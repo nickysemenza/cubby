@@ -16,7 +16,10 @@ import { getRecipeTotalsState } from "~/server/domains/recipe/repo/totals";
 import { executeEntity } from "~/server/entity-kernel";
 import { resolveLiveShortcode } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { requireActor } from "~/server/http/request-context";
-import { drainDerivedRefreshFrontier } from "~/server/testing/background-queue";
+import {
+  drainDerivedRefreshFrontier,
+  drainRecipeRefreshJobs,
+} from "~/server/testing/background-queue";
 import {
   ingredientRef,
   makeProductInput,
@@ -84,7 +87,7 @@ describe("product mutation recipe-cost staleness", () => {
   const totalsComputedAt = async (id: RecipeId) =>
     (await getRecipeTotalsState(ctx.db, id))?.totalsComputedAt;
 
-  it("marks a recipe stale when its priced product is deleted", async () => {
+  it("refreshes a recipe when its priced product is deleted", async () => {
     const ingredient = await findOrCreateIngredient(ctx.db, "delete flour");
     const product = await seedProduct("Delete Flour Co", ingredient.id, 6);
     const recipe = await seedRecipe(
@@ -95,6 +98,7 @@ describe("product mutation recipe-cost staleness", () => {
 
     await drainDerivedRefreshFrontier(ctx.db);
     await context.services.recipeCosting.recompute([recipe]);
+    await drainRecipeRefreshJobs(ctx.db, context.services.recipeCosting);
     expect(await totalsComputedAt(recipe)).not.toBeNull();
 
     installFakeQueue();
@@ -104,10 +108,11 @@ describe("product mutation recipe-cost staleness", () => {
       ids: [product],
     });
     await drainDerivedRefreshFrontier(ctx.db);
-    expect(await totalsComputedAt(recipe)).toBeNull();
+    await drainRecipeRefreshJobs(ctx.db, context.services.recipeCosting);
+    expect(await totalsComputedAt(recipe)).toBeInstanceOf(Date);
   });
 
-  it("marks recipes linked to the merge loser stale before it disappears", async () => {
+  it("refreshes recipes after merging their linked product", async () => {
     const keeperIngredient = await findOrCreateIngredient(
       ctx.db,
       "merge sugar",
@@ -123,6 +128,7 @@ describe("product mutation recipe-cost staleness", () => {
 
     await drainDerivedRefreshFrontier(ctx.db);
     await context.services.recipeCosting.recompute([recipe]);
+    await drainRecipeRefreshJobs(ctx.db, context.services.recipeCosting);
     expect(await totalsComputedAt(recipe)).not.toBeNull();
 
     installFakeQueue();
@@ -132,6 +138,7 @@ describe("product mutation recipe-cost staleness", () => {
       data: { keepId: keeper, mergeIds: [loser] },
     });
     await drainDerivedRefreshFrontier(ctx.db);
-    expect(await totalsComputedAt(recipe)).toBeNull();
+    await drainRecipeRefreshJobs(ctx.db, context.services.recipeCosting);
+    expect(await totalsComputedAt(recipe)).toBeInstanceOf(Date);
   });
 });

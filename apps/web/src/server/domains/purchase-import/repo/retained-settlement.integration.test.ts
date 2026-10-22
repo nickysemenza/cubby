@@ -21,7 +21,6 @@ import {
   purchase,
   expense,
   purchasePaymentEvidence,
-  runFinding,
   sourceOrderObservation,
 } from "~/server/db/schema";
 import {
@@ -29,6 +28,7 @@ import {
   commitFinancialSpending,
 } from "~/server/domains/financial-transaction/repo/financial-spending";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { runFinding } from "~/server/testing/run-finding.fixtures";
 
 import {
   commitPurchaseImport,

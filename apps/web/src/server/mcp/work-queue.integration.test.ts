@@ -21,7 +21,6 @@ import {
   run as runTable,
   photoRunImage,
   photoGroupProposal,
-  runFinding,
   statementRow,
   vendorAccount,
 } from "~/server/db/schema";
@@ -45,12 +44,18 @@ import {
   createInventoryFixture,
   createLocationFixture,
   insertEntityAttachments,
+  insertEntityFixtures,
   createProductFixture,
   createProductIdentityFixture,
   makeLocationInput,
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
 import { createTestRequestContext } from "~/server/testing/request-context";
+import {
+  runFinding,
+  seedRunFinding,
+  seedRunFindings,
+} from "~/server/testing/run-finding.fixtures";
 
 // Failure modes: another member's private work leaks into an actionable page;
 // shared research disappears; caller filters widen authority; a cached member
@@ -456,40 +461,39 @@ describe("member actionable Work queue", () => {
         documentKind: "receipt",
       },
     ]);
-    await getDb(ctx.db)
-      .insert(imageProcessingJob)
-      .values(
-        [sourceImage, unknownImage].map(
-          (image): typeof imageProcessingJob.$inferInsert => ({
-            shortcode: generateShortcode("imageJob"),
-            imageId: parseEntityId("image", image.id),
-            kind: "describe_image",
-            state: "failed",
-            sourceContentHash: image.sha256!,
-            processorRevision: IMAGE_DESCRIPTION_PROCESSOR_REVISION,
-          }),
-        ),
-      );
+    await insertEntityFixtures(
+      ctx.db,
+      imageProcessingJob,
+      "imageJob",
+      [sourceImage, unknownImage].map(
+        (image): typeof imageProcessingJob.$inferInsert => ({
+          shortcode: generateShortcode("imageJob"),
+          imageId: parseEntityId("image", image.id),
+          kind: "describe_image",
+          state: "failed",
+          sourceContentHash: image.sha256!,
+          processorRevision: IMAGE_DESCRIPTION_PROCESSOR_REVISION,
+        }),
+      ),
+    );
     const product = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Synthetic public identity match" }),
       ctx.actor,
     );
-    await getDb(ctx.db)
-      .insert(runFinding)
-      .values({
-        ledgerPartyId: sourceOwner.id,
-        entityKind: "expense",
-        entityId: await resolveOrThrow(ctx.db, "expense", sourceExpense.id),
-        kind: "other",
-        summary: "Synthetic source-based product relinking review",
-        evidenceFingerprint: "synthetic-source-product-relink",
-        proposedFix: {
-          kind: "relink_product",
-          expenseId: await resolveOrThrow(ctx.db, "expense", sourceExpense.id),
-          productId: product.entityId,
-        },
-      });
+    await seedRunFinding(ctx.db, {
+      ledgerPartyId: sourceOwner.id,
+      entityKind: "expense",
+      entityId: await resolveOrThrow(ctx.db, "expense", sourceExpense.id),
+      kind: "other",
+      summary: "Synthetic source-based product relinking review",
+      evidenceFingerprint: "synthetic-source-product-relink",
+      proposedFix: {
+        kind: "relink_product",
+        expenseId: await resolveOrThrow(ctx.db, "expense", sourceExpense.id),
+        productId: product.entityId,
+      },
+    });
     const otherSourceAccount = await insertWithShortcode(
       ctx.db,
       "vendorAccount",
@@ -523,36 +527,34 @@ describe("member actionable Work queue", () => {
       "expense",
       otherSourceExpense.id,
     );
-    await getDb(ctx.db)
-      .insert(runFinding)
-      .values([
-        {
-          ledgerPartyId: payer.id,
-          entityKind: "expense",
-          entityId: await resolveOrThrow(ctx.db, "expense", sourceExpense.id),
-          kind: "other",
-          summary: "Synthetic stale relink points to another source Expense",
-          evidenceFingerprint: "synthetic-mismatched-relink-target",
-          proposedFix: {
-            kind: "relink_product",
-            expenseId: staleExpenseId,
-            productId: product.entityId,
-          },
+    await seedRunFindings(ctx.db, [
+      {
+        ledgerPartyId: payer.id,
+        entityKind: "expense",
+        entityId: await resolveOrThrow(ctx.db, "expense", sourceExpense.id),
+        kind: "other",
+        summary: "Synthetic stale relink points to another source Expense",
+        evidenceFingerprint: "synthetic-mismatched-relink-target",
+        proposedFix: {
+          kind: "relink_product",
+          expenseId: staleExpenseId,
+          productId: product.entityId,
         },
-        {
-          ledgerPartyId: payer.id,
-          entityKind: "purchase",
-          entityId: otherSourcePurchase.id,
-          kind: "other",
-          summary: "Synthetic stale relink has a Purchase target",
-          evidenceFingerprint: "synthetic-wrong-kind-relink-target",
-          proposedFix: {
-            kind: "relink_product",
-            expenseId: staleExpenseId,
-            productId: product.entityId,
-          },
+      },
+      {
+        ledgerPartyId: payer.id,
+        entityKind: "purchase",
+        entityId: otherSourcePurchase.id,
+        kind: "other",
+        summary: "Synthetic stale relink has a Purchase target",
+        evidenceFingerprint: "synthetic-wrong-kind-relink-target",
+        proposedFix: {
+          kind: "relink_product",
+          expenseId: staleExpenseId,
+          productId: product.entityId,
         },
-      ]);
+      },
+    ]);
     const retainedStaleFindings = () =>
       getDb(ctx.db)
         .select({
@@ -720,7 +722,7 @@ describe("member actionable Work queue", () => {
       retiredAt: new Date(),
       agentSessionId: "synthetic-retired-review",
     });
-    await getDb(ctx.db).insert(runFinding).values({
+    await seedRunFinding(ctx.db, {
       runId: retired.id,
       ledgerPartyId: member.id,
       entityKind: "run",
@@ -736,7 +738,7 @@ describe("member actionable Work queue", () => {
       endedAt: new Date(),
       agentSessionId: "synthetic-applied-terminal-review",
     });
-    await getDb(ctx.db).insert(runFinding).values({
+    await seedRunFinding(ctx.db, {
       runId: historicallyApplied.id,
       ledgerPartyId: member.id,
       entityKind: "run",
@@ -745,7 +747,6 @@ describe("member actionable Work queue", () => {
       summary: "Synthetic source review was applied.",
       evidenceFingerprint: "synthetic-applied-finding",
       status: "applied",
-      resolvedAt: new Date(),
     });
     const photo = await insertWithShortcode(ctx.db, "run", {
       ...scope,
@@ -987,17 +988,15 @@ describe("member actionable Work queue", () => {
         endedAt: new Date(),
         agentSessionId: `synthetic-source-${party.shortcode}-${sourceAccount ?? "mail"}`,
       });
-      await getDb(ctx.db)
-        .insert(runFinding)
-        .values({
-          runId: run.id,
-          ledgerPartyId: party.id,
-          entityId: run.id,
-          entityKind: "run",
-          kind: "other",
-          summary: "Review this member's retained order source.",
-          evidenceFingerprint: `synthetic-source-review-${party.shortcode}`,
-        });
+      await seedRunFinding(ctx.db, {
+        runId: run.id,
+        ledgerPartyId: party.id,
+        entityId: run.id,
+        entityKind: "run",
+        kind: "other",
+        summary: "Review this member's retained order source.",
+        evidenceFingerprint: `synthetic-source-review-${party.shortcode}`,
+      });
       return run;
     };
     const mine = await privateRun(first, ctx.actor.userId);
@@ -1051,20 +1050,21 @@ describe("member actionable Work queue", () => {
         documentKind: "receipt",
       },
     ]);
-    await getDb(ctx.db)
-      .insert(imageProcessingJob)
-      .values(
-        [privateImage, publicImage, unknownImage].map(
-          (image): typeof imageProcessingJob.$inferInsert => ({
-            shortcode: generateShortcode("imageJob"),
-            imageId: parseEntityId("image", image.id),
-            kind: "describe_image",
-            state: "failed",
-            sourceContentHash: image.sha256!,
-            processorRevision: IMAGE_DESCRIPTION_PROCESSOR_REVISION,
-          }),
-        ),
-      );
+    await insertEntityFixtures(
+      ctx.db,
+      imageProcessingJob,
+      "imageJob",
+      [privateImage, publicImage, unknownImage].map(
+        (image): typeof imageProcessingJob.$inferInsert => ({
+          shortcode: generateShortcode("imageJob"),
+          imageId: parseEntityId("image", image.id),
+          kind: "describe_image",
+          state: "failed",
+          sourceContentHash: image.sha256!,
+          processorRevision: IMAGE_DESCRIPTION_PROCESSOR_REVISION,
+        }),
+      ),
+    );
     const mismatched = await privateRun(first, ctx.actor.userId, account.id);
     const source = "synthetic-work-statement";
     const financialAccount = await insertWithShortcode(
@@ -1105,19 +1105,16 @@ describe("member actionable Work queue", () => {
       .update(statementRow)
       .set({ accountId: financialAccount.id })
       .where(eq(statementRow.batchId, linkedStatement.batchId!));
-    const [expiredFinding] = await getDb(ctx.db)
-      .insert(runFinding)
-      .values({
-        runId: mine.id,
-        ledgerPartyId: first.id,
-        entityId: mine.id,
-        entityKind: "run",
-        kind: "other",
-        summary: "Synthetic expired source review",
-        evidenceFingerprint: "synthetic-expired-review",
-        expiresAt: new Date(0),
-      })
-      .returning({ id: runFinding.id });
+    const expiredFinding = await seedRunFinding(ctx.db, {
+      runId: mine.id,
+      ledgerPartyId: first.id,
+      entityId: mine.id,
+      entityKind: "run",
+      kind: "other",
+      summary: "Synthetic expired source review",
+      evidenceFingerprint: "synthetic-expired-review",
+      expiresAt: new Date(0),
+    });
     const reassignedRun = await insertWithShortcode(ctx.db, "run", {
       ledgerPartyId: first.id,
       vendorAccountId: account.id,

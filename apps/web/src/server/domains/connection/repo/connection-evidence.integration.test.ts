@@ -17,11 +17,16 @@ import { deletePurchases } from "~/server/domains/purchase/repo/purchase";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { canonicalJson } from "~/server/lib/canonical-json";
 import { measureDatabaseTransfer } from "~/server/testing/database-transfer.fixtures";
+import {
+  createProductFixture,
+  makeProductInput,
+} from "~/server/testing/repo.fixtures";
 
 import {
   captureConnectionBasis,
   prepareConnectionBases,
 } from "./connection-evidence";
+import { connectionDiscoveryFingerprint } from "./discovery-fingerprint";
 
 // Freshness checks capture many bases from prepared, batched reads. Each must
 // equal the basis the same candidate captures alone, and an endpoint that no
@@ -188,5 +193,36 @@ describe("prepared connection bases", () => {
       },
     );
     expect(measured.largestValueBytes).toBeLessThan(64 * 1024);
+  });
+});
+
+// Rediscovery follows the source's authoritative snapshot: a relevant field
+// change refreshes it and an irrelevant one does not.
+describe("connection discovery fingerprint", () => {
+  const ctx = withTestDb();
+
+  it("changes with the source's connection-relevant fields only", async () => {
+    const created = await createProductFixture(
+      ctx.db,
+      makeProductInput({ name: "Synthetic fingerprint drill" }),
+      ctx.actor,
+    );
+    const source: Parameters<typeof connectionDiscoveryFingerprint>[1] = {
+      entityKind: "product",
+      entityId: created.id,
+    };
+    const before = await connectionDiscoveryFingerprint(ctx.db, source);
+    await getDb(ctx.db)
+      .update(productTable)
+      .set({ tags: ["synthetic unrelated tag"] })
+      .where(eq(productTable.id, created.entityId));
+    expect(await connectionDiscoveryFingerprint(ctx.db, source)).toBe(before);
+    await getDb(ctx.db)
+      .update(productTable)
+      .set({ name: "Synthetic fingerprint driver" })
+      .where(eq(productTable.id, created.entityId));
+    expect(await connectionDiscoveryFingerprint(ctx.db, source)).not.toBe(
+      before,
+    );
   });
 });

@@ -7,7 +7,7 @@ import type { ActorContext } from "@cubby/schemas/context";
 import type { Entity } from "@cubby/schemas/entity";
 import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
 import type { EntityId } from "@cubby/schemas/identifiers";
-import { type AnyColumn, and, eq, getTableColumns, inArray } from "drizzle-orm";
+import { type AnyColumn, and, getTableColumns, inArray } from "drizzle-orm";
 import type { PgColumn, PgTable } from "drizzle-orm/pg-core";
 import { uniq } from "es-toolkit";
 
@@ -16,7 +16,6 @@ import type { IncomingEdge } from "~/server/db/entity-incoming-edges";
 import type { IncomingEdgeKey } from "~/server/db/entity-incoming-edges";
 import { INCOMING_EDGES } from "~/server/db/entity-incoming-edges";
 import { notDeleted } from "~/server/db/helpers";
-import { runFinding } from "~/server/db/schema";
 import { recordMergeRedirects } from "~/server/entity-kernel/repo/entity-identity";
 import { createAppError } from "~/server/errors/app-error";
 import { repointAssessmentTargetsTx } from "~/server/generic/assessment/repo/assessment-state";
@@ -169,55 +168,9 @@ export const finalizeMerge = async <E extends RemovableEntity>(
   const { entity, table, keepId, loserIds, removal, actor } = args;
   if (loserIds.length === 0) return { removed: 0 };
   const ids = [...loserIds];
+  // Field, Email link and import finding projections follow the survivor; a
+  // duplicate open finding is retired there, never deleted.
   await repointAssessmentTargetsTx(tx, entity, keepId, loserIds);
-
-  if (entity === "purchase" || entity === "expense" || entity === "product") {
-    const findings = await tx
-      .select({
-        id: runFinding.id,
-        ledgerPartyId: runFinding.ledgerPartyId,
-        kind: runFinding.kind,
-        evidenceFingerprint: runFinding.evidenceFingerprint,
-        status: runFinding.status,
-      })
-      .from(runFinding)
-      .where(
-        and(
-          eq(runFinding.entityKind, entity),
-          inArray(runFinding.entityId, ids),
-        ),
-      );
-    for (const finding of findings) {
-      const [collision] =
-        finding.status === "open"
-          ? await tx
-              .select({ id: runFinding.id })
-              .from(runFinding)
-              .where(
-                and(
-                  eq(runFinding.ledgerPartyId, finding.ledgerPartyId),
-                  eq(runFinding.entityKind, entity),
-                  eq(runFinding.entityId, keepId),
-                  eq(runFinding.kind, finding.kind),
-                  eq(
-                    runFinding.evidenceFingerprint,
-                    finding.evidenceFingerprint,
-                  ),
-                  eq(runFinding.status, "open"),
-                ),
-              )
-              .limit(1)
-          : [];
-      if (collision) {
-        await tx.delete(runFinding).where(eq(runFinding.id, finding.id));
-      } else {
-        await tx
-          .update(runFinding)
-          .set({ entityId: keepId, updatedAt: new Date() })
-          .where(eq(runFinding.id, finding.id));
-      }
-    }
-  }
 
   // The row removal stays here rather than moving into `cascadeRemoval`:
   // removal differs per entity (soft for products/purchases/vendors, hard for

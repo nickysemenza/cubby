@@ -1,5 +1,6 @@
 import type { ActivityExecutor } from "@cubby/schemas/activity";
 import type { ImageId } from "@cubby/schemas/identifiers";
+import { jobState } from "@cubby/schemas/job";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 
@@ -9,6 +10,7 @@ import {
   insertAndReturn,
   unwrapDb,
   withTransaction,
+  databaseForTransaction,
 } from "~/server/db/helpers";
 import {
   imageProcessingAttempt,
@@ -18,6 +20,10 @@ import {
 } from "~/server/db/image-processing-schema";
 import { image } from "~/server/db/schema";
 import { getDeviceParticipation } from "~/server/domains/device/repo/device-participation";
+import {
+  externalJobClaim,
+  publishJobPage,
+} from "~/server/generic/jobs/repo/jobs";
 
 export async function recordImageProcessingEvent(
   db: Database | DrizzleTransaction,
@@ -110,7 +116,7 @@ export async function assignImageProcessingExecutor(
           eq(imageProcessingJob.id, input.jobId),
           eq(imageProcessingJob.attemptId, input.attemptId),
           eq(imageProcessingJob.state, "leased"),
-          sql`${imageProcessingJob.leaseExpiresAt} > now()`,
+          sql`EXISTS (SELECT 1 FROM "Job" j WHERE j.key='image-processing:' || ${imageProcessingJob.id}::text AND j.state=${jobState.enum.running} AND j."leaseToken"=${input.attemptId}::uuid AND j."leaseExpiresAt">now())`,
         ),
       )
       .for("update");
@@ -237,16 +243,26 @@ export async function lockImageProcessingSubmissionSource(
 }
 
 /**
- * A funding wait is not an attempt: the job returns to `pending` at the
- * funding resume time and its assigned attempt is refunded, so waiting for
- * free AI capacity never exhausts the three-attempt retry budget.
+ * Job deferral does not spend its failure budget. Recorded executor refusals
+ * remain immutable attempt history.
  */
 export async function deferImageProcessingJob(
   db: Database,
   input: { jobId: string; attemptId: string; until: Date; reason: string },
 ): Promise<boolean> {
   return withTransaction(db, async (tx) => {
-    const [assigned] = await tx
+    const execution = await externalJobClaim(
+      tx,
+      `image-processing:${input.jobId}`,
+      input.attemptId,
+      true,
+    );
+    if (!execution) return false;
+    await publishJobPage(databaseForTransaction(tx), execution, {
+      done: false,
+      availableAt: input.until,
+    });
+    await tx
       .update(imageProcessingAttempt)
       .set({ state: "failed", completedAt: sql`now()`, error: input.reason })
       .where(
@@ -261,12 +277,7 @@ export async function deferImageProcessingJob(
       .set({
         state: "pending",
         attemptId: null,
-        leaseExpiresAt: null,
-        nextAttemptAt: input.until,
         lastError: input.reason,
-        ...(assigned && {
-          attempts: sql`greatest(${imageProcessingJob.attempts} - 1, 0)`,
-        }),
       })
       .where(
         and(

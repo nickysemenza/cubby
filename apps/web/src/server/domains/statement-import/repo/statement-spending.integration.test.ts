@@ -387,7 +387,14 @@ describe("statement spending review and re-import", () => {
     const secondProvider = observations.find(
       (row) => row.source === "copilot",
     )!;
-    await createRepoEntity(ctx, "financialTransaction", {
+    expect(
+      (await readStatementSuggestions(ctx.db, [suggestion.assessmentId]))[0]!
+        .sourceCategories,
+    ).toEqual([
+      { source: "monarch", sourceCategory: "Food and drink" },
+      { source: "monarch", sourceCategory: "Groceries" },
+    ]);
+    const transaction = await createRepoEntity(ctx, "financialTransaction", {
       accountId: account.output.id,
       kind: "purchase",
       status: "posted",
@@ -399,14 +406,33 @@ describe("statement spending review and re-import", () => {
         externalId: row.externalId,
       })),
     });
+
     expect(
-      (await readStatementSuggestions(ctx.db, [suggestion.assessmentId]))[0]!
-        .sourceCategories,
-    ).toEqual([
-      { source: "copilot", sourceCategory: "Dining" },
-      { source: "monarch", sourceCategory: "Food and drink" },
-      { source: "monarch", sourceCategory: "Groceries" },
-    ]);
+      await readStatementSuggestions(ctx.db, [suggestion.assessmentId]),
+    ).toEqual([]);
+    // Shared settlement refs establish cross-provider membership; the stale
+    // create suggestion is replaced by pending booking work for that charge.
+    await generateStatementSuggestionPage(ctx.db, { after: null, runId: null });
+    const refreshedStates = await getDb(
+      ctx.db,
+    ).query.assessmentState.findMany();
+    const refreshed = await readStatementSuggestions(
+      ctx.db,
+      refreshedStates.map((state) => state.id),
+    );
+    const booking = refreshed.find(
+      (item) =>
+        item.source === "monarch" && item.statementDate === "2026-05-04",
+    );
+    expect(booking).toMatchObject({
+      recommended: "book",
+      matchedTransactionId: transaction.output.id,
+      sourceCategories: [
+        { source: "copilot", sourceCategory: "Dining" },
+        { source: "monarch", sourceCategory: "Food and drink" },
+        { source: "monarch", sourceCategory: "Groceries" },
+      ],
+    });
   });
   it("accepts a clean spending suggestion as a Purchase and categorized Expense", async () => {
     const { advice } = await fixture();

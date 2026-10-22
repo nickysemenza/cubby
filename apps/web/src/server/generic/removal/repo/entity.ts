@@ -52,6 +52,7 @@ import {
   imageJoinColumnFor,
   reapUnreferencedImages,
 } from "~/server/domains/image/repo/image";
+import { tombstoneEntityIdentities } from "~/server/entity-kernel/repo/entity-identity-writer";
 import { countByTarget } from "~/server/entity-kernel/repo/impact";
 import {
   type CascadeCounts,
@@ -140,15 +141,38 @@ const removeRows = async (
   removal: RowRemoval,
   at: Date,
 ): Promise<void> => {
-  if (removal.mode === "hard") {
-    await tx.delete(removal.table).where(removal.where);
+  const query =
+    removal.mode === "hard"
+      ? tx.delete(removal.table).where(removal.where)
+      : tx
+          .update(removal.table)
+          .set({ deletedAt: at })
+          .where(and(removal.where, notDeleted(removal.table)));
+  const identityTable = Object.values(SHORTCODE_TABLE).find(
+    (table) => table === removal.table,
+  );
+  if (!identityTable) {
+    await query;
     return;
   }
-  const { deletedAt } = removal.table;
-  await tx
-    .update(removal.table)
-    .set({ deletedAt: at })
-    .where(and(removal.where, notDeleted({ deletedAt })));
+  // Child dispositions can remove shortcode entities as well as plain rows.
+  // Only rows actually removed receive a tombstone.
+  const removed =
+    removal.mode === "hard"
+      ? await tx
+          .delete(identityTable)
+          .where(removal.where)
+          .returning({ id: identityTable.id })
+      : await tx
+          .update(identityTable)
+          .set({ deletedAt: at })
+          .where(and(removal.where, notDeleted(identityTable)))
+          .returning({ id: identityTable.id });
+  await tombstoneEntityIdentities(
+    tx,
+    removed.map((row) => row.id),
+    at,
+  );
 };
 
 const cascadingImageRowsSchema = z.array(

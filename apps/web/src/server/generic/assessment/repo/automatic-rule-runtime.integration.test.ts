@@ -1,9 +1,8 @@
 import { suggestionStatus } from "@cubby/schemas/ai";
-import { assessmentFamily } from "@cubby/schemas/assessment";
+import { assessmentFamily, feedbackAuthority } from "@cubby/schemas/assessment";
 import type { AutomaticRuleKey } from "@cubby/schemas/automatic-rule";
 import { financialSpendingAdvice } from "@cubby/schemas/financial-booking";
 import { recordStatementRowsInput } from "@cubby/schemas/statement-row";
-import { supportedDecisionModelSchema } from "@cubby/shared/ai/models";
 import { and, desc, eq, sql } from "drizzle-orm";
 import { createEntity } from "tooling/factories/create";
 import { createRepoEntity } from "tooling/factories/repo";
@@ -14,7 +13,6 @@ import {
 import { buildKernelContext } from "tooling/scenarios/context";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
-import { z } from "zod";
 
 import { AiBudgetExhaustedError } from "~/server/ai/budget";
 import { AiWorkDeferredError } from "~/server/ai/cooperative-work";
@@ -25,11 +23,9 @@ import {
 import { producingAiManifest } from "~/server/ai/repo/ai-refresh";
 import { getDb } from "~/server/db/helpers";
 import {
-  assessment,
   assessmentState,
   automaticRule,
   expense,
-  feedback,
   spendingCategory,
 } from "~/server/db/schema";
 import { ensureRun, systemActor } from "~/server/domains/run/repo/ensure-run";
@@ -60,7 +56,6 @@ import {
   applyAutomaticRules,
   listAutomaticRules,
   setAutomaticRule,
-  recheckAutomaticRules,
 } from "~/server/generic/assessment/repo/automatic-rule-runtime";
 import * as automaticRuleRuntime from "~/server/generic/assessment/repo/automatic-rule-runtime";
 import { ruleBase } from "~/server/generic/assessment/repo/automatic-rules";
@@ -70,8 +65,6 @@ import {
   acceptSuggestion,
 } from "~/server/generic/assessment/repo/suggestion-review";
 import { createSystemUserFixture } from "~/server/testing/repo.fixtures";
-
-import { publishFieldAssessment } from "./assessment";
 
 type Ctx = ReturnType<typeof withTestDb>;
 
@@ -97,135 +90,13 @@ const labelStatementSuggestions: typeof runStatementLabels = async (
 
 const ATTACH: AutomaticRuleKey = "statement_transaction.attach";
 const BOOK_SPENDING: AutomaticRuleKey = "statement_transaction.book_spending";
-const ASSIGNMENT: AutomaticRuleKey = "field.addition";
-
-type Verdict = "correct" | "wrong" | "dismissed";
-
-/**
- * Reviewed rule matches written directly: windows need dozens of them.
- * `automatic` rows also carry an automatic application receipt.
- */
-async function seedReviews(
-  ctx: Ctx,
-  input: {
-    family: "field" | "statement_transaction";
-    stamp: string;
-    verdicts: Verdict[];
-    automatic?: boolean;
-    candidateId?: string;
-    correction?: unknown;
-    /** Seconds before now of the newest review; later entries are older. */
-    agedFrom?: number;
-  },
-) {
-  const client = getDb(ctx.db);
-  const rows = input.verdicts.map<{ id: string; verdict: Verdict; at: Date }>(
-    (verdict, index) => ({
-      id: crypto.randomUUID(),
-      verdict,
-      at: new Date(Date.now() - ((input.agedFrom ?? 0) + index + 1) * 1000),
-    }),
-  );
-  const status = input.automatic ? "applied" : "resolved";
-  const data = { matchedRules: [input.stamp] };
-  if (input.family === "field") {
-    await Promise.all(
-      rows.map(async (row) => {
-        const history = await publishFieldAssessment(
-          ctx.db,
-          {
-            entity: "product",
-            recordId: crypto.randomUUID(),
-            field: "categoryId",
-            kind: "addition",
-            confidence: 0.97,
-            model: "typesafe/jev",
-            data,
-            status,
-          },
-          true,
-        );
-        row.id = history.id;
-      }),
-    );
-  } else {
-    await client.insert(assessment).values(
-      rows.map((row) => ({
-        id: row.id,
-        publicationKey: `synthetic:${row.id}`,
-        family: "statement_transaction" as const,
-        subject: {
-          kind: "statement_transaction" as const,
-          entity: "statementRow" as const,
-          recordId: crypto.randomUUID(),
-          source: "monarch",
-          chargeKey: `synthetic-${row.id}`,
-        },
-        judgment: {
-          recommended: "attach",
-          candidates: [
-            { transactionId: input.candidateId ?? crypto.randomUUID() },
-          ],
-        },
-        fingerprint: "synthetic-fingerprint",
-      })),
-    );
-    await client.insert(assessmentState).values(
-      rows.map((row) => ({
-        id: row.id,
-        family: "statement_transaction" as const,
-        entity: "statementRow",
-        recordId: crypto.randomUUID(),
-        data,
-        status,
-      })),
-    );
-  }
-  const [key, revision] = input.stamp.split("@");
-  if (input.automatic)
-    await client.insert(feedback).values(
-      rows.map((row) => ({
-        assessmentId: row.id,
-        operationId: "command-application:automatic:synthetic",
-        verdict: "ungraded",
-        correction: { present: false as const },
-        intent: "apply",
-        authority: "automatic",
-        actorUserId: systemActor().userId,
-        receipt: {},
-        metadata: {
-          kind: "assessment_application",
-          rule: { key, revision, stamp: input.stamp },
-        },
-        createdAt: new Date(row.at.getTime() - 1_000_000),
-      })),
-    );
-  await client.insert(feedback).values(
-    rows.map((row) => ({
-      assessmentId: row.id,
-      operationId: "synthetic-review",
-      verdict: row.verdict,
-      correction:
-        input.correction === undefined
-          ? { present: false as const }
-          : { present: true as const, value: z.json().parse(input.correction) },
-      intent: "history",
-      authority: "member",
-      actorUserId: ctx.actor.userId,
-      createdAt: row.at,
-    })),
-  );
-  return rows.map((row) => row.id);
-}
-
-const times = (count: number, verdict: Verdict) =>
-  Array.from({ length: count }, () => verdict);
 
 const ruleOf = async (ctx: Ctx, key: AutomaticRuleKey) =>
   (await listAutomaticRules(ctx.db)).rules.find(
     (rule) => rule.ruleKey === key,
   )!;
 
+/** Judgments and application receipts; projection maintenance events are not decisions. */
 const feedbackFor = async (ctx: Ctx, assessmentId: string) =>
   (
     await getDb(ctx.db).execute<{
@@ -233,7 +104,7 @@ const feedbackFor = async (ctx: Ctx, assessmentId: string) =>
       verdict: string;
       metadata: { kind?: string; rule?: { key: string; stamp: string } };
     }>(
-      sql`SELECT authority, verdict, metadata FROM "Feedback" WHERE "assessmentId" = ${assessmentId}::uuid ORDER BY "createdAt"`,
+      sql`SELECT authority, verdict, metadata FROM "Feedback" WHERE "assessmentId" = ${assessmentId}::uuid AND authority <> ${feedbackAuthority.enum.system} ORDER BY "createdAt"`,
     )
   ).rows;
 
@@ -241,7 +112,7 @@ const stateOf = async (ctx: Ctx, assessmentId: string) =>
   (
     await getDb(ctx.db).execute<{
       status: string;
-      data: { matchedRules?: string[]; auditSample?: boolean };
+      data: { matchedRules?: string[] };
     }>(
       sql`SELECT status, data FROM "AssessmentState" WHERE id = ${assessmentId}::uuid`,
     )
@@ -412,36 +283,22 @@ const chargeSuggestion = async (ctx: Ctx) =>
       .limit(1)
   )[0]!;
 
-const eligibleFor = (ctx: Ctx, models: readonly string[]) =>
-  Promise.all(
-    models.map((model) =>
-      seedReviews(ctx, {
-        family: "statement_transaction",
-        stamp: `${ruleBase(ATTACH)}@${model}`,
-        verdicts: times(50, "correct"),
-      }),
-    ),
-  );
-
 // Failure modes: clean booking is invisible or cannot be paused; a measured
 // attach bypasses its pause; stale automatic commands ignore the persisted
 // switch; feedback retries reapply rejected or already-booked evidence.
 describe("clean import booking controls", () => {
   const ctx = withTestDb();
 
-  it("defaults on and lets a member pause and resume without measured eligibility", async () => {
+  it("defaults on and lets a member pause and resume", async () => {
     expect(await ruleOf(ctx, BOOK_SPENDING)).toMatchObject({
       enabled: true,
-      eligible: true,
-      n: 0,
-      precision: null,
     });
     expect(
       await setAutomaticRule(ctx.db, ctx.actor, {
         ruleKey: BOOK_SPENDING,
         enabled: false,
       }),
-    ).toMatchObject({ enabled: false, eligible: true });
+    ).toMatchObject({ enabled: false });
     // A new code revision must not silently discard a member's pause.
     await getDb(ctx.db)
       .update(automaticRule)
@@ -453,7 +310,7 @@ describe("clean import booking controls", () => {
         ruleKey: BOOK_SPENDING,
         enabled: true,
       }),
-    ).toMatchObject({ enabled: true, eligible: true, n: 0 });
+    ).toMatchObject({ enabled: true });
     await expect(
       setAutomaticRule(ctx.db, systemActor(), {
         ruleKey: BOOK_SPENDING,
@@ -465,7 +322,6 @@ describe("clean import booking controls", () => {
   it("holds clean spending while paused even when measured attach is on, then resumes once", async () => {
     await createSystemUserFixture(ctx.db);
     const { existing } = await soleCandidateCharge(ctx);
-    await eligibleFor(ctx, supportedDecisionModelSchema.options);
     await setAutomaticRule(ctx.db, ctx.actor, {
       ruleKey: ATTACH,
       enabled: true,
@@ -480,16 +336,10 @@ describe("clean import booking controls", () => {
     expect(await getDb(ctx.db).select().from(expense)).toEqual([]);
     expect(
       await applyAutomaticRules(ctx.db, [suggestion.id], { importClean: true }),
-    ).toEqual({
-      applied: [],
-      audited: [],
-      refused: [],
-    });
+    ).toEqual({ applied: [], refused: [] });
     const attachStamp = (
       await stateOf(ctx, suggestion.id)
-    ).data.matchedRules!.find((stamp) =>
-      stamp.startsWith(`${ruleBase(ATTACH)}@`),
-    )!;
+    ).data.matchedRules!.find((stamp) => stamp === ruleBase(ATTACH))!;
     await expect(
       reviewAssessment(
         ctx.db,
@@ -587,157 +437,6 @@ describe("clean import booking controls", () => {
 describe("Automatic rules", () => {
   const ctx = withTestDb();
 
-  // Failure modes: a rule turns on below 50 reviews or below 98%; a system
-  // actor flips a member's switch; turning a rule off is refused.
-  it("turns a rule on only at 50 reviews and 98% precision, by a member", async () => {
-    const stamp = `${ruleBase(ATTACH)}@typesafe/jev`;
-    await seedReviews(ctx, {
-      family: "statement_transaction",
-      stamp,
-      verdicts: [...times(48, "correct"), "wrong"],
-    });
-    expect(await ruleOf(ctx, ATTACH)).toMatchObject({
-      enabled: false,
-      eligible: false,
-      n: 49,
-      hits: 48,
-    });
-    const enable = () =>
-      setAutomaticRule(ctx.db, ctx.actor, { ruleKey: ATTACH, enabled: true });
-    await expect(enable()).rejects.toThrow(/not eligible.*n=49, hits=48/);
-    await seedReviews(ctx, {
-      family: "statement_transaction",
-      stamp,
-      verdicts: ["dismissed"],
-      agedFrom: 100,
-    });
-    // n=50, 48/50 = 96%.
-    await expect(enable()).rejects.toThrow(/n=50, hits=48/);
-    await seedReviews(ctx, {
-      family: "statement_transaction",
-      stamp,
-      verdicts: times(50, "correct"),
-      agedFrom: 200,
-    });
-    // n=100, 98/100: exactly the bar.
-    await expect(
-      setAutomaticRule(ctx.db, systemActor(), {
-        ruleKey: ATTACH,
-        enabled: true,
-      }),
-    ).rejects.toThrow(/Only a member/);
-    expect(await enable()).toMatchObject({
-      enabled: true,
-      eligible: true,
-      n: 100,
-      hits: 98,
-      enabledByUserId: ctx.actor.userId,
-    });
-    await expect(
-      setAutomaticRule(ctx.db, ctx.actor, {
-        ruleKey: ASSIGNMENT,
-        enabled: false,
-      }),
-    ).rejects.toThrow(/not an optional measured rule/);
-  });
-
-  // Failure modes: automatic applications inflate their own precision; a
-  // Wrong on one disappears; an older revision's reviews still count; the
-  // window grows past the latest 200; a correction choosing the rule's own
-  // candidate counts against it.
-  it("measures only served matches of the current revision in the latest 200", async () => {
-    const account = (await card(ctx)).output;
-    const candidate = (
-      await createRepoEntity(ctx, "financialTransaction", {
-        accountId: account.id,
-        kind: "purchase",
-        status: "posted",
-        amount: 12,
-        postedDate: "2026-05-05",
-        merchant: "Example Grocer",
-        rawDescription: "EXAMPLE GROCER",
-        sourceRefs: [],
-      })
-    ).output;
-    const clef = `${ruleBase(ATTACH)}@@cf/cloudflare/clef`;
-    const attachSame = {
-      kind: "statement_transaction",
-      action: "attach",
-      transactionId: candidate.id,
-      fields: ["postedDate"],
-      rejectedCandidateIds: [],
-    };
-    await seedReviews(ctx, {
-      family: "statement_transaction",
-      stamp: clef,
-      verdicts: ["wrong"],
-      candidateId: (
-        await getDb(ctx.db).execute<{ id: string }>(
-          sql`SELECT id FROM "FinancialTransaction" WHERE shortcode = ${candidate.id}`,
-        )
-      ).rows[0]!.id,
-      correction: attachSame,
-    });
-    await seedReviews(ctx, {
-      family: "statement_transaction",
-      stamp: clef,
-      verdicts: ["wrong"],
-      correction: { ...attachSame, action: "create" },
-      agedFrom: 10,
-    });
-    const jev = `${ruleBase(ATTACH)}@typesafe/jev`;
-    // The 10 oldest of 210 are Wrong and fall outside the window.
-    await seedReviews(ctx, {
-      family: "statement_transaction",
-      stamp: jev,
-      verdicts: [...times(200, "correct"), ...times(10, "wrong")],
-    });
-    const attach = await ruleOf(ctx, ATTACH);
-    expect(attach.windows).toEqual([
-      expect.objectContaining({
-        stamp: clef,
-        model: "@cf/cloudflare/clef",
-        n: 2,
-        hits: 1,
-      }),
-      expect.objectContaining({
-        stamp: jev,
-        model: "typesafe/jev",
-        n: 200,
-        hits: 200,
-        eligible: true,
-      }),
-    ]);
-    expect(attach.eligible).toBe(true);
-  });
-
-  // Failure: audited Wrongs accumulate without disabling the measured rule.
-  it("turns measured attach off when a member review drops precision below 98%", async () => {
-    const stamp = `${ruleBase(ATTACH)}@typesafe/jev`;
-    await seedReviews(ctx, {
-      family: "statement_transaction",
-      stamp,
-      verdicts: times(50, "correct"),
-      agedFrom: 10,
-    });
-    await setAutomaticRule(ctx.db, ctx.actor, {
-      ruleKey: ATTACH,
-      enabled: true,
-    });
-    const ids = await seedReviews(ctx, {
-      family: "statement_transaction",
-      stamp,
-      verdicts: ["wrong", "wrong"],
-    });
-    await recheckAutomaticRules(ctx.db, ids[0]!);
-    expect(await ruleOf(ctx, ATTACH)).toMatchObject({
-      enabled: false,
-      n: 52,
-      hits: 50,
-      disabledReason: expect.stringMatching(/Turned itself off/),
-    });
-  });
-
   // Failure mode: a label page built up front publishes a charge with
   // evidence an automatic rule earlier in the page already changed, so its
   // suggestion fails as stale on accept.
@@ -749,7 +448,6 @@ describe("Automatic rules", () => {
     await soleCandidateCharge(ctx);
     await competingCharge(ctx);
     await generateStatementSuggestionPage(ctx.db, { after: null, runId: null });
-    await eligibleFor(ctx, supportedDecisionModelSchema.options);
     await setAutomaticRule(ctx.db, ctx.actor, {
       ruleKey: ATTACH,
       enabled: true,
@@ -777,7 +475,6 @@ describe("Automatic rules", () => {
         after: null,
         runId: null,
       });
-      await eligibleFor(ctx, supportedDecisionModelSchema.options);
       await setAutomaticRule(ctx.db, ctx.actor, {
         ruleKey: ATTACH,
         enabled: true,
@@ -815,7 +512,6 @@ describe("Automatic rules", () => {
     const { account } = await soleCandidateCharge(ctx);
     await competingCharge(ctx);
     await generateStatementSuggestionPage(ctx.db, { after: null, runId: null });
-    await eligibleFor(ctx, supportedDecisionModelSchema.options);
     await setAutomaticRule(ctx.db, ctx.actor, {
       ruleKey: ATTACH,
       enabled: true,
@@ -872,7 +568,6 @@ describe("Automatic rules", () => {
     const { existing } = await soleCandidateCharge(ctx);
     await competingCharge(ctx);
     await generateStatementSuggestionPage(ctx.db, { after: null, runId: null });
-    await eligibleFor(ctx, supportedDecisionModelSchema.options);
     await setAutomaticRule(ctx.db, ctx.actor, {
       ruleKey: ATTACH,
       enabled: true,
@@ -919,7 +614,6 @@ describe("Automatic rules", () => {
       ctx.actor,
     );
     await generateStatementSuggestionPage(ctx.db, { after: null, runId: null });
-    await eligibleFor(ctx, supportedDecisionModelSchema.options);
     await setAutomaticRule(ctx.db, ctx.actor, {
       ruleKey: ATTACH,
       enabled: true,
@@ -946,7 +640,6 @@ describe("Automatic rules", () => {
   it("attaches a sole same-charge candidate through the review path, once", async () => {
     await createSystemUserFixture(ctx.db);
     const { existing } = await soleCandidateCharge(ctx);
-    await eligibleFor(ctx, supportedDecisionModelSchema.options);
     await setAutomaticRule(ctx.db, ctx.actor, {
       ruleKey: ATTACH,
       enabled: true,
@@ -954,7 +647,6 @@ describe("Automatic rules", () => {
     await label(ctx);
     const suggestion = await chargeSuggestion(ctx);
     const state = await stateOf(ctx, suggestion.id);
-    expect(state.data.auditSample).toBe(false);
     expect(state.status).toBe("applied");
     // Automatic applications stay available to historical grading reads.
     const history = await listSuggestionPage(ctx.db, {
@@ -977,7 +669,7 @@ describe("Automatic rules", () => {
       ]),
     );
     const [stamp] = state.data.matchedRules!;
-    expect(stamp).toMatch(/^statement_transaction\.attach@.+@.+/);
+    expect(stamp).toBe(ruleBase(ATTACH));
     const events = await feedbackFor(ctx, suggestion.id);
     expect(events).toEqual([
       expect.objectContaining({
@@ -1056,7 +748,6 @@ describe("Automatic rules", () => {
   it("refuses an automatic application once the rule is off", async () => {
     await createSystemUserFixture(ctx.db);
     const { existing } = await soleCandidateCharge(ctx);
-    await eligibleFor(ctx, supportedDecisionModelSchema.options);
     await label(ctx);
     const suggestion = await chargeSuggestion(ctx);
     expect((await stateOf(ctx, suggestion.id)).status).toBe("pending");
@@ -1084,7 +775,7 @@ describe("Automatic rules", () => {
           rule: {
             key: ATTACH,
             revision: ruleBase(ATTACH).slice(ATTACH.length + 1),
-            stamp: `${ruleBase(ATTACH)}@synthetic-model`,
+            stamp: ruleBase(ATTACH),
           },
         },
       ),
@@ -1093,34 +784,23 @@ describe("Automatic rules", () => {
     expect(await feedbackFor(ctx, suggestion.id)).toEqual([]);
   });
 
-  // Failure modes: turning the rule on for one measured model authorizes
-  // another; evidence that drifted after publication is applied anyway.
-  it("applies nothing for an unmeasured model or drifted evidence", async () => {
+  // Failure modes: a rule applies while off; evidence that drifted after
+  // publication is applied anyway.
+  it("applies nothing while off or for drifted evidence", async () => {
     await createSystemUserFixture(ctx.db);
     const { account } = await soleCandidateCharge(ctx);
     await label(ctx);
     const suggestion = await chargeSuggestion(ctx);
-    const [stamp] = (await stateOf(ctx, suggestion.id)).data.matchedRules!;
-    const others = supportedDecisionModelSchema.options.filter(
-      (model) => !stamp!.endsWith(`@${model}`),
-    );
-    await eligibleFor(ctx, others);
-    await setAutomaticRule(ctx.db, ctx.actor, {
-      ruleKey: ATTACH,
-      enabled: true,
-    });
-    expect(await applyAutomaticRules(ctx.db, [suggestion.id])).toMatchObject({
+    expect(await applyAutomaticRules(ctx.db, [suggestion.id])).toEqual({
       applied: [],
       refused: [],
     });
     expect((await stateOf(ctx, suggestion.id)).status).toBe("pending");
 
-    await eligibleFor(
-      ctx,
-      supportedDecisionModelSchema.options.filter(
-        (model) => !others.includes(model),
-      ),
-    );
+    await setAutomaticRule(ctx.db, ctx.actor, {
+      ruleKey: ATTACH,
+      enabled: true,
+    });
     // A second transaction appears nearby: the published evidence is stale.
     await createRepoEntity(ctx, "financialTransaction", {
       accountId: account.id,

@@ -638,31 +638,31 @@ async function workQueueProjection(
       "Product relink intent is missing from the import contract",
     );
   // oxlint-disable-next-line cubby/no-raw-enum-literal-in-sql -- 'kind' is the stored fix's JSON discriminator property, not a vocabulary value.
-  const findingSources = sql`CASE WHEN finding."proposedFix"->>'kind' = ${productRelinkIntent.shape.kind.value}
-    THEN CASE WHEN finding."entityKind" = ${entitySchema.enum.expense}
-      AND finding."proposedFix"->>'expenseId' = finding."entityId"::text
-      THEN ${workExpenseSourceOwners(sql`finding."entityId"`)}
+  const findingSources = sql`CASE WHEN finding.data->'proposedFix'->>'kind' = ${productRelinkIntent.shape.kind.value}
+    THEN CASE WHEN finding.entity = ${entitySchema.enum.expense}
+      AND finding.data->'proposedFix'->>'expenseId' = finding."recordId"::text
+      THEN ${workExpenseSourceOwners(sql`finding."recordId"`)}
       ELSE ARRAY[NULL::uuid] END
-    ELSE CASE finding."entityKind"
-    WHEN ${entitySchema.enum.purchase} THEN ${workPurchaseOwners(sql`finding."entityId"`)}
-    WHEN ${entitySchema.enum.expense} THEN ${workExpenseOwners(sql`finding."entityId"`)}
-    WHEN ${entitySchema.enum.email} THEN ARRAY(SELECT e."ledgerPartyId" FROM "Email" e WHERE e.id = finding."entityId" AND e."deletedAt" IS NULL)
+    ELSE CASE finding.entity
+    WHEN ${entitySchema.enum.purchase} THEN ${workPurchaseOwners(sql`finding."recordId"`)}
+    WHEN ${entitySchema.enum.expense} THEN ${workExpenseOwners(sql`finding."recordId"`)}
+    WHEN ${entitySchema.enum.email} THEN ARRAY(SELECT e."ledgerPartyId" FROM "Email" e WHERE e.id = finding."recordId" AND e."deletedAt" IS NULL)
     ELSE ${workRunReviewOwners(sql`finding."runId"`)} END END`;
   const findingRecord = scope.record
     ? sql` AND identity.kind = ${scope.record.entity} AND identity.shortcode = ${scope.record.id}`
     : sql``;
   if (!scope.check)
     selections.push(sql`SELECT identity.kind AS entity, identity.shortcode AS id,
-    finding.summary AS name, 'finding:' || finding.id::text AS key,
-    ${workQueueSourceSchema.enum.finding}::text AS source, ${workQueueKindSchema.enum.review}::text AS kind, finding.summary AS reason,
+    finding.data->>${"summary"} AS name, 'finding:' || finding.id::text AS key,
+    ${workQueueSourceSchema.enum.finding}::text AS source, ${workQueueKindSchema.enum.review}::text AS kind, finding.data->>${"summary"} AS reason,
     'Open the retained source and review the proposed correction.'::text AS "nextAction",
     CASE WHEN cardinality(authority.owners) > 0 AND NOT EXISTS (
       SELECT 1 FROM unnest(authority.owners) owner WHERE owner IS NULL OR owner <> finding."ledgerPartyId"
     ) THEN ARRAY[finding."ledgerPartyId"] ELSE ARRAY[NULL::uuid] END AS owners,
     false AS shared, NULL::text AS "problemKey",
-    ${workRecordFactColumns(sql`identity.kind`, sql`finding."entityId"`, scope.facts)}
-    FROM "RunFinding" finding
-    JOIN "Entity" identity ON identity.id = finding."entityId" AND identity.kind = finding."entityKind" AND identity."deletedAt" IS NULL
+    ${workRecordFactColumns(sql`identity.kind`, sql`finding."recordId"`, scope.facts)}
+    FROM "AssessmentState" finding
+    JOIN "Entity" identity ON identity.id = finding."recordId" AND identity.kind = finding.entity AND identity."deletedAt" IS NULL
     CROSS JOIN LATERAL (SELECT ${findingSources} AS owners) authority
     WHERE ${activeFindingSql("finding")} AND NOT ${obsoleteExecutionFindingSql("finding")}${findingRecord}
   `);
@@ -674,7 +674,7 @@ async function workQueueProjection(
       name: sql`"Run".purpose || ' · ' || "Run".status`,
       where: sql`"Run"."deletedAt" IS NULL AND "Run"."failureCode" IS DISTINCT FROM 'user_cancelled' AND "Run"."failureCode" IS DISTINCT FROM 'dispatch_aborted' AND (
         (${attentionStatePredicate(sql`"Run".status`)} AND "Run".status <> ${runStatus.enum.needs_review}
-          AND NOT EXISTS (SELECT 1 FROM "RunFinding" finding WHERE finding."runId" = "Run".id AND ${activeFindingSql("finding")}))
+          AND NOT EXISTS (SELECT 1 FROM "AssessmentState" finding WHERE finding."runId" = "Run".id AND ${activeFindingSql("finding")}))
         OR ("Run".purpose = ${runPurpose.enum.photo_inventory} AND EXISTS (
           SELECT 1 FROM "PhotoGroupProposal" proposal WHERE proposal."runId" = "Run".id AND proposal.state = ${photoGroupProposalState.enum.proposed}
         ))

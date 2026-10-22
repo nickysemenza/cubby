@@ -194,16 +194,10 @@ export async function seedCorpus(
   );
   try {
     await seedConnectedHousehold(pool, userId, options, readImage);
-    const { repairSearchIndex } =
-      await import("~/server/generic/search/service/search-index-repair.service");
-    // Bootstrap the complete static graph once; durable captures stay queued
-    // for the Worker's invalidation, dependency and provider phases.
-    for await (const event of repairSearchIndex(buildScenarioDatabase(pool))) {
-      if (event.type === "done")
-        console.log(
-          `[household] search bootstrap: ${event.result.rebuilt} documents`,
-        );
-    }
+    const { drainDerivedRefreshFrontier } =
+      await import("~/server/testing/background-queue");
+    // Settle static search through its real Job; provider work stays queued for the Worker.
+    await drainDerivedRefreshFrontier(buildScenarioDatabase(pool));
     const coverage = await readHouseholdCoverage(pool);
     console.log(
       `[household] ${coverage.map((row) => `${row.entity}:${row.status === "external" ? row.reason : row.count}`).join(", ")}`,

@@ -7,8 +7,10 @@ import { vendorCreateInput } from "@cubby/schemas/vendor";
 import { withTestDb } from "tooling/test-setup";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { productionDerivedRefreshPorts } from "~/server/domains/run/service/derived-refresh";
-import { captureBackgroundQueue } from "~/server/testing/background-queue";
+import {
+  drainDerivedRefreshFrontier,
+  captureBackgroundQueue,
+} from "~/server/testing/background-queue";
 let backgroundQueue: ReturnType<typeof captureBackgroundQueue>;
 beforeEach(() => {
   backgroundQueue = captureBackgroundQueue();
@@ -103,9 +105,7 @@ describe("purchase deletion embedding fanout", () => {
     });
 
     // Durable work must rebuild the financial projections after detach.
-    await backgroundQueue.drain(ctx.db, {
-      derivedRefreshPorts: productionDerivedRefreshPorts,
-    });
+    await drainDerivedRefreshFrontier(ctx.db);
     const [expenseDoc, transactionDoc] = await Promise.all([
       getSearchDocumentEmbeddingText(ctx.db, "expense", expenseId),
       getSearchDocumentEmbeddingText(

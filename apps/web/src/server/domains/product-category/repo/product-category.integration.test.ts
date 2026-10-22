@@ -12,6 +12,7 @@ import {
   project,
 } from "~/server/db/schema";
 import { createExpense } from "~/server/domains/expense/repo/crud";
+import { insertPayloadWithIdentity } from "~/server/entity-kernel/repo/entity-identity-writer";
 import { hierarchyDescendantsSql } from "~/server/generic/list/repo/hierarchy";
 import { deleteThroughKernel } from "~/server/testing/entity-kernel";
 import {
@@ -680,13 +681,13 @@ describe("product category hierarchy", () => {
       },
       ctx.actor,
     );
-    await getDb(ctx.db)
-      .insert(project)
-      .values({
+    await getDb(ctx.db).transaction((tx) =>
+      insertPayloadWithIdentity(tx, project, "project", {
         shortcode: testShortcode("project", "PRJ-HSHD"),
         name: "Household project",
         defaultTrade: "building",
-      });
+      }),
+    );
     const product = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({

@@ -1,4 +1,5 @@
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { jobState } from "@cubby/schemas/job";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 
 import { type Database } from "~/server/db/database";
 import { repositoryQueries as getDb } from "~/server/db/repository-access.boundary";
@@ -64,7 +65,7 @@ export async function blockUnpublishedEmailRefresh(
     .where(
       and(
         eq(aiEvaluation.id, evaluationId),
-        eq(aiEvaluation.attemptToken, token),
+        sql`EXISTS (SELECT 1 FROM "Job" j WHERE j.key='ai-evaluation:' || ${aiEvaluation.id}::text AND j.state=${jobState.enum.running} AND j."leaseToken"=${token}::uuid AND j."leaseExpiresAt">now())`,
         inArray(aiEvaluation.state, ["running", "result_ready"]),
       ),
     );

@@ -16,7 +16,6 @@ import {
   inventoryEntry,
   product,
   purchase,
-  runFinding,
 } from "~/server/db/schema";
 import { deleteProducts } from "~/server/domains/product/repo/crud";
 import { mergeProducts } from "~/server/domains/product/repo/merge";
@@ -27,6 +26,7 @@ import {
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { findOrphanedProducts } from "~/server/generic/problems/repo/detectors-product";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { runFinding } from "~/server/testing/run-finding.fixtures";
 
 import {
   memberImport,

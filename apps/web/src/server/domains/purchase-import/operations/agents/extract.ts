@@ -36,6 +36,10 @@ import {
   SUM_MISMATCH_ISSUE,
   type PurchaseAuditRenderedBatch,
 } from "~/server/ai/policy/prompts/purchase-import";
+import {
+  type AiResponseCacheKeyInput,
+  withAiResponseCache,
+} from "~/server/ai/response-cache";
 import { runStructuredFeature } from "~/server/ai/run-feature";
 import { recordAiUsage } from "~/server/ai/usage";
 import { getR2PublicUrl } from "~/server/clients/r2-public-url";
@@ -222,12 +226,15 @@ export interface PurchaseAuditPorts {
   runStructured: typeof runStructuredFeature;
   gateway: typeof gatewayFetch;
   usage: typeof recordAiUsage;
+  /** Replays an identical recovery from the application response cache. */
+  cache?: boolean;
 }
 
 const productionPurchaseAuditPorts: PurchaseAuditPorts = {
   runStructured: runStructuredFeature,
   gateway: gatewayFetch,
   usage: recordAiUsage,
+  cache: true,
 };
 
 async function recoverPurchaseAudit(
@@ -238,34 +245,12 @@ async function recoverPurchaseAudit(
   },
   ports: PurchaseAuditPorts,
 ) {
-  const started = Date.now();
   const request = PURCHASE_IMPORT_AUDIT_FEATURE.request(args.renderedBatch);
   const schema = z.toJSONSchema(importAuditModelOutput);
   // Anthropic accepts the same portable object as OpenAI once the generated
   // dialect marker is removed. No union or numeric bounds reach the provider.
   const { $schema: _dialect, ...outputSchema } = schema;
   const operation = "purchaseImport.audit.recovery";
-  let transport: AiUsageTransport = "unknown";
-  let gateway: GatewayResponseInfo | undefined;
-  const fetchThroughGateway = ports.gateway(
-    getChatModelConfig(AUDIT_RECOVERY_MODEL).gatewayProvider,
-    {
-      ...cachedCall({
-        metadata: { feature: PURCHASE_IMPORT_AUDIT_FEATURE.feature, operation },
-      }),
-      beforePaidRequest: withAiBudget(
-        args.db,
-        { model: AUDIT_RECOVERY_MODEL, runId: runEntityId.parse(args.runId) },
-        undefined,
-      ),
-      onTransport: (selected) => {
-        transport = selected;
-      },
-      onResponse: (info) => {
-        gateway = info;
-      },
-    },
-  );
   const usage = {
     provider: providerFor(AUDIT_RECOVERY_MODEL),
     model: AUDIT_RECOVERY_MODEL,
@@ -273,42 +258,102 @@ async function recoverPurchaseAudit(
     operation,
     runId: runEntityId.parse(args.runId),
   };
-  const body = await requestAuditRecovery(
-    fetchThroughGateway,
-    request,
+  const keyInput: AiResponseCacheKeyInput = {
+    feature: PURCHASE_IMPORT_AUDIT_FEATURE.feature,
+    model: AUDIT_RECOVERY_MODEL,
+    // The suffix pins this call's fixed Anthropic options (adaptive thinking,
+    // native JSON-schema output); change it when they change.
+    promptVersion: `${PURCHASE_IMPORT_AUDIT_FEATURE.promptVersion}/anthropic-recovery-1`,
+    maxTokens: PURCHASE_IMPORT_AUDIT_FEATURE.maxTokens,
+    effort: "high",
     outputSchema,
-  ).catch(async (error: UnparsedError) => {
-    // A failed attempt is still a call on its selected transport.
-    await ports.usage(args.db, {
-      ...usage,
-      transport,
-      status: "failed",
-      durationMs: Date.now() - started,
-      gatewayLogId: gateway?.gatewayLogId,
-      gatewayCacheStatus: gateway?.gatewayCacheStatus,
-    });
-    throw error;
+    request,
+  };
+  // The model's own output is cached; normalization runs on every answer.
+  const output = await withAiResponseCache({
+    enabled: ports.cache === true,
+    keyInput,
+    validate: (value) => importAuditModelOutput.parse(value),
+    // A replay made no model call; it is booked under the recovery model.
+    onHit: (durationMs, avoidedUsage) =>
+      ports.usage(args.db, {
+        ...usage,
+        transport: "cache",
+        inputTokens: 0,
+        outputTokens: 0,
+        durationMs,
+        applicationCacheStatus: "hit",
+        avoidedUsage,
+      }),
+    compute: async (applicationCacheStatus, recordUsage) => {
+      const started = Date.now();
+      let transport: AiUsageTransport = "unknown";
+      let gateway: GatewayResponseInfo | undefined;
+      const fetchThroughGateway = ports.gateway(
+        getChatModelConfig(AUDIT_RECOVERY_MODEL).gatewayProvider,
+        {
+          ...cachedCall({
+            metadata: {
+              feature: PURCHASE_IMPORT_AUDIT_FEATURE.feature,
+              operation,
+            },
+          }),
+          beforePaidRequest: withAiBudget(
+            args.db,
+            { model: AUDIT_RECOVERY_MODEL, runId: usage.runId },
+            undefined,
+          ),
+          onTransport: (selected) => {
+            transport = selected;
+          },
+          onResponse: (info) => {
+            gateway = info;
+          },
+        },
+      );
+      const body = await requestAuditRecovery(
+        fetchThroughGateway,
+        request,
+        outputSchema,
+      ).catch(async (error: UnparsedError) => {
+        // A failed attempt is still a call on its selected transport.
+        await ports.usage(args.db, {
+          ...usage,
+          transport,
+          status: "failed",
+          durationMs: Date.now() - started,
+          gatewayLogId: gateway?.gatewayLogId,
+          gatewayCacheStatus: gateway?.gatewayCacheStatus,
+          applicationCacheStatus,
+        });
+        throw error;
+      });
+      const tokens = {
+        inputTokens: body.usage.input_tokens,
+        outputTokens: body.usage.output_tokens,
+        cacheReadTokens: body.usage.cache_read_input_tokens ?? null,
+        cacheWriteTokens: body.usage.cache_creation_input_tokens ?? null,
+      };
+      recordUsage(tokens);
+      // Unpriced here: the telemetry consumer prices every token class from the
+      // catalog, and the usage writer zeroes a gateway cache hit or plan answer.
+      await ports.usage(args.db, {
+        ...usage,
+        ...tokens,
+        transport,
+        durationMs: Date.now() - started,
+        gatewayLogId: gateway?.gatewayLogId,
+        gatewayCacheStatus: gateway?.gatewayCacheStatus,
+        applicationCacheStatus,
+      });
+      const text = body.content
+        .filter((part) => part.type === "text")
+        .map((part) => part.text ?? "")
+        .join("");
+      return importAuditModelOutput.parse(JSON.parse(text));
+    },
   });
-  // Unpriced here: the telemetry consumer prices every token class from the
-  // catalog, and the usage writer zeroes a gateway cache hit or plan answer.
-  await ports.usage(args.db, {
-    ...usage,
-    transport,
-    inputTokens: body.usage.input_tokens,
-    outputTokens: body.usage.output_tokens,
-    cacheReadTokens: body.usage.cache_read_input_tokens ?? null,
-    cacheWriteTokens: body.usage.cache_creation_input_tokens ?? null,
-    durationMs: Date.now() - started,
-    gatewayLogId: gateway?.gatewayLogId,
-    gatewayCacheStatus: gateway?.gatewayCacheStatus,
-  });
-  const text = body.content
-    .filter((part) => part.type === "text")
-    .map((part) => part.text ?? "")
-    .join("");
-  return normalizeImportAuditModelOutput(
-    importAuditModelOutput.parse(JSON.parse(text)),
-  );
+  return normalizeImportAuditModelOutput(output);
 }
 
 async function requestAuditRecovery(

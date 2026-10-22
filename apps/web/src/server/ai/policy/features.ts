@@ -189,7 +189,7 @@ export const MAILBOX_TRIAGE_FEATURE = defineFeature({
   prompt: mailTriagePrompt,
   feature: "mailbox-triage",
   promptVersion: "2026-10-18.1",
-  cache: false,
+  cache: true,
   tier: "decision",
   collectPayload: false,
 });
@@ -222,7 +222,7 @@ export const MAILBOX_RELEVANCE_FEATURE = defineFeature({
   request: mailRelevanceRequest,
   feature: "mailbox-relevance",
   promptVersion: "2026-10-18.1",
-  cache: false,
+  cache: true,
   collectPayload: false,
   tier: "fast",
   effort: "medium",
@@ -459,7 +459,7 @@ export const PURCHASE_IMPORT_EXTRACTION_FEATURE = defineFeature({
   tier: "quality",
   maxTokens: 4_000,
   effort: "low",
-  cache: false,
+  cache: true,
   promptVersion: "2026-10-11.2",
   schema: importExtractionModelOutput,
 }) satisfies AiStructuredFeature<ImportExtractionModelOutput>;
@@ -470,7 +470,7 @@ export const PURCHASE_IMPORT_RECEIPT_FEATURE = defineFeature({
   tier: "quality",
   maxTokens: 4_000,
   effort: "low",
-  cache: false,
+  cache: true,
   promptVersion: "2026-10-11.2",
   schema: importExtractionModelOutput,
 }) satisfies AiStructuredFeature<ImportExtractionModelOutput>;
@@ -520,7 +520,7 @@ export const PURCHASE_IMPORT_REPAIR_FEATURE = defineFeature({
   tier: "quality",
   maxTokens: 4_000,
   effort: "high",
-  cache: false,
+  cache: true,
   promptVersion: "2026-10-11.2",
   schema: importExtractionModelOutput,
 }) satisfies AiStructuredFeature<ImportExtractionModelOutput>;

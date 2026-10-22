@@ -119,9 +119,7 @@ export const ENTITY_EDGE_OWNERS = {
   ImageProcessingEvent: { owner: imageProcessingEvent.jobId },
   ImageProcessingSubmissionJob: { owner: imageProcessingSubmissionJob.jobId },
   ImageSighting: { owner: imageSighting.imageId },
-  DerivedDiscoveryPass: {
-    excluded: "Coalesced discovery scheduling and input-epoch coverage.",
-  },
+  Job: { excluded: "Execution history independent of Run provenance." },
   AiEvaluation: { excluded: "Durable inference and publication history." },
   AiEvaluationRequest: {
     excluded: "Per-Run work membership and publication receipts.",
@@ -132,7 +130,6 @@ export const ENTITY_EDGE_OWNERS = {
     excluded: "Registry metadata naming the vendor a source slug is.",
   },
   AuditLog: { excluded: "History attribution." },
-  RunFinding: { excluded: WORKFLOW },
   AssessmentState: { excluded: WORKFLOW },
   ImportPreparedOrder: { excluded: WORKFLOW },
   SourceOrderObservation: { excluded: "Immutable source extraction history." },

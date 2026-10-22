@@ -11,7 +11,7 @@ import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
 import { unwrapDb } from "~/server/db/helpers";
-import { expense } from "~/server/db/schema";
+import { expense, project } from "~/server/db/schema";
 import {
   expenseDerivedReadSql,
   expenseDerivedMembershipSql,
@@ -20,6 +20,7 @@ import {
 } from "~/server/domains/expense/repo/expense-derived-read";
 import { loadRelatedSummary } from "~/server/generic/entity-links/repo/related-view";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { insertEntityFixtures } from "~/server/testing/repo.fixtures";
 
 import { expenseDerivedCostsSql } from "./expense-derived-read";
 import {
@@ -677,11 +678,9 @@ describe("expense project allocation", () => {
       sql`UPDATE "Project" SET "deletedAt" = now() WHERE id = ${gone.id}`,
     );
     // The food fallback resolves the household Project by its fixed code.
-    const [household] = (
-      await unwrapDb(ctx.db).execute<{ id: string }>(
-        sql`INSERT INTO "Project" (shortcode, name) VALUES ('PRJ-HSHD', 'Synthetic household') RETURNING id`,
-      )
-    ).rows;
+    const [household] = await insertEntityFixtures(ctx.db, project, "project", [
+      { shortcode: "PRJ-HSHD", name: "Synthetic household" },
+    ]);
     const food = await unwrapDb(ctx.db).execute<{ id: ProductCategoryId }>(
       sql`SELECT id FROM "ProductCategory" WHERE feature = ${productCategoryFeature.enum.food} AND "deletedAt" IS NULL LIMIT 1`,
     );

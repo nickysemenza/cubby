@@ -8,7 +8,7 @@ import { notDeleted } from "~/server/db/helpers/predicates";
 import { run } from "~/server/db/schema";
 
 // Lifecycle is in the Worker entry closure; this module must not import AI policy/discovery.
-export const AI_REFRESH_SCHEDULING_LOCK = "cubby-ai-refresh-scheduling";
+const AI_REFRESH_SCHEDULING_LOCK = "cubby-ai-refresh-scheduling";
 const MAX_ACTIVE_AI_REFRESH_RUNS = 2;
 
 /** Nonblocking admission must not pin another origin connection in a lock wait. */

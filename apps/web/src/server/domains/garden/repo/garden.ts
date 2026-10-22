@@ -67,6 +67,7 @@ import {
 } from "~/server/generic/audit-log/repo/audit-log";
 import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
 import {
+  assertLiveLinkEndpoints,
   linkValues,
   liveLinks,
   ofLinkKind,
@@ -480,6 +481,10 @@ const replaceGardenEntryPlantings = async (
   }
 
   const addIds = nextIds.filter((id) => !currentIds.has(id));
+  await assertLiveLinkEndpoints(tx, "gardenEntryPlanting", [
+    gardenEntryId,
+    ...addIds,
+  ]);
   for (const plantingId of addIds) {
     const tombstone = rows.find(
       (row) => row.plantingId === plantingId && row.deletedAt !== null,

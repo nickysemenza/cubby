@@ -5,7 +5,6 @@ import {
 } from "@cubby/schemas/ai-evaluation";
 import { entitySchema, type EntityRef } from "@cubby/schemas/entity";
 import type { RunId } from "@cubby/schemas/identifiers";
-import { MAX_AUTOMATIC_WORKFLOW_FAILURES } from "@cubby/schemas/workflow-runs";
 import { sha256Hex } from "@cubby/shared/sha256";
 import { and, asc, count, eq, gt, inArray, isNull, sql } from "drizzle-orm";
 
@@ -24,8 +23,6 @@ import {
   connectionDiscoveryFingerprint,
   connectionDiscoveryFingerprints,
 } from "~/server/domains/connection/repo/discovery-fingerprint";
-import { connectionInputKeys } from "~/server/domains/connection/repo/discovery-inputs";
-import { hasUnmaterializedInputs } from "~/server/generic/derived-refresh/repo/freshness";
 
 import {
   hasAiRefreshRunCapacity,
@@ -113,7 +110,6 @@ export async function scheduleConnectionRefresh(
       failureCode: run.failureCode,
       dispatchError: run.dispatchError,
       state: aiEvaluation.state,
-      failures: sql<number>`coalesce((${run.progress}->>'automaticRecoveryFailures')::int, 0)`,
     })
     .from(run)
     .innerJoin(aiEvaluation, eq(aiEvaluation.runId, run.id))
@@ -131,19 +127,13 @@ export async function scheduleConnectionRefresh(
   if (
     existing.failureCode !== "user_cancelled" &&
     PENDING_AI_STATES.includes(existing.state) &&
-    (existing.status === "running" ||
-      ((existing.status === "failed" ||
-        existing.status === "dispatch_failed") &&
-        existing.failures < MAX_AUTOMATIC_WORKFLOW_FAILURES))
+    existing.status === "running"
   )
-    return {
-      kind: existing.status === "running" ? "unchanged" : "recoverable",
-      runId: existing.id,
-    };
+    return { kind: "unchanged", runId: existing.id };
   return {
     kind: "stopped",
     runId: existing.id,
-    diagnostic: `Connection refresh ${existing.shortcode}: status=${existing.status}, failureCode=${existing.failureCode ?? "none"}, evaluation=${existing.state}, automaticRecoveryFailures=${existing.failures}.\n${existing.dispatchError ?? ""}`,
+    diagnostic: `Connection refresh ${existing.shortcode}: status=${existing.status}, failureCode=${existing.failureCode ?? "none"}, evaluation=${existing.state}.\n${existing.dispatchError ?? ""}`,
   };
 }
 
@@ -178,6 +168,7 @@ export async function ensureConnectionSweepRun(
       );
     return ensureRun(tx, actor, {
       purpose: "ai_refresh",
+      execution: false,
       trigger,
       status: "running",
       clientKey: `sweep:${parentRunId}:recommendation`,
@@ -212,23 +203,6 @@ export async function prepareConnectionSweepPage(
     input.limit,
     input.entityKinds,
   );
-  for (const kind of new Set(page.map((record) => record.source.entityKind))) {
-    const kinds = [
-      kind,
-      ...connectionInputKeys(kind)
-        .filter((key) => key.startsWith("kind:"))
-        .map((key) => key.slice(5)),
-    ];
-    if (
-      await hasUnmaterializedInputs(db, kinds, {
-        includePublishing: true,
-        pendingOnly: true,
-      })
-    )
-      throw new ConnectionAdmissionDeferred(
-        `Connection discovery waits for derived inputs: ${kind}`,
-      );
-  }
   const sources = page.map((record) => record.source);
   const fingerprints = await connectionSourceFingerprints(db, sources);
   const inserted = await insertEvaluationTargets(

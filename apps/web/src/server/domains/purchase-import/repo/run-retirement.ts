@@ -3,39 +3,44 @@
  * the Email text the agent read, so it is destroyed once its Run settles;
  * `Run.retiredAt` records that the coordinator can never execute again.
  */
+import { suggestionStatus } from "@cubby/schemas/ai";
 import { runEntityId } from "@cubby/schemas/identifiers";
 import { agentImportRunPurpose } from "@cubby/schemas/import-run-agent";
 import { and, asc, eq, inArray, isNotNull, isNull, lt, sql } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
 import { getDb, withTransaction } from "~/server/db/helpers";
-import { run as runTable, runFinding } from "~/server/db/schema";
+import { assessmentState, run as runTable } from "~/server/db/schema";
 import type { PurchaseImportRunAgentRpc } from "~/server/domains/purchase-agent/service/environment";
+import { transitionAssessmentStates } from "~/server/generic/assessment/repo/assessment-state";
 
 // includes-deleted: retirement closes obsolete execution alerts even on retained deleted Run identities.
 /** Legacy coordinator alerts have exact machine-written summaries; source review stays open. */
 export const obsoleteExecutionFindingSql = (findingAlias: string) =>
   sql.raw(`(
-  ${findingAlias}."entityKind" = 'run'
-  AND ${findingAlias}."entityId" = ${findingAlias}."runId"
-  AND ${findingAlias}.kind = 'other'
-  AND ${findingAlias}."proposedFix" IS NULL
-  AND ${findingAlias}.summary IN ('No coordinator activity for two hours', 'Coordinator ended without finishing the run')
+  ${findingAlias}.family = 'run_finding'
+  AND ${findingAlias}.entity = 'run'
+  AND ${findingAlias}."recordId" = ${findingAlias}."runId"
+  AND ${findingAlias}.data->>'kind' = 'other'
+  AND jsonb_typeof(${findingAlias}.data->'proposedFix') IS DISTINCT FROM 'object'
+  AND ${findingAlias}.data->>'summary' IN ('No coordinator activity for two hours', 'Coordinator ended without finishing the run')
   /* includes-deleted: retired identity history still owns obsolete execution alerts. */
   AND EXISTS (SELECT 1 FROM "Run" retired WHERE retired.id = ${findingAlias}."runId" AND retired."retiredAt" IS NOT NULL)
 )`);
 
+const openFinding = and(
+  eq(assessmentState.active, true),
+  eq(assessmentState.status, suggestionStatus.enum.pending),
+);
+
+/** Retired coordinators' execution alerts close as system projection events. */
 async function closeRetiredExecutionFindings(db: Database) {
-  const now = new Date();
-  await getDb(db)
-    .update(runFinding)
-    .set({ status: "dismissed", resolvedAt: now, updatedAt: now })
-    .where(
-      and(
-        eq(runFinding.status, "open"),
-        obsoleteExecutionFindingSql('"RunFinding"'),
-      ),
-    );
+  await transitionAssessmentStates(
+    db,
+    and(openFinding, obsoleteExecutionFindingSql('"AssessmentState"')),
+    { status: suggestionStatus.enum.rejected },
+    { kind: "coordinator_retired" },
+  );
 }
 
 const TERMINAL = ["completed", "failed", "needs_review", "cancelled"] as const;
@@ -152,16 +157,16 @@ export async function retireSettledCoordinators(
           )
           .returning({ id: runTable.id });
         if (!retiredRun) return false;
-        await tx
-          .update(runFinding)
-          .set({ status: "dismissed", resolvedAt: now, updatedAt: now })
-          .where(
-            and(
-              eq(runFinding.runId, id),
-              eq(runFinding.status, "open"),
-              obsoleteExecutionFindingSql('"RunFinding"'),
-            ),
-          );
+        await transitionAssessmentStates(
+          tx,
+          and(
+            eq(assessmentState.runId, id),
+            openFinding,
+            obsoleteExecutionFindingSql('"AssessmentState"'),
+          ),
+          { status: suggestionStatus.enum.rejected },
+          { kind: "coordinator_retired" },
+        );
         return true;
       });
       if (stamped) retired += 1;

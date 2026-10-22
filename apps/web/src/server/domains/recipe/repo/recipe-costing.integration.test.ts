@@ -26,6 +26,7 @@ import {
   getRecipeTotalsState,
   selectAllStaleRecipeIds,
 } from "~/server/domains/recipe/repo/totals";
+import { drainRecipeRefreshJobs } from "~/server/testing/background-queue";
 import {
   createProductFixture as createProduct,
   createRecipeFixture as createRecipe,
@@ -111,6 +112,7 @@ describe("RecipeCostingService", () => {
       const recipe = await seedPricedRecipe("Coordinator selection fixture");
       const costing = service();
       await costing.recompute([recipe.entityId]);
+      await drainRecipeRefreshJobs(ctx.db, service());
       const before = await getRecipeTotalsState(ctx.db, recipe.entityId);
       const all = recomputeAllDurableWorkflow(costing);
       const stale = recomputeStaleDurableWorkflow(costing);
@@ -334,6 +336,7 @@ describe("RecipeCostingService", () => {
     it("regenerates cleared derived totals without altering authored recipe data", async () => {
       const saved = await seedPricedRecipe("Cleared nutrition cache");
       await service().recomputeQueued([saved.entityId]);
+      await drainRecipeRefreshJobs(ctx.db, service());
       const before = (await getRecipesByIDs(ctx.db, [saved.entityId]))[0];
       await setRecipeTotalsFixtureRaw(ctx.db, saved.entityId, null, null);
       const cleared = await getRecipeTotalsState(ctx.db, saved.entityId);
@@ -346,6 +349,7 @@ describe("RecipeCostingService", () => {
       });
       expect(await selectAllStaleRecipeIds(ctx.db)).toContain(saved.entityId);
       expect(await service().recomputeQueued([saved.entityId])).toBe(1);
+      await drainRecipeRefreshJobs(ctx.db, service());
       const state = await getRecipeTotalsState(ctx.db, saved.entityId);
       // The column holds cost + nutrition only; `macros` is a read projection.
       expect(storedNutritionTotals.safeParse(state?.totals).success).toBe(true);
@@ -359,7 +363,7 @@ describe("RecipeCostingService", () => {
       expect(after?.updatedAt).toEqual(before?.updatedAt);
     });
 
-    it("eagerly recomputes a parent when a child's cost changes", async () => {
+    it("refreshes a parent when a child's cost changes", async () => {
       // A *costable* child: 1 lb of an ingredient priced "1 lb = $4" → $4 (a
       // weight→money package mapping, the form the engine can actually convert).
       const ing = await findOrCreateIngredient(ctx.db, "cascade flour");
@@ -417,6 +421,7 @@ describe("RecipeCostingService", () => {
 
       // Compute both; the child costs $4 and the parent is stamped fresh.
       await service().recompute([parent.entityId, child.entityId]);
+      await drainRecipeRefreshJobs(ctx.db, service());
       const childBefore = await getRecipeTotalsState(ctx.db, child.entityId);
       const parentBefore = await getRecipeTotalsState(ctx.db, parent.entityId);
       expect(childBefore?.totals?.cost).toMatchObject({
@@ -425,9 +430,7 @@ describe("RecipeCostingService", () => {
       });
       expect(parentBefore?.totalsComputedAt).not.toBeNull();
 
-      // Change the child's cost, then recompute ONLY the child. Because the
-      // child's totals changed, the eager cascade recomputes its parent too — no
-      // drain — re-stamping the parent's totals with a fresh (later) timestamp.
+      // A child request records broad recipe work; its parent converges in the same pass.
       await updateProduct(
         ctx.db,
         prod.entityId,
@@ -435,6 +438,7 @@ describe("RecipeCostingService", () => {
         ctx.actor,
       );
       await service().recompute([child.entityId]);
+      await drainRecipeRefreshJobs(ctx.db, service());
 
       const childAfter = await getRecipeTotalsState(ctx.db, child.entityId);
       const parentAfter = await getRecipeTotalsState(ctx.db, parent.entityId);

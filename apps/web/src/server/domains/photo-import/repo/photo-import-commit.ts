@@ -23,6 +23,7 @@ import {
   activateImportImages,
   getImportImageRows,
   lockImportImageRows,
+  lockPhotoImportLocationDestinations,
   type ImportImageRow,
   persistLocalImageAnalysis,
   withPhotoImportTransaction,
@@ -35,7 +36,7 @@ import {
   type MutationSideEffectEvent,
 } from "~/server/entity-kernel/repo/mutation-side-effects";
 import { createAppError } from "~/server/errors/app-error";
-import { deferPublications } from "~/server/workflows/background-tasks/publish";
+import { publishBackgroundTasks } from "~/server/workflows/background-tasks/publish";
 
 /** A staged image's bytes/dimensions checked against its row, independent of any caller-specific payload. */
 export interface StagedImageIntegrityItem {
@@ -94,6 +95,7 @@ export interface PhotoImportRouteAdapter {
 }
 
 export interface PhotoImportCommitPorts {
+  publishBackgroundTasks: typeof publishBackgroundTasks;
   getImages: typeof getImportImageRows;
   lockImages: typeof lockImportImageRows;
   getObject: typeof getS3Object;
@@ -110,6 +112,7 @@ export interface PhotoImportCommitPorts {
 }
 
 export const productionPhotoImportCommitPorts: PhotoImportCommitPorts = {
+  publishBackgroundTasks,
   getImages: getImportImageRows,
   lockImages: lockImportImageRows,
   getObject: getS3Object,
@@ -437,13 +440,14 @@ export async function commitPhotoImport(
   const verified = await verifyCommitImages(context, input, ports);
   const imageCodes = [...new Set(input.images.map((item) => item.imageId))];
   let sideEffectEvents: MutationSideEffectEvent[] = [];
-  const deferred = deferPublications();
+
   const result = await ports.withTransaction(
     context.db,
     async (transactionDb) => {
       // Lock all rows before validating or writing the route plan. The
       // preflight above intentionally remains outside the transaction so R2
       // failures never hold database locks.
+      await lockPhotoImportLocationDestinations(transactionDb, input);
       const lockedRows = await ports.lockImages(transactionDb, imageCodes);
       const lockedByCode = new Map(
         lockedRows.map((row) => [row.shortcode, row] as const),
@@ -472,10 +476,7 @@ export async function commitPhotoImport(
         db: transactionDb,
         services: {
           ...context.services,
-          recipeCosting: context.services.recipeCosting.bindTo(
-            transactionDb,
-            deferred.publish,
-          ),
+          recipeCosting: context.services.recipeCosting.bindTo(transactionDb),
         },
       };
       await routeAdapter.validate(transactionContext, input, imagesByCode);
@@ -524,7 +525,7 @@ export async function commitPhotoImport(
         ({ analysis }) => analysis !== null,
       );
       if (freshlyUploaded.length > 0) {
-        await deferred.publish(
+        await ports.publishBackgroundTasks(
           transactionDb,
           buildImageMetadataExtractionTasks(
             freshlyUploaded
@@ -541,7 +542,7 @@ export async function commitPhotoImport(
       } satisfies PhotoImportCommitResult;
     },
   );
-  await deferred.flush(context.db);
+
   await ports.runSideEffects(context.db, sideEffectEvents, undefined, {
     captured: true,
   });

@@ -83,7 +83,6 @@ import {
   formatSearchTerm,
   getDb,
   imageJoinBindings,
-  insertAndReturn,
   type ListReadIntent,
   mapImages,
   notDeleted,
@@ -140,6 +139,7 @@ import {
   productMatchesGtinTerm,
 } from "~/server/domains/product/repo/gtin";
 import { resolveEntityDisplayImages } from "~/server/entity-kernel/repo/entity-display-image";
+import { insertPayloadWithIdentity } from "~/server/entity-kernel/repo/entity-identity-writer";
 import { createEntityReader } from "~/server/entity-kernel/repo/repository";
 import { createAppError } from "~/server/errors/app-error";
 import { findPgError } from "~/server/errors/db-errors";
@@ -2456,7 +2456,7 @@ export const quickCreateProductRecord = async (
     // replaying a code that already exists; everything else mints one through
     // `insertWithShortcode` so it gets the collision retry.
     const inserted = data.shortcode
-      ? await insertAndReturn(tx, product, {
+      ? await insertPayloadWithIdentity(tx, product, "product", {
           ...values,
           shortcode: data.shortcode,
         })

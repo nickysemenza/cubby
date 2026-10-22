@@ -12,11 +12,7 @@ import {
 } from "@cubby/schemas/image-processing";
 import { z } from "zod";
 import { eq, sql } from "drizzle-orm";
-import {
-  image,
-  imageProcessingAttempt,
-  imageProcessingJob,
-} from "~/server/db/schema";
+import { image, imageProcessingAttempt, job } from "~/server/db/schema";
 import { preferredImageDescriptionPolicy } from "~/server/domains/image-processing/repo/description-policy";
 import { getDb } from "~/server/db/helpers";
 import { createUploadedImageRecord } from "~/server/domains/image/repo/image";
@@ -285,9 +281,9 @@ test("companion normalization preserves originals and rejects stale or corrupt r
   await seed();
   const expired = await claim();
   await database
-    .update(imageProcessingJob)
+    .update(job)
     .set({ leaseExpiresAt: sql`now() - interval '1 second'` })
-    .where(eq(imageProcessingJob.id, expired.command.jobId));
+    .where(eq(job.key, `image-processing:${expired.command.jobId}`));
   expect(
     completeCompanionImageProcessingOutput.parse(
       await post("complete", {

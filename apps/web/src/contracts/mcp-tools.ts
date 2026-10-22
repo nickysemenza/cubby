@@ -124,7 +124,7 @@ export const MCP_TOOLS = defineMcpTools({
       suggestion_rules: mcpAction({
         op: suggestionsContract.ops.rules,
         description:
-          "Automatic rules: named, versioned family rules that apply matching Suggestions without review (field.addition; statement_transaction.attach, measured per decision model). Each returns enabled, eligible and precision windows (stamp, model, n, hits, precision, correctedAutomatic) over the latest 200 member-reviewed matches that were served for review; eligible needs n >= 50 at >= 98%. Automatic applications later marked Wrong count as correctedAutomatic, outside the ratio.",
+          "Automatic rules: named, versioned family rules that apply matching Suggestions without review (statement_transaction.attach; statement_transaction.book_spending). Each returns its declared revision and the member switch; attach applies only while a member has it on for that revision.",
       }),
       inventory_ownership_context: mcpAction({
         op: expenseContract.ops.inventoryOwnershipContext,
@@ -647,16 +647,6 @@ export const MCP_TOOLS = defineMcpTools({
     description:
       "Import reads: one retained Email and its Mail triage preview, purchase-import operation status, one run's live status and target outcomes, vendor coverage, photo-run context and proposals, image processing, external-id collisions, and barcode lookup.",
     actions: {
-      email_accuracy_blind: mcpAction({
-        op: purchaseImportContract.ops.emailAccuracyBlind,
-        description:
-          "Read an owned frozen sample without prediction labels, reasons or models. Review the exact message through your Gmail connector before grading; missing originals are unavailable, never inferred from cache disposal.",
-      }),
-      email_accuracy_report: mcpAction({
-        op: purchaseImportContract.ops.emailAccuracyReport,
-        description:
-          "Weighted pipeline and known Jev/Clef-only confusion matrices, conditional precision/recall, sampling probabilities and excluded/unknown denominators for an independently graded frozen Email sample. Each items row joins the blind roster by predictionId and supplies its frozen inclusionProbability and inverse-probability weight for session-only grades and fresh previews. Read after blind grading; this never records a member grade.",
-      }),
       mail_import: mcpAction({
         op: runContract.ops.mailImport,
         description:
@@ -824,17 +814,6 @@ export const MCP_TOOLS = defineMcpTools({
         description:
           "Correct a false-negative Email only after independently reading the exact message. Supply prior expectedChecksum, canonical reviewedChecksum and your reason. Recovers bounded original content with no models, Pi admission or routing-policy change; frozen import sources refuse.",
       }),
-      accuracy_sample: mcpAction({
-        op: purchaseImportContract.ops.emailAccuracyCreate,
-        description:
-          "Freeze an owned stratified Email accuracy sample, including predicted-unrelated messages. Sample membership and inclusion probabilities never change with later classifications. Independent grading starts with imports_read.email_accuracy_blind.",
-      }),
-      accuracy_grade: mcpAction({
-        op: purchaseImportContract.ops.emailAccuracyGrade,
-        description:
-          "Record an independent grade after reading the real frozen-checksum message without viewing its prediction. Preserve original predictions; unavailable messages need no invented label. Exact retries replay, contradictory grades refuse.",
-      }),
-
       reclassify: mcpAction({
         op: purchaseImportContract.ops.emailReclassify,
         description:

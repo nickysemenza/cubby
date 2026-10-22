@@ -52,6 +52,13 @@ RPC, MCP, manifest, stored-shape, or native wire changes, load
 
 ## Generic by default
 
+Design for the two-person household and its actual data volume. Prefer the
+smallest design that preserves the user flow, money, source evidence and member
+decisions. Give each responsibility one owner; reuse it before adding another
+ledger, scheduler, cache or recovery path. Justify additional machinery with a
+concrete failure or measured cost. When replacing a mechanism, remove its old
+callers, adapters and tests as part of the change.
+
 Reuse before writing: search [generic paths](docs/agents/generic-paths.md).
 Entity behavior belongs in declarations and generic runtimes; for entity or
 cross-client changes, load [declaration rules](docs/entities.md#generic-by-default).
@@ -59,6 +66,12 @@ For list loading or enrichment, load [web runtime rules](apps/web/docs/web-runti
 before adding queries or scheduling work from rows or cells.
 For inherited values or overrides, load [field resolution](docs/entities.md#field-resolution-and-overrides)
 before adding storage or precedence logic.
+For background work or derived data, load
+[Background derived data](docs/entities.md#background-derived-data) before adding
+scheduling, consistency or repair behavior.
+
+Use plain technical English in code, docs and explanations. Name the operation
+and the condition it checks; prefer established terms over invented vocabulary.
 
 ## Product constraints
 

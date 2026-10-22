@@ -1,4 +1,3 @@
-import { workflowRecoveryProgress } from "./workflow-runs";
 import { supportedDecisionModelSchema } from "@cubby/shared/ai/models";
 import { z } from "zod";
 import {
@@ -147,7 +146,6 @@ export const mailboxDiscoveryInput = z.object({
   scopedQueries: z.array(mailboxScopedQuery),
 });
 export const mailboxDiscoveryProgress = z.object({
-  ...workflowRecoveryProgress.shape,
   attempt: z.number().int().nonnegative(),
   phase: z.enum(["listing", "fetching", "completed", "failed", "paused"]),
   pagesDone: z.number().int().nonnegative().default(0),

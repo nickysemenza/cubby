@@ -23,15 +23,14 @@ import {
 import { expenseDerivedReadSql } from "~/server/domains/expense/repo/expense-derived-read";
 import { effectiveExpenseTradeSql } from "~/server/domains/expense/repo/expense-inheritance";
 import { loadSelectedDescriptions } from "~/server/domains/image/repo/image-description-selection";
-import { claimDerivedPublication } from "~/server/generic/derived-refresh/repo/publication";
-import { readInputRevisions } from "~/server/generic/derived-refresh/repo/revisions";
-import { advanceInputRevisions } from "~/server/generic/derived-refresh/repo/revisions";
+import { lockRefreshFamily } from "~/server/generic/derived-refresh/repo/families";
 import {
   getEmbeddingTextsForRefs,
   type SearchableEntityText,
 } from "~/server/generic/embedding/repo/entity-embedding";
 import { normalizeSearchText } from "~/server/generic/embedding/repo/semantic/text";
 import type { SemanticEmbeddingConfig } from "~/server/generic/embedding/service/semantic/config";
+import { assertCurrentJob } from "~/server/generic/jobs/repo/execution";
 
 interface SearchDocumentSource {
   entityKind: SearchableEntity;
@@ -620,13 +619,11 @@ async function markSearchDocumentMissing(
   entityKind: SearchableEntity,
   entityId: string,
 ): Promise<SearchDocumentRefreshResult> {
-  const changed = await unwrapDb(db).execute(sql`
+  await unwrapDb(db).execute(sql`
     UPDATE "SearchDocument" SET "deletedAt" = now(), "updatedAt" = now()
     WHERE "entityKind" = ${entityKind} AND "entityId" = ${entityId}::uuid AND "deletedAt" IS NULL
     RETURNING "entityId"
   `);
-  if (changed.rows.length > 0)
-    await advanceInputRevisions(db, [`projection:${entityKind}`]);
   return { status: "missing", entityKind, entityId };
 }
 
@@ -648,9 +645,7 @@ async function upsertSearchDocumentBatch(
       )`;
     }),
   );
-  const changed = await unwrapDb(db).execute<{
-    entityKind: SearchableEntity;
-  }>(sql`
+  await unwrapDb(db).execute(sql`
     INSERT INTO "SearchDocument" (
       "entityKind", "entityId", title, subtitle, "typeHint",
       aliases, keywords, body, "semanticText", "normalizedText",
@@ -681,10 +676,6 @@ async function upsertSearchDocumentBatch(
       OR "SearchDocument".title IS DISTINCT FROM EXCLUDED.title
     RETURNING "entityKind"
   `);
-  await advanceInputRevisions(
-    db,
-    changed.rows.map((row) => `projection:${row.entityKind}`),
-  );
   return entries.map(({ source }) => ({
     status: "upserted",
     entityKind: source.entityKind,
@@ -754,8 +745,8 @@ export async function prepareSearchDocuments(
 export async function publishPreparedSearchDocuments(
   db: Database | DrizzleTransaction,
   prepared: Awaited<ReturnType<typeof prepareSearchDocuments>>,
-  revision: number,
 ): Promise<SearchDocumentRefreshResult[]> {
+  await assertCurrentJob(db);
   const results: SearchDocumentRefreshResult[] = [];
   const refs = [
     ...prepared.entries.map((entry) => entry.source),
@@ -766,7 +757,6 @@ export async function publishPreparedSearchDocuments(
     ),
   );
   for (const ref of refs) {
-    if (!(await claimDerivedPublication(db, ref, "search", revision))) continue;
     const entry = prepared.entries.find(
       (entry) =>
         entry.source.entityKind === ref.entityKind &&
@@ -786,11 +776,13 @@ export async function refreshSearchDocuments(
   refs: ReadonlyArray<{ entityKind: SearchableEntity; entityId: string }>,
 ): Promise<SearchDocumentRefreshResult[]> {
   if (refs.length === 0) return [];
-  const revision = (await readInputRevisions(db, ["all"]))[0]?.[1] ?? 0;
-  const prepared = await prepareSearchDocuments(db, refs);
-  return withTransactionOn(db, (tx) =>
-    publishPreparedSearchDocuments(tx, prepared, revision),
-  );
+  return withTransactionOn(db, async (tx) => {
+    // Standalone explicit refresh holds the same family row through current
+    // authoritative reads and publication. Later edits retain their Job intent.
+    await lockRefreshFamily(tx, "search");
+    const prepared = await prepareSearchDocuments(tx, refs);
+    return publishPreparedSearchDocuments(tx, prepared);
+  });
 }
 
 export async function getSearchDocumentEmbeddingText(

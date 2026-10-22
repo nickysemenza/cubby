@@ -20,6 +20,7 @@ import {
   fetchExternalResponse,
   readResponseWithLimit,
 } from "@cubby/shared/external-fetch";
+import { sha256Hex } from "@cubby/shared/sha256";
 /**
  * The one runner for structured AI calls.
  *
@@ -71,12 +72,14 @@ import type {
   AiStructuredFeature,
 } from "~/server/ai/policy/features";
 import {
+  AiResponseCacheBatch,
   type AiResponseCacheKeyInput,
   type ApplicationCacheStatus,
   withAiResponseCache,
 } from "~/server/ai/response-cache";
 import { recordAiUsage } from "~/server/ai/usage";
 import type { Database } from "~/server/db";
+import { JobDeferredError } from "~/server/generic/jobs/errors";
 
 import { isGatewayAdmissionWait } from "./gateway-egress-client";
 
@@ -460,6 +463,64 @@ async function resolveImageContent(
   };
 }
 
+/**
+ * A request's media as the provider receives it (`sent`) and as the
+ * application cache keys it (`keyed`). Our bucket's object keys are unique per
+ * write, so their URL names the bytes. Any other URL can change behind the
+ * same address: its bytes are fetched once, sent inline and keyed by digest.
+ */
+export async function identifyMedia(
+  request: AiChatRequest,
+): Promise<{ sent: AiChatRequest; keyed: AiChatRequest }> {
+  const { isOurBucketUrl } = await import("~/server/clients/r2-public-url");
+  const sent: AiMessage[] = [];
+  const keyed: AiMessage[] = [];
+  for (const message of request.messages) {
+    if (isTextOnlyContent(message.content)) {
+      sent.push(message);
+      keyed.push(message);
+      continue;
+    }
+    const sentParts: AiContentPart[] = [];
+    const keyedParts: AiContentPart[] = [];
+    for (const part of message.content) {
+      if (
+        part.type === "text" ||
+        (part.source.type === "url" && isOurBucketUrl(part.source.value))
+      ) {
+        sentParts.push(part);
+        keyedParts.push(part);
+        continue;
+      }
+      const source =
+        part.source.type === "inline"
+          ? { value: part.source.value, mimeType: part.source.mimeType }
+          : await resolveImageContent(part).then((content) => ({
+              value: content.data,
+              mimeType: content.mimeType,
+            }));
+      const inline = {
+        ...part,
+        source: { type: "inline" as const, ...source },
+      };
+      sentParts.push(inline);
+      keyedParts.push({
+        ...inline,
+        source: {
+          ...inline.source,
+          value: `sha256:${await sha256Hex(source.value)}`,
+        },
+      });
+    }
+    sent.push({ ...message, content: sentParts });
+    keyed.push({ ...message, content: keyedParts });
+  }
+  return {
+    sent: { ...request, messages: sent },
+    keyed: { ...request, messages: keyed },
+  };
+}
+
 /** `content is string` is the one shape `allowInTypeGuards` recognizes as a
  * type guard, so the `typeof` narrowing this needs lives in its own
  * predicate function rather than inline. */
@@ -678,6 +739,31 @@ function respondToolFor(schema: z.ZodType): RespondTool {
   const built: RespondTool = { tool, optionalPaths };
   respondToolCache.set(schema, built);
   return built;
+}
+
+/**
+ * The application-cache identity of one structured call: everything that
+ * shapes the provider request. Provider options derive from the model,
+ * `maxTokens` and `effort`; the respond tool carries the output schema.
+ */
+export function structuredCacheKeyInput(
+  spec: Pick<
+    AiStructuredFeature<unknown>,
+    "feature" | "model" | "promptVersion" | "tier" | "maxTokens" | "effort"
+  > & { schema: z.ZodType },
+  request: AiChatRequest,
+): AiResponseCacheKeyInput {
+  const keyInput: AiResponseCacheKeyInput = {
+    feature: spec.feature,
+    model: spec.model,
+    promptVersion: spec.promptVersion,
+    tier: spec.tier,
+    maxTokens: spec.maxTokens,
+    outputSchema: respondToolFor(spec.schema).tool.parameters,
+    request,
+  };
+  if (spec.effort !== undefined) keyInput.effort = spec.effort;
+  return keyInput;
 }
 
 /**
@@ -934,20 +1020,15 @@ export async function runStructuredFeature<T>(
       );
     return parsed;
   };
-  const keyInput: AiResponseCacheKeyInput = {
-    feature: spec.feature,
-    model: spec.model,
-    promptVersion: spec.promptVersion,
-    tier: spec.tier,
-    maxTokens: spec.maxTokens,
-    request,
-  };
-  if (spec.effort !== undefined) keyInput.effort = spec.effort;
+  const cached = spec.cache && ports === productionStructuredRunPorts;
+  const media = cached
+    ? await identifyMedia(request)
+    : { sent: request, keyed: request };
   let hitModel: SupportedChatModel | undefined;
   const answer = await withAiResponseCache<Answered<T>>({
-    enabled: spec.cache && ports === productionStructuredRunPorts,
+    enabled: cached,
     force: ctx.force,
-    keyInput,
+    keyInput: structuredCacheKeyInput(spec, media.keyed),
     // Entries carry their answering model; an older bare value fails this
     // parse and is recomputed once.
     validate: (cached) => {
@@ -966,7 +1047,7 @@ export async function runStructuredFeature<T>(
     compute: async (applicationCacheStatus, recordUsage) => {
       const callContext = { ...ctx, applicationCacheStatus };
       const firstResult = await placeCall(
-        request,
+        media.sent,
         planStructuredRun(spec, callContext),
         callContext,
         recordUsage,
@@ -975,9 +1056,9 @@ export async function runStructuredFeature<T>(
       const firstValidation = ctx.validate(firstResult.value);
       if (firstValidation.ok) return firstResult;
       const repairRequest: AiChatRequest = {
-        systemPrompts: request.systemPrompts,
+        systemPrompts: media.sent.systemPrompts,
         messages: [
-          ...request.messages,
+          ...media.sent.messages,
           buildRepairTurn(firstValidation.issues, firstResult.value),
         ],
       };
@@ -1004,29 +1085,171 @@ export type EmbeddingObservers = Required<
   Pick<GatewayCallOptions, "onTransport" | "onResponse">
 >;
 
+/** One provider request's vectors, in input order, and its prompt tokens. */
+type PlacedEmbeddings = { vectors: number[][]; inputTokens: number | null };
+
+/** The claimed misses of one finite text set, embedded by one request. */
+class EmbeddingMisses {
+  private observed = new Set<number>();
+  private pending: {
+    index: number;
+    text: string;
+    resolve(value: { vector: number[]; inputTokens: number | null }): void;
+    reject(error: UnparsedError): void;
+  }[] = [];
+
+  constructor(
+    private readonly count: number,
+    private readonly place: (texts: string[]) => Promise<PlacedEmbeddings>,
+  ) {}
+
+  ready(index: number) {
+    this.observed.add(index);
+    if (this.observed.size === this.count) this.flush();
+  }
+
+  request(index: number, text: string) {
+    return new Promise<{ vector: number[]; inputTokens: number | null }>(
+      (resolve, reject) => {
+        this.pending.push({ index, text, resolve, reject });
+        this.ready(index);
+      },
+    );
+  }
+
+  private flush() {
+    const entries = this.pending
+      .splice(0)
+      .sort((left, right) => left.index - right.index);
+    if (!entries.length) return;
+    void this.place(entries.map((entry) => entry.text)).then(
+      ({ vectors, inputTokens }) => {
+        // Each entry keeps its even share: what a later hit on it avoids.
+        const share =
+          inputTokens === null
+            ? null
+            : Math.round(inputTokens / entries.length);
+        for (const [position, entry] of entries.entries())
+          entry.resolve({ vector: vectors[position]!, inputTokens: share });
+      },
+      (error: UnparsedError) => {
+        for (const entry of entries) entry.reject(error);
+      },
+    );
+  }
+}
+
 /**
- * Place one embedding call and record its usage row. The feature is a plain
- * `{feature, model}` because embedding callers name their own label (search
- * queries and entity refresh share the runner, not the label).
+ * Embed `texts` through the application cache, one entry per distinct text.
+ * The misses share one provider request with one usage row; each hit
+ * records its own cache-hit row. The feature is a plain `{feature, model}`
+ * because embedding callers name their own label (search queries and entity
+ * refresh share the runner, not the label); entries are shared across labels.
  */
 export async function runEmbeddingFeature(
   spec: { feature: string; model: SupportedEmbeddingModel },
   args: {
-    /** Reports what carries the request and what the gateway answered. */
-    embed: (observers: EmbeddingObservers) => Promise<{
+    texts: readonly string[];
+    /** Requested vector length; part of every entry's identity. */
+    dimensions: number;
+    cache: boolean;
+    /** Places one request for `texts`; the runner restores input order. */
+    embed: (
+      texts: string[],
+      observers: EmbeddingObservers,
+    ) => Promise<{
       embeddings: { index: number; vector: number[] }[];
       usage?: { promptTokens?: number | null; totalTokens?: number | null };
     }>;
   },
   ctx: Omit<AiRunContext, "runId"> & { runId?: RunId },
-) {
+): Promise<number[][]> {
+  const usageCtx = ctx.runId ? { ...ctx, runId: ctx.runId } : null;
+  const texts = [...new Set(args.texts)];
+  const vector = z
+    .array(z.number().finite())
+    .length(
+      args.dimensions,
+      `Embedding dimension mismatch: expected ${args.dimensions} values`,
+    );
+  const cache = new AiResponseCacheBatch(texts.length);
+  const misses = new EmbeddingMisses(texts.length, async (batch) => {
+    const placed = await placeEmbeddings(spec, args, ctx, usageCtx, batch);
+    for (const placedVector of placed.vectors) vector.parse(placedVector);
+    return placed;
+  });
+  // Settle every text before throwing: a sibling miss's paid vectors must be
+  // stored before a Job defers on a busy key and its Worker ends.
+  const settled = await Promise.allSettled(
+    texts.map((text, index) =>
+      withAiResponseCache({
+        enabled: args.cache,
+        batch: { batch: cache, index },
+        force: ctx.force,
+        keyInput: {
+          feature: "embedding",
+          model: spec.model,
+          promptVersion: "1",
+          embedding: { text, dimensions: args.dimensions },
+        },
+        validate: (value) => vector.parse(value),
+        onWait: () => misses.ready(index),
+        onHit: async (durationMs, avoided) => {
+          misses.ready(index);
+          if (usageCtx)
+            await recordApplicationCacheHit(
+              spec,
+              usageCtx,
+              durationMs,
+              avoided,
+            );
+        },
+        compute: async (_status, recordUsage) => {
+          const miss = await misses.request(index, text);
+          recordUsage({ inputTokens: miss.inputTokens, outputTokens: null });
+          return miss.vector;
+        },
+      }).finally(() => {
+        cache.ready(index);
+        misses.ready(index);
+      }),
+    ),
+  );
+  const failures: UnparsedError[] = settled.flatMap((result) =>
+    result.status === "rejected" ? [result.reason] : [],
+  );
+  if (failures.length) {
+    const deferred = failures.find(
+      (error): error is JobDeferredError => error instanceof JobDeferredError,
+    );
+    if (deferred && deferred.cause == null)
+      deferred.cause = failures.find(
+        (error) => !(error instanceof JobDeferredError),
+      );
+    throw deferred ?? failures[0];
+  }
+  const vectors = settled.flatMap((result) =>
+    result.status === "fulfilled" ? [result.value] : [],
+  );
+  const byText = new Map(texts.map((text, index) => [text, vectors[index]!]));
+  return args.texts.map((text) => byText.get(text)!);
+}
+
+/** Place one embedding request and record its usage row. */
+async function placeEmbeddings(
+  spec: { feature: string; model: SupportedEmbeddingModel },
+  args: Parameters<typeof runEmbeddingFeature>[1],
+  ctx: Parameters<typeof runEmbeddingFeature>[2],
+  usageCtx: UsageCallContext | null,
+  texts: string[],
+): Promise<PlacedEmbeddings> {
   const startedAt = performance.now();
   let transport: AiUsageTransport = "unknown";
   let gateway: GatewayResponseInfo | undefined;
   let responseWire: GatewayResponseWire | undefined;
-  const usageCtx = ctx.runId ? { ...ctx, runId: ctx.runId } : null;
+  const applicationCacheStatus = args.cache ? "miss" : "none";
   const result = await args
-    .embed({
+    .embed(texts, {
       onTransport: (selected) => {
         transport = selected;
         responseWire = undefined;
@@ -1045,6 +1268,7 @@ export async function runEmbeddingFeature(
           cacheStatus: "none",
           gatewayLogId: gateway?.gatewayLogId,
           gatewayCacheStatus: gateway?.gatewayCacheStatus,
+          applicationCacheStatus,
         });
       throw wrapAiGatewayError(error, {
         model: spec.model,
@@ -1056,16 +1280,29 @@ export async function runEmbeddingFeature(
         responseWire,
       });
     });
+  const inputTokens =
+    result.usage?.promptTokens ?? result.usage?.totalTokens ?? null;
   if (usageCtx) {
     await recordFeatureUsage(spec, usageCtx, {
       transport,
-      inputTokens:
-        result.usage?.promptTokens ?? result.usage?.totalTokens ?? null,
+      inputTokens,
       durationMs: Math.round(performance.now() - startedAt),
       cacheStatus: "none",
       gatewayLogId: gateway?.gatewayLogId,
       gatewayCacheStatus: gateway?.gatewayCacheStatus,
+      applicationCacheStatus,
     });
   }
-  return result;
+  // Ordered by the reported input position, not by arrival. A batch caller
+  // zips these against its own refs, so a reordered response would write
+  // every vector onto the wrong entity — silently, and only detectably as
+  // bad search results months later.
+  const vectors = [...result.embeddings]
+    .sort((left, right) => left.index - right.index)
+    .map((item) => item.vector);
+  if (vectors.length !== texts.length)
+    throw new Error(
+      `Embedding response returned ${vectors.length} vectors for ${texts.length} inputs`,
+    );
+  return { vectors, inputTokens };
 }

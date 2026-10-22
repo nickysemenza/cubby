@@ -16,9 +16,9 @@ import { account } from "~/server/db/auth.schema";
 import { getDb } from "~/server/db/helpers";
 import {
   aiUsage,
+  assessmentState,
   oauthRefreshToken,
   photoGroupProposal,
-  runFinding,
   run as runTable,
   runOperation,
   session,
@@ -28,6 +28,10 @@ import {
   PURCHASE_AGENT_OAUTH_CLIENT_ID,
 } from "~/server/domains/purchase-import/repo/agent-auth";
 import { setMailImport } from "~/server/domains/purchase-import/repo/mail-import-settings";
+import {
+  isRunFinding,
+  runFindingColumns,
+} from "~/server/domains/purchase-import/repo/run-finding";
 
 type Db = TestDbContext["db"];
 
@@ -132,9 +136,12 @@ export async function workerdDiagnostic(
         .where(eq(runOperation.runId, id)),
       // Findings retain the review reason beside the Run-owned display history.
       getDb(db)
-        .select({ kind: runFinding.kind, summary: runFinding.summary })
-        .from(runFinding)
-        .where(eq(runFinding.runId, id)),
+        .select({
+          kind: runFindingColumns.kind,
+          summary: runFindingColumns.summary,
+        })
+        .from(assessmentState)
+        .where(and(isRunFinding, eq(assessmentState.runId, id))),
       getDb(db)
         .select({ history: runTable.progressHistory })
         .from(runTable)

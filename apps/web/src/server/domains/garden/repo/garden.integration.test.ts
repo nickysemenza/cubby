@@ -5,8 +5,10 @@ import { taxonomyShortcode } from "tooling/product-category-fixtures";
 import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { productionDerivedRefreshPorts } from "~/server/domains/run/service/derived-refresh";
-import { captureBackgroundQueue } from "~/server/testing/background-queue";
+import {
+  drainDerivedRefreshFrontier,
+  captureBackgroundQueue,
+} from "~/server/testing/background-queue";
 let backgroundQueue: ReturnType<typeof captureBackgroundQueue>;
 beforeEach(() => {
   backgroundQueue = captureBackgroundQueue();
@@ -499,9 +501,7 @@ describe("garden workflows", () => {
         ),
       );
     expect(liveRows).toHaveLength(1);
-    await backgroundQueue.drain(ctx.db, {
-      derivedRefreshPorts: productionDerivedRefreshPorts,
-    });
+    await drainDerivedRefreshFrontier(ctx.db);
     const refreshedSearchText = await getSearchDocumentEmbeddingText(
       ctx.db,
       "gardenEntry",

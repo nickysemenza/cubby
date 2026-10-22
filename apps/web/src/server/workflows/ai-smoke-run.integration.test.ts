@@ -11,14 +11,10 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { getDb } from "~/server/db/helpers";
-import {
-  aiAnalysis,
-  runFinding,
-  run as runTable,
-  orderMail,
-} from "~/server/db/schema";
+import { aiAnalysis, run as runTable, orderMail } from "~/server/db/schema";
 import { requireActor } from "~/server/http/request-context";
 import { createTestRequestContext } from "~/server/testing/request-context";
+import { runFinding } from "~/server/testing/run-finding.fixtures";
 
 import { PURCHASE_IMPORT_MAIL_FEATURE } from "../ai/policy/features";
 import { RESPOND_TOOL_NAME, type StructuredRunPorts } from "../ai/run-feature";

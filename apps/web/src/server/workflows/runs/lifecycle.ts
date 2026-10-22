@@ -1,44 +1,29 @@
-import { aiRefreshRunInput } from "@cubby/schemas/ai-evaluation";
+import { aiEvaluationState } from "@cubby/schemas/ai-evaluation";
 import { runEntityId, type RunId } from "@cubby/schemas/identifiers";
-import { runStatus } from "@cubby/schemas/run-fields";
-import { MAX_AUTOMATIC_WORKFLOW_FAILURES } from "@cubby/schemas/workflow-runs";
-import { CUBBY_AI_GATEWAY_ID } from "@cubby/shared/ai/gateway-metadata";
-import { and, eq, getTableColumns, inArray, lt, sql } from "drizzle-orm";
+import { jobState } from "@cubby/schemas/job";
+import { runStepState } from "@cubby/schemas/run-step";
+import { and, eq, getTableColumns, inArray, isNull, sql } from "drizzle-orm";
 
 import {
   describeErrorCauses,
   scrubErrorMessage,
 } from "~/lib/error-diagnostics";
-import { getAiGatewayEgress } from "~/server/cf-env";
 import type { Database } from "~/server/db";
-import { getDb, withTransactionDatabase } from "~/server/db/helpers/core";
-import { run as runTable } from "~/server/db/schema";
 import {
-  hasAiRefreshRunCapacity,
-  tryLockAiRefreshScheduling,
-  AI_REFRESH_SCHEDULING_LOCK,
-} from "~/server/domains/run/repo/ai-refresh-admission";
+  getDb,
+  withTransactionDatabase,
+  runAfterCommit,
+} from "~/server/db/helpers/core";
+import { run as runTable, job } from "~/server/db/retained-tables";
 import { recordRunProgress as recordProgress } from "~/server/domains/run/repo/run-progress";
-
 import {
-  WORKFLOW_RUN_PURPOSES,
-  isWorkflowRunPurpose,
-  workflowInstanceId,
-  type WorkflowRunParams,
-  type WorkflowRunPurpose,
-} from "./contract";
-import {
-  ENDED_INSTANCE_STATES,
-  productionWorkflowLauncher,
-  type WorkflowLauncher,
-} from "./launcher";
+  assertCurrentJob,
+  currentJobExecution,
+} from "~/server/generic/jobs/repo/execution";
+import { enqueueJob, retryJob } from "~/server/generic/jobs/repo/jobs";
 
-/**
- * A failure as the Run keeps it: a one-line headline (HTTP status, error
- * code), then every scrubbed cause in full — upstream bodies, SQL text and
- * parameters survive; only credential-shaped values are redacted — then the
- * Sentry event.
- */
+import type { WorkflowRunParams, WorkflowRunPurpose } from "./contract";
+
 export const runFailureText = (
   error: Error | string,
   sentryEventId?: string,
@@ -67,10 +52,6 @@ export const runFailureText = (
   ].join("\n");
 };
 
-const attemptOf = sql<number>`coalesce((${runTable.progress}->>'attempt')::int, 0)`;
-const attemptIs = (attempt: number) => sql`${attemptOf} = ${attempt}`;
-
-/** Workflow producers carry their originating attempt and ordered delivery position. */
 export const recordRunProgress = (
   db: Database,
   runId: RunId,
@@ -81,178 +62,94 @@ export const recordRunProgress = (
   recordProgress(db, {
     runId,
     eventId: crypto.randomUUID(),
-    generation: `workflow:${stamp.attempt}`,
+    generation: `job:${currentJobExecution()?.claim.generation ?? stamp.attempt}`,
     sequence: stamp.sequence,
     phase,
     detail,
   });
 
-/**
- * Start the next attempt of a Workflow-backed Run: bump `progress.attempt`,
- * reopen the Run, then create the instance. A Run another attempt is still
- * running is refused. When Cloudflare refuses the instance, the Run fails
- * with that reason so it never sits `running` with nothing behind it.
- */
 type LaunchWorkflowRunInput = {
   runId: RunId;
   purpose: WorkflowRunPurpose;
-  /**
-   * Recovery cannot undo cancellation or reopen a completed Run. Concurrent
-   * recoveries race for one attempt, so an automatic launch that finds the Run
-   * already running, ended or cancelled resolves `null` instead of throwing.
-   */
   automatic?: boolean;
-  /** Explicit rediscovery reports busy admission while retaining automatic recovery fences. */
-  reportAdmissionRefusal?: true;
-  /** Only the member's explicit retry control may clear a cancellation. */
-  retryCancelled?: true;
-  /** A bounded instance hands off only while it still owns this attempt. */
-  expectedAttempt?: number;
 };
 type LaunchedWorkflowRun = { attempt: number; instanceId: string };
 
 export async function launchWorkflowRun(
   db: Database,
   input: LaunchWorkflowRunInput & { automatic: true },
-  launcher?: WorkflowLauncher,
 ): Promise<LaunchedWorkflowRun | null>;
 export async function launchWorkflowRun(
   db: Database,
   input: LaunchWorkflowRunInput & { automatic?: false },
-  launcher?: WorkflowLauncher,
 ): Promise<LaunchedWorkflowRun>;
+/** Run is provenance/history. The Job row owns execution, retry, pause and cancellation. */
 export async function launchWorkflowRun(
   db: Database,
   input: LaunchWorkflowRunInput,
-  launcher: WorkflowLauncher = productionWorkflowLauncher,
 ): Promise<LaunchedWorkflowRun | null> {
-  let refusal = "This Run is already running; wait for it or cancel it.";
-  let admissionRefused = false;
-  const reopened = await withTransactionDatabase(db, async (tx) => {
-    const database = getDb(tx);
-    if (input.purpose === "ai_refresh" && input.expectedAttempt === undefined) {
-      const [owner] = await database
-        .select({
-          status: runTable.status,
-          discovery: sql<boolean>`coalesce((${runTable.input}->>${aiRefreshRunInput.keyof().enum.discovery})::boolean, false)`,
-          parentRunId: runTable.parentRunId,
-        })
-        .from(runTable)
-        .where(eq(runTable.id, input.runId));
-      if (!owner) {
-        refusal = "The Run no longer exists.";
-        return null;
-      }
-      if (!owner.parentRunId && !owner.discovery) {
-        if (!(await tryLockAiRefreshScheduling(tx))) {
-          admissionRefused = true;
-          refusal = `AI refresh scheduling is busy (${AI_REFRESH_SCHEDULING_LOCK}); retry shortly.`;
-          return null;
-        }
-        if (!(await hasAiRefreshRunCapacity(tx, input.runId))) {
-          admissionRefused = true;
-          refusal =
-            "AI refresh execution has no free Run slots; wait for active or paused Runs to finish or cancel one.";
-          return null;
-        }
-      }
+  return withTransactionDatabase(db, async (tx) => {
+    const [owner] = await getDb(tx)
+      .select()
+      .from(runTable)
+      .where(eq(runTable.id, input.runId))
+      .for("update");
+    if (!owner) throw new Error("Run no longer exists");
+    let execution = await enqueueJob(tx, {
+      key: `run:${input.runId}`,
+      kind: "run.execute",
+      input: { runId: input.runId, purpose: input.purpose },
+      runId: input.runId,
+    });
+    if (["failed", "cancelled", "paused"].includes(execution.state)) {
+      if (input.automatic) return null;
+      const retried = await retryJob(tx, execution.id);
+      if (retried) execution = retried;
     }
-    const [claimed] = await database
+    if (execution.state === "completed") {
+      if (input.automatic) return null;
+      const pending = await getDb(tx).execute<{ pending: boolean }>(sql`SELECT (
+        EXISTS (SELECT 1 FROM "AiEvaluation" e WHERE e.state IN (${aiEvaluationState.enum.queued},${aiEvaluationState.enum.running},${aiEvaluationState.enum.retry_wait},${aiEvaluationState.enum.result_ready})
+          AND e.receipt->>'retryEvaluationId' IS NULL
+          AND (e."runId"=${input.runId}::uuid OR EXISTS (SELECT 1 FROM "AiEvaluationRequest" r WHERE r."evaluationId"=e.id AND r."runId"=${input.runId}::uuid AND r."cancelledAt" IS NULL)))
+        OR EXISTS (SELECT 1 FROM "RunStep" s WHERE s."runId"=${input.runId}::uuid AND s.state=${runStepState.enum.queued})
+      ) AS pending`);
+      if (!pending.rows[0]?.pending)
+        throw new Error("Completed Run cannot be relaunched; create a new Run");
+      execution = await enqueueJob(tx, {
+        key: execution.key,
+        kind: execution.kind,
+        input: execution.input,
+        runId: input.runId,
+        invalidate: true,
+      });
+    }
+    if (!input.automatic) {
+      const pending = await getDb(tx).execute<{
+        id: string;
+      }>(sql`SELECT j.id FROM "Job" j JOIN "AiEvaluation" e ON j.key='ai-evaluation:' || e.id::text
+        WHERE j.state=${jobState.enum.paused} AND (e."runId"=${input.runId}::uuid OR EXISTS (SELECT 1 FROM "AiEvaluationRequest" r WHERE r."evaluationId"=e.id AND r."runId"=${input.runId}::uuid AND r."cancelledAt" IS NULL))`);
+      for (const row of pending.rows) await retryJob(tx, row.id);
+    }
+    await getDb(tx)
       .update(runTable)
       .set({
         status: "running",
         endedAt: null,
         failureCode: null,
         dispatchError: null,
-        routine: false,
-        progress: sql`coalesce(${runTable.progress}, '{}'::jsonb) || jsonb_build_object('attempt', ${attemptOf} + 1, 'automaticRecoveryFailures', ${input.automatic || input.expectedAttempt !== undefined ? sql`CASE WHEN ${runTable.status} IN (${runStatus.enum.failed}, ${runStatus.enum.dispatch_failed}) THEN coalesce((${runTable.progress}->>'automaticRecoveryFailures')::int, 0) + 1 ELSE coalesce((${runTable.progress}->>'automaticRecoveryFailures')::int, 0) END` : 0}::int)`,
+        progress: sql`coalesce(${runTable.progress}, '{}'::jsonb) || jsonb_build_object('attempt', ${execution.generation}::int)`,
       })
-      .where(
-        and(
-          eq(runTable.id, input.runId),
-          input.retryCancelled && !input.automatic
-            ? undefined
-            : sql`${runTable.failureCode} IS DISTINCT FROM 'user_cancelled'`,
-          input.expectedAttempt === undefined
-            ? sql`(${runTable.status} <> 'running' OR ${attemptOf} = 0)`
-            : and(
-                eq(runTable.status, "running"),
-                attemptIs(input.expectedAttempt),
-              ),
-          input.automatic
-            ? and(
-                inArray(runTable.status, [
-                  "running",
-                  "failed",
-                  "dispatch_failed",
-                  "paused_auth",
-                ]),
-                sql`(${runTable.status} NOT IN (${runStatus.enum.failed}, ${runStatus.enum.dispatch_failed}) OR coalesce((${runTable.progress}->>'automaticRecoveryFailures')::int, 0) < ${MAX_AUTOMATIC_WORKFLOW_FAILURES})`,
-              )
-            : undefined,
-        ),
-      )
-      .returning({ shortcode: runTable.shortcode, attempt: attemptOf });
-    if (!claimed && !input.automatic) {
-      const [current] = await database
-        .select({
-          status: runTable.status,
-          failureCode: runTable.failureCode,
-          attempt: attemptOf,
-        })
-        .from(runTable)
-        .where(eq(runTable.id, input.runId));
-      refusal =
-        current?.failureCode === "user_cancelled"
-          ? "This Run was cancelled by a member; use explicit Run Retry to restart it."
-          : `This Run is already running or no longer matches the launch: status=${current?.status ?? "missing"}, failureCode=${current?.failureCode ?? "none"}, attempt=${current?.attempt ?? "missing"}, expectedAttempt=${input.expectedAttempt ?? "initial or stopped"}.`;
-    }
-    return claimed ?? null;
-  });
-  if (!reopened) {
-    if (input.automatic && !(input.reportAdmissionRefusal && admissionRefused))
-      return null;
-    throw new Error(refusal);
-  }
-  const instanceId = workflowInstanceId(reopened.shortcode, reopened.attempt);
-  await recordRunProgress(
-    db,
-    input.runId,
-    "attempt_started",
-    `Started Workflow instance ${instanceId}`,
-    { attempt: reopened.attempt, sequence: 0 },
-  );
-  try {
-    if (
-      input.purpose === "mail_reclassify" ||
-      input.purpose === "suggestion_sweep"
-    )
-      await getAiGatewayEgress(CUBBY_AI_GATEWAY_ID)?.scheduleAiWorkRecovery(
-        input.runId,
-      );
-    await launcher.create(input.purpose, instanceId, {
-      runId: input.runId,
-      attempt: reopened.attempt,
+      .where(eq(runTable.id, input.runId));
+    await runAfterCommit(tx, async () => {
+      await (
+        await import("../background-tasks/publish")
+      ).wakeJobs({ source: "run-launch", jobId: execution.id });
     });
-  } catch (error) {
-    await failWorkflowRun(
-      db,
-      { runId: input.runId, attempt: reopened.attempt },
-      {
-        failureCode: "workflow_dispatch_failed",
-        message: runFailureText(error instanceof Error ? error : String(error)),
-      },
-    );
-    throw error;
-  }
-  return { attempt: reopened.attempt, instanceId };
+    return { attempt: execution.generation, instanceId: execution.id };
+  });
 }
 
-/**
- * The Run a step may act on: still running and still owned by this attempt.
- * Null once it was cancelled, failed, or superseded by a retry — the step
- * then stops instead of writing over the newer attempt.
- */
 export function claimWorkflowRun(
   db: Database,
   params: WorkflowRunParams,
@@ -267,6 +164,20 @@ export async function claimWorkflowRun(
   params: WorkflowRunParams,
   projection?: "id",
 ) {
+  await assertCurrentJob(db);
+  const current = currentJobExecution();
+  if (
+    !current ||
+    current.claim.kind !== "run.execute" ||
+    current.claim.input === null ||
+    typeof current.claim.input !== "object" ||
+    !("runId" in current.claim.input) ||
+    current.claim.input.runId !== params.runId
+  )
+    throw new Error(
+      "Background Run execution requires its universal Job claim",
+    );
+  if (current.claim.generation !== params.attempt) return null;
   const [row] = await getDb(db)
     .select(
       projection === "id" ? { id: runTable.id } : getTableColumns(runTable),
@@ -276,107 +187,66 @@ export async function claimWorkflowRun(
       and(
         eq(runTable.id, runEntityId.parse(params.runId)),
         eq(runTable.status, "running"),
-        attemptIs(params.attempt),
+        isNull(runTable.deletedAt),
+        isNull(runTable.retiredAt),
       ),
     )
     .limit(1);
   return row ?? null;
 }
 
-/** End this attempt's Run as failed; a later attempt or a cancel is left alone. */
+/** Terminal domain outcome is retained; retry policy remains exclusively on Job. */
 export async function failWorkflowRun(
   db: Database,
   params: WorkflowRunParams,
   input: { failureCode: string; message: string },
 ): Promise<boolean> {
-  const runId = runEntityId.parse(params.runId);
-  // A partially committed failure would make the fresh retry's running-status
-  // fence skip its combined diagnostic. Commit the status and timeline together.
-  return withTransactionDatabase(db, async (tx) => {
-    const [failed] = await getDb(tx)
-      .update(runTable)
-      .set({
-        status: "failed",
-        endedAt: new Date(),
-        failureCode: input.failureCode,
-        dispatchError: input.message,
-        progress: sql`coalesce(${runTable.progress}, '{}'::jsonb) || '{"phase":"failed"}'::jsonb`,
-      })
-      .where(
-        and(
-          eq(runTable.id, runId),
-          eq(runTable.status, "running"),
-          attemptIs(params.attempt),
-        ),
-      )
-      .returning({ id: runTable.id });
-    if (!failed) return false;
-    await recordRunProgress(
-      tx,
-      runId,
-      "failed",
-      input.message.split("\n", 1)[0] ?? "",
-      { attempt: params.attempt, sequence: Number.MAX_SAFE_INTEGER },
-    );
-    await (await import("./wake")).wakeStepRunParent(tx, runId);
-    return true;
-  });
+  if (!currentJobExecution())
+    throw new Error("Run failure requires its universal Job claim");
+  await assertCurrentJob(db);
+  const [failed] = await getDb(db)
+    .update(runTable)
+    .set({
+      status: "failed",
+      endedAt: new Date(),
+      failureCode: input.failureCode,
+      dispatchError: input.message,
+    })
+    .where(eq(runTable.id, runEntityId.parse(params.runId)))
+    .returning({ id: runTable.id });
+  return Boolean(failed);
 }
 
-/** Quiet this long before a running Run's instance is checked. */
-const RECONCILE_AFTER_MS = 30 * 60_000;
-
-/**
- * Cron backstop: a Run still `running` whose instance has ended (errored
- * before its failure step, terminated, expired) or was never created is
- * failed with what Cloudflare reports, so it neither lingers nor blocks the
- * next scheduled pass. A waiting or running instance is left alone.
- */
-export async function reconcileWorkflowRuns(
-  db: Database,
-  launcher: WorkflowLauncher = productionWorkflowLauncher,
-  now = new Date(),
-): Promise<number> {
-  const stale = await getDb(db)
-    .select({
-      id: runTable.id,
-      shortcode: runTable.shortcode,
-      purpose: runTable.purpose,
-      attempt: attemptOf,
-    })
-    .from(runTable)
+/** Lost wakes and interrupted workers are recovered by dueJobs, never new Run attempts. */
+export async function reconcileWorkflowRuns(db: Database) {
+  const rows = await getDb(db)
+    .select({ runId: job.runId, state: job.state, error: job.error })
+    .from(job)
+    .innerJoin(runTable, eq(runTable.id, job.runId))
     .where(
       and(
-        inArray(runTable.purpose, [...WORKFLOW_RUN_PURPOSES]),
+        eq(job.kind, "run.execute"),
         eq(runTable.status, "running"),
-        lt(runTable.updatedAt, new Date(now.getTime() - RECONCILE_AFTER_MS)),
+        inArray(job.state, ["failed", "cancelled", "paused"]),
       ),
-    );
-  let failed = 0;
-  for (const row of stale) {
-    if (!isWorkflowRunPurpose(row.purpose)) continue;
-    const params = { runId: row.id, attempt: row.attempt };
-    if (row.attempt === 0) {
-      if (
-        await failWorkflowRun(db, params, {
-          failureCode: "workflow_dispatch_failed",
-          message: "The Run was saved but its Workflow was never started",
-        })
-      )
-        failed += 1;
-      continue;
-    }
-    const instanceId = workflowInstanceId(row.shortcode, row.attempt);
-    const status = await launcher.status(row.purpose, instanceId);
-    if (!ENDED_INSTANCE_STATES.has(status.state)) continue;
-    const detail = status.error ? `: ${status.error}` : "";
-    if (
-      await failWorkflowRun(db, params, {
-        failureCode: "workflow_instance_ended",
-        message: `Workflow instance ${instanceId} ended (${status.state}) without finishing the Run${detail}`,
-      })
     )
-      failed += 1;
+    .limit(100);
+  for (const row of rows) {
+    if (!row.runId || !["failed", "cancelled", "paused"].includes(row.state))
+      continue;
+    await getDb(db)
+      .update(runTable)
+      .set({
+        status: row.state === "paused" ? "paused" : "failed",
+        dispatchError: row.error,
+        failureCode:
+          row.state === "cancelled"
+            ? "user_cancelled"
+            : row.state === "failed"
+              ? "job_failed"
+              : null,
+      })
+      .where(and(eq(runTable.id, row.runId), eq(runTable.status, "running")));
   }
-  return failed;
+  return rows.length;
 }

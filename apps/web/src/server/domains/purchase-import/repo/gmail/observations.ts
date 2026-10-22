@@ -23,9 +23,9 @@ import {
   emailRetrievalFailure,
   email as emailTable,
   run,
-  runFinding,
 } from "~/server/db/schema";
 import { readRetainedMail } from "~/server/domains/mail/repo/retained-mail";
+import { publishRunFinding } from "~/server/domains/purchase-import/repo/run-finding";
 import { recordFeedback } from "~/server/generic/assessment/repo/assessment";
 import {
   ensureEmailAssessment,
@@ -211,7 +211,7 @@ export async function recordEmailClassificationObservation(
       });
     // A review conflict is a worklist filter, not a Run finding.
     if (parsed.conflict?.kind === "accepted_unrelated" && parsed.runId)
-      await tx.insert(runFinding).values({
+      await publishRunFinding(tx, {
         runId: runEntityId.parse(parsed.runId),
         ledgerPartyId: email.ledgerPartyId,
         entityId: email.id,

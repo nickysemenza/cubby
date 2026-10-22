@@ -1,5 +1,6 @@
 import { aiEvaluationState } from "@cubby/schemas/ai-evaluation";
 import type { RunId } from "@cubby/schemas/identifiers";
+import { jobState } from "@cubby/schemas/job";
 import { runStatus } from "@cubby/schemas/run-fields";
 import { and, asc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
@@ -14,6 +15,7 @@ import {
   aiEvaluationRequest,
   run,
 } from "~/server/db/retained-tables";
+import { enqueueJob } from "~/server/generic/jobs/repo/jobs";
 
 export const PENDING_AI_STATES: readonly (typeof aiEvaluation.$inferSelect)["state"][] =
   [
@@ -71,6 +73,12 @@ export async function enqueueAiEvaluation(
           sequence,
         })
         .onConflictDoNothing();
+      await enqueueJob(tx, {
+        key: `ai-evaluation:${existing.id}`,
+        kind: "ai.evaluation",
+        input: { evaluationId: existing.id },
+        priority: existing.executionKind === "ai_refresh" ? 0 : 10,
+      });
       return existing;
     }
     throw new Error(
@@ -129,12 +137,8 @@ export async function evaluationIsExecutable(
       and(
         eq(aiEvaluation.id, evaluation.id),
         eq(aiEvaluation.runId, runId),
-        eq(aiEvaluation.attemptToken, evaluation.token),
+        sql`EXISTS (SELECT 1 FROM "Job" j WHERE j.key=${`ai-evaluation:${evaluation.id}`} AND j.state=${jobState.enum.running} AND j."leaseToken"=${evaluation.token}::uuid AND j."leaseExpiresAt">now())`,
         inArray(aiEvaluation.state, ["running", "result_ready"]),
-        sql`EXISTS (
-        SELECT 1 FROM "Run" AS executor WHERE executor.id = ${aiEvaluation.runId} AND executor."deletedAt" IS NULL AND executor."retiredAt" IS NULL
-          AND COALESCE((executor.progress->>'attempt')::integer, 0) = ${aiEvaluation.runAttempt}
-      )`,
         sql`EXISTS (
         SELECT 1 FROM "AiEvaluationRequest" AS demand JOIN "Run" AS requester ON requester.id = demand."runId"
         WHERE demand."evaluationId" = ${aiEvaluation.id} AND demand."cancelledAt" IS NULL
@@ -166,7 +170,6 @@ export async function cancelAiEvaluationRequests(db: Database, runId: RunId) {
     .update(aiEvaluation)
     .set({
       state: "cancelled",
-      deadlineAt: null,
       error: "Cancelled by a member",
     })
     .where(

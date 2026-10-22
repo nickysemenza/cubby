@@ -1,5 +1,4 @@
-import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
-import { generateShortcode } from "@cubby/shared";
+import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
@@ -11,18 +10,19 @@ import {
   photoGroupProposal,
   inventoryEntry,
   purchasePaymentEvidence,
-  runFinding,
 } from "~/server/db/schema";
 import { memberImport } from "~/server/domains/purchase-import/operations/order-import.fixtures";
 import {
   prepareSourceOrderReconciliation,
   commitAcceptedSourceOrderReconciliation,
 } from "~/server/domains/purchase-import/repo/reconciliation";
+import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import {
   createProductFixture,
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
+import { runFinding } from "~/server/testing/run-finding.fixtures";
 
 import { linkablePhotoGroupExpenses } from "./expense-link";
 
@@ -30,7 +30,7 @@ describe("photo review Expense link", () => {
   const ctx = withTestDb();
 
   it("reviews a live unlinked accepted line before linking the approved Product, with no extra money or stock on replay", async () => {
-    const party = await insertWithShortcode(ctx.db, "ledgerParty", {
+    await insertWithShortcode(ctx.db, "ledgerParty", {
       name: "Synthetic reviewer",
       kind: "member" as const,
       userId: ctx.actor.userId,
@@ -40,24 +40,19 @@ describe("photo review Expense link", () => {
       makeProductInput({ name: "Synthetic Canvas work boots size 7" }),
       ctx.actor,
     );
-    const runId = parseEntityId("run", crypto.randomUUID());
+    const runId = await ensureRun(ctx.db, ctx.actor, {
+      purpose: "photo_inventory",
+      trigger: "manual",
+      status: "completed",
+    });
     const [run] = await getDb(ctx.db)
-      .insert(runTable)
-      .values({
-        id: runId,
-        shortcode: generateShortcode("run"),
-        ledgerPartyId: party.id,
-        actorUserId: ctx.actor.userId,
+      .update(runTable)
+      .set({
         actorName: "Synthetic reviewer",
         actorEmail: "review@example.com",
-        actorLedgerPartyShortcode: party.shortcode,
-        actorLedgerPartyName: party.name,
-        actorLedgerPartyKind: "member",
         agentSessionId: `photo-link-test:${runId}`,
-        purpose: "photo_inventory",
-        trigger: "manual",
-        status: "completed",
       })
+      .where(eq(runTable.id, runId))
       .returning();
     await getDb(ctx.db).insert(photoGroupProposal).values({
       runId,

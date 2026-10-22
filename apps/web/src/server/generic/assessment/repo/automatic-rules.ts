@@ -1,6 +1,5 @@
 import { SUGGESTION_AUTO_APPLY_THRESHOLD } from "@cubby/schemas/ai-evaluation";
 import {
-  AUTOMATIC_RULE_AUDIT_EVERY,
   FIELD_ASSIGNMENT_REVISION,
   type AutomaticRuleFamily,
   type AutomaticRuleKey,
@@ -10,7 +9,6 @@ import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
 import { requiresSuggestionReview } from "@cubby/schemas/field-suggestion";
 import type { StatementTransactionJudgment } from "@cubby/schemas/statement-suggestion";
 import { cents } from "@cubby/shared";
-import { sha256Hex } from "@cubby/shared/sha256";
 
 import { STATEMENT_CHARGE_IDENTITY_FEATURE } from "~/server/ai/policy/features";
 import { STATEMENT_SUGGESTION_REVISION } from "~/server/domains/statement-import/repo/statement-suggestions";
@@ -43,15 +41,9 @@ type Declaration<F extends AutomaticRuleFamily> = {
   description: string;
   /** Read at call time: the statement revision lives in a module that imports this one. */
   revision: () => string;
-  /**
-   * Precision is kept per decision model, and a match applies only while
-   * its own model's window is eligible: switching the rule on for one
-   * measured model never authorizes another.
-   */
-  perModel: boolean;
-  execution: "measured" | "import_clean" | "field_policy";
-  /** The match's model qualifier (null unless `perModel`), or undefined for no match. */
-  match: (facts: FactsOf[F]) => { model: string | null } | undefined;
+  /** `member_switch` applies only while a member has it on for this revision. */
+  execution: "member_switch" | "import_clean" | "field_policy";
+  match: (facts: FactsOf[F]) => boolean;
   application: (facts: FactsOf[F]) => RuleApplication;
 };
 
@@ -71,28 +63,25 @@ export const AUTOMATIC_RULES = {
     description:
       "Fill an empty declared assignment field at 95% confidence with current evidence and a clear winner, preserving member decisions.",
     revision: () => FIELD_ASSIGNMENT_REVISION,
-    perModel: false,
     match: (facts) =>
       facts.kind === "addition" &&
       entityFieldByKey(facts.entity, facts.field)?.control?.suggest?.mode ===
         "fill" &&
       !requiresSuggestionReview(facts.entity, facts.field) &&
-      facts.confidence >= SUGGESTION_AUTO_APPLY_THRESHOLD
-        ? { model: null }
-        : undefined,
+      facts.confidence >= SUGGESTION_AUTO_APPLY_THRESHOLD,
     application: () => ({ kind: "accept_as_is" }),
   },
   "statement_transaction.attach": {
-    execution: "measured",
+    execution: "member_switch",
     family: "statement_transaction",
     description:
       "Attach a charge to its only candidate when no sibling could be the same money, no other charge already settles that candidate, the amounts match to the cent, and the decision model labels it the same charge with high confidence.",
     revision: () =>
       `${STATEMENT_SUGGESTION_REVISION}/${STATEMENT_CHARGE_IDENTITY_FEATURE.promptVersion}`,
-    perModel: true,
     match: (judgment) => {
       const only = soleCandidate(judgment);
-      return judgment.recommended === "attach" &&
+      return Boolean(
+        judgment.recommended === "attach" &&
         (!(
           judgment.create?.status === "posted" &&
           ["purchase", "refund", "fee"].includes(judgment.create.kind)
@@ -105,9 +94,8 @@ export const AUTOMATIC_RULES = {
         cents(only.amount) === cents(judgment.create.amount) &&
         only.label?.same === "same" &&
         only.label.confidence === "high" &&
-        only.label.model
-        ? { model: only.label.model }
-        : undefined;
+        only.label.model,
+      );
     },
     application: (judgment) => ({
       kind: "statement_attach",
@@ -120,11 +108,8 @@ export const AUTOMATIC_RULES = {
     description:
       "Book clean posted spending from imports automatically by default. Pause to leave future clean spending suggestions pending for review.",
     revision: () => STATEMENT_SUGGESTION_REVISION,
-    perModel: false,
     match: (judgment) =>
-      judgment.clean && judgment.spending?.status === "ready"
-        ? { model: null }
-        : undefined,
+      judgment.clean && judgment.spending?.status === "ready",
     application: () => ({ kind: "accept_as_is" }),
   },
 } satisfies { [K in AutomaticRuleKey]: Declaration<FamilyOf<K>> };
@@ -136,7 +121,7 @@ export type AutomaticRuleMatch = {
   application: RuleApplication;
 };
 
-/** `<ruleKey>@<revision>`; its windows are this base or `<base>@<model>`. */
+/** `<ruleKey>@<revision>`: the stamp a publication and receipt carry. */
 export const ruleBase = (key: AutomaticRuleKey) =>
   `${key}@${AUTOMATIC_RULES[key].revision()}`;
 
@@ -145,14 +130,12 @@ function evaluate<F extends AutomaticRuleFamily>(
   rule: Declaration<F>,
   facts: FactsOf[F],
 ): AutomaticRuleMatch[] {
-  const match = rule.match(facts);
-  if (!match) return [];
-  const base = ruleBase(key);
+  if (!rule.match(facts)) return [];
   return [
     {
       key,
       revision: rule.revision(),
-      stamp: match.model ? `${base}@${match.model}` : base,
+      stamp: ruleBase(key),
       application: rule.application(facts),
     },
   ];
@@ -176,42 +159,11 @@ export const matchStatementRules = (judgment: StatementTransactionJudgment) => [
   ),
 ];
 
-/** The deterministic 5% of a family's subjects held for review. */
-async function isAuditSample(family: string, subjectKey: string) {
-  const digest = await sha256Hex(`${family}:${subjectKey}`);
-  return BigInt(`0x${digest}`) % BigInt(AUTOMATIC_RULE_AUDIT_EVERY) === 0n;
-}
-
-/** Audit choice; tests substitute one so their outcome never rides on random ids. */
-export type AuditSampler = (
-  family: string,
-  subjectKey: string,
-) => Promise<boolean> | boolean;
-
 /**
- * The publication stamp an AssessmentState carries in `data`: the rules it
- * matched when published and whether it is held as an audit sample. Empty
- * when nothing matched, so unmatched rows keep their prior shape.
+ * The publication stamp a statement suggestion carries in `data`: the rules it
+ * matched when published, so a judgment from an older revision never applies.
  */
-export async function automaticRuleStamp(
-  family: AutomaticRuleFamily,
+export const automaticRuleStamp = (
   matches: readonly AutomaticRuleMatch[],
-  subjectKey: string,
-  sample: AuditSampler = isAuditSample,
-): Promise<{ matchedRules?: string[]; auditSample?: boolean }> {
-  if (!matches.length) return {};
-  return {
-    matchedRules: matches.map((match) => match.stamp),
-    auditSample: await sample(family, subjectKey),
-  };
-}
-
-export const fieldSubjectKey = (row: {
-  entity: string;
-  recordId: string;
-  field: string;
-}) => `${row.entity}:${row.recordId}:${row.field}`;
-export const statementSubjectKey = (row: {
-  source: string;
-  chargeKey: string;
-}) => `${row.source}:${row.chargeKey}`;
+): { matchedRules?: string[] } =>
+  matches.length ? { matchedRules: matches.map((match) => match.stamp) } : {};

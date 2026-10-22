@@ -1,4 +1,3 @@
-import { workflowRecoveryProgress } from "./workflow-runs";
 import { z } from "zod";
 import { emailLinkState } from "./email-fields.js";
 import {
@@ -154,7 +153,6 @@ export type RerunEmailPreviewOut = z.infer<typeof rerunEmailPreviewOut>;
 
 /** Exact publication receipts; an observation alone cannot establish an outcome. */
 export const mailReclassificationCheckpoint = z.strictObject({
-  ...workflowRecoveryProgress.shape,
   kind: z.literal("mail_reclassification"),
   version: z.literal(1),
   attempt: z.number().int().nonnegative().optional(),

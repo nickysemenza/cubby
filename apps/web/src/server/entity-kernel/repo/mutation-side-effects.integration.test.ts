@@ -5,10 +5,7 @@ import {
   projectCreateInput,
   taskCreateInput,
 } from "@cubby/schemas/project";
-import type {
-  SearchableEntity,
-  SearchableEntityRef,
-} from "@cubby/schemas/search";
+import type { SearchableEntity } from "@cubby/schemas/search";
 import { testUserId } from "@cubby/schemas/testing";
 import { eq } from "drizzle-orm";
 import type { CreatableEntity, EntityOverrides } from "tooling/factories/build";
@@ -18,9 +15,10 @@ import { buildKernelContext } from "tooling/scenarios/context";
 import { TEST_USER_ID, withTestDb } from "tooling/test-setup";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { processDerivedRefreshPage } from "~/server/domains/run/service/derived-refresh";
-import type { DerivedRefreshPorts } from "~/server/generic/derived-refresh/repo/refresh-ports.boundary";
-import { captureBackgroundQueue } from "~/server/testing/background-queue";
+import {
+  drainDerivedRefreshFrontier,
+  captureBackgroundQueue,
+} from "~/server/testing/background-queue";
 let backgroundQueue: ReturnType<typeof captureBackgroundQueue>;
 beforeEach(() => {
   backgroundQueue = captureBackgroundQueue();
@@ -30,7 +28,7 @@ afterEach(() => backgroundQueue.restore());
 import { mock } from "~/lib/test/mock-schema";
 import type { Database } from "~/server/db";
 import { getDb } from "~/server/db/helpers";
-import { task } from "~/server/db/schema";
+import { plant as plantTable, task } from "~/server/db/schema";
 import { createExpense } from "~/server/domains/expense/repo/crud";
 import { deleteProducts } from "~/server/domains/product/repo/crud";
 import {
@@ -52,60 +50,31 @@ import { refreshSearchDocuments } from "~/server/generic/search/repo/search-docu
 import { resolveLiveShortcode } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import {
-  createInventoryFixture as createInventoryEntry,
-  createLocationFixture as createLocation,
   createProductFixture as createProduct,
-  makeLocationInput,
   makeProductInput,
   renameFixtureRaw,
 } from "~/server/testing/repo.fixtures";
 
 import {
   runMutationSideEffects as captureSideEffects,
-  runMutationSideEffectsForEntities as captureSideEffectsForEntities,
   type MutationSideEffectEvent,
   type MutationSideEffectPorts,
 } from "./mutation-side-effects";
 
-/** Database fanout is real; the external embedding provider records its bounded batches. */
+/** Capture only external AI intent; derived search publication uses its real Job. */
 function capturingPorts(): MutationSideEffectPorts & {
   published: BackgroundTaskInput[][];
-  embeddingBatches: SearchableEntityRef[][];
 } {
   const published: BackgroundTaskInput[][] = [];
   return {
     published,
-    embeddingBatches: [],
     publishTasks: async (_db, tasks) => {
       published.push([...tasks]);
     },
   };
 }
 
-async function drain(db: Database, ports = capturingPorts()) {
-  const computation: DerivedRefreshPorts = {
-    prepareRecipe: async () => {
-      throw new Error("No recipe computation expected in this fixture");
-    },
-    refreshEmbeddings: async (_db, refs) => {
-      ports.embeddingBatches.push([...refs]);
-      return new Map(
-        refs.map((ref) => [
-          `${ref.entityKind}:${ref.entityId}`,
-          { state: "ready" },
-        ]),
-      );
-    },
-  };
-  for (let page = 0; page < 500; page++) {
-    const result = await processDerivedRefreshPage(db, computation);
-    expect(result.errors).toEqual([]);
-    if (result.done) return;
-  }
-  throw new Error(
-    "Synthetic refresh did not finish within bounded fixture pages",
-  );
-}
+const drain = (db: Database) => drainDerivedRefreshFrontier(db);
 
 async function runMutationSideEffects(
   db: Database,
@@ -113,17 +82,8 @@ async function runMutationSideEffects(
   ports = capturingPorts(),
 ) {
   await captureSideEffects(db, event, ports);
-  await drain(db, ports);
+  await drain(db);
 }
-async function runMutationSideEffectsForEntities(
-  db: Database,
-  events: MutationSideEffectEvent[],
-  ports = capturingPorts(),
-) {
-  await captureSideEffectsForEntities(db, events, ports);
-  await drain(db, ports);
-}
-
 /**
  * Seeds through the entity kernel (the browser's write path) and returns the
  * private id that side-effect events carry.
@@ -154,58 +114,7 @@ const semanticText = async (
 describe("mutation side effects integration", () => {
   const ctx = withTestDb();
 
-  it("product update refreshes product and related inventory/task embeddings in the background", async () => {
-    const product = await createProduct(
-      ctx.db,
-      makeProductInput({ name: "Manifest tarp" }),
-      ctx.actor,
-    );
-    const location = await createLocation(
-      ctx.db,
-      makeLocationInput({ name: "Manifest bin" }),
-      ctx.actor,
-    );
-    const inventory = await createInventoryEntry(
-      ctx.db,
-      {
-        productId: product.id,
-        locationId: location.id,
-        amount: { value: 1, unit: "each" },
-      },
-      ctx.actor,
-    );
-    const { entityId: taskId } = await createTask(
-      ctx.db,
-      mock(taskCreateInput, {
-        overrides: {
-          name: "Maintain manifest tarp",
-          subjectProductId: product.id,
-          trade: "other",
-        },
-      }),
-      ctx.actor,
-    );
-
-    // Background frontiers include Inventory and Task projections.
-    const event = {
-      action: "updated" as const,
-      entity: { entity: "product" as const, id: product.entityId },
-      source: "test.product.update",
-    };
-    const ports = capturingPorts();
-    await runMutationSideEffects(ctx.db, event, ports);
-
-    const refs = ports.embeddingBatches.flat();
-    expect(refs).toEqual(
-      expect.arrayContaining([
-        { entityKind: "product", entityId: product.entityId },
-        { entityKind: "inventory", entityId: inventory.entityId },
-        { entityKind: "task", entityId: taskId },
-      ]),
-    );
-  });
-
-  it("project rename refreshes project/task embeddings and Expense search projections in the background", async () => {
+  it("project rename refreshes Task and Expense search projections in the background", async () => {
     const { output: project, entityId: projectId } = await createProject(
       ctx.db,
       mock(projectCreateInput, {
@@ -256,70 +165,12 @@ describe("mutation side effects integration", () => {
       ports,
     );
 
-    const refs = ports.embeddingBatches.flat();
-    expect(refs).toEqual(
-      expect.arrayContaining([
-        { entityKind: "project", entityId: projectId },
-        { entityKind: "task", entityId: taskId },
-      ]),
+    expect(await semanticText(ctx.db, "task", taskId)).toContain(
+      "Manifest Tracker Project Renamed",
     );
-    expect(refs).not.toContainEqual({
-      entityKind: "expense",
-      entityId: expenseId,
-    });
-  });
-
-  it("bulk capture coalesces repeated roots before background embedding publication", async () => {
-    const location = await createLocation(
-      ctx.db,
-      makeLocationInput({ name: "Manifest embedding bin" }),
-      ctx.actor,
+    expect(await semanticText(ctx.db, "expense", expenseId)).toContain(
+      "Manifest Tracker Project Renamed",
     );
-    const entries: Awaited<ReturnType<typeof createInventoryEntry>>[] = [];
-    for (const n of [1, 2, 3]) {
-      const product = await createProduct(
-        ctx.db,
-        makeProductInput({ name: `Manifest embedding product ${n}` }),
-        ctx.actor,
-      );
-      entries.push(
-        await createInventoryEntry(
-          ctx.db,
-          {
-            productId: product.id,
-            locationId: location.id,
-            amount: { value: n, unit: "each" },
-          },
-          ctx.actor,
-        ),
-      );
-    }
-
-    const ports = capturingPorts();
-    await runMutationSideEffectsForEntities(
-      ctx.db,
-      [...entries, ...entries].map((entry) => ({
-        action: "created" as const,
-        entity: { entity: "inventory" as const, id: entry.entityId },
-        source: "test.embedding.bulk",
-      })),
-      ports,
-    );
-
-    const refs = ports.embeddingBatches
-      .flat()
-      .filter((ref) =>
-        entries.some((entry) => entry.entityId === ref.entityId),
-      );
-    expect(refs).toEqual(
-      expect.arrayContaining(
-        entries.map((entry) => ({
-          entityKind: "inventory",
-          entityId: entry.entityId,
-        })),
-      ),
-    );
-    expect(new Set(refs.map((ref) => ref.entityId)).size).toBe(3);
   });
 
   it("repo delete soft-deletes the entity's search embedding", async () => {
@@ -407,15 +258,6 @@ describe("mutation side effects integration", () => {
       expect(text).toContain("Fanout awning");
       expect(text).not.toContain("Fanout tarp");
     }
-    expect(ports.embeddingBatches.flat()).toEqual(
-      expect.arrayContaining([
-        { entityKind: "product", entityId: tarp.id },
-        { entityKind: "inventory", entityId: stock.id },
-        { entityKind: "task", entityId: parent.id },
-        { entityKind: "task", entityId: child.id },
-        { entityKind: "wish", entityId: wish.id },
-      ]),
-    );
   });
 
   it("a task change reaches the search projection of every inheriting descendant", async () => {
@@ -543,12 +385,6 @@ describe("mutation side effects integration", () => {
       },
       ports,
     );
-    expect(ports.embeddingBatches.flat()).toEqual(
-      expect.arrayContaining([
-        { entityKind: "product", entityId: cover.id },
-        { entityKind: "inventory", entityId: stock.id },
-      ]),
-    );
   });
 
   it("a location rename reaches its Plantings and Garden entries and gates AI on images", async () => {
@@ -579,13 +415,6 @@ describe("mutation side effects integration", () => {
     expect(await semanticText(ctx.db, "gardenEntry", entry.id)).toContain(
       "Fanout raised bed",
     );
-    expect(quiet.embeddingBatches.flat()).toEqual(
-      expect.arrayContaining([
-        { entityKind: "location", entityId: bed.id },
-        { entityKind: "planting", entityId: planting.id },
-        { entityKind: "gardenEntry", entityId: entry.id },
-      ]),
-    );
     expect(quiet.published.flat().map((task) => task.kind)).not.toContain(
       "location-ai.description.refresh",
     );
@@ -608,7 +437,10 @@ describe("mutation side effects integration", () => {
       plantId: plant.code,
       locationId: bed.code,
     });
-
+    await getDb(ctx.db)
+      .update(plantTable)
+      .set({ name: "Fanout lemon thyme" })
+      .where(eq(plantTable.id, plant.id));
     const ports = capturingPorts();
     await runMutationSideEffects(
       ctx.db,
@@ -619,64 +451,8 @@ describe("mutation side effects integration", () => {
       },
       ports,
     );
-
-    expect(ports.embeddingBatches.flat()).toEqual(
-      expect.arrayContaining([
-        { entityKind: "plant", entityId: plant.id },
-        { entityKind: "planting", entityId: planting.id },
-      ]),
-    );
-  });
-
-  it("a bulk wave of related edits reaches every affected embedding", async () => {
-    const seed = kernelSeeder(ctx.db);
-    const place = await seed("location", { name: "Fanout garage" });
-    const rope = await seed("product", { name: "Fanout rope" });
-    const twine = await seed("product", { name: "Fanout twine" });
-    const stock = await seed("inventory", {
-      productId: rope.code,
-      locationId: place.code,
-      amount: { value: 1, unit: "each" },
-    });
-    const chore = await seed("task", {
-      name: "Fanout coil chore",
-      trade: "other",
-      subjectProductId: twine.code,
-    });
-
-    const ports = capturingPorts();
-    await runMutationSideEffectsForEntities(
-      ctx.db,
-      [
-        ...[rope.id, twine.id].map((id): MutationSideEffectEvent => ({
-          action: "updated",
-          entity: { entity: "product", id },
-          source: "product.bulkUpdate",
-        })),
-        // Edited itself and also a dependent of the first Product.
-        {
-          action: "updated",
-          entity: { entity: "inventory", id: stock.id },
-          source: "product.bulkUpdate",
-        },
-      ],
-      ports,
-    );
-
-    const waves = ports.embeddingBatches;
-
-    const refs = waves.flat();
-    for (const batch of waves)
-      expect(batch).toHaveLength(
-        new Set(batch.map((ref) => ref.entityId)).size,
-      );
-    expect(refs).toEqual(
-      expect.arrayContaining([
-        { entityKind: "product", entityId: rope.id },
-        { entityKind: "product", entityId: twine.id },
-        { entityKind: "inventory", entityId: stock.id },
-        { entityKind: "task", entityId: chore.id },
-      ]),
+    expect(await semanticText(ctx.db, "planting", planting.id)).toContain(
+      "Fanout lemon thyme",
     );
   });
 
@@ -699,14 +475,9 @@ describe("mutation side effects integration", () => {
     expect(await semanticText(ctx.db, "product", kit.id)).toContain(
       "Fanout kit",
     );
-    expect(ports.embeddingBatches).toEqual([]);
-    await drain(ctx.db, ports);
+    await drain(ctx.db);
     expect(await semanticText(ctx.db, "product", kit.id)).toContain(
       "Fanout bundle",
     );
-    expect(ports.embeddingBatches.flat()).toContainEqual({
-      entityKind: "product",
-      entityId: kit.id,
-    });
   });
 });

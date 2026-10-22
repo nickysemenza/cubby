@@ -100,7 +100,7 @@ import {
   run as runTable,
   runApproval,
   runControlEvent,
-  runFinding,
+  assessmentState,
   runOperation,
   photoRunImage,
   user,
@@ -142,6 +142,7 @@ import {
 import { recordRunProgress } from "~/server/domains/run/repo/run-progress";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
+import { isRunFinding, runFindingColumns } from "./run-finding";
 import { listRunTargetOutcomes } from "./run-target";
 
 /**
@@ -1420,19 +1421,19 @@ export async function loadRunDetail(
       ),
     database
       .select({
-        id: runFinding.id,
-        kind: runFinding.kind,
-        summary: runFinding.summary,
-        status: runFinding.status,
-        proposedFix: runFinding.proposedFix,
-        autoApplied: runFinding.autoApplied,
-        probability: runFinding.probability,
-        createdAt: runFinding.createdAt,
-        expiresAt: runFinding.expiresAt,
+        id: runFindingColumns.id,
+        kind: runFindingColumns.kind,
+        summary: runFindingColumns.summary,
+        status: runFindingColumns.status,
+        proposedFix: runFindingColumns.proposedFix,
+        autoApplied: runFindingColumns.autoApplied,
+        probability: runFindingColumns.probability,
+        createdAt: runFindingColumns.createdAt,
+        expiresAt: runFindingColumns.expiresAt,
       })
-      .from(runFinding)
-      .where(eq(runFinding.runId, run.id))
-      .orderBy(asc(runFinding.createdAt)),
+      .from(assessmentState)
+      .where(and(isRunFinding, eq(assessmentState.runId, run.id)))
+      .orderBy(asc(assessmentState.createdAt), asc(assessmentState.id)),
     database
       .select({
         action: runControlEvent.action,

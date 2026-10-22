@@ -1,9 +1,20 @@
-import { eq } from "drizzle-orm";
+import { imageIngressRouteById } from "@cubby/schemas/entity-manifest";
+import { eq, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { getDb, withTransaction } from "~/server/db/helpers";
-import { aiAnalysis, entityAttachment, image, meal } from "~/server/db/schema";
+import {
+  getDb,
+  withTransaction,
+  withTransactionDatabase,
+} from "~/server/db/helpers";
+import {
+  aiAnalysis,
+  entityAttachment,
+  image,
+  meal,
+  location,
+} from "~/server/db/schema";
 import {
   commitPhotoImport,
   productionPhotoImportCommitPorts,
@@ -14,6 +25,8 @@ import { manifestPhotoImportRouteAdapter } from "~/server/domains/photo-import/s
 import { entityKernelContextSchema } from "~/server/entity-kernel";
 import {
   createImageFixture,
+  createLocationFixture,
+  makeLocationInput,
   createRecipeFixture,
   makeRecipeInput,
 } from "~/server/testing/repo.fixtures";
@@ -21,6 +34,119 @@ import { createTestRequestContext } from "~/server/testing/request-context";
 
 describe("photo import transaction", () => {
   const ctx = withTestDb();
+
+  // Import must wait for current location analysis before locking Images and adding photos.
+  it("waits for location publication before attaching an imported photo", async () => {
+    const destination = await createLocationFixture(
+      ctx.db,
+      makeLocationInput({ name: "Synthetic photo shelf" }),
+      ctx.actor,
+    );
+    const sha256 = "d".repeat(64);
+    const staged = await createImageFixture(
+      ctx.db,
+      "synthetic-location-addition",
+      {
+        status: "UPLOADED",
+        sha256,
+        width: 16,
+        height: 16,
+        renderStatus: "verified",
+        storageStatus: "available",
+        verifiedAt: new Date(),
+      },
+    );
+    const route = Object.values(imageIngressRouteById).find(
+      (entry) =>
+        entry.targetEntity === "location" &&
+        entry.sourceEntity === "location" &&
+        entry.kind === "self",
+    );
+    if (!route) throw new Error("Expected location gallery route");
+    const context = entityKernelContextSchema.parse(
+      createTestRequestContext(ctx.db, { auth: { userId: ctx.actor.userId } }),
+    );
+    let release = () => {};
+    let locked = () => {};
+    const ready = new Promise<void>((resolve) => {
+      locked = resolve;
+    });
+    const unlocked = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const analysis = withTransactionDatabase(ctx.db, async (tx) => {
+      await getDb(tx)
+        .select({ id: location.id })
+        .from(location)
+        .where(eq(location.id, destination.entityId))
+        .for("share");
+      locked();
+      await unlocked;
+    });
+    await ready;
+    const importing = commitPhotoImport(
+      context,
+      {
+        images: [
+          {
+            clientId: "synthetic-location-addition",
+            imageId: staged.shortcode,
+            routeId: route.routeId,
+            source: { entity: "location", id: destination.id },
+            destination: { kind: "existing", candidateId: destination.id },
+            duplicateDecision: "reuse",
+            replaceConfirmed: false,
+            analysis: {
+              analysisVersion: 1,
+              analyzedAt: "2026-09-17T12:00:00.000Z",
+              capturedAt: null,
+              sha256,
+              contentType: "image/png",
+              width: 16,
+              height: 16,
+              classifications: [],
+              recognizedText: [],
+              featurePrint: { revision: "1", data: "AA==" },
+              provenance: {
+                source: "photoLibrary",
+                localIdentifier: "synthetic-location-addition",
+                filename: "synthetic-location.png",
+              },
+            },
+          },
+        ],
+        creates: [],
+      },
+      manifestPhotoImportRouteAdapter,
+    );
+    try {
+      await expect
+        .poll(async () => {
+          const waiting = await getDb(ctx.db).execute<{ blocked: boolean }>(
+            sql`SELECT EXISTS (SELECT 1 FROM pg_stat_activity WHERE datname=current_database() AND wait_event_type='Lock' AND query ILIKE '%Location%') AS blocked`,
+          );
+          return waiting.rows[0]?.blocked;
+        })
+        .toBe(true);
+      await withTransactionDatabase(ctx.db, async (tx) => {
+        await getDb(tx)
+          .select({ id: image.id })
+          .from(image)
+          .where(eq(image.id, staged.id))
+          .for("update", { noWait: true });
+      });
+    } finally {
+      release();
+      await analysis;
+    }
+    await importing;
+    expect(
+      await getDb(ctx.db)
+        .select({ id: entityAttachment.id })
+        .from(entityAttachment)
+        .where(eq(entityAttachment.entityId, destination.entityId)),
+    ).toHaveLength(1);
+  });
 
   it("rolls back a mixed create-and-attach failure, then retries while staged", async () => {
     const recipe = await createRecipeFixture(

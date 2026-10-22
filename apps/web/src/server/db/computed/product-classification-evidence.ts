@@ -4,14 +4,18 @@ import type { ProductId } from "@cubby/schemas/identifiers";
 import { productImagePurpose } from "@cubby/schemas/image";
 import { type SQL, sql } from "drizzle-orm";
 
-import type { Database, DrizzleTransaction } from "~/server/db";
-import { unwrapDb } from "~/server/db/helpers/core";
+import {
+  repositoryQueries as unwrapDb,
+  type RepositoryQueryInput,
+} from "~/server/db/repository-access.boundary";
 
 /** Read retained original-image evidence only; browsing never schedules vision. */
 export const productClassificationEvidenceSql = (
   productId: SQL,
 ) => sql<string>`concat(
-  'Taxonomy revision: ', coalesce((SELECT revision FROM "DerivedRefreshRevision" WHERE key='kind:productCategory'),0),
+  'Taxonomy basis: ', (SELECT md5(coalesce(jsonb_agg(
+    to_jsonb(c)-ARRAY['createdAt','updatedAt','deletedAt'] ORDER BY c.id
+  ),'[]'::jsonb)::text) FROM "ProductCategory" c WHERE c."deletedAt" IS NULL),
   E'\n', COALESCE((
     SELECT string_agg(concat(COALESCE(pi."purpose", ${productImagePurpose.enum.item}), ': ',
       COALESCE(correction."description", analysis."result"->>'description', ''),
@@ -24,7 +28,7 @@ export const productClassificationEvidenceSql = (
 )`;
 
 export const getProductClassificationEvidence = async (
-  db: Database | DrizzleTransaction,
+  db: RepositoryQueryInput,
   id: ProductId,
 ): Promise<string> => {
   const rows = await unwrapDb(db).execute<{ evidence: string }>(

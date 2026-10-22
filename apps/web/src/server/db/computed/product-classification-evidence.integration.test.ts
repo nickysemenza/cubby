@@ -16,7 +16,6 @@ import { createUploadedImageRecord } from "~/server/domains/image/repo/image";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
 import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
-import { reconcileDerivedRefreshInputs } from "~/server/testing/background-queue";
 import { insertEntityAttachments } from "~/server/testing/repo.fixtures";
 
 import { getProductClassificationEvidence } from "./product-classification-evidence";
@@ -164,7 +163,6 @@ describe("retained classification evidence", () => {
       .update(productCategory)
       .set({ name: "Wearables", updatedAt: new Date(Date.now() + 1000) })
       .where(eq(productCategory.id, taxonomyId("apparel")));
-    await reconcileDerivedRefreshInputs(ctx.db);
     expect(await getProductClassificationEvidence(ctx.db, product.id)).not.toBe(
       before,
     );

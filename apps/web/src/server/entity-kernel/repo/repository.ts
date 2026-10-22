@@ -54,7 +54,6 @@ import type { ListReadRow } from "~/entity/model/list-read-fields";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
   notDeleted,
-  runAfterCommit,
   updateLiveAndReturn,
   withTransactionOn,
 } from "~/server/db/helpers";
@@ -94,7 +93,6 @@ import {
   resolveLiveShortcode,
   resolveOrThrow,
 } from "~/server/generic/shortcode/repo/shortcode-resolver";
-import { deferPublications } from "~/server/workflows/background-tasks/publish";
 
 /* -------------------------------------------------------------------------- */
 /* Reads                                                                       */
@@ -698,23 +696,16 @@ export function defineRepository<
         ids,
         lifecycle.delete,
         async (transactionDb) => {
-          const deferred = deferPublications();
           const result = await deleteInTransaction(
             {
               ...ctx,
               db: transactionDb,
               services: {
                 ...ctx.services,
-                recipeCosting: ctx.services.recipeCosting.bindTo(
-                  transactionDb,
-                  deferred.publish,
-                ),
+                recipeCosting: ctx.services.recipeCosting.bindTo(transactionDb),
               },
             },
             ids,
-          );
-          await runAfterCommit(transactionDb, (committedDb) =>
-            deferred.flush(committedDb),
           );
           return result;
         },

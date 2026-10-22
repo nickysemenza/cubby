@@ -1,43 +1,28 @@
 import { suggestionStatus } from "@cubby/schemas/ai";
-import {
-  assessmentFamily,
-  feedbackAuthority,
-  feedbackVerdict,
-} from "@cubby/schemas/assessment";
+import { assessmentFamily } from "@cubby/schemas/assessment";
 import {
   AUTOMATIC_RULE_KEYS,
-  AUTOMATIC_RULE_MIN_PRECISION,
-  AUTOMATIC_RULE_MIN_REVIEWS,
-  AUTOMATIC_RULE_WINDOW,
   automaticRuleOut,
   automaticRulesOut,
   setAutomaticRuleInput,
   type AutomaticRuleKey,
-  type AutomaticRuleWindow,
 } from "@cubby/schemas/automatic-rule";
 import type { ActorContext } from "@cubby/schemas/context";
 import { shortcodeEntities } from "@cubby/schemas/entity-manifest";
 import { runEntityId } from "@cubby/schemas/identifiers";
-import {
-  statementTransactionAction,
-  statementTransactionJudgment,
-} from "@cubby/schemas/statement-suggestion";
+import { statementTransactionJudgment } from "@cubby/schemas/statement-suggestion";
 import { createLogger } from "@cubby/worker-tracing";
-import { and, eq, sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { scrubErrorMessage } from "~/lib/error-diagnostics";
-import { roundTo } from "~/lib/round-to";
 import type { Database } from "~/server/db";
 import { getDb, unwrapDb } from "~/server/db/helpers";
 import { assessment, automaticRule } from "~/server/db/schema";
 import { systemActor } from "~/server/domains/run/repo/ensure-run";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { createAppError } from "~/server/errors/app-error";
-import {
-  automaticApplicationRule,
-  matchedRulesOf,
-} from "~/server/generic/assessment/repo/assessment";
+import { matchedRulesOf } from "~/server/generic/assessment/repo/assessment";
 import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
 import {
   AUTOMATIC_RULES,
@@ -51,82 +36,8 @@ import { canAutomaticallyFillField } from "~/server/generic/assessment/repo/sugg
 const log = createLogger("automatic-rules");
 
 const ruleStamps = z
-  .object({
-    matchedRules: z.array(z.string()).default([]),
-    auditSample: z.boolean().default(false),
-  })
+  .object({ matchedRules: z.array(z.string()).default([]) })
   .passthrough();
-
-const eligibleWindow = (n: number, hits: number) =>
-  n >= AUTOMATIC_RULE_MIN_REVIEWS && hits / n >= AUTOMATIC_RULE_MIN_PRECISION;
-
-/**
- * Precision windows of one rule's declared revision, by stamp. A window holds
- * the latest member-reviewed matches that were served for review: matched
- * while the rule was off, held as an audit sample, or left pending by a
- * refused application. An automatic application never enters it; one a
- * member later marks Wrong counts as a corrected automatic application.
- */
-async function ruleWindows(
-  db: Database,
-  key: AutomaticRuleKey,
-): Promise<AutomaticRuleWindow[]> {
-  const rule = AUTOMATIC_RULES[key];
-  const base = ruleBase(key);
-  const { rows } = await unwrapDb(db).execute<{
-    stamp: string;
-    n: number;
-    hits: number;
-    correctedAutomatic: number;
-  }>(sql`
-    WITH graded AS (
-      SELECT s.id, m.stamp, latest.verdict, latest."createdAt" AS "reviewedAt",
-        (latest.verdict = ${feedbackVerdict.enum.correct} OR (
-          -- A correction that attaches the same sole candidate (maybe ticking
-          -- diff fields) agrees with the rule's application.
-          a.family = ${assessmentFamily.enum.statement_transaction}
-          AND latest.verdict = ${feedbackVerdict.enum.wrong}
-          AND latest.correction->${"value"}->>${"action"} = ${statementTransactionAction.enum.attach}
-          AND latest.correction->${"value"}->>${"transactionId"} = (
-            SELECT ft.shortcode FROM "FinancialTransaction" ft
-            WHERE ft.id = (a.judgment->${"candidates"}->0->>${"transactionId"})::uuid)
-        )) AS hit,
-        ${automaticApplicationRule(sql`s.id`)} IS NOT NULL AS automatic
-      FROM "AssessmentState" s
-      JOIN "Assessment" a ON a.id = s.id
-      CROSS JOIN LATERAL jsonb_array_elements_text(${matchedRulesOf(sql`s.data`)}) AS m(stamp)
-      JOIN LATERAL (
-        SELECT f.verdict, f.correction, f."createdAt" FROM "Feedback" f
-        WHERE f."assessmentId" = s.id AND f.authority = ${feedbackAuthority.enum.member}
-          AND f.verdict IN (${feedbackVerdict.enum.correct}, ${feedbackVerdict.enum.wrong}, ${feedbackVerdict.enum.dismissed})
-        ORDER BY f."createdAt" DESC, f.id DESC LIMIT 1
-      ) latest ON true
-      WHERE s.family = ${rule.family}
-        AND (m.stamp = ${base} OR starts_with(m.stamp, ${`${base}@`}))
-    ), ranked AS (
-      SELECT graded.*, row_number() OVER (
-        PARTITION BY stamp, automatic ORDER BY "reviewedAt" DESC, id DESC) AS position
-      FROM graded
-    )
-    SELECT stamp,
-      count(*) FILTER (WHERE NOT automatic AND position <= ${AUTOMATIC_RULE_WINDOW})::int AS n,
-      count(*) FILTER (WHERE NOT automatic AND position <= ${AUTOMATIC_RULE_WINDOW} AND hit)::int AS hits,
-      count(*) FILTER (WHERE automatic AND verdict = ${feedbackVerdict.enum.wrong})::int AS "correctedAutomatic"
-    FROM ranked GROUP BY stamp ORDER BY stamp
-  `);
-  return rows.map((row) => ({
-    stamp: row.stamp,
-    model: row.stamp === base ? null : row.stamp.slice(base.length + 1),
-    n: row.n,
-    hits: row.hits,
-    precision: row.n ? row.hits / row.n : null,
-    eligible: eligibleWindow(row.n, row.hits),
-    correctedAutomatic: row.correctedAutomatic,
-  }));
-}
-
-const describeWindow = (window: AutomaticRuleWindow) =>
-  `${window.stamp}: n=${window.n}, hits=${window.hits}, precision=${window.precision === null ? "none" : roundTo(window.precision, 4)}, corrected automatic applications=${window.correctedAutomatic}`;
 
 async function storedRules(db: Database) {
   const rows = await getDb(db).select().from(automaticRule);
@@ -145,9 +56,8 @@ const isOn = (key: AutomaticRuleKey, row: StoredRule | undefined) =>
 
 /**
  * Inside the application's transaction: the rule is still on for this
- * revision and, per model, still eligible. The share lock serializes the
- * application with a member's switch and the drift disable, which update
- * the row, so a rule turned off before the application commits applies
+ * revision. The share lock serializes the application with a member's
+ * switch, so a rule turned off before the application commits applies
  * nothing.
  */
 export async function assertAutomaticRuleOn(
@@ -157,7 +67,7 @@ export async function assertAutomaticRuleOn(
   assessmentId: string,
 ) {
   const rule = AUTOMATIC_RULES[key];
-  if (rule.execution !== "measured") {
+  if (rule.execution !== "member_switch") {
     if (stamp !== ruleBase(key))
       throw new Error("Automatic policy changed; refresh the suggestion");
     if (rule.execution === "field_policy") return;
@@ -204,26 +114,10 @@ export async function assertAutomaticRuleOn(
     .for("share");
   if (!isOn(key, row))
     throw new Error(`Automatic rule ${key} is off; review the suggestion`);
-  if (
-    AUTOMATIC_RULES[key].perModel &&
-    !(await ruleWindows(db, key)).some(
-      (window) => window.stamp === stamp && window.eligible,
-    )
-  )
-    throw new Error(
-      `Automatic rule ${key} is no longer eligible for ${stamp}; review the suggestion`,
-    );
 }
 
-async function ruleSummary(
-  db: Database,
-  key: AutomaticRuleKey,
-  row: StoredRule | undefined,
-) {
+function ruleSummary(key: AutomaticRuleKey, row: StoredRule | undefined) {
   const rule = AUTOMATIC_RULES[key];
-  const windows = await ruleWindows(db, key);
-  const n = windows.reduce((sum, window) => sum + window.n, 0);
-  const hits = windows.reduce((sum, window) => sum + window.hits, 0);
   return automaticRuleOut.parse({
     family: rule.family,
     ruleKey: key,
@@ -236,33 +130,20 @@ async function ruleSummary(
     enabledReason: row?.enabledReason ?? null,
     disabledAt: row?.disabledAt?.toISOString() ?? null,
     disabledReason: row?.disabledReason ?? null,
-    eligible:
-      rule.execution === "import_clean" ||
-      windows.some((window) => window.eligible),
-    n,
-    hits,
-    precision: n ? hits / n : null,
-    correctedAutomatic: windows.reduce(
-      (sum, window) => sum + window.correctedAutomatic,
-      0,
-    ),
-    windows,
   });
 }
 
-/** Every declared rule with its switch and precision, computed on read. */
+/** Every member-switched rule and its switch. */
 export async function listAutomaticRules(db: Database) {
   const stored = await storedRules(db);
   return automaticRulesOut.parse({
-    rules: await Promise.all(
-      AUTOMATIC_RULE_KEYS.filter(
-        (key) => AUTOMATIC_RULES[key].execution !== "field_policy",
-      ).map((key) => ruleSummary(db, key, stored.get(key))),
-    ),
+    rules: AUTOMATIC_RULE_KEYS.filter(
+      (key) => AUTOMATIC_RULES[key].execution !== "field_policy",
+    ).map((key) => ruleSummary(key, stored.get(key))),
   });
 }
 
-/** Import booking can resume immediately; measured rules require eligible reviews. */
+/** A member turns a rule on for its declared revision, or off. */
 export async function setAutomaticRule(
   db: Database,
   actor: ActorContext,
@@ -278,21 +159,7 @@ export async function setAutomaticRule(
   if (rule.execution === "field_policy")
     throw createAppError(
       "CONSTRAINT_VIOLATION",
-      "This automatic policy is not an optional measured rule.",
-    );
-  const stored = await storedRules(db);
-  const before = await ruleSummary(
-    db,
-    input.ruleKey,
-    stored.get(input.ruleKey),
-  );
-  const numbers = before.windows.length
-    ? before.windows.map(describeWindow).join("; ")
-    : `${ruleBase(input.ruleKey)}: no member-reviewed matches`;
-  if (input.enabled && !before.eligible)
-    throw createAppError(
-      "CONSTRAINT_VIOLATION",
-      `${input.ruleKey} is not eligible to turn on. It needs at least ${AUTOMATIC_RULE_MIN_REVIEWS} member-reviewed matches at ${AUTOMATIC_RULE_MIN_PRECISION * 100}% precision or better in the latest ${AUTOMATIC_RULE_WINDOW}. ${numbers}`,
+      "This automatic policy is not an optional member switch.",
     );
   const now = new Date();
   const change = input.enabled
@@ -301,14 +168,14 @@ export async function setAutomaticRule(
         enabled: true,
         enabledAt: now,
         enabledByUserId: actor.userId,
-        enabledReason: `Turned on by a member at ${numbers}`,
+        enabledReason: `Turned on by a member for ${ruleBase(input.ruleKey)}`,
         disabledAt: null,
         disabledReason: null,
       }
     : {
         enabled: false,
         disabledAt: now,
-        disabledReason: `Turned off by a member at ${numbers}`,
+        disabledReason: "Turned off by a member",
       };
   await getDb(db)
     .insert(automaticRule)
@@ -322,53 +189,7 @@ export async function setAutomaticRule(
       target: [automaticRule.family, automaticRule.ruleKey],
       set: change,
     });
-  return ruleSummary(
-    db,
-    input.ruleKey,
-    (await storedRules(db)).get(input.ruleKey),
-  );
-}
-
-/**
- * After a member review of a rule-matched Assessment: a rule that is on turns
- * itself off once a window of its revision has the reviews to judge and falls
- * below the bar. A revision bump starts new windows.
- */
-export async function recheckAutomaticRules(
-  db: Database,
-  assessmentId: string,
-) {
-  const { rows } = await unwrapDb(db).execute<{ data: unknown }>(
-    sql`SELECT data FROM "AssessmentState" WHERE id = ${assessmentId}::uuid`,
-  );
-  const stamps = ruleStamps.safeParse(rows[0]?.data).data?.matchedRules ?? [];
-  if (!stamps.length) return;
-  const stored = await storedRules(db);
-  for (const key of AUTOMATIC_RULE_KEYS) {
-    if (AUTOMATIC_RULES[key].execution !== "measured") continue;
-    const base = ruleBase(key);
-    if (
-      !isOn(key, stored.get(key)) ||
-      !stamps.some((stamp) => stamp === base || stamp.startsWith(`${base}@`))
-    )
-      continue;
-    const failing = (await ruleWindows(db, key)).filter(
-      (window) =>
-        window.n >= AUTOMATIC_RULE_MIN_REVIEWS &&
-        window.hits / window.n < AUTOMATIC_RULE_MIN_PRECISION,
-    );
-    if (!failing.length) continue;
-    await getDb(db)
-      .update(automaticRule)
-      .set({
-        enabled: false,
-        disabledAt: new Date(),
-        disabledReason: `Turned itself off: audited precision fell below ${AUTOMATIC_RULE_MIN_PRECISION * 100}% at ${failing.map(describeWindow).join("; ")}`,
-      })
-      .where(
-        and(eq(automaticRule.ruleKey, key), eq(automaticRule.enabled, true)),
-      );
-  }
+  return ruleSummary(input.ruleKey, (await storedRules(db)).get(input.ruleKey));
 }
 
 const shortcodeEntity = z.enum(shortcodeEntities);
@@ -412,8 +233,6 @@ function currentMatches(row: Candidate): AutomaticRuleMatch[] {
 
 export type AutomaticRuleOutcome = {
   applied: string[];
-  /** Matches held for review: the audit sample. */
-  audited: string[];
   refused: { assessmentId: string; message: string }[];
 };
 
@@ -437,11 +256,7 @@ export async function applyAutomaticRules(
     importClean?: boolean;
   } = {},
 ): Promise<AutomaticRuleOutcome> {
-  const outcome: AutomaticRuleOutcome = {
-    applied: [],
-    audited: [],
-    refused: [],
-  };
+  const outcome: AutomaticRuleOutcome = { applied: [], refused: [] };
   if (!assessmentIds.length) return outcome;
   const { rows } = await unwrapDb(db).execute<Candidate>(sql`
     SELECT s.id, s.family, s.status, s.active, a.served, s.data, s.entity, s.field,
@@ -454,14 +269,6 @@ export async function applyAutomaticRules(
     )})
   `);
   const stored = await storedRules(db);
-  const windows = new Map<AutomaticRuleKey, AutomaticRuleWindow[]>();
-  const windowsOf = async (key: AutomaticRuleKey) => {
-    const cached = windows.get(key);
-    if (cached) return cached;
-    const read = await ruleWindows(db, key);
-    windows.set(key, read);
-    return read;
-  };
   let base = options.context;
   for (const row of rows) {
     if (!row.active || row.status !== "pending" || !row.served) continue;
@@ -490,24 +297,8 @@ export async function applyAutomaticRules(
           Number(AUTOMATIC_RULES[b.key].execution === "import_clean") -
           Number(AUTOMATIC_RULES[a.key].execution === "import_clean"),
       );
-    const eligible: AutomaticRuleMatch[] = [];
-    for (const match of matches)
-      if (
-        !AUTOMATIC_RULES[match.key].perModel ||
-        (await windowsOf(match.key)).some(
-          (window) => window.stamp === match.stamp && window.eligible,
-        )
-      )
-        eligible.push(match);
-    const [match] = eligible;
+    const [match] = matches;
     if (!match) continue;
-    if (
-      stamp?.auditSample &&
-      AUTOMATIC_RULES[match.key].execution === "measured"
-    ) {
-      outcome.audited.push(row.id);
-      continue;
-    }
     try {
       let application;
       if (match.application.kind === "statement_attach") {

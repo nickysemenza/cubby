@@ -1,7 +1,4 @@
-import {
-  aiRefreshRunInput,
-  aiRefreshProgress,
-} from "@cubby/schemas/ai-evaluation";
+import { aiRefreshRunInput } from "@cubby/schemas/ai-evaluation";
 import { runEntityId } from "@cubby/schemas/identifiers";
 import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
@@ -9,8 +6,9 @@ import { beforeEach, describe, expect, it } from "vitest";
 
 import { compiledRefreshManifest } from "~/server/ai/policy/refresh-manifest";
 import { getDb } from "~/server/db/helpers";
-import { run, user } from "~/server/db/schema";
+import { job, run, user } from "~/server/db/schema";
 import { systemActor } from "~/server/domains/run/repo/ensure-run";
+import { cancelJob } from "~/server/generic/jobs/repo/jobs";
 import { dispatchAiRefreshDiscovery } from "~/server/workflows/ai-refresh-startup";
 import { launchWorkflowRun } from "~/server/workflows/runs/lifecycle";
 
@@ -176,36 +174,30 @@ describe("application-owned AI feature observation", () => {
     );
   });
 
-  it("resumes a saved startup attempt whose Workflow instance was never created", async () => {
+  it("retains one queued discovery Job across repeated startup dispatch", async () => {
     const activation = await activateAiRefresh(ctx.db, "synthetic-dispatch", {
       enabled: true,
       startDiscovery: true,
     });
-    await getDb(ctx.db)
-      .update(run)
-      .set({ progress: aiRefreshProgress.parse({ attempt: 1 }) })
-      .where(eq(run.id, runEntityId.parse(activation.discoveryRunId)));
-    const created: unknown[] = [];
-    await dispatchAiRefreshDiscovery(ctx.db, activation, {
-      status: async () => ({ state: "missing", error: null }),
-      terminate: async () => {},
-      create: async (...args) => {
-        created.push(args);
-      },
-    });
-    expect(created).toHaveLength(1);
-    const [owner] = await getDb(ctx.db)
+    await dispatchAiRefreshDiscovery(ctx.db, activation);
+    const rows = await getDb(ctx.db)
       .select()
-      .from(run)
-      .where(eq(run.id, runEntityId.parse(activation.discoveryRunId)));
-    expect(owner!.progress).toMatchObject({ attempt: 2 });
-    await dispatchAiRefreshDiscovery(ctx.db, activation, {
-      status: async () => ({ state: "running", error: null }),
-      terminate: async () => {},
-      create: async () => {
-        throw new Error("Healthy instances must not duplicate");
-      },
+      .from(job)
+      .where(eq(job.key, `run:${activation.discoveryRunId}`));
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      kind: "run.execute",
+      state: "queued",
+      runId: activation.discoveryRunId,
+      input: { runId: activation.discoveryRunId, purpose: "ai_refresh" },
     });
+    await dispatchAiRefreshDiscovery(ctx.db, activation);
+    expect(
+      await getDb(ctx.db)
+        .select()
+        .from(job)
+        .where(eq(job.key, `run:${activation.discoveryRunId}`)),
+    ).toEqual(rows);
   });
   it("rejects cursor writes from a page that outlived its activation revision", async () => {
     const prior = await activateAiRefresh(ctx.db, "synthetic-cursor-a", {
@@ -234,30 +226,38 @@ describe("application-owned AI feature observation", () => {
       email: null,
     });
   });
-  it("automatic dispatch atomically preserves cancellation recorded after its ownership read", async () => {
+  it("automatic dispatch preserves a cancelled discovery Job", async () => {
     const activation = await activateAiRefresh(ctx.db, "synthetic-cancel", {
       enabled: true,
       startDiscovery: true,
     });
     const id = runEntityId.parse(activation.discoveryRunId);
+    await dispatchAiRefreshDiscovery(ctx.db, activation);
+    const [execution] = await getDb(ctx.db)
+      .select()
+      .from(job)
+      .where(eq(job.key, `run:${id}`));
+    if (!execution) throw new Error("Expected discovery Job");
+    await cancelJob(ctx.db, execution.id);
     await getDb(ctx.db)
       .update(run)
       .set({ status: "failed", failureCode: "user_cancelled" })
       .where(eq(run.id, id));
     await expect(
-      launchWorkflowRun(
-        ctx.db,
-        { runId: id, purpose: "ai_refresh", automatic: true },
-        {
-          status: async () => ({ state: "missing", error: null }),
-          terminate: async () => {},
-          create: async () => {},
-        },
-      ),
+      launchWorkflowRun(ctx.db, {
+        runId: id,
+        purpose: "ai_refresh",
+        automatic: true,
+      }),
     ).resolves.toBeNull();
     expect(
       (await getDb(ctx.db).select().from(run).where(eq(run.id, id)))[0]
         ?.failureCode,
     ).toBe("user_cancelled");
+    expect(
+      (
+        await getDb(ctx.db).select().from(job).where(eq(job.id, execution.id))
+      )[0]?.state,
+    ).toBe("cancelled");
   });
 });

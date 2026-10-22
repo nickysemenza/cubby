@@ -5,8 +5,7 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import { setCfEnv } from "~/server/cf-env";
 import { getDb } from "~/server/db/helpers";
-import { derivedRefreshWork } from "~/server/db/schema";
-import { foldDerivedRefreshCaptures } from "~/server/generic/derived-refresh/repo/capture";
+import { job } from "~/server/db/schema";
 import { seedEntityEmbedding } from "~/server/generic/embedding/repo/entity-embedding";
 import { getSemanticEmbeddingConfig } from "~/server/generic/embedding/service/semantic/config";
 import {
@@ -24,6 +23,7 @@ import {
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
 
+import { settleEmbeddingProjectionJobs } from "./embedding-job.fixtures";
 import {
   findSemanticEntityCandidates,
   findSimilarEntities,
@@ -73,10 +73,7 @@ describe("validated semantic candidates", () => {
       await index.upsert([{ id, values, metadata: { entityType: "product" } }]);
     };
     await seed(first.text);
-    await foldDerivedRefreshCaptures(ctx.db);
-    await getDb(ctx.db)
-      .update(derivedRefreshWork)
-      .set({ state: "completed", publishing: false });
+    await settleEmbeddingProjectionJobs(ctx.db);
     const incomplete = await findSemanticEntityCandidates(
       ctx.db,
       productionVectorStore,
@@ -99,9 +96,9 @@ describe("validated semantic candidates", () => {
       ).complete,
     ).toBe(true);
     await getDb(ctx.db)
-      .update(derivedRefreshWork)
-      .set({ state: "failed", hasFailures: true })
-      .where(eq(derivedRefreshWork.entityId, second.subject.entityId));
+      .update(job)
+      .set({ state: "failed", error: "Synthetic embedding family exhausted" })
+      .where(eq(job.key, "refresh:embeddings"));
     const degraded = await findSemanticEntityCandidates(
       ctx.db,
       productionVectorStore,
@@ -164,10 +161,7 @@ describe("validated semantic candidates", () => {
         entityId: entity.entityId,
       });
     }
-    await foldDerivedRefreshCaptures(ctx.db);
-    await getDb(ctx.db)
-      .update(derivedRefreshWork)
-      .set({ state: "completed", publishing: false });
+    await settleEmbeddingProjectionJobs(ctx.db);
     const seed = seeded[0];
     if (!seed) throw new Error("Synthetic seed missing");
     const result = await findSimilarEntities(
@@ -214,10 +208,7 @@ describe("validated semantic candidates", () => {
         metadata: { entityType: "product" },
       })),
     );
-    await foldDerivedRefreshCaptures(ctx.db);
-    await getDb(ctx.db)
-      .update(derivedRefreshWork)
-      .set({ state: "completed", publishing: false });
+    await settleEmbeddingProjectionJobs(ctx.db);
     const result = await findRelatedSearchCandidates(
       ctx.db,
       { query: "Synthetic semantic hit", limit: 5 },

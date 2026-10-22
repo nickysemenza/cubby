@@ -8,7 +8,7 @@ import {
   withTransactionDatabase,
   withSnapshotWriteDatabase,
 } from "~/server/db/helpers";
-import { derivedRefreshRevision, product } from "~/server/db/schema";
+import { job, product } from "~/server/db/schema";
 import { captureDerivedRefresh } from "~/server/generic/derived-refresh/repo/capture";
 import { captureBackgroundQueue } from "~/server/testing/background-queue";
 import {
@@ -16,7 +16,7 @@ import {
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
 
-// Real second-connection updates replace input revision tuples after snapshot creation.
+// Real second-connection updates replace Job tuples after snapshot creation.
 // Recovery must replay only aborted DB work and retain submitted review evidence.
 describe("snapshot write recovery", () => {
   const ctx = withTestDb();
@@ -31,13 +31,13 @@ describe("snapshot write recovery", () => {
       makeProductInput({ name, notes: "Synthetic original note" }),
       ctx.actor,
     );
-  const replaceInputRevision = () =>
+  const replaceJobGeneration = () =>
     getDb(ctx.db)
-      .update(derivedRefreshRevision)
-      .set({ revision: sql`${derivedRefreshRevision.revision} + 1` })
-      .where(eq(derivedRefreshRevision.key, "all"));
+      .update(job)
+      .set({ generation: sql`${job.generation} + 1` })
+      .where(eq(job.key, "refresh:search"));
 
-  it("commits one business result and one publication after late input revision contention", async () => {
+  it("commits one business result and one publication after late Job generation contention", async () => {
     const subject = await fixture();
     let attempts = 0;
     const publications: number[] = [];
@@ -45,10 +45,7 @@ describe("snapshot write recovery", () => {
       ctx.db,
       async (tx) => {
         const attempt = ++attempts;
-        await getDb(tx)
-          .select()
-          .from(derivedRefreshRevision)
-          .where(eq(derivedRefreshRevision.key, "all"));
+        await getDb(tx).select().from(job).where(eq(job.key, "refresh:search"));
         await getDb(tx)
           .update(product)
           .set({ notes: "Synthetic saved note" })
@@ -56,7 +53,7 @@ describe("snapshot write recovery", () => {
         await runAfterCommit(tx, async () => {
           publications.push(attempt);
         });
-        if (attempt === 1) await replaceInputRevision();
+        if (attempt === 1) await replaceJobGeneration();
         await captureDerivedRefresh(tx, [
           { entityKind: "product", entityId: subject.entityId },
         ]);
@@ -100,7 +97,7 @@ describe("snapshot write recovery", () => {
               .update(product)
               .set({ notes: "Synthetic changed evidence" })
               .where(eq(product.id, evidence.entityId));
-            await replaceInputRevision();
+            await replaceJobGeneration();
           }
           await captureDerivedRefresh(tx, [
             { entityKind: "product", entityId: subject.entityId },
@@ -128,12 +125,12 @@ describe("snapshot write recovery", () => {
           const attempt = ++attempts;
           await getDb(tx)
             .select()
-            .from(derivedRefreshRevision)
-            .where(eq(derivedRefreshRevision.key, "all"));
+            .from(job)
+            .where(eq(job.key, "refresh:search"));
           await runAfterCommit(tx, async () => {
             publications.push(attempt);
           });
-          await replaceInputRevision();
+          await replaceJobGeneration();
           await captureDerivedRefresh(tx, [
             { entityKind: "product", entityId: subject.entityId },
           ]);
@@ -158,9 +155,9 @@ describe("snapshot write recovery", () => {
               attempts++;
               await getDb(tx)
                 .select()
-                .from(derivedRefreshRevision)
-                .where(eq(derivedRefreshRevision.key, "all"));
-              await replaceInputRevision();
+                .from(job)
+                .where(eq(job.key, "refresh:search"));
+              await replaceJobGeneration();
               await captureDerivedRefresh(tx, [
                 { entityKind: "product", entityId: subject.entityId },
               ]);

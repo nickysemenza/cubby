@@ -11,7 +11,6 @@ import {
   suggestionSweepRunProgress,
 } from "@cubby/schemas/run-fields";
 import type { SupportedDecisionModel } from "@cubby/shared/ai/models";
-import { supportedDecisionModelSchema } from "@cubby/shared/ai/models";
 import { sha256Hex } from "@cubby/shared/sha256";
 import { z } from "zod";
 
@@ -36,12 +35,10 @@ import { settleArrivedFindingsForProduct } from "~/server/domains/purchase-impor
 import { executeEntity } from "~/server/entity-kernel";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { entityCommandSchema } from "~/server/entity-kernel/contracts";
-import type { AuditSampler } from "~/server/generic/assessment/repo/automatic-rules";
 import { fieldReviewIdentity } from "~/server/generic/assessment/repo/field-assessment-review";
-import { latestFieldWrite } from "~/server/generic/audit-log/repo/audit-log";
+import { latestFieldWrite } from "~/server/generic/audit-log/repo/field-write";
 import { resolveLiveShortcode } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { canonicalJson } from "~/server/lib/canonical-json";
-import { type WorkflowLauncher } from "~/server/workflows/runs/launcher";
 import { launchWorkflowRun } from "~/server/workflows/runs/lifecycle";
 
 import {
@@ -73,7 +70,6 @@ type SweepTrigger = Extract<RunTrigger, "manual" | "scheduled">;
 export type SuggestionSweepPorts = {
   /** Entity operations need the authenticated request's kernel services. */
   context: EntityKernelContext;
-  launcher?: WorkflowLauncher;
   decisionModel?: () => SupportedDecisionModel;
   suggest?: typeof suggestFields;
   suggestPorts?: SuggestFieldsPorts;
@@ -81,10 +77,6 @@ export type SuggestionSweepPorts = {
   wait?: (milliseconds: number) => Promise<void>;
   /** Test seam that pauses after a persisted number of processed targets. */
   pauseAfter?: number;
-  /** Persisted pairing regressions must not depend on randomly generated record IDs. */
-  samplePair?: (entityId: string) => boolean;
-  /** Likewise the Automatic rule audit sample. */
-  auditSample?: AuditSampler;
 };
 type SweepTarget = {
   id: string;
@@ -113,7 +105,6 @@ const sweepSnapshot = z.object({
     field: z.string(),
   }),
   fieldDecisionId: z.uuid().nullable(),
-  pairKey: z.string().nullable(),
 });
 const sweepResult = z.object({
   entries: z.array(sweepSuggestionSchema),
@@ -122,6 +113,7 @@ const sweepResult = z.object({
     .array(
       z.object({
         targetId: z.string(),
+        // Results saved before paired trials were removed may carry `paired_model`.
         stage: z.enum(["paired_model", "apply"]),
         reason: z.string(),
       }),
@@ -129,17 +121,11 @@ const sweepResult = z.object({
     .default([]),
   provenance: aiProvenance,
 });
-const alternateModel = (
-  model: SupportedDecisionModel,
-): SupportedDecisionModel =>
-  model === "typesafe/jev" ? "@cf/cloudflare/clef" : "typesafe/jev";
-
 async function suggestTarget(
   db: Database,
   runId: RunId,
   input: z.output<typeof sweepRunInputSchema> & { field: string },
   target: SweepTarget,
-  pairKey: string | null,
   ports: SuggestionSweepPorts,
 ) {
   const recommend = ports.suggest ?? suggestFields;
@@ -184,7 +170,6 @@ async function suggestTarget(
       runnerUpConfidence: decision.alternatives[0]?.probability,
     },
     model,
-    pairKey,
     served: true,
   });
   if (primary) {
@@ -202,47 +187,10 @@ async function suggestTarget(
       ]),
     });
   }
-  const entries = primary ? [primary] : [];
-  const diagnostics: {
-    targetId: string;
-    stage: "paired_model";
-    reason: string;
-  }[] = [];
-  const primaryDecisionModel = supportedDecisionModelSchema.safeParse(model);
-  if (pairKey && primaryDecisionModel.success) {
-    const pairedModel = alternateModel(primaryDecisionModel.data);
-    try {
-      const paired = await recommend(db, runId, fieldInput, {
-        ...ports.suggestPorts,
-        decisionModel: pairedModel,
-      });
-      const alt = paired.suggestions[input.field];
-      const pairedRow =
-        alt &&
-        makeSweepSuggestion({
-          currentValue: target.currentValue,
-          decision: {
-            value: jsonValue(alt.value),
-            confidence: alt.probability ?? 0,
-          },
-          model: pairedModel,
-          pairKey,
-          served: false,
-        });
-      if (pairedRow) entries.push(pairedRow);
-    } catch (error) {
-      diagnostics.push({
-        targetId: target.id,
-        stage: "paired_model",
-        reason: scrubErrorMessage(String(error)),
-      });
-    }
-  }
   return {
     primary,
-    entries,
+    entries: primary ? [primary] : [],
     financeReviewFingerprint: decision.financeReview?.fingerprint ?? null,
-    diagnostics,
   };
 }
 
@@ -315,14 +263,10 @@ export async function prepareSuggestionSweep(
     const fieldDecisionId =
       (await latestFieldWrite(db, input.entity, target.entityId, target.field))
         ?.id ?? null;
-    const pairKey = (ports.samplePair ?? stablePair)(target.entityId)
-      ? crypto.randomUUID()
-      : null;
     const snapshot = sweepSnapshot.parse({
       input,
       target,
       fieldDecisionId,
-      pairKey,
     });
     const inputFingerprint = await sha256Hex(
       JSON.stringify({
@@ -330,7 +274,6 @@ export async function prepareSuggestionSweep(
         target,
         fieldDecisionId,
         model: input.decisionModelOverride ?? null,
-        paired: Boolean(pairKey),
         taxonomy: input.taxonomyRevision,
         manifest,
       }),
@@ -405,7 +348,7 @@ export async function executeSuggestionSweepTarget(
   if (!item.attemptToken)
     throw new Error("Suggestion sweep has no attempt token");
   const snapshot = sweepSnapshot.parse(item.snapshot);
-  const { input, target, pairKey, fieldDecisionId } = snapshot;
+  const { input, target, fieldDecisionId } = snapshot;
   const current = await executeEntity(
     ports.context,
     entityCommandSchema.parse({
@@ -434,7 +377,6 @@ export async function executeSuggestionSweepTarget(
         item.runId,
         { ...input, field: target.field },
         target,
-        pairKey,
         ports,
       ),
     );
@@ -503,9 +445,6 @@ export async function executeSuggestionSweepTarget(
         fieldDecisionId,
         evaluationId: item.id,
         provenance: result.provenance,
-        rules: {
-          auditSample: ports.auditSample,
-        },
       },
       result.entries,
       result.financeReviewFingerprint,
@@ -551,11 +490,6 @@ export async function publishSweepSuggestions(
   return saveSweepSuggestions(db, runId, { ...input, unordered }, ...rest);
 }
 
-function stablePair(id: string) {
-  let hash = 2166136261;
-  for (const c of id) hash = Math.imul(hash ^ c.charCodeAt(0), 16777619);
-  return (hash >>> 0) % 10 === 0;
-}
 export async function pauseSuggestionSweep(db: Database, runId: RunId) {
   const saved = await readSuggestionSweepRun(db, runId);
   if (saved.status === "paused") return;
@@ -563,21 +497,13 @@ export async function pauseSuggestionSweep(db: Database, runId: RunId) {
     throw new Error("Only a running sweep can be paused");
   await pauseRunningSuggestionSweep(db, runId);
 }
-export async function resumeSuggestionSweep(
-  db: Database,
-  runId: RunId,
-  ports: SuggestionSweepPorts,
-) {
+export async function resumeSuggestionSweep(db: Database, runId: RunId) {
   const saved = await readSuggestionSweepRun(db, runId);
   if (saved.status === "completed")
     throw new Error("Completed suggestion sweep cannot be resumed");
   if (saved.status !== "paused")
     throw new Error("Only a paused sweep can be resumed");
-  await launchWorkflowRun(
-    db,
-    { runId, purpose: "suggestion_sweep" },
-    ports.launcher,
-  );
+  await launchWorkflowRun(db, { runId, purpose: "suggestion_sweep" });
   return saved.progress;
 }
 export async function startSuggestionSweep(
@@ -622,11 +548,7 @@ export async function startSuggestionSweep(
     });
     return runId;
   });
-  await launchWorkflowRun(
-    db,
-    { runId, purpose: "suggestion_sweep" },
-    ports.launcher,
-  );
+  await launchWorkflowRun(db, { runId, purpose: "suggestion_sweep" });
   return { id: runId };
 }
 
@@ -648,7 +570,6 @@ export function makeSweepSuggestion(args: {
   currentValue: SuggestionValue;
   decision: SweepDecision;
   model: string;
-  pairKey?: string | null;
   served?: boolean;
 }): SweepSuggestion | null {
   if (equalValue(args.currentValue, args.decision.value)) return null;
@@ -660,7 +581,6 @@ export function makeSweepSuggestion(args: {
     runnerUpValue: args.decision.runnerUpValue ?? null,
     runnerUpConfidence: args.decision.runnerUpConfidence ?? null,
     model: args.model,
-    pairKey: args.pairKey ?? null,
     served: args.served ?? true,
   };
 }

@@ -134,29 +134,28 @@ describe("fresh retained Email connection recommendations", () => {
     });
   });
 
-  it("invalidates negative discovery when retained event or checksum evidence changes", async () => {
+  it("hides retained recommendations when event or checksum evidence changes", async () => {
     const f = await fixture();
-    const before = await Promise.all([
-      reconciledSourceFingerprint(ctx.db, f.source),
-      reconciledSourceFingerprint(ctx.db, f.target),
-    ]);
+    const [candidate] = await retrieveConnectionCandidates(ctx.db, f.source);
+    if (!candidate) throw new Error("Synthetic Email candidate missing");
+    await publishEntityConnection(ctx.db, candidate);
+    expect(await readEntityConnections(ctx.db, f.source)).toHaveLength(1);
     await getDb(ctx.db)
       .update(orderMailEvent)
       .set({ orderId: "SYNTHETIC-CORRECTED" })
       .where(eq(orderMailEvent.id, f.event.id));
-    const changed = await Promise.all([
-      reconciledSourceFingerprint(ctx.db, f.source),
-      reconciledSourceFingerprint(ctx.db, f.target),
-    ]);
-    expect(changed[0]).not.toBe(before[0]);
-    expect(changed[1]).not.toBe(before[1]);
+    expect(await retrieveConnectionCandidates(ctx.db, f.source)).toEqual([]);
+    expect(await readEntityConnections(ctx.db, f.source)).toEqual([]);
+    await getDb(ctx.db)
+      .update(orderMailEvent)
+      .set({ orderId: f.purchase.orderId })
+      .where(eq(orderMailEvent.id, f.event.id));
+    expect(await readEntityConnections(ctx.db, f.source)).toHaveLength(1);
     await getDb(ctx.db)
       .update(orderMail)
       .set({ rawChecksum: "b".repeat(64) })
       .where(eq(orderMail.id, f.original.id));
-    expect(await reconciledSourceFingerprint(ctx.db, f.source)).not.toBe(
-      changed[0],
-    );
+    expect(await readEntityConnections(ctx.db, f.source)).toEqual([]);
   });
 
   it("ignores another vendor's purchases and retained mail", async () => {
@@ -200,13 +199,13 @@ describe("fresh retained Email connection recommendations", () => {
         reconciledSourceFingerprint(ctx.db, f.source),
         reconciledSourceFingerprint(ctx.db, f.target),
       ]),
-    ).not.toEqual(before);
+    ).toEqual(before);
     expect(await retrieveConnectionCandidates(ctx.db, f.source)).toHaveLength(
       1,
     );
   });
 
-  it("invalidates negative discovery after account assignment and ownership corrections", async () => {
+  it("rechecks account ownership before retrieving or serving retained evidence", async () => {
     const f = await fixture();
     const foreign = await insertWithShortcode(ctx.db, "ledgerParty", {
       name: "Synthetic other account member",
@@ -221,41 +220,24 @@ describe("fresh retained Email connection recommendations", () => {
       .set({ vendorAccountId: account.id })
       .where(eq(purchaseTable.id, f.purchase.id));
     expect(await retrieveConnectionCandidates(ctx.db, f.source)).toEqual([]);
-    const before = await Promise.all([
-      reconciledSourceFingerprint(ctx.db, f.source),
-      reconciledSourceFingerprint(ctx.db, f.target),
-    ]);
     await getDb(ctx.db)
       .update(vendorAccount)
       .set({ ledgerPartyId: f.message.ledgerPartyId })
       .where(eq(vendorAccount.id, account.id));
-    const owned = await Promise.all([
-      reconciledSourceFingerprint(ctx.db, f.source),
-      reconciledSourceFingerprint(ctx.db, f.target),
-    ]);
-    expect(owned[0]).not.toBe(before[0]);
-    expect(owned[1]).not.toBe(before[1]);
-    expect(await retrieveConnectionCandidates(ctx.db, f.source)).toHaveLength(
-      1,
-    );
+    const [candidate] = await retrieveConnectionCandidates(ctx.db, f.source);
+    if (!candidate) throw new Error("Synthetic owned Email candidate missing");
+    await publishEntityConnection(ctx.db, candidate);
+    expect(await readEntityConnections(ctx.db, f.source)).toHaveLength(1);
+    await getDb(ctx.db)
+      .update(vendorAccount)
+      .set({ ledgerPartyId: foreign.id })
+      .where(eq(vendorAccount.id, account.id));
+    expect(await retrieveConnectionCandidates(ctx.db, f.source)).toEqual([]);
+    expect(await readEntityConnections(ctx.db, f.source)).toEqual([]);
     await getDb(ctx.db)
       .update(purchaseTable)
       .set({ vendorAccountId: null })
       .where(eq(purchaseTable.id, f.purchase.id));
-    const unassigned = await Promise.all([
-      reconciledSourceFingerprint(ctx.db, f.source),
-      reconciledSourceFingerprint(ctx.db, f.target),
-    ]);
-    expect(unassigned[0]).not.toBe(owned[0]);
-    expect(unassigned[1]).not.toBe(owned[1]);
-    await getDb(ctx.db)
-      .update(vendorAccount)
-      .set({ deletedAt: new Date() })
-      .where(eq(vendorAccount.id, account.id));
-    // Conservative account epochs may move; candidate matching remains local.
-    expect(await reconciledSourceFingerprint(ctx.db, f.source)).not.toBe(
-      unassigned[0],
-    );
     expect(await retrieveConnectionCandidates(ctx.db, f.source)).toHaveLength(
       1,
     );

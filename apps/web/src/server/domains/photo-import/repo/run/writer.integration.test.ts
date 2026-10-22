@@ -16,6 +16,7 @@ import {
   dataExceptionRecord,
 } from "~/server/db/schema";
 import { getProductByShortcode } from "~/server/domains/product/repo/crud";
+import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import {
   entityKernelContextSchema,
   executeEntity,
@@ -27,6 +28,7 @@ import {
   createImageFixture,
   createLocationFixture,
   createProductIdentityFixture,
+  insertEntityFixtures,
   makeLocationInput,
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
@@ -48,12 +50,14 @@ describe("commitPhotoGroup", () => {
     party: Awaited<ReturnType<typeof seedMember>>,
     overrides: Partial<typeof runTable.$inferInsert> = {},
   ) => {
-    const id = parseEntityId("run", crypto.randomUUID());
+    const id = await ensureRun(ctx.db, ctx.actor, {
+      purpose: "photo_inventory",
+      trigger: "manual",
+      execution: false,
+    });
     const [run] = await getDb(ctx.db)
-      .insert(runTable)
-      .values({
-        id,
-        shortcode: generateShortcode("run"),
+      .update(runTable)
+      .set({
         ledgerPartyId: party.id,
         actorUserId: ctx.actor.userId,
         actorName: "Wardrobe Tester",
@@ -67,6 +71,7 @@ describe("commitPhotoGroup", () => {
         status: "running",
         ...overrides,
       })
+      .where(eq(runTable.id, id))
       .returning();
     if (!run) throw new Error("fixture: run not created");
     return run;
@@ -697,18 +702,22 @@ describe("commitPhotoGroup", () => {
       makeLocationInput({ name: "Boot shelf", parentId: TEST_HOME_SHORTCODE }),
       ctx.actor,
     );
-    const [entry] = await getDb(ctx.db)
-      .insert(inventoryEntry)
-      .values({
-        productId: product.entityId,
-        locationId: location.entityId,
-        shortcode: generateShortcode("inventory"),
-        amountValue: 2,
-        amountUnit: "each",
-        ownershipMode: "explicit",
-        ownerLedgerPartyId: party.id,
-      })
-      .returning();
+    const [entry] = await insertEntityFixtures(
+      ctx.db,
+      inventoryEntry,
+      "inventory",
+      [
+        {
+          productId: product.entityId,
+          locationId: location.entityId,
+          shortcode: generateShortcode("inventory"),
+          amountValue: 2,
+          amountUnit: "each",
+          ownershipMode: "explicit",
+          ownerLedgerPartyId: party.id,
+        },
+      ],
+    );
     const input = {
       runId: run.shortcode,
       groupKey: "group-add",

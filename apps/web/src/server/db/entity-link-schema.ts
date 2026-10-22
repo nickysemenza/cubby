@@ -43,33 +43,7 @@ export const entityLinkNoSelfCheckSql = (): string => {
   return `"kind" NOT IN (${kindList(noSelf)}) OR "fromEntityId" <> "toEntityId"`;
 };
 
-/**
- * A live link may not name a deleted endpoint. Row CHECKs cannot read
- * `Entity`, so this is a constraint trigger (derived DDL): it fires on every
- * insert or update that leaves the link live, and refuses when either
- * endpoint's identity row is soft-deleted. Soft-deleting the link itself
- * (setting `deletedAt`) never fires it, which is how a removal detaches links
- * before tombstoning the entity. Postgres has no `CREATE OR REPLACE` for a
- * constraint trigger, so drop-and-create keeps the script idempotent.
- */
-export const entityLinkLivenessTriggerSql =
-  (): string => `CREATE OR REPLACE FUNCTION "entity_link_require_live_endpoints"() RETURNS trigger
-LANGUAGE plpgsql AS $$
-BEGIN
-  IF EXISTS (
-    SELECT 1 FROM "Entity"
-    WHERE "id" IN (NEW."fromEntityId", NEW."toEntityId")
-      AND "deletedAt" IS NOT NULL
-  ) THEN
-    RAISE EXCEPTION 'EntityLink % (%) names a deleted entity: % -> %',
-      NEW."id", NEW."kind", NEW."fromEntityId", NEW."toEntityId"
-      USING ERRCODE = '23503', CONSTRAINT = 'EntityLink_live_endpoints_check';
-  END IF;
-  RETURN NULL;
-END;
-$$;
-
+/** Endpoint liveness is checked by the shared transactional link writer. */
+export const entityLinkDropLivenessTriggerSql = (): string => `
 DROP TRIGGER IF EXISTS "EntityLink_live_endpoints" ON "EntityLink";
-CREATE CONSTRAINT TRIGGER "EntityLink_live_endpoints" AFTER INSERT OR UPDATE ON "EntityLink"
-  FOR EACH ROW WHEN (NEW."deletedAt" IS NULL)
-  EXECUTE FUNCTION "entity_link_require_live_endpoints"();`;
+DROP FUNCTION IF EXISTS "entity_link_require_live_endpoints"();`;

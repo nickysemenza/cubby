@@ -1,20 +1,21 @@
 import type { ExtractedOrderCandidate } from "@cubby/schemas/purchase-import";
 import { suggestionSweepRunInput } from "@cubby/schemas/run-fields";
 import { and, eq } from "drizzle-orm";
-import { driveAiWork, TEST_AI_WORK_LAUNCHER } from "tooling/ai-work";
+import { driveAiWork } from "tooling/ai-work";
 import { taxonomyId } from "tooling/product-category-fixtures";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { activateAiRefresh } from "~/server/ai/repo/ai-refresh";
 import { getDb } from "~/server/db/helpers";
-import { product, productCategory, run, runFinding } from "~/server/db/schema";
+import { product, productCategory, run } from "~/server/db/schema";
 import {
   categoryPorts,
   kernelCtx,
   PRIMARY_MODEL,
 } from "~/server/domains/run/service/suggestion-sweep.fixtures";
 import { createSystemUserFixture } from "~/server/testing/repo.fixtures";
+import { runFinding } from "~/server/testing/run-finding.fixtures";
 
 import { sweepImportedProductCategories } from "../service/import-category-sweep";
 import { commitPurchaseImport } from "./import-orders";
@@ -88,9 +89,7 @@ describe("post-commit category suggestions", () => {
     const sweepPorts = {
       ...categoryPorts(),
       decisionModel: () => PRIMARY_MODEL,
-      samplePair: () => false,
       wait: async () => {},
-      launcher: TEST_AI_WORK_LAUNCHER,
     };
     const committed = await commitPurchaseImport(
       ctx.db,

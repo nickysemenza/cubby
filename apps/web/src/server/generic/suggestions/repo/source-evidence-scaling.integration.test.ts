@@ -18,6 +18,7 @@ import { getConnectedRecords } from "~/server/generic/entity-links/repo/connecte
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import {
   createProductIdentityFixture,
+  insertEntityFixtures,
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
 const ctx = withTestDb();
@@ -47,20 +48,20 @@ it("keeps purchase evidence bounded against a large unrelated mailbox", async ()
   }
   const codes = new Set<string>();
   while (codes.size < 5000) codes.add(generateShortcode("email"));
-  const rows = await db
-    .insert(email)
-    .values(
-      [...codes].map((shortcode, i) => ({
-        shortcode,
-        ledgerPartyId: party.id,
-        mailboxId: "synthetic-benchmark",
-        messageId: `message-${i}`,
-        checksum: "synthetic-checksum",
-        subject: "Synthetic receipt",
-        status: "completed",
-      })),
-    )
-    .returning({ id: email.id });
+  const rows = await insertEntityFixtures(
+    ctx.db,
+    email,
+    "email",
+    [...codes].map((shortcode, i) => ({
+      shortcode,
+      ledgerPartyId: party.id,
+      mailboxId: "synthetic-benchmark",
+      messageId: `message-${i}`,
+      checksum: "synthetic-checksum",
+      subject: "Synthetic receipt",
+      status: "completed",
+    })),
+  );
   const [original] = await db
     .insert(orderMail)
     .values({ ledgerPartyId: party.id, rawChecksum: "synthetic-checksum" })

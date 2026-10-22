@@ -72,6 +72,13 @@ const recommendationScopes = {
   tagPropagation: sql`a.subject->>'scope' = 'product.tag-propagation'`,
 };
 
+/** Families reviewed as Suggestions; Problems findings and grading rosters have their own reads. */
+export type ReviewFamily = keyof typeof assessmentReviewFamilies;
+
+export const isReviewFamily = (
+  family: AssessmentFamily,
+): family is ReviewFamily => Object.hasOwn(assessmentReviewFamilies, family);
+
 /** Subject expansion and row admission belong to families; surfaces only intersect records. */
 export const reviewFamilyDeclarations = {
   field: {
@@ -185,7 +192,7 @@ export const reviewFamilyDeclarations = {
     },
   },
 } satisfies Record<
-  AssessmentFamily,
+  ReviewFamily,
   {
     kind: "proposal" | "automatic_decision";
     label: string;
@@ -204,11 +211,14 @@ export const reviewFamilyDeclarations = {
 
 /** Rule applications leave pending; automatic families retain legacy pending history. */
 export const automaticAssessmentCandidate = sql`(a.family IN (${sql.join(
+  Object.keys(reviewFamilyDeclarations).map((family) => sql`${family}`),
+  sql`, `,
+)}) AND (a.family IN (${sql.join(
   Object.entries(reviewFamilyDeclarations).flatMap(([family, declaration]) =>
     declaration.kind === "automatic_decision" ? [sql`${family}`] : [],
   ),
   sql`, `,
-)}) OR s.status <> ${suggestionStatus.enum.pending})`;
+)}) OR s.status <> ${suggestionStatus.enum.pending}))`;
 
 export const automaticFamilyEligibility = sql`(${sql.join(
   Object.entries(reviewFamilyDeclarations).flatMap(([family, declaration]) =>

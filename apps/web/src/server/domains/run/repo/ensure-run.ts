@@ -16,13 +16,19 @@ import {
 import { and, eq, sql } from "drizzle-orm";
 
 import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
-import { getDb, notDeleted } from "~/server/db/helpers";
+import {
+  getDb,
+  notDeleted,
+  withTransactionDatabase,
+} from "~/server/db/helpers";
 import { run as runTable, ledgerParty, user } from "~/server/db/schema";
+import { enqueueJob } from "~/server/generic/jobs/repo/jobs";
 import {
   findOrCreateWithShortcode,
   insertWithShortcode,
   type ShortcodeGeneratorPort,
 } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { isWorkflowRunPurpose } from "~/server/workflows/runs/contract";
 
 /**
  * The actor for work with nobody behind it: crons, retries, scheduled
@@ -35,6 +41,8 @@ export const systemActor = (): ActorContext =>
 
 export type EnsureRunInput = {
   purpose: RunPurpose;
+  /** A roster builder admits execution only after its final page; evaluation Jobs already own its work. */
+  execution?: boolean;
   /** `ephemeral` (the default) creates the run already `completed`. */
   trigger?: RunTrigger;
   /** Groups repeat calls into one run, e.g. one decision pass per page mount. */
@@ -123,24 +131,33 @@ export async function ensureRun(
     input: input.input ?? null,
     progress: input.progress ?? null,
   };
-  if (!input.clientKey) {
-    return (await insertWithShortcode(db, "run", values, generator)).id;
-  }
-  const result = await findOrCreateWithShortcode(
-    db,
-    "run",
-    { where: eq(runTable.clientKey, input.clientKey), values: () => values },
-    generator,
-  );
-  if (!result.created) {
-    await database
-      .update(runTable)
-      .set({
-        endedAt: sql`CASE WHEN ${runTable.status} = 'completed' THEN ${now}::timestamptz ELSE ${runTable.endedAt} END`,
-      })
-      .where(eq(runTable.id, result.row.id));
-  }
-  return result.row.id;
+  return withTransactionDatabase(db, async (tx) => {
+    const row = !input.clientKey
+      ? await insertWithShortcode(tx, "run", values, generator)
+      : (
+          await findOrCreateWithShortcode(
+            tx,
+            "run",
+            {
+              where: eq(runTable.clientKey, input.clientKey),
+              values: () => values,
+            },
+            generator,
+          )
+        ).row;
+    if (
+      !completed &&
+      input.execution !== false &&
+      isWorkflowRunPurpose(input.purpose)
+    )
+      await enqueueJob(tx, {
+        key: `run:${row.id}`,
+        kind: "run.execute",
+        input: { runId: row.id, purpose: input.purpose },
+        runId: row.id,
+      });
+    return row.id;
+  });
 }
 
 /** Causal links preserve the initiating member scope, including telemetry-only parents. */

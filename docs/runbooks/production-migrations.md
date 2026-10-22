@@ -74,6 +74,52 @@ boundary before execution. Omitting `--through` retains the usual behavior of
 applying every pending journal entry and is unsuitable for a staged rollout
 whose journal already contains an undeployed contract.
 
+## Unified Job cutover
+
+This migration replaces the old job tables and removes business triggers. Pause
+writes from web, native, MCP, cron, queues, and existing Workflows while applying
+it. Keep writes paused until the matching Worker and clients are deployed and
+checks confirm the data was preserved. This PR does not authorize a production
+deploy or Cloudflare configuration changes.
+
+Before merging, the production operator must hold the automatic Deploy workflow
+and set `PRODUCTION_MIGRATION_THROUGH=0003_explicit_field_publication`. Otherwise
+the main-push workflow removes tables that live code still uses. The variable
+alone is insufficient: the new Worker also requires the new Job table. With
+writes paused, explicitly migrate through `0004_unified_jobs`, deploy the
+matching Worker and clients, and check the retained data. Only then delete
+`PRODUCTION_MIGRATION_THROUGH` and release automatic deploys.
+These are operator prerequisites, not actions performed by this PR.
+
+Before stopping the old queue consumers, stop new requests and let the old
+Worker finish every legacy queue request. Verify and record that the queue,
+its dead-letter queue, and requests already being processed are empty. This
+includes location descriptions and inventory requests: their only durable copy
+may be the old queue message, so the database migration cannot recreate them.
+Resolve failures with the old Worker before proceeding; do not discard messages
+to make the queue empty. Only then stop consumers and apply the migration with
+writes paused. New code accepts only Job wake messages, so this verified drain
+is required before switching versions.
+
+The migration creates Jobs before removing old scheduling fields. It carries
+pending AI results forward for application without another provider call,
+retains image-processing attempt tokens as historical receipts, and keeps
+embedding IDs and upload receipts. Review history retains who or what made each
+decision. Currently selected embeddings and authoritative household facts are
+preserved. Retired embeddings keep separate history keys; deleted image work is
+cancelled. Historical failed Runs remain available only through explicit retry.
+Terminal AI retry/lease counters are discarded; domain state, raw errors, paid
+usage, results and receipts remain in their owning records.
+
+Run the populated predecessor migration test before release. During the switch,
+record counts and retained receipts for each transformed source, verify the new
+Jobs before dropping their old tables, and confirm the database has no business
+triggers afterward. Resume queue messages only after the new handlers are
+deployed. Then verify a save updates its derived data, cron repairs a missed
+queue message, and failed or manually paused Jobs remain visible without being
+automatically restarted. The migration runner owns the transaction; do not run
+it alongside Actions or another operator.
+
 ## Baseline consolidation
 
 Neon is the only persistent application database; dev and CI databases are

@@ -118,17 +118,6 @@ export async function imagesMissingCurrentProcessing(
     }));
 }
 
-export async function countImagesMissingCurrentProcessing(
-  db: Database,
-  kinds: readonly ImageProcessingJobKind[],
-) {
-  const result = await getDb(db).execute(sql`
-    SELECT count(*)::int AS count FROM "Image" i
-    WHERE ${missingCurrentProcessingWhere(kinds)}
-  `);
-  return z.array(z.object({ count: z.number() })).parse(result.rows)[0]!.count;
-}
-
 /**
  * Delete one bounded batch of attempts that waited without ever having an
  * executor (written by the old dispatcher on every idle cycle), with their

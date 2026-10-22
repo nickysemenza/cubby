@@ -12,6 +12,7 @@ import { getDb } from "~/server/db/helpers";
 import { requireActor } from "~/server/http/request-context";
 import { runMutationSideEffects } from "~/server/entity-kernel/repo/mutation-side-effects";
 import { createTestRequestContext } from "~/server/testing/request-context";
+import { drainRecipeRefreshJobs } from "~/server/testing/background-queue";
 import { householdDaysFromNow, householdLocalDate } from "~/lib/household-date";
 import { getFixtureDb, fixtureUserId, createEntityFixture } from "./core";
 
@@ -182,6 +183,7 @@ export async function seedNutritionPrerequisite(
     recipes: [{ recipeId: recipe.id, scale: 1 }],
   });
   await context.services.recipeCosting.recompute([row.id]);
+  await drainRecipeRefreshJobs(db, context.services.recipeCosting);
   return { recipe, measured, incomplete, meal };
 }
 

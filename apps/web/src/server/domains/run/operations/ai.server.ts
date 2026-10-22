@@ -721,7 +721,7 @@ export const aiHandlers = implementOperationDomain(aiContract, {
   },
   resumeSuggestionSweep: async (context, input) => {
     const id = parseEntityId("run", input.runId);
-    await resumeSuggestionSweep(context.db, id, { context });
+    await resumeSuggestionSweep(context.db, id);
     return { id };
   },
   latestSuggestionSweepStatus: (context) =>

@@ -1,5 +1,5 @@
-import type { BackgroundTaskInput } from "@cubby/schemas/background-tasks";
 import { ingredientShortcode } from "@cubby/schemas/identifiers";
+import type { BackgroundTaskMessage } from "@cubby/schemas/queue-messages";
 import { fromPartial } from "@total-typescript/shoehorn";
 import { eq, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
@@ -184,24 +184,23 @@ describe("mutation response demand", () => {
         }),
         ctx.actor,
       );
-      const published: BackgroundTaskInput[] = [];
+      const published: BackgroundTaskMessage[] = [];
       let expectedName = `Synthetic ${resultDetail} costing product`;
       setCfEnv(
         fromPartial<Env>({
           BACKGROUND_QUEUE: {
             send: async () => {},
             sendBatch: async (
-              messages: Iterable<{ body: { task: BackgroundTaskInput } }>,
+              messages: Iterable<{ body: BackgroundTaskMessage }>,
             ) => {
               for (const { body } of messages) {
-                if (body.task.kind !== "derived-refresh.wakeup") continue;
                 // The queue consumer uses a fresh connection, outside the write transaction.
                 const visible = await getDb(ctx.db).query.product.findFirst({
                   where: eq(product.name, expectedName),
                   columns: { name: true },
                 });
                 expect(visible?.name).toBe(expectedName);
-                published.push(body.task);
+                published.push(body);
               }
             },
           },
@@ -224,12 +223,8 @@ describe("mutation response demand", () => {
         { entityKernel: context },
       );
       requireMutationSuccess(created);
-      expect(published).toEqual(
-        expect.arrayContaining(
-          [{ kind: "derived-refresh.wakeup" }].map((task) =>
-            expect.objectContaining(task),
-          ),
-        ),
+      expect(published).toContainEqual(
+        expect.objectContaining({ queueType: "background" }),
       );
       const identity = generatedMcpEntityMutationCreateResultSchema.parse(
         created.structuredContent,
@@ -252,12 +247,8 @@ describe("mutation response demand", () => {
         { entityKernel: context },
       );
       requireMutationSuccess(updated);
-      expect(published).toEqual(
-        expect.arrayContaining(
-          [{ kind: "derived-refresh.wakeup" }].map((task) =>
-            expect.objectContaining(task),
-          ),
-        ),
+      expect(published).toContainEqual(
+        expect.objectContaining({ queueType: "background" }),
       );
     }
   });

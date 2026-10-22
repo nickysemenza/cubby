@@ -82,6 +82,7 @@ import {
 import { createAppError } from "~/server/errors/app-error";
 import { logAuditEntry } from "~/server/generic/audit-log/repo/audit-log";
 import {
+  assertLiveLinkEndpoints,
   linkValues,
   liveLinks,
 } from "~/server/generic/entity-links/repo/entity-links";
@@ -804,6 +805,10 @@ export async function attachProjectResources(
     assertResourcesAttachable(projectId, pre);
 
     const before = await liveResourceCodes(tx, projectId);
+    await assertLiveLinkEndpoints(tx, "projectTool", [
+      projectId,
+      ...uniqueProductIds,
+    ]);
     const inserted = await tx
       .insert(entityLink)
       .values(
@@ -1117,6 +1122,7 @@ export async function setProjectToolUsage(
 
     let changed = false;
     if (used && !existing) {
+      await assertLiveLinkEndpoints(tx, "projectTool", [projectId, productId]);
       // `onConflictDoNothing` against the PARTIAL unique index (live rows only):
       // re-attaching after a soft delete inserts a NEW physical row rather than
       // conflicting, which is intended — `attachedAt` should reflect the current
@@ -1219,6 +1225,10 @@ export async function setProductProjectUses(
         );
     }
     if (additions.length > 0) {
+      await assertLiveLinkEndpoints(tx, "projectTool", [
+        productId,
+        ...additions,
+      ]);
       await tx
         .insert(entityLink)
         .values(

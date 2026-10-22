@@ -11,12 +11,6 @@ import { z } from "zod";
 import { resolveDevProfile } from "./tooling/dev-services/dev-profile.ts";
 import { localWorker } from "./tooling/dev/config.ts";
 
-type WorkflowDefinition = {
-  name: string;
-  worker: string;
-  exportName: string;
-};
-
 // Read shared data as bytes: importing runtime modules here makes Cloudflare's
 // Vite plugin deny them to the Worker module loader.
 const workflowPlatformLimits = z
@@ -32,16 +26,6 @@ const workflowPlatformLimits = z
       ),
     ),
   );
-
-const RUN_WORKFLOWS: Record<
-  "AI_REFRESH" | "MAIL_DISCOVERY" | "STEP_RUN",
-  WorkflowDefinition
-> = JSON.parse(
-  readFileSync(
-    new URL("./src/lib/workflows/run-workflows.json", import.meta.url),
-    "utf8",
-  ),
-);
 
 // Existing names and lifecycle tombstones preserve stored Durable Object namespaces.
 export const productionWorker = defineWorker({
@@ -84,20 +68,13 @@ export const productionWorker = defineWorker({
     htmlHandling: "none",
   },
   domains: ["cubby.nickysemenza.com"],
-  // No dead-letter queues: freshness gates retain unfinished work for retry.
+  // Queue delivery only wakes durable Jobs; cron recovers missed wakeups.
   triggers: [
     triggers.scheduled({ schedule: "* * * * *" }),
     triggers.scheduled({
       schedule: "0 12 * * *",
     }),
-    // Bound image and background database concurrency independently.
-    triggers.queue({
-      maxBatchSize: 1,
-      maxBatchTimeout: 0,
-      maxConcurrency: 4,
-      maxRetries: 3,
-      name: "cubby-image-cloud",
-    }),
+
     triggers.queue({
       maxBatchSize: 1,
       maxBatchTimeout: 0,
@@ -154,9 +131,6 @@ export const productionWorker = defineWorker({
     BACKGROUND_QUEUE: bindings.queue({
       name: "cubby-background",
     }),
-    IMAGE_CLOUD_QUEUE: bindings.queue({
-      name: "cubby-image-cloud",
-    }),
     TELEMETRY_QUEUE: bindings.queue({
       name: "cubby-telemetry",
     }),
@@ -195,14 +169,6 @@ export const productionWorker = defineWorker({
       worker: "cubby",
       exportName: "UsdaReleaseDurableObject",
     }),
-    AI_REFRESH: bindings.workflow(RUN_WORKFLOWS.AI_REFRESH),
-    SEARCH_INDEX_REPAIR: bindings.workflow({
-      name: "cubby-search-index-repair",
-      worker: "cubby",
-      exportName: "SearchIndexRepairWorkflow",
-    }),
-    MAIL_DISCOVERY: bindings.workflow(RUN_WORKFLOWS.MAIL_DISCOVERY),
-    STEP_RUN: bindings.workflow(RUN_WORKFLOWS.STEP_RUN),
     AI: bindings.ai({}),
     CF_VERSION_METADATA: bindings.versionMetadata(),
   },
@@ -230,18 +196,6 @@ export const productionWorker = defineWorker({
     }),
     PurchaseImportRunAgent: exports.durableObject({
       storage: "sqlite",
-    }),
-    AiRefreshWorkflow: exports.workflow({
-      name: RUN_WORKFLOWS.AI_REFRESH.name,
-    }),
-    SearchIndexRepairWorkflow: exports.workflow({
-      name: "cubby-search-index-repair",
-    }),
-    MailDiscoveryWorkflow: exports.workflow({
-      name: RUN_WORKFLOWS.MAIL_DISCOVERY.name,
-    }),
-    StepRunWorkflow: exports.workflow({
-      name: RUN_WORKFLOWS.STEP_RUN.name,
     }),
   },
 });

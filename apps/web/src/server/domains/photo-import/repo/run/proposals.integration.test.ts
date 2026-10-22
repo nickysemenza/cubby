@@ -34,6 +34,7 @@ import {
   stopRunForReview,
 } from "~/server/domains/purchase-import/operations/run-review";
 import { loadRunDetail } from "~/server/domains/purchase-import/repo/run-service";
+import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { deleteThroughKernel } from "~/server/testing/entity-kernel";
@@ -43,6 +44,7 @@ import {
   createLocationFixture,
   createProductFixture,
   createProductIdentityFixture,
+  insertEntityFixtures,
   makeLocationInput,
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
@@ -75,12 +77,14 @@ describe("photo group proposals", () => {
       kind: "member" as const,
       userId: ctx.actor.userId,
     });
-    const id = parseEntityId("run", crypto.randomUUID());
+    const id = await ensureRun(ctx.db, ctx.actor, {
+      purpose: "photo_inventory",
+      trigger: "manual",
+      execution: false,
+    });
     const [run] = await getDb(ctx.db)
-      .insert(runTable)
-      .values({
-        id,
-        shortcode: generateShortcode("run"),
+      .update(runTable)
+      .set({
         ledgerPartyId: party.id,
         actorUserId: ctx.actor.userId,
         actorName: "Proposal Tester",
@@ -94,6 +98,7 @@ describe("photo group proposals", () => {
         trigger: "manual",
         status: "running",
       })
+      .where(eq(runTable.id, id))
       .returning();
     if (!run) throw new Error("fixture: run not created");
     const images = await Promise.all(
@@ -1316,38 +1321,46 @@ describe("photo group proposals", () => {
       .update(image)
       .set({ sha256: sourceHash })
       .where(eq(image.id, source.id));
-    const [description] = await getDb(ctx.db)
-      .insert(imageProcessingJob)
-      .values({
-        shortcode: generateShortcode("imageJob"),
-        imageId: parseEntityId("image", source.id),
-        kind: "describe_image",
-        state: "pending",
-        sourceContentHash: sourceHash,
-        processorRevision: IMAGE_DESCRIPTION_PROCESSOR_REVISION,
-      })
-      .returning();
-    const [appleDescription] = await getDb(ctx.db)
-      .insert(imageProcessingJob)
-      .values({
-        shortcode: generateShortcode("imageJob"),
-        imageId: parseEntityId("image", source.id),
-        kind: "describe_image",
-        state: "waiting_for_device",
-        sourceContentHash: sourceHash,
-        processorRevision: IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION,
-      })
-      .returning({ id: imageProcessingJob.id });
-    await getDb(ctx.db)
-      .insert(imageProcessingJob)
-      .values({
+    const [description] = await insertEntityFixtures(
+      ctx.db,
+      imageProcessingJob,
+      "imageJob",
+      [
+        {
+          shortcode: generateShortcode("imageJob"),
+          imageId: parseEntityId("image", source.id),
+          kind: "describe_image",
+          state: "pending",
+          sourceContentHash: sourceHash,
+          processorRevision: IMAGE_DESCRIPTION_PROCESSOR_REVISION,
+        },
+      ],
+    );
+    const [appleDescription] = await insertEntityFixtures(
+      ctx.db,
+      imageProcessingJob,
+      "imageJob",
+      [
+        {
+          shortcode: generateShortcode("imageJob"),
+          imageId: parseEntityId("image", source.id),
+          kind: "describe_image",
+          state: "waiting_for_device",
+          sourceContentHash: sourceHash,
+          processorRevision: IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION,
+        },
+      ],
+    );
+    await insertEntityFixtures(ctx.db, imageProcessingJob, "imageJob", [
+      {
         shortcode: generateShortcode("imageJob"),
         imageId: parseEntityId("image", source.id),
         kind: "subject_lift",
         state: "waiting_for_device",
         sourceContentHash: sourceHash,
         processorRevision: 1,
-      });
+      },
+    ]);
     await proposePhotoGroups(ctx.db, {
       runId: run.shortcode,
       groups: [createGroup("sweater", codes)],
@@ -1462,22 +1475,25 @@ describe("photo group proposals", () => {
       .where(eq(image.id, source.id));
     const dispatchedAt = new Date("2026-09-20T08:00:00.000Z");
     const completedAt = new Date("2026-09-20T14:38:55.500Z");
-    const [job] = await getDb(ctx.db)
-      .insert(imageProcessingJob)
-      .values({
-        shortcode: generateShortcode("imageJob"),
-        imageId: parseEntityId("image", source.id),
-        kind: "describe_image",
-        state: "ready",
-        sourceContentHash: contentHash,
-        processorRevision: IMAGE_DESCRIPTION_PROCESSOR_REVISION,
-        dispatchedAt,
-        completedAt,
-      })
-      .returning({ id: imageProcessingJob.id });
-    await getDb(ctx.db)
-      .insert(imageProcessingJob)
-      .values({
+    const [job] = await insertEntityFixtures(
+      ctx.db,
+      imageProcessingJob,
+      "imageJob",
+      [
+        {
+          shortcode: generateShortcode("imageJob"),
+          imageId: parseEntityId("image", source.id),
+          kind: "describe_image",
+          state: "ready",
+          sourceContentHash: contentHash,
+          processorRevision: IMAGE_DESCRIPTION_PROCESSOR_REVISION,
+          dispatchedAt,
+          completedAt,
+        },
+      ],
+    );
+    await insertEntityFixtures(ctx.db, imageProcessingJob, "imageJob", [
+      {
         shortcode: generateShortcode("imageJob"),
         imageId: parseEntityId("image", source.id),
         kind: "describe_image",
@@ -1485,7 +1501,8 @@ describe("photo group proposals", () => {
         sourceContentHash: contentHash,
         processorRevision: IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION,
         dispatchedAt: new Date("2026-09-20T07:00:00.000Z"),
-      });
+      },
+    ]);
     await getDb(ctx.db)
       .insert(imageProcessingAttempt)
       .values({

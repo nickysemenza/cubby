@@ -26,6 +26,7 @@ import { photoImportContract } from "~/contracts/photo-import.contract";
 import { scrubErrorMessage } from "~/lib/error-diagnostics";
 import * as schema from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/db/helpers";
+import { runFinding } from "~/server/testing/run-finding.fixtures";
 import {
   currentMemberLedgerParty,
   setMemberLoginParty,
@@ -82,12 +83,15 @@ export async function applyReviewedSourceReconciliation(
   );
   const openReconciliations = async () =>
     (
-      await database.query.runFinding.findMany({
-        where: and(
-          eq(schema.runFinding.entityId, purchaseId),
-          eq(schema.runFinding.status, "open"),
-        ),
-      })
+      await database
+        .select()
+        .from(runFinding)
+        .where(
+          and(
+            eq(runFinding.entityId, purchaseId),
+            eq(runFinding.status, "open"),
+          ),
+        )
     ).filter(
       (row) =>
         proposedImportFix.safeParse(row.proposedFix).data?.kind ===
@@ -152,9 +156,9 @@ export async function applyReviewedSourceReconciliation(
 
   const [run] = await database
     .select({ shortcode: schema.run.shortcode })
-    .from(schema.runFinding)
-    .innerJoin(schema.run, eq(schema.run.id, schema.runFinding.runId))
-    .where(eq(schema.runFinding.id, finding.id));
+    .from(runFinding)
+    .innerJoin(schema.run, eq(schema.run.id, runFinding.runId))
+    .where(eq(runFinding.id, finding.id));
   if (!run) throw new Error("Reconciliation Run missing");
   const apply = page.getByRole("button", { name: "Apply fix", exact: true });
   await gotoAuthenticatedPage(

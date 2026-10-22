@@ -1,8 +1,4 @@
 import type { ActorContext } from "@cubby/schemas/context";
-import type {
-  EmailAccuracyReport,
-  EmailAccuracyBinaryMetrics,
-} from "@cubby/schemas/email-accuracy";
 import {
   EMAIL_LINK_STATE_LABEL,
   type EmailPurchaseLink,
@@ -24,7 +20,7 @@ import {
   mailboxClassification,
 } from "@cubby/schemas/mailbox-research";
 import { mailResearchRunInput, runWorkLabel } from "@cubby/schemas/run-fields";
-import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { groupBy } from "es-toolkit";
 
 import { operationCommandRequest } from "~/contracts/define";
@@ -32,7 +28,6 @@ import { purchaseImportContract } from "~/contracts/purchase-import.contract";
 import {
   formatAiCost,
   formatAiCostSubtotal,
-  formatPercent,
   formatSmallCurrency,
 } from "~/lib/number-format";
 import type { Database } from "~/server/db";
@@ -42,18 +37,14 @@ import {
   emailCandidateObservation,
   emailClassificationObservation,
   feedback,
-  emailAccuracyEvaluation,
   emailRetrievalFailure,
   ledgerParty,
   email as emailTable,
   orderMail,
-  assessmentEmailLink,
-  orderMailEvent,
   purchase,
   run,
 } from "~/server/db/schema";
 import { readEmailAssociations } from "~/server/domains/email/repo/email";
-import { getEmailAccuracyReport } from "~/server/domains/email/repo/email-accuracy";
 import { readEmailPurchaseLinks } from "~/server/domains/email/repo/email-purchase-links";
 import {
   emailFeedbackObservationIdSql,
@@ -64,8 +55,6 @@ import { runRowState } from "~/server/generic/collection/repo/collection-items";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 import type { ReportViewer } from "./records";
-
-type StatsBlock = Extract<ReportBlock, { kind: "stats" }>;
 
 /**
  * One count per association, then a ledger for each non-empty one; an empty association is only
@@ -200,236 +189,6 @@ function emailAssociationBlocks(
       rows,
       empty: "",
     })),
-  ];
-}
-
-function accuracyMetricsBlock(
-  metrics: EmailAccuracyBinaryMetrics,
-  basis: "pipeline" | "model-only",
-): StatsBlock {
-  const prefix = `email-accuracy-${basis}`;
-  const countFigure = (
-    suffix: string,
-    label: string,
-    value: number,
-  ): StatsBlock["figures"][number] => ({
-    id: `${prefix}-${suffix}`,
-    label,
-    value,
-    format: "count",
-  });
-  const ratioFigure = (
-    suffix: string,
-    label: string,
-    value: number | null,
-  ): StatsBlock["figures"][number] => ({
-    id: `${prefix}-${suffix}`,
-    label,
-    value,
-    format: "text",
-    text:
-      value === null
-        ? "Unknown: zero determinate denominator"
-        : formatPercent(value, { maximumFractionDigits: 2 }),
-  });
-  return {
-    kind: "stats",
-    title:
-      basis === "pipeline"
-        ? "Pipeline weighted accuracy"
-        : "Exact-known Jev/Clef model-only weighted accuracy",
-    figures: [
-      countFigure(
-        "binary-pairs",
-        "Determinate binary sample pairs",
-        metrics.binaryPairCount,
-      ),
-      countFigure(
-        "weighted-population",
-        "Estimated determinate binary population",
-        metrics.estimatedBinaryPopulation,
-      ),
-      countFigure(
-        "tp",
-        "Weighted true positives",
-        metrics.confusionMatrix.truePositive,
-      ),
-      countFigure(
-        "fp",
-        "Weighted false positives",
-        metrics.confusionMatrix.falsePositive,
-      ),
-      countFigure(
-        "fn",
-        "Weighted false negatives",
-        metrics.confusionMatrix.falseNegative,
-      ),
-      countFigure(
-        "tn",
-        "Weighted true negatives",
-        metrics.confusionMatrix.trueNegative,
-      ),
-      ratioFigure(
-        "precision",
-        "Conditional related precision",
-        metrics.precisionRelated,
-      ),
-      ratioFigure(
-        "recall",
-        "Conditional related recall",
-        metrics.recallRelated,
-      ),
-    ],
-  };
-}
-
-/** Generic blocks for the authenticated accuracy read model; never used by blind reads. */
-function emailAccuracyReviewBlocks(report: EmailAccuracyReport): ReportBlock[] {
-  const countFigure = (
-    suffix: string,
-    label: string,
-    value: number | null,
-  ): StatsBlock["figures"][number] => ({
-    id: `email-accuracy-${suffix}`,
-    label,
-    value,
-    format: "count",
-  });
-  return [
-    {
-      kind: "note",
-      text: `Latest member-wide evaluation, sampled ${report.createdAt}. The population covers this member's owned Emails, not only this Email. Predictions, roster and independent grades are frozen; newer classifications do not rewrite this measurement.`,
-    },
-    {
-      kind: "stats",
-      title: "Accuracy sample and exclusions",
-      figures: [
-        countFigure(
-          "member-emails",
-          "Owned member Emails at sampling",
-          report.memberEmailCount,
-        ),
-        countFigure(
-          "unpredicted-emails",
-          "Owned Emails without a prediction",
-          report.unpredictedEmailCount,
-        ),
-        countFigure(
-          "unknown-stage",
-          "Decision stage unknown",
-          report.counts.unknownStage,
-        ),
-        countFigure(
-          "population",
-          "Predicted population Emails",
-          report.populationCount,
-        ),
-        countFigure("sample", "Sampled Emails", report.sampleSize),
-        countFigure("graded", "Graded", report.counts.graded),
-        countFigure("ungraded", "Ungraded", report.counts.ungraded),
-        countFigure(
-          "unknown-model",
-          "Model unknown",
-          report.counts.unknownModel,
-        ),
-        countFigure(
-          "named-other-model",
-          "Other known models",
-          report.counts.knownOtherModel,
-        ),
-        countFigure(
-          "unavailable",
-          "Unavailable originals",
-          report.counts.unavailable,
-        ),
-        countFigure(
-          "uncertain-grade",
-          "Uncertain reviews",
-          report.counts.uncertainGrade,
-        ),
-        countFigure(
-          "uncertain-prediction",
-          "Uncertain predictions",
-          report.counts.uncertainPrediction,
-        ),
-        countFigure(
-          "historical-unknown",
-          "Historical metadata unknown",
-          report.counts.historicalMetadataUnknown,
-        ),
-        countFigure(
-          "missing-email",
-          "Missing Emails",
-          report.counts.missingEmail,
-        ),
-        countFigure(
-          "ownership-changed",
-          "Ownership changed",
-          report.counts.ownershipChanged,
-        ),
-      ],
-    },
-    accuracyMetricsBlock(report.pipeline, "pipeline"),
-    accuracyMetricsBlock(report.modelOnly, "model-only"),
-    {
-      kind: "table",
-      title: "Accuracy strata",
-      columns: [
-        "Stage",
-        "Predicted relevance",
-        "Model",
-        "Population N",
-        "Sample n",
-        "Inclusion probability",
-        "Weight",
-        "Graded",
-        "Binary pairs",
-      ],
-      rows: report.strata.map((item) => ({
-        id: item.id,
-        cells: [
-          item.stage ?? "Unknown",
-          item.classification,
-          item.model ?? "Unknown",
-          String(item.populationCount),
-          String(item.sampleCount),
-          String(item.inclusionProbability),
-          String(item.weight),
-          String(item.gradedCount),
-          String(item.binaryPairCount),
-        ],
-      })),
-      empty: "No eligible predictions in this frozen population.",
-    },
-    {
-      kind: "table",
-      title: "Accuracy stage coverage",
-      columns: ["Stage", "Population N", "Sample n", "Graded"],
-      rows: report.byStage.map((item) => ({
-        id: JSON.stringify(item.stage),
-        cells: [
-          item.stage ?? "Unknown",
-          String(item.populationCount),
-          String(item.sampleCount),
-          String(item.gradedCount),
-        ],
-      })),
-    },
-    {
-      kind: "table",
-      title: "Accuracy model coverage",
-      columns: ["Model", "Population N", "Sample n", "Graded"],
-      rows: report.byModel.map((item) => ({
-        id: JSON.stringify(item.model),
-        cells: [
-          item.model ?? "Unknown",
-          String(item.populationCount),
-          String(item.sampleCount),
-          String(item.gradedCount),
-        ],
-      })),
-    },
-    ...report.warnings.map((text): ReportBlock => ({ kind: "note", text })),
   ];
 }
 
@@ -1295,151 +1054,4 @@ export async function emailReviewReport(
       empty: "No extraction preview has been recorded.",
     },
   ];
-}
-
-/** Member-wide accuracy and review conflicts: the Emails list's Accuracy view. */
-export async function emailAccuracyViewReport(
-  db: Database,
-  actor: ActorContext,
-): Promise<{ blocks: ReportBlock[] }> {
-  const client = getDb(db);
-  const [[latestEvaluation], conflicts, proposals] = await Promise.all([
-    client
-      .select({ id: emailAccuracyEvaluation.id })
-      .from(emailAccuracyEvaluation)
-      .where(eq(emailAccuracyEvaluation.ownerUserId, actor.userId))
-      .orderBy(
-        desc(emailAccuracyEvaluation.createdAt),
-        desc(emailAccuracyEvaluation.id),
-      )
-      .limit(1),
-    client
-      .select({
-        stage: emailClassificationObservation.stage,
-        model: emailClassificationObservation.model,
-        count: sql<number>`count(*)::int`,
-      })
-      .from(emailClassificationObservation)
-      .innerJoin(
-        emailTable,
-        eq(emailTable.id, emailClassificationObservation.emailId),
-      )
-      .innerJoin(
-        ledgerParty,
-        and(
-          eq(ledgerParty.id, emailTable.ledgerPartyId),
-          eq(ledgerParty.userId, actor.userId),
-          notDeleted(ledgerParty),
-        ),
-      )
-      .where(
-        and(
-          notDeleted(emailTable),
-          sql`${emailClassificationObservation.conflict}->>${"kind"} = ${"member_review"}`,
-        ),
-      )
-      .groupBy(
-        emailClassificationObservation.stage,
-        emailClassificationObservation.model,
-      )
-      .orderBy(
-        emailClassificationObservation.stage,
-        emailClassificationObservation.model,
-      ),
-    // A dismissed proposal is a review conflict for whoever proposed it; the
-    // proposer survives the dismissal so agent links stay measurable.
-    client
-      .select({
-        proposedBy: assessmentEmailLink.proposedBy,
-        linked: sql<number>`count(*) FILTER (WHERE ${eq(assessmentEmailLink.decision, "linked")})::int`,
-        dismissed: sql<number>`count(*) FILTER (WHERE ${eq(assessmentEmailLink.decision, "dismissed")})::int`,
-      })
-      .from(assessmentEmailLink)
-      .innerJoin(
-        orderMailEvent,
-        eq(orderMailEvent.id, assessmentEmailLink.eventId),
-      )
-      .innerJoin(orderMail, eq(orderMail.id, orderMailEvent.orderMailId))
-      .innerJoin(
-        ledgerParty,
-        and(
-          eq(ledgerParty.id, orderMail.ledgerPartyId),
-          eq(ledgerParty.userId, actor.userId),
-          notDeleted(ledgerParty),
-        ),
-      )
-      .where(isNull(orderMailEvent.supersededAt))
-      .groupBy(assessmentEmailLink.proposedBy)
-      .orderBy(assessmentEmailLink.proposedBy),
-  ]);
-  const accuracyBlocks: ReportBlock[] = latestEvaluation
-    ? emailAccuracyReviewBlocks(
-        await getEmailAccuracyReport(
-          db,
-          { evaluationId: latestEvaluation.id },
-          actor,
-        ),
-      )
-    : [
-        {
-          kind: "note",
-          text: "Email accuracy has not yet been reviewed. Start a member-wide sample of the latest owned predictions, including unrelated messages.",
-        },
-      ];
-  return {
-    blocks: [
-      {
-        kind: "records",
-        title: "Review Email accuracy",
-        rows: [],
-        empty:
-          "Review through mail.accuracy_sample and imports_read.email_accuracy_blind, then mail.accuracy_grade. A member's Claude or Codex session can read originals with Gmail; grade the frozen checksum before opening prediction metadata. Grades never change import routing.",
-        commands: [
-          {
-            id: "create-email-accuracy",
-            prominent: true,
-            confirm: null,
-            label: "Start a 200-Email accuracy sample",
-            request: operationCommandRequest(
-              purchaseImportContract,
-              "emailAccuracyCreate",
-              { sampleSize: 200 },
-            ),
-          },
-        ],
-      },
-      {
-        kind: "table",
-        title: "Review conflicts by stage and model",
-        columns: ["Stage", "Model", "Conflicting results"],
-        rows: conflicts.map((item) => ({
-          id: JSON.stringify([item.stage, item.model]),
-          cells: [
-            item.stage ?? "Unknown",
-            item.model ?? "Unknown",
-            String(item.count),
-          ],
-        })),
-        empty:
-          "No recorded rule, decision-model or relevance-model result disagrees with a member's review.",
-      },
-      {
-        kind: "table",
-        title: "Purchase link proposals",
-        columns: ["Proposed by", "Linked", "Dismissed"],
-        rows: proposals.map((item) => ({
-          id: item.proposedBy ?? "unknown",
-          cells: [
-            item.proposedBy
-              ? PROPOSER_LABEL[item.proposedBy]
-              : "Unknown (before proposers were recorded)",
-            String(item.linked),
-            String(item.dismissed),
-          ],
-        })),
-        empty: "No Email has been linked or dismissed for a Purchase.",
-      },
-      ...accuracyBlocks,
-    ],
-  };
 }

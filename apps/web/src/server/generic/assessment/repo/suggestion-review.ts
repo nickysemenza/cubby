@@ -37,6 +37,11 @@ import {
   run as runTable,
   assessmentState as suggestionTable,
 } from "~/server/db/schema";
+import {
+  captureConnectionBasis,
+  connectionBasisIsCurrent,
+  connectionReadEvidence,
+} from "~/server/domains/connection/repo/connection-evidence";
 import { spendingClassificationRevision } from "~/server/domains/expense/repo/expense-category-resolution";
 import { applyFinanceCategorySuggestion } from "~/server/domains/financial-transaction/repo/finance-suggestion-context";
 import { executeEntity, executeEntityAs } from "~/server/entity-kernel";
@@ -48,22 +53,19 @@ import {
   matchedRulesOf,
   recordFeedback,
 } from "~/server/generic/assessment/repo/assessment";
-import { latestFieldWrite } from "~/server/generic/audit-log/repo/audit-log";
-import { withAuditReceipts } from "~/server/generic/audit-log/repo/audit-receipts";
+import { transitionAssessmentState } from "~/server/generic/assessment/repo/assessment-state";
 import {
-  currentInputRevision,
-  fenceDerivedInputsAtCommit,
-} from "~/server/generic/derived-refresh/repo/freshness";
+  fieldInputFingerprint,
+  fieldInputFingerprintIfLive,
+  fenceFieldInputsAtCommit,
+} from "~/server/generic/assessment/repo/field-input-fence";
+import { withAuditReceipts } from "~/server/generic/audit-log/repo/audit-receipts";
+import { latestFieldWrite } from "~/server/generic/audit-log/repo/field-write";
 import {
   lookupShortcodes,
   resolveLiveShortcodes,
 } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { canonicalJson } from "~/server/lib/canonical-json";
-
-import {
-  fieldInputFingerprint,
-  fieldInputFingerprintIfLive,
-} from "./field-input-fence";
 
 /** Shared executions publish one suggestion history; every live requester can inspect it. */
 const requestedSuggestionRun = (code: string) => sql`(
@@ -92,24 +94,22 @@ const suggestionRowSchema = z.object({
   kind: z.enum(["correction", "addition"]),
   status: suggestionStatus,
   correctValue: jsonSchema.nullable(),
-  pairKey: z.string().uuid().nullable(),
   createdAt: z.date().transform((value) => value.toISOString()),
 });
 
-/** A paired trial row is reviewable only when it is the model its Run
- * served; public rows name their Run by shortcode. */
+/** Public rows name their Run by shortcode. */
 function reviewableRow(
   suggestion: typeof suggestionTable.$inferSelect,
   runCode: string | null,
 ) {
   return [{ ...suggestionRowSchema.parse(suggestion), runId: runCode }];
 }
-/** Served-trial authority outlives nullable Run provenance. */
+/** Only served Assessments are member review candidates. */
 export const reviewableSuggestionSql = sql`EXISTS (SELECT 1 FROM "Assessment" prediction WHERE prediction.id=${suggestionTable.id} AND prediction.served)`;
 
 /** Pending review queue, or reviewed history by `status` (the label set a
  * decision eval replays). Every filter composes, including a list page's
- * `recordIds` and `fields`. Paired evaluation candidates never appear. */
+ * `recordIds` and `fields`. Unserved Assessments never appear. */
 export async function listSuggestions(
   db: Database,
   rawInput: z.input<typeof suggestionReviewListInput> = {},
@@ -177,7 +177,41 @@ type StoredFieldRow = {
 
 /** Public queue rows: records and receipt Runs named by shortcode. */
 async function presentFieldRows(db: Database, rows: StoredFieldRow[]) {
-  const reviewable = rows.flatMap(({ suggestion, runCode }) =>
+  const currentRows: StoredFieldRow[] = [];
+  for (const row of rows) {
+    const suggestion = row.suggestion;
+    if (suggestion.status === "pending") {
+      const data = z.record(z.string(), z.json()).parse(suggestion.data);
+      if ("connectionEvidence" in data) {
+        const evidence = connectionReadEvidence.safeParse(
+          data.connectionEvidence,
+        );
+        if (
+          !evidence.success ||
+          !(await connectionBasisIsCurrent(
+            db,
+            suggestion.id,
+            await captureConnectionBasis(db, evidence.data.candidate),
+          ))
+        )
+          continue;
+      } else {
+        if (
+          typeof data.liveInputFingerprint !== "string" ||
+          data.liveInputFingerprint !==
+            (await fieldInputFingerprintIfLive(
+              db,
+              suggestion.entity,
+              suggestion.recordId,
+              suggestion.field,
+            ))
+        )
+          continue;
+      }
+    }
+    currentRows.push(row);
+  }
+  const reviewable = currentRows.flatMap(({ suggestion, runCode }) =>
     reviewableRow(suggestion, runCode),
   );
   // Stored rows key records by uuid; the public queue names them by shortcode.
@@ -421,10 +455,12 @@ async function applySuggestionValue(
         row.recordId,
         row.field,
       );
-      await getDb(tx)
-        .update(suggestionTable)
-        .set({ acceptanceReceipt: { ...receipt, appliedInputFingerprint } })
-        .where(eq(suggestionTable.id, row.id));
+      await transitionAssessmentState(
+        tx,
+        row.id,
+        { acceptanceReceipt: { ...receipt, appliedInputFingerprint } },
+        { kind: "field_input_settled" },
+      );
     },
     "capture",
   );
@@ -569,7 +605,6 @@ export async function acceptSuggestion(
       .for("update");
     if (!row) throw new Error(`Pending Suggestion not found: ${id}`);
     const parsed = suggestionRowSchema.parse(row);
-    const revision = await currentInputRevision(transactionDb);
     const fence = z
       .object({ liveInputFingerprint: z.string() })
       .safeParse(row.data);
@@ -581,6 +616,7 @@ export async function acceptSuggestion(
           parsed.entity,
           parsed.recordId,
           parsed.field,
+          { lock: true },
         ))
     )
       throw new Error(
@@ -596,10 +632,12 @@ export async function acceptSuggestion(
     }
     // The shared write path excludes this row by status while superseding its
     // pending siblings. A failed application rolls the status transition back.
-    await getDb(transactionDb)
-      .update(suggestionTable)
-      .set({ status: "applied" })
-      .where(eq(suggestionTable.id, id));
+    await transitionAssessmentState(
+      transactionDb,
+      id,
+      { status: "applied" },
+      { kind: "field_applied" },
+    );
     const receipt = await applySuggestionValue(
       transactionDb,
       { ...context, db: transactionDb },
@@ -607,10 +645,12 @@ export async function acceptSuggestion(
       row.suggestedValue,
       automatic ? { ...automatic, reason: "confident_assignment" } : {},
     );
-    await getDb(transactionDb)
-      .update(suggestionTable)
-      .set({ acceptanceReceipt: receipt })
-      .where(eq(suggestionTable.id, id));
+    await transitionAssessmentState(
+      transactionDb,
+      id,
+      { acceptanceReceipt: receipt },
+      { kind: "field_applied" },
+    );
     await recordFeedback(transactionDb, {
       assessmentId: id,
       operationId: "saved-application",
@@ -620,8 +660,11 @@ export async function acceptSuggestion(
       intent: "apply",
       receipt: z.json().parse(receipt),
     });
-    await fenceDerivedInputsAtCommit(transactionDb, revision, (tx) =>
-      fieldInputFingerprint(tx, parsed.entity, parsed.recordId, parsed.field),
+    await fenceFieldInputsAtCommit(
+      transactionDb,
+      parsed.entity,
+      parsed.recordId,
+      parsed.field,
     );
     return { id, status: "applied" as const };
   });
@@ -653,13 +696,14 @@ export async function applyFieldCorrection(
       if (!row)
         throw new Error(`Pending Suggestion not found: ${parsedInput.id}`);
       const parsed = suggestionRowSchema.parse(row);
-      const revision = await currentInputRevision(transactionDb);
       // Remove this row from the pending set before the shared write path
       // supersedes sibling Suggestions. A failure rolls both operations back.
-      await getDb(transactionDb)
-        .update(suggestionTable)
-        .set({ status: "rejected", correctValue: parsedInput.correctValue })
-        .where(eq(suggestionTable.id, parsedInput.id));
+      await transitionAssessmentState(
+        transactionDb,
+        parsedInput.id,
+        { status: "rejected", correctValue: parsedInput.correctValue },
+        { kind: "field_corrected" },
+      );
       const receipt = await applySuggestionValue(
         transactionDb,
         { ...context, db: transactionDb },
@@ -667,10 +711,12 @@ export async function applyFieldCorrection(
         parsedInput.correctValue,
         { reason: "member_correction" },
       );
-      await getDb(transactionDb)
-        .update(suggestionTable)
-        .set({ acceptanceReceipt: receipt })
-        .where(eq(suggestionTable.id, parsedInput.id));
+      await transitionAssessmentState(
+        transactionDb,
+        parsedInput.id,
+        { acceptanceReceipt: receipt },
+        { kind: "field_corrected" },
+      );
       await recordFeedback(transactionDb, {
         assessmentId: parsedInput.id,
         operationId: "saved-correction",
@@ -684,8 +730,11 @@ export async function applyFieldCorrection(
         },
         receipt: z.json().parse(receipt),
       });
-      await fenceDerivedInputsAtCommit(transactionDb, revision, (tx) =>
-        fieldInputFingerprint(tx, parsed.entity, parsed.recordId, parsed.field),
+      await fenceFieldInputsAtCommit(
+        transactionDb,
+        parsed.entity,
+        parsed.recordId,
+        parsed.field,
       );
       return { id: parsedInput.id, status: "rejected" as const };
     });

@@ -9,6 +9,7 @@ import {
 } from "@cubby/schemas/identifiers";
 import { mailboxDiscoveryInput } from "@cubby/schemas/mailbox-research";
 import type { PurchaseAgentEvent } from "@cubby/schemas/purchase-import";
+import type { BackgroundTaskMessage } from "@cubby/schemas/queue-messages";
 import { mailResearchRunInput } from "@cubby/schemas/run-fields";
 import { sha256Hex } from "@cubby/shared/sha256";
 import { fromPartial } from "@total-typescript/shoehorn";
@@ -54,6 +55,7 @@ import {
 } from "~/server/domains/photo-import/repo/run/proposals";
 import { commitPhotoGroup } from "~/server/domains/photo-import/repo/run/writer";
 import { setMailImport } from "~/server/domains/purchase-import/repo/mail-import-settings";
+import { enqueueJob, claimJob } from "~/server/generic/jobs/repo/jobs";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { captureBackgroundQueue } from "~/server/testing/background-queue";
 import {
@@ -1332,19 +1334,18 @@ describe("current purchase-agent system boundaries", () => {
   }, 120_000);
 });
 
-// The app-open catch-up claim admits one queue handoff; a rejected handoff
-// releases the claim so the next request retries instead of waiting an hour.
+// App-open coalesces queue wakes; a lost wake cannot erase committed work.
 describe("app-open catch-up queue handoff", () => {
   const ctx = withTestDb();
   afterEach(() => setCfEnv(undefined));
 
   it("accepts one queue handoff across concurrent clients", async () => {
-    const batches: Array<Array<{ body: { task: { kind: string } } }>> = [];
+    const batches: Array<Array<{ body: BackgroundTaskMessage }>> = [];
     setCfEnv(
       fromPartial<Env>({
         BACKGROUND_QUEUE: {
           sendBatch: async (
-            messages: Iterable<{ body: { task: { kind: string } } }>,
+            messages: Iterable<{ body: BackgroundTaskMessage }>,
           ) => {
             batches.push([...messages]);
           },
@@ -1359,13 +1360,17 @@ describe("app-open catch-up queue handoff", () => {
     expect(results.filter(({ status }) => status === "queued")).toHaveLength(1);
     expect(results.filter(({ status }) => status === "recent")).toHaveLength(3);
     expect(batches).toHaveLength(1);
-    expect(batches[0]?.map(({ body }) => body.task.kind)).toEqual([
-      "maintenance.recover",
-      "maintenance.purchase-discovery",
+    expect(batches[0]?.map(({ body }) => body.queueType)).toEqual([
+      "background",
     ]);
   });
 
-  it("releases a rejected queue handoff so the next request can retry", async () => {
+  it("keeps committed work claimable when the app-open queue wake is lost", async () => {
+    const pending = await enqueueJob(ctx.db, {
+      key: "synthetic.lost-wake",
+      kind: "synthetic.work",
+      input: {},
+    });
     let calls = 0;
     setCfEnv(
       fromPartial<Env>({
@@ -1378,8 +1383,9 @@ describe("app-open catch-up queue handoff", () => {
       }),
     );
 
-    await expect(requestCatchUp(ctx.db)).rejects.toThrow("queue unavailable");
     await expect(requestCatchUp(ctx.db)).resolves.toEqual({ status: "queued" });
-    expect(calls).toBe(2);
+    await expect(requestCatchUp(ctx.db)).resolves.toEqual({ status: "recent" });
+    expect(calls).toBe(1);
+    expect((await claimJob(ctx.db, pending.id))?.id).toBe(pending.id);
   });
 });

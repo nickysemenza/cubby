@@ -1,8 +1,6 @@
-import { entitySchema } from "@cubby/schemas/entity";
-import { parseEntityId } from "@cubby/schemas/identifiers";
 import { taskCreateInput } from "@cubby/schemas/project";
 import { testUserId } from "@cubby/schemas/testing";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
 import { buildKernelContext } from "tooling/scenarios/context";
 import {
@@ -11,28 +9,21 @@ import {
   withTestDb,
 } from "tooling/test-setup";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { z } from "zod";
 
 import { mock } from "~/lib/test/mock-schema";
 import { getDb } from "~/server/db/helpers";
-import {
-  task,
-  derivedRefreshWork,
-  derivedRefreshScope,
-  productConversionCoverage,
-} from "~/server/db/schema";
-import { writeProductConversionCoverageProjection } from "~/server/domains/product/repo/conversion-coverage";
-import { processDerivedRefreshPage } from "~/server/domains/run/service/derived-refresh";
+import { task, job } from "~/server/db/schema";
 import { createTask } from "~/server/domains/task/repo/crud";
 import { executeEntity } from "~/server/entity-kernel";
-import { foldDerivedRefreshCaptures } from "~/server/generic/derived-refresh/repo/capture";
 import {
   getSearchDocumentEmbeddingText,
   refreshSearchDocuments,
 } from "~/server/generic/search/repo/search-document";
-import { captureBackgroundQueue } from "~/server/testing/background-queue";
 import {
-  createProductFixture,
+  drainDerivedRefreshFrontier,
+  captureBackgroundQueue,
+} from "~/server/testing/background-queue";
+import {
   createProductIdentityFixture,
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
@@ -46,77 +37,6 @@ describe("bounded entity writes", () => {
     queue = captureBackgroundQueue();
   });
   afterEach(() => queue.restore());
-
-  it("does not traverse Project endpoints when an Expense changes Projects", async () => {
-    const projects = await Promise.all(
-      ["Synthetic previous project", "Synthetic next project"].map((name) =>
-        createRepoEntity(ctx, "project", { name, defaultTrade: "other" }),
-      ),
-    );
-    const [previous, next] = projects;
-    if (!previous || !next) throw new Error("Synthetic projects missing");
-    const untouched = await createRepoEntity(ctx, "expense", {
-      name: "Synthetic untouched project line",
-      lineKind: "principal",
-      trade: "other",
-      cost: 10,
-      projectId: next.output.id,
-    });
-    const moved = await createRepoEntity(ctx, "expense", {
-      name: "Synthetic moved project line",
-      lineKind: "principal",
-      trade: "other",
-      cost: 10,
-      projectId: previous.output.id,
-    });
-    const drain = async (frontierOnly = false) => {
-      for (let page = 0; page < 500; page++) {
-        const result = await processDerivedRefreshPage(ctx.db, undefined, {
-          frontierOnly,
-        });
-        expect(result.errors).toEqual([]);
-        if (result.done) return;
-      }
-      throw new Error("Synthetic endpoint refresh did not terminate");
-    };
-    await drain();
-    await executeEntity(buildKernelContext(ctx.db, testUserId(TEST_USER_ID)), {
-      action: "update",
-      entity: "expense",
-      id: moved.output.id,
-      data: { projectId: next.output.id },
-    });
-    await drain(true);
-    const [work] = await getDb(ctx.db)
-      .select()
-      .from(derivedRefreshWork)
-      .where(eq(derivedRefreshWork.entityId, moved.entityId));
-    if (!work) throw new Error("Synthetic moved Expense work missing");
-    const endpointScopes = await getDb(ctx.db)
-      .select()
-      .from(derivedRefreshScope)
-      .where(
-        and(
-          eq(derivedRefreshScope.workId, work.id),
-          eq(derivedRefreshScope.entityKind, "project"),
-        ),
-      );
-    expect(endpointScopes.map((scope) => scope.traverse)).toEqual([
-      false,
-      false,
-    ]);
-    expect(
-      await getDb(ctx.db)
-        .select()
-        .from(derivedRefreshScope)
-        .where(
-          and(
-            eq(derivedRefreshScope.workId, work.id),
-            eq(derivedRefreshScope.entityId, untouched.entityId),
-          ),
-        ),
-    ).toEqual([]);
-  });
 
   it("refreshes adjustment project text when a principal Expense's Project is renamed", async () => {
     const project = await createRepoEntity(ctx, "project", {
@@ -147,14 +67,7 @@ describe("bounded entity writes", () => {
       purchaseId: purchase.output.id,
       projectId: null,
     });
-    const drain = async () => {
-      for (let page = 0; page < 500; page++) {
-        const result = await processDerivedRefreshPage(ctx.db);
-        expect(result.errors).toEqual([]);
-        if (result.done) return;
-      }
-      throw new Error("Synthetic adjustment refresh did not terminate");
-    };
+    const drain = () => drainDerivedRefreshFrontier(ctx.db);
     await drain();
     expect(
       (await getSearchDocumentEmbeddingText(ctx.db, "expense", tax.entityId))
@@ -172,128 +85,6 @@ describe("bounded entity writes", () => {
     )?.embeddingText;
     expect(text).toContain("Synthetic Workshop");
     expect(text).not.toContain("Synthetic Studio");
-  });
-
-  it("does not traverse from a Product rename through sibling purchase lines to another Product", async () => {
-    const first = await createProductFixture(
-      ctx.db,
-      makeProductInput({ name: "Synthetic changed purchase product" }),
-      ctx.actor,
-    );
-    const second = await createProductFixture(
-      ctx.db,
-      makeProductInput({ name: "Synthetic unrelated purchase product" }),
-      ctx.actor,
-    );
-    const vendor = await createRepoEntity(ctx, "vendor", {
-      name: "Synthetic shared purchase vendor",
-    });
-    const purchase = await createRepoEntity(ctx, "purchase", {
-      orderId: "SYNTHETIC-SHARED-PURCHASE",
-      vendorId: vendor.output.id,
-    });
-    for (const product of [first, second])
-      await createRepoEntity(ctx, "expense", {
-        name: "Synthetic shared purchase line",
-        lineKind: "principal",
-        trade: "other",
-        cost: 10,
-        productId: product.id,
-        purchaseId: purchase.output.id,
-      });
-    for (let page = 0; page < 500; page++)
-      if ((await processDerivedRefreshPage(ctx.db)).done) break;
-    await executeEntity(buildKernelContext(ctx.db, testUserId(TEST_USER_ID)), {
-      action: "update",
-      entity: "product",
-      id: first.id,
-      data: { name: "Synthetic renamed purchase product" },
-    });
-    await foldDerivedRefreshCaptures(ctx.db);
-    const [work] = await getDb(ctx.db)
-      .select()
-      .from(derivedRefreshWork)
-      .where(eq(derivedRefreshWork.entityId, first.entityId));
-    if (!work) throw new Error("Synthetic changed Product work missing");
-    for (let page = 0; page < 500; page++)
-      if (
-        (
-          await processDerivedRefreshPage(ctx.db, undefined, {
-            frontierOnly: true,
-          })
-        ).done
-      )
-        break;
-    const sibling = await getDb(ctx.db)
-      .select()
-      .from(derivedRefreshScope)
-      .where(
-        and(
-          eq(derivedRefreshScope.workId, work.id),
-          eq(derivedRefreshScope.entityId, second.entityId),
-        ),
-      );
-    expect(sibling).toEqual([]);
-  }, 30_000);
-
-  it("defers kit conversion invalidation when one component price changes", async () => {
-    const component = await createProductIdentityFixture(
-      ctx.db,
-      makeProductInput({ name: "Synthetic kit component", price: 4 }),
-      ctx.actor,
-    );
-    const inserted = await getDb(ctx.db).execute(sql`WITH parents AS (
-      INSERT INTO "Product" (shortcode,name,manufacturer,"categoryId")
-      SELECT 'PRD-SYN-KIT-' || n, 'Synthetic kit ' || n, 'Synthetic maker', p."categoryId"
-      FROM "Product" p CROSS JOIN generate_series(1,1000) n WHERE p.id=${component.entityId}::uuid RETURNING id
-    ), links AS (
-      INSERT INTO "EntityLink" (kind,"fromKind","fromEntityId","toKind","toEntityId",quantity)
-      SELECT 'productComponent',${entitySchema.enum.product},id,${entitySchema.enum.product},${component.entityId}::uuid,1 FROM parents
-    ) SELECT id FROM parents`);
-    const parents = z
-      .array(z.object({ id: z.uuid() }))
-      .parse(inserted.rows)
-      .map((row) => parseEntityId("product", row.id));
-    await writeProductConversionCoverageProjection(
-      ctx.db,
-      parents.map((productId) => ({
-        productId,
-        coverageTier: "synthetic",
-        coveredKinds: [],
-        applicableKinds: [],
-        islandCount: 0,
-        status: "ready",
-      })),
-    );
-    const measured = await countTestDbQueries(() =>
-      executeEntity(buildKernelContext(ctx.db, testUserId(TEST_USER_ID)), {
-        action: "update",
-        entity: "product",
-        id: component.id,
-        data: { price: 8 },
-      }),
-    );
-    expect(measured.tables).not.toContain("EntityLink");
-    expect(measured.tables).not.toContain("ProductConversionCoverage");
-    let invalidated = false;
-    for (let page = 0; page < 100; page++) {
-      await processDerivedRefreshPage(ctx.db);
-      const [stale] = await getDb(ctx.db)
-        .select({ id: productConversionCoverage.productId })
-        .from(productConversionCoverage)
-        .where(
-          and(
-            inArray(productConversionCoverage.productId, parents),
-            eq(productConversionCoverage.status, "stale"),
-          ),
-        )
-        .limit(1);
-      if (stale) {
-        invalidated = true;
-        break;
-      }
-    }
-    expect(invalidated).toBe(true);
   });
 
   it("commits a Product rename without rewriting dependent projections", async () => {
@@ -339,16 +130,7 @@ describe("bounded entity writes", () => {
     expect(
       await getSearchDocumentEmbeddingText(ctx.db, "task", dependent.entityId),
     ).toEqual(before);
-    let complete = false;
-    for (let page = 0; page < 500; page++) {
-      const result = await processDerivedRefreshPage(ctx.db);
-      expect(result.errors).toEqual([]);
-      if (result.done) {
-        complete = true;
-        break;
-      }
-    }
-    expect(complete).toBe(true);
+    await drainDerivedRefreshFrontier(ctx.db);
     expect(
       (await getSearchDocumentEmbeddingText(ctx.db, "task", dependent.entityId))
         ?.embeddingText,
@@ -425,7 +207,7 @@ describe("bounded entity writes", () => {
     ).toEqual([]);
   });
 
-  it("coalesces repeated edits into one root wave", async () => {
+  it("coalesces repeated edits into one durable search Job", async () => {
     const product = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Synthetic coalesced product" }),
@@ -444,11 +226,10 @@ describe("bounded entity writes", () => {
       id: product.id,
       data: { name: "Synthetic third name" },
     });
-    await foldDerivedRefreshCaptures(ctx.db);
     const work = await getDb(ctx.db)
       .select()
-      .from(derivedRefreshWork)
-      .where(eq(derivedRefreshWork.entityId, product.entityId));
+      .from(job)
+      .where(eq(job.key, "refresh:search"));
     expect(work).toHaveLength(1);
   });
 

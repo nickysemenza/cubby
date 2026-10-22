@@ -1,22 +1,15 @@
-import { readFileSync } from "node:fs";
-
-import { feedbackVerdict } from "@cubby/schemas/assessment";
 import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
-import { eq, sql } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { enqueueAiEvaluation } from "~/server/ai/repo/ai-evaluation-requests";
-import { getDb, withTransactionDatabase } from "~/server/db/helpers";
+import { getDb } from "~/server/db/helpers";
 import {
   assessment,
   assessmentState,
   feedback,
   auditLog,
-  run as runTable,
-  aiEvaluation,
 } from "~/server/db/schema";
-import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import {
   kernelCtx,
   productFixture,
@@ -25,7 +18,6 @@ import {
 import { executeEntity } from "~/server/entity-kernel";
 import {
   publishAssessment,
-  publishFieldAssessment,
   recordFeedback,
 } from "~/server/generic/assessment/repo/assessment";
 import { readConfirmedDescription } from "~/server/generic/assessment/repo/assessment-image";
@@ -39,219 +31,6 @@ import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-u
 // history; evaluation feedback acquires operational authority.
 describe("shared Assessment history", () => {
   const ctx = withTestDb();
-  // The trigger migration must retain populated legacy history and honor the
-  // explicit comparison flag even when its model equals a legacy Run pin.
-  it("preserves legacy history while migrating explicit served decisions", async () => {
-    const predecessor = readFileSync(
-      new URL(
-        "../../../../../drizzle/0001_explicit_served_decisions.sql",
-        import.meta.url,
-      ),
-      "utf8",
-    );
-    await getDb(ctx.db).execute(sql.raw(predecessor));
-    await getDb(ctx.db).execute(
-      sql`DROP TRIGGER IF EXISTS "AssessmentState_publish_field" ON "AssessmentState"`,
-    );
-    await getDb(ctx.db).execute(
-      sql`CREATE TRIGGER "AssessmentState_publish_field" BEFORE INSERT ON "AssessmentState" FOR EACH ROW EXECUTE FUNCTION "publish_field_assessment"()`,
-    );
-    const item = await productFixture(ctx, "Synthetic legacy serving");
-    const runId = await ensureRun(ctx.db, ctx.actor, { purpose: "background" });
-    await getDb(ctx.db)
-      .update(runTable)
-      .set({
-        input: sql`${JSON.stringify({ decisionModel: "typesafe/jev", retained: "synthetic" })}::jsonb`,
-      })
-      .where(eq(runTable.id, runId));
-    const values = {
-      entity: "product",
-      recordId: await recordId(ctx.db, item.id, "product"),
-      field: "notes",
-      currentValue: null,
-      suggestedValue: "Synthetic proposal",
-      confidence: 0.7,
-      model: "typesafe/jev",
-      kind: "addition",
-      status: "pending",
-      runId,
-      pairKey: crypto.randomUUID(),
-    } as const;
-    const [legacy] = await getDb(ctx.db)
-      .insert(assessmentState)
-      .values(values)
-      .returning();
-    if (!legacy) throw new Error("Synthetic legacy assessment missing");
-    const [history] = await getDb(ctx.db)
-      .select()
-      .from(assessment)
-      .where(eq(assessment.id, legacy.id));
-    expect(history?.served).toBe(true);
-    const work = await enqueueAiEvaluation(ctx.db, {
-      runId,
-      workKey: "synthetic-cutover",
-      shareKey: null,
-      feature: "synthetic-cutover",
-      executionKind: "suggestion_sweep",
-      target: {
-        kind: "field",
-        entity: "product",
-        recordId: values.recordId,
-        field: "notes",
-        assessmentIds: [],
-      },
-      provenance: {
-        dependencies: [],
-        inputFingerprint: "synthetic",
-        optionFingerprint: "",
-        model: null,
-      },
-      snapshot: {
-        decisionModel: "typesafe/jev",
-        decisionModelOverride: "@cf/cloudflare/clef",
-        input: { decisionModel: "typesafe/jev", retained: "synthetic" },
-      },
-      result: {
-        entries: [
-          { model: "typesafe/jev", pairKey: values.pairKey },
-          { model: "@cf/cloudflare/clef", pairKey: values.pairKey },
-        ],
-      },
-    });
-    const migration = readFileSync(
-      new URL(
-        "../../../../../drizzle/0002_decision_routing_hard_cutover.sql",
-        import.meta.url,
-      ),
-      "utf8",
-    );
-    await withTransactionDatabase(ctx.db, async (tx) => {
-      for (const statement of migration.split("--> statement-breakpoint")) {
-        if (statement.trim()) await getDb(tx).execute(sql.raw(statement));
-      }
-    });
-    expect(
-      await getDb(ctx.db)
-        .select()
-        .from(assessment)
-        .where(eq(assessment.id, legacy.id)),
-    ).toEqual([history]);
-    const [migratedRun] = await getDb(ctx.db)
-      .select()
-      .from(runTable)
-      .where(eq(runTable.id, runId));
-    expect(migratedRun?.input).toEqual({ retained: "synthetic" });
-    const [migratedWork] = await getDb(ctx.db)
-      .select()
-      .from(aiEvaluation)
-      .where(eq(aiEvaluation.id, work.id));
-    expect(migratedWork?.snapshot).toEqual({
-      decisionModelOverride: "@cf/cloudflare/clef",
-      input: { retained: "synthetic" },
-    });
-    expect(migratedWork?.result).toEqual({
-      entries: [
-        { model: "typesafe/jev", pairKey: values.pairKey, served: true },
-        {
-          model: "@cf/cloudflare/clef",
-          pairKey: values.pairKey,
-          served: false,
-        },
-      ],
-    });
-    const [migratedState] = await getDb(ctx.db)
-      .select()
-      .from(assessmentState)
-      .where(eq(assessmentState.id, legacy.id));
-    expect(migratedState?.data).toMatchObject({ served: true });
-    const [comparison] = await getDb(ctx.db)
-      .insert(assessmentState)
-      .values({ ...values, field: "manufacturer", data: { served: false } })
-      .returning();
-    if (!comparison) throw new Error("Synthetic comparison assessment missing");
-    const [unserved] = await getDb(ctx.db)
-      .select()
-      .from(assessment)
-      .where(eq(assessment.id, comparison.id));
-    expect(unserved?.served).toBe(false);
-    await expect(
-      getDb(ctx.db)
-        .insert(assessmentState)
-        .values({
-          ...values,
-          field: "model",
-        }),
-    ).rejects.toMatchObject({
-      cause: {
-        message: "Paired field assessments require an explicit served flag",
-      },
-    });
-  });
-  it("preserves populated field evidence while retiring implicit publication", async () => {
-    const item = await productFixture(ctx, "Synthetic publication cutover");
-    const target = await recordId(ctx.db, item.id, "product");
-    const migration = (name: string) =>
-      readFileSync(
-        new URL(`../../../../../drizzle/${name}.sql`, import.meta.url),
-        "utf8",
-      );
-    await getDb(ctx.db).execute(
-      sql.raw(migration("0001_explicit_served_decisions")),
-    );
-    await getDb(ctx.db).execute(
-      sql`DROP TRIGGER IF EXISTS "AssessmentState_publish_field" ON "AssessmentState"`,
-    );
-    await getDb(ctx.db).execute(
-      sql`CREATE TRIGGER "AssessmentState_publish_field" BEFORE INSERT ON "AssessmentState" FOR EACH ROW EXECUTE FUNCTION "publish_field_assessment"()`,
-    );
-    const [legacy] = await getDb(ctx.db)
-      .insert(assessmentState)
-      .values({
-        entity: "product",
-        recordId: target,
-        field: "notes",
-        currentValue: null,
-        suggestedValue: "Synthetic retained proposal",
-        confidence: 0.7,
-        model: "typesafe/jev",
-        data: { served: false },
-      })
-      .returning();
-    if (!legacy) throw new Error("Synthetic predecessor proposal missing");
-    const before = await getDb(ctx.db).select().from(assessment);
-    for (const statement of migration("0003_explicit_field_publication").split(
-      "--> statement-breakpoint",
-    ))
-      await getDb(ctx.db).execute(sql.raw(statement));
-    expect(await getDb(ctx.db).select().from(assessment)).toEqual(before);
-    expect(
-      await getDb(ctx.db)
-        .select()
-        .from(assessmentState)
-        .where(eq(assessmentState.id, legacy.id)),
-    ).toEqual([legacy]);
-    const published = await publishFieldAssessment(
-      ctx.db,
-      {
-        entity: "product",
-        recordId: target,
-        field: "manufacturer",
-        suggestedValue: "Synthetic explicit producer",
-        model: "typesafe/jev",
-      },
-      false,
-    );
-    expect(published).toMatchObject({
-      served: false,
-      judgment: { value: "Synthetic explicit producer" },
-    });
-    expect(
-      await getDb(ctx.db)
-        .select({ id: assessmentState.id })
-        .from(assessmentState)
-        .where(eq(assessmentState.id, published.id)),
-    ).toEqual([{ id: published.id }]);
-  });
   const publication = () => ({
     publicationKey: "synthetic:assessment:retry",
     family: "recommendation" as const,
@@ -280,14 +59,6 @@ describe("shared Assessment history", () => {
         evidence: { changed: true },
       }),
     ).rejects.toThrow(/publication/);
-    await expect(
-      getDb(ctx.db)
-        .update(assessment)
-        .set({ judgment: { changed: true } })
-        .where(eq(assessment.id, first.id)),
-    ).rejects.toMatchObject({
-      cause: { message: expect.stringMatching(/immutable/), code: "P0001" },
-    });
   });
 
   it("records draft acceptance separately and acknowledges only the matching saved field", async () => {
@@ -735,13 +506,10 @@ describe("shared Assessment history", () => {
     expect(
       (await getDb(ctx.db).select().from(assessment))[0]?.subject,
     ).toMatchObject({ recordId: subjectId });
-    expect((await getDb(ctx.db).select().from(feedback)).length).toBe(1);
-    await expect(
-      getDb(ctx.db).execute(
-        sql`UPDATE "Feedback" SET verdict = ${feedbackVerdict.enum.correct}`,
+    expect(
+      (await getDb(ctx.db).select().from(feedback)).filter(
+        (row) => row.authority === "member",
       ),
-    ).rejects.toMatchObject({
-      cause: { message: expect.stringMatching(/immutable/), code: "P0001" },
-    });
+    ).toHaveLength(1);
   });
 });

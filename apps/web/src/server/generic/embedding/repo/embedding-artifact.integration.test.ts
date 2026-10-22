@@ -1,21 +1,24 @@
 import type { VectorizeVector } from "@cloudflare/workers-types";
 import { entityRefKey } from "@cubby/schemas/entity";
 import { fromPartial } from "@total-typescript/shoehorn";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { setCfEnv, type getAiGateway } from "~/server/cf-env";
-import { getDb } from "~/server/db/helpers";
-import { derivedRefreshWork, entityEmbedding } from "~/server/db/schema";
-import { foldDerivedRefreshCaptures } from "~/server/generic/derived-refresh/repo/capture";
+import { getDb, withTransactionDatabase } from "~/server/db/helpers";
+import { job, entityEmbedding } from "~/server/db/schema";
+import { deleteProducts } from "~/server/domains/product/repo/crud";
 import { findSimilarEntitiesWorkflow } from "~/server/generic/embedding/service/semantic-similarity";
 import { getSemanticEmbeddingConfig } from "~/server/generic/embedding/service/semantic/config";
 import {
   createInMemoryVectorizeIndex,
   productionVectorStore,
 } from "~/server/generic/embedding/service/semantic/vector-store";
+import { withJobExecution } from "~/server/generic/jobs/context";
+import { claimJob, publishJobPage } from "~/server/generic/jobs/repo/jobs";
 import { refreshSearchDocument } from "~/server/generic/search/repo/search-document";
+import { prepareSearchDocuments } from "~/server/generic/search/repo/search-document";
 import {
   createProductFixture,
   createProductIdentityFixture,
@@ -24,11 +27,17 @@ import {
 } from "~/server/testing/repo.fixtures";
 import {
   refreshEntityEmbeddings,
-  recoverEmbeddingArtifactsPage,
   type EmbeddingRefreshPort,
 } from "~/server/workflows/background-tasks/embedding";
+import { enqueueEmbeddingRefs } from "~/server/workflows/background-tasks/embedding";
+import { embeddingJobHandler } from "~/server/workflows/background-tasks/embedding";
 import { executeWorkflow } from "~/server/workflows/runtime";
 
+import {
+  advanceEmbeddingFixture,
+  embedFixtures,
+  settleEmbeddingProjectionJobs,
+} from "./embedding-job.fixtures";
 import { getStoredEmbeddingHashes } from "./entity-embedding-refresh";
 
 // Accepted external mutations can arrive after a newer upload or deletion.
@@ -80,12 +89,13 @@ describe("immutable embedding artifacts", () => {
     const upload = async (name: string) => {
       await renameFixtureRaw(ctx.db, "product", subject.entityId, name);
       await refreshSearchDocument(ctx.db, "product", subject.entityId);
-      // Isolate external ordering from projection-frontier scheduling.
-      await foldDerivedRefreshCaptures(ctx.db);
-      await getDb(ctx.db)
-        .update(derivedRefreshWork)
-        .set({ state: "completed", publishing: true });
-      await refreshEntityEmbeddings(ctx.db, [ref], port);
+      const [execution] = await enqueueEmbeddingRefs(
+        ctx.db,
+        await prepareSearchDocuments(ctx.db, [ref]),
+        config,
+      );
+      if (!execution) throw new Error("Missing synthetic execution");
+      await advanceEmbeddingFixture(ctx.db, execution.id, port);
       const batch = accepted.at(-1);
       const vector = batch?.[0];
       if (!vector) throw new Error("Synthetic upload missing");
@@ -102,13 +112,7 @@ describe("immutable embedding artifacts", () => {
     await index.deleteByIds([alpha.vector.id]);
     expect(index.vectors.get(returned.vector.id)).toEqual(returned.vector);
     const paidCalls = providerCalls;
-    await getDb(ctx.db)
-      .update(entityEmbedding)
-      .set({ availableAt: new Date(0) })
-      .where(eq(entityEmbedding.id, returned.vector.id));
-    expect((await recoverEmbeddingArtifactsPage(ctx.db, port)).errors).toEqual(
-      [],
-    );
+    await advanceEmbeddingFixture(ctx.db, returned.vector.id, port);
     expect(providerCalls).toBe(paidCalls);
     const [selected] = await getDb(ctx.db)
       .select({ id: entityEmbedding.id })
@@ -125,6 +129,109 @@ describe("immutable embedding artifacts", () => {
         entityRefKey(ref.entityKind, ref.entityId),
       ),
     ).toBe(true);
+  });
+
+  // Deletion can commit after preparation and before selection. Selection must
+  // wait for that transaction, then reject the deleted source rather than
+  // inserting a live artifact after the deletion's cleanup already ran.
+  it("rejects selection overlapping an uncommitted source deletion", async () => {
+    const index = createInMemoryVectorizeIndex();
+    setCfEnv(
+      fromPartial<Env>({
+        VECTORIZE: index,
+        BACKGROUND_QUEUE: { sendBatch: async () => {} },
+      }),
+    );
+    const subject = await createProductIdentityFixture(
+      ctx.db,
+      makeProductInput({ name: "Synthetic overlapping vector" }),
+      ctx.actor,
+    );
+    const config = getSemanticEmbeddingConfig();
+    const port: EmbeddingRefreshPort = {
+      configured: () => true,
+      config: () => config,
+      vectorStore: productionVectorStore,
+      embed: async (texts) =>
+        texts.map(() =>
+          Array.from({ length: config.dimensions }, (_, i) =>
+            i === 0 ? 1 : 0,
+          ),
+        ),
+    };
+    const [saved] = await enqueueEmbeddingRefs(
+      ctx.db,
+      await prepareSearchDocuments(ctx.db, [
+        { entityKind: "product", entityId: subject.entityId },
+      ]),
+      config,
+    );
+    if (!saved) throw new Error("Missing synthetic embedding Job");
+    await advanceEmbeddingFixture(ctx.db, saved.id, port);
+    await getDb(ctx.db)
+      .update(job)
+      .set({ availableAt: new Date(0) })
+      .where(eq(job.id, saved.id));
+    const claim = await claimJob(ctx.db, saved.id);
+    if (!claim) throw new Error("Missing synthetic selection claim");
+    const prepared = await embeddingJobHandler(port).prepare(ctx.db, claim);
+    if (!prepared.publish)
+      throw new Error("Expected visible vector publication");
+
+    const deleting = Promise.withResolvers<void>();
+    const allowDeleteCommit = Promise.withResolvers<void>();
+    const deletion = withTransactionDatabase(ctx.db, async (tx) => {
+      await deleteProducts(tx, [subject.entityId], ctx.actor);
+      deleting.resolve();
+      await allowDeleteCommit.promise;
+    });
+    await deleting.promise;
+    let publicationPid = 0;
+    let settled = false;
+    const publication = withJobExecution(ctx.db, claim, () =>
+      publishJobPage(ctx.db, claim, prepared.page, async (tx) => {
+        const pid = await getDb(tx).execute<{ pid: number }>(
+          sql`SELECT pg_backend_pid() AS pid`,
+        );
+        publicationPid = pid.rows[0]?.pid ?? 0;
+        await prepared.publish?.(tx);
+      }),
+    ).then(
+      () => {
+        settled = true;
+        return null;
+      },
+      (error: unknown) => {
+        settled = true;
+        return error;
+      },
+    );
+    try {
+      await expect
+        .poll(async () => {
+          if (settled) return "published";
+          const waiting = await getDb(ctx.db).execute(
+            sql`SELECT 1 FROM pg_stat_activity WHERE pid=${publicationPid} AND wait_event_type='Lock'`,
+          );
+          return waiting.rows.length ? "blocked" : "starting";
+        })
+        .toBe("blocked");
+    } finally {
+      allowDeleteCommit.resolve();
+      await deletion;
+    }
+    expect(await publication).toBeInstanceOf(Error);
+    expect(
+      await getDb(ctx.db)
+        .select()
+        .from(entityEmbedding)
+        .where(
+          and(
+            eq(entityEmbedding.entityId, subject.entityId),
+            eq(entityEmbedding.artifactState, "selected"),
+          ),
+        ),
+    ).toEqual([]);
   });
 
   it("filters retired artifacts before trimming a public similarity result", async () => {
@@ -163,7 +270,7 @@ describe("immutable embedding artifacts", () => {
           ),
         ),
     };
-    await refreshEntityEmbeddings(
+    await embedFixtures(
       ctx.db,
       [source, target].map(({ entityId }) => ({
         entityKind: "product",
@@ -177,15 +284,12 @@ describe("immutable embedding artifacts", () => {
       target.entityId,
       "Synthetic current target",
     );
-    await refreshEntityEmbeddings(
+    await embedFixtures(
       ctx.db,
       [{ entityKind: "product", entityId: target.entityId }],
       port,
     );
-    await foldDerivedRefreshCaptures(ctx.db);
-    await getDb(ctx.db)
-      .update(derivedRefreshWork)
-      .set({ state: "completed", publishing: true });
+    await settleEmbeddingProjectionJobs(ctx.db);
     const result = await executeWorkflow(
       findSimilarEntitiesWorkflow.definition,
       {
@@ -231,19 +335,29 @@ describe("immutable embedding artifacts", () => {
         throw new Error("Synthetic embedding provider unavailable");
       },
     };
-    await refreshEntityEmbeddings(ctx.db, [ref], port);
-    await refreshEntityEmbeddings(ctx.db, [ref], port);
-    await refreshEntityEmbeddings(ctx.db, [ref], port);
+    const [execution] = await enqueueEmbeddingRefs(
+      ctx.db,
+      await prepareSearchDocuments(ctx.db, [ref]),
+      port.config(),
+    );
+    if (!execution) throw new Error("Missing synthetic execution");
+    for (let attempt = 0; attempt < 3; attempt++)
+      await advanceEmbeddingFixture(ctx.db, execution.id, port);
     expect(calls).toBe(3);
     await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Synthetic unrelated embedding input" }),
       ctx.actor,
     );
-    const stopped = await refreshEntityEmbeddings(ctx.db, [ref], port);
-    expect(
-      stopped.get(entityRefKey(ref.entityKind, ref.entityId)),
-    ).toMatchObject({ exhausted: true });
+    await refreshEntityEmbeddings(ctx.db, [ref], port);
+    const [stopped] = await getDb(ctx.db)
+      .select()
+      .from(job)
+      .where(eq(job.id, execution.id));
+    expect(stopped?.state).toBe("failed");
+    expect(stopped?.error).toContain(
+      "Synthetic embedding provider unavailable",
+    );
     expect(calls).toBe(3);
     await renameFixtureRaw(
       ctx.db,
@@ -251,7 +365,13 @@ describe("immutable embedding artifacts", () => {
       subject.entityId,
       "Synthetic changed embedding input",
     );
-    await refreshEntityEmbeddings(ctx.db, [ref], port);
+    const [changed] = await enqueueEmbeddingRefs(
+      ctx.db,
+      await prepareSearchDocuments(ctx.db, [ref]),
+      port.config(),
+    );
+    if (!changed) throw new Error("Missing changed execution");
+    await advanceEmbeddingFixture(ctx.db, changed.id, port);
     expect(calls).toBe(4);
   });
 });

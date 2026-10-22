@@ -1,6 +1,9 @@
 import { mailReclassifyRunInput } from "@cubby/schemas/run-fields";
 
-import { publishAiEvaluation } from "~/server/ai/repo/ai-evaluation";
+import {
+  publishAiEvaluation,
+  type claimAiEvaluation,
+} from "~/server/ai/repo/ai-evaluation";
 import type { Database } from "~/server/db";
 import { HISTORICAL_MAIL_SOURCE_IDENTITY_VERSION } from "~/server/domains/purchase-import/repo/mail-source-identity";
 import { withRunEvaluation } from "~/server/domains/run/repo/execution-context";
@@ -16,7 +19,6 @@ import {
   readReclassifiedEmail,
   reclassificationSnapshot,
   saveReclassificationSnapshot,
-  type ReclassificationEvaluation,
 } from "../../repo/gmail/reclassification-work";
 import { ingestGmailMessages } from "./ingest";
 
@@ -27,7 +29,7 @@ export type ReclassificationPorts = Pick<
 
 export async function executeReclassificationTarget(
   db: Database,
-  evaluation: ReclassificationEvaluation,
+  evaluation: NonNullable<Awaited<ReturnType<typeof claimAiEvaluation>>>,
   ports: ReclassificationPorts = {},
 ) {
   const token = evaluation.attemptToken;

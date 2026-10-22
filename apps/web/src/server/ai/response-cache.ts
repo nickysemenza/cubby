@@ -2,16 +2,17 @@ import {
   type AiAvoidedUsage,
   aiAvoidedUsageSchema,
 } from "@cubby/shared/ai/pricing";
-import { sleep } from "@cubby/shared/retry";
+import { retryWithBackoff, sleep } from "@cubby/shared/retry";
 import { sha256Hex } from "@cubby/shared/sha256";
 import { createLogger } from "@cubby/worker-tracing";
 import { z } from "zod";
 
 import type { UnparsedError } from "~/lib/error-utils";
 import type { AiChatRequest } from "~/server/ai/run-feature";
-import { afterResponse, getAiResponseCacheNamespace } from "~/server/cf-env";
+import { getAiResponseCacheNamespace } from "~/server/cf-env";
+import { currentJobExecution } from "~/server/generic/jobs/context";
+import { JobDeferredError } from "~/server/generic/jobs/errors";
 
-import { deferCooperativeAiWork } from "./cooperative-work";
 import {
   AI_RESPONSE_CACHE_BATCH_SIZE,
   type CacheClaim,
@@ -19,10 +20,17 @@ import {
 
 const log = createLogger("ai-response-cache");
 
-const CACHE_TTL_MS = 30 * 24 * 60 * 60_000;
 const LEASE_MS = 90_000;
-const MAX_VALUE_BYTES = 1_000_000;
+const WAIT_DEADLINE_MS = 5 * 60_000;
+// Long enough for a held lease to publish before the page runs again.
+const DEFER_MS = 15_000;
+const PUBLISH_ATTEMPTS = 3;
+// Below the 32 MiB Durable Object RPC message bound; the shard stores larger
+// values than one SQLite row across chunk rows.
+const MAX_VALUE_BYTES = 16_000_000;
 const MAX_LOCAL_ENTRIES = 512;
+// Holds one answer at MAX_VALUE_BYTES: UTF-8 never has fewer bytes than UTF-16 units.
+const MAX_UNWRITTEN_CHARS = 16_000_000;
 
 export type ApplicationCacheStatus = "hit" | "miss" | "none";
 const jsonSchema = z.json();
@@ -50,6 +58,9 @@ export interface AiResponseCacheKeyInput {
   tier?: string;
   maxTokens?: number;
   effort?: string;
+  /** The JSON Schema the provider is asked to answer with. */
+  outputSchema?: object;
+  embedding?: { text: string; dimensions: number };
   request?: AiChatRequest;
 }
 
@@ -63,15 +74,12 @@ interface CacheStore {
     key: string,
     token: string,
     value: string,
-    ttlMs: number,
   ): Promise<boolean> | boolean;
   release(key: string, token: string): Promise<void> | void;
-  invalidate(key: string, value: string): Promise<void> | void;
 }
 
 type LocalRow = {
   value: string | null;
-  expiresAt: number;
   token: string | null;
   leaseUntil: number;
 };
@@ -83,13 +91,10 @@ class LocalCacheStore implements CacheStore {
     const row = this.rows.get(key);
     const now = Date.now();
     if (row?.token && row.leaseUntil > now) return { kind: "busy" as const };
-    if (!force && row?.value && row.expiresAt > now) {
-      return { kind: "hit" as const, value: row.value };
-    }
+    if (!force && row?.value) return { kind: "hit" as const, value: row.value };
     const token = crypto.randomUUID();
     this.rows.set(key, {
-      value: null,
-      expiresAt: 0,
+      value: row?.value ?? null,
       token,
       leaseUntil: now + LEASE_MS,
     });
@@ -113,24 +118,18 @@ class LocalCacheStore implements CacheStore {
     return true;
   }
 
-  publish(key: string, token: string, value: string, ttlMs: number) {
+  publish(key: string, token: string, value: string) {
     const row = this.rows.get(key);
     if (row?.token !== token) return false;
-    this.rows.set(key, {
-      value,
-      expiresAt: Date.now() + ttlMs,
-      token: null,
-      leaseUntil: 0,
-    });
+    this.rows.set(key, { value, token: null, leaseUntil: 0 });
     return true;
   }
 
   release(key: string, token: string) {
-    if (this.rows.get(key)?.token === token) this.rows.delete(key);
-  }
-
-  invalidate(key: string, value: string) {
-    if (this.rows.get(key)?.value === value) this.rows.delete(key);
+    const row = this.rows.get(key);
+    if (row?.token !== token) return;
+    if (row.value) row.token = null;
+    else this.rows.delete(key);
   }
 }
 
@@ -138,11 +137,9 @@ const localStore = new LocalCacheStore();
 
 const ignoreUsage = () => undefined;
 
-// Entries published before usage retention hold the bare answer. The marker
-// key cannot occur in an answer, so both shapes stay readable through the TTL
-// instead of recomputing every legacy entry.
-// TODO: remove the bare-entry fallback after 2026-11-18, once the 30-day TTL
-// has aged out entries published before #2719.
+// Entries published before usage retention hold the bare answer. Entries do
+// not expire, so both shapes stay readable; the marker key cannot occur in an
+// answer, and a bare entry keeps its avoided usage unknown.
 const ENTRY_MARKER = "$cubbyResponseCacheEntry";
 const ENTRY_VERSION = 2;
 const versionedEntrySchema = z.object({
@@ -189,18 +186,9 @@ function canonical(value: JsonValue): JsonValue {
 
 export async function aiResponseCacheKey(
   input: AiResponseCacheKeyInput,
-): Promise<string | null> {
-  let serialized: string;
-  try {
-    serialized = JSON.stringify(input);
-  } catch {
-    return null;
-  }
-  const parsed = jsonSchema.safeParse(JSON.parse(serialized));
-  if (!parsed.success) return null;
-  return sha256Hex(
-    JSON.stringify(canonical({ version: 1, payload: parsed.data })),
-  );
+): Promise<string> {
+  const payload = jsonSchema.parse(JSON.parse(JSON.stringify(input)));
+  return sha256Hex(JSON.stringify(canonical({ version: 1, payload })));
 }
 
 const cacheShard = (key: string) =>
@@ -302,24 +290,27 @@ export async function withAiResponseCache<T>(args: {
     return args.compute("none", ignoreUsage);
   }
   const key = await aiResponseCacheKey(args.keyInput);
-  if (!key) {
-    args.batch?.batch.ready(args.batch.index);
-    return args.compute("none", ignoreUsage);
-  }
   const store = cacheStore(key);
   const start = performance.now();
-  const deadline = Date.now() + 5 * 60_000;
+  const recovered = await publishUnwritten(store, key, args.validate);
+  if (recovered) {
+    args.batch?.batch.ready(args.batch.index);
+    return recovered.result;
+  }
+  const deadline = Date.now() + WAIT_DEADLINE_MS;
   let force = !!args.force;
-  let invalidEntries = 0;
   while (Date.now() < deadline) {
-    let claim: Awaited<ReturnType<CacheStore["readOrClaim"]>>;
+    let claim: CacheClaim;
     try {
       claim = await (args.batch
         ? args.batch.batch.readOrClaim(args.batch.index, key, force)
         : store.readOrClaim(key, force));
     } catch (error) {
       log.error("lookup failed", { error });
-      return args.compute("none", ignoreUsage);
+      throw deferred(
+        "The AI response cache lookup failed; no uncached model call was placed.",
+        error,
+      );
     }
     if (claim.kind === "hit") {
       let result: T;
@@ -329,19 +320,12 @@ export async function withAiResponseCache<T>(args: {
         avoided = entry.usage;
         result = args.validate(entry.value);
       } catch (error) {
-        // SILENT: An invalid cached value is discarded so the model can answer.
+        // SILENT: A forced claim replaces an entry this code rejects.
         log.warn("entry rejected", { error });
-        try {
-          await store.invalidate(key, claim.value);
-        } catch (error) {
-          log.error("invalidation failed", { error });
-          return args.compute("none", ignoreUsage);
-        }
-        // Racing replacements cannot spend an unbounded number of cache RPCs
-        // inside one Workflow page; recover with an uncached model answer.
-        if (++invalidEntries >= 3) return args.compute("none", ignoreUsage);
+        force = true;
         continue;
       }
+      dropUnwritten(key);
       await args.onHit?.(
         Math.max(0, Math.round(performance.now() - start)),
         avoided,
@@ -350,7 +334,11 @@ export async function withAiResponseCache<T>(args: {
     }
     if (claim.kind === "busy") {
       args.onWait?.();
-      deferCooperativeAiWork(Date.now() + 250);
+      // A job page republishes its cursor instead of polling inside its page.
+      if (currentJobExecution())
+        throw deferred(
+          "Another request is computing this AI answer; no duplicate model call was placed.",
+        );
       force = false;
       await sleep(250);
       continue;
@@ -362,45 +350,146 @@ export async function withAiResponseCache<T>(args: {
         log.error("lease renewal failed", { error });
       });
     }, 15_000);
+    let result: T;
+    let value: string;
     try {
-      const usage: AiAvoidedUsage[] = [];
-      const result = args.validate(
-        jsonSchema.parse(
-          await args.compute("miss", (recorded) => usage.push(recorded)),
-        ),
-      );
-      const value = JSON.stringify({
-        [ENTRY_MARKER]: ENTRY_VERSION,
-        value: result,
-        usage: usage.length ? sumUsage(usage) : null,
-      });
-      if (new TextEncoder().encode(value).byteLength <= MAX_VALUE_BYTES) {
-        // The answer does not wait on its cache write; the claim's lease covers
-        // concurrent readers until the publish lands.
-        await afterResponse(
-          Promise.resolve()
-            .then(() => store.publish(key, token, value, CACHE_TTL_MS))
-            .then(
-              () => undefined,
-              (error: unknown) => {
-                // SILENT: Cache persistence is best effort after a valid model result.
-                log.error("publish failed", { error });
-              },
-            ),
-        );
+      const kept = keptAnswer(key, args.validate);
+      if (kept) {
+        ({ result, value } = kept);
       } else {
-        await store.release(key, token);
+        const usage: AiAvoidedUsage[] = [];
+        result = args.validate(
+          jsonSchema.parse(
+            await args.compute("miss", (recorded) => usage.push(recorded)),
+          ),
+        );
+        value = JSON.stringify({
+          [ENTRY_MARKER]: ENTRY_VERSION,
+          value: result,
+          usage: usage.length ? sumUsage(usage) : null,
+        });
       }
-      return result;
+      const bytes = new TextEncoder().encode(value).byteLength;
+      if (bytes > MAX_VALUE_BYTES)
+        throw new Error(
+          `AI answer ${key} is ${bytes} bytes, above the ${MAX_VALUE_BYTES}-byte response cache bound; it was not stored.`,
+        );
     } catch (error) {
-      await Promise.resolve(store.release(key, token)).catch((releaseError) => {
-        // SILENT: Preserve the original model failure; the lease still expires.
-        log.error("claim release failed", { error: releaseError });
-      });
+      clearInterval(heartbeat);
+      await releaseClaim(store, key, token);
       throw error;
+    }
+    try {
+      if (!(await publish(store, key, token, value)))
+        throw new Error(
+          "The cache claim expired before the answer was written.",
+        );
+    } catch (error) {
+      // The claim is left to expire so another isolate cannot pay for the
+      // same answer while this one can still write it.
+      log.error("publish failed", { error });
+      keepUnwritten(key, token, value);
+      throw deferred(
+        "The AI answer was not written to the response cache; a retry in this Worker writes it without another model call.",
+        error,
+      );
     } finally {
       clearInterval(heartbeat);
     }
+    dropUnwritten(key);
+    return result;
   }
-  return args.compute("none", ignoreUsage);
+  throw deferred(
+    "Another request was still computing this AI answer after 5 minutes; no duplicate model call was placed.",
+  );
+}
+
+/**
+ * A job republishes its page after `until`; an interactive caller surfaces
+ * the error. Either way the raw cause stays on its chain.
+ */
+function deferred(message: string, cause?: UnparsedError): JobDeferredError {
+  const error = new JobDeferredError(message, new Date(Date.now() + DEFER_MS));
+  if (cause !== undefined) error.cause = cause;
+  return error;
+}
+
+/**
+ * Answers whose write failed, by key. A later call in this isolate writes
+ * one instead of paying again; another isolate or a restart cannot see it.
+ */
+const unwritten = new Map<string, { token: string; value: string }>();
+let unwrittenChars = 0;
+
+function dropUnwritten(key: string) {
+  const kept = unwritten.get(key);
+  if (!kept) return;
+  unwritten.delete(key);
+  unwrittenChars -= kept.value.length;
+}
+
+function keepUnwritten(key: string, token: string, value: string) {
+  dropUnwritten(key);
+  unwritten.set(key, { token, value });
+  unwrittenChars += value.length;
+  // Oldest first, within the entry bound and about 32 MB of UTF-16.
+  while (
+    unwritten.size > MAX_LOCAL_ENTRIES ||
+    unwrittenChars > MAX_UNWRITTEN_CHARS
+  )
+    dropUnwritten(unwritten.keys().next().value!);
+}
+
+function keptAnswer<T>(
+  key: string,
+  validate: (value: JsonValue) => T,
+): { result: T; value: string } | null {
+  const kept = unwritten.get(key);
+  if (!kept) return null;
+  try {
+    return { result: validate(readEntry(kept.value).value), value: kept.value };
+  } catch (error) {
+    // SILENT: This caller's validation rejects the kept answer; it recomputes.
+    log.warn("kept answer rejected", { error });
+    dropUnwritten(key);
+    return null;
+  }
+}
+
+/** Writes a kept answer under the claim that produced it, while that lease lasts. */
+async function publishUnwritten<T>(
+  store: CacheStore,
+  key: string,
+  validate: (value: JsonValue) => T,
+): Promise<{ result: T } | null> {
+  const token = unwritten.get(key)?.token;
+  const kept = token ? keptAnswer(key, validate) : null;
+  if (!token || !kept) return null;
+  try {
+    if (!(await store.publish(key, token, kept.value))) return null;
+  } catch (error) {
+    // SILENT: The normal claim path retries the write once it reclaims the key.
+    log.error("kept answer publish failed", { error });
+    return null;
+  }
+  dropUnwritten(key);
+  return { result: kept.result };
+}
+
+function publish(store: CacheStore, key: string, token: string, value: string) {
+  return retryWithBackoff(async () => store.publish(key, token, value), {
+    delayFor: (outcome, attempt) =>
+      outcome.ok || attempt >= PUBLISH_ATTEMPTS - 1
+        ? null
+        : 250 * (attempt + 1),
+  });
+}
+
+async function releaseClaim(store: CacheStore, key: string, token: string) {
+  await Promise.resolve()
+    .then(() => store.release(key, token))
+    .catch((error: unknown) => {
+      // SILENT: Preserve the call's outcome; the lease still expires.
+      log.error("claim release failed", { error });
+    });
 }

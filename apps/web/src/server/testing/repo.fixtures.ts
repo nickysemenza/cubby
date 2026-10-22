@@ -25,6 +25,7 @@ import type { RecipeCreateInput } from "@cubby/schemas/recipe";
 import type { RecipeTotals } from "@cubby/schemas/recipe-shared";
 import type { SearchableEntity } from "@cubby/schemas/search";
 import { inArray, sql } from "drizzle-orm";
+import type { PgTable } from "drizzle-orm/pg-core";
 import { buildEntity } from "tooling/factories/build";
 import { z } from "zod";
 
@@ -42,6 +43,10 @@ import {
   user,
 } from "~/server/db/schema";
 import { systemActor } from "~/server/domains/run/repo/ensure-run";
+import {
+  insertPayloadsWithIdentities,
+  type EntityPayloadValues,
+} from "~/server/entity-kernel/repo/entity-identity-writer";
 
 import { getDb } from "../db/helpers";
 import {
@@ -65,6 +70,18 @@ import { insertWithShortcode } from "../generic/shortcode/repo/shortcode-utils";
 // ({ userId: TEST_USER_ID, source: "ui" }) — destructure that instead of
 // redefining a TEST_ACTOR constant per file. The `.fixtures.ts` suffix keeps
 // this file out of the test glob.
+
+/** Fixed-code fixtures use the same transactional identity writer as production. */
+export async function insertEntityFixtures<T extends PgTable>(
+  db: Database,
+  table: T,
+  kind: ShortcodeEntity,
+  rows: readonly EntityPayloadValues<T>[],
+) {
+  return getDb(db).transaction((tx) =>
+    insertPayloadsWithIdentities(tx, table, kind, rows),
+  );
+}
 
 type Amount = { value: number; unit: string };
 type RecipeIngredientInput = NonNullable<

@@ -21,6 +21,7 @@ import { sha256Hex } from "@cubby/shared/sha256";
 import { createLogger } from "@cubby/worker-tracing";
 import { z } from "zod";
 
+import { findErrorCause } from "~/lib/error-diagnostics";
 import { scrubErrorMessage } from "~/lib/error-diagnostics";
 import { decisionCatalogRows } from "~/server/ai/decision-catalog";
 import { withAiInputs } from "~/server/ai/evaluation-inputs";
@@ -50,7 +51,6 @@ import {
   saveAiDiscoveryCursor,
 } from "~/server/ai/repo/ai-refresh";
 import type { Database } from "~/server/db";
-import { connectionInputKeys } from "~/server/domains/connection/repo/discovery-inputs";
 import { productIdentityEvidenceFence } from "~/server/domains/product/repo/match/product-identity-fence";
 import {
   productIdentitySnapshot,
@@ -63,28 +63,24 @@ import { executeEntity } from "~/server/entity-kernel";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { entityCommandSchema } from "~/server/entity-kernel/contracts";
 import { applyAutomaticRules } from "~/server/generic/assessment/repo/automatic-rule-runtime";
-import type { AuditSampler } from "~/server/generic/assessment/repo/automatic-rules";
 import { fieldReviewIdentity } from "~/server/generic/assessment/repo/field-assessment-review";
 import {
   fieldInputFingerprint,
+  fenceFieldInputsAtCommit,
   fieldInputFingerprintIfLive,
 } from "~/server/generic/assessment/repo/field-input-fence";
-import { latestFieldWrite } from "~/server/generic/audit-log/repo/audit-log";
-import {
-  fenceDerivedInputsAtCommit,
-  currentInputRevision,
-  hasUnmaterializedInputs,
-} from "~/server/generic/derived-refresh/repo/freshness";
+import { latestFieldWrite } from "~/server/generic/audit-log/repo/field-write";
+import { currentJobExecution } from "~/server/generic/jobs/context";
+import { JobDeferredError } from "~/server/generic/jobs/errors";
 import { lookupShortcodes } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { buildCrudServices } from "~/server/http/request-context";
 import { canonicalJson } from "~/server/lib/canonical-json";
 
+import { checkConnectionSourceBeforeCommit } from "../repo/ai-refresh-state";
 import {
-  aiRefreshRelaunchCandidates,
   assessmentStatesById,
   emailClassificationObservations,
   fieldRefreshHistory,
-  hasRunnableAiEvaluation,
   liveProductIdsAfter,
   pendingFieldRefreshes,
   recordAiRefreshAttemptFailure,
@@ -95,7 +91,6 @@ import {
 } from "../repo/ai-refresh-state";
 import {
   guardAiEvaluationAttempt,
-  readRun,
   storeAiEvaluationResult,
 } from "../repo/ai-work-state";
 import {
@@ -108,6 +103,8 @@ import {
   publishSweepSuggestions,
 } from "./suggestion-sweep";
 
+const log = createLogger("ai-refresh");
+
 export type AiRefreshPorts = {
   context?: EntityKernelContext;
   suggestPorts?: SuggestFieldsPorts;
@@ -119,9 +116,7 @@ export type AiRefreshPorts = {
     "triage" | "relevance" | "storage"
   >;
   /** Test seam: the Automatic rule audit sample, so outcomes never ride on random ids. */
-  auditSample?: AuditSampler;
 };
-const log = createLogger("ai-refresh");
 const jsonSnapshot = (value: unknown) =>
   z.json().parse(JSON.parse(JSON.stringify(value)));
 const fieldSnapshot = z.object({
@@ -412,7 +407,8 @@ export async function discoverAiRefresh(
   ports: AiRefreshPorts = {},
 ) {
   const activation = await readAiRefreshActivation(db);
-  if (!activation?.enabled) return { runs: [], deferred: false };
+  if (!activation?.enabled)
+    return { runs: [], deferred: false, complete: true };
   const runs = new Set<string>();
   let cursor = await readAiDiscoveryCursor(db);
   if (
@@ -689,7 +685,7 @@ export async function discoverAiRefresh(
   );
   for (const productRun of productDiscovery.runs) runs.add(productRun);
   const connectionDiscovery = await scheduleConnectionDiscovery(db, cursor);
-  await saveAiDiscoveryCursor(db, {
+  const nextCursor = {
     revision: activation.revision,
     productDone: productDiscovery.productDone,
     product: productDiscovery.product,
@@ -703,10 +699,16 @@ export async function discoverAiRefresh(
     email: emailDeferred ? cursor.email : emailCursorFor(candidates),
     connectionDone: connectionDiscovery.done,
     connection: connectionDiscovery.cursor,
-  });
+  };
+  await saveAiDiscoveryCursor(db, nextCursor);
   return {
     runs: [...runs],
     deferred: fieldDeferred || emailDeferred || productDiscovery.deferred,
+    complete:
+      nextCursor.fieldDone &&
+      nextCursor.emailDone &&
+      nextCursor.productDone &&
+      nextCursor.connectionDone,
   };
 }
 
@@ -739,15 +741,6 @@ export async function executeAiRefreshTarget(
       const { entityGraphRootSchema } =
         await import("@cubby/schemas/entity-graph");
       const source = entityGraphRootSchema.parse(claimed.snapshot);
-      const revision = await currentInputRevision(db);
-      const kinds = [
-        source.entityKind,
-        ...connectionInputKeys(source.entityKind)
-          .filter((key) => key.startsWith("kind:"))
-          .map((key) => key.slice(5)),
-      ];
-      if (await hasUnmaterializedInputs(db, kinds, { pendingOnly: true }))
-        throw new Error("Connection discovery waits for current projections");
       if (
         source.entityKind !== target.entity ||
         (await connectionSourceFingerprint(db, source)) !==
@@ -769,12 +762,6 @@ export async function executeAiRefreshTarget(
       );
       const checkSource = async (transactionDb: Database) => {
         if (
-          await hasUnmaterializedInputs(transactionDb, kinds, {
-            pendingOnly: true,
-          })
-        )
-          throw new Error("Connection discovery inputs are pending refresh");
-        if (
           (await connectionSourceFingerprint(transactionDb, source)) !==
           claimed.provenance.inputFingerprint
         )
@@ -790,8 +777,8 @@ export async function executeAiRefreshTarget(
           async (transactionDb) => {
             await checkSource(transactionDb);
             await publish(transactionDb);
-            await fenceDerivedInputsAtCommit(transactionDb, revision, (tx) =>
-              connectionSourceFingerprint(tx, source),
+            await checkConnectionSourceBeforeCommit(transactionDb, () =>
+              connectionSourceFingerprint(transactionDb, source),
             );
             return null;
           },
@@ -799,15 +786,12 @@ export async function executeAiRefreshTarget(
         );
       await publishAiEvaluation(db, id, token, async (transactionDb) => {
         await checkSource(transactionDb);
-        if (
-          !preparation.complete ||
-          (await hasUnmaterializedInputs(transactionDb, kinds))
-        )
+        if (!preparation.complete)
           throw new Error(
             `Connection candidate coverage is unconfirmed. ${preparation.coverageErrors.join("\n")}`,
           );
-        await fenceDerivedInputsAtCommit(transactionDb, revision, (tx) =>
-          connectionSourceFingerprint(tx, source),
+        await checkConnectionSourceBeforeCommit(transactionDb, () =>
+          connectionSourceFingerprint(transactionDb, source),
         );
         return { source, discovered: true };
       });
@@ -1042,7 +1026,6 @@ export async function executeAiRefreshTarget(
           predecessorIds: target.assessmentIds,
           evaluationId: id,
           provenance: saved.provenance,
-          rules: { auditSample: ports.auditSample },
         },
         entry
           ? [
@@ -1059,7 +1042,6 @@ export async function executeAiRefreshTarget(
       );
       const [predecessorId] = target.assessmentIds;
       if (outcome === "settled" && predecessorId) {
-        const revision = await currentInputRevision(tx);
         await settleAppliedFieldRefresh(
           tx,
           predecessorId,
@@ -1071,13 +1053,11 @@ export async function executeAiRefreshTarget(
           ),
           saved.provenance,
         );
-        await fenceDerivedInputsAtCommit(tx, revision, (next) =>
-          fieldInputFingerprint(
-            next,
-            target.entity,
-            target.recordId,
-            target.field,
-          ),
+        await fenceFieldInputsAtCommit(
+          tx,
+          target.entity,
+          target.recordId,
+          target.field,
         );
       }
       return {
@@ -1087,6 +1067,11 @@ export async function executeAiRefreshTarget(
       };
     });
   } catch (error) {
+    const deferred = findErrorCause(
+      error,
+      (cause): cause is JobDeferredError => cause instanceof JobDeferredError,
+    );
+    if (deferred) throw deferred;
     const message = scrubErrorMessage(
       error instanceof Error ? error.message : String(error),
     );
@@ -1098,59 +1083,15 @@ export async function executeAiRefreshTarget(
     await recordAiRefreshAttemptFailure(db, id, token, {
       state: obsolete
         ? "obsolete"
-        : !admissionWait && claimed.attempts >= 3
+        : !admissionWait &&
+            claimed.attempts >= (currentJobExecution()?.claim.maxAttempts ?? 3)
           ? "failed"
           : "retry_wait",
-      attempts: admissionWait ? claimed.attempts - 1 : claimed.attempts,
       error: message,
-      nextAttemptAt: new Date(
-        Date.now() + 60_000 * Math.max(1, claimed.attempts),
-      ),
     });
+    if (admissionWait)
+      throw new JobDeferredError(message, new Date(Date.now() + 30_000));
+    if (!obsolete) throw error;
   }
   return true;
-}
-
-export async function recoverAiRefresh(db: Database) {
-  const current = await currentAiRefreshActivation(db);
-  // The singleton owns activation. An old Worker can still receive recovery work.
-  if (!current) return false;
-  const { reconcileWorkflowRuns } =
-    await import("~/server/workflows/runs/lifecycle");
-  await reconcileWorkflowRuns(db);
-  const unfinished = await aiRefreshRelaunchCandidates(db);
-  const { launchWorkflowRun } =
-    await import("~/server/workflows/runs/lifecycle");
-  const launch = async (ids: Iterable<string>) => {
-    for (const id of ids) {
-      try {
-        const row = await readRun(db, runEntityId.parse(id));
-        if (
-          !row ||
-          (row.status === "running" &&
-            Number(
-              z.record(z.string(), z.unknown()).safeParse(row.progress).data
-                ?.attempt ?? 0,
-            ) > 0)
-        )
-          continue;
-        const runnable = await hasRunnableAiEvaluation(db, id);
-        if (!runnable && !aiRefreshRunInput.parse(row.input).discovery)
-          continue;
-        await launchWorkflowRun(db, {
-          runId: runEntityId.parse(id),
-          purpose: "ai_refresh",
-          automatic: true,
-        });
-      } catch (error) {
-        log.error("Refresh Workflow launch failed", {
-          error: scrubErrorMessage(String(error)),
-        });
-      }
-    }
-  };
-  await launch(unfinished.map((row) => row.id));
-  const discovered = await discoverAiRefresh(db);
-  await launch(discovered.runs);
-  return discovered.deferred ? "deferred" : true;
 }

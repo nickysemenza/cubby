@@ -28,7 +28,6 @@ import type { Database } from "~/server/db";
 import { upsertDeviceFromHello } from "~/server/domains/device/repo/device-participation";
 import {
   claimImageProcessingJob,
-  reclaimExpiredImageProcessingLeases,
   backOffImageProcessingLease,
   SERVER_FAILURE_RETRYABLE,
   IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION,
@@ -489,7 +488,6 @@ export async function claimCompanionImageCommand(
   const { revisions, kinds, allowAvifNormalization } =
     companionClaimCapabilities(device);
   if (!kinds.length) return null;
-  await reclaimExpiredImageProcessingLeases(db);
   const claimed = await claimImageProcessingJob(db, {
     kinds,
     processorRevisions: revisions,

@@ -1,6 +1,5 @@
 import { userId } from "@cubby/schemas/identifiers";
 import { mailboxDiscoveryInput } from "@cubby/schemas/mailbox-research";
-import { fromPartial } from "@total-typescript/shoehorn";
 import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { afterEach, describe, expect, it } from "vitest";
@@ -9,7 +8,7 @@ import type { JSONType } from "zod";
 import { setCfEnv } from "~/server/cf-env";
 import { account } from "~/server/db/auth.schema";
 import { getDb } from "~/server/db/helpers";
-import { appSettings, run, user } from "~/server/db/schema";
+import { appSettings, job, run, user } from "~/server/db/schema";
 import { startMailDiscovery } from "~/server/domains/purchase-import/operations/gmail/discovery";
 import { checkpointMailboxCoverage } from "~/server/domains/purchase-import/repo/gmail/persistence";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
@@ -17,13 +16,12 @@ import { requireActor } from "~/server/http/request-context";
 import type { AppSpan } from "~/server/observability/tracing";
 import { createStartOperationRunner } from "~/server/operation-runtime/start-operation.server";
 import { createTestRequestContext } from "~/server/testing/request-context";
-import type { WorkflowRunParams } from "~/server/workflows/runs/contract";
 
 import { runHandlers } from "./run.server";
 
 // Failures: an unauthenticated or foreign toggle; discovery running while the
 // switch is off; a launch fanning out to another mailbox or duplicating an
-// active Workflow; Vendor names widening targeted search beyond verified
+// active Job; Vendor names widening targeted search beyond verified
 // senders and website domains. Real PostgreSQL backs every step.
 describe("automatic Mail import switch", () => {
   const ctx = withTestDb();
@@ -103,30 +101,6 @@ describe("automatic Mail import switch", () => {
         },
       ]);
     return party;
-  };
-
-  const launches = () => {
-    const launched: WorkflowRunParams[] = [];
-    setCfEnv(
-      fromPartial<Env>({
-        MAIL_DISCOVERY: {
-          create: async (options: {
-            id?: string;
-            params?: WorkflowRunParams;
-          }) => {
-            if (!options?.id || !options.params)
-              throw new Error(
-                "Synthetic Workflow launch requires id and params",
-              );
-            launched.push(options.params);
-            return fromPartial<
-              Awaited<ReturnType<Env["MAIL_DISCOVERY"]["create"]>>
-            >({ id: options.id });
-          },
-        },
-      }),
-    );
-    return launched;
   };
 
   it("toggles only the member's connected Gmail mailboxes", async () => {
@@ -225,7 +199,6 @@ describe("automatic Mail import switch", () => {
     await insertWithShortcode(ctx.db, "vendor", {
       name: "Synthetic Unresearched Vendor",
     });
-    const launched = launches();
     expect(await invoke("discoverMail", { mailboxId })).toMatchObject({
       ok: false,
     });
@@ -233,7 +206,9 @@ describe("automatic Mail import switch", () => {
       started: 0,
       running: 0,
     });
-    expect(launched).toEqual([]);
+    expect(
+      await getDb(ctx.db).select().from(job).where(eq(job.kind, "run.execute")),
+    ).toEqual([]);
 
     await invoke("setMailImport", { mailboxId, enabled: true });
     expect(
@@ -247,11 +222,20 @@ describe("automatic Mail import switch", () => {
       ok: true,
       data: { started: 0, running: 1 },
     });
-    expect(launched).toHaveLength(1);
     const [discovery] = await getDb(ctx.db)
       .select()
       .from(run)
       .where(eq(run.purpose, "mail_discovery"));
+    expect(
+      await getDb(ctx.db).select().from(job).where(eq(job.kind, "run.execute")),
+    ).toMatchObject([
+      {
+        key: `run:${discovery!.id}`,
+        state: "queued",
+        runId: discovery!.id,
+        input: { runId: discovery!.id, purpose: "mail_discovery" },
+      },
+    ]);
     const input = mailboxDiscoveryInput.parse(discovery?.input);
     expect(input).toMatchObject({ mailboxId, executionPolicy: "import" });
     expect(input.scopedQueries.map((query) => query.query).sort()).toEqual([

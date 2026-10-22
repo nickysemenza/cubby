@@ -21,6 +21,10 @@ import {
   publishAssessment,
   recordFeedback,
 } from "~/server/generic/assessment/repo/assessment";
+import {
+  transitionAssessmentState,
+  transitionAssessmentStates,
+} from "~/server/generic/assessment/repo/assessment-state";
 
 export async function publishEmailLinkDecision(
   db: Database,
@@ -143,7 +147,7 @@ export async function publishEmailLinkDecision(
       },
       { data: input, active: false },
     );
-    await recordFeedback(db, {
+    const decision = await recordFeedback(db, {
       assessmentId: prediction.id,
       operationId: "decision",
       verdict: input.decision === "linked" ? "correct" : "dismissed",
@@ -158,23 +162,26 @@ export async function publishEmailLinkDecision(
       },
     });
     // Current authority can move, while every historical decision stays bound to its original event.
-    await client
-      .update(assessmentState)
-      .set({ active: false, status: "superseded" })
-      .where(
-        and(
-          eq(assessmentState.family, "email_link"),
-          sql`${assessmentState.data}->>'eventId' = ${input.eventId}`,
-          sql`${assessmentState.id} <> ${prediction.id}`,
-          input.decision === "linked"
-            ? sql`(${assessmentState.data} @> ${JSON.stringify({ decision: "linked" })}::jsonb OR ${assessmentState.data}->>'purchaseId' = ${input.purchaseId})`
-            : sql`${assessmentState.data}->>'purchaseId' = ${input.purchaseId}`,
-        ),
-      );
-    await client
-      .update(assessmentState)
-      .set({ status: "resolved", active: true })
-      .where(eq(assessmentState.id, prediction.id));
+    const cause = { kind: "email_link_decided", feedbackId: decision.id };
+    await transitionAssessmentStates(
+      db,
+      and(
+        eq(assessmentState.family, "email_link"),
+        sql`${assessmentState.data}->>'eventId' = ${input.eventId}`,
+        sql`${assessmentState.id} <> ${prediction.id}`,
+        input.decision === "linked"
+          ? sql`(${assessmentState.data} @> ${JSON.stringify({ decision: "linked" })}::jsonb OR ${assessmentState.data}->>'purchaseId' = ${input.purchaseId})`
+          : sql`${assessmentState.data}->>'purchaseId' = ${input.purchaseId}`,
+      ),
+      { active: false, status: "superseded" },
+      cause,
+    );
+    await transitionAssessmentState(
+      db,
+      prediction.id,
+      { status: "resolved", active: true },
+      cause,
+    );
     return prediction;
   });
 }

@@ -1,4 +1,3 @@
-import { workflowRecoveryProgress } from "./workflow-runs";
 import type { RunWorkSamples } from "./run-work-progress";
 import {
   type AiRefreshRunInput,
@@ -321,7 +320,6 @@ const sweepCounters = z.object({
   failed: z.number().int().nonnegative(),
 });
 export const suggestionSweepRunProgress = sweepCounters.extend({
-  ...workflowRecoveryProgress.shape,
   attempt: z.number().int().nonnegative().optional(),
   rosterPrepared: z.boolean().optional(),
   legacyCounts: sweepCounters

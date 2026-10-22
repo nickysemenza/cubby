@@ -1,15 +1,10 @@
 import type { requestEmbeddingRefreshInputSchema } from "@cubby/schemas/search";
-import { createLogger } from "@cubby/worker-tracing";
 import type { z } from "zod";
 
 import {
   searchContract,
   searchStreamsContract,
 } from "~/contracts/search.contract";
-import {
-  getSearchIndexRepairWorkflow,
-  isCloudflareRuntime,
-} from "~/server/cf-env";
 import type { Database } from "~/server/db";
 import { findSimilarEntitiesWorkflow } from "~/server/generic/embedding/service/semantic-similarity";
 import {
@@ -22,14 +17,9 @@ import {
   findSearchHits,
 } from "~/server/generic/search/service/search.service";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
-import { getRequestId } from "~/server/observability/tracing";
 import { implementOperationDomain } from "~/server/operation-runtime/operation-domain.server";
 import { implementSubscriptionDomain } from "~/server/operation-runtime/subscription-domain.server";
 import { publishBackgroundTasks } from "~/server/workflows/background-tasks/publish";
-import { SEARCH_INDEX_REPAIR_RETENTION } from "~/server/workflows/search-index-repair-retention";
-import { streamSearchIndexRepairWorkflow } from "~/server/workflows/search-index-repair-workflow-adapter";
-
-const log = createLogger("search-index-repair");
 
 type RefreshInput = z.output<typeof requestEmbeddingRefreshInputSchema>;
 export async function requestEmbeddingRefreshWorkflow(
@@ -37,8 +27,7 @@ export async function requestEmbeddingRefreshWorkflow(
   input: RefreshInput,
 ) {
   const entityId = await resolveOrThrow(db, input.entityKind, input.entityId);
-  // Awaited, unlike a mutation's after-commit publication: this IS the
-  // user's action, so its acknowledgment must mean the queue accepted it.
+  // Acknowledgment means the durable intent committed, even if the queue wake is lost.
   await publishBackgroundTasks(
     db,
     [
@@ -108,28 +97,7 @@ export const searchStreamHandlers = implementSubscriptionDomain(
   searchStreamsContract,
   {
     repairIndex: async function* (context, _input, signal) {
-      const workflow = getSearchIndexRepairWorkflow();
-      if (!workflow) {
-        if (isCloudflareRuntime()) {
-          throw new Error("SEARCH_INDEX_REPAIR Workflow binding is missing");
-        }
-        yield* repairSearchIndex(context.db, signal);
-        return;
-      }
-
-      const requestedAt = new Date().toISOString();
-      const instance = await workflow.create({
-        id: crypto.randomUUID(),
-        params: { requestedAt },
-        retention: SEARCH_INDEX_REPAIR_RETENTION,
-      });
-      log.info("Workflow started", {
-        instanceId: instance.id,
-        requestId: getRequestId(context.headers),
-      });
-      yield* streamSearchIndexRepairWorkflow(instance, signal, (id) =>
-        workflow.get(id),
-      );
+      yield* repairSearchIndex(context.db, signal);
     },
   },
 );

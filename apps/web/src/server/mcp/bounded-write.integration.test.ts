@@ -1,7 +1,7 @@
 import { expenseLineKindSchema } from "@cubby/schemas/expense-line-kind";
 import { costTypeSchema, tradeSchema } from "@cubby/schemas/project";
 import { testUserId } from "@cubby/schemas/testing";
-import { inArray, sql } from "drizzle-orm";
+import { inArray } from "drizzle-orm";
 import {
   countTestDbQueries,
   TEST_USER_ID,
@@ -10,7 +10,7 @@ import {
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { getDb } from "~/server/db/helpers";
-import { product } from "~/server/db/schema";
+import { expense, product } from "~/server/db/schema";
 import { entityKernelContextSchema } from "~/server/entity-kernel";
 import { createMcpServer } from "~/server/mcp/server";
 import type { ToolArguments } from "~/server/mcp/tools/tool-registration";
@@ -21,6 +21,7 @@ import {
 } from "~/server/testing/mcp-test-utils";
 import {
   createProductFixture,
+  insertEntityFixtures,
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
 import { createTestRequestContext } from "~/server/testing/request-context";
@@ -58,16 +59,23 @@ describe("bounded MCP writes", () => {
           ),
         );
       }
-      await getDb(ctx.db).execute(sql`
-        WITH roots(id) AS (VALUES ${sql.join(
-          subjects.map((subject) => sql`(${subject.entityId}::uuid)`),
-          sql`, `,
-        )})
-        INSERT INTO "Expense" (shortcode,name,cost,date,"costType",trade,"productId","lineKind")
-        SELECT 'EXP-SYN' || replace(roots.id::text,'-','') || n::text,
-          'Synthetic dependent expense',1,'2026-01-01',${costTypeSchema.enum.materials},${tradeSchema.enum.other},roots.id,${expenseLineKindSchema.enum.principal}
-        FROM roots CROSS JOIN generate_series(1,3) n
-      `);
+      await insertEntityFixtures(
+        ctx.db,
+        expense,
+        "expense",
+        subjects.flatMap((subject) =>
+          Array.from({ length: 3 }, (_, index) => ({
+            shortcode: `EXP-SYN${subject.entityId.replaceAll("-", "")}${index + 1}`,
+            name: "Synthetic dependent expense",
+            cost: 1,
+            date: "2026-01-01",
+            costType: costTypeSchema.enum.materials,
+            trade: tradeSchema.enum.other,
+            productId: subject.entityId,
+            lineKind: expenseLineKindSchema.enum.principal,
+          })),
+        ),
+      );
       const selected = subjects.slice(0, mode === "update" ? 1 : 2);
       const data = { notes: "Synthetic saved note" };
       const args: ToolArguments =

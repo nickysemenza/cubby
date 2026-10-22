@@ -19,14 +19,13 @@ describe("buildAutoFixPlan", () => {
   it("counts the true backlog behind a sampled section and keeps upkeep out of it", () => {
     const plan = buildAutoFixPlan(
       problems({
-        entitiesMissingEmbeddings: fromPartial<
-          AllProblems["entitiesMissingEmbeddings"]
-        >([{ entityId: "sample" }]),
-        sectionTotals: { entitiesMissingEmbeddings: 6238 },
+        locationsWithoutAiDescription: fromPartial<
+          AllProblems["locationsWithoutAiDescription"]
+        >([{ id: "sample" }]),
+        sectionTotals: { locationsWithoutAiDescription: 6238 },
       }),
       maintenanceCountsSchema.parse({
         cullablePendingImages: 4,
-        entitiesMissingEmbeddings: 6238,
         staleRecipeTotals: 3,
         productsWithNoImages: 0,
         locationsWithoutAiDescription: 0,
@@ -36,7 +35,7 @@ describe("buildAutoFixPlan", () => {
     expect(plan.issues).toBe(6238);
     expect(plan.tasks.map((task) => task.key)).toEqual([
       "cullPendingImages",
-      "missingEmbeddings",
+      "locationDescriptions",
       "staleRecipeTotals",
     ]);
   });
@@ -46,7 +45,6 @@ describe("buildAutoFixPlan", () => {
       problems(),
       maintenanceCountsSchema.parse({
         cullablePendingImages: 0,
-        entitiesMissingEmbeddings: 0,
         staleRecipeTotals: 0,
         productsWithNoImages: 0,
         locationsWithoutAiDescription: 0,

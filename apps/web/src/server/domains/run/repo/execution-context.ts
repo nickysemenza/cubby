@@ -59,7 +59,7 @@ export async function pauseExecutionRun(
   message: string,
 ): Promise<void> {
   // Recovery resumes these purposes in a later window: AI work through
-  // `recoverManualAiWork`, agent imports and Mail discovery through
+  // Job execution, agent imports and Mail discovery through
   // `resumeFundingPausedRuns` (run/service/ai-work.ts).
   const recoverable = sql`${run.purpose} IN (${runPurpose.enum.mail_reclassify}, ${runPurpose.enum.suggestion_sweep}, ${runPurpose.enum.mail_import}, ${runPurpose.enum.photo_inventory}, ${runPurpose.enum.mail_discovery})`;
   await unwrapDb(db)
@@ -77,7 +77,7 @@ export async function pauseExecutionRun(
         // A step-ledger Run (maintenance, Sweep) pauses through its engine:
         // the typed error reaches the step driver, which pauses the step at
         // the resume time and keeps the step's cursor. Ending it here would
-        // take the Run away from its own Workflow mid-step.
+        // take the Run away from its current Job page mid-step.
         notInArray(run.purpose, [...STEP_RUN_PURPOSES]),
         notDeleted(run),
       ),

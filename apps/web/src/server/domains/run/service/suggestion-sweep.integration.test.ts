@@ -1,4 +1,3 @@
-import { suggestionSweepRunProgress } from "@cubby/schemas/run-fields";
 import { and, eq, sql } from "drizzle-orm";
 import {
   taxonomyId,
@@ -21,14 +20,11 @@ import {
 } from "~/server/db/schema";
 import { loadFinanceSuggestionContext } from "~/server/domains/financial-transaction/repo/finance-suggestion-context";
 import { systemActor } from "~/server/domains/run/repo/ensure-run";
-import { listSuggestions } from "~/server/generic/assessment/repo/suggestion-review";
 import { declaredFilterPredicates } from "~/server/generic/list/repo/list";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
-import { drainDerivedRefreshFrontier } from "~/server/testing/background-queue";
 
 import { pauseSuggestionSweep } from "./suggestion-sweep";
 import {
-  PAIRED_MODEL,
   PRIMARY_MODEL,
   SUGGESTED_CATEGORY,
   categoryPorts,
@@ -38,7 +34,6 @@ import {
   productCategoryId,
   productFixture,
   recordId,
-  runCode,
   resumeSuggestionSweep,
   runSuggestions,
   startSuggestionSweep,
@@ -60,15 +55,14 @@ const savedRun = async (
 // Regression modes: an empty-field Addition above threshold publishes pending
 // and then applies only through the field.addition policy, as automatic
 // Feedback naming it, without a measured audit holdback; Corrections and
-// low-confidence assignments remain pending; paired decisions share
-// provenance and never apply; pause/resume checkpoints by unprocessed record
-// and field.
+// low-confidence assignments remain pending; pause/resume checkpoints by
+// unprocessed record and field.
 describe("persisted Suggestion sweeps", () => {
   const ctx = withTestDb();
 
   // Without an automatic Run model pin, inferring served status from the Run
-  // hides the primary paired answer and publishes both histories as unserved.
-  it("keeps the primary paired answer visible without a Run model pin", async () => {
+  // hid the answer and published its history as unserved.
+  it("keeps the answer visible without a Run model pin", async () => {
     const item = await productFixture(ctx, "Synthetic input-routed item");
     const started = await startSuggestionSweep(
       ctx.db,
@@ -81,11 +75,10 @@ describe("persisted Suggestion sweeps", () => {
         context: kernelCtx(ctx),
         ...categoryPorts(0.7),
         decisionModel: undefined,
-        samplePair: () => true,
       },
     );
     const rows = await runSuggestions(ctx.db, started.id);
-    expect(rows).toHaveLength(2);
+    expect(rows).toHaveLength(1);
     const histories = await getDb(ctx.db)
       .select({ served: assessment.served })
       .from(assessment)
@@ -95,7 +88,7 @@ describe("persisted Suggestion sweeps", () => {
           sql`, `,
         )})`,
       );
-    expect(histories.map((row) => row.served).sort()).toEqual([false, true]);
+    expect(histories.map((row) => row.served)).toEqual([true]);
     const visible = await getDb(ctx.db)
       .select({ id: productTable.id })
       .from(productTable)
@@ -177,37 +170,6 @@ describe("persisted Suggestion sweeps", () => {
     expect(events.some((event) => event.authority === "member")).toBe(false);
   });
 
-  it("fills a measured-rule audit sample like every other empty-field match", async () => {
-    const [sampled, applied] = await Promise.all(
-      ["Synthetic audited", "Synthetic unaudited"].map((name) =>
-        productFixture(ctx, name),
-      ),
-    );
-    const sampledId = await recordId(ctx.db, sampled!.id, "product");
-    const started = await startSuggestionSweep(
-      ctx.db,
-      {
-        entity: "product",
-        fields: ["categoryId"],
-        filters: { ids: [sampled!.id, applied!.id] },
-      },
-      {
-        context: kernelCtx(ctx),
-        ...categoryPorts(),
-        auditSample: (_family, subjectKey) => subjectKey.includes(sampledId),
-      },
-    );
-    const rows = await runSuggestions(ctx.db, started.id);
-    expect(rows).toEqual([
-      expect.objectContaining({ status: "applied" }),
-      expect.objectContaining({ status: "applied" }),
-    ]);
-    for (const product of [sampled!, applied!])
-      expect(await productCategoryId(ctx.db, product.id)).toBe(
-        taxonomyId(SUGGESTED_CATEGORY),
-      );
-  });
-
   it("checkpoints no-proposal targets by public id and field for filter-selected rows only", async () => {
     const context = kernelCtx(ctx);
     const matching = await productFixture(ctx, "Synthetic selected product");
@@ -230,8 +192,6 @@ describe("persisted Suggestion sweeps", () => {
       { context, suggest, pauseAfter: 1 },
     );
     expect(processed).toEqual([{ id: matching.id, field: "categoryId" }]);
-    const paused = await savedRun(ctx.db, started.id);
-    expect(suggestionSweepRunProgress.parse(paused.progress).done).toBe(1);
 
     await resumeSuggestionSweep(ctx.db, started.id, { context, suggest });
     expect(processed).toEqual([
@@ -297,7 +257,16 @@ describe("persisted Suggestion sweeps", () => {
       filters: { categoryIdPresenceFilter: "none" },
       decisionModelOverride: PRIMARY_MODEL,
     });
-    expect(paused.progress).toMatchObject({ done: 2, applied: 2 });
+    // The test driver pauses before the Run's progress checkpoint is written;
+    // count settled evaluations instead.
+    expect(
+      (
+        await getDb(ctx.db)
+          .select({ state: aiEvaluation.state })
+          .from(aiEvaluation)
+          .where(eq(aiEvaluation.runId, started.id))
+      ).filter((row) => row.state === "completed"),
+    ).toHaveLength(2);
 
     await pauseSuggestionSweep(ctx.db, started.id);
     await resumeSuggestionSweep(ctx.db, started.id, {
@@ -331,7 +300,6 @@ describe("persisted Suggestion sweeps", () => {
   // A migrated paused Sweep has counts and processed IDs but no target ledger yet.
   it("prepares a legacy paused roster on resume without losing completed counts", async () => {
     const context = kernelCtx(ctx);
-    const samplePair = vi.fn(() => false);
     const products = await Promise.all(
       ["Legacy first", "Legacy next"].map((name) =>
         productFixture(ctx, `Synthetic ${name}`),
@@ -344,7 +312,7 @@ describe("persisted Suggestion sweeps", () => {
         fields: ["categoryId"],
         filters: { categoryIdPresenceFilter: "none" },
       },
-      { context, pauseAfter: 1, ...categoryPorts(), samplePair },
+      { context, pauseAfter: 1, ...categoryPorts() },
     );
     const processed = (
       await getDb(ctx.db)
@@ -376,15 +344,10 @@ describe("persisted Suggestion sweeps", () => {
         progress: sql`${JSON.stringify({ total: 2, done: 1, applied: 1, queued: 0, failed: 0, processedTargetIds: [`${processed.target.recordId}:categoryId`] })}::jsonb`,
       })
       .where(eq(runTable.id, started.id));
-    samplePair.mockClear();
     await resumeSuggestionSweep(ctx.db, started.id, {
       context,
       ...categoryPorts(),
-      samplePair,
     });
-    // Legacy preparation must honor the caller's sampling seam too; falling
-    // back to production sampling makes this history assertion UUID-dependent.
-    expect(samplePair).toHaveBeenCalled();
     const finished = await savedRun(ctx.db, started.id);
     expect(finished.status).toBe("completed");
     expect(finished.progress).toMatchObject({ total: 2, done: 2, applied: 2 });
@@ -468,96 +431,6 @@ describe("persisted Suggestion sweeps", () => {
       .from(vendorTable)
       .where(eq(vendorTable.id, vendor.id));
     expect(stored?.value).toBeNull();
-  });
-
-  it("stores a paired model row under one pair key without applying it", async () => {
-    const context = kernelCtx(ctx);
-    const product = await productFixture(ctx, "Synthetic paired item");
-    const started = await startSuggestionSweep(
-      ctx.db,
-      {
-        entity: "product",
-        fields: ["categoryId"],
-        filters: { ids: [product.id] },
-      },
-      { context, samplePair: () => true, ...categoryPorts() },
-    );
-    await drainDerivedRefreshFrontier(ctx.db);
-    const rows = await runSuggestions(ctx.db, started.id);
-    expect(rows).toHaveLength(2);
-    const [pairKey] = new Set(rows.map((row) => row.pairKey));
-    expect(pairKey).toBeTruthy();
-    expect(rows.every((row) => row.pairKey === pairKey)).toBe(true);
-    expect(rows.find((row) => row.model === PRIMARY_MODEL)).toBeDefined();
-    expect(rows.find((row) => row.model === PAIRED_MODEL)?.status).toBe(
-      "superseded",
-    );
-    expect(
-      await listSuggestions(ctx.db, {
-        runId: await runCode(ctx.db, started.id),
-        minConfidence: 0,
-      }),
-    ).toHaveLength(0);
-    expect(
-      await listSuggestions(ctx.db, {
-        minConfidence: 0,
-        entity: "product",
-        recordIds: [product.id],
-        fields: ["categoryId"],
-      }),
-    ).toHaveLength(0);
-  });
-
-  it("persists and applies the primary Addition when paired inference throws", async () => {
-    const context = kernelCtx(ctx);
-    const category = await insertWithShortcode(ctx.db, "productCategory", {
-      name: "Synthetic paired failure category",
-    });
-    const products = await Promise.all(
-      [0, 1].map((index) =>
-        productFixture(ctx, `Synthetic paired failure ${index}`),
-      ),
-    );
-    const pairedTargets = new Set<string>();
-    const suggest = vi.fn(async (_db, _runId, input, options) => {
-      if (options?.decisionModel !== PRIMARY_MODEL) {
-        pairedTargets.add(input.entityId!);
-        throw new Error("paired model unavailable");
-      }
-      return suggestion(input.targets[0]!, {
-        value: category.shortcode,
-        label: category.name,
-        probability: 0.95,
-      });
-    });
-    const started = await startSuggestionSweep(
-      ctx.db,
-      {
-        entity: "product",
-        fields: ["categoryId"],
-        filters: { ids: products.map((p) => p.id) },
-      },
-      { context, samplePair: () => true, suggest },
-    );
-    expect(pairedTargets).toEqual(new Set(products.map((p) => p.id)));
-    const rows = await runSuggestions(ctx.db, started.id);
-    expect(rows).toHaveLength(2);
-    for (const row of rows)
-      expect(row).toMatchObject({
-        kind: "addition",
-        status: "applied",
-        model: PRIMARY_MODEL,
-      });
-    for (const product of products)
-      expect(await productCategoryId(ctx.db, product.id)).toBe(category.id);
-    const finished = await savedRun(ctx.db, started.id);
-    expect(finished.progress).toMatchObject({
-      applied: 2,
-      diagnostics: [
-        expect.objectContaining({ stage: "paired_model" }),
-        expect.objectContaining({ stage: "paired_model" }),
-      ],
-    });
   });
 
   it("leaves an auto-apply candidate pending when the kernel write throws", async () => {

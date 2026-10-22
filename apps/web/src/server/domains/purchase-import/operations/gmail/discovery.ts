@@ -6,6 +6,7 @@ import {
   type RunId,
 } from "@cubby/schemas/identifiers";
 import { parseEntityId } from "@cubby/schemas/identifiers";
+import { jobState } from "@cubby/schemas/job";
 import {
   mailboxDiscoveryInput,
   mailboxDiscoveryProgress,
@@ -39,11 +40,8 @@ import { recordPaidGrant } from "~/server/domains/run/repo/paid-grant";
 import { recordRunProgress } from "~/server/domains/run/repo/run-progress";
 import { isUniqueViolation } from "~/server/errors/db-errors";
 import { reportServerError } from "~/server/errors/report-error";
+import { currentJobExecution } from "~/server/generic/jobs/context";
 import type { WorkflowRunParams } from "~/server/workflows/runs/contract";
-import {
-  productionWorkflowLauncher,
-  type WorkflowLauncher,
-} from "~/server/workflows/runs/launcher";
 import {
   claimWorkflowRun,
   failWorkflowRun,
@@ -163,8 +161,12 @@ export type DiscoveryPorts = {
   relevance?: MailRelevance;
   research?: typeof startMailImport;
 };
-const attemptIs = (attempt: number) =>
-  sql`coalesce((${runTable.progress}->>'attempt')::int, 0) = ${attempt}`;
+const attemptIs = (_attempt: number) => {
+  const execution = currentJobExecution();
+  return execution
+    ? sql`EXISTS (SELECT 1 FROM "Job" j WHERE j.id=${execution.claim.id}::uuid AND j.state=${jobState.enum.running} AND j."generation"=${execution.claim.generation} AND j."leaseToken"=${execution.claim.leaseToken}::uuid AND j."leaseExpiresAt">now())`
+    : sql`false`;
+};
 const patchProgress = (patch: Partial<MailboxDiscoveryProgress>) =>
   sql`coalesce(${runTable.progress}, '{}'::jsonb) || ${JSON.stringify(patch)}::jsonb`;
 const claimDiscovery = async (db: Database, params: WorkflowRunParams) => {
@@ -243,7 +245,6 @@ async function fundingPausedDiscovery(
 export async function startMailDiscovery(
   db: Database,
   options: {
-    launcher?: WorkflowLauncher;
     target?: Pick<GmailSyncTarget, "ledgerPartyId" | "userId" | "mailboxId">;
     paidGrant?: { actor: ActorContext; paidOverBudgetUsd?: number };
   } = {},
@@ -286,11 +287,10 @@ export async function startMailDiscovery(
         continue;
       }
       await grantPaid(waiting.id);
-      await launchWorkflowRun(
-        db,
-        { runId: waiting.id, purpose: "mail_discovery" },
-        options.launcher ?? productionWorkflowLauncher,
-      );
+      await launchWorkflowRun(db, {
+        runId: waiting.id,
+        purpose: "mail_discovery",
+      });
       started += 1;
       continue;
     }
@@ -331,11 +331,7 @@ export async function startMailDiscovery(
       continue;
     }
     await grantPaid(runId);
-    await launchWorkflowRun(
-      db,
-      { runId, purpose: "mail_discovery" },
-      options.launcher ?? productionWorkflowLauncher,
-    );
+    await launchWorkflowRun(db, { runId, purpose: "mail_discovery" });
     started += 1;
   }
   return { started, running };
@@ -604,11 +600,10 @@ export async function finishMailDiscovery(
   return finished ? { kind: "done" } : { kind: "stopped" };
 }
 
-/** A separate durable step bridges the completed page pass to its next bounded pass. */
+/** Admit the next bounded history pass through its durable Job. */
 export async function continueMailDiscovery(
   db: Database,
   params: WorkflowRunParams,
-  options: { launcher?: WorkflowLauncher } = {},
 ): Promise<void> {
   const [previous] = await getDb(db)
     .select()
@@ -678,11 +673,7 @@ export async function continueMailDiscovery(
       throw error;
     }
   }
-  await launchWorkflowRun(
-    db,
-    { runId: nextRunId, purpose: "mail_discovery" },
-    options.launcher ?? productionWorkflowLauncher,
-  );
+  await launchWorkflowRun(db, { runId: nextRunId, purpose: "mail_discovery" });
 }
 
 export async function failMailDiscovery(
@@ -724,7 +715,7 @@ export async function pruneRoutineRuns(
     ),
     // A pass that filed a finding (mail from an unknown sender) owns it.
     sql.raw(
-      `NOT EXISTS (SELECT 1 FROM "RunFinding" f WHERE f."runId" = "Run"."id")`,
+      `NOT EXISTS (SELECT 1 FROM "Assessment" a WHERE a.family = 'run_finding' AND a.producer->>'runId' = "Run"."id"::text)`,
     ),
     sql.raw(
       `NOT EXISTS (SELECT 1 FROM "EmailClassificationObservation" o WHERE o."runId" = "Run"."id")`,

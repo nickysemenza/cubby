@@ -17,10 +17,6 @@ import { auditLog } from "~/server/db/schema";
 import { findOrCreateIngredient } from "~/server/domains/ingredient/repo/crud";
 import { selectStaleRecipeIds } from "~/server/domains/recipe/repo/totals";
 import {
-  seedPending,
-  suggestionStatus,
-} from "~/server/domains/run/service/suggestion-sweep.fixtures";
-import {
   entityKernelContextSchema,
   executeEntityAs,
 } from "~/server/entity-kernel";
@@ -28,6 +24,7 @@ import { executeEntityMutationRead } from "~/server/entity-kernel/execute";
 import {
   captureBackgroundQueue,
   drainDerivedRefreshFrontier,
+  drainRecipeRefreshJobs,
 } from "~/server/testing/background-queue";
 import {
   createProductFixture,
@@ -113,39 +110,6 @@ describe("generic bulk updates", () => {
         expect.objectContaining({ id: products[1]!.id }),
       ]),
     });
-  });
-
-  it("supersedes pending targets and basis suggestions on an explicit unchanged scalar write", async () => {
-    const product = await createProductIdentityFixture(
-      ctx.db,
-      makeProductInput({
-        name: "Synthetic suggestion target",
-        manufacturer: "Synthetic original maker",
-      }),
-      ctx.actor,
-    );
-    const { id } = await seedPending(ctx, {
-      entity: "product",
-      recordId: product.entityId,
-      field: "manufacturer",
-      currentValue: "Synthetic original maker",
-      suggestedValue: "Synthetic suggested maker",
-      kind: "correction",
-    });
-    const basis = await seedPending(ctx, {
-      entity: "product",
-      recordId: product.entityId,
-      field: "ingredientId",
-      currentValue: null,
-      suggestedValue: "ING-ABCD",
-      kind: "addition",
-    });
-    await bulk("product", [product.id], {
-      manufacturer: "Synthetic original maker",
-    });
-    await drainDerivedRefreshFrontier(ctx.db);
-    expect(await suggestionStatus(ctx.db, id)).toBe("superseded");
-    expect(await suggestionStatus(ctx.db, basis.id)).toBe("superseded");
   });
 
   it("patches structured allocations without replacing each transaction's other purchase", async () => {
@@ -333,12 +297,12 @@ describe("generic bulk updates", () => {
     );
     await drainDerivedRefreshFrontier(ctx.db);
     await context().services.recipeCosting.recomputeQueued([recipe.entityId]);
+    await drainRecipeRefreshJobs(ctx.db, context().services.recipeCosting);
     expect(await selectStaleRecipeIds(ctx.db, [recipe.entityId])).toEqual([]);
     await bulk("ingredient", [ingredient.shortcode], { usuallyOnHand: true });
     await drainDerivedRefreshFrontier(ctx.db);
-    expect(await selectStaleRecipeIds(ctx.db, [recipe.entityId])).toEqual([
-      recipe.entityId,
-    ]);
+    await drainRecipeRefreshJobs(ctx.db, context().services.recipeCosting);
+    expect(await selectStaleRecipeIds(ctx.db, [recipe.entityId])).toEqual([]);
   });
 
   it("runs task guards for every row and rolls earlier writes back on refusal", async () => {

@@ -47,8 +47,6 @@ import {
   recipe,
 } from "~/server/db/schema";
 import { lockLedgerPartiesForReference } from "~/server/domains/ledger-party/repo/ledger-party-reference";
-import type { RecipeCostingService } from "~/server/domains/recipe/repo/recipe-costing";
-import { repairStaleRecipesForRead } from "~/server/domains/recipe/repo/repair-stale-recipes-for-read";
 import { createAppError } from "~/server/errors/app-error";
 import { logAuditEntry } from "~/server/generic/audit-log/repo/audit-log";
 import {
@@ -706,27 +704,7 @@ const getMealPreparationsRaw = async (
   });
 };
 
-export const getMealPreparations = async (
+export const getMealPreparations = (
   db: Database,
   input: GetMealPreparationsInput,
-  recipeCosting?: RecipeCostingService,
-): Promise<GetMealPreparationsOut> => {
-  const initial = await getMealPreparationsRaw(db, input);
-  if (!recipeCosting) return initial;
-  const codes = [
-    ...new Set(initial.preparations.map((entry) => entry.recipe.id)),
-  ];
-  const resolved = await resolveAllOrThrow(
-    recipeCosting.database,
-    "recipe",
-    codes,
-  );
-  const repaired = await repairStaleRecipesForRead(
-    recipeCosting,
-    resolved,
-    "meal.getPreparations",
-  );
-  return repaired
-    ? getMealPreparationsRaw(recipeCosting.database, input)
-    : initial;
-};
+): Promise<GetMealPreparationsOut> => getMealPreparationsRaw(db, input);

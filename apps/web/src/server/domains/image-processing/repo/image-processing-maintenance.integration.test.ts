@@ -8,6 +8,7 @@ import {
   image,
   imageProcessingJob,
   imageProcessingSubmission,
+  job,
 } from "~/server/db/schema";
 import { backfillImageProcessing } from "~/server/domains/image-processing/service/image-processing-maintenance";
 import { createUploadedImageRecord } from "~/server/domains/image/repo/image";
@@ -70,8 +71,16 @@ describe("backfillImageProcessing", () => {
       "subject_lift",
     ]);
     expect(
-      queue.tasks.some((task) => task.kind === "image-processing.wakeup"),
-    ).toBe(true);
+      await getDb(ctx.db)
+        .select({ kind: job.kind, state: job.state })
+        .from(job)
+        .where(eq(job.kind, "image.processing")),
+    ).toEqual(
+      Array.from({ length: 4 }, () => ({
+        kind: "image.processing",
+        state: "queued",
+      })),
+    );
   });
 
   it("schedules jobs without an enable or resume step", async () => {

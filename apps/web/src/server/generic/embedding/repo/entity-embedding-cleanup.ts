@@ -20,7 +20,7 @@ async function softDeleteEntityEmbeddingsTx(
   if (entityIds.length === 0) return;
   await tx
     .update(entityEmbedding)
-    .set({ deletedAt: new Date() })
+    .set({ deletedAt: new Date(), artifactState: "retired" })
     .where(
       and(
         eq(entityEmbedding.entityKind, entityKind),

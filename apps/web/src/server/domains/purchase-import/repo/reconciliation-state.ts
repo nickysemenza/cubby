@@ -23,7 +23,7 @@ import {
   product,
   purchase,
   purchasePaymentEvidence,
-  runFinding,
+  assessmentState,
   sourceOrderObservation,
   vendorAccount,
 } from "~/server/db/schema";
@@ -41,6 +41,7 @@ import {
   sourceObservationIdentityMatches,
 } from "./reconciliation-observations";
 import { lockPartySettlement } from "./retained-settlement";
+import { isRunFinding, runFindingColumns } from "./run-finding";
 
 export type ReconciliationFix = Extract<
   ProposedImportFix,
@@ -54,19 +55,22 @@ export async function lockFindingSettlement(
   actor: ActorContext,
 ) {
   const [owner] = await tx
-    .select({ ledgerPartyId: runFinding.ledgerPartyId })
-    .from(runFinding)
+    .select({ ledgerPartyId: runFindingColumns.ledgerPartyId })
+    .from(assessmentState)
     .innerJoin(
       ledgerParty,
       and(
-        eq(ledgerParty.id, runFinding.ledgerPartyId),
+        eq(ledgerParty.id, assessmentState.ledgerPartyId),
         eq(ledgerParty.userId, actor.userId),
         notDeleted(ledgerParty),
       ),
     )
-    .where(eq(runFinding.id, id));
+    .where(and(isRunFinding, eq(assessmentState.id, id)));
   if (!owner) throw new Error("Import finding not found for this member.");
-  await lockPartySettlement(tx, owner.ledgerPartyId);
+  await lockPartySettlement(
+    tx,
+    parseEntityId("ledgerParty", owner.ledgerPartyId),
+  );
 }
 
 async function reviewedProductIds(

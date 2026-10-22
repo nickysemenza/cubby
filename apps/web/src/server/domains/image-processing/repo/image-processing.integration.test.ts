@@ -8,10 +8,11 @@ import {
 import { providerFor } from "@cubby/shared/ai/models";
 import { eq, inArray, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { IMAGE_DESCRIPTION_FEATURE } from "~/server/ai/policy/features";
 import { getDb } from "~/server/db/helpers";
+import { job as durableJob } from "~/server/db/retained-tables";
 import {
   appSettings,
   aiAnalysis,
@@ -35,6 +36,7 @@ import { hydrateImageReadProjection } from "~/server/domains/image/repo/image-re
 import { imageDescriptionInputFingerprint } from "~/server/domains/image/service/image-description.service";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
 import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
+import { advanceJob } from "~/server/generic/jobs/service/jobs";
 import { drainDerivedRefreshFrontier } from "~/server/testing/background-queue";
 import {
   createProductIdentityFixture,
@@ -42,11 +44,11 @@ import {
   insertEntityAttachments,
 } from "~/server/testing/repo.fixtures";
 
+import { imageProcessingJobHandler } from "../service/dispatch";
 import {
   claimImageProcessingJob,
   completeImageProcessingJob,
   createTransparentDerivativeAndJob,
-  reclaimExpiredImageProcessingLeases,
   loadImageRepresentations,
   getImageProcessingReadProjection,
   saveImageDescriptionAnalysis,
@@ -104,6 +106,35 @@ describe("durable image representations", () => {
     expect(new Set(descriptions.map((job) => job.shortcode)).size).toBe(2);
   });
 
+  // Retiring a source must settle its old intent without producing a remote
+  // capability or leaving the processing payload permanently pending.
+  it("settles an obsolete image source as skipped under its Job fence", async () => {
+    const row = await source();
+    await getDb(ctx.db)
+      .update(image)
+      .set({ sha256: "b".repeat(64) })
+      .where(eq(image.id, row.id));
+    const [execution] = await getDb(ctx.db)
+      .select()
+      .from(durableJob)
+      .where(eq(durableJob.key, `image-processing:${row.jobId}`));
+    if (!execution) throw new Error("Missing execution");
+    await advanceJob(ctx.db, execution.id, {
+      "image.processing": imageProcessingJobHandler,
+    });
+    const [payload] = await getDb(ctx.db)
+      .select()
+      .from(imageProcessingJob)
+      .where(eq(imageProcessingJob.id, row.jobId));
+    const [settled] = await getDb(ctx.db)
+      .select()
+      .from(durableJob)
+      .where(eq(durableJob.id, execution.id));
+    expect(payload?.state).toBe("skipped");
+    expect(settled?.state).toBe("completed");
+    expect(payload?.attemptId).toBeNull();
+  });
+
   it("does not keep a completed cutout in eligibility review because an earlier device description requested review", async () => {
     const row = await source();
     const jobId = await createImageProcessingJob(ctx.db, {
@@ -155,122 +186,157 @@ describe("durable image representations", () => {
     ).toBeNull();
   });
 
-  it("rotates attempt output keys and rejects stale completion without orphaning the current result", async () => {
-    const row = await source();
-    const first = await claimImageProcessingJob(ctx.db, {
-      jobId: row.jobId,
-      kinds: ["subject_lift"],
-      leaseMs: 60000,
-    });
-    if (!first) throw new Error("Expected first lease");
-    expect(
-      await claimImageProcessingJob(ctx.db, {
+  // Image selection and its shared Job claim must agree about due time even
+  // when the application and PostgreSQL clocks differ.
+  it("claims freshly due image work using the same clock as its Job", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date(Date.now() + 30_000));
+    try {
+      const row = await source();
+      const claimed = await claimImageProcessingJob(ctx.db, {
+        jobId: row.jobId,
+        kinds: ["subject_lift"],
+        leaseMs: 60_000,
+      });
+      expect(claimed).toMatchObject({ id: row.jobId, kind: "subject_lift" });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it.each(["expired", "cutover"])(
+    "rotates %s attempt output keys and rejects stale completion without orphaning the current result",
+    async (transition) => {
+      const row = await source();
+      const first = await claimImageProcessingJob(ctx.db, {
         jobId: row.jobId,
         kinds: ["subject_lift"],
         leaseMs: 60000,
-      }),
-    ).toBeNull();
-    await reclaimExpiredImageProcessingLeases(
-      ctx.db,
-      new Date(Date.now() + 120000),
-    );
-    // Reclamation's supplied clock sets the next eligible time; return it to now.
-    await getDb(ctx.db)
-      .update(imageProcessingJob)
-      .set({ nextAttemptAt: sql`now()` })
-      .where(eq(imageProcessingJob.id, row.jobId));
-    const second = await claimImageProcessingJob(ctx.db, {
-      jobId: row.jobId,
-      kinds: ["subject_lift"],
-      leaseMs: 60000,
-    });
-    if (!second) throw new Error("Expected second lease");
-    expect(second.derivativeKey).not.toBe(first.derivativeKey);
-    const stale = await completeImageProcessingJob(ctx.db, {
-      result: {
+      });
+      if (!first) throw new Error("Expected first lease");
+      expect(
+        await claimImageProcessingJob(ctx.db, {
+          jobId: row.jobId,
+          kinds: ["subject_lift"],
+          leaseMs: 60000,
+        }),
+      ).toBeNull();
+      await getDb(ctx.db)
+        .update(durableJob)
+        .set(
+          transition === "expired"
+            ? { leaseExpiresAt: new Date(0) }
+            : {
+                state: "queued",
+                leaseToken: null,
+                leaseExpiresAt: null,
+                attempts: 0,
+                availableAt: new Date(0),
+              },
+        )
+        .where(eq(durableJob.key, `image-processing:${row.jobId}`));
+      expect(
+        (
+          await getDb(ctx.db)
+            .select()
+            .from(imageProcessingJob)
+            .where(eq(imageProcessingJob.id, row.jobId))
+        )[0],
+      ).toMatchObject({ state: "leased", attemptId: first.attemptId });
+      const second = await claimImageProcessingJob(ctx.db, {
         jobId: row.jobId,
-        attemptId: first.attemptId,
+        kinds: ["subject_lift"],
+        leaseMs: 60000,
+      });
+      if (!second) throw new Error("Expected second lease");
+      expect(second.attemptId).not.toBe(first.attemptId);
+      expect(second.derivativeKey).not.toBe(first.derivativeKey);
+      const stale = await completeImageProcessingJob(ctx.db, {
+        result: {
+          jobId: row.jobId,
+          attemptId: first.attemptId,
+          completedAt: new Date().toISOString(),
+          outcome: {
+            kind: "subject_lift",
+            status: "skipped",
+            reason: "no_subject",
+          },
+        },
+      });
+      expect(stale).toEqual({ adopted: false, orphanKey: null });
+      const result = {
+        jobId: row.jobId,
+        attemptId: second.attemptId,
         completedAt: new Date().toISOString(),
         outcome: {
-          kind: "subject_lift",
-          status: "skipped",
-          reason: "no_subject",
+          kind: "subject_lift" as const,
+          status: "completed" as const,
+          sha256: "b".repeat(64),
+          width: 10,
+          height: 10,
+          contentType: "image/png" as const,
         },
-      },
-    });
-    expect(stale).toEqual({ adopted: false, orphanKey: null });
-    const result = {
-      jobId: row.jobId,
-      attemptId: second.attemptId,
-      completedAt: new Date().toISOString(),
-      outcome: {
-        kind: "subject_lift" as const,
-        status: "completed" as const,
-        sha256: "b".repeat(64),
-        width: 10,
-        height: 10,
-        contentType: "image/png" as const,
-      },
-    };
-    expect(
-      (
+      };
+      expect(
+        (
+          await completeImageProcessingJob(ctx.db, {
+            result,
+            verifiedDerivative: result.outcome,
+          })
+        ).adopted,
+      ).toBe(true);
+      expect(
         await completeImageProcessingJob(ctx.db, {
           result,
           verifiedDerivative: result.outcome,
-        })
-      ).adopted,
-    ).toBe(true);
-    expect(
-      await completeImageProcessingJob(ctx.db, {
-        result,
-        verifiedDerivative: result.outcome,
-      }),
-    ).toEqual({ adopted: false, orphanKey: null });
-    const representations = (
-      await loadImageRepresentations(ctx.db, [row.shortcode])
-    ).get(row.shortcode);
-    expect(representations?.preferredKind).toBe("transparent");
-    expect(representations?.transparent).toContain(second.derivativeKey);
-    const originalUrl = representations!.original;
-    const date = new Date();
-    const projected = await hydrateImageReadProjection(ctx.db, {
-      updatedAt: date,
-      related: [
-        {
-          image: {
-            id: row.shortcode,
-            url: originalUrl,
-            representations: {
-              original: originalUrl,
-              transparent: null,
-              preferred: originalUrl,
-              preferredKind: "original" as const,
+        }),
+      ).toEqual({ adopted: false, orphanKey: null });
+      const representations = (
+        await loadImageRepresentations(ctx.db, [row.shortcode])
+      ).get(row.shortcode);
+      expect(representations?.preferredKind).toBe("transparent");
+      expect(representations?.transparent).toContain(second.derivativeKey);
+      const originalUrl = representations!.original;
+      const date = new Date();
+      const projected = await hydrateImageReadProjection(ctx.db, {
+        updatedAt: date,
+        related: [
+          {
+            image: {
+              id: row.shortcode,
+              url: originalUrl,
+              representations: {
+                original: originalUrl,
+                transparent: null,
+                preferred: originalUrl,
+                preferredKind: "original" as const,
+              },
             },
           },
-        },
-      ],
-    });
-    expect(projected.updatedAt).toBe(date);
-    expect(projected.related[0]?.image.url).toBe(originalUrl);
-    expect(projected.related[0]?.image.representations?.preferred).toBe(
-      representations?.transparent,
-    );
+        ],
+      });
+      expect(projected.updatedAt).toBe(date);
+      expect(projected.related[0]?.image.url).toBe(originalUrl);
+      expect(projected.related[0]?.image.representations?.preferred).toBe(
+        representations?.transparent,
+      );
 
-    await getDb(ctx.db)
-      .update(image)
-      .set({ useOriginal: true })
-      .where(eq(image.id, row.id));
-    expect(
-      (await loadImageRepresentations(ctx.db, [row.shortcode])).get(
-        row.shortcode,
-      )?.preferredKind,
-    ).toBe("original");
-    const orphanRows = await getDb(ctx.db)
-      .select()
-      .from(imageProcessingOrphan)
-      .where(eq(imageProcessingOrphan.key, second.derivativeKey!));
-    expect(orphanRows).toHaveLength(0);
-  });
+      await getDb(ctx.db)
+        .update(image)
+        .set({ useOriginal: true })
+        .where(eq(image.id, row.id));
+      expect(
+        (await loadImageRepresentations(ctx.db, [row.shortcode])).get(
+          row.shortcode,
+        )?.preferredKind,
+      ).toBe("original");
+      const orphanRows = await getDb(ctx.db)
+        .select()
+        .from(imageProcessingOrphan)
+        .where(eq(imageProcessingOrphan.key, second.derivativeKey!));
+      expect(orphanRows).toHaveLength(0);
+    },
+  );
 
   it("claims device work even with legacy disabled and paused settings", async () => {
     const row = await source();

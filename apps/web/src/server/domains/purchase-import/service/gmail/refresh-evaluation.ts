@@ -2,13 +2,13 @@ import { userId } from "@cubby/schemas/identifiers";
 import { z } from "zod";
 
 import { dependenciesCurrent } from "~/server/ai/policy/refresh-manifest";
+import type { claimAiEvaluation } from "~/server/ai/repo/ai-evaluation";
 import { readAiRefreshActivation } from "~/server/ai/repo/ai-refresh";
 import type { Database } from "~/server/db";
 import {
   blockUnpublishedEmailRefresh,
   latestClassificationObservation,
   loadEmailRefreshTarget,
-  type EmailRefreshEvaluation,
 } from "~/server/domains/purchase-import/repo/gmail/refresh-evaluation-state";
 
 import { gmailProviderForUser } from "../../repo/gmail/provider";
@@ -16,7 +16,7 @@ import { ingestGmailMessages } from "./ingest";
 
 export async function refreshEmailEvaluation(
   db: Database,
-  evaluation: EmailRefreshEvaluation,
+  evaluation: NonNullable<Awaited<ReturnType<typeof claimAiEvaluation>>>,
   ports: Pick<
     Parameters<typeof ingestGmailMessages>[2],
     "triage" | "relevance" | "storage"

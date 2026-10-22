@@ -1,5 +1,5 @@
 import { parseEntityId } from "@cubby/schemas/identifiers";
-import { eq, sql } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
@@ -9,6 +9,7 @@ import {
   imageProcessingEvent,
   imageProcessingJob,
 } from "~/server/db/image-processing-schema";
+import { job as durableJob } from "~/server/db/retained-tables";
 import { image } from "~/server/db/schema";
 import { dispatchImageProcessingWakeup } from "~/server/domains/image-processing/service/dispatch";
 import { createUploadedImageRecord } from "~/server/domains/image/repo/image";
@@ -45,9 +46,9 @@ describe("waiting for a device records no attempt", () => {
   }
   const makeDue = (jobId: string) =>
     getDb(ctx.db)
-      .update(imageProcessingJob)
-      .set({ nextAttemptAt: sql`now()` })
-      .where(eq(imageProcessingJob.id, jobId));
+      .update(durableJob)
+      .set({ availableAt: new Date(0) })
+      .where(eq(durableJob.key, `image-processing:${jobId}`));
   const attemptsOf = (jobId: string) =>
     getDb(ctx.db)
       .select()

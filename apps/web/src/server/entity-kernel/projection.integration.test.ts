@@ -1,5 +1,6 @@
 import type { SearchableEntity } from "@cubby/schemas/entity-manifest";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
+import type { BackgroundTaskMessage } from "@cubby/schemas/queue-messages";
 import { fromPartial } from "@total-typescript/shoehorn";
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { createEntity } from "tooling/factories/create";
@@ -21,7 +22,7 @@ afterEach(() => backgroundQueue.restore());
 import { setCfEnv } from "~/server/cf-env";
 import type { Database } from "~/server/db";
 import { getDb } from "~/server/db/helpers";
-import { searchDocument } from "~/server/db/schema";
+import { job, searchDocument } from "~/server/db/schema";
 import { createLocation } from "~/server/domains/location/repo/crud";
 import {
   entityKernelContextSchema,
@@ -68,12 +69,12 @@ describe("entity kernel search projections", () => {
   afterEach(() => setCfEnv(undefined));
 
   const recordingQueue = () => {
-    const published: Array<{ task: { kind: string } }> = [];
+    const published: BackgroundTaskMessage[] = [];
     setCfEnv(
       fromPartial<Env>({
         BACKGROUND_QUEUE: {
           sendBatch: async (
-            messages: Iterable<{ body: { task: { kind: string } } }>,
+            messages: Iterable<{ body: BackgroundTaskMessage }>,
           ) => {
             published.push(...[...messages].map((m) => m.body));
           },
@@ -129,8 +130,8 @@ describe("entity kernel search projections", () => {
     expect(second?.embeddingText).not.toContain("Projected saffron");
 
     expect(published.length).toBeGreaterThanOrEqual(2);
-    expect([...new Set(published.map((message) => message.task.kind))]).toEqual(
-      ["derived-refresh.wakeup"],
+    expect([...new Set(published.map((message) => message.queueType))]).toEqual(
+      ["background"],
     );
   });
 
@@ -329,8 +330,13 @@ describe("entity kernel search projections", () => {
           rename(category.id, "Projected awnings"),
         ).resolves.toMatchObject({ action: "update" });
         await expect(drainDerivedRefreshFrontier(ctx.db)).rejects.toThrow(
-          "synthetic projection failure",
+          "Synthetic search publication failed",
         );
+        const [failed] = await db
+          .select({ error: job.error })
+          .from(job)
+          .where(eq(job.key, "refresh:search"));
+        expect(failed?.error).toContain("synthetic projection failure");
       } finally {
         await db.execute(
           sql`DROP TRIGGER reject_projection ON "SearchDocument"`,

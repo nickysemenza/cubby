@@ -3,7 +3,6 @@ import { createRepoEntity } from "tooling/factories/repo";
 import { countTestDbQueries, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { getDb } from "~/server/db/helpers";
 import { inventoryEntry, location } from "~/server/db/schema";
 import { createExpense } from "~/server/domains/expense/repo/crud";
 import { attachPurchaseProducts } from "~/server/domains/purchase/repo/purchase-products";
@@ -14,6 +13,7 @@ import {
   makeExpenseInput,
   makeProductInput,
   insertEntityAttachments,
+  insertEntityFixtures,
 } from "~/server/testing/repo.fixtures";
 
 import { getEntityGraphPaths } from "./entity-graph-paths";
@@ -123,28 +123,28 @@ describe("entity graph path repository", () => {
       makeProductInput({ name: "Wide path product" }),
       ctx.actor,
     );
-    const locations = await getDb(ctx.db)
-      .insert(location)
-      .values(
-        Array.from({ length: 60 }, (_, index) => ({
-          shortcode: testShortcode("location", `LOC-PATH-${index}`),
-          name: `Wide path location ${index}`,
-          type: "area" as const,
-        })),
-      )
-      .returning({ id: location.id });
-    const inventories = await getDb(ctx.db)
-      .insert(inventoryEntry)
-      .values(
-        locations.map((locationRow, index) => ({
-          shortcode: testShortcode("inventory", `INV-PATH-${index}`),
-          productId: product.entityId,
-          locationId: locationRow.id,
-          amountValue: 1,
-          amountUnit: "each",
-        })),
-      )
-      .returning({ shortcode: inventoryEntry.shortcode });
+    const locations = await insertEntityFixtures(
+      ctx.db,
+      location,
+      "location",
+      Array.from({ length: 60 }, (_, index) => ({
+        shortcode: testShortcode("location", `LOC-PATH-${index}`),
+        name: `Wide path location ${index}`,
+        type: "area" as const,
+      })),
+    );
+    const inventories = await insertEntityFixtures(
+      ctx.db,
+      inventoryEntry,
+      "inventory",
+      locations.map((locationRow, index) => ({
+        shortcode: testShortcode("inventory", `INV-PATH-${index}`),
+        productId: product.entityId,
+        locationId: locationRow.id,
+        amountValue: 1,
+        amountUnit: "each",
+      })),
+    );
     const destination = inventories.at(-1);
     if (!destination) throw new Error("Wide path fixture is empty");
 

@@ -21,7 +21,10 @@ import {
 import * as schema from "~/server/db/schema";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
-import { createImageFixture } from "~/server/testing/repo.fixtures";
+import {
+  createImageFixture,
+  insertEntityFixtures,
+} from "~/server/testing/repo.fixtures";
 
 import {
   listAiUsageForRun,
@@ -85,18 +88,22 @@ describe("listAiUsageForRun", () => {
       ctx.db,
       `synthetic-cost-${crypto.randomUUID()}`,
     );
-    const [job] = await getDb(ctx.db)
-      .insert(imageProcessingJob)
-      .values({
-        shortcode: generateShortcode("imageJob"),
-        imageId: parseEntityId("image", image.id),
-        runId,
-        kind: "describe_image",
-        state: "ready",
-        sourceContentHash: "a".repeat(64),
-        processorRevision: 1,
-      })
-      .returning({ id: imageProcessingJob.id });
+    const [job] = await insertEntityFixtures(
+      ctx.db,
+      imageProcessingJob,
+      "imageJob",
+      [
+        {
+          shortcode: generateShortcode("imageJob"),
+          imageId: parseEntityId("image", image.id),
+          runId,
+          kind: "describe_image",
+          state: "ready",
+          sourceContentHash: "a".repeat(64),
+          processorRevision: 1,
+        },
+      ],
+    );
     if (!job) throw new Error("fixture: image job not created");
     return job;
   };

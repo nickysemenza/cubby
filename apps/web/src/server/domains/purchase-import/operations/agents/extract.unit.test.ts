@@ -77,6 +77,65 @@ describe("purchase import audit recovery", () => {
     );
   });
 
+  // Regression: an identical recovery paid Opus again. A replay keeps the
+  // recovery model's provenance and the usage its answer avoided.
+  it("replays an identical recovery from the response cache", async () => {
+    const gatewayRequest = vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify({
+            content: [{ type: "text", text: JSON.stringify({ findings: [] }) }],
+            usage: { input_tokens: 100, output_tokens: 20 },
+          }),
+        ),
+    );
+    const recordUsage = vi.fn();
+    const ports = fromPartial<PurchaseAuditPorts>({
+      runStructured: vi.fn(async () => {
+        throw new Error("primary schema rejected");
+      }),
+      gateway: () => gatewayRequest,
+      usage: recordUsage,
+      cache: true,
+    });
+    const db = createDatabase(() => {
+      throw new Error("Audit replay unit test never resolves a database");
+    });
+    const args = {
+      db,
+      runId: "00000000-0000-4000-8000-000000000001",
+      renderedBatch: [
+        {
+          id: crypto.randomUUID(),
+          orderId: null,
+          statedTotal: null,
+          displayLabel: "Synthetic order",
+          expenses: [],
+          paymentEvidence: [],
+        },
+      ],
+    };
+    expect(await auditPurchaseImportBatch(args, ports)).toEqual({
+      findings: [],
+    });
+    expect(await auditPurchaseImportBatch(args, ports)).toEqual({
+      findings: [],
+    });
+    expect(gatewayRequest).toHaveBeenCalledOnce();
+    expect(recordUsage).toHaveBeenLastCalledWith(
+      db,
+      expect.objectContaining({
+        model: "claude-opus-5-5",
+        transport: "cache",
+        applicationCacheStatus: "hit",
+        avoidedUsage: expect.objectContaining({
+          inputTokens: 100,
+          outputTokens: 20,
+        }),
+      }),
+    );
+  });
+
   // The Opus fallback must neither buy past a spent frontier budget nor skip
   // the budget check on its own call.
   it("propagates a spent budget without recovery, and budgets the recovery call", async () => {

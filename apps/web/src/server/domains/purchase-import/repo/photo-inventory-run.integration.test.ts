@@ -17,7 +17,6 @@ import {
   aiUsage,
   image,
   run as runTable,
-  runFinding,
   photoRunImage,
 } from "~/server/db/schema";
 import { productionPhotoImportCommitPorts } from "~/server/domains/photo-import/repo/photo-import-commit";
@@ -32,6 +31,7 @@ import {
 } from "~/server/testing/mcp-test-utils";
 import { createImageFixture } from "~/server/testing/repo.fixtures";
 import { createTestRequestContext } from "~/server/testing/request-context";
+import { seedRunFinding } from "~/server/testing/run-finding.fixtures";
 
 import { coordinatorRetired } from "./run-retirement";
 import {
@@ -119,18 +119,15 @@ describe("photo import finalize", () => {
       .select({ id: runTable.ledgerPartyId })
       .from(runTable)
       .where(eq(runTable.id, run.id));
-    const [finding] = await getDb(ctx.db)
-      .insert(runFinding)
-      .values({
-        runId: run.id,
-        ledgerPartyId: party!.id!,
-        entityId: run.id,
-        entityKind: "run",
-        kind: "synthetic_note",
-        summary: "Synthetic status finding",
-        evidenceFingerprint: "f".repeat(64),
-      })
-      .returning({ id: runFinding.id });
+    const finding = await seedRunFinding(ctx.db, {
+      runId: run.id,
+      ledgerPartyId: party!.id!,
+      entityId: run.id,
+      entityKind: "run",
+      kind: "synthetic_note",
+      summary: "Synthetic status finding",
+      evidenceFingerprint: "f".repeat(64),
+    });
     const server = createMcpServer();
     const entityKernel = entityKernelContextSchema.parse(
       createTestRequestContext(ctx.db, {

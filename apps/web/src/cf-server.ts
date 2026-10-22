@@ -603,14 +603,6 @@ const handler = {
             import("./server/workflows/background-tasks/consume"),
           ]);
           await handleBackgroundQueueBatch(db, batch, {
-            ...(batch.queue === "cubby-image-cloud"
-              ? {
-                  handleTask: async (db, task) =>
-                    (
-                      await import("./server/domains/image-processing/service/cloud-queue")
-                    ).handleCloudImageTask(db, task),
-                }
-              : {}),
             captureException: (error) => {
               Sentry.captureException(error);
             },
@@ -648,25 +640,11 @@ const handler = {
         }
         if (controller.cron === "* * * * *") {
           await withInvocationDb(env.HYPERDRIVE.connectionString, async () => {
-            const [
-              { db },
-              { wakeDerivedRefresh },
-              { scheduleDerivedDiscovery },
-              { recoverMissedWork },
-            ] = await Promise.all([
+            const [{ db }, { recoverMissedWork }] = await Promise.all([
               import("./server/db"),
-              import("./server/domains/run/service/derived-refresh"),
-              import("./server/domains/run/service/derived-discovery"),
               import("./server/workflows/catch-up"),
             ]);
-            const jobs = await Promise.allSettled([
-              wakeDerivedRefresh(db),
-              scheduleDerivedDiscovery(db),
-              recoverMissedWork(db),
-            ]);
-            for (const job of jobs)
-              if (job.status === "rejected")
-                Sentry.captureException(job.reason);
+            await recoverMissedWork(db);
           });
           return;
         }
@@ -746,12 +724,7 @@ export { DatabaseFreshnessDurableObject } from "./server/generic/problems/operat
 export { ImageProcessingDurableObject } from "./server/domains/image-processing/operations/durable-object";
 export { PurchaseImportRunAgent } from "./server/domains/purchase-import/operations/agent-host";
 export { UsdaReleaseDurableObject } from "./server/domains/usda-release/operations/durable-object";
-export { SearchIndexRepairWorkflow } from "./server/workflows/search-index-repair-workflow";
-export { MailDiscoveryWorkflow } from "./server/workflows/gmail-workflows";
 
 export default Sentry.withSentry(workerSentryOptions, handler);
 
 export { AiGatewayEgressDurableObject } from "./server/domains/run/operations/gateway-egress-durable-object";
-
-export { AiRefreshWorkflow } from "./server/workflows/ai-refresh-workflow";
-export { StepRunWorkflow } from "./server/workflows/step-run-workflow";

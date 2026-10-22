@@ -1,4 +1,5 @@
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
+import type { BackgroundTaskMessage } from "@cubby/schemas/queue-messages";
 import { fromPartial } from "@total-typescript/shoehorn";
 import { withTestDb } from "tooling/test-setup";
 import { afterEach, describe, expect, it } from "vitest";
@@ -10,6 +11,7 @@ import {
   executeEntity,
 } from "~/server/entity-kernel";
 import { resolveLiveShortcode } from "~/server/generic/shortcode/repo/shortcode-resolver";
+import { drainRecipeRefreshJobs } from "~/server/testing/background-queue";
 import { drainDerivedRefreshFrontier } from "~/server/testing/background-queue";
 import { makeRecipeInput } from "~/server/testing/repo.fixtures";
 import { createTestRequestContext } from "~/server/testing/request-context";
@@ -32,12 +34,12 @@ describe("entity kernel write transaction", () => {
   afterEach(() => setCfEnv(undefined));
 
   const recordingQueue = () => {
-    const published: Array<{ task: { kind: string } }> = [];
+    const published: BackgroundTaskMessage[] = [];
     setCfEnv(
       fromPartial<Env>({
         BACKGROUND_QUEUE: {
           sendBatch: async (
-            messages: Iterable<{ body: { task: { kind: string } } }>,
+            messages: Iterable<{ body: BackgroundTaskMessage }>,
           ) => {
             published.push(...[...messages].map((m) => m.body));
           },
@@ -67,6 +69,7 @@ describe("entity kernel write transaction", () => {
       // A fresh recipe is the case whose stale mark actually rewrites the row.
       await drainDerivedRefreshFrontier(ctx.db);
       await context().services.recipeCosting.recomputeQueued([entityId]);
+      await drainRecipeRefreshJobs(ctx.db, context().services.recipeCosting);
       expect(await selectStaleRecipeIds(ctx.db, [entityId])).toEqual([]);
       published.length = 0;
 
@@ -77,15 +80,9 @@ describe("entity kernel write transaction", () => {
         data: { name: "Kernel write tx (renamed)" },
       });
 
-      // Durable work commits with the rename; its later page invalidates totals.
+      await drainRecipeRefreshJobs(ctx.db, context().services.recipeCosting);
       expect(await selectStaleRecipeIds(ctx.db, [entityId])).toEqual([]);
-      await drainDerivedRefreshFrontier(ctx.db);
-      expect(await selectStaleRecipeIds(ctx.db, [entityId])).toEqual([
-        entityId,
-      ]);
-      expect(published.map((m) => m.task.kind)).toContain(
-        "derived-refresh.wakeup",
-      );
+      expect(published.map((m) => m.queueType)).toContain("background");
     },
   );
 

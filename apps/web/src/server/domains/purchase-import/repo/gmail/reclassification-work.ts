@@ -1,9 +1,10 @@
+import { jobState } from "@cubby/schemas/job";
 import {
   type SupportedDecisionModel,
   supportedDecisionModelSchema,
 } from "@cubby/shared/ai/models";
 import { sha256Hex } from "@cubby/shared/sha256";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { compiledRefreshManifest } from "~/server/ai/policy/refresh-manifest";
@@ -102,7 +103,7 @@ export async function saveReclassificationSnapshot(
     .where(
       and(
         eq(aiEvaluation.id, evaluationId),
-        eq(aiEvaluation.attemptToken, token),
+        sql`EXISTS (SELECT 1 FROM "Job" j WHERE j.key='ai-evaluation:' || ${aiEvaluation.id}::text AND j.state=${jobState.enum.running} AND j."leaseToken"=${token}::uuid AND j."leaseExpiresAt">now())`,
       ),
     );
 }

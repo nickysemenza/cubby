@@ -6,8 +6,10 @@ import { createRepoEntity } from "tooling/factories/repo";
 import { countTestDbQueries, withTestDb } from "tooling/test-setup";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { productionDerivedRefreshPorts } from "~/server/domains/run/service/derived-refresh";
-import { captureBackgroundQueue } from "~/server/testing/background-queue";
+import {
+  drainDerivedRefreshFrontier,
+  captureBackgroundQueue,
+} from "~/server/testing/background-queue";
 import { bulkUpdateFor } from "~/server/testing/entity-kernel";
 let backgroundQueue: ReturnType<typeof captureBackgroundQueue>;
 beforeEach(() => {
@@ -70,9 +72,7 @@ describe("task reorder workflow", () => {
     );
     expect(result.sideEffects).toEqual(EMPTY_MUTATION_SIDE_EFFECTS);
     // The queue consumer must refresh the reordered tasks' projections.
-    await backgroundQueue.drain(ctx.db, {
-      derivedRefreshPorts: productionDerivedRefreshPorts,
-    });
+    await drainDerivedRefreshFrontier(ctx.db);
     expect(
       await getSearchDocumentEmbeddingText(ctx.db, "task", first.entityId),
     ).not.toBeNull();

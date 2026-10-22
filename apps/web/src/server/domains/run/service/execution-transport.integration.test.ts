@@ -23,9 +23,9 @@ import {
 import { aiBudgetWindow } from "~/server/ai/budget-window";
 import { setCfEnv } from "~/server/cf-env";
 import { getDb } from "~/server/db/helpers";
-import { aiUsage, run, runControlEvent } from "~/server/db/schema";
+import { aiUsage, job, run, runControlEvent } from "~/server/db/schema";
+import { enqueueJob, claimJob } from "~/server/generic/jobs/repo/jobs";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
-import type { WorkflowLauncher } from "~/server/workflows/runs/launcher";
 
 import { ensureRun } from "../repo/ensure-run";
 import { resumeFundingPausedRuns } from "./ai-work";
@@ -504,7 +504,7 @@ describe("household AI funding at the paid transport boundary", () => {
     });
   });
 
-  it("resumes paused imports and discovery in the next window", async () => {
+  it("resumes paused imports and leaves deferred discovery to the same due Job", async () => {
     const runId = await setup("mail_import");
     await spend(runId, AI_BUDGET_LIMIT_USD);
     await expect(
@@ -515,14 +515,13 @@ describe("household AI funding at the paid transport boundary", () => {
       .update(run)
       .set({ status: "paused_auth", failureCode: "execution_limit" })
       .where(eq(run.id, discovery));
-    const launched: string[] = [];
-    const launcher: WorkflowLauncher = {
-      create: async (_purpose, id) => {
-        launched.push(id);
-      },
-      status: async () => ({ state: "running", error: null }),
-      terminate: async () => undefined,
-    };
+    const discoveryJob = await enqueueJob(ctx.db, {
+      key: `run:${discovery}`,
+      kind: "run.execute",
+      runId: discovery,
+      input: { runId: discovery, purpose: "mail_discovery" },
+      availableAt: new Date(Date.now() + 3_600_000),
+    });
     const sent: string[] = [];
     setCfEnv(
       fromPartial<Env>({
@@ -534,17 +533,24 @@ describe("household AI funding at the paid transport boundary", () => {
       }),
     );
     // Paused this window: still waiting.
-    expect(await resumeFundingPausedRuns(ctx.db, { launcher })).toBe(0);
+    expect(await resumeFundingPausedRuns(ctx.db, {})).toBe(0);
     await pausedBefore(runId);
     await pausedBefore(discovery);
-    expect(await resumeFundingPausedRuns(ctx.db, { launcher })).toBe(2);
+    await getDb(ctx.db)
+      .update(job)
+      .set({ availableAt: new Date(0) })
+      .where(eq(job.id, discoveryJob.id));
+    expect(await resumeFundingPausedRuns(ctx.db)).toBe(1);
     expect(await status(runId)).toMatchObject({ status: "running" });
     expect((await status(runId))?.failureCode).not.toBe("execution_limit");
     expect(await status(discovery)).toMatchObject({
-      status: "running",
-      failureCode: null,
+      status: "paused_auth",
+      failureCode: "execution_limit",
     });
-    expect(launched).toHaveLength(1);
+    expect(await claimJob(ctx.db, discoveryJob.id)).toMatchObject({
+      id: discoveryJob.id,
+      generation: discoveryJob.generation,
+    });
     expect(sent).toEqual([runId]);
   });
 

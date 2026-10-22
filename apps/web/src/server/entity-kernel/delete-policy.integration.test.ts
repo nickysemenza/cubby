@@ -54,7 +54,6 @@ import type {
   RunId,
 } from "@cubby/schemas/identifiers";
 import { attachableImageEntityId } from "@cubby/schemas/image";
-import { generateShortcode } from "@cubby/shared";
 import { eq, getTableColumns, type SQL, sql } from "drizzle-orm";
 import {
   getTableConfig,
@@ -90,7 +89,6 @@ import {
   importSourceOrder,
   importSourceProduct,
   imageDerivative,
-  imageProcessingJob,
   runPushRegistration,
   ledgerSourceClaim,
   mealFoodEntry,
@@ -99,7 +97,6 @@ import {
   orderMailAttachment,
   orderMailEvent,
   photoGroupProposal,
-  runFinding,
   photoRunImage,
   statementImport,
   statementRow,
@@ -136,6 +133,7 @@ import {
   SHORTCODE_TABLE,
 } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { createImageFixture } from "~/server/testing/repo.fixtures";
+import { seedRunFinding } from "~/server/testing/run-finding.fixtures";
 
 /**
  * Edges the seeded universe leaves without a live referencing row. Each is a
@@ -735,22 +733,18 @@ async function seedImportSourceClaim(
   const partyCode = shortcodeByPrefix.get("LPY-");
   if (!purchaseCode || !partyCode) return null;
   const { actorContext } = buildKernelContext(db);
-  const [run] = await getDb(db)
-    .insert(runTable)
-    .values({
-      shortcode: generateShortcode("run"),
-      actorUserId: actorContext.userId,
-      actorName: "Delete policy",
-      actorEmail: "delete-policy@example.test",
-      ledgerPartyId: await resolveOrThrow(db, "ledgerParty", partyCode),
-      actorLedgerPartyShortcode: partyCode,
-      actorLedgerPartyName: "Delete policy member",
-      actorLedgerPartyKind: "member",
-      purpose: "file_import",
-      trigger: "manual",
-      status: "completed",
-    })
-    .returning({ id: runTable.id });
+  const run = await insertWithShortcode(db, "run", {
+    actorUserId: actorContext.userId,
+    actorName: "Delete policy",
+    actorEmail: "delete-policy@example.test",
+    ledgerPartyId: await resolveOrThrow(db, "ledgerParty", partyCode),
+    actorLedgerPartyShortcode: partyCode,
+    actorLedgerPartyName: "Delete policy member",
+    actorLedgerPartyKind: "member",
+    purpose: "file_import",
+    trigger: "manual",
+    status: "completed",
+  });
   // Raw retained claims survive deleting their Purchase association.
   const retainedSourceParty = await insertWithShortcode(db, "ledgerParty", {
     name: "Delete policy retained source party",
@@ -1011,21 +1005,17 @@ async function seedRunOwnedRows(db: Database, ids: StagingIds, runId: RunId) {
       where: eq(runTable.id, runId),
     });
     if (!owner) throw new Error("Delete policy import Run missing");
-    const [photoRun] = await getDb(db)
-      .insert(runTable)
-      .values({
-        shortcode: generateShortcode("run"),
-        purpose: "photo_inventory",
-        trigger: "manual",
-        ledgerPartyId: owner.ledgerPartyId,
-        actorUserId: owner.actorUserId,
-        actorName: owner.actorName,
-        actorEmail: owner.actorEmail,
-        actorLedgerPartyShortcode: owner.actorLedgerPartyShortcode,
-        actorLedgerPartyName: owner.actorLedgerPartyName,
-        actorLedgerPartyKind: owner.actorLedgerPartyKind,
-      })
-      .returning();
+    const photoRun = await insertWithShortcode(db, "run", {
+      purpose: "photo_inventory",
+      trigger: "manual",
+      ledgerPartyId: owner.ledgerPartyId,
+      actorUserId: owner.actorUserId,
+      actorName: owner.actorName,
+      actorEmail: owner.actorEmail,
+      actorLedgerPartyShortcode: owner.actorLedgerPartyShortcode,
+      actorLedgerPartyName: owner.actorLedgerPartyName,
+      actorLedgerPartyKind: owner.actorLedgerPartyKind,
+    });
     if (!photoRun) throw new Error("Delete policy photo Run missing");
     if (deviceId)
       await insertAndReturn(db, runPushRegistration, {
@@ -1057,7 +1047,7 @@ async function seedRunOwnedRows(db: Database, ids: StagingIds, runId: RunId) {
   }
 
   if (ledgerPartyId && purchaseId)
-    await insertAndReturn(db, runFinding, {
+    await seedRunFinding(db, {
       runId,
       ledgerPartyId,
       entityKind: "purchase",
@@ -1225,8 +1215,7 @@ async function seedImageProcessingRows(db: Database, ids: StagingIds) {
     sourceContentHash: "delete-policy-hash",
     processorRevision: 1,
   }).catch(() => undefined);
-  await insertAndReturn(db, imageProcessingJob, {
-    shortcode: generateShortcode("imageJob"),
+  await insertWithShortcode(db, "imageJob", {
     imageId: ids.imageId,
     kind: "describe_image",
     state: "pending",

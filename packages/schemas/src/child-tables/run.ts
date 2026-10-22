@@ -764,101 +764,6 @@ export const runChildren = [
     ],
   }),
   defineChildTable({
-    name: "RunFinding",
-    exportName: "runFinding",
-    columns: [
-      {
-        key: "id",
-        kind: "uuid",
-        primaryKey: true,
-        default: { sql: "gen_random_uuid()" },
-      },
-      { key: "runId", kind: "uuid", reference: { table: "run", column: "id" } },
-      {
-        key: "ledgerPartyId",
-        kind: "uuid",
-        notNull: true,
-        type: "LedgerPartyId",
-        reference: { table: "ledgerParty", column: "id" },
-      },
-      { key: "entityId", kind: "uuid", notNull: true },
-      {
-        key: "entityKind",
-        kind: "text",
-        notNull: true,
-        type: '"purchase" | "expense" | "product" | "run" | "email"',
-      },
-      { key: "kind", kind: "text", notNull: true },
-      { key: "summary", kind: "text", notNull: true },
-      { key: "proposedFix", kind: "jsonb" },
-      { key: "evidenceFingerprint", kind: "text", notNull: true },
-      { key: "autoApplied", kind: "boolean", notNull: true, default: false },
-      { key: "probability", kind: "real" },
-      { key: "status", kind: "text", notNull: true, default: "open" },
-      { key: "resolvedAt", kind: "timestamp" },
-      { key: "expiresAt", kind: "timestamp" },
-      {
-        key: "resolvedByUserId",
-        kind: "text",
-        reference: { table: "user", column: "id" },
-      },
-      {
-        key: "createdAt",
-        kind: "timestamp",
-        notNull: true,
-        default: { now: true },
-      },
-      {
-        key: "updatedAt",
-        kind: "timestamp",
-        notNull: true,
-        default: { now: true },
-        onUpdateNow: true,
-      },
-    ],
-    types: [
-      { module: "@cubby/schemas/identifiers", exports: ["LedgerPartyId"] },
-    ],
-    indexes: [
-      {
-        name: "RunFinding_open_evidence_key",
-        unique: true,
-        on: [
-          "ledgerPartyId",
-          "entityKind",
-          "entityId",
-          "kind",
-          "evidenceFingerprint",
-        ],
-        where: "{status} = 'open'",
-      },
-      {
-        name: "RunFinding_status_idx",
-        on: ["status", { column: "createdAt", desc: true }],
-      },
-    ],
-    checks: [
-      {
-        name: "RunFinding_status_check",
-        sql: "{status} IN ('open', 'applied', 'dismissed')",
-      },
-      {
-        name: "RunFinding_entityKind_check",
-        sql: "{entityKind} IN ('purchase', 'expense', 'product', 'run', 'email')",
-      },
-    ],
-    foreignKeys: [
-      // Findings stay live pointers (ADR 0006): a merge repoints them and a
-      // removal deletes them, so the FK always names a live identity.
-      {
-        name: "RunFinding_entity_fk",
-        columns: ["entityId", "entityKind"],
-        table: "entityIdentity",
-        references: ["id", "kind"],
-      },
-    ],
-  }),
-  defineChildTable({
     name: "AiEvaluation",
     exportName: "aiEvaluation",
     columns: [
@@ -895,11 +800,6 @@ export const runChildren = [
       { key: "provenance", kind: "jsonb", notNull: true, type: "AiProvenance" },
       { key: "snapshot", kind: "jsonb", notNull: true },
       { key: "state", kind: "text", notNull: true, default: "queued" },
-      { key: "attempts", kind: "integer", notNull: true, default: 0 },
-      { key: "runAttempt", kind: "integer", notNull: true, default: 0 },
-      { key: "attemptToken", kind: "uuid" },
-      { key: "deadlineAt", kind: "timestamp" },
-      { key: "nextAttemptAt", kind: "timestamp" },
       { key: "result", kind: "jsonb" },
       { key: "receipt", kind: "jsonb" },
       { key: "error", kind: "text" },
@@ -935,11 +835,11 @@ export const runChildren = [
       },
       {
         name: "AiEvaluation_admission_idx",
-        on: ["executionKind", "state", "deadlineAt"],
+        on: ["executionKind", "state"],
       },
       {
         name: "AiEvaluation_run_state_idx",
-        on: ["runId", "state", "nextAttemptAt"],
+        on: ["runId", "state"],
       },
       { name: "AiEvaluation_feature_idx", on: ["feature"] },
     ],

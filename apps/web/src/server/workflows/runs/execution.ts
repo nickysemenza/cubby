@@ -1,12 +1,11 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 
-import { runEntityId } from "@cubby/schemas/identifiers";
-import { eq, sql } from "drizzle-orm";
-
 import type { UnparsedError } from "~/lib/error-utils";
 import type { Database } from "~/server/db";
-import { getDb } from "~/server/db/helpers";
-import { run } from "~/server/db/schema";
+import {
+  assertCurrentJob,
+  currentJobExecution,
+} from "~/server/generic/jobs/repo/execution";
 
 type WorkflowExecution = Readonly<{
   runId: string;
@@ -14,7 +13,8 @@ type WorkflowExecution = Readonly<{
   database?: Database;
 }>;
 const execution = new AsyncLocalStorage<WorkflowExecution>();
-export const hasWorkflowExecution = () => execution.getStore() !== undefined;
+export const hasWorkflowExecution = () =>
+  execution.getStore() !== undefined || currentJobExecution() !== undefined;
 
 export class WorkflowInterruptedError extends Error {
   constructor(readonly reason: "cancelled" | "superseded") {
@@ -39,28 +39,16 @@ export const withWorkflowExecution = <T>(
   work: () => Promise<T>,
 ) => execution.run(identity, work);
 
-/** Read authority before admitting another provider batch; no connection spans inference. */
+/** Check current ownership before starting another provider batch; no connection spans inference. */
 export async function assertWorkflowCurrent(): Promise<void> {
-  const owner = execution.getStore();
-  if (!owner) return;
-  await assertWorkflowEffect(
-    owner.database ?? (await import("~/server/db")).db,
-  );
+  if (execution.getStore() && !currentJobExecution())
+    throw new WorkflowInterruptedError("superseded");
+  await assertCurrentJob();
 }
 
-/** Must run inside the fresh transaction admitting an effect, never around a model call. */
+/** Effect ownership comes solely from the current Job token and generation. */
 export async function assertWorkflowEffect(db: Database): Promise<void> {
-  const owner = execution.getStore();
-  if (!owner) return;
-  const [current] = await getDb(db)
-    .select({
-      status: run.status,
-      attempt: sql<number>`coalesce((${run.progress}->>'attempt')::int, 0)`,
-    })
-    .from(run)
-    .where(eq(run.id, runEntityId.parse(owner.runId)));
-  if (!current || current.attempt !== owner.attempt)
+  if (execution.getStore() && !currentJobExecution())
     throw new WorkflowInterruptedError("superseded");
-  if (current.status !== "running")
-    throw new WorkflowInterruptedError("cancelled");
+  await assertCurrentJob(db);
 }

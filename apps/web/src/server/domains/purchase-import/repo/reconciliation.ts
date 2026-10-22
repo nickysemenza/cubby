@@ -32,7 +32,7 @@ import {
   ledgerParty,
   purchase,
   purchasePaymentEvidence,
-  runFinding,
+  assessmentState,
   sourceOrderObservation,
 } from "~/server/db/schema";
 import { validateExpenseInheritance } from "~/server/domains/expense/repo/expense-inheritance";
@@ -47,6 +47,7 @@ import {
 } from "~/server/domains/purchase-import/repo/writer-policy";
 import { assertClassificationPolicies } from "~/server/domains/spending-category/repo/classification-field-policy";
 import { createAppError } from "~/server/errors/app-error";
+import { transitionAssessmentStates } from "~/server/generic/assessment/repo/assessment-state";
 import { logAuditEntries } from "~/server/generic/audit-log/repo/audit-log";
 import { validateProductPolicy } from "~/server/generic/inheritance/repo/inheritance-validation";
 import { cascadeRemoval } from "~/server/generic/removal/repo/core";
@@ -69,6 +70,13 @@ import {
   type ReconciliationFix,
   type ReconciliationState,
 } from "./reconciliation-state";
+import {
+  isRunFinding,
+  publishRunFinding,
+  runFindingColumns,
+  runFindingData,
+  runFindingStatus,
+} from "./run-finding";
 import {
   arrivalAsksToReceive,
   fileArrivedFinding,
@@ -524,11 +532,11 @@ export async function prepareSourceOrderReconciliation(
   return withTransaction(db, async (tx) => {
     await lockFindingSettlement(tx, input.id, actor);
     const [finding] = await tx
-      .select()
-      .from(runFinding)
-      .where(eq(runFinding.id, input.id))
+      .select(runFindingColumns)
+      .from(assessmentState)
+      .where(and(isRunFinding, eq(assessmentState.id, input.id)))
       .for("update");
-    if (!finding || finding.status !== "open")
+    if (!finding || finding.status !== runFindingStatus.enum.open)
       throw createAppError(
         "PURCHASE_IMPORT_REVIEW_STALE",
         "This source finding has already been resolved.",
@@ -563,17 +571,23 @@ export async function prepareSourceOrderReconciliation(
       input.resolution,
     );
     const review = await reviewResolution(tx, state, fix, input.resolution);
-    await tx
-      .update(runFinding)
-      .set({
-        proposedFix: proposedImportFix.parse({
-          ...fix,
-          reviewedFingerprint: review.reviewedFingerprint,
-          review,
-        }),
-        updatedAt: new Date(),
-      })
-      .where(eq(runFinding.id, finding.id));
+    // The reviewed preview belongs to the current finding; its Assessment
+    // keeps the original proposal.
+    await transitionAssessmentStates(
+      tx,
+      eq(assessmentState.id, finding.id),
+      (row) => ({
+        data: {
+          ...runFindingData.parse(row.data),
+          proposedFix: proposedImportFix.parse({
+            ...fix,
+            reviewedFingerprint: review.reviewedFingerprint,
+            review,
+          }),
+        },
+      }),
+      { kind: "run_finding_review_prepared" },
+    );
     return prepareSourceOrderReconciliationOut.parse({
       id: finding.id,
       ...review,
@@ -588,18 +602,16 @@ async function retainUnresolvedProductFinding(
   expenseId: typeof expense.$inferSelect.id,
   title: string,
 ) {
-  await tx
-    .insert(runFinding)
-    .values({
-      runId: state.observation.runId,
-      ledgerPartyId: ownerId,
-      entityKind: "purchase",
-      entityId: state.target.id,
-      kind: "product_unresolved",
-      summary: `Product resolution is required for “${title}”: The reviewed order line has no matched Product.`,
-      evidenceFingerprint: `replacement:${expenseId}`,
-    })
-    .onConflictDoNothing();
+  await publishRunFinding(tx, {
+    runId: state.observation.runId,
+    ledgerPartyId: ownerId,
+    entityKind: "purchase",
+    entityId: state.target.id,
+    kind: "product_unresolved",
+    summary: `Product resolution is required for “${title}”: The reviewed order line has no matched Product.`,
+    proposedFix: null,
+    evidenceFingerprint: `replacement:${expenseId}`,
+  });
 }
 
 // Every reviewed effect and conservation assertion shares this transaction.

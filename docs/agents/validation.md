@@ -85,8 +85,10 @@ membership, or incidental response sizes. Large populations belong only in an
 explicit performance measurement that needs that scale.
 Report setup separately from scenario time. A failed provenance/startup check
 is not a scenario result. Before declaring shared schema inputs ready, run the
-read-only `loadEntityDeclarationBundle` strict probe; do not infer readiness from
-field spelling. Root owns generation and migration readiness during parallel work. In one
+read-only `loadEntityDeclarationBundle` strict probe from an ESM entrypoint
+(`.mts` with `tsx --tsconfig apps/web/tsconfig.json`); do not use `tsx -e`,
+whose CommonJS import path can instantiate duplicate schema modules. Do not
+infer readiness from field spelling. Root owns generation and migration readiness during parallel work. In one
 checkout, finish checks that publish generated/declaration inputs before a
 runtime collects modules from those inputs. Measure CI's natural job timings before changing
 shards; keep test-lane cache keys broad.

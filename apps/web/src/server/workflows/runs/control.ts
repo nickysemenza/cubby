@@ -1,3 +1,4 @@
+import { aiEvaluationState } from "@cubby/schemas/ai-evaluation";
 import type { ActorContext } from "@cubby/schemas/context";
 import { runShortcode, type RunId } from "@cubby/schemas/identifiers";
 import type { RunControlAction } from "@cubby/schemas/run-fields";
@@ -5,24 +6,28 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
 import { getDb, withTransactionDatabase } from "~/server/db/helpers";
+import { job } from "~/server/db/retained-tables";
 import { ledgerParty, run as runTable } from "~/server/db/schema";
 import { systemActor } from "~/server/domains/run/repo/ensure-run";
 import { recordPaidGrant } from "~/server/domains/run/repo/paid-grant";
 import { createAppError } from "~/server/errors/app-error";
+import {
+  cancelJob,
+  cancelRunJobs,
+  pauseJob,
+  enqueueJob,
+} from "~/server/generic/jobs/repo/jobs";
 
 import {
   isStepRunPurpose,
   isWorkflowRunPurpose,
-  workflowInstanceId,
   type WorkflowRunPurpose,
 } from "./contract";
-import { productionWorkflowLauncher, type WorkflowLauncher } from "./launcher";
 import { launchWorkflowRun, recordRunProgress } from "./lifecycle";
 
 /**
- * `run.control` for a Workflow-backed Run. `cancel` fails the Run first —
- * every step re-checks it before acting — and then terminates the instance;
- * `retry` starts a new attempt that resumes from the Run's saved progress.
+ * `run.control` stops or retries the Run's universal Job and its child demand.
+ * Domain progress and receipts survive an explicit retry.
  * Only the member whose mailbox or search it is may control it.
  */
 export async function controlWorkflowRun(
@@ -34,7 +39,6 @@ export async function controlWorkflowRun(
     paidOverBudgetUsd?: number;
   },
   purpose: WorkflowRunPurpose,
-  launcher: WorkflowLauncher = productionWorkflowLauncher,
 ): Promise<void> {
   const database = getDb(db);
   const [row] = await database
@@ -69,10 +73,17 @@ export async function controlWorkflowRun(
         "RUN_CONTROL_REFUSED",
         "Only running member-requested AI work can be paused",
       );
-    await database
-      .update(runTable)
-      .set({ status: "paused" })
-      .where(and(eq(runTable.id, row.id), eq(runTable.status, "running")));
+    await withTransactionDatabase(db, async (tx) => {
+      await getDb(tx)
+        .update(runTable)
+        .set({ status: "paused" })
+        .where(eq(runTable.id, row.id));
+      const [execution] = await getDb(tx)
+        .select({ id: job.id })
+        .from(job)
+        .where(eq(job.key, `run:${row.id}`));
+      if (execution) await pauseJob(tx, execution.id);
+    });
     return;
   }
   if (input.action === "run_now_paid") {
@@ -87,16 +98,16 @@ export async function controlWorkflowRun(
       runId: row.id,
       paidOverBudgetUsd: input.paidOverBudgetUsd,
     });
-    await launchWorkflowRun(db, { runId: row.id, purpose }, launcher);
+    await launchWorkflowRun(db, { runId: row.id, purpose });
     return;
   }
   if (input.action === "resume") {
-    if (row.status !== "paused")
+    if (!["paused", "paused_auth"].includes(row.status))
       throw createAppError(
         "RUN_CONTROL_REFUSED",
         "Only paused AI work can be resumed",
       );
-    await launchWorkflowRun(db, { runId: row.id, purpose }, launcher);
+    await launchWorkflowRun(db, { runId: row.id, purpose });
     return;
   }
   if (input.action === "retry") {
@@ -117,29 +128,38 @@ export async function controlWorkflowRun(
             sql`${aiEvaluation.receipt}->>'retryEvaluationId' IS NULL`,
           ),
         );
-      for (const item of failed) {
-        const retryId = crypto.randomUUID();
-        const [replacement] = await database
-          .insert(aiEvaluation)
-          .values({
-            id: retryId,
-            runId: item.runId,
-            workKey: `${item.workKey}:operator-retry:${row.attempt + 1}`,
-            feature: item.feature,
-            target: item.target,
-            provenance: item.provenance,
-            snapshot: item.snapshot,
-            result: item.result,
-            state: item.result ? "result_ready" : "queued",
-          })
-          .onConflictDoNothing()
-          .returning({ id: aiEvaluation.id });
-        if (replacement)
-          await database
-            .update(aiEvaluation)
-            .set({ receipt: { retryEvaluationId: replacement.id } })
-            .where(eq(aiEvaluation.id, item.id));
-      }
+      await withTransactionDatabase(db, async (tx) => {
+        const database = getDb(tx);
+        for (const item of failed) {
+          const retryId = crypto.randomUUID();
+          const [replacement] = await database
+            .insert(aiEvaluation)
+            .values({
+              id: retryId,
+              runId: item.runId,
+              workKey: `${item.workKey}:operator-retry:${row.attempt + 1}`,
+              feature: item.feature,
+              target: item.target,
+              provenance: item.provenance,
+              snapshot: item.snapshot,
+              result: item.result,
+              state: item.result ? "result_ready" : "queued",
+            })
+            .onConflictDoNothing()
+            .returning({ id: aiEvaluation.id });
+          if (replacement) {
+            await enqueueJob(tx, {
+              key: `ai-evaluation:${replacement.id}`,
+              kind: "ai.evaluation",
+              input: { evaluationId: replacement.id },
+            });
+            await database
+              .update(aiEvaluation)
+              .set({ receipt: { retryEvaluationId: replacement.id } })
+              .where(eq(aiEvaluation.id, item.id));
+          }
+        }
+      });
     }
     if (purpose === "mail_reclassify" || purpose === "suggestion_sweep") {
       const { aiEvaluationRequest } = await import("~/server/db/schema");
@@ -185,11 +205,7 @@ export async function controlWorkflowRun(
           );
       }
     }
-    await launchWorkflowRun(
-      db,
-      { runId: row.id, purpose, retryCancelled: true },
-      launcher,
-    );
+    await launchWorkflowRun(db, { runId: row.id, purpose });
     return;
   }
   if (input.action !== "cancel")
@@ -202,7 +218,7 @@ export async function controlWorkflowRun(
       "RUN_CONTROL_REFUSED",
       `Only active work can be cancelled (${row.status})`,
     );
-  const sharedDemand = await withTransactionDatabase(db, async (tx) => {
+  await withTransactionDatabase(db, async (tx) => {
     const database = getDb(tx);
     await database.execute(
       sql`SELECT pg_advisory_xact_lock(hashtext('cubby-ai-admission'))`,
@@ -220,8 +236,6 @@ export async function controlWorkflowRun(
         and(
           eq(runTable.id, row.id),
           inArray(runTable.status, ["running", "paused", "paused_auth"]),
-          // A retry that started after the read owns the Run now.
-          sql`coalesce((${runTable.progress}->>'attempt')::int, 0) = ${row.attempt}`,
         ),
       )
       .returning({ id: runTable.id });
@@ -236,7 +250,6 @@ export async function controlWorkflowRun(
         .update(aiEvaluation)
         .set({
           state: "cancelled",
-          deadlineAt: null,
           error: "Cancelled by a member",
           updatedAt: new Date(),
         })
@@ -258,19 +271,18 @@ export async function controlWorkflowRun(
         await import("~/server/ai/repo/ai-evaluation-requests");
       sharedDemand = await cancelAiEvaluationRequests(tx, row.id);
     }
+    await cancelRunJobs(tx, row.id);
+    const stopped = await database.execute<{ id: string }>(
+      sql`SELECT j.id FROM "Job" j JOIN "AiEvaluation" e ON j.key='ai-evaluation:' || e.id::text WHERE e.state=${aiEvaluationState.enum.cancelled} AND e."runId"=${row.id}::uuid`,
+    );
+    for (const execution of stopped.rows) await cancelJob(tx, execution.id);
     return sharedDemand;
   });
   await recordRunProgress(db, row.id, "cancelled", "Cancelled by a member", {
     attempt: row.attempt,
     sequence: Number.MAX_SAFE_INTEGER,
   });
-  if (row.attempt > 0 && !sharedDemand)
-    await launcher.terminate(
-      purpose,
-      workflowInstanceId(row.shortcode, row.attempt),
-    );
-  if (isStepRunPurpose(purpose))
-    await cancelStepChildren(db, actor, row.id, launcher);
+  if (isStepRunPurpose(purpose)) await cancelStepChildren(db, actor, row.id);
 }
 
 /**
@@ -281,7 +293,6 @@ export async function cancelStepChildren(
   db: Database,
   actor: ActorContext,
   runId: RunId,
-  launcher: WorkflowLauncher,
 ) {
   const { unfinishedStepChildren } =
     await import("~/server/domains/run/repo/run-step");
@@ -292,6 +303,5 @@ export async function cancelStepChildren(
         actor,
         { runPublicId: child.shortcode, action: "cancel" },
         child.purpose,
-        launcher,
       );
 }

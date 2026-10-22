@@ -42,11 +42,19 @@ import {
 } from "~/server/generic/assessment/repo/assessment";
 import { acknowledgeSavedField } from "~/server/generic/assessment/repo/assessment-field-receipt";
 import {
+  transitionAssessmentState,
+  transitionAssessmentStates,
+} from "~/server/generic/assessment/repo/assessment-state";
+import {
   acceptSuggestion,
   applyFieldCorrection,
 } from "~/server/generic/assessment/repo/suggestion-review";
 import { captureContextRefresh } from "~/server/generic/derived-refresh/repo/context-capture";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
+
+import { isReviewFamily, type ReviewFamily } from "./review-families";
+
+const stateDataObject = z.record(z.string(), z.json());
 
 type Review = z.infer<typeof assessmentReviewInput>;
 
@@ -257,20 +265,23 @@ const assessmentFamilies = {
         .limit(1);
       if (!source || state.fingerprint !== source.hash)
         throw new Error("Image evidence changed before confirmation");
-      await getDb(db)
-        .update(assessmentState)
-        .set({ confirmedValue: null })
-        .where(
-          and(
-            eq(assessmentState.family, "image_description"),
-            eq(assessmentState.recordId, state.recordId),
-            sql`${assessmentState.id} <> ${state.id}`,
-          ),
-        );
-      await getDb(db)
-        .update(assessmentState)
-        .set({ confirmedValue: correction, status: "applied" })
-        .where(eq(assessmentState.id, state.id));
+      const cause = { kind: "image_description_confirmed" };
+      await transitionAssessmentStates(
+        db,
+        and(
+          eq(assessmentState.family, "image_description"),
+          eq(assessmentState.recordId, state.recordId),
+          sql`${assessmentState.id} <> ${state.id}`,
+        ),
+        { confirmedValue: null },
+        cause,
+      );
+      await transitionAssessmentState(
+        db,
+        state.id,
+        { confirmedValue: correction, status: "applied" },
+        cause,
+      );
       await captureContextRefresh(db, "AssessmentState", [
         { entityKind: "image", entityId: state.recordId },
       ]);
@@ -403,7 +414,7 @@ const assessmentFamilies = {
       return applyEntityConnection(db, context, state, input);
     },
   },
-} satisfies Record<AssessmentFamily, Handler>;
+} satisfies Record<ReviewFamily, Handler>;
 
 /**
  * History settles first. A stale or refused application cannot erase the
@@ -416,22 +427,8 @@ export async function reviewAssessment(
   raw: z.input<typeof assessmentReviewInput>,
   automatic?: AutomaticReview,
 ) {
-  if (!automatic) {
-    const input = assessmentReviewInput.parse(raw);
-    const { recheckAutomaticRules } =
-      await import("~/server/generic/assessment/repo/automatic-rule-runtime");
-    try {
-      const outcome = await settleReview(db, context, input, null);
-      await recheckAutomaticRules(db, outcome.assessmentId);
-      return outcome;
-    } catch (error) {
-      // The member's Feedback committed before a refused application; its Miss
-      // still counts toward the rule, so drift is checked before the raw error.
-      if (input.assessmentId)
-        await recheckAutomaticRules(db, input.assessmentId);
-      throw error;
-    }
-  }
+  if (!automatic)
+    return settleReview(db, context, assessmentReviewInput.parse(raw), null);
   const input = automaticReviewInput.parse(raw);
   if (
     !input.assessmentId ||
@@ -468,7 +465,7 @@ export async function reviewAssessment(
 }
 
 function assertReviewAction(
-  name: AssessmentFamily,
+  name: ReviewFamily,
   verdict: Review["verdict"],
   automatic: AutomaticReview | null,
 ) {
@@ -567,9 +564,13 @@ async function settleReview(
     });
   }
   if (!prediction) throw new Error("Assessment not found");
-  const family = assessmentFamilies[prediction.family];
+  // Problems findings and grading rosters are resolved by their own paths.
+  const name = prediction.family;
+  if (!isReviewFamily(name))
+    throw new Error(`${name} Assessments are not reviewed as Suggestions`);
+  const family = assessmentFamilies[name];
   family.subject.parse(prediction.subject);
-  assertReviewAction(prediction.family, input.verdict, automatic);
+  assertReviewAction(name, input.verdict, automatic);
   if (input.suppression) {
     if (
       !["dismissed", "wrong"].includes(input.verdict) ||
@@ -765,15 +766,15 @@ async function settleReview(
         );
         if (applicationResult) outcome.applicationResult = applicationResult;
         if (!family.transactionBound)
-          await getDb(transactionDb)
-            .update(assessmentState)
-            .set({ status: "applied" })
-            .where(
-              and(
-                eq(assessmentState.id, state.id),
-                eq(assessmentState.active, true),
-              ),
-            );
+          await transitionAssessmentStates(
+            transactionDb,
+            and(
+              eq(assessmentState.id, state.id),
+              eq(assessmentState.active, true),
+            ),
+            { status: "applied" },
+            { kind: "assessment_applied", feedbackId: event.id },
+          );
       }
       await recordFeedback(transactionDb, {
         assessmentId: prediction.id,
@@ -808,10 +809,12 @@ async function settleReview(
         throw new Error(
           "Only history Dismissal or Wrong Feedback accepts suppression scope",
         );
-      await getDb(transactionDb)
-        .update(assessmentState)
-        .set({ suppression: input.suppression, status: "resolved" })
-        .where(eq(assessmentState.id, state.id));
+      await transitionAssessmentState(
+        transactionDb,
+        state.id,
+        { suppression: input.suppression, status: "resolved" },
+        { kind: "member_review", feedbackId: event.id },
+      );
       return "resolved";
     } else if (
       state &&
@@ -825,31 +828,32 @@ async function settleReview(
           ? z.object({ reviewKey: z.string().nullable() }).safeParse(state.data)
               .data?.reviewKey
           : null;
-      await getDb(transactionDb)
-        .update(assessmentState)
-        .set({
+      await transitionAssessmentStates(
+        transactionDb,
+        or(
+          eq(assessmentState.id, state.id),
+          reviewKey
+            ? and(
+                eq(assessmentState.family, "field"),
+                eq(assessmentState.status, "pending"),
+                sql`${assessmentState.data}->>'reviewKey' = ${reviewKey}`,
+              )
+            : undefined,
+        ),
+        (row) => ({
           status: nextStatus,
-          ...(reviewKey
-            ? {
-                data: sql`COALESCE(${assessmentState.data}, '{}'::jsonb) || jsonb_build_object('governingFeedbackId', ${event.id}::text)`,
-              }
-            : {}),
-          ...(input.correction.present
-            ? { correctValue: input.correction.value }
-            : {}),
-        })
-        .where(
-          or(
-            eq(assessmentState.id, state.id),
-            reviewKey
-              ? and(
-                  eq(assessmentState.family, "field"),
-                  eq(assessmentState.status, "pending"),
-                  sql`${assessmentState.data}->>'reviewKey' = ${reviewKey}`,
-                )
-              : undefined,
-          ),
-        );
+          ...(reviewKey && {
+            data: {
+              ...stateDataObject.parse(row.data ?? {}),
+              governingFeedbackId: event.id,
+            },
+          }),
+          ...(input.correction.present && {
+            correctValue: input.correction.value,
+          }),
+        }),
+        { kind: "member_review", feedbackId: event.id },
+      );
       return nextStatus;
     }
     return state?.status ?? "historical";

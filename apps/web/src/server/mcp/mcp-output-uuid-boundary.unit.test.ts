@@ -69,12 +69,6 @@ const DECLARED_UUID_OUTPUT_PATHS = new Set([
   "imports_read.candidates[].purchaseLines[].acceptedSourceLines[].sourceOrderId",
   // Retained Email reads supply the same accepted-order handle for reviewed repair.
   "imports_read.acceptedSourceOrders[].sourceOrderId",
-  // Email accuracy evaluations and their frozen predictions have no
-  // shortcode; list/grade/report take these ids back.
-  "imports_read.evaluationId",
-  "imports_read.items[].predictionId",
-  "mail.evaluationId",
-  "mail.predictionId",
   // The producing read: entity_read.suggestion_queue's row ids (Assessment
   // handles) and its field evidence row ids.
   "entity_read.items[].id",

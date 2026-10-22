@@ -1,3 +1,5 @@
+import { suggestionStatus } from "@cubby/schemas/ai";
+import { assessmentFamily } from "@cubby/schemas/assessment";
 import { readRetainedMail } from "~/server/domains/mail/repo/retained-mail";
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -506,9 +508,9 @@ export async function convergenceProjection(
 /** Open Run findings on this vendor's Purchases. */
 export async function openFindingCount(db: Database, vendorId: string) {
   const { rows } = await getDb(db).execute(sql`
-    SELECT count(*)::int AS count FROM "RunFinding" f
-    JOIN "Purchase" p ON p.id = f."entityId"
-    WHERE p."vendorId" = ${vendorId} AND f.status = 'open'
+    SELECT count(*)::int AS count FROM "AssessmentState" f
+    JOIN "Purchase" p ON p.id = f."recordId"
+    WHERE p."vendorId" = ${vendorId} AND f.family = ${assessmentFamily.enum.run_finding} AND f.active AND f.status = ${suggestionStatus.enum.pending}
   `);
   return Number(rows[0]?.count);
 }

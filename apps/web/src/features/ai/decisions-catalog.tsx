@@ -669,16 +669,7 @@ export function DecisionsCatalog({
       </div>
       <Description size="xs" className="text-muted-foreground">
         Jev and Clef return no reasoning, so each decision shows what the model
-        reads and how its suggestions were reviewed. Email relevance is measured
-        in{" "}
-        <Link
-          to="/emails"
-          search={{ view: "accuracy" }}
-          className="underline-offset-2 hover:underline"
-        >
-          Emails · Accuracy
-        </Link>
-        .
+        reads and how its suggestions were reviewed.
       </Description>
       <SidePanelLayout
         title={current?.label ?? "Decision"}

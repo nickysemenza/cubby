@@ -1,10 +1,12 @@
+import { suggestionStatus } from "@cubby/schemas/ai";
+import { assessmentFamily } from "@cubby/schemas/assessment";
 import { inventoryReceiveExpenseInput } from "@cubby/schemas/inventory";
 import { and, eq, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { getDb, notDeleted } from "~/server/db/helpers";
-import { expense, inventoryEntry, runFinding } from "~/server/db/schema";
+import { expense, inventoryEntry } from "~/server/db/schema";
 import { receiveExpenseInventoryWorkflow } from "~/server/domains/inventory/operations.server";
 import { createInventoryEntry } from "~/server/domains/inventory/repo/crud";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
@@ -15,6 +17,10 @@ import {
   makeLocationInput,
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
+import {
+  runFinding,
+  seedRunFinding,
+} from "~/server/testing/run-finding.fixtures";
 
 // Failure modes: stale rendered totals overwrite current stock; a failed
 // arrived-finding update leaves inventory committed; receiving a unique item
@@ -61,18 +67,15 @@ describe("atomic reviewed Expense receiving", () => {
       kind: "member",
       userId: ctx.actor.userId,
     });
-    const [finding] = await getDb(ctx.db)
-      .insert(runFinding)
-      .values({
-        ledgerPartyId: party.id,
-        entityKind: "purchase",
-        entityId: purchase.id,
-        kind: "arrived",
-        summary: "Fixture order delivered",
-        proposedFix: { kind: "receive_purchase", purchaseId: purchase.id },
-        evidenceFingerprint: "receiving-fixture",
-      })
-      .returning();
+    const finding = await seedRunFinding(ctx.db, {
+      ledgerPartyId: party.id,
+      entityKind: "purchase",
+      entityId: purchase.id,
+      kind: "arrived",
+      summary: "Fixture order delivered",
+      proposedFix: { kind: "receive_purchase", purchaseId: purchase.id },
+      evidenceFingerprint: "receiving-fixture",
+    });
     if (!finding) throw new Error("Fixture finding missing");
     return { good, place, otherPlace, line, purchase, finding };
   }
@@ -233,7 +236,7 @@ describe("atomic reviewed Expense receiving", () => {
             );
       const before = await rows();
       await getDb(ctx.db).execute(
-        sql`ALTER TABLE "RunFinding" ADD CONSTRAINT receiving_fixture_refuse_apply CHECK (status <> 'applied')`,
+        sql`ALTER TABLE "AssessmentState" ADD CONSTRAINT receiving_fixture_refuse_apply CHECK (family <> ${sql.raw(`'${assessmentFamily.enum.run_finding}'`)} OR status <> ${sql.raw(`'${suggestionStatus.enum.applied}'`)})`,
       );
       const action =
         kind === "create"
@@ -259,7 +262,7 @@ describe("atomic reviewed Expense receiving", () => {
         expect(await findingState(f.finding.id)).toBe("open");
       } finally {
         await getDb(ctx.db).execute(
-          sql`ALTER TABLE "RunFinding" DROP CONSTRAINT receiving_fixture_refuse_apply`,
+          sql`ALTER TABLE "AssessmentState" DROP CONSTRAINT receiving_fixture_refuse_apply`,
         );
       }
     },

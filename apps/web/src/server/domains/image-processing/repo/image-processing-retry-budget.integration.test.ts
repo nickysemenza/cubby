@@ -9,6 +9,7 @@ import {
   imageProcessingEvent,
   imageProcessingJob,
 } from "~/server/db/image-processing-schema";
+import { job as durableJob } from "~/server/db/retained-tables";
 import { image } from "~/server/db/schema";
 import { createDevice } from "~/server/domains/device/repo/device";
 import { claimCompanionImageCommand } from "~/server/domains/image-processing/service/image-processing.service";
@@ -57,20 +58,21 @@ describe("image job retry budget", () => {
         state: imageProcessingJob.state,
         attemptId: imageProcessingJob.attemptId,
         derivativeId: imageProcessingJob.derivativeId,
-        failuresSinceRetry: imageProcessingJob.failuresSinceRetry,
+        attemptsSinceRetry: durableJob.attempts,
         lastError: imageProcessingJob.lastError,
-        coolingDown: sql<boolean>`${imageProcessingJob.nextAttemptAt} > now()`,
+        coolingDown: sql<boolean>`${durableJob.availableAt} > now()`,
       })
       .from(imageProcessingJob)
+      .innerJoin(durableJob, eq(durableJob.key, `image-processing:${jobId}`))
       .where(eq(imageProcessingJob.id, jobId));
     if (!job) throw new Error("Missing job");
     return job;
   };
   const makeDue = (jobId: string) =>
     getDb(ctx.db)
-      .update(imageProcessingJob)
-      .set({ nextAttemptAt: sql`now()` })
-      .where(eq(imageProcessingJob.id, jobId));
+      .update(durableJob)
+      .set({ availableAt: new Date(0) })
+      .where(eq(durableJob.key, `image-processing:${jobId}`));
   const devicePull = () =>
     claimImageProcessingJob(ctx.db, {
       kinds: ["subject_lift"],
@@ -103,14 +105,14 @@ describe("image job retry budget", () => {
     for (let failure = 1; failure < IMAGE_PROCESSING_MAX_ATTEMPTS; failure++)
       expect(await failOnce(jobId)).toMatchObject({
         state: "pending",
-        failuresSinceRetry: failure,
+        attemptsSinceRetry: failure,
         lastError: "Synthetic transient failure",
       });
     const exhausted = await failOnce(jobId);
-    const reason = `Synthetic transient failure (stopped after ${IMAGE_PROCESSING_MAX_ATTEMPTS} attempts)`;
+    const reason = "Synthetic transient failure";
     expect(exhausted).toMatchObject({
       state: "failed",
-      failuresSinceRetry: IMAGE_PROCESSING_MAX_ATTEMPTS,
+      attemptsSinceRetry: IMAGE_PROCESSING_MAX_ATTEMPTS,
       lastError: reason,
     });
     const [derivative] = await getDb(ctx.db)
@@ -127,12 +129,12 @@ describe("image job retry budget", () => {
     ).toEqual([jobId]);
     expect(await jobOf(jobId)).toMatchObject({
       state: "pending",
-      failuresSinceRetry: 0,
+      attemptsSinceRetry: 0,
     });
     for (let failure = 1; failure < IMAGE_PROCESSING_MAX_ATTEMPTS; failure++)
       expect(await failOnce(jobId)).toMatchObject({
         state: "pending",
-        failuresSinceRetry: failure,
+        attemptsSinceRetry: failure,
       });
   });
 
@@ -174,7 +176,7 @@ describe("image job retry budget", () => {
     expect(await jobOf(jobId)).toMatchObject({
       state: "pending",
       attemptId: null,
-      failuresSinceRetry: 1,
+      attemptsSinceRetry: 1,
       lastError: "Device assignment was refused",
       coolingDown: true,
     });
@@ -191,6 +193,6 @@ describe("image job retry budget", () => {
     });
     expect(await pull()).toBeNull();
     expect(await devicePull()).toBeNull();
-    expect((await jobOf(jobId)).failuresSinceRetry).toBe(1);
+    expect((await jobOf(jobId)).attemptsSinceRetry).toBe(1);
   });
 });

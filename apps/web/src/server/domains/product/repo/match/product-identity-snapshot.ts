@@ -3,7 +3,7 @@ import { productId, runEntityId, type RunId } from "@cubby/schemas/identifiers";
 import type { ProductId } from "@cubby/schemas/identifiers";
 import { isMiscProduct } from "@cubby/shared";
 import { sha256Hex } from "@cubby/shared/sha256";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 
 import { PRODUCT_IDENTITY_FEATURE } from "~/server/ai/policy/feature-identity";
@@ -41,8 +41,25 @@ import { productIdentityEvidenceFence } from "./product-identity-fence";
  * decision itself is `ai/product-identity.ts`.
  */
 export async function productIdentitySnapshot(db: Database, id: ProductId) {
+  return (await productIdentitySnapshots(db, [id])).get(id) ?? null;
+}
+
+type ProductIdentitySnapshot = {
+  snapshot: z.infer<ReturnType<typeof z.json>>;
+  fingerprint: string;
+  eligible: boolean;
+};
+/** Set-based snapshot reads for list checks; deleted Products are absent. */
+export async function productIdentitySnapshots(
+  db: Database,
+  ids: readonly ProductId[],
+) {
   const client = getDb(db);
-  const [row] = await client
+  const unique = [...new Set(ids)];
+  const result = new Map<ProductId, ProductIdentitySnapshot>();
+  if (!unique.length) return result;
+  // Sequential: a transaction handle runs one statement at a time.
+  const rows = await client
     .select({
       id: product.id,
       name: product.name,
@@ -51,11 +68,12 @@ export async function productIdentitySnapshot(db: Database, id: ProductId) {
       aliases: product.aliases,
     })
     .from(product)
-    .where(and(eq(product.id, id), notDeleted(product)))
-    .limit(1);
-  if (!row) return null;
-  const identifiers = await client
+    .where(and(inArray(product.id, unique), notDeleted(product)));
+  if (!rows.length) return result;
+  const live = rows.map((row) => row.id);
+  const identifierRows = await client
     .select({
+      entityId: entityExternalId.entityId,
       source: entityExternalId.source,
       kind: entityExternalId.kind,
       value: entityExternalId.externalId,
@@ -64,7 +82,7 @@ export async function productIdentitySnapshot(db: Database, id: ProductId) {
     .where(
       and(
         eq(entityExternalId.entityKind, "product"),
-        eq(entityExternalId.entityId, id),
+        inArray(entityExternalId.entityId, live),
         notDeleted(entityExternalId),
       ),
     )
@@ -75,6 +93,7 @@ export async function productIdentitySnapshot(db: Database, id: ProductId) {
     );
   const photoRows = await client
     .select({
+      entityId: entityAttachment.entityId,
       id: image.id,
       shortcode: image.shortcode,
       hash: image.sha256,
@@ -85,40 +104,49 @@ export async function productIdentitySnapshot(db: Database, id: ProductId) {
     .where(
       and(
         eq(entityAttachment.entityKind, "product"),
-        eq(entityAttachment.entityId, id),
+        inArray(entityAttachment.entityId, live),
         notDeleted(entityAttachment),
         notDeleted(image),
       ),
     )
     .orderBy(image.id);
-  const descriptions = await loadSelectedDescriptions(
-    db,
-    photoRows.map((row) => row.shortcode),
-  );
-  const photos = photoRows.map(({ shortcode, ...row }) => ({
-    ...row,
-    description: descriptions.get(shortcode) ?? null,
-  }));
-  const claims = await loadProductIdentifierClaims(db, id);
-  const snapshot = { ...row, identifiers, claims, photos };
-  return {
-    snapshot: z.json().parse(snapshot),
-    fingerprint: await sha256Hex(canonicalJson(z.json().parse(snapshot))),
-    eligible: !isMiscProduct(row.name),
-  };
+  const descriptions = await loadSelectedDescriptions(db, [
+    ...new Set(photoRows.map((row) => row.shortcode)),
+  ]);
+  for (const row of rows) {
+    const identifiers = identifierRows
+      .filter((identifier) => identifier.entityId === row.id)
+      .map(({ source, kind, value }) => ({ source, kind, value }));
+    const photos = photoRows
+      .filter((photo) => photo.entityId === row.id)
+      .map(({ id, hash, purpose, shortcode }) => ({
+        id,
+        hash,
+        purpose,
+        description: descriptions.get(shortcode) ?? null,
+      }));
+    // TODO: one claim read per Product until the claim loader accepts a set.
+    const claims = await loadProductIdentifierClaims(db, row.id);
+    const snapshot = z.json().parse({ ...row, identifiers, claims, photos });
+    result.set(row.id, {
+      snapshot,
+      fingerprint: await sha256Hex(canonicalJson(snapshot)),
+      eligible: !isMiscProduct(row.name),
+    });
+  }
+  return result;
 }
+/** Order-independent pair fingerprint over two snapshot fingerprints. */
+export const pairFingerprint = (fingerprints: readonly [string, string]) =>
+  sha256Hex(canonicalJson([...fingerprints].sort()));
 /** Current pair fingerprint, independent of argument order; null once either Product is gone. */
 export async function productPairFingerprint(
   db: Database,
   ids: readonly [ProductId, ProductId],
 ) {
-  const snapshots = await Promise.all(
-    ids.map((id) => productIdentitySnapshot(db, id)),
-  );
-  if (snapshots.some((value) => !value)) return null;
-  return sha256Hex(
-    canonicalJson(snapshots.map((value) => value!.fingerprint).sort()),
-  );
+  const snapshots = await productIdentitySnapshots(db, ids);
+  const [first, second] = ids.map((id) => snapshots.get(id)?.fingerprint);
+  return first && second ? pairFingerprint([first, second]) : null;
 }
 const identityFacts = z
   .object({
@@ -150,10 +178,9 @@ export async function prepareProductIdentityPair(
   const [aId, bId] = ids[0] < ids[1] ? ids : [ids[1], ids[0]];
   if (aId === bId)
     throw new Error("A Product cannot be assessed against itself");
-  const [first, second] = await Promise.all([
-    productIdentitySnapshot(db, aId!),
-    productIdentitySnapshot(db, bId!),
-  ]);
+  const snapshots = await productIdentitySnapshots(db, [aId!, bId!]);
+  const first = snapshots.get(aId!),
+    second = snapshots.get(bId!);
   if (
     !first ||
     !second ||
@@ -191,9 +218,7 @@ export async function prepareProductIdentityPair(
     productIds: [aId, bId],
     first: first.snapshot,
     second: second.snapshot,
-    fingerprint: await sha256Hex(
-      canonicalJson([first.fingerprint, second.fingerprint].sort()),
-    ),
+    fingerprint: await pairFingerprint([first.fingerprint, second.fingerprint]),
     exact,
     ...guard,
   });

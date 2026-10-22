@@ -1,14 +1,4 @@
 import {
-  createEmailAccuracyEvaluationInput,
-  createEmailAccuracyEvaluationOut,
-  listBlindEmailAccuracyItemsInput,
-  listBlindEmailAccuracyItemsOut,
-  gradeEmailAccuracyItemInput,
-  gradeEmailAccuracyItemOut,
-  getEmailAccuracyReportInput,
-  emailAccuracyReport,
-} from "@cubby/schemas/email-accuracy";
-import {
   emailAtChecksum,
   emailImportInput,
   emailPurchaseDecisionInput,
@@ -20,7 +10,6 @@ import {
   reclassifyEmailsOut,
   rerunEmailPreviewOut,
 } from "@cubby/schemas/email-actions";
-import { entityReportOut } from "@cubby/schemas/entity-report";
 import {
   mailImportOutcomesInput,
   mailImportOutcomesOut,
@@ -49,41 +38,12 @@ import {
   prepareSourceOrderReconciliationInput,
   prepareSourceOrderReconciliationOut,
 } from "@cubby/schemas/purchase-import";
-import { z } from "zod";
 
 import { defineContract, mutation, query } from "~/contracts/define";
 
 // Agent- and caller-facing (MCP `purchase_import`, `mail`, `imports_read`):
 // the same writers serve Pi's Mail import and a member's Claude/Codex session.
 export const purchaseImportContract = defineContract("purchaseImport", {
-  emailAccuracyCreate: mutation({
-    command: { label: "Create independent review", confirmation: null },
-    input: createEmailAccuracyEvaluationInput,
-    output: createEmailAccuracyEvaluationOut,
-    native: "Freeze an independent Email accuracy sample",
-    invalidates: ["email"],
-  }),
-  emailAccuracyBlind: query({
-    input: listBlindEmailAccuracyItemsInput,
-    output: listBlindEmailAccuracyItemsOut,
-    readPolicy: "strong",
-    transport: "post",
-    native: "Blind Email accuracy sample",
-  }),
-  emailAccuracyGrade: mutation({
-    input: gradeEmailAccuracyItemInput,
-    output: gradeEmailAccuracyItemOut,
-    native: "Record independent Email accuracy grade",
-    invalidates: ["email"],
-  }),
-  emailAccuracyReport: query({
-    input: getEmailAccuracyReportInput,
-    output: emailAccuracyReport,
-    readPolicy: "strong",
-    transport: "post",
-    native: "Weighted Email accuracy report",
-  }),
-
   commitAcceptedReconciliation: mutation({
     input: commitAcceptedSourceOrderReconciliationInput,
     output: commitAcceptedSourceOrderReconciliationOut,
@@ -139,17 +99,6 @@ export const purchaseImportContract = defineContract("purchaseImport", {
     output: rerunEmailPreviewOut,
     native: "Rerun one Email's extraction preview",
     invalidates: ["email", "runOnly"],
-  }),
-  /** Member-wide accuracy as report blocks: the Emails list's Accuracy view. */
-  emailAccuracyView: query({
-    input: z.object({}).strict(),
-    output: entityReportOut,
-    readPolicy: "strong",
-    mcp: {
-      omit: "agent_twin",
-      twin: "purchaseImport.emailAccuracyReport",
-      note: "Agents read the structured report; this composes it as display blocks.",
-    },
   }),
   prepareReconciliation: mutation({
     input: prepareSourceOrderReconciliationInput,

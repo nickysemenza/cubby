@@ -723,14 +723,10 @@ describe("MCP catalog schemas", () => {
       // A tree list's children scope names a parent of the listed entity's own
       // kind, so no single prefix pattern fits.
       "entity_read.nesting.parentId",
-      // Reconciliation is addressed by its finding or accepted source order,
-      // and accuracy review by its evaluation and frozen prediction: none of
-      // those rows has a shortcode.
+      // Reconciliation is addressed by its finding or accepted source order;
+      // none of those rows has a shortcode.
       "purchase_import.id",
       "purchase_import.sourceOrderId",
-      "imports_read.evaluationId",
-      "mail.evaluationId",
-      "mail.predictionId",
     ]);
     const freeTextIds = new Set([
       "orderId",

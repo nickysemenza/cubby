@@ -58,10 +58,11 @@ import type {
 import type { EntityId } from "@cubby/schemas/identifiers";
 import type { SearchableEntity } from "@cubby/schemas/search";
 import { searchableEntities } from "@cubby/schemas/search";
-import { and, eq, inArray } from "drizzle-orm";
+import { inArray } from "drizzle-orm";
 
 import type { DrizzleTransaction } from "~/server/db";
-import { dataExceptionRecord, runFinding } from "~/server/db/schema";
+import { dataExceptionRecord } from "~/server/db/schema";
+import { tombstoneEntityIdentities } from "~/server/entity-kernel/repo/entity-identity-writer";
 import { retireAssessmentTargetsTx } from "~/server/generic/assessment/repo/assessment-state";
 import type { AuditEntryInput } from "~/server/generic/audit-log/repo/audit-log";
 import { logAuditEntries } from "~/server/generic/audit-log/repo/audit-log";
@@ -97,11 +98,6 @@ const SEARCHABLE = new Set<string>(searchableEntities);
 /** Whether removing a row of this entity must cascade derived search state. */
 const isSearchable = (entity: Entity): entity is SearchableEntity =>
   SEARCHABLE.has(entity);
-
-const isRunFindingTarget = (
-  entity: Entity,
-): entity is "purchase" | "expense" | "product" =>
-  entity === "purchase" || entity === "expense" || entity === "product";
 
 /**
  * Delete audit entries for a batch of removed ids, attaching per-parent cascade
@@ -168,9 +164,12 @@ export const cascadeRemoval = async <E extends RemovableEntity>(
   const { entity, ids, audit } = args;
   if (ids.length === 0) return;
 
+  await tombstoneEntityIdentities(tx, ids);
   if (isSearchable(entity)) {
     await softDeleteEntitySearchArtifactsTx(tx, entity, [...ids]);
   }
+  // Retirement covers every review family, including import findings: their
+  // Assessments and Feedback stay as history.
   await retireAssessmentTargetsTx(tx, entity, [...ids]);
 
   // An exception is a decision about one entity's evidence (ADR 0006); it
@@ -178,17 +177,6 @@ export const cascadeRemoval = async <E extends RemovableEntity>(
   await tx
     .delete(dataExceptionRecord)
     .where(inArray(dataExceptionRecord.entityId, [...ids]));
-
-  if (isRunFindingTarget(entity)) {
-    await tx
-      .delete(runFinding)
-      .where(
-        and(
-          eq(runFinding.entityKind, entity),
-          inArray(runFinding.entityId, [...ids]),
-        ),
-      );
-  }
 
   const entries = buildCascadeAuditEntries(entity, ids, args.counts ?? {});
   if ("into" in audit) {

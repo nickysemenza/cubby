@@ -1,7 +1,6 @@
+import { suggestionStatus } from "@cubby/schemas/ai";
+import { assessmentFamily } from "@cubby/schemas/assessment";
 import { sql, type SQL } from "drizzle-orm";
-
-// RunFinding's retained status column has no generated vocabulary schema.
-const openFindingStatus = "open";
 
 /** A deadline is exclusive: the finding expires at that instant. */
 export const findingHasExpired = (
@@ -10,15 +9,17 @@ export const findingHasExpired = (
 ): boolean =>
   expiresAt !== null && new Date(expiresAt).getTime() <= at.getTime();
 
-/** Read eligibility never changes the finding's retained resolution history. */
+/**
+ * An open, unexpired `run_finding` row of an AssessmentState alias. Read
+ * eligibility never changes the finding's retained resolution history.
+ */
 export const activeFindingSql = (
   alias: string,
-  at: Date | SQL = sql`(now() AT TIME ZONE 'UTC')`,
+  at: Date | SQL = sql`now()`,
 ): SQL => {
   const column = (name: string) =>
     sql`${sql.identifier(alias)}.${sql.identifier(name)}`;
-  // Retained timestamps use UTC without a zone. A raw pg Date parameter
-  // otherwise sends local time with an offset that this column ignores.
-  const cutoff = at instanceof Date ? sql`${at.toISOString()}::timestamp` : at;
-  return sql`(${column("status")} = ${openFindingStatus} AND (${column("expiresAt")} IS NULL OR ${column("expiresAt")} > ${cutoff}))`;
+  const cutoff =
+    at instanceof Date ? sql`${at.toISOString()}::timestamptz` : at;
+  return sql`(${column("family")} = ${assessmentFamily.enum.run_finding} AND ${column("active")} AND ${column("status")} = ${suggestionStatus.enum.pending} AND (${column("data")}->>${"expiresAt"} IS NULL OR (${column("data")}->>${"expiresAt"})::timestamptz > ${cutoff}))`;
 };

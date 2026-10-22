@@ -1807,7 +1807,7 @@ export const entityListSummaryOutputSchema = z.object({entity:z.enum(listEntitie
       source:
         generatedHeader +
         "// Generated table imports stay one entity per line.\n// oxfmt-ignore\n" +
-        `import {\n${shortcodeTableImportNames.map((name) => `  ${name},`).join("\n")}\n} from "~/server/db/schema";\n\n` +
+        `import {\n${shortcodeTableImportNames.map((name) => `  ${name},`).join("\n")}\n} from "~/server/db/generated/entity-table-definitions.gen";\n\n` +
         "// Generated table bindings stay one entity per line.\n// oxfmt-ignore\n" +
         `export const SHORTCODE_TABLE = {\n${shortcodeTableBindings}\n} as const;\n\n` +
         "// Physical title columns only; computed titles remain null for the resolver's explicit overrides.\n// oxfmt-ignore\n" +

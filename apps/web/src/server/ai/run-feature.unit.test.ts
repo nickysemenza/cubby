@@ -1,4 +1,5 @@
 import { runEntityId } from "@cubby/schemas/identifiers";
+import { DEFAULT_EMBEDDING_MODEL } from "@cubby/shared/ai/models";
 import * as externalFetch from "@cubby/shared/external-fetch";
 import {
   createModels,
@@ -11,11 +12,16 @@ import {
   type ModelsApiStreamOptions,
   type UserMessage,
 } from "@earendil-works/pi-ai";
+import { fromPartial } from "@total-typescript/shoehorn";
 import { describe, expect, it, vi } from "vitest";
+import { z } from "zod";
 
 import { AI_CACHE_TTL_SECONDS } from "~/server/ai/adapters";
 import type { GatewayCallOptions } from "~/server/ai/gateway";
+import * as cfEnv from "~/server/cf-env";
 import { createDatabase } from "~/server/db/database-runtime";
+import { withJobExecution } from "~/server/generic/jobs/context";
+import { JobDeferredError } from "~/server/generic/jobs/errors";
 
 import {
   PURCHASE_IMPORT_REPAIR_FEATURE,
@@ -23,13 +29,17 @@ import {
   PRODUCT_IDENTIFICATION_FEATURE,
   RECIPE_FLOW_PRIMARY_FEATURE,
 } from "./policy/features";
+import { aiResponseCacheKey } from "./response-cache";
 import {
   RESPOND_TOOL_NAME,
   type AiChatRequest,
   type AiRunContext,
+  identifyMedia,
   modelOptionsFor,
   planStructuredRun,
+  runEmbeddingFeature,
   runStructuredFeature,
+  structuredCacheKeyInput,
   type StructuredRunPorts,
 } from "./run-feature";
 
@@ -137,6 +147,133 @@ it("reports the answering model to the caller", async () => {
   expect(answered).toEqual(["claude-opus-5-5"]);
 });
 
+// Regression: answers stored under one output schema replayed indefinitely
+// after the schema changed without a prompt version bump.
+it("keys a structured answer by its output schema", async () => {
+  const key = (schema: z.ZodType) =>
+    aiResponseCacheKey(
+      structuredCacheKeyInput(
+        { ...LOCATION_DESCRIPTION_FEATURE, schema },
+        request,
+      ),
+    );
+  const original = z.object({ description: z.string() });
+  expect(await key(original)).toBe(
+    await key(z.object({ description: z.string() })),
+  );
+  expect(await key(original)).not.toBe(
+    await key(
+      z.object({
+        description: z.string(),
+        tags: z.array(z.string()).optional(),
+      }),
+    ),
+  );
+});
+
+// Regression: an external image changed behind the same URL replayed the
+// answer to its old bytes. Our bucket's write-unique keys need no download.
+it("keys external media by its bytes and our bucket's media by URL", async () => {
+  const bodies = ["synthetic image one", "synthetic image two"];
+  const fetch = vi
+    .spyOn(externalFetch, "fetchExternalResponse")
+    .mockImplementation(
+      async () =>
+        new Response(bodies.shift(), {
+          headers: { "content-type": "image/png" },
+        }),
+    );
+  const key = async (url: string) =>
+    aiResponseCacheKey(
+      structuredCacheKeyInput(
+        LOCATION_DESCRIPTION_FEATURE,
+        (
+          await identifyMedia({
+            systemPrompts: ["frame"],
+            messages: [
+              {
+                role: "user",
+                content: [
+                  { type: "image", source: { type: "url", value: url } },
+                ],
+              },
+            ],
+          })
+        ).keyed,
+      ),
+    );
+  try {
+    const bucket = "http://localhost:9000/synthetic/images/shelf.jpg";
+    expect(await key(bucket)).toBe(await key(bucket));
+    expect(fetch).not.toHaveBeenCalled();
+    const external = "https://example.com/shelf.jpg";
+    expect(await key(external)).not.toBe(await key(external));
+    expect(fetch).toHaveBeenCalledTimes(2);
+  } finally {
+    fetch.mockRestore();
+  }
+});
+
+// Regression: a Job page deferred on one busy key while a sibling miss's paid
+// provider call was still running, so the Worker could end before that
+// vector was stored.
+it("stores a sibling's paid embedding before deferring on a busy key", async () => {
+  const embeddingKey = (text: string) =>
+    aiResponseCacheKey({
+      feature: "embedding",
+      model: DEFAULT_EMBEDDING_MODEL,
+      promptVersion: "1",
+      embedding: { text, dimensions: 2 },
+    });
+  const busyKey = await embeddingKey("synthetic busy text");
+  const missKey = await embeddingKey("synthetic missing text");
+  const published: string[] = [];
+  const store = {
+    readOrClaimMany: (requests: readonly { key: string }[]) =>
+      requests.map(({ key }) =>
+        key === busyKey
+          ? { kind: "busy" as const }
+          : { kind: "claimed" as const, token: `token-${key}` },
+      ),
+    renew: () => true,
+    publish: (key: string) => {
+      published.push(key);
+      return true;
+    },
+    release: () => undefined,
+  };
+  const namespace = vi
+    .spyOn(cfEnv, "getAiResponseCacheNamespace")
+    .mockReturnValue(fromPartial({ getByName: () => fromPartial(store) }));
+  try {
+    await expect(
+      withJobExecution(fromPartial({}), fromPartial({}), () =>
+        runEmbeddingFeature(
+          { feature: "embedding", model: DEFAULT_EMBEDDING_MODEL },
+          {
+            texts: ["synthetic busy text", "synthetic missing text"],
+            dimensions: 2,
+            cache: true,
+            embed: async (texts) => {
+              await new Promise((resolve) => setTimeout(resolve, 20));
+              return {
+                embeddings: texts.map((_, index) => ({
+                  index,
+                  vector: [index, 1],
+                })),
+              };
+            },
+          },
+          { operation: "embed" },
+        ),
+      ),
+    ).rejects.toBeInstanceOf(JobDeferredError);
+    expect(published).toEqual([missKey]);
+  } finally {
+    namespace.mockRestore();
+  }
+});
+
 describe("planStructuredRun", () => {
   it("caches a structured feature for the gateway's full TTL", () => {
     const plan = planStructuredRun(PRODUCT_IDENTIFICATION_FEATURE, {
@@ -162,11 +299,10 @@ describe("planStructuredRun", () => {
   });
 
   it("skips the cache for an uncacheable feature", () => {
-    const plan = planStructuredRun(PURCHASE_IMPORT_REPAIR_FEATURE, {
-      db,
-      runId,
-      operation: "purchaseImport.repair",
-    });
+    const plan = planStructuredRun(
+      { ...PURCHASE_IMPORT_REPAIR_FEATURE, cache: false },
+      { db, runId, operation: "purchaseImport.repair" },
+    );
 
     expect(plan.call.skipCache).toBe(true);
     expect(plan.call.cacheTtlSeconds).toBeUndefined();

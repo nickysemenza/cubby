@@ -14,7 +14,7 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { getDb } from "~/server/db/helpers";
-import { assessmentState } from "~/server/db/schema";
+import { assessmentState, statementRow } from "~/server/db/schema";
 import { publishEntityConnection } from "~/server/domains/connection/repo/entity-connections";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
@@ -160,6 +160,25 @@ const readyKey = (row: SuggestionListRow) =>
 
 describe("cross-family Suggestion list", () => {
   const ctx = withTestDb();
+
+  it("omits ignored statement evidence without a retirement pass", async () => {
+    await card(ctx);
+    await record(ctx, [rowInput()]);
+    await generate(ctx);
+    expect(
+      (await listSuggestionPage(ctx.db, { family: "statement_transaction" }))
+        .items,
+    ).toHaveLength(1);
+    await getDb(ctx.db).update(statementRow).set({
+      disposition: "ignored",
+      dispositionReason: "not_modeled",
+      dispositionNote: "Synthetic unmodeled charge",
+    });
+    expect(
+      (await listSuggestionPage(ctx.db, { family: "statement_transaction" }))
+        .items,
+    ).toEqual([]);
+  });
 
   // Entity-wide history can contain more ids than a Postgres Bind message
   // permits. A scoped key read must use a bounded number of parameters.

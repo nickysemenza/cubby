@@ -22,6 +22,7 @@ import {
   runSuggestions,
   suggestion,
   suggestionStatus,
+  isSuggestionReviewable,
 } from "~/server/domains/run/service/suggestion-sweep.fixtures";
 import { executeEntity } from "~/server/entity-kernel";
 import { acceptSuggestion } from "~/server/generic/assessment/repo/suggestion-review";
@@ -395,7 +396,7 @@ describe("Account scalar suggestion acceptance", () => {
       sql`UPDATE "FinancialAccount" SET identity = jsonb_set(identity, '{network}', '"visa"') WHERE id = ${id}`,
     );
     await reconcileDerivedRefreshInputs(ctx.db);
-    expect(await suggestionStatus(ctx.db, advice.id)).toBe("superseded");
+    expect(await isSuggestionReviewable(ctx.db, advice.id)).toBe(false);
   });
 
   it("rejects non-card scalar writes and refuses a guest as primary cardholder", async () => {

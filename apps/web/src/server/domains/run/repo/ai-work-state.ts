@@ -1,6 +1,3 @@
-import { runEntityId } from "@cubby/schemas/identifiers";
-import { runStatus } from "@cubby/schemas/run-fields";
-import { MAX_AUTOMATIC_WORKFLOW_FAILURES } from "@cubby/schemas/workflow-runs";
 import { and, eq, inArray, lt, notExists, or, sql } from "drizzle-orm";
 import type { PgUpdateSetSource } from "drizzle-orm/pg-core";
 
@@ -13,9 +10,15 @@ import {
   withTransactionDatabase,
 } from "~/server/db/helpers";
 import { aiEvaluation, run } from "~/server/db/schema";
+import {
+  currentJobExecution,
+  assertCurrentJob,
+} from "~/server/generic/jobs/repo/execution";
 
 export type RunRow = typeof run.$inferSelect;
-export type AiEvaluationRow = typeof aiEvaluation.$inferSelect;
+export type AiEvaluationRow = typeof aiEvaluation.$inferSelect & {
+  attemptToken?: string | null;
+};
 type RunUpdate = PgUpdateSetSource<typeof run>;
 
 export async function readRun(
@@ -38,7 +41,7 @@ export async function readRunStatus(db: Database, runId: RunRow["id"]) {
   return row?.status;
 }
 
-/** Writes one Workflow attempt's checkpoint; a newer attempt or a stopped Run keeps its own. */
+/** Writes a checkpoint only for its current Job generation and live token. */
 export async function writeRunningAttemptProgress(
   db: Database,
   runId: RunRow["id"],
@@ -46,6 +49,14 @@ export async function writeRunningAttemptProgress(
   set: RunUpdate,
   options: { requireNoOwnedPendingWork?: boolean } = {},
 ) {
+  const execution = currentJobExecution();
+  if (
+    !execution ||
+    execution.claim.kind !== "run.execute" ||
+    execution.claim.key !== `run:${runId}` ||
+    execution.claim.generation !== attempt
+  )
+    throw new Error("Run checkpoint requires its current universal Job claim");
   const write = async (target: Database) => {
     const written = await getDb(target)
       .update(run)
@@ -54,7 +65,6 @@ export async function writeRunningAttemptProgress(
         and(
           eq(run.id, runId),
           eq(run.status, "running"),
-          sql`COALESCE((${run.progress}->>'attempt')::integer, 0) = ${attempt}`,
           // Discovery may add or reopen work after the attempt read its roster.
           options.requireNoOwnedPendingWork
             ? notExists(
@@ -80,6 +90,7 @@ export async function writeRunningAttemptProgress(
     return written.length > 0;
   };
   return withTransactionDatabase(db, async (tx) => {
+    await assertCurrentJob(tx);
     // Under READ COMMITTED an UPDATE that waits on the Run row rechecks only that
     // row, not its NOT EXISTS subquery. Taking the lock first gives the guarded
     // UPDATE a fresh snapshot that sees work discovery committed under the lock.
@@ -126,21 +137,34 @@ export async function recordAiEvaluationAttemptFailure(
   item: Pick<AiEvaluationRow, "id" | "attemptToken">,
   set: {
     state: AiEvaluationRow["state"];
-    attempts: number;
     error: string;
-    nextAttemptAt: Date;
   },
 ) {
-  await getDb(db)
-    .update(aiEvaluation)
-    .set({ ...set, deadlineAt: null })
-    .where(
-      and(
-        eq(aiEvaluation.id, item.id),
-        eq(aiEvaluation.attemptToken, item.attemptToken!),
-        inArray(aiEvaluation.state, ["running", "result_ready"]),
-      ),
+  const execution = currentJobExecution();
+  if (
+    !execution ||
+    execution.claim.kind !== "ai.evaluation" ||
+    execution.claim.key !== `ai-evaluation:${item.id}` ||
+    execution.claim.leaseToken !== item.attemptToken
+  )
+    throw new Error(
+      "AI evaluation failure requires its current universal Job claim",
     );
+  await withTransactionDatabase(db, async (tx) => {
+    // A funding/auth stop may have paused the requester after inference.
+    // Only execution ownership fences this diagnostic; publication still
+    // checks the requester's current domain authority separately.
+    await assertCurrentJob(tx);
+    await getDb(tx)
+      .update(aiEvaluation)
+      .set({ state: set.state, error: set.error })
+      .where(
+        and(
+          eq(aiEvaluation.id, item.id),
+          inArray(aiEvaluation.state, ["running", "result_ready"]),
+        ),
+      );
+  });
 }
 
 /** Mail discovery a funding stop paused before `pausedBefore`. */
@@ -208,72 +232,17 @@ export async function storeAiEvaluationResult(
   item: Pick<AiEvaluationRow, "id" | "attemptToken">,
   result: AiEvaluationRow["result"],
 ) {
-  const [stored] = await getDb(db)
-    .update(aiEvaluation)
-    .set({ state: "result_ready", result })
-    .where(
-      and(
-        eq(aiEvaluation.id, item.id),
-        eq(aiEvaluation.attemptToken, item.attemptToken!),
-        eq(aiEvaluation.state, "running"),
-      ),
-    )
-    .returning({ id: aiEvaluation.id });
-  return Boolean(stored);
-}
-
-/** Manual AI work whose dispatch may have been lost, within the automatic retry budget. */
-export async function recoverableManualAiWorkRuns(
-  db: Database,
-  runIds?: readonly string[],
-) {
-  return getDb(db)
-    .select()
-    .from(run)
-    .where(
-      and(
-        inArray(run.purpose, ["mail_reclassify", "suggestion_sweep"]),
-        notDeleted(run),
-        sql`${run.failureCode} IS DISTINCT FROM 'user_cancelled'`,
-        sql`(${run.status} NOT IN (${runStatus.enum.failed}, ${runStatus.enum.dispatch_failed}) OR coalesce((${run.progress}->>'automaticRecoveryFailures')::int, 0) < ${MAX_AUTOMATIC_WORKFLOW_FAILURES})`,
-        runIds
-          ? inArray(
-              run.id,
-              runIds.map((id) => runEntityId.parse(id)),
-            )
-          : undefined,
-        or(
-          eq(run.status, "failed"),
-          eq(run.status, "dispatch_failed"),
-          eq(run.status, "paused_auth"),
-          eq(run.status, "running"),
-        ),
-      ),
-    );
-}
-
-/** Completes a recovered Run unless its status, attempt, or a member cancellation moved on. */
-export async function completeRecoveredAiWorkRun(
-  db: Database,
-  owner: Pick<RunRow, "id" | "status">,
-  attempt: number,
-  progress: RunRow["progress"],
-) {
-  await getDb(db)
-    .update(run)
-    .set({
-      status: "completed",
-      endedAt: new Date(),
-      failureCode: null,
-      dispatchError: null,
-      progress,
-    })
-    .where(
-      and(
-        eq(run.id, owner.id),
-        eq(run.status, owner.status),
-        sql`COALESCE((${run.progress}->>'attempt')::integer, 0) = ${attempt}`,
-        sql`${run.failureCode} IS DISTINCT FROM 'user_cancelled'`,
-      ),
-    );
+  if (!item.attemptToken)
+    throw new Error("AI result has no universal Job token");
+  return withTransactionDatabase(db, async (tx) => {
+    await guardAiEvaluationAttempt(tx, item.id, item.attemptToken!);
+    const [stored] = await getDb(tx)
+      .update(aiEvaluation)
+      .set({ state: "result_ready", result })
+      .where(
+        and(eq(aiEvaluation.id, item.id), eq(aiEvaluation.state, "running")),
+      )
+      .returning({ id: aiEvaluation.id });
+    return Boolean(stored);
+  });
 }

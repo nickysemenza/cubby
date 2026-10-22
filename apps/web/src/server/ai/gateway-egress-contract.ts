@@ -2,9 +2,6 @@ import { aiGatewayMetadataSchema } from "@cubby/shared/ai/gateway-metadata";
 import { gatewayProviderSchema } from "@cubby/shared/ai/models";
 import { z } from "zod";
 
-import type { SearchIndexRepairWorkflowParams } from "~/server/worker-bindings";
-import type { WorkflowRunParams } from "~/server/workflows/runs/contract";
-
 export const gatewayEgressInput = z.object({
   provider: gatewayProviderSchema,
   endpoint: z.string().min(1),
@@ -41,11 +38,6 @@ export type CreditRefusal = Omit<
 >;
 export interface AiGatewayEgressRpc {
   currentDeploymentVersion(): Promise<string>;
-  continueWorkflowRun(params: WorkflowRunParams): Promise<void>;
-  continueSearchIndexRepair(input: {
-    id: string;
-    params: SearchIndexRepairWorkflowParams;
-  }): Promise<void>;
   scheduleAiWorkRecovery(runId?: string): Promise<void>;
   scheduleFundingResume(at: number): Promise<void>;
   fetch(request: Request): Promise<Response>;

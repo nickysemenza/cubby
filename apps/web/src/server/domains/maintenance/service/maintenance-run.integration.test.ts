@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { z } from "zod";
 
 import { getDb } from "~/server/db/helpers";
-import { image, imageProcessingJob, run } from "~/server/db/schema";
+import { image, imageProcessingJob, job, run } from "~/server/db/schema";
 import {
   countImagesStaleMetadata,
   createUploadedImageRecord,
@@ -16,23 +16,32 @@ import { extractImageMetadata } from "~/server/domains/image/service/image-metad
 import type { ExtractImageMetadataPorts } from "~/server/domains/image/service/image-metadata-extraction.service";
 import { readRunSteps } from "~/server/domains/run/repo/run-step";
 import {
-  advanceStepRun,
-  recoverStepRuns,
+  advanceStepRun as advanceStepRunImplementation,
   retryRunStep,
   type StepRunDrivers,
 } from "~/server/domains/run/service/step-run";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
-import { captureBackgroundQueue } from "~/server/testing/background-queue";
-import type { WorkflowLauncher } from "~/server/workflows/runs/launcher";
+import {
+  withJobFixtureExecution,
+  captureBackgroundQueue,
+} from "~/server/testing/background-queue";
 
 import { maintenanceSteps, type MaintenancePorts } from "./maintenance-run";
 import { launchMaintenanceRun } from "./maintenance.service";
 
-const launcher: WorkflowLauncher = {
-  create: async () => {},
-  terminate: async () => {},
-  status: async () => ({ state: "running", error: null }),
-};
+const advanceStepRun = (
+  ...args: Parameters<typeof advanceStepRunImplementation>
+) =>
+  withJobFixtureExecution(
+    args[0],
+    {
+      key: `run:${args[1].runId}`,
+      kind: "run.execute",
+      input: { runId: args[1].runId, purpose: "maintenance" },
+      runId: args[1].runId,
+    },
+    () => advanceStepRunImplementation(...args),
+  );
 
 /** A JPEG with no APP1 segment: extraction succeeds with no metadata. */
 const BARE_JPEG = new Uint8Array([0xff, 0xd8, 0xff, 0xd9]);
@@ -85,12 +94,7 @@ describe("maintenance Run", () => {
   };
 
   async function startPass() {
-    const launched = await launchMaintenanceRun(
-      ctx.db,
-      ctx.actor,
-      "manual",
-      launcher,
-    );
+    const launched = await launchMaintenanceRun(ctx.db, ctx.actor, "manual");
     return runIdOf(launched.runId);
   }
 
@@ -165,15 +169,10 @@ describe("maintenance Run", () => {
   });
 
   it("returns the active pass instead of starting a second one", async () => {
-    const first = await launchMaintenanceRun(
-      ctx.db,
-      ctx.actor,
-      "manual",
-      launcher,
-    );
+    const first = await launchMaintenanceRun(ctx.db, ctx.actor, "manual");
     const [again, concurrent] = await Promise.all([
-      launchMaintenanceRun(ctx.db, ctx.actor, "scheduled", launcher),
-      launchMaintenanceRun(ctx.db, ctx.actor, "manual", launcher),
+      launchMaintenanceRun(ctx.db, ctx.actor, "scheduled"),
+      launchMaintenanceRun(ctx.db, ctx.actor, "manual"),
     ]);
     expect(first.existing).toBe(false);
     expect(again).toEqual({ runId: first.runId, existing: true });
@@ -185,81 +184,31 @@ describe("maintenance Run", () => {
     expect(passes).toHaveLength(1);
   });
 
-  // Failure mode (#2722 review): a funding wait counted its images done and
-  // advanced; the pass must pause at the resume time instead.
-  it("pauses the image backfill on a funding wait and resumes past it", async () => {
-    const images = [];
+  // Image provider capacity belongs to child Jobs; the maintenance pass only
+  // admits bounded pages, so it cannot retain a second paid-work scheduler.
+  it("admits image work in bounded pages without waiting for provider execution", async () => {
     for (const [index, name] of ["one", "two", "three"].entries())
-      images.push(await seedImage(name, String(index + 1).repeat(64)));
-    const dispatched: string[] = [];
-    const until = new Date(Date.now() + 60 * 60_000);
-    let fundingOpen = true;
-    const ports: MaintenancePorts = {
-      // Stands in for dispatch's deferral: the job returns to pending.
-      dispatchImageJob: async (db, jobId) => {
-        dispatched.push(jobId);
-        if (fundingOpen) return "completed";
-        await getDb(db)
-          .update(imageProcessingJob)
-          .set({
-            state: "pending",
-            nextAttemptAt: until,
-            lastError:
-              "Waiting for free AI capacity; background work never pays.",
-          })
-          .where(eq(imageProcessingJob.id, jobId));
-        return "deferred";
-      },
-      pageSize: { imageBackfill: 2 },
-    };
+      await seedImage(name, String(index + 1).repeat(64));
     const id = await startPass();
-    const drivers = only("image-backfill", ports);
-
-    const params = { runId: id, attempt: await attemptOf(id) };
-    expect(await advanceStepRun(ctx.db, params, drivers)).toMatchObject({
-      kind: "continue",
-      summary: {
-        phase: "image-backfill",
-        pageProcessed: 2,
-        cumulative: { processed: 2, total: 3, failures: 0 },
-      },
-    });
-    fundingOpen = false;
-    expect(await advanceStepRun(ctx.db, params, drivers)).toMatchObject({
-      kind: "paused",
-      summary: {
-        phase: "image-backfill",
-        pageProcessed: 0,
-        cumulative: { processed: 2, total: 3, failures: 0 },
-      },
-    });
-    const [paused] = await readRunSteps(ctx.db, id);
-    expect(paused).toMatchObject({ state: "paused", done: 2 });
-    expect(paused?.pausedReason).toContain("free AI capacity");
-    expect(paused?.pausedUntil).toEqual(until);
-    expect(await readRun(id)).toMatchObject({
-      status: "paused_auth",
-      failureCode: "execution_limit",
-    });
-
-    // Not before the resume time; then the pass finishes past the waiting
-    // image, whose pending job the image queue runs.
-    expect(await recoverStepRuns(ctx.db, launcher, [id])).toBe(0);
-    expect(
-      await recoverStepRuns(
-        ctx.db,
-        launcher,
-        [id],
-        new Date(until.getTime() + 1_000),
-      ),
-    ).toBe(1);
-    expect(await drive(id, drivers)).toEqual(["continue", "finished"]);
+    await drive(id, only("image-backfill", { pageSize: { imageBackfill: 2 } }));
+    const payloads = await getDb(ctx.db).select().from(imageProcessingJob);
+    expect(payloads.length).toBeGreaterThanOrEqual(3);
+    expect(payloads.every((payload) => payload.attemptId === null)).toBe(true);
+    const admitted = await getDb(ctx.db)
+      .select()
+      .from(job)
+      .where(eq(job.kind, "image.processing"));
+    expect(admitted).toHaveLength(payloads.length);
+    expect(admitted.every((execution) => execution.state === "queued")).toBe(
+      true,
+    );
+    expect(await readRun(id)).toMatchObject({ status: "completed" });
     expect((await readRunSteps(ctx.db, id))[0]).toMatchObject({
       state: "done",
-      done: 2,
+      done: 3,
+      failed: 0,
       left: 0,
     });
-    expect(dispatched.length).toBe(new Set(dispatched).size);
   });
 
   it("retries only the failed EXIF refs a step recorded", async () => {
@@ -293,7 +242,7 @@ describe("maintenance Run", () => {
     const later = await seedImage("retry-later");
     objects.clear();
     reads.length = 0;
-    await retryRunStep(ctx.db, id, "exif", launcher);
+    await retryRunStep(ctx.db, id, "exif");
     await drive(id, drivers);
 
     expect([...reads].sort()).toEqual([missing.key, broken.key].sort());
@@ -313,27 +262,18 @@ describe("maintenance Run", () => {
   // Failure mode (review): a pass parked on the AI budget held the one-active
   // slot, so no nightly pass drained the free backlogs while it waited.
   it("ends a budget-paused pass when the nightly launch starts a fresh one", async () => {
-    const first = await launchMaintenanceRun(
-      ctx.db,
-      ctx.actor,
-      "manual",
-      launcher,
-    );
+    const first = await launchMaintenanceRun(ctx.db, ctx.actor, "manual");
     const firstId = await resolveOrThrow(ctx.db, "run", first.runId);
     await getDb(ctx.db)
       .update(run)
       .set({ status: "paused_auth", failureCode: "execution_limit" })
       .where(eq(run.id, firstId));
     // A member's Run now still sees the paused pass.
-    expect(
-      await launchMaintenanceRun(ctx.db, ctx.actor, "manual", launcher),
-    ).toEqual({ runId: first.runId, existing: true });
-    const nightly = await launchMaintenanceRun(
-      ctx.db,
-      ctx.actor,
-      "scheduled",
-      launcher,
-    );
+    expect(await launchMaintenanceRun(ctx.db, ctx.actor, "manual")).toEqual({
+      runId: first.runId,
+      existing: true,
+    });
+    const nightly = await launchMaintenanceRun(ctx.db, ctx.actor, "scheduled");
     expect(nightly.existing).toBe(false);
     expect(nightly.runId).not.toBe(first.runId);
     const [ended] = await getDb(ctx.db)

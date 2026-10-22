@@ -1,10 +1,11 @@
-import { eq, sql } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
-import { getDb } from "~/server/db/helpers";
-import { runFinding } from "~/server/db/schema";
+import { assessmentState } from "~/server/db/schema";
+import { runFindingData } from "~/server/domains/purchase-import/repo/run-finding";
+import { transitionAssessmentStates } from "~/server/generic/assessment/repo/assessment-state";
 import { runDiagnostic } from "~/server/generic/problems/service/problem-diagnostics.service";
 import { findProblemByType } from "~/server/generic/problems/service/problem-execution.service";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
@@ -13,6 +14,7 @@ import {
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
 import { createTestRequestContext } from "~/server/testing/request-context";
+import { seedRunFindings } from "~/server/testing/run-finding.fixtures";
 
 import { findOpenRunFindings } from "./detectors-import";
 
@@ -49,22 +51,17 @@ describe("SQL-backed finding diagnostic intent", () => {
       }),
       ctx.actor,
     );
-    const rows = await getDb(ctx.db)
-      .insert(runFinding)
-      .values(
-        Array.from({ length: 16 }, (_, index) => ({
-          ledgerPartyId: party.id,
-          entityKind: "product" as const,
-          entityId: target.entityId,
-          kind: "other" as const,
-          summary: `Synthetic diagnostic finding ${index}`,
-          evidenceFingerprint: `synthetic-diagnostic-${index}`,
-          createdAt: new Date(
-            Date.UTC(2026, 8, 20, 12, 0, Math.floor(index / 2)),
-          ),
-        })),
-      )
-      .returning({ id: runFinding.id, createdAt: runFinding.createdAt });
+    const rows = await seedRunFindings(
+      ctx.db,
+      Array.from({ length: 16 }, (_, index) => ({
+        ledgerPartyId: party.id,
+        entityKind: "product" as const,
+        entityId: target.entityId,
+        kind: "other" as const,
+        summary: `Synthetic diagnostic finding ${index}`,
+        evidenceFingerprint: `synthetic-diagnostic-${index}`,
+      })),
+    );
     const ordered = [...rows].sort((left, right) => {
       const created = left.createdAt.getTime() - right.createdAt.getTime();
       if (created !== 0) return created;
@@ -73,12 +70,17 @@ describe("SQL-backed finding diagnostic intent", () => {
     });
     const last = rows.at(-1);
     if (!last) throw new Error("Synthetic finding fixture is empty");
-    await getDb(ctx.db)
-      .update(runFinding)
-      .set({
-        proposedFix: sql`jsonb_build_object('syntheticInvalidFix', true)`,
-      })
-      .where(eq(runFinding.id, last.id));
+    await transitionAssessmentStates(
+      ctx.db,
+      eq(assessmentState.id, last.id),
+      (row) => ({
+        data: {
+          ...runFindingData.parse(row.data),
+          proposedFix: { syntheticInvalidFix: true },
+        },
+      }),
+      { kind: "synthetic_invalid_fix" },
+    );
 
     const count = await runDiagnostic(
       ctx.db,

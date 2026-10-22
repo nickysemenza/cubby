@@ -249,11 +249,9 @@ describe("meal recipe preparations", () => {
       { mealRecipeId: second.mealRecipeId, actualYieldGrams: 200, changes: [] },
       ctx.actor,
     );
-    const preparations = await getMealPreparations(
-      ctx.db,
-      { mealId: source.output.id },
-      createTestRequestContext(ctx.db).services.recipeCosting,
-    );
+    const preparations = await getMealPreparations(ctx.db, {
+      mealId: source.output.id,
+    });
     expect(preparations.preparations).toEqual(
       expect.arrayContaining([
         expect.objectContaining({

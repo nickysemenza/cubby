@@ -19,12 +19,22 @@ in `dataExceptions` jsonb columns on Product and Purchase only.
 `Entity(id, kind, shortcode, createdAt, deletedAt, mergedIntoId)` holds one
 durable row per shortcode entity. Payload tables keep their `shortcode` and
 `deletedAt` and bind to their identity with a composite `(id, shortcode)` FK,
-so a payload cannot disagree with its canonical code or change it. Database
-triggers on every payload table write the identity on insert and mirror soft
-and hard deletes, so no writer can skip identity; `drizzle-kit push` does not
-manage triggers, so every place that builds a database from `schema.ts`
-installs them afterwards. `finalizeMerge` records one-hop, path-compressed
-`mergedIntoId` redirects. Rows are never deleted, and a code is never reused.
+so a payload cannot disagree with its canonical code or change it. Shared
+transactional repositories insert the identity before the payload, with the
+same id, kind, code and lifecycle timestamps. Both writes roll back together
+on a payload rejection; shortcode collisions alone retry in a fresh
+transaction or savepoint. Find-or-create also rolls back a losing candidate
+identity before re-reading the concurrent winner. Noncollision failures retain
+their SQL diagnostics.
+
+Removal repositories tombstone identities in the same transaction as soft or
+hard payload removal, including child cascades and reaped images.
+`finalizeMerge` writes the tombstone and one-hop, path-compressed `mergedIntoId`
+redirects together. Identity rows are never deleted, and a code is never
+reused. Required identity creation and lifecycle work are synchronous; jobs may
+repair exceptional drift. Fixed-code imports and bulk fixtures must insert
+their identities before their payloads in the same transaction. Raw SQL
+payload insertion or removal without this bookkeeping is unsupported.
 
 Reads follow a merge redirect to the survivor and report `redirectedFrom`;
 detail reads list `previousShortcodes`. Writes never follow a redirect: they
@@ -72,12 +82,12 @@ previews, the graph explorer's physical edges, and the orphan finder read it.
 
 ## Consequences
 
-Identity is structurally enforced: an insert without an identity, a code
-rename, a cross-kind history row, and a hard delete that skips its tombstone
-all fail in the database. Entity ids must be unique across entity tables,
+Ordinary database constraints enforce identity existence, immutable payload
+codes, cross-kind history references and code uniqueness across tombstones.
+Transactional removal repositories own tombstoning; SQL constraints do not
+mirror a raw payload delete. Entity ids must be unique across entity tables,
 which random UUIDs already guarantee; fixtures cannot reuse a fixed id in two
-tables. Composite FKs into `Entity(id, kind)` show as drift to an interactive
-`db:push` (it offers to drop and re-add them); cancel those statements.
+tables.
 
 ADR 0001 still holds: physical edges remain typed FKs and joins, lifecycle
 remains per-operation policy, and there is no generic edge table.
@@ -94,8 +104,11 @@ path's destination.
   `EntityEmbedding` is `(entityKind, entityId)`, like every other pointer
   named here. `RunMutation` no longer exists: its rows are `AuditLog` rows
   keyed by `runId`.
-- Schema, including the identity triggers, reaches every database through the
-  committed migrations in `apps/web/drizzle/`; `db:push` no longer exists.
+- Schema reaches every database through the committed migrations in
+  `apps/web/drizzle/`; `db:push` no longer exists. Historical migrations retain
+  their identity-trigger DDL; the consolidation migration drops those triggers
+  and functions after the transactional writers replace them. Desired-state
+  DDL repeats only idempotent drops and preserves the identity table and FKs.
 - Deliberate exception to "Entity rows are never deleted": `ImageSighting` is
   a plain child table of Image, not an entity. Its audit rows were moved onto
   the parent Image (`entityKind = 'image'`, nested under

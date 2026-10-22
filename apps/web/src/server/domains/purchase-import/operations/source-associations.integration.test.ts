@@ -23,10 +23,10 @@ import {
   orderMailEvent,
   product,
   purchase,
-  runFinding,
   user,
 } from "~/server/db/schema";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { runFinding } from "~/server/testing/run-finding.fixtures";
 
 import { admitMailImport } from "../repo/mail-import-run";
 import { commitPurchaseImport, preparePurchaseImport } from "./import-orders";

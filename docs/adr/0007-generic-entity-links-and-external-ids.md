@@ -53,9 +53,10 @@ database enforces what it can:
   `(toEntityId, kind)`, both partial on `deletedAt IS NULL`. A soft-deleted
   duplicate may coexist with a live link, which is what makes restore and
   re-add work.
-- A constraint trigger, `EntityLink_live_endpoints`, refuses a live link whose
-  endpoint `Entity` is deleted. It guards link writes only; deleting an entity
-  with live links remains the delete policy's job.
+- The shared transactional link writer refuses missing or deleted endpoints
+  and holds their identity rows through commit. Merge repointing uses the same
+  check. Deleting an entity with live links remains the delete policy's job;
+  no link lifecycle trigger runs in Postgres.
 
 Dependencies became soft-deletable in the same move. Cycle detection stays in
 `db/helpers/dependency-edges.ts`, because a cycle is a graph

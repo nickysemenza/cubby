@@ -1,16 +1,13 @@
 /** Persistence seam for the catalog-wide conversion projection. */
-import type { ProductId } from "@cubby/schemas/identifiers";
+import { parseEntityId, type ProductId } from "@cubby/schemas/identifiers";
 import type { ProductConversionCoverageFreshness } from "@cubby/schemas/problems";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, eq, gt, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { type Database } from "~/server/db/database";
 import { notDeleted } from "~/server/db/helpers/predicates";
 import { type RepositoryQueryTransaction as DrizzleTransaction } from "~/server/db/repository-access.boundary";
-import {
-  repositoryQueries as getDb,
-  repositoryQueries as unwrapDb,
-} from "~/server/db/repository-access.boundary";
+import { repositoryQueries as getDb } from "~/server/db/repository-access.boundary";
 import {
   product,
   productConversionCoverage,
@@ -163,18 +160,7 @@ export const writeProductConversionCoverageProjection = async (
     });
 };
 
-export const markProductConversionCoverageStale = async (
-  db: Database | DrizzleTransaction,
-  productIds: readonly ProductId[],
-): Promise<void> => {
-  if (productIds.length === 0) return;
-  await unwrapDb(db)
-    .update(productConversionCoverage)
-    .set({ status: "stale" })
-    .where(inArray(productConversionCoverage.productId, [...productIds]));
-};
-
-/** Containing kits are visited through the durable background dependency frontier. */
+/** Kit and ingredient effects converge through the broad conversions pass. */
 export const markProductConversionCoverageInputStale = async (
   db: Database | DrizzleTransaction,
   productIds: readonly ProductId[],
@@ -187,3 +173,23 @@ export const markProductConversionCoverageInputStale = async (
     })),
   );
 };
+
+/** A broad pass pages product owners, independently of changed endpoints. */
+export async function selectProductCoverageIdsPage(
+  db: Database,
+  options: { after?: string; limit: number },
+) {
+  return getDb(db)
+    .select({ id: product.id })
+    .from(product)
+    .where(
+      and(
+        notDeleted(product),
+        options.after
+          ? gt(product.id, parseEntityId("product", options.after))
+          : undefined,
+      ),
+    )
+    .orderBy(asc(product.id))
+    .limit(Math.max(1, Math.min(options.limit, 25)));
+}

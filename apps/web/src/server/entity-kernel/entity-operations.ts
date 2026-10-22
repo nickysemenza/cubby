@@ -59,7 +59,6 @@ import { captureDerivedRefresh } from "~/server/generic/derived-refresh/repo/cap
 import { withListGroupBy } from "~/server/generic/list/repo/list";
 import { listTotalLabels } from "~/server/generic/list/repo/list-display-labels";
 import { withChildCounts } from "~/server/generic/list/repo/list-read-adapters";
-import { deferPublications } from "~/server/workflows/background-tasks/publish";
 import {
   bindWorkflow,
   workflow,
@@ -157,9 +156,9 @@ const writeWithRefreshCapture = async <
   // Every declared write, including identity-only entities, uses the transaction-bound context.
   // Everything the adapter reaches through the context must run on the
   // transaction: a service still bound to the request pool would UPDATE a row
-  // this transaction holds and wait on it forever. Its task publications are
-  // held back until the commit, so no consumer can see the pre-write row.
-  const deferred = deferPublications();
+  // this transaction holds and wait on it forever. Its Job intents are
+  // saved in the same transaction; queue wakes wait for commit.
+
   const result = await withTransactionDatabase(
     context.db,
     async (transactionDb) => {
@@ -168,18 +167,15 @@ const writeWithRefreshCapture = async <
         db: transactionDb,
         services: {
           ...context.services,
-          recipeCosting: context.services.recipeCosting.bindTo(
-            transactionDb,
-            deferred.publish,
-          ),
+          recipeCosting: context.services.recipeCosting.bindTo(transactionDb),
         },
       });
       // The repository's audit writer captured durable refresh intent in this
-      // transaction. Dependency expansion belongs to the background processor.
+      // transaction. Broad refresh passes run in the background.
       return result;
     },
   );
-  await deferred.flush(context.db);
+
   return result;
 };
 
@@ -730,7 +726,6 @@ const buildEntityOperations = <
           return { ids: input.ids, data };
         })
         .commit("updated", async ({ context }, { validated }) => {
-          const deferred = deferPublications();
           let offending: string | undefined;
           try {
             const updated = await withTransactionDatabase(
@@ -741,10 +736,7 @@ const buildEntityOperations = <
                   db,
                   services: {
                     ...context.services,
-                    recipeCosting: context.services.recipeCosting.bindTo(
-                      db,
-                      deferred.publish,
-                    ),
+                    recipeCosting: context.services.recipeCosting.bindTo(db),
                   },
                 };
                 if (
@@ -814,7 +806,7 @@ const buildEntityOperations = <
                 };
               },
             );
-            await deferred.flush(context.db);
+
             return updated;
           } catch (error) {
             const pg = findPgError(error);

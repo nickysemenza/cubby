@@ -1,5 +1,4 @@
 import { eq } from "drizzle-orm";
-import { z } from "zod";
 
 import { type Database } from "~/server/db/database";
 import { repositoryQueries as getDb } from "~/server/db/repository-access.boundary";
@@ -78,10 +77,3 @@ export async function ensureEmailAssessment(
     evidence: { checksum: row.checksum, provenance: row.provenance },
   });
 }
-export const emailGradeMetadata = z.object({
-  kind: z.literal("email_accuracy"),
-  evaluationId: z.uuid(),
-  predictionId: z.uuid(),
-  grade: z.enum(["related", "unrelated", "uncertain", "unavailable"]),
-  reviewedChecksum: z.string().nullable(),
-});

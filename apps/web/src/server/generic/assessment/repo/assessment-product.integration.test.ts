@@ -60,6 +60,8 @@ import { mergeReviewedProductPair } from "~/server/generic/assessment/repo/asses
 import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
 import { findDuplicateProductIdentities } from "~/server/generic/problems/repo/detectors-product";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { withJobFixtureExecution } from "~/server/testing/background-queue";
+import { insertEntityFixtures } from "~/server/testing/repo.fixtures";
 
 const identityPort: DecisionPort = async () => ({
   answers: {
@@ -130,12 +132,24 @@ describe("stored Product identity pairs", () => {
           manufacturer: "Synthetic queue maker",
         };
       });
-      await getDb(ctx.db).insert(product).values(products);
+      await insertEntityFixtures(ctx.db, product, "product", products);
       const anchor = products[0]!;
+      // Detector rows carry the pair snapshot their publication froze; the
+      // queue hides any whose Products have since changed.
+      const fingerprints: string[] = [];
+      for (const row of products.slice(1)) {
+        const pair = await prepareProductIdentityPair(ctx.db, [
+          anchor.id,
+          row.id,
+        ]);
+        if (!pair) throw new Error("Synthetic queue pair is missing");
+        fingerprints.push(pair.fingerprint);
+      }
       const predictions = products.slice(1).map((row, index) => ({
         id: `10000000-0000-4000-8000-${String(index).padStart(12, "0")}`,
         publicationKey: `synthetic:queue-limit:${index}`,
         family: "product_pair" as const,
+        fingerprint: fingerprints[index]!,
         subject: {
           kind: "product_pair" as const,
           entity: "product" as const,
@@ -156,6 +170,7 @@ describe("stored Product identity pairs", () => {
             family: prediction.family,
             entity: "product",
             recordId: anchor.id,
+            fingerprint: prediction.fingerprint,
             status:
               index < suppressed ? ("resolved" as const) : ("pending" as const),
             suppression:
@@ -177,7 +192,11 @@ describe("stored Product identity pairs", () => {
             },
           })),
         );
-      const queue = await getProductMatchQueue(ctx.db, {});
+      // Live snapshot fences read each Product once, never once per pair side.
+      const { result: queue, queryCount } = await countTestDbQueries(() =>
+        getProductMatchQueue(ctx.db, {}),
+      );
+      expect(queryCount).toBeLessThan(2 * products.length);
       expect(queue.items).toHaveLength(Math.min(200, weak + actionable));
       const problems = (await findDuplicateProductIdentities(ctx.db)).flatMap(
         (group) => group.pairs,
@@ -289,6 +308,24 @@ describe("stored Product identity pairs", () => {
       );
     return { products, ids, runId, decisionPort: identityPort };
   };
+  it("hides changed detector advice before any retirement pass while retaining history", async () => {
+    const { ids, runId, decisionPort } = await acceptedIdentityPair([
+      "Synthetic stale pair A",
+      "Synthetic stale pair B",
+    ]);
+    await publishProductIdentity(
+      ctx.db,
+      await evaluateProductIdentity(ctx.db, ids[0]!, runId, { decisionPort }),
+    );
+    const before = await getProductMatchQueue(ctx.db, {});
+    expect(before.items).toHaveLength(1);
+    await getDb(ctx.db)
+      .update(product)
+      .set({ model: "SYNTH-CHANGED" })
+      .where(eq(product.id, ids[1]!));
+    expect((await getProductMatchQueue(ctx.db, {})).items).toEqual([]);
+    expect(await getDb(ctx.db).select().from(assessment)).toHaveLength(1);
+  });
   // Claim loading must share issuer reads across accepted lines, while a later
   // operation must observe current registry ownership instead of a stale cache.
   it("loads retained identifier issuers in a constant query budget", async () => {
@@ -562,20 +599,37 @@ describe("stored Product identity pairs", () => {
         },
       })
       .where(eq(aiEvaluation.id, evaluation.id));
-    const claimed = await claimAiEvaluation(ctx.db, evaluation.id);
+    const claimed = await withJobFixtureExecution(
+      ctx.db,
+      {
+        key: `ai-evaluation:${evaluation.id}`,
+        kind: "ai.evaluation",
+        input: { evaluationId: evaluation.id },
+      },
+      () => claimAiEvaluation(ctx.db, evaluation.id),
+    );
     await activateAiRefresh(ctx.db, "synthetic-current-policy", {
       enabled: true,
       manifest,
     });
     await expect(
-      publishAiEvaluation(
+      withJobFixtureExecution(
         ctx.db,
-        evaluation.id,
-        claimed!.attemptToken!,
-        async (transactionDb) => {
-          await publishProductIdentity(transactionDb, { pairs: [] });
-          return {};
+        {
+          key: `ai-evaluation:${evaluation.id}`,
+          kind: "ai.evaluation",
+          input: { evaluationId: evaluation.id },
         },
+        () =>
+          publishAiEvaluation(
+            ctx.db,
+            evaluation.id,
+            claimed!.attemptToken!,
+            async (transactionDb) => {
+              await publishProductIdentity(transactionDb, { pairs: [] });
+              return {};
+            },
+          ),
       ),
     ).rejects.toThrow(/obsolete/);
     expect(await getDb(ctx.db).select().from(assessment)).toHaveLength(0);
@@ -614,7 +668,17 @@ describe("stored Product identity pairs", () => {
     );
     expect(targets).toHaveLength(2);
     for (const target of targets)
-      expect(await executeAiRefreshTarget(ctx.db, target.id, ports)).toBe(true);
+      expect(
+        await withJobFixtureExecution(
+          ctx.db,
+          {
+            key: `ai-evaluation:${target.id}`,
+            kind: "ai.evaluation",
+            input: { evaluationId: target.id },
+          },
+          () => executeAiRefreshTarget(ctx.db, target.id, ports),
+        ),
+      ).toBe(true);
     const pairs = await listProductMatchRows(ctx.db);
     expect(pairs).toHaveLength(1);
     expect(pairs[0]).toMatchObject({ actionable: true, conflict: false });

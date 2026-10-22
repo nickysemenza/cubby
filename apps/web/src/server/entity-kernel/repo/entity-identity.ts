@@ -14,7 +14,7 @@ import {
 } from "@cubby/schemas/entity-manifest";
 import { ENTITY_LABEL } from "@cubby/schemas/identifiers";
 import { parseShortcode } from "@cubby/shared";
-import { and, eq, inArray, isNotNull, or } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, or, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
 import { householdLocalDate } from "~/lib/household-date";
@@ -191,8 +191,8 @@ export async function describeUnresolvableCode(
 
 /**
  * Point each loser identity at the survivor and path-compress any older
- * redirect that targeted a loser, so every redirect stays one hop. Runs after
- * the losers' payload removal, whose trigger has already set `deletedAt`.
+ * redirect that targeted a loser, so every redirect stays one hop. Tombstone
+ * and redirect are written together after the losers' payload removal.
  */
 export async function recordMergeRedirects(
   tx: DrizzleTransaction,
@@ -202,7 +202,10 @@ export async function recordMergeRedirects(
   if (loserIds.length === 0) return;
   await tx
     .update(entityIdentity)
-    .set({ mergedIntoId: keepId })
+    .set({
+      mergedIntoId: keepId,
+      deletedAt: sql`coalesce(${entityIdentity.deletedAt}, now())`,
+    })
     .where(
       or(
         inArray(entityIdentity.id, [...loserIds]),

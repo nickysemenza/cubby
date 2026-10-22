@@ -82,6 +82,7 @@ const portsFor = (
 ): PhotoImportCommitPorts => {
   const row = imageRow(status);
   return {
+    publishBackgroundTasks: vi.fn(async () => ({ count: 1 })),
     getImages: vi.fn(async () => [row]),
     lockImages: vi.fn(async () => [row]),
     getObject: vi.fn(async () => new Response(new Uint8Array(128))),

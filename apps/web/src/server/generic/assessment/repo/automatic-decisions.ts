@@ -20,6 +20,7 @@ import {
   automaticFamilyEligibility,
   automaticAssessmentCandidate,
   automaticApplicationVerified,
+  isReviewFamily,
   readAssessmentRecordRefs,
   reviewFamilyDeclarations,
   touchingAssessmentIds,
@@ -84,6 +85,8 @@ export async function listAutomaticDecisions(
   );
   const items = rows.map((row) => {
     const family = assessmentFamily.parse(row.family);
+    if (!isReviewFamily(family))
+      throw new Error(`${family} Assessments are not automatic decisions`);
     const declaration = reviewFamilyDeclarations[family];
     return automaticDecisionRow.parse({
       id: row.id,

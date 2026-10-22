@@ -5,7 +5,6 @@ import {
   type ImageProcessingCommand,
   imageProcessingCapabilities,
 } from "@cubby/schemas/image-processing";
-import { backgroundTaskMessageSchema } from "@cubby/schemas/queue-messages";
 import { createLogger } from "@cubby/worker-tracing";
 import { DurableObject } from "cloudflare:workers";
 import { z } from "zod";
@@ -254,16 +253,21 @@ export class ImageProcessingDurableObject
       );
       return;
     }
-    await this.env.BACKGROUND_QUEUE.send(
-      backgroundTaskMessageSchema.parse({
-        version: 2,
-        queueType: "background",
-        task: {
+    const { enqueueBackgroundTask } =
+      await import("~/server/workflows/background-tasks/publish");
+    // Acknowledge only after the result is durable; queue delivery is a wakeup.
+    await withInvocationDb(this.env.HYPERDRIVE.connectionString, () =>
+      enqueueBackgroundTask(
+        {
           kind: "image-processing.result",
           requestedAt: new Date().toISOString(),
-          result: parsed.data.result,
+          result,
         },
-      }),
+        {
+          source: "image-processing.result",
+          queue: this.env.BACKGROUND_QUEUE,
+        },
+      ),
     );
     socket.send(
       JSON.stringify(

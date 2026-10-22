@@ -31,7 +31,7 @@ and retain their behavior checks; passing the helper's own tests proves only tha
 - Suggestion review: `suggestions.list`/`acceptClean` over the family registry
   (`server/generic/assessment/repo/suggestion-families.ts`) and the Suggestions page; apply
   stays the family's `reviewAssessment` handler. `review-families.ts` declares affected
-  records, actionability and automatic-audit admission. Web list badges and detail sections
+  records, actionability and automatic application. Web list badges and detail sections
   reuse `entity/suggestions/queue`; automatic history uses `suggestions.automaticDecisions`.
   Never a family-specific review list or a status-only pending count.
 - Run detail: web renders `GenericEntityDetail` with the declared `run` slots; on Apple
@@ -96,14 +96,14 @@ and retain their behavior checks; passing the helper's own tests proves only tha
   `listProductsRead` owns it; `productList` validates complete rows against the
   canonical schema rather than assembling another copy. Kit component rows
   reuse that complete reader and add only their parent identity and quantity.
-- Derived refresh: writers capture changed roots and known old/new endpoints through
-  `server/generic/derived-refresh/capture.boundary.ts`; authoritative audit writes
-  register roots automatically. `repo/dependencies.ts` declares direct keyset
-  frontiers; `repo/process.ts` owns durable phases and short publication fences.
-  The Run service injects recipe/provider computation outside publication
-  transactions. Queue messages wake this path; periodic reconciliation repairs
-  missed hooks. [Background derived data](../entities.md#background-derived-data)
-  owns freshness, failure and discovery semantics.
+- Background execution: `server/generic/jobs/` owns durable scheduling, retries
+  and claims; `server/workflows/jobs.ts` composes production handlers. Runs retain
+  domain progress and history. Derived refresh records broad family Job intent
+  through `server/generic/derived-refresh/capture.boundary.ts` in the save
+  transaction; `repo/process.ts` prepares bounded pages through injected ports.
+  Provider work happens before the transaction that checks current inputs and
+  saves the output. [Background derived data](../entities.md#background-derived-data)
+  owns freshness, recovery and discovery semantics.
 - Unbounded reads: `listAll` (never a literal huge `pageSize`).
 - Money: `cents`, `dollars`, `round2` (`@cubby/shared`); expense
   rollups select `expenseAggregateFields` (`server/db/computed/expense-aggregate-sql.ts`);

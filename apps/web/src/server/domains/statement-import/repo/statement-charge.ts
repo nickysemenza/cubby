@@ -1,6 +1,7 @@
 import { suggestionStatus } from "@cubby/schemas/ai";
 import { assessmentFamily } from "@cubby/schemas/assessment";
 import { statementRowDisposition } from "@cubby/schemas/statement-row";
+import { statementTransactionAction } from "@cubby/schemas/statement-suggestion";
 import { type SQL, sql } from "drizzle-orm";
 
 /**
@@ -73,8 +74,23 @@ export const suggestionField = (
   alias = "s",
 ) => sql`${sql.raw(`"${alias}"`)}.data->>${key}`;
 
-/** Pending, active statement suggestions under `alias`. */
+/** Current unsettled evidence gates reads as well as discovery; no retirement scan is required. */
 export const pendingSuggestion = (alias = "s") =>
   sql`${sql.raw(`"${alias}"`)}.family = ${assessmentFamily.enum.statement_transaction}
     AND ${sql.raw(`"${alias}"`)}.active
-    AND ${sql.raw(`"${alias}"`)}.status = ${suggestionStatus.enum.pending}`;
+    AND ${sql.raw(`"${alias}"`)}.status = ${suggestionStatus.enum.pending}
+    -- includes-deleted: removed observations invalidate current advice.
+    AND NOT EXISTS (
+      SELECT 1 FROM jsonb_array_elements_text(${sql.raw(`"${alias}"`)}.data->'refs') ref(value)
+      WHERE (
+        ${sql.raw(`"${alias}"`)}.data->>'recommended' NOT IN (${statementTransactionAction.enum.void}, ${statementTransactionAction.enum.book})
+        AND EXISTS (SELECT 1 FROM "EntityExternalId" e WHERE e.kind='settlement_ref' AND e."deletedAt" IS NULL
+          AND e.source=split_part(ref.value,':',1) AND e."externalId"=substr(ref.value,strpos(ref.value,':')+1))
+      )
+      -- includes-deleted: removed observations invalidate current advice.
+      OR EXISTS (
+        SELECT 1 FROM "StatementRow" r WHERE r.source=split_part(ref.value,':',1)
+          AND r."externalId"=substr(ref.value,strpos(ref.value,':')+1)
+          AND (r."deletedAt" IS NOT NULL OR r.disposition=${statementRowDisposition.enum.ignored} OR r."supersededByRowId" IS NOT NULL)
+      )
+    )`;

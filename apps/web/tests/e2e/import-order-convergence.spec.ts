@@ -5,6 +5,10 @@ import {
 import { eq, and } from "drizzle-orm";
 import * as schema from "~/server/db/schema";
 import { getDb } from "~/server/db/helpers";
+import {
+  runFinding,
+  seedRunFindings,
+} from "~/server/testing/run-finding.fixtures";
 import { createEvidenceHarnessContext } from "./fixtures/core";
 import { sha256Hex } from "../../tooling/convergence-harness";
 import { escapeRegExp, uniqueName } from "./support/e2e-helpers";
@@ -35,17 +39,22 @@ for (const order of BROWSER_SOURCE_ORDERS) {
         where: eq(schema.purchase.orderId, earlier.orderId),
       });
       if (!purchase) throw new Error("Background import created no Purchase");
-      const finding = await database.query.runFinding.findFirst({
-        where: and(
-          eq(schema.runFinding.entityId, purchase.id),
-          eq(schema.runFinding.status, "open"),
-        ),
-      });
+      const [finding] = await database
+        .select()
+        .from(runFinding)
+        .where(
+          and(
+            eq(runFinding.entityId, purchase.id),
+            eq(runFinding.status, "open"),
+          ),
+        )
+        .limit(1);
       if (!finding)
         throw new Error("Background import created no open finding");
       // Only the sample's population matters; the foreground imports own the
       // writer coverage. Seed additional valid findings from the real writer.
-      await database.insert(schema.runFinding).values(
+      await seedRunFindings(
+        db,
         Array.from({ length: 12 }, (_, index) => ({
           runId: finding.runId,
           ledgerPartyId: finding.ledgerPartyId,

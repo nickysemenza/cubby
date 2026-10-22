@@ -2,9 +2,7 @@ import {
   aiEvaluationTarget,
   aiProvenance,
   aiRefreshRunInput,
-  aiRefreshProgress,
 } from "@cubby/schemas/ai-evaluation";
-import { MAX_AUTOMATIC_WORKFLOW_FAILURES } from "@cubby/schemas/workflow-runs";
 import { and, eq } from "drizzle-orm";
 import { createEntity } from "tooling/factories/create";
 import { buildKernelContext } from "tooling/scenarios/context";
@@ -17,25 +15,15 @@ import { aiEvaluation, product, run } from "~/server/db/schema";
 import { captureBackgroundQueue } from "~/server/testing/background-queue";
 import { createSystemUserFixture } from "~/server/testing/repo.fixtures";
 import { controlWorkflowRun } from "~/server/workflows/runs/control";
-import type { WorkflowLauncher } from "~/server/workflows/runs/launcher";
 import { launchWorkflowRun } from "~/server/workflows/runs/lifecycle";
 
-import {
-  aiRefreshRelaunchCandidates,
-  insertEvaluationTargets,
-  scheduleEvaluationRun,
-} from "./ai-refresh-state";
+import { scheduleEvaluationRun } from "./ai-refresh-state";
 import { ensureRun, systemActor } from "./ensure-run";
 
-// Real transactions expose scheduling races; the Workflow provider is the only external seam.
+// Real transactions expose races between shared Jobs and their requesters.
 describe("AI refresh scheduling admission", () => {
   const ctx = withTestDb();
   beforeEach(() => createSystemUserFixture(ctx.db));
-  const launcher: WorkflowLauncher = {
-    create: async () => undefined,
-    terminate: async () => undefined,
-    status: async () => ({ state: "running", error: null }),
-  };
   const target = (recordId = crypto.randomUUID()) => ({
     target: aiEvaluationTarget.parse({
       kind: "email",
@@ -89,74 +77,6 @@ describe("AI refresh scheduling admission", () => {
   });
 
   // Explicit rediscovery must report deferred readmission without resetting its recovery budget.
-  it("reports a failed owner's capacity refusal while retaining automatic recovery fences", async () => {
-    const id = await ensureRun(
-      ctx.db,
-      systemActor(),
-      input("explicit-readmission"),
-    );
-    await getDb(ctx.db)
-      .update(run)
-      .set({
-        status: "failed",
-        progress: aiRefreshProgress.parse({
-          attempt: 1,
-          automaticRecoveryFailures: 1,
-        }),
-      })
-      .where(eq(run.id, id));
-    const busy = await ensureRun(
-      ctx.db,
-      systemActor(),
-      input("explicit-busy-one"),
-    );
-    await ensureRun(ctx.db, systemActor(), input("explicit-busy-two"));
-    const request = {
-      runId: id,
-      purpose: "ai_refresh" as const,
-      automatic: true as const,
-      reportAdmissionRefusal: true as const,
-    };
-    await expect(launchWorkflowRun(ctx.db, request, launcher)).rejects.toThrow(
-      "no free Run slots",
-    );
-    expect(
-      (await getDb(ctx.db).select().from(run).where(eq(run.id, id)))[0],
-    ).toMatchObject({
-      status: "failed",
-      progress: { automaticRecoveryFailures: 1 },
-    });
-    await getDb(ctx.db)
-      .update(run)
-      .set({ status: "completed" })
-      .where(eq(run.id, busy));
-    expect(await launchWorkflowRun(ctx.db, request, launcher)).toMatchObject({
-      attempt: 2,
-    });
-    expect(await launchWorkflowRun(ctx.db, request, launcher)).toBeNull();
-    expect(
-      (await getDb(ctx.db).select().from(run).where(eq(run.id, id)))[0]
-        ?.progress,
-    ).toMatchObject({ automaticRecoveryFailures: 2 });
-  });
-
-  it("includes dispatch failures with pending work in bounded recovery", async () => {
-    const id = await ensureRun(
-      ctx.db,
-      systemActor(),
-      input("dispatch-recovery"),
-    );
-    await insertEvaluationTargets(ctx.db, id, [target()]);
-    await getDb(ctx.db)
-      .update(run)
-      .set({
-        status: "dispatch_failed",
-        failureCode: "workflow_dispatch_failed",
-      })
-      .where(eq(run.id, id));
-    expect(await aiRefreshRelaunchCandidates(ctx.db)).toEqual([{ id }]);
-  });
-
   it("bounds concurrent frozen rosters and resumes deferred work after capacity is released", async () => {
     const requests = [target(), target(), target()];
     await Promise.all(
@@ -203,17 +123,16 @@ describe("AI refresh scheduling admission", () => {
       systemActor(),
       { runPublicId: owner!.shortcode, action: "cancel" },
       "ai_refresh",
-      launcher,
     );
     await scheduleEvaluationRun(ctx.db, systemActor(), input("cancelled"), [
       item,
     ]);
     expect(
-      await launchWorkflowRun(
-        ctx.db,
-        { runId: owner!.id, purpose: "ai_refresh", automatic: true },
-        launcher,
-      ),
+      await launchWorkflowRun(ctx.db, {
+        runId: owner!.id,
+        purpose: "ai_refresh",
+        automatic: true,
+      }),
     ).toBeNull();
     expect(await active()).toHaveLength(0);
     expect(
@@ -243,7 +162,6 @@ describe("AI refresh scheduling admission", () => {
       systemActor(),
       { runPublicId: owner!.shortcode, action: "cancel" },
       "ai_refresh",
-      launcher,
     );
     await scheduleEvaluationRun(
       ctx.db,
@@ -268,22 +186,20 @@ describe("AI refresh scheduling admission", () => {
       systemActor(),
       { runPublicId: owner!.shortcode, action: "cancel" },
       "ai_refresh",
-      launcher,
     );
     // A Sweep finishing its child's roster is an implicit launch, not member retry.
     await expect(
-      launchWorkflowRun(
-        ctx.db,
-        { runId: owner!.id, purpose: "ai_refresh" },
-        launcher,
-      ),
-    ).rejects.toThrow(/cancelled/);
+      launchWorkflowRun(ctx.db, {
+        runId: owner!.id,
+        purpose: "ai_refresh",
+        automatic: true,
+      }),
+    ).resolves.toBeNull();
     await controlWorkflowRun(
       ctx.db,
       systemActor(),
       { runPublicId: owner!.shortcode, action: "retry" },
       "ai_refresh",
-      launcher,
     );
     expect((await active())[0]?.id).toBe(owner!.id);
     expect(
@@ -291,64 +207,6 @@ describe("AI refresh scheduling admission", () => {
         .map((row) => row.state)
         .sort(),
     ).toEqual(["cancelled", "queued"]);
-  });
-
-  it("does not spend its recovery budget on exhausted failures", async () => {
-    for (let index = 0; index < 11; index++) {
-      const id = await ensureRun(
-        ctx.db,
-        systemActor(),
-        input(`failed-${index}`),
-      );
-      await insertEvaluationTargets(ctx.db, id, [target()]);
-      await getDb(ctx.db)
-        .update(run)
-        .set({
-          status: "failed",
-          failureCode: "workflow_dispatch_failed",
-          progress: aiRefreshProgress.parse({
-            attempt: 3,
-            automaticRecoveryFailures: MAX_AUTOMATIC_WORKFLOW_FAILURES,
-          }),
-          updatedAt: new Date(0),
-        })
-        .where(eq(run.id, id));
-    }
-    const fresh = await ensureRun(ctx.db, systemActor(), input("fresh"));
-    await insertEvaluationTargets(ctx.db, fresh, [target()]);
-    expect(await aiRefreshRelaunchCandidates(ctx.db)).toEqual([{ id: fresh }]);
-  });
-
-  it("bounds recovery of historical failed Runs by the same execution slots", async () => {
-    const ids = [];
-    for (let index = 0; index < 3; index++) {
-      const id = await ensureRun(
-        ctx.db,
-        systemActor(),
-        input(`recovery-${index}`),
-      );
-      await getDb(ctx.db)
-        .update(run)
-        .set({ status: "failed", failureCode: "workflow_dispatch_failed" })
-        .where(eq(run.id, id));
-      ids.push(id);
-    }
-    await Promise.all(
-      ids.map((id) =>
-        launchWorkflowRun(
-          ctx.db,
-          { runId: id, purpose: "ai_refresh", automatic: true },
-          launcher,
-        ),
-      ),
-    );
-    for (const id of ids)
-      await launchWorkflowRun(
-        ctx.db,
-        { runId: id, purpose: "ai_refresh", automatic: true },
-        launcher,
-      );
-    expect(await active()).toHaveLength(2);
   });
 
   it("keeps member Product creation successful when automatic connection work is deferred", async () => {
@@ -376,41 +234,6 @@ describe("AI refresh scheduling admission", () => {
     } finally {
       queue.restore();
     }
-  });
-
-  it("launches unstarted slot owners before older failures blocked by their capacity", async () => {
-    for (let index = 0; index < 10; index++) {
-      const id = await ensureRun(
-        ctx.db,
-        systemActor(),
-        input(`waiting-failure-${index}`),
-      );
-      await insertEvaluationTargets(ctx.db, id, [target()]);
-      await getDb(ctx.db)
-        .update(run)
-        .set({
-          status: "failed",
-          failureCode: "workflow_dispatch_failed",
-          updatedAt: new Date(0),
-        })
-        .where(eq(run.id, id));
-    }
-    const unstarted = [];
-    for (let index = 0; index < 2; index++) {
-      const id = await ensureRun(
-        ctx.db,
-        systemActor(),
-        input(`slot-owner-${index}`),
-      );
-      await insertEvaluationTargets(ctx.db, id, [target()]);
-      unstarted.push(id);
-    }
-    expect(
-      (await aiRefreshRelaunchCandidates(ctx.db))
-        .slice(0, 2)
-        .map((row) => row.id)
-        .sort(),
-    ).toEqual(unstarted.sort());
   });
 
   it("does not join a new activation's work to an older policy Run", async () => {

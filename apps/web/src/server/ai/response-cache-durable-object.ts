@@ -1,4 +1,4 @@
-import type { DurableObjectState } from "@cloudflare/workers-types";
+import type { DurableObjectState, SqlStorage } from "@cloudflare/workers-types";
 import { DurableObject } from "cloudflare:workers";
 
 import { withInvocationTrace } from "~/server/observability/tracing";
@@ -10,16 +10,23 @@ import {
 } from "./response-cache-rpc";
 
 const LEASE_MS = 90_000;
-const DAY_MS = 86_400_000;
+// UTF-16 units; at most three UTF-8 bytes each keeps a chunk row under
+// SQLite's 2 MB row bound.
+const CHUNK_CHARS = 500_000;
+// A stored value is client JSON, which never starts with this prefix.
+const CHUNKED = "chunked:";
 
 type CacheRow = {
   value: string | null;
-  expires_at: number | null;
   claim_token: string | null;
   lease_expires_at: number | null;
 };
 
-/** One of 64 shards; SQLite coordinates claims across Worker isolates. */
+/**
+ * One of 64 shards; SQLite coordinates claims across Worker isolates.
+ * Completed answers never expire. `expires_at` is retained but ignored: rows
+ * written under the retired 30-day expiry stay readable.
+ */
 export class AiResponseCacheDurableObject
   extends DurableObject<Env>
   implements AiResponseCacheRpc
@@ -29,8 +36,9 @@ export class AiResponseCacheDurableObject
     ctx.storage.sql.exec(
       "CREATE TABLE IF NOT EXISTS responses (key TEXT PRIMARY KEY, value TEXT, expires_at INTEGER, claim_token TEXT, lease_expires_at INTEGER)",
     );
+    ctx.storage.sql.exec("DROP INDEX IF EXISTS responses_expires_at_idx");
     ctx.storage.sql.exec(
-      "CREATE INDEX IF NOT EXISTS responses_expires_at_idx ON responses (expires_at)",
+      "CREATE TABLE IF NOT EXISTS response_chunks (key TEXT NOT NULL, seq INTEGER NOT NULL, value TEXT NOT NULL, PRIMARY KEY (key, seq))",
     );
   }
 
@@ -38,19 +46,22 @@ export class AiResponseCacheDurableObject
     const now = Date.now();
     const row = this.ctx.storage.sql
       .exec<CacheRow>(
-        "SELECT value, expires_at, claim_token, lease_expires_at FROM responses WHERE key = ?",
+        "SELECT value, claim_token, lease_expires_at FROM responses WHERE key = ?",
         key,
       )
       .toArray()[0];
     if (row?.claim_token && (row.lease_expires_at ?? 0) > now) {
       return { kind: "busy" };
     }
-    if (!force && row?.value && (row.expires_at ?? 0) > now) {
-      return { kind: "hit", value: row.value };
-    }
+    if (!force && row?.value)
+      return {
+        kind: "hit",
+        value: storedValue(this.ctx.storage.sql, key, row.value),
+      };
     const token = crypto.randomUUID();
+    // A forced claim keeps the current answer until its replacement publishes.
     this.ctx.storage.sql.exec(
-      "INSERT INTO responses (key, value, expires_at, claim_token, lease_expires_at) VALUES (?, NULL, NULL, ?, ?) ON CONFLICT(key) DO UPDATE SET value = NULL, expires_at = NULL, claim_token = excluded.claim_token, lease_expires_at = excluded.lease_expires_at",
+      "INSERT INTO responses (key, value, claim_token, lease_expires_at) VALUES (?, NULL, ?, ?) ON CONFLICT(key) DO UPDATE SET claim_token = excluded.claim_token, lease_expires_at = excluded.lease_expires_at",
       key,
       token,
       now + LEASE_MS,
@@ -80,58 +91,90 @@ export class AiResponseCacheDurableObject
     );
   }
 
-  async publish(
-    key: string,
-    token: string,
-    value: string,
-    ttlMs: number,
-  ): Promise<boolean> {
-    const written =
-      this.ctx.storage.sql.exec(
-        "UPDATE responses SET value = ?, expires_at = ?, claim_token = NULL, lease_expires_at = NULL WHERE key = ? AND claim_token = ?",
-        value,
-        Date.now() + ttlMs,
+  publish(key: string, token: string, value: string): boolean {
+    const sql = this.ctx.storage.sql;
+    if (
+      !sql
+        .exec(
+          "SELECT 1 FROM responses WHERE key = ? AND claim_token = ?",
+          key,
+          token,
+        )
+        .toArray().length
+    )
+      return false;
+    sql.exec("DELETE FROM response_chunks WHERE key = ?", key);
+    const chunks = chunked(value);
+    for (const [seq, chunk] of chunks.entries())
+      sql.exec(
+        "INSERT INTO response_chunks (key, seq, value) VALUES (?, ?, ?)",
         key,
-        token,
-      ).rowsWritten > 0;
-    if (written && (await this.ctx.storage.getAlarm()) === null) {
-      await this.ctx.storage.setAlarm(Date.now() + DAY_MS);
-    }
-    return written;
+        seq,
+        chunk,
+      );
+    sql.exec(
+      "UPDATE responses SET value = ?, expires_at = NULL, claim_token = NULL, lease_expires_at = NULL WHERE key = ?",
+      chunks.length ? `${CHUNKED}${chunks.length}` : value,
+      key,
+    );
+    return true;
   }
 
+  /** A failed claim leaves no row; a failed regeneration keeps its prior answer. */
   release(key: string, token: string): void {
     this.ctx.storage.sql.exec(
-      "DELETE FROM responses WHERE key = ? AND claim_token = ?",
+      "DELETE FROM responses WHERE key = ? AND claim_token = ? AND value IS NULL",
+      key,
+      token,
+    );
+    this.ctx.storage.sql.exec(
+      "UPDATE responses SET claim_token = NULL, lease_expires_at = NULL WHERE key = ? AND claim_token = ?",
       key,
       token,
     );
   }
 
-  invalidate(key: string, value: string): void {
-    this.ctx.storage.sql.exec(
-      "DELETE FROM responses WHERE key = ? AND value = ? AND claim_token IS NULL",
-      key,
-      value,
-    );
-  }
-
+  /**
+   * Drains alarms the retired expiry scheduled. Completed answers stay;
+   * abandoned first claims are removed, and every other expired lease is
+   * reclaimed by its next lookup.
+   */
   async alarm(): Promise<void> {
     return withInvocationTrace(
       "ai.response-cache.alarm",
       async () => {
-        const now = Date.now();
         this.ctx.storage.sql.exec(
-          "DELETE FROM responses WHERE key IN (SELECT key FROM responses WHERE (expires_at IS NOT NULL AND expires_at <= ?) OR (claim_token IS NOT NULL AND lease_expires_at <= ?) LIMIT 500)",
-          now,
-          now,
+          "DELETE FROM responses WHERE value IS NULL AND lease_expires_at <= ?",
+          Date.now(),
         );
-        const remaining = this.ctx.storage.sql
-          .exec<{ count: number }>("SELECT count(*) AS count FROM responses")
-          .one().count;
-        if (remaining > 0) await this.ctx.storage.setAlarm(now + DAY_MS);
       },
       { "cubby.workload": "alarm" },
     );
   }
+}
+
+function storedValue(sql: SqlStorage, key: string, value: string) {
+  if (!value.startsWith(CHUNKED)) return value;
+  return sql
+    .exec<{ value: string }>(
+      "SELECT value FROM response_chunks WHERE key = ? ORDER BY seq",
+      key,
+    )
+    .toArray()
+    .map((chunk) => chunk.value)
+    .join("");
+}
+
+/** No chunks for a value that fits one row; never splits a surrogate pair. */
+function chunked(value: string): string[] {
+  if (value.length <= CHUNK_CHARS) return [];
+  const chunks: string[] = [];
+  for (let start = 0; start < value.length;) {
+    let end = Math.min(start + CHUNK_CHARS, value.length);
+    const last = value.charCodeAt(end - 1);
+    if (end < value.length && last >= 0xd800 && last <= 0xdbff) end -= 1;
+    chunks.push(value.slice(start, end));
+    start = end;
+  }
+  return chunks;
 }

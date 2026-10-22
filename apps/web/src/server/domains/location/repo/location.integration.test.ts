@@ -25,6 +25,7 @@ import type {
   EntityMutationCommand,
   EntityQueryCommand,
 } from "~/server/entity-kernel/contracts";
+import { insertPayloadWithIdentity } from "~/server/entity-kernel/repo/entity-identity-writer";
 import { resolveLiveShortcode } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { requireActor } from "~/server/http/request-context";
 import { reparentThroughKernel as bulkReparentLocations } from "~/server/testing/entity-kernel";
@@ -56,18 +57,20 @@ describe("createLocation name race", () => {
     const { loser: outcome } = await raceUniqueInsert(ctx, {
       winner: ({ releaseSignal, markWinnerReady }) =>
         getDb(ctx.db).transaction(async (tx) => {
-          const [row] = await tx
-            .insert(location)
-            .values({
+          const row = await insertPayloadWithIdentity(
+            tx,
+            location,
+            "location",
+            {
               name,
               type: "room",
               shortcode: winnerCode,
               parentId: TEST_HOME_ID,
-            })
-            .returning();
+            },
+          );
           markWinnerReady();
           await releaseSignal; // hold the txn (and its lock) open
-          return row!.id;
+          return row.id;
         }),
       loser: () =>
         createLocation(
@@ -104,9 +107,8 @@ describe("location storage integrity", () => {
     expect(home?.parentId).toBeNull();
 
     await expect(
-      getDb(ctx.db)
-        .insert(location)
-        .values({
+      getDb(ctx.db).transaction((tx) =>
+        insertPayloadWithIdentity(tx, location, "location", {
           name: "Orphaned raw location",
           type: "area",
           shortcode: shortcode("LOC-2345"),
@@ -115,6 +117,7 @@ describe("location storage integrity", () => {
             "00000000-0000-4000-8000-000000000099",
           ),
         }),
+      ),
     ).rejects.toMatchObject({ cause: { code: "23503" } });
   });
 });

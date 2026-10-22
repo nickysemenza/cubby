@@ -15,19 +15,13 @@ import { executeEntity } from "~/server/entity-kernel";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { entityCommandSchema } from "~/server/entity-kernel/contracts";
 import { publishFieldAssessment } from "~/server/generic/assessment/repo/assessment";
+import { transitionAssessmentStates } from "~/server/generic/assessment/repo/assessment-state";
 import { applyAutomaticRules } from "~/server/generic/assessment/repo/automatic-rule-runtime";
 import {
-  type AuditSampler,
-  automaticRuleStamp,
-  fieldSubjectKey,
-  matchFieldRules,
-} from "~/server/generic/assessment/repo/automatic-rules";
-import { fieldInputFingerprint } from "~/server/generic/assessment/repo/field-input-fence";
-import { latestFieldWrite } from "~/server/generic/audit-log/repo/audit-log";
-import {
-  currentInputRevision,
-  fenceDerivedInputsAtCommit,
-} from "~/server/generic/derived-refresh/repo/freshness";
+  fieldInputFingerprint,
+  fenceFieldInputsAtCommit,
+} from "~/server/generic/assessment/repo/field-input-fence";
+import { latestFieldWrite } from "~/server/generic/audit-log/repo/field-write";
 import { canonicalJson } from "~/server/lib/canonical-json";
 
 export type SuggestionValue =
@@ -59,7 +53,6 @@ export const sweepSuggestionSchema = z.object({
   runnerUpValue: suggestionValueSchema,
   runnerUpConfidence: z.number().nullable(),
   model: z.string(),
-  pairKey: z.string().nullable(),
   served: z.boolean(),
 });
 export type SweepSuggestion = z.infer<typeof sweepSuggestionSchema>;
@@ -107,7 +100,6 @@ export async function saveSweepSuggestions(
     provenance?: import("@cubby/schemas/ai-evaluation").AiProvenance;
     /** The field's decision policy prunes an unordered set. */
     unordered: boolean;
-    rules?: { auditSample?: AuditSampler };
   },
   entries: readonly SweepSuggestion[],
   financeReviewFingerprint: string | null,
@@ -117,7 +109,6 @@ export async function saveSweepSuggestions(
   return withTransactionDatabase(
     db,
     async (tx) => {
-      const inputRevision = await currentInputRevision(tx);
       const liveInputFingerprint = await fieldInputFingerprint(
         tx,
         input.entity,
@@ -283,43 +274,25 @@ export async function saveSweepSuggestions(
           (input.predecessorIds && !input.predecessorIds.includes(previous.id))
         )
           continue;
-        await getDb(tx)
-          .update(suggestionTable)
-          .set({
+        await transitionAssessmentStates(
+          tx,
+          and(
+            eq(suggestionTable.id, previous.id),
+            eq(suggestionTable.status, "pending"),
+          ),
+          {
             status: "superseded",
             supersessionReceipt: {
               reason: admissible.length ? "replacement" : "no_proposal",
               evaluationId: input.evaluationId ?? null,
               at: new Date().toISOString(),
             },
-          })
-          .where(
-            and(
-              eq(suggestionTable.id, previous.id),
-              eq(suggestionTable.status, "pending"),
-            ),
-          );
+          },
+          { kind: "field_refresh_superseded" },
+        );
       }
       const created: string[] = [];
       for (const entry of admissible) {
-        const stamp = input.rules
-          ? await automaticRuleStamp(
-              "field",
-              matchFieldRules({
-                entity: input.entity,
-                field: input.field,
-                kind: entry.kind,
-                confidence: entry.confidence,
-                model: entry.model,
-              }),
-              fieldSubjectKey({
-                entity: input.entity,
-                recordId: typedRecordId,
-                field: input.field,
-              }),
-              input.rules.auditSample,
-            )
-          : {};
         const row = await publishFieldAssessment(
           tx,
           {
@@ -338,17 +311,15 @@ export async function saveSweepSuggestions(
             runnerUpValue: entry.runnerUpValue,
             runnerUpConfidence: entry.runnerUpConfidence,
             model: entry.model,
-            pairKey: entry.pairKey,
             kind: entry.kind,
             data: {
               served: entry.served,
               liveInputFingerprint,
               reviewKey: entry.reviewKey ?? null,
-              ...stamp,
             },
             status: "pending",
           },
-          entry.served ?? entry.pairKey === null,
+          entry.served,
         );
         created.push(row.id);
       }
@@ -358,13 +329,11 @@ export async function saveSweepSuggestions(
         context: txContext,
         onFailure: (_id, error) => onApplyFailure?.(error),
       });
-      await fenceDerivedInputsAtCommit(tx, inputRevision, (current) =>
-        fieldInputFingerprint(
-          current,
-          input.entity,
-          input.recordId,
-          input.field,
-        ),
+      await fenceFieldInputsAtCommit(
+        tx,
+        input.entity,
+        input.recordId,
+        input.field,
       );
       return applied.length
         ? ("applied" as const)

@@ -1,65 +1,36 @@
 import type { EntityRef } from "@cubby/schemas/entity";
-import { shortcodeEntities } from "@cubby/schemas/entity-manifest";
 import { sha256Hex } from "@cubby/shared/sha256";
-import { z } from "zod";
 
 import type { Database } from "~/server/db";
-import { readInputRevisions } from "~/server/generic/derived-refresh/repo/revisions";
-import { resolveLiveShortcodes } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
-import { connectionInputKeys } from "./discovery-inputs";
+import { connectionRecord } from "./connection-evidence";
 
-const sourceKind = z.enum(shortcodeEntities);
-
-/** Fixed-size input vectors only: no candidates, context reads or corpus scans. */
+/**
+ * The source's own connection-relevant snapshot, the same projection its
+ * candidate evidence captures. A candidate's side is fenced by the basis its
+ * published Assessment stores and by that endpoint's own discovery, so no
+ * corpus-wide revision is read here.
+ */
 export async function connectionDiscoveryFingerprints(
   db: Database,
   sources: readonly EntityRef[],
 ): Promise<string[]> {
-  const groups = new Map<z.infer<typeof sourceKind>, string[]>();
+  const fingerprints: string[] = [];
+  // Sequential: a transaction handle runs one statement at a time.
   for (const source of sources) {
-    const kind = sourceKind.parse(source.entityKind);
-    const group = groups.get(kind) ?? [];
-    group.push(source.entityId);
-    groups.set(kind, group);
-  }
-  const ids = new Map<string, string>();
-  for (const [kind, codes] of groups) {
-    for (const [code, id] of await resolveLiveShortcodes(db, codes, kind))
-      ids.set(`${kind}:${code}`, id);
-  }
-  const keys = (source: EntityRef) => {
-    const id = ids.get(`${source.entityKind}:${source.entityId}`);
-    if (!id)
-      throw new Error(`Connection ${source.entityKind} no longer exists`);
-    const inputs = connectionInputKeys(source.entityKind);
-    return [
-      `entity:${source.entityKind}:${id}`,
-      ...inputs,
-      ...inputs
-        .filter((key) => key.startsWith("kind:"))
-        .flatMap((key) => [
-          key.replace("kind:", "projection:"),
-          key.replace("kind:", "embedding:"),
-        ]),
-    ];
-  };
-  const sourceKeys = sources.map(keys);
-  const revisions = new Map(await readInputRevisions(db, sourceKeys.flat()));
-  return Promise.all(
-    sources.map((source, index) =>
-      sha256Hex(
+    const record = await connectionRecord(db, source);
+    fingerprints.push(
+      await sha256Hex(
         JSON.stringify([
-          "connection-input-revisions-v3",
+          "connection-source-v4",
           source.entityKind,
-          source.entityId,
-          [...new Set(sourceKeys[index])]
-            .sort()
-            .map((key) => [key, revisions.get(key) ?? 0]),
+          record.id,
+          record.row,
         ]),
       ),
-    ),
-  );
+    );
+  }
+  return fingerprints;
 }
 
 export async function connectionDiscoveryFingerprint(

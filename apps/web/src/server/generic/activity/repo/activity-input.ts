@@ -8,7 +8,9 @@ import {
   imageProcessingJob,
   imageProcessingOrphan,
 } from "~/server/db/image-processing-schema";
+import { job } from "~/server/db/retained-tables";
 import { image } from "~/server/db/schema";
+import { currentJobExecution } from "~/server/generic/jobs/context";
 
 export async function recordImageDescriptionInput(
   db: Database,
@@ -62,6 +64,10 @@ export async function reserveImageAnalysisInput(
         eq(imageProcessingJob.id, imageProcessingAttempt.jobId),
       )
       .innerJoin(image, eq(image.id, imageProcessingJob.imageId))
+      .innerJoin(
+        job,
+        eq(job.key, sql`'image-processing:' || ${imageProcessingJob.id}::text`),
+      )
       .where(
         and(
           eq(imageProcessingAttempt.id, attemptId),
@@ -70,7 +76,12 @@ export async function reserveImageAnalysisInput(
             : eq(imageProcessingAttempt.inputKey, expectedInputKey),
           eq(imageProcessingJob.attemptId, attemptId),
           eq(imageProcessingJob.state, "leased"),
-          gt(imageProcessingJob.leaseExpiresAt, sql`now()`),
+          eq(job.state, "running"),
+          eq(job.leaseToken, attemptId),
+          currentJobExecution()
+            ? eq(job.generation, currentJobExecution()!.claim.generation)
+            : undefined,
+          gt(job.leaseExpiresAt, sql`now()`),
           eq(image.status, "UPLOADED"),
           eq(image.sha256, imageProcessingJob.sourceContentHash),
           notDeleted(image),
@@ -104,13 +115,22 @@ export async function retainImageAnalysisInput(
         eq(imageProcessingJob.id, imageProcessingAttempt.jobId),
       )
       .innerJoin(image, eq(image.id, imageProcessingJob.imageId))
+      .innerJoin(
+        job,
+        eq(job.key, sql`'image-processing:' || ${imageProcessingJob.id}::text`),
+      )
       .where(
         and(
           eq(imageProcessingAttempt.id, attemptId),
           eq(imageProcessingAttempt.inputKey, key),
           eq(imageProcessingJob.attemptId, attemptId),
           eq(imageProcessingJob.state, "leased"),
-          gt(imageProcessingJob.leaseExpiresAt, sql`now()`),
+          eq(job.state, "running"),
+          eq(job.leaseToken, attemptId),
+          currentJobExecution()
+            ? eq(job.generation, currentJobExecution()!.claim.generation)
+            : undefined,
+          gt(job.leaseExpiresAt, sql`now()`),
           eq(image.status, "UPLOADED"),
           eq(image.sha256, imageProcessingJob.sourceContentHash),
           notDeleted(image),

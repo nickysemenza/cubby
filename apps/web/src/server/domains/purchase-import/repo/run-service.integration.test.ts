@@ -6,7 +6,7 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { getDb, withTransaction } from "~/server/db/helpers";
-import { runFinding, run as runTable } from "~/server/db/schema";
+import { run as runTable } from "~/server/db/schema";
 import {
   expireStaleRuns,
   reconcileSettledRun,
@@ -16,6 +16,10 @@ import { executeLeasedOperation } from "~/server/domains/run/repo/operation";
 import { insertOperation } from "~/server/domains/run/repo/run-operation";
 import { importReportBlocks } from "~/server/generic/entity-report/repo/run";
 import { findOpenRunFindings } from "~/server/generic/problems/repo/detectors-import";
+import {
+  runFinding,
+  seedRunFindings,
+} from "~/server/testing/run-finding.fixtures";
 
 import { dispatchRunEvent, recordRunDispatchAttempt } from "./dispatch";
 import { resolveRunFinding } from "./findings";
@@ -536,9 +540,6 @@ describe("purchase import run admission", () => {
         receivedEventIds: new Set([run.dispatchEventId]),
       }),
     ).resolves.toEqual({ reconciled: true, status: "needs_review" });
-    const { runFinding, run: runTable } = await import("~/server/db/schema");
-    const { eq } = await import("drizzle-orm");
-    const { getDb } = await import("~/server/db/helpers");
     const [stored] = await getDb(ctx.db)
       .select({ status: runTable.status })
       .from(runTable)
@@ -615,24 +616,22 @@ describe("purchase import run admission", () => {
       { kind: "research_field_correction", productId: crypto.randomUUID() },
       { kind: "validation_corrections", corrections: [] },
     ];
-    const rows = await getDb(ctx.db)
-      .insert(runFinding)
-      .values(
-        retiredFixes.flatMap((proposedFix) =>
-          (["open", "dismissed"] as const).map((status) => ({
-            runId: run.id,
-            ledgerPartyId: party.id,
-            entityKind: "run" as const,
-            entityId: run.id,
-            kind: `retired_${proposedFix.kind}`,
-            summary: "A finding filed before its fix kind was retired.",
-            proposedFix,
-            evidenceFingerprint: `${proposedFix.kind}:${status}`,
-            status,
-          })),
-        ),
-      )
-      .returning({ id: runFinding.id, status: runFinding.status });
+    const rows = await seedRunFindings(
+      ctx.db,
+      retiredFixes.flatMap((proposedFix) =>
+        (["open", "dismissed"] as const).map((status) => ({
+          runId: run.id,
+          ledgerPartyId: party.id,
+          entityKind: "run" as const,
+          entityId: run.id,
+          kind: `retired_${proposedFix.kind}`,
+          summary: "A finding filed before its fix kind was retired.",
+          proposedFix,
+          evidenceFingerprint: `${proposedFix.kind}:${status}`,
+          status,
+        })),
+      ),
+    );
 
     const detail = await loadRunDetail(ctx.db, run.publicId);
     expect(detail.findings).toHaveLength(6);

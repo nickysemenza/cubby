@@ -23,12 +23,21 @@ import { and, eq } from "drizzle-orm";
 
 import { type Database } from "~/server/db/database";
 import { notDeleted } from "~/server/db/helpers/predicates";
-import { type RepositoryQueryTransaction as DrizzleTransaction } from "~/server/db/repository-access.boundary";
 import {
-  repositoryQueries as unwrapDb,
-  repositoryTransaction as withTransaction,
+  repositoryTransaction,
+  repositoryTransactionDatabase as withTransaction,
 } from "~/server/db/repository-access.boundary";
+import {
+  type RepositoryQueryClient,
+  type RepositoryQueryInput,
+} from "~/server/db/repository-access.boundary";
+import { repositoryQueries as unwrapDb } from "~/server/db/repository-access.boundary";
 import { device } from "~/server/db/retained-tables";
+import {
+  insertPayloadWithIdentity,
+  isEntityShortcodeCollision,
+} from "~/server/entity-kernel/repo/entity-identity-writer";
+import { findPgError } from "~/server/errors/db-errors";
 
 /** How many fresh shortcodes to try before giving up — mirrors
  * `shortcode-utils.ts`'s `MAX_RETRIES`, which this intentionally does not
@@ -38,7 +47,7 @@ const MAX_SHORTCODE_RETRIES = 10;
 type DeviceParticipation = { automaticWork: boolean; remotePaused: boolean };
 
 const selectByInstallationId = (
-  tx: DrizzleTransaction,
+  tx: RepositoryQueryClient,
   installationId: string,
 ) =>
   tx
@@ -65,43 +74,43 @@ export async function upsertDeviceFromHello(
     automaticWork: boolean;
   },
 ): Promise<DeviceParticipation> {
-  return withTransaction(db, async (tx) => {
+  return withTransaction(db, async (transactionDb) => {
+    const tx = unwrapDb(transactionDb);
     const now = new Date();
     const [existing] = await selectByInstallationId(tx, hello.installationId);
     let id = existing?.id;
     if (!id) {
-      // Bare `.onConflictDoNothing()` — no target — applies to ANY
-      // conflicting unique constraint on the table (the partial
-      // `installationId` index or a freak shortcode collision), same as
-      // `db/helpers/crud.ts`'s `findOrCreate` does for every other
-      // entity; this file just can't import that helper (see doc comment).
       for (let attempt = 0; attempt < MAX_SHORTCODE_RETRIES; attempt++) {
-        const [created] = await tx
-          .insert(device)
-          .values({
-            shortcode: generateShortcode("device"),
-            installationId: hello.installationId,
-            name: hello.name,
-            platform: hello.platform,
-            appVersion: hello.appVersion,
-            osVersion: hello.osVersion,
-            automaticWork: hello.automaticWork,
-            remotePaused: false,
-            lastSeenAt: now,
-          })
-          .onConflictDoNothing()
-          .returning({ id: device.id });
-        if (created) {
+        try {
+          const created = await repositoryTransaction(
+            transactionDb,
+            (savepoint) =>
+              insertPayloadWithIdentity(savepoint, device, "device", {
+                shortcode: generateShortcode("device"),
+                installationId: hello.installationId,
+                name: hello.name,
+                platform: hello.platform,
+                appVersion: hello.appVersion,
+                osVersion: hello.osVersion,
+                automaticWork: hello.automaticWork,
+                remotePaused: false,
+                lastSeenAt: now,
+              }),
+          );
           id = created.id;
           break;
-        }
-        // Lost the race, or the minted shortcode collided: another hello for
-        // the same installationId may have just won — check for it before
-        // assuming it was a shortcode collision worth retrying.
-        const [winner] = await selectByInstallationId(tx, hello.installationId);
-        if (winner) {
-          id = winner.id;
-          break;
+        } catch (error) {
+          if (findPgError(error)?.code !== "23505") throw error;
+          // The rejected payload's savepoint also releases its identity.
+          const [winner] = await selectByInstallationId(
+            tx,
+            hello.installationId,
+          );
+          if (winner) {
+            id = winner.id;
+            break;
+          }
+          if (!isEntityShortcodeCollision(error, "Device")) throw error;
         }
       }
       if (!id)
@@ -132,7 +141,7 @@ export async function upsertDeviceFromHello(
  * so a `remotePaused`/`automaticWork` flip after hello, but before dispatch,
  * still refuses the assignment and new activity uses the saved display name. */
 export async function getDeviceParticipation(
-  db: Database | DrizzleTransaction,
+  db: RepositoryQueryInput,
   installationId: string,
 ): Promise<(DeviceParticipation & { name: string }) | null> {
   const [row] = await unwrapDb(db)

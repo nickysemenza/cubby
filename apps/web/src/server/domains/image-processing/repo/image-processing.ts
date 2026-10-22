@@ -26,6 +26,7 @@ import type {
   ImageProcessingTerminalResult as ImageProcessingResult,
 } from "@cubby/schemas/image-processing";
 import type { ImageRepresentations } from "@cubby/schemas/image-summary";
+import { jobState } from "@cubby/schemas/job";
 import {
   and,
   asc,
@@ -52,6 +53,8 @@ import {
   unwrapDb,
   notDeleted,
   withTransaction,
+  withTransactionOn,
+  databaseForTransaction,
 } from "~/server/db/helpers";
 import {
   imageDerivative,
@@ -60,6 +63,8 @@ import {
   imageProcessingAttempt,
   imageProcessingSubmissionJob,
 } from "~/server/db/image-processing-schema";
+import { repositoryBeforeCommit } from "~/server/db/repository-access.boundary";
+import { job as durableJob } from "~/server/db/retained-tables";
 import { aiAnalysis, image } from "~/server/db/schema";
 import {
   isCurrentPreferredImageDescription,
@@ -70,6 +75,17 @@ import { MAIL_ATTACHMENT_UPLOAD_REASON } from "~/server/domains/mail/repo/mail-a
 import { runMutationSideEffects } from "~/server/entity-kernel/repo/mutation-side-effects";
 import { publishAssessment } from "~/server/generic/assessment/repo/assessment";
 import { readConfirmedDescription } from "~/server/generic/assessment/repo/assessment-image";
+import { currentJobExecution } from "~/server/generic/jobs/context";
+import {
+  enqueueJob,
+  claimJob,
+  externalJobClaim,
+  publishJobPage,
+  failJob,
+  retryJob,
+  assertJobClaim,
+  JobSupersededError,
+} from "~/server/generic/jobs/repo/jobs";
 import { findOrCreateWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 import {
@@ -133,16 +149,16 @@ export const IMAGE_IDENTIFICATION_PROCESSOR_REVISION = stableProcessorRevision(
 );
 
 const currentImageProcessingProcessor = () => sql<boolean>`(
-  (${imageProcessingJob.kind} = 'subject_lift'
+  (${imageProcessingJob.kind} = ${imageProcessingJobKind.enum.subject_lift}
     AND ${imageProcessingJob.processorRevision} = ${IMAGE_SUBJECT_LIFT_PROCESSOR_REVISION})
   OR (${imageProcessingJob.kind} = ${imageProcessingJobKind.enum.identify_image}
     AND ${imageProcessingJob.processorRevision} = ${IMAGE_IDENTIFICATION_PROCESSOR_REVISION})
-  OR (${imageProcessingJob.kind} = 'describe_image'
+  OR (${imageProcessingJob.kind} = ${imageProcessingJobKind.enum.describe_image}
     AND ${imageProcessingJob.processorRevision} IN (${IMAGE_DESCRIPTION_PROCESSOR_REVISION}, ${IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION}))
 )`;
 
 const obsoleteImageProcessingSource = () => sql<boolean>`(
-  ${image.deletedAt} IS NOT NULL OR ${image.status} <> 'UPLOADED'
+  ${image.deletedAt} IS NOT NULL OR ${image.status} <> ${ImageStatus.enum.UPLOADED}
   OR ${image.sha256} IS NULL OR ${image.sha256} <> ${imageProcessingJob.sourceContentHash}
 )`;
 
@@ -278,16 +294,25 @@ async function ensureImageProcessingJob(
     runId: RunId | null;
   },
 ) {
-  const { row } = await findOrCreateWithShortcode(db, "imageJob", {
-    where: and(
-      eq(imageProcessingJob.imageId, values.imageId),
-      eq(imageProcessingJob.kind, values.kind),
-      eq(imageProcessingJob.sourceContentHash, values.sourceContentHash),
-      eq(imageProcessingJob.processorRevision, values.processorRevision),
-    ),
-    values: () => ({ ...values, state: "pending" as const }),
+  return withTransactionOn(db, async (tx) => {
+    const { row } = await findOrCreateWithShortcode(tx, "imageJob", {
+      where: and(
+        eq(imageProcessingJob.imageId, values.imageId),
+        eq(imageProcessingJob.kind, values.kind),
+        eq(imageProcessingJob.sourceContentHash, values.sourceContentHash),
+        eq(imageProcessingJob.processorRevision, values.processorRevision),
+      ),
+      values: () => ({ ...values, state: "pending" as const }),
+    });
+    if (["pending", "leased", "waiting_for_device"].includes(row.state))
+      await enqueueJob(tx, {
+        key: `image-processing:${row.id}`,
+        kind: "image.processing",
+        input: { processingId: row.id },
+        runId: row.runId,
+      });
+    return row;
   });
-  return row;
 }
 
 export async function createTransparentDerivativeAndJob(
@@ -356,70 +381,6 @@ export async function createTransparentDerivativeAndJob(
  * attemptId. An expired executor attempt spends the retry budget, so an
  * executor that always dies mid-job cannot loop forever.
  */
-export async function reclaimExpiredImageProcessingLeases(
-  db: Database,
-  clock?: Date,
-): Promise<number> {
-  const now = clock ?? sql`now()`;
-  return withTransaction(db, async (tx) => {
-    const expired = await tx
-      .select({
-        id: imageProcessingJob.id,
-        attemptId: imageProcessingJob.attemptId,
-        attempts: imageProcessingJob.attempts,
-        derivativeId: imageProcessingJob.derivativeId,
-        failuresSinceRetry: imageProcessingJob.failuresSinceRetry,
-      })
-      .from(imageProcessingJob)
-      .where(
-        and(
-          eq(imageProcessingJob.state, "leased"),
-          lte(imageProcessingJob.leaseExpiresAt, now),
-        ),
-      )
-      .for("update");
-    for (const job of expired) {
-      const executed = job.attemptId
-        ? await tx
-            .update(imageProcessingAttempt)
-            .set({
-              state: "expired",
-              completedAt: now,
-              error: "Execution lease expired",
-            })
-            .where(eq(imageProcessingAttempt.id, job.attemptId))
-            .returning({ id: imageProcessingAttempt.id })
-        : [];
-      await recordImageProcessingEvent(tx, {
-        jobId: job.id,
-        eventKey: `${job.attemptId}:expired`,
-        event: "attempt.expired",
-        attempt: job.attempts,
-        level: "error",
-      });
-      const release = { attemptId: null, leaseExpiresAt: null };
-      if (executed.length)
-        await settleImageProcessingFailure(tx, job, {
-          reason: "Execution lease expired",
-          retryable: true,
-          set: release,
-          retryAt: now,
-        });
-      else
-        await tx
-          .update(imageProcessingJob)
-          .set({
-            ...release,
-            state: "pending",
-            nextAttemptAt: now,
-            lastError: "Execution lease expired",
-          })
-          .where(eq(imageProcessingJob.id, job.id));
-    }
-    return expired.length;
-  });
-}
-
 /** Claim one job with a bounded lease. No HTTP path waits for device work. */
 export async function claimImageProcessingJob(
   db: Database,
@@ -434,14 +395,49 @@ export async function claimImageProcessingJob(
     allowAvifNormalization?: boolean;
   },
 ): Promise<ClaimedImageProcessingJob | null> {
-  // Use the database clock for both eligibility and leases; worker clocks can drift.
-  const now = sql`now()`;
-  const leaseExpiresAt = sql`now() + ${input.leaseMs} * interval '1 millisecond'`;
+  // Candidate selection uses the same due-time clock as the shared Job claim.
+  const now = new Date();
+  const currentExecution = currentJobExecution();
   return await withTransaction(db, async (tx) => {
+    if (currentExecution) {
+      if (
+        !input.jobId ||
+        currentExecution.claim.kind !== "image.processing" ||
+        currentExecution.claim.key !== `image-processing:${input.jobId}`
+      )
+        throw new Error(
+          "Image processing requires its own universal Job claim",
+        );
+      await assertJobClaim(
+        databaseForTransaction(tx),
+        currentExecution.claim,
+        true,
+      );
+      await tx
+        .update(imageProcessingJob)
+        .set({
+          state: "skipped",
+          completedAt: new Date(),
+          lastError: "Image source or processor is obsolete",
+        })
+        .where(
+          and(
+            eq(imageProcessingJob.id, input.jobId),
+            inArray(imageProcessingJob.state, [
+              "pending",
+              "waiting_for_device",
+              "leased",
+            ]),
+            // includes-deleted: retire work whose source image was removed.
+            sql`EXISTS (SELECT 1 FROM ${image} WHERE ${image.id}=${imageProcessingJob.imageId} AND (${obsoleteImageProcessingSource()} OR NOT ${currentImageProcessingProcessor()}))`,
+          ),
+        );
+    }
     // The internal policy keeps claims within the device’s supported job kinds.
-    const [candidate] = await tx
+    const candidates = tx
       .select({
         id: imageProcessingJob.id,
+        executionId: durableJob.id,
         imageId: imageProcessingJob.imageId,
         kind: imageProcessingJob.kind,
         sourceContentHash: imageProcessingJob.sourceContentHash,
@@ -455,6 +451,13 @@ export async function claimImageProcessingJob(
         derivativeKey: imageDerivative.key,
       })
       .from(imageProcessingJob)
+      .innerJoin(
+        durableJob,
+        eq(
+          durableJob.key,
+          sql`'image-processing:' || ${imageProcessingJob.id}::text`,
+        ),
+      )
       .innerJoin(
         image,
         and(
@@ -475,6 +478,11 @@ export async function claimImageProcessingJob(
         and(
           input.jobId ? eq(imageProcessingJob.id, input.jobId) : undefined,
           inArray(imageProcessingJob.kind, [...input.kinds]),
+          inArray(imageProcessingJob.state, [
+            "pending",
+            "waiting_for_device",
+            "leased",
+          ]),
           currentImageProcessingProcessor(),
           input.processorRevisions
             ? or(
@@ -493,44 +501,96 @@ export async function claimImageProcessingJob(
                   : undefined,
               )
             : undefined,
-          or(
-            eq(imageProcessingJob.state, "pending"),
-            eq(imageProcessingJob.state, "waiting_for_device"),
-          ),
-          // The no-device cooldown throttles queue wakeups, not a capable device's reconnect.
-          // Pending retries and backoffs still honor `nextAttemptAt`; only
-          // capability-scoped pulls bypass `waiting_for_device`.
-          input.processorRevisions !== undefined
-            ? or(
-                lte(imageProcessingJob.nextAttemptAt, now),
-                eq(imageProcessingJob.state, "waiting_for_device"),
+          currentExecution
+            ? and(
+                eq(durableJob.id, currentExecution.claim.id),
+                eq(durableJob.state, "running"),
+                eq(durableJob.generation, currentExecution.claim.generation),
+                eq(durableJob.leaseToken, currentExecution.claim.leaseToken),
+                gt(durableJob.leaseExpiresAt, now),
               )
-            : lte(imageProcessingJob.nextAttemptAt, now),
+            : or(
+                and(
+                  inArray(durableJob.state, ["queued", "retry_wait"]),
+                  input.processorRevisions
+                    ? or(
+                        lte(durableJob.availableAt, now),
+                        eq(imageProcessingJob.state, "waiting_for_device"),
+                      )
+                    : lte(durableJob.availableAt, now),
+                ),
+                and(
+                  eq(durableJob.state, "running"),
+                  lte(durableJob.leaseExpiresAt, now),
+                ),
+              ),
         ),
       )
-      .orderBy(
-        asc(imageProcessingJob.nextAttemptAt),
-        asc(imageProcessingJob.id),
-      )
-      .limit(1)
-      .for("update", { of: [imageProcessingJob, image], skipLocked: true });
+      .orderBy(asc(durableJob.availableAt), asc(imageProcessingJob.id))
+      .limit(1);
+    const [candidate] = await (currentExecution
+      ? candidates.for("update", { of: [imageProcessingJob, image] })
+      : candidates.for("update", {
+          of: [imageProcessingJob, image],
+          skipLocked: true,
+        }));
     if (!candidate) return null;
 
-    // A subject-lift job without a live output record must not send an upload
-    // capability that can be adopted nowhere. Mark it terminal instead.
+    if (!currentExecution && input.processorRevisions)
+      await tx
+        .update(durableJob)
+        .set({ availableAt: new Date() })
+        .where(
+          and(
+            eq(durableJob.id, candidate.executionId),
+            eq(durableJob.state, "queued"),
+          ),
+        );
+    const execution =
+      currentExecution?.claim ??
+      (await claimJob(
+        databaseForTransaction(tx),
+        candidate.executionId,
+        input.leaseMs,
+      ));
+    if (!execution) return null;
+    // A missing output record is a permanent domain failure, retained on Job.
     if (candidate.kind === "subject_lift" && !candidate.derivativeKey) {
+      execution.attempts = execution.maxAttempts;
+      await failJob(
+        databaseForTransaction(tx),
+        execution,
+        new Error("Transparent derivative is unavailable"),
+      );
       await tx
         .update(imageProcessingJob)
         .set({
           state: "failed",
-          completedAt: now,
+          completedAt: new Date(),
           lastError: "Transparent derivative is unavailable",
         })
         .where(eq(imageProcessingJob.id, candidate.id));
       return null;
     }
 
-    const attemptId = crypto.randomUUID();
+    const attemptId = execution.leaseToken;
+    if (
+      candidate.previousAttemptId &&
+      candidate.previousAttemptId !== attemptId
+    )
+      await tx
+        .update(imageProcessingAttempt)
+        .set({
+          state: "expired",
+          completedAt: new Date(),
+          error: "Universal Job lease expired",
+        })
+        .where(
+          and(
+            eq(imageProcessingAttempt.id, candidate.previousAttemptId),
+            eq(imageProcessingAttempt.state, "running"),
+          ),
+        );
     // Every lease gets a new server-chosen key. A late PUT authorized by an
     // earlier presigned URL can therefore never overwrite the next attempt.
     const derivativeKey =
@@ -551,25 +611,25 @@ export async function claimImageProcessingJob(
         .set({ key: derivativeKey!, status: "pending", failureReason: null })
         .where(eq(imageDerivative.id, candidate.derivativeId));
     }
-    const [leased] = await tx
+    await tx
       .update(imageProcessingJob)
       .set({
         state: "leased",
         attemptId,
-        leaseExpiresAt,
-        dispatchedAt: now,
+        dispatchedAt: new Date(),
       })
-      .where(eq(imageProcessingJob.id, candidate.id))
-      .returning({ leaseExpiresAt: imageProcessingJob.leaseExpiresAt });
-    if (!leased?.leaseExpiresAt)
-      throw new Error("Image-processing lease was not persisted");
-    const { previousAttemptId: _previousAttemptId, ...claimed } = candidate;
+      .where(eq(imageProcessingJob.id, candidate.id));
+    const {
+      previousAttemptId: _previousAttemptId,
+      executionId: _executionId,
+      ...claimed
+    } = candidate;
     return {
       ...claimed,
       imageId: parseEntityId("image", claimed.imageId),
       derivativeKey,
       attemptId,
-      leaseExpiresAt: leased.leaseExpiresAt,
+      leaseExpiresAt: execution.leaseExpiresAt,
     };
   });
 }
@@ -594,6 +654,7 @@ export async function getLeasedImageProcessingOutputKey(
         eq(imageProcessingJob.id, input.jobId),
         eq(imageProcessingJob.attemptId, input.attemptId),
         eq(imageProcessingJob.state, "leased"),
+        sql`EXISTS (SELECT 1 FROM "Job" j WHERE j.key='image-processing:' || ${imageProcessingJob.id}::text AND j.state=${jobState.enum.running} AND j."leaseToken"=${input.attemptId}::uuid AND j."leaseExpiresAt">now())`,
       ),
     )
     .limit(1);
@@ -637,7 +698,7 @@ export async function getLeasedImageProcessingJobContext(
         eq(imageProcessingJob.id, input.jobId),
         eq(imageProcessingJob.attemptId, input.attemptId),
         eq(imageProcessingJob.state, "leased"),
-        gt(imageProcessingJob.leaseExpiresAt, sql`now()`),
+        sql`EXISTS (SELECT 1 FROM "Job" j WHERE j.key='image-processing:' || ${imageProcessingJob.id}::text AND j.state=${jobState.enum.running} AND j."leaseToken"=${input.attemptId}::uuid AND j."leaseExpiresAt">now())`,
       ),
     )
     .limit(1);
@@ -654,13 +715,22 @@ export async function markImageProcessingWaitingForDevice(
   input: { jobId: string; attemptId: string },
 ): Promise<void> {
   await withTransaction(db, async (tx) => {
+    const execution = await externalJobClaim(
+      tx,
+      `image-processing:${input.jobId}`,
+      input.attemptId,
+      true,
+    );
+    if (!execution) return;
+    await publishJobPage(databaseForTransaction(tx), execution, {
+      done: false,
+      availableAt: new Date(Date.now() + 60_000),
+    });
     const rows = await tx
       .update(imageProcessingJob)
       .set({
         state: "waiting_for_device",
         attemptId: null,
-        leaseExpiresAt: null,
-        nextAttemptAt: sql`now() + interval '1 minute'`,
       })
       .where(
         and(
@@ -694,7 +764,6 @@ export async function backOffImageProcessingLease(
       .select({
         id: imageProcessingJob.id,
         derivativeId: imageProcessingJob.derivativeId,
-        failuresSinceRetry: imageProcessingJob.failuresSinceRetry,
       })
       .from(imageProcessingJob)
       .where(
@@ -709,7 +778,7 @@ export async function backOffImageProcessingLease(
     await settleImageProcessingFailure(tx, job, {
       reason: input.reason,
       retryable: true,
-      set: { attemptId: null, leaseExpiresAt: null },
+      set: { attemptId: null },
     });
     await recordImageProcessingEvent(tx, {
       jobId: input.jobId,
@@ -719,129 +788,6 @@ export async function backOffImageProcessingLease(
       details: { reason: input.reason },
     });
   });
-}
-
-/**
- * Retire a bounded page of obsolete sources and processors before repairing
- * wakeups. Current claim/repair fences also exclude the remainder of the page
- * so stale work cannot starve a live job or execute under a different processor.
- */
-async function skipObsoleteImageProcessingDispatchJobs(
-  db: Database,
-  limit: number,
-): Promise<void> {
-  await withTransaction(db, async (tx) => {
-    const obsolete = await tx
-      .select({
-        id: imageProcessingJob.id,
-        attempts: imageProcessingJob.attempts,
-        obsoleteSource: obsoleteImageProcessingSource(),
-      })
-      .from(imageProcessingJob)
-      .innerJoin(image, eq(image.id, imageProcessingJob.imageId))
-      .where(
-        and(
-          inArray(imageProcessingJob.state, ["pending", "waiting_for_device"]),
-          or(
-            obsoleteImageProcessingSource(),
-            sql`NOT ${currentImageProcessingProcessor()}`,
-          ),
-        ),
-      )
-      .orderBy(
-        asc(imageProcessingJob.nextAttemptAt),
-        asc(imageProcessingJob.id),
-      )
-      .limit(limit)
-      .for("update", { of: [imageProcessingJob, image], skipLocked: true });
-    if (!obsolete.length) return;
-
-    const ids = obsolete.map((job) => job.id);
-    const sourceIds = obsolete
-      .filter((job) => job.obsoleteSource)
-      .map((job) => job.id);
-    const sourceReason = "Original image is no longer current";
-    const processorReason = "Image processor revision is no longer current";
-    await tx
-      .update(imageProcessingJob)
-      .set({
-        state: "skipped",
-        attemptId: null,
-        leaseExpiresAt: null,
-        completedAt: sql`now()`,
-        lastError: sql`CASE WHEN ${sourceIds.length ? inArray(imageProcessingJob.id, sourceIds) : sql`false`}
-          THEN ${sourceReason} ELSE ${processorReason} END`,
-      })
-      .where(
-        and(
-          inArray(imageProcessingJob.id, ids),
-          inArray(imageProcessingJob.state, ["pending", "waiting_for_device"]),
-        ),
-      );
-    for (const job of obsolete) {
-      await recordImageProcessingEvent(tx, {
-        jobId: job.id,
-        eventKey: job.obsoleteSource ? "source-obsolete" : "processor-obsolete",
-        event: job.obsoleteSource
-          ? "dispatch.skipped_obsolete_source"
-          : "dispatch.skipped_obsolete_processor",
-        attempt: job.attempts,
-        level: "info",
-        details: {
-          reason: job.obsoleteSource ? sourceReason : processorReason,
-        },
-      });
-    }
-  });
-}
-
-/** Each job's state and last raw error, for a caller that just ran them. */
-export async function readImageProcessingJobStates(
-  db: Database,
-  jobIds: readonly string[],
-) {
-  if (!jobIds.length) return [];
-  return getDb(db)
-    .select({
-      id: imageProcessingJob.id,
-      state: imageProcessingJob.state,
-      lastError: imageProcessingJob.lastError,
-      nextAttemptAt: imageProcessingJob.nextAttemptAt,
-    })
-    .from(imageProcessingJob)
-    .where(inArray(imageProcessingJob.id, [...jobIds]));
-}
-
-/** Bounded repair after a post-commit queue publication was missed. */
-export async function findImageProcessingDispatchRepairs(
-  db: Database,
-  limit: number,
-): Promise<string[]> {
-  await skipObsoleteImageProcessingDispatchJobs(db, limit);
-  const rows = await getDb(db)
-    .select({ id: imageProcessingJob.id })
-    .from(imageProcessingJob)
-    .innerJoin(
-      image,
-      and(
-        eq(image.id, imageProcessingJob.imageId),
-        notDeleted(image),
-        eq(image.status, "UPLOADED"),
-        eq(image.sha256, imageProcessingJob.sourceContentHash),
-      ),
-    )
-    .where(
-      and(
-        currentImageProcessingProcessor(),
-        or(
-          eq(imageProcessingJob.state, "pending"),
-          eq(imageProcessingJob.state, "waiting_for_device"),
-        ),
-      ),
-    )
-    .orderBy(asc(imageProcessingJob.nextAttemptAt), asc(imageProcessingJob.id))
-    .limit(limit);
-  return rows.map((row) => row.id);
 }
 
 /** Bounded maintenance retry; old result/runtime remains immutable history. */
@@ -886,6 +832,13 @@ export async function retryFailedImageProcessingJobs(
       .for("update", { skipLocked: true });
     if (!rows.length) return [];
     const ids = rows.map((row) => row.id);
+    for (const id of ids) {
+      const [execution] = await tx
+        .select({ id: durableJob.id })
+        .from(durableJob)
+        .where(eq(durableJob.key, `image-processing:${id}`));
+      if (execution) await retryJob(databaseForTransaction(tx), execution.id);
+    }
     if (options?.submissionId)
       await tx
         .insert(imageProcessingSubmissionJob)
@@ -903,11 +856,8 @@ export async function retryFailedImageProcessingJobs(
       .set({
         state: "pending",
         attemptId: null,
-        leaseExpiresAt: null,
-        nextAttemptAt: sql`now()`,
         lastError: null,
         completedAt: null,
-        failuresSinceRetry: 0,
         submissionId: options?.submissionId ?? null,
       })
       .where(inArray(imageProcessingJob.id, ids));
@@ -987,7 +937,6 @@ type CompletionJob = {
   kind: ImageProcessingJobKind;
   state: ImageProcessingJobState;
   attemptId: string | null;
-  failuresSinceRetry: number;
   leaseValid: boolean;
   sourceContentHash: string;
   processorRevision: number;
@@ -1046,7 +995,7 @@ function canAdoptCompletion(
  */
 async function settleImageProcessingFailure(
   tx: DrizzleTransaction,
-  job: { id: string; derivativeId: string | null; failuresSinceRetry: number },
+  job: { id: string; derivativeId: string | null },
   input: {
     reason: string;
     retryable: boolean;
@@ -1054,24 +1003,24 @@ async function settleImageProcessingFailure(
     retryAt?: SQL | Date;
   },
 ): Promise<boolean> {
-  const failures = job.failuresSinceRetry + 1;
-  const retry = input.retryable && failures < IMAGE_PROCESSING_MAX_ATTEMPTS;
-  const reason =
-    input.retryable && !retry
-      ? `${input.reason} (stopped after ${failures} attempts)`
-      : input.reason;
+  const execution = await externalJobClaim(
+    tx,
+    `image-processing:${job.id}`,
+    undefined,
+    true,
+  );
+  if (!execution) return false;
+  if (!input.retryable) execution.attempts = execution.maxAttempts;
+  await failJob(databaseForTransaction(tx), execution, new Error(input.reason));
+  const retry = input.retryable && execution.attempts < execution.maxAttempts;
+  const reason = input.reason;
   await tx
     .update(imageProcessingJob)
     .set({
       ...input.set,
-      failuresSinceRetry: failures,
       lastError: reason,
-      ...(retry
-        ? {
-            state: "pending",
-            nextAttemptAt: input.retryAt ?? sql`now() + interval '1 minute'`,
-          }
-        : { state: "failed", completedAt: sql`now()` }),
+      state: retry ? "pending" : "failed",
+      ...(retry ? {} : { completedAt: new Date() }),
     })
     .where(eq(imageProcessingJob.id, job.id));
   if (!retry && job.derivativeId)
@@ -1091,7 +1040,6 @@ async function adoptTerminalCompletion(
   if (outcome.status === "completed") return false;
   const base = {
     attemptId: null,
-    leaseExpiresAt: null,
     runtime: input.runtime ?? null,
     result: outcome,
   };
@@ -1199,7 +1147,6 @@ async function adoptSuccessfulCompletion(
     .update(imageProcessingJob)
     .set({
       attemptId: null,
-      leaseExpiresAt: null,
       runtime: input.runtime ?? null,
       result: outcome,
       state: "ready",
@@ -1221,6 +1168,12 @@ export async function completeImageProcessingJob(
 ): Promise<{ adopted: boolean; orphanKey: string | null }> {
   let settledPhotoRunId: string | null = null;
   const completion = await withTransaction(db, async (tx) => {
+    const execution = await externalJobClaim(
+      tx,
+      `image-processing:${input.result.jobId}`,
+      input.result.attemptId,
+      true,
+    );
     const [job] = await tx
       .select({
         id: imageProcessingJob.id,
@@ -1230,8 +1183,7 @@ export async function completeImageProcessingJob(
         kind: imageProcessingJob.kind,
         state: imageProcessingJob.state,
         attemptId: imageProcessingJob.attemptId,
-        failuresSinceRetry: imageProcessingJob.failuresSinceRetry,
-        leaseValid: sql<boolean>`${imageProcessingJob.leaseExpiresAt} > now()`,
+        leaseValid: sql<boolean>`${Boolean(execution)}::boolean`,
         sourceContentHash: imageProcessingJob.sourceContentHash,
         processorRevision: imageProcessingJob.processorRevision,
         imageHash: image.sha256,
@@ -1251,7 +1203,11 @@ export async function completeImageProcessingJob(
       )
       .where(eq(imageProcessingJob.id, input.result.jobId))
       .for("update", { of: [imageProcessingJob, image] });
-    if (!canAdoptCompletion(job, input)) {
+    if (
+      !canAdoptCompletion(job, input) ||
+      !execution ||
+      execution.leaseExpiresAt.getTime() <= Date.now()
+    ) {
       const attempt = await tx.query.imageProcessingAttempt.findFirst({
         where: and(
           eq(imageProcessingAttempt.id, input.result.attemptId),
@@ -1307,6 +1263,29 @@ export async function completeImageProcessingJob(
       level: outcome.status === "failed" ? "error" : "info",
       details: outcome,
     });
+    if (outcome.status !== "failed") {
+      const published = await publishJobPage(
+        databaseForTransaction(tx),
+        execution,
+        {
+          done: true,
+          result: {
+            outcome: outcome.status,
+            attemptId: input.result.attemptId,
+          },
+        },
+      );
+      if (!published) throw new JobSupersededError();
+    }
+    if (outcome.status === "failed")
+      await repositoryBeforeCommit(
+        tx,
+        async () => {
+          if (execution.leaseExpiresAt.getTime() <= Date.now())
+            throw new JobSupersededError();
+        },
+        { phase: "publication" },
+      );
     if (job.kind === "describe_image") settledPhotoRunId = job.runId;
     return { adopted: true, orphanKey: null };
   });
@@ -1654,6 +1633,13 @@ export async function releaseAssignedImageProcessingJob(
   input: { jobId: string; attemptId: string; deviceId: string; userId: string },
 ): Promise<boolean> {
   return withTransaction(db, async (tx) => {
+    const execution = await externalJobClaim(
+      databaseForTransaction(tx),
+      `image-processing:${input.jobId}`,
+      input.attemptId,
+      true,
+    );
+    if (!execution) return false;
     const [assignment] = await tx
       .select({
         executor: imageProcessingAttempt.executor,
@@ -1702,13 +1688,14 @@ export async function releaseAssignedImageProcessingJob(
         error: "Background execution released",
       })
       .where(eq(imageProcessingAttempt.id, input.attemptId));
+    await publishJobPage(databaseForTransaction(tx), execution, {
+      done: false,
+    });
     await tx
       .update(imageProcessingJob)
       .set({
         state: "pending",
         attemptId: null,
-        leaseExpiresAt: null,
-        nextAttemptAt: sql`now() + interval '1 minute'`,
         lastError: "Background execution released",
       })
       .where(eq(imageProcessingJob.id, input.jobId));

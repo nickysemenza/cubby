@@ -17,6 +17,7 @@ import {
   vendor,
 } from "~/server/db/schema";
 import { publishAssessment } from "~/server/generic/assessment/repo/assessment";
+import { transitionAssessmentStates } from "~/server/generic/assessment/repo/assessment-state";
 
 /** Freeze every Purchase reached by this Email commit, including credits and unknown costs. */
 export async function importedMailJudgment(
@@ -118,16 +119,16 @@ export async function publishMailImportOutcome(
   );
   // Preserve every historical outcome; only the newest result is a current
   // review candidate for the same Run and Email.
-  await getDb(db)
-    .update(assessmentState)
-    .set({ active: false, status: "superseded", updatedAt: new Date() })
-    .where(
-      and(
-        eq(assessmentState.family, "mail_import_outcome"),
-        ne(assessmentState.id, published.id),
-        eq(assessmentState.runId, input.runId),
-        eq(assessmentState.recordId, input.emailId),
-      ),
-    );
+  await transitionAssessmentStates(
+    db,
+    and(
+      eq(assessmentState.family, "mail_import_outcome"),
+      ne(assessmentState.id, published.id),
+      eq(assessmentState.runId, input.runId),
+      eq(assessmentState.recordId, input.emailId),
+    ),
+    { active: false, status: "superseded" },
+    { kind: "superseded_by_publication" },
+  );
   return published;
 }

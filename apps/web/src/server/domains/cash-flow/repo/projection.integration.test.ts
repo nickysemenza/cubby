@@ -9,6 +9,7 @@ import { describe, expect, it } from "vitest";
 
 import { getDb } from "~/server/db/helpers";
 import { project } from "~/server/db/schema";
+import { insertPayloadWithIdentity } from "~/server/entity-kernel/repo/entity-identity-writer";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 import { cashFlowProjection } from "./projection";
@@ -57,15 +58,14 @@ const projectRow = (
  * counts, and other-project spend does not. Two sparse roots are Irregular.
  */
 const fixture = async () => {
-  const [household] = await getDb(ctx.db)
-    .insert(project)
-    .values({
+  const household = await getDb(ctx.db).transaction((tx) =>
+    insertPayloadWithIdentity(tx, project, "project", {
       shortcode: testShortcode("project", "PRJ-HSHD"),
       name: "Household project",
       status: "in_progress",
       costEstimate: 9000,
-    })
-    .returning({ id: project.id });
+    }),
+  );
   const regular = await insertWithShortcode(ctx.db, "spendingCategory", {
     name: "Synthetic regular root",
   });

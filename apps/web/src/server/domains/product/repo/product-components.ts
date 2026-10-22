@@ -73,6 +73,7 @@ import {
 } from "~/server/entity-kernel/repo/relation-preflight";
 import { logAuditEntry } from "~/server/generic/audit-log/repo/audit-log";
 import {
+  assertLiveLinkEndpoints,
   linkQuantity,
   linkValues,
   liveLinks,
@@ -607,6 +608,10 @@ export async function attachProductComponents(
     assertComponentsAttachable(parentProductId, pre);
 
     const before = await liveComponentShortcodes(tx, parentProductId);
+    await assertLiveLinkEndpoints(tx, "productComponent", [
+      parentProductId,
+      ...componentProductIds,
+    ]);
     const inserted = await tx
       .insert(entityLink)
       .values(

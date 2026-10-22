@@ -44,7 +44,7 @@ export const repositoryBeforeCommit = (
   db: RepositoryQueryInput,
   effect: (tx: RepositoryQueryTransaction) => Promise<void>,
   options?: {
-    phase?: "validation" | "fence" | "capture";
+    phase?: "validation" | "fence" | "capture" | "publication";
     changedKeys?: readonly string[];
   },
 ): Promise<void> => runBeforeCommit(db, effect, options);

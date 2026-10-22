@@ -49,8 +49,6 @@ export const connectionHandlers = implementOperationDomain(connectionContract, {
         runId,
         purpose: "ai_refresh",
         automatic: true,
-        reportAdmissionRefusal:
-          scheduled.kind === "recoverable" ? true : undefined,
       });
     const codes = runId
       ? await lookupShortcodes(context.db, [parseEntityRef("run", runId)])

@@ -9,66 +9,21 @@ import {
 } from "@cubby/schemas/run-fields";
 import { runWorkSamples } from "@cubby/schemas/run-work-progress";
 import { and, eq } from "drizzle-orm";
-import { z } from "zod";
 
 import type { Database } from "~/server/db";
 import { getDb, withTransactionDatabase } from "~/server/db/helpers/core";
 import { notDeleted } from "~/server/db/helpers/predicates";
-import { run } from "~/server/db/schema";
-import {
-  isWorkflowRunPurpose,
-  workflowInstanceId,
-} from "~/server/workflows/runs/contract";
-import {
-  productionWorkflowLauncher,
-  type WorkflowInstanceStatus,
-  type WorkflowLauncher,
-} from "~/server/workflows/runs/launcher";
-
-/**
- * Cloudflare's view of the Run's current attempt, or null when it cannot be
- * read (no binding outside the Worker, an API error). Diagnostics only: the
- * Run row stays the record, and a missing instance is reported as such.
- */
-async function instanceStatus(
-  launcher: WorkflowLauncher,
-  purpose: Parameters<WorkflowLauncher["status"]>[0],
-  id: string,
-): Promise<WorkflowInstanceStatus | null> {
-  try {
-    return await launcher.status(purpose, id);
-  } catch {
-    // SILENT: an unreadable instance only drops the optional diagnostic line.
-    return null;
-  }
-}
-
-/** The Workflow attempt behind a Gmail Run, with Cloudflare's view of it. */
-async function workflowAttempt(
-  launcher: WorkflowLauncher,
-  run: { purpose: string; shortcode: string },
-  attempt: number,
-) {
-  if (!isWorkflowRunPurpose(run.purpose) || attempt === 0) return null;
-  const instanceId = workflowInstanceId(run.shortcode, attempt);
-  return {
-    purpose: run.purpose,
-    attempt,
-    instanceId,
-    instance: await instanceStatus(launcher, run.purpose, instanceId),
-  };
-}
+import { run, job } from "~/server/db/schema";
+import { currentJobExecution } from "~/server/generic/jobs/context";
+import { assertCurrentJob } from "~/server/generic/jobs/repo/execution";
 
 /** The small, durable progress read shared by every Run detail page. */
-export async function getRunLiveProgress(
-  db: Database,
-  shortcode: string,
-  launcher: WorkflowLauncher = productionWorkflowLauncher,
-) {
+export async function getRunLiveProgress(db: Database, shortcode: string) {
   const database = getDb(db);
   const [record] = await database
     .select({
       run: {
+        id: run.id,
         status: run.status,
         purpose: run.purpose,
         shortcode: run.shortcode,
@@ -87,14 +42,20 @@ export async function getRunLiveProgress(
     record.run.purpose === "mail_discovery"
       ? mailDiscoveryRunProgress.safeParse(record.run.progress).data
       : undefined;
-  const workflowProgress = z
-    .object({ attempt: z.number() })
-    .safeParse(record.run.progress);
-  const workflow = await workflowAttempt(
-    launcher,
-    record.run,
-    workflowProgress.success ? workflowProgress.data.attempt : 0,
-  );
+  const { job } = await import("~/server/db/retained-tables");
+  const [execution] = await database
+    .select()
+    .from(job)
+    .where(eq(job.key, `run:${record.run.id}`))
+    .limit(1);
+  const workflow = execution
+    ? {
+        purpose: record.run.purpose,
+        attempt: execution.generation,
+        instanceId: execution.id,
+        instance: { state: execution.state, error: execution.error },
+      }
+    : null;
   const events = record.run.progressHistory ?? [];
   return {
     status: runStatus.parse(record.run.status),
@@ -135,6 +96,8 @@ export async function recordRunProgress(
 ): Promise<{ recorded: boolean }> {
   const id = runEntityId.parse(input.runId);
   return withTransactionDatabase(db, async (database) => {
+    const owner = currentJobExecution();
+    if (owner) await assertCurrentJob(database);
     const tx = getDb(database);
     const [current] = await tx
       .select()
@@ -144,12 +107,17 @@ export async function recordRunProgress(
     if (!current) throw new Error("Progress Run does not exist");
     const eventIds = current.progressEventIds ?? [];
     if (eventIds.includes(input.eventId)) return { recorded: false };
-    const workflow = z
-      .object({ attempt: z.number() })
-      .safeParse(current.progress);
+    const [execution] = current.dispatchEventId
+      ? []
+      : await tx
+          .select({ id: job.id, generation: job.generation })
+          .from(job)
+          .where(eq(job.key, `run:${id}`));
     const generation =
       current.dispatchEventId ??
-      (workflow.success ? `workflow:${workflow.data.attempt}` : null);
+      (execution && owner?.claim.id === execution.id
+        ? `job:${execution.generation}`
+        : null);
     if (generation !== input.generation) return { recorded: false };
     if (
       current.liveProgress?.generation === input.generation &&

@@ -1,8 +1,7 @@
-// Types only, importing nothing but schema types: the global
+// Types only, importing nothing: the global
 // worker-environment.d.ts reaches this file through worker-bindings.ts, and
 // tsc re-checks the whole program after an edit to anything it reaches
 // (`git show 18f8bd430:docs/reports/local-check-performance.md`).
-import type { ProblemsCount } from "@cubby/schemas/problems";
 
 export interface DatabaseFreshness {
   lastWriteAt: number;
@@ -13,5 +12,4 @@ export interface DatabaseFreshness {
 export interface DatabaseFreshnessRpc {
   readFreshness(): DatabaseFreshness;
   recordWrite(): Promise<DatabaseFreshness>;
-  getProblemCounts(): Promise<ProblemsCount>;
 }

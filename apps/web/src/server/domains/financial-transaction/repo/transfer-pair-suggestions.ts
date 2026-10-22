@@ -30,7 +30,7 @@ import {
 } from "@cubby/schemas/transfer-pair-suggestion";
 import { cents } from "@cubby/shared";
 import { sha256Hex } from "@cubby/shared/sha256";
-import { type SQL, eq, sql } from "drizzle-orm";
+import { type SQL, and, eq, inArray, sql } from "drizzle-orm";
 import { chunk, uniq, uniqBy } from "es-toolkit";
 import { z } from "zod";
 
@@ -59,6 +59,10 @@ import { statementTransactionKind } from "~/server/domains/statement-import/repo
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { createAppError } from "~/server/errors/app-error";
 import { publishAssessment } from "~/server/generic/assessment/repo/assessment";
+import {
+  transitionAssessmentState,
+  transitionAssessmentStates,
+} from "~/server/generic/assessment/repo/assessment-state";
 import { settlementRefsFor } from "~/server/generic/entity-links/repo/entity-external-ids";
 import { canonicalJson } from "~/server/lib/canonical-json";
 import {
@@ -69,6 +73,7 @@ import { runFailureText } from "~/server/workflows/runs/lifecycle";
 
 /** Rule revision stamped on every published pair; bump with any policy change. */
 const TRANSFER_PAIR_REVISION = "2026-10-19.1";
+const stateData = z.record(z.string(), z.json());
 /** Candidates: the opposite leg posted within this many days. */
 const CANDIDATE_WINDOW_DAYS = 5;
 /** A clean pair's legs are at most this many days apart. */
@@ -1144,27 +1149,28 @@ export async function publishTransferPair(
       // The state follows the Run that last confirmed it, so a later
       // run-scoped label pass still finds a pair an earlier Run left unlabelled.
       if (producer.runId)
-        await client.execute(sql`
-          UPDATE "AssessmentState" SET "runId" = ${producer.runId}::uuid, "updatedAt" = now()
-          WHERE id IN (${sql.join(
-            same.map((row) => sql`${row.id}::uuid`),
-            sql`, `,
-          )}) AND "runId" IS DISTINCT FROM ${producer.runId}::uuid
-        `);
+        await transitionAssessmentStates(
+          tx,
+          inArray(
+            assessmentState.id,
+            same.map((row) => row.id),
+          ),
+          { runId: producer.runId },
+          { kind: "transfer_pair_reconfirmed" },
+        );
       return "unchanged";
     }
     const retire = prior.filter((row) => row.active).map((row) => row.id);
     if (retire.length)
-      await client.execute(sql`
-        UPDATE "AssessmentState"
-        SET active = false,
-          status = CASE WHEN status = ${suggestionStatus.enum.pending} THEN ${suggestionStatus.enum.superseded} ELSE status END,
-          "updatedAt" = now()
-        WHERE id IN (${sql.join(
-          retire.map((id) => sql`${id}::uuid`),
-          sql`, `,
-        )})
-      `);
+      await transitionAssessmentStates(
+        tx,
+        inArray(assessmentState.id, retire),
+        (row) => ({
+          active: false,
+          ...(row.status === "pending" && { status: "superseded" }),
+        }),
+        { kind: "superseded_by_publication" },
+      );
     const data: TransferPairStateData = {
       pairKey: judgment.key,
       outflowAccountId: pair.outflowAccountId,
@@ -1260,14 +1266,20 @@ export async function refreshTransferPairStatements(
         runId: null,
         evaluationId: null,
       });
-    await client.execute(sql`
-      UPDATE "AssessmentState"
-      SET data = jsonb_set(data, '{statementRefreshPending}', 'false'::jsonb), "updatedAt" = now()
-      WHERE id IN (${sql.join(
-        receipts.map((receipt) => sql`${receipt.id}::uuid`),
-        sql`, `,
-      )})
-    `);
+    await transitionAssessmentStates(
+      tx,
+      inArray(
+        assessmentState.id,
+        receipts.map((receipt) => receipt.id),
+      ),
+      (row) => ({
+        data: {
+          ...stateData.parse(row.data ?? {}),
+          statementRefreshPending: false,
+        },
+      }),
+      { kind: "transfer_pair_statement_refreshed" },
+    );
     return true;
   });
 }
@@ -1463,11 +1475,17 @@ export async function generateTransferPairSuggestionsPage(
           const retired = await withTransactionDatabase(db, async (tx) => {
             await assertWorkflowEffect(tx);
             await getDb(tx).execute(pairLock(row.pairKey));
-            const { rowCount } = await unwrapDb(tx).execute(sql`
-            UPDATE "AssessmentState" SET active = false, status = ${suggestionStatus.enum.superseded}, "updatedAt" = now()
-            WHERE id = ${row.id}::uuid AND active AND status = ${suggestionStatus.enum.pending}
-          `);
-            return rowCount ?? 0;
+            const retiredRows = await transitionAssessmentStates(
+              tx,
+              and(
+                eq(assessmentState.id, row.id),
+                eq(assessmentState.active, true),
+                eq(assessmentState.status, "pending"),
+              ),
+              { active: false, status: "superseded" },
+              { kind: "transfer_pair_out_of_scope" },
+            );
+            return retiredRows.length;
           });
           page.retired += retired;
         } catch (error) {
@@ -1861,12 +1879,17 @@ export async function applyTransferPair(
     );
     if (!accepted.canProceed) throw refused(accepted.reason);
     // Every other pending pair naming either leg lost it.
-    await unwrapDb(tx).execute(sql`
-      UPDATE "AssessmentState" s SET active = false, status = ${suggestionStatus.enum.superseded}, "updatedAt" = now()
-      WHERE s.family = ${assessmentFamily.enum.transfer_pair} AND s.active AND s.status = ${suggestionStatus.enum.pending}
-        AND ${legKeysAny(legKeys)}
-        ${input.stateId ? sql`AND s.id <> ${input.stateId}::uuid` : sql``}
-    `);
+    await transitionAssessmentStates(
+      tx,
+      sql`${assessmentState.family} = ${assessmentFamily.enum.transfer_pair} AND ${assessmentState.active} AND ${assessmentState.status} = ${suggestionStatus.enum.pending}
+        AND ${assessmentState.data}->'legKeys' ?| ARRAY[${sql.join(
+          legKeys.map((key) => sql`${key}`),
+          sql`, `,
+        )}]::text[]
+        ${input.stateId ? sql`AND ${assessmentState.id} <> ${input.stateId}::uuid` : sql``}`,
+      { active: false, status: "superseded" },
+      { kind: "transfer_pair_leg_taken" },
+    );
     return {
       transferId: accepted.transferId,
       outflowTransactionId,
@@ -1894,10 +1917,12 @@ export async function applyTransferPairSuggestion(
     const published = transferPairJudgment.parse(prediction?.judgment);
     if (state.status !== "pending" || !state.fingerprint)
       throw refused("This transfer pair suggestion is no longer pending.");
-    await getDb(tx)
-      .update(assessmentState)
-      .set({ status: "applied" })
-      .where(eq(assessmentState.id, state.id));
+    await transitionAssessmentState(
+      tx,
+      state.id,
+      { status: "applied" },
+      { kind: "transfer_pair_applied" },
+    );
     await applyTransferPair(tx, context, {
       key: subject.pairKey,
       expectedFingerprint: input.expectedFingerprint ?? state.fingerprint,

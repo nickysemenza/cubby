@@ -1,9 +1,5 @@
 import { describe, expect, expectTypeOf, it } from "vitest";
-import {
-  backgroundTaskSchema,
-  RECIPE_RECOMPUTE_CHUNK_SIZE,
-} from "./background-tasks";
-import type { RecipeId } from "./identifiers";
+import { backgroundTaskSchema } from "./background-tasks";
 import { backgroundTaskMessageSchema } from "./queue-messages";
 import { telemetryMessageV1Schema } from "./telemetry";
 import { testEntityId } from "./test-support/identifiers";
@@ -11,55 +7,51 @@ import { testEntityId } from "./test-support/identifiers";
 const requestedAt = "2026-09-12T12:00:00.000Z";
 
 describe("background task messages", () => {
-  it("parses a version-2 message and brands the task's ids", () => {
+  it("transports only a strict version-3 wake while admission keeps branded inputs", () => {
     const entityId = testEntityId("product", "embedding");
-    const parsed = backgroundTaskMessageSchema.parse({
-      version: 2,
-      queueType: "background",
-      task: {
-        kind: "entity-embedding.refresh",
-        requestedAt,
-        entityKind: "product",
-        entityId,
-      },
-    });
-    if (parsed.task.kind !== "entity-embedding.refresh")
-      throw new Error("wrong kind");
-    // The ref is the branded pair; its id is a union over searchable entities
-    // because the message does not narrow the entity type statically.
-    expectTypeOf(parsed.task.ref.id).toMatchTypeOf<string>();
-    expect(parsed.task.ref).toEqual({ entity: "product", id: entityId });
-  });
-
-  it("rejects the retired version-1 wakeup instead of treating it as work", () => {
-    const result = backgroundTaskMessageSchema.safeParse({
-      version: 1,
-      queueType: "background",
-      batchId: "b",
-      jobId: "j",
-      kind: "recipe-totals.recompute",
-    });
-    expect(result.success).toBe(false);
-  });
-
-  it("bounds a recipe recompute task to one chunk", () => {
-    const recipeId = testEntityId("recipe", "totals");
     const parsed = backgroundTaskSchema.parse({
-      kind: "recipe-totals.recompute",
+      kind: "entity-embedding.refresh",
       requestedAt,
-      recipeIds: [recipeId],
+      entityKind: "product",
+      entityId,
     });
-    if (parsed.kind !== "recipe-totals.recompute") throw new Error("wrong");
-    expectTypeOf(parsed.recipeIds).toEqualTypeOf<RecipeId[]>();
+    if (parsed.kind !== "entity-embedding.refresh")
+      throw new Error("wrong kind");
+    expectTypeOf(parsed.ref.id).toMatchTypeOf<string>();
+    expect(parsed.ref).toEqual({ entity: "product", id: entityId });
     expect(
-      backgroundTaskSchema.safeParse({
-        kind: "recipe-totals.recompute",
-        requestedAt,
-        recipeIds: Array.from({ length: RECIPE_RECOMPUTE_CHUNK_SIZE + 1 }, () =>
-          testEntityId("recipe", "too-many"),
-        ),
+      backgroundTaskMessageSchema.parse({
+        version: 3,
+        queueType: "background",
+      }),
+    ).toEqual({ version: 3, queueType: "background" });
+    expect(
+      backgroundTaskMessageSchema.safeParse({
+        version: 3,
+        queueType: "background",
+        task: parsed,
       }).success,
     ).toBe(false);
+    expect(
+      backgroundTaskMessageSchema.safeParse({
+        version: 2,
+        queueType: "background",
+        task: parsed,
+      }).success,
+    ).toBe(false);
+  });
+
+  it("rejects retired execution admissions instead of silently accepting work", () => {
+    for (const kind of [
+      "workflow.continue",
+      "derived-refresh.wakeup",
+      "recipe-totals.recompute",
+      "maintenance.recover",
+    ]) {
+      expect(
+        backgroundTaskSchema.safeParse({ kind, requestedAt }).success,
+      ).toBe(false);
+    }
   });
 
   it("leaves telemetry on its version-1 envelope", () => {

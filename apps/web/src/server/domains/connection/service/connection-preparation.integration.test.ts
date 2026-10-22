@@ -1,7 +1,6 @@
 import { workQueueHouseholdInput } from "@cubby/schemas/work-queue";
 import { fromPartial } from "@total-typescript/shoehorn";
 import { and, eq } from "drizzle-orm";
-import { TEST_AI_WORK_LAUNCHER } from "tooling/ai-work";
 import { buildEntity } from "tooling/factories/build";
 import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
@@ -19,24 +18,23 @@ import {
   expense,
   searchDocument,
   product,
-  derivedRefreshWork,
 } from "~/server/db/schema";
 import { inferFieldAssessments } from "~/server/domains/run/operations/ai.server";
 import { scheduleConnectionRefresh } from "~/server/domains/run/repo/connection-refresh";
 import { systemActor } from "~/server/domains/run/repo/ensure-run";
-import { executeAiRefreshTarget } from "~/server/domains/run/service/ai-refresh";
-import { processDerivedRefreshPage } from "~/server/domains/run/service/derived-refresh";
+import { executeAiRefreshTarget as executeAiRefreshTargetImplementation } from "~/server/domains/run/service/ai-refresh";
 import {
   kernelCtx,
   PRIMARY_MODEL,
 } from "~/server/domains/run/service/suggestion-sweep.fixtures";
 import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
-import { foldDerivedRefreshCaptures } from "~/server/generic/derived-refresh/repo/capture";
-import { processConnectionRetirementPage } from "~/server/generic/derived-refresh/repo/connection-retirement";
 import { getSemanticEmbeddingConfig } from "~/server/generic/embedding/service/semantic/config";
 import { createInMemoryVectorizeIndex } from "~/server/generic/embedding/service/semantic/vector-store";
+import { enqueueJob } from "~/server/generic/jobs/repo/jobs";
+import { advanceJob } from "~/server/generic/jobs/service/jobs";
 import { refreshSearchDocument } from "~/server/generic/search/repo/search-document";
 import { readWorkQueueWith } from "~/server/generic/work-queue/repo/work-queue";
+import { drainDerivedRefreshFrontier } from "~/server/testing/background-queue";
 import { captureBackgroundQueue } from "~/server/testing/background-queue";
 import {
   createProductFixture,
@@ -48,6 +46,24 @@ import { controlWorkflowRun } from "~/server/workflows/runs/control";
 
 import { readEntityConnections } from "../repo/entity-connections";
 import { prepareEntityConnections } from "./entity-connections";
+
+const executeAiRefreshTarget = async (
+  ...args: Parameters<typeof executeAiRefreshTargetImplementation>
+) => {
+  const saved = await enqueueJob(args[0], {
+    key: `ai-evaluation:${args[1]}`,
+    kind: "ai.evaluation",
+    input: { evaluationId: args[1] },
+  });
+  return advanceJob(args[0], saved.id, {
+    "ai.evaluation": {
+      prepare: async () => {
+        await executeAiRefreshTargetImplementation(...args);
+        return { page: { done: true } };
+      },
+    },
+  });
+};
 
 // Existing rollback scenarios deliberately put all units in one caller-owned
 // transaction to verify that a publisher cannot escape its database capability.
@@ -91,16 +107,7 @@ describe("connection preparation and publication authority", () => {
       trade: "electrical",
       subjectProductId: null,
     });
-    let drained = false;
-    for (let page = 0; page < 250; page++) {
-      const result = await processDerivedRefreshPage(ctx.db);
-      expect(result.errors).toEqual([]);
-      if (result.done) {
-        drained = true;
-        break;
-      }
-    }
-    expect(drained).toBe(true);
+    await drainDerivedRefreshFrontier(ctx.db);
     return {
       source: { entityKind: "task" as const, entityId: task.output.id },
       task,
@@ -157,10 +164,7 @@ describe("connection preparation and publication authority", () => {
     });
     await refreshSearchDocument(ctx.db, "product", target.entityId);
     await refreshSearchDocument(ctx.db, "expense", payment.entityId);
-    await foldDerivedRefreshCaptures(ctx.db);
-    await getDb(ctx.db)
-      .update(derivedRefreshWork)
-      .set({ state: "completed", publishing: false });
+    await drainDerivedRefreshFrontier(ctx.db);
     const source = {
       entityKind: "expense",
       entityId: payment.output.id,
@@ -250,7 +254,6 @@ describe("connection preparation and publication authority", () => {
             ctx.actor,
             { runPublicId: owner.shortcode, action: "cancel" },
             "ai_refresh",
-            TEST_AI_WORK_LAUNCHER,
           );
         } else {
           const feature = activation.manifest["entity-connections"];
@@ -497,7 +500,7 @@ describe("connection preparation and publication authority", () => {
     ).toEqual([]);
   });
 
-  it("rejects stale field evidence immediately and retires household Work in the background", async () => {
+  it("rejects stale field evidence on read while retained household counts may lag", async () => {
     const { source, item } = await fixture();
     const publish = await prepareCombinedConnections(
       ctx.db,
@@ -557,21 +560,6 @@ describe("connection preparation and publication authority", () => {
       ctx.actor,
     );
     expect(after.items).toContainEqual(
-      expect.objectContaining({
-        key: "suggestions:field",
-        suggestionFamily: "field",
-      }),
-    );
-    await processConnectionRetirementPage(ctx.db);
-    const retired = await readWorkQueueWith(
-      async () => [],
-      ctx.db,
-      null,
-      workQueueHouseholdInput.parse({ pageSize: 100 }),
-      false,
-      ctx.actor,
-    );
-    expect(retired.items).not.toContainEqual(
       expect.objectContaining({
         key: "suggestions:field",
         suggestionFamily: "field",

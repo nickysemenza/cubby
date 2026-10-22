@@ -1,5 +1,4 @@
 import { eq } from "drizzle-orm";
-import { buildEntity } from "tooling/factories/build";
 import { createRepoIdentity } from "tooling/factories/repo";
 import { buildKernelContext } from "tooling/scenarios/context";
 import { countTestDbQueries, withTestDb } from "tooling/test-setup";
@@ -15,7 +14,6 @@ import {
   aiEvaluation,
   entityLink,
   expense,
-  ingredient,
   inventoryEntry,
   location,
   product,
@@ -24,12 +22,21 @@ import {
 } from "~/server/db/schema";
 import { connectionHandlers } from "~/server/domains/connection/operations/connection.server";
 import { acquisitionPairEligible } from "~/server/domains/connection/repo/connection-candidates";
+import { captureConnectionBasis } from "~/server/domains/connection/repo/connection-evidence";
+import {
+  publishEntityConnection,
+  readEntityConnections,
+} from "~/server/domains/connection/repo/entity-connections";
 import { confirmPurchaseAcquisition } from "~/server/domains/purchase/repo/purchase-products";
+import { getEntityRecommendations } from "~/server/domains/recommendation/service/entity-recommendations.service";
 import { refreshSearchDocument } from "~/server/generic/search/repo/search-document";
-import { reconcileDerivedRefreshInputs } from "~/server/testing/background-queue";
+import {
+  reconcileDerivedRefreshInputs,
+  withJobFixtureExecution,
+} from "~/server/testing/background-queue";
+import { deleteThroughKernel } from "~/server/testing/entity-kernel";
 import {
   createInventoryFixture,
-  createIngredientFixture,
   createLocationFixture,
   createProductIdentityFixture,
   makeProductInput,
@@ -51,9 +58,11 @@ const reconciledSourceFingerprint = async (
 
 const each = (value: number) => ({ value, unit: "each" }) as const;
 
-// Failure mode: completing a negative scan permanently hides a later endpoint,
-// or a projection rebuild creates unnecessary new evaluations with identical content.
-describe("connection discovery roster freshness", () => {
+// Retained boundary after removing corpus epochs: endpoint-owned scheduling,
+// source changes reopening negative scans, and stale published evidence hiding.
+// acquisition-discovery retains retrieval gates; field-input-fence retains stale
+// basis rejection on apply and unchanged-save advice availability.
+describe("connection discovery source freshness", () => {
   const ctx = withTestDb();
   beforeEach(async () => {
     await getDb(ctx.db).insert(user).values({
@@ -66,7 +75,7 @@ describe("connection discovery roster freshness", () => {
     });
   });
   it.each(["failed", "dispatch_failed", "cancelled"] as const)(
-    "returns the %s owner when explicit rediscovery finds its retained work",
+    "keeps the %s owner stopped when explicit rediscovery finds its retained work",
     async (outcome) => {
       const source = await createRepoIdentity(ctx, "task", {
         name: "Synthetic recoverable discovery",
@@ -96,17 +105,12 @@ describe("connection discovery roster freshness", () => {
         .where(eq(aiEvaluation.runId, first.runId));
       const found = await scheduleConnectionRefresh(ctx.db, ref);
       expect(found).toMatchObject({
-        kind: outcome === "cancelled" ? "stopped" : "recoverable",
+        kind: "stopped",
         runId: first.runId,
+        diagnostic: expect.stringContaining(
+          "Synthetic retained Workflow diagnostic",
+        ),
       });
-      if (outcome !== "cancelled")
-        for (let index = 0; index < 2; index++)
-          await ensureRun(ctx.db, systemActor(), {
-            purpose: "ai_refresh",
-            trigger: "scheduled",
-            status: "running",
-            clientKey: `synthetic-discovery-capacity:${index}`,
-          });
       await expect(
         connectionHandlers.runs.discover!.run(
           {
@@ -115,15 +119,18 @@ describe("connection discovery roster freshness", () => {
           },
           ref,
         ),
-      ).rejects.toThrow(
-        outcome === "cancelled"
-          ? "Synthetic retained Workflow diagnostic"
-          : "no free Run slots",
-      );
+      ).rejects.toThrow("Synthetic retained Workflow diagnostic");
+      const [retained] = await getDb(ctx.db)
+        .select()
+        .from(run)
+        .where(eq(run.id, first.runId));
+      expect(retained).toMatchObject({
+        status: outcome === "cancelled" ? "failed" : outcome,
+        dispatchError: "Synthetic retained Workflow diagnostic",
+      });
     },
   );
-  // A page must not scan the same broad target corpus for every source.
-  it("shares broad rosters within a batch and refreshes them on the next call", async () => {
+  it("preserves batch order and changes only the edited source fingerprint", async () => {
     const first = await createRepoIdentity(ctx, "task", {
       name: "Synthetic first batch source",
       trade: "other",
@@ -151,10 +158,6 @@ describe("connection discovery roster freshness", () => {
       connectionSourceFingerprints(ctx.db, sources),
     );
     expect(batch.result).toEqual(singles);
-    const corpusQueries = batch.statements.filter((statement) =>
-      statement.startsWith("select md5(coalesce(jsonb_agg("),
-    );
-    expect(corpusQueries).toEqual([]);
     const empty = await countTestDbQueries(() =>
       connectionSourceFingerprints(ctx.db, []),
     );
@@ -166,7 +169,10 @@ describe("connection discovery roster freshness", () => {
       .where(eq(product.id, item.entityId));
     await reconcileDerivedRefreshInputs(ctx.db);
     const after = await connectionSourceFingerprints(ctx.db, sources);
-    expect(after).not.toEqual(batch.result);
+    expect(after[0]).toBe(batch.result[0]);
+    expect(after[1]).not.toBe(batch.result[1]);
+    expect(after[2]).toBe(batch.result[2]);
+    expect(after[3]).toBe(batch.result[3]);
     const current = [];
     for (const source of sources)
       current.push(await connectionSourceFingerprint(ctx.db, source));
@@ -203,52 +209,8 @@ describe("connection discovery roster freshness", () => {
     );
     expect(await reconciledSourceFingerprint(ctx.db, ref)).toBe(before);
   });
-  it("revisits Product field inference after an Ingredient alias changes indexed retrieval", async () => {
-    const source = await createProductIdentityFixture(
-      ctx.db,
-      makeProductInput({ name: "Synthetic alias source" }),
-      ctx.actor,
-    );
-    const target = await createIngredientFixture(
-      ctx.db,
-      buildEntity("ingredient", { name: "Synthetic herb" }),
-      ctx.actor,
-    );
-    const ref = { entityKind: "product" as const, entityId: source.id };
-    const before = await reconciledSourceFingerprint(ctx.db, ref);
-    await getDb(ctx.db)
-      .update(ingredient)
-      .set({ aliases: ["Synthetic alias source"] })
-      .where(eq(ingredient.id, target.entityId));
-    expect(await reconciledSourceFingerprint(ctx.db, ref)).not.toBe(before);
-    await refreshSearchDocument(ctx.db, "ingredient", target.entityId);
-    const changed = await reconciledSourceFingerprint(ctx.db, ref);
-    expect(changed).not.toBe(before);
-    await refreshSearchDocument(ctx.db, "ingredient", target.entityId);
-    expect(await reconciledSourceFingerprint(ctx.db, ref)).toBe(changed);
-  });
-  it("includes indexed Product retrieval content for Task field inference", async () => {
-    const source = await createRepoIdentity(ctx, "task", {
-      name: "Synthetic field retrieval source",
-      trade: "other",
-    });
-    const target = await createProductIdentityFixture(
-      ctx.db,
-      makeProductInput({ name: "Synthetic indexed target" }),
-      ctx.actor,
-    );
-    await refreshSearchDocument(ctx.db, "product", target.entityId);
-    const ref = { entityKind: "task" as const, entityId: source.output.id };
-    const before = await reconciledSourceFingerprint(ctx.db, ref);
-    // The periodic backstop observes authoritative text changes before discovery.
-    await getDb(ctx.db)
-      .update(product)
-      .set({ notes: "Synthetic retrieval content change" })
-      .where(eq(product.id, target.entityId));
-    expect(await reconciledSourceFingerprint(ctx.db, ref)).not.toBe(before);
-  });
   it.each(["expense", "confirmation"] as const)(
-    "revisits both acquisition endpoints after their %s acquisition blocker is removed",
+    "refreshes acquisition eligibility and evidence after the %s blocker is removed",
     async (blocker) => {
       const vendor = await createRepoIdentity(ctx, "vendor", {
         name: "Synthetic acquisition supplier",
@@ -262,11 +224,17 @@ describe("connection discovery roster freshness", () => {
         makeProductInput({ name: "Synthetic acquired tool" }),
         ctx.actor,
       );
-      const ref = {
-        entityKind: "purchase" as const,
-        entityId: order.output.id,
+      const candidate = {
+        relation: "product-purchase" as const,
+        source: { entityKind: "product" as const, entityId: item.id },
+        target: { entityKind: "purchase" as const, entityId: order.output.id },
+        label: "Connect acquisition purchase",
+        evidence: {
+          reasons: ["Synthetic matching acquisition"],
+          contradictions: [],
+          unknowns: ["Member review required"],
+        },
       };
-      const productRef = { entityKind: "product" as const, entityId: item.id };
       if (blocker === "expense")
         await createRepoIdentity(ctx, "expense", {
           name: "Synthetic acquired tool",
@@ -284,11 +252,9 @@ describe("connection discovery roster freshness", () => {
       expect(
         await acquisitionPairEligible(ctx.db, item.id, order.output.id),
       ).toBe(false);
-      await reconcileDerivedRefreshInputs(ctx.db);
-      const before = await connectionSourceFingerprint(ctx.db, ref);
-      const beforeProduct = await connectionSourceFingerprint(
-        ctx.db,
-        productRef,
+      const before = await captureConnectionBasis(ctx.db, candidate);
+      await expect(publishEntityConnection(ctx.db, candidate)).rejects.toThrow(
+        /eligible|already acquired/i,
       );
       if (blocker === "expense")
         await getDb(ctx.db)
@@ -303,14 +269,16 @@ describe("connection discovery roster freshness", () => {
       expect(
         await acquisitionPairEligible(ctx.db, item.id, order.output.id),
       ).toBe(true);
-      await reconcileDerivedRefreshInputs(ctx.db);
-      expect(await connectionSourceFingerprint(ctx.db, ref)).not.toBe(before);
-      expect(await connectionSourceFingerprint(ctx.db, productRef)).not.toBe(
-        beforeProduct,
+      expect(await captureConnectionBasis(ctx.db, candidate)).not.toEqual(
+        before,
       );
+      const proposal = await publishEntityConnection(ctx.db, candidate);
+      expect(await readEntityConnections(ctx.db, candidate.source)).toEqual([
+        expect.objectContaining({ review: proposal.review }),
+      ]);
     },
   );
-  it("advances conservative inventory epochs while ignoring verification-only changes", async () => {
+  it("refreshes inventory destination evidence without invalidating an unchanged source", async () => {
     const item = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({ name: "Synthetic stock subject" }),
@@ -343,35 +311,64 @@ describe("connection discovery roster freshness", () => {
       { productId: other.id, locationId: shelf.id, amount: each(1) },
       ctx.actor,
     );
-    expect(await reconciledSourceFingerprint(ctx.db, ref)).not.toBe(before);
+    expect(await reconciledSourceFingerprint(ctx.db, ref)).toBe(before);
+    expect((await getEntityRecommendations(ctx.db, ref)).groups).toEqual([
+      expect.objectContaining({ kind: "inventory-placement", proposals: [] }),
+    ]);
     await createInventoryFixture(
       ctx.db,
       { productId: item.id, locationId: shelf.id, amount: each(1) },
       ctx.actor,
     );
-    const withDestination = await reconciledSourceFingerprint(ctx.db, ref);
-    expect(withDestination).not.toBe(before);
+    expect(await reconciledSourceFingerprint(ctx.db, ref)).toBe(before);
+    expect((await getEntityRecommendations(ctx.db, ref)).groups).toEqual([
+      expect.objectContaining({
+        kind: "inventory-placement",
+        proposals: [
+          expect.objectContaining({
+            target: { id: shelf.id, name: "Synthetic shelf" },
+          }),
+        ],
+      }),
+    ]);
     await getDb(ctx.db)
       .update(inventoryEntry)
       .set({ verifiedAt: new Date() })
       .where(eq(inventoryEntry.id, stock.entityId));
-    expect(await reconciledSourceFingerprint(ctx.db, ref)).toBe(
-      withDestination,
-    );
+    expect(await reconciledSourceFingerprint(ctx.db, ref)).toBe(before);
+    const proposal = await publishEntityConnection(ctx.db, {
+      relation: "inventory-location",
+      source: ref,
+      target: { entityKind: "location", entityId: shelf.id },
+      label: "Review inventory placement",
+      evidence: {
+        reasons: ["Synthetic exact-product stock destination"],
+        contradictions: [],
+        unknowns: ["Member review required"],
+      },
+    });
+    expect(await readEntityConnections(ctx.db, ref)).toEqual([
+      expect.objectContaining({ review: proposal.review }),
+    ]);
     await getDb(ctx.db)
       .update(location)
       .set({ name: "Synthetic renamed shelf" })
       .where(eq(location.id, shelf.entityId));
-    expect(await reconciledSourceFingerprint(ctx.db, ref)).not.toBe(
-      withDestination,
-    );
+    expect(await reconciledSourceFingerprint(ctx.db, ref)).toBe(before);
+    expect(await readEntityConnections(ctx.db, ref)).toEqual([]);
+    await getDb(ctx.db)
+      .update(inventoryEntry)
+      .set({ amountValue: 2 })
+      .where(eq(inventoryEntry.id, stock.entityId));
+    expect(await reconciledSourceFingerprint(ctx.db, ref)).not.toBe(before);
   });
-  it("reschedules a completed negative scan for new, changed and retired endpoints", async () => {
-    const source = await createRepoIdentity(ctx, "task", {
-      name: "Synthetic discovery source",
-      trade: "other",
-    });
-    const ref = { entityKind: "task" as const, entityId: source.output.id };
+  it("schedules each endpoint's own changes and hides stale evidence after a negative scan", async () => {
+    const source = await createProductIdentityFixture(
+      ctx.db,
+      makeProductInput({ name: "Synthetic discovery source" }),
+      ctx.actor,
+    );
+    const ref = { entityKind: "product" as const, entityId: source.id };
     await activateAiRefresh(ctx.db, "synthetic-connection-roster", {
       enabled: true,
     });
@@ -385,14 +382,24 @@ describe("connection discovery roster freshness", () => {
       .from(aiEvaluation)
       .where(eq(aiEvaluation.runId, firstRun));
     if (!first) throw new Error("Synthetic connection evaluation is missing");
-    const claimed = await claimAiEvaluation(ctx.db, first.id);
-    if (!claimed?.attemptToken)
-      throw new Error("Synthetic evaluation was not claimed");
-    await publishAiEvaluation(
+    await withJobFixtureExecution(
       ctx.db,
-      first.id,
-      claimed.attemptToken,
-      async () => ({ source: ref, discovered: true }),
+      {
+        key: `ai-evaluation:${first.id}`,
+        kind: "ai.evaluation",
+        input: { evaluationId: first.id },
+      },
+      async () => {
+        const claimed = await claimAiEvaluation(ctx.db, first.id);
+        if (!claimed?.attemptToken)
+          throw new Error("Synthetic evaluation was not claimed");
+        await publishAiEvaluation(
+          ctx.db,
+          first.id,
+          claimed.attemptToken,
+          async () => ({ source: ref, discovered: true }),
+        );
+      },
     );
     const before = await reconciledSourceFingerprint(ctx.db, ref);
     expect((await scheduleConnectionRefresh(ctx.db, ref)).runId).toBeNull();
@@ -402,40 +409,153 @@ describe("connection discovery roster freshness", () => {
     });
     expect(await reconciledSourceFingerprint(ctx.db, ref)).toBe(before);
 
-    const endpoint = await createProductIdentityFixture(
+    const endpoint = await createRepoIdentity(ctx, "expense", {
+      name: "Synthetic new endpoint",
+      cost: 18,
+      trade: "electrical",
+      costType: "tools",
+    });
+    const endpointRef = {
+      entityKind: "expense" as const,
+      entityId: endpoint.output.id,
+    };
+    expect(await reconciledSourceFingerprint(ctx.db, ref)).toBe(before);
+    expect(await scheduleConnectionRefresh(ctx.db, ref)).toMatchObject({
+      kind: "unchanged",
+      runId: null,
+    });
+    const endpointFingerprint = await connectionSourceFingerprint(
       ctx.db,
-      makeProductInput({ name: "Synthetic new endpoint" }),
-      ctx.actor,
+      endpointRef,
     );
-    expect(await reconciledSourceFingerprint(ctx.db, ref)).not.toBe(before);
-    await refreshSearchDocument(ctx.db, "product", endpoint.entityId);
-    const afterInsert = await reconciledSourceFingerprint(ctx.db, ref);
-    expect(afterInsert).not.toBe(before);
-    expect((await scheduleConnectionRefresh(ctx.db, ref)).runId).toBe(firstRun);
-    const refreshed = await getDb(ctx.db)
+    const scheduledEndpoint = await scheduleConnectionRefresh(
+      ctx.db,
+      endpointRef,
+    );
+    expect(scheduledEndpoint.kind).toBe("scheduled");
+    if (scheduledEndpoint.kind !== "scheduled")
+      throw new Error("Synthetic endpoint discovery was not scheduled");
+    const endpointEvaluations = await getDb(ctx.db)
       .select()
       .from(aiEvaluation)
-      .where(eq(aiEvaluation.runId, firstRun));
-    expect(refreshed).toHaveLength(2);
-    expect(refreshed.find((row) => row.id !== first.id)).toMatchObject({
-      state: "queued",
-      provenance: { inputFingerprint: afterInsert },
+      .where(eq(aiEvaluation.runId, scheduledEndpoint.runId));
+    expect(endpointEvaluations).toContainEqual(
+      expect.objectContaining({
+        state: "queued",
+        target: expect.objectContaining({
+          entity: "expense",
+          recordId: endpoint.entityId,
+        }),
+        provenance: expect.objectContaining({
+          inputFingerprint: endpointFingerprint,
+        }),
+      }),
+    );
+    const candidate = {
+      relation: "product-expense" as const,
+      source: ref,
+      target: endpointRef,
+      label: "Connect acquisition charge",
+      evidence: {
+        reasons: ["Synthetic matching acquisition"],
+        contradictions: [],
+        unknowns: ["Member review required"],
+      },
+    };
+    const proposal = await publishEntityConnection(ctx.db, candidate);
+    expect(await readEntityConnections(ctx.db, ref)).toEqual([
+      expect.objectContaining({ review: proposal.review }),
+    ]);
+
+    await getDb(ctx.db)
+      .update(expense)
+      .set({ name: "Synthetic changed target" })
+      .where(eq(expense.id, endpoint.entityId));
+    expect(await readEntityConnections(ctx.db, ref)).toEqual([]);
+    expect(await readEntityConnections(ctx.db, endpointRef)).toEqual([]);
+    expect(await scheduleConnectionRefresh(ctx.db, ref)).toMatchObject({
+      kind: "unchanged",
+      runId: null,
     });
-    await refreshSearchDocument(ctx.db, "product", endpoint.entityId);
-    expect(await reconciledSourceFingerprint(ctx.db, ref)).toBe(afterInsert);
+    const changedEndpointFingerprint = await connectionSourceFingerprint(
+      ctx.db,
+      endpointRef,
+    );
+    expect(changedEndpointFingerprint).not.toBe(endpointFingerprint);
+    const changedEndpoint = await scheduleConnectionRefresh(
+      ctx.db,
+      endpointRef,
+    );
+    expect(changedEndpoint.kind).toBe("scheduled");
+    if (changedEndpoint.kind !== "scheduled")
+      throw new Error("Synthetic changed endpoint discovery was not scheduled");
+    const changedEvaluations = await getDb(ctx.db)
+      .select()
+      .from(aiEvaluation)
+      .where(eq(aiEvaluation.runId, changedEndpoint.runId));
+    expect(changedEvaluations).toContainEqual(
+      expect.objectContaining({
+        state: "queued",
+        target: expect.objectContaining({
+          entity: "expense",
+          recordId: endpoint.entityId,
+        }),
+        provenance: expect.objectContaining({
+          inputFingerprint: changedEndpointFingerprint,
+        }),
+      }),
+    );
+    const fresh = await publishEntityConnection(ctx.db, candidate);
+    expect(fresh.review.assessmentId).not.toBe(proposal.review.assessmentId);
+    expect(await readEntityConnections(ctx.db, ref)).toEqual([
+      expect.objectContaining({ review: fresh.review }),
+    ]);
+    await refreshSearchDocument(ctx.db, "expense", endpoint.entityId);
+    expect(await scheduleConnectionRefresh(ctx.db, endpointRef)).toMatchObject({
+      kind: "unchanged",
+      runId: changedEndpoint.runId,
+    });
+
+    await deleteThroughKernel(ctx.db, ctx.actor, "expense", [
+      endpoint.output.id,
+    ]);
+    expect(await readEntityConnections(ctx.db, ref)).toEqual([]);
+    await expect(
+      scheduleConnectionRefresh(ctx.db, endpointRef),
+    ).rejects.toThrow(/no longer exists|not found/);
+    expect(await scheduleConnectionRefresh(ctx.db, ref)).toMatchObject({
+      kind: "unchanged",
+      runId: null,
+    });
 
     await getDb(ctx.db)
       .update(product)
-      .set({ name: "Synthetic changed target" })
-      .where(eq(product.id, endpoint.entityId));
-    const afterContent = await reconciledSourceFingerprint(ctx.db, ref);
-    expect(afterContent).not.toBe(afterInsert);
-    await getDb(ctx.db)
-      .update(product)
-      .set({ deletedAt: new Date() })
-      .where(eq(product.id, endpoint.entityId));
-    expect(await reconciledSourceFingerprint(ctx.db, ref)).not.toBe(
-      afterContent,
+      .set({ name: "Synthetic changed discovery source" })
+      .where(eq(product.id, source.entityId));
+    const changedSourceFingerprint = await connectionSourceFingerprint(
+      ctx.db,
+      ref,
+    );
+    expect(changedSourceFingerprint).not.toBe(before);
+    const changedSource = await scheduleConnectionRefresh(ctx.db, ref);
+    expect(changedSource.kind).toBe("scheduled");
+    if (changedSource.kind !== "scheduled")
+      throw new Error("Synthetic changed source discovery was not scheduled");
+    const sourceEvaluations = await getDb(ctx.db)
+      .select()
+      .from(aiEvaluation)
+      .where(eq(aiEvaluation.runId, changedSource.runId));
+    expect(sourceEvaluations).toContainEqual(
+      expect.objectContaining({
+        state: "queued",
+        target: expect.objectContaining({
+          entity: "product",
+          recordId: source.entityId,
+        }),
+        provenance: expect.objectContaining({
+          inputFingerprint: changedSourceFingerprint,
+        }),
+      }),
     );
   });
 });

@@ -4,7 +4,6 @@ import {
   selectOperationContext,
   type AuthenticatedRequestContext,
 } from "~/server/http/request-context";
-import { deferPublications } from "~/server/workflows/background-tasks/publish";
 
 /**
  * Resolves the database once for one MCP tool execution. It deliberately has
@@ -36,8 +35,8 @@ export class McpOperationContext {
 
   /**
    * Run one tool call in a single transaction. Kernel units inside it nest as
-   * savepoints, and their publications and storage deletes wait for this
-   * commit (`runAfterCommit`). Recipe costing is rebound to the transaction:
+   * savepoints. Job intents commit with the writes; queue wakes and storage
+   * deletes wait for this commit (`runAfterCommit`). Recipe costing is rebound to the transaction:
    * a pool-bound stale mark on a Recipe row this transaction locked would
    * wait on it forever.
    */
@@ -45,7 +44,7 @@ export class McpOperationContext {
     run: (prepared: ReturnType<McpOperationContext["prepared"]>) => Promise<T>,
   ): Promise<T> {
     const selected = await selectOperationContext(this.context, "strong");
-    const deferred = deferPublications();
+
     const result = await withTransactionDatabase(
       selected.db,
       async (transactionDb) =>
@@ -55,15 +54,13 @@ export class McpOperationContext {
             db: transactionDb,
             services: {
               ...selected.services,
-              recipeCosting: selected.services.recipeCosting.bindTo(
-                transactionDb,
-                deferred.publish,
-              ),
+              recipeCosting:
+                selected.services.recipeCosting.bindTo(transactionDb),
             },
           }),
         ),
     );
-    await deferred.flush(selected.db);
+
     return result;
   }
 }

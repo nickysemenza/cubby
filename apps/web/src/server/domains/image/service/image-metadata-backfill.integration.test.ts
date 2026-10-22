@@ -1,7 +1,10 @@
 import { parseEntityId } from "@cubby/schemas/identifiers";
+import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import { getDb } from "~/server/db/helpers";
+import { image as imageTable } from "~/server/db/schema";
 import { createDevice } from "~/server/domains/device/repo/device";
 import {
   getImageById,
@@ -15,6 +18,12 @@ import {
   type ExtractImageMetadataPorts,
 } from "~/server/domains/image/service/image-metadata-extraction.service";
 import { createLedgerParty } from "~/server/domains/ledger-party/repo/ledger-party";
+import { withJobExecution } from "~/server/generic/jobs/context";
+import {
+  cancelJob,
+  claimJob,
+  enqueueJob,
+} from "~/server/generic/jobs/repo/jobs";
 import { createImageFixture } from "~/server/testing/repo.fixtures";
 
 // ---------------------------------------------------------------------------
@@ -173,6 +182,52 @@ const stubbedPorts = (bytes: Uint8Array): ExtractImageMetadataPorts => ({
 
 describe("image metadata extraction + backfill (real Postgres)", () => {
   const ctx = withTestDb();
+
+  // Downloading bytes never gives an old worker permission to update a new
+  // source or a Job that the member stopped while the download was running.
+  it.each(["cancelled", "source_changed"])(
+    "rejects %s metadata after downloading bytes",
+    async (change) => {
+      const source = await createImageFixture(
+        ctx.db,
+        "synthetic-metadata-owner",
+        { contentType: "image/jpeg" },
+      );
+      const imageId = parseEntityId("image", source.id);
+      const saved = await enqueueJob(ctx.db, {
+        key: `synthetic-metadata:${imageId}`,
+        kind: "image-metadata.extract",
+        input: {},
+      });
+      const claim = await claimJob(ctx.db, saved.id);
+      if (!claim) throw new Error("Expected metadata Job");
+      const ports: ExtractImageMetadataPorts = {
+        ...stubbedPorts(buildJpegWithExif("2025:07:04 09:15:00", 40, -74)),
+        getBytes: async () => {
+          if (change === "cancelled") await cancelJob(ctx.db, saved.id);
+          else
+            await getDb(ctx.db)
+              .update(imageTable)
+              .set({ key: "tests/synthetic-replaced-original.jpg" })
+              .where(eq(imageTable.id, imageId));
+          return buildJpegWithExif("2025:07:04 09:15:00", 40, -74);
+        },
+      };
+      await expect(
+        withJobExecution(ctx.db, claim, () =>
+          extractAndStoreImageMetadata(ctx.db, imageId, ports),
+        ),
+      ).rejects.toThrow(
+        change === "cancelled"
+          ? "Job generation or lease is obsolete"
+          : "Image metadata source changed",
+      );
+      expect(
+        await getImageMetadataExtractionRow(ctx.db, imageId),
+      ).toBeDefined();
+      expect((await getImageById(ctx.db, source.id)).capturedAt).toBeNull();
+    },
+  );
 
   it("advances the stale marker and derives capturedAt/location from EXIF when there is no sighting", async () => {
     const jpeg = buildJpegWithExif("2025:07:04 09:15:00", 40, -74);

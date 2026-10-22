@@ -1,11 +1,5 @@
 import { purchaseImportContract } from "~/contracts/purchase-import.contract";
 import {
-  createEmailAccuracyEvaluation,
-  listBlindEmailAccuracyItems,
-  gradeEmailAccuracyItem,
-  getEmailAccuracyReport,
-} from "~/server/domains/email/repo/email-accuracy";
-import {
   commitPurchaseImport,
   preparePurchaseImport,
   purchaseImportOperationStatus,
@@ -30,7 +24,6 @@ import {
   rerunEmailPreview,
 } from "~/server/domains/purchase-import/service/gmail/reclassify";
 import { sweepImportedProductCategories } from "~/server/domains/purchase-import/service/import-category-sweep";
-import { emailAccuracyViewReport } from "~/server/generic/entity-report/repo/email";
 import { implementOperationDomain } from "~/server/operation-runtime/operation-domain.server";
 
 export const purchaseImportHandlers = implementOperationDomain(
@@ -38,14 +31,6 @@ export const purchaseImportHandlers = implementOperationDomain(
   {
     correctEmailRelevance: (context, input) =>
       correctEmailRelevance(context.db, input, context.actorContext),
-    emailAccuracyCreate: (context, input) =>
-      createEmailAccuracyEvaluation(context.db, input, context.actorContext),
-    emailAccuracyBlind: (context, input) =>
-      listBlindEmailAccuracyItems(context.db, input, context.actorContext),
-    emailAccuracyGrade: (context, input) =>
-      gradeEmailAccuracyItem(context.db, input, context.actorContext),
-    emailAccuracyReport: (context, input) =>
-      getEmailAccuracyReport(context.db, input, context.actorContext),
     commitAcceptedReconciliation: (context, input) =>
       commitAcceptedSourceOrderReconciliation(
         context.db,
@@ -60,8 +45,6 @@ export const purchaseImportHandlers = implementOperationDomain(
       reclassifyEmails(context.db, input, context.actorContext),
     emailPreviewRerun: (context, input) =>
       rerunEmailPreview(context.db, input, context.actorContext),
-    emailAccuracyView: (context) =>
-      emailAccuracyViewReport(context.db, context.actorContext),
     prepareReconciliation: (context, input) =>
       prepareSourceOrderReconciliation(context.db, input, context.actorContext),
     prepare: (context, input) =>

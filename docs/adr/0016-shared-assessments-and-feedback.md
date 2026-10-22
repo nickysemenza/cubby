@@ -59,8 +59,10 @@ separate explicitly reviewed inventory correction.
 
 ## Implementation boundaries
 
-Assessment predictions and Feedback events are immutable. Current actionable
-state, confirmed corrections and suppression are separate rebuildable
+Assessment predictions and Feedback events are immutable.
+The shared application repository enforces append-only history; database
+immutability triggers are unnecessary for the trusted household's writers.
+Current actionable state, confirmed corrections and suppression are separate rebuildable
 projections. Original subjects refer to durable Entity identity and retained
 snapshots; merges or deletes retire or repoint current targets without rewriting
 historical subjects. Image deletion removes live description authority while
@@ -136,10 +138,13 @@ Declaration-owned Assessment and Feedback history is separate from a shared
 AssessmentState projection. Assessment subjects and predictions never change;
 AssessmentState owns current targets, pending/resolved/superseded state,
 confirmed values and explicitly scoped suppression. Its physical entity,
-recordId, field, family and state columns preserve indexed discovery and
-trigger-driven field supersession. Update both generated Postgres triggers and
-kernel invalidation to the new state path, including input dependencies. Schema
-changes include the derived-DDL migration, not only the table migration.
+recordId, field, family and state columns preserve indexed discovery.
+Pending field reads compare captured authoritative field, basis and reference
+snapshots and the latest explicit field-write intent. Applying locks those
+inputs through commit and repeats the specific fingerprint check; unrelated
+table-wide revision changes do not invalidate advice. History remains available
+when current advice becomes stale. Schema changes include the derived-DDL
+migration, not only the table migration.
 
 Field producers call `publishFieldAssessment`, which delegates to the shared
 transactional `publishAssessment` writer for immutable evidence and its current

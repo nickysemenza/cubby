@@ -2,10 +2,6 @@ import type { RunId } from "@cubby/schemas/identifiers";
 import type { ImageProcessingJobKind } from "@cubby/schemas/image-processing";
 
 import type { Database } from "~/server/db";
-import {
-  findImageProcessingDispatchRepairs,
-  reclaimExpiredImageProcessingLeases,
-} from "~/server/domains/image-processing/repo/image-processing";
 import { createImageProcessingSubmission } from "~/server/domains/image-processing/repo/image-processing-history";
 import {
   ALL_IMAGE_PROCESSING_KINDS,
@@ -66,18 +62,13 @@ export async function backfillImageProcessing(
   };
 }
 
-/** Bounded repairs of orphans, executorless attempts, leases and lost wakeups. */
+/** Direct bounded cleanup; Job claims recover interrupted execution without scanners. */
 export async function repairImageProcessingWork(db: Database) {
   const orphans = await cleanupExpiredImageProcessingOrphans(db, 100);
   const executorless = await pruneExecutorlessWaitingAttempts(db, 500);
-  const leases = await reclaimExpiredImageProcessingLeases(db);
-  const dispatch = await findImageProcessingDispatchRepairs(db, 100);
-  await publishImageProcessingWakeups(db, dispatch);
   return {
     orphans,
     executorless,
-    leases,
-    dispatch: dispatch.length,
     // Only deletions shrink their own selection; republished wakeups leave
     // their jobs selectable until the queue lands them.
     more: orphans >= 100 || executorless >= 500,

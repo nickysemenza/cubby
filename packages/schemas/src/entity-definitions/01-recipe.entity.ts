@@ -1316,18 +1316,6 @@ export default defineEntity(
       dataQuality: {
         checks: [
           {
-            id: "recipe_deleted_dependency",
-            satisfiedLabel: "Dependencies available",
-            placement: { section: "contents" },
-            facet: "integrity",
-            kind: "defect",
-            weight: 3,
-            scoreCap: 49,
-            exceptions: "forbidden",
-            label: "Deleted dependency",
-            message: "Fresh totals still reference a deleted sub-recipe.",
-          },
-          {
             id: "recipe_ingredients",
             satisfiedLabel: "Ingredients recorded",
             placement: { section: "contents" },

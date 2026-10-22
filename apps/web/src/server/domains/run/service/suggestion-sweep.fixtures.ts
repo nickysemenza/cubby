@@ -7,12 +7,9 @@ import {
   type RunId,
 } from "@cubby/schemas/identifiers";
 import type { ProductCategoryFeature } from "@cubby/schemas/product-category-fields";
-import {
-  type SupportedDecisionModel,
-  supportedDecisionModelSchema,
-} from "@cubby/shared/ai/models";
+import type { SupportedDecisionModel } from "@cubby/shared/ai/models";
 import { eq } from "drizzle-orm";
-import { driveAiWork, TEST_AI_WORK_LAUNCHER } from "tooling/ai-work";
+import { driveAiWork } from "tooling/ai-work";
 import {
   taxonomyId,
   taxonomyShortcode,
@@ -54,24 +51,15 @@ type SweepPorts = Parameters<typeof startSweep>[2];
 
 export const PRIMARY_MODEL =
   "typesafe/jev" as const satisfies SupportedDecisionModel;
-const otherDecisionModels = supportedDecisionModelSchema.options.filter(
-  (model) => model !== PRIMARY_MODEL,
-);
-// The sweep pairs the pinned model with the one other supported decision model.
-if (otherDecisionModels.length !== 1)
-  throw new Error("Paired sweeps expect exactly two decision models");
-export const PAIRED_MODEL = otherDecisionModels[0]!;
 
 export const kernelCtx = (ctx: Ctx) =>
   entityKernelContextSchema.parse(
     createTestRequestContext(ctx.db, { auth: { userId: ctx.actor.userId } }),
   );
 
-/** Defaults: pinned primary model, no paired sampling or audit sample, no pacing waits. */
+/** Defaults: pinned primary model, no pacing waits. */
 const sweepDefaults = {
   decisionModel: () => PRIMARY_MODEL,
-  samplePair: () => false,
-  auditSample: () => false,
   wait: async () => {},
 };
 export const startSuggestionSweep = async (
@@ -79,11 +67,7 @@ export const startSuggestionSweep = async (
   input: Parameters<typeof startSweep>[1],
   ports: SweepPorts,
 ) => {
-  const options = {
-    ...sweepDefaults,
-    ...ports,
-    launcher: TEST_AI_WORK_LAUNCHER,
-  };
+  const options = { ...sweepDefaults, ...ports };
   // Automatic rule applications write as the system actor.
   await createSystemUserFixture(db);
   const started = await startSweep(db, input, options);
@@ -95,13 +79,9 @@ export const resumeSuggestionSweep = async (
   runId: Parameters<typeof resumeSweep>[1],
   ports: SweepPorts,
 ) => {
-  const options = {
-    ...sweepDefaults,
-    ...ports,
-    launcher: TEST_AI_WORK_LAUNCHER,
-  };
+  const options = { ...sweepDefaults, ...ports };
   await createSystemUserFixture(db);
-  await resumeSweep(db, runId, options);
+  await resumeSweep(db, runId);
   await driveAiWork(db, runId, { sweep: options });
 };
 
@@ -189,6 +169,15 @@ export async function seedPending(
     true,
   );
   return { runId, id: saved.id };
+}
+
+/** Eligibility follows current field inputs; historical state need not be rewritten. */
+export async function isSuggestionReviewable(db: Database, id: string) {
+  const { listSuggestions } =
+    await import("~/server/generic/assessment/repo/suggestion-review");
+  return (await listSuggestions(db, { minConfidence: 0 })).some(
+    (row) => row.id === id,
+  );
 }
 
 export async function suggestionStatus(db: Database, id: string) {

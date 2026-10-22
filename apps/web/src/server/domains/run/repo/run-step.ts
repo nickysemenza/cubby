@@ -1,4 +1,5 @@
-import { runEntityId, type RunId } from "@cubby/schemas/identifiers";
+import { type RunId } from "@cubby/schemas/identifiers";
+import { jobState } from "@cubby/schemas/job";
 import {
   RUN_STEP_ERROR_SAMPLE,
   runStepErrors,
@@ -12,31 +13,17 @@ import {
   runWorkSamples,
   runWorkSample,
 } from "@cubby/schemas/run-work-progress";
-import { MAX_AUTOMATIC_WORKFLOW_FAILURES } from "@cubby/schemas/workflow-runs";
 import { scrubErrorMessage } from "@cubby/worker-tracing/scrub-error-message";
-import {
-  and,
-  asc,
-  eq,
-  gt,
-  inArray,
-  isNull,
-  lte,
-  notExists,
-  or,
-  sql,
-} from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, sql } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { getDb, unwrapDb, withTransactionDatabase } from "~/server/db/helpers";
 import { run, runStep } from "~/server/db/schema";
+import { currentJobExecution } from "~/server/generic/jobs/context";
 import {
   assertWorkflowEffect,
   hasWorkflowExecution,
 } from "~/server/workflows/runs/execution";
-
-const MAINTENANCE = "maintenance";
-const ACTIVE_STATUSES = ["running", "paused_auth"] as const;
 
 export type RunStepRow = typeof runStep.$inferSelect;
 export type StepRunOwner = typeof run.$inferSelect;
@@ -196,7 +183,7 @@ export async function reopenRunStep(
       endedAt: null,
       pausedReason: null,
       pausedUntil: null,
-      meta: sql`coalesce(${runStep.meta}, '{}'::jsonb) || jsonb_build_object('batchRetry', null, 'capacityUntil', null, 'retriedFailures', coalesce((${runStep.meta}->>'retriedFailures')::int, 0) + ${runStep.failed}, 'retryRefs', coalesce(${runStep.meta}->'failedRefs', '[]'::jsonb), 'failedRefs', '[]'::jsonb) || ${retryWork}`,
+      meta: sql`coalesce(${runStep.meta}, '{}'::jsonb) || jsonb_build_object('capacityUntil', null, 'retriedFailures', coalesce((${runStep.meta}->>'retriedFailures')::int, 0) + ${runStep.failed}, 'retryRefs', coalesce(${runStep.meta}->'failedRefs', '[]'::jsonb), 'failedRefs', '[]'::jsonb) || ${retryWork}`,
       errors: sql`'[]'::jsonb`,
     })
     .where(
@@ -262,8 +249,12 @@ export async function stepParentOf(db: Database, childRunId: RunId) {
   return row ?? null;
 }
 
-const attemptIs = (attempt: number) =>
-  sql`coalesce((${run.progress}->>'attempt')::int, 0) = ${attempt}`;
+const attemptIs = (_attempt: number) => {
+  const execution = currentJobExecution();
+  return execution
+    ? sql`EXISTS (SELECT 1 FROM "Job" j WHERE j.id=${execution.claim.id}::uuid AND j.state=${jobState.enum.running} AND j."generation"=${execution.claim.generation} AND j."leaseToken"=${execution.claim.leaseToken}::uuid AND j."leaseExpiresAt">now())`
+    : sql`false`;
+};
 
 /** Pauses this attempt's Run for a budget or authorization window. */
 export async function pauseStepRun(
@@ -326,82 +317,6 @@ export async function readStepRunOwner(db: Database, runId: RunId) {
     .from(run)
     .where(eq(run.id, runId));
   return owner ?? null;
-}
-
-/**
- * Step-ledger Runs a lost handoff or an ended budget window left behind: a
- * `running` Run whose first attempt never started, or a budget pause no step
- * is still waiting out.
- */
-export async function stepRunsToRecover(
-  db: Database,
-  purposes: readonly string[],
-  now: Date,
-  runIds?: readonly string[],
-  budgetRaised = false,
-) {
-  const budgetPaused = and(
-    eq(run.status, "paused_auth"),
-    eq(run.failureCode, "execution_limit"),
-  );
-  // One maintenance pass at a time (Run_one_active_maintenance): an older
-  // pass is superseded once a newer one exists, and relaunching any pass
-  // while another is active would violate the index.
-  const maintenanceBlocked = sql`${run.purpose} = ${MAINTENANCE} AND EXISTS (
-    SELECT 1 FROM "Run" other WHERE other."deletedAt" IS NULL AND other.purpose = ${MAINTENANCE} AND other.id <> ${run.id}
-      AND (other.status IN (${sql.join(
-        ACTIVE_STATUSES.map((status) => sql`${status}`),
-        sql`, `,
-      )}) OR other."createdAt" > ${run.createdAt}))`;
-  return getDb(db)
-    .select({ id: run.id, purpose: run.purpose, status: run.status })
-    .from(run)
-    .where(
-      and(
-        inArray(run.purpose, [...purposes]),
-        sql`NOT (${maintenanceBlocked})`,
-        runIds
-          ? inArray(
-              run.id,
-              runIds.map((id) => runEntityId.parse(id)),
-            )
-          : undefined,
-        // A raised credit limit resumes budget-paused Runs before their window
-        // ends; nothing else is recovered on that path.
-        budgetRaised
-          ? budgetPaused
-          : or(
-              and(
-                eq(run.status, "running"),
-                attemptIs(0),
-                lte(run.createdAt, new Date(now.getTime() - 60_000)),
-              ),
-              // A crashed or never-dispatched attempt (reconcile fails a lost
-              // first dispatch) retries under the automatic-failure cap; a member's
-              // cancellation and recorded step failures are outcomes, not crashes.
-              and(
-                inArray(run.status, ["failed", "dispatch_failed"]),
-                sql`${run.failureCode} IS DISTINCT FROM 'user_cancelled'`,
-                sql`coalesce((${run.progress}->>'automaticRecoveryFailures')::int, 0) < ${MAX_AUTOMATIC_WORKFLOW_FAILURES}`,
-              ),
-              and(
-                budgetPaused,
-                notExists(
-                  getDb(db)
-                    .select({ id: runStep.id })
-                    .from(runStep)
-                    .where(
-                      and(
-                        eq(runStep.runId, run.id),
-                        eq(runStep.state, "paused"),
-                        gt(runStep.pausedUntil, now),
-                      ),
-                    ),
-                ),
-              ),
-            ),
-      ),
-    );
 }
 
 /** A step's child Run as its parent step reads it. */

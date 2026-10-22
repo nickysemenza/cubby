@@ -13,12 +13,6 @@ export interface AiResponseCacheRpc {
     requests: readonly { key: string; force: boolean }[],
   ): CacheClaim[];
   renew(key: string, token: string): boolean;
-  publish(
-    key: string,
-    token: string,
-    value: string,
-    ttlMs: number,
-  ): Promise<boolean>;
+  publish(key: string, token: string, value: string): boolean;
   release(key: string, token: string): void;
-  invalidate(key: string, value: string): void;
 }

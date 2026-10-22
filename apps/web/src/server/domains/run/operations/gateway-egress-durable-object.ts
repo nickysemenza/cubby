@@ -9,7 +9,6 @@ import {
 } from "@cubby/shared/ai/gateway-request";
 import { scrubCredentialValues } from "@cubby/worker-tracing/scrub-error-message";
 import { DurableObject } from "cloudflare:workers";
-import { z } from "zod";
 
 import { aiBudgetWindow } from "~/server/ai/budget-window";
 import {
@@ -17,9 +16,6 @@ import {
   type GatewayAdmission,
 } from "~/server/ai/gateway-egress-contract";
 import { isMaintenanceMode } from "~/server/http/maintenance";
-import type { SearchIndexRepairWorkflowParams } from "~/server/worker-bindings";
-import type { WorkflowRunParams } from "~/server/workflows/runs/contract";
-import { SEARCH_INDEX_REPAIR_RETENTION } from "~/server/workflows/search-index-repair-retention";
 
 const WINDOW_MS = 60_000;
 const REQUESTS_PER_WINDOW = 180;
@@ -70,58 +66,6 @@ export class AiGatewayEgressDurableObject extends DurableObject<Env> {
   /** Read the running DO code, never a caller's or a retained observation's version. */
   async currentDeploymentVersion(): Promise<string> {
     return this.env.CF_VERSION_METADATA.id;
-  }
-
-  /** Pinned Workflow versions still call this RPC; they also cross the queue boundary. */
-  async continueWorkflowRun(params: WorkflowRunParams): Promise<void> {
-    const { enqueueBackgroundTask } =
-      await import("~/server/workflows/background-tasks/publish");
-    await enqueueBackgroundTask(
-      {
-        kind: "workflow.continue",
-        ...params,
-        requestedAt: new Date().toISOString(),
-      },
-      { source: "workflow.continue", queue: this.env.BACKGROUND_QUEUE },
-    );
-  }
-
-  async continueSearchIndexRepair(input: {
-    id: string;
-    params: SearchIndexRepairWorkflowParams;
-  }): Promise<void> {
-    const result = z
-      .object({
-        created: z.array(z.object({ id: z.string() })),
-        errors: z.array(
-          z.object({
-            index: z.number().int(),
-            code: z.number().int(),
-            message: z.string(),
-            id: z.string().optional(),
-          }),
-        ),
-      })
-      .parse(
-        await this.env.SEARCH_INDEX_REPAIR.createBatch({
-          instances: [
-            {
-              ...input,
-              retention: SEARCH_INDEX_REPAIR_RETENTION,
-            },
-          ],
-        }),
-      );
-    if (result.created.some((instance) => instance.id === input.id)) return;
-    // createBatch documents 10405 as an existing instance. A lost first reply
-    // is therefore recoverable without depending on create()'s error wording.
-    if (
-      result.errors.some((error) => error.index === 0 && error.code === 10405)
-    )
-      return;
-    throw new Error(
-      `Search repair successor ${input.id} was not created: ${JSON.stringify(result.errors)}`,
-    );
   }
 
   constructor(ctx: DurableObjectState, env: Env) {
@@ -361,12 +305,8 @@ export class AiGatewayEgressDurableObject extends DurableObject<Env> {
     if (!keys.length) return;
     const { withInvocationDb, db } = await import("~/server/db");
     await withInvocationDb(this.env.HYPERDRIVE.connectionString, async () => {
-      const { recoverManualAiWork } = await import("../service/ai-work");
-      await recoverManualAiWork(
-        db,
-        undefined,
-        keys.includes("authorization") ? undefined : keys,
-      );
+      const { drainProductionJobs } = await import("~/server/workflows/jobs");
+      await drainProductionJobs(db);
     });
     await this.ctx.blockConcurrencyWhile(async () => {
       const current =

@@ -47,7 +47,6 @@ import {
   getErrorMessage,
 } from "@cubby/shared";
 import { countLabel } from "@cubby/shared/pluralize";
-import { createLogger } from "@cubby/worker-tracing";
 import { sum, sumBy, uniq, uniqBy } from "es-toolkit";
 import { z } from "zod";
 
@@ -68,6 +67,7 @@ import { findOrCreateIngredient } from "~/server/domains/ingredient/repo/crud";
 import { deleteIngredients } from "~/server/domains/ingredient/repo/deletion";
 import { countProductsWithNoImagesWithGtin } from "~/server/domains/product/repo/analytics";
 import {
+  selectProductCoverageIdsPage,
   getProductConversionCoverageFreshness,
   loadProductConversionCoverageProjection,
   type ProductConversionCoverageFreshness,
@@ -80,11 +80,8 @@ import { computeAttentionItems } from "~/server/domains/project/repo/attention";
 import { countStaleRecipeTotals } from "~/server/domains/recipe/repo/totals";
 import type { UsdaFoodBatchPort } from "~/server/domains/usda-food/repo/usda-helpers";
 import { batchEnrichWithFood } from "~/server/domains/usda-food/repo/usda-helpers";
-import { getSemanticEmbeddingConfig } from "~/server/generic/embedding/service/semantic/config";
-import { semanticEmbeddingsConfigured } from "~/server/generic/embedding/service/semantic/embeddings";
 import { selectedListProjection } from "~/server/generic/list/repo/list-projection";
 import { findCoverageTotalsOnConnection } from "~/server/generic/problems/repo/detectors-coverage";
-import { countEntitiesMissingEmbeddings } from "~/server/generic/problems/repo/detectors-embedding";
 import { loadAllocationDefectPresenters } from "~/server/generic/problems/repo/detectors-financial";
 import {
   findIngredientsWithUnusedAliases,
@@ -123,22 +120,6 @@ import { countViewProblem } from "~/server/generic/problems/service/problem-view
 import { resolveLiveShortcodes } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { traceAll, traceAllBounded } from "~/server/observability/tracing";
 
-const log = createLogger("findCoverageProblems");
-
-// The embedding-coverage detector is gated HERE rather than in the repo, so the
-// repo stays pure data access and the env read stays in the service layer.
-//
-// The gate itself is load-bearing: with no AI_GATEWAY_API_KEY every live row in
-// every searchable table reads as "missing an embedding", and nothing can
-// ever clear it — `enqueueEntityEmbeddingBackfill` doesn't check configuration
-// either, so it would cheerfully enqueue thousands of jobs that all throw at
-// `embedTexts`. Report nothing rather than an unfixable wall. Mirrors the
-// degradation the semantic read paths already do.
-const countMissingEmbeddings = async (db: Database) =>
-  semanticEmbeddingsConfigured()
-    ? countEntitiesMissingEmbeddings(db, getSemanticEmbeddingConfig())
-    : 0;
-
 // Detect both coverage problems in one pass: ingredient products that are
 // *under-covered* and products whose mappings *island*. Both detectors fetch
 // products with their stored mappings, enrich them with USDA food, and
@@ -159,12 +140,13 @@ const countMissingEmbeddings = async (db: Database) =>
 const findProductCoverageProblems = async (
   db: Database,
   usdaClient: UsdaFoodBatchPort,
+  productIds?: readonly ProductId[],
 ): Promise<{
   ingredientsWithPartialCoverage: ProblemItem<"ingredientsWithPartialCoverage">[];
   productsWithIslandedMappings: ProblemItem<"productsWithIslandedMappings">[];
   projection: ProductConversionCoverageProjection[];
 }> => {
-  const products = await loadProductsForCoverage(db);
+  const products = await loadProductsForCoverage(db, productIds);
 
   // Candidate sets are pure DB/WASM (no network). Partial coverage wants
   // ingredient products with *some* signal — truly-empty ones belong to
@@ -323,15 +305,32 @@ const findProductCoverageProblems = async (
   };
 };
 
-/** Rebuild the persisted list-query projection using this exact detector scan. */
-const rebuildProductConversionCoverageProjection = async (
+/** Provider work runs before the Job publication transaction. */
+export async function prepareProductConversionCoveragePage(
   db: Database,
+  options: { after?: string; limit: number },
   usdaClient: UsdaFoodBatchPort,
-): Promise<ProductConversionCoverageProjection[]> => {
-  const { projection } = await findProductCoverageProblems(db, usdaClient);
-  await writeProductConversionCoverageProjection(db, projection);
-  return projection;
-};
+) {
+  const ids = await selectProductCoverageIdsPage(db, options);
+  const productIds = ids.map((row) => row.id);
+  const source = JSON.stringify(await loadProductsForCoverage(db, productIds));
+  const { projection } = await findProductCoverageProblems(
+    db,
+    usdaClient,
+    productIds,
+  );
+  return {
+    nextCursor:
+      ids.length === Math.min(options.limit, 25) ? ids.at(-1)!.id : null,
+    async publish(tx: Database) {
+      if (
+        JSON.stringify(await loadProductsForCoverage(tx, productIds)) !== source
+      )
+        throw new Error("Conversion inputs changed during preparation");
+      await writeProductConversionCoverageProjection(tx, projection);
+    },
+  };
+}
 
 // Apply the current parser's result to every stale ingredient line, persisting the
 // fresh parse on all three axes (name, amounts, modifier). Reuses the exact scan the
@@ -420,7 +419,6 @@ export const findMaintenanceCounts = async (
     staleRecipeTotals: () => countStaleRecipeTotals(db),
     cullablePendingImages: () =>
       countCullablePendingImages(db, CULL_PENDING_IMAGES_DEFAULT_HOURS),
-    entitiesMissingEmbeddings: () => countMissingEmbeddings(db),
   });
 
   return {
@@ -428,7 +426,6 @@ export const findMaintenanceCounts = async (
     locationsWithoutAiDescription: r.locationsWithoutAiDescription,
     staleRecipeTotals: r.staleRecipeTotals,
     cullablePendingImages: r.cullablePendingImages,
-    entitiesMissingEmbeddings: r.entitiesMissingEmbeddings,
   };
 };
 
@@ -1231,18 +1228,6 @@ export const findFastProblems = async (db: Database): Promise<ProblemsFast> => {
             "tools-used-outside-ownership",
             allProblemsSchema.shape.toolsUsedOutsideOwnership,
           ),
-        entitiesMissingEmbeddings: () =>
-          diagnosticItems(
-            db,
-            "entities-missing-embeddings",
-            allProblemsSchema.shape.entitiesMissingEmbeddings,
-          ),
-        staleParentRecipes: () =>
-          diagnosticItems(
-            db,
-            "stale-parent-recipes",
-            allProblemsSchema.shape.staleParentRecipes,
-          ),
         imageMetadataOutcomes: () =>
           diagnosticItems(
             db,
@@ -1339,8 +1324,6 @@ export const findFastProblems = async (db: Database): Promise<ProblemsFast> => {
     unconnectedEntities: r.unconnectedEntities.items,
     partiallyImportedCookbooks: r.partiallyImportedCookbooks.items,
     toolsUsedOutsideOwnership: r.toolsUsedOutsideOwnership.items,
-    entitiesMissingEmbeddings: r.entitiesMissingEmbeddings.items,
-    staleParentRecipes: r.staleParentRecipes.items,
     imageMetadataOutcomes: r.imageMetadataOutcomes.items,
     weightSoldProducts: r.weightSoldProducts.items,
     manufacturerSpellingVariants: r.manufacturerSpellingVariants.items,
@@ -1466,40 +1449,12 @@ export const findFastProblems = async (db: Database): Promise<ProblemsFast> => {
 export const findCoverageTotals = (db: Database): Promise<CoverageTotals> =>
   findCoverageTotalsOnConnection(db);
 
-/**
- * Conversion coverage's hot path is projection-first. Rebuilding remains the
- * explicit `rebuildProductConversionCoverageProjection` maintenance seam;
- * stale/missing rows stay absent from exact filters and are reported on the
- * wire instead of being synchronously recomputed during page rendering.
- */
+/** Coverage reads serve the persisted projection; broad Jobs own convergence. */
 export const findCoverageProblems = async (
   db: Database,
   usdaClient: UsdaFoodBatchPort,
 ): Promise<ProblemsCoverage> => {
-  let freshness = await getProductConversionCoverageFreshness(db);
-  // Normal mutations synchronously mark affected rows stale. This isolated
-  // lane is their durable convergence point: healthy page loads are pure
-  // read-model queries, while a stale/missing projection is rebuilt once here
-  // through the shared engine and then re-read. Provider failures persist as
-  // `unavailable`, which stays fail-closed rather than becoming a healthy 0.
-  if (
-    freshness.staleCount > 0 ||
-    freshness.missingCount > 0 ||
-    freshness.unavailableCount > 0
-  ) {
-    try {
-      await rebuildProductConversionCoverageProjection(db, usdaClient);
-      freshness = await getProductConversionCoverageFreshness(db);
-    } catch (error) {
-      // The durable relation is still the authority. A USDA outage must not
-      // turn into a failed Problems page (or, worse, an empty healthy card):
-      // leave the prior stale/unavailable rows intact, let the exact filters
-      // fail closed, and return their existing freshness state to the UI.
-      log.warn(
-        `conversion projection rebuild failed; serving ${freshness.state} persisted projection: ${getErrorMessage(error)}`,
-      );
-    }
-  }
+  const freshness = await getProductConversionCoverageFreshness(db);
   const exact = await runExactProblemPages(
     db,
     ["ingredientsWithPartialCoverage", "productsWithIslandedMappings"],

@@ -4,9 +4,10 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { getDb } from "~/server/db/helpers";
-import { auditLog, run, runFinding, user } from "~/server/db/schema";
+import { auditLog, run, user } from "~/server/db/schema";
 import { auditImportBatch } from "~/server/domains/purchase-import/operations/run-review";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { runFinding } from "~/server/testing/run-finding.fixtures";
 
 import { importedPurchaseFixture } from "../service/import-run.fixtures";
 import { loadPurchaseAuditBatch } from "./audit-batch";
