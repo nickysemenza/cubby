@@ -1,0 +1,61 @@
+apps/apple/App/Shared/Entity/Detail/DetailSlots.swift
+  s_033c97ccc35358::t_1a795f3f1e5326 110-113
+apps/web/DESIGN.md
+  s_033c97ccc35358::t_aed03c71acbb13 273-276
+apps/web/src/contracts/run-detail.contract.ts
+  s_033c97ccc35358::t_2282d49553579c 18-19
+apps/web/src/entity/entity-detail/detail-slots.unit.test.ts
+  s_033c97ccc35358::t_fe998217a2e29c 72-86
+apps/web/src/features/registry.tsx
+  s_033c97ccc35358::t_1f96dc2eecec14 5,283-284,289-296
+apps/web/src/features/run/run-detail.preview.test.tsx
+  s_033c97ccc35358::t_73fc8370188a3d 20,45,69-70,75-76,96,229-239,246,251,266,278
+apps/web/src/features/run/run-detail.tsx
+  s_033c97ccc35358::t_460936e63bcd76 8,18-21,40-42,47-72,94-95,97,125-138,248-282,284-294,296-323
+apps/web/src/features/run/run-view-model.ts
+  s_033c97ccc35358::t_37b1796a65414a 6-14,21-24,30-31,34,36-37,186,218,220-221,230,246-248,251,282-283,287
+apps/web/src/server/domains/calendar/repo/calendar-caldav.integration.test.ts
+  s_033c97ccc35358::t_531fc52f05eeb8 223,262
+apps/web/src/server/domains/image/repo/image-storage.unit.test.ts
+  s_033c97ccc35358::t_7cb06fc23919a3 387-390
+apps/web/src/server/domains/run/service/ai-refresh.integration.test.ts
+  s_033c97ccc35358::t_2450b9aea98fd5 919-921
+apps/web/src/server/generic/entity-report/repo/index.ts
+  s_033c97ccc35358::t_30f453a124e14f 239-240
+apps/web/src/server/generic/entity-report/repo/run-dependencies.ts
+  s_033c97ccc35358::t_483701f36ac8e4 6,25,37,202-219
+apps/web/src/server/generic/entity-report/repo/run.ts
+  s_033c97ccc35358::t_d13cb04302921a 24,1210-1274,1464-1465
+apps/web/src/server/generic/jobs/repo/job-diagnostics.ts
+  s_033c97ccc35358::t_391c588561d467 28-32,156,159-160
+apps/web/src/server/generic/jobs/service/jobs.ts
+  s_033c97ccc35358::t_a00ab67c30174e 14
+apps/web/src/server/generic/run-detail/repo/run-detail.ts
+  s_033c97ccc35358::t_7bb0489362df8d 14,30,44
+apps/web/tooling/typecheck-repositories.ts
+  s_033c97ccc35358::t_0930739be65870 25
+packages/schemas/src/entity-definitions/23-run.entity.ts
+  s_033c97ccc35358::t_f3343c64ee7326 79-87
+packages/schemas/src/entity-report.ts
+  s_033c97ccc35358::t_75a1cdff1aeabe 67-68
+packages/schemas/src/native-coverage.ts
+  s_033c97ccc35358::t_c6ab8e56604f89 392-393
+packages/schemas/src/run-step.ts
+  s_033c97ccc35358::t_eeb20736413e99 53-67,96-97
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "ca9d1659990b916e3734222eda3058c6ee128eea",
+  "prompts": {},
+  "sessions": {
+    "s_033c97ccc35358": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "60bf3a4f-d655-4028-9f82-d84fe59d64b8",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
