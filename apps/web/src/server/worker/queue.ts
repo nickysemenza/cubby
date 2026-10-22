@@ -4,9 +4,9 @@ import { TELEMETRY_SCHEMA_VERSION } from "~/lib/http-cache";
 import { withCfEnv } from "~/server/cf-env";
 import { db, withInvocationDb } from "~/server/db";
 import { recordDatabaseWrite } from "~/server/db/freshness/client";
-import type { BackgroundQueueBatch } from "~/server/workflows/background-queue-types";
 import { withInvocationTrace } from "~/server/observability/tracing";
 import { QUEUE_NAMES } from "~/server/worker-identity";
+import type { BackgroundQueueBatch } from "~/server/workflows/background-queue-types";
 
 type QueueDelivery = Omit<BackgroundQueueBatch, "queue"> & {
   readonly queue: string;
