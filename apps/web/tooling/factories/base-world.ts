@@ -34,13 +34,13 @@ type InsertClient = Pick<ReturnType<typeof drizzle>, "transaction">;
 
 /** Insert the starting rows. Idempotent: a re-seed is a no-op. */
 /**
- * The rule revisions migration 0091 seeds. Literal because the global test
+ * The current rule revisions the synthetic world seeds. Literal because the global test
  * setup loads this file before the test environment exists, so it cannot
  * import the rule declarations; `automatic-rules.unit.test.ts` keeps them equal.
  */
 export const SEEDED_RULE_REVISIONS = {
   "field.addition": "2026-10-20.1",
-  "statement_transaction.attach": "2026-10-21.1/2026-10-20.1",
+  "statement_transaction.attach": "2026-10-21.1/2026-10-21.1",
 } as const;
 
 export async function seedBaseWorld(db: InsertClient): Promise<void> {

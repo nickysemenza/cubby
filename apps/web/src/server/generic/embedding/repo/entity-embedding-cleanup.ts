@@ -7,6 +7,7 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { notDeleted, unwrapDb, withTransaction } from "~/server/db/helpers";
 import { entityEmbedding, searchDocument } from "~/server/db/schema";
+import { lockRefreshFamily } from "~/server/generic/derived-refresh/repo/families";
 import {
   getOrphanedSearchDocumentRefs,
   type SearchDocumentCursor,
@@ -46,7 +47,9 @@ export async function retireStillOrphanedSearchArtifacts(
       ]);
     }
     for (const [entityKind, ids] of byType) {
-      await softDeleteEntitySearchArtifactsTx(tx, entityKind, ids);
+      // Orphan publication already owns its Job; acquiring search here would
+      // reverse the ordinary search-before-orphans family order.
+      await retireSearchArtifactsTx(tx, entityKind, ids);
     }
     return stillOrphaned.length;
   });
@@ -66,6 +69,17 @@ export async function softDeleteEntitySearchArtifactsTx(
   entityIds: string[],
 ): Promise<void> {
   if (entityIds.length === 0) return;
+  // Publication owns this Job before artifact rows. Removal must use that same
+  // order before its eventual capture updates the Job again at commit.
+  await lockRefreshFamily(tx, "search");
+  await retireSearchArtifactsTx(tx, entityKind, entityIds);
+}
+
+async function retireSearchArtifactsTx(
+  tx: DrizzleTransaction,
+  entityKind: SearchableEntity,
+  entityIds: string[],
+): Promise<void> {
   await softDeleteEntityEmbeddingsTx(tx, entityKind, entityIds);
   await tx
     .update(searchDocument)

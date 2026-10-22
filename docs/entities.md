@@ -2128,6 +2128,12 @@ validation. No global input revision or publication epoch stands in for that
 check. Failed, cancelled and manually paused Jobs require explicit retry;
 ordinary captures and periodic wakes do not revive them.
 
+Authoritative removal acquires the search-family Job before retiring search
+artifacts, matching search publication's Job-before-artifact lock order. Orphan
+publication already owns its own Job and retires artifacts directly; it must
+not acquire the search Job in reverse family order. This orders search
+publication against removal, not all concurrent mutation paths.
+
 A successful page can wake another bounded drain. The drain reselects fair
 batches, up to 256 pages or 20 seconds between pages, so a lost follow-up wake
 does not reduce an entire corpus to one page per minute. Completed families are
