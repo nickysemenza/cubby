@@ -17,11 +17,14 @@ use ingredient::{
     from_str as parse_ingredient_str,
     ingredient::Ingredient,
     rich_text::{Chunk, RichParser},
+    unit::Measure,
     usage::IngredientUsage,
 };
 use recipe_scraper::{RecipeSection, RecipeTimes, RecipeYield, ScrapedRecipe};
 use serde::{Deserialize, Serialize};
+#[cfg(feature = "wasm")]
 use tsify_next::Tsify;
+#[cfg(feature = "wasm")]
 use wasm_bindgen::prelude::*;
 
 use crate::WAmount;
@@ -32,8 +35,8 @@ use crate::WAmount;
 /// surfaces key off the discrete `fell_back` / `unparsed_digit` booleans rather
 /// than a `confidence` threshold. Booleans are always emitted (no skip) so the
 /// TS shape is a definite `{ confidence, fell_back, unparsed_digit }`.
-#[derive(Tsify, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Debug)]
-#[tsify(into_wasm_abi)]
+#[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Debug)]
+#[cfg_attr(feature = "wasm", derive(Tsify), tsify(into_wasm_abi))]
 pub struct WParseNotes {
     /// Convenience rollup of the booleans below.
     pub confidence: Confidence,
@@ -54,8 +57,8 @@ impl From<ParseNotes> for WParseNotes {
 }
 
 /// A parsed ingredient (mirrors `Ingredient`).
-#[derive(Tsify, Serialize, Deserialize)]
-#[tsify(into_wasm_abi)]
+#[derive(Serialize, Deserialize)]
+#[cfg_attr(feature = "wasm", derive(Tsify), tsify(into_wasm_abi))]
 pub struct WIngredient {
     pub name: String,
     pub amounts: Vec<WAmount>,
@@ -85,7 +88,8 @@ impl From<Ingredient> for WIngredient {
 }
 
 /// Structured yield, e.g. `{ value: 12, unit: "pancakes" }`.
-#[derive(Tsify, Serialize, Deserialize)]
+#[derive(Serialize, Deserialize)]
+#[cfg_attr(feature = "wasm", derive(Tsify))]
 pub struct WRecipeYield {
     pub value: f64,
     pub unit: String,
@@ -101,8 +105,8 @@ impl From<RecipeYield> for WRecipeYield {
 }
 
 /// Result of parsing a freeform yield string into structured yield + servings.
-#[derive(Tsify, Serialize, Deserialize)]
-#[tsify(into_wasm_abi)]
+#[derive(Serialize, Deserialize)]
+#[cfg_attr(feature = "wasm", derive(Tsify), tsify(into_wasm_abi))]
 pub struct WYieldResult {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub recipe_yield: Option<WRecipeYield>,
@@ -112,7 +116,8 @@ pub struct WYieldResult {
 }
 
 /// A recipe component with raw ingredient/instruction lines (mirrors `RecipeSection`).
-#[derive(Tsify, Serialize, Deserialize)]
+#[derive(Serialize, Deserialize)]
+#[cfg_attr(feature = "wasm", derive(Tsify))]
 pub struct WRecipeSection {
     /// Component label (e.g., "For the sauce"); absent for the main/only section.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -141,15 +146,13 @@ impl From<RecipeSection> for WRecipeSection {
 
 /// A scraped recipe (the cubby-facing subset of `ScrapedRecipe`); the TS side
 /// converts it to the shared `ImportRecipe` carrier.
-#[derive(Tsify, Serialize, Deserialize)]
-#[tsify(into_wasm_abi)]
+#[derive(Serialize, Deserialize)]
+#[cfg_attr(feature = "wasm", derive(Tsify), tsify(into_wasm_abi))]
 pub struct WScrapedRecipe {
     /// Recipe components; most recipes have a single unnamed section.
     pub sections: Vec<WRecipeSection>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub name: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub url: Option<String>,
+    pub name: String,
+    pub url: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub image: Option<String>,
     /// Headnote / intro blurb (schema.org `description`).
@@ -173,8 +176,8 @@ impl From<ScrapedRecipe> for WScrapedRecipe {
     fn from(r: ScrapedRecipe) -> Self {
         Self {
             sections: r.sections.into_iter().map(WRecipeSection::from).collect(),
-            name: Some(r.name),
-            url: Some(r.url),
+            name: r.name,
+            url: r.url,
             image: r.image,
             description: r.description,
             recipe_yield: r.recipe_yield.map(WRecipeYield::from),
@@ -186,7 +189,8 @@ impl From<ScrapedRecipe> for WScrapedRecipe {
 }
 
 /// One span of measurement-aware instruction text (mirrors `Chunk`).
-#[derive(Tsify, Serialize, Deserialize)]
+#[derive(Serialize, Deserialize)]
+#[cfg_attr(feature = "wasm", derive(Tsify))]
 #[serde(tag = "kind", content = "value")]
 pub enum WRichItem {
     Text(String),
@@ -205,8 +209,8 @@ impl From<Chunk> for WRichItem {
 }
 
 /// `WRichItem[]` (`transparent` → `type WRichItems = WRichItem[]`).
-#[derive(Tsify, Serialize, Deserialize)]
-#[tsify(into_wasm_abi)]
+#[derive(Serialize, Deserialize)]
+#[cfg_attr(feature = "wasm", derive(Tsify), tsify(into_wasm_abi))]
 #[serde(transparent)]
 pub struct WRichItems(pub Vec<WRichItem>);
 
@@ -214,7 +218,8 @@ pub struct WRichItems(pub Vec<WRichItem>);
 /// upstream does not derive Tsify on). Renders as the TS string union
 /// `"amount" | "name" | "modifier"`, matching the keys of the
 /// `INGREDIENT_PART_COLOR` map on the TS side.
-#[derive(Tsify, Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Eq, Debug)]
+#[cfg_attr(feature = "wasm", derive(Tsify))]
 #[serde(rename_all = "lowercase")]
 pub enum WField {
     Amount,
@@ -237,7 +242,8 @@ impl From<Field> for WField {
 /// unlabeled gap text. The segments concatenate back to the whole source, so JS
 /// renders them in order with no byte-offset math (the Rust spans are UTF-8 byte
 /// ranges, which don't map to JS UTF-16 indices).
-#[derive(Tsify, Serialize, Deserialize)]
+#[derive(Serialize, Deserialize)]
+#[cfg_attr(feature = "wasm", derive(Tsify))]
 pub struct WSegment {
     pub text: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -248,8 +254,8 @@ pub struct WSegment {
 /// ordered list of segments covering the whole source. `segments` carries no
 /// labeled entries when a whole-line recognizer or the name-only fallback
 /// produced the result (then it's a single unlabeled segment = the whole line).
-#[derive(Tsify, Serialize, Deserialize)]
-#[tsify(into_wasm_abi)]
+#[derive(Serialize, Deserialize)]
+#[cfg_attr(feature = "wasm", derive(Tsify), tsify(into_wasm_abi))]
 pub struct WDecomposition {
     pub source: String,
     pub segments: Vec<WSegment>,
@@ -272,24 +278,15 @@ impl From<Decomposition> for WDecomposition {
     }
 }
 
-#[wasm_bindgen]
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
 pub fn parse_ingredient(input: &str) -> WIngredient {
     parse_ingredient_str(input).into()
 }
 
-/// The upstream parser's own one-line rendering of a parsed line ("2 cups flour, sifted
-/// (optional)"). Not a wasm export: the native client reaches it through `cubby-ffi`, so no
-/// consumer re-implements the formatter. The web renders from `WIngredient` fields today.
-pub fn format_ingredient(input: &str) -> String {
-    parse_ingredient_str(input).to_string()
-}
-
 /// Parses `input` once and returns both the structured result and the parser's own
-/// one-line rendering. `cubby-ffi::parse_ingredient` wants both `WIngredient` and the
-/// `Display` string for every line; calling `parse_ingredient` + `format_ingredient`
-/// there would run the same (non-trivial) parse twice per line. `parse_ingredient` and
-/// `format_ingredient` stay as single-purpose wrappers for callers that only need one
-/// side (`food_mappings` and the wasm export, respectively).
+/// one-line rendering ("2 cups flour, sifted (optional)"). `cubby-ffi::parse_ingredient`
+/// wants both for every line, so no native consumer re-implements the formatter; the web
+/// renders from `WIngredient` fields.
 pub fn parse_and_format_ingredient(input: &str) -> (WIngredient, String) {
     let ingredient = parse_ingredient_str(input);
     // `to_string()` borrows; compute the display string before `.into()` consumes it.
@@ -298,15 +295,15 @@ pub fn parse_and_format_ingredient(input: &str) -> (WIngredient, String) {
 }
 
 /// `WIngredient[]` (`transparent` → `type WParsedLines = WIngredient[]`).
-#[derive(Tsify, Serialize, Deserialize)]
-#[tsify(into_wasm_abi)]
+#[derive(Serialize, Deserialize)]
+#[cfg_attr(feature = "wasm", derive(Tsify), tsify(into_wasm_abi))]
 #[serde(transparent)]
 pub struct WParsedLines(pub Vec<WIngredient>);
 
 /// Batch [`parse_ingredient`]: one boundary crossing for N lines (collapses the
 /// TS per-line loops on paste/import/report surfaces). Output order matches
 /// input; each element is exactly what `parse_ingredient` returns for that line.
-#[wasm_bindgen]
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
 pub fn parse_ingredient_lines(lines: Vec<String>) -> WParsedLines {
     WParsedLines(
         lines
@@ -319,42 +316,59 @@ pub fn parse_ingredient_lines(lines: Vec<String>) -> WParsedLines {
 /// Decompose a line into ordered `{text, field?}` segments showing how the
 /// grammar carved it into amount / name / modifier spans. `source` is the
 /// *normalized* line the spans index into, not the verbatim raw input.
-#[wasm_bindgen]
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
 pub fn decompose_ingredient(input: &str) -> WDecomposition {
     decompose_str(input).into()
 }
 
-#[wasm_bindgen]
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
 pub fn format_amount(amount: WAmount) -> String {
     amount.to_measure().to_string()
 }
 
-/// [`format_amount`] for display: `each` parses to `Unit::Whole`, which renders
-/// unit-less (`3`, `2 - 4`), so the caller's `each` is re-attached to stay
-/// visible (`3 each`). Web and native amount cells both render through this.
-#[wasm_bindgen]
-pub fn format_amount_labeled(amount: WAmount) -> String {
-    let is_each = amount.unit == "each";
-    let text = amount.to_measure().to_string();
-    if is_each {
+/// The display rules every amount cell shares, around a `render` of the measure:
+/// an empty unit is a bare count (a plain number, `1.5` rather than the unit
+/// formatter's `1½`; a ranged one renders as `whole`), and `each`, which parses to
+/// `Unit::Whole` and renders unit-less (`3`, `2 - 4`), is re-attached to stay
+/// visible (`3 each`).
+fn format_amount_for_display(
+    mut amount: WAmount,
+    render: impl FnOnce(Measure) -> String,
+) -> String {
+    if amount.unit.is_empty() {
+        if amount.upper_value.is_none() {
+            return crate::format_number(amount.value);
+        }
+        amount.unit = "whole".to_string();
+    }
+    let text = render(amount.to_measure());
+    if amount.unit == "each" {
         format!("{text} each")
     } else {
         text
     }
 }
 
+/// [`format_amount`] for display, with the shared bare-count and `each` rules.
+/// Web and native amount cells both render through this; pinned by the `amount`
+/// cases in `packages/shared/golden-vectors/display-format.json`.
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
+pub fn format_amount_labeled(amount: WAmount) -> String {
+    format_amount_for_display(amount, |measure| measure.to_string())
+}
+
 /// Format an amount the way it would be read off a shopping list rather than
-/// out of the conversion graph.
+/// out of the conversion graph, with the same display rules as
+/// [`format_amount_labeled`].
 ///
 /// `format_amount` renders the measure as stored, and `Measure::denormalize`
 /// (which it does not call) ladders teaspoons and cents but deliberately leaves
 /// `Gram` and `Milliliter` untouched. That is exactly the pair the shopping
 /// list produces, which is why a flour shortfall prints as "1360 g" instead of
 /// "3 lb".
-///
-#[wasm_bindgen]
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
 pub fn format_amount_shopper(amount: WAmount) -> String {
-    amount.to_measure().format_shopper()
+    format_amount_for_display(amount, |measure| measure.format_shopper())
 }
 
 /// Render a quantity float as an *editable* ASCII fraction for the recipe editor's
@@ -364,7 +378,7 @@ pub fn format_amount_shopper(amount: WAmount) -> String {
 /// Thin WASM shim over `ingredient::util::format_quantity_ascii` — the algorithm lives
 /// upstream alongside the parser's glyph `format_quantity`, sharing the fraction logic
 /// (see that fn for the denominator-cap + `1e-6` recheck details).
-#[wasm_bindgen]
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
 pub fn format_quantity(value: f64) -> String {
     ingredient::util::format_quantity_ascii(value)
 }
@@ -374,7 +388,7 @@ pub fn format_quantity(value: f64) -> String {
 /// fractions). The inverse of `format_quantity`. The editor's quantity cell holds
 /// only a quantity — the unit is a separate field — so a faux `"<qty> x"` line backs
 /// up the bare-measurement parse when the grammar wants a trailing token.
-#[wasm_bindgen]
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
 pub fn parse_quantity(input: &str) -> Result<f64, String> {
     // Trim once up front so both parse paths (bare-measurement and the faux-line
     // fallback) see the same normalized input.
@@ -406,7 +420,7 @@ pub fn parse_quantity(input: &str) -> Result<f64, String> {
 ///
 /// Errors rather than guessing when the input carries no recognizable measurement, so
 /// the caller rejects the paste instead of persisting garbage.
-#[wasm_bindgen]
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
 pub fn parse_amount(input: &str) -> Result<WAmount, String> {
     // Trim up front so the grammar sees the same normalized input `parse_quantity` does.
     let trimmed = input.trim();
@@ -422,13 +436,13 @@ pub fn parse_amount(input: &str) -> Result<WAmount, String> {
 /// including the `-es` guard ("glasses" → "glass", not "glasse"). It expects a
 /// plural; an already-singular word is out of contract (e.g. "glass" → "glas").
 /// See `singularize_unit_table` in the tests for the locked-in cases.
-#[wasm_bindgen]
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
 pub fn singularize_unit(unit: String) -> String {
     ingredient::unit::singular(&unit).to_string()
 }
 
 #[cfg(feature = "html")]
-#[wasm_bindgen]
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
 pub fn parse_scraped_recipe(body: &str, url: &str) -> Result<WScrapedRecipe, String> {
     recipe_scraper::scrape(body, url)
         .map_err(|e| format!("Failed to scrape: {e}"))
@@ -438,7 +452,7 @@ pub fn parse_scraped_recipe(body: &str, url: &str) -> Result<WScrapedRecipe, Str
 /// Parse a freeform yield string ("Makes about 12 pancakes", "Serves 4") into a
 /// structured `{ recipe_yield?, servings? }`, using the same parser the web
 /// scraper uses for JSON-LD yields (so cookbook and web yields stay consistent).
-#[wasm_bindgen]
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
 pub fn parse_yield(input: &str) -> WYieldResult {
     let (recipe_yield, servings) = recipe_scraper::parse_yield_string(input);
     WYieldResult {
@@ -447,7 +461,7 @@ pub fn parse_yield(input: &str) -> WYieldResult {
     }
 }
 
-#[wasm_bindgen]
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
 pub fn parse_rich_text(text: String, ingredient_names: Vec<String>) -> Result<WRichItems, String> {
     RichParser::new(ingredient_names)
         .parse(&text)
@@ -456,8 +470,8 @@ pub fn parse_rich_text(text: String, ingredient_names: Vec<String>) -> Result<WR
 }
 
 // Golden tests — drift tripwires for the ingredient / recipe-scraper crates
-// (pinned by exact git rev in Cargo.toml). The parse_* fns are plain Rust under
-// the #[wasm_bindgen] attribute, so they run natively under `cargo test`. The
+// (pinned by exact git rev in Cargo.toml). The parse_* fns are plain Rust
+// without the `wasm` feature, so they run natively under `cargo test`. The
 // asserts pin the W-bridge serde shapes the TS side reads; a parser rev bump
 // that changes classification, the snake_case rename, yield/singularization, or
 // the rich-text chunk contract fails here instead of three layers downstream.
@@ -472,15 +486,6 @@ mod tests {
             value,
             upper_value: None,
         }
-    }
-
-    #[test]
-    fn labeled_amount_keeps_each_visible() {
-        assert_eq!(format_amount_labeled(amount("each", 3.0)), "3 each");
-        assert_eq!(
-            format_amount_labeled(amount("cup", 2.0)),
-            format_amount(amount("cup", 2.0))
-        );
     }
 
     /// The shopping-list ladder. `format_amount` renders the base unit the
@@ -501,6 +506,7 @@ mod tests {
     #[case("tsp", 48.0, "1 cup")]
     // Non-weight, non-volume units pass through untouched.
     #[case("whole", 3.0, "3")]
+    #[case("each", 3.0, "3 each")]
     fn shopper_amounts(#[case] unit: &str, #[case] value: f64, #[case] expected: &str) {
         assert_eq!(format_amount_shopper(amount(unit, value)), expected);
     }
@@ -654,12 +660,13 @@ mod tests {
     /// reshaping the TS import relies on — `name`/`url` wrapped in `Some`, sections
     /// carried through, yield parsed. A scraper field rename would surface here
     /// rather than silently producing an empty import.
+    #[cfg(feature = "html")]
     #[test]
     fn parse_scraped_recipe_reshapes_jsonld() {
         let html = r#"<html><head><script type="application/ld+json">{"name":"Test Cake","recipeIngredient":["2 cups flour","1 cup sugar"],"recipeInstructions":"Mix. Bake.","recipeYield":"8 servings"}</script></head><body></body></html>"#;
         let r = parse_scraped_recipe(html, "https://example.com/cake").expect("scrapes");
-        assert_eq!(r.name.as_deref(), Some("Test Cake"));
-        assert_eq!(r.url.as_deref(), Some("https://example.com/cake"));
+        assert_eq!(r.name, "Test Cake");
+        assert_eq!(r.url, "https://example.com/cake");
         assert!(
             r.sections
                 .iter()

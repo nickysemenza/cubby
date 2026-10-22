@@ -4,16 +4,24 @@
   "private": true,
   "type": "module",
   "sideEffects": [
+    "./workerd.js",
     "./worker/recipebridge.js",
     "./browser/recipebridge.js",
     "./cookbook/recipebridge_cookbook.js",
     "./*/snippets/*"
   ],
   "main": "worker/recipebridge.js",
-  "types": "worker/recipebridge.d.ts",
+  "types": "browser/recipebridge.d.ts",
   "exports": {
     ".": {
+      "types": "./browser/recipebridge.d.ts",
+      "workerd": "./workerd.js",
+      "browser": "./browser/recipebridge.js",
+      "default": "./worker/recipebridge.js"
+    },
+    "./worker": {
       "types": "./worker/recipebridge.d.ts",
+      "workerd": "./workerd.js",
       "default": "./worker/recipebridge.js"
     },
     "./cookbook": {

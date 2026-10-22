@@ -11,7 +11,6 @@ import {
 } from "@cubby/shared/external-fetch";
 
 import { scrubErrorMessage } from "~/lib/error-diagnostics";
-import { wasm } from "~/lib/wasm";
 import { MAILBOX_RELEVANCE_FEATURE } from "~/server/ai/policy/features";
 import type { AiChatRequest } from "~/server/ai/run-feature";
 import {
@@ -24,6 +23,7 @@ import {
   type GmailProvider,
   type GmailOrderMailAttachment,
 } from "~/server/domains/purchase-import/repo/gmail/types";
+import { wasm } from "~/server/wasm";
 
 import { unreadableMailImages } from "./triage";
 

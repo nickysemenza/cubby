@@ -7,6 +7,7 @@ use image::{
     codecs::{gif::GifDecoder, jpeg::JpegDecoder, png::PngDecoder},
     metadata::Orientation,
 };
+#[cfg(feature = "wasm")]
 use wasm_bindgen::prelude::*;
 
 const MAX_SOURCE: usize = 3 * 1024 * 1024;
@@ -53,16 +54,16 @@ fn check_pixels(decoder: &impl ImageDecoder) -> Result<(), String> {
 
 fn decode_still(
     mut decoder: impl ImageDecoder,
-    working_format: Option<&str>,
+    check_jpeg_working_memory: bool,
 ) -> Result<DynamicImage, String> {
     decoder.set_limits(limits()).map_err(|e| e.to_string())?;
     check_pixels(&decoder)?;
     let (width, height) = decoder.dimensions();
-    if let Some(format) = working_format {
+    if check_jpeg_working_memory {
         let padded_pixels =
             u64::from(width.div_ceil(32) * 32) * u64::from(height.div_ceil(32) * 32);
         if padded_pixels * CODEC_BYTES_PER_PIXEL > MAX_CODEC_WORKING {
-            return Err(format!("Image exceeds {format} working memory budget"));
+            return Err("Image exceeds JPEG working memory budget".into());
         }
     }
     let orientation = decoder.orientation().map_err(|e| e.to_string())?;
@@ -73,16 +74,15 @@ fn decode_still(
 fn decode(bytes: &[u8]) -> Result<DynamicImage, String> {
     let input = Cursor::new(bytes);
     match image::guess_format(bytes).map_err(|e| e.to_string())? {
-        ImageFormat::Jpeg => decode_still(
-            JpegDecoder::new(input).map_err(|e| e.to_string())?,
-            Some("JPEG"),
-        ),
+        ImageFormat::Jpeg => {
+            decode_still(JpegDecoder::new(input).map_err(|e| e.to_string())?, true)
+        }
         ImageFormat::Png => {
             let decoder = PngDecoder::with_limits(input, limits()).map_err(|e| e.to_string())?;
             if decoder.is_apng().map_err(|e| e.to_string())? {
                 return Err("Animated PNG is unsupported purchase evidence".into());
             }
-            decode_still(decoder, None)
+            decode_still(decoder, false)
         }
         ImageFormat::Gif => {
             // Inspect headers without expanding animation frames into pixel buffers.
@@ -105,7 +105,7 @@ fn decode(bytes: &[u8]) -> Result<DynamicImage, String> {
             {
                 return Err("Animated GIF is unsupported purchase evidence".into());
             }
-            decode_still(GifDecoder::new(input).map_err(|e| e.to_string())?, None)
+            decode_still(GifDecoder::new(input).map_err(|e| e.to_string())?, false)
         }
         _ => Err("Unsupported model image format".into()),
     }
@@ -133,7 +133,7 @@ fn finish_image(decoded: DynamicImage, orientation: Orientation) -> DynamicImage
 }
 
 /// Private byte-in/byte-out Worker export. Refusals are missing evidence, never negatives.
-#[wasm_bindgen]
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
 pub fn prepare_model_image(bytes: &[u8], detail: bool) -> Result<Vec<u8>, String> {
     if bytes.len() > MAX_SOURCE {
         return Err("Image exceeds source byte budget".into());

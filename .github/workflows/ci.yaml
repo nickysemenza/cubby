@@ -74,6 +74,7 @@ jobs:
           filters: |
             rust: &rust
               - 'recipebridge/**'
+              - 'cookbook-wasm/**'
               - 'cubby-ffi/**'
               - 'Cargo.{toml,lock}'
               - 'rust-toolchain.toml'
@@ -88,7 +89,7 @@ jobs:
               - 'apps/apple/**'
               - '.xcode-version'
               - '.github/actions/setup-apple/**'
-              - 'scripts/{ensure,rust-fingerprint}.ts'
+              - 'scripts/{ensure,rust-fingerprint,apple-ffi}.ts'
               - 'scripts/lib/**'
               # File inputs of appleCommon in apps/apple/project.json.
               - 'apps/web/tooling/{simulator-inventory-schema,mac-fixture-identity}.ts'
@@ -261,7 +262,7 @@ jobs:
         run: pnpm exec nx run-many -p @cubby/web -t db-check workerd-tests --parallel=1 --outputStyle=stream
 
   rust:
-    name: Rust - recipebridge and cubby-ffi
+    name: Rust - recipebridge, cookbook-wasm and cubby-ffi
     needs: plan
     if: needs.plan.outputs.rust == 'true'
     runs-on: ubuntu-24.04-arm
@@ -279,11 +280,11 @@ jobs:
         with:
           workspaces: ". -> target"
           # Root workspace profiles are not part of rust-cache's member manifest hash.
-          # Retire immutable empty entries saved when Nx replayed both Rust targets.
+          # Retire immutable empty entries saved when Nx replayed the Rust targets.
           prefix-key: rust-gate-v3
           key: ${{ hashFiles('Cargo.toml') }}
           cache-on-failure: false
-      # One crate at a time: both share the workspace target directory.
+      # One crate at a time: they share the workspace target directory.
       - run: pnpm exec nx run-many -t rust --parallel=1 --outputStyle=stream
 
   # Native jobs use independent hosted VMs and compiler/artifact caches.

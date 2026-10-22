@@ -44,18 +44,29 @@ Start streams   →  cancellable workflow streams
   `cubby/domain-layers` keeps imports flowing operations → service → repo → db.
 - Unit conversion uses `@cubby/recipebridge`, which wraps Rust
   [ingredient-parser](https://github.com/nickysemenza/ingredient-parser). Call
-  `wasm` from `~/lib/wasm` (sync) on the client and `wasmServer` (async) on the
-  server. Conversions chain through a product's unit mappings, e.g.
-  `2 cups → $5.00 → 333g`.
+  `wasm` from `~/lib/wasm` for common synchronous compute. Worker-only
+  capabilities use `wasm` from `~/server/wasm`. Conversions chain through a product's unit mappings, e.g.
+  `2 cups → $5.00 → 333g`. Amount display rules also live in Rust; web and
+  UniFFI adapters forward to the same functions, with cross-client cases in
+  `packages/shared/golden-vectors/display-format.json`.
+  Physical conversions share density and nutrition mappings, but use one
+  product's package mappings per route. Conflicting package interpretations
+  remain unknown even when needs share one authored unit; only absent conversion
+  routes allow availability to fall back to that unit. Costing keeps the selected conversion path with its result;
+  recipe recursion marks the root before expanding sub-recipes. Needs and meal
+  calculations share the same validated yield-ratio conversion.
 - `pnpm wasm` prepares three packages through the shared
   [artifact preparation entrypoint](../scripts/ensure.ts) into
   `packages/wasm`. The Worker and Vitest load the full build, `worker/`. The browser
-  loads `browser/`, built without the Worker-only `html` and `ai-usage`
-  features (`compact_browser_page`, `parse_scraped_recipe`,
+  loads `browser/`, built with only the `wasm` feature, without Worker-only `html`, `ai-usage`, and `model-images`
+  features (`compact_email_html`, `parse_scraped_recipe`,
   `gateway_call_usage`). Only the cookbook import loads
-  `@cubby/recipebridge/cookbook` (the `recipebridge/cookbook` crate). Put a new
-  Worker-only export behind one of those features; browser code must not call
-  it, which `wasm-browser-exports.unit.test.ts` enforces, and
+  `@cubby/recipebridge/cookbook` (the sibling `cookbook-wasm` crate). Put a new
+  Worker-only export behind one of those features. The package root's types
+  describe the browser build; `@cubby/recipebridge/worker` exposes the full
+  interface and is restricted to `src/server`. Package conditions select the
+  browser build or the shared `packages/wasm/workerd.js` initializer; both
+  workerd subpaths resolve to that one module. Node tests use the full build.
   `check-client-bundle.ts` checks each package lands in the right bundle.
   Cookbook EPUB estimates and extraction use the same deployment options:
   Sonnet 5 first, Haiku 4.5 for the second opinion, then Luna. Anthropic calls
@@ -330,12 +341,12 @@ native PostgreSQL installation remain owned by their existing runners.
 
 ## Deployment (`apps/web` on Workers)
 
-| File                                                                          | Purpose                                           |
-| ----------------------------------------------------------------------------- | ------------------------------------------------- |
-| [apps/web/src/cf-server.ts](../apps/web/src/cf-server.ts)                     | Worker entry; wraps requests in `withRequestDb()` |
-| [apps/web/src/server/db.ts](../apps/web/src/server/db.ts)                     | Request pools and scoped background pool cleanup  |
-| [apps/web/src/lib/recipebridge-cf.ts](../apps/web/src/lib/recipebridge-cf.ts) | WASM via `?init` (Workers SSR)                    |
-| [apps/web/cloudflare.config.ts](../apps/web/cloudflare.config.ts)             | Bindings, vars, compat flags, secret names        |
+| File                                                              | Purpose                                                    |
+| ----------------------------------------------------------------- | ---------------------------------------------------------- |
+| [apps/web/src/cf-server.ts](../apps/web/src/cf-server.ts)         | Worker entry; wraps requests in `withRequestDb()`          |
+| [apps/web/src/server/db.ts](../apps/web/src/server/db.ts)         | Request pools and scoped background pool cleanup           |
+| [packages/wasm/workerd.js](../packages/wasm/workerd.js)           | Shared WASM initialization for production and test Workers |
+| [apps/web/cloudflare.config.ts](../apps/web/cloudflare.config.ts) | Bindings, vars, compat flags, secret names                 |
 
 - **Hyperdrive.** Both bindings use one Neon origin. Account-side configuration
   and reconstruction live in [infrastructure](infrastructure.md#postgresql-and-hyperdrive);

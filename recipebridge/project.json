@@ -3,7 +3,7 @@
   "name": "recipebridge",
   "targets": {
     "rust": {
-      "command": "failed=0; cargo fmt --check || failed=1; cargo clippy --locked --profile ci --all-targets -- -D warnings || failed=1; cargo clippy --locked --profile ci --no-default-features -- -D warnings || failed=1; cargo test --locked --profile ci || failed=1; exit $failed",
+      "command": "failed=0; cargo fmt --check || failed=1; cargo clippy --locked --profile ci --all-targets --features wasm -- -D warnings || failed=1; cargo clippy --locked --profile ci --all-targets --no-default-features -- -D warnings || failed=1; cargo test --locked --profile ci || failed=1; exit $failed",
       "options": {
         "cwd": "{projectRoot}"
       },

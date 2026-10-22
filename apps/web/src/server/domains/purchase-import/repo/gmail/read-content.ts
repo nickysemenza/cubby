@@ -15,8 +15,8 @@ import {
   type RetainedMailContent,
 } from "@cubby/schemas/mailbox-research";
 
-import { wasm } from "~/lib/wasm";
 import { createAppError } from "~/server/errors/app-error";
+import { wasm } from "~/server/wasm";
 
 const MAIL_READ_MAX_LINKS = 40;
 const MAIL_READ_IDENTITY_HEADERS = ["subject", "date", "message-id"];

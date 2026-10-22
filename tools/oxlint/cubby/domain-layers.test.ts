@@ -5,6 +5,24 @@ import { targetPath, violation } from "./rules/domain-layers.ts";
 
 const S = "apps/web/src/server";
 
+test("Worker WASM capabilities stay behind the server interface", () => {
+  const client = "apps/web/src/features/recipe/view.tsx";
+  for (const source of [
+    "@cubby/recipebridge/worker",
+    "~/server/wasm",
+    "../../server/wasm",
+  ]) {
+    const target = targetPath(client, source);
+    assert.ok(target);
+    assert.equal(violation(client, target, false), "workerWasm");
+    assert.equal(violation(client, target, true), "workerWasm");
+    assert.equal(
+      violation(`${S}/clients/scraper.ts`, target, false),
+      undefined,
+    );
+  }
+});
+
 test("server roles import only the same or a lower layer", () => {
   assert.equal(
     violation(

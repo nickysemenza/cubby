@@ -1,16 +1,17 @@
 [package]
 name = "cubby-ffi"
 version = "0.1.0"
-# Matches recipebridge: edition 2024, no `rust-version` floor (see its Cargo.toml).
-edition = "2024"
+edition.workspace = true
+publish.workspace = true
 
 [lib]
 name = "cubby_ffi"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [dependencies]
-# No default features: `html` and `ai-usage` are Worker-only, and `ai-usage`
-# would compile the cookbook crate into every Apple target.
+# No default features and never `wasm`: `html` and `ai-usage` are Worker-only
+# (`ai-usage` would compile the cookbook crate into every Apple target), and
+# without `wasm` recipebridge links no wasm-bindgen, js-sys or tsify.
 recipebridge = { path = "../recipebridge", default-features = false }
 uniffi = "0.32"
 
@@ -28,12 +29,9 @@ name = "uniffi-bindgen"
 path = "src/bin/uniffi-bindgen.rs"
 required-features = ["cli"]
 
-# Mirrors recipebridge's clippy gate: a panic at the FFI boundary is a hard
-# Swift-side crash (well, UniFFI's own catch_unwind turns it into a thrown
-# Swift error instead, but only if we never call panic!/unwrap!/expect!
-# directly — deny them so that safety net is never the first line of defense).
-[lints.clippy]
-unwrap_used = "deny"
-expect_used = "deny"
-panic = "deny"
-uninlined_format_args = "warn"
+# The shared no-panic gate (see the workspace Cargo.toml). UniFFI's
+# catch_unwind turns a Rust panic into a thrown Swift error, but only as a last
+# resort; denying panic!/unwrap!/expect! keeps it from being the first line of
+# defense.
+[lints]
+workspace = true

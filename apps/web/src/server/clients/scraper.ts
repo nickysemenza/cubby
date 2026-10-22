@@ -1,4 +1,4 @@
-import type { WScrapedRecipe } from "@cubby/recipebridge";
+import type { WScrapedRecipe } from "@cubby/recipebridge/worker";
 import { sanitizeSectionName } from "@cubby/schemas/codec";
 import type { ImportRecipe } from "@cubby/schemas/import-recipe";
 import {
@@ -9,7 +9,7 @@ import {
   validateExternalHttpUrl,
 } from "@cubby/shared/external-fetch";
 
-import { wasm } from "~/lib/wasm";
+import { wasm } from "~/server/wasm";
 
 const isChefStepsHost = (url: string): boolean => {
   try {
@@ -65,7 +65,7 @@ export const htmlToImportRecipe = (html: string, url: string): ImportRecipe => {
 export const scrapedToImportRecipe = (w: WScrapedRecipe): ImportRecipe => {
   return {
     meta: {
-      title: w.name ?? "",
+      title: w.name,
       description: w.description,
       recipe_yield: w.recipe_yield,
       // JSON-LD durations are ISO-8601, so the scraper always fills a count

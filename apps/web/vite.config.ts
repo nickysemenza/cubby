@@ -146,42 +146,6 @@ function cfPgNativeStub(): Plugin {
 }
 
 /**
- * Resolves @cubby/recipebridge per environment (scripts/ensure.ts wasm --build).
- *
- * SSR gets a CF Workers wrapper over the full build. It uses the ?init pattern
- * @cloudflare/vite-plugin supports: vite-plugin-wasm doesn't apply to the
- * Workers environment, so a bare .wasm import returns an uninstantiated
- * WebAssembly.Module, causing `__wbindgen_start is not a function`.
- *
- * The client gets the build without the Worker-only features: HTML parsing
- * alone is ~0.34 MB gzip that only the Worker calls.
- */
-function recipebridgePlugin(): Plugin {
-  const targets = new Map([
-    ["ssr", path.resolve(__dirname, "src/lib/recipebridge-cf.ts")],
-    [
-      "client",
-      path.resolve(__dirname, "../../packages/wasm/browser/recipebridge.js"),
-    ],
-  ]);
-  return {
-    name: "recipebridge-redirect",
-    enforce: "pre",
-    applyToEnvironment(env) {
-      return targets.has(env.name);
-    },
-    resolveId(source) {
-      if (
-        source === "@cubby/recipebridge" ||
-        source.endsWith("/packages/wasm/worker/recipebridge.js")
-      ) {
-        return targets.get(this.environment.name);
-      }
-    },
-  };
-}
-
-/**
  * Redirect @sentry/tanstackstart-react to a @sentry/cloudflare-backed shim in
  * the SSR environment. Its server half re-exports @sentry/node, which pulls
  * @sentry/node-core, @sentry/opentelemetry, seven @opentelemetry/* packages and
@@ -405,9 +369,7 @@ export default defineConfig(async ({ command }) => {
       devLifecycle(),
       // Deploy plugin must come first (Cloudflare plugin needs early hook)
       ...deployPlugin,
-      // CF Workers WASM instantiation plugin must run before vite-plugin-wasm
       cfPgNativeStub(),
-      recipebridgePlugin(),
       cfSentryShim(),
       cfZodLocalesStub(),
       phosphorWeights(),

@@ -1,10 +1,9 @@
 [package]
 name = "recipebridge"
 version = "0.1.0"
-# Edition 2024 matches the ingredient-parser workspace. No `rust-version`
-# floor: rust-toolchain.toml tracks stable, and declaring an MSRV would make
-# the edition-2024 resolver hold dependencies back to that older compiler.
-edition = "2024"
+edition.workspace = true
+publish.workspace = true
+
 [lib]
 crate-type = ["cdylib", "rlib"]
 
@@ -20,74 +19,64 @@ image = { version = "0.25.9", default-features = false, features = [
   "png",
   "gif",
 ], optional = true }
-wasm-bindgen = "0.2"
-js-sys = "0.3"
-# Generates the boundary .d.ts from the Rust structs below (replacing the old
-# hand-written typescript_custom_section). "js" routes the wasm ABI through
-# serde-wasm-bindgen, matching how this crate already crosses the boundary.
-tsify-next = { version = "0.5", features = ["js"] }
-
-# Pin the shared upstream commit so every CI job builds identical Rust sources.
-# Renovate follows main weekly and updates every ref (here and in
-# cookbook/) together.
-#
-# To build against a sibling ingredient-parser working copy, drop a gitignored
-# cubby/.cargo/config.toml with a
-# `[patch."https://github.com/nickysemenza/ingredient-parser"]` table mapping
-# each crate to `path = "../ingredient-parser/<crate>"`. Treat it as a
-# temporary dev-session tool and remove it afterwards: while it is present cargo
-# strips `source =` from Cargo.lock on every build, which dirties the tree and
-# fails the clean-tree pre-push gate, and local builds silently diverge from
-# the pinned rev CI uses.
-# `wasm` only derives Tsify on upstream boundary types (`Confidence`,
-# `IngredientUsage`, `RecipeTimes`) so they cross as-is; it adds no exports.
-ingredient = { git = "https://github.com/nickysemenza/ingredient-parser", rev = "3a4940372ce4cfdb9f3b8ff200f13883a4f8ab69", features = [
-  "wasm",
-] }
-recipe-types = { git = "https://github.com/nickysemenza/ingredient-parser", rev = "3a4940372ce4cfdb9f3b8ff200f13883a4f8ab69", features = [
-  "wasm",
-] }
-recipe-scraper = { git = "https://github.com/nickysemenza/ingredient-parser", rev = "3a4940372ce4cfdb9f3b8ff200f13883a4f8ab69" }
-serde = { version = "1.0", features = ["derive"] }
+ingredient.workspace = true
+recipe-types.workspace = true
+recipe-scraper.workspace = true
+serde.workspace = true
 serde_json = "1.0"
-# The same HTML parser recipe-scraper already compiles in; `page.rs` walks a
-# captured browser DOM with it. Behind `html` (see [features]).
+# The same HTML parser recipe-scraper already compiles in; `email.rs` walks
+# email HTML with it. Behind `html` (see [features]).
 scraper = { version = "0.27.0", optional = true }
 url = { version = "2", optional = true }
-serde-wasm-bindgen = "0.6"
-wasm-tracing = "2.1.0"
 tracing = "0.1.44"
-console_error_panic_hook = "0.1.7"
 # Only the model catalog, usage parsing, and pricing (`ai_usage.rs`). Never the
-# `wasm` feature: every `#[wasm_bindgen]` fn it adds would be exported from
-# this module too, putting the EPUB pipeline back in the Worker.
-cookbook = { git = "https://github.com/nickysemenza/ingredient-parser", rev = "3a4940372ce4cfdb9f3b8ff200f13883a4f8ab69", default-features = false, optional = true }
+# upstream `wasm` feature: every `#[wasm_bindgen]` fn it adds would be exported
+# from this module too, putting the EPUB pipeline back in the Worker.
+cookbook = { workspace = true, optional = true }
 
+# The JavaScript boundary, all behind `wasm`.
+wasm-bindgen = { workspace = true, optional = true }
+js-sys = { version = "0.3", optional = true }
+# Generates the boundary .d.ts from the Rust structs (replacing the old
+# hand-written typescript_custom_section). "js" routes the wasm ABI through
+# serde-wasm-bindgen, matching how this crate already crosses the boundary.
+tsify-next = { version = "0.5", features = ["js"], optional = true }
+serde-wasm-bindgen = { version = "0.6", optional = true }
+wasm-tracing = { version = "2.1.0", optional = true }
+console_error_panic_hook = { workspace = true, optional = true }
 
 [features]
-# Worker-only capabilities. HTML parsing (`compact_browser_page`,
-# `parse_scraped_recipe`) is ~0.8 MB of the wasm binary; `gateway_call_usage`
-# needs the cookbook model catalog. The browser build passes
-# --no-default-features, as does cubby-ffi. Worker builds and native Rust tests
-# retain the defaults, including the model-image codecs.
+# Worker-only capabilities. HTML parsing (`compact_email_html`,
+# `parse_scraped_recipe`) stays out of the browser; `gateway_call_usage`
+# needs the cookbook model catalog. The Worker wasm build is
+# `--features wasm`; the browser build is `--no-default-features --features
+# wasm`; cubby-ffi takes `default-features = false` and never `wasm`. Native
+# Rust tests retain the defaults, including the model-image codecs.
 default = ["html", "ai-usage", "model-images"]
 model-images = ["dep:image", "dep:jpeg-encoder", "dep:gif"]
 html = ["dep:scraper", "dep:url"]
 ai-usage = ["dep:cookbook"]
+# The wasm-bindgen exports, Tsify `.d.ts` derives, and wasm init. Upstream
+# `wasm` only derives Tsify on boundary types (`Confidence`, `IngredientUsage`,
+# `RecipeTimes`) so they cross as-is; it adds no exports.
+wasm = [
+  "dep:wasm-bindgen",
+  "dep:js-sys",
+  "dep:tsify-next",
+  "dep:serde-wasm-bindgen",
+  "dep:wasm-tracing",
+  "dep:console_error_panic_hook",
+  "ingredient/wasm",
+  "recipe-types/wasm",
+]
 
 [dev-dependencies]
 # Native-target tests (cargo test): the costing + food-mapping modules are pure
 # serde/ingredient code, so the parity suite runs without a wasm runtime.
 rstest = "0.27"
 
-# Mirror upstream ingredient-parser's gate. A panic at the wasm boundary is a hard
-# browser crash, so forbid the macros that produce one in production code. Tests
-# legitimately unwrap/expect — allowed via `#![cfg_attr(test, allow(...))]` in
-# lib.rs (recipebridge has no separate tests/ dir, only inline `mod tests`).
-# `uninlined_format_args` warns on `format!("{}", x)` (no current hits; future
-# guard). CI runs `cargo clippy --all-targets -- -D warnings`, so these bite.
-[lints.clippy]
-unwrap_used = "deny"
-expect_used = "deny"
-panic = "deny"
-uninlined_format_args = "warn"
+# The shared no-panic gate (see the workspace Cargo.toml). Tests legitimately
+# unwrap/expect — allowed via `#![cfg_attr(test, allow(...))]` in lib.rs and
+# crate-level `allow` attributes in each `tests/` file.
+[lints]
+workspace = true

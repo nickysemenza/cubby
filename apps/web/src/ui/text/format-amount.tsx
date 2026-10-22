@@ -72,11 +72,7 @@ export const tryFormatAmountShopper = (
       unit: amount.unit,
     };
     if (upper != null) request.upper_value = upper;
-    const formatted = wasm.format_amount_shopper(request);
-    if (amount.unit === "each") {
-      return `${formatted} each`;
-    }
-    return formatted;
+    return wasm.format_amount_shopper(request);
   } catch (error) {
     return `Error formatting amount: ${error}`;
   }
@@ -104,8 +100,8 @@ export const tryFormatAmount = (
       unit: amount.unit,
     };
     if (upper != null) request.upper_value = upper;
-    // Rust re-attaches the user's "each" (Unit::Whole renders unit-less), so a
-    // count stays visible ("3 each", "2 - 4 each") on web and native alike.
+    // Rust owns the shared display rules (a visible "each", a bare count as a
+    // plain number), pinned by the `amount` golden vectors.
     return wasm.format_amount_labeled(request);
   } catch (error) {
     return `Error formatting amount: ${error}`;

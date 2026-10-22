@@ -3,7 +3,51 @@
 # workspace; every profile lives here.
 [workspace]
 resolver = "3"
-members = ["recipebridge", "recipebridge/cookbook", "cubby-ffi"]
+members = ["recipebridge", "cookbook-wasm", "cubby-ffi"]
+
+# Edition 2024 matches the ingredient-parser workspace. No `rust-version`
+# floor: rust-toolchain.toml tracks stable, and declaring an MSRV would make
+# the edition-2024 resolver hold dependencies back to that older compiler.
+[workspace.package]
+edition = "2024"
+publish = false
+
+# Own upstream pins here so every member and CI job builds identical Rust
+# sources. Renovate follows main weekly and updates these workspace dependencies.
+# Upstream features are additive per member: recipebridge's `wasm` and
+# cookbook-wasm turn on the upstream `wasm` features; nothing here does, so a
+# native build never links the JavaScript boundary crates.
+#
+# To build against a sibling ingredient-parser working copy, drop a gitignored
+# cubby/.cargo/config.toml with a
+# `[patch."https://github.com/nickysemenza/ingredient-parser"]` table mapping
+# each crate to `path = "../ingredient-parser/<crate>"`. Treat it as a
+# temporary dev-session tool and remove it afterwards: while it is present cargo
+# strips `source =` from Cargo.lock on every build, which dirties the tree,
+# and local builds silently diverge from the pinned rev CI uses.
+[workspace.dependencies]
+ingredient = { git = "https://github.com/nickysemenza/ingredient-parser", rev = "3a4940372ce4cfdb9f3b8ff200f13883a4f8ab69" }
+recipe-types = { git = "https://github.com/nickysemenza/ingredient-parser", rev = "3a4940372ce4cfdb9f3b8ff200f13883a4f8ab69" }
+recipe-scraper = { git = "https://github.com/nickysemenza/ingredient-parser", rev = "3a4940372ce4cfdb9f3b8ff200f13883a4f8ab69" }
+# No default features: upstream's default `native` pulls reqwest, tokio and the
+# filesystem store, none of which any Cubby build uses. A member cannot turn
+# workspace defaults back off, so they stay off here.
+cookbook = { git = "https://github.com/nickysemenza/ingredient-parser", rev = "3a4940372ce4cfdb9f3b8ff200f13883a4f8ab69", default-features = false }
+console_error_panic_hook = "0.1.7"
+serde = { version = "1.0", features = ["derive"] }
+wasm-bindgen = "0.2"
+
+# Mirror upstream ingredient-parser's gate. A panic at the wasm boundary is a
+# hard browser crash (wasm builds abort on panic), and at the FFI boundary
+# UniFFI's catch_unwind is only a last resort, so forbid the macros that produce
+# one in production code. recipebridge's tests opt out with a crate-level
+# `#![cfg_attr(test, allow(...))]`; cubby-ffi's do not. `uninlined_format_args`
+# warns on `format!("{}", x)`. CI runs clippy with `-D warnings`, so these bite.
+[workspace.lints.clippy]
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
+uninlined_format_args = "warn"
 
 # Line numbers are kept for backtraces; full DWARF only inflated the shared
 # target dir.
@@ -39,9 +83,9 @@ opt-level = 0
 # is a partial recompile per target instead of a full one.
 #
 # The wasm build overrides this through CARGO_PROFILE_RELEASE_* in the root
-# `wasm` script and the CI wasm step (wasm-pack only takes --release, and
-# member profiles are ignored): opt-level z, lto, one codegen unit,
-# panic = abort, no incremental. Keep those lists in sync.
+# builder (`scripts/wasm.ts`; wasm-pack only takes --release, and member
+# profiles are ignored): opt-level z, lto, one codegen unit, panic = abort,
+# no incremental. Local preparation and CI use that same builder.
 [profile.release]
 strip = "debuginfo"
 incremental = true

@@ -1,8 +1,8 @@
 import CubbyFFI
 
 /// Cubby's Rust ingredient parser, the same code the web app runs as WASM, reached through
-/// UniFFI. This wrapper is the only file that names the generated `CubbyFFI` types, so a
-/// regenerated binding changes one file.
+/// UniFFI. The wrappers in this folder are the only files that name the generated `CubbyFFI`
+/// types, so a regenerated binding changes only them.
 public enum IngredientParser {
     public struct Amount: Sendable, Hashable {
         public let value: Double
@@ -24,7 +24,7 @@ public enum IngredientParser {
         let parsed = CubbyFFI.parseIngredient(line: line)
         return Parsed(
             name: parsed.name,
-            amounts: parsed.amounts.map { Amount(value: $0.value, upperValue: $0.upperValue, unit: $0.unit) },
+            amounts: parsed.amounts.map(Amount.init),
             modifier: parsed.modifier,
             optional: parsed.optional,
             display: parsed.display
@@ -35,6 +35,17 @@ public enum IngredientParser {
     /// unit spellings elsewhere; this is the vocabulary.
     public static var sizeUnitAliases: [String] {
         CubbyFFI.sizeUnitAliases()
+    }
+}
+
+// An extension, so `Amount` keeps its memberwise initializer.
+extension IngredientParser.Amount {
+    init(_ ffi: CubbyFFI.Amount) {
+        self.init(value: ffi.value, upperValue: ffi.upperValue, unit: ffi.unit)
+    }
+
+    var ffi: CubbyFFI.Amount {
+        CubbyFFI.Amount(unit: unit, value: value, upperValue: upperValue)
     }
 }
 

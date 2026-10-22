@@ -5,24 +5,27 @@
 //! one implementation of range and completeness semantics.
 
 use serde::{Deserialize, Serialize};
+#[cfg(feature = "wasm")]
 use tsify_next::Tsify;
+#[cfg(feature = "wasm")]
 use wasm_bindgen::prelude::*;
 
 fn is_zero(value: &u32) -> bool {
     *value == 0
 }
 
-#[derive(Tsify, Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
-#[tsify(into_wasm_abi, from_wasm_abi)]
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "wasm", derive(Tsify), tsify(into_wasm_abi, from_wasm_abi))]
 pub struct WEstimateCoverage {
     pub covered: u32,
     pub total: u32,
     #[serde(rename = "inferredZero", default, skip_serializing_if = "is_zero")]
-    #[tsify(optional)]
+    #[cfg_attr(feature = "wasm", tsify(optional))]
     pub inferred_zero: u32,
 }
 
-#[derive(Tsify, Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "wasm", derive(Tsify))]
 #[serde(rename_all = "snake_case")]
 pub enum WUnavailableReason {
     NoData,
@@ -31,26 +34,27 @@ pub enum WUnavailableReason {
     NotApplicable,
 }
 
-#[derive(Tsify, Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "wasm", derive(Tsify))]
 #[serde(rename_all = "snake_case")]
 pub enum WPendingReason {
     TotalsMissing,
     TotalsStale,
 }
 
-#[derive(Tsify, Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "wasm", derive(Tsify), tsify(into_wasm_abi, from_wasm_abi))]
 #[serde(tag = "status", rename_all = "lowercase")]
-#[tsify(into_wasm_abi, from_wasm_abi)]
 pub enum WMeasureEstimate {
     Complete {
         lower: f64,
-        #[tsify(type = "number | null")]
+        #[cfg_attr(feature = "wasm", tsify(type = "number | null"))]
         upper: Option<f64>,
         coverage: WEstimateCoverage,
     },
     Partial {
         lower: f64,
-        #[tsify(type = "number | null")]
+        #[cfg_attr(feature = "wasm", tsify(type = "number | null"))]
         upper: Option<f64>,
         coverage: WEstimateCoverage,
     },
@@ -60,7 +64,7 @@ pub enum WMeasureEstimate {
         // `covered: 0`); absent for `Empty` and legacy rows persisted before it
         // existed. Lets callers count "0 of N priced" without a known total.
         #[serde(default, skip_serializing_if = "Option::is_none")]
-        #[tsify(optional)]
+        #[cfg_attr(feature = "wasm", tsify(optional))]
         coverage: Option<WEstimateCoverage>,
     },
     Pending {
@@ -109,33 +113,33 @@ impl WMeasureEstimate {
     }
 }
 
-#[derive(Tsify, Serialize, Deserialize, Clone, Debug, PartialEq)]
-#[tsify(into_wasm_abi, from_wasm_abi)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "wasm", derive(Tsify), tsify(into_wasm_abi, from_wasm_abi))]
 pub struct WNamedEstimate {
     pub code: String,
     pub estimate: WMeasureEstimate,
 }
 
-#[derive(Tsify, Serialize, Deserialize, Clone, Debug, PartialEq)]
-#[tsify(into_wasm_abi, from_wasm_abi)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[cfg_attr(feature = "wasm", derive(Tsify), tsify(into_wasm_abi, from_wasm_abi))]
 pub struct WNutritionTotals {
     pub cost: WMeasureEstimate,
     pub nutrition: Vec<WNamedEstimate>,
 }
 
-#[derive(Tsify, Serialize, Deserialize)]
+#[derive(Serialize, Deserialize)]
+#[cfg_attr(feature = "wasm", derive(Tsify), tsify(from_wasm_abi))]
 #[serde(transparent)]
-#[tsify(from_wasm_abi)]
 pub struct WMeasureEstimates(pub Vec<WMeasureEstimate>);
 
-#[derive(Tsify, Serialize, Deserialize)]
+#[derive(Serialize, Deserialize)]
+#[cfg_attr(feature = "wasm", derive(Tsify), tsify(into_wasm_abi, from_wasm_abi))]
 #[serde(transparent)]
-#[tsify(into_wasm_abi, from_wasm_abi)]
 pub struct WNamedEstimates(pub Vec<WNamedEstimate>);
 
-#[derive(Tsify, Serialize, Deserialize)]
+#[derive(Serialize, Deserialize)]
+#[cfg_attr(feature = "wasm", derive(Tsify), tsify(from_wasm_abi))]
 #[serde(transparent)]
-#[tsify(from_wasm_abi)]
 pub struct WNutritionTotalsList(pub Vec<WNutritionTotals>);
 
 fn add_count(total: &mut u32, value: u32) {
@@ -314,7 +318,7 @@ pub(crate) fn scale_totals_impl(
     }
 }
 
-#[wasm_bindgen]
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
 pub fn scale_estimate(
     estimate: WMeasureEstimate,
     lower_factor: f64,
@@ -323,12 +327,12 @@ pub fn scale_estimate(
     scale_estimate_impl(&estimate, lower_factor, upper_factor)
 }
 
-#[wasm_bindgen]
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
 pub fn aggregate_estimates(entries: WMeasureEstimates) -> WMeasureEstimate {
     aggregate_estimates_impl(&entries.0)
 }
 
-#[wasm_bindgen]
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
 pub fn scale_nutrition_totals(
     totals: WNutritionTotals,
     lower_factor: f64,
@@ -337,7 +341,7 @@ pub fn scale_nutrition_totals(
     scale_totals_impl(&totals, lower_factor, upper_factor)
 }
 
-#[wasm_bindgen]
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
 pub fn scale_nutrition_estimates(
     entries: WNamedEstimates,
     lower_factor: f64,
@@ -355,7 +359,7 @@ pub fn scale_nutrition_estimates(
     )
 }
 
-#[wasm_bindgen]
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
 pub fn aggregate_nutrition_totals(entries: WNutritionTotalsList) -> WNutritionTotals {
     let cost = aggregate_estimates_impl(
         &entries

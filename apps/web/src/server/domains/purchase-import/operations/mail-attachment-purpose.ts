@@ -1,7 +1,6 @@
 import type { ActorContext } from "@cubby/schemas/context";
 import { eq } from "drizzle-orm";
 
-import { wasm } from "~/lib/wasm";
 import {
   decisionChoiceFitsContext,
   runDecisionChoice,
@@ -19,6 +18,7 @@ import {
   aiCallRunInput,
   ensureRun,
 } from "~/server/domains/run/repo/ensure-run";
+import { wasm } from "~/server/wasm";
 
 type AttachmentEvidence = Pick<
   typeof orderMailAttachment.$inferSelect,

@@ -1,31 +1,34 @@
 //! One-food nutrition calculation for meal logging.
 //!
 //! Product and ingredient amounts run through the recipe costing engine so the
-//! merged-product conversion graph, label precedence, and per-product price
+//! shared density/nutrition graph, label precedence, and per-product package
 //! isolation stay identical to recipe rows. Recipe portions use the same unit
 //! engine for yield ratios and the canonical estimate scaler for uncertainty.
 
-use ingredient::unit::{Measure, MeasureKind, convert_with_fallback, make_graph};
+use ingredient::unit::{MeasureKind, convert_with_fallback, make_graph};
 use serde::{Deserialize, Serialize};
+#[cfg(feature = "wasm")]
 use tsify_next::Tsify;
+#[cfg(feature = "wasm")]
 use wasm_bindgen::prelude::*;
 
 use crate::costing::{WNutrientTarget, resolve_mapped_food};
 use crate::estimates::scale_totals_impl;
+use crate::needs::yield_ratio_measure;
 use crate::{
     WAmount, WEstimateCoverage, WMeasureEstimate, WNamedEstimate, WNutritionTotals, WProductInput,
     WUnavailableReason,
 };
 
-const BATCH_UNIT: &str = "cubbyfoodbatch";
-
-#[derive(Tsify, Serialize, Deserialize)]
+#[derive(Serialize, Deserialize)]
+#[cfg_attr(feature = "wasm", derive(Tsify))]
 pub struct WManualNutrient {
     pub code: String,
     pub value: f64,
 }
 
-#[derive(Tsify, Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]
+#[derive(Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(feature = "wasm", derive(Tsify))]
 #[serde(rename_all = "lowercase")]
 pub enum WFoodYieldBasisKind {
     Actual,
@@ -34,34 +37,36 @@ pub enum WFoodYieldBasisKind {
     Missing,
 }
 
-#[derive(Tsify, Serialize, Deserialize)]
+#[derive(Serialize, Deserialize)]
+#[cfg_attr(feature = "wasm", derive(Tsify))]
 pub struct WFoodYieldBasis {
     pub kind: WFoodYieldBasisKind,
     #[serde(default)]
-    #[tsify(type = "number | null")]
+    #[cfg_attr(feature = "wasm", tsify(type = "number | null"))]
     pub lower_grams: Option<f64>,
     #[serde(default)]
-    #[tsify(type = "number | null")]
+    #[cfg_attr(feature = "wasm", tsify(type = "number | null"))]
     pub upper_grams: Option<f64>,
 }
 
-#[derive(Tsify, Serialize, Deserialize)]
+#[derive(Serialize, Deserialize)]
+#[cfg_attr(feature = "wasm", derive(Tsify))]
 #[serde(tag = "kind", rename_all = "lowercase")]
 pub enum WFoodAmountSource {
     Mapped {
         products: Vec<WProductInput>,
         #[serde(default)]
-        #[tsify(optional)]
+        #[cfg_attr(feature = "wasm", tsify(optional))]
         nutrient_opt_out_codes: Vec<String>,
     },
     Recipe {
         batch: WNutritionTotals,
         yield_basis: WFoodYieldBasis,
         #[serde(default)]
-        #[tsify(type = "WAmount | null")]
+        #[cfg_attr(feature = "wasm", tsify(type = "WAmount | null"))]
         recipe_yield: Option<WAmount>,
         #[serde(default)]
-        #[tsify(type = "number | null")]
+        #[cfg_attr(feature = "wasm", tsify(type = "number | null"))]
         servings: Option<f64>,
         scale: f64,
     },
@@ -71,22 +76,22 @@ pub enum WFoodAmountSource {
     Unavailable,
 }
 
-#[derive(Tsify, Serialize, Deserialize)]
-#[tsify(from_wasm_abi)]
+#[derive(Serialize, Deserialize)]
+#[cfg_attr(feature = "wasm", derive(Tsify), tsify(from_wasm_abi))]
 pub struct WFoodAmountInput {
     #[serde(default)]
-    #[tsify(type = "WAmount | null")]
+    #[cfg_attr(feature = "wasm", tsify(type = "WAmount | null"))]
     pub amount: Option<WAmount>,
     pub source: WFoodAmountSource,
     pub nutrient_targets: Vec<WNutrientTarget>,
 }
 
-#[derive(Tsify, Serialize, Deserialize)]
-#[tsify(into_wasm_abi)]
+#[derive(Serialize, Deserialize)]
+#[cfg_attr(feature = "wasm", derive(Tsify), tsify(into_wasm_abi))]
 pub struct WFoodAmountResult {
     pub totals: WNutritionTotals,
     #[serde(default)]
-    #[tsify(type = "number | null")]
+    #[cfg_attr(feature = "wasm", tsify(type = "number | null"))]
     pub grams: Option<f64>,
     pub weight: WMeasureEstimate,
     pub batch_share: WMeasureEstimate,
@@ -182,18 +187,8 @@ fn mapped_food(
 }
 
 fn ratio_from_yield(amount: &WAmount, recipe_yield: &WAmount) -> Option<(f64, Option<f64>)> {
-    if !recipe_yield.value.is_finite() || recipe_yield.value <= 0.0 {
-        return None;
-    }
-    let pairs = [(recipe_yield.to_measure(), Measure::new(BATCH_UNIT, 1.0))];
-    let measures = [amount.to_measure()];
-    let ratio = convert_with_fallback(
-        &measures,
-        &make_graph(&pairs),
-        MeasureKind::Other(BATCH_UNIT.to_string()),
-    )?;
-    (ratio.value().is_finite() && ratio.value() > 0.0)
-        .then_some((ratio.value(), ratio.upper_value()))
+    let ratio = yield_ratio_measure(recipe_yield, std::slice::from_ref(amount))?;
+    Some((ratio.value(), ratio.upper_value()))
 }
 
 fn scale_amount(amount: &WAmount, factor: f64) -> WAmount {
@@ -427,7 +422,7 @@ pub fn calculate_food_amount_impl(input: WFoodAmountInput) -> Result<WFoodAmount
     }
 }
 
-#[wasm_bindgen]
+#[cfg_attr(feature = "wasm", wasm_bindgen)]
 pub fn calculate_food_amount(input: WFoodAmountInput) -> Result<WFoodAmountResult, String> {
     calculate_food_amount_impl(input)
 }

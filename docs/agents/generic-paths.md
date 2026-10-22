@@ -242,8 +242,8 @@ and retain their behavior checks; passing the helper's own tests proves only tha
   `formatPercent`, `roundTo`, compact variants) and the WASM amount formatter.
   Currency, bare numbers, amounts, kcal, and estimates (compact cell
   `compactEstimateText`, long form `formatEstimate` in `lib/nutrition-format.ts`)
-  are one Rust implementation (`recipebridge/src/display_format.rs`) shared
-  with native via UniFFI; add a rule there and to
+  are one Rust implementation (`recipebridge/src/display_format.rs`, with
+  amounts in `recipebridge/src/parse.rs`) shared with native via UniFFI; add a rule there and to
   `golden-vectors/display-format.json`. Declared list totals arrive as
   server-worded `totalLabels` (`server/generic/list/repo/list-display-labels.ts`); clients
   print them.
