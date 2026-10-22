@@ -224,7 +224,7 @@ describe("listPage", () => {
       { name: "Group by Status" },
     );
     expect(status).toHaveAttribute("aria-disabled", "true");
-    expect(status).toHaveTextContent("Timeline is already arranged by date.");
+    expect(status).toHaveTextContent("This view is already arranged by date.");
   });
 
   it("clears table selection and bulk actions after browsing Cards and returning to List", async () => {
