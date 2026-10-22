@@ -103,7 +103,7 @@ test("all matching selection bulk-edits unloaded tasks within the active scope",
   });
   // Keep the final record unloaded until action admission has resolved it;
   // the ordinary sentinel may prefetch while selection changes the layout.
-  await page.route(BROWSER_OPERATION_PATH, async (route) => {
+  await page.route(`**${BROWSER_OPERATION_PATH}/**`, async (route) => {
     if (await unbatchFor(route, ["entity.listBase"])) return;
     if (
       dispatchesOperation(
