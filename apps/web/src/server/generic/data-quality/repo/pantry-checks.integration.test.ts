@@ -85,8 +85,8 @@ describe("data quality: pantry and garden entities", () => {
     expect(hydrated.get(gap.entityId)?.status).toBe("needs_data");
 
     expect(hydrated.get(complete.entityId)).toMatchObject({
-      status: "complete",
-      gaps: [],
+      status: "needs_data",
+      gaps: [{ check: "recipe_display_image" }],
     });
   });
 
@@ -120,8 +120,8 @@ describe("data quality: pantry and garden entities", () => {
       ownRecipeIngredient.entityId,
     ]);
     expect(hydrated.get(ownRecipeIngredient.entityId)).toMatchObject({
-      status: "complete",
-      gaps: [],
+      status: "needs_data",
+      gaps: [{ check: "ingredient_display_image" }],
     });
   });
 
@@ -297,8 +297,8 @@ describe("data quality: pantry and garden entities", () => {
     // Parked in Unknown is consequential, not a free diagnostic.
     expect(hydrated.get(gap.entityId)?.score).toBeLessThanOrEqual(69);
     expect(hydrated.get(complete.entityId)).toMatchObject({
-      status: "complete",
-      gaps: [],
+      status: "needs_data",
+      gaps: [{ check: "inventory_display_image" }],
     });
   });
 
@@ -331,8 +331,8 @@ describe("data quality: pantry and garden entities", () => {
       "meal_contents",
     );
     expect(hydrated.get(complete.entityId)).toMatchObject({
-      status: "complete",
-      gaps: [],
+      status: "needs_data",
+      gaps: [{ check: "meal_display_image" }],
     });
   });
 
@@ -361,7 +361,9 @@ describe("data quality: pantry and garden entities", () => {
     const before = (
       await loadDataQualities(ctx.db, "recipe", [recipe.entityId])
     ).get(recipe.entityId);
-    expect(before?.gaps).toEqual([]);
+    expect(before?.gaps.map((gap) => gap.check)).toEqual([
+      "recipe_display_image",
+    ]);
 
     await unwrapDb(ctx.db).execute(sql`
       UPDATE "RecipeSection" SET "instructions" = '[{"text": "   "}]'::jsonb
@@ -546,8 +548,8 @@ describe("data quality: pantry and garden entities", () => {
     expect(gapChecks).toContain("category_feature");
 
     expect(hydrated.get(completeRoot.entityId)).toMatchObject({
-      status: "complete",
-      gaps: [],
+      status: "needs_data",
+      gaps: [{ check: "productcategory_display_image" }],
     });
   });
 });

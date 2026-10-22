@@ -1,3 +1,4 @@
+import { displayImageQualityCheck } from "@cubby/schemas/data-quality";
 import {
   DEFAULT_UNRESOLVED_SCORE_CAP,
   dataCheckExemptible,
@@ -18,6 +19,7 @@ import { getTableName, type SQL, sql } from "drizzle-orm";
 import { alias, type PgTable } from "drizzle-orm/pg-core";
 import { z } from "zod";
 
+import { entityDisplayImagePresenceSql } from "~/server/entity-kernel/repo/entity-display-image";
 import {
   liveQualityRow,
   type CheckBinding,
@@ -41,7 +43,21 @@ const entries: DataQualityEntries = dataQualityEntries;
 /** One registry entry, read through the erased-table contract. */
 export const entryFor = (
   entity: ScoredEntity,
-): EntityChecks<ScoredEntity, ScoredTable> => entries[entity];
+): Omit<EntityChecks<ScoredEntity, ScoredTable>, "checks"> & {
+  checks: Readonly<Partial<Record<DataCheck, CheckBinding<ScoredTable>>>>;
+} => {
+  const entry = entries[entity];
+  return {
+    ...entry,
+    checks: {
+      ...entry.checks,
+      [displayImageQualityCheck(entity).id]: {
+        missing: (t: ScoredTable) =>
+          sql`NOT ${entityDisplayImagePresenceSql(entity, sql`${t.id}`)}`,
+      },
+    },
+  };
+};
 
 /** Bulk predicates and their FROM must use the same declared derived relation. */
 export const qualityFilterContext = (

@@ -29,6 +29,8 @@ import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
 import { ensureExternalSources } from "~/server/generic/entity-links/repo/entity-external-ids";
 import { readRecordWorkQueue } from "~/server/generic/work-queue/service/work-queue-read";
 import {
+  createImageFixture,
+  insertEntityAttachments,
   createInventoryFixture,
   createLocationFixture,
   createProductFixture,
@@ -55,6 +57,64 @@ const page = { pageIndex: 0, pageSize: 50 };
  */
 describe("data quality: list filters, sort and hydration agree", () => {
   const ctx = withTestDb();
+
+  it("missing display images prevent perfect quality even without inventory", async () => {
+    const row = await createProductFixture(
+      ctx.db,
+      makeProductInput({
+        name: "DQ image-free catalog item",
+        commodity: true,
+        categoryId: taxonomyShortcode("food"),
+      }),
+      TEST_ACTOR,
+    );
+    await createExpense(
+      ctx.db,
+      makeExpenseInput({
+        name: "DQ catalog acquisition",
+        productId: row.id,
+        cost: 2,
+      }),
+      TEST_ACTOR,
+    );
+    const quality = (
+      await loadDataQualities(ctx.db, "product", [row.entityId])
+    ).get(row.entityId)!;
+    expect(quality.score).toBeLessThan(100);
+    expect(quality.gaps.map((gap) => gap.check)).toContain(
+      "product_display_image",
+    );
+    const scores = await unwrapDb(ctx.db)
+      .execute(sql`SELECT ${scoreSql("product")} AS score
+      FROM ${entryFor("product").table} WHERE ${entryFor("product").table.id} = ${row.entityId}`);
+    expect(Number(scores.rows[0]?.score)).toBe(quality.score);
+    await expect(
+      setDataException(
+        ctx.db,
+        {
+          entityId: row.id,
+          check: "product_display_image",
+          reason: "unavailable",
+          note: "Synthetic missing image",
+        },
+        TEST_ACTOR,
+      ),
+    ).rejects.toThrow("unavailable is not allowed for product_display_image.");
+    const cover = await createImageFixture(ctx.db, "dq-catalog-cover");
+    await insertEntityAttachments(ctx.db, {
+      entityId: row.entityId,
+      imageId: cover.id,
+      sortOrder: 0,
+    });
+    const complete = (
+      await loadDataQualities(ctx.db, "product", [row.entityId])
+    ).get(row.entityId)!;
+    expect(complete).toMatchObject({
+      score: 100,
+      status: "complete",
+      gaps: [],
+    });
+  });
 
   const seedProducts = async () => {
     const shelf = await createLocationFixture(
@@ -233,6 +293,7 @@ describe("data quality: list filters, sort and hydration agree", () => {
       "product_manufacturer",
       "product_external_id",
       "product_category",
+      "product_display_image",
     ]);
     expect(hydrated.get(weak.entityId)?.gaps.map((gap) => gap.check)).toContain(
       "product_manufacturer",
@@ -538,6 +599,7 @@ describe("data quality: list filters, sort and hydration agree", () => {
     expect(gaps(uncategorized)).toEqual([
       "product_orphaned",
       "product_category",
+      "product_display_image",
     ]);
     expect(quality(uncategorized).score).toBe(69);
     expect(gaps(blank)).toContain("product_name");

@@ -188,7 +188,12 @@ const fieldChecks = new Map<string, DataCheck[]>();
 for (const [entity, checks] of Object.entries(dataChecksByEntity))
   for (const check of checks.options) {
     const placement = dataCheckPresentation[check].placement;
-    if (dataCheckKind[check] === "defect" || !("field" in placement)) continue;
+    if (
+      dataCheckKind[check] === "defect" ||
+      placement === null ||
+      !("field" in placement)
+    )
+      continue;
     const key = `${entity}.${placement.field}`;
     fieldChecks.set(key, [...(fieldChecks.get(key) ?? []), check]);
   }
