@@ -290,6 +290,14 @@ describe("Work queue gaps, typed columns, and record rows", () => {
     const typed = await read({ query: prefix, entity: recordType });
     expect(typed.meta.totalCount).toBe(sections[0]?.count);
     expect(typed.items.every((row) => row.entity === recordType)).toBe(true);
+    const bySource = await read({ query: prefix, group: "source" });
+    const sourceSection = bySource.meta.groups?.[0];
+    const source = workQueueHouseholdInput.shape.source.parse(
+      sourceSection?.key,
+    );
+    const sourceRows = await read({ query: prefix, source });
+    expect(sourceRows.meta.totalCount).toBe(sourceSection?.count);
+    expect(sourceRows.items.every((row) => row.source === source)).toBe(true);
     expect(review.items.some((row) => row.source === "reconciliation")).toBe(
       true,
     );

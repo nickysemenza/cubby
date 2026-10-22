@@ -1,15 +1,14 @@
 import { calendarRangeInput } from "@cubby/schemas/calendar";
 import { withTestDb } from "tooling/test-setup";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 
-import * as expenseAllocation from "~/server/domains/expense/repo/expense-project-allocation";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 import { getCalendarRange, getCalendarSchedule } from "./calendar";
 
 describe("calendar effective attribution", () => {
   const ctx = withTestDb();
-  it("filters after full-purchase allocation and counts a shared charge once", async () => {
+  it("selects expenses through allocation membership and shows whole-record amounts", async () => {
     const first = await insertWithShortcode(ctx.db, "project", {
       name: "Calendar first project",
       defaultTrade: "building",
@@ -54,36 +53,19 @@ describe("calendar effective attribution", () => {
       trade: null,
       purchaseId: purchase.id,
     });
-    const allocation = vi.spyOn(expenseAllocation, "expenseJointAllocationSql");
-    const scopedRead = await (async () => {
-      try {
-        const result = await getCalendarRange(
-          ctx.db,
-          calendarRangeInput.parse({
-            startDate: "2026-09-20",
-            endDateExclusive: "2026-09-21",
-            kinds: ["expense"],
-            projectId: first.shortcode,
-          }),
-        );
-        return {
-          result,
-          allocations: allocation.mock.calls.filter(
-            ([, , dimensions]) => dimensions?.categories === false,
-          ).length,
-        };
-      } finally {
-        allocation.mockRestore();
-      }
-    })();
-    const scoped = scopedRead.result;
-    // Membership and displayed cost must consume the same allocation, rather
-    // than resolving every purchase a second time for the display projection.
-    expect(scopedRead.allocations).toBe(1);
+    const scoped = await getCalendarRange(
+      ctx.db,
+      calendarRangeInput.parse({
+        startDate: "2026-09-20",
+        endDateExclusive: "2026-09-21",
+        kinds: ["expense"],
+        filters: { expense: { projectId: [first.shortcode] } },
+      }),
+    );
     expect(scoped.items).toHaveLength(1);
-    expect(scoped.items[0]).toMatchObject({ title: "Shared tax", cost: 0.2 });
+    expect(scoped.items[0]).toMatchObject({ title: "Shared tax", cost: 1 });
     expect(scoped.days["2026-09-20"]).toMatchObject({
-      actualSpend: 0.2,
+      actualSpend: 1,
       expenseCount: 1,
     });
     const all = await getCalendarRange(
@@ -124,10 +106,20 @@ describe("calendar effective attribution", () => {
         startDate: "2026-09-20",
         endDateExclusive: "2026-09-21",
         kinds: ["task"],
-        projectId: project.shortcode,
-        taskTrade: "building",
+        filters: {
+          task: { projectId: [project.shortcode], trade: ["building"] },
+        },
       }),
     );
+    const conflicting = await getCalendarRange(
+      ctx.db,
+      calendarRangeInput.parse({
+        startDate: "2026-09-20",
+        endDateExclusive: "2026-09-21",
+        filters: { task: { trade: ["building"] }, expense: { future: false } },
+      }),
+    );
+    expect(conflicting.items).toEqual([]);
     expect(result.items).toHaveLength(1);
     expect(result.items[0]).toMatchObject({
       title: "Calendar child",
@@ -136,7 +128,7 @@ describe("calendar effective attribution", () => {
     });
   });
 
-  it("scopes linked plantings through task inheritance and retains undated schedule rows", async () => {
+  it("uses planting list filters, excludes other kinds, and retains existing schedule rows", async () => {
     const project = await insertWithShortcode(ctx.db, "project", {
       name: "Calendar garden project",
       defaultTrade: "building",
@@ -173,7 +165,7 @@ describe("calendar effective attribution", () => {
     const input = calendarRangeInput.parse({
       startDate: "2026-09-20",
       endDateExclusive: "2026-09-21",
-      projectId: project.shortcode,
+      filters: { planting: { taskId: [linkedTask.shortcode] } },
       kinds: ["task", "planting"],
     });
 
@@ -183,11 +175,7 @@ describe("calendar effective attribution", () => {
     ]);
 
     const schedule = await getCalendarSchedule(ctx.db, input);
-    expect(schedule.tasks).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({ id: linkedTask.shortcode, dueDate: null }),
-      ]),
-    );
+    expect(schedule.tasks).toEqual([]);
     expect(schedule.plantings).toEqual([
       expect.objectContaining({
         id: linked.shortcode,
@@ -202,7 +190,7 @@ describe("calendar effective attribution", () => {
         startDate: "2026-09-20",
         endDateExclusive: "2026-09-21",
         kinds: ["planting"],
-        projectPresenceFilter: "none",
+        filters: { planting: { taskIdPresenceFilter: "none" } },
       }),
     );
     expect(unassigned.plantings.map((row) => row.id).sort()).toEqual(

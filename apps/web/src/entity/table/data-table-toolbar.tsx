@@ -313,9 +313,17 @@ export function GroupMenu<TData extends RowData>({
         {grouping.choices.map((choice) => (
           <DropdownMenuItem
             key={choice.key}
+            disabled={Boolean(choice.reason)}
             onClick={() => grouping.onChange(choice.key)}
           >
-            {choice.label}
+            <span>
+              {choice.label}
+              {choice.reason && (
+                <span className="block text-xs text-muted-foreground">
+                  {choice.reason}
+                </span>
+              )}
+            </span>
             {active === choice && <CheckIcon className="ml-auto size-3.5" />}
           </DropdownMenuItem>
         ))}

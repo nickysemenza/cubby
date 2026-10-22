@@ -1,16 +1,15 @@
+import { calendarSources } from "@cubby/schemas/calendar";
 import type {
   CalendarItem,
   CalendarPlantingMilestone,
   CalendarRangeInput,
 } from "@cubby/schemas/calendar";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
-import type { ProjectId } from "@cubby/schemas/identifiers";
 import type { AnyColumn, SQL } from "drizzle-orm";
-import { and, eq, gte, isNotNull, isNull, lte, or, sql } from "drizzle-orm";
+import { and, eq, gte, isNotNull, isNull, lte, or } from "drizzle-orm";
 
 import { shiftPlainDate } from "~/lib/household-date";
 import type { Database } from "~/server/db";
-import { effectiveFieldSql } from "~/server/db/computed/effective-field";
 import { getDb, notDeleted } from "~/server/db/helpers";
 import { location, plant, planting } from "~/server/db/schema";
 import { plantingDisplayName } from "~/server/domains/garden/repo/garden";
@@ -19,9 +18,9 @@ import { plantingDisplayName } from "~/server/domains/garden/repo/garden";
  * Shared by the "any milestone falls in range" read predicate and by
  * `mapPlantingItems`'s per-milestone emission. */
 const MILESTONE_COLUMNS = {
-  sowed: planting.sowedOn,
-  transplanted: planting.transplantedOn,
-  finished: planting.finishedOn,
+  sowed: planting[calendarSources.planting.dates[0]],
+  transplanted: planting[calendarSources.planting.dates[1]],
+  finished: planting[calendarSources.planting.dates[2]],
 } as const satisfies Record<CalendarPlantingMilestone, AnyColumn>;
 
 // SAFETY: `Object.keys` only widens to `string[]` — the keys are exactly
@@ -30,15 +29,6 @@ const MILESTONE_COLUMNS = {
 const MILESTONES = Object.keys(
   MILESTONE_COLUMNS,
 ) as CalendarPlantingMilestone[];
-
-/** A Planting has no direct Project. Its linked Task supplies the effective
- * Project, including Task inheritance; a missing/deleted Task is unassigned. */
-export const plantingLinkedProjectSql: SQL<ProjectId | null> = sql`(
-  SELECT ${effectiveFieldSql("task", "projectId", "linked_task")}
-  FROM "Task" linked_task
-  WHERE linked_task."id" = "Planting"."taskId"
-    AND linked_task."deletedAt" IS NULL
-)`;
 
 const milestoneInRange = (input: CalendarRangeInput, endInclusive: string) =>
   or(
@@ -65,7 +55,7 @@ export const loadCalendarPlantings = (
   db: Database,
   input: CalendarRangeInput,
   endInclusive: string,
-  projectCondition?: SQL,
+  sourceCondition?: SQL,
 ) => {
   if (input.kinds && !input.kinds.includes("planting")) {
     return Promise.resolve([]);
@@ -88,7 +78,7 @@ export const loadCalendarPlantings = (
       and(
         notDeleted(planting),
         milestoneInRange(input, endInclusive),
-        projectCondition,
+        sourceCondition,
       ),
     );
 };
@@ -98,7 +88,7 @@ export const loadSchedulePlantingIds = (
   db: Database,
   input: CalendarRangeInput,
   endInclusive: string,
-  projectCondition?: SQL,
+  sourceCondition?: SQL,
 ) =>
   getDb(db)
     .select({ id: planting.id })
@@ -107,7 +97,7 @@ export const loadSchedulePlantingIds = (
       and(
         notDeleted(planting),
         or(milestoneInRange(input, endInclusive), noMilestone()),
-        projectCondition,
+        sourceCondition,
       ),
     );
 
@@ -126,9 +116,9 @@ export interface CalendarPlantingRow {
 }
 
 const MILESTONE_DATE = {
-  sowed: "sowedOn",
-  transplanted: "transplantedOn",
-  finished: "finishedOn",
+  sowed: calendarSources.planting.dates[0],
+  transplanted: calendarSources.planting.dates[1],
+  finished: calendarSources.planting.dates[2],
 } satisfies Record<CalendarPlantingMilestone, keyof CalendarPlantingRow>;
 
 /**

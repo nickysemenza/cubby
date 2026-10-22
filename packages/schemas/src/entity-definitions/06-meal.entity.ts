@@ -104,7 +104,7 @@ export default defineEntity(
             kind: "slot",
             id: "calendar",
             label: "Calendar",
-            searchKeys: ["period", "week", "date"],
+            searchKeys: ["period", "calendarDate"],
           },
           {
             kind: "slot",

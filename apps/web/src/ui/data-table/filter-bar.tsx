@@ -850,6 +850,12 @@ function FieldValueEditor(props: FieldEditorProps) {
 }
 
 export function FilterFieldEditor(props: FieldEditorProps) {
+  if (props.field.unsupportedReason)
+    return (
+      <p className="text-xs text-muted-foreground">
+        {props.field.unsupportedReason}
+      </p>
+    );
   return (
     <div className="flex flex-col gap-2">
       <FieldValueEditor {...props} />
@@ -991,6 +997,16 @@ function PanelRow({
   const summary = filterSummary(field, filter);
   const editorId = useId();
   const triState = isTriState(field);
+  if (field.unsupportedReason)
+    return (
+      <div
+        aria-disabled="true"
+        className="px-2 py-1 text-sm text-muted-foreground"
+      >
+        <span>{label}</span>
+        <p className="text-xs">{field.unsupportedReason}</p>
+      </div>
+    );
   const Label = triState ? "span" : "button";
   return (
     <div className={cn("rounded-sm", open && "bg-muted/60")}>
@@ -1194,7 +1210,7 @@ function FilterChip({
             <button
               type="button"
               aria-label={name}
-              title={name}
+              title={field.unsupportedReason ?? name}
               className="flex h-full min-w-0 items-center gap-1 rounded-l-[var(--brand-web-radius-chip)] pr-1 pl-1.5 outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
             />
           }
@@ -1834,13 +1850,14 @@ export function MobileFilterTier<TData extends RowData>({
                   key={field.key}
                   type="button"
                   className="flex min-h-11 items-center justify-between gap-2 border-b border-border px-1 text-left text-sm"
+                  disabled={Boolean(field.unsupportedReason)}
                   onClick={() => setView(field.key)}
                 >
                   <span className="font-medium">
                     {field.label ?? field.key}
                   </span>
                   <span className="min-w-0 truncate text-muted-foreground">
-                    {filterSummary(field, filter)}
+                    {field.unsupportedReason ?? filterSummary(field, filter)}
                   </span>
                 </button>
               );

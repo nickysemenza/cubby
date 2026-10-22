@@ -239,11 +239,10 @@ const scheduleQueryInput = (
   const input: CalendarRangeInput = {
     startDate,
     endDateExclusive,
-    projectId: filters?.projectId,
-    projectPresenceFilter: filters?.projectPresenceFilter,
-    includeSubProjects: filters?.includeSubProjects,
-    taskStatus: filters?.taskStatus,
-    taskTrade: filters?.taskTrade,
+    filters: {
+      task: filters?.filters?.task,
+      planting: filters?.filters?.planting,
+    },
   };
   if (selectedKinds?.length) {
     input.kinds = [selectedKinds[0]!, ...selectedKinds.slice(1)];
@@ -320,7 +319,8 @@ export function UnifiedCalendar({
     () => ({
       startDate: visibleRange.startDate,
       endDateExclusive: visibleRange.endDateExclusive,
-      ...(lockedKinds ? { kinds: lockedKinds } : filters),
+      ...filters,
+      ...(lockedKinds ? { kinds: lockedKinds } : {}),
     }),
     [filters, lockedKinds, visibleRange],
   );

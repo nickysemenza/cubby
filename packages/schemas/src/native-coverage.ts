@@ -476,6 +476,10 @@ export const nativeCoverage = {
       "project.schedule",
       "planting.schedule",
       "task.agenda",
+      "task.calendar",
+      "project.calendar",
+      "expense.calendar",
+      "planting.calendar",
     ]),
   },
 } as const satisfies {

@@ -10,6 +10,7 @@ import type {
 } from "~/entity/entity-list/list-slot-types";
 import { useAllEntityRecords } from "~/entity/hooks/use-all-entity-records";
 import { usePageCount } from "~/entity/page/page";
+import { entityCalendar } from "~/features/calendar/entity-calendar";
 import {
   plantingScheduleRows,
   yearWindow,
@@ -121,5 +122,6 @@ function PlantingsScheduleSlot({ search, navigate }: ListSlotProps) {
 }
 
 export const plantingListSlots = {
+  calendar: entityCalendar("planting"),
   schedule: PlantingsScheduleSlot,
 } satisfies Record<ListSlotId<"planting">, ListSlotComponent>;

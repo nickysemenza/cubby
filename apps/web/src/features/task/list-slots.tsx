@@ -10,6 +10,7 @@ import {
   filterGetterFromSearch,
   type FilterSearch,
 } from "~/entity/filters";
+import { entityCalendar } from "~/features/calendar/entity-calendar";
 import { Stack } from "~/ui/layout";
 
 import { NextTasks } from "./next-tasks";
@@ -37,5 +38,6 @@ function TaskAgendaSlot({ search }: ListSlotProps) {
 }
 
 export const taskListSlots = {
+  calendar: entityCalendar("task"),
   agenda: TaskAgendaSlot,
 } satisfies Record<ListSlotId<"task">, ListSlotComponent>;

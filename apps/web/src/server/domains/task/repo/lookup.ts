@@ -32,7 +32,7 @@ import { hydrateTaskInheritanceRows } from "./task-project-inheritance";
 
 // The effective project, subject product and assignee compile from their
 // declared `via` paths through the inherited references.
-const taskScaffold = listScaffold("task", task, {
+export const taskScaffold = listScaffold("task", task, {
   derived: {
     effectiveTrade: effectiveFieldSql("task", "trade"),
     // Effective due date — `dueEndDate ?? dueDate` — so a ranged task still

@@ -6,6 +6,10 @@ import type {
   CalendarRangeOut,
   CalendarScheduleOut,
 } from "@cubby/schemas/calendar";
+import {
+  calendarSources,
+  calendarSourceMatches,
+} from "@cubby/schemas/calendar";
 import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import {
   MEAL_TYPE_LABELS,
@@ -13,10 +17,9 @@ import {
   mealTypeRank,
 } from "@cubby/schemas/meal-classification";
 import type { NutritionTotals } from "@cubby/schemas/nutrition";
-import type { AnyColumn, SQL } from "drizzle-orm";
+import type { SQL } from "drizzle-orm";
 import {
   and,
-  eq,
   gte,
   inArray,
   isNotNull,
@@ -30,37 +33,34 @@ import { uniq } from "es-toolkit";
 import { shiftPlainDate } from "~/lib/household-date";
 import { aggregateTotals } from "~/lib/nutrition-estimates";
 import type { Database } from "~/server/db";
-import { effectiveFieldSql } from "~/server/db/computed/effective-field";
 import { getDb, notDeleted, relations } from "~/server/db/helpers";
-import { eqAny, presenceCondition } from "~/server/db/helpers/query";
-import { expense, project, purchase, task } from "~/server/db/schema";
-import {
-  expenseDerivedCostRead,
-  expenseSelectionForWhere,
-} from "~/server/domains/expense/repo/expense-derived-read";
+import { expense, project, task, meal, planting } from "~/server/db/schema";
 import { expenseInheritanceReadExtras } from "~/server/domains/expense/repo/expense-inheritance";
 import { dbExpenseToAPI } from "~/server/domains/expense/repo/helpers";
-import { chargeCondition } from "~/server/domains/expense/repo/lookup";
-import { getPlanting } from "~/server/domains/garden/repo/garden";
-import { getMealsByDateRange } from "~/server/domains/meal/repo/crud";
-import { getProductCoverImageUrlsByProductIds } from "~/server/domains/product/repo/crud";
+import { expenseScaffold } from "~/server/domains/expense/repo/lookup";
 import {
-  loadProjectDateWindows,
-  loadProjectSubtreeIds,
-  loadProjectTree,
-} from "~/server/domains/project/repo/subtree";
+  plantingScaffold,
+  getPlanting,
+} from "~/server/domains/garden/repo/garden";
+import {
+  mealScaffold,
+  getMealsByDateRange,
+} from "~/server/domains/meal/repo/crud";
+import { getProductCoverImageUrlsByProductIds } from "~/server/domains/product/repo/crud";
+import { projectScaffold } from "~/server/domains/project/repo/lookup";
+import { loadProjectDateWindows } from "~/server/domains/project/repo/subtree";
 import { getRecipeCoverImageUrlsByShortcodes } from "~/server/domains/recipe/repo/crud";
 import { getTasksByIDs } from "~/server/domains/task/repo/crud";
 import { dbTaskToAPI } from "~/server/domains/task/repo/helpers";
+import { taskScaffold } from "~/server/domains/task/repo/lookup";
 import { hydrateTaskInheritanceRows } from "~/server/domains/task/repo/task-project-inheritance";
 import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
-import { resolveAllPresent } from "~/server/generic/shortcode/repo/shortcode-resolver";
+import type { NestedListScaffold } from "~/server/generic/list/repo/list";
 
 import {
   loadCalendarPlantings,
   loadSchedulePlantingIds,
   mapPlantingItems,
-  plantingLinkedProjectSql,
 } from "./calendar-plantings";
 
 const emptyDaySummary = (): CalendarDaySummary => ({
@@ -93,90 +93,94 @@ const mealSlotDelta = (a: CalendarItem, b: CalendarItem): number =>
     ? mealTypeRank(a.mealType) - mealTypeRank(b.mealType)
     : 0;
 
-const loadCalendarProjectScope = async (
+const sourceTables = { meal, task, expense, project, planting };
+const sourceScaffolds = {
+  meal: mealScaffold,
+  task: taskScaffold,
+  expense: expenseScaffold,
+  project: projectScaffold,
+  planting: plantingScaffold,
+} satisfies Record<CalendarItemKind, NestedListScaffold<CalendarItemKind>>;
+
+/** Use the source's prepared list population, including derived fields and
+ * related scopes, before calendar hydration and date layout. Keep this predicate
+ * in plain table queries: Drizzle relational hydration rewrites nested columns
+ * to its outer alias, corrupting the matchingIds subquery. Hydrate by IDs. */
+const calendarSourceWhere = async (
   db: Database,
   input: CalendarRangeInput,
-  wantsProjects: boolean,
-) => {
-  const projectCodes = input.projectId ? [input.projectId].flat() : [];
-  const projectRequested = projectCodes.length > 0;
-  const selectedProjectIds = projectRequested
-    ? await resolveAllPresent(db, "project", projectCodes)
-    : [];
-  const [tree, scopeIds] = await Promise.all([
-    wantsProjects ? loadProjectTree(db) : undefined,
-    input.includeSubProjects
-      ? loadProjectSubtreeIds(db, selectedProjectIds)
-      : selectedProjectIds,
-  ]);
-  return { projectRequested, scopeIds, tree };
+  kind: CalendarItemKind,
+): Promise<SQL> => {
+  if (!calendarSourceMatches(kind, input)) return sql`false`;
+  const scaffold = sourceScaffolds[kind];
+  const filters = input.filters?.[kind] ?? {};
+  const context = await scaffold.context(db, { filters, readIntent: "count" });
+  const ids = scaffold.matchingIds(filters, { context });
+  return sql`${sourceTables[kind].id} IN ${ids}`;
 };
 
-type CalendarProjectScope = Awaited<
-  ReturnType<typeof loadCalendarProjectScope>
->;
-
-const projectScopeOn = (
-  column: AnyColumn | SQL,
-  input: CalendarRangeInput,
-  scope: CalendarProjectScope,
-): SQL | undefined =>
-  or(
-    scope.scopeIds.length
-      ? sql`${column} IN (${sql.join(
-          scope.scopeIds.map((id) => sql`${id}::uuid`),
-          sql`, `,
-        )})`
-      : scope.projectRequested
-        ? sql`false`
-        : undefined,
-    input.projectPresenceFilter === "none"
-      ? isNull(column)
-      : input.projectPresenceFilter === "has"
-        ? isNotNull(column)
-        : undefined,
-  );
-
-const loadCalendarMeals = (
+const loadCalendarMeals = async (
   db: Database,
   input: CalendarRangeInput,
   endInclusive: string,
 ) => {
-  const mealsInProjectScope =
-    input.projectPresenceFilter === "none" ||
-    (!input.projectId && input.projectPresenceFilter === undefined);
-  return !input.kinds?.includes("meal") && input.kinds
-    ? Promise.resolve([])
-    : mealsInProjectScope
-      ? getMealsByDateRange(db, input.startDate, endInclusive)
-      : Promise.resolve([]);
+  if (!calendarSourceMatches("meal", input)) return [];
+  const condition = await calendarSourceWhere(db, input, "meal");
+  const ids = await getDb(db)
+    .select({ id: meal.id })
+    .from(meal)
+    .where(
+      and(
+        condition,
+        gte(meal[calendarSources.meal.dates[0]], input.startDate),
+        lte(meal[calendarSources.meal.dates[0]], endInclusive),
+      ),
+    );
+  return ids.length
+    ? getMealsByDateRange(
+        db,
+        input.startDate,
+        endInclusive,
+        inArray(
+          meal.id,
+          ids.map((row) => row.id),
+        ),
+      )
+    : [];
 };
 
 const loadCalendarTasks = async (
   db: Database,
   input: CalendarRangeInput,
   endInclusive: string,
-  scope: CalendarProjectScope,
 ) => {
-  if (input.kinds && !input.kinds.includes("task")) return Promise.resolve([]);
-  const rows = await getDb(db).query.task.findMany({
-    where: and(
-      notDeleted(task),
-      or(isNotNull(task.dueDate), isNotNull(task.dueEndDate)),
-      lte(sql`coalesce(${task.dueDate}, ${task.dueEndDate})`, endInclusive),
-      gte(sql`coalesce(${task.dueEndDate}, ${task.dueDate})`, input.startDate),
-      eqAny(task.status, input.taskStatus),
-      input.taskTrade
-        ? inArray(
-            effectiveFieldSql("task", "trade", "task"),
-            [input.taskTrade].flat(),
-          )
-        : undefined,
-      projectScopeOn(
-        effectiveFieldSql("task", "projectId", "task"),
-        input,
-        scope,
+  if (!calendarSourceMatches("task", input)) return [];
+  const condition = await calendarSourceWhere(db, input, "task");
+  const ids = await getDb(db)
+    .select({ id: task.id })
+    .from(task)
+    .where(
+      and(
+        condition,
+        or(
+          isNotNull(task[calendarSources.task.dates[0]]),
+          isNotNull(task[calendarSources.task.dates[1]]),
+        ),
+        lte(
+          sql`coalesce(${task[calendarSources.task.dates[0]]}, ${task[calendarSources.task.dates[1]]})`,
+          endInclusive,
+        ),
+        gte(
+          sql`coalesce(${task[calendarSources.task.dates[1]]}, ${task[calendarSources.task.dates[0]]})`,
+          input.startDate,
+        ),
       ),
+    );
+  if (!ids.length) return [];
+  const rows = await getDb(db).query.task.findMany({
+    where: inArray(
+      task.id,
+      ids.map((row) => row.id),
     ),
     orderBy: (row, { asc }) => [asc(row.dueDate), asc(row.name)],
     ...relations.task.withProject,
@@ -188,83 +192,40 @@ const loadCalendarExpenses = async (
   db: Database,
   input: CalendarRangeInput,
   endInclusive: string,
-  scope: CalendarProjectScope,
-  vendorIds: Awaited<ReturnType<typeof resolveAllPresent>>,
 ) => {
-  if (input.kinds && !input.kinds.includes("expense")) {
-    return Promise.resolve([]);
-  }
-  const vendorCondition = input.expenseVendorId
-    ? vendorIds.length
-      ? chargeCondition(db, eqAny(purchase.vendorId, vendorIds))
-      : sql`false`
-    : undefined;
-  const where = and(
-    notDeleted(expense),
-    isNotNull(expense.date),
-    gte(expense.date, input.startDate),
-    lte(expense.date, endInclusive),
-    input.expenseFuture !== undefined
-      ? eq(expense.future, input.expenseFuture)
-      : undefined,
-    or(
-      vendorCondition,
-      presenceCondition(expense.purchaseId, input.expenseVendorPresenceFilter),
-    ),
-  );
-  const allocationScope =
-    scope.projectRequested || input.projectPresenceFilter
-      ? {
-          projectIds: scope.projectRequested ? scope.scopeIds : undefined,
-          presence: input.projectPresenceFilter,
-        }
-      : undefined;
-  const load = (selectedWhere: SQL | undefined) =>
-    getDb(db).query.expense.findMany({
-      where: selectedWhere,
-      orderBy: (row, { asc }) => [asc(row.date), asc(row.name)],
-      ...relations.expense.withProject,
-      extras: {
-        ...expenseInheritanceReadExtras(),
-        scopedCost: sql<number | null>`"expense"."cost"`.as("scopedCost"),
-      },
-    });
-  if (!allocationScope) return load(where);
-  // Selected cost rows supply both membership and displayed cost. Hydration
-  // consumes only those identities and does not resolve allocation again.
-  const selectedIds = expenseSelectionForWhere(where);
-  const read = expenseDerivedCostRead(db, allocationScope, selectedIds);
-  const costs = await read
-    .select({ id: expense.id, cost: read.cost })
-    .where(where);
-  if (costs.length === 0) return [];
-  const rows = await load(
-    and(
-      where,
-      inArray(
-        expense.id,
-        costs.map((row) => row.id),
+  if (!calendarSourceMatches("expense", input)) return [];
+  const condition = await calendarSourceWhere(db, input, "expense");
+  const ids = await getDb(db)
+    .select({ id: expense.id })
+    .from(expense)
+    .where(
+      and(
+        condition,
+        isNotNull(expense[calendarSources.expense.dates[0]]),
+        gte(expense[calendarSources.expense.dates[0]], input.startDate),
+        lte(expense[calendarSources.expense.dates[0]], endInclusive),
       ),
+    );
+  if (!ids.length) return [];
+  return getDb(db).query.expense.findMany({
+    where: inArray(
+      expense.id,
+      ids.map((row) => row.id),
     ),
-  );
-  const byId = new Map(costs.map((row) => [row.id, row.cost]));
-  return rows.map((row) => ({ ...row, scopedCost: byId.get(row.id) ?? null }));
+    orderBy: (row, { asc }) => [asc(row.date), asc(row.name)],
+    ...relations.expense.withProject,
+    extras: {
+      ...expenseInheritanceReadExtras(),
+    },
+  });
 };
 
-const loadCalendarProjects = (
+const loadCalendarProjects = async (
   db: Database,
   input: CalendarRangeInput,
-  scope: CalendarProjectScope,
 ) => {
-  if (input.kinds && !input.kinds.includes("project")) {
-    return Promise.resolve([]);
-  }
-  const presence =
-    input.projectPresenceFilter === "has"
-      ? sql`true`
-      : input.projectPresenceFilter === "none"
-        ? sql`false`
-        : undefined;
+  if (!calendarSourceMatches("project", input)) return [];
+  const condition = await calendarSourceWhere(db, input, "project");
   return getDb(db)
     .select({
       id: project.id,
@@ -274,24 +235,7 @@ const loadCalendarProjects = (
       kind: project.kind,
     })
     .from(project)
-    .where(
-      and(
-        notDeleted(project),
-        eqAny(project.status, input.projectStatus),
-        or(
-          eqAny(project.kind, input.projectKind),
-          presenceCondition(project.kind, input.projectKindPresenceFilter),
-        ),
-        or(
-          scope.scopeIds.length
-            ? inArray(project.id, scope.scopeIds)
-            : scope.projectRequested
-              ? sql`false`
-              : undefined,
-          presence,
-        ),
-      ),
-    );
+    .where(condition);
 };
 
 const mapMealItems = (
@@ -303,9 +247,9 @@ const mapMealItems = (
     id: meal.id,
     title: meal.name || mealTypeTitle(meal.mealType),
     name: meal.name,
-    startDate: meal.date,
-    endDateExclusive: shiftPlainDate(meal.date, 1),
-    interaction: "move",
+    startDate: meal[calendarSources.meal.dates[0]],
+    endDateExclusive: shiftPlainDate(meal[calendarSources.meal.dates[0]], 1),
+    interaction: "move" as const,
     sortOrder: meal.sortOrder,
     mealType: meal.mealType,
     mealKind: meal.mealKind,
@@ -331,8 +275,12 @@ const mapTaskItems = async (
   return rows.flatMap((row) => {
     // SAFETY: `row` came from `rows`, which `dataQualities` was loaded for.
     const value = dbTaskToAPI(row, [], [], 0, 0, dataQualities.get(row.id)!);
-    const startDate = value.dueDate ?? value.dueEndDate;
-    const endDate = value.dueEndDate ?? value.dueDate;
+    const startDate =
+      value[calendarSources.task.dates[0]] ??
+      value[calendarSources.task.dates[1]];
+    const endDate =
+      value[calendarSources.task.dates[1]] ??
+      value[calendarSources.task.dates[0]];
     return startDate && endDate
       ? [
           {
@@ -342,8 +290,8 @@ const mapTaskItems = async (
             startDate,
             endDateExclusive: shiftPlainDate(endDate, 1),
             interaction: "move" as const,
-            dueDate: value.dueDate,
-            dueEndDate: value.dueEndDate,
+            dueDate: value[calendarSources.task.dates[0]],
+            dueEndDate: value[calendarSources.task.dates[1]],
             status: value.status,
             trade: value.trade,
             projectName: value.projectName,
@@ -382,7 +330,7 @@ const mapExpenseItems = async (
               ? ("move" as const)
               : ("read-only" as const),
             future: value.future,
-            cost: row.scopedCost,
+            cost: value.cost,
             vendor: value.vendor,
             trade: value.trade,
             projectName: value.projectName,
@@ -501,15 +449,8 @@ export async function getCalendarRange(
   // the ICS feed asks for meals + tasks (or, for the garden feed, plantings),
   // and the project branch it drops is a whole-tree date fold it would
   // otherwise pay for on every poll.
-  const wants = (kind: CalendarItemKind) =>
-    !input.kinds || input.kinds.includes(kind);
+  const wants = (kind: CalendarItemKind) => calendarSourceMatches(kind, input);
 
-  // The tree is shared by scope expansion and the project date fold. Loading
-  // it here prevents either branch from scanning the project table twice.
-  const scope = await loadCalendarProjectScope(db, input, wants("project"));
-  const vendorIds = input.expenseVendorId
-    ? await resolveAllPresent(db, "vendor", [input.expenseVendorId].flat())
-    : [];
   const [
     meals,
     taskRows,
@@ -519,14 +460,11 @@ export async function getCalendarRange(
     projectDates,
   ] = await Promise.all([
     loadCalendarMeals(db, input, endInclusive),
-    loadCalendarTasks(db, input, endInclusive, scope),
-    loadCalendarExpenses(db, input, endInclusive, scope, vendorIds),
-    loadCalendarProjects(db, input, scope),
-    loadCalendarPlantings(
-      db,
-      input,
-      endInclusive,
-      projectScopeOn(plantingLinkedProjectSql, input, scope),
+    loadCalendarTasks(db, input, endInclusive),
+    loadCalendarExpenses(db, input, endInclusive),
+    loadCalendarProjects(db, input),
+    calendarSourceWhere(db, input, "planting").then((condition) =>
+      loadCalendarPlantings(db, input, endInclusive, condition),
     ),
     // The date fold stays WHOLE-TREE on purpose. `aggregateSubtreeDates`
     // folds a parent's window up from its descendants, so scoping the fold to
@@ -536,7 +474,7 @@ export async function getCalendarRange(
     // `loadProjectDateWindows`, not `loadProjectSubtreeRollups`: the calendar
     // reads `.dateWindows` and nothing else, and the rollup variant
     // additionally runs two spend/task aggregates whose results are discarded.
-    wants("project") ? loadProjectDateWindows(db, scope.tree) : null,
+    wants("project") ? loadProjectDateWindows(db) : null,
   ]);
 
   const recipeIds = uniq(
@@ -565,15 +503,18 @@ export async function getCalendarRange(
 
 /** One read for the two-kind Schedule workbench. The window selects dated
  * records by overlap, while records with no date remain available in its
- * undated lanes. Kind-prefixed meal/expense/project filters are inapplicable. */
+ * undated lanes. Filters use the same source membership as the date grid. */
 export async function getCalendarSchedule(
   db: Database,
   input: CalendarRangeInput,
 ): Promise<CalendarScheduleOut> {
   const endInclusive = shiftPlainDate(input.endDateExclusive, -1);
-  const scope = await loadCalendarProjectScope(db, input, false);
-  const wantsTask = !input.kinds || input.kinds.includes("task");
-  const wantsPlanting = !input.kinds || input.kinds.includes("planting");
+  const [taskCondition, plantingCondition] = await Promise.all([
+    calendarSourceWhere(db, input, "task"),
+    calendarSourceWhere(db, input, "planting"),
+  ]);
+  const wantsTask = calendarSourceMatches("task", input);
+  const wantsPlanting = calendarSourceMatches("planting", input);
   const [taskIds, plantingIds] = await Promise.all([
     wantsTask
       ? getDb(db)
@@ -583,40 +524,27 @@ export async function getCalendarSchedule(
             and(
               notDeleted(task),
               or(
-                and(isNull(task.dueDate), isNull(task.dueEndDate)),
+                and(
+                  isNull(task[calendarSources.task.dates[0]]),
+                  isNull(task[calendarSources.task.dates[1]]),
+                ),
                 and(
                   lte(
-                    sql`coalesce(${task.dueDate}, ${task.dueEndDate})`,
+                    sql`coalesce(${task[calendarSources.task.dates[0]]}, ${task[calendarSources.task.dates[1]]})`,
                     endInclusive,
                   ),
                   gte(
-                    sql`coalesce(${task.dueEndDate}, ${task.dueDate})`,
+                    sql`coalesce(${task[calendarSources.task.dates[1]]}, ${task[calendarSources.task.dates[0]]})`,
                     input.startDate,
                   ),
                 ),
               ),
-              eqAny(task.status, input.taskStatus),
-              input.taskTrade
-                ? inArray(
-                    effectiveFieldSql("task", "trade", "Task"),
-                    [input.taskTrade].flat(),
-                  )
-                : undefined,
-              projectScopeOn(
-                effectiveFieldSql("task", "projectId", "Task"),
-                input,
-                scope,
-              ),
+              taskCondition,
             ),
           )
       : [],
     wantsPlanting
-      ? loadSchedulePlantingIds(
-          db,
-          input,
-          endInclusive,
-          projectScopeOn(plantingLinkedProjectSql, input, scope),
-        )
+      ? loadSchedulePlantingIds(db, input, endInclusive, plantingCondition)
       : [],
   ]);
   const [tasks, plantings] = await Promise.all([
