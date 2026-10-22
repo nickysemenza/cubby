@@ -15,6 +15,7 @@ import { imageProcessingJobHandler } from "~/server/domains/image-processing/ser
 import { deliverPurchaseDispatch } from "~/server/domains/purchase-agent/service/dispatch";
 import { connectionDiscoveryJobHandler } from "~/server/domains/run/service/derived-discovery";
 import { embeddingCleanupHandler } from "~/server/generic/embedding/service/embedding-cleanup";
+import { JOB_DRAIN } from "~/server/generic/jobs/limits";
 import {
   defineJobHandler,
   drainDueJobs,
@@ -96,7 +97,10 @@ export const productionJobHandlers: JobHandlers = {
     },
   ),
 };
-export async function drainProductionJobs(db: Database, limit = 256) {
+export async function drainProductionJobs(
+  db: Database,
+  limit = JOB_DRAIN.pageLimit,
+) {
   const outcomes = await drainDueJobs(db, productionJobHandlers, limit);
   await (
     await import("~/server/domains/purchase-import/repo/dispatch")

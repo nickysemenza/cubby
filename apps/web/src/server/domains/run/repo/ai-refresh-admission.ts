@@ -9,7 +9,7 @@ import { run } from "~/server/db/schema";
 
 // Lifecycle is in the Worker entry closure; this module must not import AI policy/discovery.
 const AI_REFRESH_SCHEDULING_LOCK = "cubby-ai-refresh-scheduling";
-const MAX_ACTIVE_AI_REFRESH_RUNS = 2;
+export const MAX_ACTIVE_AI_REFRESH_RUNS = 2;
 
 /** Nonblocking admission must not pin another origin connection in a lock wait. */
 export async function tryLockAiRefreshScheduling(db: Database) {

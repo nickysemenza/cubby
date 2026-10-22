@@ -280,7 +280,10 @@ const detailSlots = {
   run: {
     // Progress, usage and changes are server-composed report slots; `runReportSlot` is their one
     // component (`features/run/slots.tsx`).
-    steps: runReportSlot("steps", (run) => isStepRunPurpose(run.purpose)),
+    steps: slot(
+      () => named(import("~/features/run/run-detail"), "RunStepsDetail"),
+      (run) => isStepRunPurpose(run.purpose),
+    ),
     "live-progress": runReportSlot("live-progress"),
     "import-controls": slot(
       () =>

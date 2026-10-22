@@ -5,9 +5,33 @@ import {
   exports,
   triggers,
 } from "cf/config";
+import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import { z } from "zod";
 import { resolveDevProfile } from "./tooling/dev-services/dev-profile.ts";
 import { localWorker } from "./tooling/dev/config.ts";
+
+// Read shared data as bytes: importing runtime modules here makes Cloudflare's
+// Vite plugin deny them to the Worker module loader. The Run page's limits
+// catalog imports the same file.
+const backgroundQueueConsumer = z
+  .object({
+    maxBatchSize: z.number().int().positive(),
+    maxBatchTimeout: z.number().int().nonnegative(),
+    maxConcurrency: z.number().int().positive(),
+    maxRetries: z.number().int().nonnegative(),
+  })
+  .parse(
+    JSON.parse(
+      readFileSync(
+        new URL(
+          "../../packages/shared/src/background-queue-consumer.json",
+          import.meta.url,
+        ),
+        "utf8",
+      ),
+    ),
+  );
 
 // Existing names and lifecycle tombstones preserve stored Durable Object namespaces.
 export const productionWorker = defineWorker({
@@ -58,10 +82,7 @@ export const productionWorker = defineWorker({
     }),
 
     triggers.queue({
-      maxBatchSize: 1,
-      maxBatchTimeout: 0,
-      maxConcurrency: 2,
-      maxRetries: 0,
+      ...backgroundQueueConsumer,
       name: "cubby-background",
     }),
     triggers.queue({
@@ -77,6 +98,9 @@ export const productionWorker = defineWorker({
     R2_ACCESS_KEY_ID: bindings.secret(),
     R2_SECRET_ACCESS_KEY: bindings.secret(),
     AI_GATEWAY_API_KEY: bindings.secret(),
+    // Read-only Workers Observability query token for the Run page's inline
+    // Job logs; absent, the panel says logs are not configured.
+    CLOUDFLARE_OBSERVABILITY_TOKEN: bindings.secret(),
 
     NODE_ENV: bindings.text("production"),
     ALLOW_SIGNUP: bindings.text("false"),

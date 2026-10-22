@@ -246,6 +246,33 @@ units, and a qualified rate/ETA. Unknown totals use a moving ink segment;
 reduced motion keeps that segment visible and stationary. Progress owns its
 activity animation separately from intentionally static loading skeletons.
 
+A step-ledger Run's detail (`features/run/run-detail.tsx`) never blends steps
+into one percentage. `RunStepStrip` draws one 6px segment per step, filled by
+that step's own frozen count. Done segments are ink at 55%, running ones info,
+and tally steps a sliding info segment. Steps sit on the RecordList timeline:
+
+- **Marks.** Running is a pulsing ink dot; waiting is the same dot held still
+  (`RecordDot state="waiting"`).
+- **Card content.** Each card states its purpose and an input-mode tag
+  (Counted input, Provider estimate, Tally).
+- **Count mode only.** Only count mode draws a bar, percentage, rate and ETA,
+  plus the "Frozen at step start" boundary. Waiting steps keep a lighter bar
+  (`Progress paused`) and say "Rate paused".
+- **Not started.** A step that hasn't started reads "Not started" and "Counts
+  its inputs when it starts".
+- **Moving step.** The moving step adds:
+  - one "Speed set by …" line from the limits catalog;
+  - the last page's time per phase with its queries (or "not measured");
+  - value-first tallies (`KeyNumbers layout="tallies"`);
+  - wait reasons as a tone pill over the raw stored detail;
+  - the reason funnel ("Where the items went").
+
+Run figures and funnel rows drill into the decision ledger. The ledger is the
+step's declared results family, read through a family presenter. It has facets,
+search, J/K/Enter, `/` and Esc, and stacked rows on phone. Evidence opens in a
+`SidePanel`. Diagnostics is a continuous section, never a tab: Job facts, Jobs
+by kind, Limits (Binding, Not limiting or Unknown) and the inline log panel.
+
 The dedicated Work queue is a workbench table across record types. Its
 workbench band carries line tabs (All, Review, Research, Waiting, Automatic)
 with each view's server total in mono; a tab presets the View filter, beside

@@ -85,9 +85,11 @@ const OVERLAP_WINDOW_DAYS = 3;
 const POOL_WINDOW_DAYS = 2 * CANDIDATE_WINDOW_DAYS;
 const PREVIEW_CHUNK = 500;
 // Amortize Job dispatch between pages; the byte bound still limits publications.
-const TRANSFER_PAIR_GENERATION_PAGE = 128;
-const TRANSFER_PAIR_GENERATION_BYTES = 256 * 1024;
-const TRANSFER_PAIR_PUBLICATION_CONCURRENCY = 4;
+export const TRANSFER_PAIR_GENERATION_PAGE = 128;
+export const TRANSFER_PAIR_GENERATION_BYTES = 256 * 1024;
+export const TRANSFER_PAIR_PUBLICATION_CONCURRENCY = 4;
+/** Label pages publish this many pairs at once; database work only, model calls never occupy this lane. */
+export const TRANSFER_PAIR_PUBLISH_CONCURRENCY = 4;
 
 /** Kinds that move money between accounts; they retrieve a leg, never prove it. */
 const MONEY_MOVES = new Set<FinancialTransactionKind>([

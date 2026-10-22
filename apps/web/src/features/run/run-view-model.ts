@@ -1,0 +1,448 @@
+import {
+  assessmentFamily,
+  type AssessmentFamily,
+} from "@cubby/schemas/assessment";
+import type { JobWaitReason } from "@cubby/schemas/job";
+import { runStepMeta, type RunStepError } from "@cubby/schemas/run-step";
+import { runWorkSamples } from "@cubby/schemas/run-work-progress";
+import { z } from "zod";
+
+import type {
+  JobFacts,
+  JobListOut,
+  LimitBinding,
+} from "~/contracts/job.contract";
+import {
+  type RunDecisionStatus,
+  type RunDetailStep,
+  type RunDetailStepsOut,
+  runStepPageSample,
+} from "~/contracts/run-detail.contract";
+import { formatInstant } from "~/lib/date-format";
+
+/**
+ * The Run detail page's one reading of stored RunSteps and Job facts. Every
+ * component renders these shapes; only `stepView` and `declarationOf` read
+ * the stored step meta and the step declarations.
+ */
+
+export type StepInputMode = "count" | "estimate" | "tally";
+
+/** What a step declares about itself (`RunStepDeclaration` in `RUN_KINDS`). */
+type StepDeclarationView = {
+  label: string;
+  purpose: string | null;
+  action: string | null;
+  unit: string;
+  mode: StepInputMode | null;
+  /** The Assessment family this step publishes into, for its ledger. */
+  results: AssessmentFamily | null;
+};
+
+/**
+ * The step-input meta (`input`, `tallies`, `reasons`, `action`) as the
+ * step-input contract stores it. `runStepMeta` gains these keys with that
+ * contract; until then this reads them beside it.
+ */
+const stepMeta = runStepMeta.partial().extend({
+  input: z
+    .object({
+      mode: z.enum(["count", "estimate", "tally"]),
+      total: z.number().int().nonnegative().nullable(),
+      boundary: z.json().nullable(),
+      countedAt: z.iso.datetime(),
+    })
+    .optional(),
+  tallies: z.record(z.string(), z.number().int().nonnegative()).optional(),
+  reasons: z.record(z.string(), z.number().int().nonnegative()).optional(),
+  action: z.string().nullable().optional(),
+  work: runWorkSamples.optional(),
+  page: runStepPageSample.optional(),
+});
+type StepMeta = z.infer<typeof stepMeta>;
+
+const readMeta = (meta: RunDetailStep["meta"]): StepMeta =>
+  stepMeta.safeParse(meta ?? {}).data ?? {};
+
+/**
+ * The step's declaration. Purpose, action, unit and results come from
+ * `runStepDeclaration(purpose, key)` once `RUN_KINDS` declares steps; until
+ * then a step whose key names an Assessment family publishes that family.
+ */
+function declarationOf(
+  _purpose: string,
+  step: Pick<RunDetailStep, "key" | "label">,
+): StepDeclarationView {
+  return {
+    label: step.label,
+    purpose: null,
+    action: null,
+    unit: "items",
+    mode: null,
+    results: assessmentFamily.safeParse(step.key).data ?? null,
+  };
+}
+
+export type StepPhase =
+  | "done"
+  | "running"
+  | "waiting"
+  | "paused"
+  | "failed"
+  | "not_started";
+
+export const STEP_PHASE_LABEL = {
+  done: "Done",
+  running: "Running",
+  waiting: "Waiting",
+  paused: "Paused",
+  failed: "Failed",
+  not_started: "Not started",
+} as const satisfies Record<StepPhase, string>;
+
+export const INPUT_MODE_LABEL = {
+  count: "Counted input",
+  estimate: "Provider estimate",
+  tally: "Tally",
+} as const satisfies Record<StepInputMode, string>;
+
+const PHASE_OF = {
+  queued: "not_started",
+  running: "running",
+  waiting: "waiting",
+  paused: "paused",
+  done: "done",
+  failed: "failed",
+} as const satisfies Record<RunDetailStep["state"], StepPhase>;
+
+/** Why a step or Job is not moving, with the raw detail it was stored with. */
+export type StepWait = {
+  reason: JobWaitReason | "behind" | "retry" | "paused";
+  label: string;
+  /** "until 11:42", "attempt 2 of 3": the quiet line beside the pill. */
+  until: string | null;
+  /** The raw stored failure or pause reason, credentials scrubbed only. */
+  raw: string | null;
+};
+
+type StepRate = {
+  perMinute: number;
+  /** Where the rate comes from ("over the last 10 min", "since it started"). */
+  basis: string;
+  etaMs: number | null;
+};
+
+type StepTally = { key: string; label: string; value: number };
+
+/** Where the last page's time went; null fields were not measured. */
+type StepPageWork = {
+  phases: { phase: string; ms: number; share: number }[];
+  totalMs: number;
+  queries: number | null;
+  /** Peak in-flight work per bounded phase. */
+  concurrency: Record<string, number>;
+};
+
+export type RunStepView = {
+  key: string;
+  position: number;
+  label: string;
+  purpose: string | null;
+  unit: string;
+  mode: StepInputMode;
+  phase: StepPhase;
+  /** What it is doing now; only while running or waiting. */
+  action: string | null;
+  /** Count and estimate modes: the frozen total or the provider's estimate. */
+  total: number | null;
+  processed: number;
+  /** `found − done − failed − skipped − removed`; count mode only. */
+  left: number | null;
+  /** 0–1 of the frozen count; count mode only. */
+  fraction: number | null;
+  countedAt: string | null;
+  boundary: string | null;
+  /** Running count mode only; waiting and paused steps say "Rate paused". */
+  rate: StepRate | null;
+  ratePaused: boolean;
+  tallies: StepTally[];
+  reasons: { code: string; count: number }[];
+  wait: StepWait | null;
+  /** Null when the step's driver does not measure its pages yet. */
+  page: StepPageWork | null;
+  errors: RunStepError[];
+  failed: number;
+  startedAt: string | null;
+  endedAt: string | null;
+  durationMs: number | null;
+  results: AssessmentFamily | null;
+};
+
+export const humanizeKey = (key: string) => {
+  const words = key.replaceAll(/[_.-]+/g, " ").trim();
+  return words.charAt(0).toUpperCase() + words.slice(1);
+};
+
+/** `image.process` Jobs read as "image Jobs" in wait copy. */
+const jobKindNoun = (kind: string) => kind.split(".")[0] ?? kind;
+
+const WAIT_LABEL = {
+  provider_capacity: "AI capacity",
+  ai_funding_window: "Funding window",
+  rate_limit: "Provider rate limit",
+  device: "Waiting for a device",
+} as const satisfies Record<JobWaitReason, string>;
+
+const clock = (iso: string) => formatInstant(iso, "clock");
+
+/** Why the Run's Job is not executing now, when it is waiting at all. */
+export function jobWait(job: JobFacts | null): StepWait | null {
+  if (!job) return null;
+  if (job.waitReason)
+    return {
+      reason: job.waitReason,
+      label: WAIT_LABEL[job.waitReason],
+      until: job.waitUntil ? `until ${clock(job.waitUntil)}` : null,
+      raw: job.error,
+    };
+  if (job.state === "retry_wait")
+    return {
+      reason: "retry",
+      label: "Retrying",
+      until: `attempt ${job.attempts + 1} of ${job.maxAttempts} at ${clock(job.availableAt)}`,
+      raw: job.error,
+    };
+  if (job.state === "queued" && job.ahead)
+    return {
+      reason: "behind",
+      label: `Waiting behind ${job.ahead.toLocaleString("en-US")} ${jobKindNoun(job.kind)} Jobs`,
+      until: `${job.ahead.toLocaleString("en-US")} same-kind Jobs ahead`,
+      raw: null,
+    };
+  return null;
+}
+
+const boundaryText = (boundary: unknown): string | null => {
+  if (boundary === null || boundary === undefined) return null;
+  if (typeof boundary === "string") return boundary;
+  return JSON.stringify(boundary);
+};
+
+function rateOf(
+  step: RunDetailStep,
+  meta: StepMeta,
+  processed: number,
+  left: number | null,
+  now: number,
+): StepRate | null {
+  const sample = meta.work?.current;
+  if (sample?.ratePerSecond && sample.phase === step.key && !sample.finished) {
+    const perSecond = sample.ratePerSecond;
+    return {
+      perMinute: perSecond * 60,
+      basis: "recent pages",
+      etaMs: left === null ? null : (left / perSecond) * 1000,
+    };
+  }
+  if (!step.startedAt || processed === 0) return null;
+  const elapsed = now - Date.parse(step.startedAt);
+  if (elapsed <= 0) return null;
+  const perSecond = processed / (elapsed / 1000);
+  return {
+    perMinute: perSecond * 60,
+    basis: "since it started",
+    etaMs: left === null ? null : (left / perSecond) * 1000,
+  };
+}
+
+function stepView(
+  purpose: string,
+  step: RunDetailStep,
+  job: JobFacts | null,
+  now: number,
+): RunStepView {
+  const meta = readMeta(step.meta);
+  const declaration = declarationOf(purpose, step);
+  const phase = PHASE_OF[step.state];
+  // A stored input wins; a step without one counts when it found anything.
+  const mode: StepInputMode =
+    meta.input?.mode ??
+    declaration.mode ??
+    (step.found > 0 || phase === "not_started" ? "count" : "tally");
+  const removed = meta.tallies?.removed ?? 0;
+  const processed = step.done + step.failed + step.skipped + removed;
+  const total =
+    mode === "count"
+      ? (meta.input?.total ?? step.found)
+      : mode === "estimate"
+        ? (meta.input?.total ?? null)
+        : null;
+  const left =
+    mode === "count"
+      ? Math.max(
+          step.found - step.done - step.failed - step.skipped - removed,
+          0,
+        )
+      : null;
+  const live = phase === "running" || phase === "waiting";
+  const stepWait: StepWait | null =
+    phase === "waiting" || phase === "paused"
+      ? (jobWait(job) ?? {
+          reason: "paused",
+          label: phase === "paused" ? "Paused" : "Waiting",
+          until: step.pausedUntil ? `until ${clock(step.pausedUntil)}` : null,
+          raw: step.pausedReason,
+        })
+      : null;
+  const started = step.startedAt ? Date.parse(step.startedAt) : null;
+  const ended = step.endedAt ? Date.parse(step.endedAt) : null;
+  return {
+    key: step.key,
+    position: step.position,
+    label: declaration.label,
+    purpose: declaration.purpose,
+    unit: declaration.unit,
+    mode,
+    phase,
+    action: live ? (meta.action ?? declaration.action) : null,
+    total,
+    processed,
+    left,
+    fraction:
+      mode === "count" && total
+        ? Math.min(1, (total - (left ?? 0)) / total)
+        : null,
+    countedAt: meta.input?.countedAt ?? step.startedAt,
+    boundary: boundaryText(meta.input?.boundary),
+    rate:
+      mode === "count" && phase === "running"
+        ? rateOf(step, meta, processed, left, now)
+        : null,
+    ratePaused: mode === "count" && (phase === "waiting" || phase === "paused"),
+    tallies: Object.entries(meta.tallies ?? {}).map(([key, value]) => ({
+      key,
+      label: humanizeKey(key),
+      value,
+    })),
+    reasons: Object.entries(meta.reasons ?? {})
+      .map(([code, count]) => ({ code, count }))
+      .sort((a, b) => b.count - a.count),
+    wait: stepWait,
+    page: pageWorkOf(meta),
+    errors: step.errors,
+    failed: step.failed,
+    startedAt: step.startedAt,
+    endedAt: step.endedAt,
+    durationMs:
+      started === null ? null : (ended ?? (live ? now : started)) - started,
+    results: declaration.results,
+  };
+}
+
+function pageWorkOf(meta: StepMeta): StepPageWork | null {
+  if (!meta.page) return null;
+  const entries = Object.entries(meta.page.timings);
+  const measured = entries.reduce((sum, [, ms]) => sum + ms, 0);
+  const totalMs = Math.max(measured, meta.timing?.lastPageMs ?? 0);
+  if (totalMs <= 0) return null;
+  return {
+    phases: entries
+      .map(([phase, ms]) => ({ phase, ms, share: ms / totalMs }))
+      .sort((a, b) => b.ms - a.ms),
+    totalMs,
+    queries: meta.page.queries,
+    concurrency: meta.page.concurrency ?? {},
+  };
+}
+
+export type StepSegment = {
+  key: string;
+  label: string;
+  phase: StepPhase;
+  /** Count-mode fill; null draws a full (done) or sliding (tally) segment. */
+  fraction: number | null;
+  tally: boolean;
+};
+
+export type RunOverview = {
+  steps: RunStepView[];
+  /** The step running or waiting now, else the first not started, else the last. */
+  current: RunStepView | null;
+  currentIndex: number;
+  segments: StepSegment[];
+  /** What sets the Run's speed now (the limits catalog's evaluation). */
+  binding: LimitBinding | null;
+};
+
+export function runOverview(
+  detail: RunDetailStepsOut,
+  jobs: JobListOut | undefined,
+  now: number,
+): RunOverview {
+  const primary = jobs?.primary ?? null;
+  const steps = detail.steps.map((step) =>
+    stepView(detail.purpose, step, primary, now),
+  );
+  const moving = steps.findIndex((step) =>
+    ["running", "waiting", "paused", "failed"].includes(step.phase),
+  );
+  const currentIndex =
+    moving >= 0
+      ? moving
+      : steps.every((step) => step.phase === "done")
+        ? steps.length - 1
+        : steps.findIndex((step) => step.phase === "not_started");
+  return {
+    steps,
+    current: steps[currentIndex] ?? null,
+    currentIndex,
+    segments: steps.map((step) => ({
+      key: step.key,
+      label: step.label,
+      phase: step.phase,
+      fraction: step.fraction,
+      tally:
+        step.mode !== "count" &&
+        (step.phase === "running" || step.phase === "waiting"),
+    })),
+    binding: jobs?.binding ?? null,
+  };
+}
+
+const lowerFirst = (text: string) =>
+  /^[A-Z][a-z]/.test(text)
+    ? text.charAt(0).toLowerCase() + text.slice(1)
+    : text;
+
+/**
+ * The one line a RunStep card shows beside rate and ETA ("Speed set by page
+ * work: preparation 61% of page time · 106 queries/page").
+ */
+export function speedSetBy(binding: LimitBinding | null): string | null {
+  if (!binding) return null;
+  if (binding.status === "binding")
+    return `Speed set by ${lowerFirst(binding.label)}: ${binding.evidence}`;
+  if (binding.status === "unknown")
+    return "Speed set by: unknown — no recent samples";
+  return `No limit is binding: ${lowerFirst(binding.reason)}`;
+}
+
+/* ——— Decisions ——— */
+
+export const DECISION_STATUS_LABEL = {
+  pending: "Needs review",
+  applied: "Applied",
+  rejected: "Rejected",
+  superseded: "Superseded",
+  resolved: "Resolved",
+} as const satisfies Record<RunDecisionStatus, string>;
+
+export const formatEta = (ms: number) => {
+  const minutes = Math.round(ms / 60_000);
+  if (minutes < 1) return "under a minute left";
+  if (minutes < 60) return `about ${minutes} min left`;
+  const hours = Math.round(minutes / 60);
+  return hours < 48
+    ? `about ${hours} h left`
+    : `about ${Math.round(hours / 24)} days left`;
+};

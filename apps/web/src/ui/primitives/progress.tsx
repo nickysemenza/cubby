@@ -11,6 +11,8 @@ interface ProgressProps extends React.ComponentProps<"div"> {
    * count is available.
    */
   indeterminate?: boolean;
+  /** Work that holds its place but is not moving now (a waiting step): a lighter fill. */
+  paused?: boolean;
 }
 
 /**
@@ -24,6 +26,7 @@ export function Progress({
   value = 0,
   max = 100,
   indeterminate = false,
+  paused = false,
   className,
   ...props
 }: ProgressProps) {
@@ -45,7 +48,10 @@ export function Progress({
         <div className="progress-indeterminate h-full w-1/3 bg-primary" />
       ) : (
         <div
-          className="h-full rounded-none bg-primary transition-all duration-300"
+          className={cn(
+            "h-full rounded-none transition-all duration-300",
+            paused ? "bg-primary/45" : "bg-primary",
+          )}
           style={{ width: `${pct}%` }}
         />
       )}
