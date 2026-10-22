@@ -45,7 +45,7 @@ runs:
       shell: bash
       run: ${{ inputs.command }}
     - name: Upload Playwright HTML report and traces
-      if: always()
+      if: ${{ !cancelled() }}
       uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
       with:
         name: playwright-${{ github.sha }}-${{ inputs.artifact }}
@@ -57,4 +57,13 @@ runs:
           !apps/web/playwright-report/workerd-logs/**
           apps/web/test-results/**/trace.zip
         if-no-files-found: warn
+        retention-days: 7
+    # The CI report job merges every shard's blob into one HTML report.
+    - name: Upload Playwright blob
+      if: ${{ !cancelled() }}
+      uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+      with:
+        name: playwright-blob-${{ github.sha }}-${{ inputs.artifact }}
+        path: apps/web/blob-report/**
+        if-no-files-found: ignore
         retention-days: 7

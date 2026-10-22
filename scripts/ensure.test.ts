@@ -9,7 +9,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import test from "node:test";
+import { test } from "vitest";
 import { fileURLToPath } from "node:url";
 import {
   rustFingerprint,
@@ -33,7 +33,9 @@ test("offline startup ignores inherited Rust logging but preserves compiler flag
 
 test("WASM inputs follow contents across checkouts, including local dependency assets", (t) => {
   const root = mkdtempSync(join(tmpdir(), "cubby-wasm-inputs-"));
-  t.after(() => rmSync(root, { recursive: true, force: true }));
+  t.onTestFinished(() =>
+    rmSync(root, { recursive: true, force: true, maxRetries: 5 }),
+  );
   const first = join(root, "first");
   const second = join(root, "second");
   for (const path of [first, second]) {
@@ -69,7 +71,9 @@ test("WASM inputs follow contents across checkouts, including local dependency a
 
 test("artifact keys isolate dependency graphs and include workspace profiles", (t) => {
   const root = mkdtempSync(join(tmpdir(), "cubby-artifact-graph-"));
-  t.after(() => rmSync(root, { recursive: true, force: true }));
+  t.onTestFinished(() =>
+    rmSync(root, { recursive: true, force: true, maxRetries: 5 }),
+  );
   const put = (path: string, value: string) =>
     writeFileSync(join(root, path), value);
   const manifest =

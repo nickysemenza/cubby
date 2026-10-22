@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import test from "node:test";
+import { test } from "vitest";
 import { installedApprovalVerifier } from "./lib/mac-app-approval.ts";
 
 // A valid same-team signature may still fail the requirement stored by TCC.
@@ -26,6 +26,6 @@ test("Mac approval guard reads the installed requirement and rejects incompatibl
     );
   } finally {
     process.env.PATH = previousPath;
-    rmSync(root, { recursive: true, force: true });
+    rmSync(root, { recursive: true, force: true, maxRetries: 5 });
   }
 });

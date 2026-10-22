@@ -11,7 +11,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import test from "node:test";
+import { type TestContext, test } from "vitest";
 import { fileURLToPath } from "node:url";
 
 const SCRIPT = fileURLToPath(
@@ -20,9 +20,11 @@ const SCRIPT = fileURLToPath(
 
 // A copy of the gate in a synthetic checkout, with `swift` and the generator
 // replaced by stubs that log each invocation.
-const fixture = (t: test.TestContext) => {
+const fixture = (t: TestContext) => {
   const root = mkdtempSync(join(tmpdir(), "cubby-openapi-warnings-"));
-  t.after(() => rmSync(root, { recursive: true, force: true }));
+  t.onTestFinished(() =>
+    rmSync(root, { recursive: true, force: true, maxRetries: 5 }),
+  );
   const scripts = join(root, "apps/apple/scripts");
   const kit = join(root, "apps/apple/CubbyKit");
   const api = join(kit, "Sources/CubbyAPI");

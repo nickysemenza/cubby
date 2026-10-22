@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { timingSafeEqual } from "node:crypto";
-import { test } from "node:test";
+import { test } from "vitest";
 import worker from "../src/index.ts";
 
 // Workers extends SubtleCrypto; use Node's native constant-time equivalent.
@@ -162,7 +162,7 @@ test("public query strings share one edge snapshot, including partial failures",
       },
     },
   };
-  t.after(() => {
+  t.onTestFinished(() => {
     if (original === undefined) delete globalThis.caches;
     else globalThis.caches = original;
   });

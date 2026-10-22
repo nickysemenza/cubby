@@ -1,5 +1,6 @@
 import { execFileSync, execSync } from "node:child_process";
 import { join } from "node:path";
+import { cloudflareTest } from "@cloudflare/vitest-plugin";
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import { playwright } from "@vitest/browser-playwright";
@@ -9,6 +10,7 @@ import wasm from "vite-plugin-wasm";
 import { defineConfig, type TestProjectConfiguration } from "vitest/config";
 import { readR2PublicUrl } from "./tooling/cloudflare-public-config.ts";
 import { testShuffleSeed } from "./tooling/test-seed.ts";
+import { testWorker } from "./tooling/workers-test.cloudflare.config.ts";
 
 // Generated output and the @cubby/recipebridge WASM are never committed; bring
 // them current before any module graph (or TanStack's route scan) reads them.
@@ -78,6 +80,58 @@ function isPluginLoadHook(load: Plugin["load"]): load is PluginLoadHook {
 }
 
 /** Keep IntegreSQL opt-in while supporting both direct and full-suite commands. */
+function workersTestPluginOptions(): Parameters<typeof cloudflareTest>[0] {
+  const durableObjects = Object.fromEntries(
+    Object.entries(testWorker.env).flatMap(([name, binding]) =>
+      binding.type === "durable-object"
+        ? [
+            [
+              name,
+              {
+                className: binding.exportName,
+                useSQLite:
+                  new Map(Object.entries(testWorker.exports)).get(
+                    binding.exportName,
+                  )?.storage === "sqlite",
+              },
+            ],
+          ]
+        : [],
+    ),
+  );
+  return {
+    miniflare: {
+      // The beta pool renames its runner without retargeting native self bindings.
+      durableObjects,
+      outboundService: async (request) => {
+        if (
+          request.url === "https://auth.openai.com/api/accounts/oauth/token"
+        ) {
+          return new Response("synthetic token rejection", { status: 400 });
+        }
+        // Miniflare's Request is not Node's native Request class.
+        return fetch(request.url, {
+          method: request.method,
+          headers: [...request.headers],
+          redirect: request.redirect,
+          body:
+            request.method === "GET" || request.method === "HEAD"
+              ? undefined
+              : await request.arrayBuffer(),
+        });
+      },
+    },
+    experimental: {
+      newConfig: {
+        configPath: join(
+          import.meta.dirname,
+          "tooling/workers-test.cloudflare.config.ts",
+        ),
+      },
+    },
+  };
+}
+
 function wantsIntegrationTier(name: string): boolean {
   if (process.env.CUBBY_TEST_INTEGRATION === "1") return true;
   return explicitlySelectsProject(name);
@@ -140,7 +194,12 @@ const integrationTests = [
   "src/**/*.integration.test.ts",
   "tooling/**/*.integration.test.ts",
 ];
+// Same flake policy as Playwright for suites that own databases, browsers or
+// workerd: one CI retry, reported as flaky, quarantined on repeat. Node unit,
+// tooling and package suites never retry, so their flakes fail.
+const serviceRetry = process.env.CI ? 1 : 0;
 const integrationProject = {
+  retry: serviceRetry,
   globalSetup: ["./tooling/test-setup.ts"],
   // File-scoped `afterAll` that returns this file's database to
   // IntegreSQL. Must be a setupFile, not something `withTestDb()`
@@ -164,6 +223,19 @@ const integrationProject = {
   // First-test database provisioning is the long tail; resets use the
   // full-table reset documented in tooling/test-setup.ts.
   hookTimeout: 30000,
+};
+// Web projects only: repository tooling tests assert that dev commands refuse
+// inherited database overrides, so the scripts project must not see these.
+const webTestEnv = {
+  NODE_ENV: "test",
+  SKIP_ENV_VALIDATION: "1",
+  DATABASE_URL: "postgresql://postgres:password@localhost:5432/test",
+  R2_ACCESS_KEY_ID: "test",
+  R2_SECRET_ACCESS_KEY: "test",
+  R2_ENDPOINT: "http://localhost:9000",
+  R2_BUCKET_NAME: "test",
+  R2_PUBLIC_URL: "http://localhost:9000",
+  BETTER_AUTH_SECRET: "synthetic-test-signing-secret",
 };
 const sharedIsolationSeed = testShuffleSeed();
 const groupZeroMaxWorkers = Number.parseInt(
@@ -197,13 +269,16 @@ export default defineConfig({
     // enabling it. WASM initialization is not the material cost.
 
     // The default reporter covers terminal output; JSON preserves failed
-    // tests when output is truncated. CI also emits GitHub annotations.
+    // tests when output is truncated. CI also emits GitHub annotations and a
+    // blob per shard; the CI report job merges the blobs into one HTML report
+    // and writes the combined job summary (tooling/ci-test-summary.ts).
     reporters:
       process.env.GITHUB_ACTIONS === "true"
         ? [
             "default",
-            "github-actions",
+            ["github-actions", { jobSummary: { enabled: false } }],
             ["json", { outputFile: ".vitest-results.json" }],
+            "blob",
           ]
         : ["default", ["json", { outputFile: ".vitest-results.json" }]],
     // Passing fixtures intentionally exercise error logging and transport
@@ -213,8 +288,6 @@ export default defineConfig({
     // CI runners are slower than local dev machines but should still fail
     // fast on a genuinely hung test; local runs keep Vitest's own default.
     testTimeout: process.env.CI ? 10_000 : 5000,
-    // Same flake policy as Playwright: one CI retry, quarantine on repeat.
-    retry: process.env.CI ? 1 : 0,
     // Vitest 5 makes file ordering a root-only concern. Every project still
     // inherits the same deterministic shuffle; project sequence config only
     // controls which groups may run together.
@@ -385,6 +458,7 @@ export default defineConfig({
                 // shared jsdom graph; give it real room instead of flaking on
                 // the fast tiers' 5s/10s budget.
                 testTimeout: 20_000,
+                retry: serviceRetry,
                 isolate: false,
                 sequence: { groupOrder: 2 },
               },
@@ -419,6 +493,69 @@ export default defineConfig({
           },
         },
         {
+          // Repository tooling tests (scripts, lint rules, generators, dev
+          // services, Apple host tooling). They import plain Node modules
+          // without aliases or WASM, so they do not extend the web config.
+          // Many spawn processes or change directories: keep forks isolated.
+          test: {
+            name: "scripts",
+            root: join(import.meta.dirname, "../.."),
+            include: [
+              "scripts/**/*.test.ts",
+              "tools/oxlint/**/*.test.ts",
+              "apps/web/generator/**/*.test.ts",
+              "apps/web/tooling/**/*.test.ts",
+              "apps/apple/tooling/**/*.test.ts",
+              "apps/apple/scripts/*.test.ts",
+              "apps/nx-cache/tests/*.test.mjs",
+            ],
+            exclude: [
+              "**/node_modules/**",
+              "**/*.unit.test.ts",
+              "**/*.integration.test.ts",
+            ],
+            pool: "forks",
+            testTimeout: 30_000,
+            sequence: { groupOrder: 0 },
+          },
+        },
+        {
+          // Workspace package suites; they need no web aliases or plugins.
+          test: {
+            name: "packages",
+            root: join(import.meta.dirname, "../.."),
+            include: ["packages/*/src/**/*.test.ts"],
+            sequence: { groupOrder: 0 },
+          },
+        },
+        {
+          // Worker suites inside workerd. No `extends`: the Cloudflare pool
+          // brings its own module runner, and the root WASM/alias plugins
+          // target Node.
+          plugins: [cloudflareTest(workersTestPluginOptions())],
+          // The Sentry-instrumented agent host reads the release the app build defines.
+          define: { __GIT_COMMIT__: JSON.stringify("workers-test") },
+          resolve: { tsconfigPaths: true },
+          test: {
+            name: "workers",
+            // workerd cannot read Vitest 5's transformed modules from the host filesystem.
+            fsModuleCache: false,
+            include: [
+              "src/server/domains/calendar/**/*.workers.test.ts",
+              "src/server/generic/problems/**/*.workers.test.ts",
+              "src/server/domains/purchase-import/**/*.workers.test.ts",
+              "src/server/ai/**/*.workers.test.ts",
+              "src/server/domains/run/**/*.workers.test.ts",
+              "src/server/domains/usda-release/**/*.workers.test.ts",
+            ],
+            testTimeout: 30_000,
+            hookTimeout: 30_000,
+            fileParallelism: false,
+            retry: serviceRetry,
+            sequence: { groupOrder: 5 },
+          },
+        },
+        {
           // Opt-in, billed model evals (`*.live-eval.ts`) on the integration
           // database harness. Never part of test:postgres; select explicitly.
           extends: true,
@@ -433,28 +570,22 @@ export default defineConfig({
           },
         },
       ] satisfies TestProjectConfiguration[]
-    ).filter((project) => {
-      if (
-        project.test.name === "integration" ||
-        project.test.name === "integration-workerd"
+    )
+      .map((project) =>
+        project.extends === true
+          ? { ...project, test: { env: webTestEnv, ...project.test } }
+          : project,
       )
-        return wantsIntegrationTier(project.test.name);
-      if (project.test.name === "preview") return wantsPreviewTier();
-      if (project.test.name === "live-eval")
-        return explicitlySelectsProject("live-eval");
-      return true;
-    }),
-
-    env: {
-      NODE_ENV: "test",
-      SKIP_ENV_VALIDATION: "1",
-      DATABASE_URL: "postgresql://postgres:password@localhost:5432/test",
-      R2_ACCESS_KEY_ID: "test",
-      R2_SECRET_ACCESS_KEY: "test",
-      R2_ENDPOINT: "http://localhost:9000",
-      R2_BUCKET_NAME: "test",
-      R2_PUBLIC_URL: "http://localhost:9000",
-      BETTER_AUTH_SECRET: "synthetic-test-signing-secret",
-    },
+      .filter((project) => {
+        if (
+          project.test.name === "integration" ||
+          project.test.name === "integration-workerd"
+        )
+          return wantsIntegrationTier(project.test.name);
+        if (project.test.name === "preview") return wantsPreviewTier();
+        if (project.test.name === "live-eval")
+          return explicitlySelectsProject("live-eval");
+        return true;
+      }),
   },
 });

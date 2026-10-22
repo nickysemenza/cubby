@@ -11,7 +11,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import test from "node:test";
+import { test } from "vitest";
 import { spawn } from "node:child_process";
 import { once } from "node:events";
 import { installMacApp, stopMacAppProcesses } from "./lib/mac-app-install.ts";
@@ -52,7 +52,7 @@ test("Mac installation waits for process exit before moving the approved bundle"
     assert.equal(readFileSync(join(destination, "binary"), "utf8"), "new");
   } finally {
     if (child.exitCode === null) child.kill("SIGKILL");
-    rmSync(root, { recursive: true, force: true });
+    rmSync(root, { recursive: true, force: true, maxRetries: 5 });
   }
 });
 
@@ -112,7 +112,7 @@ test("Mac installation verifies staged bytes before stopping and replacing the o
     );
     assert.equal(readFileSync(join(destination, "binary"), "utf8"), "new");
   } finally {
-    rmSync(root, { recursive: true, force: true });
+    rmSync(root, { recursive: true, force: true, maxRetries: 5 });
   }
 });
 
@@ -146,7 +146,7 @@ test("Mac installation reports retained backups without failing a successful rep
       if (directory.endsWith(".previous.app") && existsSync(old))
         chmodSync(old, 0o755);
     }
-    rmSync(root, { recursive: true, force: true });
+    rmSync(root, { recursive: true, force: true, maxRetries: 5 });
   }
 });
 

@@ -1,6 +1,8 @@
 playwright/.auth
 playwright-report/
 test-results/
+# Playwright CI shard blobs; Vitest writes its blobs under the ignored .vitest/.
+blob-report/
 node_modules
 .DS_Store
 dist

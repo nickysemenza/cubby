@@ -2,7 +2,7 @@ import { bindings, defineConfig, defineWorker } from "cf/config";
 
 export const testWorker = defineWorker({
   name: "cubby-calendar-test",
-  entrypoint: "../web/tooling/calendar-test-worker.ts",
+  entrypoint: "./calendar-test-worker.ts",
   compatibilityDate: "2026-09-19",
   compatibilityFlags: ["nodejs_compat"],
   env: {

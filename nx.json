@@ -111,9 +111,9 @@
       "inputs": ["default"],
       "outputs": []
     },
-    // Every package.json-inferred `test` target (the aux packages under
-    // apps/* and packages/*) is a merge-gate lane; a project-scoped key would
-    // reuse a pass after a dependency it imports changed.
+    // A package.json-inferred `test` target is a merge-gate lane; a
+    // project-scoped key would reuse a pass after a dependency it imports
+    // changed.
     "test": {
       "cache": true,
       "inputs": ["gate"]

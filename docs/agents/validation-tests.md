@@ -359,15 +359,14 @@ changes the affected layout.
 
 The `capability` Vitest project runs the explicitly selected shared list/table/explanation
 coverage in `vitest.config.ts`. Production renderers run in headless Chromium
-with the real Tailwind CSS. It is part of `pnpm test` and the existing Auxiliary lane;
-that runner installs Chromium before running the tests. No additional runner
+with the real Tailwind CSS. It is part of `pnpm test` and the Vitest shards;
+those runners install Chromium before running the tests. No additional runner
 is allocated. Other `**/*.preview.test.tsx` files remain opt-in through
 `pnpm --dir apps/web test:preview`; they are not retained merge-gate coverage
 until migrated into the required roster. A direct preview-file run selects
 required files through `capability` once; explicit `--project preview` retains
-the full optional preview command. Auxiliary uploads its JSON report and browser
-failure attachments (`.vitest/attachments/`) before Worker tests can overwrite
-the shared report.
+the full optional preview command. Each Vitest shard uploads its blob and browser
+failure attachments (`.vitest/attachments/`) for the merged CI report.
 
 The compound date editor owner verifies local drafts, atomic replace/clear and
 responsive nested popovers on desktop and phone.

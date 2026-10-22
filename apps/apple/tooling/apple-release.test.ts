@@ -3,7 +3,7 @@ import { execFileSync } from "node:child_process";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import { test } from "node:test";
+import { test } from "vitest";
 
 import {
   BUILD_NUMBER_OFFSET,
@@ -83,7 +83,7 @@ const withRepository = (
     git("commit", "-qm", "synthetic");
     body(root, git("rev-parse", "HEAD"), git);
   } finally {
-    rmSync(root, { recursive: true, force: true });
+    rmSync(root, { recursive: true, force: true, maxRetries: 5 });
   }
 };
 

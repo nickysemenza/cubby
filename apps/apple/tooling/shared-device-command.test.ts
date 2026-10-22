@@ -3,7 +3,7 @@ import { spawnSync } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import test from "node:test";
+import { test } from "vitest";
 
 // Wrong session/host flags drive another run; stopping the shared daemon or
 // closing its session would break the user's live Device panel.
@@ -44,7 +44,7 @@ test("simulator commands keep the supplied shared launcher and session", () => {
       ...targetArgs,
     ]);
   } finally {
-    rmSync(root, { recursive: true, force: true });
+    rmSync(root, { recursive: true, force: true, maxRetries: 5 });
   }
 });
 

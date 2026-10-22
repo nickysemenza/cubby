@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import test from "node:test";
+import { test } from "vitest";
 import { generatedHeader, removeExtraArtifacts } from "./artifacts.ts";
 
 test("cache restoration prunes retired output directories without deleting handwritten files", async () => {
@@ -44,6 +44,6 @@ test("cache restoration prunes retired output directories without deleting handw
       /export const handwritten/u,
     );
   } finally {
-    await rm(root, { recursive: true, force: true });
+    await rm(root, { recursive: true, force: true, maxRetries: 5 });
   }
 });
