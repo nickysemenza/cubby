@@ -260,6 +260,8 @@ native PostgreSQL installation remain owned by their existing runners.
   toolchain settings; unrelated root package-script changes do not invalidate it.
   Generation and WASM preparation always enter Nx; there is no separate local
   marker or stat-based cache deciding whether Nx runs.
+  Keep new emitted paths in the root `generate.outputs` list in `project.json`.
+  Verify that a cache hit restores a missing new output after changing that list.
   Use `node scripts/ensure.ts wasm` to prepare it explicitly through that cache;
   `pnpm wasm` forces the build command. Keep generated WASM checkout-local
   rather than copying or symlinking another worktree's output.

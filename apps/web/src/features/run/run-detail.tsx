@@ -8,10 +8,8 @@ import { Link } from "@tanstack/react-router";
 import { useCallback, useSyncExternalStore } from "react";
 
 import type { RunDecision } from "~/contracts/run-detail.contract";
-import {
-  job,
-  runDetail,
-} from "~/integrations/tanstack-query/generated/catalog.gen";
+import { job } from "~/integrations/tanstack-query/generated/catalog/job.gen";
+import { runDetail } from "~/integrations/tanstack-query/generated/catalog/runDetail.gen";
 import { formatCount } from "~/lib/number-format";
 import type { KeyNumber } from "~/ui/common/key-numbers";
 import { RecordList } from "~/ui/common/record-list";

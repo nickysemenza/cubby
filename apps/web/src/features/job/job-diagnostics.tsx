@@ -13,7 +13,7 @@ import {
   type JobLogsOut,
   type LimitEntry,
 } from "~/contracts/job.contract";
-import { job } from "~/integrations/tanstack-query/generated/catalog.gen";
+import { job } from "~/integrations/tanstack-query/generated/catalog/job.gen";
 import { formatInstant } from "~/lib/date-format";
 import { formatDuration } from "~/lib/format-duration";
 import { formatCount } from "~/lib/number-format";
