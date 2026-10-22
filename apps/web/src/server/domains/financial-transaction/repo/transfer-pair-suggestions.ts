@@ -45,7 +45,10 @@ import {
   withTransactionDatabase,
 } from "~/server/db/helpers";
 import { assessment, assessmentState } from "~/server/db/schema";
-import { previewFinancialTransactionImport } from "~/server/domains/financial-transaction/repo/financial-statement-preview";
+import {
+  prepareFinancialStatementPreview,
+  previewFinancialTransactionImport,
+} from "~/server/domains/financial-transaction/repo/financial-statement-preview";
 import { createFinancialTransaction } from "~/server/domains/financial-transaction/repo/financial-transaction";
 import { acceptFinancialTransferPair } from "~/server/domains/financial-transaction/repo/financial-transfer-accept";
 import { transferEvidenceStatuses } from "~/server/domains/ledger-transfer/repo";
@@ -410,6 +413,7 @@ async function loadStatementLegs(
   db: Database,
   accounts: Accounts,
   filter: LegFilter,
+  preparation?: Awaited<ReturnType<typeof prepareFinancialStatementPreview>>,
 ): Promise<LegFacts[]> {
   if (
     filter.amountsCents?.length === 0 ||
@@ -494,6 +498,7 @@ async function loadStatementLegs(
       },
       {
         candidatePolicy: "suggestion",
+        preparation,
         accountHints: new Map(
           page.flatMap(({ charge, observations }) => {
             const stored = observations.find((row) => row.accountId)?.accountId;
@@ -993,10 +998,40 @@ async function potentialTransferSeeds(db: Database, keys: readonly string[]) {
   );
 }
 
+/** Page-local advisory reads only. Exact pool scopes preserve each seed's
+ * duplicate/competitor semantics; acceptance always rebuilds fresh evidence. */
+function transferPreparation(
+  db: Database,
+  accounts: Accounts,
+  preview: Awaited<ReturnType<typeof prepareFinancialStatementPreview>>,
+) {
+  const pools = new Map<string, Promise<ReturnType<typeof poolOf>>>();
+  return {
+    preview,
+    pool(filter: Pick<LegFilter, "amountsCents" | "from" | "to">) {
+      const key = canonicalJson({
+        amountsCents: filter.amountsCents ?? null,
+        from: filter.from ?? null,
+        to: filter.to ?? null,
+      });
+      const existing = pools.get(key);
+      if (existing) return existing;
+      const loaded = (async () =>
+        poolOf([
+          ...(await loadTransactionLegs(db, accounts, filter)),
+          ...(await loadStatementLegs(db, accounts, filter, preview)),
+        ]))();
+      pools.set(key, loaded);
+      return loaded;
+    },
+  };
+}
+
 async function discover(
   db: Database,
   seeds: Seeds,
   loadedAccounts?: Accounts,
+  preparation?: ReturnType<typeof transferPreparation>,
 ): Promise<Pair[]> {
   const accounts = loadedAccounts ?? (await loadAccounts(db));
   let seedLegs: LegFacts[];
@@ -1018,10 +1053,15 @@ async function discover(
           })
         : []),
       ...(charges.length
-        ? await loadStatementLegs(db, accounts, {
-            charges,
-            seedOnly: seeds.seedOnly,
-          })
+        ? await loadStatementLegs(
+            db,
+            accounts,
+            {
+              charges,
+              seedOnly: seeds.seedOnly,
+            },
+            preparation?.preview,
+          )
         : []),
     ];
   }
@@ -1032,10 +1072,12 @@ async function discover(
     from: shiftPlainDate(dates[0]!, -POOL_WINDOW_DAYS),
     to: shiftPlainDate(dates.at(-1)!, POOL_WINDOW_DAYS),
   };
-  const pool = poolOf([
-    ...(await loadTransactionLegs(db, accounts, poolFilter)),
-    ...(await loadStatementLegs(db, accounts, poolFilter)),
-  ]);
+  const pool = preparation
+    ? await preparation.pool(poolFilter)
+    : poolOf([
+        ...(await loadTransactionLegs(db, accounts, poolFilter)),
+        ...(await loadStatementLegs(db, accounts, poolFilter)),
+      ]);
   const poolByKey = new Map(pool.legs.map((leg) => [leg.key, leg]));
   const pairs = new Map<string, Pair>();
   for (const seed of seedLegs) {
@@ -1696,6 +1738,13 @@ export async function generateTransferPairSuggestionsPage(
     seeds.slice(0, limit),
   );
   const preparationStarted = performance.now();
+  const preparation = potentialSeeds.size
+    ? transferPreparation(
+        db,
+        accounts,
+        await prepareFinancialStatementPreview(db),
+      )
+    : undefined;
   for (const [index, seed] of seeds.entries()) {
     if (index >= limit || page.found >= limit) {
       page.next = { kind: "discover", afterSeed, seed: null, afterPair: null };
@@ -1716,6 +1765,7 @@ export async function generateTransferPairSuggestionsPage(
         db,
         { kind: "legs", keys: [seed], seedOnly: true },
         accounts,
+        preparation,
       );
       if (!discovered.length) seedReasons.no_candidate++;
       pairs = discovered.filter((pair) => {
