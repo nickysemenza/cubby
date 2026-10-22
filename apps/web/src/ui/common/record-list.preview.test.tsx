@@ -5,6 +5,7 @@ import { page } from "vitest/browser";
 import { DateDisplay } from "~/ui/common/date-display";
 
 import {
+  RecordDot,
   RecordFold,
   RecordGroup,
   RecordHeading,
@@ -91,21 +92,23 @@ it("draws the timeline rail through each row's dot", async () => {
         <RecordHeading label="Oct 11, 2026" />
         <RecordRow
           data-testid="first"
-          leading={<span data-testid="dot" className="size-2 rounded-full" />}
+          leading={<RecordDot tone="muted" label="Updated" />}
           primary="Updated"
         />
-        <RecordRow leading={<span className="size-2" />} primary="Created" />
+        <RecordRow
+          leading={<RecordDot tone="muted" label="Created" />}
+          primary="Created"
+        />
       </RecordList>
     </div>,
   );
-  const leading = screen
-    .getByTestId("dot")
-    .closest("[data-ledger-slot]") as HTMLElement;
-  const rail = getComputedStyle(leading, "::before");
+  const first = screen.getByTestId("first");
+  const rail = getComputedStyle(first, "::before");
   expect(rail.content).not.toBe("none");
-  expect(Number.parseFloat(rail.height)).toBeGreaterThanOrEqual(
-    rect("first").height,
-  );
+  expect(Number.parseFloat(rail.height)).toBeGreaterThan(0);
+  expect(
+    Number.parseFloat(rail.top) + Number.parseFloat(rail.height),
+  ).toBeGreaterThanOrEqual(first.getBoundingClientRect().height - 1);
 });
 
 it("keeps loading, failure and emptiness distinct", () => {

@@ -1,15 +1,6 @@
-/**
- * Real-browser layout invariants for the decision suggestion surfaces (PR #1223):
- * a fixed glyph footprint across states, a phone inline review folding into
- * the glyph instead of growing the page, a desktop inline review staying on
- * its one wrapping row, and `SuggestionStatus`'s headline never wrapping.
- *
- * jsdom cannot see any of this — it has no layout engine, so every
- * `getBoundingClientRect()` is `{0,0,0,0}` and no media query ever matches a
- * width. This file runs in a real (headless) Chromium tab via Vitest's
- * `preview` project (`pnpm test:preview`), at the two widths the app actually
- * ships: a phone (402x874) and a desktop (1440x900).
- */
+/** Real-browser suggestion contracts: named status controls, phone touch
+ * targets, visible inline review without overflow, and compact desktop values.
+ * jsdom cannot establish geometry; this file runs in Chromium. */
 import type {
   FieldSuggestion,
   FieldSuggestionOutcome,
@@ -80,10 +71,10 @@ function skippedFieldFixture(): SuggestionStatusField {
 }
 
 describe.each(["inline", "cell"] as const)(
-  "SuggestionOutcomeMark glyph footprint — %s surface",
+  "SuggestionOutcomeMark accessible status — %s surface",
   (surface) => {
     it.each([["phone", PHONE] as const, ["desktop", DESKTOP] as const])(
-      "keeps the same button size across pending → evaluated → error (%s)",
+      "keeps pending, evaluated and error controls labelled and touchable (%s)",
       async (_label, { width, height }) => {
         await page.viewport(width, height);
         const { container, rerender } = render(
@@ -107,21 +98,21 @@ describe.each(["inline", "cell"] as const)(
         );
         const errorBox = box();
 
-        // A tolerance of 1px absorbs sub-pixel layout rounding; a
-        // regression that grows the glyph (e.g. an inline headline
-        // sneaking into the trigger) shows up as several pixels, not a
-        // rounding error.
-        expect(evaluatedBox.width).toBeCloseTo(pendingBox.width, 0);
-        expect(evaluatedBox.height).toBeCloseTo(pendingBox.height, 0);
-        expect(errorBox.width).toBeCloseTo(pendingBox.width, 0);
-        expect(errorBox.height).toBeCloseTo(pendingBox.height, 0);
+        // Status text may change width; its action must remain named and usable.
+        for (const state of [pendingBox, evaluatedBox, errorBox]) {
+          expect(state.width).toBeGreaterThan(0);
+          expect(state.height).toBeGreaterThanOrEqual(
+            width === PHONE.width && surface === "inline" ? 44 : 1,
+          );
+        }
+        expect(container.querySelector("button")).toHaveAccessibleName();
       },
     );
   },
 );
 
-describe("SuggestionReview inline surface — phone folding", () => {
-  it("adds no height when an actionable proposal arrives (folds into the glyph)", async () => {
+describe("SuggestionReview inline surface — phone review", () => {
+  it("shows an actionable proposal without horizontal overflow", async () => {
     await page.viewport(PHONE.width, PHONE.height);
     const suggestion = actionableSuggestionFixture();
 
@@ -155,15 +146,15 @@ describe("SuggestionReview inline surface — phone folding", () => {
     );
     const actionableHeight = container.getBoundingClientRect().height;
 
-    // The regression this guards: an inline review that grew the page under
-    // the reader's finger instead of folding into the mark's popover.
-    expect(actionableHeight).toBeCloseTo(pendingHeight, 0);
-    // Sanity check the proposal really arrived, just folded — not that
-    // nothing rendered at all.
-    expect(screen.queryByText("Tools")).not.toBeInTheDocument();
+    expect(actionableHeight).toBeGreaterThanOrEqual(pendingHeight);
+    expect(screen.getByText("Tools")).toBeVisible();
     expect(
-      screen.queryByRole("button", { name: "Use suggestion" }),
-    ).not.toBeInTheDocument();
+      screen.getByRole("button", { name: "Accept" }).getBoundingClientRect()
+        .height,
+    ).toBeGreaterThanOrEqual(44);
+    expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(
+      window.innerWidth,
+    );
   });
 });
 
@@ -190,7 +181,7 @@ describe("SuggestionReview inline surface — desktop one line", () => {
     // a few px of each other.
     const valueTop = screen.getByText("Tools").getBoundingClientRect().top;
     const confidenceTop = screen
-      .getByText("97% · high")
+      .getByText("Confidence: 97% · high")
       .getBoundingClientRect().top;
     expect(Math.abs(valueTop - confidenceTop)).toBeLessThan(10);
   });

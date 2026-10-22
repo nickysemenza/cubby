@@ -230,7 +230,7 @@ function LedgerChangeSummary({
   references: AuditReferences;
 }) {
   return (
-    <Row align="baseline" gap="sm" className="min-w-0 text-xs">
+    <Row align="baseline" gap="sm" wrap className="min-w-0 text-xs">
       {shown.map(({ field, from, to }) => (
         <Row key={field} align="baseline" gap="tight" className="min-w-0">
           <span className="shrink-0 text-muted-foreground">
@@ -243,12 +243,14 @@ function LedgerChangeSummary({
               className="text-muted-foreground"
             />
           )}
-          <span className="shrink-0 text-slate">&rarr;</span>
-          {to ? (
-            <LedgerValueText value={to} references={references} />
-          ) : (
-            <span className="truncate">(empty)</span>
-          )}
+          <span className="ledger-change-target">
+            <span className="shrink-0 text-slate">&rarr;</span>
+            {to ? (
+              <LedgerValueText value={to} references={references} />
+            ) : (
+              <span className="truncate">(empty)</span>
+            )}
+          </span>
         </Row>
       ))}
       {omitted > 0 && (

@@ -175,3 +175,50 @@
 .ledger[data-record-list] > .ledger-row > [data-ledger-slot="actions"] {
   margin-block: -0.1875rem;
 }
+
+/* Activity opts in; dense record and columnar lists keep their existing layout. */
+.ledger[data-ledger="records"]
+  > .ledger-row[data-record-stacked]
+  > [data-ledger-slot="primary"] {
+  grid-column: 2 / 4;
+  flex-wrap: wrap;
+  align-items: baseline;
+}
+.ledger[data-ledger="records"]
+  > .ledger-row[data-record-stacked]
+  > [data-ledger-slot="secondary"] {
+  grid-column: 2 / -1;
+  grid-row: 2;
+  white-space: normal;
+  overflow: visible;
+}
+.ledger[data-ledger="records"]
+  > .ledger-row[data-record-stacked]
+  > [data-ledger-slot="facts"] {
+  grid-column: 2 / -1;
+  grid-row: 2;
+}
+.ledger[data-ledger="records"]
+  > .ledger-row[data-record-stacked]
+  > [data-ledger-slot="trailing"] {
+  grid-column: 4 / -1;
+}
+.ledger[data-ledger="records"]:not(
+    :has(> .ledger-row > [data-ledger-slot="leading"])
+  )
+  > .ledger-row[data-record-stacked]
+  > [data-ledger-slot="primary"] {
+  grid-column: 1 / 4;
+}
+.ledger-change-target {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--brand-space-1);
+  min-width: 0;
+}
+
+.ledger[data-ledger="records"]
+  > .ledger-row[data-record-stacked]:has(> [data-ledger-slot="secondary"])
+  > [data-ledger-slot="facts"] {
+  grid-row: 3;
+}

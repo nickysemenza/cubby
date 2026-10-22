@@ -63,6 +63,22 @@ Web controls use 8px radii (30px tall buttons, 28px navigation items), chips 6px
 
 ## Components
 
+### Suggestions and date spans
+
+Field suggestions distinguish Current from Proposed with a quiet ochre action
+surface (destructive for a proposed removal); confidence appears once. Accept stays ink, while reasons, alternatives,
+source evidence and raw failures retain their existing review disclosure. Activity
+rows may stack provenance beneath the primary change; an arrow stays attached to
+its destination value rather than wrapping alone.
+
+An editor showing both ends of a declared plain-date span uses one labelled
+control with Single date and Date range modes. It keeps typed date entry, the
+shared calendar, both canonical form fields and their validation errors. Opening
+or dismissing the control preserves values, including an existing end-only date;
+choosing Single date explicitly clears the optional end. Scoped single-field and
+bulk editors retain their independent field controls. Record references and
+inheritance sources use EntityRefLink.
+
 ### Component sources and boundaries
 
 Interactive design previews of existing workspaces run inside the actual
@@ -70,7 +86,10 @@ Interactive design previews of existing workspaces run inside the actual
 controls. Do not recreate app chrome in generated mockups or prototype code;
 exploration changes only the explicitly requested content region. Prototype
 records are synthetic and writes stay in memory until production implementation
-is explicitly in scope.
+is explicitly in scope. Representative previews compose existing shared controls
+and field renderers, retaining rich pickers, enum glyphs, inheritance, suggestions,
+validation and date behavior; native dropdowns and hand-built imitations do not
+establish whether an existing Cubby workflow improves.
 
 `components.json` configures the shadcn Base UI/Mira family; local primitives
 are maintained in `src/ui/primitives`. Base UI owns accessible interaction,

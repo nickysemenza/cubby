@@ -753,11 +753,11 @@ describe("record suggestions", () => {
     const view = render(<Surface name="red apple" operations={operations} />, {
       wrapper: harness.wrapper,
     });
-    await screen.findByText("Suggested: Food");
+    await screen.findByText("Food");
     expect(calls).toHaveLength(2);
     expect(calls.some((call) => call.basisMode === "suggested")).toBe(true);
     view.rerender(<Surface name="steel wrench" operations={operations} />);
-    expect(screen.queryByText("Suggested: Food")).not.toBeInTheDocument();
+    expect(screen.queryByText("Food")).not.toBeInTheDocument();
     await waitFor(() => expect(calls).toHaveLength(3));
     await act(async () => {
       finish({
@@ -775,14 +775,14 @@ describe("record suggestions", () => {
         },
       });
     });
-    await screen.findByText("Suggested: Tools");
+    await screen.findByText("Tools");
     fireEvent.click(screen.getByRole("button", { name: "Review" }));
     fireEvent.click(screen.getByRole("button", { name: "Reject" }));
     view.rerender(
       <Surface name="steel wrench" operations={operations} visible={false} />,
     );
     view.rerender(<Surface name="steel wrench" operations={operations} />);
-    expect(screen.queryByText("Suggested: Tools")).not.toBeInTheDocument();
+    expect(screen.queryByText("Tools")).not.toBeInTheDocument();
     expect(
       screen.getByText("No suggestions · 1 field checked"),
     ).toBeInTheDocument();
@@ -1429,7 +1429,7 @@ describe("record suggestions", () => {
     );
 
     const errorSpy = vi.spyOn(toast, "error").mockImplementation(() => "");
-    await screen.findByText("Suggested: Electrical");
+    await screen.findByText("Electrical");
     fireEvent.click(screen.getByRole("button", { name: "Accept" }));
     const alert = await screen.findByRole("alert");
     expect(alert).toHaveTextContent("Suggestion inputs changed");
