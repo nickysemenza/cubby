@@ -60,9 +60,11 @@ export function EntityEditDialog<E extends EditableEntity>(
   props: EntityEditDialogProps<E>,
 ) {
   if (!props.open) return null;
+  // A scoped correction owns its reviewed field projection, not a full baseline.
   if (
     props.request.operation === "update" &&
     props.request.record &&
+    !props.request.fieldScope &&
     !props.mutationPort
   )
     return (
@@ -92,9 +94,14 @@ function EntityEditDialogBaseline<E extends EditableEntity>(
   );
   const query = useQuery({ ...options, enabled: needsFresh && !baseline });
   useEffect(() => {
-    if (!baseline && query.isSuccess && !query.isFetching && query.data)
+    if (
+      !baseline &&
+      query.isSuccess &&
+      query.fetchStatus === "idle" &&
+      query.data
+    )
       setBaseline(baselineSchema.parse(query.data));
-  }, [baseline, query.isSuccess, query.isFetching, query.data]);
+  }, [baseline, query.isSuccess, query.fetchStatus, query.data]);
   if (baseline)
     return <EntityEditDialogContent {...props} baseline={baseline} />;
   return (
@@ -113,7 +120,11 @@ function EntityEditDialogBaseline<E extends EditableEntity>(
       ) : query.isSuccess && !query.data ? (
         <ErrorDisplay error={new Error("This record no longer exists.")} />
       ) : (
-        <output>Loading current values…</output>
+        <output>
+          {query.fetchStatus === "paused"
+            ? "Waiting for a connection to load current values…"
+            : "Loading current values…"}
+        </output>
       )}
     </Overlay>
   );

@@ -156,8 +156,13 @@ partial receipt or retain a second committed value in a cell.
 Editors show Saving… until acceptance. Offline writes reject without queuing;
 overlapping writes to the same record reject while unrelated records stay usable.
 Draft and failed-write retry state remain local. Collection and inherited-value
-editors load an authoritative baseline on reopening when their cache was retired
-or invalidated. That dependent action may wait; the accepted save is complete.
+full editors load an authoritative baseline on reopening when their cache was
+retired or invalidated. Field-scoped correction editors retain their reviewed
+field projection and submit through its correction owner; they do not replace it
+with an unrelated full-record baseline. A dependent action may wait; the accepted
+save is complete. Settlement matching starts each review visit from a fresh candidate read and with no retained
+selection or draft; cached candidates stay unavailable until that read finishes.
+A paused/offline read cannot satisfy a fresh-baseline gate.
 
 Loaded views retain data with Updating… during reconciliation and report refresh
 failure separately. Server reads own membership, ordering, counts and paging: a
