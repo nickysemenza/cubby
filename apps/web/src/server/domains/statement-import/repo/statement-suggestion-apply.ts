@@ -62,6 +62,7 @@ export async function applyStatementTransactionSuggestion(
   const loaded = await loadStatementApplication(db, state);
   const { subject, published, stored } = loaded;
   const { application } = input;
+  if (published.reviewReason) throw refused(published.reviewReason);
   if (!input.corrected && application.action !== published.recommended)
     throw refused(
       "Accepting a suggestion as is applies its recommended action; review a different choice as a correction.",

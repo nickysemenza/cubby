@@ -98,6 +98,8 @@ export type FinancialStatementPreviewOptions = {
    * apply, so both sides agree on what a candidate is.
    */
   candidatePolicy?: "import" | "suggestion";
+  /** Server-owned retained observations, never supplied by a client. */
+  retainedRefs?: ReadonlyMap<string, string>;
   /** Server-only: a stored StatementRow account outranks alias/last4 resolution, keyed by row key. */
   accountHints?: ReadonlyMap<string, string>;
   /** One synchronous preparation scope; never retain across model latency or another page. */
@@ -157,14 +159,16 @@ export async function previewFinancialStatementImport(
     input.rows.map((row) => statementRowExternalId(row)),
   );
   const sourceRefIds = await Promise.all(
-    input.rows.map((row, index) =>
-      row.importFingerprint && row.rowPosition !== undefined
-        ? statementRowOccurrenceId(
-            row.source,
-            row.importFingerprint,
-            row.rowPosition,
-          )
-        : legacyIds[index]!,
+    input.rows.map(
+      (row, index) =>
+        options.retainedRefs?.get(row.key) ??
+        (row.importFingerprint && row.rowPosition !== undefined
+          ? statementRowOccurrenceId(
+              row.source,
+              row.importFingerprint,
+              row.rowPosition,
+            )
+          : legacyIds[index]!),
     ),
   );
   const dates = uniq(
@@ -364,18 +368,19 @@ export async function previewFinancialStatementImport(
     const sourceRef = { source: row.source, externalId };
     const normalizedAmount = -row.amount;
     const kind = row.kind ?? (normalizedAmount > 0 ? "purchase" : "refund");
-    const proposed = {
-      sourceRef,
-      amount: normalizedAmount,
-      kind,
-      status: "posted" as const,
-      transactionDate: null,
-      postedDate: row.date,
-      merchant: row.merchant,
-      rawDescription: row.originalStatement,
-      sourceCategory: row.category,
-      notes: row.notes,
-    };
+    const proposed: FinancialStatementImportPreviewOut["rows"][number]["proposed"] =
+      {
+        sourceRef,
+        amount: normalizedAmount,
+        kind,
+        status: row.providerStatus ?? "observed",
+        transactionDate: row.providerStatus === "posted" ? null : row.date,
+        postedDate: row.providerStatus === "posted" ? row.date : null,
+        merchant: row.merchant,
+        rawDescription: row.originalStatement,
+        sourceCategory: row.category,
+        notes: row.notes,
+      };
     const account = accountFor(row);
     const exactOccurrence = parsedTransactions.filter((transaction) =>
       transaction.sourceRefs.some(

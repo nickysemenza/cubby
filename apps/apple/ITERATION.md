@@ -17,15 +17,14 @@ booted and the relevant build artifacts warm while working on one feature.
 | Device-only behavior (camera, permissions, performance, installed app) | `pnpm apple ios` on a paired iPhone                                                                | Real device behavior; use Xcode/agent-device for interaction and diagnostics.                                             |
 | Mac-specific UI                                                        | `pnpm apple mac` and Mac previews/tests                                                            | The native macOS shell and window behavior.                                                                               |
 
-Run `pnpm test:e2e:sim -- --headless --statement-csv` for Swift CSV file preview
-and reviewed import through generated OpenAPI calls. The disposable Worker
-journey checks physical occurrences, exact retry, ambiguous date matches,
-canonical charge preservation, and no implicit Expense or stock creation. Its
-shared booking session also previews without writes, commits the saved review,
-and replays it without duplicating economics. Run this lane directly or with
-`pnpm test:e2e:local -- headless:statement-csv`. Its
-sanitized results and replay command are checksummed under
-`artifacts/headless-e2e/statement-csv/`.
+Run `pnpm test:e2e:sim -- --headless` for generated OpenAPI client writes
+against the disposable Worker. Use
+`pnpm test:e2e:sim -- --headless --photo --purchase` or
+`pnpm test:e2e:local -- headless:wardrobe` for the composed photo, retailer,
+and normalized statement workflow. Statement evidence is recorded through
+`statementRow.record`; reviewed transaction kinds are explicit kernel creates.
+The wardrobe journey checks exact replay, overlapping evidence, decoy charges,
+reviewed settlement, and preservation of Expense and inventory during convergence.
 
 `pnpm test:e2e:sim -- --qa-photo-completion` checks that approving the final selected
 ready group of a stopped `needs_review` photo Run updates the same open console’s
@@ -107,8 +106,8 @@ verified process, disposable database, and checksummed artifact paths; an
 unlocked Mac session with Accessibility permission is required. Run Mac and
 simulator UI lanes sequentially.
 
-Keep import workflow state in `CubbyKit`: CSV preview and decisions, transaction
-booking/correction review, and Run/photo review commands are shared with the
+Keep import workflow state in `CubbyKit`: transaction booking/correction review
+and Run/photo review commands are shared with the
 CLI. Matching, categorization, receipt expectations, and economic writes remain
 backend operations. SwiftUI owns presentation, pickers,
 confirmation dialogs, and navigation.

@@ -76,7 +76,7 @@ const review = (
   reason,
 });
 
-async function acceptedAutomaticFacts(
+export async function acceptedAutomaticFacts(
   db: Database,
   transactionId: FinancialConvergenceInput["transactionId"],
 ) {
@@ -384,13 +384,14 @@ async function runFinancialConvergence(
         .for("update");
       if (
         !row ||
-        row.status !== "posted" ||
+        row.status === "void" ||
+        row.status === "expected" ||
         row.kind !== "purchase" ||
         row.amount <= 0 ||
         row.ledgerTransferId
       )
         return review(
-          "Automatic booking requires a posted purchase payment. Transfers, repayments, refunds, reimbursements and incoming payments retain their meaning.",
+          "Automatic booking requires observed purchase payment evidence. Transfers, repayments, refunds, reimbursements and incoming payments retain their meaning.",
         );
       // The funder on the charge date (a lag-safe posting date when only that
       // is known) is the household or the member, and the member owns the

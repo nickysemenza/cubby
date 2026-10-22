@@ -26,11 +26,11 @@ uses the reconciliation writer and refreshes the automatic booking fingerprint.
    allocation and source reference before proposing a missing Purchase link or
    additional reference; preserve unrelated allocations and references. Check
    alternate exports for the same charge before considering creation.
-3. For an unmatched saved row, use `finance_read.preview_import` with its
-   normalized provider amount and source identity. Verify the proposed kind
-   and sign. Propose a new transaction only for `ready_to_create` with a
-   uniquely verified account and Purchase allocation. Generic settlement
-   mutations retain exact typed approval and stable run-operation identities.
+3. For missing or revised statement evidence, use
+   [financial-evidence-import](../../financial-evidence-import/SKILL.md).
+   Recording evidence lets Cubby's durable work match and book through shared
+   rules or publish unresolved decisions. Inspect the receipts and suggestions;
+   do not orchestrate record/create/reference/book writes in the client.
 4. Report each order's settlement outcome: already matched, awaiting posting,
    awaiting approval, ambiguous, or source evidence absent. For recent charges,
    refunds and transfer counterparts, allow two complete Monday–Friday days after the effective transaction
@@ -57,20 +57,11 @@ Vendor-reported card/payment hints do not establish a Financial Account
 identity; once the funding account is known, they belong in that account's
 `cardNumbers` (below), not in notes.
 
-Cubby signs are positive charge/outflow and negative refund/inflow. Pass the
-raw Monarch signed amount to `finance_read.preview_import`; the preview inverts
-it into Cubby's sign convention. Do not invert the amount before previewing.
-`statement_rows.record.providerAmount` also retains the raw provider sign.
-
-**Verify the normalization from the preview's own output, every time.** The
-preview does not validate intent: hand it a charge with the wrong sign and it
-cheerfully proposes `kind: "refund"` with a matching amount and
-`ready_to_create`, because nothing about the row is internally inconsistent. The
-amounts still tie out, so this survives a totals check. Before submitting, read
-each proposed row back and confirm `kind` is `purchase` for charges and `refund`
-for credits, and that the sign matches. Rows pasted into chat frequently arrive
-already flipped relative to a raw Monarch export — trust the receipt for what
-actually happened, not the sign in the row.
+Cubby signs are positive charge/outflow and negative refund/inflow. Evidence
+normalization and raw provider signs are owned by
+[financial-evidence-import](../../financial-evidence-import/SKILL.md#normalize-and-record).
+Statements establish only the status/date semantics they actually expose;
+unknown status remains unknown.
 
 ## Free rewards and purchased credit
 
@@ -111,16 +102,17 @@ as two rows.
 is exactly one allocation, NULL for a split. NULL there means "not exactly one
 purchase", never "unsettled" — read `allocations` for the general case.
 
-## Statement import
+## Financial evidence intake
 
-Use `finance_read.preview_import` for normalized client-side Monarch
-rows. It is read-only and returns `already_recorded`, `ready_to_create`,
-`possible_existing`, `unresolved_account`, or `indistinguishable_duplicate`.
+Use [financial-evidence-import](../../financial-evidence-import/SKILL.md) for
+Monarch MCP and statement files, including historical backfill, replay, source
+revisions and qualified withdrawals. It owns coverage proof and client parsing;
+Cubby owns scheduling, matching and booking. Each observation and genuine
+occurrence remains distinct until reconciled. Equal date/amount/description,
+provider category, or a historical content hash does not establish charge
+identity or authorize propagating a match or disposition.
 
-After approval, submit only `ready_to_create` proposed values to
-`entity.create financialTransaction` (or `entity.commands`). Review every result. Source reference
-uniqueness makes later full-history imports no-op for unchanged rows; it does
-not authorize writing through a conflict.
+## Account identity for settlement review
 
 Resolve an Account by source external ID, source aliases, then one unambiguous
 network/last-four candidate across every account's `cardNumbers` (`entity_read.list
@@ -159,77 +151,6 @@ and the statement row identifies the funding account (date, amount, vendor),
 with a `note` citing the receipt. Do not mint a provisional Account for the
 digits the receipt printed, do not leave them as prose in notes, and do not
 reject an otherwise exact date/amount/vendor match over them.
-
-When a second export covers the same window, check the charge in both. Agreement
-across two independently-synced sources is cheap corroboration, and it converts
-an absence into a usable negative: a charge missing from both, in a window where
-both list the vendor's other charges, is real evidence of cash payment rather
-than a coverage gap.
-
-An existing transaction can carry the right amount, Account and Purchase and
-still leave `settlement_reference` open because it was imported without a source
-ref. Re-derive the ref through `finance_read.preview_import` — a match
-returns `possible_existing` with the transaction id — then backfill it with
-`entity.update financialTransaction`. Never create a second transaction to fix this.
-
-The field is **`sourceRefs`**, an array, and on update it replaces the whole
-array (read–merge–write when appending). The singular `sourceRef` is accepted
-and silently discarded — the write reports success, `sourceRefs` comes back
-`[]`, and the gap stays open. Confirm by re-reading the row, or by checking that
-the Purchase drops out of `entity_read.list purchase` with `filters:{dataStatus:"needs_data"}`.
-
-**`entity.create financialTransaction` does take `sourceRefs`,** so the backfill pass
-above is only for transactions created without one. Include refs in the initial
-create when available; a create-plus-backfill sequence adds an unnecessary write
-and briefly leaves the transaction indistinguishable from a reference-less import.
-
-The ref is a **content hash of the statement row** (account, date, amount,
-original statement), so it is only stable for a row that has settled. Do not
-attach one to a `pending` credit: pending rows can post on a later date, the
-hash changes with the date, and the row then fails to match its own statement
-line on the next import — the exact duplicate this field exists to prevent.
-Attach it when the row posts. The pending row and the row that replaces it are
-two distinct `StatementRow`s, linked with `supersededByExternalId` — written by
-an agent, never inferred — which drops the predecessor off the worklist without
-discarding the evidence that it existed.
-
-## The statement ledger
-
-Provider rows are recorded verbatim with `statement_rows.record`, and drift is a
-query rather than a pipeline rebuilt each session. It is not an importer: it
-resolves no account, links no Purchase, creates no transaction, and makes no
-match.
-
-`finance_read.statement_rows({matchState:"unmatched"})` is the worklist — a provider
-charge with no live transaction carrying any of its source refs. Match state is
-per charge: every re-export observation of one charge (same v1 identity)
-inherits an ignore, supersession or match recorded on any of them, and
-`summary.unmatchedCharges` counts distinct charges. To close one, append that ref
-to the right transaction with `entity.update financialTransaction` (read–merge–write
-on `sourceRefs`); the row flips to `matched` on the next read, with no write to
-the row itself. `statement_rows.update` takes a `{filter}` selector for the long
-tail that will never match; `disposition: "ignored"` requires BOTH a reason and
-a note, enforced by a CHECK.
-
-Three reconciliation traps:
-
-- **Submit `providerAmount` charges-negative, always.** Monarch signs charges
-  negative, but Copilot signs them positive, Mint leaves them unsigned with the
-  sign in a `Transaction Type` column, and Apple Card signs them positive. The
-  identity hash is computed over `providerAmount`, so submitting an
-  un-normalized export does not merely flip a sign — it mints a second identity
-  for a charge already recorded.
-- **Account aliases resolve per source.** A `copilot` row will not resolve
-  against an account carrying only a `monarch` alias. Add the provider's aliases
-  before ingesting it, or every row lands unresolved.
-- **Never bulk-load rows through a model.** Transcribing evidence corrupts it:
-  visually similar Unicode characters can differ while retaining the same byte
-  length, changing the identity hash and fabricating a second statement row. MCP
-  is the write path for ordinary imports, where a few hundred rows is
-  unremarkable; a backfill big enough that a model cannot carry it is a one-off
-  migration script, not a reason to fork the write path permanently. Reconcile
-  afterwards either way with `finance_read.drift` — a row present in the
-  ledger but absent from every export is the signature.
 
 ### Working the backlog through Transaction suggestions
 
@@ -305,12 +226,10 @@ filtering a group with `where {account: {in: [FAC-…]}, month: {in: [YYYY-MM]}}
 A refusal (evidence changed, a live candidate, a stale hold, an attach with
 several candidates and no named `transactionId`) writes nothing. Labelling
 republishes a suggestion under a new assessment id, so a stale-Assessment
-error means re-list the group and review the replacement. Supersede suggestions settle a hold this ledger
-recorded from a provider-pending row: the posted amount may exceed the hold by
-up to the larger of 25% or $20 within seven days, and the review shows the new
-amount. A void suggestion is the one absence judgment: a hold recorded from
-pending rows, with no posted twin, missing from a later export that covers its
-account seven days past it. Voiding keeps the transaction and its refs.
+error means re-list the group and review the replacement. Explicit pending-to-posted evidence can support a reviewed supersession.
+Disappearance requires the complete scope and explicit source confirmation in
+[financial-evidence-import](../../financial-evidence-import/SKILL.md#withdrawals).
+Age or absence from a later export alone does not authorize voiding a hold.
 
 ## Purchases and refunds
 
@@ -402,74 +321,20 @@ allocations; do not fit numbers or unallocate solely to quiet a mismatch
 detector. Document any unresolved cross-payout leg without inventing a
 transaction for it.
 
-## Card exports: signs, coverage, and what they cannot prove
+## Source coverage during settlement review
 
-- Monarch: negative = charge, positive = credit; `Original Statement` carries the
-  store number, and its `Id` column is a usable external id. Copilot: **sign
-  inverted** (positive = charge), carries the account mask directly. Mint-era
-  exports: unsigned amount with a `Transaction Type` column, card named by
-  _product_ with no last-four, and no external id — rows sourced from them get
-  no `sourceRef`. Combine overlapping exports only after establishing their
-  source coverage;
-  different files may each carry only one leg of a charge/credit pair.
-- Copilot posts on posting date, Monarch on transaction date, so one event
-  appears 1–3 days apart in each; dedupe on vendor + amount within ~5 days.
-- **Absence from every export is not evidence a charge did not happen** — a
-  vendor-confirmed receipt can be missing from every file inside the covered
-  window. Grep the raw amount across every file; when nothing turns up, record
-  the vendor-printed tender hint in the Purchase notes and leave it unsettled.
-- Aggregators sometimes double-represent a return as an extra charge+refund
-  pair; when a card export and the vendor's charge history disagree, the vendor
-  page is authoritative for what was owed.
-- Two people holding the same card product from one issuer is far likelier than
-  an exotic reissue chain. Before attaching an alias or merging accounts on a
-  name resemblance, run the **overlap test**: two descriptors that share ~100%
-  of date+amount rows are one account through two export vintages; two that
-  share zero rows over a long concurrent window are two cards. Recurring
-  subscriptions at different prices on different billing days are the sharpest
-  discriminator. Cubby has no restore — a wrong account merge is permanent.
-- **A last-four printed by a vendor is never grounds for a new account.** Apple
-  Pay device numbers, reissued cards and vendor display tokens all print digits
-  the statement does not carry. Map to the statement row, then register the
-  digits on that account's `cardNumbers` so the next receipt settles itself.
-- When vendor histories require another account owner's unavailable login,
-  the statement rows can remain in scope without being enrichable. Stamp
-  `accountId` for ownership and leave the rows `open`/`unmatched` — that is the
-  correct resting state, not a backlog. Never disposition them `ignored`, and do
-  not write a per-row note explaining the blocker.
-
-## Re-importing a newer provider export
-
-- It is a **delta-only** job. Dedup is on `(source, externalId)` globally, so
-  declare `rowCountDeclared` = the delta count (or `finance_read.imports`
-  reports an unfinished chunked ingest). Compute `statementRowExternalId` with
-  `apps/web/src/server/domains/statement-import/repo/statement-row-identity.ts` — import it, never
-  reimplement — and ask the DB which ids exist; a column-wise CSV diff does not
-  work across export vintages. `StatementImport.fingerprint` is the sha256 of
-  the file. Exclude `$0.00` placeholder rows (they re-present as new forever);
-  the import counts them as `zeroValueRows` instead of saving them.
-  Verify afterwards: any stored row whose hash is absent from the source file is
-  fabricated.
-- **The descriptor firm-up mints a second identity.** A pending row re-observed
-  with a fuller descriptor after posting (`THE HOME DEPOT #NNNN` →
-  `THE HOME DEPOT #NNNN 800-… CA`, `AMAZON MKTPLACE PMTS` → `AMAZON MKTPL*…`)
-  hashes differently on the same account/date/amount. Detect with a self-join on
-  (accountDescriptor, statementDate, providerAmount) across imports; set
-  `supersededByExternalId` on the thinner row, and where a transaction already
-  carries the old ref, **append the new ref to that same transaction**.
-- Disposition by `sourceCategory` is a first pass only. **Provider categories
-  are wrong often enough to bury modelled spend** — a durable-goods purchase can be
-  classified as a recurring expense. When two providers
-  disagree on a category, the ignore is suspect. Sweep the ignored tail **by
-  amount** as well as by merchant: no plausible fuel charge is five figures, and
-  a bare `Check` has no payee to triage on. Ask of each row "is this an
-  acquisition?", not "does the category sound modelled?".
+Use the financial-evidence skill's account/window coverage proof before treating
+an absent source record as a withdrawal. A vendor receipt can establish a real
+Purchase while its payment remains outside available statement coverage. Keep
+that gap explicit; never invent a cash payment or merge accounts from name or
+last-four resemblance. Overlapping sources are corroboration to review, not
+permission to collapse equal-looking purchases. Provider categories remain
+advisory and cannot hide real consumer spending.
 
 ## Orphan transactions and twins
 
-- A statement import leaves orphan transactions (no allocation, `notes` null,
-  the real descriptor, a `v1:<hash>` sourceRef). **Their `transactionDate` is
-  NULL** — only `postedDate` is set — so any `transactionDateFrom/To` filter
+- A statement-backed transaction may have no Purchase allocation. Its
+  `transactionDate` can be NULL when only a posted date was provided, so a `transactionDateFrom/To` filter
   silently excludes exactly the rows still needing a match, and `vendorSearch`
   resolves through the linked purchase, so an unlinked row has no vendor either.
   **Hunt unmatched settlement by amount + account with no date or vendor
@@ -479,19 +344,16 @@ transaction for it.
 - **To settle from an orphan, LINK it** (set allocations and `transactionDate`
   on the existing row). Creating a fresh transaction beside a live orphan is
   what manufactures twins.
-- A twin pair is a _linked_ row (purchase, reasoning, readable vendor ref) and an
-  _orphan_ (true descriptor, dedupe hash). Neither dominates: **delete the
-  orphan first, then graft its `v1:` hash onto the linked row's `sourceRefs`**
-  — refs are globally unique, so grafting while the orphan is live fails with a
-  source-ref conflict. Deleting the orphan without grafting throws the hash
-  away and the next sync recreates it. Deleted rows' hashes stay readable via
-  `deletedAt IS NOT NULL`.
+- A linked transaction and an unallocated statement-backed transaction may be
+  twins or separate real charges. Keep all observations and source references;
+  use the shared reconciliation writer or explicit duplicate bookkeeping review
+  to resolve accepted identity. Financial intake does not delete transactions
+  and graft historical hashes between them.
 - Shapes that defeat amount matching: split tender (card +
   gift card, so no row equals the total); per-shipment billing (N legs summing
   to the order); store-fulfilled legs under the store descriptor; several
   refunds from **different orders** posting as one credit, grouped by card, not
-  by return visit (retire the merged row and graft its hash onto the largest
-  constituent — a merged row spanning orders can never link to one Purchase);
+  by return visit (retain one credit with allocations across those Purchases);
   a discount posting as a separate credit; a tax-rounding gap between recorded and
   printed lines; a synthesized aggregate booked from an order header facing two real
   statement legs (prefer the statement rows). Sum before concluding a mismatch,
@@ -513,7 +375,7 @@ money, but most nonzero gaps are benign. Check these causes:
    there is nothing to credit back. Do not book refunded-tax rows here.
 3. **Expected-not-posted.** Filter on `status = 'posted'`.
 4. **Import twins — the real defect.** Settled refunds exactly 2× booked credits.
-   Fix is delete-then-graft.
+   Verify identity and resolve through explicit duplicate bookkeeping review.
 
 - **An unmatched credit has three causes — check in this order:** already
   netted into the Expenses with only the settlement pair missing (most common);

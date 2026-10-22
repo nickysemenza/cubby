@@ -204,7 +204,11 @@ async function settleableCharges(
     .where(
       and(
         notDeleted(financialTransaction),
-        eq(financialTransaction.status, "posted"),
+        inArray(financialTransaction.status, [
+          financialTransactionStatus.enum.observed,
+          financialTransactionStatus.enum.pending,
+          financialTransactionStatus.enum.posted,
+        ]),
         sql`${financialTransaction.ledgerTransferId} IS NULL`,
         between(
           sql<string>`coalesce(${financialTransaction.transactionDate}, ${financialTransaction.postedDate})`,
@@ -735,7 +739,7 @@ export async function settleRetainedPaymentEvidence(
             ON fa."id" = ft."accountId" AND fa."deletedAt" IS NULL
           WHERE fa."ledgerPartyId" = ${importSourceClaim.ledgerPartyId}
             AND ft."deletedAt" IS NULL
-            AND ft."status" = ${financialTransactionStatus.enum.posted}
+            AND ft."status" IN (${financialTransactionStatus.enum.observed}, ${financialTransactionStatus.enum.pending}, ${financialTransactionStatus.enum.posted})
             AND round(ft."amount" * 100) = round(${purchasePaymentEvidence.amount} * 100)
             AND abs(coalesce(ft."transactionDate", ft."postedDate") - (${purchasePaymentEvidence.chargedAt})::date) <= ${POSTING_WINDOW_DAYS}
             AND NOT EXISTS (

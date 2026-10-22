@@ -69,12 +69,13 @@ async function transactionForBooking(
   if (!stored) return fail("The financial transaction is no longer live.");
   const row = { ...stored, ...projection };
   if (
-    row.status !== "posted" ||
+    row.status === "void" ||
+    row.status === "expected" ||
     row.ledgerTransferId ||
     !purchaseSettlementKinds.some((kind) => kind === row.kind)
   )
     return fail(
-      "Only posted spending can be booked. Transfer evidence is not spending.",
+      "Only observed spending can be booked. Transfer evidence is not spending.",
     );
   if (row.kind === "income" && input.economicRole !== "reimbursement")
     return fail(

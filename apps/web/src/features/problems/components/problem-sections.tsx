@@ -1925,12 +1925,10 @@ const DECLARED_SECTIONS = [
       ),
       details: [
         <p key="overlap" className="text-sm text-muted-foreground">
-          Rows already present in another import are not attached here. Reopen
-          the source CSV to check coverage and resume any interrupted import.
+          Rows already present in another import are not attached here. Check
+          source evidence and coverage before resuming an interrupted import.
         </p>,
       ],
-      route: { href: "/statement-rows/import" },
-      editLabel: "Open statement importer",
     }),
   }),
 ];

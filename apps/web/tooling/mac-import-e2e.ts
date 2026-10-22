@@ -43,16 +43,17 @@ const webRoot = path.resolve(
 );
 const repoRoot = path.resolve(webRoot, "../..");
 const flags = process.argv.slice(2).filter((arg) => arg !== "--");
-const productClarity = flags.length === 1 && flags[0] === "--product-clarity";
-if ((flags.length && !productClarity) || process.platform !== "darwin")
+if (
+  (flags.length > 0 &&
+    !(flags.length === 1 && flags[0] === "--product-clarity")) ||
+  process.platform !== "darwin"
+)
   throw new Error(
     "Usage on macOS: pnpm --dir apps/web exec tsx tooling/mac-import-e2e.ts [--product-clarity]",
   );
-const replayFlags = productClarity ? ["--product-clarity"] : [];
-const scenarioTitle = productClarity
-  ? "Actual sandboxed macOS Product explanations, financial relations and native table"
-  : "Actual sandboxed macOS app statement CSV file import";
-const fixtureVersion = productClarity ? 2 : 1;
+const scenarioTitle =
+  "Actual sandboxed macOS Product explanations, financial relations and native table";
+const fixtureVersion = 2;
 const nonce = randomBytes(8).toString("hex");
 const databaseName = `cubby_sim_${nonce}`;
 const adminURL = "postgresql://postgres:password@localhost:55432/postgres";
@@ -82,9 +83,6 @@ const milestones = {
   signed: false,
   launched: false,
   fixtureUIObserved: false,
-  previewObserved: false,
-  savedObserved: false,
-  databaseVerified: false,
   valuationExplanationObserved: false,
   productPurchaseEvidenceObserved: false,
   purchaseProductEvidenceObserved: false,
@@ -292,28 +290,19 @@ function saveArtifact(): void {
       "exec",
       "tsx",
       "tooling/mac-import-e2e.ts",
-      ...replayFlags,
     ],
     scenario: scenarioTitle,
-    fixture: productClarity
-      ? "synthetic-product-evidence"
-      : "synthetic-monarch-wardrobe",
+    fixture: "synthetic-product-evidence",
     fixtureVersion,
     cases: [
       {
-        name: productClarity
-          ? "Mac valuation explanation, financial relations and sorted native table"
-          : "Mac file selection, review, commit and database readback",
-        status: (
-          productClarity
-            ? [
-                milestones.valuationExplanationObserved,
-                milestones.productPurchaseEvidenceObserved,
-                milestones.purchaseProductEvidenceObserved,
-                milestones.entityTableObserved,
-              ].every(Boolean)
-            : milestones.databaseVerified
-        )
+        name: "Mac valuation explanation, financial relations and sorted native table",
+        status: [
+          milestones.valuationExplanationObserved,
+          milestones.productPurchaseEvidenceObserved,
+          milestones.purchaseProductEvidenceObserved,
+          milestones.entityTableObserved,
+        ].every(Boolean)
           ? "passed"
           : milestones.fixtureUIObserved
             ? "failed"
@@ -477,157 +466,146 @@ function retainCleanupFailure(
   return message;
 }
 
-async function runNativeScenario(
-  csv: () => Promise<void>,
-  productFixture: { productId: string; purchaseId: string } | undefined,
-): Promise<void> {
-  if (productClarity && productFixture) {
-    phase = "product-clarity-presentation";
-    const { productId, purchaseId } = productFixture;
-    await driver.openEntity(productId, appPath);
-    await driver.wait("id=detail.product.edit");
-    await driver.scrollTo(
-      `id=field.explanation.product.${productId}.price label="About Valuation price"`,
-      "detail.product",
-    );
-    await driver.click(
-      `id=field.explanation.product.${productId}.price label="About Valuation price"`,
-      "detail.product",
-    );
-    await driver.wait("id=field.explanation.popover");
-    await driver.scrollTo(
-      'id=field.explanation.effective-value text="$40.00"',
-      "field.explanation.popover",
-    );
-    await driver.scrollTo(
-      'text="Overrides inherited"',
-      "field.explanation.popover",
-    );
-    await driver.scrollTo(
-      'id=field.explanation.fallback-value text="$25.00"',
-      "field.explanation.popover",
-    );
-    milestones.valuationExplanationObserved = true;
-    await driver.screenshot("valuation-explanation");
-    await driver.scrollTo(
-      "id=field.explanation.close",
-      "field.explanation.popover",
-      "up",
-    );
-    await driver.click(
-      "id=field.explanation.close",
-      "field.explanation.popover",
-    );
-    await driver.waitAbsent("id=field.explanation.popover");
-    async function relationEvidence(
-      target: "product" | "purchase",
-      id: string,
-    ) {
-      for (const suffix of [
-        "movement.acquired",
-        "movement.adjusted",
-        "planned",
-        "linked",
-      ]) {
-        await driver.scrollTo(
-          `id=relation.evidence.${target}.${id}.${suffix}`,
-          `detail.${target === "purchase" ? "product" : "purchase"}`,
+async function runNativeScenario(productFixture: {
+  productId: string;
+  purchaseId: string;
+}): Promise<void> {
+  phase = "product-clarity-presentation";
+  const { productId, purchaseId } = productFixture;
+  await driver.openEntity(productId, appPath);
+  await driver.wait("id=detail.product.edit");
+  await driver.scrollTo(
+    `id=field.explanation.product.${productId}.price label="About Valuation price"`,
+    "detail.product",
+  );
+  await driver.click(
+    `id=field.explanation.product.${productId}.price label="About Valuation price"`,
+    "detail.product",
+  );
+  await driver.wait("id=field.explanation.popover");
+  await driver.scrollTo(
+    'id=field.explanation.effective-value text="$40.00"',
+    "field.explanation.popover",
+  );
+  await driver.scrollTo(
+    'text="Overrides inherited"',
+    "field.explanation.popover",
+  );
+  await driver.scrollTo(
+    'id=field.explanation.fallback-value text="$25.00"',
+    "field.explanation.popover",
+  );
+  milestones.valuationExplanationObserved = true;
+  await driver.screenshot("valuation-explanation");
+  await driver.scrollTo(
+    "id=field.explanation.close",
+    "field.explanation.popover",
+    "up",
+  );
+  await driver.click("id=field.explanation.close", "field.explanation.popover");
+  await driver.waitAbsent("id=field.explanation.popover");
+  async function relationEvidence(target: "product" | "purchase", id: string) {
+    for (const suffix of [
+      "movement.acquired",
+      "movement.adjusted",
+      "planned",
+      "linked",
+    ]) {
+      await driver.scrollTo(
+        `id=relation.evidence.${target}.${id}.${suffix}`,
+        `detail.${target === "purchase" ? "product" : "purchase"}`,
+      );
+    }
+  }
+  await relationEvidence("purchase", purchaseId);
+  milestones.productPurchaseEvidenceObserved = true;
+  await driver.screenshot("product-purchase-evidence");
+  await driver.click(
+    `id=relation.row.purchase.${purchaseId}`,
+    "detail.product",
+  );
+  await driver.wait("id=detail.purchase.edit");
+  await relationEvidence("product", productId);
+  milestones.purchaseProductEvidenceObserved = true;
+  await driver.screenshot("purchase-product-evidence");
+  phase = "entity-table-presentation";
+  await driver.openEntity(productId, appPath);
+  await driver.wait("id=detail.product.edit");
+  await driver.click("role=popupbutton id=browse.product.view.list");
+  await driver.click("id=browse.product.view.table");
+  await driver.wait("role=outline");
+  await driver.click("label=Name");
+  async function waitForFirstTableProduct(expected: string) {
+    await pollUntil(
+      async () => {
+        const snapshot = await driver.snapshot();
+        const first = snapshot.match(
+          /\[statictext\] "(Synthetic table product \d+)"/,
         );
-      }
-    }
-    await relationEvidence("purchase", purchaseId);
-    milestones.productPurchaseEvidenceObserved = true;
-    await driver.screenshot("product-purchase-evidence");
-    await driver.click(
-      `id=relation.row.purchase.${purchaseId}`,
-      "detail.product",
+        return first?.[1] === expected ? true : undefined;
+      },
+      { label: `native table first product ${expected}`, timeoutMs: 30000 },
     );
-    await driver.wait("id=detail.purchase.edit");
-    await relationEvidence("product", productId);
-    milestones.purchaseProductEvidenceObserved = true;
-    await driver.screenshot("purchase-product-evidence");
-    phase = "entity-table-presentation";
-    await driver.openEntity(productId, appPath);
-    await driver.wait("id=detail.product.edit");
-    await driver.click("role=popupbutton id=browse.product.view.list");
-    await driver.click("id=browse.product.view.table");
-    await driver.wait("role=outline");
-    await driver.click("label=Name");
-    async function waitForFirstTableProduct(expected: string) {
-      await pollUntil(
-        async () => {
-          const snapshot = await driver.snapshot();
-          const first = snapshot.match(
-            /\[statictext\] "(Synthetic table product \d+)"/,
-          );
-          return first?.[1] === expected ? true : undefined;
-        },
-        { label: `native table first product ${expected}`, timeoutMs: 30000 },
-      );
-    }
-    await waitForFirstTableProduct("Synthetic table product 00");
-    await driver.click("label=Name");
-    await waitForFirstTableProduct("Synthetic table product 15");
-    await driver.scrollTo(
-      'label="Synthetic table product 01"',
-      "browse.product.list",
+  }
+  await waitForFirstTableProduct("Synthetic table product 00");
+  await driver.click("label=Name");
+  await waitForFirstTableProduct("Synthetic table product 15");
+  await driver.scrollTo(
+    'label="Synthetic table product 01"',
+    "browse.product.list",
+  );
+  const reusedRowId = z
+    .string()
+    .min(1)
+    .parse(
+      (await driver.snapshot()).match(
+        /\[statictext\] "Synthetic table product 05" id=browse\.product\.table\.row\.(\S+)/,
+      )?.[1],
     );
-    const reusedRowId = z
-      .string()
-      .min(1)
-      .parse(
-        (await driver.snapshot()).match(
-          /\[statictext\] "Synthetic table product 05" id=browse\.product\.table\.row\.(\S+)/,
-        )?.[1],
-      );
-    await driver.click(
-      `id=field.explanation.product.${reusedRowId}.dataQuality label="Quality: About Quality"`,
-    );
-    await driver.wait("id=field.explanation.popover");
-    await driver.wait('contains="Score calculation"');
-    await driver.screenshot("table-explanation");
-    await driver.click(
-      "id=field.explanation.close",
-      "field.explanation.popover",
-    );
-    await driver.waitAbsent("id=field.explanation.popover");
-    const manufacturerCount = (snapshot: string) =>
-      [...snapshot.matchAll(/\[statictext\] "Synthetic Works"/g)].length;
-    const hiddenManufacturerCount = manufacturerCount(await driver.snapshot());
+  await driver.click(
+    `id=field.explanation.product.${reusedRowId}.dataQuality label="Quality: About Quality"`,
+  );
+  await driver.wait("id=field.explanation.popover");
+  await driver.wait('contains="Score calculation"');
+  await driver.screenshot("table-explanation");
+  await driver.click("id=field.explanation.close", "field.explanation.popover");
+  await driver.waitAbsent("id=field.explanation.popover");
+  const manufacturerCount = (snapshot: string) =>
+    [...snapshot.matchAll(/\[statictext\] "Synthetic Works"/g)].length;
+  const hiddenManufacturerCount = manufacturerCount(await driver.snapshot());
+  await driver.click('label="Show or hide table columns"');
+  await driver.click("id=browse.product.column.manufacturer");
+  await driver.wait("role=button label=Manufacturer");
+  await pollUntil(
+    async () =>
+      manufacturerCount(await driver.snapshot()) > hiddenManufacturerCount
+        ? true
+        : undefined,
+    { label: "native table manufacturer values rendered", timeoutMs: 30000 },
+  );
+  await driver.screenshot("entity-table");
+  await driver.click('label="Show or hide table columns"');
+  await driver.click("id=browse.product.column.manufacturer");
+  await driver.waitAbsent("role=button label=Manufacturer");
+  await pollUntil(
+    async () =>
+      manufacturerCount(await driver.snapshot()) === hiddenManufacturerCount
+        ? true
+        : undefined,
+    { label: "native table manufacturer values hidden", timeoutMs: 30000 },
+  );
+  for (const field of ["dataQuality", "acquisitionOrigin"]) {
     await driver.click('label="Show or hide table columns"');
-    await driver.click("id=browse.product.column.manufacturer");
-    await driver.wait("role=button label=Manufacturer");
-    await pollUntil(
-      async () =>
-        manufacturerCount(await driver.snapshot()) > hiddenManufacturerCount
-          ? true
-          : undefined,
-      { label: "native table manufacturer values rendered", timeoutMs: 30000 },
-    );
-    await driver.screenshot("entity-table");
-    await driver.click('label="Show or hide table columns"');
-    await driver.click("id=browse.product.column.manufacturer");
-    await driver.waitAbsent("role=button label=Manufacturer");
-    await pollUntil(
-      async () =>
-        manufacturerCount(await driver.snapshot()) === hiddenManufacturerCount
-          ? true
-          : undefined,
-      { label: "native table manufacturer values hidden", timeoutMs: 30000 },
-    );
-    for (const field of ["dataQuality", "acquisitionOrigin"]) {
-      await driver.click('label="Show or hide table columns"');
-      await driver.click(`id=browse.product.column.${field}`);
-    }
-    await driver.click(
-      `id=browse.product.table.reference.${reusedRowId}.categoryId`,
-    );
-    await driver.wait("id=detail.productCategory.edit");
-    await driver.click("role=popupbutton id=browse.product.view.table");
-    await driver.click("id=browse.product.view.list");
-    await driver.wait("role=popupbutton id=browse.product.view.list");
-    milestones.entityTableObserved = true;
-  } else await csv();
+    await driver.click(`id=browse.product.column.${field}`);
+  }
+  await driver.click(
+    `id=browse.product.table.reference.${reusedRowId}.categoryId`,
+  );
+  await driver.wait("id=detail.productCategory.edit");
+  await driver.click("role=popupbutton id=browse.product.view.table");
+  await driver.click("id=browse.product.view.list");
+  await driver.wait("role=popupbutton id=browse.product.view.list");
+  milestones.entityTableObserved = true;
 }
 
 async function main(): Promise<void> {
@@ -766,10 +744,7 @@ async function main(): Promise<void> {
     } finally {
       await context.dispose();
     }
-    const { seedMacStatementAccount } =
-      await import("./mac-import-prerequisites");
-    await seedMacStatementAccount(databaseURL, fixtureUserId);
-    if (productClarity) {
+    {
       const {
         seedSimulatorPhotoActor,
         seedSimulatorProductClarity,
@@ -917,66 +892,8 @@ async function main(): Promise<void> {
     await driver.wait("id=sidebar.destinations");
     fixtureUIReady = true;
     milestones.fixtureUIObserved = true;
-    async function csv() {
-      phase = "file-import";
-      await driver.clickSidebar("Browse");
-      await driver.openStatementImport();
-      await driver.importStatement(
-        path.join(webRoot, "tests/e2e/fixtures/synthetic-monarch-wardrobe.csv"),
-      );
-      milestones.previewObserved = true;
-      await driver.screenshot("csv-review");
-      const review = await driver.snapshot();
-      const toggle = review.match(
-        /(@e\d+(?:~s\d+)?)\s+[^\n]*Record transaction/,
-      );
-      if (!toggle?.[1])
-        throw new Error(
-          "Native review did not expose the synthetic charge selector",
-        );
-      await driver.click(toggle[1]);
-      await driver.click("id=statement.csv.confirm");
-      await driver.wait('text="Statement saved"');
-      milestones.savedObserved = true;
-      await driver.screenshot("csv-saved");
-      phase = "database-readback";
-      const checkPool = createPostgresPool({ connectionString: databaseURL });
-      try {
-        const count = await checkPool.query<{
-          rows: string;
-          transactions: string;
-          purchases: string;
-        }>(
-          `SELECT (SELECT count(*) FROM "StatementRow")::text AS rows, (SELECT count(*) FROM "FinancialTransaction")::text AS transactions, (SELECT count(*) FROM "FinancialTransaction" WHERE kind = 'purchase')::text AS purchases`,
-        );
-        if (
-          count.rows[0]?.rows !== "2" ||
-          count.rows[0]?.transactions !== "1" ||
-          count.rows[0]?.purchases !== "1"
-        )
-          throw new Error(
-            `Native CSV readback differs: ${JSON.stringify(count.rows)}`,
-          );
-        milestones.databaseVerified = true;
-        const output = path.join(artifacts, "database-assertions.json");
-        writeFileSync(
-          output,
-          JSON.stringify(
-            {
-              sourceRows: 2,
-              transactions: 1,
-              input: "synthetic-monarch-wardrobe.csv",
-            },
-            null,
-            2,
-          ),
-        );
-        driver.evidence.push(output);
-      } finally {
-        await checkPool.end();
-      }
-    }
-    await runNativeScenario(csv, productFixture);
+    if (!productFixture) throw new Error("Synthetic Product fixture missing");
+    await runNativeScenario(productFixture);
   } catch (error) {
     failure = error instanceof Error ? error : new Error(String(error));
     if (fixtureUIReady) await driver.screenshot("failure").catch(() => {});

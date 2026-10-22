@@ -248,7 +248,8 @@ function availableCents(
       (entry) =>
         entry.deletedAt ||
         entry.accountDeletedAt ||
-        entry.status !== "posted" ||
+        entry.status === "void" ||
+        entry.status === "expected" ||
         entry.ledgerTransferId ||
         !["purchase", "fee", "refund"].includes(entry.kind) ||
         cents(Number(entry.allocatedAmount)) !==
@@ -383,7 +384,8 @@ async function discoverSpendingEvidence(
   if (
     date &&
     account.ledgerPartyId &&
-    source.status === "posted" &&
+    source.status !== "void" &&
+    source.status !== "expected" &&
     ["purchase", "fee", "refund"].includes(source.kind)
   ) {
     // UTC noon carries a plain calendar date to the retained-payment matcher.
@@ -641,7 +643,8 @@ export async function previewFinancialSpending(
     );
   }
   const deferred =
-    facts.source.status !== "posted" ||
+    facts.source.status === "void" ||
+    facts.source.status === "expected" ||
     facts.row?.ledgerTransferId ||
     !["purchase", "refund", "fee"].includes(facts.source.kind);
   if (deferred || facts.allocations.length) {
@@ -656,7 +659,8 @@ export async function previewFinancialSpending(
       return {
         ...basis,
         status: "deferred",
-        reason: "Only posted purchase, fee and refund evidence books spending.",
+        reason:
+          "Only observed purchase, fee and refund evidence books spending.",
       };
     const existing = await existingSpendingOutcome(db, { facts, basis });
     if (existing) return existing;

@@ -58,13 +58,12 @@ the web Worker (reused when provenance matches), and drops the database after.
 Modes (one per run; no mode = search/detail smoke in the iOS simulator):
   --headless                 Swift CubbyKit CLI against the Worker, no simulator
     --photo [--purchase]     synthetic photo-inventory (+ wardrobe purchase) run
-    --statement-csv          Swift CSV statement preview/import
   --extended-journey         full native edit, view-switch and filter journey
   --video                    selected journey plus MP4 and contact sheet
   --layout [--video]         layout probe screens
   --product-clarity [--video]  focused synthetic Product journey (Maestro)
   --input-journey [--photo-only] [--video]
-                             PhotosPicker/Files input acceptance
+                             PhotosPicker input acceptance
   --emoji-review [--video]   category emoji review replay
   --qa [--hold] [--video] [--journey qa-a,qa-b]
                              seeded synthetic household QA pass; --hold keeps it
@@ -97,7 +96,6 @@ const flags = rawFlags.filter(
 const headless = flags.includes("--headless");
 const photo = flags.includes("--photo");
 const purchase = flags.includes("--purchase");
-const statementCsv = flags.includes("--statement-csv");
 const inputJourney = flags.includes("--input-journey");
 const photoOnly = flags.includes("--photo-only");
 if (photoOnly && !inputJourney)
@@ -142,18 +140,12 @@ if (
   (emojiReview &&
     flags.some((flag) => flag !== "--emoji-review" && flag !== "--video")) ||
   (inputJourney &&
-    (headless ||
-      photo ||
-      purchase ||
-      statementCsv ||
-      layout ||
-      productClarity)) ||
+    (headless || photo || purchase || layout || productClarity)) ||
   (video && headless) ||
   (layout && (headless || photo || purchase || productClarity)) ||
-  (productClarity && (headless || photo || purchase || statementCsv)) ||
+  (productClarity && (headless || photo || purchase)) ||
   (photo && !headless) ||
   (purchase && !photo) ||
-  (statementCsv && (!headless || photo || purchase)) ||
   flags.some(
     (argument) =>
       ![
@@ -167,7 +159,6 @@ if (
         "--purchase",
         "--layout",
         "--product-clarity",
-        "--statement-csv",
         "--qa",
         "--qa-photo-completion",
         "--hold",
@@ -175,7 +166,7 @@ if (
   )
 )
   throw new Error(
-    "Usage (see --help): sim-e2e.ts [--emoji-review [--video] | --input-journey [--photo-only] [--video] | --extended-journey [--video] | --video | --layout [--video] | --product-clarity [--video] | --qa [--hold] [--video] [--journey qa-a,qa-b] | --headless [--photo [--purchase] | --statement-csv]]",
+    "Usage (see --help): sim-e2e.ts [--emoji-review [--video] | --input-journey [--photo-only] [--video] | --extended-journey [--video] | --video | --layout [--video] | --product-clarity [--video] | --qa [--hold] [--video] [--journey qa-a,qa-b] | --headless [--photo [--purchase]]]",
   );
 const lane = qa
   ? "sim-qa-e2e"
@@ -185,17 +176,15 @@ const lane = qa
       ? "sim-input-journey-e2e"
       : productClarity
         ? "sim-product-clarity-e2e"
-        : statementCsv
-          ? "headless-statement-csv-e2e"
-          : layout
-            ? "sim-layout-e2e"
-            : purchase
-              ? "headless-wardrobe-e2e"
-              : photo
-                ? "headless-photo-e2e"
-                : headless
-                  ? "headless-e2e"
-                  : "sim-e2e";
+        : layout
+          ? "sim-layout-e2e"
+          : purchase
+            ? "headless-wardrobe-e2e"
+            : photo
+              ? "headless-photo-e2e"
+              : headless
+                ? "headless-e2e"
+                : "sim-e2e";
 // Database bootstrap validates the caller's environment before simulation-only overrides.
 const bootstrapEnvironment = { ...process.env };
 for (const [key, value] of Object.entries({
@@ -213,12 +202,7 @@ const adminURL = "postgresql://postgres:password@localhost:55432/postgres";
 const simName = `cubby_sim_${randomBytes(8).toString("hex")}`;
 const databaseURL = adminURL.replace(/\/postgres$/u, `/${simName}`);
 process.env.DATABASE_URL = databaseURL;
-const artifacts = path.join(
-  repoRoot,
-  "artifacts",
-  statementCsv ? "headless-e2e/statement-csv" : lane,
-  simName,
-);
+const artifacts = path.join(repoRoot, "artifacts", lane, simName);
 mkdirSync(artifacts, { recursive: true });
 const runStartedAt = performance.now();
 const phases: Array<{ name: string; durationMs: number }> = [];
@@ -892,32 +876,6 @@ async function runHeadlessProductScenario(
   );
 }
 
-async function runHeadlessStatementCsvScenario(url: URL, userId: string) {
-  nativeBuildSourceVersion = nativeSourceFingerprint(false);
-  currentNativeSourceVersion = () => nativeSourceFingerprint(false);
-  // Build output stays in the runner log; each scenario invocation needs JSON-only stdout.
-  await run("pnpm", ["apple", "cli", "version"]);
-  nativeBuildBinary = path.join(kitRoot, ".build/debug/cubby");
-  nativeBuildReady = true;
-  const binary = nativeBuildBinary;
-  const pool = createPostgresPool({ connectionString: databaseURL });
-  try {
-    const { runSwiftStatementCsvScenario } =
-      await import("./scenarios/swift-statement-csv");
-    const evidence = await runSwiftStatementCsvScenario({
-      pool,
-      origin: url.origin,
-      artifacts,
-      userId,
-      runNative: (args, outputPath, errorPath) =>
-        run(binary, args, repoRoot, outputPath, false, process.env, errorPath),
-    });
-    scenarioEvidence.push(...evidence);
-  } finally {
-    await pool.end();
-  }
-}
-
 function nativeBuildMetadata() {
   const web = readWebBuildProvenance(repoRoot);
   const fingerprint =
@@ -1000,11 +958,7 @@ function retainRunDiagnostics(failure: Error | undefined): string[] {
     "failure-ui-tree.ndjson",
     "diagnostic-error.txt",
     "fixture-app-settings.json",
-    "input-statement.xml",
     "input-photo.xml",
-    "input-statement.json",
-    "input-statement-open.json",
-    "input-statement-files.json",
     "input-photo.json",
     "input-photo-approval.json",
     "input-driver-close.json",
@@ -1047,13 +1001,11 @@ function finishE2ERun(failure: Error | undefined): Error | undefined {
       scenario: lane,
       fixture: productClarity
         ? "synthetic-product-evidence"
-        : statementCsv
-          ? "synthetic-statement-csv"
-          : layout
-            ? "synthetic-layout"
-            : photo
-              ? "synthetic-wardrobe"
-              : "synthetic-product",
+        : layout
+          ? "synthetic-layout"
+          : photo
+            ? "synthetic-wardrobe"
+            : "synthetic-product",
       fixtureVersion: 1,
       phase,
       phases,
@@ -1114,7 +1066,7 @@ async function seedNativeScenario(
       return { productId: await seedSimulatorEmojiCategory(seedPool, userId) };
     return {
       productId:
-        photo || statementCsv || inputJourney
+        photo || inputJourney
           ? ""
           : await seedSimulatorScenario(seedPool, userId),
       layoutRunID: layout
@@ -1666,9 +1618,7 @@ async function main(): Promise<void> {
     });
     const scenarioStarted = performance.now();
     if (headless) {
-      if (statementCsv) {
-        await runHeadlessStatementCsvScenario(url, userId);
-      } else if (photo) {
+      if (photo) {
         await runHeadlessPhotoScenario(url, objectStorageUrl, userId);
         if (purchase) {
           const { runWardrobeConvergenceScenario } =
@@ -1884,18 +1834,7 @@ async function main(): Promise<void> {
               run: (command, args, stdoutFile) =>
                 run(command, args, repoRoot, stdoutFile),
             });
-            const container = execFileSync(
-              "xcrun",
-              [
-                "simctl",
-                "get_app_container",
-                device.udid,
-                "com.nickysemenza.cubby",
-                "data",
-              ],
-              { encoding: "utf8" },
-            ).trim();
-            await journey.installInputs(path.join(container, "Documents"));
+            await journey.installInputs();
             scenarioEvidence.push(
               ...journey.inputs,
               path.join(artifacts, "fixture-app-settings.json"),

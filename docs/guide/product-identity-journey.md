@@ -18,8 +18,8 @@ not change what the result means.
 
 ## The whole journey
 
-Connect read-only Gmail in Cubby Settings, import a Monarch CSV through the
-web or native statement review (or MCP), and capture own-item and label photos on iPhone or Mac.
+Connect read-only Gmail in Cubby Settings, record Monarch financial evidence
+through the agent financial-evidence-import skill, and capture own-item and label photos on iPhone or Mac.
 These sources can arrive in any order. Cubby should converge them on one exact
 Product, an itemized Purchase, and a truthful settlement allocation. A human
 reviews uncertain identity, grouped photos, and ambiguous charges. The
@@ -47,7 +47,7 @@ flowchart LR
     G[Connect Gmail] --> E[Order mail events]
     R[Retailer history or receipt] --> O[Itemized Purchase]
     E --> R
-    M[Import Monarch CSV] --> T[Posted transaction evidence]
+    M[Record financial observations] --> T[Financial transaction evidence]
     F[Take item and label photos] --> Q[Agent proposes photo groups]
     Q --> H{Human review}
     H --> P[Exact Product variant]
@@ -252,7 +252,7 @@ the repository.
 The [local journey coverage map](../agents/core-journey-e2e.md) names each
 executable Product path, its actual synthetic input, the few seeded
 prerequisites, and its remaining gap. The wardrobe check carries uploaded
-photos, synthetic retailer HTML, and a browser-uploaded Monarch CSV through grouping, approval, purchase import,
+photos, synthetic retailer HTML, and normalized financial observations through grouping, approval, purchase import,
 settlement, and Product merge. A separate browser check creates a Product from
 item and label files without an import run. On iPhone, repeat direct photo and
 new Product paths in a disposable local database; inspect candidate order,

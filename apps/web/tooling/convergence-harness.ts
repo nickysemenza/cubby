@@ -1,3 +1,7 @@
+import type {
+  StatementImportInput,
+  StatementRowInput,
+} from "@cubby/schemas/statement-row";
 import { suggestionStatus } from "@cubby/schemas/ai";
 import { assessmentFamily } from "@cubby/schemas/assessment";
 import { readRetainedMail } from "~/server/domains/mail/repo/retained-mail";
@@ -69,11 +73,22 @@ export interface ConvergenceNames {
   host: string;
   sender: string;
   messageId: string;
-  /** The statement account descriptor the CSV rows name. */
+  /** The statement account descriptor normalized statement rows name. */
   statementAccount: string;
   retailerHtml: string;
   retailerCandidate: RetailerCandidate;
-  statementCsv: string;
+  statementRow: Pick<
+    StatementRowInput,
+    | "accountDescriptor"
+    | "statementDate"
+    | "providerAmount"
+    | "merchant"
+    | "rawDescription"
+    | "sourceCategory"
+    | "providerStatus"
+    | "providerTransactionId"
+    | "rowPosition"
+  > & { source: StatementImportInput["source"] };
 }
 
 interface RetailerCandidate {
@@ -124,7 +139,18 @@ export function convergenceNames(token: string): ConvergenceNames {
       payments: [],
       allShipmentsDelivered: true,
     },
-    statementCsv: `Date,Merchant,Category,Account,Original Statement,Notes,Amount,Id\n2026-09-12,${name},Clothing,${name} Visa,SYNTHETIC ORDER ${token},,-42.50,${token}-posted`,
+    statementRow: {
+      source: "monarch",
+      accountDescriptor: `${name} Visa`,
+      statementDate: "2026-09-12",
+      providerAmount: -42.5,
+      merchant: name,
+      rawDescription: `SYNTHETIC ORDER ${token}`,
+      sourceCategory: "Clothing",
+      providerStatus: "posted",
+      providerTransactionId: `${token}-posted`,
+      rowPosition: 1,
+    },
   };
 }
 

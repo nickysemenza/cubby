@@ -18,6 +18,7 @@ const financialTransactionKindValues = [
 ] as const;
 const financialTransactionStatusValues = [
   "expected",
+  "observed",
   "pending",
   "posted",
   "void",

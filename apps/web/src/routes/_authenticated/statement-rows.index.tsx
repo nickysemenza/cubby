@@ -43,26 +43,15 @@ const StatementRowsPage = listChromePage({
   layout: "full",
   page: StatementRowList,
   actions: () => (
-    <>
-      <Button
-        variant="outline"
-        render={
-          <Link
-            to="/suggestions"
-            search={{ family: "statement_transaction" }}
-          />
-        }
-        nativeButton={false}
-      >
-        Review suggestions
-      </Button>
-      <Button
-        render={<Link to="/statement-rows/import" />}
-        nativeButton={false}
-      >
-        Import statement
-      </Button>
-    </>
+    <Button
+      variant="outline"
+      render={
+        <Link to="/suggestions" search={{ family: "statement_transaction" }} />
+      }
+      nativeButton={false}
+    >
+      Review suggestions
+    </Button>
   ),
 });
 

@@ -24,13 +24,10 @@ export const LIVE_REFS = sql`(
 )`;
 
 /**
- * One provider charge's identity: its frozen v1 content hash. Every
- * re-export records a new v2 occurrence of the same charge, and each carries
- * that hash as `legacyExternalId`; a row recorded before occurrence ids has
- * the hash as its own `externalId`.
+ * Explicit source-record identity. Historical reference strings remain links;
+ * equal descriptions and amounts alone do not establish charge equivalence.
  */
-export const chargeKeyOf = (alias: string) =>
-  sql.raw(`COALESCE(${alias}."legacyExternalId", ${alias}."externalId")`);
+export const chargeKeyOf = (alias: string) => sql.raw(`${alias}."chargeKey"`);
 
 /**
  * Charge-level state over ALL live observations of a source, never a filtered
@@ -47,8 +44,9 @@ export const chargeStateOf = (scope: SQL) => sql`(
   LEFT JOIN ${LIVE_REFS} own
     ON own.source = r.source AND own."externalId" = r."externalId"
   LEFT JOIN ${LIVE_REFS} legacy
-    ON legacy.source = r.source AND legacy."externalId" = r."legacyExternalId"
+    ON legacy.source = r.source AND legacy."externalId" = r."legacyReference"
   WHERE r."deletedAt" IS NULL AND (${scope})
+
   GROUP BY r.source, ${chargeKeyOf("r")}
 )`;
 
@@ -79,6 +77,10 @@ export const pendingSuggestion = (alias = "s") =>
   sql`${sql.raw(`"${alias}"`)}.family = ${assessmentFamily.enum.statement_transaction}
     AND ${sql.raw(`"${alias}"`)}.active
     AND ${sql.raw(`"${alias}"`)}.status = ${suggestionStatus.enum.pending}
+    AND EXISTS (SELECT 1 FROM "StatementRow" head
+      WHERE head.source=${sql.raw(`"${alias}"`)}.data->>${"source"}
+        AND head."externalId"=${sql.raw(`"${alias}"`)}.data->>'headRef'
+        AND head.current AND (head."withdrawnAt" IS NULL OR ${sql.raw(`"${alias}"`)}.data->>'reviewReason' IS NOT NULL) AND head."deletedAt" IS NULL)
     -- includes-deleted: removed observations invalidate current advice.
     AND NOT EXISTS (
       SELECT 1 FROM jsonb_array_elements_text(${sql.raw(`"${alias}"`)}.data->'refs') ref(value)

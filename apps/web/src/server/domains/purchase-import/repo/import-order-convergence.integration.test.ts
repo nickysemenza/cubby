@@ -2,6 +2,7 @@ import type { ActorContext } from "@cubby/schemas/context";
 import { emailPurchaseLink } from "@cubby/schemas/email-fields";
 import { financialBookingInput } from "@cubby/schemas/financial-booking";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
+import { recordStatementRowsInput } from "@cubby/schemas/statement-row";
 import { and, eq, isNull } from "drizzle-orm";
 import {
   completeDescribeImageJobs,
@@ -41,6 +42,7 @@ import {
   proposePhotoGroups,
 } from "~/server/domains/photo-import/repo/run/proposals";
 import { stagePhotoImport } from "~/server/domains/photo-import/service/photo-import-stage.service";
+import { recordStatementRows } from "~/server/domains/statement-import/repo/statement-row";
 import { executeEntity } from "~/server/entity-kernel";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import {
@@ -48,7 +50,6 @@ import {
   setMemberLoginParty,
 } from "~/server/http/member-login";
 import { captureBackgroundQueue } from "~/server/testing/background-queue";
-import { commitStatementCsv } from "~/server/workflows/statement-csv-import";
 
 import { startImportRunFixture } from "../service/import-run.fixtures";
 import { resolveRunFinding } from "./findings";
@@ -377,14 +378,44 @@ async function createConvergenceHarness(ctx: TestDbContext) {
   }
 
   async function statement() {
-    // The /statement-rows/import page's "Save rows and create 1 reviewed
-    // transactions" dispatches statementRow.commitCsv with the chosen kind.
-    const committed = await commitStatementCsv(db, actor, {
-      fileName: `${token}.csv`,
-      text: names.statementCsv,
-      selected: [{ key: "1", kind: "purchase" }],
+    const { source, ...row } = names.statementRow;
+    const recorded = await recordStatementRows(
+      db,
+      recordStatementRowsInput.parse({
+        import: {
+          source,
+          label: token,
+          fingerprint: token,
+          rowCountDeclared: 1,
+        },
+        rows: [row],
+      }),
+      actor,
+    );
+    const account = await database.query.financialAccount.findFirst({
+      where: eq(schema.financialAccount.id, cardId),
     });
-    expect(committed.transactions).toBe(1);
+    const evidence = recorded.batchId
+      ? await database.query.statementRow.findFirst({
+          where: eq(schema.statementRow.batchId, recorded.batchId),
+        })
+      : undefined;
+    if (!account || !evidence)
+      throw new Error("Convergence card or evidence missing");
+    await executeEntity(kernel, {
+      action: "create",
+      entity: "financialTransaction",
+      data: buildEntity("financialTransaction", {
+        accountId: parseShortcodeFor("financialAccount", account.shortcode),
+        amount: 42.5,
+        kind: "purchase",
+        status: "posted",
+        postedDate: "2026-09-12",
+        merchant: names.name,
+        rawDescription: names.statementRow.rawDescription,
+        sourceRefs: [{ source, externalId: evidence.externalId }],
+      }),
+    });
     const transaction = await database.query.financialTransaction.findFirst({
       where: and(
         eq(schema.financialTransaction.accountId, cardId),

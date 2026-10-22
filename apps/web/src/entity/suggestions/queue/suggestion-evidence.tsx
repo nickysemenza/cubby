@@ -579,6 +579,14 @@ function StatementEvidence({ row }: { row: StatementRow }) {
         <EvidenceFacts
           rows={[
             ["Descriptor", charge.rawDescription],
+            ...(charge.reviewReason
+              ? [
+                  ["Needs review", charge.reviewReason] satisfies [
+                    string,
+                    string,
+                  ],
+                ]
+              : []),
             ["Merchant", charge.merchant],
             [
               "Amount",
@@ -587,7 +595,12 @@ function StatementEvidence({ row }: { row: StatementRow }) {
               </span>,
             ],
             ["Date", <DateDisplay key="date" start={charge.statementDate} />],
-            ["Status", humanize(charge.providerStatus)],
+            [
+              "Status",
+              charge.providerStatus
+                ? humanize(charge.providerStatus)
+                : "Unknown",
+            ],
             ["Account", <RecordLink key="account" record={row.record} />],
             [
               "Owner",

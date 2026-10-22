@@ -26,12 +26,10 @@ import { superJsonResultSchema } from "~/lib/superjson-wire";
 import { unparsedStartOperationResultSchema } from "~/server/operation-runtime/start-operation.contract";
 import { callMcpTool } from "~/server/testing/mcp-test-utils";
 import { createMcpServer } from "~/server/mcp/server";
-import { financialAccount } from "~/server/db/schema";
-import { parseEntityId } from "@cubby/schemas/identifiers";
+import { financialAccount, statementRow } from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/db/helpers";
-import { replaceSettlementRefs } from "~/server/generic/entity-links/repo/entity-external-ids";
 import { recordStatementRows } from "~/server/domains/statement-import/repo/statement-row";
-import { statementRowExternalId } from "~/server/domains/statement-import/repo/statement-row-identity";
+import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 import {
@@ -496,23 +494,22 @@ async function reviewLateChargeInBrowser(input: {
   }
 }
 
-async function importSyntheticMonarchCsv(
+async function recordSyntheticStatement(
   pool: Pool,
   db: Database,
+  kernel: KernelContext,
   userId: string,
-  origin: string,
-  artifacts: string,
 ): Promise<string> {
-  const member = await pool.query<{ id: string }>(
-    `SELECT id FROM "LedgerParty" WHERE "userId" = $1 AND kind = 'member' AND "deletedAt" IS NULL`,
+  const member = await pool.query<{ shortcode: string }>(
+    `SELECT shortcode FROM "LedgerParty" WHERE "userId" = $1 AND kind = 'member' AND "deletedAt" IS NULL`,
     [userId],
   );
-  const memberId = member.rows[0]?.id;
+  const memberId = member.rows[0]?.shortcode;
   if (member.rows.length !== 1 || !memberId)
     throw new Error("Synthetic member is unavailable for statement import");
-  await insertWithShortcode(db, "financialAccount", {
+  const account = await createFixtureWithContext(kernel, "financialAccount", {
     name: "Fixture Visa",
-    ledgerPartyId: parseEntityId("ledgerParty", memberId),
+    ledgerPartyId: memberId,
     identity: { kind: "credit_card", issuer: null, network: "visa" },
     cardNumbers: [
       {
@@ -532,108 +529,86 @@ async function importSyntheticMonarchCsv(
     ],
     provisional: false,
   });
-  const api = await request.newContext({
-    baseURL: origin,
-    extraHTTPHeaders: { Origin: origin },
-  });
-  const csvPath = new URL(
-    "../../tests/e2e/fixtures/synthetic-monarch-wardrobe.csv",
-    import.meta.url,
-  ).pathname;
-  try {
-    const login = await api.post("/api/auth/sign-in/email", {
-      data: {
-        email: "sim@cubby.localhost",
-        password: "cubby-sim-local-only",
+  const input = recordStatementRowsInput.parse({
+    import: {
+      source: "monarch",
+      label: "Synthetic wardrobe statement",
+      fingerprint: "synthetic-wardrobe-statement-1",
+      dateKind: "unknown",
+      rowCountDeclared: 2,
+    },
+    rows: [
+      {
+        providerTransactionId: "synthetic-statement-1",
+        accountDescriptor: "Fixture Visa (...4242)",
+        statementDate: "2026-09-21",
+        providerAmount: -29.99,
+        merchant: "Synthetic Outfitters",
+        rawDescription: "SYNTHETIC OUTFITTERS ORDER 1",
+        sourceCategory: "Clothing",
       },
-    });
-    if (!login.ok())
-      throw new Error(`Statement review sign-in failed: ${await login.text()}`);
-    const state = await api.storageState();
-    state.cookies = state.cookies.filter(
-      (cookie) => !cookie.name.endsWith("session_data"),
-    );
-    const browser = await chromium.launch();
-    try {
-      const context = await browser.newContext({
-        storageState: state,
-        viewport: { width: 1280, height: 900 },
-        recordVideo: { dir: artifacts, size: { width: 1280, height: 900 } },
-      });
-      const page = await context.newPage();
-      try {
-        await page.goto(`${origin}/statement-rows/import`);
-        const fileInput = page.getByLabel("Statement CSV file");
-        await expect(fileInput).toBeEnabled();
-        await fileInput.setInputFiles(csvPath);
-        const preview = page.getByRole("region", { name: "Statement preview" });
-        await expect(preview.getByText("Ready to record")).toHaveCount(2);
-        await expect(preview).toContainText("Fixture Visa");
-        await expect(preview).toContainText("monarch category: Clothing");
-        await expect(preview).toContainText(
-          "monarch category: Credit Card Payment",
-        );
-        await preview
-          .getByRole("checkbox", {
-            name: "Record SYNTHETIC OUTFITTERS ORDER 1",
-          })
-          .check();
-        await expect(
-          preview.getByRole("button", { name: "Choose transaction kinds" }),
-        ).toBeDisabled();
-        await preview
-          .getByRole("combobox", {
-            name: "Transaction kind for SYNTHETIC OUTFITTERS ORDER 1",
-          })
-          .selectOption("purchase");
-        await preview
-          .getByRole("button", {
-            name: "Save rows and create 1 reviewed transactions",
-          })
-          .click();
-        await expect(page.locator("output")).toContainText(
-          "1 transactions created · 2 new source rows",
-        );
-        await expect(fileInput).toBeEnabled();
-        await fileInput.setInputFiles(csvPath);
-        await expect(preview.getByText("Already recorded")).toBeVisible();
-        await preview
-          .getByRole("button", { name: "Save 2 source rows" })
-          .click();
-        await expect(page.locator("output")).toContainText(
-          "0 transactions created · 0 new source rows",
-        );
-      } finally {
-        await context.close();
-        const videoPath = await page.video()?.path();
-        if (videoPath)
-          console.log(
-            `[headless-wardrobe-e2e] Statement review video: ${videoPath}`,
-          );
-      }
-    } finally {
-      await browser.close();
-    }
-  } finally {
-    await api.dispose();
-  }
-  const recorded = await pool.query<{ shortcode: string }>(
-    `SELECT DISTINCT t.shortcode FROM "FinancialTransaction" t
-     JOIN "EntityExternalId" x ON x."entityId" = t.id AND x.kind = 'settlement_ref'
-       AND x.source = 'monarch' AND x."deletedAt" IS NULL
-     WHERE t."deletedAt" IS NULL`,
+      {
+        providerTransactionId: "synthetic-statement-2",
+        accountDescriptor: "Fixture Visa (...4242)",
+        statementDate: "2026-09-22",
+        providerAmount: 50,
+        merchant: "Fixture Bank",
+        rawDescription: "SYNTHETIC CARD PAYMENT",
+        sourceCategory: "Credit Card Payment",
+      },
+    ],
+    complete: false,
+  });
+  const actor = buildActorContext(testUserId(userId), "mcp");
+  const recorded = await recordStatementRows(db, input, actor);
+  if (recorded.inserted !== 2 || !recorded.batchId)
+    throw new Error("Synthetic normalized statement evidence missing");
+  const evidence = await getDb(db).query.statementRow.findFirst({
+    where: and(
+      eq(statementRow.source, "monarch"),
+      eq(statementRow.batchId, recorded.batchId),
+      eq(statementRow.providerTransactionId, "synthetic-statement-1"),
+      notDeleted(statementRow),
+    ),
+  });
+  if (!evidence) throw new Error("Synthetic charge evidence missing");
+  // This reviewed fixture approves only the purchase; the card payment stays evidence.
+  const transaction = await createFixtureWithContext(
+    kernel,
+    "financialTransaction",
+    {
+      accountId: account.id,
+      kind: "purchase",
+      status: "posted",
+      amount: -evidence.providerAmount,
+      postedDate: evidence.statementDate,
+      merchant: evidence.merchant,
+      rawDescription: evidence.rawDescription,
+      sourceCategory: evidence.sourceCategory,
+      sourceRefs: [
+        { source: evidence.source, externalId: evidence.externalId },
+      ],
+    },
   );
-  const statementRows = await pool.query<{ count: string }>(
-    `SELECT count(*)::text AS count FROM "StatementRow" WHERE source = 'monarch'`,
+  const replay = await recordStatementRows(db, input, actor);
+  const transactions = await pool.query<{ shortcode: string }>(
+    `SELECT t.shortcode FROM "FinancialTransaction" t
+     JOIN "FinancialAccount" a ON a.id = t."accountId"
+     WHERE a.shortcode = $1 AND t."deletedAt" IS NULL`,
+    [account.id],
   );
-  if (recorded.rows.length !== 1 || statementRows.rows[0]?.count !== "2")
+  if (
+    replay.inserted !== 0 ||
+    replay.alreadyInThisBatch !== 2 ||
+    transactions.rows.length !== 1
+  )
     throw new Error(
-      "Replaying the synthetic Monarch CSV duplicated its evidence",
+      "Replaying normalized statement evidence duplicated rows or transactions",
     );
   console.log(
-    "[headless-wardrobe-e2e] Synthetic Monarch CSV browser preview, confirmation, evidence, and replay verified",
+    "[headless-wardrobe-e2e] Normalized statement evidence, explicit reviewed transaction, and replay verified",
   );
-  return recorded.rows[0]!.shortcode;
+  return transaction.id;
 }
 
 async function importSyntheticPurchase(
@@ -880,20 +855,23 @@ async function reimportInNewRunAndAssertNoOp(
 }
 
 /**
- * Trap 1 + 2: an overlapping statement CSV whose rows were already imported,
+ * Trap 1 + 2: an overlapping normalized statement batch whose rows were already imported,
  * alongside a decoy charge sharing the purchase's exact amount on a different
  * day/merchant. Only the decoy row may be recorded; the overlap must not
  * mint a second StatementRow under a new batch. Returns the decoy
  * FinancialTransaction so the duplicate-order-history trap can confirm it
  * stays unmatched.
  */
-async function recordOverlappingStatementCsvAndDecoy(
+async function recordOverlappingStatementAndDecoy(
   db: Database,
+  kernel: KernelContext,
   userId: string,
 ): Promise<{ id: string }> {
   const actor = buildActorContext(testUserId(userId), "mcp");
   const overlapAndDecoyRows = [
     {
+      providerTransactionId: "synthetic-statement-1",
+      sourceCategory: "Clothing",
       accountDescriptor: "Fixture Visa (...4242)",
       statementDate: "2026-09-21",
       providerAmount: -29.99,
@@ -902,6 +880,8 @@ async function recordOverlappingStatementCsvAndDecoy(
     },
     {
       accountDescriptor: "Fixture Visa (...4242)",
+      providerTransactionId: "synthetic-statement-2",
+      sourceCategory: "Credit Card Payment",
       statementDate: "2026-09-22",
       providerAmount: 50,
       merchant: "Fixture Bank",
@@ -909,6 +889,8 @@ async function recordOverlappingStatementCsvAndDecoy(
     },
     {
       accountDescriptor: "Fixture Visa (...4242)",
+      providerTransactionId: "synthetic-statement-decoy",
+      sourceCategory: "Clothing",
       statementDate: "2026-08-05",
       providerAmount: -29.99,
       merchant: "Synthetic Deceptive Retail",
@@ -937,11 +919,11 @@ async function recordOverlappingStatementCsvAndDecoy(
     recorded.alreadyInThisBatch !== 0
   )
     throw new Error(
-      `Overlapping statement CSV did not dedupe against already-imported rows: ${JSON.stringify(recorded)}`,
+      `Overlapping normalized statement batch did not dedupe against already-imported rows: ${JSON.stringify(recorded)}`,
     );
 
   const fixtureVisa = await getDb(db)
-    .select({ id: financialAccount.id })
+    .select({ shortcode: financialAccount.shortcode })
     .from(financialAccount)
     .where(
       and(
@@ -949,33 +931,41 @@ async function recordOverlappingStatementCsvAndDecoy(
         notDeleted(financialAccount),
       ),
     );
-  const fixtureVisaId = fixtureVisa[0]?.id;
+  const fixtureVisaId = fixtureVisa[0]?.shortcode;
   if (fixtureVisa.length !== 1 || !fixtureVisaId)
     throw new Error("Fixture Visa account is unavailable for the decoy charge");
-  const decoyExternalId = await statementRowExternalId({
-    source: "monarch",
-    account: "Fixture Visa (...4242)",
-    date: "2026-08-05",
-    amount: -29.99,
-    originalStatement: "SYNTHETIC DECEPTIVE RETAIL CHARGE 1",
+  const evidence = await getDb(db).query.statementRow.findFirst({
+    where: and(
+      eq(statementRow.source, "monarch"),
+      eq(statementRow.providerTransactionId, "synthetic-statement-decoy"),
+      notDeleted(statementRow),
+    ),
   });
-  const created = await insertWithShortcode(db, "financialTransaction", {
-    accountId: parseEntityId("financialAccount", fixtureVisaId),
-    kind: "purchase",
-    status: "posted",
-    amount: 29.99,
-    transactionDate: null,
-    postedDate: "2026-08-05",
-    merchant: "Synthetic Deceptive Retail",
-    rawDescription: "SYNTHETIC DECEPTIVE RETAIL CHARGE 1",
-    sourceCategory: "Clothing",
-  });
-  await getDb(db).transaction((tx) =>
-    replaceSettlementRefs(tx, created.id, [
-      { source: "monarch", externalId: decoyExternalId },
-    ]),
+  if (!evidence) throw new Error("Synthetic decoy evidence missing");
+  const created = await createFixtureWithContext(
+    kernel,
+    "financialTransaction",
+    {
+      accountId: fixtureVisaId,
+      kind: "purchase",
+      status: "posted",
+      amount: 29.99,
+      transactionDate: null,
+      postedDate: "2026-08-05",
+      merchant: "Synthetic Deceptive Retail",
+      rawDescription: "SYNTHETIC DECEPTIVE RETAIL CHARGE 1",
+      sourceCategory: "Clothing",
+      sourceRefs: [
+        { source: evidence.source, externalId: evidence.externalId },
+      ],
+    },
   );
-  return created;
+  const transaction = await resolveOrThrow(
+    db,
+    "financialTransaction",
+    created.id,
+  );
+  return { id: transaction };
 }
 
 /**
@@ -1080,7 +1070,7 @@ async function commitDuplicateOrderHistoryCapture(
 }
 
 /**
- * ForgeWear traps: an overlapping statement CSV whose rows were already
+ * ForgeWear traps: an overlapping normalized statement batch whose rows were already
  * imported, a decoy charge sharing the purchase's exact amount on a different
  * day/merchant, and a duplicate order-history capture of the same order under
  * a different source key. None may mint a duplicate Expense/Purchase or match
@@ -1094,8 +1084,9 @@ async function runForgeWearTraps(
   photoProduct: { id: string; shortcode: string },
   purchaseProduct: { id: string; shortcode: string },
 ): Promise<void> {
-  const decoyTransaction = await recordOverlappingStatementCsvAndDecoy(
+  const decoyTransaction = await recordOverlappingStatementAndDecoy(
     db,
+    kernel,
     userId,
   );
   await commitDuplicateOrderHistoryCapture(kernel, purchaseProduct);
@@ -1187,14 +1178,13 @@ export async function runWardrobeConvergenceScenario({
     );
     if (beforeStatement.settlements.length)
       throw new Error(
-        "Purchase import invented a statement settlement before CSV upload",
+        "Purchase import invented a statement settlement before normalized statement recording",
       );
-    const statementTransactionId = await importSyntheticMonarchCsv(
+    const statementTransactionId = await recordSyntheticStatement(
       pool,
       db,
+      kernel,
       userId,
-      origin,
-      artifacts,
     );
     const afterStatement = await readConvergenceFacts(
       pool,

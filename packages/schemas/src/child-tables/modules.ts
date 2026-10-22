@@ -325,6 +325,14 @@ export const modulesChildren = [
        */
       { key: "dateKind", kind: "text", notNull: true, default: "unknown" },
       { key: "rowCountDeclared", kind: "integer" },
+      {
+        key: "observedAt",
+        kind: "timestamp",
+        notNull: true,
+        default: { now: true },
+      },
+      { key: "coverage", kind: "jsonb" },
+      { key: "completedAt", kind: "timestamp" },
       { key: "notes", kind: "text" },
       {
         key: "createdAt",
@@ -440,6 +448,28 @@ export const modulesChildren = [
       { key: "rowPosition", kind: "integer" },
       { key: "providerTransactionId", kind: "text" },
       { key: "legacyExternalId", kind: "text" },
+      { key: "legacyReference", kind: "text" },
+      {
+        key: "chargeKey",
+        kind: "text",
+        notNull: true,
+        default: { sql: "gen_random_uuid()::text" },
+      },
+      { key: "current", kind: "boolean", notNull: true, default: true },
+      { key: "withdrawnAt", kind: "timestamp" },
+      {
+        key: "withdrawalImportId",
+        kind: "uuid",
+        reference: { table: "statementImport", column: "id" },
+      },
+      {
+        key: "lastObservedAt",
+        kind: "timestamp",
+        notNull: true,
+        default: { now: true },
+      },
+      { key: "providerAccountId", kind: "text" },
+      { key: "providerData", kind: "jsonb" },
       { key: "accountDescriptor", kind: "text", notNull: true },
       { key: "statementDate", kind: "date", notNull: true },
       { key: "amount", kind: "doublePrecision", notNull: true },
@@ -512,6 +542,7 @@ export const modulesChildren = [
         name: "StatementRow_source_providerTransactionId_idx",
         on: ["source", "providerTransactionId"],
       },
+      { name: "StatementRow_source_charge_idx", on: ["source", "chargeKey"] },
       { name: "StatementRow_batchId_idx", on: ["batchId"] },
       { name: "StatementRow_statementDate_idx", on: ["statementDate"] },
       {
@@ -576,7 +607,7 @@ export const modulesChildren = [
       },
       {
         name: "StatementRow_externalId_format_check",
-        sql: "{externalId} ~ '^v[12]:[0-9a-f]{64}$'",
+        sql: "{externalId} ~ '^v[123]:[0-9a-f]{64}$'",
       },
     ],
   }),
