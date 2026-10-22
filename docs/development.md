@@ -393,6 +393,11 @@ native PostgreSQL installation remain owned by their existing runners.
     Failed image jobs are never re-queued silently.
   - App-open recovery (`requestCatchUp`) admits mail discovery and wakes due
     durable Jobs. Stopped work still requires explicit retry.
+  - Financial generation publishes first-time rule recommendations in bounded
+    batches, sharing charge admission reads and immutable Assessment inserts.
+    Existing decisions, paid labels and suppressions retain the ordinary
+    per-charge writer. A failed batch falls back to individual admission;
+    the post-commit settlement check finishes before acknowledging its items.
   - A financial Sweep's generation-step Retry failed re-admits only its retained
     charge references, in bounded pages through the current-evidence planner.
     It does not restart the population cursor or label healthy charges again.

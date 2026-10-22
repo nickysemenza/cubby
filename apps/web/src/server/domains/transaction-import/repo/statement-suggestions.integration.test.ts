@@ -417,6 +417,24 @@ describe("statement Transaction suggestions", () => {
       );
     expect(batch).toHaveLength(4);
     expect(view(batch)).toEqual(view(single));
+    const generated = await generateStatementSuggestionPage(ctx.db, {
+      after: null,
+      runId: null,
+    });
+    expect(generated).toMatchObject({ published: batch.length, failed: [] });
+    // Batching the initial publication must retain the exact evidence and
+    // judgments that the single-charge review/apply path rebuilds.
+    for (const proposal of single) {
+      expect(
+        await publishChargeProposal(ctx.db, proposal, {
+          kind: "rule",
+          model: null,
+          revision: statementSuggestionsRepo.STATEMENT_SUGGESTION_REVISION,
+          runId: null,
+          evaluationId: null,
+        }),
+      ).toMatchObject({ outcome: "unchanged", labelsReused: 0 });
+    }
   });
 
   // Failure modes: a re-export doubles the suggestion; an ignore recorded on

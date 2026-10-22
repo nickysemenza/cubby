@@ -200,6 +200,7 @@ function Table({ block }: { block: Extract<ReportBlock, { kind: "table" }> }) {
       <StaticTable
         rows={block.rows}
         rowKey={(row) => row.id}
+        className={cn(block.columns.length > 4 && "min-w-3xl")}
         columns={block.columns.map<
           StaticTableColumn<(typeof block.rows)[number]>
         >((column, index) => ({

@@ -6,7 +6,7 @@ import {
   feedbackAuthority,
   feedbackEvent,
 } from "@cubby/schemas/assessment";
-import { and, eq, sql, type SQL } from "drizzle-orm";
+import { and, eq, inArray, sql, type SQL } from "drizzle-orm";
 import { isEqual } from "es-toolkit";
 import { z } from "zod";
 
@@ -23,7 +23,7 @@ import {
 
 import {
   assessmentProjectionSnapshot,
-  insertPublishedAssessmentState,
+  insertPublishedAssessmentStates,
 } from "./assessment-state";
 import { fieldInputFingerprint } from "./field-input-fence";
 
@@ -67,74 +67,118 @@ export const automaticApplicationRule = (assessmentId: SQL) => sql<
 export const matchedRulesOf = (data: SQL) =>
   sql<unknown>`CASE WHEN jsonb_typeof(${data}->'matchedRules') = 'array' THEN ${data}->'matchedRules' ELSE '[]'::jsonb END`;
 
+/** Publishes immutable evidence atomically, returning one row per input in order. */
+export async function publishAssessments(
+  db: Database,
+  entries: readonly {
+    input: z.input<typeof assessmentPublication>;
+    projection?: Partial<typeof assessmentState.$inferInsert>;
+  }[],
+) {
+  // Validate every publication and creation snapshot before any writes.
+  const prepared = entries.map(({ input: raw, projection = {} }) => {
+    const input = assessmentPublication.parse(raw);
+    assessmentJudgments[input.family].parse(input.judgment);
+    const suggestedValue =
+      projection.suggestedValue === undefined
+        ? input.judgment
+        : projection.suggestedValue;
+    const target =
+      input.subject.kind === "evaluation_sample"
+        ? null
+        : input.subject.kind === "email_link" && input.subject.recordId === null
+          ? { entity: "orderMailEvent", recordId: input.subject.eventId }
+          : input.subject.recordId === null
+            ? null
+            : {
+                entity: input.subject.entity,
+                recordId: input.subject.recordId,
+              };
+    // The creation snapshot is the row's first state; rebuild replays it.
+    const state = target && {
+      ...assessmentProjectionTargets[input.family].parse({
+        ...target,
+        ...projection,
+      }),
+      field: input.subject.kind === "field" ? input.subject.field : "",
+      fingerprint: input.fingerprint,
+      ...(input.subject.kind === "run_finding" && {
+        ledgerPartyId: input.subject.ledgerPartyId,
+      }),
+      ...projection,
+      suggestedValue,
+    };
+    return {
+      input,
+      state,
+      snapshot: state && assessmentProjectionSnapshot(state),
+    };
+  });
+  if (!prepared.length) return [];
+  const publications = new Map<string, (typeof prepared)[number]>();
+  for (const entry of prepared) {
+    const previous = publications.get(entry.input.publicationKey);
+    if (previous && !isEqual(previous.input, entry.input))
+      throw new Error(
+        "Assessment publication retry changed immutable evidence",
+      );
+    // Sequential replays keep the first creation projection for this key.
+    if (!previous) publications.set(entry.input.publicationKey, entry);
+  }
+  return withTransactionDatabase(db, async (transactionDb) => {
+    const client = getDb(transactionDb);
+    const inserted = await client
+      .insert(assessment)
+      .values(
+        [...publications.values()].map(({ input, snapshot }) => ({
+          ...input,
+          judgment:
+            input.judgment === null ? sql`'null'::jsonb` : input.judgment,
+          projection: snapshot,
+        })),
+      )
+      .onConflictDoNothing({ target: assessment.publicationKey })
+      .returning();
+    const rowsByKey = new Map(inserted.map((row) => [row.publicationKey, row]));
+    const conflicts = [...publications.keys()].filter(
+      (key) => !rowsByKey.has(key),
+    );
+    if (conflicts.length) {
+      const existing = await client
+        .select()
+        .from(assessment)
+        .where(inArray(assessment.publicationKey, conflicts));
+      for (const row of existing) rowsByKey.set(row.publicationKey, row);
+    }
+    const rows = prepared.map(({ input }) => {
+      const row = rowsByKey.get(input.publicationKey);
+      if (!row) throw new Error("Assessment publication returned no row");
+      if (!isEqual(input, assessmentPublication.parse(row)))
+        throw new Error(
+          "Assessment publication retry changed immutable evidence",
+        );
+      return row;
+    });
+    await insertPublishedAssessmentStates(
+      transactionDb,
+      inserted.flatMap((row) => {
+        const state = publications.get(row.publicationKey)?.state;
+        return state ? [{ ...state, id: row.id, family: row.family }] : [];
+      }),
+    );
+    return rows;
+  });
+}
+
 /** A publication key names exact immutable evidence, never a mutable slot. */
 export async function publishAssessment(
   db: Database,
   raw: z.input<typeof assessmentPublication>,
   projection: Partial<typeof assessmentState.$inferInsert> = {},
 ) {
-  const input = assessmentPublication.parse(raw);
-  assessmentJudgments[input.family].parse(input.judgment);
-  const suggestedValue =
-    projection.suggestedValue === undefined
-      ? input.judgment
-      : projection.suggestedValue;
-  const target =
-    input.subject.kind === "evaluation_sample"
-      ? null
-      : input.subject.kind === "email_link" && input.subject.recordId === null
-        ? { entity: "orderMailEvent", recordId: input.subject.eventId }
-        : input.subject.recordId === null
-          ? null
-          : { entity: input.subject.entity, recordId: input.subject.recordId };
-  // The creation snapshot is the row's first state; rebuild replays it.
-  const state = target && {
-    ...assessmentProjectionTargets[input.family].parse({
-      ...target,
-      ...projection,
-    }),
-    field: input.subject.kind === "field" ? input.subject.field : "",
-    fingerprint: input.fingerprint,
-    ...(input.subject.kind === "run_finding" && {
-      ledgerPartyId: input.subject.ledgerPartyId,
-    }),
-    ...projection,
-    suggestedValue,
-  };
-  return withTransactionDatabase(db, async (transactionDb) => {
-    const client = getDb(transactionDb);
-    const [inserted] = await client
-      .insert(assessment)
-      .values({
-        ...input,
-        judgment: input.judgment === null ? sql`'null'::jsonb` : input.judgment,
-        projection: state && assessmentProjectionSnapshot(state),
-      })
-      .onConflictDoNothing({ target: assessment.publicationKey })
-      .returning();
-    const row =
-      inserted ??
-      (
-        await client
-          .select()
-          .from(assessment)
-          .where(eq(assessment.publicationKey, input.publicationKey))
-          .limit(1)
-      )[0];
-    if (!row) throw new Error("Assessment publication returned no row");
-    if (!isEqual(input, assessmentPublication.parse(row)))
-      throw new Error(
-        "Assessment publication retry changed immutable evidence",
-      );
-    if (inserted && state)
-      await insertPublishedAssessmentState(transactionDb, {
-        ...state,
-        id: row.id,
-        family: input.family,
-        suggestedValue,
-      });
-    return row;
-  });
+  const [row] = await publishAssessments(db, [{ input: raw, projection }]);
+  if (!row) throw new Error("Assessment publication returned no row");
+  return row;
 }
 
 /** Field producers publish evidence before its live projection; serving is a producer decision. */

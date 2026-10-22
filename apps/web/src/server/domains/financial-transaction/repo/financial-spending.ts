@@ -121,6 +121,14 @@ function spendingBlocker(input: {
   return null;
 }
 
+const resolveSpendingVendors = (db: Database, names: readonly string[]) =>
+  resolveNames(
+    db,
+    "vendor",
+    names.map((name) => ({ name })),
+    { create: false },
+  );
+
 /** Read-only metadata for one synchronous proposal page; never reuse at commit or across model work. */
 export async function prepareFinancialSpendingPage(
   db: Database,
@@ -163,7 +171,13 @@ export async function prepareFinancialSpendingPage(
   );
   for (const transaction of transactions)
     transactionsById.set(transaction.shortcode, transaction);
-  return { accounts: accountsById, transactions: transactionsById };
+  return {
+    accounts: accountsById,
+    transactions: transactionsById,
+    // Promise caching coalesces concurrent identical reads without extending
+    // their lifetime beyond this advisory page. Commit rebuilds without it.
+    vendors: new Map<string, ReturnType<typeof resolveSpendingVendors>>(),
+  };
 }
 export type FinancialSpendingPage = Awaited<
   ReturnType<typeof prepareFinancialSpendingPage>
@@ -357,11 +371,27 @@ function reviewedSpendingAdvice(request: Request) {
   });
 }
 
+function spendingVendors(
+  db: Database,
+  names: readonly string[],
+  page?: FinancialSpendingPage,
+) {
+  const key = canonicalJson(names);
+  const cached = page?.vendors.get(key);
+  if (cached) return cached;
+  const lookup = names.length
+    ? resolveSpendingVendors(db, names)
+    : Promise.resolve([]);
+  page?.vendors.set(key, lookup);
+  return lookup;
+}
+
 /** Discovery does not authorize a write; the same retained evidence is rebuilt at commit. */
 async function discoverSpendingEvidence(
   db: Database,
   request: Request,
   facts: Awaited<ReturnType<typeof spendingFacts>>,
+  page?: FinancialSpendingPage,
 ) {
   const { row, source, account, allocations, graphs } = facts;
   let advice = reviewedSpendingAdvice(request);
@@ -373,14 +403,7 @@ async function discoverSpendingEvidence(
       ].filter((value): value is string => Boolean(value)),
     ),
   ];
-  const resolved = names.length
-    ? await resolveNames(
-        db,
-        "vendor",
-        names.map((name) => ({ name })),
-        { create: false },
-      )
-    : [];
+  const resolved = await spendingVendors(db, names, page);
   const vendors = new Map(
     resolved.flatMap((result) =>
       result.row ? [[result.row.id, result.row] as const] : [],
@@ -722,7 +745,7 @@ export async function previewFinancialSpending(
     const existing = await existingSpendingOutcome(db, { facts, basis });
     if (existing) return existing;
   }
-  const evidence = await discoverSpendingEvidence(db, request, facts);
+  const evidence = await discoverSpendingEvidence(db, request, facts, page);
   const {
     facts: currentFacts,
     advice,
