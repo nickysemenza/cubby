@@ -121,8 +121,8 @@ describe("photo coordinator model eval", () => {
         },
         async ({ harness }) => {
           // The web Worker is the harness's primary Worker, so `listen()`'s URL
-          // serves the app; the agent queue is reached through its producer.
-          const queue = harness.getWorker("cubby-queue-producer");
+          // serves the app; the Job drain is reached through its wake producer.
+          const queue = harness.getWorker("cubby-job-wake-producer");
           const model = harness.getWorker("cubby-test-model");
 
           // Catalog Products are created once and shared by every candidate:
@@ -186,7 +186,7 @@ describe("photo coordinator model eval", () => {
                   targetFingerprint: `eval-${crypto.randomUUID()}`,
                 });
             }
-            const started = await startPhotoInventoryCoordinator(ctx.db, {
+            await startPhotoInventoryCoordinator(ctx.db, {
               publicId: run.publicId,
               actorUserId: ctx.actor.userId,
             });
@@ -196,21 +196,11 @@ describe("photo coordinator model eval", () => {
               body: JSON.stringify(choice),
             });
             const startedAt = Date.now();
-            const dispatched = await queue.fetch(
-              "https://queue.test/dispatch",
-              {
-                method: "POST",
-                headers: { "content-type": "application/json" },
-                body: JSON.stringify({
-                  version: 1,
-                  type: "start_or_resume",
-                  runId: run.id,
-                  purpose: "photo_inventory",
-                  eventId: started.eventId,
-                  generation: started.eventId,
-                }),
-              },
-            );
+            const dispatched = await queue.fetch("https://queue.test/wake", {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: "{}",
+            });
             if (!dispatched.ok)
               throw new Error(
                 `Dispatch failed (${dispatched.status}): ${await dispatched.text()}`,

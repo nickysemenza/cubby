@@ -8,6 +8,7 @@ import {
 } from "../identifier-fields.js";
 import {
   RUN_PURPOSE_LABEL,
+  VISIBLE_RUN_PURPOSES,
   runCause,
   runPurpose,
   runRetirementReason,
@@ -75,6 +76,15 @@ export default defineEntity({
         // A step-ledger Run (maintenance, sweep) leads with its steps; the
         // slot is empty for every other purpose.
         { kind: "slot", id: "steps", title: "Steps" },
+        // The Assessments a step-ledger Run published, then the Job that
+        // executes it: limits, waits and raw logs.
+        { kind: "slot", id: "decisions", title: "Decisions" },
+        {
+          kind: "slot",
+          id: "diagnostics",
+          workspace: "evidence",
+          title: "Diagnostics",
+        },
         { kind: "slot", id: "live-progress", title: "Progress" },
         // What the run counted and the records it worked, before its
         // controls and agent: the first questions about any run.
@@ -164,7 +174,6 @@ export default defineEntity({
             "skillRevision",
             "runtimeRevision",
             "decisionRevision",
-            "dispatchAttempts",
             "predecessorRunId",
             "parentRunId",
             "cause",
@@ -227,15 +236,17 @@ export default defineEntity({
           filters: [{ id: "purpose", value: ["ai_suggest", "background"] }],
         },
       ],
-      // Ephemeral runs only group AI usage (thousands a day), and a routine
-      // run is a scheduled pass that found nothing; a person opens the list
-      // for work somebody started or that changed something. Clearing the
-      // filter shows both.
+      // Ephemeral runs only group AI usage (thousands a day), routine kinds
+      // are scheduler passes (`RUN_KINDS[*].routine`), and a routine run is a
+      // scheduled pass that found nothing; a person opens the list for work
+      // somebody started or that changed something. Clearing the filter
+      // shows all three.
       initialFilter: [
         {
           id: "trigger",
           value: ["foreground", "discovery", "manual", "backfill", "scheduled"],
         },
+        { id: "purpose", value: [...VISIBLE_RUN_PURPOSES] },
         { id: "routine", value: "false" },
       ],
     },
@@ -567,12 +578,6 @@ export default defineEntity({
         validation: readOnly(z.number().int()),
       },
       {
-        key: "dispatchAttempts",
-        kind: "number",
-        display: { list: false },
-        validation: readOnly(z.number().int().nonnegative()),
-      },
-      {
         key: "dispatchError",
         labelOverride: "Failure details",
         kind: "text",
@@ -735,7 +740,6 @@ export default defineEntity({
       "auditedAt",
       "failureCode",
       "notes",
-      { key: "dispatchAttempts", defaultValue: 0 },
       "dispatchError",
       "coordinatorStartedAt",
       { key: "createdAt" },
@@ -773,7 +777,6 @@ export default defineEntity({
       "skillRevision",
       "runtimeRevision",
       "decisionRevision",
-      "dispatchAttempts",
       "dispatchError",
       "coordinatorStartedAt",
       "auditedAt",
@@ -946,13 +949,6 @@ export default defineEntity({
         unique: true,
         where:
           "{purpose} = 'maintenance' AND {status} IN ('running', 'paused_auth')",
-      },
-      {
-        name: "Run_one_active_derived_refresh",
-        on: ["purpose"],
-        unique: true,
-        where:
-          "{purpose} = 'derived_refresh' AND {status} IN ('running', 'paused_auth', 'paused')",
       },
     ],
     checks: [

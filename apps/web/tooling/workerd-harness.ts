@@ -33,9 +33,8 @@ const webRoot = path.resolve(
  * - `real`: the built Worker's own consumer, with production settings except
  *   `max_batch_timeout: 0`, so a test never waits out a batching window.
  * - `dropped`: `local-offline-peers` acknowledges and discards every message.
- * - `unconsumed`: no consumer; messages stay queued for the harness's life.
  */
-type QueueRoute = "real" | "dropped" | "unconsumed";
+type QueueRoute = "real" | "dropped";
 
 /**
  * Each profile routes every production queue consumer explicitly. The
@@ -43,16 +42,13 @@ type QueueRoute = "real" | "dropped" | "unconsumed";
  * Worker itself.
  */
 interface WorkerdProfileDefinition {
-  queues: Record<
-    "cubby-background" | "cubby-telemetry" | "cubby-purchase-agent",
-    QueueRoute
-  >;
+  queues: Record<"cubby-background" | "cubby-telemetry", QueueRoute>;
   /** A local Google OAuth/Gmail provider (`tooling/local-google-provider.ts`). */
   googleProvider: boolean;
   /**
    * The purchase agent's model peer (`cubby-test-model`), the Worker's AI
-   * Gateway peer (`cubby-test-gateway`), and `cubby-queue-producer`, which
-   * dispatches agent events to the coordinator. Deterministic unless a
+   * Gateway peer (`cubby-test-gateway`), and `cubby-job-wake-producer`, which
+   * wakes durable dispatch Jobs or probes coordinator RPCs. Deterministic unless a
    * caller supplies live peers.
    */
   purchaseAgentPeers: boolean;
@@ -72,7 +68,6 @@ export const WORKERD_PROFILES = {
     queues: {
       "cubby-background": "dropped",
       "cubby-telemetry": "dropped",
-      "cubby-purchase-agent": "unconsumed",
     },
     googleProvider: false,
     purchaseAgentPeers: false,
@@ -84,19 +79,17 @@ export const WORKERD_PROFILES = {
     queues: {
       "cubby-background": "real",
       "cubby-telemetry": "dropped",
-      "cubby-purchase-agent": "unconsumed",
     },
     googleProvider: true,
     purchaseAgentPeers: false,
     testGatewayPeer: false,
     harnessLock: false,
   },
-  /** Provider acquisition and research use the deployed Workflow/queue handoffs. */
+  /** Provider acquisition and research use the deployed Job handoffs. */
   "gmail-research": {
     queues: {
       "cubby-background": "real",
       "cubby-telemetry": "real",
-      "cubby-purchase-agent": "real",
     },
     googleProvider: true,
     purchaseAgentPeers: true,
@@ -106,9 +99,8 @@ export const WORKERD_PROFILES = {
   /** Actual Mac captures; the production coordinator uses scripted judgment. */
   "native-import": {
     queues: {
-      "cubby-background": "dropped",
+      "cubby-background": "real",
       "cubby-telemetry": "dropped",
-      "cubby-purchase-agent": "real",
     },
     googleProvider: false,
     purchaseAgentPeers: true,
@@ -117,14 +109,12 @@ export const WORKERD_PROFILES = {
   },
   /**
    * The purchase agent against scripted (or live-eval) model peers: the real
-   * agent queue and telemetry consumers run; background work stays queued so
-   * no background task reaches a deterministic model peer.
+   * Job and telemetry consumers run against deterministic model peers.
    */
   "purchase-agent": {
     queues: {
-      "cubby-background": "unconsumed",
+      "cubby-background": "real",
       "cubby-telemetry": "real",
-      "cubby-purchase-agent": "real",
     },
     googleProvider: false,
     purchaseAgentPeers: true,
@@ -139,7 +129,6 @@ export const WORKERD_PROFILES = {
     queues: {
       "cubby-background": "real",
       "cubby-telemetry": "real",
-      "cubby-purchase-agent": "real",
     },
     googleProvider: false,
     purchaseAgentPeers: true,
@@ -270,14 +259,14 @@ function peerWorkers(
       ? [
           {
             config: {
-              name: "cubby-queue-producer",
-              main: "tests/e2e/harness-services/purchase-agent-queue-producer.ts",
+              name: "cubby-job-wake-producer",
+              main: "tests/e2e/harness-services/job-wake-producer.ts",
               compatibility_date: compatibilityDate,
               queues: {
                 producers: [
                   {
-                    binding: "PURCHASE_AGENT_QUEUE",
-                    queue: "cubby-purchase-agent",
+                    binding: "BACKGROUND_QUEUE",
+                    queue: "cubby-background",
                   },
                 ],
               },

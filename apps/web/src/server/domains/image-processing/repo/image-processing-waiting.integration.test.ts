@@ -80,6 +80,19 @@ describe("waiting for a device records no attempt", () => {
     const job = await jobOf(jobId);
     expect(job.attempts).toBe(0);
     expect(job.state).toBe("waiting_for_device");
+    const [execution] = await getDb(ctx.db)
+      .select()
+      .from(durableJob)
+      .where(eq(durableJob.key, `image-processing:${jobId}`));
+    expect(execution).toMatchObject({
+      state: "queued",
+      attempts: 0,
+      waitReason: "device",
+      subjectKind: "image",
+      subjectId: job.imageId,
+    });
+    expect(execution?.waitUntil).toEqual(execution?.availableAt);
+    expect(execution!.waitUntil!.getTime()).toBeGreaterThan(Date.now());
     const events = await eventsOf(jobId);
     expect(events.filter((e) => e.event === "dispatch.waiting")).toHaveLength(
       1,

@@ -308,7 +308,7 @@ const findProductCoverageProblems = async (
 /** Provider work runs before the Job publication transaction. */
 export async function prepareProductConversionCoveragePage(
   db: Database,
-  options: { after?: string; limit: number },
+  options: { after?: string; limit: number; createdBefore?: string },
   usdaClient: UsdaFoodBatchPort,
 ) {
   const ids = await selectProductCoverageIdsPage(db, options);
@@ -319,9 +319,16 @@ export async function prepareProductConversionCoveragePage(
     usdaClient,
     productIds,
   );
+  const stored = await loadProductConversionCoverageProjection(db, productIds);
   return {
     nextCursor:
       ids.length === Math.min(options.limit, 25) ? ids.at(-1)!.id : null,
+    scanned: ids.length,
+    /** Products whose stored coverage differs from this recomputation. */
+    changed: projection.filter(
+      (row) =>
+        JSON.stringify(stored.get(row.productId)) !== JSON.stringify(row),
+    ).length,
     async publish(tx: Database) {
       if (
         JSON.stringify(await loadProductsForCoverage(tx, productIds)) !== source

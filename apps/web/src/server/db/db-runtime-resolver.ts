@@ -1,6 +1,15 @@
 import type { DatabaseRuntime } from "./database-runtime";
 import type { RequestDbRole } from "./db-pg-tracing";
 
+/**
+ * Sockets one Worker request may open, inside the Worker connection ceiling:
+ * five strong plus one bounded-stale, six total.
+ */
+export const WORKER_REQUEST_CONNECTIONS = {
+  strong: 5,
+  "bounded-stale": 1,
+} as const satisfies Record<RequestDbRole, number>;
+
 export interface RequestDbConnections {
   strong: string;
   boundedStale: string;
@@ -58,12 +67,11 @@ export class DatabaseRuntimeResolver {
         role === "strong"
           ? scope.connections.strong
           : scope.connections.boundedStale;
-      // Keep each request within the Worker connection ceiling: five strong
-      // sockets plus one bounded-stale socket, six total. Hyperdrive owns
-      // lifecycle and timeouts; do not add per-session overrides here.
+      // Hyperdrive owns lifecycle and timeouts; do not add per-session
+      // overrides here.
       const runtime = this.#createRuntime(
         connectionString,
-        role === "strong" ? 5 : 1,
+        WORKER_REQUEST_CONNECTIONS[role],
         role,
         () => (scope.clientOrdinal = (scope.clientOrdinal ?? 0) + 1),
         scope.connections.poolIdleTimeoutMs,

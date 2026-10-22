@@ -10,10 +10,13 @@ const sink = () => ({
 });
 
 describe("createLogger", () => {
-  it("prefixes the scope and passes fields as the trailing argument", () => {
+  it("emits indexed fields and message in a single JSON object", () => {
     const out = sink();
     createLogger("UPC Lookup", {}, out).warn("Failed for 042", { status: 503 });
-    expect(out.warn).toHaveBeenCalledWith("[UPC Lookup] Failed for 042", {
+    expect(out.warn).toHaveBeenCalledWith({
+      message: "[UPC Lookup] Failed for 042",
+      scope: "UPC Lookup",
+      level: "warn",
       status: 503,
     });
   });
@@ -21,14 +24,21 @@ describe("createLogger", () => {
   it("logs a bare message when there are no fields", () => {
     const out = sink();
     createLogger("x", {}, out).info("hello");
-    expect(out.info).toHaveBeenCalledWith("[x] hello");
+    expect(out.info).toHaveBeenCalledWith({
+      message: "[x] hello",
+      scope: "x",
+      level: "info",
+    });
   });
 
   it("carries child fields on every entry, overridable per call", () => {
     const out = sink();
     const log = createLogger("x", {}, out).child({ upc: "042", attempt: 1 });
     log.error("boom", { attempt: 2 });
-    expect(out.error).toHaveBeenCalledWith("[x] boom", {
+    expect(out.error).toHaveBeenCalledWith({
+      message: "[x] boom",
+      scope: "x",
+      level: "error",
       upc: "042",
       attempt: 2,
     });
@@ -44,8 +54,8 @@ describe("createLogger", () => {
       params: ["synthetic fixture"],
     });
     createLogger("request", {}, out).error("failed", { error });
-    expect(originalLoggedError(out.error.mock.calls[0]?.[1].error)).toBe(error);
-    const payload = JSON.stringify(out.error.mock.calls[0]?.[1]);
+    expect(originalLoggedError(out.error.mock.calls[0]?.[0].error)).toBe(error);
+    const payload = JSON.stringify(out.error.mock.calls[0]?.[0]);
     expect(JSON.parse(payload)).toMatchObject({
       error: {
         name: "Error",
@@ -71,7 +81,7 @@ describe("createLogger", () => {
         headers: { authorization: "Bearer synthetic-token-0000" },
       },
     );
-    const payload = JSON.stringify(out.warn.mock.calls[0]?.[1]);
+    const payload = JSON.stringify(out.warn.mock.calls[0]?.[0]);
     expect(payload).not.toContain("synthetic-token");
     expect(payload).not.toContain("synthetic-password");
     expect(payload).toContain("synthetic fixture");
@@ -83,9 +93,11 @@ describe("createLogger", () => {
     createLogger("request", {}, out).error(
       "upstream failed: Bearer synthetic-token-0000",
     );
-    expect(out.error).toHaveBeenCalledWith(
-      "[request] upstream failed: Bearer [REDACTED]",
-    );
+    expect(out.error).toHaveBeenCalledWith({
+      message: "[request] upstream failed: Bearer [REDACTED]",
+      scope: "request",
+      level: "error",
+    });
   });
 
   it("bounds wide diagnostic collections while keeping complete SQL diagnostics", () => {
@@ -95,8 +107,8 @@ describe("createLogger", () => {
       error: new Error(message),
       params: Array.from({ length: 10_000 }, () => "synthetic fixture"),
     });
-    expect(out.error.mock.calls[0]?.[0]).toBe(`[request] ${message}`);
-    const fields = out.error.mock.calls[0]?.[1];
+    expect(out.error.mock.calls[0]?.[0].message).toBe(`[request] ${message}`);
+    const fields = out.error.mock.calls[0]?.[0];
     expect(fields.error.message).toBe(message);
     expect(fields.params.length).toBeLessThanOrEqual(1001);
     expect(fields.params.at(-1)).toBe("[Truncated]");
@@ -118,8 +130,8 @@ describe("createLogger", () => {
     expect(() =>
       createLogger("request", {}, out).error("failed", { error }),
     ).not.toThrow();
-    expect(() => JSON.stringify(out.error.mock.calls[0]?.[1])).not.toThrow();
-    expect(JSON.stringify(out.error.mock.calls[0]?.[1])).toContain(
+    expect(() => JSON.stringify(out.error.mock.calls[0]?.[0])).not.toThrow();
+    expect(JSON.stringify(out.error.mock.calls[0]?.[0])).toContain(
       "nested failure",
     );
   });

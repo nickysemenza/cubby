@@ -1,4 +1,5 @@
 import { imageId, type RunId } from "@cubby/schemas/identifiers";
+import { runStepDeclaration } from "@cubby/schemas/run-fields";
 import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -18,7 +19,7 @@ import { readRunSteps } from "~/server/domains/run/repo/run-step";
 import {
   advanceStepRun as advanceStepRunImplementation,
   retryRunStep,
-  type StepRunDrivers,
+  type StepPlan,
 } from "~/server/domains/run/service/step-run";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import {
@@ -26,7 +27,10 @@ import {
   captureBackgroundQueue,
 } from "~/server/testing/background-queue";
 
-import { maintenanceSteps, type MaintenancePorts } from "./maintenance-run";
+import {
+  maintenanceStepDrivers,
+  type MaintenancePorts,
+} from "./maintenance-run";
 import { launchMaintenanceRun } from "./maintenance.service";
 
 const advanceStepRun = (
@@ -98,7 +102,7 @@ describe("maintenance Run", () => {
     return runIdOf(launched.runId);
   }
 
-  async function drive(id: RunId, drivers: StepRunDrivers, limit = 30) {
+  async function drive(id: RunId, drivers: StepPlan, limit = 30) {
     const params = { runId: id, attempt: await attemptOf(id) };
     const kinds: string[] = [];
     for (let page = 0; page < limit; page++) {
@@ -109,10 +113,15 @@ describe("maintenance Run", () => {
     return kinds;
   }
 
-  const only =
-    (key: string, ports: MaintenancePorts): StepRunDrivers =>
-    async () =>
-      maintenanceSteps(ports).filter((step) => step.key === key);
+  const only = (
+    key: keyof ReturnType<typeof maintenanceStepDrivers>,
+    ports: MaintenancePorts,
+  ): StepPlan => [
+    {
+      declaration: runStepDeclaration("maintenance", key)!,
+      driver: maintenanceStepDrivers(ports)[key],
+    },
+  ];
 
   const seedImage = async (name: string, sha256?: string) => {
     const row = await createUploadedImageRecord(ctx.db, {
@@ -207,7 +216,7 @@ describe("maintenance Run", () => {
       state: "done",
       done: 3,
       failed: 0,
-      left: 0,
+      left: null,
     });
   });
 

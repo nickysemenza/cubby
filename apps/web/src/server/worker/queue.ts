@@ -4,37 +4,25 @@ import { TELEMETRY_SCHEMA_VERSION } from "~/lib/http-cache";
 import { withCfEnv } from "~/server/cf-env";
 import { db, withInvocationDb } from "~/server/db";
 import { recordDatabaseWrite } from "~/server/db/freshness/client";
-import type { PurchaseAgentQueueBatch } from "~/server/domains/purchase-agent/service/environment";
 import { withInvocationTrace } from "~/server/observability/tracing";
 import { QUEUE_NAMES } from "~/server/worker-identity";
+import type { BackgroundQueueBatch } from "~/server/workflows/background-queue-types";
 
-type QueueDelivery = Omit<PurchaseAgentQueueBatch, "queue"> & {
+type QueueDelivery = Omit<BackgroundQueueBatch, "queue"> & {
   readonly queue: string;
 };
 
+// Deliveries wake the durable Job drain and always acknowledge. Job owns
+// retries, including when a wake envelope is unreadable.
 export async function handleQueueInvocation(
   batch: QueueDelivery,
   env: Env,
-  ctx: { waitUntil(promise: Promise<unknown>): void },
+  _ctx: { waitUntil(promise: Promise<unknown>): void },
 ) {
   return withCfEnv(env, () =>
     withInvocationTrace(
       "cf.queue",
       async () => {
-        if (batch.queue === QUEUE_NAMES.purchaseAgent) {
-          // The agent's consumer holds no database client: each Run service it
-          // calls opens its own (`server/domains/purchase-import/operations/agent-services`).
-          const { purchaseAgentQueueEnvironment } =
-            await import("~/server/domains/purchase-import/operations/agent-host");
-          const { consumePurchaseAgentQueue } =
-            await import("~/server/domains/purchase-agent/service/queue");
-          await consumePurchaseAgentQueue(
-            { ...batch, queue: QUEUE_NAMES.purchaseAgent },
-            purchaseAgentQueueEnvironment(env, ctx),
-          );
-          return;
-        }
-
         if (
           batch.queue !== QUEUE_NAMES.telemetry &&
           batch.queue !== QUEUE_NAMES.background

@@ -1,7 +1,7 @@
 /**
  * A minimal structured logger: a level, a scope that prefixes the message, and
- * a flat bag of fields passed as the trailing `console` argument (which
- * Workers Observability indexes as structured data). It exists so a service
+ * a flat JSON object passed as the sole `console` argument (which
+ * Workers Logs extracts into indexed fields). It exists so a service
  * client states `logger.warn("lookup failed", { upc, status })` once instead
  * of hand-formatting `[Scope] ...` strings at every site.
  *
@@ -39,8 +39,7 @@ const emit = (
 ) => {
   const merged = { ...bound, ...fields };
   const text = scrubCredentialValues(`[${scope}] ${message}`);
-  if (Object.keys(merged).length === 0) sink[level](text);
-  else sink[level](text, serializeLogFields(merged));
+  sink[level]({ ...serializeLogFields(merged), message: text, scope, level });
 };
 
 /** `sink` defaults to the global `console`, read at call time so tests can spy. */

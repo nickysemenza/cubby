@@ -1,5 +1,11 @@
 import type { RunId } from "@cubby/schemas/identifiers";
-import { jobState, type JobPayload, type JobState } from "@cubby/schemas/job";
+import {
+  jobState,
+  jobWaitReason,
+  type JobWaitReason,
+  type JobPayload,
+  type JobState,
+} from "@cubby/schemas/job";
 import { sql } from "drizzle-orm";
 import {
   check,
@@ -27,6 +33,10 @@ export const job = pgTable(
     runId: uuid("runId")
       .$type<RunId>()
       .references(() => run.id, { onDelete: "set null" }),
+    subjectKind: text("subjectKind"),
+    subjectId: text("subjectId"),
+    waitReason: text("waitReason").$type<JobWaitReason>(),
+    waitUntil: timestamp("waitUntil", { mode: "date" }),
     input: jsonb("input").$type<JobPayload>().notNull(),
     state: text("state").$type<JobState>().notNull().default("queued"),
     generation: integer("generation").notNull().default(1),
@@ -40,6 +50,8 @@ export const job = pgTable(
       .defaultNow(),
     leaseToken: uuid("leaseToken"),
     leaseExpiresAt: timestamp("leaseExpiresAt", { mode: "date" }),
+    /** Set by each claim; the fair drain serves the least recently claimed kind first. */
+    lastClaimedAt: timestamp("lastClaimedAt", { mode: "date" }),
     error: text("error"),
     ...baseTimestamps(),
   },
@@ -47,6 +59,21 @@ export const job = pgTable(
     uniqueIndex("Job_key_unique").on(table.key),
     index("Job_due_idx").on(table.state, table.availableAt, table.priority),
     index("Job_run_idx").on(table.runId),
+    index("Job_subject_idx").on(table.subjectKind, table.subjectId),
+    index("Job_kind_claimed_idx").on(table.kind, table.lastClaimedAt),
+    check(
+      "Job_waitReason_check",
+      sql`${table.waitReason} IN (${sql.join(
+        jobWaitReason.options.map((reason) =>
+          sqlEnumConstant(jobWaitReason, reason),
+        ),
+        sql`,`,
+      )})`,
+    ),
+    check(
+      "Job_subject_check",
+      sql`(${table.subjectKind} IS NULL) = (${table.subjectId} IS NULL)`,
+    ),
     check(
       "Job_state_check",
       sql`${table.state} IN (${sql.join(

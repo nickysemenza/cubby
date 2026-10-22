@@ -4,7 +4,10 @@ import {
   mailReclassificationCheckpoint,
 } from "@cubby/schemas/email-actions";
 import { runEntityId } from "@cubby/schemas/identifiers";
-import { suggestionSweepRunProgress } from "@cubby/schemas/run-fields";
+import {
+  OWNED_AI_WORK_PURPOSES,
+  suggestionSweepRunProgress,
+} from "@cubby/schemas/run-fields";
 import { z } from "zod";
 
 import { findErrorCause } from "~/lib/error-diagnostics";
@@ -43,13 +46,16 @@ import type { WorkflowRunParams } from "~/server/workflows/runs/contract";
 import { launchWorkflowRun } from "~/server/workflows/runs/lifecycle";
 import { claimWorkflowRun } from "~/server/workflows/runs/lifecycle";
 import { runFailureText } from "~/server/workflows/runs/lifecycle";
-import { wakeStepRunParent } from "~/server/workflows/runs/wake";
 
 import { executeAiRefreshTarget } from "./ai-refresh";
 import {
   executeSuggestionSweepTarget,
   type SuggestionSweepPorts,
 } from "./suggestion-sweep";
+
+/** Kinds whose evaluations name the Run as owner rather than requesting shared work. */
+const ownsAiWork = (owner: Pick<RunRow, "purpose">) =>
+  OWNED_AI_WORK_PURPOSES.some((purpose) => purpose === owner.purpose);
 
 export type AiWorkPorts = {
   reclassification?: ReclassificationPorts;
@@ -121,20 +127,18 @@ export async function advanceAiWorkRun(
           }),
     },
     {
-      requireNoOwnedPendingWork:
-        !pending.length && owner.purpose === "ai_refresh",
+      requireNoOwnedPendingWork: !pending.length && ownsAiWork(owner),
     },
   );
   // Work joined this Run after its roster read: continue with it instead of settling.
-  if (!pending.length && !written && owner.purpose === "ai_refresh")
+  if (!pending.length && !written && ownsAiWork(owner))
     return advanceAiWorkRun(db, params, ports);
-  if (!pending.length) await wakeStepRunParent(db, owner.id);
   return pending
     .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())
     .slice(0, 2);
 }
 export async function aiWorkItems(db: Database, owner: RunRow) {
-  const items = await (owner.purpose === "ai_refresh"
+  const items = await (ownsAiWork(owner)
     ? aiEvaluationsForRun(db, owner.id)
     : requestedAiEvaluations(db, owner.id));
   return items.filter(
@@ -214,13 +218,22 @@ export async function executeAiWorkTarget(
       },
     );
     if (paused) throw new JobPausedError("AI work paused by its requester");
-    if (budget) throw new JobDeferredError(message, new Date(budget.resumeAt));
+    if (budget)
+      throw new JobDeferredError(
+        message,
+        new Date(budget.resumeAt),
+        "ai_funding_window",
+      );
     if (unauthorized) {
       await pauseRunForAiWork(db, item.runId, message);
       throw new JobPausedError(message);
     }
     if (message.includes("AI Gateway admission is waiting"))
-      throw new JobDeferredError(message, new Date(Date.now() + 30_000));
+      throw new JobDeferredError(
+        message,
+        new Date(Date.now() + 30_000),
+        "rate_limit",
+      );
     if (!obsolete) throw error;
   }
   const continuations = z
@@ -242,7 +255,7 @@ function aiWorkProgress(
   attempt: number,
   complete = false,
 ) {
-  if (owner.purpose === "ai_refresh")
+  if (ownsAiWork(owner))
     return {
       ...aiEvaluationProgress(items, attempt),
     };

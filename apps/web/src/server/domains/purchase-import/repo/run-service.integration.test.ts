@@ -1,12 +1,20 @@
 import { runEntityId } from "@cubby/schemas/identifiers";
 import { coordinatorModelFor } from "@cubby/schemas/import-run-agent";
+import { agentImportRunPurpose } from "@cubby/schemas/import-run-agent";
 import { runFindingProblemSchema } from "@cubby/schemas/problems";
+import { purchaseAgentEvent } from "@cubby/schemas/purchase-import";
+import { fromPartial } from "@total-typescript/shoehorn";
 import { eq, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { getDb, withTransaction } from "~/server/db/helpers";
-import { run as runTable } from "~/server/db/schema";
+import { job, run as runTable } from "~/server/db/schema";
+import { deliverPurchaseDispatch } from "~/server/domains/purchase-agent/service/dispatch";
+import type {
+  RunServices,
+  PurchaseImportRunAgentRpc,
+} from "~/server/domains/purchase-agent/service/environment";
 import {
   expireStaleRuns,
   reconcileSettledRun,
@@ -21,11 +29,13 @@ import {
   seedRunFindings,
 } from "~/server/testing/run-finding.fixtures";
 
-import { dispatchRunEvent, recordRunDispatchAttempt } from "./dispatch";
 import { resolveRunFinding } from "./findings";
 import { admitMailImport } from "./mail-import-run";
+import { coordinatorRetired } from "./run-retirement";
 import {
   controlRun,
+  canDispatchRunCoordinator,
+  acknowledgeRunCoordinator,
   loadRunDetail,
   loadRunScope,
   resumeAuthorizedRuns,
@@ -90,6 +100,57 @@ describe("purchase import run admission", () => {
       ),
     );
   };
+
+  it("retries the same operation after a lost submission and never resubmits a started coordinator", async () => {
+    const subject = await startAgentRun(await createMember());
+    const [intent] = await getDb(ctx.db)
+      .select()
+      .from(job)
+      .where(eq(job.runId, subject.id));
+    if (!intent) throw new Error("Expected transactional dispatch intent");
+    const event = purchaseAgentEvent.parse(intent.input);
+    const dispatch = vi
+      .fn<PurchaseImportRunAgentRpc["dispatch"]>()
+      .mockRejectedValueOnce(new Error("Synthetic lost RPC reply"))
+      .mockResolvedValue({ accepted: true });
+    const services = fromPartial<RunServices>({
+      coordinatorRetired: () => coordinatorRetired(ctx.db, subject.id),
+      canDispatchCoordinator: (eventId: string) =>
+        canDispatchRunCoordinator(ctx.db, { runId: subject.id, eventId }),
+      acknowledgeCoordinator: (eventId: string) =>
+        acknowledgeRunCoordinator(ctx.db, { runId: subject.id, eventId }),
+      loadScope: async () => {
+        const { public: scope } = await loadRunScope(ctx.db, subject.id);
+        return {
+          purpose: agentImportRunPurpose.parse(scope.purpose),
+          agentId: scope.agentId,
+          generation: scope.dispatchEventId,
+        };
+      },
+      updateAgentProgress: (
+        progress: Parameters<RunServices["updateAgentProgress"]>[0],
+      ) => updateAgentProgress(ctx.db, { ...progress, runId: subject.id }),
+    });
+    const env = {
+      run: () => services,
+      coordinator: () => fromPartial<PurchaseImportRunAgentRpc>({ dispatch }),
+    };
+    await expect(deliverPurchaseDispatch(event, env)).rejects.toThrow(
+      "Synthetic lost RPC reply",
+    );
+    expect(await deliverPurchaseDispatch(event, env)).toBe("dispatched");
+    expect(await deliverPurchaseDispatch(event, env)).toBe("fenced");
+    expect(dispatch).toHaveBeenCalledTimes(2);
+    expect(dispatch.mock.calls[0]?.[0].operationId).toBe(
+      dispatch.mock.calls[1]?.[0].operationId,
+    );
+    expect(
+      await canDispatchRunCoordinator(ctx.db, {
+        runId: subject.id,
+        eventId: event.eventId,
+      }),
+    ).toBe(false);
+  });
 
   // A manual pause must remain cancellable and resumable; legacy recovery must
   // continue after one dispatch fails and must not resume a manual pause.
@@ -323,6 +384,11 @@ describe("purchase import run admission", () => {
   it("resumes authorization with a persisted dispatch generation", async () => {
     const party = await createMember();
     const run = await startAgentRun(party);
+    const unrelatedRunId = await ensureRun(ctx.db, ctx.actor, {
+      purpose: "ai_refresh",
+      trigger: "manual",
+      status: "running",
+    });
     const { run: runTable } = await import("~/server/db/schema");
     const { eq } = await import("drizzle-orm");
     const { getDb } = await import("~/server/db/helpers");
@@ -330,8 +396,14 @@ describe("purchase import run admission", () => {
       .update(runTable)
       .set({ status: "paused_auth", coordinatorStartedAt: new Date() })
       .where(eq(runTable.id, run.id));
+    await getDb(ctx.db)
+      .update(runTable)
+      .set({ status: "paused_auth" })
+      .where(eq(runTable.id, unrelatedRunId));
 
-    const [resumed] = await resumeAuthorizedRuns(ctx.db, ctx.actor.userId);
+    const resumedRuns = await resumeAuthorizedRuns(ctx.db, ctx.actor.userId);
+    expect(resumedRuns).toHaveLength(1);
+    const [resumed] = resumedRuns;
     expect(resumed?.eventId).toEqual(expect.any(String));
     expect(resumed?.eventId).not.toBe(run.dispatchEventId);
     const [stored] = await getDb(ctx.db)
@@ -345,20 +417,11 @@ describe("purchase import run admission", () => {
       eventId: resumed?.eventId,
       coordinatorStartedAt: null,
     });
-
-    await recordRunDispatchAttempt(ctx.db, {
-      runId: run.id,
-      eventId: resumed!.eventId!,
-      error: "queue unavailable",
-    });
-    const [failed] = await getDb(ctx.db)
-      .select({ status: runTable.status, error: runTable.dispatchError })
+    const [unrelated] = await getDb(ctx.db)
+      .select({ status: runTable.status })
       .from(runTable)
-      .where(eq(runTable.id, run.id));
-    expect(failed).toEqual({
-      status: "dispatch_failed",
-      error: "queue unavailable",
-    });
+      .where(eq(runTable.id, unrelatedRunId));
+    expect(unrelated?.status).toBe("paused_auth");
   });
 
   it("dispatches a manually resumed authorization pause instead of leaving it idle", async () => {
@@ -410,29 +473,6 @@ describe("purchase import run admission", () => {
     expect(repaired).toContainEqual(
       expect.objectContaining({ id: run.id, eventId: run.dispatchEventId }),
     );
-  });
-
-  it("accepts a producer receipt after the consumer advances the run", async () => {
-    const party = await createMember();
-    const run = await startAgentRun(party);
-    const { run: runTable } = await import("~/server/db/schema");
-    const { eq } = await import("drizzle-orm");
-    const { getDb } = await import("~/server/db/helpers");
-    if (!run.dispatchEventId)
-      throw new Error("Run did not have a dispatch event");
-
-    for (const status of ["paused_auth", "completed"] as const) {
-      await getDb(ctx.db)
-        .update(runTable)
-        .set({ status })
-        .where(eq(runTable.id, run.id));
-      await expect(
-        recordRunDispatchAttempt(ctx.db, {
-          runId: run.id,
-          eventId: run.dispatchEventId,
-        }),
-      ).resolves.toMatchObject({ id: run.id, status });
-    }
   });
 
   it("returns the recorded tool result without replaying its effect", async () => {
@@ -493,38 +533,6 @@ describe("purchase import run admission", () => {
     await expect(
       executeLeasedOperation(ctx.db, input, async () => ({ recovered: true })),
     ).resolves.toEqual({ recovered: true });
-  });
-
-  it("counts the initial dispatch as an attempt, not only retries", async () => {
-    const party = await createMember();
-    const run = await startAgentRun(party);
-    const { run: runTable } = await import("~/server/db/schema");
-    const { eq } = await import("drizzle-orm");
-    const { getDb } = await import("~/server/db/helpers");
-    const sent: string[] = [];
-
-    await dispatchRunEvent(
-      ctx.db,
-      {
-        send: async (event) => {
-          sent.push(event.type);
-        },
-      },
-      {
-        version: 1,
-        runId: run.id,
-        eventId: run.dispatchEventId!,
-        generation: run.dispatchEventId!,
-        type: "start_or_resume",
-      },
-    );
-
-    const [stored] = await getDb(ctx.db)
-      .select({ attempts: runTable.dispatchAttempts })
-      .from(runTable)
-      .where(eq(runTable.id, run.id));
-    expect(sent).toEqual(["start_or_resume"]);
-    expect(stored?.attempts).toBe(1);
   });
 
   it("moves a run whose coordinator settled without finishing to review", async () => {

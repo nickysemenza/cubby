@@ -264,7 +264,6 @@ queue consumer to one of:
 - `real`: the built Worker's own consumer, with production settings except
   `max_batch_timeout: 0`.
 - `dropped`: `local-offline-peers` acknowledges and discards each message.
-- `unconsumed`: no consumer; messages stay queued.
 
 `WORKERD_PROFILES` owns profile names, peers, queue modes and harness-lock
 selection. Choose the declared profile that exercises the real boundary rather

@@ -23,8 +23,16 @@ export async function handleScheduledInvocation(
         }
         if (controller.cron === CRON_SCHEDULES.backgroundRecovery) {
           await withInvocationDb(env.HYPERDRIVE.connectionString, async () => {
-            const { recoverMissedWork } =
-              await import("~/server/workflows/catch-up");
+            const [{ recoverMissedWork }, { publishAiRefreshActivation }] =
+              await Promise.all([
+                import("~/server/workflows/catch-up"),
+                import("~/server/workflows/ai-refresh-startup"),
+              ]);
+            await publishAiRefreshActivation(
+              db,
+              env.CF_VERSION_METADATA.id,
+              __GIT_COMMIT__,
+            );
             await recoverMissedWork(db);
           });
           return;
@@ -34,7 +42,8 @@ export async function handleScheduledInvocation(
         await Sentry.withMonitor(
           "daily-maintenance",
           async () => {
-            // Launch durable maintenance work; Jobs drain its backlog separately.
+            // The cron only launches the pass; its steps drain each backlog
+            // page by page through run.execute Jobs, one active pass at a time.
             await withInvocationDb(
               env.HYPERDRIVE.connectionString,
               async () => {

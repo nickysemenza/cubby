@@ -2,7 +2,7 @@ import { recordSourceTransactionRecordsInput } from "@cubby/schemas/source-trans
 import { eq, sql } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
 import { dismissItem } from "~/entity/suggestions/queue/suggestion-review";
@@ -33,7 +33,6 @@ import { answering } from "~/server/domains/transaction-import/repo/statement-de
 import { generateStatementSuggestionPage } from "~/server/domains/transaction-import/repo/statement-suggestions";
 import { labelStatementSuggestions } from "~/server/domains/transaction-import/service/statement-suggestion-labels";
 import { withJobFixtureExecution } from "~/server/testing/background-queue";
-import { createSystemUserFixture } from "~/server/testing/repo.fixtures";
 
 import { reviewAssessment } from "./assessment-review";
 import { readAssessmentRecordRefs } from "./review-families";
@@ -41,9 +40,6 @@ import { acceptCleanSuggestions, listSuggestionPage } from "./suggestion-list";
 
 describe("transfer pairs in the global queue", () => {
   const ctx = withTestDb();
-  beforeEach(async () => {
-    await createSystemUserFixture(ctx.db);
-  });
 
   const seed = async (
     kind: "account_transfer" | "credit_card_payment" = "account_transfer",
@@ -159,14 +155,15 @@ describe("transfer pairs in the global queue", () => {
       if (outcome.kind !== "continue") break;
     }
     expect(outcome?.kind).toBe("finished");
-    expect(await readRunSteps(ctx.db, runId)).toEqual([
-      expect.objectContaining({
-        key: "transfer_pair",
-        state: "done",
-        found: 1,
-        done: 1,
-      }),
-    ]);
+    // The scan's denominator is its frozen seed COUNT, never the pages done.
+    const [scan] = await readRunSteps(ctx.db, runId);
+    expect(scan).toMatchObject({
+      key: "transfer_pair_scan",
+      state: "done",
+      left: 0,
+      meta: { input: { mode: "count" }, tallies: { pairs: 1 } },
+    });
+    expect(scan!.found).toBeGreaterThan(0);
     expect(
       (
         await listSuggestionPage(ctx.db, {

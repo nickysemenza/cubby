@@ -33,7 +33,8 @@ export const maintenanceRunSummarySchema = z.object({
       done: count,
       failed: count,
       skipped: count,
-      left: count,
+      /** Null for a step without a frozen count, which shows no bar. */
+      left: count.nullable(),
       pausedReason: z.string().nullable(),
       pausedUntil: z.iso.datetime().nullable(),
     })

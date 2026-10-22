@@ -120,6 +120,8 @@ export async function enqueueEmbeddingRefs(
         return enqueueJob(tx, {
           key,
           kind: "embedding.refresh",
+          subjectKind: source.entityKind,
+          subjectId: source.entityId,
           input: {
             entityKind: source.entityKind,
             entityId: source.entityId,

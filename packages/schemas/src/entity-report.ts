@@ -64,6 +64,8 @@ export const reportSlots = [
   "run.import-debug-log",
   "run.ai-usage",
   "run.suggestions",
+  "run.decisions",
+  "run.diagnostics",
   "run.changes",
 ] as const;
 export const reportSlot = z.enum(reportSlots);

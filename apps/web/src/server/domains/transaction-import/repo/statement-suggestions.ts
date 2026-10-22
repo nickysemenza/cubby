@@ -31,8 +31,8 @@ import {
   statementApplicationOrder,
 } from "@cubby/schemas/statement-suggestion";
 import { cents } from "@cubby/shared";
+import { JOB_PAGE_LIMITS } from "@cubby/shared/job-page-limits";
 import { sha256Hex } from "@cubby/shared/sha256";
-import { WORKFLOW_EXECUTION_LIMITS } from "@cubby/shared/workflow-limits";
 import { createLogger } from "@cubby/worker-tracing";
 import { inArray, type SQL, sql } from "drizzle-orm";
 import { z } from "zod";
@@ -78,6 +78,7 @@ import {
   automaticRuleStamp,
   matchStatementRules,
 } from "~/server/generic/assessment/repo/automatic-rules";
+import { type PageWork, peakWorkers } from "~/server/generic/jobs/page-work";
 import { canonicalJson, jsonSnapshot } from "~/server/lib/canonical-json";
 import {
   assertWorkflowEffect,
@@ -1739,6 +1740,8 @@ export async function generateStatementSuggestionPage(
     runId: string | null;
     limit?: number;
     scope?: StatementSuggestionScope;
+    /** A Run step's page recorder; receives the same timings the log line carries. */
+    work?: PageWork;
   },
 ): Promise<{
   found: number;
@@ -1755,7 +1758,7 @@ export async function generateStatementSuggestionPage(
     1,
     Math.min(
       input.limit ?? STATEMENT_SUGGESTION_PAGE,
-      WORKFLOW_EXECUTION_LIMITS.suggestionsPerPage,
+      JOB_PAGE_LIMITS.suggestionsPerPage,
     ),
   );
   const startedAt = performance.now();
@@ -1820,16 +1823,28 @@ export async function generateStatementSuggestionPage(
       }
     }
   }
+  const timings = {
+    selection: Math.round(selectedAt - startedAt),
+    preparation: Math.round(preparedAt - selectedAt),
+    publication: Math.round(publishedAt - preparedAt),
+    application: Math.round(performance.now() - publishedAt),
+  };
   log.info("Statement generation page", {
     charges: charges.length,
     proposals: proposals.length,
     published,
     unchanged,
     failed: failed.length,
-    selectionMs: Math.round(selectedAt - startedAt),
-    preparationMs: Math.round(preparedAt - selectedAt),
-    publicationMs: Math.round(publishedAt - preparedAt),
-    applicationMs: Math.round(performance.now() - publishedAt),
+    selectionMs: timings.selection,
+    preparationMs: timings.preparation,
+    publicationMs: timings.publication,
+    applicationMs: timings.application,
+  });
+  input.work?.add({
+    timings,
+    concurrency: {
+      publication: peakWorkers(STATEMENT_PUBLISH_CONCURRENCY, proposals.length),
+    },
   });
   return {
     found: charges.length,
@@ -1841,6 +1856,24 @@ export async function generateStatementSuggestionPage(
     failed,
     next: charges.length === limit ? charges.at(-1)! : null,
   };
+}
+
+const holdAccounts = async (db: Database, scope?: StatementSuggestionScope) =>
+  scope?.accountIds ??
+  (
+    await unwrapDb(db).execute<{ id: string }>(sql`
+      SELECT DISTINCT ft."accountId" AS id FROM "FinancialTransaction" ft
+      WHERE ft."deletedAt" IS NULL AND ft.status = ${financialTransactionStatus.enum.pending}
+    `)
+  ).rows.map((row) => String(row.id));
+
+/** The holds `generateStatementHoldVoidPage` pages, for a step's frozen count. */
+export async function countStatementPendingHolds(
+  db: Database,
+  scope?: StatementSuggestionScope,
+) {
+  return (await statementPendingTransactions(db, await holdAccounts(db, scope)))
+    .length;
 }
 
 /** Vanished holds use their own bounded transaction-ID cursor, including non-voidable holds. */
@@ -1857,17 +1890,10 @@ export async function generateStatementHoldVoidPage(
     1,
     Math.min(
       input.limit ?? STATEMENT_SUGGESTION_PAGE,
-      WORKFLOW_EXECUTION_LIMITS.suggestionsPerPage,
+      JOB_PAGE_LIMITS.suggestionsPerPage,
     ),
   );
-  const accounts =
-    input.scope?.accountIds ??
-    (
-      await unwrapDb(db).execute<{ id: string }>(sql`
-      SELECT DISTINCT ft."accountId" AS id FROM "FinancialTransaction" ft
-      WHERE ft."deletedAt" IS NULL AND ft.status = ${financialTransactionStatus.enum.pending}
-    `)
-    ).rows.map((row) => String(row.id));
+  const accounts = await holdAccounts(db, input.scope);
   const holds = await statementPendingTransactions(db, accounts, {
     after: input.after,
     limit,

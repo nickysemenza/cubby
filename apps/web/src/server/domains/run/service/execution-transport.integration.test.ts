@@ -1,12 +1,10 @@
 import type { RunId } from "@cubby/schemas/identifiers";
-import type { PurchaseAgentEvent } from "@cubby/schemas/purchase-import";
 import {
   gatewayFetchThrough,
   type GatewayFetchRequest,
 } from "@cubby/shared/ai/gateway-request";
 import { fundedCubbyPiProviders } from "@cubby/shared/ai/pi-providers";
 import { createModels } from "@earendil-works/pi-ai";
-import { fromPartial } from "@total-typescript/shoehorn";
 import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { afterEach, describe, expect, it } from "vitest";
@@ -25,7 +23,9 @@ import { setCfEnv } from "~/server/cf-env";
 import { getDb } from "~/server/db/helpers";
 import { aiUsage, job, run, runControlEvent } from "~/server/db/schema";
 import { enqueueJob, claimJob } from "~/server/generic/jobs/repo/jobs";
+import { advanceJob } from "~/server/generic/jobs/service/jobs";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { productionJobHandlers } from "~/server/workflows/jobs";
 
 import { ensureRun } from "../repo/ensure-run";
 import { resumeFundingPausedRuns } from "./ai-work";
@@ -522,16 +522,6 @@ describe("household AI funding at the paid transport boundary", () => {
       input: { runId: discovery, purpose: "mail_discovery" },
       availableAt: new Date(Date.now() + 3_600_000),
     });
-    const sent: string[] = [];
-    setCfEnv(
-      fromPartial<Env>({
-        PURCHASE_AGENT_QUEUE: {
-          send: async (event: PurchaseAgentEvent) => {
-            sent.push(event.runId);
-          },
-        },
-      }),
-    );
     // Paused this window: still waiting.
     expect(await resumeFundingPausedRuns(ctx.db, {})).toBe(0);
     await pausedBefore(runId);
@@ -540,7 +530,27 @@ describe("household AI funding at the paid transport boundary", () => {
       .update(job)
       .set({ availableAt: new Date(0) })
       .where(eq(job.id, discoveryJob.id));
-    expect(await resumeFundingPausedRuns(ctx.db)).toBe(1);
+    const [resume] = await getDb(ctx.db)
+      .select()
+      .from(job)
+      .where(eq(job.kind, "run.funding-resume"));
+    expect(resume).toMatchObject({
+      runId,
+      waitReason: "ai_funding_window",
+      waitUntil: expect.any(Date),
+    });
+    if (!resume) throw new Error("Expected durable funding resume");
+    // The window ends: the timer's own deadline has passed.
+    await getDb(ctx.db)
+      .update(job)
+      .set({
+        availableAt: new Date(0),
+        input: { runId, until: new Date(0).toISOString() },
+      })
+      .where(eq(job.id, resume.id));
+    expect(await advanceJob(ctx.db, resume.id, productionJobHandlers)).toBe(
+      "succeeded",
+    );
     expect(await status(runId)).toMatchObject({ status: "running" });
     expect((await status(runId))?.failureCode).not.toBe("execution_limit");
     expect(await status(discovery)).toMatchObject({
@@ -551,41 +561,52 @@ describe("household AI funding at the paid transport boundary", () => {
       id: discoveryJob.id,
       generation: discoveryJob.generation,
     });
-    expect(sent).toEqual([runId]);
+    expect(
+      (
+        await getDb(ctx.db)
+          .select()
+          .from(job)
+          .where(eq(job.kind, "purchase.dispatch"))
+      ).map((item) => item.runId),
+    ).toEqual([runId]);
   });
 
-  // A resume interrupted before its queue send must not strand the Run.
-  it("resends an interrupted budget resume with its existing generation", async () => {
+  // Review finding: a budget raise brought the funding timer forward and it
+  // completed early, so a re-exhaustion in the same window reused the
+  // completed key and nothing resumed the Run.
+  it("keeps the funding timer's window end through a budget raise", async () => {
     const runId = await setup("mail_import");
-    const eventId = crypto.randomUUID();
-    await getDb(ctx.db)
-      .update(run)
-      .set({
-        failureCode: "budget_resume_pending",
-        dispatchEventId: eventId,
-        updatedAt: new Date(Date.now() - 60_000),
-      })
-      .where(eq(run.id, runId));
-    // Recent: another recovery may still be sending it.
-    expect(await resumeFundingPausedRuns(ctx.db)).toBe(0);
-    await getDb(ctx.db)
-      .update(run)
-      .set({ updatedAt: new Date(Date.now() - 10 * 60_000) })
-      .where(eq(run.id, runId));
-    expect(await resumeFundingPausedRuns(ctx.db)).toBe(1);
-    const [resent] = await getDb(ctx.db)
-      .select({
-        dispatchEventId: run.dispatchEventId,
-        dispatchAttempts: run.dispatchAttempts,
-        failureCode: run.failureCode,
-      })
-      .from(run)
-      .where(eq(run.id, runId));
-    expect(resent).toMatchObject({
-      dispatchEventId: eventId,
-      dispatchAttempts: 1,
+    await spend(runId, AI_BUDGET_LIMIT_USD);
+    await expect(
+      paidRunPreflight(ctx.db, runId)(chatRequest()),
+    ).rejects.toBeInstanceOf(AiBudgetExhaustedError);
+    const timer = async () =>
+      (
+        await getDb(ctx.db)
+          .select()
+          .from(job)
+          .where(eq(job.kind, "run.funding-resume"))
+      )[0];
+    const armed = await timer();
+    if (!armed) throw new Error("Expected durable funding resume");
+    await resumeFundingPausedRuns(ctx.db, { anyWindow: true });
+    expect(await advanceJob(ctx.db, armed.id, productionJobHandlers)).toBe(
+      "succeeded",
+    );
+    expect(await timer()).toMatchObject({
+      state: "queued",
+      availableAt: armed.waitUntil,
+      waitReason: "ai_funding_window",
     });
-    expect(resent?.failureCode).not.toBe("budget_resume_pending");
+    await expect(
+      paidRunPreflight(ctx.db, runId)(chatRequest()),
+    ).rejects.toBeInstanceOf(AiBudgetExhaustedError);
+    expect(await status(runId)).toMatchObject({ status: "paused_auth" });
+    expect(await timer()).toMatchObject({
+      id: armed.id,
+      state: "queued",
+      availableAt: armed.waitUntil,
+    });
   });
 
   it("lets only one of two concurrent recoveries send a resumed import", async () => {
@@ -603,11 +624,12 @@ describe("household AI funding at the paid transport boundary", () => {
       resumeFundingPausedRuns(ctx.db),
     ]);
     expect([...counts].sort()).toEqual([0, 1]);
-    const [sent] = await getDb(ctx.db)
-      .select({ dispatchAttempts: run.dispatchAttempts })
-      .from(run)
-      .where(eq(run.id, runId));
-    expect(sent?.dispatchAttempts).toBe(1);
+    expect(
+      await getDb(ctx.db)
+        .select()
+        .from(job)
+        .where(eq(job.kind, "purchase.dispatch")),
+    ).toHaveLength(1);
   });
 
   it("pauses a reclassification Run for recovery in a later window", async () => {

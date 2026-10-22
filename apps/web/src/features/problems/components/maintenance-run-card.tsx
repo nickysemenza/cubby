@@ -189,7 +189,7 @@ function ActivePass({ run }: { run: MaintenanceRunSummary }) {
         </span>
         <RunLink runId={run.runId} />
       </Row>
-      {step && step.found > 0 && (
+      {step && step.left !== null && step.found > 0 && (
         <>
           <span className="font-mono text-xs text-muted-foreground tabular-nums">
             {formatCount(step.done + step.failed + step.skipped)} of{" "}

@@ -2,7 +2,7 @@ import { mailImportOutcome } from "@cubby/schemas/assessment";
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import { importRunAgentManifest } from "@cubby/schemas/import-run-agent";
 import { mailAttributionHeaders } from "@cubby/schemas/mailbox-research";
-import type { PurchaseAgentEvent } from "@cubby/schemas/purchase-import";
+import { purchaseAgentEvent } from "@cubby/schemas/purchase-import";
 import {
   CF_ACCOUNT_ID,
   testAiGatewayEnvironment,
@@ -20,7 +20,7 @@ import { z } from "zod";
 
 import { user } from "~/server/db/auth.schema";
 import { getDb } from "~/server/db/helpers";
-import { aiUsage, assessment, run as runTable } from "~/server/db/schema";
+import { aiUsage, assessment, job, run as runTable } from "~/server/db/schema";
 import { captureBackgroundQueue } from "~/server/testing/background-queue";
 
 import {
@@ -272,21 +272,18 @@ describe("isolated Mail coordinator replay", () => {
           });
           await enableSyntheticMailImport(ctx, mailboxId);
           await authorizePurchaseAgent(ctx.db, ctx.actor.userId);
-          const events: PurchaseAgentEvent[] = [];
-          const [started] = await startMailImport(
-            ctx.db,
-            {
-              ledgerPartyId: party.id,
-              userId: ctx.actor.userId,
-              messageIds: [mail.id],
-            },
-            {
-              send: async (event: PurchaseAgentEvent) => {
-                events.push(event);
-              },
-            },
-          );
-          const event = events[0];
+          const [started] = await startMailImport(ctx.db, {
+            ledgerPartyId: party.id,
+            userId: ctx.actor.userId,
+            messageIds: [mail.id],
+          });
+          const [dispatch] = await getDb(ctx.db)
+            .select()
+            .from(job)
+            .where(eq(job.runId, parseEntityId("run", started!.runId)));
+          const event = dispatch
+            ? purchaseAgentEvent.parse(dispatch.input)
+            : null;
           if (!started || !event)
             throw new Error(
               "Replay admission did not produce a coordinator event",
@@ -410,7 +407,7 @@ describe("isolated Mail coordinator replay", () => {
             );
             try {
               observedOutcome = await observe(async () => {
-                await scenario.dispatch(event);
+                await scenario.wake();
                 await waitForSettlement();
               });
             } finally {
@@ -464,11 +461,11 @@ describe("isolated Mail coordinator replay", () => {
                 };
                 observedOutcome = await observe(async () => {
                   const response = await harness
-                    .getWorker("cubby-queue-producer")
-                    .fetch("https://queue.test/dispatch", {
+                    .getWorker("cubby-job-wake-producer")
+                    .fetch("https://queue.test/wake", {
                       method: "POST",
                       headers: { "content-type": "application/json" },
-                      body: JSON.stringify(event),
+                      body: "{}",
                     });
                   if (!response.ok)
                     throw new Error(

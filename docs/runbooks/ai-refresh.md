@@ -2,7 +2,7 @@
 
 The [entity contract](../entities.md) owns refresh eligibility, history and
 acceptance semantics. Refresh is always enabled; the existing
-Gateway Durable Object detects its own compiled feature policy. Gateway coordination
+minute cron activates the current compiled feature policy through a Job. Gateway coordination
 applies to production paid inference independently.
 
 ## Rollout
@@ -25,16 +25,14 @@ applies to production paid inference independently.
    legacy work, repeated activation, no-proposal completion and member decisions
    during inference. No live source belongs in repository fixtures, reports or
    PR text.
-4. Requests and nightly
-   maintenance nudge the production Gateway singleton. It checks its own
-   deployment version in Durable Object storage before opening Neon once to
-   compare the exact compiled feature manifest.
-   A monotonically increasing Durable Object ownership epoch fences delayed
-   old instances transactionally, including rollback. A changed policy atomically
-   updates generations and creates one discovery Run;
-   repeated nudges and interrupted handoffs reuse it. Code-only releases do not
-   create another Run. Rollback compares exact policies, including older versions.
-   No activation endpoint, credential or post-deploy action is required.
+4. Minute cron admits `ai-refresh.activate` under the current deployment version
+   and a transactionally recorded occurrence. The gateway DO supplies its running
+   version; a stale publisher or Job cannot replace a later occurrence. A rollback
+   A → B → A gets a new occurrence. Policy fingerprints preserve existing feature
+   generations when unchanged; changed policy creates a new discovery owner.
+   Admission and discovery launch are durable Job intent, independent of member
+   automatic-rule switches. No request nudge, observation alarm, activation
+   endpoint or post-deploy action is required.
 
 ## Database pool diagnosis
 
@@ -58,9 +56,9 @@ retain inference and actual business-write provenance.
 Discovery advances durable cursors through at most 200 field targets and 400
 eligible Emails per invocation; Email execution rosters still cap at 200.
 Ordinary refresh execution has two active Run slots across the household,
-including funding/auth pauses and connection Sweep children. Discovery is a
-separate activation Run; a Sweep's connection child retains its explicit parent
-while consuming the same admission capacity. Product, field and on-demand connection targets share a running
+including funding/auth pauses. Discovery is a separate activation Run, and
+routine connection discovery is its own `connection_discovery` Run. A Sweep
+owns its connection evaluations directly and takes no Run slot. Product, field and on-demand connection targets share a running
 non-Email Run for their actor and activation revision. New policy work waits
 for capacity rather than joining an older policy owner. Frozen Email rosters retain their mailbox and
 200-item boundary. A short scheduling transaction uses a nonblocking advisory
@@ -72,10 +70,10 @@ to that owner. Inspect its roster before cancelling; same-fingerprint work stays
 stopped until explicit member retry.
 If both slots are paused for authentication, ordinary refresh work waits until
 the member resolves authentication, resumes or cancels an owner. Cancelling a
-Sweep child also stops its parent roster step rather than reviving that child.
+Sweep stops the evaluations it owns or requested.
 
 When slots are full, discovery retains the affected stream's cursor and waits
-30 seconds in its existing Workflow before trying again. Capacity waits do not
+30 seconds through its existing Job before trying again. Capacity waits do not
 consume deployment-policy waits or inference retries. Unchanged, already queued,
 failed or cancelled work creates no empty Run. An on-demand connection request
 that cannot obtain capacity reports the capacity diagnostic; scheduling-lock
@@ -89,16 +87,15 @@ refresh framework. Connection discovery and admission happen in the resulting
 background Sweep; see the [derived-data contract](../entities.md#background-derived-data).
 Scheduling requires an actor without an inherited Run: a Run-scoped actor cannot
 create an independent owner or advance its successor key through `ensureRun`.
-A new policy resets the scan cursor and its discovery Workflow checkpoints
+A new policy resets the scan cursor and its discovery Job checkpoints
 bounded pages until both independent streams finish. Cursor writes are fenced
 by activation revision, so an old page cannot overwrite a newer reset. During
 deploy overlap a discovery page whose Worker policy differs from the activation
 sleeps and retries (up to 30 minutes) instead of failing the Run.
-There is no frequent polling cron. Request nudges stay in Durable Object storage
-when the deployment version is already observed. The nightly cron is the idle
-reconciliation exception. An alarm verifies and retries an interrupted startup handoff; external
-activation does not block interactive Gateway admission.
-The Workflow's preliminary Run guard selects only its identity under the running
+The minute cron and app-open catch-up inspect durable Jobs. Failed startup
+activation uses Job retries; exhausted failures remain stopped for explicit
+retry. Activation does not block interactive Gateway admission.
+The Run executor's preliminary guard selects only its identity under the running
 status and attempt predicate, omitting retained input and progress-history payloads. Callers that
 need the Run data keep the full read under the same status/attempt fence.
 Statement Transaction suggestion labels are not AiEvaluation targets: the
@@ -111,10 +108,10 @@ reviewable. A high-confidence same-charge label makes a single exact-amount
 attach bulk-acceptable, and every create waits for its kind and counterparty
 labels (one vote beside the category rule and merchant history); a label
 itself applies nothing.
-Workflows own inference deadlines and retries. Nightly maintenance and existing
+Jobs own execution retries; inference retains its bounded request deadlines. Nightly maintenance and existing
 app-open recovery reconcile stranded Runs and relevant evidence/option changes.
-The singleton uses its own compiled manifest, never a caller-supplied version;
-a request from an old Worker cannot reinstall that Worker's policy. Saved field results resume
+The activation Job uses the current compiled manifest under its deployment
+occurrence fence; a request from an old Worker cannot reinstall its policy. Saved field results resume
 without another inference. Missing evidence, Mail import switched off and
 genuine ambiguity wait for a relevant fingerprint change. Rediscovery reopens a
 blocked or obsolete target at most three times: a replacement row
@@ -129,13 +126,10 @@ evaluations retain the earlier failed rows and link their receipts.
 
 Already applied values and immutable history survive rollback. Do not delete
 the additive ledger/receipt columns during rollback.
-A failed startup handoff retains its alarm and retries the same discovery Run;
-nightly reconciliation is the additional backstop. Preserve the Gateway
-namespace and its storage during changes. If stored ownership falls behind
-PostgreSQL, the current object reports the fence and schedules a retry above
-the recorded epoch instead of acknowledging a stale observation. Input-only changes can wait
-until app-open recovery or nightly maintenance; they do not require idle database
-polling.
+Startup activation is retained in a Job and guarded by the observed deployment
+occurrence. Preserve provider admission and coordinator namespaces and their
+stored receipts. Background source changes record Job intent and converge
+through the same drain; no deployment-observation alarm repairs that work.
 
 Use existing Run cancel/retry controls for individual failures; investigate the
 ledger and Run diagnostics before replaying exhausted work. Gateway leases and
@@ -175,7 +169,7 @@ UTC ISO text cast to `timestamp` so the driver's local timezone cannot shift a
 cutoff.
 
 Proposed cleanup: choose an explicit UTC cutoff and the ordinary refresh owners
-to stop, excluding the current discovery Run, explicit Sweep children and member
+to stop, excluding the current discovery Run, Sweeps and member
 work outside this scope. Under the AI-admission lock, mark selected active Runs
 `failed` / `user_cancelled`, set `endedAt` and the cancellation diagnostic, and
 cancel their pending evaluations in a batch, mirroring Run control. Preserve

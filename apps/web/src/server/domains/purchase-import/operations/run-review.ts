@@ -53,7 +53,7 @@ import {
 } from "~/server/domains/purchase-import/repo/mail-run-membership";
 import { failOperationsForRun } from "~/server/domains/run/repo/run-operation";
 import { transitionAssessmentStates } from "~/server/generic/assessment/repo/assessment-state";
-import { WORKFLOW_RUN_PURPOSES } from "~/server/workflows/runs/contract";
+import { EXECUTED_RUN_PURPOSES } from "~/server/workflows/runs/contract";
 
 import { loadPurchaseAuditBatch } from "../repo/audit-batch";
 import { resolveRunFinding } from "../repo/findings";
@@ -298,7 +298,7 @@ function staleRunWhere(cutoff: Date) {
   return and(
     eq(runTable.status, "running"),
     lt(runTable.updatedAt, cutoff),
-    notInArray(runTable.purpose, [...WORKFLOW_RUN_PURPOSES]),
+    notInArray(runTable.purpose, [...EXECUTED_RUN_PURPOSES]),
     or(
       ne(runTable.purpose, runPurpose.enum.photo_inventory),
       isNotNull(runTable.coordinatorStartedAt),

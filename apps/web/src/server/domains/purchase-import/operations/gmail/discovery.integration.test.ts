@@ -5,7 +5,6 @@
  * targeted search falls through to whole-mailbox history or searches a Vendor
  * name; completed coverage keeps chaining passes; one mailbox starves another. */
 import { runEntityId } from "@cubby/schemas/identifiers";
-import type { PurchaseAgentEvent } from "@cubby/schemas/purchase-import";
 import { and, asc, eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
@@ -24,7 +23,6 @@ import { readRetainedMail } from "~/server/domains/mail/repo/retained-mail";
 import { setMailImport } from "~/server/domains/purchase-import/repo/mail-import-settings";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { withJobFixtureExecution } from "~/server/testing/background-queue";
-import { seedRunFinding } from "~/server/testing/run-finding.fixtures";
 import {
   launchWorkflowRun,
   reconcileWorkflowRuns,
@@ -39,7 +37,6 @@ import {
   saveMailDiscoveryBatch as saveMailDiscoveryBatchImplementation,
   finishMailDiscovery as finishMailDiscoveryImplementation,
   continueMailDiscovery as continueMailDiscoveryImplementation,
-  pruneRoutineRuns,
   failMailDiscovery as failMailDiscoveryImplementation,
   type DiscoveryPorts,
 } from "./discovery";
@@ -369,12 +366,6 @@ describe("scheduled Gmail discovery", () => {
         data: Buffer.from("pdf").toString("base64url"),
       }),
     });
-    const events: PurchaseAgentEvent[] = [];
-    const queue = {
-      send: async (event: PurchaseAgentEvent) => {
-        events.push(event);
-      },
-    };
     const attachmentBytes = new Map<string, Uint8Array>();
     const seam: DiscoveryPorts = {
       ...ports(provider),
@@ -393,7 +384,7 @@ describe("scheduled Gmail discovery", () => {
       },
       triage: async () => "uncertain",
       relevance: async () => ({ classification: "uncertain" }),
-      research: (db, input) => startMailImport(db, input, queue),
+      research: (db, input) => startMailImport(db, input),
     };
     await listMailDiscovery(ctx.db, state.params, seam);
     await saveMailDiscoveryBatch(ctx.db, state.params, 0, seam);
@@ -419,7 +410,12 @@ describe("scheduled Gmail discovery", () => {
       executionPolicy: "import",
     });
     expect(message?.runId).not.toBeNull();
-    expect(events).toHaveLength(1);
+    expect(
+      await getDb(ctx.db)
+        .select()
+        .from(job)
+        .where(eq(job.kind, "purchase.dispatch")),
+    ).toHaveLength(1);
     const search = async () =>
       (await getDb(ctx.db).select().from(mailboxCursor))[0]?.coverage
         ?.scoped[0];
@@ -432,7 +428,12 @@ describe("scheduled Gmail discovery", () => {
     expect(await search()).not.toHaveProperty("completedAt");
     await saveMailDiscoveryBatch(ctx.db, state.params, 0, seam);
     expect(await getDb(ctx.db).select().from(orderMail)).toHaveLength(1);
-    expect(events).toHaveLength(1);
+    expect(
+      await getDb(ctx.db)
+        .select()
+        .from(job)
+        .where(eq(job.kind, "purchase.dispatch")),
+    ).toHaveLength(1);
     expect((await search())?.emailCount).toBe(1);
   });
 
@@ -695,32 +696,4 @@ describe("scheduled Gmail discovery", () => {
       ).toEqual(scanPending ? [(await readRun(state.params.runId)).input] : []);
     },
   );
-  it("keeps a month-old routine pass that holds a finding", async () => {
-    const state = await seed();
-    const quiet = gmail({ listMessages: async () => ({}) });
-    await listMailDiscovery(ctx.db, state.params, ports(quiet));
-    await saveMailDiscoveryBatch(ctx.db, state.params, 0, ports(quiet));
-    await finishMailDiscovery(ctx.db, state.params, new Date("2026-01-01"));
-    const [quietPass] = await getDb(ctx.db)
-      .select()
-      .from(run)
-      .where(eq(run.id, runEntityId.parse(state.params.runId)));
-    // A finding is retained review history: it keeps its Run.
-    await seedRunFinding(ctx.db, {
-      runId: runEntityId.parse(state.params.runId),
-      ledgerPartyId: state.party.id,
-      entityKind: "run",
-      entityId: runEntityId.parse(state.params.runId),
-      kind: "unknown_mail_sender",
-      summary: "Synthetic historical finding",
-      evidenceFingerprint: "synthetic",
-    });
-    expect(await pruneRoutineRuns(ctx.db, new Date("2026-03-01"))).toBe(0);
-    expect(
-      await getDb(ctx.db)
-        .select()
-        .from(run)
-        .where(eq(run.id, runEntityId.parse(state.params.runId))),
-    ).toEqual([quietPass]);
-  });
 });

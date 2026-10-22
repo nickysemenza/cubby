@@ -1,3 +1,4 @@
+import { aiEvaluationState } from "@cubby/schemas/ai-evaluation";
 import { assessmentFamily } from "@cubby/schemas/assessment";
 import { recordSourceTransactionRecordsInput } from "@cubby/schemas/source-transaction-record";
 import type { SourceTransactionRecordInput } from "@cubby/schemas/source-transaction-record";
@@ -10,7 +11,7 @@ import { z } from "zod";
 import type { DecisionPort } from "~/server/ai/decision-model";
 import { activateAiRefresh } from "~/server/ai/repo/ai-refresh";
 import { getDb } from "~/server/db/helpers";
-import { run, runStep } from "~/server/db/schema";
+import { run } from "~/server/db/schema";
 import { recordSourceTransactionRecords } from "~/server/domains/transaction-import/repo/source-transaction-record";
 import { labelStatementSuggestions } from "~/server/domains/transaction-import/service/statement-suggestion-labels";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
@@ -109,6 +110,8 @@ describe("Sweeps", () => {
         () => advanceStepRun(ctx.db, { runId, attempt }),
       );
       if (advance.kind !== "continue") return advance.kind;
+      // An evaluate step waits on its ai.evaluation Jobs.
+      if (advance.waitSeconds) return "wait";
     }
     return "unbounded";
   };
@@ -143,16 +146,19 @@ describe("Sweeps", () => {
       families,
     });
     expect(await drive(runId)).toBe("finished");
-    const [step] = await readRunSteps(ctx.db, runId);
-    expect(step).toMatchObject({
-      key: "statement_transaction",
-      label: "Statements",
+    const steps = await readRunSteps(ctx.db, runId);
+    expect(steps.map((step) => step.key)).toEqual([
+      "statement_generate",
+      "statement_holds",
+      "statement_label",
+    ]);
+    expect(steps[0]).toMatchObject({
+      label: "Statements: match",
       state: "done",
-      found: 4,
       done: 3,
-      skipped: 1,
       failed: 0,
       left: 0,
+      meta: { input: { mode: "count" } },
     });
     const { rows } = await getDb(ctx.db).execute<{ count: number }>(
       sql`SELECT count(*)::int AS count FROM "AssessmentState" WHERE family = ${assessmentFamily.enum.statement_transaction} AND active`,
@@ -224,9 +230,26 @@ describe("Sweeps", () => {
     expect(second).toMatchObject({ labelled: 1, stale: 0, next: null });
   });
 
-  // Failure mode: a connection Sweep re-evaluates sources whose evidence has
-  // not changed since they were last scanned.
-  it("queues connection sources once and skips them on a repeat Sweep", async () => {
+  const evaluationsOf = async (runId: string) => {
+    const { rows } = await getDb(ctx.db).execute<{
+      state: string;
+      job: string | null;
+    }>(sql`SELECT e.state, j.state AS job FROM "AiEvaluation" e
+      LEFT JOIN "Job" j ON j.key = 'ai-evaluation:' || e.id::text
+      WHERE e."runId" = ${runId}::uuid
+        OR e.id IN (SELECT "evaluationId" FROM "AiEvaluationRequest" WHERE "runId" = ${runId}::uuid)`);
+    return rows;
+  };
+  const childRuns = async (runId: string) =>
+    getDb(ctx.db)
+      .select({ id: run.id })
+      .from(run)
+      .where(eq(run.parentRunId, runId as never));
+
+  // Failure modes: a connection Sweep re-evaluates sources whose evidence has
+  // not changed since they were last scanned, or parks its evaluations on a
+  // child Run that holds AI refresh capacity (#2873).
+  it("queues connection evaluations on the Sweep once and skips them on a repeat Sweep", async () => {
     await activateAiRefresh(ctx.db, "synthetic-sweep-connections", {
       enabled: true,
     });
@@ -243,11 +266,19 @@ describe("Sweeps", () => {
       trigger: "manual",
       families,
     });
-    // The roster queues both sources on one child Run, then waits on it.
     expect(await drive(first)).toBe("wait");
-    const [queued] = await readRunSteps(ctx.db, first);
-    expect(queued).toMatchObject({ state: "waiting", found: 2, skipped: 0 });
-    expect(queued?.childRunId).not.toBeNull();
+    const [roster, evaluate] = await readRunSteps(ctx.db, first);
+    expect(roster).toMatchObject({ state: "done", found: 2, done: 2 });
+    expect(evaluate).toMatchObject({
+      state: "running",
+      found: 2,
+      meta: { action: "Waiting for 2 of 2 evaluations" },
+    });
+    expect(await childRuns(first)).toEqual([]);
+    expect(await evaluationsOf(first)).toEqual([
+      { state: "queued", job: "queued" },
+      { state: "queued", job: "queued" },
+    ]);
     const second = await startSweep(ctx.db, ctx.actor, {
       trigger: "manual",
       families,
@@ -259,7 +290,27 @@ describe("Sweeps", () => {
       found: 2,
       skipped: 2,
       left: 0,
+      meta: { reasons: { already_evaluated: 2 } },
     });
+  });
+
+  // Failure mode (#2722 review): a scheduled Sweep's connection work was
+  // created manual, so its evaluations paid instead of waiting for credit.
+  it("makes a scheduled Sweep's connection evaluations background work", async () => {
+    await activateAiRefresh(ctx.db, "synthetic-sweep-background", {
+      enabled: true,
+    });
+    await createRepoEntity(ctx, "project", { name: "Synthetic gutter repair" });
+    await drainDerivedRefreshFrontier(ctx.db);
+    const runId = await startSweep(ctx.db, ctx.actor, {
+      trigger: "scheduled",
+      families: [
+        { family: "recommendation", scope: { entityKinds: ["project"] } },
+      ],
+    });
+    expect(await drive(runId)).toBe("wait");
+    const { isBackgroundRun } = await import("~/server/ai/funding");
+    expect(await isBackgroundRun(ctx.db, runId)).toBe(true);
   });
 
   const fieldSweep = () =>
@@ -275,116 +326,53 @@ describe("Sweeps", () => {
       ],
     });
 
-  const childOf = async (runId: string) => {
-    const [step] = await readRunSteps(ctx.db, runId as never);
-    if (!step?.childRunId) throw new Error("expected a child Run");
-    return step.childRunId;
-  };
-
-  const settleChild = (
-    childRunId: string,
-    status: "completed" | "failed",
-    progress: { total: number; done: number; failed: number },
-  ) =>
-    getDb(ctx.db)
-      .update(run)
-      .set({
-        status,
-        ...(status === "failed" && {
-          failureCode: "ai_work_workflow_failed",
-          dispatchError:
-            "Synthetic Workflow crash before any evaluation failed",
-        }),
-        progress: {
-          ...progress,
-          applied: 0,
-          queued: 0,
-          diagnostics: [],
-          attempt: 1,
-        },
-      })
-      .where(eq(run.id, childRunId as never));
-
-  // Failure mode (#2722 review): a scheduled Sweep's connection child was
-  // created manual, so its evaluations paid instead of waiting for credit.
-  it("makes a scheduled Sweep's connection child background work", async () => {
-    await activateAiRefresh(ctx.db, "synthetic-sweep-background", {
-      enabled: true,
-    });
-    await createRepoEntity(ctx, "project", { name: "Synthetic gutter repair" });
-    await drainDerivedRefreshFrontier(ctx.db);
-    const runId = await startSweep(ctx.db, ctx.actor, {
-      trigger: "scheduled",
-      families: [
-        { family: "recommendation", scope: { entityKinds: ["project"] } },
-      ],
-    });
-    expect(await drive(runId)).toBe("wait");
-    const childRunId = await childOf(runId);
-    const { isBackgroundRun } = await import("~/server/ai/funding");
-    expect(await isBackgroundRun(ctx.db, childRunId)).toBe(true);
-  });
-
-  // Failure mode: a field Sweep step finishes before its per-entity child
-  // Runs do, or loses their counts.
-  it("runs one field-sweep child per entity and reports its totals", async () => {
+  // Review finding: the evaluate step counted a completed evaluation as both
+  // done and skipped, so a finished step overstated its inputs.
+  it("counts each settled field evaluation once", async () => {
+    await createRepoEntity(ctx, "project", { name: "Synthetic porch repair" });
     const runId = await fieldSweep();
     expect(await drive(runId)).toBe("wait");
-    const childRunId = await childOf(runId);
-    const [child] = await getDb(ctx.db)
-      .select({ purpose: run.purpose, parentRunId: run.parentRunId })
-      .from(run)
-      .where(eq(run.id, childRunId));
-    expect(child).toEqual({ purpose: "suggestion_sweep", parentRunId: runId });
-    await settleChild(childRunId, "completed", {
-      total: 3,
-      done: 3,
-      failed: 0,
-    });
+    const requested = await evaluationsOf(runId);
+    await getDb(ctx.db).execute(
+      sql`UPDATE "AiEvaluation" SET state = ${aiEvaluationState.enum.completed} WHERE id IN (SELECT "evaluationId" FROM "AiEvaluationRequest" WHERE "runId" = ${runId}::uuid)`,
+    );
+    await getDb(ctx.db).execute(
+      sql`UPDATE "RunStep" SET meta = meta - 'capacityUntil' WHERE "runId" = ${runId}::uuid`,
+    );
     expect(await drive(runId)).toBe("finished");
-    expect((await readRunSteps(ctx.db, runId))[0]).toMatchObject({
+    const [, evaluate] = await readRunSteps(ctx.db, runId);
+    expect(evaluate).toMatchObject({
+      key: "field_evaluate",
       state: "done",
-      found: 3,
-      done: 3,
-      left: 0,
+      done: requested.length,
+      skipped: 0,
     });
   });
 
-  // Failure modes (review): a child whose Workflow crashed before recording a
-  // failed evaluation counted as success; cancelling the Sweep left it running.
-  it("fails the step for a crashed child and cancels children with the Sweep", async () => {
-    const crashed = await fieldSweep();
-    await drive(crashed);
-    const crashedChild = await childOf(crashed);
-    await settleChild(crashedChild, "failed", { total: 3, done: 1, failed: 0 });
-    expect(await drive(crashed)).toBe("finished");
-    const [step] = await readRunSteps(ctx.db, crashed);
-    expect(step).toMatchObject({ state: "failed", failed: 1 });
-    expect(step?.errors[0]?.message).toContain("Synthetic Workflow crash");
-    // Retry failed relaunches the crashed child instead of rereading it.
-    const { retryRunStep } = await import("./step-run");
-    await retryRunStep(ctx.db, crashed as never, "field");
-    expect(await drive(crashed)).toBe("wait");
-    const [relaunched] = await getDb(ctx.db)
-      .select({ status: run.status })
-      .from(run)
-      .where(eq(run.id, crashedChild));
-    expect(relaunched?.status).toBe("running");
+  // Failure modes: a field Sweep step finishes before its evaluations do, or
+  // fans out a child Run instead of requesting evaluations itself; cancelling
+  // the Sweep leaves its evaluation Jobs running.
+  it("requests field evaluations on the Sweep, waits for them, and cancels them with it", async () => {
+    await createRepoEntity(ctx, "project", { name: "Synthetic deck repair" });
+    const runId = await fieldSweep();
+    expect(await drive(runId)).toBe("wait");
+    expect(await childRuns(runId)).toEqual([]);
+    const [roster, evaluate] = await readRunSteps(ctx.db, runId);
+    expect(roster).toMatchObject({
+      key: "field_roster",
+      state: "done",
+      done: 1,
+    });
+    expect(evaluate).toMatchObject({ key: "field_evaluate", state: "running" });
+    const pending = await evaluationsOf(runId);
+    expect(pending.length).toBeGreaterThan(0);
+    expect(pending.every((item) => item.job === "queued")).toBe(true);
 
-    const cancelled = await fieldSweep();
-    await drive(cancelled);
-    const runningChild = await childOf(cancelled);
-    // A child still being prepared (the connection roster) is not yet on its
-    // step; cancellation finds it by parentage.
-    await getDb(ctx.db)
-      .update(runStep)
-      .set({ childRunId: null })
-      .where(eq(runStep.runId, cancelled as never));
     const shortcode = (
       await getDb(ctx.db)
         .select({ shortcode: run.shortcode })
         .from(run)
-        .where(eq(run.id, cancelled))
+        .where(eq(run.id, runId))
     )[0]!.shortcode;
     const { controlWorkflowRun } =
       await import("~/server/workflows/runs/control");
@@ -394,10 +382,10 @@ describe("Sweeps", () => {
       { runPublicId: shortcode, action: "cancel" },
       "sweep",
     );
-    const [child] = await getDb(ctx.db)
-      .select({ status: run.status, failureCode: run.failureCode })
-      .from(run)
-      .where(eq(run.id, runningChild));
-    expect(child).toEqual({ status: "failed", failureCode: "user_cancelled" });
+    expect(
+      (await evaluationsOf(runId)).every(
+        (item) => item.state === "cancelled" && item.job === "cancelled",
+      ),
+    ).toBe(true);
   });
 });

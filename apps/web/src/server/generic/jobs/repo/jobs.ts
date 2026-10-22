@@ -6,7 +6,7 @@ import {
   type EnqueueJobInput,
   type JobPage,
 } from "@cubby/schemas/job";
-import { and, asc, desc, eq, gt, inArray, lte, or, sql } from "drizzle-orm";
+import { and, eq, gt, inArray, lte, or, sql } from "drizzle-orm";
 
 import { describeErrorCauses } from "~/lib/error-diagnostics";
 import type { UnparsedError } from "~/lib/error-utils";
@@ -23,8 +23,14 @@ import {
 import { job } from "~/server/db/retained-tables";
 
 import { JobSupersededError } from "../errors";
+import { JOB_DRAIN } from "../limits";
 
-const LEASE_MS = 5 * 60_000;
+/** How long a claim holds a Job before another worker may take it over. */
+export const JOB_LEASE_MS = 5 * 60_000;
+/** Consecutive failures before a Job fails; an enqueue may declare its own. */
+export const DEFAULT_JOB_MAX_ATTEMPTS = 3;
+/** A failed page waits `baseMs · 2^attempts`, capped at `maxMs`. */
+export const JOB_RETRY_BACKOFF = { baseMs: 1_000, maxMs: 60_000 } as const;
 export type JobRow = typeof job.$inferSelect;
 export type JobClaim = JobRow & { leaseToken: string; leaseExpiresAt: Date };
 
@@ -39,9 +45,11 @@ export async function enqueueJob(
     key: input.key,
     kind: input.kind,
     input: input.input,
+    subjectKind: input.subjectKind ?? null,
+    subjectId: input.subjectId ?? null,
     runId: input.runId ? parseEntityId("run", input.runId) : null,
     priority: input.priority ?? 0,
-    maxAttempts: input.maxAttempts ?? 3,
+    maxAttempts: input.maxAttempts ?? DEFAULT_JOB_MAX_ATTEMPTS,
     availableAt: input.availableAt ?? new Date(),
   };
   const insertion = client.insert(job).values(values);
@@ -57,6 +65,8 @@ export async function enqueueJob(
             result: null,
             attempts: 0,
             error: null,
+            waitReason: null,
+            waitUntil: null,
             updatedAt: new Date(),
           },
           setWhere: and(
@@ -91,25 +101,42 @@ const due = (now: Date) =>
     and(eq(job.state, "running"), lte(job.leaseExpiresAt, now)),
   );
 
-export async function dueJobs(db: Database, limit = 25) {
-  return getDb(db)
-    .select({ id: job.id, kind: job.kind })
-    .from(job)
-    .where(due(new Date()))
-    .orderBy(
-      desc(job.priority),
-      asc(job.updatedAt),
-      asc(job.availableAt),
-      asc(job.id),
+/**
+ * Interleave kinds; a short drain starts with the kind claimed least recently.
+ * Only a claim is service: invalidations and enqueues leave `lastClaimedAt`.
+ */
+export async function dueJobs(db: Database, limit = JOB_DRAIN.batch) {
+  const result = await getDb(db).execute<{ id: string; kind: string }>(sql`
+    WITH served AS (
+      SELECT kind, max("lastClaimedAt") AS last_served FROM "Job" GROUP BY kind
+    ), ranked AS (
+      SELECT id, kind, row_number() OVER (
+        PARTITION BY kind ORDER BY priority DESC, "updatedAt", "availableAt", id
+      ) AS position FROM "Job" WHERE ${due(new Date())}
     )
-    .limit(limit);
+    SELECT ranked.id, ranked.kind FROM ranked JOIN served USING (kind)
+    ORDER BY position, last_served NULLS FIRST, kind LIMIT ${limit}
+  `);
+  return result.rows;
+}
+
+/** The visible queue position uses the same within-kind ordering as the drain. */
+export async function dueJobsAhead(db: Database, id: string) {
+  const result = await getDb(db).execute<{ ahead: number }>(sql`
+    WITH ranked AS (
+      SELECT id, row_number() OVER (
+        PARTITION BY kind ORDER BY priority DESC, "updatedAt", "availableAt", id
+      ) - 1 AS ahead FROM "Job" WHERE ${due(new Date())}
+    ) SELECT ahead::int FROM ranked WHERE id = ${id}::uuid
+  `);
+  return result.rows[0]?.ahead ?? 0;
 }
 
 /** Skip a busy Job immediately; a claim never waits behind another worker. */
 export async function claimJob(
   db: Database,
   id: string,
-  leaseMs = LEASE_MS,
+  leaseMs = JOB_LEASE_MS,
 ): Promise<JobClaim | null> {
   if (!Number.isFinite(leaseMs) || leaseMs <= 0)
     throw new Error("Job lease must be a positive finite duration");
@@ -126,6 +153,8 @@ export async function claimJob(
         .update(job)
         .set({
           state: "failed",
+          waitReason: null,
+          waitUntil: null,
           leaseToken: null,
           leaseExpiresAt: null,
           error: "Job exhausted attempts after interrupted execution",
@@ -140,9 +169,12 @@ export async function claimJob(
       .update(job)
       .set({
         state: "running",
+        waitReason: null,
+        waitUntil: null,
         leaseToken: token,
         leaseExpiresAt: expires,
         attempts: available.attempts + 1,
+        lastClaimedAt: now,
         updatedAt: now,
       })
       .where(eq(job.id, id))
@@ -158,7 +190,7 @@ export async function renewJob(db: Database, claim: JobClaim) {
   const [row] = await getDb(db)
     .update(job)
     .set({
-      leaseExpiresAt: new Date(Date.now() + LEASE_MS),
+      leaseExpiresAt: new Date(Date.now() + JOB_LEASE_MS),
       updatedAt: new Date(),
     })
     .where(
@@ -202,6 +234,8 @@ export async function publishJobPage(
         .set({
           state: "queued",
           cursor: null,
+          waitReason: null,
+          waitUntil: null,
           leaseToken: null,
           leaseExpiresAt: null,
           availableAt: new Date(),
@@ -236,6 +270,8 @@ export async function publishJobPage(
             .set({
               state: "queued",
               cursor: null,
+              waitReason: null,
+              waitUntil: null,
               leaseToken: null,
               leaseExpiresAt: null,
               availableAt: new Date(),
@@ -258,7 +294,9 @@ export async function publishJobPage(
               !Array.isArray(current.result)
                 ? { ...current.result, ...output }
                 : (output ?? current.result),
-            availableAt: page.availableAt ?? new Date(),
+            availableAt: page.waitUntil ?? page.availableAt ?? new Date(),
+            waitReason: page.done ? null : (page.waitReason ?? null),
+            waitUntil: page.done ? null : (page.waitUntil ?? null),
             leaseToken: null,
             leaseExpiresAt: null,
             attempts: 0,
@@ -284,8 +322,14 @@ export async function failJob(
     .set({
       state: claim.attempts >= claim.maxAttempts ? "failed" : "retry_wait",
       availableAt: new Date(
-        Date.now() + Math.min(60_000, 1_000 * 2 ** claim.attempts),
+        Date.now() +
+          Math.min(
+            JOB_RETRY_BACKOFF.maxMs,
+            JOB_RETRY_BACKOFF.baseMs * 2 ** claim.attempts,
+          ),
       ),
+      waitReason: null,
+      waitUntil: null,
       leaseToken: null,
       leaseExpiresAt: null,
       error: message,
@@ -304,6 +348,8 @@ export async function failJob(
     .update(job)
     .set({
       state: "queued",
+      waitReason: null,
+      waitUntil: null,
       leaseToken: null,
       leaseExpiresAt: null,
       availableAt: new Date(),
@@ -342,6 +388,8 @@ export async function retryJob(db: Database, id: string) {
         key: previous.key,
         kind: previous.kind,
         input: previous.input,
+        subjectKind: previous.subjectKind,
+        subjectId: previous.subjectId,
         maxAttempts: previous.maxAttempts,
         priority: previous.priority,
       });
@@ -353,6 +401,8 @@ export async function retryJob(db: Database, id: string) {
         attempts: 0,
         generation: sql`${job.generation} + 1`,
         error: null,
+        waitReason: null,
+        waitUntil: null,
         leaseToken: null,
         leaseExpiresAt: null,
         availableAt: new Date(),
@@ -381,6 +431,8 @@ export async function pauseClaimedJob(
     .update(job)
     .set({
       state: "paused",
+      waitReason: null,
+      waitUntil: null,
       leaseToken: null,
       leaseExpiresAt: null,
       error: JSON.stringify(describeErrorCauses(error)),
@@ -431,6 +483,8 @@ async function controlJob(
     .set({
       state,
       generation: sql`${job.generation} + 1`,
+      waitReason: null,
+      waitUntil: null,
       leaseToken: null,
       leaseExpiresAt: null,
       updatedAt: new Date(),
@@ -466,6 +520,8 @@ export async function repeatJob(
       result: null,
       attempts: 0,
       input: input.input,
+      waitReason: null,
+      waitUntil: null,
       availableAt: input.availableAt ?? new Date(),
       updatedAt: new Date(),
     })
@@ -506,6 +562,8 @@ export async function cancelRunJobs(db: RepositoryQueryInput, runId: string) {
     .update(job)
     .set({
       state: "cancelled",
+      waitReason: null,
+      waitUntil: null,
       leaseToken: null,
       leaseExpiresAt: null,
       updatedAt: new Date(),
@@ -522,7 +580,7 @@ export async function cancelRunJobs(db: RepositoryQueryInput, runId: string) {
 export async function bringQueuedJobsForward(db: Database, now: Date) {
   return getDb(db)
     .update(job)
-    .set({ availableAt: now })
+    .set({ availableAt: now, waitUntil: null, waitReason: null })
     .where(
       and(
         inArray(job.state, ["queued", "retry_wait"]),

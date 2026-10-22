@@ -23,7 +23,6 @@ export function localWorker(production: WorkerConfig, profile: DevProfile) {
   const queues = {
     background: `${name}-${suffix(queueIdentities.background)}`,
     telemetry: `${name}-${suffix(queueIdentities.telemetry)}`,
-    purchaseAgent: `${name}-${suffix(queueIdentities.purchaseAgent)}`,
   };
   const env = { ...production.env };
   for (const key of ["AI", "VECTORIZE", "HYPERDRIVE", "HYPERDRIVE_CACHED"])
@@ -49,19 +48,13 @@ export function localWorker(production: WorkerConfig, profile: DevProfile) {
         maxBatchSize: 1,
         maxBatchTimeout: 0,
         maxConcurrency: 1,
-        maxRetries: 3,
+        maxRetries: 0,
       }),
       triggers.queue({
         name: queues.telemetry,
         maxBatchSize: 100,
         maxBatchTimeout: 5,
         maxConcurrency: 1,
-        maxRetries: 3,
-      }),
-      triggers.queue({
-        name: queues.purchaseAgent,
-        maxBatchSize: 10,
-        maxBatchTimeout: 0,
         maxRetries: 3,
       }),
     ],
@@ -85,7 +78,6 @@ export function localWorker(production: WorkerConfig, profile: DevProfile) {
       USDA_RELEASES: bindings.r2({ name: `${name}-usda-releases` }),
       BACKGROUND_QUEUE: bindings.queue({ name: queues.background }),
       TELEMETRY_QUEUE: bindings.queue({ name: queues.telemetry }),
-      PURCHASE_AGENT_QUEUE: bindings.queue({ name: queues.purchaseAgent }),
 
       ...(profile.integration && {
         AI: bindings.ai({ dev: { remote: true } }),

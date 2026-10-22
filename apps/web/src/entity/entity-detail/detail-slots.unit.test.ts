@@ -69,10 +69,21 @@ describe("Run detail slots", () => {
       ],
     ],
   ])("a %s run renders %j", (purpose, expected) => {
-    expect(applying(purpose, "completed")).toEqual([
-      "live-progress",
-      ...expected,
-    ]);
+    expect(
+      applying(purpose, "completed").filter((id) => id !== "diagnostics"),
+    ).toEqual(["live-progress", ...expected]);
+  });
+
+  // Steps, Decisions and Diagnostics lead a step-ledger Run; any Run the
+  // universal Job executes shows its Diagnostics.
+  it.each<[RunOut["purpose"], string[]]>([
+    ["sweep", ["steps", "decisions", "diagnostics"]],
+    ["suggestion_sweep", ["diagnostics"]],
+    ["mail_import", []],
+  ])("a %s run leads with %j", (purpose, expected) => {
+    expect(
+      applying(purpose, "completed").slice(0, expected.length + 1),
+    ).toEqual([...expected, "live-progress"]);
   });
 
   it.each<[RunOut["purpose"]]>([

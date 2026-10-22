@@ -1,6 +1,5 @@
 import { runShortcode, userId } from "@cubby/schemas/identifiers";
 import { mailboxDiscoveryInput } from "@cubby/schemas/mailbox-research";
-import type { PurchaseAgentEvent } from "@cubby/schemas/purchase-import";
 import { fromPartial } from "@total-typescript/shoehorn";
 import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
@@ -38,13 +37,7 @@ describe("Run lifecycle through MCP", () => {
   const ctx = withTestDb("mcp");
 
   beforeEach(() => {
-    setCfEnv(
-      fromPartial<Env>({
-        PURCHASE_AGENT_QUEUE: {
-          send: async (_event: PurchaseAgentEvent) => undefined,
-        },
-      }),
-    );
+    setCfEnv(fromPartial<Env>({}));
   });
   afterEach(() => setCfEnv(undefined));
 
@@ -260,8 +253,6 @@ describe("Mail import switch and discovery through MCP", () => {
             resetCreditRefusal: async () => {
               creditRefusal = null;
             },
-            scheduleFundingResume: async () => undefined,
-            scheduleAiWorkRecovery: async () => undefined,
           }),
         },
       }),

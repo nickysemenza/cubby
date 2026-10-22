@@ -21,7 +21,6 @@ import {
 } from "~/server/generic/search/repo/search-document";
 import {
   createProductIdentityFixture,
-  createSystemUserFixture,
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
 
@@ -99,7 +98,6 @@ describe("acquisition Expense discovery gating", () => {
   };
 
   it("keeps valid acquisition candidates when other corpus documents have no vector", async () => {
-    await createSystemUserFixture(ctx.db);
     const index = semanticIndex();
     const runner = await createProductIdentityFixture(
       ctx.db,
@@ -143,8 +141,6 @@ describe("acquisition Expense discovery gating", () => {
   });
 
   it("drops weak semantic-only hits and other-brand lines, keeping same-brand charges", async () => {
-    // Query embeddings book their AI call under a system background Run.
-    await createSystemUserFixture(ctx.db);
     const index = semanticIndex();
     const runner = await createProductIdentityFixture(
       ctx.db,

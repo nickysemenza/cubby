@@ -12,30 +12,18 @@ import { DurableObject } from "cloudflare:workers";
 
 import { aiBudgetWindow } from "~/server/ai/budget-window";
 import {
+  GATEWAY_EGRESS_LIMITS,
   gatewayEgressInput,
   type GatewayAdmission,
 } from "~/server/ai/gateway-egress-contract";
-import { isMaintenanceMode } from "~/server/http/maintenance";
 
-const WINDOW_MS = 60_000;
-const REQUESTS_PER_WINDOW = 180;
-// Checked 2026-10-20: Unified Billing is 200 requests/60s/gateway (BYOK
-// excluded); Cubby reserves 20 for other clients. Workers AI defaults are
-// 300 RPM text generation / 2,000 classification, with no published fixed
-// concurrency ceiling. 64 unified permits leave >2x the 30 needed at 10s.
-// https://developers.cloudflare.com/ai-gateway/reference/limits/
-// https://developers.cloudflare.com/workers-ai/platform/limits/
-// Anthropic BYOK has organization/model RPM and token limits, not one universal
-// concurrency number: honor its 429 Retry-After without inventing a flat cap.
-// https://platform.claude.com/docs/en/api/rate-limits
-// ChatGPT plan transport bypasses AI Gateway; its plan-dependent usage limits
-// publish no fixed concurrency allowance and it has no local fan-out cap.
-// https://help.openai.com/en/articles/11369540-using-codex-with-your-chatgpt-plan
-const UNIFIED_MAX_IN_FLIGHT = 64;
-const REQUEST_DEADLINE_MS = 10 * 60_000;
-const FUNDING_RESUME = "fundingResumeAt";
-const FUNDING_IN_FLIGHT = "fundingResumeInFlight";
-type FundingResume = { at: number; generation: string };
+const {
+  windowMs: WINDOW_MS,
+  requestsPerWindow: REQUESTS_PER_WINDOW,
+  unifiedMaxInFlight: UNIFIED_MAX_IN_FLIGHT,
+  requestDeadlineMs: REQUEST_DEADLINE_MS,
+} = GATEWAY_EGRESS_LIMITS;
+
 const CREDIT_BUCKET = "subscriber-credit:anthropic";
 
 const windowStart = (now: number) =>
@@ -70,6 +58,8 @@ export class AiGatewayEgressDurableObject extends DurableObject<Env> {
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
+    // Postgres Jobs now retain startup, recovery and funding intent.
+    void ctx.blockConcurrencyWhile(() => ctx.storage.deleteAlarm());
     ctx.storage.sql.exec(
       "CREATE TABLE IF NOT EXISTS starts (bucket TEXT NOT NULL, started INTEGER NOT NULL)",
     );
@@ -113,214 +103,6 @@ export class AiGatewayEgressDurableObject extends DurableObject<Env> {
       "INSERT INTO credit_epochs VALUES (?, 1) ON CONFLICT(bucket) DO UPDATE SET epoch = epoch + 1",
       CREDIT_BUCKET,
     );
-  }
-
-  private observation: Promise<void> | undefined;
-
-  /** Callers cannot install their own manifest, including during rollback. */
-  observeAiRefresh() {
-    if (isMaintenanceMode(this.env)) return Promise.resolve();
-    if (this.observation) return this.observation;
-    this.observation = this.observeCurrentVersion().finally(() => {
-      this.observation = undefined;
-    });
-    return this.observation;
-  }
-
-  private async observeCurrentVersion() {
-    const version = this.env.CF_VERSION_METADATA.id;
-    const epoch = await this.ctx.blockConcurrencyWhile(async () => {
-      const pending = await this.ctx.storage.get<{
-        version: string;
-        epoch: number;
-      }>("aiRefreshPendingObservation");
-      if (
-        !pending &&
-        (await this.ctx.storage.get("aiRefreshObservedVersion")) === version
-      )
-        return null;
-      if (
-        pending &&
-        pending.version === version &&
-        ((await this.ctx.storage.getAlarm()) ?? 0) > Date.now()
-      )
-        return null;
-      const epoch =
-        pending && pending.version === version
-          ? pending.epoch
-          : ((await this.ctx.storage.get<number>(
-              "aiRefreshObservationEpoch",
-            )) ?? 0) + 1;
-      await this.ctx.storage.put({
-        aiRefreshObservationEpoch: epoch,
-        aiRefreshPendingObservation: { version, epoch },
-      });
-      // Persist before external work. A replacement allocates a newer Neon fencing epoch.
-      await this.ctx.storage.setAlarm(Date.now() + 60_000);
-      return epoch;
-    });
-    if (epoch === null) return;
-    const activeEpoch = await (
-      await import("~/server/workflows/ai-refresh-startup")
-    ).observeAiRefreshFeatures(this.env, epoch);
-    if (activeEpoch > epoch) {
-      await this.ctx.blockConcurrencyWhile(async () => {
-        const nextEpoch = activeEpoch + 1;
-        await this.ctx.storage.put({
-          aiRefreshObservationEpoch: nextEpoch,
-          aiRefreshPendingObservation: { version, epoch: nextEpoch },
-        });
-        await this.ctx.storage.setAlarm(Date.now() + 60_000);
-      });
-      throw new Error(
-        `AI refresh observation fenced: attempted epoch ${epoch}, active epoch ${activeEpoch}; durable retry scheduled`,
-      );
-    }
-    await this.ctx.blockConcurrencyWhile(async () => {
-      await this.ctx.storage.put("aiRefreshObservedVersion", version);
-      await this.ctx.storage.delete("aiRefreshPendingObservation");
-      if (
-        Object.keys(
-          (await this.ctx.storage.get<Record<string, string>>(
-            "manualAiWorkWakes",
-          )) ?? {},
-        ).length
-      )
-        await this.ctx.storage.setAlarm(Date.now() + 60_000);
-      else {
-        const fundingAt = await this.ctx.storage.get<number>(FUNDING_RESUME);
-        if (fundingAt === undefined) await this.ctx.storage.deleteAlarm();
-        else await this.ctx.storage.setAlarm(fundingAt);
-      }
-    });
-  }
-
-  async alarm() {
-    const { withCfEnv } = await import("~/server/cf-env");
-    return withCfEnv(this.env, async () => {
-      if (isMaintenanceMode(this.env)) {
-        await this.ctx.storage.setAlarm(Date.now() + 5 * 60_000);
-        return;
-      }
-      const results = await Promise.allSettled([
-        this.observeAiRefresh(),
-        this.recoverAiWorkWakes(),
-        this.resumeFundingWaits(),
-      ]);
-      const failed = results.find((result) => result.status === "rejected");
-      if (failed?.status === "rejected") throw failed.reason;
-    });
-  }
-
-  async scheduleAiWorkRecovery(runId?: string) {
-    if (runId)
-      (await import("@cubby/schemas/identifiers")).runEntityId.parse(runId);
-    await this.ctx.blockConcurrencyWhile(async () => {
-      const pending =
-        (await this.ctx.storage.get<Record<string, string>>(
-          "manualAiWorkWakes",
-        )) ?? {};
-      pending[runId ?? "authorization"] = crypto.randomUUID();
-      await this.ctx.storage.put("manualAiWorkWakes", pending);
-      const next = Date.now() + 60_000;
-      await this.ctx.storage.setAlarm(
-        Math.min((await this.ctx.storage.getAlarm()) ?? next, next),
-      );
-    });
-  }
-
-  /**
-   * Background work paused for free AI capacity resumes when its six-hour
-   * window ends (`resumeFundingPausedRuns`). One pending wake at the earliest
-   * requested time covers every paused Run, so idle windows never open Neon.
-   */
-  async scheduleFundingResume(at: number) {
-    await this.ctx.blockConcurrencyWhile(async () => {
-      const current = await this.ctx.storage.get<number>(FUNDING_RESUME);
-      const next = current === undefined ? at : Math.min(current, at);
-      await this.ctx.storage.put(FUNDING_RESUME, next);
-      const alarm = await this.ctx.storage.getAlarm();
-      if (alarm === null || alarm > next) await this.ctx.storage.setAlarm(next);
-    });
-  }
-
-  private async resumeFundingWaits() {
-    const wake = await this.ctx.blockConcurrencyWhile(async () => {
-      const inFlight =
-        await this.ctx.storage.get<FundingResume>(FUNDING_IN_FLIGHT);
-      // A failed or interrupted alarm retries the consumed wake. New requests
-      // remain in FUNDING_RESUME and cannot be erased by this acknowledgement.
-      if (inFlight) return inFlight;
-      const at = await this.ctx.storage.get<number>(FUNDING_RESUME);
-      if (at === undefined) return null;
-      if (at > Date.now()) {
-        await this.armFundingAlarm(at);
-        return null;
-      }
-      const consumed = { at, generation: crypto.randomUUID() };
-      await this.ctx.storage.transaction(async (storage) => {
-        await storage.put(FUNDING_IN_FLIGHT, consumed);
-        await storage.delete(FUNDING_RESUME);
-      });
-      return consumed;
-    });
-    if (!wake) return;
-    try {
-      await this.recoverFundingRuns();
-    } catch (error) {
-      await this.ctx.blockConcurrencyWhile(async () => {
-        await this.armFundingAlarm(Date.now() + 60_000);
-      });
-      throw error;
-    }
-    await this.ctx.blockConcurrencyWhile(async () => {
-      const current =
-        await this.ctx.storage.get<FundingResume>(FUNDING_IN_FLIGHT);
-      if (current?.generation === wake.generation)
-        await this.ctx.storage.delete(FUNDING_IN_FLIGHT);
-      const next = await this.ctx.storage.get<number>(FUNDING_RESUME);
-      if (next !== undefined) await this.armFundingAlarm(next);
-    });
-  }
-
-  private async armFundingAlarm(at: number) {
-    const alarm = await this.ctx.storage.getAlarm();
-    await this.ctx.storage.setAlarm(
-      alarm !== null && alarm > Date.now() ? Math.min(alarm, at) : at,
-    );
-  }
-
-  private async recoverFundingRuns() {
-    const { withInvocationDb, db } = await import("~/server/db");
-    await withInvocationDb(this.env.HYPERDRIVE.connectionString, async () => {
-      const { resumeFundingPausedRuns } = await import("../service/ai-work");
-      await resumeFundingPausedRuns(db);
-    });
-  }
-
-  private async recoverAiWorkWakes() {
-    const pending =
-      (await this.ctx.storage.get<Record<string, string>>(
-        "manualAiWorkWakes",
-      )) ?? {};
-    const keys = Object.keys(pending);
-    if (!keys.length) return;
-    const { withInvocationDb, db } = await import("~/server/db");
-    await withInvocationDb(this.env.HYPERDRIVE.connectionString, async () => {
-      const { drainProductionJobs } = await import("~/server/workflows/jobs");
-      await drainProductionJobs(db);
-    });
-    await this.ctx.blockConcurrencyWhile(async () => {
-      const current =
-        (await this.ctx.storage.get<Record<string, string>>(
-          "manualAiWorkWakes",
-        )) ?? {};
-      for (const key of keys)
-        if (current[key] === pending[key]) delete current[key];
-      await this.ctx.storage.put("manualAiWorkWakes", current);
-      if (Object.keys(current).length)
-        await this.ctx.storage.setAlarm(Date.now() + 60_000);
-    });
   }
 
   private activeCreditRefusal(now: number) {

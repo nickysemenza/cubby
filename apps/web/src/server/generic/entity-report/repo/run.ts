@@ -10,7 +10,10 @@ import {
   countRunTargets,
   runTargetState,
 } from "@cubby/schemas/purchase-import";
-import { hasImportRunReports } from "@cubby/schemas/run-fields";
+import {
+  hasImportRunReports,
+  runStepDeclaration,
+} from "@cubby/schemas/run-fields";
 import type { SuggestionCountsOut } from "@cubby/schemas/suggestion-list";
 import { TRADE_LABELS, tradeValues } from "@cubby/schemas/task-fields";
 import { AI_USAGE_TRANSPORT_LABELS } from "@cubby/schemas/telemetry";
@@ -18,6 +21,7 @@ import { ACTIVE_RUN_STATUSES } from "@cubby/shared/client-constants";
 import { z } from "zod";
 
 import { operationCommandRequest } from "~/contracts/define";
+import type { JobListOut } from "~/contracts/job.contract";
 import { problemsContract } from "~/contracts/problems.contract";
 import { runContract } from "~/contracts/run.contract";
 import type { RunDetail, RunLogEntry } from "~/contracts/run.contract";
@@ -894,12 +898,13 @@ function discoveryCountsBlock(
 /** A step-ledger Run's steps as read for its Steps section. */
 export type RunStepsReport = {
   code: RunDetail["publicId"];
+  purpose: string;
   status: string;
-  steps: (RunStepRead & { childShortcode: string | null })[];
+  steps: RunStepRead[];
 };
 
 const STEP_STATE = {
-  queued: { kind: "not_reached", label: "Queued" },
+  queued: { kind: "not_reached", label: "Not started" },
   running: { kind: "running", label: "Running" },
   waiting: { kind: "running", label: "Waiting" },
   paused: { kind: "warning", label: "Paused" },
@@ -907,34 +912,43 @@ const STEP_STATE = {
   failed: { kind: "failed", label: "Failures" },
 } as const satisfies Record<RunStepRead["state"], NonNullable<Row["state"]>>;
 
+const words = (key: string) => key.replaceAll("_", " ");
+const tallyText = (tallies: Record<string, number> | undefined) =>
+  Object.entries(tallies ?? {})
+    .filter(([, count]) => count > 0)
+    .map(([key, count]) => `${formatCount(count)} ${words(key)}`)
+    .join(" · ");
+
 /**
- * The Steps ledger: one row per step with its found, done, failed, skipped
- * and left counts and raw errors; finished steps with nothing to do collapse
- * into one muted row. "Retry failed" re-admits a stopped step's failures.
+ * The Steps ledger, one row per declared step: its purpose, current action,
+ * input counts, tallies and no-result reasons, and raw errors. A `count`
+ * step reads "done of N" against the population it froze when it started;
+ * an estimate reads "about N" and a tally only its running counts, never a
+ * percentage. A step that has not started reads "Not started", whatever its
+ * count. "Retry failed" re-admits a stopped step's failures.
  */
 export function runStepsBlocks(report: RunStepsReport): ReportBlock[] {
   if (!report.steps.length) return [];
-  const idle = report.steps.filter(
-    (step) =>
-      (step.state === "done" || step.state === "queued") &&
-      step.found === 0 &&
-      step.failed === 0,
-  );
-  const shown = report.steps.filter((step) => !idle.includes(step));
   const running = ACTIVE_RUN_STATUSES.some(
     (status) => status === report.status,
   );
-  const rows = shown.map((step) => {
+  const rows = report.steps.map((step) => {
+    const declaration = runStepDeclaration(report.purpose, step.key);
+    const unit = declaration?.unit ?? "items";
+    const input = step.meta?.input;
+    const started = step.startedAt !== null || step.pages > 0;
     const elapsed =
       step.startedAt &&
       formatDuration(
         (step.endedAt ?? new Date()).getTime() - step.startedAt.getTime(),
       );
+    const removed = step.meta?.tallies?.removed ?? 0;
     const counts = [
       `${formatCount(step.done)} done`,
       `${formatCount(step.failed)} failed`,
       `${formatCount(step.skipped)} skipped`,
-      `${formatCount(step.left)} left`,
+      ...(removed ? [`${formatCount(removed)} removed`] : []),
+      ...(step.left === null ? [] : [`${formatCount(step.left)} left`]),
       ...(elapsed ? [elapsed] : []),
       ...(step.meta?.timing && step.pages > 0
         ? [
@@ -942,18 +956,35 @@ export function runStepsBlocks(report: RunStepsReport): ReportBlock[] {
           ]
         : []),
     ].join(" · ");
+    const trailing = !started
+      ? undefined
+      : input?.mode === "count"
+        ? `${formatCount(step.done)} of ${formatCount(step.found)} ${unit}`
+        : input?.mode === "estimate"
+          ? input.total === null
+            ? `${formatCount(step.done)} ${unit} · provider doesn't report a total`
+            : `${formatCount(step.done)} of about ${formatCount(input.total)} ${unit}`
+          : `${formatCount(step.done)} ${unit}`;
+    const { removed: _removed, ...tallies } = step.meta?.tallies ?? {};
+    const outcome = tallyText(tallies);
+    const reasons = tallyText(step.meta?.reasons);
+    const action =
+      step.state === "running" || step.state === "waiting"
+        ? (step.meta?.action ?? declaration?.action)
+        : null;
     // Refs are internal retry keys (`image:<uuid>`); the raw message is the
     // diagnostic a member reads.
     const errors = step.errors.map((error) => error.message);
     return row(step.key, {
       title: step.label,
-      trailing: `${formatCount(step.done)} of ${formatCount(step.found)}`,
+      trailing,
       state: STEP_STATE[step.state],
-      ...(step.childShortcode && {
-        ref: { entity: "run", id: step.childShortcode },
-      }),
       lines: [
-        line(counts),
+        ...(action ? [line(action)] : []),
+        ...(started ? [line(counts)] : []),
+        ...(outcome ? [line(outcome)] : []),
+        ...(reasons ? [line(`No result: ${reasons}`, "muted")] : []),
+        ...(declaration ? [line(declaration.purpose, "muted")] : []),
         ...(step.pausedReason
           ? [
               line(
@@ -989,14 +1020,6 @@ export function runStepsBlocks(report: RunStepsReport): ReportBlock[] {
           : [],
     });
   });
-  if (idle.length)
-    rows.push(
-      row("idle", {
-        title: `${idle.length} ${idle.length === 1 ? "step" : "steps"} with nothing to do`,
-        state: { kind: "skipped", label: "Nothing to do" },
-        lines: [line(idle.map((step) => step.label).join(", "), "muted")],
-      }),
-    );
   return [records(rows, { title: "Steps" })];
 }
 
@@ -1180,6 +1203,71 @@ export function suggestionBlocks(counts: SuggestionCountsOut): ReportBlock[] {
         figure("Rejected", total("rejected")),
         figure("Superseded", total("superseded")),
       ],
+    },
+  ];
+}
+
+/**
+ * The Job executing a Run, as native reads it: what sets its speed now, the
+ * Job's raw facts and its fan-out by kind. Web draws the same read with the
+ * limits catalog and inline logs.
+ */
+export function runDiagnosticsBlocks(jobs: JobListOut): ReportBlock[] {
+  const { primary, binding } = jobs;
+  if (!primary)
+    return [{ kind: "note", text: "No Job is recorded for this Run." }];
+  const at = (iso: string) => formatInstant(iso, "dateShortTime");
+  const facts: [string, string | null][] = [
+    ["Kind", primary.kind],
+    ["State", primary.state],
+    [
+      "Attempt",
+      `${formatCount(primary.attempts)} of ${formatCount(primary.maxAttempts)}`,
+    ],
+    ["Wait", primary.waitReason],
+    ["Wait until", primary.waitUntil && at(primary.waitUntil)],
+    [
+      "Queue position",
+      primary.ahead === null
+        ? null
+        : `${formatCount(primary.ahead)} same-kind Jobs ahead`,
+    ],
+    ["Available", at(primary.availableAt)],
+    ["Lease expires", primary.leaseExpiresAt && at(primary.leaseExpiresAt)],
+    ["Error", primary.error],
+  ];
+  return [
+    {
+      kind: "note",
+      strong: true,
+      text:
+        binding.status === "binding"
+          ? `Speed set by ${binding.label}: ${binding.evidence}`
+          : binding.reason,
+    },
+    {
+      kind: "table",
+      title: "Job",
+      columns: ["Fact", "Value"],
+      rows: facts.flatMap(([label, value]) =>
+        value === null ? [] : [{ id: label, cells: [label, value] }],
+      ),
+    },
+    {
+      kind: "table",
+      title: "Jobs by kind",
+      columns: ["Kind", "Jobs", "States"],
+      rows: jobs.groups.map((group) => ({
+        id: group.kind,
+        cells: [
+          group.kind,
+          formatCount(group.count),
+          Object.entries(group.states)
+            .map(([state, count]) => `${formatCount(count)} ${state}`)
+            .join(" · "),
+        ],
+      })),
+      empty: "No fan-out Jobs.",
     },
   ];
 }
@@ -1373,6 +1461,8 @@ export type RunReportSlot =
   | "run.import-debug-log"
   | "run.ai-usage"
   | "run.suggestions"
+  | "run.decisions"
+  | "run.diagnostics"
   | "run.changes";
 
 export const isImportReportSlot = (slot: string): slot is ImportReportSlot =>

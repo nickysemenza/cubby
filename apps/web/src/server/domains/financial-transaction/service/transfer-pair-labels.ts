@@ -1,7 +1,7 @@
 import type { RunId } from "@cubby/schemas/identifiers";
 import type { RunStepError } from "@cubby/schemas/run-step";
 import type { TransferPairLeg } from "@cubby/schemas/transfer-pair-suggestion";
-import { WORKFLOW_EXECUTION_LIMITS } from "@cubby/shared/workflow-limits";
+import { JOB_PAGE_LIMITS } from "@cubby/shared/job-page-limits";
 
 import {
   createConcurrencyLimiter,
@@ -27,6 +27,7 @@ import {
   transferPairEvidenceFingerprint,
   transferPairsNeedingLabels,
   type TransferPairLabelCursor,
+  TRANSFER_PAIR_PUBLISH_CONCURRENCY,
 } from "~/server/domains/financial-transaction/repo/transfer-pair-suggestions";
 import { ensureRun, systemActor } from "~/server/domains/run/repo/ensure-run";
 import { isWorkflowInterrupted } from "~/server/workflows/runs/execution";
@@ -34,11 +35,9 @@ import { runFailureText } from "~/server/workflows/runs/lifecycle";
 
 /** One label page labels at most this many pairs. */
 const TRANSFER_PAIR_LABEL_BATCH = Math.min(
-  WORKFLOW_EXECUTION_LIMITS.suggestionsPerPage,
-  Math.floor(WORKFLOW_EXECUTION_LIMITS.maxDecisionQuestionsPerPage / 2),
+  JOB_PAGE_LIMITS.suggestionsPerPage,
+  Math.floor(JOB_PAGE_LIMITS.maxDecisionQuestionsPerPage / 2),
 );
-/** Database work only; model calls never occupy this lane. */
-const TRANSFER_PAIR_PUBLISH_CONCURRENCY = 4;
 
 type Question = DecisionChoiceArgs;
 type Usage = Question["usage"];

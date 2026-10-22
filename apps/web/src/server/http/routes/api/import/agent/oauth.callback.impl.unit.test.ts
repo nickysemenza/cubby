@@ -1,4 +1,3 @@
-import { runEntityId } from "@cubby/schemas/identifiers";
 import { describe, expect, it, vi } from "vitest";
 
 import { createDatabase } from "~/server/db/database-runtime";
@@ -44,12 +43,6 @@ function dependencies() {
     sessionId: "session-1",
   }));
   const resumeRuns = vi.fn<CallbackDependencies["resumeRuns"]>(async () => []);
-  const getQueue = vi.fn<CallbackDependencies["getQueue"]>(() => ({
-    send: vi.fn(async () => undefined),
-  }));
-  const recordDispatch = vi.fn<CallbackDependencies["recordDispatch"]>(
-    async () => ({ id: "run-1", status: "running" }),
-  );
   const verifyState = vi.fn<CallbackDependencies["verifyState"]>(
     async () => stateClaims,
   );
@@ -58,8 +51,6 @@ function dependencies() {
     exchangeCode,
     findGrant,
     resumeRuns,
-    getQueue,
-    recordDispatch,
     verifyState,
   };
 }
@@ -122,97 +113,18 @@ describe("purchase agent OAuth callback", () => {
     expect(ports.resumeRuns).not.toHaveBeenCalled();
   });
 
-  it("uses persisted event ids and records successful queue handoff", async () => {
+  it("reports a recoverable failure when transactional resume cannot persist intent", async () => {
     const ports = dependencies();
-    const send = vi.fn(async () => undefined);
-    ports.getQueue.mockReturnValue({ send });
-    ports.resumeRuns.mockResolvedValue([
-      {
-        id: runEntityId.parse("15119902-3ed6-4f04-a9cc-8c9860c399b2"),
-        publicId: "RUN-4K7M",
-        purpose: "mail_import",
-        eventId: "persisted-event",
-      },
-    ]);
-
-    const response = await handlePurchaseAgentOAuthCallback(
-      request("?code=code-1&state=state-1"),
-      ports,
+    ports.resumeRuns.mockRejectedValue(
+      new Error("Synthetic admission failure"),
     );
-
-    expectRedirect(response, "authorized");
-    expect(send).toHaveBeenCalledWith({
-      version: 1,
-      runId: "15119902-3ed6-4f04-a9cc-8c9860c399b2",
-      purpose: "mail_import",
-      eventId: "persisted-event",
-      generation: "persisted-event",
-      type: "start_or_resume",
-    });
-    expect(ports.recordDispatch).toHaveBeenCalledWith(database, {
-      runId: "15119902-3ed6-4f04-a9cc-8c9860c399b2",
-      eventId: "persisted-event",
-    });
-  });
-
-  it("marks every missing or rejected queue handoff as recoverable", async () => {
-    const runs = [
-      {
-        id: runEntityId.parse("15119902-3ed6-4f04-a9cc-8c9860c399b2"),
-        publicId: "RUN-4K7M",
-        purpose: "mail_import" as const,
-        eventId: "event-1",
-      },
-      {
-        id: runEntityId.parse("25119902-3ed6-4f04-a9cc-8c9860c399b2"),
-        publicId: "RUN-4K7N",
-        purpose: "mail_import" as const,
-        eventId: "event-2",
-      },
-    ];
-    const [firstRun, secondRun] = runs;
-    if (!firstRun || !secondRun) throw new Error("Expected two resumed runs");
-    const missing = dependencies();
-    missing.resumeRuns.mockResolvedValue(runs);
-    missing.getQueue.mockReturnValue(undefined);
     expectRedirect(
       await handlePurchaseAgentOAuthCallback(
         request("?code=code-1&state=state-1"),
-        missing,
+        ports,
       ),
       "dispatch_failed",
     );
-    expect(missing.recordDispatch).toHaveBeenCalledTimes(2);
-    expect(
-      missing.recordDispatch.mock.calls.every(([, input]) => input.error),
-    ).toBe(true);
-
-    const partial = dependencies();
-    partial.resumeRuns.mockResolvedValue(runs);
-    partial.getQueue.mockReturnValue({
-      send: vi
-        .fn()
-        .mockResolvedValueOnce(undefined)
-        .mockRejectedValueOnce(new Error("queue rejected")),
-    });
-    expectRedirect(
-      await handlePurchaseAgentOAuthCallback(
-        request("?code=code-1&state=state-1"),
-        partial,
-      ),
-      "dispatch_failed",
-    );
-    expect(partial.recordDispatch).toHaveBeenCalledWith(database, {
-      runId: firstRun.id,
-      eventId: firstRun.eventId,
-    });
-    expect(partial.recordDispatch).toHaveBeenCalledWith(
-      database,
-      expect.objectContaining({
-        runId: secondRun.id,
-        eventId: secondRun.eventId,
-        error: "queue rejected",
-      }),
-    );
+    expect(ports.resumeRuns).toHaveBeenCalledOnce();
   });
 });

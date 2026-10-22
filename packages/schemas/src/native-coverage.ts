@@ -389,6 +389,8 @@ export const nativeCoverage = {
       // audit diffs (changes) as richer fills of the same slots.
       "run.ai-usage",
       "run.suggestions",
+      "run.decisions",
+      "run.diagnostics",
       "run.changes",
       "run.import-debug-log",
       "run.import-findings",

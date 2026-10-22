@@ -1,7 +1,7 @@
 import { aiProvenance, aiEvaluationTarget } from "@cubby/schemas/ai-evaluation";
 import { sql, eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { claimAiEvaluation } from "~/server/ai/repo/ai-evaluation";
 import { activateAiRefresh } from "~/server/ai/repo/ai-refresh";
@@ -18,7 +18,6 @@ import {
 } from "~/server/domains/run/service/ai-refresh";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { withJobFixtureExecution } from "~/server/testing/background-queue";
-import { createSystemUserFixture } from "~/server/testing/repo.fixtures";
 
 import { publishGmailEvidence } from "../../repo/gmail/admitted-source";
 import { originalChecksum } from "../../repo/gmail/checksum";
@@ -34,7 +33,6 @@ describe("Email prompt refresh publication", () => {
   const emailTarget = aiEvaluationTarget.options.find(
     (target) => target.shape.kind.value === "email",
   )!;
-  beforeEach(() => createSystemUserFixture(ctx.db));
   afterEach(() => vi.restoreAllMocks());
   it("rolls back Email publication when activation is disabled and re-enabled during its callback", async () => {
     const party = await insertWithShortcode(ctx.db, "ledgerParty", {

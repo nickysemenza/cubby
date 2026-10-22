@@ -1,5 +1,7 @@
 import { aiRefreshRunInput } from "@cubby/schemas/ai-evaluation";
 import { runEntityId } from "@cubby/schemas/identifiers";
+import { jobWaitReason } from "@cubby/schemas/job";
+import { RUN_KINDS } from "@cubby/schemas/run-fields";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 
@@ -10,15 +12,12 @@ import { readRun } from "~/server/domains/run/repo/ai-work-state";
 import { JobPausedError, JobDeferredError } from "~/server/generic/jobs/errors";
 import { defineJobHandler } from "~/server/generic/jobs/service/jobs";
 import type { PreparedJobPage } from "~/server/generic/jobs/types";
-import {
-  isStepRunPurpose,
-  WORKFLOW_RUN_PURPOSES,
-} from "~/server/workflows/runs/contract";
+import { EXECUTED_RUN_PURPOSES } from "~/server/workflows/runs/contract";
 import { withWorkflowExecution } from "~/server/workflows/runs/execution";
 
 const runJobInput = z.object({
   runId: runEntityId,
-  purpose: z.enum(WORKFLOW_RUN_PURPOSES),
+  purpose: z.enum(EXECUTED_RUN_PURPOSES),
 });
 import { aiEvaluationJobInput } from "~/server/generic/jobs/inputs";
 const mailCursor = z.object({
@@ -27,7 +26,11 @@ const mailCursor = z.object({
   more: z.boolean().optional(),
 });
 
-/** RunStep cursors and receipts remain domain checkpoints; only Job owns admission and retries. */
+/**
+ * One handler executes every kind its manifest entry gives an `execution`:
+ * a RunStep ledger, AI evaluations, or mailbox discovery. RunStep cursors
+ * and receipts remain domain checkpoints; only Job owns admission and retries.
+ */
 export const runJobHandler = defineJobHandler(
   runJobInput,
   async (db, claim, input): Promise<PreparedJobPage> =>
@@ -44,7 +47,8 @@ export const runJobHandler = defineJobHandler(
             .update(run)
             .set({ status: "running" })
             .where(eq(run.id, input.runId));
-        if (isStepRunPurpose(input.purpose)) {
+        const execution = RUN_KINDS[input.purpose].execution;
+        if (execution === "steps") {
           const next = await (
             await import("~/server/domains/run/service/step-run")
           ).advanceStepRun(db, params);
@@ -59,25 +63,28 @@ export const runJobHandler = defineJobHandler(
               throw new JobDeferredError(
                 paused.pausedReason ?? "Step capacity wait",
                 paused.pausedUntil,
+                next.waitReason ?? "provider_capacity",
               );
             throw new JobPausedError(
               paused?.pausedReason ?? "Step requires member attention",
             );
           }
-          const seconds =
-            next.kind === "wait"
-              ? next.seconds
-              : next.kind === "continue"
-                ? (next.waitSeconds ?? 0)
-                : 60;
+          const seconds = next.waitSeconds ?? 0;
+          const availableAt = new Date(Date.now() + seconds * 1000);
           return {
             page: {
               done: false,
-              availableAt: new Date(Date.now() + seconds * 1000),
+              availableAt,
+              ...(seconds > 0
+                ? {
+                    waitUntil: availableAt,
+                    waitReason: jobWaitReason.enum.provider_capacity,
+                  }
+                : {}),
             },
           };
         }
-        if (input.purpose === "mail_discovery") {
+        if (execution === "mail_discovery") {
           const mail =
             await import("~/server/domains/purchase-import/operations/gmail/discovery");
           const resumed = await mail.beginMailDiscovery(db, params);
@@ -136,13 +143,20 @@ export const runJobHandler = defineJobHandler(
             const page = await (
               await import("~/server/domains/run/service/ai-refresh")
             ).discoverAiRefresh(db);
+            const availableAt = new Date(
+              Date.now() +
+                (page.deferred ? 30_000 : page.complete ? 120_000 : 0),
+            );
             return {
               page: {
                 done: false,
-                availableAt: new Date(
-                  Date.now() +
-                    (page.deferred ? 30_000 : page.complete ? 120_000 : 0),
-                ),
+                availableAt,
+                ...(page.deferred
+                  ? {
+                      waitUntil: availableAt,
+                      waitReason: jobWaitReason.enum.provider_capacity,
+                    }
+                  : {}),
               },
             };
           }
@@ -193,6 +207,7 @@ export const aiEvaluationJobHandler = defineJobHandler(
       throw new JobDeferredError(
         settled.error ?? "AI evidence resume",
         new Date(Date.now() + 1_000),
+        "provider_capacity",
       );
     if (settled?.state === "failed")
       throw new Error(settled.error ?? "AI evaluation failed");

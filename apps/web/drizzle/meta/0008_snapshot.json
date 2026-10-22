@@ -1,6 +1,6 @@
 {
-  "id": "e5070dc7-013d-468e-a482-910128b0afca",
-  "prevId": "35c4b96b-89b8-4591-8347-3e913271db5d",
+  "id": "26a74d9e-9179-48f0-bee4-a2981b381591",
+  "prevId": "a49c3d16-9698-4bb2-a0d8-9fa65526c816",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -2315,6 +2315,30 @@
           "primaryKey": false,
           "notNull": false
         },
+        "subjectKind": {
+          "name": "subjectKind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "subjectId": {
+          "name": "subjectId",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "waitReason": {
+          "name": "waitReason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "waitUntil": {
+          "name": "waitUntil",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
         "input": {
           "name": "input",
           "type": "jsonb",
@@ -2383,6 +2407,12 @@
         },
         "leaseExpiresAt": {
           "name": "leaseExpiresAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "lastClaimedAt": {
+          "name": "lastClaimedAt",
           "type": "timestamp",
           "primaryKey": false,
           "notNull": false
@@ -2465,6 +2495,48 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
+        },
+        "Job_subject_idx": {
+          "name": "Job_subject_idx",
+          "columns": [
+            {
+              "expression": "subjectKind",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "subjectId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "Job_kind_claimed_idx": {
+          "name": "Job_kind_claimed_idx",
+          "columns": [
+            {
+              "expression": "kind",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "lastClaimedAt",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
       "foreignKeys": {
@@ -2486,6 +2558,14 @@
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {
+        "Job_waitReason_check": {
+          "name": "Job_waitReason_check",
+          "value": "\"Job\".\"waitReason\" IN ('provider_capacity','ai_funding_window','device','rate_limit')"
+        },
+        "Job_subject_check": {
+          "name": "Job_subject_check",
+          "value": "(\"Job\".\"subjectKind\" IS NULL) = (\"Job\".\"subjectId\" IS NULL)"
+        },
         "Job_state_check": {
           "name": "Job_state_check",
           "value": "\"Job\".\"state\" IN ('queued','running','retry_wait','paused','completed','failed','cancelled')"
@@ -17449,13 +17529,6 @@
           "primaryKey": false,
           "notNull": false
         },
-        "dispatchAttempts": {
-          "name": "dispatchAttempts",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 0
-        },
         "dispatchError": {
           "name": "dispatchError",
           "type": "text",
@@ -17802,22 +17875,6 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
-        },
-        "Run_one_active_derived_refresh": {
-          "name": "Run_one_active_derived_refresh",
-          "columns": [
-            {
-              "expression": "purpose",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": true,
-          "where": "\"Run\".\"purpose\" = 'derived_refresh' AND \"Run\".\"status\" IN ('running', 'paused_auth', 'paused')",
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
         }
       },
       "foreignKeys": {
@@ -17937,7 +17994,7 @@
         },
         "Run_purpose_check": {
           "name": "Run_purpose_check",
-          "value": "\"Run\".\"purpose\" IN ('account_sync', 'mail_import', 'purchase_validation', 'product_enrichment', 'photo_inventory', 'ai_suggest', 'suggestion_sweep', 'ai_refresh', 'background', 'file_import', 'mail_search', 'mail_discovery', 'mail_reclassify', 'maintenance', 'derived_refresh', 'sweep')"
+          "value": "\"Run\".\"purpose\" IN ('account_sync', 'mail_import', 'purchase_validation', 'product_enrichment', 'photo_inventory', 'ai_suggest', 'suggestion_sweep', 'ai_refresh', 'background', 'file_import', 'mail_search', 'mail_discovery', 'mail_reclassify', 'connection_discovery', 'maintenance', 'derived_refresh', 'sweep')"
         },
         "Run_cause_check": {
           "name": "Run_cause_check",
@@ -18685,12 +18742,6 @@
           "notNull": true,
           "default": 0
         },
-        "childRunId": {
-          "name": "childRunId",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false
-        },
         "cursor": {
           "name": "cursor",
           "type": "jsonb",
@@ -18770,22 +18821,6 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
-        },
-        "RunStep_child_idx": {
-          "name": "RunStep_child_idx",
-          "columns": [
-            {
-              "expression": "childRunId",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "where": "\"RunStep\".\"childRunId\" IS NOT NULL",
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
         }
       },
       "foreignKeys": {
@@ -18800,19 +18835,6 @@
             "id"
           ],
           "onDelete": "cascade",
-          "onUpdate": "no action"
-        },
-        "RunStep_childRunId_Run_id_fk": {
-          "name": "RunStep_childRunId_Run_id_fk",
-          "tableFrom": "RunStep",
-          "tableTo": "Run",
-          "columnsFrom": [
-            "childRunId"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "set null",
           "onUpdate": "no action"
         }
       },

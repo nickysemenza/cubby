@@ -1090,7 +1090,11 @@ export async function executeAiRefreshTarget(
       error: message,
     });
     if (admissionWait)
-      throw new JobDeferredError(message, new Date(Date.now() + 30_000));
+      throw new JobDeferredError(
+        message,
+        new Date(Date.now() + 30_000),
+        "rate_limit",
+      );
     if (!obsolete) throw error;
   }
   return true;

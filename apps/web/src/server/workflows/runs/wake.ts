@@ -3,7 +3,11 @@ import { and, eq, inArray, isNull } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
 import { getDb, runAfterCommit } from "~/server/db/helpers";
-import { aiEvaluationRequest, job } from "~/server/db/retained-tables";
+import {
+  aiEvaluation,
+  aiEvaluationRequest,
+  job,
+} from "~/server/db/retained-tables";
 import { wakeJobs } from "~/server/workflows/background-tasks/publish";
 
 async function wakeRun(db: Database, runId: RunId) {
@@ -18,11 +22,17 @@ async function wakeRun(db: Database, runId: RunId) {
     );
   await runAfterCommit(db, () => wakeJobs({ source: "run-receipt" }));
 }
+
+/** A settled evaluation wakes every Run waiting on it: its owner and its requesters. */
 export async function wakeAiEvaluationRequesters(
   db: Database,
   evaluationId: string,
 ) {
-  const owners = await getDb(db)
+  const [owner] = await getDb(db)
+    .select({ runId: aiEvaluation.runId })
+    .from(aiEvaluation)
+    .where(eq(aiEvaluation.id, evaluationId));
+  const requesters = await getDb(db)
     .select({ runId: aiEvaluationRequest.runId })
     .from(aiEvaluationRequest)
     .where(
@@ -31,11 +41,9 @@ export async function wakeAiEvaluationRequesters(
         isNull(aiEvaluationRequest.cancelledAt),
       ),
     );
-  for (const owner of owners) await wakeRun(db, owner.runId);
-}
-export async function wakeStepRunParent(db: Database, childRunId: RunId) {
-  const parent = await (
-    await import("~/server/domains/run/repo/run-step")
-  ).stepParentOf(db, childRunId);
-  if (parent) await wakeRun(db, parent.runId);
+  const runIds = new Set([
+    ...(owner ? [owner.runId] : []),
+    ...requesters.map((row) => row.runId),
+  ]);
+  for (const runId of runIds) await wakeRun(db, runId);
 }

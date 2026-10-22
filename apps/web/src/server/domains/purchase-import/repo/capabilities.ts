@@ -66,6 +66,7 @@ const capabilityMatrix = {
   mail_search: new Set(),
   mail_discovery: new Set(),
   mail_reclassify: new Set(),
+  connection_discovery: new Set(),
   maintenance: new Set(),
   derived_refresh: new Set(),
   sweep: new Set(),

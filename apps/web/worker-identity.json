@@ -5,9 +5,6 @@
     },
     "telemetry": {
       "cubby-telemetry": "telemetry"
-    },
-    "purchaseAgent": {
-      "cubby-purchase-agent": "purchase"
     }
   },
   "crons": {

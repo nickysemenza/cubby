@@ -3,6 +3,7 @@ import { runShortcode } from "@cubby/schemas/identifiers";
 import type { RunOut } from "@cubby/schemas/run";
 import {
   hasImportRunReports,
+  isExecutedRunPurpose,
   runPurpose,
   runStatus,
 } from "@cubby/schemas/run-fields";
@@ -17,10 +18,11 @@ import {
   loadRunTimeline,
 } from "~/server/domains/purchase-import/repo/run-service";
 import { getRunLiveProgress } from "~/server/domains/run/repo/run-progress";
-import { readRunStepsReport } from "~/server/domains/run/repo/run-step";
+import { readRunSteps } from "~/server/domains/run/repo/run-step";
 import { createEntityReader } from "~/server/entity-kernel/repo/repository";
 import { suggestionCountsByFamily } from "~/server/generic/assessment/repo/suggestion-list";
 import { getAuditLog } from "~/server/generic/audit-log/repo/audit-log";
+import { listRunJobs } from "~/server/generic/jobs/repo/job-diagnostics";
 import { isStepRunPurpose } from "~/server/workflows/runs/contract";
 
 import { reportDependency, type ReportExecution } from "./dependency";
@@ -32,6 +34,7 @@ import {
   isImportReportSlot,
   isLiveRunStatus,
   liveProgressBlocks,
+  runDiagnosticsBlocks,
   runLogBlocks,
   runStepsBlocks,
   runTimelineBlocks,
@@ -156,8 +159,9 @@ export const RUN_REPORTS = {
     return {
       blocks: runStepsBlocks({
         code,
+        purpose,
         status,
-        steps: await readRunStepsReport(
+        steps: await readRunSteps(
           execution.request.db,
           await execution.read(runId),
         ),
@@ -193,6 +197,24 @@ export const RUN_REPORTS = {
     return {
       blocks: aiUsageBlocks(usage),
       nextCursor: usage.nextCursor ?? undefined,
+    };
+  }),
+  "run.decisions": runSlot(async (execution) => {
+    const { code, purpose } = await execution.read(runBase);
+    if (!isStepRunPurpose(purpose)) return { blocks: [] };
+    return {
+      blocks: suggestionBlocks(
+        await suggestionCountsByFamily(execution.request.db, { runId: code }),
+      ),
+    };
+  }),
+  "run.diagnostics": runSlot(async (execution) => {
+    const { code, purpose } = await execution.read(runBase);
+    if (!isExecutedRunPurpose(purpose)) return { blocks: [] };
+    return {
+      blocks: runDiagnosticsBlocks(
+        await listRunJobs(execution.request.db, code),
+      ),
     };
   }),
   "run.suggestions": runSlot(async (execution) => ({

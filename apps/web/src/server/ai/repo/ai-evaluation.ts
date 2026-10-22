@@ -52,6 +52,7 @@ export async function claimAiEvaluation(
       throw new JobDeferredError(
         "Automatic AI refresh is disabled",
         new Date(Date.now() + 120_000),
+        "provider_capacity",
       );
     const owner = await aiExecutionOwner(tx, existing, requestingRunId);
     if (!owner)

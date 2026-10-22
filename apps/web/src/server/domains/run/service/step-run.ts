@@ -1,27 +1,30 @@
-import { buildActorContext } from "@cubby/schemas/context";
 import type { RunId } from "@cubby/schemas/identifiers";
+import type { JobWaitReason } from "@cubby/schemas/job";
+import {
+  isExecutedRunPurpose,
+  isStepRunPurpose,
+  RUN_KINDS,
+  sweepRunInput,
+  type RunStepDeclaration,
+} from "@cubby/schemas/run-fields";
 import type {
   RunStepCounts,
   RunStepError,
+  RunStepInput,
   RunStepMeta,
-  RunStepExecution,
 } from "@cubby/schemas/run-step";
-import type { RunWorkItems } from "@cubby/schemas/run-work-progress";
-import { pick } from "es-toolkit";
-import { z } from "zod";
+
+type JsonValue = RunStepInput["boundary"];
 
 import type { Database } from "~/server/db";
-import {
-  isStepRunPurpose,
-  type StepRunPurpose,
-  type WorkflowRunParams,
-} from "~/server/workflows/runs/contract";
+import { setJobStepKey } from "~/server/generic/jobs/context";
+import { measurePage, type PageWork } from "~/server/generic/jobs/page-work";
+import type { WorkflowRunParams } from "~/server/workflows/runs/contract";
 import {
   claimWorkflowRun,
   launchWorkflowRun,
   recordRunProgress,
 } from "~/server/workflows/runs/lifecycle";
-import { wakeStepRunParent } from "~/server/workflows/runs/wake";
 
 import {
   ensureRunSteps,
@@ -33,133 +36,117 @@ import {
   readStepRunOwner,
   recordRunStepPage,
   reopenRunStep,
-  type RunStepDefinition,
+  startRunStep,
   type RunStepRow,
   type StepRunOwner,
 } from "../repo/run-step";
 import { sampleRunWork, stepWorkSamples } from "../repo/work-progress";
+import { stepDriversFor } from "./run-step-registry";
 
 type RunRow = StepRunOwner;
+type Tallies = Record<string, number>;
 
-/** What one page of a step reported. */
-export type StepPage = (
+/** What one page of a step reported. Counts are this page's increments. */
+export type StepPage =
   | {
       kind: "progress";
-      /** Retry failed items durably before advancing this input checkpoint. */
-      retryable?: boolean;
-      /** Identity pages recount successes on replay; draining queues add fresh completions. */
-      retryAccounting?: "replace" | "add";
-      /** Stable skipped identities in a draining queue, retained only during retries. */
-      skippedIds?: readonly string[];
-      execution?: RunStepExecution;
-      waitSeconds?: number;
-      delta?: Partial<RunStepCounts>;
-      /** The backlog size when the driver knows it. */
-      found?: number;
+      delta?: Partial<Omit<RunStepCounts, "found">>;
       errors?: readonly RunStepError[];
       cursor?: unknown;
-      meta?: RunStepMeta;
+      meta?: Pick<RunStepMeta, "detail" | "retryRefs">;
+      /** Running counts without a denominator (candidates, decisions). */
+      tallies?: Tallies;
+      /** Why inputs produced no result on this page (`no_candidate`). */
+      reasons?: Tallies;
+      /**
+       * Whole-step tallies and reasons that replace the stored ones: a wait
+       * step re-reads absolute evaluation states on every page.
+       */
+      absolute?: true;
+      /** The current action when narrower than the declared one. */
+      action?: string;
+      /** An `estimate` step's provider-reported "about N". */
+      estimate?: number | null;
+      waitSeconds?: number;
       /** Nothing is left: the step ends, failed when it recorded failures. */
       done: boolean;
-    }
-  | {
-      /** The step's work runs on a child Run; it ends when the child does. */
-      kind: "child";
-      childRunId: RunId;
-      counts: RunStepCounts;
-      state: "running" | "done" | "failed" | "paused";
-      errors?: readonly RunStepError[];
-      pausedUntil?: Date | null;
-      reason?: string;
-      /** The driver's own resume point (which child of several is current). */
-      cursor?: unknown;
-      meta?: RunStepMeta;
-      /** Page again now instead of waiting (the driver just moved to its next child). */
-      again?: boolean;
     }
   | {
       kind: "paused";
       reason: string;
       until: Date | null;
+      waitReason?: JobWaitReason;
       /** What the page finished before the pause, kept on the step. */
-      delta?: Partial<RunStepCounts>;
+      delta?: Partial<Omit<RunStepCounts, "found">>;
       errors?: readonly RunStepError[];
       cursor?: unknown;
-    }
-) & {
-  work?: RunWorkItems & { finished?: boolean };
-  labels?: { reused: number; generated: number };
-  pageProcessed?: number;
-};
+      tallies?: Tallies;
+      reasons?: Tallies;
+    };
 
 export type StepContext = {
   db: Database;
   run: RunRow;
   step: RunStepRow;
+  declaration: RunStepDeclaration;
   attempt: number;
   /** The first page after "Retry failed" reopened this step. */
   retrying: boolean;
+  /** The population cutoff the step froze with its count; pagers apply it. */
+  boundary: JsonValue | null;
 };
 
-export interface StepDriver extends RunStepDefinition {
-  /** Only declaration constants and the persisted checkpoint may define a name. */
-  describe?(step: RunStepRow): {
-    phase: string;
-    unit: string;
-    limit: number | null;
-    processed: number;
-  };
-  page(context: StepContext): Promise<StepPage>;
+/** One COUNT over the same predicate the pager walks, with the cutoff it pages under. */
+export type StepCounter = (context: StepContext) => Promise<{
+  total: number;
+  boundary: JsonValue | null;
+}>;
+
+/** A page also records where its time went (`RunStep.meta.page`). */
+export type StepPageContext = StepContext & { work: PageWork };
+
+export type StepDriver = {
+  count?: StepCounter;
+  page(context: StepPageContext): Promise<StepPage>;
+};
+
+/** The ordered declarations and drivers one Run pages; tests pass their own. */
+export type StepPlan = readonly {
+  declaration: RunStepDeclaration;
+  driver: StepDriver;
+}[];
+
+/** A Sweep runs the declared steps of the families its input chose, in declared order. */
+async function planForRun(owner: RunRow): Promise<StepPlan> {
+  if (!isStepRunPurpose(owner.purpose) || !isExecutedRunPurpose(owner.purpose))
+    throw new Error(`${owner.purpose} Runs are not executed by run.execute`);
+  const families =
+    owner.purpose === "sweep"
+      ? new Set<string>(
+          sweepRunInput
+            .parse(owner.input)
+            .families.map((entry) => entry.family),
+        )
+      : null;
+  const drivers = await stepDriversFor(owner.purpose);
+  const declarations: readonly RunStepDeclaration[] =
+    RUN_KINDS[owner.purpose].steps;
+  return declarations
+    .filter(
+      (declaration) =>
+        !families || !declaration.family || families.has(declaration.family),
+    )
+    .flatMap((declaration) => {
+      const driver = drivers[declaration.key];
+      return driver ? [{ declaration, driver }] : [];
+    });
 }
 
-/** The ordered drivers a step-ledger Run runs, chosen from its stored input. */
-export type StepRunDrivers = (
-  db: Database,
-  owner: RunRow,
-) => Promise<StepDriver[]>;
-
-const registry = {
-  maintenance: async () =>
-    (await import("~/server/domains/maintenance/service/maintenance-run"))
-      .maintenanceDrivers,
-  sweep: async () => (await import("./sweep")).sweepDrivers,
-} satisfies Record<
-  Exclude<StepRunPurpose, "derived_refresh">,
-  () => Promise<StepRunDrivers>
->;
-
-async function driversForPurpose(purpose: StepRunPurpose) {
-  if (purpose === "derived_refresh")
-    throw new Error(
-      "Legacy derived-refresh Runs are historical; broad family Jobs own refresh",
-    );
-  return registry[purpose]();
-}
-
-export const stepPageSummary = z.object({
-  phase: z.string(),
-  unit: z.string(),
-  pageProcessed: z.number().nonnegative(),
-  pageFailures: z.number().nonnegative(),
-  cumulative: z.object({
-    processed: z.number(),
-    total: z.number().nullable(),
-    failures: z.number(),
-  }),
-  labels: z.object({ reused: z.number(), generated: z.number() }).nullable(),
-  // Checkpoint identity, never a driver's potentially private source keys or payload.
-  cursor: z.object({ stepId: z.string(), page: z.number() }),
-});
-export type StepPageSummary = z.infer<typeof stepPageSummary>;
-export type StepAdvance = (
-  | { kind: "continue"; execution?: RunStepExecution; waitSeconds?: number }
-  | { kind: "wait"; seconds: number }
-  | { kind: "paused" }
+export type StepAdvance =
+  | { kind: "continue"; waitSeconds?: number }
+  | { kind: "paused"; waitReason?: JobWaitReason }
   | { kind: "finished" }
-  | { kind: "lost" }
-) & { summary?: StepPageSummary };
-
-const CHILD_WAIT_SECONDS = 60;
+  | { kind: "lost" };
 
 let progressSequence = 0;
 /** Timeline events within one millisecond still keep their order. */
@@ -168,99 +155,47 @@ const stampOf = (attempt: number) => ({
   sequence: Date.now() * 1_000 + (progressSequence++ % 1_000),
 });
 
-function pageWork(
+const addTallies = (left: Tallies | undefined, right: Tallies | undefined) => {
+  if (!right) return left;
+  const sum = { ...left };
+  for (const [key, value] of Object.entries(right))
+    if (value) sum[key] = (sum[key] ?? 0) + value;
+  return sum;
+};
+
+/** Only a frozen count is a denominator; estimates and tallies have no %/ETA. */
+const denominatorOf = (step: RunStepRow) =>
+  step.meta?.input?.mode === "count" ? step.found : null;
+
+function stepWork(
   step: RunStepRow,
-  page: StepPage,
+  declaration: RunStepDeclaration,
+  counts: Omit<RunStepCounts, "found">,
+  removed: number,
   started: number,
+  finished: boolean,
   reset: boolean,
 ) {
-  const counts =
-    page.kind === "child"
-      ? page.counts
-      : {
-          done: step.done + (page.delta?.done ?? 0),
-          skipped: step.skipped + (page.delta?.skipped ?? 0),
-          failed: step.failed + (page.delta?.failed ?? 0),
-        };
-  const total =
-    page.kind === "child"
-      ? page.counts.found
-      : page.kind === "progress" && page.found !== undefined
-        ? page.found
-        : (step.meta?.work?.current.total ??
-          (step.found > 0 ? step.found : null));
-  const finished =
-    page.kind === "progress"
-      ? page.done
-      : page.kind === "child" &&
-        (page.state === "done" || page.state === "failed");
-  const items = page.work ?? {
-    phase: step.key,
-    label: step.label,
-    unit: "items",
-    processed: counts.done + counts.skipped + counts.failed,
-    total,
-    failures: counts.failed,
-  };
-  return {
-    work: sampleRunWork(stepWorkSamples(step), items, {
+  return sampleRunWork(
+    stepWorkSamples(step),
+    {
+      phase: step.key,
+      label: step.label,
+      unit: declaration.unit,
+      processed: counts.done + counts.skipped + counts.failed + removed,
+      total: denominatorOf(step),
+      failures: counts.failed,
+    },
+    {
       startedAt: new Date(started),
       sampledAt: new Date(),
-      finished: page.work?.finished ?? finished,
+      finished,
       reset,
       baselineProcessed: reset
         ? step.done + step.skipped + step.failed
         : undefined,
-    }),
-  };
-}
-
-function summarizePage(
-  current: RunStepRow,
-  page: StepPage,
-  items: RunWorkItems,
-): StepPageSummary {
-  const previous = current.meta?.work?.current;
-  const baseline =
-    previous?.phase === items.phase
-      ? previous.processed
-      : page.work
-        ? 0
-        : current.done + current.skipped + current.failed;
-  return {
-    phase: items.phase,
-    unit: items.unit,
-    pageProcessed:
-      page.pageProcessed ?? Math.max(0, items.processed - baseline),
-    pageFailures: page.errors?.length ?? 0,
-    cumulative: {
-      processed: items.processed,
-      total: items.total,
-      failures: items.failures,
     },
-    labels: page.labels ?? null,
-    cursor: {
-      stepId: current.id,
-      page:
-        current.pages +
-        (current.state === "queued" || current.state === "paused" ? 2 : 1),
-    },
-  };
-}
-
-function failedPageSummary(step: RunStepRow): StepPageSummary {
-  const items = stepWorkSamples(step)?.current ?? {
-    phase: step.key,
-    label: step.label,
-    unit: "items",
-    processed: step.done + step.skipped + step.failed,
-    total: step.found || null,
-    failures: step.failed,
-  };
-  return {
-    ...summarizePage(step, { kind: "progress", done: true }, items),
-    pageFailures: 1,
-  };
+  );
 }
 
 function remainingStepWaitSeconds(step: RunStepRow): number | null {
@@ -272,161 +207,211 @@ function remainingStepWaitSeconds(step: RunStepRow): number | null {
     : null;
 }
 
+/**
+ * Freezes a step's population once per step generation, before its first
+ * page. Resume, retry and every read reuse the stored count.
+ */
+async function freezeStepInput(
+  context: StepContext,
+  driver: StepDriver,
+): Promise<{ found: number; input: RunStepInput }> {
+  const countedAt = new Date().toISOString();
+  const { mode } = context.declaration.input;
+  if (mode !== "count")
+    return {
+      found: 0,
+      input: { mode, total: null, boundary: null, countedAt },
+    };
+  if (!driver.count)
+    throw new Error(
+      `Step ${context.declaration.key} declares count without one`,
+    );
+  const counted = await driver.count(context);
+  return {
+    found: counted.total,
+    input: {
+      mode,
+      total: counted.total,
+      boundary: counted.boundary,
+      countedAt,
+    },
+  };
+}
+
 export async function advanceStepRun(
   db: Database,
   params: WorkflowRunParams,
-  drivers?: StepRunDrivers,
+  plan?: StepPlan,
 ): Promise<StepAdvance> {
   const owner = await claimWorkflowRun(db, params);
   if (!owner || !isStepRunPurpose(owner.purpose)) return { kind: "lost" };
-  const list = await (drivers ?? (await driversForPurpose(owner.purpose)))(
+  const steps = plan ?? (await planForRun(owner));
+  await ensureRunSteps(
     db,
-    owner,
+    owner.id,
+    steps.map((entry) => entry.declaration),
   );
-  await ensureRunSteps(db, owner.id, list);
-  const steps = await listRunSteps(db, owner.id);
-  const current = steps.find((step) => !isTerminalStep(step.state));
-  if (!current) {
-    await finishStepRun(db, owner, steps, params.attempt);
+  const rows = await listRunSteps(db, owner.id);
+  const next = rows.find((step) => !isTerminalStep(step.state));
+  if (!next) {
+    await finishStepRun(db, owner, rows, params.attempt);
     return { kind: "finished" };
   }
-  const driver = list.find((candidate) => candidate.key === current.key);
-  if (!driver) {
-    await recordRunStepPage(db, owner.id, current.key, {
+  setJobStepKey(next.key);
+  const entry = steps.find((step) => step.declaration.key === next.key);
+  if (!entry) {
+    await recordRunStepPage(db, owner.id, next.key, {
       state: "failed",
-      errors: [failure(`No driver runs step ${current.key}`)],
+      errors: [failure(`No driver runs step ${next.key}`)],
     });
-    return { kind: "continue", summary: failedPageSummary(current) };
+    return { kind: "continue" };
   }
   const stamp = stampOf(params.attempt);
-  const waitSeconds = remainingStepWaitSeconds(current);
+  const waitSeconds = remainingStepWaitSeconds(next);
   if (waitSeconds !== null) return { kind: "continue", waitSeconds };
   // Only a reopened step is queued after it has already run pages.
-  const retrying = current.state === "queued" && current.pages > 0;
-  if (current.state === "queued" || current.state === "paused") {
-    await recordRunStepPage(db, owner.id, current.key, {
-      state: "running",
-      pausedReason: null,
-      pausedUntil: null,
-    });
+  const retrying = next.state === "queued" && next.pages > 0;
+  const context = (step: RunStepRow): StepContext => ({
+    db,
+    run: owner,
+    step,
+    declaration: entry.declaration,
+    attempt: params.attempt,
+    retrying,
+    boundary: step.meta?.input?.boundary ?? null,
+  });
+  let step = next;
+  if (next.state === "queued" || next.state === "paused") {
+    const frozen = next.meta?.input
+      ? null
+      : await freezeStepInput(context(next), entry.driver);
+    const started = await startRunStep(db, owner.id, next.key, frozen);
+    if (!started) return { kind: "lost" };
+    step = started;
     await recordRunProgress(
       db,
       owner.id,
-      current.state === "paused" ? "step_resumed" : "step_started",
-      current.label,
+      step.pages > 0 && !retrying ? "step_resumed" : "step_started",
+      frozen?.input.mode === "count"
+        ? `${step.label}: ${frozen.found} ${entry.declaration.unit}`
+        : step.label,
       stamp,
     );
   }
-  const context: StepContext = {
-    db,
-    run: owner,
-    step: current,
-    attempt: params.attempt,
-    retrying,
-  };
   const started = Date.now();
-  const page = await driver.page(context);
+  const { result: page, sample } = await measurePage((work) =>
+    entry.driver.page({ ...context(step), work }),
+  );
   if (!(await claimWorkflowRun(db, params, "id")))
     return lostAfterPage(db, owner);
+  return recordStepPage(db, owner, step, {
+    declaration: entry.declaration,
+    page,
+    sample,
+    started,
+    retrying,
+    attempt: params.attempt,
+    stamp,
+  });
+}
+
+/** Folds one page into its step: counts, tallies, `removed`, meta and events. */
+async function recordStepPage(
+  db: Database,
+  owner: RunRow,
+  step: RunStepRow,
+  input: {
+    declaration: RunStepDeclaration;
+    page: StepPage;
+    sample: RunStepMeta["page"] | null;
+    started: number;
+    retrying: boolean;
+    attempt: number;
+    stamp: { attempt: number; sequence: number };
+  },
+): Promise<StepAdvance> {
+  const { page, started, retrying, stamp } = input;
   const elapsed = Date.now() - started;
-  const sampledWork = pageWork(current, page, started, retrying);
-  sampledWork.work.current.activity =
-    page.kind === "progress" && page.waitSeconds ? "capacity" : "publishing";
-  const summary = summarizePage(current, page, sampledWork.work.current);
-  const timing = {
+  const counts = {
+    done: step.done + (page.delta?.done ?? 0),
+    skipped: step.skipped + (page.delta?.skipped ?? 0),
+    failed: step.failed + (page.delta?.failed ?? 0),
+  };
+  const ending = page.kind === "progress" && page.done;
+  const absolute = page.kind === "progress" && page.absolute;
+  let tallies = absolute
+    ? page.tallies
+    : addTallies(step.meta?.tallies, page.tallies);
+  // Inputs that left eligibility after the count froze end as `removed`, so
+  // a finished count step always accounts for its whole population.
+  if (ending && denominatorOf(step) !== null) {
+    const removed = Math.max(
+      0,
+      step.found -
+        counts.done -
+        counts.skipped -
+        counts.failed -
+        (tallies?.removed ?? 0),
+    );
+    if (removed) tallies = addTallies(tallies, { removed });
+  }
+  const meta: RunStepMeta = {
+    ...(page.kind === "progress" && page.meta),
+    ...(tallies && { tallies }),
+    ...(page.reasons && {
+      reasons: absolute
+        ? page.reasons
+        : addTallies(step.meta?.reasons, page.reasons),
+    }),
+    ...(page.kind === "progress" && { action: page.action ?? null }),
+    ...(page.kind === "progress" &&
+      page.estimate !== undefined &&
+      step.meta?.input && {
+        input: { ...step.meta.input, total: page.estimate },
+      }),
     capacityUntil:
       page.kind === "progress" && page.waitSeconds
         ? new Date(Date.now() + page.waitSeconds * 1000).toISOString()
         : null,
     timing: {
       lastPageMs: elapsed,
-      totalMs: (current.meta?.timing?.totalMs ?? 0) + elapsed,
+      totalMs: (step.meta?.timing?.totalMs ?? 0) + elapsed,
     },
+    ...(input.sample && { page: input.sample }),
+    work: stepWork(
+      step,
+      input.declaration,
+      counts,
+      tallies?.removed ?? 0,
+      started,
+      ending,
+      retrying,
+    ),
   };
-  if (page.kind === "paused") {
-    if (["delta", "errors", "cursor", "work"].some((key) => key in page))
-      await recordRunStepPage(db, owner.id, current.key, {
-        ...(page.delta && { delta: page.delta }),
-        ...(page.errors && { errors: page.errors }),
-        ...(page.cursor !== undefined && { cursor: page.cursor }),
-        meta: { ...timing, ...sampledWork },
-      });
-    await pauseStep(
-      db,
-      owner,
-      current,
-      page.reason,
-      page.until,
-      params.attempt,
-    );
-    return { kind: "paused", summary };
-  }
-  if (page.kind === "child") {
-    const ended = page.state === "done" || page.state === "failed";
-    await recordRunStepPage(db, owner.id, current.key, {
-      counts: page.counts,
-      childRunId: page.childRunId,
-      ...(page.errors?.length && { errors: page.errors }),
-      ...(page.cursor !== undefined && { cursor: page.cursor }),
-      meta: {
-        ...page.meta,
-        ...timing,
-        ...sampledWork,
-      },
-      state: ended
-        ? page.state === "failed" || page.counts.failed > 0
-          ? "failed"
-          : "done"
-        : "waiting",
-    });
-    if (page.state === "paused") {
-      await pauseStep(
-        db,
-        owner,
-        current,
-        page.reason ?? "The step's child Run is paused",
-        page.pausedUntil ?? null,
-        params.attempt,
-      );
-      return { kind: "paused", summary };
-    }
-    if (ended) {
-      await stepEnded(db, owner, current, page.counts, stamp);
-      return { kind: "continue", summary };
-    }
-    return page.again
-      ? { kind: "continue", summary }
-      : { kind: "wait", seconds: CHILD_WAIT_SECONDS, summary };
-  }
-  const failed = current.failed + (page.delta?.failed ?? 0);
-  await recordRunStepPage(db, owner.id, current.key, {
+  if (meta.work)
+    meta.work.current.activity =
+      page.kind === "progress" && page.waitSeconds ? "capacity" : "publishing";
+  await recordRunStepPage(db, owner.id, step.key, {
     ...(page.delta && { delta: page.delta }),
-    ...(page.found !== undefined && { found: page.found }),
     ...(page.errors && { errors: page.errors }),
     ...(page.cursor !== undefined && { cursor: page.cursor }),
-    meta: {
-      ...page.meta,
-      ...timing,
-      ...sampledWork,
-    },
-    ...(page.done && { state: failed > 0 ? "failed" : "done" }),
+    meta,
+    ...(ending && { state: counts.failed > 0 ? "failed" : "done" }),
   });
-  if (page.done) {
-    const [after] = (await listRunSteps(db, owner.id)).filter(
-      (step) => step.key === current.key,
-    );
-    if (after) await stepEnded(db, owner, current, after, stamp);
+  if (page.kind === "paused") {
+    await pauseStep(db, owner, step, page.reason, page.until, input.attempt);
+    return { kind: "paused", waitReason: page.waitReason };
   }
+  if (ending) await stepEnded(db, owner, step, counts, stamp);
   return {
     kind: "continue",
-    summary,
-    ...pick(page, ["execution", "waitSeconds"]),
+    ...(page.waitSeconds && { waitSeconds: page.waitSeconds }),
   };
 }
 
 /**
  * A member cancelled the Run while a page ran: cancellation already stopped
- * the children it could see, so stop any this page started after it.
+ * the AI work it could see, so stop any this page admitted after it.
  */
 async function lostAfterPage(
   db: Database,
@@ -434,13 +419,8 @@ async function lostAfterPage(
 ): Promise<StepAdvance> {
   const now = await readStepRunOwner(db, owner.id);
   if (now?.status === "failed" && now.failureCode === "user_cancelled") {
-    const { cancelStepChildren } =
-      await import("~/server/workflows/runs/control");
-    await cancelStepChildren(
-      db,
-      buildActorContext(owner.actorUserId, owner.channel),
-      owner.id,
-    );
+    const { cancelRunAiWork } = await import("~/server/workflows/runs/control");
+    await cancelRunAiWork(db, owner.id, "Cancelled by a member");
   }
   return { kind: "lost" };
 }
@@ -455,24 +435,23 @@ async function stepEnded(
   db: Database,
   owner: RunRow,
   step: RunStepRow,
-  counts: RunStepCounts,
+  counts: Omit<RunStepCounts, "found">,
   stamp: { attempt: number; sequence: number },
 ) {
-  // A step with nothing to do collapses on the ledger; the Timeline skips it.
-  if (!counts.found && !counts.failed) return;
   const failures = counts.failed ? ` · ${counts.failed} failed` : "";
+  const total = denominatorOf(step);
   await recordRunProgress(
     db,
     owner.id,
     counts.failed ? "step_failed" : "step_finished",
-    `${step.label}: ${counts.done} done of ${counts.found}${failures}`,
+    `${step.label}: ${counts.done} done${total === null ? "" : ` of ${total}`}${failures}`,
     stamp,
   );
 }
 
 /**
  * A budget or authorization pause stops the whole Run as `paused_auth` /
- * `execution_limit`, matching AI-work Runs; recovery relaunches it once the
+ * `execution_limit`, matching AI-work Runs; the Job resumes it once the
  * window that paused it has ended.
  */
 async function pauseStep(
@@ -497,7 +476,6 @@ async function pauseStep(
     `${step.label}: ${reason}${until ? ` · resumes after ${until.toISOString()}` : ""}`,
     stampOf(attempt),
   );
-  await wakeStepRunParent(db, owner.id);
 }
 
 async function finishStepRun(
@@ -507,11 +485,10 @@ async function finishStepRun(
   attempt: number,
 ) {
   const failed = steps.filter((step) => step.state === "failed");
-  const found = steps.reduce((total, step) => total + step.found, 0);
+  const worked = steps.some((step) => step.done + step.failed > 0);
   const finished = await finishStepRunRow(db, owner.id, attempt, {
     failedLabels: failed.map((step) => step.label),
-    // A scheduled pass that found nothing is history worth pruning.
-    routine: owner.trigger === "scheduled" && found === 0,
+    routine: owner.trigger === "scheduled" && !worked,
   });
   if (!finished) return;
   await recordRunProgress(
@@ -523,7 +500,6 @@ async function finishStepRun(
       : `Finished · ${steps.length} steps`,
     { attempt, sequence: Number.MAX_SAFE_INTEGER },
   );
-  await wakeStepRunParent(db, owner.id);
 }
 
 /**
@@ -532,12 +508,12 @@ async function finishStepRun(
  */
 export async function retryRunStep(db: Database, runId: RunId, key: string) {
   const owner = await readStepRunOwner(db, runId);
-  if (!owner || !isStepRunPurpose(owner.purpose))
-    throw new Error("Only a step-ledger Run has steps to retry");
-  if (owner.purpose === "derived_refresh")
-    throw new Error(
-      "Historical derived-refresh Runs cannot be retried; broad family Jobs own refresh",
-    );
+  if (
+    !owner ||
+    !isStepRunPurpose(owner.purpose) ||
+    !isExecutedRunPurpose(owner.purpose)
+  )
+    throw new Error("Only an executed step-ledger Run has steps to retry");
   if (owner.status === "running")
     throw new Error(
       "This Run is still running; retry its failures once it stops.",

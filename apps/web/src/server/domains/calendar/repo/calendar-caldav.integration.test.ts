@@ -219,8 +219,8 @@ describe("durable calendar dirty-mark fallback", () => {
       expect(markDirty).toHaveBeenCalledTimes(3);
       expect(consoleError).toHaveBeenCalledTimes(1);
       expect(consoleError).toHaveBeenCalledWith(
-        "[calendar-feed] failed to mark snapshot dirty",
         expect.objectContaining({
+          message: "[calendar-feed] failed to mark snapshot dirty",
           reason: "test.write",
           attempt: 2,
           error: expect.objectContaining({ message: "stub RPC failure" }),
@@ -258,8 +258,8 @@ describe("durable calendar dirty-mark fallback", () => {
 
       await expect(tasks[0]).resolves.toBeUndefined();
       expect(consoleError).toHaveBeenCalledWith(
-        "[jobs] wake failed; cron will drain committed jobs",
         expect.objectContaining({
+          message: "[jobs] wake failed; cron will drain committed jobs",
           source: "calendar-feed.mark-dirty-fallback",
           error: expect.objectContaining({ message: "queue down" }),
         }),

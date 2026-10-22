@@ -14,7 +14,7 @@ import {
 import { eq, isNull, sql } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
 import { countTestDbQueries, withTestDb } from "tooling/test-setup";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
 import { AiWorkDeferredError } from "~/server/ai/cooperative-work";
@@ -39,7 +39,6 @@ import { generateStatementSuggestionPage } from "~/server/domains/transaction-im
 import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
 import { listSuggestionPage } from "~/server/generic/assessment/repo/suggestion-list";
 import { settlementRefsFor } from "~/server/generic/entity-links/repo/entity-external-ids";
-import { createSystemUserFixture } from "~/server/testing/repo.fixtures";
 import {
   isWorkflowInterrupted,
   withWorkflowExecution,
@@ -89,9 +88,6 @@ import {
  */
 describe("transfer-pair suggestions", () => {
   const ctx = withTestDb();
-  beforeEach(async () => {
-    await createSystemUserFixture(ctx.db);
-  });
 
   type Choice = TransferPairMovementLabel["choice"];
   /** Model stand-in: answers each leg's movement question by its descriptor. */

@@ -7,6 +7,7 @@ import {
 } from "~/server/generic/derived-refresh/repo/process";
 import { prepareProductConversionCoveragePage } from "~/server/generic/problems/service/problems.service";
 import {
+  countUnembeddedSearchDocuments,
   prepareSearchDocuments,
   selectUnembeddedSearchDocumentRefs,
 } from "~/server/generic/search/repo/search-document";
@@ -28,6 +29,14 @@ export const createProductionRefreshFamilyHandler = (
         options,
         new USDAClient(requestUsdaRelease()),
       ),
+    countEmbeddings: async (db, updatedBefore) =>
+      productionEmbeddingRefreshPort.configured()
+        ? countUnembeddedSearchDocuments(
+            db,
+            productionEmbeddingRefreshPort.config(),
+            updatedBefore,
+          )
+        : null,
     prepareEmbeddings: async (db, options) => {
       if (!productionEmbeddingRefreshPort.configured()) return null;
       const config = productionEmbeddingRefreshPort.config();
@@ -39,6 +48,7 @@ export const createProductionRefreshFamilyHandler = (
       const prepared = await prepareSearchDocuments(db, page.refs);
       return {
         nextCursor: page.nextCursor,
+        pending: page.refs.length,
         publish: async (tx) =>
           (await enqueueEmbeddingRefs(tx, prepared, config)).length,
       };
