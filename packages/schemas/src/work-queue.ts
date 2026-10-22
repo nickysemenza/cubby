@@ -15,7 +15,6 @@ import {
 } from "./identifiers";
 import {
   createSortParamsSchema,
-  listGroupSummarySchema,
   mcpPaginationFields,
   oneOrMany,
   partyFilterList,
@@ -266,6 +265,15 @@ export const workQueueHouseholdInput = workQueuePageInput.extend({
   group: workQueueGroupSchema.optional(),
 });
 
+/** Queue sections count actionable queue items, independently of entity-list memberships. */
+export const workQueueGroupSummarySchema = z
+  .object({
+    key: z.string().min(1),
+    label: z.string().min(1),
+    count: z.number().int().positive(),
+  })
+  .meta({ id: "WorkQueueGroupSummary" });
+
 export const workQueueOutSchema = z.object({
   items: z.array(workQueueRowSchema),
   members: z.array(workQueueMemberSchema),
@@ -281,7 +289,7 @@ export const workQueueOutSchema = z.object({
       waiting: z.number().int().nonnegative(),
     }),
     /** The grouped read's sections of the whole filtered set, in page order. */
-    groups: z.array(listGroupSummarySchema).optional(),
+    groups: z.array(workQueueGroupSummarySchema).optional(),
   }),
 });
 

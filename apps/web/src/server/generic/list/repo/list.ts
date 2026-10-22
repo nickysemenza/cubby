@@ -23,6 +23,8 @@ import { entitySummary } from "@cubby/schemas/entity-summary";
 import { FILTER_NONE } from "@cubby/schemas/filter-sentinel-fields";
 import {
   buildTakeSkip,
+  listGroupByDimensionsSchema,
+  type ListGroupMembership,
   type ListGroupSummary,
   type ListGroupBy,
   type ListNesting,
@@ -126,6 +128,7 @@ import {
   type AnyDerivedSql,
   groupSql,
   type ListGroupSql,
+  listMetricSql,
   listFilterValues,
   type ListFilterValues,
   ListContext,
@@ -137,6 +140,7 @@ import {
   type RowsSqlArg,
   shortcodeIdsSql,
 } from "./field-compiler";
+import { readGroupedQuery } from "./grouped-query";
 import {
   wantsListGroup,
   listReadPlan,
@@ -1454,39 +1458,30 @@ const listNestingCarrier = z
 const listNestingFromFilters = (filters: unknown): ListNesting =>
   listNestingCarrier.parse(filters).nesting ?? { scope: "flat" };
 const listRowIdSchema = z.object({ id: z.string() });
+const selectionCursorSchema = z
+  .object({
+    after: z.string().min(1),
+    fingerprint: z.string().regex(/^[0-9a-f]{32}$/),
+  })
+  .strict();
+const selectionPageSchema = z.object({
+  ids: z.array(z.string()),
+  totalCount: z.number().int().nonnegative(),
+  fingerprint: z.string(),
+});
 
 const listGroupByCarrier = z
-  .object({
-    groupBy: z.string().optional(),
-    groupLevel: z.number().int().positive().optional(),
-  })
+  .object({ groupBy: listGroupByDimensionsSchema.optional() })
   .passthrough();
-/**
- * The kernel's validated `groupBy`, carried beside the entity's own filters
- * like `nesting`, so every repository's list groups without threading it.
- */
-const listGroupByFromFilters = (filters: unknown): ListGroupBy | undefined => {
-  const { groupBy, groupLevel } = listGroupByCarrier.parse(filters);
-  return groupBy === undefined
-    ? undefined
-    : groupLevel === undefined
-      ? { key: groupBy }
-      : { key: groupBy, level: groupLevel };
-};
+const listGroupByFromFilters = (filters: unknown): ListGroupBy[] =>
+  listGroupByCarrier.parse(filters).groupBy ?? [];
 
-/** `filters` carrying a kernel-validated Group by for `listScaffold`. */
+/** Carries the validated ordered dimensions beside the entity filters. */
 export const withListGroupBy = <Filters extends object>(
   filters: Filters,
-  groupBy: ListGroupBy | undefined,
+  groupBy: readonly ListGroupBy[] | undefined,
 ): Filters =>
-  groupBy === undefined
-    ? filters
-    : Object.assign(
-        {},
-        filters,
-        { groupBy: groupBy.key },
-        groupBy.level === undefined ? {} : { groupLevel: groupBy.level },
-      );
+  groupBy === undefined ? filters : Object.assign({}, filters, { groupBy });
 
 const searchQueryFromFilters = <Filters extends object>(
   filters: Filters | undefined,
@@ -1500,75 +1495,6 @@ const groupOrderBy = (group: ListGroupSql): SQL[] =>
     if (value === null) throw new Error("A group orders by an absent label");
     return sql`${value} asc nulls last`;
   });
-
-const groupSummaryRow = z.object({
-  key: z.string().nullable(),
-  label: z.string().nullable(),
-  count: z.number().int().positive(),
-  subtree: z.boolean().nullable(),
-});
-
-/**
- * Every section of the filtered set in page order, with its count: the same
- * key and order the page query sorts by, so sections stay contiguous across
- * offset pages and each count matches its rows.
- */
-const loadGroupSummaries = async (
-  db: Database | DrizzleTransaction,
-  group: ListGroupSql,
-  source: PgTable | SQL,
-  where: SQL | undefined,
-  joins: ((query: PgSelect) => PgSelect) | undefined,
-): Promise<ListGroupSummary[]> => {
-  const parts = group.order.flatMap((part) =>
-    typeof part === "string" ? [] : [part],
-  );
-  // Selected in this order, so GROUP BY and ORDER BY can name positions.
-  const selection = {
-    key: group.key,
-    label: group.label ?? sql`null::text`,
-    ...Object.fromEntries(parts.map((part, index) => [`o${index}`, part])),
-    count: sql`count(*)::int`,
-    subtree: group.subtree
-      ? sql`bool_or(${group.subtree})`
-      : sql`null::boolean`,
-  };
-  const position = (part: SQL | "key" | "label") =>
-    part === "key" ? 1 : part === "label" ? 2 : 3 + parts.indexOf(part);
-  // SAFETY: T extends PgTable; this erases only the generic FROM constraint.
-  const query = unwrapDb(db).select(selection).from(source).$dynamic();
-  const rows = await (joins ? joins(query) : query)
-    .where(where)
-    .groupBy(
-      sql.raw(
-        Array.from({ length: 2 + parts.length }, (_, index) => index + 1).join(
-          ", ",
-        ),
-      ),
-    )
-    .orderBy(
-      ...group.order.map((part) => sql.raw(`${position(part)} asc nulls last`)),
-    );
-  const { choice } = group;
-  const options =
-    choice.value !== null && "options" in choice.value
-      ? choice.value.options
-      : null;
-  return z
-    .array(groupSummaryRow)
-    .parse(rows)
-    .map(({ key, label, count, subtree }) => ({
-      key: key ?? FILTER_NONE,
-      label:
-        key === null
-          ? choice.noValueLabel
-          : (label ??
-            options?.find((option) => option.value === key)?.label ??
-            key),
-      count,
-      ...(subtree === null ? {} : { subtree }),
-    }));
-};
 
 /**
  * The list a related scope (`presentation.list.scopes`) nests: its prepared
@@ -1613,7 +1539,10 @@ type ListScaffoldOptions<E extends Entity> = ([keyof DerivedSqlArg<E>] extends [
     : { rows: RowsSqlArg<E> }) &
   ([GeneratedListScopeKey<E>] extends [never]
     ? { scopes?: ScopesArg<E> }
-    : { scopes: ScopesArg<E> });
+    : { scopes: ScopesArg<E> }) & {
+    /** Join-implied population constraints shared by rows, facets, and identity reads. */
+    population?: () => SQL;
+  };
 
 /** `options` is required exactly when the entity declares SQL it reads. */
 type ListScaffoldArgs<E extends Entity> = [
@@ -1626,6 +1555,11 @@ const scopeValue = listFilterValues.optional();
 
 /** What the generic facet operation needs from an entity's list scaffold. */
 interface ListFacetCounter {
+  selectionIds(
+    db: Database | DrizzleTransaction,
+    filters: ListFilterValues,
+    input: { cursor?: string; limit: number },
+  ): Promise<{ ids: string[]; totalCount: number; nextCursor: string | null }>;
   countBy(
     db: Database | DrizzleTransaction,
     filters: ListFilterValues,
@@ -1829,7 +1763,13 @@ export function listScaffold<
           filtered.has(key) ||
           (!counting &&
             (request.sorts?.some((sort) => sort.orderBy === key) === true ||
-              listGroupByFromFilters(request.filters)?.key === key ||
+              listGroupByFromFilters(request.filters).some(
+                (dimension) => dimension.key === key,
+              ) ||
+              (listGroupByFromFilters(request.filters).length > 0 &&
+                generatedEntityListFields[entity].metrics.some(
+                  (metric) => metric.key === key,
+                )) ||
               projects(key, request.projection ?? { kind: "full" }))),
       );
       const scopes = requestedScopes(values);
@@ -1874,7 +1814,8 @@ export function listScaffold<
     /**
      * Every list filter compiles from the declaration (stored, `model.derived`,
      * related views, quality, audit dates, ids, search), and so do the list's
-     * declared scopes; there is no hand-written predicate argument.
+     * declared scopes. A repository's join-implied population predicate is
+     * shared here so identity readers and row readers cannot diverge.
      */
     where<Filters extends object>(
       filters: Filters,
@@ -1887,6 +1828,7 @@ export function listScaffold<
         table,
         [],
         [
+          options?.population?.(),
           // Only a caller's own read context reaches derived SQL; the
           // scaffold's quality join alias exists only beside its own FROM.
           ...scaffold.filterPredicates(filters, context.withRead(readContext)),
@@ -1954,15 +1896,96 @@ export function listScaffold<
       });
     },
 
-    /** The request's validated `groupBy` as SQL, or null when ungrouped. */
+    /** One snapshot per page; refuse any population change during cursor traversal. */
+    async selectionIds(
+      db: Database | DrizzleTransaction,
+      filters: ListFilterValues,
+      input: { cursor?: string; limit: number },
+    ) {
+      const cursor =
+        input.cursor === undefined
+          ? null
+          : selectionCursorSchema.parse(JSON.parse(input.cursor));
+      const context = await scaffold.context(db, {
+        filters,
+        readIntent: "count",
+      });
+      const filtered = scaffold.where(filters, { context });
+      const nesting = listNestingFromFilters(filters);
+      const parent = nesting.scope === "flat" ? null : treeParent();
+      const where =
+        nesting.scope === "flat" || !parent
+          ? filtered
+          : and(filtered, nestingCondition(nesting, parent, filtered));
+      const source: PgTable | SQL =
+        scored !== null && hasDataQualityFilter(filters)
+          ? qualitySource
+          : table;
+      const matches = unwrapDb(db)
+        .selectDistinct({ id: sql<string>`${table.shortcode}` })
+        .from(source)
+        .where(where);
+      const relation = sql`(
+        WITH matches(code) AS MATERIALIZED (${matches}), population AS (
+          SELECT count(*)::int AS count, md5(coalesce(jsonb_agg(code ORDER BY code)::text, '[]')) AS fingerprint FROM matches
+        ), page AS (
+          SELECT code FROM matches ${cursor === null ? sql`` : sql`WHERE code > ${cursor.after}`} ORDER BY code LIMIT ${input.limit + 1}
+        ) SELECT jsonb_build_object('ids', coalesce((SELECT jsonb_agg(code ORDER BY code) FROM page), '[]'::jsonb), 'totalCount', population.count, 'fingerprint', population.fingerprint) AS payload FROM population
+      ) selection_page`;
+      const [row] = await unwrapDb(db)
+        .select({ payload: sql<unknown>`selection_page.payload` })
+        .from(relation);
+      const page = selectionPageSchema.parse(row?.payload);
+      if (cursor !== null && cursor.fingerprint !== page.fingerprint)
+        throw createAppError(
+          "CONSTRAINT_VIOLATION",
+          `${entity} selection population changed while collecting IDs; restart selection`,
+        );
+      const ids = page.ids.slice(0, input.limit);
+      const after = ids.at(-1);
+      return {
+        ids,
+        totalCount: page.totalCount,
+        nextCursor:
+          page.ids.length > input.limit && after !== undefined
+            ? JSON.stringify({ after, fingerprint: page.fingerprint })
+            : null,
+      };
+    },
+
+    /** Compile every dimension, joining explicit expansions under stable aliases. */
     group<Filters extends object>(
       filters: Filters,
       context: ListContext = ListContext.empty,
-    ): ListGroupSql | null {
-      const groupBy = listGroupByFromFilters(filters);
-      return groupBy === undefined
-        ? null
-        : groupSql(entity, groupBy, derivedSql, table, context);
+    ): ListGroupSql[] {
+      return listGroupByFromFilters(filters).map((dimension, index) => {
+        const group = groupSql(entity, dimension, derivedSql, table, context);
+        if (!group.members) return group;
+        const at = (column: string) =>
+          sql`${sql.identifier(`list_group_${index}`)}.${sql.identifier(column)}`;
+        const value = group.choice.value;
+        const options =
+          value !== null && "options" in value ? value.options : null;
+        const order: ListGroupSql["order"] =
+          value?.kind === "record"
+            ? ["label", "key"]
+            : options?.length
+              ? [
+                  sql`array_position(ARRAY[${sql.join(
+                    options.map((option) => sql`${option.value}`),
+                    sql`, `,
+                  )}]::text[], ${at("key")})`,
+                  "key",
+                ]
+              : ["key"];
+        return {
+          ...group,
+          key: at("key"),
+          label: at("label"),
+          subtree: at("subtree"),
+          order,
+        };
+      });
     },
 
     /** A derived field's ORDER BY, or null when the field is not derived. */
@@ -2140,7 +2163,13 @@ export function listScaffold<
       db: Database | DrizzleTransaction,
       request: ListRequest<Filters>,
       spec: ListSpec<Row, Out>,
-    ): Promise<{ data: Out[]; count: number; groups?: ListGroupSummary[] }> {
+    ): Promise<{
+      data: Out[];
+      count: number;
+      groups?: ListGroupSummary[];
+      memberships?: ListGroupMembership[];
+      membershipCount?: number;
+    }> {
       const readsQuality =
         scored !== null &&
         (hasDataQualityFilter(request.filters) ||
@@ -2167,10 +2196,8 @@ export function listScaffold<
       // Sections lead the total order, so a page never splits a section the
       // summary query counts whole.
       const group =
-        readIntent === "count"
-          ? null
-          : scaffold.group(request.filters, context);
-      if (group && spec.count && !spec.joins)
+        readIntent === "count" ? [] : scaffold.group(request.filters, context);
+      if (group.length && spec.count && !spec.joins)
         throw new Error(
           `${entity} counts its own FROM; pass its joins to group the list`,
         );
@@ -2183,7 +2210,7 @@ export function listScaffold<
           readIntent === "count"
             ? []
             : [
-                ...(group ? groupOrderBy(group) : []),
+                ...group.flatMap(groupOrderBy),
                 ...(spec.orderBy ??
                   scaffold.orderBy(
                     request.sorts,
@@ -2289,20 +2316,77 @@ export function listScaffold<
       return withListReadTracing(
         { entity, projection: projection.kind },
         async () => {
-          const [{ data, count }, groups] = await Promise.all([
-            readIntent !== "count" && readLoadedPageWithCount
-              ? readLoadedPageWithCount()
-              : executeListQueryWithCount({
+          const groupedPage =
+            group.length && readIntent === "page"
+              ? await readGroupedQuery({
+                  db,
+                  source,
+                  id: sql`${table.id}`,
+                  code: sql`${table.shortcode}`,
+                  where,
+                  joins: spec.joins,
+                  groups: group,
+                  metrics: generatedEntityListFields[entity].metrics.map(
+                    ({ key }) => ({
+                      key,
+                      value: listMetricSql(
+                        entity,
+                        key,
+                        derivedSql,
+                        table,
+                        context,
+                      ),
+                    }),
+                  ),
+                  order: page.orderBy,
+                  limit: take,
+                  offset: skip,
+                })
+              : null;
+          const { data, count } = groupedPage
+            ? {
+                count: groupedPage.count,
+                data:
+                  groupedPage.ids.length === 0
+                    ? []
+                    : await selectRows(
+                        {
+                          ...page,
+                          where: and(where, inArray(table.id, groupedPage.ids)),
+                          orderBy: [],
+                          limit: groupedPage.ids.length,
+                          offset: 0,
+                        },
+                        projection,
+                      ).then((rows) => {
+                        const keyed = new Map(
+                          rows.map((row) => [
+                            listRowIdSchema.parse(row).id,
+                            row,
+                          ]),
+                        );
+                        return groupedPage.ids.flatMap((id) => {
+                          const row = keyed.get(id);
+                          return row === undefined ? [] : [row];
+                        });
+                      }),
+              }
+            : readIntent !== "count" && readLoadedPageWithCount
+              ? await readLoadedPageWithCount()
+              : await executeListQueryWithCount({
                   kind: readIntent,
                   rows: () => selectRows(page, projection),
                   count:
                     spec.count ?? (() => countWhere(db, table, where, source)),
-                }),
-            group && readIntent === "page"
-              ? loadGroupSummaries(db, group, source, where, spec.joins)
-              : undefined,
-          ]);
-          const grouped = groups === undefined ? {} : { groups };
+                });
+          const grouped =
+            groupedPage === null
+              ? {}
+              : {
+                  groups: groupedPage.groups,
+                  memberships: groupedPage.memberships,
+                  membershipCount: groupedPage.membershipCount,
+                };
           if (readIntent === "count" || data.length === 0)
             return { data: [], count, ...grouped };
           return withListReadTracing({ rows: data.length }, async () => {

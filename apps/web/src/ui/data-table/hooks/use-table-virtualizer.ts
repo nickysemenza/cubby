@@ -27,14 +27,22 @@ export type GroupedItem =
       key: string;
       title: string;
       count: number;
+      depth?: number;
+      collapsed?: boolean;
+      onToggle?: () => void;
       onFilter?: () => void;
       onHide?: () => void;
       aside?: ReactNode;
       actions?: ReactNode;
     }
-  | { kind: "row"; rowIndex: number; groupRowIndex: number }
+  | {
+      kind: "row";
+      rowIndex: number;
+      groupRowIndex: number;
+      occurrenceKey?: string;
+    }
   /** An expanded row's full-width detail, directly after its row. */
-  | { kind: "detail"; rowIndex: number };
+  | { kind: "detail"; rowIndex: number; occurrenceKey?: string };
 
 /** First estimate for a row detail; the rendered element is then measured. */
 const ROW_DETAIL_ESTIMATE = 160;
@@ -55,14 +63,22 @@ type ResolvedVirtualIndex =
       key: string;
       title: string;
       count: number;
+      depth?: number;
+      collapsed?: boolean;
+      onToggle?: () => void;
       onFilter?: () => void;
       onHide?: () => void;
       aside?: ReactNode;
       actions?: ReactNode;
     }
   /** groupRowIndex present only in grouped mode (position within the group). */
-  | { kind: "row"; rowIndex: number; groupRowIndex?: number }
-  | { kind: "detail"; rowIndex: number }
+  | {
+      kind: "row";
+      rowIndex: number;
+      groupRowIndex?: number;
+      occurrenceKey?: string;
+    }
+  | { kind: "detail"; rowIndex: number; occurrenceKey?: string }
   | { kind: "sentinel" };
 
 /**
@@ -140,8 +156,8 @@ export function tableVirtualItemKey(
     if (!item) return `missing:${index}`;
     if (item.kind === "header") return `group:${item.key ?? item.title}`;
     if (item.kind === "detail")
-      return `detail:${rowKeys[item.rowIndex] ?? item.rowIndex}`;
-    return `row:${rowKeys[item.rowIndex] ?? item.rowIndex}`;
+      return `detail:${item.occurrenceKey ?? rowKeys[item.rowIndex] ?? item.rowIndex}`;
+    return `row:${item.occurrenceKey ?? rowKeys[item.rowIndex] ?? item.rowIndex}`;
   }
   return `row:${rowKeys[index] ?? index}`;
 }

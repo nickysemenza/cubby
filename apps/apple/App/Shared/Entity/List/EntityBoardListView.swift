@@ -129,10 +129,10 @@ struct EntityBoardListView: View {
         do {
             let scoped = EntityBoardPlan.scope(captured.filters, spec: spec)
             let summary = try await client.list(
-                descriptor, pageSize: 1, filters: scoped, groupBy: captured.grouping)
+                descriptor, pageSize: 1, filters: scoped, groupBy: [.init(key: captured.grouping)])
             guard !Task.isCancelled, request == captured, loadToken == token else { return }
             let summaries: [EntityListSection] = (summary.meta.groups ?? []).map {
-                .init(id: $0.key, label: $0.label, count: $0.count, rows: [])
+                .init(id: $0.path.last ?? $0.key, label: $0.label, count: $0.count, path: $0.path, rows: [])
             }
             var fetchedGroups = summaries
             if let options = descriptor.field(captured.grouping)?.controlOptions, !options.isEmpty {

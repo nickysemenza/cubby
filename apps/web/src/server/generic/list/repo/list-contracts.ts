@@ -1,4 +1,7 @@
-import type { ListGroupSummary } from "@cubby/schemas/pagination";
+import type {
+  ListGroupSummary,
+  ListGroupMembership,
+} from "@cubby/schemas/pagination";
 
 import type { ListReadRow } from "~/entity/model/list-read-fields";
 
@@ -9,4 +12,6 @@ export interface ListReadPage<T = ListReadRow> {
   count: number;
   sums?: Record<string, number>;
   groups?: ListGroupSummary[];
+  memberships?: ListGroupMembership[];
+  membershipCount?: number;
 }

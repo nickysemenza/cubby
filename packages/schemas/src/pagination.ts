@@ -235,7 +235,6 @@ export const sortPaginationFields = {
   pagination: paginationParams
     .optional()
     .default({ pageIndex: 0, pageSize: DEFAULT_PAGE_SIZE }),
-  groupBy: z.string().optional(),
 };
 
 export const createSortPaginationFields = <
@@ -244,7 +243,6 @@ export const createSortPaginationFields = <
 >(opts: {
   sortableFields: TFields;
   defaultSort: TDefault;
-  groupableFields?: TFields;
 }) => ({
   sort: createSortParamsSchema(opts.sortableFields, opts.defaultSort)
     .optional()
@@ -252,9 +250,6 @@ export const createSortPaginationFields = <
   pagination: paginationParams
     .optional()
     .default({ pageIndex: 0, pageSize: DEFAULT_PAGE_SIZE }),
-  groupBy: opts.groupableFields
-    ? z.enum(opts.groupableFields).optional()
-    : z.enum(opts.sortableFields).optional(),
 });
 
 export const sortPaginationCombo = z.object(sortPaginationFields);
@@ -269,30 +264,59 @@ export const buildTakeSkip = (pagination: PaginationParams) => {
 export type PaginationParams = z.infer<typeof paginationParams>;
 export type SortParams = z.infer<typeof sortParams>;
 
-/**
- * Counts from the full filtered set, ordered as the grouped list is ordered.
- * `subtree`, present when the list groups at a hierarchy level, says the
- * section holds rows under its key's descendants, so its header filter
- * includes sub-records.
- */
-export const listGroupSummarySchema = z
+/** One dimension; ordering in a request is the grouping hierarchy. */
+export const listGroupBySchema = z
   .object({
     key: z.string().min(1),
+    level: z.number().int().positive().optional(),
+    bucket: z.enum(["day", "week", "month", "quarter", "year"]).optional(),
+  })
+  .strict()
+  .meta({ id: "ListGroupBy" });
+export type ListGroupBy = z.infer<typeof listGroupBySchema>;
+export const listGroupByDimensionsSchema = z
+  .array(listGroupBySchema)
+  .max(3)
+  .refine(
+    (dimensions) =>
+      new Set(dimensions.map(({ key }) => key)).size === dimensions.length,
+    "Group dimensions must have distinct keys",
+  );
+
+export const listGroupMembershipSchema = z
+  .object({
+    id: z.string().min(1),
+    path: z.array(z.string()).min(1).max(3),
+  })
+  .meta({ id: "ListGroupMembership" });
+export type ListGroupMembership = z.infer<typeof listGroupMembershipSchema>;
+
+export const listGroupMetricSchema = z
+  .object({
+    sum: z.number().nullable(),
+    presentCount: z.number().int().nonnegative(),
+    totalCount: z.number().int().nonnegative(),
+    coverage: z.number().min(0).max(1).nullable(),
+  })
+  .meta({ id: "ListGroupMetric" });
+export type ListGroupMetric = z.infer<typeof listGroupMetricSchema>;
+
+/** Full-filter distinct canonical counts for every nonempty path prefix. */
+export const listGroupSummarySchema = z
+  .object({
+    /** JSON-encoded path; never join path components with a delimiter. */
+    key: z.string().min(1),
+    path: z.array(z.string()).min(1).max(3),
     label: z.string().min(1),
     count: z.number().int().positive(),
+    parentCount: z.number().int().nonnegative(),
+    fraction: z.number().min(0).max(1).nullable(),
+    overlapping: z.boolean(),
     subtree: z.boolean().optional(),
+    metrics: z.record(z.string(), listGroupMetricSchema).optional(),
   })
   .meta({ id: "ListGroupSummary" });
 export type ListGroupSummary = z.infer<typeof listGroupSummarySchema>;
-
-/**
- * A validated Group by: the `model.grouping` key and, for a field whose
- * records nest, the hierarchy level (1 = top) each row groups at.
- */
-export interface ListGroupBy {
-  readonly key: string;
-  readonly level?: number;
-}
 
 /**
  * A tree list's scope (`list.tree`), applied after the filters: every
@@ -325,16 +349,11 @@ export function buildPaginatedResponse<T>(
     /** The declared list totals as server-worded text, keyed by total id. */
     totalLabels?: Record<string, string>;
     groups?: ListGroupSummary[];
+    memberships?: ListGroupMembership[];
+    membershipCount?: number;
   } = {},
 ) {
-  type PaginatedMeta = {
-    pageIndex: number;
-    pageSize: number;
-    totalCount: number;
-    sums?: Record<string, number>;
-    totalLabels?: Record<string, string>;
-    groups?: ListGroupSummary[];
-  };
+  type PaginatedMeta = z.infer<typeof paginatedMetaSchema>;
   const meta: PaginatedMeta = {
     pageIndex: pagination.pageIndex,
     pageSize: pagination.pageSize,
@@ -343,6 +362,9 @@ export function buildPaginatedResponse<T>(
   if (aggregates.sums) meta.sums = aggregates.sums;
   if (aggregates.totalLabels) meta.totalLabels = aggregates.totalLabels;
   if (aggregates.groups) meta.groups = aggregates.groups;
+  if (aggregates.memberships) meta.memberships = aggregates.memberships;
+  if (aggregates.membershipCount !== undefined)
+    meta.membershipCount = aggregates.membershipCount;
   return {
     meta,
     items: data,
@@ -358,6 +380,8 @@ export const paginatedMetaSchema = z
     sums: z.record(z.string(), z.number()).optional(),
     totalLabels: z.record(z.string(), z.string()).optional(),
     groups: z.array(listGroupSummarySchema).optional(),
+    memberships: z.array(listGroupMembershipSchema).optional(),
+    membershipCount: z.number().int().nonnegative().optional(),
   })
   .meta({ id: "ListPageMeta" });
 

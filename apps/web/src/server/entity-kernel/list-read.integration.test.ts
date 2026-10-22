@@ -22,6 +22,7 @@ import {
 } from "~/entity/model/list-read-schema";
 import { viewsForEntity } from "~/entity/model/view-manifest";
 import { getDb } from "~/server/db/helpers";
+import { findOrCreateIngredient } from "~/server/domains/ingredient/repo/crud";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { executeEntity } from "~/server/entity-kernel";
 import { ENTITY_LIST_READ_OPERATIONS } from "~/server/generated/entity-list-read-bindings.gen";
@@ -33,6 +34,28 @@ import {
 
 describe("standard progressive list composition", () => {
   const ctx = withTestDb();
+  it("retains ingredient grouping memberships through the progressive adapter", async () => {
+    const ingredient = await findOrCreateIngredient(
+      ctx.db,
+      "Synthetic grouped progressive ingredient",
+    );
+    const base = await ENTITY_LIST_READ_OPERATIONS.ingredient.base(
+      buildKernelContext(ctx.db),
+      {
+        filters: { ids: [ingredient.shortcode] },
+        groupBy: [{ key: "usuallyOnHand" }],
+        pagination: { pageIndex: 0, pageSize: 1 },
+      },
+    );
+    expect(base.data.map((row) => row.id)).toEqual([ingredient.shortcode]);
+    expect(base.meta.membershipCount).toBe(1);
+    expect(base.meta.memberships).toEqual([
+      { id: ingredient.shortcode, path: ["false"] },
+    ]);
+    expect(base.meta.groups).toEqual([
+      expect.objectContaining({ path: ["false"], count: 1 }),
+    ]);
+  });
   // Core reads must survive an unavailable deferred inheritance dependency.
   it("reads expense core without evaluating deferred inheritance", async () => {
     await seedReferenceUniverse(ctx.db);

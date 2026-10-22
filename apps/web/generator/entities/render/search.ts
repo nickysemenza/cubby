@@ -144,21 +144,13 @@ export const renderSearchArtifacts = (
         .filter(({ reason }) => reason === null)
         .map(({ key }) => key);
       const grouped = groupKeys.length > 0;
-      const leveled = entity.listFields.grouping.some(
-        ({ levels }) => levels > 0,
-      );
       const presentationFields = [
         ...(nestToggle
           ? ['nest:z.enum(["on","off"]).optional().catch(undefined),']
           : []),
         ...(grouped
           ? [
-              `groupBy:z.enum(${JSON.stringify(groupKeys)}).optional().catch(undefined),`,
-            ]
-          : []),
-        ...(leveled
-          ? [
-              "groupLevel:z.number().int().positive().optional().catch(undefined),",
+              `groupBy:z.array(z.object({key:z.enum(${JSON.stringify(groupKeys)}),level:z.number().int().positive().optional(),bucket:z.enum(["day","week","month","quarter","year"]).optional()})).max(3).optional().catch(undefined),`,
             ]
           : []),
       ].join("\n");
@@ -175,7 +167,6 @@ export const renderSearchArtifacts = (
         ...(timeline ? timelineKeys : []),
         ...(nestToggle ? ["nest"] : []),
         ...(grouped ? ["groupBy"] : []),
-        ...(leveled ? ["groupLevel"] : []),
       ];
       if (new Set(keys).size !== keys.length)
         throw new EntityDeclarationError(

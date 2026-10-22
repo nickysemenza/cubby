@@ -63,9 +63,31 @@ test("real Tasks group, ungroup, and compose in the board view", async ({
   // This journey owns grouping real records through the visible list control.
   await page.getByRole("button", { name: "Group by", exact: true }).click();
   await page.getByRole("menuitem", { name: /^Group by Status/ }).click();
-  await expect(page).toHaveURL(/groupBy=status/);
+  await expect
+    .poll(() =>
+      JSON.parse(new URL(page.url()).searchParams.get("groupBy") ?? "null"),
+    )
+    .toEqual([{ key: "status" }]);
   await expect(
     page.getByRole("heading", { name: "In progress", exact: true }),
+  ).toBeVisible();
+
+  // A collapsed section retains its full count and does not hide the next
+  // section's records or alter the query's matching population.
+  await page
+    .getByRole("button", { name: "Collapse In progress", exact: true })
+    .click();
+  await expect(
+    page.getByRole("table").getByText(`${prefix} open`, { exact: true }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByRole("table").getByText(`${prefix} closed`, { exact: true }),
+  ).toBeVisible();
+  await page
+    .getByRole("button", { name: "Expand In progress", exact: true })
+    .click();
+  await expect(
+    page.getByRole("table").getByText(`${prefix} open`, { exact: true }),
   ).toBeVisible();
 
   await page

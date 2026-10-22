@@ -576,7 +576,7 @@ export const renderEntityArtifacts = (
   const listInputVariants = listEntitySpecs
     .map(
       ({ key, filterSchema, inspector }) =>
-        `z.object({entity:z.literal(${JSON.stringify(key)}),filters:${filterSchema === null ? "z.record(z.string(),z.unknown())" : `${key}ListFiltersSchema`},sort:entityListSortsSchema.optional(),pagination:entityListPaginationSchema.optional(),groupBy:z.string().min(1).optional(),groupLevel:z.number().int().positive().optional()${inspector.list.tree === null ? "" : ",nesting:listNestingSchema.optional()"}})`,
+        `z.object({entity:z.literal(${JSON.stringify(key)}),filters:${filterSchema === null ? "z.record(z.string(),z.unknown())" : `${key}ListFiltersSchema`},sort:entityListSortsSchema.optional(),pagination:entityListPaginationSchema.optional(),groupBy:listGroupByDimensionsSchema.optional()${inspector.list.tree === null ? "" : ",nesting:listNestingSchema.optional()"}})`,
     )
     .join(",\n  ");
   // Strict: an unknown filter name is a 400, not a silently wider list.
@@ -988,6 +988,7 @@ export const entityListSummaryOutputSchema = z.object({entity:z.enum(listEntitie
         rows: _rows,
         hierarchy: _hierarchy,
         grouping: _grouping,
+        groupingOmit: _groupingOmit,
         ...rest
       } = fieldModel;
       return [
@@ -1379,7 +1380,7 @@ export const entityListSummaryOutputSchema = z.object({entity:z.enum(listEntitie
         'export type GeneratedInherit = { readonly column: string; readonly reference: Entity | null; readonly empty: "array" | null; readonly mode: { readonly column: string; readonly inherit: string; readonly none: readonly string[]; readonly explicitIfSet: boolean } | null; readonly from: readonly ({ readonly kind: "hierarchy"; readonly parentColumn: string; readonly maxDepth: number; readonly whileSame: { readonly field: string; readonly column: string } | null } | { readonly kind: "effective"; readonly hops: readonly InheritHop[]; readonly field: string; readonly column: string })[] };\n\n' +
         "type GroupOptions = readonly { readonly value: string; readonly label: string }[] | null;\n" +
         "/** One Group by choice: `value` is null exactly when `reason` is set. */\n" +
-        'export type GeneratedGroupChoice = { readonly key: string; readonly label: string; readonly noValueLabel: string; readonly reason: string | null; readonly value: { readonly kind: "column"; readonly column: string; readonly options: GroupOptions } | { readonly kind: "record"; readonly steps: readonly RelationshipPathStep[]; readonly target: Entity; readonly titleColumn: string } | { readonly kind: "field"; readonly steps: readonly RelationshipPathStep[]; readonly target: Entity; readonly column: string; readonly options: GroupOptions } | { readonly kind: "derived"; readonly options: GroupOptions } | null; readonly filter: { readonly columnId: string; readonly noValue: boolean; readonly subtree: string | null } | null; readonly levels: number; readonly levelReason: string | null };\n\n' +
+        'export type GeneratedGroupChoice = { readonly key: string; readonly label: string; readonly noValueLabel: string; readonly reason: string | null; readonly value: { readonly kind: "column"; readonly column: string; readonly options: GroupOptions } | { readonly kind: "record"; readonly steps: readonly RelationshipPathStep[]; readonly target: Entity; readonly titleColumn: string } | { readonly kind: "field"; readonly steps: readonly RelationshipPathStep[]; readonly target: Entity; readonly column: string; readonly options: GroupOptions } | { readonly kind: "derived"; readonly options: GroupOptions } | null; readonly filter: { readonly columnId: string; readonly noValue: boolean; readonly subtree: string | null } | null; readonly levels: number; readonly levelReason: string | null; readonly multiple: boolean; readonly dateKind: "date" | "timestamp" | null; readonly buckets: readonly ("day" | "week" | "month" | "quarter" | "year")[] };\n\n' +
         "/** A related list scope (`presentation.list.scopes`): the entity whose list filter record its key holds, and the path to that entity's records. */\n" +
         'export type GeneratedListScope = { readonly filters: Entity; readonly via: Extract<GeneratedListField, { shape: "via" | "rows" }> };\n\n' +
         renderRecord({
@@ -1388,7 +1389,7 @@ export const entityListSummaryOutputSchema = z.object({entity:z.enum(listEntitie
             entities.map(({ key, listFields }) => [key, listFields]),
           ),
           satisfies:
-            "Record<Entity, { derived: Record<string, GeneratedListField>; rows: Record<string, GeneratedRowSet>; terms: Record<string, GeneratedListTermKey>; inherit: Record<string, GeneratedInherit>; hierarchy: { parentField: string; column: string; maxDepth: number } | null; subtree: Record<string, string>; grouping: readonly GeneratedGroupChoice[]; scope: readonly string[]; scopes: Record<string, GeneratedListScope> }>",
+            "Record<Entity, { derived: Record<string, GeneratedListField>; rows: Record<string, GeneratedRowSet>; terms: Record<string, GeneratedListTermKey>; inherit: Record<string, GeneratedInherit>; hierarchy: { parentField: string; column: string; maxDepth: number } | null; subtree: Record<string, string>; grouping: readonly GeneratedGroupChoice[]; metrics: readonly { readonly key: string; readonly label: string; readonly format: string | null }[]; scope: readonly string[]; scopes: Record<string, GeneratedListScope> }>",
           comment: "// Generated list fields stay one entity per line.",
         }) +
         "\n" +
@@ -1542,7 +1543,7 @@ export const entityListSummaryOutputSchema = z.object({entity:z.enum(listEntitie
         'import { withEntityListMedia } from "@cubby/schemas/entity-read-media";\n' +
         'import { compileListReadSchema } from "../model/list-read-fields";\n' +
         'import { publicStartOperationErrorSchema } from "~/server/operation-runtime/start-operation.contract";\n' +
-        'import { listChildCountSchema, listNestingSchema, MAX_PAGE_SIZE, MAX_SORTS, paginatedMetaSchema } from "@cubby/schemas/pagination";\n' +
+        'import { listChildCountSchema, listNestingSchema, listGroupByDimensionsSchema, type ListGroupBy, MAX_PAGE_SIZE, MAX_SORTS, paginatedMetaSchema } from "@cubby/schemas/pagination";\n' +
         'import type { FilterPatch } from "../filters";\n' +
         'import { z } from "zod";\n\n' +
         `export const listEntities = ${compactLiteral(listEntityKeys)} as const;\n` +
@@ -1565,7 +1566,7 @@ export const entityListSummaryOutputSchema = z.object({entity:z.enum(listEntitie
         "type EntityListParsedFiltersByEntity = { [E in ListEntity]: z.output<(typeof ENTITY_LIST_FILTER_SCHEMAS)[E]> };\n" +
         "type EntityListSort = z.input<typeof entityListSortSchema>;\n" +
         "export type EntityListInputByEntity = {\n" +
-        "  [E in ListEntity]: { entity: E; filters: EntityListInputFiltersByEntity[E]; sort?: EntityListSort[]; pagination?: { pageIndex: number; pageSize: number }; groupBy?: string; groupLevel?: number; nesting?: z.input<typeof listNestingSchema> };\n" +
+        "  [E in ListEntity]: { entity: E; filters: EntityListInputFiltersByEntity[E]; sort?: EntityListSort[]; pagination?: { pageIndex: number; pageSize: number }; groupBy?: ListGroupBy[]; nesting?: z.input<typeof listNestingSchema> };\n" +
         "};\n" +
         "export type ParsedEntityListInputByEntity = {\n" +
         '  [E in ListEntity]: Omit<EntityListInputByEntity[E], "filters"> & { filters: EntityListParsedFiltersByEntity[E] };\n' +
@@ -1581,7 +1582,7 @@ export const entityListSummaryOutputSchema = z.object({entity:z.enum(listEntitie
         "  const { entity: _entity, ...params } = input;\n" +
         "  return params;\n" +
         "}\n\n" +
-        "export type EntityListParseInput = EntityListInputByEntity[ListEntity] | { entity: ListEntity; filters: FilterPatch; sort?: EntityListSort[]; pagination?: { pageIndex: number; pageSize: number }; groupBy?: string; groupLevel?: number; nesting?: z.input<typeof listNestingSchema> };\n\n" +
+        "export type EntityListParseInput = EntityListInputByEntity[ListEntity] | { entity: ListEntity; filters: FilterPatch; sort?: EntityListSort[]; pagination?: { pageIndex: number; pageSize: number }; groupBy?: ListGroupBy[]; nesting?: z.input<typeof listNestingSchema> };\n\n" +
         "export type EntityListResultByEntity = {\n" +
         "  [E in ListEntity]: z.output<(typeof ENTITY_LIST_OUTPUT_SCHEMAS)[E]>;\n" +
         "};\n\n" +

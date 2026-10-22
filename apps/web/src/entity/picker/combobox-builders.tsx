@@ -51,12 +51,15 @@ const emojiValue = z.string().nullable().optional();
 
 /** Trailing chips a row shows at most — the inspo row: one or two figures. */
 const MAX_TRAILING = 2;
+/** `meta` facts the second line shows at most, so rows stay two lines. */
+const MAX_META = 2;
 
 /**
  * A record's row data from its manifest phone-row projection: the field in
- * the `subtitle` slot supplies the secondary/status column, and `trailing`
- * fields become right-aligned chips. The same declaration drives the phone list row
- * and native, so a picker row says what the record's card says.
+ * the `subtitle` slot supplies the secondary/status column, `meta` fields
+ * become the muted context line under the name, and `trailing` fields become
+ * right-aligned chips. The same declaration drives the phone list row and
+ * native, so a picker row says what the record's card says.
  */
 function recordRowProjection<E extends ShortcodeType>(
   entity: E,
@@ -95,8 +98,14 @@ function recordRowProjection<E extends ShortcodeType>(
       return value ? [{ text: value }] : [];
     })
     .slice(0, MAX_TRAILING);
+  const detail = slotted
+    .filter((entry) => entry.slot === "meta")
+    .flatMap((entry) => text(entry) ?? [])
+    .slice(0, MAX_META)
+    .join(" · ");
   return {
     ...(secondary && !status && { secondary }),
+    ...(detail && { detail }),
     ...(status && { status: { text: status.label, color: status.color } }),
     trailing,
   };
@@ -130,7 +139,10 @@ export function buildRecordComboboxItem<E extends ShortcodeType>(
   const shortcode = parseShortcodeFor(entity, record.id);
   const title = record[entitySummary[entity].titleField];
   const aliases = pickerAliases.safeParse(record.aliases).data;
-  const { secondary, status, trailing } = recordRowProjection(entity, record);
+  const { secondary, detail, status, trailing } = recordRowProjection(
+    entity,
+    record,
+  );
   return {
     id: shortcode,
     shortcode,
@@ -141,6 +153,7 @@ export function buildRecordComboboxItem<E extends ShortcodeType>(
     ...(aliases && { aliases }),
     thumb: recordThumb(entity, record),
     ...(secondary && { secondary }),
+    ...(detail && { detail }),
     ...((status || trailing.length > 0) && {
       presentation: { status, trailing },
     }),

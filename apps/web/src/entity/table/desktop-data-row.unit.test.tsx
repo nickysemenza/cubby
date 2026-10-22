@@ -229,6 +229,57 @@ describe("DesktopDataRow", () => {
     expect(onRowClick).toHaveBeenCalledOnce();
   });
 
+  it("opens inspection from the identity while preserving fact cells, edit controls, and modified links", () => {
+    const inspect = vi.fn();
+    const columns = columnHelper.columns([
+      columnHelper.accessor("id", {
+        id: "identity",
+        meta: { entityColumnRole: "identity" },
+        cell: () => (
+          <>
+            <span data-record-identity-link>
+              <a href="#full-record">Sample record</a>
+            </span>
+            <button type="button" data-cell-edit-trigger>
+              Edit name
+            </button>
+          </>
+        ),
+      }),
+      columnHelper.accessor("id", {
+        id: "fact",
+        meta: { entityColumnRole: "fact" },
+        cell: () => <span>Recorded fact</span>,
+      }),
+    ]);
+    const { result } = renderHook(() =>
+      useCubbyTable({
+        data: [{ id: "synthetic-record" }],
+        columns,
+        getRowId: (row) => row.id,
+      }),
+    );
+    render(
+      <table>
+        <tbody>
+          <DesktopDataRow
+            {...desktopRowProps(result.current.getRow("synthetic-record"), {
+              onRowClick: inspect,
+            })}
+          />
+        </tbody>
+      </table>,
+    );
+    fireEvent.click(screen.getByText("Recorded fact"));
+    fireEvent.click(screen.getByRole("button", { name: "Edit name" }));
+    fireEvent.click(screen.getByRole("link", { name: "Sample record" }), {
+      metaKey: true,
+    });
+    expect(inspect).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("link", { name: "Sample record" }));
+    expect(inspect).toHaveBeenCalledOnce();
+  });
+
   it("does not open the row inspector from an interactive cell control", () => {
     const onRowClick = vi.fn();
     const buttonClick = vi.fn();

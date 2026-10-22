@@ -38,10 +38,14 @@ import { formatCount, formatCurrency } from "~/lib/number-format";
 import { Picker } from "~/ui/combobox/picker";
 import type { PickerOption } from "~/ui/combobox/picker-option";
 import type { BulkActionsConfig } from "~/ui/data-table/bulk-actions.types";
+import { countedGroupPage } from "~/ui/data-table/counted-group-page";
 import type { CubbyTable, CubbyRow } from "~/ui/data-table/table-features";
 import type { FilterConfig } from "~/ui/data-table/table-meta";
 import type { GroupConfig } from "~/ui/data-table/use-grouped-list";
-import type { ListQueryOptionsFn } from "~/ui/hooks/use-paginated-table-core";
+import type {
+  ListQueryOptionsFn,
+  ListQueryResponse,
+} from "~/ui/hooks/use-paginated-table-core";
 import { Panel } from "~/ui/layout/panel";
 import { Alert } from "~/ui/primitives/alert";
 import { Button } from "~/ui/primitives/button";
@@ -141,7 +145,11 @@ const ORDER_OPTIONS: PickerOption[] = [
   { value: "impact", label: "Most impact" },
 ];
 
-const queryPlan: ListQueryOptionsFn<QueryFilters, Row, SuggestionListOut> = ({
+type SuggestionTablePage = Omit<SuggestionListOut, "meta"> & {
+  meta: ListQueryResponse<Row>["meta"];
+  statementGroups?: SuggestionGroup[];
+};
+const queryPlan: ListQueryOptionsFn<QueryFilters, Row, SuggestionTablePage> = ({
   filters,
   pagination,
   sort,
@@ -160,7 +168,22 @@ const queryPlan: ListQueryOptionsFn<QueryFilters, Row, SuggestionListOut> = ({
   return {
     queryKey: options.queryKey,
     meta: options.meta,
-    execute: (signal) => suggestions.list.call(input, { signal }),
+    execute: async (signal) => {
+      const result = await suggestions.list.call(input, { signal });
+      const grouping = result.meta.groups
+        ? countedGroupPage({
+            groups: result.meta.groups,
+            ids: result.items.map((row) => row.id),
+            offset: result.meta.pageIndex * result.meta.pageSize,
+            totalCount: result.meta.totalCount,
+          })
+        : {};
+      return {
+        ...result,
+        statementGroups: result.meta.groups,
+        meta: { ...result.meta, groups: undefined, ...grouping },
+      };
+    },
   };
 };
 
@@ -177,6 +200,9 @@ const monthLabel = (month: string) => {
 
 const ACCOUNT_MONTH_CHOICE: GroupConfig["choice"] = {
   key: "account_month",
+  multiple: false,
+  dateKind: null,
+  buckets: [],
   label: "Account × month",
   noValueLabel: "No account",
   reason: null,
@@ -597,18 +623,22 @@ function SuggestionsTableBody({
   const cleanCount =
     firstPage?.facets.clean?.find((facet) => facet.value === true)?.count ?? 0;
 
-  const groups = firstPage?.meta.groups ?? NO_GROUPS;
+  const groups = firstPage?.statementGroups ?? NO_GROUPS;
   const groupConfig = useMemo<GroupConfig | undefined>(
     () =>
       grouped
         ? {
             choice: ACCOUNT_MONTH_CHOICE,
-            groups: groups.map((group) => ({
+            memberships: list.memberships ?? [],
+            groups: (firstPage?.meta.groups ?? []).map((group) => ({
               ...group,
-              label: monthLabel(group.month),
+              label: monthLabel(
+                groups.find((source) => source.key === group.path[0])?.month ??
+                  group.label,
+              ),
             })),
             header: (summary) => {
-              const group = groups.find((item) => item.key === summary.key);
+              const group = groups.find((item) => item.key === summary.path[0]);
               if (!group) return {};
               return {
                 aside: (
@@ -664,6 +694,8 @@ function SuggestionsTableBody({
     [
       grouped,
       groups,
+      firstPage?.meta.groups,
+      list.memberships,
       accept,
       cleanFilters,
       list.infiniteScroll.isTransitioning,

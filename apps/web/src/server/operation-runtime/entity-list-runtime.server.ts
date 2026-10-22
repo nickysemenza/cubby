@@ -6,6 +6,7 @@ import {
   entityListEnrichmentOutputSchema,
   entityListSummaryOutputSchema,
 } from "~/entity/generated/entity-lists.gen";
+import { executeEntitySelectionIds } from "~/server/entity-kernel";
 import { ENTITY_LIST_READ_OPERATIONS } from "~/server/generated/entity-list-read-bindings.gen";
 import { implementOperationDomain } from "~/server/operation-runtime/operation-domain.server";
 
@@ -15,6 +16,7 @@ import { implementOperationDomain } from "~/server/operation-runtime/operation-d
  * overrides, and the output schema depends on the parsed input's entity.
  */
 export const entityListHandlers = implementOperationDomain(entityListContract, {
+  selectionIds: (context, input) => executeEntitySelectionIds(context, input),
   listBase: async (context, input) =>
     entityListBaseOutputSchema.parse(
       await ENTITY_LIST_READ_OPERATIONS[input.entity].base(context, input),

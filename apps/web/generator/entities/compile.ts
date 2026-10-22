@@ -875,6 +875,7 @@ const compileFieldModel = (
     rows: model.rows,
     hierarchy,
     grouping: model.grouping ?? [],
+    groupingOmit: model.groupingOmit,
     intents: compileEditIntents(model.intents, fieldKeys, `${context}.intents`),
     research: model.research,
   };
@@ -2442,6 +2443,7 @@ export const compileEntity = (
       hierarchy: null,
       subtree: {},
       grouping: [],
+      metrics: [],
       scope: [],
       scopes: {},
     },

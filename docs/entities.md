@@ -1299,52 +1299,73 @@ generic table headers enable server sorting only for those column ids. Native
 sort changes restart pagination and replay the active search with its current
 filters, rather than sorting only the already loaded page.
 
-`model.grouping` is the ordered Group by roster: `model.fields` or
-`model.derived` keys, including one to-one related path (Inventory's
-`category` is `product.category`). The generator compiles each key into a
-choice (`generatedEntityListFields[entity].grouping`, and the native
-`EntityDescriptor.grouping`) with its label, its "No ‹label›" section, the
-filter that addresses the same value, and a reason when it cannot group: a
-multi-valued field, a `via` path through a to-many hop, or a filter-only
-predicate. Clients list such choices disabled with the reason; the kernel
-rejects them as `LIST_GROUP_BY_FIELD_UNSUPPORTED` with the same reason over
-HTTP and MCP. A related-record section's key is the record's public id and its
-label the record's title, ordered by label; an enum section follows declared
-option order. The no-value section is always last. `listScaffold.read` and
-`listScaffold.raw` put
-the group order ahead of the sort, and its summary query (key, label, count
-over the whole filtered set, `meta.groups`) shares that order, so loaded rows
-are a prefix of the sections and clients assign them by position. A list spec
-with a custom `count` must pass `joins`, which the summary reuses. A saved
-view's `groupBy` opens the list grouped; web keeps the choice in `?groupBy=`
-and Apple in the list's view state. Timeline is already arranged by date, so
-both clients disable Group by there; Apple's search results are ranked by
-match, so it disables Group by with that reason while searching and restores
-the choice afterwards. Sections use the neutral band (a domain colour stays
-optional) with a sticky header and a quiet tabular count; collapsing sections
-is not offered. A section header's "Filter to this" sets
-the section's value (and turns an "Include sub-…" toggle off) as the field's
-include filter, and exists only when the choice declares a filter. Its
-"Hide" keeps the grouping and adds the section's value to the field's Exclude
-key, so it exists only when that filter can exclude; a level section's Hide
-turns "Include sub-…" on, so the ancestor goes with its descendants. Hiding
-the "No ‹label›" section drops No value beside picked values, and otherwise
-picks Any value. Both actions reveal on hover and stay keyboard reachable on
-web; on Apple, tapping a header opens a menu with both.
+`model.grouping` supplies the preferred ordered Group by choices, including
+explicit text fields and related paths. The compiler then infers eligible enum,
+reference, boolean, and calendar-date fields; `model.groupingOmit` removes
+choices. Generated choices carry their filter, no-value label,
+multivalue capability, ancestor levels, and supported date buckets. Unsupported
+SQL sources remain disabled with a reason; the kernel validates the same
+capabilities for every client.
 
-A choice whose section key is a related record of an entity that declares
-`model.hierarchy` can group at a level (`groupLevel`, 1 = top, absolute from
-the root): each row groups under its ancestor at that level, a row whose value
-sits above that level groups under itself, and no value stays last. The
-choice's `levels` (at most three, fewer for a shallower hierarchy) bounds the
-level; any other choice carries a `levelReason` derived from the declaration,
-which clients show on the disabled Level choices and the kernel returns when
-it rejects the level. `hierarchyAncestorSql` walks up the same hierarchy the
-descendant filter walks down, so a level section counts its key's
-descendants, and its summary's `subtree` flag tells "Filter to this" to keep
-"Include sub-…" on: the filtered list is that one section. Level rides beside
-`groupBy` in the URL (`?groupLevel=`), the list request, Apple's view state,
-and a saved view's `groupLevel`; changing Group by clears it.
+List requests and supplied views use `groupBy: [{ key, level?, bucket? }]`, with
+at most three unique keys in hierarchy order. Empty or omitted means ungrouped.
+Web URL state encodes that array in `groupBy`; there is no standalone
+`groupLevel`. Supplied views are declaration-backed only: there is no user view
+save/manage interface. Timeline retains its own arrangement and disables Group
+by. Native ranked search temporarily suspends grouping and restores it afterwards.
+
+A reference to a hierarchical entity can use an absolute ancestor `level`
+(1 = root). Shallower values group under themselves. Calendar buckets are day,
+week, month, quarter, and year; an omitted bucket on a date field means day.
+Plain dates keep their calendar value, while timestamps use the configured
+household timezone. Nulls and empty memberships use the explicit no-value
+sentinel and sort last. Enums follow declared order; references use readable
+labels with stable identity tie-breakers.
+
+SQL expands multivalue memberships before paging. `items` contains unique
+canonical records, while `meta.memberships` assigns each displayed occurrence an
+`{ id, path }`. `meta.membershipCount` controls occurrence pagination;
+`meta.totalCount` counts distinct canonical records. Never assign rows to
+sections by slicing summary counts or deduplicate occurrences by record ID.
+Canonical IDs still own selection, editing, enrichment, and mutations; the
+combination of canonical ID and path identifies a displayed occurrence.
+Custom list sources must preserve their joins and predicates in membership and
+summary queries.
+
+`meta.groups` contains authoritative summaries for every path prefix over the
+complete filtered population. Its `key` is the JSON-encoded path, not a scalar
+filter value. Each summary includes distinct-record count, parent count,
+fraction (null for a zero denominator), overlap, and optional declared metrics.
+A record contributes once per prefix even when several leaves share it.
+Overlapping sibling counts can exceed their parent's count. Use
+`path[depth - 1]` to address a dimension's filter value.
+
+`presentation.list.metrics` explicitly declares summable field keys. The
+compiler emits labels and display formats and rejects unsupported or mixed-unit
+sources. Monetary values retain authoritative `SUM(Expense.cost)` provenance;
+field names never imply currency. Per-prefix metrics distinguish unknown sums
+from zero and include present/total counts and coverage. Date grouping with a
+declared metric supplies calendar analysis; loaded-row reductions cannot supply
+filtered-set analytics.
+
+Web section headers show full counts and can collapse independently without
+changing membership, selection, or later groups. Collapse state is scoped to
+the entity and dimensions. "Filter to this" applies every supported prefix
+filter, preserving ancestor subtree semantics. Calendar buckets lack a scalar
+filter adapter, so that action is unavailable there. "Hide" is available only
+for a single root value with an exclusion filter; a flat exclusion cannot negate
+a multidimensional path conjunction. Native multidimensional leaf menus are
+disabled for the same reason, while labels retain ancestor context.
+
+Complete matching selection uses `entity.selectionIds`, separately from list
+hydration. Its filters and nesting define the canonical population; bounded
+pages return public IDs, total count, and an opaque cursor. Each page uses one
+SQL snapshot. Later pages refuse a changed ID population, including same-count
+replacement; there are no cross-request locks or snapshots. Data-only changes
+do not invalidate that cursor. Web also cancels scope or selection drift and
+applies selection only after the complete traversal. Bulk actions hydrate and
+check selected records before executing existing eligibility and refusal rules;
+selection never grants permission to mutate a record.
 
 Declare object-valued outputs as `json`, and render relations and structured
 values through explicit overrides. A logo object is not a text field. Fields

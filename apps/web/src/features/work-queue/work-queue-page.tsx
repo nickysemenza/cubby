@@ -76,6 +76,7 @@ import type { BulkActionsConfig } from "~/ui/data-table/bulk-actions.types";
 import { BulkActionBar } from "~/ui/data-table/bulk/bulk-action-bar";
 import { tableMoneyTotals } from "~/ui/data-table/bulk/table-money";
 import { textCellData } from "~/ui/data-table/cell-data";
+import { countedGroupPage } from "~/ui/data-table/counted-group-page";
 import type { FilterBarField } from "~/ui/data-table/filter-bar-core";
 import {
   buildSelectColumn,
@@ -97,7 +98,10 @@ import {
   type RuntimeFilterOptionSource,
 } from "~/ui/hooks/filter-option-types";
 import { useHydratedLoading } from "~/ui/hooks/use-hydrated";
-import { type ListQueryOptionsFn } from "~/ui/hooks/use-paginated-table-core";
+import {
+  type ListQueryOptionsFn,
+  type ListQueryResponse,
+} from "~/ui/hooks/use-paginated-table-core";
 import { Button } from "~/ui/primitives/button";
 
 import {
@@ -109,7 +113,7 @@ import {
 
 const route = getRouteApi("/_authenticated/work-queue");
 const EMPTY_MEMBERS: WorkQueueMember[] = [];
-const NO_GROUPS: NonNullable<QueuePage["meta"]["groups"]> = [];
+const NO_GROUPS: NonNullable<QueueTablePage["meta"]["groups"]> = [];
 type QueueInput = z.infer<typeof workQueueHouseholdInput>;
 type QueueView = NonNullable<QueueInput["view"]>;
 type QueuePage = z.infer<typeof workQueueOutSchema>;
@@ -131,8 +135,10 @@ type QueueTableRow = Omit<WorkQueueRow, "id"> & {
   id: string;
   recordId: WorkQueueRow["id"];
 };
-type QueueTablePage = Omit<QueuePage, "items"> & {
+type QueueTablePage = Omit<QueuePage, "items" | "meta"> & {
   items: QueueTableRow[];
+  meta: ListQueryResponse<QueueTableRow>["meta"] &
+    Pick<QueuePage["meta"], "viewCounts">;
 };
 const helper = createCubbyColumnHelper<QueueTableRow>();
 const PREVIEW_OPTIONS = { responsiveInspector: true };
@@ -210,8 +216,17 @@ const queueQueryPlan: ListQueryOptionsFn<
     meta: options.meta,
     execute: async (signal) => {
       const result = await workQueue.list.call(input, { signal });
+      const grouping = result.meta.groups
+        ? countedGroupPage({
+            groups: result.meta.groups,
+            ids: result.items.map((row) => row.key),
+            offset: result.meta.pageIndex * result.meta.pageSize,
+            totalCount: result.meta.totalCount,
+          })
+        : {};
       return {
         ...result,
+        meta: { ...result.meta, groups: undefined, ...grouping },
         items: result.items.map((row) => ({
           ...row,
           recordId: row.id,
@@ -304,6 +319,9 @@ const groupChoice = (
   filter: null,
   levels: 0,
   levelReason: `${group.label} is a flat section, not a hierarchy.`,
+  multiple: false,
+  dateKind: null,
+  buckets: [],
 });
 
 /** The row's own Open or Review, beside the rule's details. */
@@ -624,8 +642,14 @@ function WorkQueue() {
   const activeGroup = GROUPS.find((choice) => choice.key === group);
   const groupConfig = useMemo<GroupConfig | undefined>(
     () =>
-      activeGroup ? { choice: groupChoice(activeGroup), groups } : undefined,
-    [activeGroup, groups],
+      activeGroup
+        ? {
+            choice: groupChoice(activeGroup),
+            groups,
+            memberships: list.memberships ?? [],
+          }
+        : undefined,
+    [activeGroup, groups, list.memberships],
   );
   const rows = table.getRowModel().rows;
   const selectedRows = table.getFilteredSelectedRowModel().rows;

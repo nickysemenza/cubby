@@ -1,4 +1,5 @@
 import type { Entity } from "@cubby/schemas/entity";
+import type { ListGroupBy } from "@cubby/schemas/pagination";
 import { BookmarkIcon } from "@phosphor-icons/react/dist/csr/Bookmark";
 import { CheckIcon } from "@phosphor-icons/react/dist/csr/Check";
 import { ListChecksIcon } from "@phosphor-icons/react/dist/csr/ListChecks";
@@ -50,11 +51,10 @@ interface SavedViewsMenuProps {
   onResetPage?: () => void;
   /** Tables apply exact layouts; dashboard/card consumers simply omit it. */
   onApplyLayout?: (layout: SavedLayout) => void;
-  /** Sets the list view (`?view=`) and grouping (`?groupBy=`, `?groupLevel=`) a saved view opens with. */
+  /** Sets the presentation and ordered grouping supplied by a declared view. */
   onApplyListSearch?: (patch: {
     view?: string;
-    groupBy?: string;
-    groupLevel?: number;
+    groupBy?: ListGroupBy[];
   }) => void;
 }
 
@@ -170,9 +170,7 @@ function applyView(
   // matching; a view that declares neither leaves them as they are.
   const listSearch = {
     ...(view.view ? { view: view.view } : {}),
-    ...(view.groupBy
-      ? { groupBy: view.groupBy, groupLevel: view.groupLevel }
-      : {}),
+    ...(view.groupBy ? { groupBy: view.groupBy } : {}),
   };
   if (Object.keys(listSearch).length > 0) onApplyListSearch?.(listSearch);
   onResetPage?.();

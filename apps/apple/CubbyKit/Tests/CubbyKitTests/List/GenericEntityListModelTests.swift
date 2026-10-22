@@ -209,7 +209,9 @@ struct GenericEntityListModelTests {
         let levels = Mutex<[Double?]>([])
         ListStub.handler.withLock { handler in
             handler = { request in
-                levels.withLock { $0.append(Self.body(of: request)["groupLevel"]?.doubleValue) }
+                levels.withLock {
+                    $0.append(Self.body(of: request)["groupBy"]?.arrayValue?.first?["level"]?.doubleValue)
+                }
                 return (200, page)
             }
         }

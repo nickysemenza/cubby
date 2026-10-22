@@ -6,7 +6,7 @@ import {
 import type { ShortcodeFor, ShortcodeType } from "@cubby/shared";
 import { z } from "zod";
 import { dataQuality } from "../data-quality-shape";
-import { sortDirection } from "../pagination";
+import { sortDirection, listGroupByDimensionsSchema } from "../pagination";
 import {
   dataQualityCheckKind,
   dataQualityFacetName,
@@ -1033,14 +1033,10 @@ const buildMetadataSchemas = () => {
         .optional()
         .default({}),
       hierarchy: entityHierarchyMetadataSchema.optional(),
-      /**
-       * The list's Group by choices, in menu order: model fields or
-       * `model.derived` keys (one to-one related path). The list compiler
-       * derives each section key, label, order and no-value section, and
-       * keeps a field it cannot group by (several values per row, a to-many
-       * path, a filter-only predicate) in the menu, disabled with the reason.
-       */
+      /** Explicit menu order and opt-in text choices; bounded scalar and reference choices are inferred. */
       grouping: z.array(nonEmptyString()).optional().default([]),
+      /** Suppress an otherwise inferred grouping choice. */
+      groupingOmit: z.array(nonEmptyString()).optional().default([]),
       intents: entityFieldModelIntentsMetadataSchema.optional(),
     })
     .strict();
@@ -1505,6 +1501,8 @@ const buildMetadataSchemas = () => {
             )
             .optional()
             .default([]),
+          /** Numeric fields with a canonical additive SQL expression, over distinct records. */
+          metrics: z.array(fieldKey).optional().default([]),
           /** Replaces the subtitle inferred from mobile card placement. */
           shelfSubtitleOverride: z.array(fieldKey).optional(),
           /**
@@ -1585,18 +1583,7 @@ const buildMetadataSchemas = () => {
                   /** The list view (`table`, `shelf`, ...) the view opens in. */
                   view: nonEmptyString().nullable().optional().default(null),
                   /** The `model.grouping` field the view opens grouped by. */
-                  groupBy: nonEmptyString().nullable().optional().default(null),
-                  /**
-                   * The hierarchy level (1 = top) `groupBy` groups at, for a
-                   * field whose target declares `model.hierarchy`.
-                   */
-                  groupLevel: z
-                    .number()
-                    .int()
-                    .positive()
-                    .nullable()
-                    .optional()
-                    .default(null),
+                  groupBy: listGroupByDimensionsSchema.optional().default([]),
                   /**
                    * A shortcut on another surface. `home` lists the view in
                    * the home "Your views" row on web and Apple, by `order`.
@@ -1735,6 +1722,7 @@ const buildMetadataSchemas = () => {
             views,
             viewAliases,
             totals,
+            metrics,
             read,
             shelfSubtitleOverride,
             titleSubtitle,
@@ -1751,6 +1739,7 @@ const buildMetadataSchemas = () => {
             views,
             viewAliases,
             totals,
+            metrics,
             read,
             shelf:
               shelfSubtitleOverride === undefined

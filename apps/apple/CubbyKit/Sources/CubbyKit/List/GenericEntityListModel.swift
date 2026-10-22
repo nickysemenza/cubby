@@ -81,12 +81,11 @@ public final class GenericEntityListModel {
     public private(set) var sort: String?
     /// The selected declared view; `select(view:)` loads the timeline when it is `.timeline`.
     public private(set) var view: ListView
-    /// The `model.grouping` choice the declared list is grouped by, kept with the view state; a
-    /// saved view's `groupBy` sets it. Nil is a flat list.
-    public private(set) var groupBy: String?
-    /// The hierarchy level (1 = top) `groupBy` groups at; nil groups by the exact value. Kept
-    /// across Group by changes only while the new choice offers it.
-    public private(set) var groupLevel: Int?
+    public private(set) var groupDimensions: [ListGroupDimension] = []
+    /// The existing native menu edits the opening dimension; supplied views retain the full path.
+    public var groupBy: String? { groupDimensions.first?.key }
+    public var groupLevel: Int? { groupDimensions.first?.level }
+    private var memberships: [(id: String, path: [String])] = []
     public private(set) var timeline: EntityTimelineOut?
     public private(set) var timelineError: String?
     public private(set) var isLoadingTimeline = false
@@ -100,7 +99,7 @@ public final class GenericEntityListModel {
 
     public var hasMore: Bool {
         guard let meta else { return false }
-        return page * meta.pageSize < meta.totalCount
+        return page * meta.pageSize < (meta.membershipCount ?? meta.totalCount)
     }
 
     /// Metadata is only presented as current while its last refresh succeeded.
@@ -152,8 +151,8 @@ public final class GenericEntityListModel {
         return EntityListSection.sections(
             rows: rows,
             groups: groups.map {
-                (key: $0.key, label: $0.label, count: $0.count, subtree: $0.subtree ?? false)
-            })
+                (key: $0.key, path: $0.path, label: $0.label, count: $0.count, subtree: $0.subtree ?? false)
+            }, memberships: memberships)
     }
 
     public var activeSavedView: SavedView? {
@@ -184,6 +183,7 @@ public final class GenericEntityListModel {
         view: ListView? = nil,
         groupBy: String? = nil,
         groupLevel: Int? = nil,
+        groupDimensions: [ListGroupDimension]? = nil,
         progressive: Bool = true,
         searchLoader: EntityListSearchModel.PageLoader? = nil,
         searchDebounceNanoseconds: UInt64 = 250_000_000
@@ -198,8 +198,11 @@ public final class GenericEntityListModel {
         self.filters = filters
         let selectedView = view ?? descriptor.presentation.listViews.first ?? .table
         self.view = selectedView
-        self.groupBy = descriptor.groupChoice(groupBy)?.id
-        self.groupLevel = self.groupBy == nil ? nil : groupLevel
+        if let groupDimensions {
+            self.groupDimensions = groupDimensions
+        } else if let key = descriptor.groupChoice(groupBy)?.id {
+            self.groupDimensions = [.init(key: key, level: groupLevel)]
+        }
         self.searchModel =
             searchLoader.map {
                 EntityListSearchModel(
@@ -303,26 +306,21 @@ public final class GenericEntityListModel {
     }
 
     /// Apply filters, ordering and grouping together so a saved view never sends an
-    /// intermediate scope. A view that declares no `groupBy` keeps the current grouping; one
-    /// that does sets its `groupLevel` too.
+    /// intermediate scope. An empty supplied grouping restores an ungrouped list.
     public func apply(savedView: SavedView) async {
         guard source == nil else { return }
         let newFilters = savedView.filterState
         let newSort = savedView.sortParameter
-        let declared = descriptor.groupChoice(savedView.groupBy)?.id
-        let newGroupBy = declared ?? groupBy
-        let newGroupLevel = declared == nil ? groupLevel : savedView.groupLevel
+        let newDimensions = savedView.groupBy
         // The view mode is not part of active-view matching (`activeSavedView`): switching it
         // never changes the query, so it must not depend on whether the query changed.
         if let newView = savedView.listView(in: descriptor) { await select(view: newView) }
         guard
-            filters != newFilters || sort != newSort || groupBy != newGroupBy
-                || groupLevel != newGroupLevel
+            filters != newFilters || sort != newSort || groupDimensions != newDimensions
         else { return }
         filters = newFilters
         sort = newSort
-        groupBy = newGroupBy
-        groupLevel = newGroupLevel
+        groupDimensions = newDimensions
         await refreshQuery()
     }
 
@@ -331,9 +329,8 @@ public final class GenericEntityListModel {
     public func apply(groupBy newGroupBy: String?) async {
         guard source == nil else { return }
         let resolved = descriptor.groupChoice(newGroupBy)?.id
-        guard resolved == newGroupBy, resolved != groupBy else { return }
-        groupBy = resolved
-        groupLevel = nil
+        guard resolved == newGroupBy, resolved != groupBy || groupDimensions.count > 1 else { return }
+        groupDimensions = resolved.map { [.init(key: $0)] } ?? []
         await refreshQuery()
     }
 
@@ -342,21 +339,32 @@ public final class GenericEntityListModel {
     public func apply(groupLevel level: Int?) async {
         guard source == nil, let choice = groupChoice, level != groupLevel else { return }
         if let level, !(1...max(1, choice.levels)).contains(level) || choice.levels == 0 { return }
-        groupLevel = level
+        if let first = groupDimensions.first {
+            groupDimensions[0] = .init(key: first.key, level: level, bucket: first.bucket)
+        }
         await refreshQuery()
     }
 
     /// "Filter to this" on a section header; see `EntityDescriptor.filtering(_:to:of:)`.
     public func filter(to section: EntityListSection) async {
-        guard let choice = groupChoice,
-            let next = descriptor.filtering(filters, to: section, of: choice)
-        else { return }
+        guard groupChoice != nil else { return }
+        var next = filters
+        for (dimension, value) in zip(groupDimensions, section.path) {
+            guard let choice = descriptor.groupChoice(dimension.key),
+                let filtered = descriptor.filtering(
+                    next,
+                    to: .init(
+                        id: value, label: section.label,
+                        count: section.count, subtree: dimension.level != nil, rows: []), of: choice)
+            else { return }
+            next = filtered
+        }
         await apply(filters: next)
     }
 
     /// "Hide" on a section header; see `EntityDescriptor.hiding(_:section:of:)`.
     public func hide(_ section: EntityListSection) async {
-        guard let choice = groupChoice,
+        guard groupDimensions.count == 1, let choice = groupChoice,
             let next = descriptor.hiding(filters, section: section, of: choice)
         else { return }
         await apply(filters: next)
@@ -500,6 +508,9 @@ public final class GenericEntityListModel {
                     coreRows.append(contentsOf: result.items.filter { ids.insert($0.id).inserted })
                 }
                 page = requestedPage
+                if replacing { memberships = [] }
+                memberships.append(
+                    contentsOf: (result.meta.memberships ?? []).map { (id: $0.id, path: $0.path) })
                 meta = result.meta
                 if enrichesRows { enrichment.accept(result, replacing: replacing) }
                 phase = .loaded
@@ -531,18 +542,17 @@ public final class GenericEntityListModel {
         let pageSize = pageSize
         let sort = sort
         let filters = filters
-        let groupBy = groupBy
-        let groupLevel = activeGroupLevel
+        let dimensions = groupByUnavailableReason == nil ? groupDimensions : []
         let standard = progressive && (view == .table || view == .shelf)
         return { page in
             if standard {
                 return try await client.progressiveList(
                     descriptor, page: page, pageSize: pageSize, sort: sort, filters: filters,
-                    groupBy: groupBy, groupLevel: groupLevel)
+                    groupBy: dimensions)
             }
             return try await client.list(
                 descriptor, page: page, pageSize: pageSize, sort: sort, filters: filters,
-                groupBy: groupBy, groupLevel: groupLevel)
+                groupBy: dimensions)
         }
     }
 

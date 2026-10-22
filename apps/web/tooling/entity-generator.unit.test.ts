@@ -120,7 +120,7 @@ const model = {
   fields: [
     {
       key: "name",
-      kind: "text",
+      kind: "text" as const,
       validation: {
         read: z.string(),
         create: z.string().trim().min(1).default("Example"),
@@ -972,7 +972,7 @@ describe("typed entity compiler", () => {
   describe("list fields", () => {
     const parentField = {
       key: "parentId",
-      kind: "identifier",
+      kind: "identifier" as const,
       nullable: true,
       reference: { entity: "alpha" },
       validation: { read: z.string().nullable(), create: null, update: null },
@@ -1005,13 +1005,12 @@ describe("typed entity compiler", () => {
       extra: Partial<Extract<EntityDeclaration["model"], { fields: unknown }>>,
       filters: EntityDeclaration["filters"] = base.filters,
       savedViews: readonly object[] = [],
+      metrics: readonly string[] = [],
     ) =>
       compileEntityDeclarations([
         {
           ...base,
-          ...(savedViews.length > 0
-            ? { presentation: { ...presentation, list: { savedViews } } }
-            : {}),
+          presentation: { ...presentation, list: { savedViews, metrics } },
           relations,
           filters,
           model: {
@@ -1042,8 +1041,7 @@ describe("typed entity compiler", () => {
       expect(listFields.derived.childName).toMatchObject({
         shape: "via",
         terminal: { kind: "field", column: "name" },
-        group:
-          "Goes through a list of Alphas. Only paths that lead to a single record can group.",
+        group: null,
       });
       expect(listFields.derived.score).toMatchObject({
         shape: "value",
@@ -1103,10 +1101,10 @@ describe("typed entity compiler", () => {
         },
       );
       expect(listFields.grouping).toEqual([
-        {
+        expect.objectContaining({
           key: "parentId",
           label: "Parent",
-          noValueLabel: "No parent",
+          noValueLabel: "Unassigned",
           reason: null,
           value: {
             kind: "record",
@@ -1117,11 +1115,11 @@ describe("typed entity compiler", () => {
           filter: { columnId: "parentId", noValue: true, subtree: null },
           levels: 0,
           levelReason: "Alphas don't nest, so Parent has no levels.",
-        },
+        }),
         expect.objectContaining({
           key: "childName",
-          reason:
-            "Goes through a list of Alphas. Only paths that lead to a single record can group.",
+          reason: null,
+          multiple: true,
           filter: null,
         }),
         expect.objectContaining({
@@ -1154,6 +1152,51 @@ describe("typed entity compiler", () => {
       expect(() => compile({ grouping: ["missing"] })).toThrow(
         "names no model.fields or model.derived key",
       );
+    });
+
+    it("uses declaration overrides to omit inferred groups and admits only explicit numeric metrics", () => {
+      expect(
+        compile({ groupingOmit: ["parentId"] }).listFields.grouping,
+      ).toEqual([]);
+      const numeric = { derived: { score: { type: "number" as const } } };
+      expect(compile(numeric).listFields.metrics).toEqual([]);
+      expect(
+        compile(numeric, base.filters, [], ["score"]).listFields.metrics,
+      ).toEqual([{ key: "score", label: "Score", format: null }]);
+      expect(() =>
+        compile(
+          { derived: { score: { type: "text" } } },
+          base.filters,
+          [],
+          ["score"],
+        ),
+      ).toThrow("needs a scalar numeric SQL field");
+      for (const format of ["amount", "currency"] as const) {
+        const field = {
+          key: "observation",
+          kind: "number" as const,
+          display: { format },
+        };
+        expect(() =>
+          compile(
+            {
+              fields: [...model.fields, parentField, field],
+              storage: [
+                "name",
+                { key: "parentId", reference: "alpha" },
+                "observation",
+              ],
+            },
+            base.filters,
+            [],
+            ["observation"],
+          ),
+        ).toThrow(
+          format === "amount"
+            ? "record-specific units"
+            : "must use Expense.cost",
+        );
+      }
     });
 
     it("lets a value or path declare a stored field's order, never a predicate", () => {
@@ -1220,8 +1263,12 @@ describe("typed entity compiler", () => {
               label: "Nested",
               description: "Grouped under ancestors.",
               filters: [{ id: "parentId", value: ["ALP-1"] }],
-              groupBy: "parentId",
-              groupLevel,
+              groupBy: [
+                {
+                  key: "parentId",
+                  ...(groupLevel === null ? {} : { level: groupLevel }),
+                },
+              ],
             },
           ],
         );
@@ -1246,7 +1293,7 @@ describe("typed entity compiler", () => {
       // A shallow hierarchy offers only the levels it has.
       expect(grouped(null, 1).listFields.grouping[0]?.levels).toBe(2);
       expect(() => grouped(3, 1)).toThrow(
-        "savedViews[nested].groupLevel 3: Parent offers levels 1–2.",
+        "savedViews[nested].groupBy parentId: offers levels 1–2.",
       );
     });
   });

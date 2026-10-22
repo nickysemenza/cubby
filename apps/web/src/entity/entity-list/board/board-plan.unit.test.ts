@@ -15,8 +15,20 @@ describe("declared board plan", () => {
     expect(boardGroups([], null, options)).toEqual([
       { key: "__none__", label: "Inbox", count: 0 },
     ]);
-    const present = [{ key: "__none__", label: "Inbox", count: 3 }];
-    expect(boardGroups(present, null, options)).toEqual(present);
+    const present = [
+      {
+        key: JSON.stringify(["__none__"]),
+        path: ["__none__"],
+        label: "Inbox",
+        count: 3,
+        parentCount: 3,
+        fraction: 1,
+        overlapping: false,
+      },
+    ];
+    expect(boardGroups(present, null, options)).toEqual([
+      { key: "__none__", label: "Inbox", count: 3 },
+    ]);
     expect(boardGroups([], null, { ...options, noValue: false })).toEqual([]);
   });
   const view = {

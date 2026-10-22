@@ -632,7 +632,7 @@ function LiveEntityRelationTable({
     columns,
     tableStateOptions,
     hiddenFilterColumns: [plan.descriptorId],
-    groupBy: groupBy ?? undefined,
+    groupBy: groupBy ? [{ key: groupBy }] : undefined,
     onGroupByChange: setGroupBy,
     // H2: never `includeCatalogActions: false` here — that would empty the
     // row `…` menu too. This only drops the checkbox column and bulk bar.

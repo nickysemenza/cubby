@@ -26,16 +26,16 @@ struct EntityManifestTests {
     @Test func groupingChoicesAndSavedViewDefaultArriveOnTheWire() throws {
         let inventory = EntityCatalog[.inventory]
         let wardrobe = try #require(inventory.presentation.savedViews.first { $0.id == "wardrobe" })
-        #expect(wardrobe.groupBy == "category")
-        let category = try #require(inventory.groupChoice(wardrobe.groupBy))
-        #expect(category.noValueLabel == "No category")
+        #expect(wardrobe.groupBy.map(\.key) == ["category"])
+        let category = try #require(inventory.groupChoice(wardrobe.groupBy.first?.key))
+        #expect(category.noValueLabel == "Unassigned")
         #expect(
             category.filter
                 == GroupChoiceFilter(
                     columnId: "category", noValue: true, subtree: "includeSubProductCategories"))
         let tags = try #require(EntityCatalog[.product].grouping.first { $0.id == "tags" })
-        #expect(tags.reason == "A record can have several Tags, so it would appear in more than one group.")
-        #expect(EntityCatalog[.product].groupChoice("tags") == nil)
+        #expect(tags.reason == nil)
+        #expect(EntityCatalog[.product].groupChoice("tags") != nil)
     }
 
     // Native dropped option roles and glyphs at the catalog, and relation sections lost their

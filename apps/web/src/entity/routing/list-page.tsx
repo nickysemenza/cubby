@@ -6,6 +6,7 @@ import {
 import { generatedEntityListFields } from "@cubby/schemas/entity-list-fields";
 import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
 import { entitySummary } from "@cubby/schemas/entity-summary";
+import type { ListGroupBy } from "@cubby/schemas/pagination";
 import { CalendarCheckIcon } from "@phosphor-icons/react/dist/csr/CalendarCheck";
 import { CaretDownIcon } from "@phosphor-icons/react/dist/csr/CaretDown";
 import { CheckIcon } from "@phosphor-icons/react/dist/csr/Check";
@@ -23,7 +24,6 @@ import {
   GenericEntityList,
   type GenericEntityListProps,
   listGroupBy,
-  listGroupLevel,
   useEntityListCardDensity,
   useListSearch,
 } from "~/entity/entity-list/generic-entity-list";
@@ -39,6 +39,9 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
+  DropdownMenuSubmenu,
+  DropdownMenuSubmenuTrigger,
+  DropdownMenuSubmenuContent,
 } from "~/ui/primitives/dropdown-menu";
 
 /**
@@ -94,7 +97,6 @@ const VIEW_ICONS = {
 } satisfies Record<"table" | "shelf" | "timeline", Icon>;
 
 const TIMELINE_GROUP_REASON = "Timeline is already arranged by date.";
-const NO_GROUP_LEVEL_REASON = "Group by a field first.";
 
 /** A hierarchy level's menu label: 1 is the top level. */
 const groupLevelLabel = (level: number) =>
@@ -189,49 +191,31 @@ function ListViewMenu({ entity }: { entity: BrowserRoutedEntity }) {
 function ListGroupMenu({ entity }: { entity: BrowserRoutedEntity }) {
   const { search, navigate } = useListSearch();
   const { view } = resolveListView(entity, search);
-  const grouping = generatedEntityListFields[entity].grouping;
-  if (grouping.length === 0) return null;
+  const choices = generatedEntityListFields[entity].grouping;
+  if (choices.length === 0) return null;
   const timeline = view === "timeline";
-  const groupBy = timeline ? undefined : listGroupBy(search);
-  const activeGroup = grouping.find(
-    (choice) => choice.key === groupBy && choice.reason === null,
-  );
-  const groupChoices = [
-    { key: undefined, label: "None", reason: null },
-    ...grouping,
-  ].map((choice) => ({
-    ...choice,
-    reason: timeline && choice.key ? TIMELINE_GROUP_REASON : choice.reason,
-  }));
-  // Levels sit beside Group by on lists whose choices can nest; a choice
-  // that cannot keeps the section, disabled, with the declaration's reason.
-  const leveled = grouping.some(({ levels }) => levels > 0);
-  const requestedLevel = listGroupLevel(search);
-  const activeLevel =
-    activeGroup && requestedLevel && requestedLevel <= activeGroup.levels
-      ? requestedLevel
-      : undefined;
-  const levelReason = timeline
-    ? TIMELINE_GROUP_REASON
-    : activeGroup === undefined
-      ? NO_GROUP_LEVEL_REASON
-      : activeGroup.levelReason;
-  const levelChoices: { level: number | undefined; label: string }[] =
-    activeGroup && levelReason === null
-      ? [
-          {
-            level: undefined,
-            label: `Exact ${activeGroup.label.toLowerCase()}`,
-          },
-          ...Array.from({ length: activeGroup.levels }, (_, index) => ({
-            level: index + 1,
-            label: groupLevelLabel(index + 1),
-          })),
-        ]
-      : [];
-  const groupSummary = activeGroup
-    ? `${activeGroup.label}${activeLevel ? `, ${groupLevelLabel(activeLevel).toLowerCase()}` : ""}`
-    : undefined;
+  const dimensions = timeline ? [] : (listGroupBy(search) ?? []);
+  const apply = (next: ListGroupBy[]) =>
+    navigate({ groupBy: next.length ? next : undefined });
+  const update = (index: number, next: ListGroupBy) =>
+    apply(
+      dimensions.map((item, position) => (position === index ? next : item)),
+    );
+  const move = (index: number, delta: number) => {
+    const next = [...dimensions];
+    const from = next[index];
+    const to = next[index + delta];
+    if (!from || !to) return;
+    next[index] = to;
+    next[index + delta] = from;
+    apply(next);
+  };
+  const summary = dimensions
+    .map((dimension) => {
+      const choice = choices.find(({ key }) => key === dimension.key);
+      return `${choice?.label ?? dimension.key}${dimension.bucket ? ` / ${dimension.bucket}` : dimension.level ? ` / ${groupLevelLabel(dimension.level)}` : ""}`;
+    })
+    .join(" → ");
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
@@ -239,75 +223,145 @@ function ListGroupMenu({ entity }: { entity: BrowserRoutedEntity }) {
           <Button
             variant="outline"
             size="sm"
-            className="h-7.5 text-sm"
-            aria-label={
-              groupSummary ? `Grouped by ${groupSummary}` : "Group by"
-            }
+            className="h-7.5 max-w-80 text-sm"
+            aria-label={summary ? `Grouped by ${summary}` : "Group by"}
           />
         }
       >
-        <RowsIcon className="size-3.5" />
-        {groupSummary ?? "Group"}
+        <RowsIcon className="size-3.5 shrink-0" />
+        <span className="truncate">{summary || "Group"}</span>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="min-w-52">
+      <DropdownMenuContent
+        align="end"
+        className="max-h-96 min-w-56 overflow-y-auto"
+      >
         <DropdownMenuGroup aria-label="Group by">
-          <DropdownMenuLabel>Group by</DropdownMenuLabel>
-          {groupChoices.map((choice) => {
-            const current = choice.key === activeGroup?.key;
+          <DropdownMenuLabel>Group by · up to 3 fields</DropdownMenuLabel>
+          <DropdownMenuItem
+            aria-label="Group by None"
+            onClick={() => apply([])}
+          >
+            None
+            {dimensions.length === 0 && (
+              <CheckIcon className="ml-auto size-3.5" />
+            )}
+          </DropdownMenuItem>
+          {choices.map((choice) => {
+            const index = dimensions.findIndex(({ key }) => key === choice.key);
+            const reason = timeline ? TIMELINE_GROUP_REASON : choice.reason;
             return (
               <DropdownMenuItem
-                key={choice.key ?? "none"}
-                disabled={choice.reason !== null}
+                key={choice.key}
                 aria-label={`Group by ${choice.label}`}
-                aria-current={current ? "true" : undefined}
+                disabled={
+                  reason !== null || (index < 0 && dimensions.length === 3)
+                }
+                aria-current={index >= 0 ? "true" : undefined}
                 onClick={() =>
-                  navigate({ groupBy: choice.key, groupLevel: undefined })
+                  apply(
+                    index >= 0
+                      ? dimensions.filter((_, position) => position !== index)
+                      : [
+                          ...dimensions,
+                          {
+                            key: choice.key,
+                            ...(choice.buckets.length
+                              ? { bucket: "month" }
+                              : {}),
+                          },
+                        ],
+                  )
                 }
               >
                 <span className="flex min-w-0 flex-col">
                   <span>{choice.label}</span>
-                  {choice.reason && (
+                  {reason && (
                     <span className="max-w-64 text-xs whitespace-normal text-muted-foreground">
-                      {choice.reason}
+                      {reason}
                     </span>
                   )}
                 </span>
-                {current && <CheckIcon className="ml-auto size-3.5" />}
+                {index >= 0 && (
+                  <span className="ml-auto text-xs text-muted-foreground">
+                    {index + 1}
+                    <CheckIcon className="ml-1 inline size-3.5" />
+                  </span>
+                )}
               </DropdownMenuItem>
             );
           })}
         </DropdownMenuGroup>
-        {leveled && <DropdownMenuSeparator />}
-        {leveled && (
-          <DropdownMenuGroup aria-label="Group level">
-            <DropdownMenuLabel>Level</DropdownMenuLabel>
-            {levelReason !== null ? (
-              <DropdownMenuItem disabled aria-label="Group by level">
-                <span className="flex min-w-0 flex-col">
-                  <span>By level</span>
-                  <span className="max-w-64 text-xs whitespace-normal text-muted-foreground">
-                    {levelReason}
-                  </span>
-                </span>
-              </DropdownMenuItem>
-            ) : (
-              levelChoices.map((choice) => {
-                const current = choice.level === activeLevel;
-                return (
+        {dimensions.length > 0 && <DropdownMenuSeparator />}
+        {dimensions.map((dimension, index) => {
+          const choice = choices.find(({ key }) => key === dimension.key);
+          if (!choice) return null;
+          return (
+            <DropdownMenuSubmenu key={dimension.key}>
+              <DropdownMenuSubmenuTrigger>
+                {index + 1}. {choice.label}
+              </DropdownMenuSubmenuTrigger>
+              <DropdownMenuSubmenuContent>
+                <DropdownMenuItem
+                  disabled={index === 0}
+                  onClick={() => move(index, -1)}
+                >
+                  Move up
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  disabled={index === dimensions.length - 1}
+                  onClick={() => move(index, 1)}
+                >
+                  Move down
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() =>
+                    apply(
+                      dimensions.filter((_, position) => position !== index),
+                    )
+                  }
+                >
+                  Remove grouping
+                </DropdownMenuItem>
+                {choice.levels > 0 && <DropdownMenuSeparator />}
+                {choice.levels > 0 && (
                   <DropdownMenuItem
-                    key={choice.level ?? "exact"}
-                    aria-label={`Group at ${choice.label}`}
-                    aria-current={current ? "true" : undefined}
-                    onClick={() => navigate({ groupLevel: choice.level })}
+                    onClick={() => update(index, { key: dimension.key })}
                   >
-                    {choice.label}
-                    {current && <CheckIcon className="ml-auto size-3.5" />}
+                    Exact {choice.label.toLowerCase()}
                   </DropdownMenuItem>
-                );
-              })
-            )}
-          </DropdownMenuGroup>
-        )}
+                )}
+                {Array.from({ length: choice.levels }, (_, level) => (
+                  <DropdownMenuItem
+                    key={level}
+                    aria-label={`Group ${choice.label} at ${groupLevelLabel(level + 1)}`}
+                    onClick={() =>
+                      update(index, { key: dimension.key, level: level + 1 })
+                    }
+                  >
+                    {groupLevelLabel(level + 1)}
+                    {dimension.level === level + 1 && (
+                      <CheckIcon className="ml-auto size-3.5" />
+                    )}
+                  </DropdownMenuItem>
+                ))}
+                {choice.buckets.length > 0 && <DropdownMenuSeparator />}
+                {choice.buckets.map((bucket) => (
+                  <DropdownMenuItem
+                    key={bucket}
+                    onClick={() =>
+                      update(index, { key: dimension.key, bucket })
+                    }
+                  >
+                    By {bucket}
+                    {dimension.bucket === bucket && (
+                      <CheckIcon className="ml-auto size-3.5" />
+                    )}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuSubmenuContent>
+            </DropdownMenuSubmenu>
+          );
+        })}
       </DropdownMenuContent>
     </DropdownMenu>
   );

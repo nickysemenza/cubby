@@ -1,4 +1,9 @@
-import type { ListGroupSummary, ListNesting } from "@cubby/schemas/pagination";
+import type {
+  ListGroupBy,
+  ListGroupMembership,
+  ListGroupSummary,
+  ListNesting,
+} from "@cubby/schemas/pagination";
 import type { QueryKey, QueryMeta } from "@tanstack/react-query";
 import { useMemo } from "react";
 
@@ -24,6 +29,8 @@ export interface ListQueryResponse<TData> {
     pageSize: number;
     totalCount: number;
     groups?: ListGroupSummary[];
+    memberships?: ListGroupMembership[];
+    membershipCount?: number;
   };
 }
 
@@ -63,9 +70,7 @@ export type ListQueryOptionsFn<
   sort?: Array<{ orderBy: string; direction: "asc" | "desc" }>;
   pagination: { pageIndex: number; pageSize: number };
   filters: TFilters;
-  groupBy?: string;
-  /** The hierarchy level (1 = top) `groupBy` groups at. */
-  groupLevel?: number;
+  groupBy?: ListGroupBy[];
   /** A declared tree's scope; omitted reads the flat list. */
   nesting?: ListNesting;
 }) => ListQueryPlan<TData, TPage>;
@@ -78,8 +83,7 @@ interface UsePaginatedTableCoreOptions<
   queryOptions: ListQueryOptionsFn<TFilters, TData, TPage>;
   buildFilters: (tableState: TableStateReturn) => TFilters;
   tableState: TableStateReturn;
-  groupBy?: string;
-  groupLevel?: number;
+  groupBy?: ListGroupBy[];
 }
 
 export function usePaginatedTableCore<
@@ -91,7 +95,6 @@ export function usePaginatedTableCore<
   buildFilters,
   tableState,
   groupBy,
-  groupLevel,
 }: UsePaginatedTableCoreOptions<TFilters, TData, TPage>) {
   const filters = useMemo(
     () => buildFilters(tableState),
@@ -111,14 +114,12 @@ export function usePaginatedTableCore<
     };
     if (!searching || tableState.hasExplicitSort) params.sort = sortParams;
     if (groupBy) params.groupBy = groupBy;
-    if (groupBy && groupLevel) params.groupLevel = groupLevel;
     return params;
   }, [
     sortParams,
     pagination,
     filters,
     groupBy,
-    groupLevel,
     searching,
     tableState.hasExplicitSort,
   ]);

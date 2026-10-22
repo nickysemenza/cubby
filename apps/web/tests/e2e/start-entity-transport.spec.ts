@@ -109,8 +109,15 @@ test("core entity list, detail, and mutation ride named browser operations", asy
   // curtain fires no event while still reporting success (see `editListCell`).
   await expect(async () => {
     await page.getByRole("link", { name, exact: true }).first().click();
-    await expect(page).toHaveURL(/\/products\/PRD-/u, { timeout: 5000 });
+    await expect(
+      page.getByRole("complementary", { name: "Product inspector" }),
+    ).toBeVisible({ timeout: 5000 });
   }).toPass({ timeout: 30000 });
+  await page
+    .getByRole("complementary", { name: "Product inspector" })
+    .getByRole("button", { name: "Open full product details" })
+    .click();
+  await expect(page).toHaveURL(/\/products\/PRD-/u);
   await expect(page.getByRole("heading", { level: 1, name })).toBeVisible();
 
   const matching = (operation: string, fragment: string) =>

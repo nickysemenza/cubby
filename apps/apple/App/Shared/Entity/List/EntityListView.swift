@@ -190,8 +190,7 @@ struct EntityListView: View {
                     sort: initialSavedView?.sortParameter,
                     filters: descriptor.openingFilters(savedView: initialSavedView, explicit: initialFilters),
                     view: initialSavedView?.listView(in: descriptor) ?? renderableViews.first ?? .table,
-                    groupBy: initialSavedView?.groupBy,
-                    groupLevel: initialSavedView?.groupLevel)
+                    groupDimensions: initialSavedView?.groupBy)
             }
             await model?.loadInitial()
         }
@@ -473,10 +472,14 @@ struct EntityListView: View {
         { section in
             guard let choice = model.groupChoice else { return .init() }
             var actions = EntityListSectionHeader.Actions()
-            if descriptor.filtering(model.filters, to: section, of: choice) != nil {
+            if model.groupDimensions.count == 1
+                && descriptor.filtering(model.filters, to: section, of: choice) != nil
+            {
                 actions.filter = { Task { await model.filter(to: section) } }
             }
-            if descriptor.hiding(model.filters, section: section, of: choice) != nil {
+            if model.groupDimensions.count == 1
+                && descriptor.hiding(model.filters, section: section, of: choice) != nil
+            {
                 actions.hide = { Task { await model.hide(section) } }
             }
             return actions

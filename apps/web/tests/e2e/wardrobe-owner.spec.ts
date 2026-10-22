@@ -85,9 +85,11 @@ test("home pins open the viewer's wardrobe as a generic saved view", async ({
   expect(href.searchParams.get("owner")).toBe("@me");
   expect(href.searchParams.get("categoryFeature")).toBe("apparel");
   expect(href.searchParams.get("view")).toBe("shelf");
-  expect(href.searchParams.get("groupBy")).toBe("category");
+  expect(JSON.parse(href.searchParams.get("groupBy") ?? "null")).toEqual([
+    { key: "category", level: 2 },
+  ]);
   // Apparel is the taxonomy root, so clothing types are its second level.
-  expect(href.searchParams.get("groupLevel")).toBe("2");
+  expect(href.searchParams.has("groupLevel")).toBe(false);
 });
 
 test("wardrobe cards section by clothing type and a header filters to one type", async ({
@@ -117,7 +119,7 @@ test("wardrobe cards section by clothing type and a header filters to one type",
   const tops = sections.filter({ hasText: `${name} Tops` });
   await gotoAuthenticatedPage(
     page,
-    `${wardrobeUrl(owner.id)}&groupBy=category`,
+    `${wardrobeUrl(owner.id)}&groupBy=${encodeURIComponent(JSON.stringify([{ key: "category" }]))}`,
     tops,
   );
   // Related-record sections follow their labels; the seed shirt sits in the
@@ -133,7 +135,9 @@ test("wardrobe cards section by clothing type and a header filters to one type",
   await expect(
     tops.getByRole("link", { name: new RegExp(`^${name} Tops item`) }),
   ).toBeVisible();
-  expect(new URL(page.url()).searchParams.get("groupBy")).toBe("category");
+  expect(
+    JSON.parse(new URL(page.url()).searchParams.get("groupBy") ?? "null"),
+  ).toEqual([{ key: "category" }]);
 });
 
 test("wardrobe cards group at a category level and a header filters to that type with its sub-types", async ({
@@ -170,7 +174,7 @@ test("wardrobe cards group at a category level and a header filters to that type
   const topsSection = sections.filter({ hasText: `${name} Tops` });
   await gotoAuthenticatedPage(
     page,
-    `${wardrobeUrl(owner.id)}&groupBy=category&groupLevel=2`,
+    `${wardrobeUrl(owner.id)}&groupBy=${encodeURIComponent(JSON.stringify([{ key: "category", level: 2 }]))}`,
     topsSection,
   );
   // The tee groups under its level-2 ancestor; the seed shirt sits in the
@@ -186,7 +190,9 @@ test("wardrobe cards group at a category level and a header filters to that type
     topsSection.getByRole("link", { name: new RegExp(`^${name} Tee item`) }),
   ).toBeVisible();
   const url = new URL(page.url());
-  expect(url.searchParams.get("groupLevel")).toBe("2");
+  expect(JSON.parse(url.searchParams.get("groupBy") ?? "null")).toEqual([
+    { key: "category", level: 2 },
+  ]);
 });
 
 // Without the apparel family scope, so an uncategorized owned item shows.
@@ -226,7 +232,7 @@ test("wardrobe cards exclude a clothing type, keep uncategorized items, and a he
   const tops = sections.filter({ hasText: `${name} Tops` });
   await gotoAuthenticatedPage(
     page,
-    `/inventory?owner=${owner.id}&view=shelf&groupBy=category`,
+    `/inventory?owner=${owner.id}&view=shelf&groupBy=${encodeURIComponent(JSON.stringify([{ key: "category" }]))}`,
     tops,
   );
   await expect(sections.filter({ hasText: `${name} Outerwear` })).toHaveCount(
@@ -258,11 +264,11 @@ test("wardrobe cards exclude a clothing type, keep uncategorized items, and a he
   await expect(sections).toHaveText([
     /^Apparel/,
     new RegExp(`^${name} Tops`),
-    /^No category/,
+    /^Unassigned/,
   ]);
   await expect(
     sections
-      .filter({ hasText: /^No category/ })
+      .filter({ hasText: /^Unassigned/ })
       .getByRole("link", { name: new RegExp(`^${name} uncategorized item`) }),
   ).toBeVisible();
   expect(new URL(page.url()).searchParams.get("categoryExclude")).toBeTruthy();
@@ -270,9 +276,11 @@ test("wardrobe cards exclude a clothing type, keep uncategorized items, and a he
   // Hide keeps the grouping and excludes that section's value too.
   await tops.hover();
   await tops.getByRole("button", { name: /^Hide/ }).click();
-  await expect(sections).toHaveText([/^Apparel/, /^No category/]);
+  await expect(sections).toHaveText([/^Apparel/, /^Unassigned/]);
   const url = new URL(page.url());
-  expect(url.searchParams.get("groupBy")).toBe("category");
+  expect(JSON.parse(url.searchParams.get("groupBy") ?? "null")).toEqual([
+    { key: "category" },
+  ]);
   expect(url.searchParams.get("categoryExclude")?.split(",")).toHaveLength(2);
 });
 
@@ -305,7 +313,7 @@ test("mobile list section headers stay pinned while their section scrolls", asyn
     .filter({ hasText: `${name} Tops` });
   await gotoAuthenticatedPage(
     page,
-    `/inventory?owner=${owner.id}&categoryFeature=apparel&groupBy=category`,
+    `/inventory?owner=${owner.id}&categoryFeature=apparel&groupBy=${encodeURIComponent(JSON.stringify([{ key: "category" }]))}`,
     header,
   );
   const top = async () => (await header.boundingBox())?.y ?? -1;

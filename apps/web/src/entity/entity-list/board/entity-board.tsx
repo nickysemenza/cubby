@@ -4,7 +4,7 @@ import { generatedEntityListFields } from "@cubby/schemas/entity-list-fields";
 import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
 import { entitySummary } from "@cubby/schemas/entity-summary";
 import { FILTER_NONE } from "@cubby/schemas/filter-sentinel-fields";
-import type { ListGroupSummary } from "@cubby/schemas/pagination";
+import type { ListGroupBy } from "@cubby/schemas/pagination";
 import {
   DndContext,
   rectIntersection,
@@ -49,6 +49,7 @@ import { ListLoadingSkeleton } from "~/ui/feedback/loading-skeletons";
 import { useHydratedLoading } from "~/ui/hooks/use-hydrated";
 import { Button } from "~/ui/primitives/button";
 
+import { listGroupBy } from "../list-grouping";
 import type { ListSlotProps } from "../list-slot-types";
 import {
   boardGroups,
@@ -57,6 +58,7 @@ import {
   boardDropBefore,
   type BoardFilters,
   type BoardRow,
+  type BoardGroup,
 } from "./board-plan";
 
 type BoardEntity = ListEntity & BrowserRoutedEntity;
@@ -67,7 +69,7 @@ function boardQuery(
   input: {
     filters: BoardFilters;
     pagination: { pageIndex: number; pageSize: number };
-    groupBy?: string;
+    groupBy?: ListGroupBy[];
     sort?: { orderBy: string; direction: "asc" | "desc" }[];
   },
 ) {
@@ -94,7 +96,7 @@ export function EntityBoard({
     [entity, view],
   );
   const choice =
-    choices.find((choice) => choice.key === search.groupBy) ??
+    choices.find((choice) => choice.key === listGroupBy(search)?.[0]?.key) ??
     choices.find((choice) => choice.key === view.groupBy);
   if (!choice?.filter)
     throw new Error(
@@ -151,7 +153,7 @@ export function EntityBoard({
   const queryInput = {
     filters,
     pagination: { pageIndex: 0, pageSize: 1 },
-    groupBy: choice.key,
+    groupBy: [{ key: choice.key }],
   };
   const query = useQuery(boardQuery(entity, queryInput));
   const loading = useHydratedLoading(query.isLoading);
@@ -256,7 +258,7 @@ export function EntityBoard({
           value={choice.key}
           onValueChange={(groupBy) => {
             setGroupPage(0);
-            navigate({ groupBy });
+            navigate({ groupBy: groupBy ? [{ key: groupBy }] : undefined });
           }}
         />
       </div>
@@ -352,12 +354,12 @@ function BoardGroup({
 }: {
   entity: BoardEntity;
   view: EntityBoardListView;
-  group: ListGroupSummary;
+  group: BoardGroup;
   filters: BoardFilters;
   groupBy: string;
   filterField: string;
   filterColumn: string;
-  groups: ListGroupSummary[];
+  groups: BoardGroup[];
   move: (id: string, destination: Destination) => void;
   moveToGroup: (id: string, key: string) => Promise<void>;
   pending: boolean;

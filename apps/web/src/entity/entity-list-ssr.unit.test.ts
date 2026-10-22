@@ -1,7 +1,11 @@
 import { QueryClient } from "@tanstack/react-query";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { compileEntityListInput, entityListFor } from "~/entity/entity-list";
+import {
+  compileEntityListInput,
+  entityListFor,
+  entityListBaseFor,
+} from "~/entity/entity-list";
 import { infiniteOperationQueryKey } from "~/integrations/tanstack-query/operation-catalog";
 
 import {
@@ -86,12 +90,34 @@ describe("ensureEntityListSsr", () => {
     expect(input.sort).toEqual([{ orderBy: "startDate", direction: "desc" }]);
   });
 
-  it("shares the operation infinite key between SSR and the mounted list", () => {
-    const input = compileEntityListInput("product", {});
+  it("shares the operation infinite key and suspends retained grouping in Timeline", async () => {
+    const groupBy = [
+      { key: "tags" },
+      { key: "createdAt", bucket: "month" },
+    ] as const;
+    const input = compileEntityListInput("product", { groupBy: [...groupBy] });
+    expect(input.groupBy).toEqual(groupBy);
     const finite = entityListFor("product").queryOptions(input);
     const ssr = entityListFor("product").infiniteQueryOptions(input);
 
     expect(ssr.queryKey).toEqual(infiniteOperationQueryKey(finite.queryKey));
+    const queryClient = new QueryClient();
+    const ensure = vi
+      .spyOn(queryClient, "ensureInfiniteQueryData")
+      .mockResolvedValue({ pages: [], pageParams: [] });
+    await ensureEntityListSsr({
+      queryClient,
+      entity: "task",
+      search: { view: "timeline", groupBy: [{ key: "status" }] },
+    });
+    const ungrouped = entityListBaseFor("task").infiniteQueryOptions(
+      compileEntityListInput(
+        "task",
+        {},
+        { defaultSort: entityListDefaultSort("task") },
+      ),
+    );
+    expect(ensure.mock.calls[0]?.[0].queryKey).toEqual(ungrouped.queryKey);
   });
 
   it("allows incomplete filters while a conditional finite query is disabled", () => {

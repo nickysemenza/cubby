@@ -247,6 +247,7 @@ export default defineEntity({
         ],
         quality: ["dataQuality"],
       },
+      metrics: ["cost"],
       totals: [
         {
           id: "cost",

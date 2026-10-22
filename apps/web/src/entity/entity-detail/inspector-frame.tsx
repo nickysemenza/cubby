@@ -1,5 +1,7 @@
 import type { Entity } from "@cubby/schemas/entity";
 import { ArrowSquareOutIcon } from "@phosphor-icons/react/dist/csr/ArrowSquareOut";
+import { CaretDownIcon } from "@phosphor-icons/react/dist/csr/CaretDown";
+import { CaretUpIcon } from "@phosphor-icons/react/dist/csr/CaretUp";
 import { Link } from "@tanstack/react-router";
 import { useId, useEffect, useState, type ReactNode } from "react";
 
@@ -46,6 +48,45 @@ function OpenEntityLink({ entity, id }: { entity: Entity; id: string }) {
   );
 }
 
+/** Pointer twins of J/K, named for the entity so they never collide with a
+ * host's own record stepper on the same page. */
+function RecordStepButtons({
+  noun,
+  onPrev,
+  onNext,
+}: {
+  noun: string;
+  onPrev: () => void;
+  onNext: () => void;
+}) {
+  return (
+    <>
+      <Button
+        variant="ghost"
+        size="icon-xs"
+        mobileSize="compact"
+        aria-label={`Previous ${noun}`}
+        aria-keyshortcuts="K"
+        title="Previous (K)"
+        onClick={onPrev}
+      >
+        <CaretUpIcon />
+      </Button>
+      <Button
+        variant="ghost"
+        size="icon-xs"
+        mobileSize="compact"
+        aria-label={`Next ${noun}`}
+        aria-keyshortcuts="J"
+        title="Next (J)"
+        onClick={onNext}
+      >
+        <CaretDownIcon />
+      </Button>
+    </>
+  );
+}
+
 /** Shared chrome for every responsive canonical-row inspector. */
 export function EntityInspectorFrame({
   entity,
@@ -79,6 +120,8 @@ export function EntityInspectorFrame({
 }) {
   const step = useTableRowStep();
   const label = entityLabel(entity);
+  const prev = onPrev ?? (() => void step(-1));
+  const next = onNext ?? (() => void step(1));
   const hasRelations = relations !== undefined;
   const hasActivity = activity !== undefined;
   const prefix = useId();
@@ -116,11 +159,20 @@ export function EntityInspectorFrame({
           </SidePanelIconTile>
         )
       }
-      actions={<OpenEntityLink entity={entity} id={id} />}
+      actions={
+        <>
+          <RecordStepButtons
+            noun={label.toLowerCase()}
+            onPrev={prev}
+            onNext={next}
+          />
+          <OpenEntityLink entity={entity} id={id} />
+        </>
+      }
       onClose={onClose}
       closeLabel="Close inspector"
-      onPrev={onPrev ?? (() => void step(-1))}
-      onNext={onNext ?? (() => void step(1))}
+      onPrev={prev}
+      onNext={next}
     >
       <div id={`${prefix}-overview`}>{overview}</div>
       {hasRelations ? (

@@ -300,6 +300,10 @@ export const manifestWire = {
   SavedViewSort: record({ id: "string", desc: "boolean" }),
   SavedViewFlow: record({ kind: "string", label: "string" }),
   SavedViewPin: record({ surface: "string", order: "integer" }),
+  ListGroupDimension: record(
+    { key: "string", level: "integer?", bucket: "string?" },
+    { defaults: { level: "nil", bucket: "nil" } },
+  ),
   SavedView: record(
     {
       id: "string",
@@ -311,8 +315,7 @@ export const manifestWire = {
       columnVisibility: "[string:boolean]",
       problemKey: "string~",
       view: "string~",
-      groupBy: "string~",
-      groupLevel: "integer~",
+      groupBy: "[ListGroupDimension]",
       pin: "SavedViewPin~",
     },
     { conformances: identifiable },

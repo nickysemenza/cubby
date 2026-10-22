@@ -656,7 +656,6 @@ const presentationJSON = (
       problemKey: view.problem?.key ?? null,
       view: view.view,
       groupBy: view.groupBy,
-      groupLevel: view.groupLevel,
       pin: view.pin === null ? null : { ...view.pin },
     })),
   };

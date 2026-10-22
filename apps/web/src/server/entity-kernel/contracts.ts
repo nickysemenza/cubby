@@ -13,6 +13,7 @@ import { mutationSideEffectsSchema } from "@cubby/schemas/mutation-side-effects"
 import { sortDirection } from "@cubby/schemas/pagination";
 import {
   DEFAULT_PAGE_SIZE,
+  listGroupByDimensionsSchema,
   listNestingSchema,
   MAX_PAGE_SIZE,
   MAX_SORTS,
@@ -92,15 +93,7 @@ const listFields = {
         .default(DEFAULT_PAGE_SIZE),
     })
     .optional(),
-  groupBy: z.string().min(1).optional(),
-  groupLevel: z
-    .number()
-    .int()
-    .positive()
-    .optional()
-    .describe(
-      "With groupBy on a field whose records nest (a category, a location): group each row under its ancestor at this level, 1 = top",
-    ),
+  groupBy: listGroupByDimensionsSchema.optional(),
   nesting: listNestingSchema
     .optional()
     .describe(
@@ -138,7 +131,6 @@ const mcpListCommandCases = generatedMcpEntityActionEntities.list.map(
       sort: listFields.sort,
       pagination: mcpListPagination,
       groupBy: listFields.groupBy,
-      groupLevel: listFields.groupLevel,
       nesting: listFields.nesting,
       ...mcpReadSelectionFields,
     });

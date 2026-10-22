@@ -1,6 +1,9 @@
+import { eq } from "drizzle-orm";
 import { countTestDbQueries, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import { getDb } from "~/server/db/helpers";
+import { location, ingredient } from "~/server/db/schema";
 import { findOrCreateIngredient } from "~/server/domains/ingredient/repo/crud";
 import {
   entityKernelContextSchema,
@@ -15,6 +18,8 @@ import {
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
 import { createTestRequestContext } from "~/server/testing/request-context";
+
+import { executeEntitySelectionIds } from "./selection-ids";
 
 /**
  * `filters.ids` restricts a kernel list to named rows. Failure modes: the
@@ -136,5 +141,121 @@ describe("kernel list restricted to ids", () => {
       expect(result.meta.totalCount).toBe(2);
       expect(result.meta.sums).toMatchObject({ valuation: 30 });
     }
+  });
+});
+
+// Identity enumeration must retain list scope and page until complete without
+// loading full records or silently imposing the former 3,000-row UI cap.
+describe("kernel selection identities", () => {
+  const ctx = withTestDb();
+  it("excludes inventory whose location is no longer in the list population", async () => {
+    const item = await createProductFixture(
+      ctx.db,
+      makeProductInput({ name: "Selection population product" }),
+      ctx.actor,
+    );
+    const shelf = await createLocationFixture(
+      ctx.db,
+      makeLocationInput({ name: "Selection population shelf", type: "shelf" }),
+      ctx.actor,
+    );
+    const entry = await createInventoryFixture(
+      ctx.db,
+      {
+        productId: item.id,
+        locationId: shelf.id,
+        amount: { value: 1, unit: "each" },
+      },
+      ctx.actor,
+    );
+    const context = entityKernelContextSchema.parse(
+      createTestRequestContext(ctx.db, { auth: { userId: ctx.actor.userId } }),
+    );
+    const request = {
+      entity: "inventory",
+      filters: { ids: [entry.id] },
+    } as const;
+    expect((await executeEntitySelectionIds(context, request)).ids).toEqual([
+      entry.id,
+    ]);
+    await getDb(ctx.db)
+      .update(location)
+      .set({ deletedAt: new Date() })
+      .where(eq(location.shortcode, shelf.id));
+    expect(await executeEntitySelectionIds(context, request)).toEqual({
+      ids: [],
+      totalCount: 0,
+      nextCursor: null,
+    });
+    const list = await executeEntity(context, {
+      action: "list",
+      entity: "inventory",
+      filters: { ids: [entry.id] },
+    });
+    if (list.action !== "list") throw new Error("expected list");
+    expect(list.items).toEqual([]);
+  });
+  it("returns canonical public IDs in bounded cursor pages with a full count", async () => {
+    const wanted = [];
+    for (const name of ["Select alpha", "Select beta", "Select gamma"])
+      wanted.push(await findOrCreateIngredient(ctx.db, name));
+    await findOrCreateIngredient(ctx.db, "Outside selection");
+    const context = entityKernelContextSchema.parse(
+      createTestRequestContext(ctx.db, { auth: { userId: ctx.actor.userId } }),
+    );
+    const ids: string[] = [];
+    let cursor: string | undefined;
+    do {
+      const page = await executeEntitySelectionIds(context, {
+        entity: "ingredient",
+        filters: { ids: wanted.map((row) => row.shortcode) },
+        limit: 2,
+        cursor,
+      });
+      expect(page.totalCount).toBe(3);
+      expect(page.ids.length).toBeLessThanOrEqual(2);
+      ids.push(...page.ids);
+      cursor = page.nextCursor ?? undefined;
+    } while (cursor !== undefined);
+    expect(ids.sort()).toEqual(wanted.map((row) => row.shortcode).sort());
+  });
+  it("refuses a same-count replacement of the canonical matching population", async () => {
+    const original = await findOrCreateIngredient(ctx.db, "Cursor scope alpha");
+    const retained = await findOrCreateIngredient(ctx.db, "Cursor scope beta");
+    const replacement = await findOrCreateIngredient(
+      ctx.db,
+      "Cursor scope gamma",
+    );
+    await getDb(ctx.db)
+      .update(ingredient)
+      .set({ usuallyOnHand: true })
+      .where(eq(ingredient.shortcode, replacement.shortcode));
+    const context = entityKernelContextSchema.parse(
+      createTestRequestContext(ctx.db, { auth: { userId: ctx.actor.userId } }),
+    );
+    const input = {
+      entity: "ingredient",
+      filters: {
+        ids: [original.shortcode, retained.shortcode, replacement.shortcode],
+        usuallyOnHand: false,
+      },
+      limit: 1,
+    } as const;
+    const first = await executeEntitySelectionIds(context, input);
+    if (first.nextCursor === null) throw new Error("expected cursor");
+    await getDb(ctx.db)
+      .update(ingredient)
+      .set({ usuallyOnHand: true })
+      .where(eq(ingredient.shortcode, original.shortcode));
+    await getDb(ctx.db)
+      .update(ingredient)
+      .set({ usuallyOnHand: false })
+      .where(eq(ingredient.shortcode, replacement.shortcode));
+    await expect(
+      executeEntitySelectionIds(context, {
+        ...input,
+        cursor: first.nextCursor,
+      }),
+    ).rejects.toThrow("selection population changed");
   });
 });

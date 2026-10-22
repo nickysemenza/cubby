@@ -38,6 +38,8 @@ export interface BulkActionBarProps<TData extends RowData> {
   };
   /** Stale placeholder rows are visible but must not be acted on. */
   disabled?: boolean;
+  /** Eligibility is checked against resolved records before any action runs. */
+  selectionIncomplete?: boolean;
 }
 
 /**
@@ -55,6 +57,7 @@ export function BulkActionBar<TData extends RowData>({
   currentAction,
   selectAllMatching,
   disabled = false,
+  selectionIncomplete = false,
 }: BulkActionBarProps<TData>) {
   if (selectedCount === 0) return null;
 
@@ -68,7 +71,9 @@ export function BulkActionBar<TData extends RowData>({
   const handleActionClick = (action: BulkAction<TData>) => {
     if (
       disabled ||
-      resolveBulkActionAvailability(action, selectedRows).status !== "available"
+      (!selectionIncomplete &&
+        resolveBulkActionAvailability(action, selectedRows).status !==
+          "available")
     ) {
       return;
     }
@@ -77,7 +82,9 @@ export function BulkActionBar<TData extends RowData>({
   const orderedActions = actions
     .map((action) => ({
       action,
-      availability: resolveBulkActionAvailability(action, selectedRows),
+      availability: selectionIncomplete
+        ? { status: "available" as const }
+        : resolveBulkActionAvailability(action, selectedRows),
     }))
     .filter(({ availability }) => availability.status !== "hidden")
     .sort(
@@ -94,6 +101,11 @@ export function BulkActionBar<TData extends RowData>({
       gap="md"
       wrap
       aria-label="Selected rows"
+      aria-description={
+        selectionIncomplete
+          ? "Some selected records are unloaded. Actions load their required data and check the complete selection before running."
+          : undefined
+      }
       className="fixed bottom-[calc(var(--app-chrome-bottom,0px)+1rem)] left-1/2 z-50 max-w-[calc(100vw-2rem)] -translate-x-1/2 [scrollbar-width:none] flex-nowrap overflow-x-auto overscroll-x-contain rounded-lg bg-foreground py-1.5 pr-2 pl-3 text-background [&::-webkit-scrollbar]:hidden"
     >
       <span className="shrink-0 text-sm tabular-nums">

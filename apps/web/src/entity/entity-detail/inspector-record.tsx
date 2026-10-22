@@ -1,4 +1,7 @@
-import { entityFieldModels } from "@cubby/schemas/entity-fields";
+import {
+  entityFieldModels,
+  type EntityFieldModel,
+} from "@cubby/schemas/entity-fields";
 import { entitySummary } from "@cubby/schemas/entity-summary";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
@@ -6,6 +9,7 @@ import { useEffect, useState } from "react";
 import { z } from "zod";
 
 import type { EntityActionRow } from "~/entity/actions/entity-actions";
+import { detailFieldRenderersFor } from "~/entity/display/detail-field-renderers";
 import { detailEditRequest } from "~/entity/editing/editor-requests";
 import {
   EntityEditDialog,
@@ -20,6 +24,7 @@ import {
 import { isGeneratedBrowserCrudEntity } from "~/entity/entity-contracts";
 import { entityDetailFor } from "~/entity/entity-detail";
 import { PreviewQuery } from "~/entity/preview/preview-query";
+import { readPathValue } from "~/entity/read-path";
 import { RecordSuggestionsProvider } from "~/entity/suggestions/record-suggestions";
 import { RecordWorkQueue } from "~/entity/work-queue/record-work-queue";
 import { FactsAddProvider, FactsDensityProvider } from "~/ui/common/facts";
@@ -32,10 +37,16 @@ import { detailHeroStats } from "./detail-hero-stats";
 import type { DetailRecordOf, GenericDetailEntity } from "./detail-record";
 import { EntityRecordFields } from "./entity-record-fields";
 import {
+  fieldQualityChecks,
   QualitySectionChecks,
+  type RecordQualityCheck,
   RecordQualityProvider,
+  useFieldQuality,
   useQualityCheckSections,
 } from "./record-quality";
+
+type DisplayField = EntityFieldModel["fields"][number];
+type FieldSection = { id: string; title: string; fields: readonly string[] };
 
 function presentationEditable(
   entity: GenericDetailEntity,
@@ -46,6 +57,84 @@ function presentationEditable(
     actions.includes("edit") &&
     (hasOverride || isGeneratedBrowserCrudEntity(entity))
   );
+}
+
+const isBlank = (value: unknown) =>
+  value === null ||
+  value === undefined ||
+  value === "" ||
+  (Array.isArray(value) && value.length === 0);
+
+/**
+ * Whether a declared field section would render nothing but dashes: every
+ * field's stored value is blank, none can be added or edited in place, no
+ * domain renderer owns one, and no check is placed on the section or its
+ * fields. Undeclared or renderer-only fields count as content.
+ */
+function isEmptyFieldSection<E extends GenericDetailEntity>(
+  entity: E,
+  record: DetailRecordOf<E>,
+  section: FieldSection,
+  {
+    editable,
+    checkSections,
+    checks,
+  }: {
+    editable: boolean;
+    checkSections: readonly string[];
+    checks: readonly RecordQualityCheck[];
+  },
+) {
+  if (checkSections.includes(section.id)) return false;
+  const model: EntityFieldModel = entityFieldModels[entity];
+  const updateRoster: readonly string[] = model.update;
+  const crud = isGeneratedBrowserCrudEntity(entity);
+  const renderers = detailFieldRenderersFor(entity) ?? {};
+  const fields: readonly DisplayField[] = model.fields;
+  return section.fields.every((key) => {
+    const field = fields.find((candidate) => candidate.key === key);
+    if (!field || key in renderers) return false;
+    if (fieldQualityChecks(checks, key).length > 0) return false;
+    if (field.control && (editable || (crud && updateRoster.includes(key))))
+      return false;
+    const path = field.display.readPath ?? field.readKey;
+    return path !== null && isBlank(readPathValue(record, path));
+  });
+}
+
+/** The declared field sections with content, each under a hairline. */
+function InspectorFieldSections<E extends GenericDetailEntity>({
+  entity,
+  record,
+  sections,
+  editable,
+}: {
+  entity: E;
+  record: DetailRecordOf<E>;
+  sections: readonly FieldSection[];
+  editable: boolean;
+}) {
+  const checkSections = useQualityCheckSections();
+  const checks = useFieldQuality(entity, record.id)?.checks ?? [];
+  return sections
+    .filter(
+      (section) =>
+        !isEmptyFieldSection(entity, record, section, {
+          editable,
+          checkSections,
+          checks,
+        }),
+    )
+    .map((section) => (
+      <Section key={section.id} headingAs="h3" compact title={section.title}>
+        <QualitySectionChecks section={section.id} />
+        <EntityRecordFields
+          entity={entity}
+          record={record}
+          fields={section.fields}
+        />
+      </Section>
+    ));
 }
 
 /** Sections only the record's evaluated checks bring into the inspector. */
@@ -127,13 +216,26 @@ function ResolvedInspectorRecord<E extends GenericDetailEntity>({
     .map((field) => field.key);
   return (
     <>
-      <KeyNumbers
-        layout="inline"
-        label="Key numbers"
-        items={detailHeroStats(entity, record)}
-        className="mb-3"
-        data-testid="inspector-key-numbers"
-      />
+      {/* Identity facts and the record's one edit verb share the first row. */}
+      <div className="mb-3 flex min-w-0 items-start gap-2 empty:hidden">
+        <KeyNumbers
+          layout="inline"
+          label="Key numbers"
+          items={detailHeroStats(entity, record)}
+          className="flex-1"
+          data-testid="inspector-key-numbers"
+        />
+        {editable ? (
+          <Button
+            variant="outline"
+            size="xs"
+            className="ms-auto shrink-0"
+            onClick={() => setEditing(true)}
+          >
+            Edit record
+          </Button>
+        ) : null}
+      </div>
       <RecordSuggestionsProvider
         entity={entity}
         records={[record]}
@@ -147,33 +249,17 @@ function ResolvedInspectorRecord<E extends GenericDetailEntity>({
           <FactsDensityProvider density="compact">
             <FactsAddProvider onAdd={editable ? () => setEditing(true) : null}>
               <Stack gap="md">
-                {editable ? (
-                  <div>
-                    <Button
-                      variant="outline"
-                      size="xs"
-                      onClick={() => setEditing(true)}
-                    >
-                      Edit record
-                    </Button>
-                  </div>
-                ) : null}
-                <RecordWorkQueue id={record.id} />
-                {fieldSections.map((section) => (
-                  <Section
-                    key={section.id}
-                    headingAs="h3"
-                    compact
-                    title={section.title}
-                  >
-                    <QualitySectionChecks section={section.id} />
-                    <EntityRecordFields
-                      entity={entity}
-                      record={record}
-                      fields={section.fields}
-                    />
-                  </Section>
-                ))}
+                {/* Work rows are not all warnings: the citron rule is the
+                    sparse needs-input signal, absent with no work. */}
+                <div className="border-s border-signal ps-3 empty:hidden">
+                  <RecordWorkQueue id={record.id} />
+                </div>
+                <InspectorFieldSections
+                  entity={entity}
+                  record={record}
+                  sections={fieldSections}
+                  editable={editable}
+                />
                 <InspectorCheckSections
                   entity={entity}
                   id={record.id}

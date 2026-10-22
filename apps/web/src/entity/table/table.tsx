@@ -1275,6 +1275,9 @@ function RTableInner<TItem extends RowData>(props: RTableProps<TItem>) {
               <SectionHeader
                 title={item.title}
                 count={item.count}
+                depth={item.depth}
+                collapsed={item.collapsed}
+                onToggle={item.onToggle}
                 onFilter={item.onFilter}
                 onHide={item.onHide}
                 aside={item.aside}
@@ -1288,7 +1291,7 @@ function RTableInner<TItem extends RowData>(props: RTableProps<TItem>) {
         const detailRow = rows[item.rowIndex]!;
         return (
           <TableRow
-            key={`detail-${detailRow.id}`}
+            key={`detail-${item.occurrenceKey ?? detailRow.id}`}
             ref={measureElement}
             data-index={virtualRow.index}
             className="border-b border-border bg-muted/40 hover:bg-muted/40"
@@ -1316,7 +1319,7 @@ function RTableInner<TItem extends RowData>(props: RTableProps<TItem>) {
       if (treeStatus)
         return (
           <TableRow
-            key={row.id}
+            key={item.occurrenceKey ?? row.id}
             className="border-b border-border"
             style={{ height: `${virtualRow.size}px` }}
           >
@@ -1331,7 +1334,7 @@ function RTableInner<TItem extends RowData>(props: RTableProps<TItem>) {
         );
       return (
         <VirtualSelectionRow
-          key={row.id}
+          key={item.occurrenceKey ?? row.id}
           table={table}
           rows={rows}
           row={row}

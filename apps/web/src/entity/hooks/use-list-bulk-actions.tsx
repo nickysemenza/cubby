@@ -1,5 +1,6 @@
 import type { Entity } from "@cubby/schemas/entity";
-import { useMemo, useRef } from "react";
+import { useMemo, useRef, useState } from "react";
+import { toast } from "sonner";
 
 import { type EntityActionDefinition } from "~/entity/actions/entity-action-definition";
 import { useRedundantOverrideBulkAction } from "~/entity/fields/field-resolution";
@@ -8,6 +9,7 @@ import type {
   BulkAction,
   BulkActionsConfig,
 } from "~/ui/data-table/bulk-actions.types";
+import { resolveBulkActionAvailability } from "~/ui/data-table/bulk-actions.types";
 import {
   BulkActionBar,
   type BulkActionBarProps,
@@ -21,6 +23,7 @@ import {
   type UseBulkActionsReturn,
   useBulkActions,
 } from "~/ui/data-table/use-bulk-actions";
+import { showErrorToast } from "~/ui/feedback/error-details";
 
 import { verbBulkAction } from "../actions/action-verb-ui";
 import {
@@ -174,31 +177,82 @@ export function ListBulkActionBar<TData extends { id: string }>({
   config,
   state,
   selectAllMatching,
+  resolveSelectedRows,
   disabled = false,
 }: {
   table: Table<TData>;
   config?: BulkActionsConfig<TData>;
   state: UseBulkActionsReturn<TData>;
   selectAllMatching?: BulkActionBarProps<TData>["selectAllMatching"];
+  resolveSelectedRows?: (ids: string[]) => Promise<Row<TData>[]>;
   disabled?: boolean;
 }) {
+  const [isResolving, setIsResolving] = useState(false);
+  const selectionKey = JSON.stringify(
+    Object.keys(state.rowSelection)
+      .filter((id) => state.rowSelection[id])
+      .sort(),
+  );
+  const liveSelection = useRef(selectionKey);
+  liveSelection.current = selectionKey;
   if (!config) return null;
-  const selectedRows: Row<TData>[] = table.getFilteredSelectedRowModel().rows;
+  const selectedRows: Row<TData>[] = table.getSelectedRowModel().rows;
+  const incomplete = selectedRows.length !== state.selectedCount;
   return (
     <BulkActionBar
       selectedCount={state.selectedCount}
       selectedRows={selectedRows}
-      moneyTotals={tableMoneyTotals(
-        table.getVisibleLeafColumns(),
-        selectedRows,
-      )}
-      actions={state.getAvailableActions(selectedRows)}
-      onExecute={state.executeAction}
+      moneyTotals={
+        incomplete
+          ? undefined
+          : tableMoneyTotals(table.getVisibleLeafColumns(), selectedRows)
+      }
+      actions={
+        incomplete
+          ? config.actions.filter(
+              (action) =>
+                (action.minSelection ?? 1) <= state.selectedCount &&
+                (action.maxSelection ?? Infinity) >= state.selectedCount,
+            )
+          : state.getAvailableActions(selectedRows)
+      }
+      selectionIncomplete={incomplete}
+      onExecute={async (action, rows) => {
+        if (!incomplete) return state.executeAction(action, rows);
+        if (!resolveSelectedRows) return;
+        const snapshot = selectionKey;
+        setIsResolving(true);
+        try {
+          const resolved = await resolveSelectedRows(
+            Object.keys(state.rowSelection).filter(
+              (id) => state.rowSelection[id],
+            ),
+          );
+          if (liveSelection.current !== snapshot)
+            throw new Error(
+              "Selection changed while checking the action. Select the records again.",
+            );
+          const availability = resolveBulkActionAvailability(action, resolved);
+          if (availability.status !== "available") {
+            toast.error(
+              availability.status === "disabled"
+                ? availability.reason
+                : "This action is unavailable for the complete selection.",
+            );
+            return;
+          }
+          await state.executeAction(action, resolved);
+        } catch (error) {
+          showErrorToast(error);
+        } finally {
+          setIsResolving(false);
+        }
+      }}
       onClearSelection={state.clearSelection}
-      isExecuting={state.isExecuting}
+      isExecuting={state.isExecuting || isResolving}
       currentAction={state.currentAction}
       selectAllMatching={selectAllMatching}
-      disabled={disabled}
+      disabled={disabled || (incomplete && !resolveSelectedRows)}
     />
   );
 }

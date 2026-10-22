@@ -1,3 +1,4 @@
+import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
 import { EyeSlashIcon } from "@phosphor-icons/react/dist/csr/EyeSlash";
 import { FunnelIcon } from "@phosphor-icons/react/dist/csr/Funnel";
 import type { ReactNode } from "react";
@@ -13,6 +14,9 @@ export const SECTION_HEADER_HEIGHT = 32;
 interface SectionHeaderProps {
   title: string;
   count: number;
+  depth?: number;
+  collapsed?: boolean;
+  onToggle?: () => void;
   /** "Filter to this": present only when the grouped field has a declared filter. */
   onFilter?: () => void;
   /** "Hide": excludes the section's value, keeping the grouping. */
@@ -35,6 +39,9 @@ const ACTION_CLASS =
 export function SectionHeader({
   title,
   count,
+  depth = 0,
+  collapsed = false,
+  onToggle,
   onFilter,
   onHide,
   aside,
@@ -44,12 +51,34 @@ export function SectionHeader({
   return (
     <div
       data-slot="list-section-header"
+      style={{ paddingInlineStart: `${8 + depth * 12}px` }}
       className={cn(
-        "group/section flex h-8 items-center gap-2 border-b bg-muted px-3",
+        "group/section flex h-11 items-center gap-2 border-b border-hairline-soft bg-card px-2 md:h-8",
         className,
       )}
     >
-      <h3 className="min-w-0 truncate text-sm font-semibold">{title}</h3>
+      <h3 aria-label={title} className="min-w-0 truncate text-sm font-medium">
+        {onToggle ? (
+          <button
+            type="button"
+            onClick={onToggle}
+            aria-expanded={!collapsed}
+            aria-label={`${collapsed ? "Expand" : "Collapse"} ${title}`}
+            className="inline-flex min-h-11 max-w-full items-center gap-1 rounded-sm text-left outline-none focus-visible:ring-2 focus-visible:ring-ring md:min-h-8"
+          >
+            <CaretRightIcon
+              aria-hidden
+              className={cn(
+                "size-3 shrink-0 text-muted-foreground",
+                !collapsed && "rotate-90",
+              )}
+            />
+            <span className="truncate">{title}</span>
+          </button>
+        ) : (
+          title
+        )}
+      </h3>
       <span className="text-xs text-muted-foreground tabular-nums">
         {count}
       </span>
