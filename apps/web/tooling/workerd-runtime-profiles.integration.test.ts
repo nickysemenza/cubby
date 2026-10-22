@@ -1,8 +1,17 @@
 import { randomUUID } from "node:crypto";
 
 import type { PurchaseAgentEvent } from "@cubby/schemas/purchase-import";
+import {
+  BACKGROUND_TASK_MESSAGE_VERSION,
+  type BackgroundTaskMessage,
+} from "@cubby/schemas/queue-messages";
 import { pollUntil } from "@cubby/shared/retry";
+import { eq } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
+
+import { getDb } from "~/server/db/helpers";
+import { job } from "~/server/db/retained-tables";
+import { enqueueJob } from "~/server/generic/jobs/repo/jobs";
 
 import type { TestHarness } from "./test-runtime";
 import { withTestDb } from "./test-setup";
@@ -14,12 +23,12 @@ import { expectWriteLands } from "./workerd-runtime-fixtures";
 //   without exercising background work;
 // - a runtime points the Worker at the wrong database.
 
-// What each real consumer logs for a body it cannot parse. Peers that drop
-// messages log nothing, and an unconsumed queue never delivers.
+// Background wakes prove execution through persisted Job state. The other
+// consumers log invalid probes; peers that drop messages produce neither.
 const queues = {
   "cubby-background": {
     producer: "BACKGROUND_QUEUE",
-    consumerLog: "[background-tasks] unreadable message queue=cubby-background",
+    consumerLog: null,
   },
   "cubby-telemetry": {
     producer: "TELEMETRY_QUEUE",
@@ -32,27 +41,53 @@ const queues = {
 } as const;
 /** A queue producer binding, reached from Node through `getEnv()`. */
 type QueueSend = {
-  send(body: { probe: string } | PurchaseAgentEvent): Promise<void>;
+  send(
+    body: { probe: string } | PurchaseAgentEvent | BackgroundTaskMessage,
+  ): Promise<void>;
 };
 
 /**
- * Send an unreadable probe on every production queue through the Worker's own
- * producers and return the queues whose real consumer handled it.
+ * Send through the Worker's producers and observe each real consumer.
  */
 async function realConsumers(harness: TestHarness, expected: string[]) {
   const env = await harness.getWorker<Record<string, QueueSend>>().getEnv();
+  const probe = await enqueueJob(ctx.db, {
+    key: `runtime-probe:${randomUUID()}`,
+    kind: "refresh.family",
+    input: { family: "recipes" },
+    availableAt: new Date(0),
+  });
   harness.clearLogs();
-  for (const { producer } of Object.values(queues))
-    await env[producer]?.send({ probe: randomUUID() });
-  const consumed = () =>
-    Object.entries(queues)
+  for (const [queue, { producer }] of Object.entries(queues))
+    await env[producer]?.send(
+      queue === "cubby-background"
+        ? {
+            version: BACKGROUND_TASK_MESSAGE_VERSION,
+            queueType: "background",
+            jobId: probe.id,
+          }
+        : { probe: randomUUID() },
+    );
+  const consumed = async () => {
+    const [saved] = await getDb(ctx.db)
+      .select({ state: job.state })
+      .from(job)
+      .where(eq(job.id, probe.id));
+    return Object.entries(queues)
       .filter(([, { consumerLog }]) =>
-        harness.getLogs().some((log) => log.message.includes(consumerLog)),
+        consumerLog === null
+          ? saved?.state === "completed"
+          : harness.getLogs().some((log) => log.message.includes(consumerLog)),
       )
       .map(([queue]) => queue);
+  };
   await pollUntil(
-    () =>
-      expected.every((queue) => consumed().includes(queue)) ? true : undefined,
+    async () => {
+      const observed = await consumed();
+      return expected.every((queue) => observed.includes(queue))
+        ? true
+        : undefined;
+    },
     { label: `real consumers ${expected.join(", ")}`, timeoutMs: 20_000 },
   );
   return consumed();

@@ -144,7 +144,7 @@ describe("independent durable image identification", () => {
       });
       await getDb(ctx.db)
         .update(durableJob)
-        .set({ availableAt: sql`now()` })
+        .set({ availableAt: new Date(0) })
         .where(eq(durableJob.key, `image-processing:${apple.id}`));
     }
     const claimed = await lease(identification.id);

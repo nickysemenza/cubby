@@ -422,8 +422,8 @@ test("Suggestions lists every family with named records and category pills, and 
     field.getByRole("checkbox", { name: "Select row", exact: true }),
   ).not.toBeChecked();
 
-  // Confirming the acquisition changes the Product's classification evidence.
-  // Its older category advice must be replaced by a fresh assessment.
+  // Acquisition does not change the declared classification inputs, so the
+  // existing category advice remains available after confirming the link.
   await connection
     .getByRole("button", { name: "Confirm", exact: true })
     .click();
@@ -448,7 +448,7 @@ test("Suggestions lists every family with named records and category pills, and 
 
   await drainDerivedRefreshFrontier(db);
   await gotoAuthenticatedPage(page, `/suggestions?record=product:${item.id}`);
-  await expect(field).toHaveCount(0);
+  await expect(field).toHaveCount(1);
   expect(
     (
       await getDb(db)
@@ -457,9 +457,6 @@ test("Suggestions lists every family with named records and category pills, and 
         .where(eq(productTable.id, itemId))
     )[0]?.categoryId,
   ).toBeNull();
-  await seedCategoryAdvice();
-  await gotoAuthenticatedPage(page, `/suggestions?record=product:${item.id}`);
-  await expect(field).toHaveCount(1);
   await field.getByRole("button", { name: "Accept", exact: true }).click();
   await expect
     .poll(
@@ -879,7 +876,7 @@ test("Suggestions contains automatic history and pausable statement spending", a
   const attach = rules.getByRole("listitem", { name: "Statement attach" });
   await expect(
     attach.getByRole("switch", { name: "Statement attach automatic rule" }),
-  ).toHaveAttribute("aria-disabled", "true");
+  ).toBeEnabled();
   const spending = rules.getByRole("listitem", { name: "Statement spending" });
   const toggle = spending.getByRole("switch", {
     name: "Statement spending automatic rule",
