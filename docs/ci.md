@@ -414,12 +414,13 @@ CI records a Playwright trace only for the retry of a failed test
 failure traces. Each browser job uploads Playwright's HTML report and those
 traces for seven days, named by commit SHA and shard, and a blob report.
 
-`Test report` waits for every lane, downloads the Vitest and Playwright blobs,
+`Test report` waits for Validation and the test lanes (not Rust or Apple),
+downloads the Vitest and Playwright blobs,
 and merges each runner's shards into one HTML report (`vitest --merge-reports`,
 `playwright merge-reports`), kept for 14 days. The Vitest report opens in
 [Vitest Viewer](https://viewer.vitest.dev/) from its artifact URL. The job
-summary (`apps/web/tooling/ci-report/summary.ts`) lists each lane's result and
-duration from the Actions API, shard balance, per-runner totals, failures,
+summary (`apps/web/tooling/ci-report/summary.ts`) lists each Linux test lane's
+result and duration from the Actions API, shard balance, per-runner totals, failures,
 tests that passed only on retry, and the slowest tests. It is informative and
 outside `CI passed`, so merging never delays or fails the gate. CI runs use only
 synthetic data and test credentials, so the report is safe to publish. Local

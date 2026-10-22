@@ -45,7 +45,8 @@ describe("local R2 HTTP contract", () => {
 
   afterAll(async () => {
     await harness?.close();
-    if (directory) await rm(directory, { recursive: true, force: true });
+    if (directory)
+      await rm(directory, { recursive: true, force: true, maxRetries: 5 });
   });
 
   it("shares uploaded bytes and HTTP metadata across signed, public, and transform URLs", async () => {

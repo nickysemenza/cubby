@@ -126,7 +126,10 @@ For a named-case handoff, copy the exact replay selector or confirm the literal
 test title with `rg` before invoking the runner. A title inferred from the task
 description can select no cases; that setup failure supplies no regression evidence.
 
-CI retries a failed Vitest or Playwright test once; locally nothing retries.
+CI retries a failed Playwright test, or a failed test in a service-backed
+Vitest project (`integration`, `integration-workerd`, `capability`, `preview`,
+`workers`), once; Node unit, UI, tooling and package projects never retry, and
+locally nothing retries.
 A test that passes only on retry is reported as flaky, not failed. The second
 time a test is reported flaky, fix it or delete it, recording the named
 failure and the deleting commit in a GitHub issue so it can be

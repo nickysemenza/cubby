@@ -15,7 +15,7 @@ const inventory = `1) ${first} "Developer ID Application: Synthetic Fixture (${t
 const temporary: string[] = [];
 afterEach(() => {
   for (const directory of temporary.splice(0))
-    rmSync(directory, { recursive: true, force: true });
+    rmSync(directory, { recursive: true, force: true, maxRetries: 5 });
 });
 
 describe("unattended Mac fixture identity boundary", () => {

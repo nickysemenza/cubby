@@ -5,8 +5,9 @@
  *
  *   node tooling/ci-report/summary.ts <vitest-records.json> <playwright.json>
  *
- * A missing input (a lane that never produced a report) is reported, not
- * fatal: the summary must still render when the gate failed early.
+ * A missing or malformed input (a lane that never produced a report) is
+ * reported, not fatal: the summary must still render when the gate failed
+ * early.
  */
 import { appendFileSync, existsSync, readFileSync } from "node:fs";
 import { z } from "zod";
@@ -29,6 +30,8 @@ const jobsSchema = z.object({
 });
 type Job = z.infer<typeof jobsSchema>["jobs"][number];
 const runSchema = z.object({ run_started_at: z.string() });
+// Linux test lanes only; Rust and Apple report through their own jobs.
+const summarizedLanes = ["Validation", "E2E tests (desktop", "Vitest ("];
 
 const [vitestPath, playwrightPath] = process.argv.slice(2);
 const env = process.env;
@@ -43,7 +46,9 @@ function readReport<T>(
     missing.push(label);
     return undefined;
   }
-  return schema.parse(JSON.parse(readFileSync(path, "utf8")));
+  const parsed = schema.safeParse(JSON.parse(readFileSync(path, "utf8")));
+  if (!parsed.success) missing.push(`${label} (unexpected report shape)`);
+  return parsed.data;
 }
 
 const vitest = readReport(vitestPath, "Vitest", z.array(testRecordSchema));
@@ -75,7 +80,9 @@ async function github<T>(
     missing.push(`Actions API ${path} (HTTP ${response.status})`);
     return undefined;
   }
-  return schema.parse(await response.json());
+  const parsed = schema.safeParse(await response.json());
+  if (!parsed.success) missing.push(`Actions API ${path} (unexpected shape)`);
+  return parsed.data;
 }
 
 const runPath = `/actions/runs/${env.GITHUB_RUN_ID}`;
@@ -87,7 +94,11 @@ const jobs = (
       jobsSchema,
     )
   )?.jobs ?? []
-).filter((job) => job.name !== env.CUBBY_REPORT_JOB && job.completed_at);
+).filter(
+  (job) =>
+    job.completed_at &&
+    summarizedLanes.some((prefix) => job.name.startsWith(prefix)),
+);
 
 const ms = (job: Job) =>
   Date.parse(job.completed_at ?? job.started_at) - Date.parse(job.started_at);

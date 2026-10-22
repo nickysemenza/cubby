@@ -271,7 +271,7 @@ export default defineConfig({
     // The default reporter covers terminal output; JSON preserves failed
     // tests when output is truncated. CI also emits GitHub annotations and a
     // blob per shard; the CI report job merges the blobs into one HTML report
-    // and writes the combined job summary (tooling/ci-test-summary.ts).
+    // and writes the combined job summary (tooling/ci-report/summary.ts).
     reporters:
       process.env.GITHUB_ACTIONS === "true"
         ? [

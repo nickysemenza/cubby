@@ -22,7 +22,9 @@ const roots: string[] = [];
 afterEach(() =>
   roots
     .splice(0)
-    .forEach((root) => rmSync(root, { recursive: true, force: true })),
+    .forEach((root) =>
+      rmSync(root, { recursive: true, force: true, maxRetries: 5 }),
+    ),
 );
 function fixture() {
   const root = mkdtempSync(path.join(tmpdir(), "cubby-watch-"));

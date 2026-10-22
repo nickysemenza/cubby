@@ -385,7 +385,7 @@ jobs:
   # merging never delays or fails the gate.
   report:
     name: Test report
-    needs: [plan, validation, lanes, rust, apple-host, apple-simulator]
+    needs: [validation, lanes]
     if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -410,15 +410,19 @@ jobs:
       # The merge loads the Vitest config only to match project names: the
       # generated-output/WASM bootstrap is unnecessary, and the integration
       # projects must be enabled for their blobs to resolve.
+      # Each merge exits nonzero when the merged results contain failures,
+      # after writing its reports; later steps still publish them.
       - name: Merge Vitest reports
         if: ${{ hashFiles('apps/web/.vitest/blob/*') != '' }}
+        continue-on-error: true
         working-directory: apps/web
         env:
           CUBBY_VITEST_ENSURED: "1"
           CUBBY_TEST_INTEGRATION: "1"
         run: pnpm exec vitest --merge-reports --reporter=html --reporter=./tooling/ci-report/vitest-records-reporter.ts
       - name: Merge Playwright reports
-        if: ${{ hashFiles('apps/web/all-blob-reports/*') != '' }}
+        if: ${{ !cancelled() && hashFiles('apps/web/all-blob-reports/*') != '' }}
+        continue-on-error: true
         working-directory: apps/web
         env:
           PLAYWRIGHT_HTML_OUTPUT_DIR: playwright-report
@@ -428,7 +432,7 @@ jobs:
       # URL (https://vitest.dev/guide/ui#view-reports-from-ci).
       - name: Upload merged Vitest report
         id: vitest-report
-        if: ${{ hashFiles('apps/web/.vitest/index.html') != '' }}
+        if: ${{ !cancelled() && hashFiles('apps/web/.vitest/index.html') != '' }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: vitest-report-${{ github.sha }}
@@ -439,17 +443,17 @@ jobs:
           retention-days: 14
       - name: Upload merged Playwright report
         id: playwright-report
-        if: ${{ hashFiles('apps/web/playwright-report/index.html') != '' }}
+        if: ${{ !cancelled() && hashFiles('apps/web/playwright-report/index.html') != '' }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: playwright-report-${{ github.sha }}
           path: apps/web/playwright-report/
           retention-days: 14
       - name: Write job summary
+        if: ${{ !cancelled() }}
         working-directory: apps/web
         env:
           GITHUB_TOKEN: ${{ github.token }}
-          CUBBY_REPORT_JOB: Test report
           CUBBY_VITEST_REPORT_URL: ${{ steps.vitest-report.outputs.artifact-url }}
           CUBBY_PLAYWRIGHT_REPORT_URL: ${{ steps.playwright-report.outputs.artifact-url }}
         run: node tooling/ci-report/summary.ts .vitest/records.json playwright-report/results.json

@@ -368,7 +368,7 @@ it("writes public and private CLI artifacts without raw input even on RPC failur
       });
     }
   } finally {
-    await rm(directory, { recursive: true, force: true });
+    await rm(directory, { recursive: true, force: true, maxRetries: 5 });
   }
 });
 
@@ -463,7 +463,7 @@ it.each([false, true])(
         },
       ]);
     } finally {
-      await rm(directory, { recursive: true, force: true });
+      await rm(directory, { recursive: true, force: true, maxRetries: 5 });
     }
   },
 );

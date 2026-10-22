@@ -18,7 +18,9 @@ afterEach(() => {
   vi.restoreAllMocks();
   roots
     .splice(0)
-    .forEach((root) => rmSync(root, { recursive: true, force: true }));
+    .forEach((root) =>
+      rmSync(root, { recursive: true, force: true, maxRetries: 5 }),
+    );
 });
 
 function fixture() {

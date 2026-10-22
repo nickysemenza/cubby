@@ -80,7 +80,9 @@
       "inputs": ["webGate", { "env": "CUBBY_VITEST_SHARD" }],
       "outputs": [
         "{projectRoot}/.vitest-results.json",
-        "{projectRoot}/.vitest/blob"
+        "{projectRoot}/.vitest/blob",
+        // Blobs reference failure attachments by path; a replay restores both.
+        "{projectRoot}/.vitest/attachments"
       ]
     },
     "build-cf": {
