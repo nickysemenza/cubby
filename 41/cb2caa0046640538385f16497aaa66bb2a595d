@@ -1,0 +1,107 @@
+apps/web/DESIGN.md
+  s_033c97ccc35358::t_c48dcd0ffab1ec 249-275
+apps/web/cloudflare.config.ts
+  s_033c97ccc35358::t_fe3c6c1c8fc534 8,10,14-35,85,101-103
+apps/web/src/contracts/index.ts
+  s_033c97ccc35358::t_34161c3e06f356 70-71
+apps/web/src/contracts/job.contract.ts
+  s_033c97ccc35358::t_1bc4060af913c4 1-162
+apps/web/src/contracts/run-detail.contract.ts
+  s_033c97ccc35358::t_5bec44df16e719 1-99
+apps/web/src/features/image/slots.tsx
+  s_033c97ccc35358::t_a4f041d96ddc6b 8,25
+apps/web/src/features/job/job-diagnostics.tsx
+  s_033c97ccc35358::t_1600aa8957be8a 1-557
+apps/web/src/features/job/job-status.tsx
+  s_033c97ccc35358::t_5b06156e94a1b4 1-96
+apps/web/src/features/location/slots.tsx
+  s_033c97ccc35358::t_203e498c8ba9ca 6,8,23-30
+apps/web/src/features/registry.tsx
+  s_033c97ccc35358::t_501655d488ad40 283-286
+apps/web/src/features/run/decision-ledger.tsx
+  s_033c97ccc35358::t_e9a790ccaab716 1-332
+apps/web/src/features/run/decision-presenters.tsx
+  s_033c97ccc35358::t_d9b01b597ce971 1-579
+apps/web/src/features/run/run-detail.preview.test.tsx
+  s_033c97ccc35358::t_9a3d9a552fb4ea 1-287
+apps/web/src/features/run/run-detail.tsx
+  s_033c97ccc35358::t_a38c44732bf2ee 1-280
+apps/web/src/features/run/run-step-strip.tsx
+  s_033c97ccc35358::t_5c74340bb83857 1-111
+apps/web/src/features/run/run-step-timeline.tsx
+  s_033c97ccc35358::t_0a08c78f69647f 1-483
+apps/web/src/features/run/run-view-model.ts
+  s_033c97ccc35358::t_3ff8a5f8fa23bc 1-448
+apps/web/src/server/ai/gateway-egress-contract.ts
+  s_033c97ccc35358::t_2aaf1c43c961c8 5-24
+apps/web/src/server/ai/gateway-error.ts
+  s_033c97ccc35358::t_dad156c395ace2 86-87
+apps/web/src/server/cf-env.ts
+  s_033c97ccc35358::t_b2698c087004b4 96-107
+apps/web/src/server/db/db-runtime-resolver.ts
+  s_033c97ccc35358::t_6412ba44c803da 4-12,70-71,74
+apps/web/src/server/domains/financial-transaction/repo/transfer-pair-suggestions.ts
+  s_033c97ccc35358::t_3f5757680093c1 88-92
+apps/web/src/server/domains/financial-transaction/service/transfer-pair-labels.ts
+  s_033c97ccc35358::t_3f874b14c22dc7 30
+apps/web/src/server/domains/run/operations/gateway-egress-durable-object.ts
+  s_033c97ccc35358::t_b90f5cd01270cb 15,20-26
+apps/web/src/server/domains/run/repo/ai-refresh-admission.ts
+  s_033c97ccc35358::t_f781eb224630bf 12
+apps/web/src/server/generic/jobs/limits-catalog.ts
+  s_033c97ccc35358::t_db7d749bdd9355 1-480
+apps/web/src/server/generic/jobs/limits-catalog.unit.test.ts
+  s_033c97ccc35358::t_8a9d21340c6724 1-147
+apps/web/src/server/generic/jobs/limits.ts
+  s_033c97ccc35358::t_e34e2d5a8ac84d 1-13
+apps/web/src/server/generic/jobs/operations/job.server.ts
+  s_033c97ccc35358::t_e630f14effb335 1-13
+apps/web/src/server/generic/jobs/repo/job-diagnostics.ts
+  s_033c97ccc35358::t_3daeade727bcda 1-236
+apps/web/src/server/generic/jobs/repo/jobs.ts
+  s_033c97ccc35358::t_152eb01f936174 26,28-33,52,108,139,193,325-329
+apps/web/src/server/generic/jobs/service/job-logs.ts
+  s_033c97ccc35358::t_edb4d15a4cd510 1-199
+apps/web/src/server/generic/jobs/service/job-logs.unit.test.ts
+  s_033c97ccc35358::t_3d96fd02dc2eef 1-126
+apps/web/src/server/generic/jobs/service/jobs.ts
+  s_033c97ccc35358::t_11ac83039cc36b 24,81,156-157,162-165
+apps/web/src/server/generic/run-detail/operations/run-detail.server.ts
+  s_033c97ccc35358::t_15cd2487587b96 1-10
+apps/web/src/server/generic/run-detail/repo/run-detail.ts
+  s_033c97ccc35358::t_e64a272c39065f 1-105
+apps/web/src/server/workflows/jobs.ts
+  s_033c97ccc35358::t_b7643932b692c5 19,113-116
+apps/web/src/ui/common/key-numbers.tsx
+  s_033c97ccc35358::t_2d953c0e3d52cc 24-25,34-35,37,80-95,164-191
+apps/web/src/ui/common/record-list.tsx
+  s_033c97ccc35358::t_1409828bb51d41 361-363,367,372,377,391
+apps/web/src/ui/primitives/progress.tsx
+  s_033c97ccc35358::t_4626dbbfc5cbc3 14-15,29,51-54
+apps/web/tooling/dev/config-runtime-boundary.test.ts
+  s_033c97ccc35358::t_4d6ff1b3c08d65 33-37
+docs/infrastructure.md
+  s_033c97ccc35358::t_02e0731d2dfec0 397-409,780-830
+packages/shared/package.json
+  s_033c97ccc35358::t_7477dd8bbfc140 28
+packages/shared/src/background-queue-consumer.json
+  s_033c97ccc35358::t_030d5f5cef84e9 1-6
+packages/shared/src/background-queue.ts
+  s_033c97ccc35358::t_ff6177358b6864 1-9
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "41cb2caa0046640538385f16497aaa66bb2a595d",
+  "prompts": {},
+  "sessions": {
+    "s_033c97ccc35358": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "60bf3a4f-d655-4028-9f82-d84fe59d64b8",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
