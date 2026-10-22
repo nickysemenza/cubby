@@ -837,10 +837,72 @@ describe("statement Transaction suggestions", () => {
           ),
         }),
       ).toEqual({ done: 1, skipped: 0, failed: [] });
+      const missing = await retryStatementGenerationRefs(ctx.db, {
+        runId: null,
+        refs: ["charge:synthetic:missing"],
+      });
+      expect(missing).toMatchObject({
+        done: 0,
+        skipped: 0,
+        failed: [
+          {
+            ref: "charge:synthetic:missing",
+            message: expect.stringContaining("not found"),
+          },
+        ],
+      });
       expect(await suggestions(ctx)).toHaveLength(7);
     } finally {
       await removeFailure();
     }
+  });
+
+  it("recovers missed retirement even when settled transfer evidence produces no proposal", async () => {
+    const account = (await card(ctx)).output;
+    await record(ctx, [rowInput()]);
+    await generateStatementSuggestionPage(ctx.db, { after: null, runId: null });
+    const [pending] = await suggestions(ctx);
+    const [observation] = (await listSourceTransactionRecords(ctx.db, {})).data;
+    if (!pending || !observation)
+      throw new Error("Missing synthetic recovery evidence");
+    await createRepoIdentity(ctx, "financialTransaction", {
+      accountId: account.id,
+      kind: "account_transfer",
+      status: "posted",
+      amount: 42.5,
+      transactionDate: "2026-05-04",
+      sourceRefs: [
+        { source: observation.source, externalId: observation.externalId },
+      ],
+    });
+    // Recreate only the stale projection a missed after-commit retirement left.
+    await getDb(ctx.db)
+      .update(assessmentState)
+      .set({ active: true, status: "pending" })
+      .where(eq(assessmentState.id, pending.id));
+    const charge = {
+      source: observation.source,
+      chargeKey: observation.chargeKey,
+    };
+    expect(await buildChargeProposals(ctx.db, [charge])).toEqual([]);
+    expect(
+      await retryStatementGenerationRefs(ctx.db, {
+        runId: null,
+        refs: [`charge:${charge.source}:${charge.chargeKey}`],
+      }),
+    ).toEqual({ done: 1, skipped: 0, failed: [] });
+    expect(
+      await getDb(ctx.db)
+        .select({
+          active: assessmentState.active,
+          status: assessmentState.status,
+        })
+        .from(assessmentState)
+        .where(eq(assessmentState.id, pending.id)),
+    ).toEqual([{ active: false, status: "superseded" }]);
+    expect(
+      await getDb(ctx.db).select({ cost: expense.cost }).from(expense),
+    ).toEqual([]);
   });
 
   // Retired spending must not silently stay hidden when positive source

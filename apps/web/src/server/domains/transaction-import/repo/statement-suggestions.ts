@@ -1354,6 +1354,24 @@ const isSettledBooking = (judgment: StatementTransactionJudgment) =>
   judgment.recommended === "book" &&
   judgment.spending?.status === "already_booked";
 
+/** Complete a previously committed publication's missed retirement check, even without a new proposal. */
+async function retireSettledChargeAdvice(db: Database, charge: ChargeRef) {
+  return transitionAssessmentStates(
+    db,
+    sql`${pendingStatementState} AND ${suggestionField("source", STATE)}=${charge.source} AND ${suggestionField("chargeKey", STATE)}=${charge.chargeKey}
+            AND ${suggestionField("recommended", STATE)} <> ${statementTransactionAction.enum.void}
+            AND EXISTS (
+              SELECT 1 FROM ${chargeStateOf(
+                sql`r.source = ${charge.source} AND ${chargeKeyOf("r")} = ${charge.chargeKey}`,
+              )} cs
+              WHERE cs.ignored OR cs.superseded OR
+                (cs.shortcode IS NOT NULL AND ${suggestionField("recommended", STATE)} <> ${statementTransactionAction.enum.book})
+            )`,
+    { active: false, status: "superseded" },
+    { kind: "statement_settled_elsewhere" },
+  );
+}
+
 export async function publishChargeProposal(
   db: Database,
   proposal: ChargeProposal,
@@ -1431,20 +1449,7 @@ export async function publishChargeProposal(
       if (settled.length) {
         // A prior commit may have lost its after-commit retirement effect.
         // Replaying that exact charge must finish the effect, not leave stale advice.
-        await transitionAssessmentStates(
-          tx,
-          sql`${pendingStatementState} AND ${suggestionField("source", STATE)}=${charge.source} AND ${suggestionField("chargeKey", STATE)}=${charge.chargeKey}
-            AND ${suggestionField("recommended", STATE)} <> ${statementTransactionAction.enum.void}
-            AND EXISTS (
-              SELECT 1 FROM ${chargeStateOf(
-                sql`r.source = ${charge.source} AND ${chargeKeyOf("r")} = ${charge.chargeKey}`,
-              )} cs
-              WHERE cs.ignored OR cs.superseded OR
-                (cs.shortcode IS NOT NULL AND ${suggestionField("recommended", STATE)} <> ${statementTransactionAction.enum.book})
-            )`,
-          { active: false, status: "superseded" },
-          { kind: "statement_settled_elsewhere" },
-        );
+        await retireSettledChargeAdvice(tx, charge);
         return { outcome: "settled", labelsReused: 0 };
       }
     }
@@ -1783,11 +1788,41 @@ export async function retryStatementGenerationRefs(
       return [];
     });
     if (!charges.length) continue;
+    const retained = new Set(
+      (await loadObservations(db, charges)).map(chargeId),
+    );
+    const admitted: ChargeRef[] = [];
+    for (const charge of charges) {
+      const ref = `charge:${chargeId(charge)}`;
+      if (!retained.has(chargeId(charge))) {
+        failed.push(
+          statementGenerationFailure(
+            ref,
+            new Error("Retained charge identity was not found"),
+          ),
+        );
+        continue;
+      }
+      try {
+        await withTransactionDatabase(db, async (tx) => {
+          await assertWorkflowEffect(tx);
+          await getDb(tx).execute(
+            sql`SELECT pg_advisory_xact_lock(hashtextextended(${`statement-suggestion:${chargeId(charge)}`}, 0))`,
+          );
+          await retireSettledChargeAdvice(tx, charge);
+        });
+        admitted.push(charge);
+      } catch (error) {
+        if (isWorkflowInterrupted(error)) throw error;
+        failed.push(statementGenerationFailure(ref, error));
+      }
+    }
+    if (!admitted.length) continue;
     const page = await generateStatementSuggestionPage(db, {
       runId: input.runId,
       scope: input.scope,
       after: null,
-      retryCharges: charges,
+      retryCharges: admitted,
       work: input.work,
     });
     failed.push(...page.failed);
