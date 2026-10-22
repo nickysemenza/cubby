@@ -1684,7 +1684,12 @@ export async function generateTransferPairSuggestionsPage(
   const publications: Pair[] = [];
   let afterSeed = after.afterSeed;
   page.next = { kind: "retire", after: null };
-  if (!seeds.length) return page;
+  if (!seeds.length) {
+    input.work?.add({
+      timings: { selection: performance.now() - selectionStarted },
+    });
+    return page;
+  }
   const accounts = await loadAccounts(db);
   const potentialSeeds = await potentialTransferSeeds(
     db,

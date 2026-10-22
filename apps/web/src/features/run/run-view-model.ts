@@ -12,6 +12,7 @@ import {
   type RunStepError,
   type RunStepMeta,
 } from "@cubby/schemas/run-step";
+import { z } from "zod";
 
 import type {
   JobFacts,
@@ -131,8 +132,13 @@ export type RunStepView = {
   results: AssessmentFamily | null;
 };
 
+/** `no_candidate`, `image.process` and `publishFailed` read as words. */
 export const humanizeKey = (key: string) => {
-  const words = key.replaceAll(/[_.-]+/g, " ").trim();
+  const words = key
+    .replaceAll(/([a-z])([A-Z])/g, "$1 $2")
+    .replaceAll(/[_.-]+/g, " ")
+    .trim()
+    .toLowerCase();
   return words.charAt(0).toUpperCase() + words.slice(1);
 };
 
@@ -177,8 +183,11 @@ export function jobWait(job: JobFacts | null): StepWait | null {
 
 const boundaryText = (boundary: unknown): string | null => {
   if (boundary === null || boundary === undefined) return null;
-  if (typeof boundary === "string") return boundary;
-  return JSON.stringify(boundary);
+  if (typeof boundary !== "string") return JSON.stringify(boundary);
+  // A cutoff instant reads as a date; other boundaries stay raw.
+  return z.iso.datetime().safeParse(boundary).success
+    ? formatInstant(boundary, "dateShortTime")
+    : boundary;
 };
 
 function rateOf(
