@@ -18,7 +18,8 @@ test("Product inspection keeps scalar edits accessible and persistent", async ({
   const table = page.getByRole("table", { name: /Products table/i });
   const row = table.getByRole("row").filter({ hasText: name });
   await row.getByRole("checkbox", { name: "Select row" }).click();
-  await page.getByRole("button", { name: "Inspect", exact: true }).click();
+  await expect(page.locator("[data-desktop-inspector]")).toHaveCount(0);
+  await row.locator("[data-record-identity-link] a").click();
 
   await expect(page.locator("[data-desktop-inspector]")).toBeVisible();
   await expect(
