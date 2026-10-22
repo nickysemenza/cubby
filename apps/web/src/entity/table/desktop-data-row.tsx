@@ -336,12 +336,9 @@ function DesktopDataRowInner<TItem extends RowData>({
         if (!(e.target instanceof Node) || !e.currentTarget.contains(e.target))
           return;
         if (
-          row
-            .getVisibleCells()
-            .some(
-              (cell) =>
-                cell.column.columnDef.meta?.entityColumnRole === "identity",
-            ) &&
+          // Catalogs can declare an identity-styled column without a record
+          // identity link; their existing whole-row action stays available.
+          e.currentTarget.querySelector("[data-record-identity-link]") &&
           (!(e.target instanceof Element) ||
             !e.target.closest('td[data-entity-column-role="identity"]'))
         )

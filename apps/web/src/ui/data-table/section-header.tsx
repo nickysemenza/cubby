@@ -57,7 +57,7 @@ export function SectionHeader({
         className,
       )}
     >
-      <h3 className="min-w-0 truncate text-sm font-medium">
+      <h3 aria-label={title} className="min-w-0 truncate text-sm font-medium">
         {onToggle ? (
           <button
             type="button"

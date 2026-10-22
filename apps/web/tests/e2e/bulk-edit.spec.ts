@@ -12,6 +12,8 @@ import {
 } from "./fixtures/catalog";
 import { createEntityFixture, seedConcurrently } from "./fixtures/core";
 import { defaultPagination } from "~/ui/data-table/table-utils";
+import { BROWSER_OPERATION_PATH } from "~/lib/browser-operation-path";
+import { dispatchesOperation, unbatchFor } from "./support/dispatch-wire";
 import { gotoAuthenticatedPage, uniqueName } from "./support/e2e-helpers";
 import { expect, test } from "./support/e2e-test";
 
@@ -92,42 +94,78 @@ test("all matching selection bulk-edits unloaded tasks within the active scope",
     name: uniqueName(test.info(), "Outside matching scope"),
     status: "in_progress",
   });
-  await page.setViewportSize({ width: 1440, height: 900 });
-  await gotoAuthenticatedPage(
-    page,
-    `/tasks?name=${encodeURIComponent(prefix)}`,
-  );
-  await page
-    .getByRole("table")
-    .getByRole("checkbox", { name: "Select all", exact: true })
-    .check();
-  const bar = page.locator("[data-bulk-action-bar]");
-  await expect(bar).toContainText(`${defaultPagination.pageSize} selected`);
-  await bar
-    .getByRole("button", { name: `Select all ${count}`, exact: true })
-    .click();
-  await expect(bar).toContainText(`${count} selected`);
-  await bar.getByRole("button", { name: "Bulk edit...", exact: true }).click();
-  const dialog = page.getByRole("dialog");
-  await dialog.getByRole("combobox", { name: "Status", exact: true }).click();
-  await page.getByRole("option", { name: "Done", exact: true }).click();
-  await dialog.getByRole("button", { name: "Update", exact: true }).click();
-  await expect(dialog).not.toBeVisible();
-  const response = await entityApi(page.request).list("task", {
-    filters: { ids: selected.map(({ id }) => id) },
-    pagination: { pageIndex: 0, pageSize: count },
+  let releaseNextPage = () => {};
+  const nextPage = new Promise<void>((resolve) => {
+    releaseNextPage = resolve;
   });
-  expect(response.status()).toBe(200);
-  const result = z
-    .object({
-      items: z.array(z.object({ id: z.string(), status: z.string() })),
-    })
-    .parse(await response.json());
-  expect(result.items).toHaveLength(count);
-  expect(result.items.every(({ status }) => status === "done")).toBe(true);
-  expect(
-    await (await entityApi(page.request).get("task", outside.id)).json(),
-  ).toMatchObject({ status: "in_progress" });
+  const pageInput = z.object({
+    pagination: z.object({ pageIndex: z.number() }),
+  });
+  // Keep the final record unloaded until action admission has resolved it;
+  // the ordinary sentinel may prefetch while selection changes the layout.
+  await page.route(BROWSER_OPERATION_PATH, async (route) => {
+    if (await unbatchFor(route, ["entity.listBase"])) return;
+    if (
+      dispatchesOperation(
+        route.request(),
+        "entity.listBase",
+        ({ input }) => pageInput.parse(input).pagination.pageIndex > 0,
+      )
+    )
+      await nextPage;
+    await route.continue();
+  });
+  try {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await gotoAuthenticatedPage(
+      page,
+      `/tasks?name=${encodeURIComponent(prefix)}`,
+    );
+    await expect(
+      page
+        .getByRole("table")
+        .getByRole("row")
+        .filter({ hasText: prefix })
+        .first(),
+    ).toBeVisible();
+    await page
+      .getByRole("table")
+      .getByRole("checkbox", { name: "Select all", exact: true })
+      .check();
+    const bar = page.locator("[data-bulk-action-bar]");
+    await expect(bar).toContainText(`${defaultPagination.pageSize} selected`);
+    await bar
+      .getByRole("button", { name: `Select all ${count}`, exact: true })
+      .click();
+    await expect(bar).toContainText(`${count} selected`);
+    await bar
+      .getByRole("button", { name: "Bulk edit...", exact: true })
+      .click();
+    const dialog = page.getByRole("dialog");
+    await expect(dialog).toBeVisible();
+    releaseNextPage();
+    await dialog.getByRole("combobox", { name: "Status", exact: true }).click();
+    await page.getByRole("option", { name: "Done", exact: true }).click();
+    await dialog.getByRole("button", { name: "Update", exact: true }).click();
+    await expect(dialog).not.toBeVisible();
+    const response = await entityApi(page.request).list("task", {
+      filters: { ids: selected.map(({ id }) => id) },
+      pagination: { pageIndex: 0, pageSize: count },
+    });
+    expect(response.status()).toBe(200);
+    const result = z
+      .object({
+        items: z.array(z.object({ id: z.string(), status: z.string() })),
+      })
+      .parse(await response.json());
+    expect(result.items).toHaveLength(count);
+    expect(result.items.every(({ status }) => status === "done")).toBe(true);
+    expect(
+      await (await entityApi(page.request).get("task", outside.id)).json(),
+    ).toMatchObject({ status: "in_progress" });
+  } finally {
+    releaseNextPage();
+  }
 });
 
 test("plantings list bulk-edits status finished plus a date in one write", async ({

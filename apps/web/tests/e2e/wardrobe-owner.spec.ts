@@ -264,11 +264,11 @@ test("wardrobe cards exclude a clothing type, keep uncategorized items, and a he
   await expect(sections).toHaveText([
     /^Apparel/,
     new RegExp(`^${name} Tops`),
-    /^No category/,
+    /^Unassigned/,
   ]);
   await expect(
     sections
-      .filter({ hasText: /^No category/ })
+      .filter({ hasText: /^Unassigned/ })
       .getByRole("link", { name: new RegExp(`^${name} uncategorized item`) }),
   ).toBeVisible();
   expect(new URL(page.url()).searchParams.get("categoryExclude")).toBeTruthy();
@@ -276,7 +276,7 @@ test("wardrobe cards exclude a clothing type, keep uncategorized items, and a he
   // Hide keeps the grouping and excludes that section's value too.
   await tops.hover();
   await tops.getByRole("button", { name: /^Hide/ }).click();
-  await expect(sections).toHaveText([/^Apparel/, /^No category/]);
+  await expect(sections).toHaveText([/^Apparel/, /^Unassigned/]);
   const url = new URL(page.url());
   expect(JSON.parse(url.searchParams.get("groupBy") ?? "null")).toEqual([
     { key: "category" },
