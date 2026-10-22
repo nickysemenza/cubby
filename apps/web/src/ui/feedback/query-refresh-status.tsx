@@ -1,3 +1,4 @@
+import { useHydrated } from "~/ui/hooks/use-hydrated";
 import { Spinner } from "~/ui/primitives/spinner";
 
 import { ErrorDisplay } from "./error-display";
@@ -12,6 +13,9 @@ export function QueryRefreshStatus({
   error?: unknown;
   onRetry?: () => void;
 }) {
+  // The shell can start a refresh before this streamed section hydrates.
+  const hydrated = useHydrated();
+  if (!hydrated) return null;
   if (error)
     return (
       <div className="py-2">

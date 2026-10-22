@@ -12,4 +12,6 @@ export interface DatabaseFreshness {
 export interface DatabaseFreshnessRpc {
   readFreshness(): DatabaseFreshness;
   recordWrite(): Promise<DatabaseFreshness>;
+  publishChanges(categories: string[]): Promise<void>;
+  fetch(request: Request): Promise<Response>;
 }

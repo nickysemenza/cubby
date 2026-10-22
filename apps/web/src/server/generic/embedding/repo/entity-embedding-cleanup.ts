@@ -6,6 +6,7 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { notDeleted, unwrapDb, withTransaction } from "~/server/db/helpers";
+import { repositoryChanged } from "~/server/db/repository-access.boundary";
 import { entityEmbedding, searchDocument } from "~/server/db/schema";
 import { lockRefreshFamily } from "~/server/generic/derived-refresh/repo/families";
 import {
@@ -19,7 +20,7 @@ async function softDeleteEntityEmbeddingsTx(
   entityIds: string[],
 ): Promise<void> {
   if (entityIds.length === 0) return;
-  await tx
+  const changed = await tx
     .update(entityEmbedding)
     .set({ deletedAt: new Date(), artifactState: "retired" })
     .where(
@@ -28,7 +29,10 @@ async function softDeleteEntityEmbeddingsTx(
         inArray(entityEmbedding.entityId, entityIds),
         notDeleted(entityEmbedding),
       ),
-    );
+    )
+    .returning({ id: entityEmbedding.id });
+  if (changed.length)
+    await repositoryChanged(tx, ["search", "relatedData", "problems"]);
 }
 
 /** Revalidate persisted candidates and retire both artifacts atomically. */
@@ -81,7 +85,7 @@ async function retireSearchArtifactsTx(
   entityIds: string[],
 ): Promise<void> {
   await softDeleteEntityEmbeddingsTx(tx, entityKind, entityIds);
-  await tx
+  const changed = await tx
     .update(searchDocument)
     .set({ deletedAt: new Date() })
     .where(
@@ -90,7 +94,10 @@ async function retireSearchArtifactsTx(
         inArray(searchDocument.entityId, entityIds),
         notDeleted(searchDocument),
       ),
-    );
+    )
+    .returning({ id: searchDocument.entityId });
+  if (changed.length)
+    await repositoryChanged(tx, ["search", "relatedData", "problems"]);
 }
 
 export async function getEntityEmbeddingDeletedAtForRef(

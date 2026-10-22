@@ -19,6 +19,7 @@ import { z } from "zod";
 import { QuickActionsMenu } from "~/entity/navigation/quick-actions-menu";
 import { preloadCommandMenu } from "~/features/command-menu/command-menu-loader";
 import { MainNav } from "~/features/shell/main-nav";
+import { useDatabaseChanges } from "~/integrations/tanstack-query/use-database-changes";
 import type { UnparsedError } from "~/lib/error-utils";
 import { cn } from "~/lib/utils";
 import { useHydrated } from "~/ui/hooks/use-hydrated";
@@ -110,6 +111,7 @@ export function AuthenticatedAppShell({
   const viewportSurface = routeDescriptor.presentation === "immersive";
   const keyboardOpen = useVirtualKeyboard();
   const hydrated = useHydrated();
+  useDatabaseChanges();
 
   useEffect(() => {
     requestCatchUpWhenVisible();

@@ -1,6 +1,6 @@
 import { createLogger } from "@cubby/worker-tracing";
 
-import { getDatabaseFreshnessNamespace } from "~/server/cf-env";
+import { afterResponse, getDatabaseFreshnessNamespace } from "~/server/cf-env";
 
 import type { DatabaseFreshness } from "./state";
 
@@ -18,6 +18,25 @@ const getPort = () =>
   getDatabaseFreshnessNamespace()?.getByName("household", {
     locationHint: "wnam",
   });
+
+/** Failure cannot turn an already committed write into a failed save. */
+export async function notifyDatabaseChanges(
+  categories: readonly string[],
+): Promise<void> {
+  try {
+    const target = getPort();
+    if (!target) return;
+    await afterResponse(
+      boundedRpc(async () => {
+        await target.publishChanges([...new Set(categories)]);
+      }).catch((error: unknown) => {
+        log.warn("change notification failed", { error });
+      }),
+    );
+  } catch (error) {
+    log.warn("change notification unavailable", { error });
+  }
+}
 
 async function boundedRpc<T>(run: () => Promise<T>): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | undefined;

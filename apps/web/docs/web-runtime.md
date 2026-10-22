@@ -175,6 +175,37 @@ Invalid rows issue no writes; successful sibling rows remain saved. Errors keep
 row and field context, and retry targets failed original row identities only.
 Multi-field rows without a shared atomic row writer reject before dispatch.
 
+## Change notifications
+
+The authenticated shell subscribes to the household freshness Durable Object
+over a same-origin WebSocket. Writers enroll changed cache categories in their
+transaction; successful savepoints merge them and rollback discards them.
+After the outer commit, one best-effort hint advances the strong-read window
+before broadcasting. Audit writes cover ordinary entity edits across transports;
+non-audited recipe totals, conversion coverage, assessments, saved AI analyses and search/embedding
+publication enroll at their saved projection owners. Job claims, heartbeats and
+cursor-only advances do not publish hints. Unchanged periodic projections do not
+trigger refreshes merely to update a computation timestamp.
+
+Hints invalidate the existing cache ripples; they never carry record values or
+replace receipt reconciliation. Reads already in flight are retired and loaded
+views retain their ordinary refresh/error UI. Notification invalidation retains
+inactive baselines because streamed sections may still need them to hydrate;
+mount and detail loaders refetch those invalidated baselines before reuse.
+Refresh status renders only after its own hydration boundary is ready, since
+the shell can initiate subscription recovery before streamed sections hydrate.
+Additional hints received during refresh are combined for the next read.
+Subscription establishment, reconnect and app resume resync cache-backed queries
+to recover missed hints. Logout unmounts the subscription; delivery requires
+reauthentication after its five-minute lease expires.
+
+This replaces fixed post-mutation refresh timers. Delivery is not a durable event
+log: a Worker can die after database commit but before publishing, even while a
+browser remains connected. Such a tab has no bounded catch-up guarantee until
+resume, reconnect or explicit refresh. Notification failures are logged separately
+and never make an accepted save fail. Existing workflow progress polling remains
+owned by its workflow and is not a guarantee that every derived value is current.
+
 ## List loading and enrichment
 
 Extend the generic list enrichment pipeline for data shared across rows,

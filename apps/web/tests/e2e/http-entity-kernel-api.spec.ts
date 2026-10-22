@@ -8,6 +8,7 @@ import { createCubbyClient } from "./support/http-api-client";
 import {
   settledCalendarFeedRevision,
   expectCalendarFeedDirtied,
+  waitForAppHydration,
 } from "./support/e2e-helpers";
 import { retryStaleKeepAlive } from "../../tooling/stale-keep-alive";
 import { expect, test } from "./support/e2e-test";
@@ -45,6 +46,11 @@ test("kernel HTTP round trip preserves fields, audit identity, and calendar effe
   const id = createdSchema.parse(created.parsedBody).item.id;
   expect(created.headers().location).toBeUndefined();
   try {
+    await page.goto(`/vendors/${id}`);
+    await waitForAppHydration(page);
+    await expect(
+      page.getByRole("heading", { level: 1, name, exact: true }),
+    ).toBeVisible();
     const detail = await api.get("vendor", id);
     expect(detail.status()).toBe(200);
     expect(detail.parsedBody).toMatchObject({ id, name, notes: "Keep this" });
@@ -59,6 +65,14 @@ test("kernel HTTP round trip preserves fields, audit identity, and calendar effe
     expect(updated.parsedBody).toMatchObject({
       item: { id, name: `${name} renamed` },
     });
+    // The HTTP caller never patches the browser cache: the committed hint must refresh this view.
+    await expect(
+      page.getByRole("heading", {
+        level: 1,
+        name: `${name} renamed`,
+        exact: true,
+      }),
+    ).toBeVisible();
     expect((await api.get("vendor", id)).parsedBody).toMatchObject({
       notes: "Keep this",
     });

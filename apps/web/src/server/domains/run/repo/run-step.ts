@@ -18,6 +18,7 @@ import { and, asc, eq, inArray, sql } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { getDb, unwrapDb, withTransactionDatabase } from "~/server/db/helpers";
+import { repositoryChanged } from "~/server/db/repository-access.boundary";
 import { run, runStep } from "~/server/db/schema";
 import { currentJobExecution } from "~/server/generic/jobs/context";
 import {
@@ -154,7 +155,7 @@ async function writeRunStepPage(
       )
     : null;
   const now = new Date();
-  await getDb(db)
+  const changed = await getDb(db)
     .update(runStep)
     .set({
       done: sql`${runStep.done} + ${delta.done ?? 0}`,
@@ -181,7 +182,9 @@ async function writeRunStepPage(
         ...(isTerminalStep(page.state) && { endedAt: now }),
       }),
     })
-    .where(and(eq(runStep.runId, runId), eq(runStep.key, key)));
+    .where(and(eq(runStep.runId, runId), eq(runStep.key, key)))
+    .returning({ id: runStep.id });
+  if (changed.length) await repositoryChanged(db, ["run"]);
 }
 
 /** Re-admits a failed step: its failures become work again, counts stay history. */

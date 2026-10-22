@@ -7,7 +7,10 @@ import { z } from "zod";
 import { type Database } from "~/server/db/database";
 import { notDeleted } from "~/server/db/helpers/predicates";
 import { type RepositoryQueryTransaction as DrizzleTransaction } from "~/server/db/repository-access.boundary";
-import { repositoryQueries as getDb } from "~/server/db/repository-access.boundary";
+import {
+  repositoryQueries as getDb,
+  repositoryChanged,
+} from "~/server/db/repository-access.boundary";
 import {
   product,
   productConversionCoverage,
@@ -137,7 +140,7 @@ export const writeProductConversionCoverageProjection = async (
 ): Promise<void> => {
   if (rows.length === 0) return;
   const now = new Date();
-  await getDb(db)
+  const changed = await getDb(db)
     .insert(productConversionCoverage)
     .values(
       rows.map((row) => ({
@@ -157,7 +160,10 @@ export const writeProductConversionCoverageProjection = async (
         engineVersion: PRODUCT_CONVERSION_COVERAGE_ENGINE_VERSION,
         computedAt: now,
       },
-    });
+      setWhere: sql`(${productConversionCoverage.coverageTier}, ${productConversionCoverage.coveredKinds}, ${productConversionCoverage.applicableKinds}, ${productConversionCoverage.islandCount}, ${productConversionCoverage.status}, ${productConversionCoverage.engineVersion}) IS DISTINCT FROM (excluded."coverageTier", excluded."coveredKinds", excluded."applicableKinds", excluded."islandCount", excluded."status", excluded."engineVersion") OR ${productConversionCoverage.computedAt} < now() - interval '7 days'`,
+    })
+    .returning({ id: productConversionCoverage.productId });
+  if (changed.length) await repositoryChanged(db, ["product", "problems"]);
 };
 
 /** Kit and ingredient effects converge through the broad conversions pass. */
