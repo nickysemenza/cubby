@@ -137,38 +137,32 @@ function TaskSpanFields({
 it("preserves mapped span values until an explicit change and submits a single date without a stale end", async () => {
   const save = vi.fn();
   render(<TaskSpanFields save={save} />, { wrapper: harness.wrapper });
-  fireEvent.click(screen.getByRole("button", { name: "Due", exact: true }));
-  fireEvent.click(
-    await screen.findByRole("button", { name: "Done", exact: true }),
-  );
-  fireEvent.click(screen.getByRole("button", { name: "Save", exact: true }));
+  fireEvent.click(screen.getByRole("button", { name: "Due" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Done" }));
+  fireEvent.click(screen.getByRole("button", { name: "Save" }));
   await waitFor(() =>
     expect(save).toHaveBeenLastCalledWith({
       draft: { dueDate: null, dueEndDate: "2026-10-30" },
     }),
   );
 
-  fireEvent.click(screen.getByRole("button", { name: "Due", exact: true }));
+  fireEvent.click(screen.getByRole("button", { name: "Due" }));
   const start = await screen.findByRole("textbox", { name: "Due start" });
   fireEvent.change(start, { target: { value: "Oct 28, 2026" } });
   fireEvent.keyDown(start, { key: "Enter" });
-  fireEvent.click(
-    screen.getByRole("button", { name: "Single date", exact: true }),
-  );
-  fireEvent.click(screen.getByRole("button", { name: "Done", exact: true }));
-  fireEvent.click(screen.getByRole("button", { name: "Save", exact: true }));
+  fireEvent.click(screen.getByRole("button", { name: "Single date" }));
+  fireEvent.click(screen.getByRole("button", { name: "Done" }));
+  fireEvent.click(screen.getByRole("button", { name: "Save" }));
   await waitFor(() =>
     expect(save).toHaveBeenLastCalledWith({
       draft: { dueDate: "2026-10-28", dueEndDate: null },
     }),
   );
 
-  fireEvent.click(screen.getByRole("button", { name: "Due", exact: true }));
-  fireEvent.click(
-    screen.getByRole("button", { name: "Clear dates", exact: true }),
-  );
-  fireEvent.click(screen.getByRole("button", { name: "Done", exact: true }));
-  fireEvent.click(screen.getByRole("button", { name: "Save", exact: true }));
+  fireEvent.click(screen.getByRole("button", { name: "Due" }));
+  fireEvent.click(screen.getByRole("button", { name: "Clear dates" }));
+  fireEvent.click(screen.getByRole("button", { name: "Done" }));
+  fireEvent.click(screen.getByRole("button", { name: "Save" }));
   await waitFor(() =>
     expect(save).toHaveBeenLastCalledWith({
       draft: { dueDate: null, dueEndDate: null },

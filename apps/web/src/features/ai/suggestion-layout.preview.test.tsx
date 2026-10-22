@@ -149,9 +149,8 @@ describe("SuggestionReview inline surface — phone review", () => {
     expect(actionableHeight).toBeGreaterThanOrEqual(pendingHeight);
     expect(screen.getByText("Tools")).toBeVisible();
     expect(
-      screen
-        .getByRole("button", { name: "Accept", exact: true })
-        .getBoundingClientRect().height,
+      screen.getByRole("button", { name: "Accept" }).getBoundingClientRect()
+        .height,
     ).toBeGreaterThanOrEqual(44);
     expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(
       window.innerWidth,
