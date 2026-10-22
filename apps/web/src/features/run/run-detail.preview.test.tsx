@@ -317,8 +317,12 @@ it.each([1440, 402])(
         within(drawer).getByText("Transfers create no Expenses."),
       ).toBeVisible(),
     );
-    expect(within(drawer).getAllByText(/The account owners differ/)[0]).toBeVisible();
-    await userEvent.click(within(drawer).getByRole("button", {name:"Raw diagnostics"}));
+    expect(
+      within(drawer).getAllByText(/The account owners differ/)[0],
+    ).toBeVisible();
+    await userEvent.click(
+      within(drawer).getByRole("button", { name: "Raw diagnostics" }),
+    );
     expect(within(drawer).getByText(/"owners_differ"/)).toBeVisible();
     await userEvent.keyboard("{Escape}");
     await waitFor(() =>

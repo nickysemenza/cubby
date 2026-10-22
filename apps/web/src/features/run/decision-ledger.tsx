@@ -95,7 +95,11 @@ export function DecisionLedger({
             }),
             cell: ({ row }) => {
               const def = presenter.facetOf(row.original);
-              return <span title={presenter.explanation(row.original)}><StatusPill tone={def.tone}>{def.label}</StatusPill></span>;
+              return (
+                <span title={presenter.explanation(row.original)}>
+                  <StatusPill tone={def.tone}>{def.label}</StatusPill>
+                </span>
+              );
             },
           }),
         );
