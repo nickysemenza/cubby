@@ -1,0 +1,43 @@
+recipebridge/src/ai_usage.rs
+  s_51e123cbeb9183::t_ebcd28d2fb9610 13,36
+recipebridge/src/availability.rs
+  s_51e123cbeb9183::t_2da09ccccb4849 40,49,59,72,97,107,115,143
+recipebridge/src/conversion.rs
+  s_51e123cbeb9183::t_61448d9e9f1a6e 31,53,83,99,284,291
+recipebridge/src/costing/types.rs
+  s_51e123cbeb9183::t_53cebadd95b8d0 97,330
+recipebridge/src/email.rs
+  s_51e123cbeb9183::t_d9bb32686ffbbe 30,41,53,62
+recipebridge/src/estimates.rs
+  s_51e123cbeb9183::t_f4d719dbb11831 18,118,125
+recipebridge/src/food_calculation.rs
+  s_51e123cbeb9183::t_5bff92cb5ddb23 81,91
+recipebridge/src/food_mappings.rs
+  s_51e123cbeb9183::t_64f34307b14c63 26,37,55,63,78,94
+recipebridge/src/isbn.rs
+  s_51e123cbeb9183::t_b7c290ca592c45 24
+recipebridge/src/lib.rs
+  s_51e123cbeb9183::t_7b70fe595f5513 207,265,292
+recipebridge/src/needs.rs
+  s_51e123cbeb9183::t_de5ab02346a4ef 74,144,153,166
+recipebridge/src/page.rs
+  s_51e123cbeb9183::t_1933fb79300d20 23,30,44
+recipebridge/src/parse.rs
+  s_51e123cbeb9183::t_e495138521a7a7 38,60,108,149,214,259,300
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "eb2d86f6afa0069c3f995ff4f778367a335915f7",
+  "prompts": {},
+  "sessions": {
+    "s_51e123cbeb9183": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a1650c-f629-7cd2-a585-c1c7808a98d3",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
