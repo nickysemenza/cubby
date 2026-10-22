@@ -135,12 +135,13 @@ fact explicitly from inline custom properties, gives the identity a
 each row's `dt` (visually hidden beside the header) so phones and assistive
 tech read them.
 
-Table identity captions omit fields with dedicated list columns. Shelf subtitles
-must name the canonical field (`categoryId`, for example), rather than its hydrated
-object (`category`), so the shared exclusion recognizes the same value.
-Suggestions financial rows use the charge description as their single linked
-record label; do not append the account pill beneath every charge. Account
-context remains in the review evidence and dedicated account columns.
+Every RTable identity/name cell contains one line of name text, never a caption,
+subtitle, account pill, or other content below it. Put secondary facts in their
+own columns or review evidence. `createNameColumn` has no caption option;
+the desktop identity-cell context suppresses shared stacked secondary values
+and record-link metadata. Custom identity renderers follow the same rule.
+Shelf cards retain their declared subtitles; the native `list.titleSubtitle`
+setting does not affect web tables.
 
 Column factories reuse module-level render components for selection controls:
 `flexRender` treats callbacks as React component types, so refreshing column

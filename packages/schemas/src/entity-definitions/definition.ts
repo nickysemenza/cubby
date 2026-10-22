@@ -1524,8 +1524,8 @@ const buildMetadataSchemas = () => {
           /** Replaces the subtitle inferred from mobile card placement. */
           shelfSubtitleOverride: z.array(fieldKey).optional(),
           /**
-           * The table's identity column takes a muted second line: the first
-           * `shelf.subtitle` field with a value. Opt-in; rows stay 32px.
+           * Native presentation may show the first populated shelf subtitle.
+           * Web RTable identity columns always contain only the name.
            */
           titleSubtitle: z.boolean().optional().default(false),
           /**

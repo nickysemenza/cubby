@@ -29,6 +29,7 @@ import {
 import { browserOnlyLazy } from "~/lib/browser-only-lazy";
 import { cn } from "~/lib/utils";
 import { PersonAvatar } from "~/ui/common/person-avatar";
+import { useIdentityCell } from "~/ui/common/stacked-value";
 import { ExternalLinkIcon } from "~/ui/external-link";
 import { EnumPill } from "~/ui/primitives/enum-pill";
 import {
@@ -298,6 +299,7 @@ export function ChipRefLink({
   wrap = false,
   compact = false,
 }: Leaf<ChipRefLinkProps>) {
+  const identity = useIdentityCell();
   const label = name ?? id;
   const providedImage = useEntityDisplayImage({
     entityKind: entity,
@@ -310,9 +312,11 @@ export function ChipRefLink({
   ) : null;
   // One name may take a second line in a 32px row (15px + 15px) before it
   // clamps; the cell spill shows the rest. `wrap` lets bounded panels flow.
-  const labelClass = wrap
-    ? "break-words whitespace-normal"
-    : "line-clamp-2 break-words whitespace-normal leading-[15px]";
+  const labelClass = identity
+    ? "truncate"
+    : wrap
+      ? "break-words whitespace-normal"
+      : "line-clamp-2 break-words whitespace-normal leading-[15px]";
   if (avatar) {
     const text = (
       <span className={cn("min-w-0", compact ? "truncate" : labelClass)}>

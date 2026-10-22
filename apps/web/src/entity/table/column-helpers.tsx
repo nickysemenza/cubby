@@ -43,10 +43,6 @@ import {
 import { cn } from "~/lib/utils";
 import { CurrencyValue } from "~/ui/common/currency-value";
 import { renderScalarValue } from "~/ui/common/scalar-value";
-import {
-  DenseCellContext,
-  STACKED_SECONDARY_CLASS,
-} from "~/ui/common/stacked-value";
 import { Row } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 import {
@@ -218,8 +214,6 @@ export function createNameColumn<T extends BaseRow>(
     header?: string;
     nameSuffix?: (row: T) => ReactNode;
     namePrefix?: (row: T) => ReactNode;
-    /** A muted second line under the name, within the 32px row. */
-    caption?: (row: T) => ReactNode;
     expandable?: boolean;
     emptyLabel?: (row: T) => string;
     rowLink?: RowLinkResolver<T>;
@@ -280,23 +274,6 @@ export function createNameColumn<T extends BaseRow>(
         options?.emptyLabel,
       );
       const suffix = options?.nameSuffix?.(info.row.original);
-      const caption = options?.caption?.(info.row.original);
-      const withCaption = (nameEl: ReactNode) =>
-        caption == null ? (
-          nameEl
-        ) : (
-          <span className="block min-w-0">
-            <span
-              data-stacked-line=""
-              className="block h-[15px] truncate leading-[15px]"
-            >
-              {nameEl}
-            </span>
-            <span data-stacked-line="" className={STACKED_SECONDARY_CLASS}>
-              <DenseCellContext value={null}>{caption}</DenseCellContext>
-            </span>
-          </span>
-        );
       const recordEmoji = recordEmojiSchema.parse(info.row.original).emoji;
       const prefix =
         recordEmoji || entitySummary[entity].recordIconEntityField ? (
@@ -319,9 +296,6 @@ export function createNameColumn<T extends BaseRow>(
               to={link.to}
               params={link.params}
               tone="identity"
-              className={
-                caption == null ? undefined : "block truncate leading-[15px]"
-              }
             >
               {label}
             </EntityRefLink>
@@ -416,18 +390,14 @@ export function createNameColumn<T extends BaseRow>(
             trigger="pencil"
             renderValue={(v) =>
               wrapWithSuffix(
-                withCaption(
-                  <Tooltip>
-                    <TooltipTrigger
-                      render={<span className="block truncate" />}
-                    >
-                      {linkName(v || value)}
-                    </TooltipTrigger>
-                    <TooltipContent side="top" className="max-w-xs">
-                      {v || value}
-                    </TooltipContent>
-                  </Tooltip>,
-                ),
+                <Tooltip>
+                  <TooltipTrigger render={<span className="block truncate" />}>
+                    {linkName(v || value)}
+                  </TooltipTrigger>
+                  <TooltipContent side="top" className="max-w-xs">
+                    {v || value}
+                  </TooltipContent>
+                </Tooltip>,
               )
             }
           />,
@@ -436,16 +406,14 @@ export function createNameColumn<T extends BaseRow>(
 
       return wrapExpandable(
         wrapWithSuffix(
-          withCaption(
-            <Tooltip>
-              <TooltipTrigger render={<span className="block truncate" />}>
-                {linkName(value)}
-              </TooltipTrigger>
-              <TooltipContent side="top" className="max-w-xs">
-                {value}
-              </TooltipContent>
-            </Tooltip>,
-          ),
+          <Tooltip>
+            <TooltipTrigger render={<span className="block truncate" />}>
+              {linkName(value)}
+            </TooltipTrigger>
+            <TooltipContent side="top" className="max-w-xs">
+              {value}
+            </TooltipContent>
+          </Tooltip>,
         ),
       );
     },
