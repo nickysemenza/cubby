@@ -11,6 +11,7 @@ import { z } from "zod";
 import type { Database } from "~/server/db";
 import { entityIdentity } from "~/server/db/entity-identity-schema";
 import { getDb, withTransactionDatabase } from "~/server/db/helpers";
+import { repositoryChanged } from "~/server/db/repository-access.boundary";
 import { entityEmbedding, job } from "~/server/db/retained-tables";
 import { vectorPayloadHash } from "~/server/generic/embedding/repo/embedding-artifact";
 import { embeddingTextHash } from "~/server/generic/embedding/repo/semantic/hash";
@@ -277,6 +278,12 @@ export function embeddingJobHandler(
                 indexedAt: new Date(),
               },
             });
+          await repositoryChanged(tx, [
+            input.entityKind,
+            "search",
+            "relatedData",
+            "problems",
+          ]);
         },
       };
     },

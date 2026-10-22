@@ -7,6 +7,7 @@ import {
   createDatabase,
   resolveDatabaseRuntime,
 } from "~/server/db/database-runtime";
+import { notifyDatabaseChanges } from "~/server/db/freshness/client";
 import type { RepositoryQueryTransaction } from "~/server/db/repository-access.boundary";
 import { isSerializationFailure } from "~/server/errors/db-errors";
 import { TraceNames, withTrace } from "~/server/observability/tracing";
@@ -30,6 +31,23 @@ export type AfterCommitEffect = (committedDb: Database) => Promise<void>;
  * of `withTransaction` has no commit boundary and rejects deferred effects.
  */
 const afterCommitQueues = new WeakMap<object, AfterCommitEffect[]>();
+const committedChanges = new WeakMap<object, Set<string>>();
+
+/** Changes follow savepoint ownership; only a successful outer commit publishes. */
+export async function recordCommittedChanges(
+  db: Database | RepositoryQueryTransaction,
+  categories: readonly string[],
+): Promise<void> {
+  if (!categories.length) return;
+  const pending = committedChanges.get(db);
+  if (pending) {
+    for (const category of categories) pending.add(category);
+    return;
+  }
+  if ("rollback" in db)
+    throw new Error("Change notifications require withTransaction");
+  await notifyDatabaseChanges(categories);
+}
 type BeforeCommitEffect = (tx: DrizzleTransaction) => Promise<void>;
 type BeforeCommitEntry = {
   effect: BeforeCommitEffect;
@@ -199,12 +217,14 @@ const withTransactionAttempts = async <T>(
   const limit = isTransaction(getDb(db)) ? 1 : attempts;
   for (let attempt = 1; ; attempt++) {
     const pending: AfterCommitEffect[] = [];
+    const changes = new Set<string>();
     const before: BeforeCommitEntry[] = [];
     let result: T;
     try {
       result = await withTrace(TraceNames.db("transaction"), async () => {
         return await getDb(db).transaction(async (tx) => {
           afterCommitQueues.set(tx, pending);
+          committedChanges.set(tx, changes);
           beforeCommitQueues.set(tx, before);
           transactionParents.set(tx, db);
           try {
@@ -244,6 +264,12 @@ const withTransactionAttempts = async <T>(
     // Commit succeeded: effect failures must never enter the replay catch.
     if (parentBefore) parentBefore.push(...before);
     const parent = afterCommitQueues.get(db);
+    const parentChanges = committedChanges.get(db);
+    if (parentChanges) {
+      for (const category of changes) parentChanges.add(category);
+    } else if (changes.size) {
+      await notifyDatabaseChanges([...changes]);
+    }
     if (parent) parent.push(...pending);
     else await flushAfterCommit(db, pending);
     return result;
@@ -313,6 +339,8 @@ export const databaseForTransaction = (tx: DrizzleTransaction): Database => {
   }));
   const pending = afterCommitQueues.get(tx);
   if (pending) afterCommitQueues.set(database, pending);
+  const changes = committedChanges.get(tx);
+  if (changes) committedChanges.set(database, changes);
   const before = beforeCommitQueues.get(tx);
   if (before) beforeCommitQueues.set(database, before);
   return database;

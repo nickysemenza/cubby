@@ -20,6 +20,7 @@ import {
   uuidArrayParam,
   withTransactionOn,
 } from "~/server/db/helpers";
+import { repositoryChanged } from "~/server/db/repository-access.boundary";
 import { expenseDerivedReadSql } from "~/server/domains/expense/repo/expense-derived-read";
 import { effectiveExpenseTradeSql } from "~/server/domains/expense/repo/expense-inheritance";
 import { loadSelectedDescriptions } from "~/server/domains/image/repo/image-description-selection";
@@ -628,11 +629,13 @@ async function markSearchDocumentMissing(
   entityKind: SearchableEntity,
   entityId: string,
 ): Promise<SearchDocumentRefreshResult> {
-  await unwrapDb(db).execute(sql`
+  const changed = await unwrapDb(db).execute(sql`
     UPDATE "SearchDocument" SET "deletedAt" = now(), "updatedAt" = now()
     WHERE "entityKind" = ${entityKind} AND "entityId" = ${entityId}::uuid AND "deletedAt" IS NULL
     RETURNING "entityId"
   `);
+  if (changed.rows.length)
+    await repositoryChanged(db, ["search", "relatedData", "problems"]);
   return { status: "missing", entityKind, entityId };
 }
 
@@ -654,7 +657,7 @@ async function upsertSearchDocumentBatch(
       )`;
     }),
   );
-  await unwrapDb(db).execute(sql`
+  const changed = await unwrapDb(db).execute(sql`
     INSERT INTO "SearchDocument" (
       "entityKind", "entityId", title, subtitle, "typeHint",
       aliases, keywords, body, "semanticText", "normalizedText",
@@ -685,6 +688,8 @@ async function upsertSearchDocumentBatch(
       OR "SearchDocument".title IS DISTINCT FROM EXCLUDED.title
     RETURNING "entityKind"
   `);
+  if (changed.rows.length)
+    await repositoryChanged(db, ["search", "relatedData", "problems"]);
   return entries.map(({ source }) => ({
     status: "upserted",
     entityKind: source.entityKind,

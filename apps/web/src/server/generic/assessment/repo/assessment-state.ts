@@ -17,6 +17,7 @@ import { isEqual } from "es-toolkit";
 import { z } from "zod";
 
 import { type Database } from "~/server/db/database";
+import { repositoryChanged } from "~/server/db/repository-access.boundary";
 import {
   type RepositoryQueryInput,
   type RepositoryQueryTransaction as DrizzleTransaction,
@@ -205,6 +206,13 @@ export async function transitionAssessmentStates(
         .where(inArray(assessmentState.id, group.ids))
         .returning()),
     );
+  if (updated.length)
+    await repositoryChanged(db, [
+      "ai",
+      "suggestions",
+      "problems",
+      ...updated.map((row) => row.entity),
+    ]);
   return updated;
 }
 
@@ -242,6 +250,7 @@ export async function insertPublishedAssessmentState(
           ? sql`'null'::jsonb`
           : values.suggestedValue,
     });
+  await repositoryChanged(db, ["ai", "suggestions", "problems", values.entity]);
 }
 
 /**
@@ -268,6 +277,7 @@ export async function openAssessmentState(
     [{ id: opened.id, patch: projectionColumns(opened) }],
     cause,
   );
+  await repositoryChanged(db, ["ai", "suggestions", "problems", opened.entity]);
   return opened;
 }
 

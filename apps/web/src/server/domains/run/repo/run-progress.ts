@@ -13,6 +13,7 @@ import { and, eq } from "drizzle-orm";
 import type { Database } from "~/server/db";
 import { getDb, withTransactionDatabase } from "~/server/db/helpers/core";
 import { notDeleted } from "~/server/db/helpers/predicates";
+import { repositoryChanged } from "~/server/db/repository-access.boundary";
 import { run, job } from "~/server/db/schema";
 import { currentJobExecution } from "~/server/generic/jobs/context";
 import { assertCurrentJob } from "~/server/generic/jobs/repo/execution";
@@ -150,6 +151,7 @@ export async function recordRunProgress(
         heartbeatAt: now,
       })
       .where(eq(run.id, id));
+    await repositoryChanged(database, ["run"]);
     return { recorded: true };
   });
 }
