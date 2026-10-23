@@ -129,7 +129,10 @@ test("a new account must choose its identity kind instead of getting a default",
 }) => {
   await page.setViewportSize({ width: 1280, height: 1000 });
   const name = `Example card ${Date.now()}`;
-  await gotoAuthenticatedPage(page, "/financial-accounts?create=true");
+  await gotoAuthenticatedPage(
+    page,
+    `/financial-accounts?create=true&searchQuery=${encodeURIComponent(name)}`,
+  );
   const dialog = page.getByRole("dialog", { name: "New Account" });
   await dialog.getByRole("textbox", { name: "Name", exact: true }).fill(name);
 

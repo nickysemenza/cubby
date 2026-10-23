@@ -79,7 +79,10 @@ test("capture keeps pending role controls available and saves an explicitly sele
   const product = z
     .object({ item: z.object({ id: z.string() }) })
     .parse(await created.json()).item;
-  await gotoAuthenticatedPage(page, "/expenses?create=true");
+  await gotoAuthenticatedPage(
+    page,
+    `/expenses?create=true&searchQuery=${encodeURIComponent(name)}`,
+  );
   await waitForFormHydration(page);
   const dialog = page.getByRole("dialog");
   const role = dialog.getByRole("combobox", {

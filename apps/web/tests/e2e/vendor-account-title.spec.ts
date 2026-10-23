@@ -27,7 +27,10 @@ test("vendor accounts take their title from the current vendor and member", asyn
   // The typed picker searches SearchDocument; a raw insert bypasses its creation.
   const store = await createEntityFixture(page, "vendor", { name: storeName });
 
-  await gotoAuthenticatedPage(page, "/vendor-accounts?create=true");
+  await gotoAuthenticatedPage(
+    page,
+    `/vendor-accounts?create=true&searchQuery=${encodeURIComponent(storeName)}`,
+  );
   await waitForFormHydration(page);
   const dialog = page.getByRole("dialog");
   await expect(

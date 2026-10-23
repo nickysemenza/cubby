@@ -20,7 +20,10 @@ test("a member creates a Product from own item and label photos without an impor
   page,
 }) => {
   const name = `Photo-first crew shirt ${Date.now()}`;
-  await gotoAuthenticatedPage(page, "/products?create=true");
+  await gotoAuthenticatedPage(
+    page,
+    `/products?create=true&searchQuery=${encodeURIComponent(name)}`,
+  );
   await waitForFormHydration(page);
   const editor = page.getByRole("dialog");
   await editor.getByRole("textbox", { name: "Name", exact: true }).fill(name);
