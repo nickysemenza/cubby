@@ -65,10 +65,13 @@ import {
   type LabelCursor,
   recordStatementLabelCheckpoint,
   completeStatementApplications,
+  completeNoActionStatementPrefix,
+  STATEMENT_APPLICATION_PREFIX_LIMIT,
   repairStatementApplicationReceipts,
 } from "~/server/domains/transaction-import/repo/statement-suggestions";
 import { decideStatementKind } from "~/server/domains/transaction-import/repo/statement-transaction-kind";
 import { applyAutomaticRulesForCharge } from "~/server/generic/assessment/repo/automatic-rule-runtime";
+import { matchStatementRules } from "~/server/generic/assessment/repo/automatic-rules";
 import { canonicalJson } from "~/server/lib/canonical-json";
 import { isWorkflowInterrupted } from "~/server/workflows/runs/execution";
 import { runFailureText } from "~/server/workflows/runs/lifecycle";
@@ -439,6 +442,158 @@ function statementLabelCursors(
         ? { createdAt: last.createdAt, id: last.cursorId }
         : null),
   };
+}
+
+async function completeNoActionTargets(
+  db: Database,
+  input: {
+    targets: readonly {
+      charge: ChargeRef;
+      row: Awaited<ReturnType<typeof suggestionsNeedingLabels>>[number];
+    }[];
+    receipts: ReadonlyMap<string, string>;
+    published: ReadonlyMap<string, string>;
+    skipped: ReadonlySet<string>;
+    failedCharges: ReadonlySet<string>;
+    completed: Set<string>;
+    unfinished: Set<string>;
+  },
+) {
+  const window = [];
+  for (const next of input.targets) {
+    const key = chargeId(next.charge);
+    const assessmentId = input.receipts.get(key);
+    const evidenceFingerprint = input.published.get(key);
+    if (
+      input.skipped.has(key) ||
+      input.failedCharges.has(key) ||
+      !assessmentId ||
+      !evidenceFingerprint ||
+      // A nonempty hint only declines batching. Absence still needs locked proof.
+      matchStatementRules(next.row.judgment).length > 0
+    )
+      break;
+    window.push({ assessmentId, charge: next.charge, evidenceFingerprint });
+  }
+  const settled = await completeNoActionStatementPrefix(db, window);
+  for (const next of input.targets.slice(0, settled)) {
+    input.completed.add(chargeId(next.charge));
+    next.row.applicationPending = false;
+    input.unfinished.delete(next.row.cursorId);
+  }
+  return settled;
+}
+
+async function applyPublishedStatementLabels(
+  db: Database,
+  input: Parameters<typeof completeNoActionTargets>[1] & {
+    importId: string | null | undefined;
+    reconsidered: ReadonlySet<string>;
+    fail: (charge: ChargeRef, error: unknown) => void;
+  },
+) {
+  const {
+    targets,
+    receipts,
+    published,
+    skipped,
+    failedCharges,
+    completed,
+    unfinished,
+    importId,
+    reconsidered,
+    fail,
+  } = input;
+  // Model work may finish out of order; effects admit only the original
+  // ready prefix. Later publications keep their receipts for durable resume.
+  const applied = new Set<string>();
+  const settledReceipts: string[] = [];
+  const settledCharges: string[] = [];
+  const rebuild = new Set<string>();
+  // A prior-round completion is resolved unless changed evidence required publication again.
+  const awaitsPublication = (key: string) =>
+    !completed.has(key) || reconsidered.has(key);
+  let applicationBlocked = false;
+  for (let targetIndex = 0; targetIndex < targets.length; targetIndex++) {
+    const target = targets[targetIndex]!;
+    const key = chargeId(target.charge);
+    if (skipped.has(key)) {
+      unfinished.delete(target.row.cursorId);
+      continue;
+    }
+    if (failedCharges.has(key)) {
+      // Root retries the original input while attempts remain. After
+      // exhaustion next must advance past this failure, not reset its budget.
+      unfinished.delete(target.row.cursorId);
+      applicationBlocked = true;
+      continue;
+    }
+    if (!published.has(key)) {
+      if (awaitsPublication(key)) applicationBlocked = true;
+      continue;
+    }
+    if (applicationBlocked) {
+      unfinished.add(target.row.cursorId);
+      continue;
+    }
+    try {
+      // Import-scoped application regenerates first and may introduce rules.
+      // Only an unscoped, freshly locked no-rule prefix can bypass admission.
+      const settled = importId
+        ? 0
+        : await completeNoActionTargets(db, {
+            targets: targets.slice(
+              targetIndex,
+              targetIndex + STATEMENT_APPLICATION_PREFIX_LIMIT,
+            ),
+            receipts,
+            published,
+            skipped,
+            failedCharges,
+            completed,
+            unfinished,
+          });
+      if (settled) {
+        targetIndex += settled - 1;
+        continue;
+      }
+      if (importId) await regenerateCharges(db, [target.charge]);
+      const outcome = await applyAutomaticRulesForCharge(
+        db,
+        target.charge,
+        Boolean(importId),
+      );
+      if (outcome.refused.length) {
+        const [fresh] = await buildChargeProposals(db, [target.charge]);
+        if (fresh && fresh.evidenceFingerprint !== published.get(key)) {
+          // An earlier application can consume this charge's candidate.
+          // Rebuild through the existing ordered rounds instead of retrying
+          // an obsolete application receipt forever.
+          target.row.applicationPending = false;
+          rebuild.add(key);
+          applicationBlocked = true;
+          continue;
+        }
+        throw new Error(
+          `Automatic statement application refused: ${JSON.stringify(outcome.refused)}`,
+        );
+      }
+      // Newly published rows replaced the selected row; clear the active
+      // receipt only after this charge's ordered application has settled.
+      settledReceipts.push(receipts.get(key)!);
+      settledCharges.push(key);
+      target.row.applicationPending = false;
+      unfinished.delete(target.row.cursorId);
+      if (outcome.applied.length) applied.add(key);
+    } catch (error) {
+      fail(target.charge, error);
+      unfinished.delete(target.row.cursorId);
+      applicationBlocked = true;
+    }
+  }
+  await completeStatementApplications(db, settledReceipts);
+  for (const key of settledCharges) completed.add(key);
+  return { applied, rebuild };
 }
 
 /**
@@ -866,82 +1021,26 @@ async function runStatementLabelBatch(
         published.set(key, outcome.receipt.evidenceFingerprint);
         receipts.set(key, outcome.receipt.assessmentId);
         target.row.id = outcome.receipt.assessmentId;
+        target.row.judgment = item.input.proposal.judgment;
         target.row.applicationPending = true;
       } catch (error) {
         fail(current.charge, error);
       }
     }
-    // Model work may finish out of order; effects admit only the original
-    // ready prefix. Later publications keep their receipts for durable resume.
-    const applied = new Set<string>();
-    const settledReceipts: string[] = [];
-    const settledCharges: string[] = [];
-    const rebuild = new Set<string>();
-    const reconsidered = new Set(
-      ready.map(({ current }) => chargeId(current.charge)),
-    );
-    // A prior-round completion is resolved unless changed evidence required publication again.
-    const awaitsPublication = (key: string) =>
-      !completed.has(key) || reconsidered.has(key);
-    let applicationBlocked = false;
-    for (const target of targets) {
-      const key = chargeId(target.charge);
-      if (skipped.has(key)) {
-        unfinished.delete(target.row.cursorId);
-        continue;
-      }
-      if (failedCharges.has(key)) {
-        // Root retries the original input while attempts remain. After
-        // exhaustion next must advance past this failure, not reset its budget.
-        unfinished.delete(target.row.cursorId);
-        applicationBlocked = true;
-        continue;
-      }
-      if (!published.has(key)) {
-        if (awaitsPublication(key)) applicationBlocked = true;
-        continue;
-      }
-      if (applicationBlocked) {
-        retainUnfinished(target.row);
-        continue;
-      }
-      try {
-        if (input.importId) await regenerateCharges(db, [target.charge]);
-        const outcome = await applyAutomaticRulesForCharge(
-          db,
-          target.charge,
-          Boolean(input.importId),
-        );
-        if (outcome.refused.length) {
-          const [fresh] = await buildChargeProposals(db, [target.charge]);
-          if (fresh && fresh.evidenceFingerprint !== published.get(key)) {
-            // An earlier application can consume this charge's candidate.
-            // Rebuild through the existing ordered rounds instead of retrying
-            // an obsolete application receipt forever.
-            target.row.applicationPending = false;
-            rebuild.add(key);
-            applicationBlocked = true;
-            continue;
-          }
-          throw new Error(
-            `Automatic statement application refused: ${JSON.stringify(outcome.refused)}`,
-          );
-        }
-        // Newly published rows replaced the selected row; clear the active
-        // receipt only after this charge's ordered application has settled.
-        settledReceipts.push(receipts.get(key)!);
-        settledCharges.push(key);
-        target.row.applicationPending = false;
-        unfinished.delete(target.row.cursorId);
-        if (outcome.applied.length) applied.add(key);
-      } catch (error) {
-        fail(target.charge, error);
-        unfinished.delete(target.row.cursorId);
-        applicationBlocked = true;
-      }
-    }
-    await completeStatementApplications(db, settledReceipts);
-    for (const key of settledCharges) completed.add(key);
+    const { applied, rebuild } = await applyPublishedStatementLabels(db, {
+      targets,
+      receipts,
+      published,
+      skipped,
+      failedCharges,
+      completed,
+      unfinished,
+      importId: input.importId,
+      reconsidered: new Set(
+        ready.map(({ current }) => chargeId(current.charge)),
+      ),
+      fail,
+    });
     if (rebuild.size && round === MAX_LABEL_ROUNDS - 1) {
       const remaining = targets.filter((target) =>
         rebuild.has(chargeId(target.charge)),
