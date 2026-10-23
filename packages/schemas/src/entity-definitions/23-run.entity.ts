@@ -183,6 +183,7 @@ export default defineEntity({
       ],
     },
     list: {
+      links: [{ label: "Run types", path: "/runs/types" }],
       // Display images borrow from the vendor; they load as list media.
       read: {
         derived: ["workProgress", "activityAt"],

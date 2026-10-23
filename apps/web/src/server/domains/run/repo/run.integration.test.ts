@@ -8,6 +8,7 @@ import { run as runTable } from "~/server/db/schema";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import type { ShortcodeGeneratorPort } from "~/server/generic/shortcode/repo/shortcode-utils";
 
+import { readRunCatalogActivity } from "./catalog-activity";
 import { getRunByShortcode, listRuns } from "./run";
 
 const collisionGenerator = (
@@ -121,5 +122,56 @@ describe("listRuns", () => {
     ]);
     expect(ephemeral.data).toHaveLength(1);
     expect(manual.data).toHaveLength(0);
+  });
+});
+
+describe("Run catalog activity", () => {
+  const ctx = withTestDb();
+
+  it("separates latest starts from latest completions and excludes deleted runs", async () => {
+    const first = await ensureRun(ctx.db, ctx.actor, { purpose: "ai_suggest" });
+    const later = await ensureRun(ctx.db, ctx.actor, { purpose: "ai_suggest" });
+    const running = await ensureRun(ctx.db, ctx.actor, {
+      purpose: "ai_suggest",
+      trigger: "manual",
+    });
+    const deleted = await ensureRun(ctx.db, ctx.actor, {
+      purpose: "ai_suggest",
+    });
+    await ensureRun(ctx.db, ctx.actor, { purpose: "background" });
+    for (const [id, startedAt, endedAt] of [
+      [first, "2025-01-01T00:00:00Z", "2025-01-04T00:00:00Z"],
+      [later, "2025-01-02T00:00:00Z", "2025-01-03T00:00:00Z"],
+      [running, "2025-01-05T00:00:00Z", null],
+      [deleted, "2025-01-06T00:00:00Z", "2025-01-07T00:00:00Z"],
+    ] as const) {
+      await getDb(ctx.db)
+        .update(runTable)
+        .set({
+          startedAt: new Date(startedAt),
+          endedAt: endedAt ? new Date(endedAt) : null,
+        })
+        .where(eq(runTable.id, id));
+    }
+    await getDb(ctx.db)
+      .update(runTable)
+      .set({ deletedAt: new Date("2025-01-08T00:00:00Z") })
+      .where(eq(runTable.id, deleted));
+    const activity = await readRunCatalogActivity(ctx.db);
+    expect(
+      activity.latest.find((row) => row.purpose === "ai_suggest"),
+    ).toMatchObject({
+      status: "running",
+      startedAt: "2025-01-05T00:00:00.000Z",
+    });
+    expect(
+      activity.completed.find((row) => row.purpose === "ai_suggest"),
+    ).toMatchObject({
+      startedAt: "2025-01-01T00:00:00.000Z",
+      endedAt: "2025-01-04T00:00:00.000Z",
+    });
+    expect(
+      activity.latest.find((row) => row.purpose === "background"),
+    ).toMatchObject({ status: "completed" });
   });
 });

@@ -6,6 +6,24 @@ server projection with record work sections, including Runs. Views can overlap:
 automatic execution can be waiting for a prerequisite. GitHub Issues owns
 delivery and remaining domain coverage.
 
+The Runs header links to **Run types** (`/runs/types`), a catalog of every
+declared Run kind. Its indexed sections expose purpose keys, execution owners,
+progress sources, AI ownership and ordered steps (purpose, action, input mode,
+units and suggestion families) directly from `RUN_KINDS`. Metadata and recent
+activity use the shared `Facts` list and canonical Run entity links; ordered
+steps use columnar `RecordList` rows, with shared technical headers on wide
+surfaces and labeled inline facts on narrow ones, matching `/design`.
+Types marked historical
+appear under “No longer created”; their retained history remains accessible.
+Types without fixed steps say so rather than inventing a sequence.
+Each type links to its filtered Runs history, including routine and ephemeral
+work hidden from the default list. A shared household-wide activity read shows
+the latest run by start time and latest completed run by finish time for each
+purpose, excluding deleted rows. Activity refresh is explicit, and errors leave
+the static reference usable. Completion is a stored status, not a claim that
+every target succeeded. Scheduling cadence and start controls remain in their
+existing owners; the catalog does not infer them from the trigger category.
+
 ## Shared work, different ways to complete it
 
 The Work queue, a record's work section, and a Run's progress should explain
