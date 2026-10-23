@@ -1,46 +1,65 @@
 import type { Page } from "@playwright/test";
 
-import {
-  seedPlantPrerequisite,
-  seedPlantingPrerequisite,
-  seedPlantPurchasePrerequisite,
-  seedProjectPrerequisite,
-  seedTaskPrerequisite,
-  seedVendorDisplayPrerequisite,
-} from "../fixtures/catalog";
+import { createFixtureGraph } from "../fixtures/core";
 import { gotoAuthenticatedPage } from "./e2e-helpers";
 import { expect } from "./e2e-test";
 
 export async function plantTaskConnection(page: Page) {
   const suffix = Date.now();
-  const plant = await seedPlantPrerequisite(page, `Connection crop ${suffix}`);
-  const project = await seedProjectPrerequisite(
-    page,
-    `Connection project ${suffix}`,
-  );
   const taskName = `Connection task ${suffix}`;
-  const task = await seedTaskPrerequisite(page, {
-    name: taskName,
-    projectId: project.id,
-  });
-  const planting = await seedPlantingPrerequisite(page, {
-    plantId: plant.id,
-    taskId: task.id,
-  });
-  const vendor = await seedVendorDisplayPrerequisite(
-    page,
-    `Connection supplier ${suffix}`,
-  );
-  const seed = await seedPlantPurchasePrerequisite(page, {
-    plantId: plant.id,
-    vendorId: vendor.id,
-    name: `Connection seeds ${suffix}`,
-  });
-  const starter = await seedPlantPurchasePrerequisite(page, {
-    plantId: plant.id,
-    vendorId: vendor.id,
-    name: `Connection starter ${suffix}`,
-  });
+  const { plant, project, task, planting, vendor, seed, starter } =
+    await createFixtureGraph(page, async (create) => {
+      const plant = await create("plant", {
+        name: `Connection crop ${suffix}`,
+      });
+      const project = await create("project", {
+        name: `Connection project ${suffix}`,
+      });
+      const task = await create("task", {
+        name: taskName,
+        trade: "other",
+        projectId: project.id,
+      });
+      const planting = await create("planting", {
+        plantId: plant.id,
+        locationId: null,
+        taskId: task.id,
+      });
+      const vendorName = `Connection supplier ${suffix}`;
+      const vendor = await create("vendor", {
+        name: vendorName,
+        website: "https://example.com",
+        orderUrlTemplate: "https://example.com/orders/{orderId}",
+        notes: `${vendorName} notes`,
+      });
+      const brand = await create("vendor", { name: "E2E fixture" });
+      const purchaseFor = async (name: string) => {
+        const product = await create("product", {
+          brandId: brand.id,
+          name: `${name} product`,
+          growsPlantId: plant.id,
+        });
+        const purchase = await create("purchase", {
+          vendorId: vendor.id,
+          orderId: `${name} order`,
+          date: "2026-09-09",
+        });
+        await create("expense", {
+          name: `${name} expense`,
+          cost: 7,
+          date: "2026-09-09",
+          costType: "materials",
+          trade: "other",
+          productId: product.id,
+          productQuantity: 1,
+          purchaseId: purchase.id,
+        });
+        return { product, purchase };
+      };
+      const seed = await purchaseFor(`Connection seeds ${suffix}`);
+      const starter = await purchaseFor(`Connection starter ${suffix}`);
+      return { plant, project, task, planting, vendor, seed, starter };
+    });
 
   await gotoAuthenticatedPage(page, `/plants/${plant.id}`);
   await page
