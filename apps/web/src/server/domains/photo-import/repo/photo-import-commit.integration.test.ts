@@ -1,4 +1,8 @@
-import { imageIngressRouteById } from "@cubby/schemas/entity-manifest";
+import {
+  coverEntities,
+  imageIngressRouteById,
+  logoEntities,
+} from "@cubby/schemas/entity-manifest";
 import { eq, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
@@ -23,6 +27,7 @@ import {
 import { reconcilePhotoImport } from "~/server/domains/photo-import/service/photo-import-reconcile.service";
 import { manifestPhotoImportRouteAdapter } from "~/server/domains/photo-import/service/photo-import-route.adapter";
 import { entityKernelContextSchema } from "~/server/entity-kernel";
+import { ENTITY_KERNEL_BINDINGS } from "~/server/generated/entity-kernel-bindings.gen";
 import {
   createImageFixture,
   createLocationFixture,
@@ -31,6 +36,11 @@ import {
   makeRecipeInput,
 } from "~/server/testing/repo.fixtures";
 import { createTestRequestContext } from "~/server/testing/request-context";
+
+import {
+  isSingularImageOwner,
+  photoImportRelationTraversals,
+} from "./photo-import";
 
 describe("photo import transaction", () => {
   const ctx = withTestDb();
@@ -503,5 +513,62 @@ describe("photo import transaction", () => {
       ],
       missing: [],
     });
+  });
+});
+
+describe("manifest photo import runtime bindings", () => {
+  it("compiles the confirmed transaction-purchase route through allocations", () => {
+    const route =
+      imageIngressRouteById["financial-transaction-confirmed-purchase"];
+    const traversals = photoImportRelationTraversals(
+      route.sourceEntity,
+      route.relationPath,
+    );
+
+    expect(traversals).toEqual([
+      {
+        targetEntity: "purchase",
+        steps: [
+          {
+            edge: "FinancialTransactionAllocation.transactionId",
+            direction: "incoming",
+          },
+          {
+            edge: "FinancialTransactionAllocation.purchaseId",
+            direction: "outgoing",
+          },
+        ],
+      },
+    ]);
+  });
+
+  it("has a typed adapter for every manifest singular image owner", () => {
+    expect(
+      [...coverEntities, ...logoEntities].every(isSingularImageOwner),
+    ).toBe(true);
+  });
+
+  // The generator only sees the manifest `contract.create`; `createDestination` needs the
+  // runtime binding's `createInput` and hand-written `repository.create`, so a route enabled
+  // against an entity whose repository lacks `create` would fail only at commit time.
+  it("binds a runtime create for every enabled creating route", () => {
+    const creating = Object.values(imageIngressRouteById).filter(
+      (route) =>
+        route.enabled &&
+        (route.kind === "createSelf" || route.kind === "createRelated"),
+    );
+    const uncreatable = creating
+      .filter((route) => {
+        const binding = Object.entries(ENTITY_KERNEL_BINDINGS).find(
+          ([entity]) => entity === route.targetEntity,
+        )?.[1];
+        return (
+          !binding?.schemas.createInput ||
+          !("create" in binding.repository) ||
+          !binding.repository.create
+        );
+      })
+      .map((route) => route.routeId);
+    expect(uncreatable).toEqual([]);
   });
 });

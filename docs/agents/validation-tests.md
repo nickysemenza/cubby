@@ -6,8 +6,16 @@ The UI project shares module state between files. Its shared teardown clears
 Sonner notifications as well as React trees: unmounting a Toaster leaves its
 notifications available to the next test.
 
-Keep pure logic imported by Node tests in alias-free `.ts` files. Temporary
-subprocess workspaces declare their module type explicitly, matching the consumer.
+Keep pure logic imported directly by standalone Node subprocesses in alias-free
+`.ts` files. Vitest uses the application's configured aliases; server composition
+keeps the declared `~/server/` boundary. Temporary subprocess workspaces declare
+their module type explicitly, matching the consumer.
+
+Photo-import route binding and source-admission unit cases import
+`photo-import-route-bindings.ts`, which evaluates contracts without loading
+repositories or the entity kernel. Runtime route creation, singular image owners
+and SQL relationship traversal stay in the existing photo-import transaction
+integration suite, which already imports those production bindings.
 
 Detail renderer and browser tests assert the continuous page: every section is
 accessible without a view switch. Select a section hash to verify scrolling,
@@ -432,6 +440,13 @@ When moving coverage, name the retained owner or the deliberate
 coverage tradeoff in the deleting commit. Use the `ui` jsdom tier for a distinct
 failure that does not need native browser behavior; avoid duplicating the same
 shared capability in both tiers.
+
+The Wardrobe browser journeys retain ownership edits, grouped category navigation,
+subtype inclusion and section exclusion. The mobile sticky-header coordinate
+check is deliberately omitted: creating a scrolling inventory population solely
+to assert header position costs a full browser journey for a presentation detail.
+Shared responsive capabilities do not establish sticky behavior; verify that
+visual detail during relevant layout work instead.
 
 ## Test and dev data factories
 

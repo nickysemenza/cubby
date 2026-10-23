@@ -1,15 +1,5 @@
-import {
-  coverEntities,
-  imageIngressRouteById,
-  logoEntities,
-} from "@cubby/schemas/entity-manifest";
+import { imageIngressRouteById } from "@cubby/schemas/entity-manifest";
 import { describe, expect, it } from "vitest";
-
-import {
-  isSingularImageOwner,
-  photoImportRelationTraversals,
-} from "~/server/domains/photo-import/repo/photo-import";
-import { ENTITY_KERNEL_BINDINGS } from "~/server/generated/entity-kernel-bindings.gen";
 
 import {
   assertPhotoImportReplacementAllowed,
@@ -17,7 +7,7 @@ import {
   assertPhotoImportSourceCardinality,
   assertPhotoImportSourceContext,
   materializePhotoImportCreateBody,
-} from "./photo-import-route.adapter";
+} from "./photo-import-route-bindings";
 
 describe("manifest photo import routes", () => {
   it("materializes every binding kind over the staged editor body", () => {
@@ -129,31 +119,6 @@ describe("manifest photo import routes", () => {
     expect(nullableSource.locationId).toBe("LOC-EDIT");
   });
 
-  it("compiles the confirmed transaction-purchase route through allocations", () => {
-    const route =
-      imageIngressRouteById["financial-transaction-confirmed-purchase"];
-    const traversals = photoImportRelationTraversals(
-      route.sourceEntity,
-      route.relationPath,
-    );
-
-    expect(traversals).toEqual([
-      {
-        targetEntity: "purchase",
-        steps: [
-          {
-            edge: "FinancialTransactionAllocation.transactionId",
-            direction: "incoming",
-          },
-          {
-            edge: "FinancialTransactionAllocation.purchaseId",
-            direction: "outgoing",
-          },
-        ],
-      },
-    ]);
-  });
-
   it("requires replace confirmation only for an occupied singular owner", () => {
     const route = imageIngressRouteById["cookbook-cover"];
     expect(() =>
@@ -165,12 +130,6 @@ describe("manifest photo import routes", () => {
     expect(() =>
       assertPhotoImportReplacementAllowed(route, true, true),
     ).not.toThrow();
-  });
-
-  it("has a typed adapter for every manifest singular image owner", () => {
-    expect(
-      [...coverEntities, ...logoEntities].every(isSingularImageOwner),
-    ).toBe(true);
   });
 
   // `createSelf` has no source record — `images[].source` is required exactly when
@@ -201,31 +160,6 @@ describe("manifest photo import routes", () => {
     expect(() => assertPhotoImportSourceCardinality(route, source)).toThrow(
       /source/,
     );
-  });
-
-  // The generator only sees the manifest `contract.create`; `createDestination` needs the
-  // runtime binding's `createInput` and hand-written `repository.create`, so a route enabled
-  // against an entity whose repository lacks `create` would fail only at commit time.
-  it("binds a runtime create for every enabled creating route", () => {
-    const creating = Object.values(imageIngressRouteById).filter(
-      (route) =>
-        route.enabled &&
-        (route.kind === "createSelf" || route.kind === "createRelated"),
-    );
-    expect(creating.length).toBeGreaterThan(0);
-    const uncreatable = creating
-      .filter((route) => {
-        const binding = Object.entries(ENTITY_KERNEL_BINDINGS).find(
-          ([entity]) => entity === route.targetEntity,
-        )?.[1];
-        return (
-          !binding?.schemas.createInput ||
-          !("create" in binding.repository) ||
-          !binding.repository.create
-        );
-      })
-      .map((route) => route.routeId);
-    expect(uncreatable).toEqual([]);
   });
 
   it("rejects a disabled route, naming its manifest reason", () => {

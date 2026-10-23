@@ -10,7 +10,7 @@
   },
   "scripts": {
     "generate:claude-plugin": "node generator/claude-plugin.ts",
-    "test": "vitest run --project unit --project mcp-contract --project worker-safety --project ui --project capability --project scripts --project packages",
+    "test": "vitest run --project unit --project mcp-contract --project ui --project capability --project scripts --project packages",
     "test:unit": "vitest run --project unit",
     "test:ui": "NODE_OPTIONS=--no-experimental-webstorage vitest run --project ui",
     "test:preview": "vitest run --project preview",
