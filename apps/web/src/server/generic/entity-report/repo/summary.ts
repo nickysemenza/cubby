@@ -121,7 +121,13 @@ export async function productStockSummary(
       category: productCategorySummary.nullable(),
     })
     .parse(products.data[0]);
-  if (isServiceProductCategory(product.category)) return [];
+  if (isServiceProductCategory(product.category))
+    return [
+      {
+        kind: "note",
+        text: "Stock is not applicable: this Product is a service, so charges do not represent physical inventory.",
+      },
+    ];
   const locations = await getConnectedRecords(db, {
     source: { entityKind: "product", entityId: code },
     viewKey: "relation:locations",
@@ -372,6 +378,7 @@ async function serviceChargesSummary(
         count(*) FILTER (WHERE e."date" IS NULL)::int AS undated,
         count(*)::int AS count,
         sum(e."cost")::double precision AS spent
+        , avg(e."cost") FILTER (WHERE e."cost" > 0)::double precision AS average
       FROM "Expense" e
       WHERE e."productId" = ${productId} AND e."deletedAt" IS NULL AND ${sql.raw(actualExpenseSql("e"))}
     `),
@@ -399,6 +406,7 @@ async function serviceChargesSummary(
       undated: z.number(),
       count: z.number(),
       spent: z.number().nullable(),
+      average: z.number().nullable(),
     })
     .parse(totalsResult.rows[0]);
   const expenseRow = z.object({
@@ -414,6 +422,7 @@ async function serviceChargesSummary(
       figures: [
         { label: "Charges", value: totals.charges, format: "count" },
         { label: "Credits", value: totals.credits, format: "count" },
+        { label: "Average charge", value: totals.average, format: "money" },
         {
           label: "Total spent",
           value: totals.count === 0 ? 0 : totals.spent,
@@ -472,7 +481,7 @@ async function serviceChargesSummary(
     },
     {
       kind: "note",
-      text: `Charges count positive actual Expense lines; credits count negative lines. Total spent includes credits. Bills may vary. ${totals.unpriced} unpriced Expenses; ${totals.undated} without dates.`,
+      text: `Average charge uses positive actual Expense lines, excluding credits and unknown amounts. Charges may cover different periods, usage, or seats; this is not a monthly rate. Unit price is unavailable because these charges have no comparable unit. Total spent includes credits. ${totals.unpriced} unpriced Expenses; ${totals.undated} without dates.`,
       ...(totals.unpriced > 0 ? { tone: "warning" as const } : {}),
     },
   ];

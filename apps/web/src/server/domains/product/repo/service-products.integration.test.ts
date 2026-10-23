@@ -79,6 +79,13 @@ describe("category-based service Products", () => {
       expect(detail.category?.feature).toBe(feature);
       expect(detail.price).toBe(123); // Stored intent survives; it does not value a service.
       expect(detail.pricing.effectivePrice).toBeNull();
+      expect(detail.pricing.cost).toMatchObject({
+        amount: 65,
+        label: "$65.00 / charge",
+        chargeCount: 2,
+        latestCharge: 90,
+      });
+      expect(detail.unitPriceDetailLabel).toContain("Not applicable");
       expect(detail.fieldResolutions?.price?.source).toBe(
         "not applicable to services",
       );
@@ -108,7 +115,10 @@ describe("category-based service Products", () => {
         ]),
       );
       expect(selected.data[0]).toMatchObject({
-        pricing: { effectivePrice: null },
+        pricing: {
+          effectivePrice: null,
+          cost: { amount: 65, chargeCount: 2, latestCharge: 90 },
+        },
         onHandUnits: null,
         stockStatusItems: [],
         ledgerExpectedQuantityLabel: null,
@@ -139,6 +149,24 @@ describe("category-based service Products", () => {
         { pageIndex: 0, pageSize: 10 },
       );
       expect(sorted.data.map((row) => row.id)).toEqual([service.id]);
+      const physical = await createProductIdentityFixture(
+        ctx.db,
+        makeProductInput({ name: "Synthetic physical item", price: 70 }),
+        ctx.actor,
+      );
+      const mixed = await productList(
+        ctx.db,
+        { ids: [service.id, physical.id] },
+        [{ orderBy: "price", direction: "asc" }],
+        { pageIndex: 0, pageSize: 10 },
+      );
+      expect(mixed.data.map((row) => row.id)).toEqual([
+        service.id,
+        physical.id,
+      ]);
+      expect(
+        mixed.data.find((row) => row.id === physical.id)?.pricing.cost?.amount,
+      ).toBe(70);
       const quality = (
         await loadDataQualities(ctx.db, "product", [service.entityId])
       ).get(service.entityId)!;
@@ -154,12 +182,15 @@ describe("category-based service Products", () => {
         figures: [
           { label: "Charges", value: 2, format: "count" },
           { label: "Credits", value: 1, format: "count" },
+          { label: "Average charge", value: 65, format: "money" },
           { label: "Total spent", value: 120, format: "money" },
         ],
       });
       expect(JSON.stringify(charges)).toContain("Latest dated charge");
       expect(JSON.stringify(charges)).toContain("$90.00");
-      expect(await productStockSummary(ctx.db, service.id)).toEqual([]);
+      expect(
+        JSON.stringify(await productStockSummary(ctx.db, service.id)),
+      ).toContain("Stock is not applicable");
       const originals = await getDb(ctx.db)
         .select({ cost: expense.cost, quantity: expense.productQuantity })
         .from(expense)
@@ -241,6 +272,7 @@ describe("category-based service Products", () => {
     expect(figures).toEqual([
       { label: "Charges", value: 1, format: "count" },
       { label: "Credits", value: 13, format: "count" },
+      { label: "Average charge", value: 25, format: "money" },
       { label: "Total spent", value: 12, format: "money" },
     ]);
     expect(JSON.stringify(report)).toContain("$25.00");

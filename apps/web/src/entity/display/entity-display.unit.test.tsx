@@ -177,7 +177,7 @@ describe("declared entity displays", () => {
     harness.dispose();
   });
 
-  it("shows an empty structured detail field as none rather than raw JSON", () => {
+  it("explains missing scalar and structured detail values", () => {
     const field = fieldOf("financialAccount", "sourceAliases");
     render(
       <>
@@ -189,6 +189,27 @@ describe("declared entity displays", () => {
       </>,
     );
     expect(screen.queryByText("[]")).toBeNull();
+    expect(screen.getByText("Not recorded")).toBeVisible();
+  });
+
+  it("retains an inapplicable unit-price field with the server explanation", () => {
+    render(
+      <>
+        {renderDetailFieldValue(
+          "product",
+          {
+            unitPriceDetailLabel:
+              "Not applicable: service charges have no comparable unit.",
+          },
+          fieldOf("product", "unitPrice"),
+        )}
+      </>,
+    );
+    expect(
+      screen.getByText(
+        "Not applicable: service charges have no comparable unit.",
+      ),
+    ).toBeVisible();
   });
 
   it("reads a recipe's source URL and yield through their declared paths and formats", () => {
@@ -348,7 +369,7 @@ describe("declared entity displays", () => {
     expect(screen.getByText("Guest fixture")).toBeInTheDocument();
     expect(screen.getByText("GUEST").tagName).toBe("STRONG");
     expect(screen.getByText("Notes")).toBeInTheDocument();
-    expect(screen.getByText("—")).toBeInTheDocument();
+    expect(screen.getByText("Not recorded")).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Filter guests" }),
     ).toBeInTheDocument();
@@ -636,6 +657,7 @@ describe("declared entity displays", () => {
       expectedQuantity: number | null;
       category: string | null;
       price: number | null;
+      pricing: { cost: { label: string | null } };
       usdaUnavailable: boolean | null;
       stockTracked: boolean | null;
       primaryGtin: string | null;
@@ -648,6 +670,7 @@ describe("declared entity displays", () => {
       expectedQuantity: 3,
       category: null,
       price: 12.5,
+      pricing: { cost: { label: "$12.50" } },
       usdaUnavailable: null,
       stockTracked: true,
       primaryGtin: null,

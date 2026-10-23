@@ -1,7 +1,20 @@
 import type { ProductListItem } from "@cubby/schemas/product";
+import { isServiceProductCategory } from "@cubby/schemas/product-category-fields";
 
 import { computePerUnitPrices } from "~/lib/price-mapping-utils";
 import { getAllUnitMappingsFromProduct } from "~/lib/unit-mapping-utils";
+import { unitPriceLabel } from "~/server/generic/list/repo/list-display-labels";
+
+/** The same conversion graph backs detail values and compact list prices. */
+export const productUnitPriceDetailLabel = (
+  product: Parameters<typeof getAllUnitMappingsFromProduct>[0] &
+    Pick<ProductListItem, "category">,
+): string | null =>
+  isServiceProductCategory(product.category)
+    ? "Not applicable—charges may cover different periods, usage, or seats. See Average charge."
+    : unitPriceLabel(
+        computePerUnitPrices(getAllUnitMappingsFromProduct(product)),
+      );
 import { foodLookupParamFromProduct } from "~/server/domains/product/repo/helpers";
 import {
   batchEnrichWithFood,

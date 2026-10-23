@@ -22,6 +22,15 @@ export const productSummaryWithCover = productRefOut.extend({
 });
 
 export const productPricingOut = z.object({
+  cost: z
+    .object({
+      amount: moneyNullable,
+      label: z.string().nullable(),
+      explanation: z.string(),
+      chargeCount: z.number().int().nonnegative(),
+      latestCharge: moneyNullable,
+    })
+    .nullish(),
   derivedPrice: moneyNullable,
   effectivePrice: moneyNullable,
   source: z.enum(["explicit", "derived", "none"]),
