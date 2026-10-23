@@ -18,12 +18,14 @@ import {
   expense,
   inventoryEntry,
   email,
+  user,
 } from "~/server/db/schema";
 import {
   memberImportWorld,
   retainedMailFixture,
 } from "~/server/domains/purchase-import/operations/order-import.fixtures";
 import { mergeVendors } from "~/server/domains/vendor/repo/vendor";
+import { shipmentTrackingReport } from "~/server/generic/entity-report/repo/shipment";
 
 import {
   recordShipmentEvidence,
@@ -75,6 +77,86 @@ const capture = (
 
 describe("Shipment retained evidence", () => {
   const ctx = withTestDb();
+
+  it("retains an exported SMS, replays without duplicates and refuses changed message evidence", async () => {
+    const input: RecordShipmentEvidenceInput = {
+      source: {
+        kind: "sms_export",
+        externalKey: "synthetic-thread:message-one",
+        fileName: "synthetic-carrier.txt",
+        sender: "Synthetic Parcel Carrier",
+        sentAt: { kind: "local", value: "2026-06-03T09:05:00", timezone: null },
+        capturedAt: "2026-06-06T09:00:00Z",
+        content: "Synthetic Parcel Carrier: EXAMPLE-123 picked up.",
+      },
+      purchaseId: null,
+      shipments: [packet()],
+    };
+    const first = await recordShipmentEvidence(ctx.db, input, ctx.actor);
+    const replay = await recordShipmentEvidence(ctx.db, input, ctx.actor);
+    expect(replay.shipmentIds).toEqual(first.shipmentIds);
+    expect(replay.insertedObservations).toBe(0);
+    const code = first.shipmentIds[0];
+    if (!code) throw new Error("Synthetic Shipment missing");
+    const timeline = await readShipmentTimeline(ctx.db, code);
+    expect(timeline.observations).toHaveLength(1);
+    expect(timeline.observations[0]?.source).toMatchObject({
+      kind: "sms_export",
+      externalKey: "synthetic-thread:message-one",
+      sender: "Synthetic Parcel Carrier",
+      sentAt:
+        input.source.kind === "sms_export" ? input.source.sentAt : undefined,
+    });
+    const captures = await getDb(ctx.db).select().from(shipmentSourceCapture);
+    expect(captures).toHaveLength(1);
+    expect(captures[0]?.source).toEqual(input.source);
+    if (input.source.kind !== "sms_export")
+      throw new Error("Synthetic SMS missing");
+    await expect(
+      recordShipmentEvidence(
+        ctx.db,
+        {
+          ...input,
+          source: { ...input.source, content: "Synthetic changed message" },
+        },
+        ctx.actor,
+      ),
+    ).rejects.toThrow("exported SMS source changed");
+    expect(
+      (await readShipmentTimeline(ctx.db, code)).observations,
+    ).toHaveLength(1);
+    const otherUserId = testUserId("synthetic-sms-member");
+    await getDb(ctx.db).insert(user).values({
+      id: otherUserId,
+      name: "Synthetic second member",
+      email: "sms-member@example.com",
+      emailVerified: true,
+    });
+    await recordShipmentEvidence(
+      ctx.db,
+      {
+        ...input,
+        source: { ...input.source, fileName: "synthetic-second-export.txt" },
+        shipments: [{ ...packet(), shipmentId: code }],
+      },
+      { ...ctx.actor, userId: otherUserId },
+    );
+    const report = await shipmentTrackingReport(ctx.db, code);
+    const timelineBlock = report.find((block) => block.kind === "records");
+    if (timelineBlock?.kind !== "records")
+      throw new Error("Synthetic timeline missing");
+    expect(timelineBlock.rows).toHaveLength(1);
+    expect(timelineBlock.rows[0]?.lines).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          text: "SMS from Synthetic Parcel Carrier · synthetic-carrier.txt",
+        }),
+        expect.objectContaining({
+          text: "SMS from Synthetic Parcel Carrier · synthetic-second-export.txt",
+        }),
+      ]),
+    );
+  });
 
   it("partially edits a keyless observation, retains originals and protects the reviewed revision from replay", async () => {
     const parcel = packet();

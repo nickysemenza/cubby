@@ -204,12 +204,34 @@ async function sourceCapture(
   } else {
     if (actor.runId)
       return refuse(
-        "Unattended mail processing cannot submit browser tracking captures.",
+        "Unattended mail processing cannot submit interactive shipment captures.",
       );
     if (new Date(source.capturedAt).getTime() > Date.now() + 300000)
       return refuse("Tracking capture time cannot be in the future.");
-    sourceKey = `tracking_page:${actor.userId}:${source.url}:${source.externalKey}`;
-    checksum = await sha256Hex(source.content);
+    sourceKey =
+      source.kind === "tracking_page"
+        ? `tracking_page:${actor.userId}:${source.url}:${source.externalKey}`
+        : `sms_export:${actor.userId}:${source.externalKey}`;
+    checksum = await sha256Hex(
+      source.kind === "sms_export"
+        ? canonical({
+            sender: source.sender,
+            sentAt: source.sentAt,
+            content: source.content,
+          })
+        : source.content,
+    );
+    if (source.kind === "sms_export") {
+      const prior = await getDb(db)
+        .select({ checksum: shipmentSourceCapture.checksum })
+        .from(shipmentSourceCapture)
+        .where(eq(shipmentSourceCapture.sourceKey, sourceKey))
+        .limit(1);
+      if (prior[0] && prior[0].checksum !== checksum)
+        return refuse(
+          "The exported SMS source changed; review its original instead of replacing it.",
+        );
+    }
   }
   const [capture] = await getDb(db)
     .insert(shipmentSourceCapture)
@@ -301,7 +323,7 @@ export async function recordShipmentEvidence(
     let insertedObservations = 0;
     let repeatedObservations = 0;
     const observedAt =
-      input.source.kind === "tracking_page"
+      input.source.kind !== "email"
         ? new Date(input.source.capturedAt)
         : new Date();
     for (const packet of input.shipments) {

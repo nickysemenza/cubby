@@ -91,6 +91,23 @@ export const shipmentEvidence = z
   );
 export type ShipmentEvidence = z.infer<typeof shipmentEvidence>;
 
+const smsExportSource = z.strictObject({
+  kind: z.literal("sms_export"),
+  externalKey: text.max(500),
+  fileName: text.max(300),
+  sender: text.max(300),
+  sentAt: shipmentEventTime,
+  capturedAt: z.iso.datetime({ offset: true }),
+  content: z
+    .string()
+    .min(1)
+    .max(200000)
+    .refine(
+      (value) => value.trim().length > 0,
+      "Exported message content must not be blank.",
+    ),
+});
+
 export const shipmentEvidenceSource = z.union([
   z.strictObject({
     kind: z.literal("email"),
@@ -113,6 +130,7 @@ export const shipmentEvidenceSource = z.union([
         "Capture content must not be blank.",
       ),
   }),
+  smsExportSource,
 ]);
 export const recordShipmentEvidenceInput = z.strictObject({
   source: shipmentEvidenceSource,
@@ -165,6 +183,7 @@ export const shipmentTimelineObservation = shipmentObservationInput.extend({
   source: z.union([
     shipmentEvidenceSource.options[0],
     shipmentEvidenceSource.options[1].omit({ content: true }),
+    smsExportSource.omit({ content: true }),
   ]),
   firstSeenAt: z.iso.datetime(),
   lastSeenAt: z.iso.datetime(),

@@ -112,6 +112,17 @@ content. Browser order extractions keep their package facts in the accepted
 extraction; callers record a tracking capture explicitly through
 `shipments.record` when they have the original page content.
 
+Interactive SMS export intake uses `source.kind: "sms_export"`, retaining the
+literal message content, export filename, sender, message time with its known
+precision/timezone, offset capture time and stable per-message external key.
+The key is member-scoped and independent of export filename; replay retains one
+capture, while changed sender, message time or content under that key is refused
+for review. Export/capture time never substitutes for a package event time.
+Only explicit package identifiers establish a package; neighboring messages,
+grouped delivery notices and opaque short links do not establish a match.
+Keep unresolvable notices outside shipment intake until their package is proven.
+Unattended Mail import cannot submit SMS exports.
+
 Relevance routing retains actual recipient parcel notices from vendors, carriers
 and Shop even when no merchant, order, amount or Purchase is known; shipping
 promotions and scanned-letter digests remain unrelated. A Shipment is one
