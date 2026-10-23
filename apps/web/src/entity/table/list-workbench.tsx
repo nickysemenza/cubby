@@ -29,6 +29,7 @@ export interface ListWorkbenchModel<TItem extends RowData> {
   isLoading?: boolean;
   error?: unknown;
   timing?: QueryTiming;
+  isFieldReady?: RTableProps<TItem>["isFieldReady"];
   bulkActionBar?: ReactNode;
   bulkActionPreview?: RTableProps<TItem>["bulkActionPreview"];
   /**
@@ -194,6 +195,7 @@ export function ListWorkbench<TItem extends RowData>({
         isLoading={model.isLoading}
         error={model.error}
         timing={model.timing}
+        isFieldReady={model.isFieldReady}
         bulkActionBar={model.bulkActionBar}
         bulkActionPreview={model.bulkActionPreview}
         infiniteScroll={model.infiniteScroll}

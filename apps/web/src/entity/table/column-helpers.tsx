@@ -36,10 +36,8 @@ import {
 } from "~/entity/entities";
 import { fieldResolutionFor } from "~/entity/fields/field-resolution";
 import { multiSelectFilterFn } from "~/entity/filters";
-import {
-  fieldSuggestionBasisFromRecord,
-  suggestTargetsFor,
-} from "~/entity/suggestions/field-suggestion";
+import { fieldSuggestionBasisFromRecord } from "~/entity/suggestions/field-suggestion";
+import { suggestTargetsFor } from "~/entity/suggestions/suggestion-targets";
 import { cn } from "~/lib/utils";
 import { CurrencyValue } from "~/ui/common/currency-value";
 import { renderScalarValue } from "~/ui/common/scalar-value";
