@@ -25,7 +25,7 @@ export const aiFundingHandlers = implementOperationDomain(aiFundingContract, {
   status: async (context) => readAiFundingStatus(context.db),
   setCreditBudget: async (context, input) => {
     await assertMember(context);
-    await setCreditBudget(context.db, input.creditLimitUsd);
+    await setCreditBudget(context.db, input);
     return fundingChanged(context);
   },
   resetCreditRefusal: async (context) => {

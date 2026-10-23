@@ -16,6 +16,8 @@ export const creditBudgetLimitUsd = z.number().nonnegative().max(100);
 /** Stored household AI budget settings; an absent row keeps the defaults. */
 export const aiBudgetSettings = z.strictObject({
   creditLimitUsd: creditBudgetLimitUsd,
+  planLimitUsd: creditBudgetLimitUsd.default(2),
+  paidLimitUsd: creditBudgetLimitUsd.default(1),
 });
 export type AiBudgetSettings = z.infer<typeof aiBudgetSettings>;
 

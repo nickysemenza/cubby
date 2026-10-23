@@ -8,7 +8,7 @@ import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 import {
   AiFundingLine,
   AiFundingSettings,
-  CreditBudgetEditor,
+  FundingBudgetEditor,
   PaidRunButton,
 } from "./ai-funding";
 
@@ -48,7 +48,7 @@ afterEach(() => {
 
 // Failure modes: the card hides a budget, the plan state, or a credit refusal
 // with Anthropic's raw reason; the refusal cannot be retried from Settings;
-// the credit budget cannot be edited; "paid allowed" pays without a
+// window budgets cannot be edited; "paid allowed" pays without a
 // confirmation, or past a spent paid budget without a second confirmation
 // naming the amount.
 describe("AI funding controls", () => {
@@ -65,7 +65,8 @@ describe("AI funding controls", () => {
     render(<AiFundingSettings />, { wrapper: harness.wrapper });
     expect(await screen.findByText(/refused until Nov 1/u)).toBeVisible();
     expect(screen.getByText(CONSOLE_LIMIT)).toBeVisible();
-    expect(screen.getByText("$0.40 of $1.00")).toBeVisible();
+    expect(screen.getByText("$0.40 of $")).toBeVisible();
+    expect(screen.getByLabelText("Paid budget per window")).toHaveValue(1);
     fireEvent.click(
       screen.getByRole("button", { name: "Retry Claude credit now" }),
     );
@@ -115,14 +116,26 @@ describe("AI funding controls", () => {
     ).toHaveAttribute("href", "https://chatgpt.com/settings/usage");
   });
 
-  it("saves an edited credit budget", () => {
+  it("saves all three edited window budgets inline", () => {
     const onSave = vi.fn();
-    render(<CreditBudgetEditor limitUsd={5} pending={false} onSave={onSave} />);
+    render(
+      <FundingBudgetEditor budget={budget()} pending={false} onSave={onSave} />,
+    );
     fireEvent.change(screen.getByLabelText("Claude credit budget per window"), {
       target: { value: "7.5" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Save" }));
-    expect(onSave).toHaveBeenCalledWith(7.5);
+    fireEvent.change(screen.getByLabelText("ChatGPT plan budget per window"), {
+      target: { value: "4" },
+    });
+    fireEvent.change(screen.getByLabelText("Paid budget per window"), {
+      target: { value: "3" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Save budgets" }));
+    expect(onSave).toHaveBeenCalledWith({
+      creditLimitUsd: 7.5,
+      planLimitUsd: 4,
+      paidLimitUsd: 3,
+    });
   });
 
   it("confirms paid funding within the paid budget once", async () => {
@@ -144,29 +157,36 @@ describe("AI funding controls", () => {
     expect(onConfirm).toHaveBeenCalledWith(undefined);
   });
 
-  it("asks again, naming the amount, before paying past a spent paid budget", async () => {
-    const onConfirm = vi.fn();
-    render(
-      <PaidRunButton
-        label="Run now, paid allowed"
-        budget={budget({ paid: { limitUsd: 1, spentUsd: 1.05 } })}
-        pending={false}
-        onConfirm={onConfirm}
-      />,
-    );
-    fireEvent.click(
-      screen.getByRole("button", { name: "Run now, paid allowed" }),
-    );
-    fireEvent.click(
-      await screen.findByRole("button", { name: "Allow paid models" }),
-    );
-    expect(onConfirm).not.toHaveBeenCalled();
-    expect(
-      await screen.findByText(/already spent \$1\.05 of \$1\.00/u),
-    ).toBeVisible();
-    fireEvent.click(
-      screen.getByRole("button", { name: "Allow $1.00 over budget" }),
-    );
-    expect(onConfirm).toHaveBeenCalledWith(1);
-  });
+  it.each([
+    { limit: 0, spent: 0, grant: 1 },
+    { limit: 1, spent: 1.05, grant: 1 },
+    { limit: 100, spent: 100, grant: 10 },
+  ])(
+    "confirms a bounded grant past a spent $limit paid budget",
+    async ({ limit, spent, grant }) => {
+      const onConfirm = vi.fn();
+      render(
+        <PaidRunButton
+          label="Run now, paid allowed"
+          budget={budget({ paid: { limitUsd: limit, spentUsd: spent } })}
+          pending={false}
+          onConfirm={onConfirm}
+        />,
+      );
+      fireEvent.click(
+        screen.getByRole("button", { name: "Run now, paid allowed" }),
+      );
+      fireEvent.click(
+        await screen.findByRole("button", { name: "Allow paid models" }),
+      );
+      expect(onConfirm).not.toHaveBeenCalled();
+      expect(await screen.findByText(/already spent/u)).toBeVisible();
+      fireEvent.click(
+        screen.getByRole("button", {
+          name: `Allow $${grant.toFixed(2)} over budget`,
+        }),
+      );
+      expect(onConfirm).toHaveBeenCalledWith(grant);
+    },
+  );
 });

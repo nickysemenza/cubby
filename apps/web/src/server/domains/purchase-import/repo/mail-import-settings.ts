@@ -9,7 +9,7 @@ import type { Database } from "~/server/db";
 import { getDb, withTransactionDatabase } from "~/server/db/helpers";
 import { appSettings } from "~/server/db/schema";
 
-const SETTINGS_ID = "00000000-0000-4000-8000-000000000076";
+const SETTINGS_ID = "00000000-0000-4000-8000-000000000078";
 
 export async function readMailImportSettings(
   db: Database,

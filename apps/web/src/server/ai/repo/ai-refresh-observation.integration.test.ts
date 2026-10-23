@@ -7,6 +7,10 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { compiledRefreshManifest } from "~/server/ai/policy/refresh-manifest";
 import { getDb } from "~/server/db/helpers";
 import { job, run, user } from "~/server/db/schema";
+import {
+  readMailImportSettings,
+  setMailImport,
+} from "~/server/domains/purchase-import/repo/mail-import-settings";
 import { systemActor } from "~/server/domains/run/repo/ensure-run";
 import { cancelJob } from "~/server/generic/jobs/repo/jobs";
 import { dispatchAiRefreshDiscovery } from "~/server/workflows/ai-refresh-startup";
@@ -36,6 +40,8 @@ describe("application-owned AI feature observation", () => {
       .onConflictDoNothing();
   });
   it("admits one activation per deployment occurrence, fences old cron work and reactivates rollback", async () => {
+    const mailboxId = "synthetic-mailbox";
+    await setMailImport(ctx.db, { mailboxId, enabled: true });
     let current = "synthetic-version-a";
     const readVersion = async () => current;
     const a = await admitAiRefreshDeployment(
@@ -103,6 +109,18 @@ describe("application-owned AI feature observation", () => {
       aiRefreshDeploymentInput.parse(rollback.input),
     );
     expect(restored?.observationEpoch).toBeGreaterThan(first!.observationEpoch);
+    expect(await readMailImportSettings(ctx.db)).toEqual({
+      enabledMailboxes: [mailboxId],
+    });
+    await setMailImport(ctx.db, { mailboxId, enabled: false });
+    expect(
+      await admitAiRefreshDeployment(
+        ctx.db,
+        current,
+        "synthetic-commit-a",
+        readVersion,
+      ),
+    ).toMatchObject({ id: rollback.id });
     expect(restored?.manifest).toEqual(first?.manifest);
     expect(restored?.discoveryRunId).toBe(first?.discoveryRunId);
   });
