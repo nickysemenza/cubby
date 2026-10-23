@@ -16,9 +16,7 @@ import { expect, test } from "./support/e2e-test";
 
 function headerIds(page: Page) {
   return page
-    .locator("thead tr")
-    .first()
-    .locator("th[data-column-id]")
+    .locator("thead th[data-column-id]")
     .evaluateAll((cells) =>
       cells.map((cell) => cell.getAttribute("data-column-id") ?? ""),
     );
@@ -146,12 +144,16 @@ test("column layout changes by pointer and keyboard, keeps locked edges, and res
 
   // Header, pointer: a same-region drag moves the column past its neighbour.
   // Both columns sit in the table's leading half, clear of auto-scroll.
-  let expected = placedAfter(defaults, "dataQuality", "spendingProfile");
+  let expected = placedAfter(
+    defaults,
+    "spendingProfile",
+    "defaultSpendingCategoryId",
+  );
   await pointerDrag(
     page,
-    grip("dataQuality"),
-    header("dataQuality"),
+    grip("spendingProfile"),
     header("spendingProfile"),
+    header("defaultSpendingCategoryId"),
   );
   await expect.poll(() => headerIds(page)).toEqual(expected);
 
@@ -161,32 +163,36 @@ test("column layout changes by pointer and keyboard, keeps locked edges, and res
     said(`Picked up: ${id} column.`).or(
       said(`Move target: ${id} column position.`),
     );
-  await grip("spendingProfile").focus();
-  await pressUntilAnnounced(page, "Space", pickedUp("spendingProfile"));
+  await grip("defaultSpendingCategoryId").focus();
   await pressUntilAnnounced(
     page,
-    "ArrowRight",
-    said("Move target: dataQuality column position."),
+    "Space",
+    pickedUp("defaultSpendingCategoryId"),
   );
   await pressUntilAnnounced(
     page,
     "ArrowRight",
-    said("Move target: defaultSpendingCategoryId column position."),
+    said("Move target: spendingProfile column position."),
+  );
+  await pressUntilAnnounced(
+    page,
+    "ArrowRight",
+    said("Move target: itemizationExpectation column position."),
   );
   await pressUntilAnnounced(
     page,
     "Space",
     said(
-      "Dropped: spendingProfile column, defaultSpendingCategoryId column position.",
+      "Dropped: defaultSpendingCategoryId column, itemizationExpectation column position.",
     ),
   );
   // dnd-kit hands focus back to the handle so the next key keeps working, and
   // no cell editor claims those keys.
-  await expect(grip("spendingProfile")).toBeFocused();
+  await expect(grip("defaultSpendingCategoryId")).toBeFocused();
   expected = placedAfter(
     expected,
-    "spendingProfile",
     "defaultSpendingCategoryId",
+    "itemizationExpectation",
   );
   await expect.poll(() => headerIds(page)).toEqual(expected);
 
@@ -252,11 +258,11 @@ test("column layout changes by pointer and keyboard, keeps locked edges, and res
   // the sortable preview showed it (here: back in its own slot).
   await pointerDrag(
     page,
-    dragHandle("Itemization expectation"),
-    row("itemizationExpectation"),
+    row("dataQuality").getByRole("button", { name: /^Drag / }),
+    row("dataQuality"),
     row("notes"),
   );
-  expected = placedAfter(expected, "itemizationExpectation", "notes");
+  expected = placedAfter(expected, "dataQuality", "notes");
   await expect.poll(() => headerIds(page)).toEqual(expected);
 
   // A reorder inside a pinned region, from the dialog's buttons.
@@ -289,11 +295,15 @@ test("column layout changes by pointer and keyboard, keeps locked edges, and res
 
   // Pin then unpin round-trips an unrelated column to its own slot and
   // leaves the pinned reorder alone.
-  await press("Pin Spend to start");
+  await row("dataQuality")
+    .getByRole("button", { name: /^Pin .* to start$/ })
+    .click();
   await expect
     .poll(() => zoneIds("Pinned start"))
-    .toEqual(["select", "image", "name", "website", "spend"]);
-  await press("Unpin Spend");
+    .toEqual(["select", "image", "name", "website", "dataQuality"]);
+  await row("dataQuality")
+    .getByRole("button", { name: /^Unpin / })
+    .click();
   await expect.poll(() => headerIds(page)).toEqual(expected);
 
   // Regression: "Pin to end" appended past the row-actions column.
