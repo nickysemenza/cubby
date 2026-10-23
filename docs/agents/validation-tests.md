@@ -438,6 +438,11 @@ write one checksummed bundle with separate per-case reports. Their Workers still
 close after each case; Mail-only scenarios omit object storage. Socket-lifecycle
 coverage shortens the configured pool idle timeout and observes three times that
 interval per quiet window, preserving real expiry without production-length waits.
+It uses a synthetic persisted session and Better Auth's signer, as the real Worker
+provider-discovery owner does, to authenticate its HTTP calls. Password signup is
+owned by browser runtime authentication; do not repeat it inside socket lifecycle.
+Keep all three quiet windows, concurrent reads, freshness writes and socket-count
+assertions; removing password setup must not shorten the expiry observation.
 
 Native relation journeys scroll the navigation row back into view after inspecting
 its badges, then wait for the destination detail marker before inspecting
