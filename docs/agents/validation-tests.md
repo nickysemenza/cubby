@@ -34,7 +34,13 @@ this editor regression depend on the newly created row entering that list.
 Connected-record Plant/Project/Task and both purchase paths use one fixture
 graph with one shared brand. Booking-review prerequisites settle once before the
 first browser action; its reimbursement credit is still created after booking.
-Keep all route, stale-approval, replay and signed-money assertions.
+Keep all route, stale-approval, replay and signed-money assertions. The Plant
+connection browser owner keeps its multi-hop task/project paths, both purchases,
+Open all plantings and Project/Task composition. Product inverse navigation stays
+in `product-clarity.spec.ts`; the existing connected-record SQL owner checks
+Vendor purchased-Product traversal and duplicate Expense paths. Dedicated Vendor
+Product-section rendering and its path-copy check are a presentation tradeoff;
+do not repeat those visits inside the Plant journey.
 
 Detail renderer and browser tests assert the continuous page: every section is
 accessible without a view switch. Select a section hash to verify scrolling,

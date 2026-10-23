@@ -7,7 +7,7 @@ import { expect } from "./e2e-test";
 export async function plantTaskConnection(page: Page) {
   const suffix = Date.now();
   const taskName = `Connection task ${suffix}`;
-  const { plant, project, task, planting, vendor, seed, starter } =
+  const { plant, project, task, planting, seedPurchase, starterPurchase } =
     await createFixtureGraph(page, async (create) => {
       const plant = await create("plant", {
         name: `Connection crop ${suffix}`,
@@ -54,11 +54,11 @@ export async function plantTaskConnection(page: Page) {
           productQuantity: 1,
           purchaseId: purchase.id,
         });
-        return { product, purchase };
+        return purchase;
       };
-      const seed = await purchaseFor(`Connection seeds ${suffix}`);
-      const starter = await purchaseFor(`Connection starter ${suffix}`);
-      return { plant, project, task, planting, vendor, seed, starter };
+      const seedPurchase = await purchaseFor(`Connection seeds ${suffix}`);
+      const starterPurchase = await purchaseFor(`Connection starter ${suffix}`);
+      return { plant, project, task, planting, seedPurchase, starterPurchase };
     });
 
   await gotoAuthenticatedPage(page, `/plants/${plant.id}`);
@@ -81,10 +81,10 @@ export async function plantTaskConnection(page: Page) {
     section.getByRole("link", { name: `Connection project ${suffix}` }).first(),
   ).toBeVisible();
   await expect(
-    section.locator(`a[href="/purchases/${seed.purchase.id}"]`).first(),
+    section.locator(`a[href="/purchases/${seedPurchase.id}"]`).first(),
   ).toBeVisible();
   await expect(
-    section.locator(`a[href="/purchases/${starter.purchase.id}"]`).first(),
+    section.locator(`a[href="/purchases/${starterPurchase.id}"]`).first(),
   ).toBeVisible();
   await expect(section.getByText(/^No connections: /u)).toBeVisible();
   await page
@@ -95,32 +95,6 @@ export async function plantTaskConnection(page: Page) {
   await expect(page).toHaveURL(/\/connections\?.*view=relation%3Aplantings/u);
   await expect(
     page.locator(`a[href="/plantings/${planting.id}"]`).first(),
-  ).toBeVisible();
-
-  await gotoAuthenticatedPage(page, `/products/${seed.product.id}`);
-  await page
-    .getByRole("heading", { level: 2, name: "Work", exact: true })
-    .scrollIntoViewIfNeeded();
-  const productPurchases = page.locator("#purchases");
-  await expect(
-    productPurchases
-      .locator(`a[href="/purchases/${seed.purchase.id}"]`)
-      .first(),
-  ).toBeVisible();
-  await expect(
-    productPurchases.getByText("Connected through").last(),
-  ).toBeVisible();
-
-  await gotoAuthenticatedPage(page, `/vendors/${vendor.id}`);
-  await page
-    .getByRole("heading", { level: 2, name: "Work", exact: true })
-    .scrollIntoViewIfNeeded();
-  const purchasedProducts = page.locator("#purchased-products");
-  await expect(
-    purchasedProducts.locator(`a[href="/products/${seed.product.id}"]`).first(),
-  ).toBeVisible();
-  await expect(
-    purchasedProducts.getByText("Connected through").last(),
   ).toBeVisible();
 
   await gotoAuthenticatedPage(page, `/projects/${project.id}`);
