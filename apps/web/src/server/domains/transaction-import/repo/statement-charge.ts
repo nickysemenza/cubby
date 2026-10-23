@@ -4,6 +4,8 @@ import { sourceTransactionRecordDisposition } from "@cubby/schemas/source-transa
 import { statementTransactionAction } from "@cubby/schemas/statement-suggestion";
 import { type SQL, sql } from "drizzle-orm";
 
+import { sqlEnumConstant } from "~/server/db/sql-enum";
+
 /**
  * Every live settlement reference with its transaction's shortcode — the
  * `(source, externalId)` pairs a statement row matches on.
@@ -72,11 +74,15 @@ export const suggestionField = (
   alias = "s",
 ) => sql`${sql.raw(`"${alias}"`)}.data->>${key}`;
 
-/** Current unsettled evidence gates reads as well as discovery; no retirement scan is required. */
+/**
+ * Current unsettled evidence gates reads as well as discovery. Schema-owned
+ * family/status literals preserve partial-index admission in generic plans;
+ * caller values remain parameters. No retirement scan is required.
+ */
 export const pendingSuggestion = (alias = "s") =>
-  sql`${sql.raw(`"${alias}"`)}.family = ${assessmentFamily.enum.statement_transaction}
+  sql`${sql.raw(`"${alias}"`)}.family = ${sqlEnumConstant(assessmentFamily, assessmentFamily.enum.statement_transaction)}
     AND ${sql.raw(`"${alias}"`)}.active
-    AND ${sql.raw(`"${alias}"`)}.status = ${suggestionStatus.enum.pending}
+    AND ${sql.raw(`"${alias}"`)}.status = ${sqlEnumConstant(suggestionStatus, suggestionStatus.enum.pending)}
     AND EXISTS (SELECT 1 FROM "SourceTransactionRecord" head
       WHERE head.source=${sql.raw(`"${alias}"`)}.data->>${"source"}
         AND head."externalId"=${sql.raw(`"${alias}"`)}.data->>'headRef'

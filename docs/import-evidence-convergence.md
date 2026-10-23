@@ -404,7 +404,9 @@ same component-wise overrides. Both branches apply full current-evidence eligibi
 exact import membership, cursor comparison and Assessment existence before taking
 their bounded first sets. The merged first set is hydrated after its limit. Disjoint
 partial work indexes exclude completed labels and keep receipt recovery separate from
-ordinary cursor access; no timestamp cast is asserted immutable.
+ordinary cursor access. Schema-owned family, status and label-work keys stay SQL
+literals so generic plans can admit those indexes; household values and cursors
+stay bound parameters. No timestamp cast is asserted immutable.
 An obsolete Job generation or lease interrupts the invocation; per-charge error
 isolation must not turn that ownership signal into an item failure or retry.
 Acceptance always validates the current broader evidence fingerprint.

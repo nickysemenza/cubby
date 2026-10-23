@@ -2701,7 +2701,7 @@ export async function suggestionsNeedingLabels(
     const id = position === "native" ? sql`s.id` : positionId;
     return sql`SELECT s.id, ${at} AS "positionAt", ${id} AS "positionId"
       FROM "AssessmentState" s JOIN "Assessment" a ON a.id=s.id
-      WHERE ${pendingSuggestion()} AND ((${suggestionField("needsLabel")})::boolean
+      WHERE ${pendingSuggestion()} AND ((s.data->>'needsLabel')::boolean
         OR coalesce((s.data->>'applicationPending')::boolean, false))
         AND ${position === "native" ? nativePosition : sql`NOT ${nativePosition}`}
         ${importScope(importId)}
