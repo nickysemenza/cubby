@@ -1,0 +1,41 @@
+apps/web/src/features/calendar/calendar-schedule.tsx
+  s_a3b6b46af29582::t_f413c952cf9e54 19,32
+apps/web/src/lib/task-dates.ts
+  s_a3b6b46af29582::t_c3a9ed4e63e454 4-5,7-11
+apps/web/src/server/domains/calendar/repo/calendar.ts
+  s_a3b6b46af29582::t_a93c4f3d759bf7 35,55,169,272,521
+apps/web/src/server/domains/calendar/service/caldav-ics.ts
+  s_a3b6b46af29582::t_84a66dff523ac8 20,309-311
+apps/web/src/server/domains/project/repo/attention.ts
+  s_a3b6b46af29582::t_dcab97447af05e 48,260-262
+apps/web/src/server/domains/project/repo/lookup.ts
+  s_a3b6b46af29582::t_a3b833d0dfe203 29,148
+apps/web/src/server/domains/task/repo/helpers.ts
+  s_a3b6b46af29582::t_67b1c6a02973b0 14,25-33
+apps/web/src/server/domains/task/repo/summary.ts
+  s_a3b6b46af29582::t_63be5ac1301dab 18,44,47-48
+apps/web/src/server/domains/task/repo/today-briefing.ts
+  s_a3b6b46af29582::t_ea26903a808406 15,71,74-75,84,87
+apps/web/src/server/generic/entity-report/repo/task.ts
+  s_a3b6b46af29582::t_6df3ebdcbba8de 4-5,34
+apps/web/src/server/generic/list/repo/relative-dates.integration.test.ts
+  s_a3b6b46af29582::t_0a5547ef3b22a4 19,48-63
+docs/entities.md
+  s_a3b6b46af29582::t_b2e03d3631049d 1954-1957
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "8b7c94e680430bd41858f473332faa0be070b199",
+  "prompts": {},
+  "sessions": {
+    "s_a3b6b46af29582": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a16ae9-09b9-7271-bc7a-c96487de65fa",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
