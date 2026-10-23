@@ -86,7 +86,9 @@ export function piCallTarget(
   const models = createModels();
   let failedFetch: { error: UnparsedError } | undefined;
   const fetchFor: GatewayFetchFor = (route, onUnbilledResponse, funding) => {
-    let finalTransport: "gateway" | "chatgpt" | undefined;
+    let finalTransport:
+      | Parameters<NonNullable<GatewayCallOptions["onTransport"]>>[0]
+      | undefined;
     const routedFetch = gatewayFetch(route, {
       ...call,
       ...(funding && { funding }),
