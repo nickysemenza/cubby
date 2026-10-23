@@ -2,6 +2,7 @@ import { AsyncLocalStorage } from "node:async_hooks";
 
 import type { UnparsedError } from "~/lib/error-utils";
 import type { Database } from "~/server/db";
+import { JobSupersededError } from "~/server/generic/jobs/errors";
 import {
   assertCurrentJob,
   currentJobExecution,
@@ -23,10 +24,14 @@ export class WorkflowInterruptedError extends Error {
 }
 export function workflowInterruption(
   error: UnparsedError,
-): WorkflowInterruptedError | null {
+): WorkflowInterruptedError | JobSupersededError | null {
   const seen = new Set<unknown>();
   while (error instanceof Error && !seen.has(error)) {
-    if (error instanceof WorkflowInterruptedError) return error;
+    if (
+      error instanceof WorkflowInterruptedError ||
+      error instanceof JobSupersededError
+    )
+      return error;
     seen.add(error);
     error = error.cause;
   }
