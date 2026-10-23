@@ -454,6 +454,10 @@ each call retains its own duplicate-admission input rows.
 Preview indexes retain source-scoped reference identity, provider account scope,
 file occurrence positions and the original ledger candidate order. Each row's
 nearby search still evaluates every transaction on its account in the read pool.
+Preview transaction selection joins exact source/reference pairs through a
+requested-values relation, rather than planning a correlated OR per reference.
+Reference matches remain global across date corrections; live transaction and
+reference checks, date alternatives and candidate hydration stay unchanged.
 The initial statement count aggregates the same eligibility predicate once;
 generation continues selecting bounded charge identities before hydration.
 Generation checkpoints depend only on model-free generation and publication;
