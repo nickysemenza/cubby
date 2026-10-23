@@ -10,34 +10,13 @@ import {
   type MailboxClassification,
 } from "@cubby/schemas/mailbox-research";
 import { importSourceKind } from "@cubby/schemas/purchase-import";
-import { runPurpose, runStatus } from "@cubby/schemas/run-fields";
-import { and, sql, type SQL } from "drizzle-orm";
+import { sql, type SQL } from "drizzle-orm";
 
-import { uuidArrayParam } from "~/server/db/helpers/query";
-
-// Leaf module: data-quality bindings import these predicates, and the Email
-// repository imports the list scaffold that imports those bindings.
+// Leaf module: the quality loader and Email repository share domain evidence
+// without importing the repository/list-scaffold composition.
 
 const { rule, decision, model, resolution } = mailboxClassificationStage.enum;
 
-/** Bulk and record checks read database-maintained presence, never retained bodies. */
-export const emailRetainedContentSql = (
-  email: SQL = sql`"Email"`,
-  original?: SQL,
-) => sql<boolean>`(
-  ${email}."orderMailId" IS NOT NULL AND ${email}."contentClearedAt" IS NULL AND (
-    ${
-      original
-        ? sql`(${original}.id IS NOT NULL AND ${original}."hasRetainedText")`
-        : sql`EXISTS (SELECT 1 FROM "OrderMail" original
-          WHERE original.id=${email}."orderMailId"
-            AND original."hasRetainedText")`
-    }
-    OR EXISTS (SELECT 1 FROM "OrderMailAttachment" attachment
-      WHERE attachment."orderMailId"=${email}."orderMailId"
-        AND (attachment."pendingObjectKey" IS NOT NULL OR attachment."imageId" IS NOT NULL))
-  )
-)`;
 /** Assessment subjects own observation lineage; caller metadata is not a second join key. */
 export const emailFeedbackObservationIdSql = (label: SQL) => sql<
   string | null
@@ -64,7 +43,7 @@ export const emailFeedbackHasClassificationSql = (
 ) => sql`
  (${emailFeedbackClassificationSql(label, assessment)}) IN (${mailboxClassification.enum.related},${mailboxClassification.enum.unrelated},${mailboxClassification.enum.uncertain})`;
 /** The stages a member's review can disagree with. */
-export const automatedStagesSql = sql`(${rule}, ${decision}, ${model})`;
+const automatedStagesSql = sql`(${rule}, ${decision}, ${model})`;
 
 /**
  * Correlated to the plain Email root table used by the list scaffold. Explicit
@@ -282,8 +261,6 @@ const memberClassificationWithResolutionSql = (email: SQL, reviewed: SQL) =>
     WHEN ${email}."classificationStage" = ${resolution} THEN ${email}.classification
     ELSE ${reviewed} END`;
 
-// Keep ownership/checksum/latest-valid policy aligned with emailMemberReviewReadSql;
-// email-review-quality.integration.test.ts compares their returned values.
 export const emailMemberClassificationSql = () =>
   memberClassificationWithResolutionSql(
     sql`"Email"`,
@@ -323,93 +300,3 @@ export const emailLinkedSql = () =>
   // Existence does not need the complete, deduplicated association list.
   sql<boolean>`(EXISTS (${emailAcceptedEvidenceSql()})
     OR EXISTS (${emailLinkedDecisionPurchasesSql()}))`;
-
-/** Resolve immutable Feedback lineage once before the mailbox join. Without
- * this boundary, join reordering can repeat the Assessment lookup for every
- * Email × Feedback pair, even though each review names one Assessment.
- * Page IDs constrain the prediction join; bounded hydration still resolves
- * immutable Feedback lineage once, outside that join. Keep policy aligned with
- * emailMemberClassificationSql; email-review-quality.integration.test.ts pins parity. */
-const emailMemberReviewReadSql = (ids?: SQL) => sql`
-  WITH eligible_feedback AS MATERIALIZED (
-    SELECT label.id, label."createdAt", label."actorUserId",
-      reviewed_assessment.subject->>'observationId' AS "observationId",
-      ${emailFeedbackClassificationSql(sql`label`, sql`reviewed_assessment`)} AS classification
-    FROM "Feedback" label
-    JOIN "Assessment" reviewed_assessment
-      ON reviewed_assessment.id = label."assessmentId"
-      AND reviewed_assessment.family = ${assessmentFamily.enum.email_relevance}
-    WHERE label.authority = ${feedbackAuthority.enum.member}
-      AND ${emailFeedbackHasClassificationSql(sql`label`, sql`reviewed_assessment`)}
-  )
-  SELECT DISTINCT ON (candidate.id) candidate.id AS "entityId", label.classification
-  FROM "Email" candidate
-  JOIN "EmailClassificationObservation" prediction
-    ON prediction."emailId" = candidate.id AND prediction.checksum = candidate.checksum
-  JOIN eligible_feedback label ON label."observationId" = prediction.id::text
-  JOIN "LedgerParty" owner ON owner.id = candidate."ledgerPartyId"
-    AND owner."userId" = label."actorUserId"
-  ${ids ? sql`WHERE candidate.id = ANY(${uuidArrayParam(ids)})` : sql``}
-  ORDER BY candidate.id, label."createdAt" DESC, label.id DESC
-`;
-
-/** One row per Email: ordinary joins can spill instead of degrading a hashed
- * SubPlan into a source-list scan for every Email. Deduplication prevents
- * repeated imports or duplicate sources from multiplying Email rows. */
-const emailQualityRead = (ids?: SQL, predicate?: SQL) => {
-  const condition = and(
-    ids ? sql`candidate.id = ANY(${uuidArrayParam(ids)})` : undefined,
-    predicate,
-  );
-  return sql`
-  SELECT candidate.id AS "entityId", membership."ledgerPartyId" IS NOT NULL AS "completedImport",
-    ${emailRetainedContentSql(sql`candidate`, sql`quality_original`)} AS "retainedContent",
-    ${memberClassificationWithResolutionSql(sql`candidate`, sql`member_review.classification`)} AS "memberClassification",
-    linked_state.linked AS "linked"
-  FROM "Email" candidate
-  -- One evaluation per related Email for both checks that read it; the helper
-  -- binds the unaliased "Email" root, which this lateral names for the same row.
-  LEFT JOIN LATERAL (
-    SELECT ${emailLinkedSql()} AS linked FROM "Email"
-    WHERE "Email".id = candidate.id AND "Email".classification = ${mailboxClassification.enum.related}
-  ) linked_state ON true
-  LEFT JOIN "OrderMail" quality_original ON quality_original.id=candidate."orderMailId"
-  LEFT JOIN (${emailMemberReviewReadSql(ids)}) member_review ON member_review."entityId" = candidate.id
-  LEFT JOIN (
-    SELECT DISTINCT import."ledgerPartyId", source->'orderMailId' AS "original"
-    FROM "Run" import
-    CROSS JOIN LATERAL jsonb_array_elements(CASE
-      WHEN jsonb_typeof(import.input->'sources') = 'array' THEN import.input->'sources'
-      ELSE '[]'::jsonb END) source
-    WHERE import.purpose = ${runPurpose.enum.mail_import}
-      AND import.status = ${runStatus.enum.completed}
-      AND import."deletedAt" IS NULL
-      AND import."ledgerPartyId" IS NOT NULL
-      AND source->'orderMailId' IS NOT NULL
-  ) membership ON membership."ledgerPartyId" = candidate."ledgerPartyId"
-    AND membership.original = COALESCE(to_jsonb(candidate."orderMailId"::text), 'null'::jsonb)
-  ${condition ? sql`WHERE ${condition}` : sql``}
-`;
-};
-
-export const emailQualityReadSql = (ids?: SQL) => emailQualityRead(ids);
-
-/** No derived-reading check expects unrelated or unclassified Emails. Leave
- * their evidence outside filter joins; ordinary hydration reads all classes. */
-export const emailQualityFilterReadSql = () =>
-  emailQualityRead(
-    undefined,
-    sql`candidate.classification <> ${mailboxClassification.enum.unrelated}`,
-  );
-
-/** Bounded single-record checks retain the historical containment contract. */
-export const emailHasCompletedImportSql = () => sql<boolean>`EXISTS (
-  SELECT 1 FROM "Run" import
-  WHERE import.purpose = ${runPurpose.enum.mail_import}
-    AND import.status = ${runStatus.enum.completed}
-    AND import."deletedAt" IS NULL
-    AND import."ledgerPartyId" = "Email"."ledgerPartyId"
-    AND import.input @> jsonb_build_object('sources', jsonb_build_array(
-      jsonb_build_object('orderMailId', "Email"."orderMailId"::text)
-    ))
-)`;

@@ -174,7 +174,6 @@ export const repositoryOwners = [
   "src/server/generic/collection/repo/collection-membership.ts",
   "src/server/generic/collection/repo/smart-collection-membership.ts",
   "src/server/generic/data-quality/repo/checks/cookbook.ts",
-  "src/server/generic/data-quality/repo/checks/email.ts",
   "src/server/generic/data-quality/repo/checks/financial-account.ts",
   "src/server/generic/data-quality/repo/checks/image.ts",
   "src/server/generic/data-quality/repo/checks/ingredient.ts",

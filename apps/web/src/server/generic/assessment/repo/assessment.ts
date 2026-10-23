@@ -20,6 +20,7 @@ import {
   assessmentState,
   feedback,
 } from "~/server/db/retained-tables";
+import { recordChange } from "~/server/generic/changes/repo/change";
 
 import {
   assessmentProjectionSnapshot,
@@ -166,6 +167,16 @@ export async function publishAssessments(
         return state ? [{ ...state, id: row.id, family: row.family }] : [];
       }),
     );
+    if (
+      inserted.some(
+        (row) =>
+          row.family === "email_relevance" || row.family === "email_link",
+      )
+    )
+      await recordChange(transactionDb, {
+        kind: "source",
+        categories: ["email"],
+      });
     return rows;
   });
 }
@@ -252,7 +263,7 @@ export async function recordFeedback(
   return withTransactionDatabase(db, async (transactionDb) => {
     const client = getDb(transactionDb);
     const [prediction] = await client
-      .select({ served: assessment.served })
+      .select({ served: assessment.served, family: assessment.family })
       .from(assessment)
       .where(eq(assessment.id, input.assessmentId))
       .limit(1);
@@ -292,6 +303,15 @@ export async function recordFeedback(
     if (!row) throw new Error("Feedback publication returned no row");
     if (!isEqual(input, feedbackEvent.parse(row)))
       throw new Error("Immutable Feedback retry changed its event");
+    if (
+      inserted &&
+      (prediction.family === "email_relevance" ||
+        prediction.family === "email_link")
+    )
+      await recordChange(transactionDb, {
+        kind: "source",
+        categories: ["email"],
+      });
     return row;
   });
 }

@@ -1,5 +1,4 @@
 import { scoredEntities } from "@cubby/schemas/data-quality";
-import { mailboxClassification } from "@cubby/schemas/mailbox-research";
 import {
   purchaseFiltersSchema,
   purchaseReconciliation,
@@ -7,7 +6,6 @@ import {
 import { workQueueHouseholdInput } from "@cubby/schemas/work-queue";
 import { sql } from "drizzle-orm";
 import { seedPerformanceCorpus } from "tooling/scenarios/performance";
-import { seedEmailLinkDecision } from "tooling/shared-assessment-fixtures";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
@@ -19,12 +17,8 @@ import {
   externalSource,
   financialTransaction,
   financialTransactionAllocation,
-  importSourceClaim,
-  importSourceOrder,
-  orderMailEvent,
   purchase,
 } from "~/server/db/schema";
-import { syntheticRetainedMail } from "~/server/domains/purchase-import/service/gmail/retained-mail.fixtures";
 import { buildPurchaseWhereClause } from "~/server/domains/purchase/repo/purchase";
 import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
@@ -271,109 +265,9 @@ describe("bulk quality relations", () => {
         await line({ lineKind: "unclassified" });
     }
 
-    // Both Email link kinds: accepted source evidence and a reviewed link.
-    const linkRun = await insertWithShortcode(ctx.db, "run", {
-      purpose: "mail_import",
-      ledgerPartyId: member.id,
-      trigger: "manual",
-      status: "completed",
-      actorUserId: ctx.actor.userId,
-      actorName: member.name,
-      actorEmail: "member@example.test",
-      actorLedgerPartyShortcode: member.shortcode,
-      actorLedgerPartyName: member.name,
-      actorLedgerPartyKind: member.kind,
-    });
-    const linkedEmails: string[] = [];
-    for (const kind of ["accepted", "reviewed"] as const) {
-      const order = await insertWithShortcode(ctx.db, "purchase", {
-        vendorId: vendor.id,
-        date: "2026-02-01",
-        displayLabel: `Synthetic parity ${kind} order`,
-      });
-      const checksum = (kind === "accepted" ? "d" : "f").repeat(64);
-      const source = await syntheticRetainedMail(ctx.db, {
-        ledgerPartyId: member.id,
-        mailboxId: "synthetic-parity-mailbox",
-        messageId: `synthetic-parity-${kind}`,
-        sender: null,
-        subject: `Synthetic parity ${kind} receipt`,
-        receivedAt: new Date("2026-02-01T12:00:00Z"),
-        vendorId: vendor.id,
-        rawChecksum: checksum,
-        content: {
-          snippet: "Synthetic receipt",
-          bodyText: null,
-          bodyHtml: null,
-        },
-      });
-      const [message] = (
-        await getDb(ctx.db)
-          .execute(sql`UPDATE "Email" SET classification = ${mailboxClassification.enum.related}
-          WHERE "orderMailId" = ${source.id}
-          RETURNING id::text AS id, provider, "mailboxId", "messageId"`)
-      ).rows as {
-        id: string;
-        provider: string;
-        mailboxId: string;
-        messageId: string;
-      }[];
-      if (!message) throw new Error("Synthetic parity Email missing");
-      linkedEmails.push(message.id);
-      if (kind === "accepted") {
-        const [claim] = await getDb(ctx.db)
-          .insert(importSourceClaim)
-          .values({
-            ledgerPartyId: member.id,
-            kind: "mail_message",
-            externalKey: `${message.provider}:${message.mailboxId}:${message.messageId}`,
-            checksum,
-            firstRunId: linkRun.id,
-            lastRunId: linkRun.id,
-          })
-          .returning();
-        if (!claim) throw new Error("Synthetic parity claim missing");
-        await getDb(ctx.db).insert(importSourceOrder).values({
-          sourceClaimId: claim.id,
-          orderKey: "synthetic-parity/order/accepted",
-          purchaseId: order.id,
-          checksum,
-          outputFingerprint: "synthetic-parity-accepted",
-        });
-      } else {
-        const [event] = await getDb(ctx.db)
-          .insert(orderMailEvent)
-          .values({
-            orderMailId: source.id,
-            event: "placed",
-            orderId: "SYNTHETIC-PARITY-REVIEWED",
-            sourceKey: "synthetic-parity-reviewed",
-          })
-          .returning();
-        if (!event) throw new Error("Synthetic parity event missing");
-        await seedEmailLinkDecision(ctx.db, {
-          eventId: event.id,
-          purchaseId: order.id,
-          decision: "linked",
-          evidenceChecksum: checksum,
-          decidedByUserId: ctx.actor.userId,
-          proposedBy: "member",
-        });
-      }
-    }
-    const linked = await getDb(ctx.db)
-      .execute(sql`SELECT "Email".id::text AS id, dq_filter.linked
-      FROM ${qualityFilterSource("email")}
-      WHERE "Email".id::text IN (${sql.join(
-        linkedEmails.map((id) => sql`${id}`),
-        sql`, `,
-      )}) ORDER BY 1`);
-    expect(linked.rows.map((row) => row.linked)).toEqual([true, true]);
-
     const bulkEntities = scoredEntities.filter(
       (entity) => !storedEntryFor(entity) && entryFor(entity).filterRead,
     );
-    expect(bulkEntities).toEqual(expect.arrayContaining(["email", "purchase"]));
     const results = new Map<string, z.infer<typeof rowSchema>>();
     for (const entity of bulkEntities) {
       const { table } = entryFor(entity);

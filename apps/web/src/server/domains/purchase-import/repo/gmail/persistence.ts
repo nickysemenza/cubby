@@ -65,6 +65,7 @@ import {
   mailSourceIdentityBlocked,
 } from "~/server/domains/purchase-import/repo/mail-source-identity";
 import { readImportSourceClaimFamily } from "~/server/domains/purchase-import/repo/source-claim-family";
+import { recordChange } from "~/server/generic/changes/repo/change";
 import { findOrCreateWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 import { deferClassificationRefresh } from "./admitted-source";
@@ -260,6 +261,7 @@ export async function saveEmail(
       }),
     });
     await supersedeLegacyEmail(tx, input);
+    await recordChange(tx, { kind: "source", categories: ["email"] });
     if (created) return;
     // Routine routing and provider removal cannot resolve historical ownership.
     await tx
@@ -302,6 +304,7 @@ export async function markEmailRemoved(
         status: input.status,
       }),
     });
+    await recordChange(tx, { kind: "source", categories: ["email"] });
     if (row.classificationVersion === HISTORICAL_MAIL_SOURCE_IDENTITY_VERSION)
       return;
     await tx
@@ -340,6 +343,7 @@ export async function saveMailboxMetadata(
       }),
     });
     await supersedeLegacyEmail(tx, identity);
+    await recordChange(tx, { kind: "source", categories: ["email"] });
     const fields = mailboxMetadataFields(input, row);
     const changed =
       (
@@ -449,6 +453,7 @@ export async function clearUnrelatedOriginal(
       .update(emailTable)
       .set({ contentClearedAt: new Date() })
       .where(messageWhere(input));
+    await recordChange(tx, { kind: "source", categories: ["email"] });
     return null;
   });
 }
@@ -736,6 +741,7 @@ export const upsertOrderMail = async (
         .update(importSourceClaim)
         .set({ checksum: row.rawChecksum, updatedAt: new Date() })
         .where(eq(importSourceClaim.id, family.root.id));
+    await recordChange(tx, { kind: "source", categories: ["email"] });
     return row.id;
   });
 };
@@ -859,7 +865,16 @@ export const storeOrderMailAttachment = async (
     )
     .limit(1);
   if (existing?.pendingObjectKey || existing?.imageId) return;
-  if (!existing && (await adoptLegacyAttachment(database, input))) return;
+  if (
+    !existing &&
+    (await withTransaction(db, async (tx) => {
+      const adopted = await adoptLegacyAttachment(tx, input);
+      if (adopted)
+        await recordChange(tx, { kind: "source", categories: ["email"] });
+      return adopted;
+    }))
+  )
+    return;
   const data = await input.fetchData();
   const bytes = data ? Buffer.from(data, "base64url") : null;
   const checksum = await sha256Hex(
@@ -870,17 +885,21 @@ export const storeOrderMailAttachment = async (
     mimeType: input.attachment.mimeType,
     checksum,
   };
-  const [row] = await database
-    .insert(orderMailAttachment)
-    .values({ orderMailId, providerAttachmentId, ...fields })
-    .onConflictDoUpdate({
-      target: [
-        orderMailAttachment.orderMailId,
-        orderMailAttachment.providerAttachmentId,
-      ],
-      set: { ...fields, updatedAt: new Date() },
-    })
-    .returning({ id: orderMailAttachment.id });
+  const row = await withTransaction(db, async (tx) => {
+    const [row] = await tx
+      .insert(orderMailAttachment)
+      .values({ orderMailId, providerAttachmentId, ...fields })
+      .onConflictDoUpdate({
+        target: [
+          orderMailAttachment.orderMailId,
+          orderMailAttachment.providerAttachmentId,
+        ],
+        set: { ...fields, updatedAt: new Date() },
+      })
+      .returning({ id: orderMailAttachment.id });
+    await recordChange(tx, { kind: "source", categories: ["email"] });
+    return row;
+  });
   if (!row) throw new GmailPersistenceError("Attachment upsert had no id");
   if (!bytes) return;
   const key = input.uploadKey;
@@ -890,10 +909,13 @@ export const storeOrderMailAttachment = async (
     );
   await lockMailAttachmentUpload(db, key);
   await input.storage.put(key, bytes, input.attachment.mimeType);
-  await database
-    .update(orderMailAttachment)
-    .set({ pendingObjectKey: key })
-    .where(eq(orderMailAttachment.id, row.id));
+  await withTransaction(db, async (tx) => {
+    await tx
+      .update(orderMailAttachment)
+      .set({ pendingObjectKey: key })
+      .where(eq(orderMailAttachment.id, row.id));
+    await recordChange(tx, { kind: "source", categories: ["email"] });
+  });
   await finalizeMailAttachmentUpload(db, key);
 };
 
@@ -954,6 +976,8 @@ export const persistGmailEvents = async (
         .onConflictDoNothing();
       saved += 1;
     }
+    if (saved)
+      await recordChange(tx, { kind: "source", categories: ["email"] });
     return { saved, dropped: input.events.length - saved };
   });
 };

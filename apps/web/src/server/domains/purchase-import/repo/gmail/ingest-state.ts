@@ -5,7 +5,7 @@ import {
 import { eq } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
-import { getDb } from "~/server/db/helpers";
+import { getDb, withTransaction } from "~/server/db/helpers";
 import { runAfterCommit } from "~/server/db/helpers/core";
 import {
   email as emailTable,
@@ -14,6 +14,7 @@ import {
 } from "~/server/db/schema";
 import { emailMemberClassificationSql } from "~/server/domains/email/repo/email-sql";
 import { hasRetainedEmailImportContent } from "~/server/domains/purchase-import/repo/email-content";
+import { recordChange } from "~/server/generic/changes/repo/change";
 
 /** Gmail ingest's own reads and writes on Email and its retained original. */
 
@@ -50,15 +51,18 @@ export async function confirmEmailClassification(
   emailId: string,
   decision: Pick<MailboxClassificationDecision, "stage" | "reason">,
 ) {
-  await getDb(db)
-    .update(emailTable)
-    .set({
-      classificationStage: decision.stage,
-      classificationReason: decision.reason,
-      classificationVersion: MAILBOX_RESEARCH_VERSION,
-      updatedAt: new Date(),
-    })
-    .where(eq(emailTable.id, emailId));
+  await withTransaction(db, async (tx) => {
+    await tx
+      .update(emailTable)
+      .set({
+        classificationStage: decision.stage,
+        classificationReason: decision.reason,
+        classificationVersion: MAILBOX_RESEARCH_VERSION,
+        updatedAt: new Date(),
+      })
+      .where(eq(emailTable.id, emailId));
+    await recordChange(tx, { kind: "source", categories: ["email"] });
+  });
 }
 
 /** Object keys an order-mail original already stages; a failed publish must not delete them. */
@@ -78,10 +82,13 @@ export async function restoreOrderMailContent(
   db: Database,
   orderMailId: string,
 ) {
-  await getDb(db)
-    .update(emailTable)
-    .set({ contentClearedAt: null })
-    .where(eq(emailTable.orderMailId, orderMailId));
+  await withTransaction(db, async (tx) => {
+    await tx
+      .update(emailTable)
+      .set({ contentClearedAt: null })
+      .where(eq(emailTable.orderMailId, orderMailId));
+    await recordChange(tx, { kind: "source", categories: ["email"] });
+  });
 }
 
 /** Run `effect` once the publication transaction `db` commits. */

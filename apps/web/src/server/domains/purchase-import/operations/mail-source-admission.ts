@@ -251,7 +251,7 @@ export async function applyMailSourceAdmissions(
 ) {
   for (const admission of admissions) {
     if (admission.supporting)
-      await admitSupportingMailSource(getDb(db), runId, admission.mail);
+      await admitSupportingMailSource(db, runId, admission.mail);
     else if (
       options.requireAttribution &&
       admission.attribution !== "explicit" &&

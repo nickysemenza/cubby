@@ -6,12 +6,15 @@ import {
 import { and, eq, inArray, ne, or, sql } from "drizzle-orm";
 
 import {
+  repositoryQueries,
+  type RepositoryQueryInput,
   type RepositoryQueryClient as DrizzleClient,
   type RepositoryQueryTransaction as DrizzleTransaction,
 } from "~/server/db/repository-access.boundary";
 import { email as emailTable, run } from "~/server/db/retained-tables";
 import type { RetainedMail } from "~/server/domains/mail/repo/retained-mail";
 import { createAppError } from "~/server/errors/app-error";
+import { recordChange } from "~/server/generic/changes/repo/change";
 
 /**
  * The admitted source roster is Run input: admission freezes it and a
@@ -122,13 +125,14 @@ export async function assertMailRunReadAuthority(
  */
 export async function admitSupportingMailSource(
   // Row locks below need the caller's transaction.
-  tx: DrizzleClient | DrizzleTransaction,
+  db: RepositoryQueryInput,
   runId: RunId,
   mail: Pick<
     RetainedMail,
     "id" | "ledgerPartyId" | "mailboxId" | "messageId" | "rawChecksum"
   >,
 ) {
+  const tx = repositoryQueries(db);
   const [owner] = await tx
     .select()
     .from(run)
@@ -218,6 +222,7 @@ export async function admitSupportingMailSource(
     .update(emailTable)
     .set({ runId, status: "researching", updatedAt: new Date() })
     .where(eq(emailTable.id, message.id));
+  await recordChange(db, { kind: "source", categories: ["email"] });
 }
 
 /**
@@ -276,6 +281,7 @@ export async function transferMailRunSources(
       updatedAt: new Date(),
     })
     .where(eq(run.id, toRunId));
+  await recordChange(tx, { kind: "source", categories: ["email"] });
 }
 
 /**

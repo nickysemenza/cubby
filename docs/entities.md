@@ -2575,6 +2575,23 @@ The broad quality pass recomputes affected Products, including kit descendants,
 without mutation-time dependent traversal. Reads leave old publications intact
 until the pass completes.
 
+Email uses stored TypeScript checks at rules version 1. A single loader reads
+only its ID page's classification, retained-text/attachment presence, current
+preview, owner review, accepted/link evidence and completed same-member Mail
+import membership. The checks retain current-checksum review and preview rules,
+settled automated negatives, live Purchase/account ownership fences, and JSON
+source containment (including explicit null). Bodies are never selected for
+quality evaluation. List quality facets/counts, score sorts and the Email Work
+queue branch join stored outcomes; no mailbox-wide acceptance or review relation
+runs on those reads. Missing publications stay unassessed until refresh.
+
+Email metadata, original/attachment persistence, candidate/classification
+observations, email Assessment/Feedback, linked Purchase writes and Mail import
+Run/source-roster changes enroll the existing quality family transactionally.
+Run source changes enroll quality even when other families ignore Run execution
+metadata; progress-only projections still enroll no family. Old publications
+remain readable until refresh, and member waivers survive evidence changes.
+
 Expense uses stored TypeScript checks at rules version 1. One page-scoped
 loader reads its scalar fields, shared allocation/category completeness,
 product-expectation policy and display-image presence. Existing SQL domain

@@ -1,6 +1,7 @@
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import { workQueueHouseholdInput } from "@cubby/schemas/work-queue";
-import { sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
+import { createRepoIdentity } from "tooling/factories/repo";
 import { countTestDbQueries, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
@@ -8,36 +9,64 @@ import { z } from "zod";
 import { getDb } from "~/server/db/helpers";
 import {
   email,
+  entityQuality,
+  job,
+  ledgerParty,
   orderMail,
   orderMailAttachment,
   run as runTable,
 } from "~/server/db/schema";
 import { listEmailsRead } from "~/server/domains/email/repo/email";
 import { resolveMail } from "~/server/domains/purchase-import/operations/mail-tool";
+import { confirmEmailClassification } from "~/server/domains/purchase-import/repo/gmail/ingest-state";
+import { recordEmailClassificationObservation } from "~/server/domains/purchase-import/repo/gmail/observations";
+import {
+  saveEmail,
+  upsertOrderMail,
+} from "~/server/domains/purchase-import/repo/gmail/persistence";
+import { ensureRun } from "~/server/domains/run/repo/ensure-run";
+import { recordFeedback } from "~/server/generic/assessment/repo/assessment";
+import { ensureEmailAssessment } from "~/server/generic/assessment/repo/assessment-email";
+import { invalidateRefreshFamily } from "~/server/generic/derived-refresh/repo/families";
+import { advanceJob } from "~/server/generic/jobs/service/jobs";
 import { listScaffold } from "~/server/generic/list/repo/list";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { readWorkQueue } from "~/server/generic/work-queue/service/work-queue-read";
+import { refreshFamilyHandler } from "~/server/workflows/background-tasks/refresh-families";
 
-import { loadDataQualities } from "./hydrate";
-import {
-  checksOf,
-  gapCondition,
-  qualityFilterSource,
-  qualityFilterContext,
-  statusSql,
-} from "./sql";
+import { emailChecks, EMAIL_QUALITY_RULES_VERSION } from "./checks/email";
+import { loadDataQualities, loadQualityBreakdown } from "./hydrate";
+import { gapCondition, qualityFilterSource, qualityFilterContext } from "./sql";
 
-// Email pipeline gaps are Relevance-conditional, and their correlated SQL must
-// stay bound to the scored Email: another Email's attachment or completed
-// import Run must never satisfy this Email's check.
-// A reviewed link to an existing Purchase must not demand another extraction.
-// Original-content checks must inspect the selected Email's original, rather
-// than decompressing every retained message body to build a hashed SubPlan.
-// Settled unrelated history must not enter the filter-only evidence joins.
+// Failure modes: original/import evidence crosses Email or member boundaries;
+// filtered list counts and Work queue branches re-run live acceptance policy;
+// reads publish repairs or source writes fail to enroll the quality family.
 describe("Email data quality", () => {
   const ctx = withTestDb();
+  const refresh = async () => {
+    // Low-level historical fixtures deliberately bypass source writers.
+    await invalidateRefreshFamily(ctx.db, "quality");
+    for (let page = 0; page < 8; page++) {
+      const [intent] = await getDb(ctx.db)
+        .select()
+        .from(job)
+        .where(eq(job.key, "refresh:quality"));
+      if (!intent) throw new Error("Expected quality refresh intent");
+      expect(
+        await advanceJob(ctx.db, intent.id, {
+          "refresh.family": refreshFamilyHandler,
+        }),
+      ).toBe("succeeded");
+      const [current] = await getDb(ctx.db)
+        .select()
+        .from(job)
+        .where(eq(job.id, intent.id));
+      if (current?.state === "completed") return;
+    }
+    throw new Error("Synthetic Email quality pass exceeded page budget");
+  };
 
-  it("bounds original-content inspection to the scored Emails", async () => {
+  it("batch-loads original presence only for the scored Emails", async () => {
     const party = await insertWithShortcode(ctx.db, "ledgerParty", {
       name: "Synthetic content member",
       kind: "member",
@@ -45,7 +74,7 @@ describe("Email data quality", () => {
     const originals = await getDb(ctx.db)
       .insert(orderMail)
       .values(
-        Array.from({ length: 300 }, (_, index) => ({
+        Array.from({ length: 7 }, (_, index) => ({
           ledgerPartyId: party.id,
           rawChecksum: "c".repeat(64),
           content: {
@@ -74,94 +103,38 @@ describe("Email data quality", () => {
         pendingObjectKey: "synthetic/retained.pdf",
       });
     const expectedMissing = new Set<string>();
-    for (let index = 0; index < 300; index++) {
+    const ids: string[] = [];
+    for (let index = 0; index < 7; index++) {
       const record = await insertWithShortcode(ctx.db, "email", {
         ledgerPartyId: party.id,
         mailboxId: "synthetic-content-mailbox",
         messageId: `synthetic-content-${index}`,
         checksum: "c".repeat(64),
-        classification: index < 120 ? "related" : "unrelated",
+        classification: index < 6 ? "related" : "unrelated",
         status: "pending",
         orderMailId: index === 3 ? null : originalAt(index),
         contentClearedAt: index === 5 ? new Date() : null,
       });
+      ids.push(record.id);
       if (index === 0 || index === 3 || index === 5)
         expectedMissing.add(record.id);
     }
-    await getDb(ctx.db).execute(sql`ANALYZE "Email", "OrderMail"`);
-    const qualityQuery = (bulk: boolean) => {
-      const context = bulk ? qualityFilterContext("email") : undefined;
-      return sql`SELECT "Email".id,
-        ${gapCondition("email", "email_original_missing", undefined, context)} AS gap,
-        jsonb_build_array(${sql.join(
-          checksOf("email").map(
-            (check) =>
-              sql`${gapCondition("email", check, undefined, context)} IS TRUE`,
-          ),
-          sql`, `,
-        )}) AS checks,
-        ${statusSql("email", undefined, context)} AS status
-        FROM ${bulk ? qualityFilterSource("email") : sql`"Email"`}`;
-    };
-    const query = qualityQuery(true);
-    const rows = await getDb(ctx.db).execute(query);
-    const resultSchema = z.array(
-      z.object({
-        id: z.string(),
-        gap: z.boolean(),
-        checks: z.array(z.boolean()),
-        status: z.string(),
-      }),
+    const loaded = await countTestDbQueries(() =>
+      emailChecks.evaluate(ctx.db, ids.slice(0, 6)),
     );
-    const gaps = resultSchema.parse(rows.rows);
-    expect(gaps).toHaveLength(300);
-    expect(new Set(gaps.filter((row) => row.gap).map((row) => row.id))).toEqual(
-      expectedMissing,
+    expect(loaded.queryCount).toBe(1);
+    expect(loaded.result.map((row) => row.id).sort()).toEqual(
+      ids.slice(0, 6).sort(),
     );
-    const scalar = await getDb(ctx.db).execute(qualityQuery(false));
     expect(
-      new Map(
-        resultSchema
-          .parse(scalar.rows)
-          .map(({ id, ...quality }) => [id, quality]),
+      new Set(
+        loaded.result
+          .filter((row) => row.checks.email_original_missing === "gap")
+          .map((row) => row.id),
       ),
-    ).toEqual(new Map(gaps.map(({ id, ...quality }) => [id, quality])));
-    const explained = await getDb(ctx.db).execute(
-      sql`EXPLAIN (ANALYZE, FORMAT JSON) ${query}`,
-    );
-    const node = z.object({
-      "Relation Name": z.string().optional(),
-      Alias: z.string().optional(),
-      Filter: z.string().optional(),
-      "Actual Rows": z.number().default(0),
-      "Actual Loops": z.number().default(0),
-      "Rows Removed by Filter": z.number().default(0),
-      Plans: z.array(z.unknown()).optional(),
-    });
-    const plans = z
-      .array(
-        z.object({ "QUERY PLAN": z.array(z.object({ Plan: z.unknown() })) }),
-      )
-      .parse(explained.rows);
-    let inspected = 0;
-    let qualityCandidates = 0;
-    const inspect = (value: unknown) => {
-      const current = node.parse(value);
-      if (current["Relation Name"] === "Email" && current.Alias === "candidate")
-        qualityCandidates += current["Actual Rows"] * current["Actual Loops"];
-      if (
-        current["Relation Name"] === "OrderMail" &&
-        current.Filter?.includes("content")
-      )
-        inspected +=
-          (current["Actual Rows"] + current["Rows Removed by Filter"]) *
-          current["Actual Loops"];
-      current.Plans?.forEach(inspect);
-    };
-    inspect(plans[0]!["QUERY PLAN"][0]!.Plan);
-    expect(inspected).toBeLessThanOrEqual(120);
-    expect(qualityCandidates).toBeGreaterThan(0);
-    expect(qualityCandidates).toBeLessThanOrEqual(120);
+    ).toEqual(expectedMissing);
+    expect(loaded.statements.join("\n")).not.toContain('"content"');
+    expect(await emailChecks.evaluate(ctx.db, [])).toEqual([]);
   });
 
   it("counts and queues only Emails without a completed import", async () => {
@@ -215,6 +188,7 @@ describe("Email data quality", () => {
         classification: "related",
         status: "pending",
       });
+    await refresh();
     const statement = sql`SELECT "Email".id, ${gapCondition("email", "email_not_imported", undefined, qualityFilterContext("email"))} AS gap FROM ${qualityFilterSource("email")}`;
     const rows = await getDb(ctx.db).execute(statement);
     const gaps = z.array(z.object({ gap: z.boolean() })).parse(rows.rows);
@@ -246,18 +220,232 @@ describe("Email data quality", () => {
     expect(plain.result.count).toBe(6);
     expect(plain.queryCount).toBe(1);
     expect(plain.statements.join("\n")).not.toMatch(/\bJOIN\b/i);
-    const queue = await readWorkQueue(
-      ctx.db,
-      null,
-      workQueueHouseholdInput.parse({
-        check: ["email_not_imported"],
-        pageSize: 100,
-      }),
-      false,
+    const filtered = await countTestDbQueries(() =>
+      listEmailsRead(
+        ctx.db,
+        { dataGap: ["email_not_imported"] },
+        [{ orderBy: "dataQuality", direction: "asc" }],
+        { pageIndex: 0, pageSize: 25 },
+        { kind: "selected", fields: ["dataQuality"], groups: ["quality"] },
+      ),
     );
+    expect(filtered.result.count).toBe(4);
+    expect(filtered.result.data).toHaveLength(4);
+    const statements = filtered.statements.join("\n");
+    expect(statements).toMatch(/JOIN[^;]*"EntityQuality"/i);
+    expect(filtered.tables).toEqual(
+      expect.arrayContaining(["EntityQuality", "EntityQualityCheck"]),
+    );
+    expect(
+      filtered.tables.filter((table) =>
+        [
+          "ImportSourceClaim",
+          "ImportSourceOrder",
+          "EmailCandidateObservation",
+          "AssessmentEmailLink",
+          "Feedback",
+          "Run",
+        ].includes(table),
+      ),
+    ).toEqual([]);
+    const count = await countTestDbQueries(() =>
+      listEmailsRead(
+        ctx.db,
+        { dataGap: ["email_not_imported"] },
+        [],
+        { pageIndex: 0, pageSize: 25 },
+        { kind: "selected", fields: [], groups: [] },
+        "count",
+      ),
+    );
+    expect(count.result.count).toBe(4);
+    expect(count.queryCount).toBe(1);
+    expect(count.tables).toEqual([
+      "Email",
+      "EntityQuality",
+      "EntityQualityCheck",
+    ]);
+    const facet = await countTestDbQueries(() =>
+      listEmailsRead(
+        ctx.db,
+        { dataStatus: ["needs_data"] },
+        [],
+        { pageIndex: 0, pageSize: 25 },
+        { kind: "selected", fields: [], groups: [] },
+        "count",
+      ),
+    );
+    expect(facet.result.count).toBe(6);
+    expect(facet.queryCount).toBe(1);
+    expect(facet.tables).toEqual([
+      "Email",
+      "EntityQuality",
+      "EntityQualityCheck",
+    ]);
+    const measuredQueue = await countTestDbQueries(() =>
+      readWorkQueue(
+        ctx.db,
+        null,
+        workQueueHouseholdInput.parse({
+          check: ["email_not_imported"],
+          pageSize: 100,
+        }),
+        false,
+      ),
+    );
+    const queue = measuredQueue.result;
+    expect(measuredQueue.tables).toContain("EntityQualityCheck");
+    expect(
+      measuredQueue.tables.filter((table) =>
+        [
+          "ImportSourceClaim",
+          "ImportSourceOrder",
+          "EmailCandidateObservation",
+        ].includes(table),
+      ),
+    ).toEqual([]);
     expect(queue.meta.totalCount).toBe(4);
     expect(queue.items).toHaveLength(4);
     expect(queue.items.every((item) => item.entity === "email")).toBe(true);
+  });
+
+  it("enrolls mail inputs and retains publications across reads until refresh", async () => {
+    const party = await createRepoIdentity(ctx, "ledgerParty", {
+      name: "Synthetic publication member",
+      kind: "member",
+    });
+    await getDb(ctx.db)
+      .update(ledgerParty)
+      .set({ userId: ctx.actor.userId })
+      .where(eq(ledgerParty.id, party.entityId));
+    const identity = {
+      ledgerPartyId: party.entityId,
+      mailboxId: "synthetic-publication-mailbox",
+      messageId: "synthetic-publication",
+    };
+    const input = {
+      ...identity,
+      checksum: "e".repeat(64),
+      classification: "related" as const,
+      classificationStage: "decision" as const,
+      status: "pending" as const,
+    };
+    await saveEmail(ctx.db, input);
+    const [message] = await getDb(ctx.db)
+      .select()
+      .from(email)
+      .where(eq(email.messageId, identity.messageId));
+    if (!message) throw new Error("Synthetic Email missing");
+    const emailId = parseEntityId("email", message.id);
+    const published = async () =>
+      (await loadDataQualities(ctx.db, "email", [emailId])).get(emailId)!;
+    expect((await published()).status).toBe("not_assessed");
+    expect(
+      (
+        await loadQualityBreakdown(ctx.db, "email", message.shortcode)
+      ).checks.map((check) => check.check),
+    ).toContain("email_original_missing");
+    expect(await getDb(ctx.db).select().from(entityQuality)).toEqual([]);
+    await refresh();
+    const [stored] = await getDb(ctx.db)
+      .select()
+      .from(entityQuality)
+      .where(eq(entityQuality.entityId, message.id));
+    expect(stored?.rulesVersion).toBe(EMAIL_QUALITY_RULES_VERSION);
+    const generation = async () =>
+      (
+        await getDb(ctx.db)
+          .select()
+          .from(job)
+          .where(eq(job.key, "refresh:quality"))
+      )[0]!.generation;
+    const enrolled = async <T>(write: () => Promise<T>) => {
+      const before = await generation();
+      const result = await write();
+      expect(await generation()).toBeGreaterThan(before);
+      return result;
+    };
+    const originalId = await enrolled(() =>
+      upsertOrderMail(
+        ctx.db,
+        party.entityId,
+        {
+          ...identity,
+          sourceKey: `gmail:${identity.mailboxId}:${identity.messageId}`,
+          threadId: null,
+          historyId: null,
+          internalDate: null,
+          labelIds: [],
+          headers: {},
+          snippet: "Synthetic retained original",
+          bodyText: null,
+          bodyHtml: null,
+        },
+        input.checksum,
+      ),
+    );
+    expect((await published()).gaps.map((gap) => gap.check)).toContain(
+      "email_original_missing",
+    );
+    expect(
+      (await loadQualityBreakdown(ctx.db, "email", message.shortcode)).checks
+        .filter((check) => check.state === "gap")
+        .map((check) => check.check),
+    ).not.toContain("email_original_missing");
+    await refresh();
+    expect((await published()).gaps.map((gap) => gap.check)).not.toContain(
+      "email_original_missing",
+    );
+    await enrolled(() =>
+      confirmEmailClassification(ctx.db, message.id, {
+        stage: "model",
+        reason: "Synthetic stage update",
+      }),
+    );
+    const prediction = await enrolled(() =>
+      recordEmailClassificationObservation(ctx.db, {
+        emailId: message.id,
+        checksum: input.checksum,
+        classification: "related",
+        stage: "model",
+        reason: "Synthetic observed classification",
+        classificationVersion: "synthetic-v1",
+      }),
+    );
+    const assessment = await ensureEmailAssessment(ctx.db, prediction.id);
+    await enrolled(() =>
+      recordFeedback(ctx.db, {
+        assessmentId: assessment.id,
+        operationId: "synthetic-member-review",
+        verdict: "correct",
+        authority: "member",
+        actorUserId: ctx.actor.userId,
+        intent: "history",
+        correction: { present: false },
+      }),
+    );
+    await refresh();
+    expect((await published()).gaps.map((gap) => gap.check)).not.toContain(
+      "email_relevance_unreviewed",
+    );
+    await enrolled(() =>
+      ensureRun(ctx.db, ctx.actor, {
+        purpose: "mail_import",
+        trigger: "manual",
+        status: "completed",
+        input: {
+          kind: "mail_research",
+          sources: [{ orderMailId: originalId, checksum: input.checksum }],
+        },
+      }),
+    );
+    expect((await published()).gaps.map((gap) => gap.check)).toContain(
+      "email_not_imported",
+    );
+    await refresh();
+    expect((await published()).gaps.map((gap) => gap.check)).not.toContain(
+      "email_not_imported",
+    );
   });
 
   it("rejects completed Mail import Runs without an owner", async () => {
@@ -349,19 +537,16 @@ describe("Email data quality", () => {
       await getDb(ctx.db).execute(
         sql`UPDATE ${runTable} SET input = ${JSON.stringify(input)}::jsonb WHERE id = ${run.id}`,
       );
-      const result = await getDb(ctx.db).execute(
-        sql`SELECT ${gapCondition("email", "email_not_imported")} AS gap FROM "Email" WHERE id = ${message.id}`,
-      );
-      const bulk = await getDb(ctx.db).execute(
-        sql`SELECT ${gapCondition("email", "email_not_imported", undefined, qualityFilterContext("email"))} AS gap FROM ${qualityFilterSource("email")} WHERE "Email".id = ${message.id}`,
-      );
-      expect(bulk.rows).toEqual(result.rows);
-      const expected = !["exact", "extra-fields", "explicit-null"].includes(
+      const [result] = await emailChecks.evaluate(ctx.db, [message.id]);
+      const expected = ["exact", "extra-fields", "explicit-null"].includes(
         scenario,
-      );
-      expect(
-        z.array(z.object({ gap: z.boolean() })).parse(result.rows),
-      ).toEqual([{ gap: expected }]);
+      )
+        ? "pass"
+        : "gap";
+      expect({ scenario, state: result?.checks.email_not_imported }).toEqual({
+        scenario,
+        state: expected,
+      });
     }
   });
 
@@ -465,12 +650,12 @@ describe("Email data quality", () => {
     );
 
     const id = (row: { id: string }) => parseEntityId("email", row.id);
-    const qualities = await loadDataQualities(ctx.db, "email", [
-      id(unrelated),
-      id(related),
-      id(retained),
-      id(linked),
-    ]);
+    const qualities = await loadDataQualities(
+      ctx.db,
+      "email",
+      [id(unrelated), id(related), id(retained), id(linked)],
+      "live",
+    );
     const gaps = (row: { id: string }) =>
       qualities
         .get(id(row))
@@ -492,6 +677,7 @@ describe("Email data quality", () => {
     ]);
     expect(gaps(linked)).toEqual(["email_display_image"]);
 
+    await refresh();
     const reviewQueue = await listEmailsRead(
       ctx.db,
       { dataGap: ["email_relevance_unreviewed"] },

@@ -22,6 +22,7 @@ import {
   withTransactionDatabase,
 } from "~/server/db/helpers";
 import { run as runTable, ledgerParty, user } from "~/server/db/schema";
+import { recordChange } from "~/server/generic/changes/repo/change";
 import { enqueueJob } from "~/server/generic/jobs/repo/jobs";
 import {
   findOrCreateWithShortcode,
@@ -160,6 +161,8 @@ export async function ensureRun(
         input: { runId: row.id, purpose: input.purpose },
         runId: row.id,
       });
+    if (row.purpose === "mail_import")
+      await recordChange(tx, { kind: "source", categories: ["email"] });
     return row.id;
   });
 }
