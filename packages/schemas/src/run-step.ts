@@ -74,6 +74,10 @@ export const runStepPageSample = z.object({
     .optional(),
   timings: z.record(z.string(), z.number().nonnegative()),
   queries: z.number().int().nonnegative().nullable(),
+  /** Traced statements within timed phases; nested phases overlap. */
+  phaseQueries: z
+    .record(z.string(), z.number().int().nonnegative().nullable())
+    .optional(),
   concurrency: z.record(z.string(), z.number().int().nonnegative()).optional(),
 });
 export type RunStepPageSample = z.infer<typeof runStepPageSample>;

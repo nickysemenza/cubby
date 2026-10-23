@@ -27,6 +27,7 @@ export async function measurePage<T>(
   const startedAt = performance.now();
   const timings: Record<string, number> = {};
   const concurrency: Record<string, number> = {};
+  const phaseQueries: Record<string, number> = {};
   const add = (sample: PageWorkSample) => {
     for (const [phase, ms] of Object.entries(sample.timings))
       timings[phase] = (timings[phase] ?? 0) + Math.round(ms);
@@ -37,11 +38,14 @@ export async function measurePage<T>(
     add,
     time: async (phase, run) => {
       const started = performance.now();
-      try {
-        return await run();
-      } finally {
-        add({ timings: { [phase]: performance.now() - started } });
-      }
+      return withDatabaseOperationMetrics(async (metrics) => {
+        try {
+          return await run();
+        } finally {
+          phaseQueries[phase] = (phaseQueries[phase] ?? 0) + metrics.queryCount;
+          add({ timings: { [phase]: performance.now() - started } });
+        }
+      });
     },
   };
   return withDatabaseOperationMetrics(async (metrics) => {
@@ -72,6 +76,14 @@ export async function measurePage<T>(
           : {}),
         timings,
         queries: metrics.queryCount || null,
+        ...(Object.keys(phaseQueries).length && {
+          phaseQueries: Object.fromEntries(
+            Object.entries(phaseQueries).map(([phase, count]) => [
+              phase,
+              count || null,
+            ]),
+          ),
+        }),
         ...(Object.keys(concurrency).length && { concurrency }),
       },
     };
