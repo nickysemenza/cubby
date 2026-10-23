@@ -478,9 +478,9 @@ shared capability in both tiers.
 category browser journey uses two refund lines for readable labels, explanations,
 explicit policy and reset-to-inherited behavior. Avoid a second full list reload
 merely to repeat the explicit value already read back and shown on detail.
-Hover the assessment’s declared placement column to reveal its explanation:
-Itemization belongs to `itemizationCoverage`, separate from the policy field
-`itemizationExpectation`.
+Use `openCellExplanation` when the runtime explanation rail’s host column has
+not been established. A declaration’s assessment placement does not identify
+every derived-value explanation control.
 
 The Wardrobe browser journeys retain ownership edits, grouped category navigation,
 subtype inclusion and section exclusion. The mobile sticky-header coordinate

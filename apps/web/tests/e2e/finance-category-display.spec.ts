@@ -3,6 +3,7 @@ import { z } from "zod";
 import { spendingCategorySummarySchema } from "@cubby/schemas/spending-classification";
 import { fieldResolutionSchema } from "@cubby/schemas/field-resolution";
 import {
+  openCellExplanation,
   gotoAuthenticatedPage,
   selectComboboxItem,
 } from "./support/e2e-helpers";
@@ -142,13 +143,7 @@ test("linked Expense categories display their readable label and transaction exp
   );
 
   await page.keyboard.press("Escape");
-  await row.locator('[data-cell-col="itemizationCoverage"]').hover();
-  const expectationExplanation = row.getByRole("button", {
-    name: "How itemization is determined",
-    exact: true,
-  });
-  await expect(expectationExplanation).toBeVisible();
-  await expectationExplanation.dispatchEvent("click");
+  await openCellExplanation(row, "How itemization is determined");
   await expect(popover).toContainText("Technical details");
   await expect(
     popover.getByText("Confirmed allocations 1", { exact: true }),
