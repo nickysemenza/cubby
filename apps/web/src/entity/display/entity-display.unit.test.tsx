@@ -76,6 +76,58 @@ function fieldOf(entity: Entity, key: string) {
 }
 
 describe("declared entity displays", () => {
+  it("keeps allocated category links when the scalar resolution is null", () => {
+    const harness = createBrowserTestHarness();
+    const record = {
+      spendingCategoryId: null,
+      spendingCategoryName: null,
+      fieldResolutions: {
+        spendingCategoryId: {
+          mode: "allocated",
+          storedValue: null,
+          value: null,
+          fallbackValue: null,
+          source: "Principal line allocation",
+          sourceEntity: null,
+          matchesFallback: false,
+          canReset: true,
+        },
+      },
+      spendingCategoryAllocations: [
+        {
+          spendingCategoryId: "SPC-7M4K",
+          spendingCategoryName: "Supplies",
+          amount: 2,
+          incomplete: false,
+        },
+        {
+          spendingCategoryId: "SPC-4K7M",
+          spendingCategoryName: "Services",
+          amount: 3,
+          incomplete: false,
+        },
+      ],
+    };
+    render(
+      <>
+        {renderDetailFieldValue(
+          "expense",
+          record,
+          fieldOf("expense", "spendingCategoryId"),
+        )}
+      </>,
+      { wrapper: harness.wrapper },
+    );
+    expect(screen.getByRole("link", { name: "Supplies" })).toHaveAttribute(
+      "href",
+      "/spending-categories/SPC-7M4K",
+    );
+    expect(screen.getByRole("link", { name: "Services" })).toHaveAttribute(
+      "href",
+      "/spending-categories/SPC-4K7M",
+    );
+    harness.dispose();
+  });
   it("links shortcodes in editable product notes beside a working edit control", async () => {
     const overrides = editableFieldOverrides(
       "product",

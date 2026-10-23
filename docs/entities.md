@@ -3331,6 +3331,8 @@ Unit price and valuation fields remain visible with an applicability explanation
 Full detail pages and inspectors retain all declared user-facing field sections,
 including empty ones. Missing values read Not recorded, with Add when editable;
 domain-specific inapplicable values explain why they cannot be supplied.
+Allocated references remain content even when their scalar resolution is null;
+their individual links and amounts remain visible.
 Internal fields remain excluded from the declared presentation and available
 under Technical details. Lists retain compact absence markers.
 

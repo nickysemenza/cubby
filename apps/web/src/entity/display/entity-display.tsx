@@ -396,6 +396,8 @@ function resolutionEmptyLabel(
 ): ReactNode {
   const resolution = fieldResolutionFor(record, field.key);
   if (!resolution || resolution.value !== null) return null;
+  // Allocations have multiple reference values rather than one scalar value.
+  if (resolution.mode === "allocated") return null;
   const labels = resolutionPolicyFor(entity, field.key)?.labels;
   const label =
     resolution.mode === "inherit" ? labels?.unresolved : labels?.none;
