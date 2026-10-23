@@ -80,6 +80,7 @@ import {
 import { transitionAssessmentStates } from "~/server/generic/assessment/repo/assessment-state";
 import {
   automaticRuleStamp,
+  importOnlyStatementRuleStamps,
   matchStatementRules,
 } from "~/server/generic/assessment/repo/automatic-rules";
 import { currentJobExecution } from "~/server/generic/jobs/context";
@@ -2765,7 +2766,7 @@ export async function completeStatementApplications(
 export const STATEMENT_APPLICATION_PREFIX_LIMIT =
   JOB_PAGE_LIMITS.suggestionsPerPage;
 
-/** A locked publication without rule stamps cannot admit an automatic effect.
+/** A locked unscoped publication without applicable rule stamps cannot admit an automatic effect.
  * Only the original consecutive prefix is resolved; callers must apply a
  * boundary charge after releasing these locks and reread the remaining suffix.
  */
@@ -2783,6 +2784,12 @@ export async function completeNoActionStatementPrefix(
     throw new Error("Statement application prefix contains duplicate receipts");
   // A negative preflight only declines batching; ordinary admission reads fresh.
   // Positive results prove nothing until the whole prefix is locked and checked.
+  // Import-only rules are inapplicable to this unscoped path regardless of their switch.
+  // Unknown or obsolete stamps remain boundaries; only exact current stamps are excluded.
+  const excluded = importOnlyStatementRuleStamps();
+  const hasApplicableRules = (data: SQL) => sql<boolean>`EXISTS (
+    SELECT 1 FROM jsonb_array_elements_text(${matchedRulesOf(data)}) AS matched(value)
+    WHERE matched.value IS NULL OR NOT ${inArray(sql`matched.value`, excluded)})`;
   const first = window[0]!;
   const [candidate] = await getDb(db)
     .select({ id: assessmentState.id })
@@ -2798,7 +2805,7 @@ export async function completeNoActionStatementPrefix(
         sql`${suggestionField("chargeKey", STATE)} = ${first.charge.chargeKey}`,
         sql`${suggestionField("evidenceFingerprint", STATE)} = ${first.evidenceFingerprint}`,
         sql`${assessmentState.data}->'applicationPending' = 'true'::jsonb`,
-        sql`jsonb_array_length(${matchedRulesOf(sql`${assessmentState.data}`)}) = 0`,
+        sql`NOT ${hasApplicableRules(sql`${assessmentState.data}`)}`,
       ),
     )
     .limit(1);
@@ -2813,7 +2820,7 @@ export async function completeNoActionStatementPrefix(
         status: assessmentState.status,
         suppression: assessmentState.suppression,
         data: assessmentState.data,
-        hasRules: sql<boolean>`jsonb_array_length(${matchedRulesOf(sql`${assessmentState.data}`)}) > 0`,
+        hasRules: hasApplicableRules(sql`${assessmentState.data}`),
       })
       .from(assessmentState)
       .where(

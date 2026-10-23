@@ -457,6 +457,11 @@ pending application receipts before testing the obsolete input fence, and finish
 retirement before acknowledgement. Recovery does not recreate or restamp labels.
 Resumed application receipts repeat that exact retirement check before application,
 including recovery from a crash before the after-commit callback started.
+Unscoped Sweeps may settle a no-effect receipt prefix whose only stamps are
+current import-only rules: these rules cannot execute outside import admission.
+Unknown, obsolete and otherwise applicable stamps still end the prefix, even
+when a member switch is paused. Import-scoped work keeps regeneration and fresh
+individual admission.
 Automatic financial application still admits only the original ready prefix,
 sequentially. Unscoped label passes may complete consecutive no-action receipts
 in bounded transactions: lock the exact receipts, verify their charge/evidence,
