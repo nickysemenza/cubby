@@ -1,0 +1,19 @@
+apps/web/src/server/generic/data-quality/repo/email-checks.integration.test.ts
+  s_f8222ceba4ac4a::t_6aff3370c6e70e 257,360
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "3a69cf417700d7f7d13100cd8387dc4fdbf9a29a",
+  "prompts": {},
+  "sessions": {
+    "s_f8222ceba4ac4a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a16a9c-1cbd-7ae2-beda-2ce80e62e68c",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}

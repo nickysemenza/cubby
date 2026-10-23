@@ -1,0 +1,21 @@
+apps/web/src/server/domains/run/service/suggestion-sweep.integration.test.ts
+  s_0cc53fa46ecbd7::t_f6f7c84d88ccb4 6,186-197,200-204
+apps/web/src/server/domains/run/service/suggestion-sweep.ts
+  s_0cc53fa46ecbd7::t_467f3bdbdeb115 40,270-274,276
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "37c7b7f6a96ddeb841057dea10cde881bf70b97d",
+  "prompts": {},
+  "sessions": {
+    "s_0cc53fa46ecbd7": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2e7ff6fb-224e-42e0-a270-a92fc1131a0c",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}

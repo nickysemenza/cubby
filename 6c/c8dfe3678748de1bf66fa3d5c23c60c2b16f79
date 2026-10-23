@@ -1,0 +1,25 @@
+apps/web/src/server/observability/tracing.ts
+  s_16882afa1e38ca::t_273c78512a0436 2-3,80-93,103-111,120-126,135-143,151-155
+apps/web/src/server/db/db-pg-tracing.unit.test.ts
+  s_16882afa1e38ca::t_2311041b48bb26 5-8,33-119
+docs/infrastructure.md
+  s_16882afa1e38ca::t_fd58c2a76b94c9 942-952
+apps/web/src/server/db/db-pg-tracing.ts
+  s_16882afa1e38ca::t_23b11981425377 5,7-11,235-238,249
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "6cc8dfe3678748de1bf66fa3d5c23c60c2b16f79",
+  "prompts": {},
+  "sessions": {
+    "s_16882afa1e38ca": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a16a6a-0a75-7111-9f3c-b5b97e53f6bd",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
