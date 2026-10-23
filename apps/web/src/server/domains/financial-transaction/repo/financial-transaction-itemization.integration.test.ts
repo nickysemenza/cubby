@@ -8,7 +8,6 @@ import {
   findOrCreateVendor,
   getVendorByID,
 } from "~/server/domains/vendor/repo/vendor";
-import { publishQualityFixtures } from "~/server/testing/quality.fixtures";
 import {
   createProductIdentityFixture,
   makeExpenseInput,
@@ -167,7 +166,7 @@ describe("financial transaction itemization verdict", () => {
 
       await charge(7, []);
 
-      await publishQualityFixtures(ctx.db, "purchase");
+      // Verdicts are live: no quality publication precedes this read.
       const all = await verdicts();
       expect(all.get("charge 7 0 posted")).toBe("bare");
       expect(all.get("charge 100 1 posted")).toBe("lump");

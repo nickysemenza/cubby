@@ -115,12 +115,67 @@ export const vendorExpenseAggregateSql = (purchaseAlias: string) =>
     count(*) FILTER (WHERE vp_e."cost" IS NULL)::int AS "unpricedCount"
     ${vendorExpenseRowsSql(purchaseAlias)}`;
 
-/** Published actionable mismatch; waivers remain durable across evidence changes. */
-const purchaseFinancialMismatchSql = (purchaseAlias: string) => `EXISTS (
-  SELECT 1 FROM "EntityQualityCheck" quality
-  WHERE quality."entityId" = ${purchaseAlias}."id" AND quality.kind = 'purchase'
-    AND quality."checkKey" = 'settlement_mismatch' AND quality.state = 'gap'
-)`;
+/**
+ * The settlement total compared with incurred expenses. Outstanding expected
+ * or pending rows make the projected total authoritative; otherwise only
+ * posted rows count. The Purchase quality loader applies the same rule in its
+ * batched aggregate.
+ */
+const purchaseFinancialComparisonTotalSql = (purchaseAlias: string) =>
+  `(CASE WHEN EXISTS (
+    SELECT 1
+    FROM "FinancialTransactionAllocation" a
+    JOIN "FinancialTransaction" ft ON ft."id" = a."transactionId"
+    WHERE a."purchaseId" = ${purchaseAlias}."id" AND a."deletedAt" IS NULL
+      AND ft."deletedAt" IS NULL AND ft."kind" IN (${purchaseSettlementKinds.map((kind) => `'${kind}'`).join(", ")})
+      AND ft."status" IN ('expected', 'pending')
+  ) THEN (
+    SELECT COALESCE(sum(a."amount"), 0)::double precision FROM "FinancialTransactionAllocation" a
+    JOIN "FinancialTransaction" ft ON ft."id" = a."transactionId"
+    WHERE a."purchaseId" = ${purchaseAlias}."id" AND a."deletedAt" IS NULL
+      AND ft."deletedAt" IS NULL AND ft."kind" IN (${purchaseSettlementKinds.map((kind) => `'${kind}'`).join(", ")})
+      AND ft."status" <> 'void'
+  ) ELSE (
+    SELECT COALESCE(sum(a."amount"), 0)::double precision FROM "FinancialTransactionAllocation" a
+    JOIN "FinancialTransaction" ft ON ft."id" = a."transactionId"
+    WHERE a."purchaseId" = ${purchaseAlias}."id" AND a."deletedAt" IS NULL
+      AND ft."deletedAt" IS NULL AND ft."kind" IN (${purchaseSettlementKinds.map((kind) => `'${kind}'`).join(", ")})
+      AND ft."status" = 'posted'
+  ) END)`;
+
+/**
+ * Correlated SQL form of `calculateFinancialReconciliation(...).status ===
+ * "mismatch"`, before a reasoned `settlement_mismatch` exception is applied.
+ * The raw verdict remains available to data quality and detail reads: accepting
+ * a documented discrepancy must not falsify the actual bank/ledger delta.
+ */
+const purchaseFinancialMismatchRawSql = (purchaseAlias: string) => `
+  ${settleableUnpricedExpenseCountSql(purchaseAlias)} = 0
+  AND EXISTS (
+    SELECT 1
+    FROM "FinancialTransactionAllocation" a
+    JOIN "FinancialTransaction" ft ON ft."id" = a."transactionId"
+    WHERE a."purchaseId" = ${purchaseAlias}."id"
+      AND a."deletedAt" IS NULL
+      AND ft."deletedAt" IS NULL
+      AND ft."kind" IN (${purchaseSettlementKinds.map((kind) => `'${kind}'`).join(", ")})
+      AND ft."status" <> 'void'
+  )
+  AND floor(${purchaseFinancialComparisonTotalSql(purchaseAlias)} * 100 + 0.5)
+    IS DISTINCT FROM floor((${settleableExpenseTotalSql(purchaseAlias)}) * 100 + 0.5)`;
+
+/**
+ * The live actionable mismatch: current money, minus a member's durable
+ * `settlement_mismatch` waiver. Detail reconciliation must not wait for a
+ * quality refresh.
+ */
+const purchaseFinancialMismatchSql = (purchaseAlias: string) => `
+  (${purchaseFinancialMismatchRawSql(purchaseAlias)})
+  AND NOT EXISTS (
+    SELECT 1 FROM "DataException" exception
+    WHERE exception."entityId" = ${purchaseAlias}."id"
+      AND exception."check" = 'settlement_mismatch'
+  )`;
 
 /**
  * The itemization verdict for one charge, as a correlated scalar over
