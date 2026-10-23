@@ -36,9 +36,10 @@ export const locationChecks = defineStoredEntityChecks({
       (record) => record.hasAttachedDisplayableImage,
       observed((record) => hasText(record.aiDescription)),
     ),
+    // Furniture is the place itself; live inventory of its Product counts it twice.
     location_furniture_counted: when(
       (record) => record.type === furnitureLocationType,
-      observed((record) => record.hasInventoryForProduct),
+      observed((record) => !record.hasInventoryForProduct),
     ),
   },
 });
