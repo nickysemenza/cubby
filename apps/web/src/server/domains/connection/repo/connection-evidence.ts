@@ -257,14 +257,18 @@ export type PreparedConnectionBases = {
 const pairKey = (purchaseId: string, productId: string) =>
   `${purchaseId}:${productId}`;
 
-const recordKey = (ref: EntityRef) => `${ref.entityKind}:${ref.entityId}`;
+export const connectionRecordKey = (ref: EntityRef) =>
+  `${ref.entityKind}:${ref.entityId}`;
 
 /** `connectionRecord`'s unlocked rows, one statement per entity kind. Codes
  * that do not resolve are left out, so their capture still raises. */
-async function connectionRecords(db: Database, refs: readonly EntityRef[]) {
+export async function connectionRecords(
+  db: Database,
+  refs: readonly EntityRef[],
+) {
   const records: PreparedConnectionBases["records"] = new Map();
   const kinds = z.enum(shortcodeEntities);
-  const unique = uniqBy(refs, recordKey);
+  const unique = uniqBy(refs, connectionRecordKey);
   for (const kind of new Set(
     unique.map((ref) => kinds.parse(ref.entityKind)),
   )) {
@@ -336,7 +340,7 @@ export async function prepareConnectionBases(
     .map((candidate) =>
       parseShortcodeFor("purchase", candidate.target.entityId),
     );
-  const idOf = (ref: EntityRef) => records.get(recordKey(ref))?.id;
+  const idOf = (ref: EntityRef) => records.get(connectionRecordKey(ref))?.id;
   const transactionIds = [
     ...new Set(
       candidates.flatMap((candidate) => {
@@ -451,7 +455,7 @@ export async function captureConnectionBasis(
     candidate.target.entityKind === "project" ||
     candidate.target.entityKind === "location";
   const record = async (ref: EntityRef) =>
-    (!lock && prepared?.records.get(recordKey(ref))) ||
+    (!lock && prepared?.records.get(connectionRecordKey(ref))) ||
     (await connectionRecord(db, ref, lock));
   const first = await record(targetFirst ? candidate.target : candidate.source);
   const second = await record(
