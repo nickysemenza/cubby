@@ -35,6 +35,17 @@ repositories or the entity kernel. Runtime route creation, singular image owners
 and SQL relationship traversal stay in the existing photo-import transaction
 integration suite, which already imports those production bindings.
 
+The required `photo-run-detail.preview.test.tsx` dirty-field workflow also owns
+failed-save recovery: a rejected name stays dirty through refresh, valid notes
+can save without acknowledging that name, approval remains blocked, and retry
+submits the saved revision before approval. It drives the real `CommitInput` and
+photo draft barrier shared by create and existing-Product edits. The selected-field
+E2E retains real identity resolution, incompatible-entry and fractional-quantity
+recovery, notes-only application preserving the original Product name, unchanged
+historical stock and fresh Product-detail read-back. Its duplicate failed-name
+HTTP save/retry sequence is removed; dedicated existing-Product failed-save
+composition is the deliberate gap, with the shared native barrier retained.
+
 Photo-group review prerequisites create their Location and Product category in one
 fixture graph. Independent shirt, label and boots uploads run together; keep their
 ordered result tuple and wait for every verified Image before linking the Run's

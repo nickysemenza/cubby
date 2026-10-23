@@ -181,19 +181,6 @@ test("resolves identity, validates counts, and applies selected fields without r
   await group
     .getByRole("button", { name: "Show unchanged fields", exact: true })
     .click();
-  const changeName = group.getByRole("checkbox", {
-    name: "Change name",
-    exact: true,
-  });
-  await changeName.click();
-  await expect(changeName).toBeChecked();
-  const editedName = group.getByRole("textbox", {
-    name: "New name",
-    exact: true,
-  });
-  await editedName.fill("x".repeat(501));
-  await editedName.blur();
-  await expect(page.getByText(/Changes were not saved:/)).toBeVisible();
   const changeNotes = group.getByRole("checkbox", {
     name: "Change notes",
     exact: true,
@@ -204,15 +191,6 @@ test("resolves identity, validates counts, and applies selected fields without r
     .getByRole("textbox", { name: "New notes", exact: true })
     .fill("Label confirmed: medium");
   await group.getByRole("textbox", { name: "New notes", exact: true }).blur();
-  await group
-    .getByRole("button", { name: "Attach 1 photo", exact: true })
-    .click();
-  await expect(editedName).toBeFocused();
-  await expect(
-    group.getByRole("button", { name: "Attach 1 photo", exact: true }),
-  ).toBeVisible();
-  // Reverting the failed field to its saved value must unblock this group.
-  await editedName.fill(`${name} shirt`);
   await group
     .getByRole("button", { name: "Attach 1 photo", exact: true })
     .click();
