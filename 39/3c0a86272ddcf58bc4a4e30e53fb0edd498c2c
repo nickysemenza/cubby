@@ -1,0 +1,51 @@
+apps/web/src/server/domains/image/repo/image.ts
+  s_707664f32c0885::t_cd5b6fa3a6d779 2553-2565
+apps/web/src/server/domains/product/repo/crud.ts
+  s_707664f32c0885::t_6edf152b418db7 700-705
+apps/web/src/server/domains/product/repo/displayable-image-predicate.integration.test.ts
+  s_707664f32c0885::t_b262da7001a612 10,69,86,107
+apps/web/src/server/domains/product/repo/pricing.ts
+  s_707664f32c0885::t_c61fa5df03cb14 15,407-408,454,457-458
+apps/web/src/server/generic/data-quality/repo/checks/product.ts
+  s_707664f32c0885::t_05c70710f83751 2,4,6,11,13-15,92-93,95-101,103,106-107,109-115,117-125,129-146,149-166,169-193
+apps/web/src/server/generic/data-quality/repo/data-quality.integration.test.ts
+  s_707664f32c0885::t_8ba458892e308d 31,61-78,100,129,195,198,218,240,257-259,266,274,297,303,329,358,367,380,383,408-413,503,606,638-643,708,726,735,746,799,806,838,858-859,882-884,895,897-900,907-909,961,986,997,1062
+apps/web/src/server/generic/data-quality/repo/exceptions.ts
+  s_707664f32c0885::t_2edd449d7c3250 207-210
+apps/web/src/server/generic/data-quality/repo/filter-read-parity.integration.test.ts
+  s_707664f32c0885::t_70268d55a419be 36,374
+apps/web/src/server/generic/data-quality/repo/product-checks.integration.test.ts
+  s_707664f32c0885::t_ade3bcacaceabc 1-340
+apps/web/src/server/generic/data-quality/repo/sql.unit.test.ts
+  s_707664f32c0885::t_e2a3201d90d5f2 16,119-122,185,188-189,214-215,231-232
+apps/web/src/server/generic/data-quality/repo/stored.ts
+  s_707664f32c0885::t_fb5f7fa232f45d 66-68
+apps/web/src/server/generic/work-queue/repo/work-queue.integration.test.ts
+  s_707664f32c0885::t_ea7b7bd1d2d652 31,47-48,54-63,129,185,264,418,567,655,671,717,784,796
+apps/web/src/server/generic/work-queue/repo/work-queue.ts
+  s_707664f32c0885::t_f122a26aa395c4 325,332,334,968
+apps/web/src/server/testing/quality.fixtures.ts
+  s_707664f32c0885::t_b14e5eab1ef6b0 1-28
+docs/entities.md
+  s_707664f32c0885::t_5a03c14e4f39c8 2551-2555,2559-2571,2574-2584,2675-2677
+packages/schemas/src/data-quality.ts
+  s_707664f32c0885::t_fa45e6d88c58de 90-91
+packages/schemas/src/entity-definitions/00-product.entity.ts
+  s_707664f32c0885::t_d6789e06479cb9 267
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "393c0a86272ddcf58bc4a4e30e53fb0edd498c2c",
+  "prompts": {},
+  "sessions": {
+    "s_707664f32c0885": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a16a7f-c3d4-7ea0-b5de-eb61b28fbc97",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}

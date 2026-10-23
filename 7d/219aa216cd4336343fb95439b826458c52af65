@@ -1,0 +1,21 @@
+apps/web/src/server/db/helpers/build-where.unit.test.ts
+  s_0cc53fa46ecbd7::t_abf39624c9ee35 523,525-526
+apps/web/src/server/observability/tracing.ts
+  s_0cc53fa46ecbd7::t_176584bfd50042 2,80-89
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "7d219aa216cd4336343fb95439b826458c52af65",
+  "prompts": {},
+  "sessions": {
+    "s_0cc53fa46ecbd7": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2e7ff6fb-224e-42e0-a270-a92fc1131a0c",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}

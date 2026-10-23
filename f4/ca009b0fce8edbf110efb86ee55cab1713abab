@@ -1,0 +1,33 @@
+apps/web/src/server/domains/inventory/repo/inventory-list-filters.integration.test.ts
+  s_0cc53fa46ecbd7::t_7fb3548ddbb90a 9,138-139
+apps/web/src/server/generic/data-quality/repo/email-checks.integration.test.ts
+  s_0cc53fa46ecbd7::t_45acd2692a7f71 331-333
+apps/web/src/server/generic/data-quality/repo/expense-checks.integration.test.ts
+  s_0cc53fa46ecbd7::t_8bd31982603a64 185-187
+apps/web/src/server/generic/data-quality/repo/product-checks.integration.test.ts
+  s_0cc53fa46ecbd7::t_96e36c5f49c4d8 127-129,145,163,322
+apps/web/src/server/generic/data-quality/repo/purchase-checks.integration.test.ts
+  s_0cc53fa46ecbd7::t_43ece1288d3cfe 147-149
+apps/web/src/server/generic/data-quality/repo/shipment-checks.integration.test.ts
+  s_0cc53fa46ecbd7::t_40d17b946f8096 375-377,516-518
+apps/web/src/server/generic/list/repo/list-projection.integration.test.ts
+  s_0cc53fa46ecbd7::t_58d9f27dfa37b7 316-317
+apps/web/src/server/generic/list/repo/list.integration.test.ts
+  s_0cc53fa46ecbd7::t_2db0aaa76310c4 10,153
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "f4ca009b0fce8edbf110efb86ee55cab1713abab",
+  "prompts": {},
+  "sessions": {
+    "s_0cc53fa46ecbd7": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2e7ff6fb-224e-42e0-a270-a92fc1131a0c",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}

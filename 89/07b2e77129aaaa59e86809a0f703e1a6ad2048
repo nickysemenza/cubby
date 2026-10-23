@@ -1,0 +1,43 @@
+apps/web/src/server/generic/assessment/repo/review-families.ts
+  s_0cc53fa46ecbd7::t_97a9862a68d0b7 450
+apps/web/src/server/generic/data-quality/repo/checks/device.ts
+  s_0cc53fa46ecbd7::t_6bc3e0feb74299 11
+apps/web/src/server/generic/data-quality/repo/checks/garden-entry.ts
+  s_0cc53fa46ecbd7::t_a5bb8c124bbbe3 11
+apps/web/src/server/generic/data-quality/repo/checks/image-job.ts
+  s_0cc53fa46ecbd7::t_6e39afd30d6f44 12
+apps/web/src/server/generic/data-quality/repo/checks/inventory.ts
+  s_0cc53fa46ecbd7::t_a795df0c95dae6 11
+apps/web/src/server/generic/data-quality/repo/checks/ledger-party.ts
+  s_0cc53fa46ecbd7::t_b9dc26d6283746 11
+apps/web/src/server/generic/data-quality/repo/checks/ledger-transfer.ts
+  s_0cc53fa46ecbd7::t_c8181f3e77fadf 14
+apps/web/src/server/generic/data-quality/repo/checks/plant.ts
+  s_0cc53fa46ecbd7::t_be501562504876 11
+apps/web/src/server/generic/data-quality/repo/checks/planting.ts
+  s_0cc53fa46ecbd7::t_b64d5947c00ee5 11
+apps/web/src/server/generic/data-quality/repo/checks/project.ts
+  s_0cc53fa46ecbd7::t_06e649c2c2c00a 11
+apps/web/src/server/generic/data-quality/repo/checks/spending-category.ts
+  s_0cc53fa46ecbd7::t_a5121d9ea474b0 11
+apps/web/src/server/generic/data-quality/repo/checks/wish.ts
+  s_0cc53fa46ecbd7::t_848c7a0eb47e32 11
+apps/web/src/server/generic/data-quality/repo/email-checks.integration.test.ts
+  s_0cc53fa46ecbd7::t_d2bb8db4d67539 261,274
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "8907b2e77129aaaa59e86809a0f703e1a6ad2048",
+  "prompts": {},
+  "sessions": {
+    "s_0cc53fa46ecbd7": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2e7ff6fb-224e-42e0-a270-a92fc1131a0c",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
