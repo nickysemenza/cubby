@@ -416,9 +416,12 @@ and transaction metadata, settlement references and allocations once and prepare
 concurrently. The metadata is discarded after that build; label work and
 financial application rebuild current facts. Purchase-payment candidates are
 selected once for the page's admitted amounts and date envelope. Vendor
-Purchase pools, booking graphs, payment rows and category history are shared
+Purchase pools, booking graphs, payment rows, category records and category history are shared
 only inside that page; per-charge date, amount, refund and explicit-target rules
-still select candidates. Requests outside the admitted bounds use the original
+still select candidates. Payment candidates are indexed by exact amount before
+applying each charge's calendar window. Concurrent category lookups coalesce
+including absent or deleted categories; a new page and every commit read current
+categories again. Requests outside the admitted bounds use the original
 fresh SQL selector. Publication retains its own
 four-transaction limit and per-charge locks, suppression checks and settlement
 rechecks. Rule replacements share batch admission, retirement and publication

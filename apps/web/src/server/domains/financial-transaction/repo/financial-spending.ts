@@ -248,7 +248,7 @@ export async function prepareFinancialSpendingPage(
     retainedSettlement: await prepareRetainedSettlementDiscovery(getDb(db), []),
     candidateBounds,
     candidateAmounts: new Set(amounts),
-    paymentCandidates,
+    paymentCandidates: groupBy(paymentCandidates, (row) => row.amountKey),
     vendorCandidates: new Map<string, Promise<SpendingCandidate[]>>(),
     explicitCandidates: new Map<string, Promise<SpendingCandidate[]>>(),
     references,
@@ -267,6 +267,10 @@ export async function prepareFinancialSpendingPage(
       ReturnType<typeof financialSpendingCategoryHistory>
     >(),
     payments: new Map<string, ReturnType<typeof purchasePayments>>(),
+    categories: new Map<
+      string,
+      Promise<typeof spendingCategory.$inferSelect | undefined>
+    >(),
   };
   const allocatedIds = [...new Set(allocations.map((row) => row.purchaseId))];
   for (const [id, graph] of await loadSpendingGraphs(db, allocatedIds))
@@ -669,11 +673,8 @@ async function spendingCandidates(
     ).rows;
   }
   const candidates = new Map<string, SpendingCandidate>();
-  for (const candidate of page.paymentCandidates) {
-    if (
-      candidate.amountKey === String(input.amount) &&
-      calendarGap(candidate.chargedDate, input.date) <= 3
-    )
+  for (const candidate of page.paymentCandidates[String(input.amount)] ?? []) {
+    if (calendarGap(candidate.chargedDate, input.date) <= 3)
       candidates.set(candidate.id, {
         id: candidate.id,
         shortcode: candidate.shortcode,
@@ -741,6 +742,34 @@ async function categoryHistoryForDiscovery(
   return lookup;
 }
 
+function spendingCategoryForDiscovery(
+  db: Database,
+  reference:
+    | { id: (typeof spendingCategory.$inferSelect)["id"] }
+    | { shortcode: string },
+  page?: FinancialSpendingPage,
+) {
+  const key =
+    "id" in reference
+      ? `id:${reference.id}`
+      : `shortcode:${reference.shortcode}`;
+  const cached = page?.categories.get(key);
+  if (cached) return cached;
+  // Coalesce concurrent advisory reads, including misses. Commit has no page.
+  const lookup = getDb(db)
+    .query.spendingCategory.findFirst({
+      where: and(
+        "id" in reference
+          ? eq(spendingCategory.id, reference.id)
+          : eq(spendingCategory.shortcode, reference.shortcode),
+        notDeleted(spendingCategory),
+      ),
+    })
+    .then((row) => row);
+  page?.categories.set(key, lookup);
+  return lookup;
+}
+
 /** Discovery does not authorize a write; the same retained evidence is rebuilt at commit. */
 async function discoverSpendingEvidence(
   db: Database,
@@ -781,12 +810,11 @@ async function discoverSpendingEvidence(
     selectedVendor ??
     (vendors.size === 1 ? [...vendors.values()][0] : undefined);
   let category = advice?.spendingCategoryId
-    ? await getDb(db).query.spendingCategory.findFirst({
-        where: and(
-          eq(spendingCategory.shortcode, advice.spendingCategoryId),
-          notDeleted(spendingCategory),
-        ),
-      })
+    ? await spendingCategoryForDiscovery(
+        db,
+        { shortcode: advice.spendingCategoryId },
+        page,
+      )
     : undefined;
   const date = source.transactionDate ?? source.postedDate;
   // Retained payment dates use UTC calendar days, matching the shared matcher.
@@ -924,15 +952,11 @@ async function discoverSpendingEvidence(
       );
       const [categoryId] = categories;
       if (categories.size === 1 && categoryId) {
-        const inherited = await getDb(db).query.spendingCategory.findFirst({
-          where: and(
-            eq(
-              spendingCategory.id,
-              parseEntityId("spendingCategory", categoryId),
-            ),
-            notDeleted(spendingCategory),
-          ),
-        });
+        const inherited = await spendingCategoryForDiscovery(
+          db,
+          { id: parseEntityId("spendingCategory", categoryId) },
+          page,
+        );
         if (inherited) {
           category = inherited;
           advice = financialSpendingAdvice.parse({
