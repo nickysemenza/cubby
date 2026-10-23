@@ -118,6 +118,12 @@ reports do not establish carrier possession. Repeated source observations use
 the shared writer's idempotent path; conflicts remain evidence.
 
 Source package identity is retained separately from event versions. Identical
+tracked packages across lifecycle Emails reuse the established Purchase,
+resolved carrier and tracking reference. Extraction leaves
+`distinctPackageEvidence` null for these updates; only explicit evidence of a
+separate package bypasses that matching. A new Email, item list or status change
+alone does not establish a separate package. Trackingless packages still need
+a stable source package key and distinct-package evidence. Identical
 unkeyed source rows retain their multiplicity; replay updates the same
 occurrences. Native event keys scope changed versions to their source package.
 A later A → B → A report retains a third version, while stale captures cannot

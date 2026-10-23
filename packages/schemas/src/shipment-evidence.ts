@@ -52,8 +52,18 @@ export type ShipmentObservationInput = z.infer<typeof shipmentObservationInput>;
 export const shipmentEvidence = z
   .strictObject({
     shipmentId: shortcodeSchema("shipment").nullable(),
-    sourceShipmentKey: text.max(500).nullable(),
-    distinctPackageEvidence: text.max(2000).nullable(),
+    sourceShipmentKey: text
+      .max(500)
+      .nullable()
+      .describe(
+        "Stable package identifier within this source; not a global Shipment identity. Repeated lifecycle Emails may identify the same package.",
+      ),
+    distinctPackageEvidence: text
+      .max(2000)
+      .nullable()
+      .describe(
+        "Null for ordinary tracked-package updates. Non-null forces a separate package instead of reusing a matching tracking reference: quote explicit evidence of a distinct package (such as package 2 of 2 under a shared master number). A new trackingless package also requires this evidence and a stable sourceShipmentKey. A tracking number, item list, new Email, or changed shipping status alone is not distinct-package evidence.",
+      ),
     carrierId: shortcodeSchema("vendor").nullable(),
     carrierName: text.max(300).nullable(),
     trackingNumber: text.max(300).nullable(),

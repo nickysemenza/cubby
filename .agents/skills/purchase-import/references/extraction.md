@@ -68,11 +68,21 @@ reward-versus-tender or total evidence stays unresolved.
 Return `shipments` for explicit package evidence on an order confirmation or
 order page; use an empty array when none is shown. Each packet represents one
 package, with `shipmentId` null unless a verified existing `SHIP-` is supplied.
-Preserve `sourceShipmentKey` from a stable source package identifier and quote
-its `distinctPackageEvidence`. A new package with no tracking number requires
-both; an order number or a generic order-wide status alone cannot distinguish
-packages. Keep ambiguous package facts in the original rather than inventing a
-packet. Split packages stay separate even when they belong to the same order.
+Preserve `sourceShipmentKey` from a stable source package identifier. Set
+`distinctPackageEvidence` to null for ordinary tracked-package updates: a new
+Email, tracking number, item list, or changed shipping status does not establish
+a separate package. A non-null value bypasses automatic tracking matching, so
+quote it only when the source establishes a distinct package, such as "package
+2 of 2" under a shared master number. A new trackingless package requires both
+a stable source key and distinct-package evidence; an order number or generic
+order-wide status alone cannot distinguish packages. Keep ambiguous facts in
+the original rather than inventing a packet. Split packages stay separate even
+when they belong to the same order.
+
+For example, shipping, out-for-delivery and delivered Emails for the same
+Purchase with carrier Example Parcel and tracking EXAMPLE-123 describe one
+package. Give each source its supported observations with
+`distinctPackageEvidence: null`; the writer reuses the established package.
 
 Retain the primary `carrierName` and `trackingNumber` verbatim, and explicit
 handoff pairs in `extraTrackingNumbers`. Carrier IDs, when supplied by verified

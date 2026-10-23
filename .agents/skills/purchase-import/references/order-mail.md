@@ -35,6 +35,13 @@ creates an order nor changes money or inventory. A `linked` disposition may
 include `shipments: [{purchaseId, shipments}]` to record package evidence in the
 same transaction; every packet must name one of its linked `purchaseIds`.
 
+Lifecycle Emails can add observations to the same Shipment. Follow the
+extraction contract's nullable `distinctPackageEvidence`: ordinary tracking
+and status evidence must not force a new package. Source-local package keys
+need not match across Emails; established Purchase, carrier and tracking
+identity drive automatic reuse. An ambiguous match requires an explicit verified
+Shipment rather than guessing.
+
 Interactive tracking-page research uses the same `shipments.record` writer with
 `source: {kind: "tracking_page", url, externalKey, capturedAt, content}`. Retain
 the literal captured text and offset capture timestamp, use a stable source
