@@ -1,7 +1,7 @@
 import { flexRender } from "@tanstack/react-table";
 import { render, waitFor, fireEvent } from "@testing-library/react";
 import { useRef } from "react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { page } from "vitest/browser";
 
 import { householdDaysFromNow } from "~/lib/household-date";
@@ -61,6 +61,8 @@ function FitFixture({
   total = "Total",
   qualityHeader = "Quality",
   chips,
+  editing = false,
+  extraLocation,
 }: {
   location?: string;
   scope?: string;
@@ -69,6 +71,8 @@ function FitFixture({
   total?: string;
   qualityHeader?: string;
   chips?: string[];
+  editing?: boolean;
+  extraLocation?: string;
 }) {
   const table = useCubbyTable({
     data: [{ id: "synthetic" }],
@@ -173,7 +177,9 @@ function FitFixture({
                 className={ROW_DENSITY.cellClass}
                 style={cellStyle("location")}
               >
-                {chips ? (
+                {editing ? (
+                  <input aria-label="Location draft" defaultValue={location} />
+                ) : chips ? (
                   <ChipCluster
                     items={chips.map((chip) => ({
                       key: chip,
@@ -197,6 +203,23 @@ function FitFixture({
               </TableCell>
               <TableCell style={{ width: 400 }} />
             </TableRow>
+            {extraLocation && (
+              <TableRow data-cell-row="1">
+                <TableCell
+                  data-column-id="quality"
+                  style={cellStyle("quality")}
+                >
+                  Good
+                </TableCell>
+                <TableCell
+                  data-column-id="location"
+                  style={cellStyle("location")}
+                >
+                  {extraLocation}
+                </TableCell>
+                <TableCell style={{ width: 400 }} />
+              </TableRow>
+            )}
           </TableBody>
           <TableFooter>
             <TableRow>
@@ -301,6 +324,108 @@ function DateFitFixture() {
 const width = (element: Element) => element.getBoundingClientRect().width;
 
 describe("rendered column fit", () => {
+  it("measures newly mounted cells without cloning unchanged rows", async () => {
+    await page.viewport(1440, 900);
+    await document.fonts.ready;
+    const view = render(<FitFixture />);
+    await waitFor(() =>
+      expect(width(view.getByTestId("location"))).toBeLessThan(100),
+    );
+    await new Promise<void>((resolve) =>
+      requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+    );
+    const clone = vi.spyOn(view.getByTestId("location"), "cloneNode");
+    try {
+      view.rerender(
+        <FitFixture extraLocation="A much longer workshop location with several words" />,
+      );
+      await waitFor(() =>
+        expect(width(view.getByTestId("location"))).toBe(160),
+      );
+      expect(clone).not.toHaveBeenCalled();
+    } finally {
+      clone.mockRestore();
+    }
+  });
+
+  it("remeasures unchanged cells when the pending fonts become ready", async () => {
+    await page.viewport(1440, 900);
+    await document.fonts.ready;
+    const ready = Promise.withResolvers<FontFaceSet>();
+    const fontReady = vi
+      .spyOn(document.fonts, "ready", "get")
+      .mockReturnValue(ready.promise);
+    const view = render(<FitFixture />);
+    try {
+      await waitFor(() =>
+        expect(width(view.getByTestId("location"))).toBeLessThan(100),
+      );
+      const clone = vi.spyOn(view.getByTestId("location"), "cloneNode");
+      try {
+        ready.resolve(document.fonts);
+        await waitFor(() => expect(clone).toHaveBeenCalled());
+      } finally {
+        clone.mockRestore();
+      }
+    } finally {
+      fontReady.mockRestore();
+    }
+  });
+
+  it("retains fit during editing and measures the returning display", async () => {
+    await page.viewport(1440, 900);
+    const view = render(<FitFixture />);
+    await waitFor(() =>
+      expect(width(view.getByTestId("location"))).toBeLessThan(100),
+    );
+    const before = width(view.getByTestId("location"));
+    view.rerender(
+      <FitFixture
+        editing
+        location="A much longer workshop location with several words"
+      />,
+    );
+    await new Promise<void>((resolve) =>
+      requestAnimationFrame(() => resolve()),
+    );
+    expect(width(view.getByTestId("location"))).toBe(before);
+    view.rerender(
+      <FitFixture location="A much longer workshop location with several words" />,
+    );
+    await waitFor(() => expect(width(view.getByTestId("location"))).toBe(160));
+  });
+
+  it("remeasures only changed cells and starts fresh for a new query scope", async () => {
+    await page.viewport(1440, 900);
+    await document.fonts.ready;
+    const view = render(<FitFixture />);
+    await waitFor(() =>
+      expect(width(view.getByTestId("location"))).toBeLessThan(100),
+    );
+    // Let the font-ready callback finish before observing content updates.
+    await new Promise<void>((resolve) =>
+      requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+    );
+    const quality = view.getByTestId("quality");
+    const location = view.getByTestId("location");
+    const qualityClone = vi.spyOn(quality, "cloneNode");
+    const locationClone = vi.spyOn(location, "cloneNode");
+    try {
+      view.rerender(
+        <FitFixture location="A much longer workshop location with several words" />,
+      );
+      await waitFor(() => expect(width(location)).toBe(160));
+      expect(locationClone).toHaveBeenCalled();
+      expect(qualityClone).not.toHaveBeenCalled();
+      view.rerender(<FitFixture scope="second" />);
+      await waitFor(() => expect(width(location)).toBeLessThan(100));
+      expect(qualityClone).toHaveBeenCalled();
+    } finally {
+      qualityClone.mockRestore();
+      locationClone.mockRestore();
+    }
+  });
+
   it("keeps a future editable calendar label unclipped with inherited typography", async () => {
     await page.viewport(1440, 900);
     const view = render(<DateFitFixture />);

@@ -20,6 +20,9 @@ keyboard focus expose exact seconds and the household timezone offset.
 Full labels wrap rather than clip on narrow screens. Date columns start at
 96px and declared spans at 320px; shared rendered-content fitting preserves
 readable labels.
+Within a query scope, unchanged rendered cells retain their measured contribution;
+content changes invalidate only the affected cell. New cells and font readiness
+receive fresh measurements, and a new query scope resets the fit.
 
 Desktop table cells containing `DateDisplay`'s open-overdue marker use the
 destructive surface tint across the cell. Keep the overdue text as a second
