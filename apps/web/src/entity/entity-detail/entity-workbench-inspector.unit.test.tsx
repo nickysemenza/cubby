@@ -174,12 +174,12 @@ function seedVendorInspector() {
   });
 }
 
-function seedImageInspector() {
+function seedImageInspector(record = imageRecord) {
   const detailOptions = entityPreviewQueryOptions("image", IMAGE_ID);
   harness.queryClient.setQueryDefaults(detailOptions.queryKey, {
     staleTime: Number.POSITIVE_INFINITY,
   });
-  harness.queryClient.setQueryData(detailOptions.queryKey, imageRecord);
+  harness.queryClient.setQueryData(detailOptions.queryKey, record);
   harness.queryClient.setQueryData(
     entityGraph.graph.queryOptions({
       roots: [{ entityKind: "image", entityId: IMAGE_ID }],
@@ -217,6 +217,19 @@ function renderInspector({
 }
 
 describe("EntityWorkbenchInspector", () => {
+  it("keeps missing image dimensions visible and names their missing state", async () => {
+    seedImageInspector({ ...imageRecord, width: null, height: null });
+    renderInspector({ entity: "image", id: IMAGE_ID });
+    expect(
+      await screen.findByRole("heading", { name: "fixture.jpg" }),
+    ).toBeVisible();
+    for (const label of ["Width", "Height"])
+      for (const field of screen.getAllByText(label, { exact: true }))
+        expect(field).toBeVisible();
+    expect(screen.getAllByText("Not recorded").length).toBeGreaterThanOrEqual(
+      2,
+    );
+  });
   it("keeps record fields mounted while relationships and activity open inline", async () => {
     seedVendorInspector();
     let closeCount = 0;

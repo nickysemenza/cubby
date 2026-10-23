@@ -10,6 +10,7 @@ import type { AnyColumn } from "drizzle-orm";
 import { and, inArray, isNotNull, sql, type SQL } from "drizzle-orm";
 import { z } from "zod";
 
+import { formatCurrency } from "~/lib/number-format";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
   getDb,
@@ -100,6 +101,14 @@ export const resolveProductPricing = (
     ? null
     : (explicitPrice ?? derivedPrice);
   return {
+    cost: {
+      amount: effectivePrice,
+      label: effectivePrice === null ? null : formatCurrency(effectivePrice),
+      explanation:
+        "Item cost uses the manual valuation price when set, otherwise the Expense-derived unit price.",
+      chargeCount: 0,
+      latestCharge: null,
+    },
     derivedPrice,
     effectivePrice,
     source:
@@ -246,12 +255,54 @@ export const loadProductPricing = async (
   const ids = products.map((product) => product.id);
   if (ids.length === 0) return new Map();
 
-  const aggregateById = await loadPricingAggregates(db, ids, options);
+  const [aggregateById, charges] = await Promise.all([
+    loadPricingAggregates(db, ids, options),
+    unwrapDb(db).execute(sql`
+      SELECT p."id" AS "productId",
+        avg(e."cost") FILTER (WHERE e."cost" > 0)::double precision AS average,
+        count(*) FILTER (WHERE e."cost" > 0)::int AS count,
+        (array_agg(e."cost" ORDER BY e."date" DESC, e."id" DESC)
+          FILTER (WHERE e."cost" > 0 AND e."date" IS NOT NULL))[1]::double precision AS latest
+      FROM "Product" p
+      LEFT JOIN "Expense" e ON e."productId" = p."id"
+        AND e."deletedAt" IS NULL AND ${sql.raw(actualExpenseSql("e"))}
+      WHERE p."id" = ANY(${uuidArrayParam(ids)})
+        AND ${sql.raw(serviceProductSqlText('p."id"'))}
+      GROUP BY p."id"
+    `),
+  ]);
+  const chargeRows = z
+    .array(
+      z.object({
+        productId,
+        average: z.number().nullable(),
+        count: z.number(),
+        latest: z.number().nullable(),
+      }),
+    )
+    .parse(charges.rows);
+  const chargeById = new Map(chargeRows.map((row) => [row.productId, row]));
   return new Map(
-    products.map((product) => [
-      product.id,
-      resolveProductPricing(product.price, aggregateById.get(product.id)),
-    ]),
+    products.map((product) => {
+      const pricing = resolveProductPricing(
+        product.price,
+        aggregateById.get(product.id),
+      );
+      const charge = chargeById.get(product.id);
+      if (charge) {
+        const average = roundOrNull(charge.average);
+        pricing.cost = {
+          amount: average,
+          label:
+            average === null ? null : `${formatCurrency(average)} / charge`,
+          explanation:
+            "Average of positive actual Expense charges. Credits and unknown amounts are excluded. Charges may cover different periods, usage, or seats; this is not a monthly rate.",
+          chargeCount: charge.count,
+          latestCharge: charge.latest,
+        };
+      }
+      return [product.id, pricing] satisfies [ProductId, ProductPricing];
+    }),
   );
 };
 
@@ -380,6 +431,14 @@ const derivedProductPriceSql = (productAlias = '"product"') =>
 
 export const effectiveProductPriceSql = (productAlias = '"product"') =>
   `(CASE WHEN NOT ${serviceProductSqlText(`${productAlias}."id"`)} THEN COALESCE(${productAlias}."price", ${derivedProductPriceSql(productAlias)}) END)`;
+
+/** List Cost is descriptive; inventory valuation continues to use effectiveProductPriceSql. */
+export const displayProductCostSql = (productAlias: string) =>
+  `(CASE WHEN ${serviceProductSqlText(`${productAlias}."id"`)} THEN
+    (SELECT round(avg(e."cost")::numeric, 2)::double precision FROM "Expense" e
+      WHERE e."productId" = ${productAlias}."id" AND e."deletedAt" IS NULL
+        AND ${actualExpenseSql("e")} AND e."cost" > 0)
+    ELSE ${effectiveProductPriceSql(productAlias)} END)`;
 
 /**
  * Catalog evidence and the filtered footer group live sibling quantities and

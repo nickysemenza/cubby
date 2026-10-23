@@ -3319,6 +3319,23 @@ Service identity does not require a model or external identifier; live Expenses
 already retain any Product against the orphan check. No agreement records or
 automatic bill links are introduced.
 
+The existing Product list Price column is labelled Cost. Physical Products show
+their effective item price; services show the mean of positive actual Expense
+charges, labelled per charge. Credits, zero charges and unknown amounts do not
+enter that mean. Its explanation carries the count and latest dated positive
+charge. Sorting uses the displayed amount, while the Item prices footer and all
+inventory valuation continue to exclude service averages. The detail charge
+summary shows Average charge and explains why it is not a monthly rate. Service
+Unit price and valuation fields remain visible with an applicability explanation.
+
+Full detail pages and inspectors retain all declared user-facing field sections,
+including empty ones. Missing values read Not recorded, with Add when editable;
+domain-specific inapplicable values explain why they cannot be supplied.
+Allocated references remain content even when their scalar resolution is null;
+their individual links and amounts remain visible.
+Internal fields remain excluded from the declared presentation and available
+under Technical details. Lists retain compact absence markers.
+
 `ProductCategory` is an editable, at-most-three-level tree. `Product.categoryId`
 references the most specific known node; its read-only `category` projection
 contains the complete root-first path and inherited behavior binding. Products

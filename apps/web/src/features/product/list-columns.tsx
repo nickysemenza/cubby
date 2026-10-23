@@ -3,6 +3,7 @@ import {
   type ProductListItem,
   type ProductPricingOut,
 } from "@cubby/schemas/product";
+import { isServiceProductCategory } from "@cubby/schemas/product-category-fields";
 import type { KitComponentRowOut } from "@cubby/schemas/product-components";
 import { countLabel } from "@cubby/shared/pluralize";
 import { PushPinIcon } from "@phosphor-icons/react/dist/csr/PushPin";
@@ -272,47 +273,57 @@ export const productListOverride = defineListOverride<
             }),
           );
           add(
-            columnHelper.accessor((product) => product.pricing.effectivePrice, {
-              id: "price",
-              // A header FUNCTION: `createEntityDisplayColumns` replaces a
-              // plain-string override header with the declared label
-              // ("Valuation price", for the detail page's sake); a function
-              // is the one shape it lets through, so the list heads "Price".
-              header: () => "Price",
-              meta: {
-                numeric: true,
-                className: "w-20",
-                mobile: { slot: "trailing", priority: 10, interactive: true },
+            columnHelper.accessor(
+              (product) =>
+                product.pricing.cost?.amount ?? product.pricing.effectivePrice,
+              {
+                id: "price",
+                header: () => "Cost",
+                meta: {
+                  readFields: ["price", "pricing", "category"],
+                  numeric: true,
+                  className: "w-32",
+                  mobile: { slot: "trailing", priority: 10, interactive: true },
+                },
+                footer: (info) => {
+                  const total =
+                    info.table.options.meta?.serverTotals?.sums?.price;
+                  return total !== undefined ? (
+                    <span
+                      className="tabular-nums"
+                      title="Item prices only; service averages are excluded."
+                    >
+                      {formatCurrency(total)}
+                    </span>
+                  ) : null;
+                },
+                cell: (info) => {
+                  const product = info.row.original;
+                  if (isServiceProductCategory(product.category))
+                    return renderProductChargeCost(product.pricing.cost);
+                  return (
+                    <EditableCell
+                      value={product.price}
+                      onSave={async (price) => {
+                        await updateProduct({
+                          id: product.id,
+                          data: { price },
+                        });
+                      }}
+                      config={{
+                        type: "currency",
+                        clearable: {
+                          label: productPriceClearLabel(product.pricing),
+                        },
+                      }}
+                      renderValue={() =>
+                        renderProductPriceValue(product.pricing)
+                      }
+                    />
+                  );
+                },
               },
-              footer: (info) => {
-                const total =
-                  info.table.options.meta?.serverTotals?.sums?.price;
-                return total !== undefined ? (
-                  <span className="tabular-nums">{formatCurrency(total)}</span>
-                ) : null;
-              },
-              cell: (info) => {
-                const product = info.row.original;
-                return (
-                  <EditableCell
-                    value={product.price}
-                    onSave={async (price) => {
-                      await updateProduct({
-                        id: product.id,
-                        data: { price },
-                      });
-                    }}
-                    config={{
-                      type: "currency",
-                      clearable: {
-                        label: productPriceClearLabel(product.pricing),
-                      },
-                    }}
-                    renderValue={() => renderProductPriceValue(product.pricing)}
-                  />
-                );
-              },
-            }),
+            ),
           );
         }),
       [updateProduct],
@@ -583,6 +594,30 @@ export function renderProductPriceValue(
       <TooltipContent side="top">
         {describeProductPricingSource(pricing)}
       </TooltipContent>
+    </Tooltip>
+  );
+}
+
+/** Charge averages are read-only evidence, never a manual valuation editor. */
+export function renderProductChargeCost(
+  cost: ProductPricingOut["cost"],
+): ReactNode {
+  const explanation = cost
+    ? `${cost.explanation} ${countLabel(cost.chargeCount, "charge")}. Latest dated charge: ${cost.latestCharge === null ? "not recorded" : formatCurrency(cost.latestCharge)}.`
+    : "No positive actual charges recorded.";
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <button
+            type="button"
+            aria-label={`${cost?.label ?? "Not recorded"}. ${explanation}`}
+          />
+        }
+      >
+        {cost?.label ?? <NoneValue />}
+      </TooltipTrigger>
+      <TooltipContent side="top">{explanation}</TooltipContent>
     </Tooltip>
   );
 }

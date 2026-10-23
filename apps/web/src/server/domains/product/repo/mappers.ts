@@ -228,7 +228,10 @@ export const mapDbProductToTopLevel = (
 ): ProductTopLevelOut => {
   const imageGroups = splitProductImages(productData.images);
   const pricing = isServiceProductCategory(productData.category)
-    ? resolveProductPricing(null)
+    ? {
+        ...resolveProductPricing(null),
+        cost: productData.pricing?.cost ?? null,
+      }
     : (productData.pricing ?? resolveProductPricing(productData.price));
   return {
     id: parseShortcodeFor("product", productData.shortcode),
@@ -538,7 +541,10 @@ export const dbProductToAPI = (
   );
 
   const pricing = isServiceProductCategory(productData.category)
-    ? resolveProductPricing(null)
+    ? {
+        ...resolveProductPricing(null),
+        cost: productData.pricing?.cost ?? null,
+      }
     : (productData.pricing ?? resolveProductPricing(productData.price));
   const result = {
     id: parseShortcodeFor("product", productData.shortcode),

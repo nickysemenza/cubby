@@ -141,7 +141,8 @@ const isProseField = (key: string, control: DisplayField["control"]) =>
 
 function renderProseValue(value: ScalarDisplayValue, surface: DisplaySurface) {
   if (value.kind !== "text") return renderScalarValue(value, surface);
-  if (!value.label) return <NoneValue />;
+  if (!value.label)
+    return surface === "detail" ? "Not recorded" : <NoneValue />;
   return surface === "list" ? (
     <span className="block truncate" title={value.label}>
       <ShortcodeProse>{value.label}</ShortcodeProse>
@@ -268,7 +269,10 @@ function renderFormattedScalar(
   }
   if (value.kind === "empty")
     return (
-      context?.field.display.emptyLabel ?? renderScalarValue(value, surface)
+      context?.field.display.emptyLabel ??
+      (surface === "detail"
+        ? "Not recorded"
+        : renderScalarValue(value, surface))
     );
   switch (format) {
     // Known counts read literally: `0` is a fact, never a dash.
@@ -388,13 +392,17 @@ function resolutionEmptyLabel(
   entity: Entity,
   record: unknown,
   field: DisplayField,
+  explainMissing = false,
 ): ReactNode {
   const resolution = fieldResolutionFor(record, field.key);
   if (!resolution || resolution.value !== null) return null;
+  // Allocations have multiple reference values rather than one scalar value.
+  if (resolution.mode === "allocated") return null;
   const labels = resolutionPolicyFor(entity, field.key)?.labels;
   const label =
     resolution.mode === "inherit" ? labels?.unresolved : labels?.none;
-  return label ? <span className="text-muted-foreground">{label}</span> : null;
+  const text = label ?? (explainMissing ? resolution.source : null);
+  return text ? <span className="text-muted-foreground">{text}</span> : null;
 }
 
 /**
@@ -695,14 +703,14 @@ export function renderDetailFieldValue<TRecord extends object>(
   field: DisplayField,
 ): ReactNode {
   if (field.kind === "dateRange") return renderDateRangeValue(record, field);
-  const emptyLabel = resolutionEmptyLabel(entity, record, field);
+  const emptyLabel = resolutionEmptyLabel(entity, record, field, true);
   if (emptyLabel) return emptyLabel;
   if (field.display.itemsPath) {
     const parsed = displayItems.safeParse(
       readPathValue(record, field.display.itemsPath),
     );
     const items = parsed.success ? (parsed.data ?? []) : [];
-    if (items.length === 0) return <NoneValue />;
+    if (items.length === 0) return "Not recorded";
     return (
       <RecordList>
         {items.map((item) => (
@@ -724,7 +732,7 @@ export function renderDetailFieldValue<TRecord extends object>(
   if (field.display.detailLabelPath) {
     const label = readLabel(record, field.display.detailLabelPath);
     return label === null ? (
-      <NoneValue />
+      <>Not recorded</>
     ) : (
       <span className="whitespace-pre-line">{label}</span>
     );
@@ -735,7 +743,11 @@ export function renderDetailFieldValue<TRecord extends object>(
       reference.items.length === 0 &&
       !reference.unclassifiedAllocations?.length
     )
-      return reference.incomplete ? <span>Unclassified</span> : <NoneValue />;
+      return reference.incomplete ? (
+        <span>Unclassified</span>
+      ) : (
+        <>Not recorded</>
+      );
     return (
       <>
         {referenceBrowse(record, field)}
@@ -1213,11 +1225,11 @@ export function EntityBasicInfo<TRecord extends object>({
         const decoratedValue = field.control?.suggest ? (
           <span className="inline-flex max-w-full min-w-0 items-center gap-1">
             <RecordFieldSuggestion record={record} field={field.key}>
-              {rendered.value ?? <NoneValue />}
+              {rendered.value ?? "Not recorded"}
             </RecordFieldSuggestion>
           </span>
         ) : (
-          (rendered.value ?? <NoneValue />)
+          (rendered.value ?? "Not recorded")
         );
         return [
           {
@@ -1419,9 +1431,11 @@ function renderEditableField<TRecord extends object>(
     (candidate) => candidate.key === field.key,
   );
   const displayed = (rendered: ReactNode) =>
-    resolution && displayField
-      ? renderCompactFieldValue(entity, record, displayField)
-      : rendered;
+    surface === "detail" && displayField
+      ? renderDetailFieldValue(entity, record, displayField)
+      : resolution && displayField
+        ? renderCompactFieldValue(entity, record, displayField)
+        : rendered;
   switch (clipboard.kind) {
     case "text":
     case "textarea": {

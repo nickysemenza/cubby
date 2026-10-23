@@ -80,7 +80,8 @@ function StructuredValue({
   const summary = parsed.success
     ? structuredSummary(parsed.data)
     : "Structured value";
-  if (summary === null) return <NoneValue />;
+  if (summary === null)
+    return surface === "detail" ? "Not recorded" : <NoneValue />;
   if (surface === "detail")
     return (
       <Disclosure summary={summary} className="max-w-full">
@@ -116,7 +117,11 @@ export function renderScalarValue(
 ): ReactNode {
   switch (value.kind) {
     case "empty":
-      return value.raw === undefined ? undefined : <NoneValue />;
+      return value.raw === undefined ? undefined : surface === "detail" ? (
+        "Not recorded"
+      ) : (
+        <NoneValue />
+      );
     case "timestamp":
       return <DateDisplay timestamp={value.raw} />;
     case "date":
@@ -138,7 +143,13 @@ export function renderScalarValue(
         <NumberValue value={value.raw} />
       );
     case "list":
-      return value.raw.length ? value.raw.join(", ") : <NoneValue />;
+      return value.raw.length ? (
+        value.raw.join(", ")
+      ) : surface === "detail" ? (
+        "Not recorded"
+      ) : (
+        <NoneValue />
+      );
     case "json":
       return <StructuredValue value={value} surface={surface} />;
     case "enum":

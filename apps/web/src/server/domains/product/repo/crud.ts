@@ -217,7 +217,7 @@ import {
 import { ownershipExitExpensePredicate } from "./ownership";
 import {
   hasDerivedProductPriceSql,
-  effectiveProductPriceSql,
+  displayProductCostSql,
   enrichProductRowsWithPricing,
   loadEffectiveProductPricesById,
   loadProductPriceSum,
@@ -334,7 +334,7 @@ const productScaffold = listScaffold("product", product, {
     ),
     brandId: productBrandNameSql(product.brandId),
     categoryId: sql`${categorySummarySql(sql`${product.categoryId}`)}::jsonb->'path'`,
-    price: sql.raw(effectiveProductPriceSql('"Product"')),
+    price: sql.raw(displayProductCostSql('"Product"')),
     primaryGtin: sql.raw(
       `(SELECT pei."externalId" FROM "EntityExternalId" pei ` +
         `WHERE pei."entityId" = "Product"."id" AND pei."source" = 'gtin' AND pei."deletedAt" IS NULL ` +
