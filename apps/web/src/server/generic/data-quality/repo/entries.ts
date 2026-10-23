@@ -19,6 +19,7 @@ import { productCategoryChecks } from "~/server/generic/data-quality/repo/checks
 import { projectChecks } from "~/server/generic/data-quality/repo/checks/project";
 import { recipeChecks } from "~/server/generic/data-quality/repo/checks/recipe";
 import { runChecks } from "~/server/generic/data-quality/repo/checks/run";
+import { shipmentChecks } from "~/server/generic/data-quality/repo/checks/shipment";
 import { spendingCategoryChecks } from "~/server/generic/data-quality/repo/checks/spending-category";
 import { vendorChecks } from "~/server/generic/data-quality/repo/checks/vendor";
 import { wishChecks } from "~/server/generic/data-quality/repo/checks/wish";
@@ -47,6 +48,7 @@ export type DataQualityEntries = {
  */
 export const dataQualityEntries = {
   run: runChecks,
+  shipment: shipmentChecks,
   product: productChecks,
   purchase: purchaseChecks,
   // pantry and garden entities

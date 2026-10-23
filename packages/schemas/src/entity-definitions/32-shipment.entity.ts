@@ -28,6 +28,7 @@ export default defineEntity({
       read: {
         media: ["displayImages"],
         relations: ["purchaseName", "carrierName", "vendorId", "vendorName"],
+        quality: ["dataQuality"],
         derived: [
           "firstEventDate",
           "lastEventDate",
@@ -480,6 +481,72 @@ export default defineEntity({
     merge: false,
     lifecycle: "readOnly",
     timeline: "default",
+    dataQuality: {
+      displayImage: false,
+      checks: [
+        {
+          id: "shipment_events",
+          facet: "provenance",
+          weight: 10,
+          scoreCap: 25,
+          label: "Limited event history",
+          satisfiedLabel: "Multiple distinct events",
+          message:
+            "Fewer than two distinct current tracking events are retained.",
+          placement: { field: "eventCount" },
+        },
+        {
+          id: "shipment_shipped",
+          facet: "provenance",
+          weight: 30,
+          label: "Shipment not evidenced",
+          satisfiedLabel: "Shipment evidenced",
+          message:
+            "No carrier possession or movement event is retained. A label alone does not establish shipment.",
+          placement: { section: "tracking" },
+        },
+        {
+          id: "shipment_delivered",
+          facet: "provenance",
+          weight: 30,
+          label: "Delivery not yet evidenced",
+          satisfiedLabel: "Delivery evidenced",
+          message: "No explicit delivered event is retained.",
+          placement: { section: "tracking" },
+        },
+        {
+          id: "shipment_span",
+          facet: "provenance",
+          weight: 10,
+          label: "Limited event span",
+          satisfiedLabel: "Event span exceeds one day",
+          message:
+            "The dated event span must be strictly greater than one day.",
+          placement: { field: "eventSpanHours" },
+        },
+        {
+          id: "shipment_dates",
+          facet: "provenance",
+          weight: 10,
+          label: "Missing milestone dates",
+          satisfiedLabel: "Milestone dates recorded",
+          message:
+            "Shipment and delivery evidence need known dates or exact timestamps.",
+          placement: { section: "tracking" },
+        },
+        {
+          id: "shipment_chronology",
+          facet: "integrity",
+          weight: 10,
+          kind: "defect",
+          label: "Conflicting shipment chronology",
+          satisfiedLabel: "Consistent shipment chronology",
+          message:
+            "Delivery reports conflict or delivery precedes a carrier movement event.",
+          placement: { section: "tracking" },
+        },
+      ],
+    },
   },
   extensions: {
     ports: {

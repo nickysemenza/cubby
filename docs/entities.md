@@ -2497,7 +2497,9 @@ and emit no migration.
 
 Compact entity facts, including board cards, use the shared quality value and lazy field explanation; they never summarize the quality object as a field count.
 
-Every scored entity receives a shared, unscored display-image check. Without a
+Scored entities receive a shared, unscored display-image check by default.
+An evidence-only quality declaration can set `displayImage: false`; Shipment
+uses this because tracking evidence completeness does not require imagery. Without a
 usable direct or declared related image, its score is capped at 99; this check
 cannot be waived with a DataException. It uses the thumbnail resolver's presence
 predicate, so deleted images, PDFs, failed renders and unavailable files do not

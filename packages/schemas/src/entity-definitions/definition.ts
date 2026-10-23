@@ -2179,6 +2179,8 @@ const buildMetadataSchemas = () => {
   const entityDataQualityMetadataSchema = z
     .object({
       checks: z.array(entityDataQualityCheckMetadataSchema).min(1),
+      /** Disable when quality measures evidence completeness independently of imagery. */
+      displayImage: z.boolean().optional().default(true),
       /**
        * True where the entity may record `DataException` rows; every check
        * then declares fingerprint inputs so an exception can go stale.
@@ -2975,9 +2977,11 @@ type OwnCheckId<D> = D extends {
 }
   ?
       | Id
-      | (D extends { key: infer K extends string }
-          ? `${Lowercase<K>}_display_image`
-          : never)
+      | (D extends { capabilities: { dataQuality: { displayImage: false } } }
+          ? never
+          : D extends { key: infer K extends string }
+            ? `${Lowercase<K>}_display_image`
+            : never)
   : never;
 export type ReadSchemaFacts<D> = Readonly<{
   ownDataCheck: z.ZodEnum<{ [Id in OwnCheckId<D>]: Id }>;
@@ -3011,7 +3015,9 @@ export function ownDataCheckSchema<
   const ids = quality
     ? [
         ...quality.checks.map((check) => check.id),
-        displayImageQualityCheck(declaration.key).id,
+        ...(quality.displayImage !== false
+          ? [displayImageQualityCheck(declaration.key).id]
+          : []),
       ]
     : [];
   if (new Set(ids).size !== ids.length)
