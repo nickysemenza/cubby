@@ -89,6 +89,14 @@ const DECLARED_UUID_OUTPUT_PATHS = new Set([
   // Audit rows are opaque receipts, not entity links; these identify the exact acceptance writes.
   "entity_read.items[].evidence.acceptanceReceipt.auditIds[]",
   "run.id",
+  // Shipment evidence child rows have no shortcodes. These handles preserve
+  // capture membership, timeline provenance and explicit source reassignment;
+  // Shipment, Purchase, Email and Vendor entity references remain shortcodes.
+  "shipments_read.observations[].observationId",
+  "shipments_read.observations[].sourceCaptureId",
+  "shipments_read.observations[].sourcePackageId",
+  "shipments_read.observations[].captureIds[]",
+  "shipments_read.timeline[].observationIds[]",
 ]);
 
 const NOT_YET_CUT_OVER: string[] = [];

@@ -1,3 +1,4 @@
+import { parseEntityId } from "@cubby/schemas/identifiers";
 import type { ExtractedOrderCandidate } from "@cubby/schemas/purchase-import";
 import { suggestionSweepRunInput } from "@cubby/schemas/run-fields";
 import { and, eq } from "drizzle-orm";
@@ -14,7 +15,11 @@ import {
   kernelCtx,
   PRIMARY_MODEL,
 } from "~/server/domains/run/service/suggestion-sweep.fixtures";
-import { runFinding } from "~/server/testing/run-finding.fixtures";
+import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
+import {
+  runFinding,
+  seedRunFinding,
+} from "~/server/testing/run-finding.fixtures";
 
 import { sweepImportedProductCategories } from "../service/import-category-sweep";
 import { commitPurchaseImport } from "./import-orders";
@@ -63,7 +68,7 @@ describe("post-commit category suggestions", () => {
       .update(productCategory)
       .set({ stockTracked: false })
       .where(eq(productCategory.id, taxonomyId("food")));
-    const { vendor } = await memberImportWorld(ctx.db, ctx.actor, {
+    const { vendor, party } = await memberImportWorld(ctx.db, ctx.actor, {
       vendor: { name: "Synthetic sweep market" },
     });
     const preparation = await prepareMemberImport(ctx.db, ctx.actor, {
@@ -130,8 +135,20 @@ describe("post-commit category suggestions", () => {
             eq(runFinding.entityKind, "purchase"),
           ),
         );
-    expect(await arrived()).toEqual([{ status: "open" }]);
+    expect(await arrived()).toEqual([]);
     expect(purchaseCode).toBeTruthy();
+    // Existing receiving findings remain actionable; new extraction no longer creates them.
+    const purchaseId = await resolveOrThrow(ctx.db, "purchase", purchaseCode!);
+    await seedRunFinding(ctx.db, {
+      ledgerPartyId: parseEntityId("ledgerParty", party.id),
+      entityKind: "purchase",
+      entityId: purchaseId,
+      kind: "arrived",
+      summary: "Synthetic historical delivery finding",
+      proposedFix: { kind: "receive_purchase", purchaseId },
+      evidenceFingerprint: "synthetic-historical-arrival",
+    });
+    expect(await arrived()).toEqual([{ status: "open" }]);
 
     await driveAiWork(ctx.db, sweep!.id, {
       sweep: { context, ...sweepPorts },
