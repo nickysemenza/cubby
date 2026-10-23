@@ -1,0 +1,19 @@
+apps/web/src/server/generic/data-quality/repo/sql.unit.test.ts
+  s_a3b6b46af29582::t_71ce2fd19a2c8d 153-154,156,165-173
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "6c1e19e3e56f8c96cbde7fc2cf87b8abd4695746",
+  "prompts": {},
+  "sessions": {
+    "s_a3b6b46af29582": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a16ae9-09b9-7271-bc7a-c96487de65fa",
+        "model": "unknown"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
