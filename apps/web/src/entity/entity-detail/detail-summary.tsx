@@ -49,9 +49,9 @@ function SummaryCell({
   return (
     <section
       aria-label={title}
-      className="min-w-0 border-b border-border px-3 py-3 text-xs"
+      className="min-w-0 border-b border-border px-3 py-2 text-xs"
     >
-      <h2 className="mb-2 text-xs font-medium text-muted-foreground">
+      <h2 className="mb-1 text-xs font-medium text-muted-foreground">
         {title}
       </h2>
       {children}
@@ -69,7 +69,7 @@ export function CompactSummaryReport({
   const [expanded, setExpanded] = useState(false);
   const displayed = expanded ? blocks : projection.blocks;
   return (
-    <div className="space-y-2">
+    <div className="space-y-1">
       {displayed.map((block) => {
         if (block.kind === "records") {
           const more = block.rows.filter(
@@ -112,27 +112,33 @@ export function CompactSummaryReport({
                     }
                     trailing={row.trailing}
                     secondary={
-                      <>
-                        {row.time ? (
-                          <ReportTimeDisplay time={row.time} />
-                        ) : row.at ? (
-                          <DateDisplay timestamp={row.at} stacked={false} />
-                        ) : null}
-                        {row.paths ? (
-                          <RecordPaths paths={row.paths} compact />
-                        ) : null}
-                        <ReportRowText row={row} />
-                        {row.externalLink ? (
-                          <a
-                            href={row.externalLink.url}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="text-link hover:underline"
-                          >
-                            {row.externalLink.label}
-                          </a>
-                        ) : null}
-                      </>
+                      row.time ||
+                      row.at ||
+                      row.lines?.length ||
+                      row.externalLink ||
+                      row.paths?.some((path) => path.length > 2) ? (
+                        <div className="flex min-w-0 flex-wrap items-baseline gap-x-2">
+                          {row.time ? (
+                            <ReportTimeDisplay time={row.time} />
+                          ) : row.at ? (
+                            <DateDisplay timestamp={row.at} stacked={false} />
+                          ) : null}
+                          {row.paths?.some((path) => path.length > 2) ? (
+                            <RecordPaths paths={row.paths} compact />
+                          ) : null}
+                          <ReportRowText row={row} />
+                          {row.externalLink ? (
+                            <a
+                              href={row.externalLink.url}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-link hover:underline"
+                            >
+                              {row.externalLink.label}
+                            </a>
+                          ) : null}
+                        </div>
+                      ) : null
                     }
                   />
                 ))}
@@ -297,7 +303,12 @@ export function DetailSummary<E extends GenericDetailEntity>({
           );
         } else if (slot.kind === "chart")
           content = (
-            <MonthlySpendChart entity={entity} id={id} viewKey={slot.viewKey} />
+            <MonthlySpendChart
+              entity={entity}
+              id={id}
+              viewKey={slot.viewKey}
+              compact
+            />
           );
         else if (slot.kind === "report") {
           if (!reportQuery || reportQuery.isPending)
@@ -357,7 +368,11 @@ export function DetailSummary<E extends GenericDetailEntity>({
                           item.target.label
                         )
                       }
-                      secondary={<RecordPaths paths={item.paths} compact />}
+                      secondary={
+                        item.paths.some((path) => path.length > 2) ? (
+                          <RecordPaths paths={item.paths} compact />
+                        ) : null
+                      }
                     />
                   ))}
                 </RecordList>

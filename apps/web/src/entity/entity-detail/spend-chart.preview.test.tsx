@@ -35,6 +35,7 @@ it("keeps spend readouts outside clipping and one keyboard stop at both edges", 
       <div className="overflow-hidden">
         <MonthlySpendChart
           entity="product"
+          compact
           id={testShortcode("product", "PRD-4K7M")}
         />
       </div>,

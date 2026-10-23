@@ -3,6 +3,7 @@ import { useRef, useState } from "react";
 
 import { formatCalendarDay } from "~/lib/date-format";
 import { formatCurrency } from "~/lib/number-format";
+import { cn } from "~/lib/utils";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import {
   Tooltip,
@@ -26,10 +27,12 @@ export function MonthlySpendChart({
   entity,
   id,
   viewKey,
+  compact = false,
 }: {
   entity: Entity;
   id: string;
   viewKey?: string;
+  compact?: boolean;
 }) {
   const spend = useMonthlyExpenseSpend({
     source: { entityKind: entity, entityId: id },
@@ -75,15 +78,25 @@ export function MonthlySpendChart({
       data-testid="monthly-spend-chart"
       aria-busy={spend.isPending || undefined}
     >
-      <figcaption className="flex items-baseline justify-between gap-3 text-sm">
-        <span className="font-medium text-muted-foreground">
+      <figcaption className="flex items-baseline justify-between gap-3 text-xs">
+        <span
+          className={cn(
+            "font-medium text-muted-foreground",
+            compact && "sr-only",
+          )}
+        >
           Spend, last 12 months
         </span>
         <span className="font-mono text-xs text-foreground-strong tabular-nums">
           {spend.isPending ? "…" : formatCurrency(total / 100)}
         </span>
       </figcaption>
-      <div className="relative mt-1.5 flex h-30 gap-[3px]">
+      <div
+        className={cn(
+          "relative mt-1.5 flex gap-[3px]",
+          compact ? "h-16" : "h-30",
+        )}
+      >
         <div
           aria-hidden
           className="pointer-events-none absolute inset-x-0 z-0 border-b border-muted-foreground/35"
