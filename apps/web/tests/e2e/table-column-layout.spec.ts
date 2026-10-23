@@ -110,7 +110,7 @@ test("column layout changes by pointer and keyboard, keeps locked edges, and res
 }) => {
   test.setTimeout(60_000);
   // Tall enough that every customizer zone renders without dialog scrolling.
-  await page.setViewportSize({ width: 1440, height: 1600 });
+  await page.setViewportSize({ width: 1440, height: 2400 });
   const name = `Layout vendor ${Date.now()}`;
   await seedVendorDisplayPrerequisite(page, name);
   const path = `/vendors?q=${encodeURIComponent(name)}`;
