@@ -357,6 +357,10 @@ extra detail visits or Purchase-cell overflow checks to the reset journey.
 The Gmail import-convergence journey prepares its statement-first aggregate with
 `previewFinancialBooking` and `commitFinancialBooking`, preserving selected
 Vendor/category and allocation/Purchase read-back before the real retailer review.
+An explicitly selected booking category belongs to its new aggregate Expense;
+do not assert a stored Purchase category override for that choice.
+Include the booked Purchase identity explicitly in final convergence reads so
+an uncategorized aggregate left behind cannot evade duplicate detection.
 `financial-booking-review.spec.ts` owns the native booking form, stale preview,
 fresh approval and replay guards; `import-order-convergence.integration.test.ts`
 owns source-arrival permutations and conserved money. Do not repeat the booking

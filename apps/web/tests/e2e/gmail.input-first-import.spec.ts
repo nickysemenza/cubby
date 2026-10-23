@@ -324,7 +324,8 @@ test("input-first Google, statement then retailer, and Product identity converge
     );
     expect(review).toMatchObject({ action: "create_aggregate", amount: 42.5 });
     const booked = await commitFinancialBooking(db, review, actor);
-    expect(booked.expenseId).not.toBeNull();
+    if (!booked.expenseId)
+      throw new Error("Statement booking created no Expense");
     const allocation =
       await database.query.financialTransactionAllocation.findFirst({
         where: and(
@@ -335,19 +336,25 @@ test("input-first Google, statement then retailer, and Product identity converge
           notDeleted(schema.financialTransactionAllocation),
         ),
       });
-    expect(allocation).toBeDefined();
-    const purchase =
-      allocation &&
-      (await database.query.purchase.findFirst({
-        where: and(
-          eq(schema.purchase.id, allocation.purchaseId),
-          eq(schema.purchase.vendorId, vendorId),
-          notDeleted(schema.purchase),
-        ),
-      }));
-    expect(purchase).toMatchObject({ spendingCategoryId: categoryId });
+    if (!allocation) throw new Error("Statement booking created no allocation");
+    const purchase = await database.query.purchase.findFirst({
+      where: and(
+        eq(schema.purchase.id, allocation.purchaseId),
+        eq(schema.purchase.vendorId, vendorId),
+        notDeleted(schema.purchase),
+      ),
+    });
+    const aggregate = await database.query.expense.findFirst({
+      where: eq(schema.expense.shortcode, booked.expenseId),
+    });
+    expect(aggregate).toMatchObject({
+      purchaseId: allocation.purchaseId,
+      spendingCategoryId: categoryId,
+      cost: 42.5,
+    });
     purchaseCode = purchase?.shortcode;
     expect(purchaseCode).toBe(booked.purchaseId);
+    return booked.purchaseId;
   }
   const productId = await resolveOrThrow(db, "product", product.id);
   const aliasId = await resolveOrThrow(db, "product", duplicate.id);
@@ -443,7 +450,7 @@ test("input-first Google, statement then retailer, and Product identity converge
     purchaseCode = purchase?.shortcode;
     expect(purchaseCode).toBeTruthy();
   }
-  await statement();
+  const statementPurchaseCode = await statement();
   await retailer();
   if (!purchaseCode) throw new Error("Supported imports created no Purchase");
   await researchMail(purchaseCode);
@@ -461,6 +468,7 @@ test("input-first Google, statement then retailer, and Product identity converge
       eq(schema.purchase.vendorId, vendorId),
       // Include a statement aggregate left behind without the retailer order ID.
       or(
+        eq(schema.purchase.shortcode, statementPurchaseCode),
         eq(schema.purchase.spendingCategoryId, categoryId),
         eq(schema.purchase.orderId, names.orderId),
       ),
