@@ -25,7 +25,11 @@ import {
   EntityActionRowMenuItems,
   type EntityActionSubject,
 } from "~/entity/actions/entity-actions";
-import { EntityRefLink } from "~/entity/components/entity-ref-link";
+import {
+  EntityRefLink,
+  EntityRouteLink,
+  EntityRefList,
+} from "~/entity/components/entity-ref-link";
 import { RecordEmoji } from "~/entity/components/record-emoji";
 import type { EntityDetailParams, EntityDetailRoute } from "~/entity/entities";
 import {
@@ -289,14 +293,22 @@ export function createNameColumn<T extends BaseRow>(
       const linkName = (label: ReactNode) =>
         link ? (
           <span data-record-identity-link className="contents">
-            <EntityRefLink
-              variant="table"
-              to={link.to}
-              params={link.params}
-              tone="identity"
-            >
-              {label}
-            </EntityRefLink>
+            {!options?.rowLink && typeof label === "string" ? (
+              <EntityRefLink
+                entity={entity}
+                id={String(info.row.original.id)}
+                name={label}
+                bare
+              />
+            ) : (
+              <EntityRouteLink
+                to={link.to}
+                params={link.params}
+                tone="identity"
+              >
+                {label}
+              </EntityRouteLink>
+            )}
           </span>
         ) : (
           label
@@ -1201,22 +1213,10 @@ function CanonicalSingleEntityLink({
     entityId: "id" in data ? data.id : "",
   });
   if (entity === "usda-food") {
-    return (
-      <EntityRefLink
-        displayImage={null}
-        entity="usda-food"
-        data={data}
-        truncate
-      />
-    );
+    return <EntityRefLink entity="usda-food" data={data} />;
   }
   return (
-    <EntityRefLink
-      displayImage={displayImage}
-      entity={entity}
-      data={data}
-      truncate
-    />
+    <EntityRefLink displayImage={displayImage} entity={entity} data={data} />
   );
 }
 
@@ -1278,8 +1278,7 @@ const singleEntityAdapters = {
       <CanonicalSingleEntityLink entity="ingredient" data={data} />
     ),
     renderCollection: (items) => (
-      <EntityRefLink
-        variant="list"
+      <EntityRefList
         entity="ingredient"
         items={items}
         maxItems={1}
@@ -1300,8 +1299,7 @@ const singleEntityAdapters = {
       <CanonicalSingleEntityLink entity="product" data={data} />
     ),
     renderCollection: (items) => (
-      <EntityRefLink
-        variant="list"
+      <EntityRefList
         entity="product"
         items={items}
         maxItems={1}
@@ -1318,8 +1316,7 @@ const singleEntityAdapters = {
       <CanonicalSingleEntityLink entity="recipe" data={data} />
     ),
     renderCollection: (items) => (
-      <EntityRefLink
-        variant="list"
+      <EntityRefList
         entity="recipe"
         items={items}
         maxItems={1}
@@ -1340,8 +1337,7 @@ const singleEntityAdapters = {
       <CanonicalSingleEntityLink entity="location" data={data} />
     ),
     renderCollection: (items) => (
-      <EntityRefLink
-        variant="list"
+      <EntityRefList
         entity="location"
         items={items}
         maxItems={1}
@@ -1752,14 +1748,9 @@ export function createExternalLinkColumn<
     if (value === null || value === undefined) return <NoneValue />;
     const shown = display(String(value));
     return (
-      <EntityRefLink
-        variant="table"
-        to={linkTo}
-        params={{ id: shown }}
-        tone="mono"
-      >
+      <EntityRouteLink to={linkTo} params={{ id: shown }} tone="mono">
         {shown}
-      </EntityRefLink>
+      </EntityRouteLink>
     );
   };
   return createEditableAccessorColumn(columnHelper, (row: T) => row[accessor], {

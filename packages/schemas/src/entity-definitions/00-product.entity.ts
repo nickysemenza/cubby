@@ -101,7 +101,7 @@ export default defineEntity(
           {
             kind: "report",
             id: "purchase-pricing",
-            title: "Purchase & pricing",
+            title: "Purchases & charges",
             slot: "product.pricing-summary",
           },
           {
@@ -663,7 +663,12 @@ export default defineEntity(
         },
         metrics: ["expenseTotal"],
         totals: [
-          { id: "price", label: "Prices", keys: ["price"], format: "currency" },
+          {
+            id: "price",
+            label: "Item prices",
+            keys: ["price"],
+            format: "currency",
+          },
           {
             id: "expenseTotal",
             label: "Expenses",
@@ -1152,7 +1157,8 @@ Rules:
           control: { kind: "number", renderer: "money", width: "half" },
           display: {
             columnGroup: "Purchasing",
-            columnLabel: "Price",
+            columnLabel: "Cost",
+            labelPath: "pricing.cost.label",
             format: "currency",
           },
           resolution: {
@@ -1162,13 +1168,17 @@ Rules:
           explanation: {
             ruleId: "product.effective-valuation-price",
             description:
-              "A manual valuation price wins; otherwise Cubby derives a per-unit price from live priced expenses and their recorded quantities.",
+              "Cost shows the effective item price for physical Products and the average positive actual charge for services. Service averages exclude credits and unknown amounts and do not imply a monthly rate. Inventory valuation uses only the item price.",
             projections: {
-              list: "fieldResolutions.price.value",
+              list: "pricing.cost.amount",
               detail: "fieldResolutions.price.value",
               summary: "fieldResolutions.price.value",
             },
             sourceDependencies: [
+              {
+                path: "pricing.cost",
+                label: "Cost basis, charge count and latest dated charge",
+              },
               {
                 path: "fieldResolutions.price.storedValue",
                 label: "Manual valuation price",
@@ -1519,6 +1529,7 @@ Rules:
           display: {
             columnGroup: "Purchasing",
             labelPath: "unitPriceLabel",
+            detailLabelPath: "unitPriceDetailLabel",
             width: "sm",
           },
           provenance: {
@@ -1528,10 +1539,18 @@ Rules:
           explanation: {
             ruleId: "product.unit-price",
             description:
-              "Comparable unit price converts one natural unit through the product's complete current conversion graph, including label or USDA-derived mappings and the effective price edge.",
+              "Comparable unit price converts one natural unit through the product's conversion graph and effective item price. Services have no comparable unit price: charges may cover different periods, usage, or seats. Average charge is shown under Cost instead.",
             resolver: "productValuation",
-            projections: { list: "unitPrice", summary: "unitPrice" },
+            projections: {
+              list: "unitPrice",
+              detail: "unitPriceDetailLabel",
+              summary: "unitPrice",
+            },
             sourceDependencies: [
+              {
+                path: "category.feature",
+                label: "Product accounting category",
+              },
               {
                 path: "pricing.effectivePrice",
                 label: "Effective product price",
@@ -1880,6 +1899,10 @@ Rules:
         labelField("ledgerExpectedQuantityLabel", "Expense quantity ledger"),
         labelField("quantityVarianceLabel", "Counted inventory and ledger"),
         labelField("unitPriceLabel", "Product price and unit mappings"),
+        labelField(
+          "unitPriceDetailLabel",
+          "Product accounting and unit mappings",
+        ),
         labelField("externalIdsLabel", "Product identifiers"),
         {
           key: "quantityVariance",

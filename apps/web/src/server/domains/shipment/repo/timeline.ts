@@ -1,5 +1,8 @@
 import type { ShipmentObservationInput } from "@cubby/schemas/shipment-evidence";
-import { shipmentTimelineOut } from "@cubby/schemas/shipment-evidence";
+import {
+  datedShipmentEventTime,
+  shipmentTimelineOut,
+} from "@cubby/schemas/shipment-evidence";
 import { and, eq, inArray } from "drizzle-orm";
 
 import { householdLocalDate } from "~/lib/household-date";
@@ -69,7 +72,14 @@ export function shipmentEventSummary(
     const time = event.time;
     if (time.kind === "instant")
       return [{ ...time, value: new Date(time.value).toISOString() }];
-    return time.kind === "date" ? [time] : [];
+    if (time.kind === "date") return [time];
+    // A local clock still establishes its literal calendar day without inventing an offset.
+    if (time.kind === "local") {
+      const date = time.value.slice(0, 10);
+      if (datedShipmentEventTime.safeParse(time).success)
+        return [{ kind: "date", value: date }];
+    }
+    return [];
   });
   const day = (time: (typeof dated)[number]) =>
     time.kind === "date"

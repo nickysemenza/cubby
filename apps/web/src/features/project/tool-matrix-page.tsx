@@ -42,7 +42,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { match } from "ts-pattern";
 
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
-import { RecordMark } from "~/entity/components/record-mark";
 import {
   ProductImageSummariesProvider,
   useHydratedProductImages,
@@ -671,7 +670,6 @@ function ToolIdentityLink({
         id: row.productId,
         name: row.productName,
       }}
-      truncate
     />
   );
 }
@@ -762,16 +760,12 @@ function MatrixTable({
             >
               <div className="relative h-24 w-11 overflow-visible">
                 <EntityRefLink
-                  variant="preview"
-                  displayImage={null}
                   entity="project"
                   id={column.projectId}
-                  showIdentityMark={false}
-                  className="absolute bottom-2 left-1 z-10 flex w-24 origin-bottom-left rotate-[-60deg] items-center gap-1 truncate text-2xs leading-none text-foreground underline decoration-border/70 decoration-dotted underline-offset-2 transition-colors hover:text-primary hover:decoration-primary hover:decoration-solid"
-                >
-                  <RecordMark entity="project" emoji={column.emoji} size={12} />
-                  <span className="truncate">{column.projectName}</span>
-                </EntityRefLink>
+                  name={column.projectName}
+                  emoji={column.emoji}
+                  className="absolute bottom-2 left-1 z-10 flex w-24 origin-bottom-left rotate-[-60deg]"
+                />
               </div>
               <div className="pb-1 text-center text-2xs text-slate">
                 {column.startDate ? `’${column.startDate.slice(2, 4)}` : "—"}

@@ -141,6 +141,13 @@
       "when": 1792775364802,
       "tag": "0019_job_useful_progress",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1792785408697,
+      "tag": "0020_service_product_categories",
+      "breakpoints": true
     }
   ]
 }

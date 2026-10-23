@@ -249,11 +249,10 @@ export function CommandButton({
         .map((id) => (
           <EntityRefLink
             key={id}
-            variant="chip"
+
             entity="run"
             id={id}
             name={id}
-            displayImage={null}
           />
         ))}
     </Row>

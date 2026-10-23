@@ -10,6 +10,7 @@ import type { AnyColumn } from "drizzle-orm";
 import { and, inArray, isNotNull, sql, type SQL } from "drizzle-orm";
 import { z } from "zod";
 
+import { formatCurrency } from "~/lib/number-format";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
   getDb,
@@ -35,6 +36,8 @@ import {
   type QualityReadContext,
 } from "~/server/generic/data-quality/repo/registry";
 
+import { serviceProductSqlText } from "./service-category";
+
 export type ProductPricing = ProductTopLevelOut["pricing"];
 
 export type PricingAggregate = Omit<
@@ -43,6 +46,7 @@ export type PricingAggregate = Omit<
 >;
 
 const EMPTY_AGGREGATE: PricingAggregate = {
+  service: false,
   knownCost: 0,
   knownExpenseCount: 0,
   unknownExpenseCount: 0,
@@ -51,6 +55,7 @@ const EMPTY_AGGREGATE: PricingAggregate = {
 
 const pricingAggregateRowSchema = z.object({
   productId,
+  service: z.boolean().optional(),
   knownCost: z.number(),
   knownUnitCount: z.number(),
   knownExpenseCount: z.number().int(),
@@ -89,13 +94,25 @@ export const resolveProductPricing = (
   explicitPrice: number | null,
   aggregate: PricingAggregate = EMPTY_AGGREGATE,
 ): ProductPricing => {
-  const derivedPrice = roundOrNull(derivedPriceExact(aggregate));
-  const effectivePrice = explicitPrice ?? derivedPrice;
+  const derivedPrice = aggregate.service
+    ? null
+    : roundOrNull(derivedPriceExact(aggregate));
+  const effectivePrice = aggregate.service
+    ? null
+    : (explicitPrice ?? derivedPrice);
   return {
+    cost: {
+      amount: effectivePrice,
+      label: effectivePrice === null ? null : formatCurrency(effectivePrice),
+      explanation:
+        "Item cost uses the manual valuation price when set, otherwise the Expense-derived unit price.",
+      chargeCount: 0,
+      latestCharge: null,
+    },
     derivedPrice,
     effectivePrice,
     source:
-      explicitPrice !== null
+      explicitPrice !== null && !aggregate.service
         ? "explicit"
         : derivedPrice !== null
           ? "derived"
@@ -112,13 +129,15 @@ export const resolveProductPricing = (
 export const resolveProductPriceField = (
   storedPrice: number | null,
   pricing: ProductPricing,
+  service = false,
 ): FieldResolution => ({
   mode: storedPrice !== null ? "explicit" : "inherit",
   storedValue: storedPrice,
   value: pricing.effectivePrice,
   fallbackValue: pricing.derivedPrice,
-  source:
-    storedPrice !== null
+  source: service
+    ? "not applicable to services"
+    : storedPrice !== null
       ? "manual valuation price"
       : pricing.derivedPrice !== null
         ? "expense-derived unit price"
@@ -144,7 +163,8 @@ const PRICING_OWN_MEASURES = `sum(kpe."cost") FILTER (WHERE kpe."productQuantity
          count(*) FILTER (WHERE kpe."productQuantity" IS NOT NULL) AS "knownExpenseCount",
          count(*) FILTER (WHERE kpe."productQuantity" IS NULL) AS "unknownExpenseCount"`;
 
-const PRICING_OWN_PREDICATES = `kpe."deletedAt" IS NULL
+const PRICING_OWN_PREDICATES = `NOT ${serviceProductSqlText('kpe."productId"')}
+     AND kpe."deletedAt" IS NULL
      AND ${actualExpenseSql("kpe")}
      AND kpe."lineKind" = 'principal'
      AND kpe."cost" > 0`;
@@ -185,6 +205,7 @@ const loadPricingAggregates = async (
     kitSeedForProductIds(ids, options.wholeCatalog ?? false),
   )}
     SELECT ka.target AS "productId",
+           ${sql.raw(serviceProductSqlText("ka.target"))} AS "service",
            COALESCE(${sql.raw(PROJECTED_KNOWN_COST)}, 0)::double precision AS "knownCost",
            COALESCE(${sql.raw(PROJECTED_KNOWN_UNITS)}, 0)::double precision AS "knownUnitCount",
            COALESCE(${sql.raw(ownOnly(`"knownExpenseCount"`))}, 0)::int AS "knownExpenseCount",
@@ -200,6 +221,7 @@ const loadPricingAggregates = async (
   const aggregateById = new Map<ProductId, PricingAggregate>();
   for (const row of rows) {
     aggregateById.set(row.productId, {
+      service: row.service,
       knownCost: Number(row.knownCost),
       knownExpenseCount: Number(row.knownExpenseCount),
       unknownExpenseCount: Number(row.unknownExpenseCount),
@@ -233,12 +255,54 @@ export const loadProductPricing = async (
   const ids = products.map((product) => product.id);
   if (ids.length === 0) return new Map();
 
-  const aggregateById = await loadPricingAggregates(db, ids, options);
+  const [aggregateById, charges] = await Promise.all([
+    loadPricingAggregates(db, ids, options),
+    unwrapDb(db).execute(sql`
+      SELECT p."id" AS "productId",
+        avg(e."cost") FILTER (WHERE e."cost" > 0)::double precision AS average,
+        count(*) FILTER (WHERE e."cost" > 0)::int AS count,
+        (array_agg(e."cost" ORDER BY e."date" DESC, e."id" DESC)
+          FILTER (WHERE e."cost" > 0 AND e."date" IS NOT NULL))[1]::double precision AS latest
+      FROM "Product" p
+      LEFT JOIN "Expense" e ON e."productId" = p."id"
+        AND e."deletedAt" IS NULL AND ${sql.raw(actualExpenseSql("e"))}
+      WHERE p."id" = ANY(${uuidArrayParam(ids)})
+        AND ${sql.raw(serviceProductSqlText('p."id"'))}
+      GROUP BY p."id"
+    `),
+  ]);
+  const chargeRows = z
+    .array(
+      z.object({
+        productId,
+        average: z.number().nullable(),
+        count: z.number(),
+        latest: z.number().nullable(),
+      }),
+    )
+    .parse(charges.rows);
+  const chargeById = new Map(chargeRows.map((row) => [row.productId, row]));
   return new Map(
-    products.map((product) => [
-      product.id,
-      resolveProductPricing(product.price, aggregateById.get(product.id)),
-    ]),
+    products.map((product) => {
+      const pricing = resolveProductPricing(
+        product.price,
+        aggregateById.get(product.id),
+      );
+      const charge = chargeById.get(product.id);
+      if (charge) {
+        const average = roundOrNull(charge.average);
+        pricing.cost = {
+          amount: average,
+          label:
+            average === null ? null : `${formatCurrency(average)} / charge`,
+          explanation:
+            "Average of positive actual Expense charges. Credits and unknown amounts are excluded. Charges may cover different periods, usage, or seats; this is not a monthly rate.",
+          chargeCount: charge.count,
+          latestCharge: charge.latest,
+        };
+      }
+      return [product.id, pricing] satisfies [ProductId, ProductPricing];
+    }),
   );
 };
 
@@ -264,8 +328,10 @@ export const loadExactEffectivePrices = async (
   return new Map(
     products.map((product) => [
       product.id,
-      product.price ??
-        derivedPriceExact(aggregateById.get(product.id) ?? EMPTY_AGGREGATE),
+      aggregateById.get(product.id)?.service
+        ? null
+        : (product.price ??
+          derivedPriceExact(aggregateById.get(product.id) ?? EMPTY_AGGREGATE)),
     ]),
   );
 };
@@ -344,7 +410,7 @@ export const loadIngredientIdsForProducts = async (
 };
 
 /** Divide, round to cents — shared by the sort twin and the filter twin below. */
-const PROJECTED_DERIVED_PRICE = `round((${PROJECTED_KNOWN_COST} / NULLIF(${PROJECTED_KNOWN_UNITS}, 0))::numeric, 2)::double precision`;
+const PROJECTED_DERIVED_PRICE = `CASE WHEN bool_or(${serviceProductSqlText("ka.target")}) THEN NULL ELSE round((${PROJECTED_KNOWN_COST} / NULLIF(${PROJECTED_KNOWN_UNITS}, 0))::numeric, 2)::double precision END`;
 
 /**
  * Correlated SQL for Product root-list sorting and aggregation (filtering goes
@@ -364,7 +430,15 @@ const derivedProductPriceSql = (productAlias = '"product"') =>
     ${PRICING_PROJECTION_FROM})`;
 
 export const effectiveProductPriceSql = (productAlias = '"product"') =>
-  `COALESCE(${productAlias}."price", ${derivedProductPriceSql(productAlias)})`;
+  `(CASE WHEN NOT ${serviceProductSqlText(`${productAlias}."id"`)} THEN COALESCE(${productAlias}."price", ${derivedProductPriceSql(productAlias)}) END)`;
+
+/** List Cost is descriptive; inventory valuation continues to use effectiveProductPriceSql. */
+export const displayProductCostSql = (productAlias: string) =>
+  `(CASE WHEN ${serviceProductSqlText(`${productAlias}."id"`)} THEN
+    (SELECT round(avg(e."cost")::numeric, 2)::double precision FROM "Expense" e
+      WHERE e."productId" = ${productAlias}."id" AND e."deletedAt" IS NULL
+        AND ${actualExpenseSql("e")} AND e."cost" > 0)
+    ELSE ${effectiveProductPriceSql(productAlias)} END)`;
 
 /**
  * Catalog evidence and the filtered footer group live sibling quantities and
@@ -416,11 +490,11 @@ const productPriceSumSql = (whereClause: SQL | undefined): SQL<number> => {
   const derived = groupedProductPriceSql(sql`
     SELECT "Product"."id", "Product"."id", 1::numeric, 1::numeric, 0
       FROM "Product"
-     WHERE ${condition} AND "Product"."price" IS NULL
+     WHERE ${condition} AND NOT ${sql.raw(serviceProductSqlText('"Product"."id"'))} AND "Product"."price" IS NULL
   `);
   return sql<number>`SELECT (COALESCE((
     SELECT sum("Product"."price"::numeric) FROM "Product"
-     WHERE ${condition} AND "Product"."price" IS NOT NULL
+     WHERE ${condition} AND NOT ${sql.raw(serviceProductSqlText('"Product"."id"'))} AND "Product"."price" IS NOT NULL
   ), 0) + COALESCE((SELECT sum(price."derivedPrice"::numeric) FROM (${derived}) price), 0))::double precision AS "priceSum"`;
 };
 

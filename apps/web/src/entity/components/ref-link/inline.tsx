@@ -9,56 +9,29 @@ import { PROJECT_STATUS_LABELS } from "@cubby/schemas/project-fields";
 import type { ProductCategory } from "@cubby/shared";
 import { getMiscDisplayName, isMiscProduct, capitalize } from "@cubby/shared";
 import type { DataType } from "@cubby/usda";
-import type { ReactNode } from "react";
 import { match } from "ts-pattern";
 import { z } from "zod";
 
-import {
-  RecordMarkByReference,
-  useResolvedRecordEmoji,
-} from "~/entity/components/record-mark";
-import { EntityIcon } from "~/entity/entities";
 import { usdaRouteId } from "~/entity/entity-query";
-import { LocationIcon } from "~/entity/presentation/location-icons";
 import { formatCurrency } from "~/lib/number-format";
 import { purchaseLabel, purchaseLabelUsedVendor } from "~/lib/purchase-label";
-import { dataTypeColor, UsdaDataTypeDot } from "~/lib/usda-data-type";
-import { cn } from "~/lib/utils";
-import {
-  STACKED_SECONDARY_CLASS,
-  useDenseCell,
-  useHeaderEntity,
-  useIdentityCell,
-} from "~/ui/common/stacked-value";
 
-import { PreviewRefLink } from "./leaf";
+import { ChipRefLink } from "./leaf";
 
 // Minimal data shape - just id and name
 type MinimalEntityData = { id: string; name: string; emoji?: string | null };
 
 // Discriminated union for entity-specific data shapes
 export type InlineRefLinkProps = {
-  variant?: "inline";
   openInNewTab?: boolean;
   /** Optional sizing/layout classes applied to the actual anchor. */
   className?: string;
-  /** Compact mode: truncates long names with max-width */
-  compact?: boolean;
-  /** Keep a resolved identity readable in narrow record-review cards. */
-  wrap?: boolean;
-  /** Truncate the name to the available flex width (no fixed cap). Parent must be min-w-0. */
-  truncate?: boolean;
-  /** An adjacent dedicated image/mark already identifies this record. */
-  showIdentityMark?: boolean;
-  /**
-   * Name over its context in two 12px lines; defaults to on inside a table
-   * cell (`useDenseCell`). Without context a long name wraps to two lines.
-   */
-  stacked?: boolean;
+  /** Text only; primary table names select this centrally. */
+  bare?: boolean;
   /** Muted context leading the metadata ("1 each" for a stocked location). */
   context?: string;
   /** Canonical backend-resolved cover; null intentionally renders the mark. */
-  displayImage: ImageUrlSummary | null;
+  displayImage?: ImageUrlSummary | null;
 } & (
   | { entity: "ingredient"; data: MinimalEntityData }
   | {
@@ -140,9 +113,6 @@ type InlineSpec = {
   id: string;
   name: string;
   metadata?: string;
-  /** Overrides the default coloured entity icon. */
-  mark?: ReactNode;
-  trailing?: ReactNode;
 };
 
 const inlineSpec = (props: InlineRefLinkProps): InlineSpec =>
@@ -172,14 +142,6 @@ const inlineSpec = (props: InlineRefLinkProps): InlineSpec =>
       id: data.id,
       name: data.name,
       metadata: data.type ?? undefined,
-      mark: data.type ? (
-        <LocationIcon
-          type={data.type}
-          product={data.product ?? null}
-          size={12}
-          colored
-        />
-      ) : undefined,
     }))
     .with({ entity: "product" }, ({ data }) => {
       const isMisc = isMiscProduct(data.name);
@@ -190,24 +152,9 @@ const inlineSpec = (props: InlineRefLinkProps): InlineSpec =>
       };
     })
     .with({ entity: "usda-food" }, ({ data }) => {
-      const dataType = data.foodInfo.data_type;
       return {
-        // usda-food has no shortcode — fdc_id IS its public id.
         id: usdaRouteId(data.fdc_id),
         name: data.foodInfo.description || "Unnamed Food",
-        // Tint the apple + trail a dot by data_type so the source quality reads
-        // at a glance in dense lists (terracotta SR Legacy = richest, plum =
-        // branded).
-        mark: dataType ? (
-          <EntityIcon
-            entity="usda-food"
-            size={12}
-            style={{ color: dataTypeColor(dataType) }}
-          />
-        ) : undefined,
-        trailing: dataType ? (
-          <UsdaDataTypeDot dataType={dataType} />
-        ) : undefined,
       };
     })
     .with({ entity: "project" }, ({ data }) => ({
@@ -251,107 +198,23 @@ const inlineSpec = (props: InlineRefLinkProps): InlineSpec =>
     }))
     .exhaustive();
 
-// Crisp entity link: a colored wayfinding icon + the name as a
-// dotted-underlined text link, with optional muted metadata.
-const linkClass =
-  "group inline-flex max-w-full items-baseline gap-2 align-baseline text-foreground transition-colors hover:text-primary";
-const nameClass =
-  "min-w-0 font-medium underline decoration-border/70 decoration-dotted underline-offset-2 group-hover:decoration-primary group-hover:decoration-solid";
-
+/** Entity-specific data supplies a name; the shared record link owns appearance. */
 export function InlineRefLink(props: InlineRefLinkProps) {
-  const {
-    entity,
-    displayImage,
-    showIdentityMark,
-    openInNewTab,
-    className,
-    compact,
-    wrap,
-    truncate,
-    stacked,
-    context,
-  } = props;
-  const { id, name, metadata, mark, trailing } = inlineSpec(props);
-  const dense = useDenseCell(stacked);
-  const identity = useIdentityCell();
+  const { id, name, metadata } = inlineSpec(props);
   const emoji = z
     .object({ emoji: z.string().nullish() })
     .parse(props.data).emoji;
-  // The header already paints this entity's icon; a record's own image or
-  // emoji still identifies it. Regression: relation adapters omit emoji, so
-  // treating that as empty hid a record's emoji with the generic icon.
-  const hoisted = useHeaderEntity() === entity && displayImage === null;
-  const resolvedEmoji = useResolvedRecordEmoji(entity, id, emoji, hoisted);
-  const generic = hoisted && !resolvedEmoji;
-  const detail = identity
-    ? ""
-    : [context, metadata].filter(Boolean).join(" · ");
-
   return (
-    <PreviewRefLink
-      entity={entity}
+    <ChipRefLink
+      entity={props.entity}
       id={id}
-      displayImage={displayImage}
-      fallbackMark={
-        <RecordMarkByReference
-          entity={entity}
-          recordId={id}
-          emoji={emoji}
-          size={12}
-          fallback={mark}
-        />
-      }
-      showIdentityMark={generic ? false : showIdentityMark}
-      openInNewTab={openInNewTab}
-      className={cn(
-        linkClass,
-        dense && "min-w-0 items-center gap-0.5 text-xs",
-        truncate && "min-w-0",
-        className,
-      )}
-    >
-      {dense ? (
-        <span className="flex min-w-0 flex-col">
-          <span
-            data-stacked-line=""
-            className={cn(
-              nameClass,
-              wrap
-                ? "line-clamp-2 leading-snug break-words whitespace-normal"
-                : detail
-                  ? "block truncate leading-[15px]"
-                  : "line-clamp-2 leading-[14px] break-words whitespace-normal",
-            )}
-          >
-            {name}
-          </span>
-          {detail && (
-            <span data-stacked-line="" className={STACKED_SECONDARY_CLASS}>
-              {/* The link reads "name · detail", as on one line. */}
-              <span className="sr-only"> · </span>
-              {detail}
-            </span>
-          )}
-        </span>
-      ) : (
-        <>
-          <span
-            className={cn(
-              nameClass,
-              compact && "max-w-32 truncate",
-              (truncate || identity) && "truncate",
-            )}
-          >
-            {name}
-          </span>
-          {detail && (
-            <span className="shrink-0 text-2xs text-muted-foreground">
-              · {detail}
-            </span>
-          )}
-        </>
-      )}
-      {trailing && <span className="shrink-0 self-center">{trailing}</span>}
-    </PreviewRefLink>
+      name={name}
+      displayImage={props.displayImage}
+      emoji={emoji}
+      bare={props.bare}
+      className={props.className}
+      openInNewTab={props.openInNewTab}
+      context={[props.context, metadata].filter(Boolean).join(" · ")}
+    />
   );
 }

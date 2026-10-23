@@ -1,6 +1,6 @@
 import type { ActorContext } from "@cubby/schemas/context";
 import { userId, type RunId } from "@cubby/schemas/identifiers";
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
 import { getDb } from "~/server/db/helpers";
@@ -46,22 +46,26 @@ const MAX_LINEAGE = 50;
  * background status (`isBackgroundRun`), so it inherits the grant too.
  */
 export async function readPaidGrant(db: Database, runId: RunId) {
-  const scope = new Set<RunId>();
-  let current: RunId | null = runId;
-  for (let depth = 0; current && depth < MAX_LINEAGE; depth++) {
-    if (scope.has(current)) break;
-    scope.add(current);
-    const [row] = await getDb(db)
-      .select({
-        parentRunId: run.parentRunId,
-        predecessorRunId: run.predecessorRunId,
-      })
-      .from(run)
-      .where(eq(run.id, current))
-      .limit(1);
-    if (row?.parentRunId) scope.add(row.parentRunId);
-    current = row?.predecessorRunId ?? null;
-  }
+  // Follow only predecessors; each visited Run contributes its direct parent.
+  // Parents also enter the visited fence: a later predecessor already in that
+  // scope must not contribute its own parent. Grants are still read fresh.
+  const scope = sql`WITH RECURSIVE lineage AS (
+    SELECT ${runId}::uuid AS id, ARRAY[${runId}::uuid] AS visited, 0 AS depth
+    UNION ALL
+    SELECT current_run."predecessorRunId",
+           lineage.visited || array_remove(ARRAY[current_run."parentRunId", current_run."predecessorRunId"], NULL),
+           lineage.depth + 1
+    FROM lineage JOIN ${run} current_run ON current_run.id = lineage.id
+    WHERE lineage.depth + 1 < ${MAX_LINEAGE}
+      AND current_run."predecessorRunId" IS NOT NULL
+      AND NOT (current_run."predecessorRunId" = ANY(lineage.visited))
+      AND current_run."predecessorRunId" IS DISTINCT FROM current_run."parentRunId"
+  )
+  SELECT id FROM lineage
+  UNION
+  SELECT current_run."parentRunId"
+  FROM lineage JOIN ${run} current_run ON current_run.id = lineage.id
+  WHERE current_run."parentRunId" IS NOT NULL`;
   const [grant] = await getDb(db)
     .select({
       createdAt: runControlEvent.createdAt,
@@ -71,7 +75,7 @@ export async function readPaidGrant(db: Database, runId: RunId) {
     .where(
       and(
         eq(runControlEvent.action, "run_now_paid"),
-        inArray(runControlEvent.runId, [...scope]),
+        inArray(runControlEvent.runId, sql`(${scope})`),
       ),
     )
     .orderBy(desc(runControlEvent.createdAt))

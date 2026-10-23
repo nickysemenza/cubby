@@ -117,7 +117,10 @@ literal message content, export filename, sender, message time with its known
 precision/timezone, offset capture time and stable per-message external key.
 The key is member-scoped and independent of export filename; replay retains one
 capture, while changed sender, message time or content under that key is refused
-for review. Export/capture time never substitutes for a package event time.
+for review. This household's SMS timestamps use `America/Los_Angeles` with the
+dated PST/PDT offset. Every new observation requires a calendar date. When an SMS
+does not state a separate event time, use its notification date at date-only
+precision; preserve forecast wording without asserting a completed scan.
 Only explicit package identifiers establish a package; neighboring messages,
 grouped delivery notices and opaque short links do not establish a match.
 Keep unresolvable notices outside shipment intake until their package is proven.
@@ -127,6 +130,9 @@ Interactive scripts can use the existing CLI login and `cubby call
 shipment.record --json-body '<JSON>'` to send the same evidence packets over
 the authenticated HTTP API. Omit MCP's top-level `action` from the request body.
 Read back with `cubby call shipment.timeline --query shipmentId=SHIP-4K7MN`.
+Reviewed corrections use `cubby call shipment.edit_observation --json-body '<JSON>'`
+with the current observation ID from the timeline, Shipment reference and a
+partial patch. This is the same ownership-checked, revision-preserving writer as MCP.
 The CLI retains its credential locally; scripts do not export or print it.
 
 Relevance routing retains actual recipient parcel notices from vendors, carriers
@@ -139,8 +145,9 @@ including when no Purchase association exists. A new
 trackingless package requires a stable source package key and distinct-package
 evidence. Carrier identity uses Vendor, preserving literal carrier wording and
 structured handoff tracking pairs. Observations retain raw status, location,
-source event keys and exact time precision/timezone. Receipt/capture time never
-supplies a missing shipment event time. Label creation and vendor-shipped
+source event keys and exact time precision/timezone. Use the source notification's
+date when no separate event date is stated; ingestion/capture time does not
+establish a historical event date. Label creation and vendor-shipped
 reports do not establish carrier possession. Repeated source observations use
 the shared writer's idempotent path; conflicts remain evidence.
 
@@ -151,10 +158,15 @@ count once. Observation first/last-seen and capture times are never endpoints.
 The span stops at the latest dated event, not the current time. One dated event
 has no span. Dates display in the household timezone for exact events and retain the stated day for date-only events.
 Date-only endpoints use whole household calendar days; two exact endpoints
-use elapsed hours. Unknown and unresolved local times do not establish endpoints.
+use elapsed hours. Valid local timestamps establish their literal calendar date,
+even when their timezone is unknown; they do not establish exact elapsed hours.
+Historical unknown or unparseable times remain readable but cannot be written as
+new event times. One dated event establishes both First event and Last event.
 All four list columns sort across the full population before pagination.
 
-Shipment quality reads the same distinct, current event population. Its weighted
+Shipment quality reads the same distinct, current event population and treats
+valid local timestamps as calendar dates, matching first/last and span summaries.
+Historical unparseable local values remain unknown. Its weighted
 checks are multiple events (10), carrier possession or movement evidence (30),
 explicit delivery evidence (30), event span strictly greater than one day (10),
 known shipment and delivery dates (10), and consistent chronology (10). Fewer
@@ -463,7 +475,10 @@ Unknown, obsolete and otherwise applicable stamps still end the prefix, even
 when a member switch is paused. Import-scoped work keeps regeneration and fresh
 individual admission.
 Automatic financial application still admits only the original ready prefix,
-sequentially. Unscoped label passes may complete consecutive no-action receipts
+sequentially. Charges already skipped by the current label page do not split its
+ready receipt prefix; they admit no effect and retain their skipped outcome.
+Failed, unfinished and applicable-rule charges still stop it.
+Unscoped label passes may complete consecutive no-action receipts
 in bounded transactions: lock the exact receipts, verify their charge/evidence,
 active pending state and absent rule descriptors, then clear only the proven
 prefix through the projection writer. A missing, replaced or rule-bearing receipt
@@ -530,7 +545,11 @@ Generation checkpoints depend only on model-free generation and publication;
 optional model preparation cannot delay them. Label rounds apply the settled
 kind votes before preparing shared spending facts; each charge then uses those
 read-only facts with its own advice. The existing field-suggestion batch scope
-shares classification catalogs within the round without sharing model answers.
+shares classification catalogs within the round. Each bounded spending wave
+uses the existing finite-work decision scheduler and one usage group per
+operation to batch category questions after merchant preparation. Each question
+keeps its own evidence, cache entry, model routing and checkpoint; all started
+work settles before publication.
 The spending roster requests only identity, name and parent fields, leaving
 unrelated category connections and stock tracking unloaded. Advice and its
 spending preview share the same read-only vendor resolution and history.

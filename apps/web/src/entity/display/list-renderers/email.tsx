@@ -40,12 +40,9 @@ const purchaseLinks: ListRenderer<"email"> = (helper) =>
                   className="inline-flex items-center gap-1"
                 >
                   <EntityRefLink
-                    variant="chip"
                     entity="purchase"
                     id={link.purchaseId}
                     name={link.purchaseId}
-                    displayImage={null}
-                    compact
                   />
                   <span className={cn("text-2xs", STATE_CLASS[link.state])}>
                     {EMAIL_LINK_STATE_LABEL[link.state]}

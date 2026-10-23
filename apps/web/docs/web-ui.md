@@ -95,7 +95,10 @@ Inventory and cookbook shortcodes retain their individual detail destinations;
 legacy UUID audit references keep their unlinked/index fallback.
 Visual rules live in [DESIGN.md](../DESIGN.md#controls-and-suggestions).
 Record picker builders add up to two declared metadata values as a searchable
-secondary line. The check and name weight indicate selection; the row fill
+secondary line. Trailing picker figures use their content width, capped at
+7.5rem, so compact counts do not reserve a full metadata column and squeeze
+inline filter labels.
+The check and name weight indicate selection; the row fill
 indicates pointer or keyboard highlight. Desktop record popups show keyboard
 hints when a caller has not supplied a footer.
 The picker's frame owns its focus ring. Its nested search input suppresses
@@ -254,3 +257,15 @@ Pass the exact technical string rather than reconstructing it from display text.
 Do not hide essential facts, wrap existing buttons/links, or automatically make
 every field inspectable. Run types and run timeline reason, phase and input-mode
 labels use this shared component; standalone technical facts remain visible.
+
+### Record link appearance
+
+`EntityRefLink` renders a record pill by default. Use `bare` for table name
+columns. The shared pill owns image size, text, fallback marks and wrapping;
+entity declarations own labels and identity data. Candidate filter rows reuse
+the same noninteractive identity, with detail and counts outside the pill.
+Resolve canonical display images in batches at collection boundaries and pass
+them through the display-image provider, including transitive images. Never
+start an image or record-mark metadata query from a cell or option row. Use
+identity metadata already supplied by the owner; a missing mark falls back to
+the canonical entity mark.

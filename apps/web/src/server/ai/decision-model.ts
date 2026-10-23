@@ -339,6 +339,7 @@ const decisionWork = new AsyncLocalStorage<
 export function settleDecisionWorkItems<T, V>(
   items: readonly T[],
   work: (item: T) => Promise<V>,
+  concurrency = 4,
 ) {
   return settleDecisionWork<
     T,
@@ -359,6 +360,7 @@ export function settleDecisionWorkItems<T, V>(
       settleDecisionChoices(questions, (question) => question.args, {
         runInContext: (question, execute) => question.run(execute),
       }),
+    concurrency,
   );
 }
 

@@ -122,6 +122,9 @@ inheritance, or would need more than a small step kind (#2616):
   classification policy, the designated household Project chosen by
   shortcode when the Product's category feature is food. The allocation
   join form (`principalExpenseInheritanceSql`) must equal the scalar one.
+  Drafts without Project, Product or Purchase references resolve without a
+  database read: no ancestor can supply a fallback or food classification.
+  Referenced drafts retain live database resolution.
   Declaring them needs a row gate, per-step conditions and a fixed-record
   step.
 - Expense `spendingCategoryId`: a ladder of override, vendor food context,
@@ -422,7 +425,9 @@ stock evidence through the shared read context. One grouped inventory/location
 relation preserves the canonical absent, mixed-unit and installed-stock rules;
 record-scoped queue and ordinary Product reads retain indexed scalar lookups.
 Unsupported evidence fields fall back to their canonical reads, and unused
-relations are omitted.
+relations are omitted. Catalog quality filters pass an explicit read context even
+without a joined relation, so Product price membership uses shared bulk evidence;
+an absent context retains bounded scalar price reads after paging.
 Positive-stock applicability guards resolve unavailable stock to false before
 kit or ledger-quantity reads; the underlying quantity stays null.
 
@@ -2517,6 +2522,8 @@ numeric projection for quality hydration. Applicability, missing-value checks,
 and exception fingerprints read the same projection during hydration. Both
 projections reuse the kit-pricing rules used by scalar prices and list totals;
 zero remains a known price and an absent derived price remains null.
+Scalar quality reads keep price evidence correlated to the requested Product;
+page enrichment must not evaluate service/category subplans for the catalog.
 Composite reads can supply statement-local presence evidence through the same
 quality-filter context used by the list scaffold and Product filters. The Work
 queue registers one materialized price relation when a compiled predicate
@@ -3296,6 +3303,46 @@ Proposal persistence locks selected live Brands against concurrent Vendor
 merge/delete; unresolved non-null references fail rather than becoming unknown.
 
 ## Product classification and photos
+
+ProductCategory's inherited `feature` also distinguishes service accounting:
+`services` and `software` Products represent ongoing access, usage or obligations.
+Bind Services on a category ancestor to cover utilities, insurance and similar
+categories; there is no per-Product service switch and category names do not
+control behavior. A child with its own different feature overrides the ancestor.
+
+Actual Expenses retain their amounts and quantities (usage, seats or other
+source units). Service quantities do not accumulate acquired stock, establish
+physical ownership, or derive a valuation/unit price. A stored Product price is
+preserved as assignment intent but supplies no effective service valuation.
+List prices, price filters, footer totals and exact valuation reads share this
+rule. Physical untracked Products keep their existing quantity and price rules.
+
+The shared Product charge report shows positive actual Expense-line counts,
+credits, refund-inclusive spending, the latest dated positive charge and a
+bounded history linked to the full Expense list. Unknown amounts and dates stay
+explicit; planned and deleted Expenses are excluded. It does not turn a bill
+average into a fixed price or infer an active subscription, coverage window or
+renewal. Web and native omit physical ownership/inventory guidance for services.
+Service identity does not require a model or external identifier; live Expenses
+already retain any Product against the orphan check. No agreement records or
+automatic bill links are introduced.
+
+The existing Product list Price column is labelled Cost. Physical Products show
+their effective item price; services show the mean of positive actual Expense
+charges, labelled per charge. Credits, zero charges and unknown amounts do not
+enter that mean. Its explanation carries the count and latest dated positive
+charge. Sorting uses the displayed amount, while the Item prices footer and all
+inventory valuation continue to exclude service averages. The detail charge
+summary shows Average charge and explains why it is not a monthly rate. Service
+Unit price and valuation fields remain visible with an applicability explanation.
+
+Full detail pages and inspectors retain all declared user-facing field sections,
+including empty ones. Missing values read Not recorded, with Add when editable;
+domain-specific inapplicable values explain why they cannot be supplied.
+Allocated references remain content even when their scalar resolution is null;
+their individual links and amounts remain visible.
+Internal fields remain excluded from the declared presentation and available
+under Technical details. Lists retain compact absence markers.
 
 `ProductCategory` is an editable, at-most-three-level tree. `Product.categoryId`
 references the most specific known node; its read-only `category` projection

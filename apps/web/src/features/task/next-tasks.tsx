@@ -49,7 +49,6 @@ function ChainNodeLink({
         displayImage={displayImage}
         entity="task"
         data={{ id: node.id, name: node.name }}
-        compact
       />
     ))
     .with("project", () => (
@@ -57,7 +56,6 @@ function ChainNodeLink({
         displayImage={displayImage}
         entity="project"
         data={{ id: node.id, name: node.name }}
-        compact
       />
     ))
     .exhaustive();
@@ -117,7 +115,6 @@ function TaskRows({
                 }
                 entity="task"
                 data={{ id: t.id, name: t.name }}
-                truncate
               />
               {t.subtaskCount > 0 && (
                 <Badge variant="outline">
@@ -154,7 +151,6 @@ function TaskRows({
                   id: t.projectId,
                   name: t.projectName,
                 }}
-                truncate
               />
             ) : (
               <span className="text-muted-foreground">—</span>

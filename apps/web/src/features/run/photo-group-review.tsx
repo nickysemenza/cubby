@@ -1085,7 +1085,6 @@ function PurchaseLineRow({ line }: { line: PurchaseLine }) {
       <span className="text-muted-foreground">·</span>
       {line.purchaseId ? (
         <EntityRefLink
-          variant="chip"
           entity="purchase"
           id={line.purchaseId}
           name={
@@ -1093,17 +1092,10 @@ function PurchaseLineRow({ line }: { line: PurchaseLine }) {
               ? line.purchaseLabel
               : "Order"
           }
-          displayImage={null}
         />
       ) : null}
       {line.vendorId && line.vendor ? (
-        <EntityRefLink
-          variant="chip"
-          entity="vendor"
-          id={line.vendorId}
-          name={line.vendor}
-          displayImage={null}
-        />
+        <EntityRefLink entity="vendor" id={line.vendorId} name={line.vendor} />
       ) : line.vendor && !line.purchaseId ? (
         <span>{line.vendor}</span>
       ) : null}
@@ -1114,7 +1106,6 @@ function PurchaseLineRow({ line }: { line: PurchaseLine }) {
           id: line.expenseId,
           name: line.cost == null ? "Price unknown" : formatCurrency(line.cost),
         }}
-        displayImage={null}
       />
       {line.productQuantity != null && line.productQuantity !== 1 ? (
         <span className="text-muted-foreground">× {line.productQuantity}</span>
@@ -1175,7 +1166,6 @@ function OnHand({ product }: { product: PhotoProductEvidence }) {
             <EntityRefLink
               entity="location"
               data={{ id: entry.location.id, name: entry.location.name }}
-              displayImage={null}
             />
           </Row>
         ))}
@@ -1244,7 +1234,7 @@ function SelectedProductEvidence({
             <EntityRefLink
               entity="product"
               data={{ id: product.id, name: product.name }}
-              displayImage={null}
+
               className="font-medium"
             />
             {product.brandName ? <p>{product.brandName}</p> : null}
@@ -1998,7 +1988,6 @@ function PhotoProductSuggestions({
           <EntityRefLink
             entity="product"
             data={{ id: closest.id, name: closest.name }}
-            displayImage={null}
           />
           <Button size="sm" variant="ghost" onClick={() => setOpen(!open)}>
             {open ? "Hide" : "Compare"}
@@ -2028,7 +2017,6 @@ function PhotoProductSuggestions({
                 <EntityRefLink
                   entity="product"
                   data={{ id: candidate.id, name: candidate.name }}
-                  displayImage={null}
                 />
               }
               trailing={
@@ -3017,7 +3005,6 @@ function SettledGroup({
                   id: proposal.committedProduct.id,
                   name: proposal.committedProduct.name,
                 }}
-                displayImage={null}
               />
             </span>
           ) : null}
@@ -3032,7 +3019,6 @@ function SettledGroup({
                     proposal.inventory?.locationName ||
                     proposal.committedInventoryId,
                 }}
-                displayImage={null}
               />
             </span>
           ) : (
@@ -3132,7 +3118,6 @@ function ExpenseLinkReview({
                   <EntityRefLink
                     entity="expense"
                     data={{ id: line.expenseId, name: line.name }}
-                    displayImage={null}
                   />
                 </p>
                 <p className="text-muted-foreground">
@@ -3599,7 +3584,6 @@ export function PhotoGroupReview({
                                     id: result.committedInventoryId,
                                     name: `${result.inventory?.quantity ?? 0} received`,
                                   }}
-                                  displayImage={null}
                                 />
                               ) : null,
                             )}

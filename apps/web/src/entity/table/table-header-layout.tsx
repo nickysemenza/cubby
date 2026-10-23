@@ -47,7 +47,6 @@ import {
 } from "~/ui/primitives/dropdown-menu";
 import { TableHead, TableRow } from "~/ui/primitives/table";
 
-import { ColumnFilterEditor } from "../../ui/data-table/column-filter-editor";
 import {
   columnWidthValue,
   columnOffsetValue,
@@ -66,6 +65,7 @@ import {
   type ColumnValueKind,
   type CubbyColumnMeta,
   hasColumnFilterEditor,
+  requestColumnFilterEdit,
 } from "../../ui/data-table/table-meta";
 
 type HeaderStyles = { header: string; sortIcon: string };
@@ -380,7 +380,12 @@ function ColumnFilterMenuItems<TData extends RowData>({
   column: Header<typeof cubbyTableFeatures, TData, unknown>["column"];
 }) {
   if (!hasColumnFilterEditor(table)) return null;
-  return <ColumnFilterEditor table={table} columnId={column.id} />;
+  return (
+    <DropdownMenuItem onClick={() => requestColumnFilterEdit(table, column.id)}>
+      <FunnelSimpleIcon aria-hidden="true" />
+      Filter…
+    </DropdownMenuItem>
+  );
 }
 
 function HeaderMenuCheck() {

@@ -66,7 +66,7 @@ describe("imported shipment source identity", () => {
               {
                 sourceEventKey: null,
                 kind: "in_transit",
-                time: { kind: "unknown" },
+                time: { kind: "date", value: "2026-06-03" },
                 rawStatus: "Your package is in transit",
                 location: null,
                 carrierId: null,
@@ -139,7 +139,7 @@ describe("imported shipment source identity", () => {
           {
             sourceEventKey: null,
             kind: "label_created",
-            time: { kind: "unknown" },
+            time: { kind: "date", value: "2026-06-03" },
             rawStatus: "Replacement package label created",
             location: null,
             carrierId: null,

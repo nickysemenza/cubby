@@ -8,7 +8,10 @@ import type { LocationType } from "@cubby/schemas/location";
 import { PencilIcon } from "@phosphor-icons/react/dist/csr/Pencil";
 import type { ReactNode } from "react";
 
-import { EntityRefLink } from "~/entity/components/entity-ref-link";
+import {
+  EntityRefLink,
+  EntityRefList,
+} from "~/entity/components/entity-ref-link";
 import { useDenseCell } from "~/ui/common/stacked-value";
 import { Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
@@ -132,7 +135,6 @@ function InventoryEntriesCellBody<
           entity="location"
           data={related}
           context={context}
-          compact
         />
       );
     }
@@ -143,7 +145,6 @@ function InventoryEntriesCellBody<
           entity="product"
           data={related}
           context={context}
-          compact
         />
       );
     }
@@ -265,7 +266,6 @@ function InventoryEntriesCellBody<
                     }
                     entity="location"
                     data={linkData}
-                    compact
                   />
                 ) : (
                   <span className="truncate">{v.name}</span>
@@ -311,8 +311,7 @@ function InventoryEntriesCellBody<
         throw new Error("Unexpected product in a location inventory cell");
       }
       return (
-        <EntityRefLink
-          variant="list"
+        <EntityRefList
           entity="location"
           items={locations}
           compact
@@ -325,8 +324,7 @@ function InventoryEntriesCellBody<
       throw new Error("Unexpected location in a product inventory cell");
     }
     return (
-      <EntityRefLink
-        variant="list"
+      <EntityRefList
         entity="product"
         items={products}
         compact

@@ -333,6 +333,12 @@ export default defineEntity({
           kind: "select",
           options: [
             {
+              value: "services",
+              label: "Services",
+              description:
+                "Utilities, insurance, subscriptions and obligations: track charges without physical stock or unit valuation",
+            },
+            {
               value: "food",
               glyph: {
                 phosphor: "ForkKnife",

@@ -31,7 +31,7 @@ import { Link } from "@tanstack/react-router";
 import { groupBy } from "es-toolkit";
 import type { ElementType, ReactNode } from "react";
 
-import { EntityRefLink } from "~/entity/components/entity-ref-link";
+import { VendorOrderLink } from "~/entity/components/entity-ref-link";
 import {
   EntityIcon,
   entityDetailLink,
@@ -1604,8 +1604,7 @@ const DECLARED_SECTIONS = [
               "Order",
               <span className="inline-flex items-center gap-1">
                 <span className="font-mono">{purchase.orderId}</span>
-                <EntityRefLink
-                  variant="order"
+                <VendorOrderLink
                   orderUrl={purchase.orderUrl}
                   orderId={purchase.orderId}
                   vendorName={purchase.vendorName}

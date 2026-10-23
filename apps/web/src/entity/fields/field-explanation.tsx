@@ -251,27 +251,13 @@ export function ExplanationEntityLink({
   name?: string | null;
 }) {
   if (name && isBrowserRoutedEntity(entity)) {
-    return (
-      <EntityRefLink variant="chip" entity={entity} id={id} name={name} wrap />
-    );
+    return <EntityRefLink entity={entity} id={id} name={name} />;
   }
   const auditable = auditEntitySchema.safeParse(entity);
   return auditable.success ? (
-    <EntityRefLink
-      variant="byId"
-      entityKind={auditable.data}
-      entityId={id}
-      name={name}
-      wrap
-    />
+    <EntityRefLink entity={auditable.data} id={id} name={name} />
   ) : isBrowserRoutedEntity(entity) ? (
-    <EntityRefLink
-      variant="chip"
-      entity={entity}
-      id={id}
-      name={name ?? id}
-      wrap
-    />
+    <EntityRefLink entity={entity} id={id} name={name ?? id} />
   ) : (
     <span className="font-mono text-xs">{id}</span>
   );

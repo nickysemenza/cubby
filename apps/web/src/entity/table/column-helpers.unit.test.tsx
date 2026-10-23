@@ -10,6 +10,7 @@ import {
   describeProductPricingSource,
   productPriceClearLabel,
   renderProductPriceValue,
+  renderProductChargeCost,
 } from "~/features/product/list-columns";
 import { formatCurrency } from "~/lib/number-format";
 import { booleanCellOptions } from "~/lib/select-options";
@@ -829,6 +830,24 @@ describe("boolean tones come from the roster, not the factory", () => {
 // and the product list column call the same three functions, so the two
 // surfaces cannot disagree about what the cell means.
 describe("Product pricing cell (explicit vs derived legibility)", () => {
+  it("labels service averages per charge and exposes the basis without a price editor", () => {
+    render(
+      <>
+        {renderProductChargeCost({
+          amount: 65,
+          label: "$65.00 / charge",
+          explanation: "Average excludes credits; not a monthly rate.",
+          chargeCount: 2,
+          latestCharge: 90,
+        })}
+      </>,
+    );
+    expect(screen.getByText("$65.00 / charge")).toBeVisible();
+    expect(
+      screen.getByLabelText(/2 charges.*Latest dated charge: \$90.00/),
+    ).toBeVisible();
+    expect(screen.queryByRole("textbox")).toBeNull();
+  });
   const explicitPricing = {
     effectivePrice: 20,
     derivedPrice: 12,

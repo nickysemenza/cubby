@@ -204,6 +204,7 @@ export function productReadSchemas<
     unitPriceLabel: listLabel,
   });
   const detail = base.extend({
+    unitPriceDetailLabel: z.string().nullish(),
     ownershipEvidence: productOwnershipEvidenceOut,
     /** Owner rollup over live inventory (`loadProductOwners`). */
     owners: resolvedListSchema,

@@ -1,11 +1,6 @@
-import type { Entity } from "@cubby/schemas/entity";
-import { shortcodeEntities } from "@cubby/schemas/entity-manifest";
 import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
-import { useQuery } from "@tanstack/react-query";
-import type { ReactNode } from "react";
 import { useMemo } from "react";
 
-import { entityFilterOptions } from "~/integrations/tanstack-query/generated/catalog/entityFilterOptions.gen";
 import { useEntityOptions } from "~/ui/hooks/use-entity-options";
 
 import { RecordEmoji } from "./record-emoji";
@@ -48,69 +43,6 @@ export function useRecordEmojiById(
     [items],
   );
   return { emojiById, isLoading };
-}
-
-const isShortcodeEntity = (value: Entity): value is ShortcodeEntity =>
-  shortcodeEntities.some((candidate) => candidate === value);
-
-/**
- * A record's emoji: `emoji` when the caller has it (`null` = known-empty),
- * else the lightweight options query's answer, `null` until it loads.
- */
-export function useResolvedRecordEmoji(
-  entity: Entity,
-  recordId: string,
-  emoji: string | null | undefined,
-  enabled = true,
-) {
-  const shortcode = isShortcodeEntity(entity) ? entity : null;
-  const { data } = useQuery({
-    ...entityFilterOptions.filterOptions.queryOptions({
-      source: "entity",
-      entity: shortcode ?? "product",
-      search: "",
-      selectedIds: [recordId],
-      include: ["emoji"],
-      limit: 1,
-    }),
-    enabled: enabled && shortcode !== null && emoji === undefined,
-  });
-  return emoji === undefined
-    ? (data?.items.find((item) => item.id === recordId)?.emoji ?? null)
-    : emoji;
-}
-
-/**
- * Resolves relation-only links through the lightweight options query.
- * Explicit emoji values skip the lookup.
- */
-export function RecordMarkById({
-  entity,
-  recordId,
-  emoji,
-  size = 14,
-  className,
-  fallback,
-}: {
-  entity: ShortcodeEntity;
-  recordId: string;
-  /** `undefined` means not loaded; `null` means known-empty. */
-  emoji?: string | null;
-  size?: RecordMarkSize;
-  className?: string;
-  fallback?: ReactNode;
-}) {
-  const resolvedIcon = useResolvedRecordEmoji(entity, recordId, emoji);
-
-  if (!resolvedIcon && fallback) return fallback;
-  return (
-    <RecordMark
-      entity={entity}
-      emoji={resolvedIcon}
-      size={size}
-      className={className}
-    />
-  );
 }
 
 export type RecordChartIdentity = {
@@ -170,32 +102,5 @@ export function RecordChartTick({
         </div>
       </foreignObject>
     </g>
-  );
-}
-
-/** References without hydrated marks use the same shared roster as identity charts. */
-export function RecordMarkByReference({
-  entity,
-  recordId,
-  emoji,
-  size = 12,
-  fallback,
-}: {
-  entity: Entity;
-  recordId: string;
-  emoji?: string | null;
-  size?: RecordMarkSize;
-  fallback?: ReactNode;
-}) {
-  return isShortcodeEntity(entity) ? (
-    <RecordMarkById
-      entity={entity}
-      recordId={recordId}
-      emoji={emoji}
-      size={size}
-      fallback={fallback}
-    />
-  ) : (
-    <RecordEmoji entity={entity} emoji={emoji} size={size} />
   );
 }

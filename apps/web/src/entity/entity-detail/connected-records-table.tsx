@@ -70,7 +70,6 @@ function RecordChip({
     );
   return (
     <EntityRefLink
-      variant="chip"
       entity={node.entityKind}
       id={node.entityId}
       name={kind ? entities[node.entityKind].label : node.label}

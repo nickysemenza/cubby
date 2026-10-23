@@ -3,6 +3,12 @@ import { useDebouncedValue } from "@tanstack/react-pacer";
 import { useQuery } from "@tanstack/react-query";
 import { useCallback, useMemo, useRef, useState } from "react";
 
+import {
+  useEntityDisplayImages,
+  useEntityDisplayImageMap,
+  entityDisplayImageKey,
+} from "~/entity/entity-media/entity-display-images";
+import { recordFilterOption } from "~/entity/filter-option-presentation";
 import { recordSource } from "~/entity/picker/picker";
 import { entityFilterOptions } from "~/integrations/tanstack-query/generated/catalog/entityFilterOptions.gen";
 import type { PickerEntity } from "~/ui/combobox/combobox-types";
@@ -60,14 +66,27 @@ export function useDeferredFilterOptions(
     );
   }, []);
 
+  const inheritedImages = useEntityDisplayImageMap();
+  const target = KIND_ENTITY[kind];
+  const images = useEntityDisplayImages(
+    (query.data?.items ?? []).map((item) => ({
+      entityKind: target,
+      entityId: item.id,
+    })),
+    inheritedImages,
+  );
   const options = useMemo(
     () =>
-      query.data?.items.map((item) => ({
-        value: item.id,
-        label: item.label,
-        detail: item.detail,
-      })) ?? [],
-    [query.data],
+      query.data?.items.map((item) =>
+        recordFilterOption(
+          target,
+          item,
+          images[
+            entityDisplayImageKey({ entityKind: target, entityId: item.id })
+          ] ?? null,
+        ),
+      ) ?? [],
+    [target, query.data, images],
   );
 
   return useMemo(

@@ -4,7 +4,10 @@ import {
 } from "@cubby/shared/collection-tag";
 import { Link } from "@tanstack/react-router";
 
-import { EntityRefLink } from "~/entity/components/entity-ref-link";
+import {
+  EntityRefLink,
+  EntityFilterLink,
+} from "~/entity/components/entity-ref-link";
 import { ProductExternalIds } from "~/entity/components/product-external-ids";
 import {
   ProductGtin,
@@ -79,11 +82,7 @@ export const productDetailFields = {
       <Row gap="sm" wrap>
         <ProductIngredientLink ingredient={product.ingredient} />
         {product.food ? (
-          <EntityRefLink
-            displayImage={null}
-            entity="usda-food"
-            data={product.food}
-          />
+          <EntityRefLink entity="usda-food" data={product.food} />
         ) : null}
       </Row>
     ) : undefined,
@@ -118,8 +117,7 @@ export const productDetailFields = {
                 </Badge>
               </Link>
             ) : (
-              <EntityRefLink
-                variant="filter"
+              <EntityFilterLink
                 key={tag}
                 to="/products"
                 search={{ tags: tag }}
@@ -128,7 +126,7 @@ export const productDetailFields = {
                 className="no-underline"
               >
                 <Badge variant="outline">{tag}</Badge>
-              </EntityRefLink>
+              </EntityFilterLink>
             );
           })}
         </Row>

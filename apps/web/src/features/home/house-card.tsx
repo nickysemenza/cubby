@@ -3,7 +3,6 @@ import { useInfiniteQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
-import { entities, entityDetailParams } from "~/entity/entities";
 import { cursorQueryOptions } from "~/integrations/tanstack-query/cursor-query-options";
 import { entityReport } from "~/integrations/tanstack-query/generated/catalog/entityReport.gen";
 import { DateDisplay } from "~/ui/common/date-display";
@@ -114,16 +113,7 @@ export function TodayAttention() {
               }
             >
               {item.id ? (
-                <EntityRefLink
-                  variant="table"
-                  tone="identity"
-                  to={entities.task.routes.detail}
-                  params={entityDetailParams(item.id)}
-                  title={item.title}
-                  className="truncate"
-                >
-                  {item.title}
-                </EntityRefLink>
+                <EntityRefLink entity="task" id={item.id} name={item.title} />
               ) : (
                 <span className="truncate">{item.title}</span>
               )}
@@ -146,18 +136,7 @@ function BriefingProjectLine({
 }) {
   if (!line) return null;
   if (line.ref?.entity === "project")
-    return (
-      <EntityRefLink
-        variant="table"
-        tone="muted"
-        to={entities.project.routes.detail}
-        params={entityDetailParams(line.ref.id)}
-        title={line.text}
-        className="min-w-0 truncate text-muted-foreground"
-      >
-        {line.text}
-      </EntityRefLink>
-    );
+    return <EntityRefLink entity="project" id={line.ref.id} name={line.text} />;
   return (
     <span className="min-w-0 truncate text-muted-foreground">{line.text}</span>
   );

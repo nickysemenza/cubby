@@ -18,6 +18,8 @@ export const shipmentContract = defineContract(
     edit_observation: mutation({
       description:
         "Partially edit one retained observation using its observationId from shipments.timeline and current Shipment reference. Supply only changed fields in patch; omitted fields and source identity remain unchanged. Appends a reviewed revision, retains original captures and history, and protects it from source replay. A superseded observation refuses a different edit; read the current revision first. Interactive members only.",
+      native: "Correct retained shipment observations from the CLI",
+      nativeModels: { input: "json", output: "json" },
       input: editShipmentObservationInput,
       output: shipmentReferenceOut,
       invalidates: ["shipment", "purchase"],

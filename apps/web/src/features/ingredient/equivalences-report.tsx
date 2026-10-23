@@ -234,7 +234,6 @@ function EquivalenceEvidence({
                 }
                 entity="recipe"
                 data={{ id: ex.recipeId, name: ex.recipeName }}
-                compact
               />
               {ex.rawLine ? (
                 <p className="text-xs text-muted-foreground">{ex.rawLine}</p>

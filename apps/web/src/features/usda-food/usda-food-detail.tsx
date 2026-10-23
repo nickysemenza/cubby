@@ -7,7 +7,7 @@ import { ScalesIcon } from "@phosphor-icons/react/dist/csr/Scales";
 import { ScrollIcon } from "@phosphor-icons/react/dist/csr/Scroll";
 import { useMemo } from "react";
 
-import { EntityRefLink } from "~/entity/components/entity-ref-link";
+import { EntityRefList } from "~/entity/components/entity-ref-link";
 import { Page } from "~/entity/page/page";
 import { USDA_KINDS } from "~/lib/conversion-coverage";
 import { sourceNutritionEstimate } from "~/lib/nutrition-format";
@@ -236,7 +236,7 @@ export const USDAFoodDetail: React.FC<{
           No associated products found
         </div>
       ) : (
-        <EntityRefLink variant="list" entity="product" items={linkedProducts} />
+        <EntityRefList entity="product" items={linkedProducts} />
       )}
     </div>
   );

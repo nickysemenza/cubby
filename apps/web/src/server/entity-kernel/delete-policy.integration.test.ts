@@ -1306,7 +1306,7 @@ async function seedShipmentReferences(
             {
               sourceEventKey: "pickup",
               kind: "carrier_possession",
-              time: { kind: "unknown" },
+              time: { kind: "date", value: "2026-06-03" },
               rawStatus: "Collected",
               location: null,
               carrierId,

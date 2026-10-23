@@ -64,14 +64,7 @@ const LazyFoodPillLink: React.FC<{ fdcId: number }> = ({ fdcId }) => {
     foodInfo: { description: `food ${fdcId}${isLoading ? "..." : ""}` },
   };
 
-  return (
-    <EntityRefLink
-      displayImage={null}
-      entity="usda-food"
-      data={displayFood}
-      compact
-    />
-  );
+  return <EntityRefLink entity="usda-food" data={displayFood} />;
 };
 
 // Component for lazy loading product data and rendering ProductPillLink
@@ -107,7 +100,6 @@ const LazyProductPillLink: React.FC<{ productId: string }> = ({
       displayImage={product.displayImages[0] ?? null}
       entity="product"
       data={product}
-      compact
     />
   );
 };

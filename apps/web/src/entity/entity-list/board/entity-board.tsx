@@ -568,7 +568,6 @@ function BoardCard({
           </button>
         )}
         <EntityRefLink
-          variant="chip"
           entity={entity}
           id={row.id}
           name={String(row[entitySummary[entity].titleField] ?? row.id)}

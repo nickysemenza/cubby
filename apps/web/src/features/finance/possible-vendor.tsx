@@ -28,7 +28,6 @@ export function PossibleVendor({
       return (
         <Row gap="sm" className="min-w-0">
           <EntityRefLink
-            variant="chip"
             entity="vendor"
             id={candidate.vendorId}
             name={candidate.vendorName}
@@ -57,7 +56,6 @@ export function PossibleVendor({
     return (
       <Stack gap="tight" className="min-w-0">
         <EntityRefLink
-          variant="chip"
           entity="vendor"
           id={candidate.vendorId}
           name={candidate.vendorName}
@@ -79,7 +77,6 @@ export function PossibleVendor({
         {inference.candidates.map((candidate) => (
           <Row as="li" key={candidate.vendorId} justify="between" gap="sm">
             <EntityRefLink
-              variant="chip"
               entity="vendor"
               id={candidate.vendorId}
               name={candidate.vendorName}

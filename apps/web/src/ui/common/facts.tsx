@@ -108,7 +108,7 @@ export function AddFactValue({
       onClick={onAdd}
       className="rounded-sm text-muted-foreground outline-none hover:text-foreground-strong hover:underline focus-visible:ring-2 focus-visible:ring-ring"
     >
-      Add…
+      Not recorded · Add…
     </button>
   );
 }

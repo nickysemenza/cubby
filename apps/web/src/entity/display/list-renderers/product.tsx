@@ -20,12 +20,7 @@ const usdaFoodLink: ListRenderer<"product"> = (helper) =>
         cell: ({ row }) => {
           const food = row.original.food;
           return food ? (
-            <EntityRefLink
-              displayImage={null}
-              entity="usda-food"
-              data={food}
-              compact
-            />
+            <EntityRefLink entity="usda-food" data={food} />
           ) : (
             <NoneValue />
           );

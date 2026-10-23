@@ -12,7 +12,7 @@ import type {
   AuditLogListOperations,
   AuditLogSession,
 } from "~/entity/audit-log/audit-log-list";
-import { EntityRefLink } from "~/entity/components/entity-ref-link";
+import { EntityAuditLink } from "~/entity/components/entity-ref-link";
 import { cursorQueryOptions } from "~/integrations/tanstack-query/cursor-query-options";
 import { auditLog } from "~/integrations/tanstack-query/generated/catalog/auditLog.gen";
 import { authClient } from "~/lib/auth-client";
@@ -245,8 +245,7 @@ function ChangeLine({ group }: { group: AuditEntry[] }) {
     <li className="flex min-w-0 items-baseline justify-between gap-3 text-sm/4.5">
       <span className="flex min-w-0 items-baseline gap-1">
         {entry.entityId ? (
-          <EntityRefLink
-            variant="audit"
+          <EntityAuditLink
             entityKind={entry.entityKind}
             entityId={entry.entityId}
             name={entry.entityName}

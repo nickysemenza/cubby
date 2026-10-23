@@ -88,6 +88,30 @@ describe("shipment evidence reconciliation", () => {
     });
   });
 
+  it("uses a single local event's date for both endpoints without inventing elapsed hours", () => {
+    const local = {
+      ...event("delivered", "2026-06-03T09:00:00Z"),
+      time: {
+        kind: "local",
+        value: "2026-06-03T09:00:00",
+        timezone: "America/Los_Angeles",
+      },
+    } satisfies ShipmentObservationInput;
+    expect(
+      shipmentEventSummary(
+        reconcileShipmentTimeline([
+          { id: "local", event: local, superseded: false },
+        ]),
+      ),
+    ).toEqual({
+      firstEventDate: "2026-06-03",
+      lastEventDate: "2026-06-03",
+      eventSpanHours: null,
+      eventSpanLabel: null,
+      eventCount: 1,
+    });
+  });
+
   it("keeps calendar-day precision for coarse endpoints, including mixed time precision", () => {
     const coarse = {
       ...event("label_created", "2026-06-01T00:00:00Z"),

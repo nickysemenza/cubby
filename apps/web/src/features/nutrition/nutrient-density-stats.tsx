@@ -160,7 +160,6 @@ export function NutrientDensityStats({
             }
             entity="product"
             data={mappingProduct}
-            compact
           />{" "}
           to price per gram protein
         </Description>

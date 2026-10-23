@@ -11,7 +11,6 @@ import {
   useViewCounts,
   withFacets,
 } from "~/entity/table/list-query-context";
-import { usePublishColumnFilters } from "~/ui/data-table/column-filter-editor";
 
 import {
   FilterBar,
@@ -170,17 +169,6 @@ export function LedgerFilters<TData extends RowData>({
     fields,
     commit,
   });
-
-  usePublishColumnFilters(
-    table,
-    {
-      fields,
-      filters: draftFilters,
-      onChange: handleChange,
-      onEditorChange: setOpenEditor,
-    },
-    variant === "desktop",
-  );
 
   const pluralLower =
     entity && isBrowserRoutedEntity(entity)

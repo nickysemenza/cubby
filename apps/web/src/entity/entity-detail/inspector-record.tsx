@@ -1,7 +1,4 @@
-import {
-  entityFieldModels,
-  type EntityFieldModel,
-} from "@cubby/schemas/entity-fields";
+import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import { entitySummary } from "@cubby/schemas/entity-summary";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
@@ -9,7 +6,6 @@ import { useEffect, useState } from "react";
 import { z } from "zod";
 
 import type { EntityActionRow } from "~/entity/actions/entity-actions";
-import { detailFieldRenderersFor } from "~/entity/display/detail-field-renderers";
 import { detailEditRequest } from "~/entity/editing/editor-requests";
 import {
   EntityEditDialog,
@@ -24,7 +20,6 @@ import {
 import { isGeneratedBrowserCrudEntity } from "~/entity/entity-contracts";
 import { entityDetailFor } from "~/entity/entity-detail";
 import { PreviewQuery } from "~/entity/preview/preview-query";
-import { readPathValue } from "~/entity/read-path";
 import { RecordSuggestionsProvider } from "~/entity/suggestions/record-suggestions";
 import { RecordWorkQueue } from "~/entity/work-queue/record-work-queue";
 import { FactsAddProvider, FactsDensityProvider } from "~/ui/common/facts";
@@ -36,15 +31,11 @@ import type { DetailRecordOf, GenericDetailEntity } from "./detail-record";
 import { DetailSummary } from "./detail-summary";
 import { EntityRecordFields } from "./entity-record-fields";
 import {
-  fieldQualityChecks,
   QualitySectionChecks,
-  type RecordQualityCheck,
   RecordQualityProvider,
-  useFieldQuality,
   useQualityCheckSections,
 } from "./record-quality";
 
-type DisplayField = EntityFieldModel["fields"][number];
 type FieldSection = { id: string; title: string; fields: readonly string[] };
 
 function presentationEditable(
@@ -58,82 +49,26 @@ function presentationEditable(
   );
 }
 
-const isBlank = (value: unknown) =>
-  value === null ||
-  value === undefined ||
-  value === "" ||
-  (Array.isArray(value) && value.length === 0);
-
-/**
- * Whether a declared field section would render nothing but dashes: every
- * field's stored value is blank, none can be added or edited in place, no
- * domain renderer owns one, and no check is placed on the section or its
- * fields. Undeclared or renderer-only fields count as content.
- */
-function isEmptyFieldSection<E extends GenericDetailEntity>(
-  entity: E,
-  record: DetailRecordOf<E>,
-  section: FieldSection,
-  {
-    editable,
-    checkSections,
-    checks,
-  }: {
-    editable: boolean;
-    checkSections: readonly string[];
-    checks: readonly RecordQualityCheck[];
-  },
-) {
-  if (checkSections.includes(section.id)) return false;
-  const model: EntityFieldModel = entityFieldModels[entity];
-  const updateRoster: readonly string[] = model.update;
-  const crud = isGeneratedBrowserCrudEntity(entity);
-  const renderers = detailFieldRenderersFor(entity) ?? {};
-  const fields: readonly DisplayField[] = model.fields;
-  return section.fields.every((key) => {
-    const field = fields.find((candidate) => candidate.key === key);
-    if (!field || key in renderers) return false;
-    if (fieldQualityChecks(checks, key).length > 0) return false;
-    if (field.control && (editable || (crud && updateRoster.includes(key))))
-      return false;
-    const path = field.display.readPath ?? field.readKey;
-    return path !== null && isBlank(readPathValue(record, path));
-  });
-}
-
-/** The declared field sections with content, each under a hairline. */
+/** Keep every declared field section visible, including missing values. */
 function InspectorFieldSections<E extends GenericDetailEntity>({
   entity,
   record,
   sections,
-  editable,
 }: {
   entity: E;
   record: DetailRecordOf<E>;
   sections: readonly FieldSection[];
-  editable: boolean;
 }) {
-  const checkSections = useQualityCheckSections();
-  const checks = useFieldQuality(entity, record.id)?.checks ?? [];
-  return sections
-    .filter(
-      (section) =>
-        !isEmptyFieldSection(entity, record, section, {
-          editable,
-          checkSections,
-          checks,
-        }),
-    )
-    .map((section) => (
-      <Section key={section.id} headingAs="h3" compact title={section.title}>
-        <QualitySectionChecks section={section.id} />
-        <EntityRecordFields
-          entity={entity}
-          record={record}
-          fields={section.fields}
-        />
-      </Section>
-    ));
+  return sections.map((section) => (
+    <Section key={section.id} headingAs="h3" compact title={section.title}>
+      <QualitySectionChecks section={section.id} />
+      <EntityRecordFields
+        entity={entity}
+        record={record}
+        fields={section.fields}
+      />
+    </Section>
+  ));
 }
 
 /** Sections only the record's evaluated checks bring into the inspector. */
@@ -251,7 +186,6 @@ function ResolvedInspectorRecord<E extends GenericDetailEntity>({
                   entity={entity}
                   record={record}
                   sections={fieldSections}
-                  editable={editable}
                 />
                 <InspectorCheckSections
                   entity={entity}

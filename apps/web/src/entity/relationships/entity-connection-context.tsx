@@ -65,7 +65,6 @@ function ResolvedContext({
   const recordLink = (node: (typeof refs)[number]) =>
     isBrowserRoutedEntity(node.entityKind) ? (
       <EntityRefLink
-        variant="chip"
         entity={node.entityKind}
         id={node.entityId}
         name={node.label}

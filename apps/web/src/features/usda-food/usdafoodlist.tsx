@@ -3,7 +3,7 @@ import { usdaListInput } from "@cubby/schemas/usda";
 import { type DataType, dataTypeLabel } from "@cubby/usda";
 import { useCallback, useEffect, useMemo } from "react";
 
-import { EntityRefLink } from "~/entity/components/entity-ref-link";
+import { EntityRouteLink } from "~/entity/components/entity-ref-link";
 import { EntityShelf } from "~/entity/entity-list/entity-shelf";
 import {
   useEntityListCardDensity,
@@ -152,14 +152,13 @@ export function USDAFoodList({
               mobile: { slot: "trailing", priority: 20 },
             },
             cell: (info) => (
-              <EntityRefLink
-                variant="table"
+              <EntityRouteLink
                 tone="mono"
                 to="/usda/$id"
                 params={{ id: String(info.getValue()) }}
               >
                 {info.getValue()}
-              </EntityRefLink>
+              </EntityRouteLink>
             ),
           }),
         );
@@ -229,14 +228,13 @@ export function USDAFoodList({
               const upc = info.getValue();
               if (!upc) return <NoneValue />;
               return (
-                <EntityRefLink
-                  variant="table"
+                <EntityRouteLink
                   to="/usda/upc/$code"
                   params={{ code: upc }}
                   tone="mono"
                 >
                   {upc}
-                </EntityRefLink>
+                </EntityRouteLink>
               );
             },
           }),

@@ -177,7 +177,7 @@ function ProjectScheduleSurface({
                 })
               ] ?? null
             }
-            truncate
+
             className="min-w-0 flex-1"
           />
           {count > 0 && (

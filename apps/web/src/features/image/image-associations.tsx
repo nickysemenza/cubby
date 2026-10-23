@@ -16,7 +16,6 @@ const roleLabel = {
 
 function ImageAssociationLink({
   association,
-  compact,
   showRole,
   displayImages,
 }: {
@@ -35,14 +34,12 @@ function ImageAssociationLink({
         displayImage={displayImage}
         entity="purchase"
         data={{ id: entityId, orderId: entityName }}
-        compact={compact}
       />
     ) : (
       <EntityRefLink
         displayImage={displayImage}
         entity={entityKind}
         data={{ id: entityId, name: entityName }}
-        compact={compact}
       />
     );
 
@@ -60,7 +57,6 @@ function ImageAssociationLink({
 
 export function ImageAssociationLinks({
   associations,
-  compact,
   showRole,
 }: {
   associations: ImageAssociation[];
@@ -81,7 +77,6 @@ export function ImageAssociationLinks({
         <ImageAssociationLink
           key={`${association.entityKind}:${association.entityId}:${association.role}`}
           association={association}
-          compact={compact}
           showRole={showRole}
           displayImages={displayImages}
         />

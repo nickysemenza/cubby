@@ -16,6 +16,7 @@ import {
   hydrateProductLocationBreadcrumbs,
 } from "~/server/domains/product/repo/crud";
 import { foodLookupParamFromProduct } from "~/server/domains/product/repo/helpers";
+import { productUnitPriceDetailLabel } from "~/server/domains/product/repo/list-enrichment";
 import {
   dbProductToAPI,
   primaryGtinOf,
@@ -87,7 +88,11 @@ export async function readProductDetail(
         : Promise.resolve(null);
     },
   );
-  const ownershipPromise = loadProductOwnershipEvidence(context.db, row.id);
+  const ownershipPromise = loadProductOwnershipEvidence(
+    context.db,
+    row.id,
+    row.category,
+  );
   const ownersPromise = loadProductOwners(context.db, [row.id]);
   const pricingPromise = observeOperationPhase(
     PRODUCT_DETAIL_OPERATION,
@@ -194,6 +199,7 @@ export async function readProductDetail(
   );
   return {
     ...mapped,
+    unitPriceDetailLabel: productUnitPriceDetailLabel({ ...mapped, food }),
     ownershipEvidence: ownership,
     owners: owners.get(row.id) ?? [],
     nutritionDisplay: buildNutritionDisplay({

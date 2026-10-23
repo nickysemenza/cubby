@@ -183,18 +183,23 @@ private struct ProductJourneySummaryView: View {
     @Environment(AppModel.self) private var appModel
 
     private var ownPhotos: Int { product.attachments.filter { $0.source == .own }.count }
+    private var isService: Bool {
+        product.category?.feature == .services || product.category?.feature == .software
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
             Text(
-                product.ownershipEvidence.state == .exited
-                    ? "Recorded ownership ended\(product.ownershipEvidence.exitedAt.map { " on \($0.rawValue)" } ?? "")."
-                    : product.ownershipEvidence.state == .owned
-                        ? "Recorded movements establish ownership."
-                        : "Ownership is uncertain: recorded movements do not establish the current quantity."
+                isService
+                    ? "Actual Expenses record charge history; bill amounts may vary."
+                    : product.ownershipEvidence.state == .exited
+                        ? "Recorded ownership ended\(product.ownershipEvidence.exitedAt.map { " on \($0.rawValue)" } ?? "")."
+                        : product.ownershipEvidence.state == .owned
+                            ? "Recorded movements establish ownership."
+                            : "Ownership is uncertain: recorded movements do not establish the current quantity."
             )
             .font(.subheadline)
-            if product.ownershipEvidence.state != .exited {
+            if !isService && product.ownershipEvidence.state != .exited {
                 Label(
                     ownPhotos == 0 ? "Add an item photo" : "\(ownPhotos) own photos",
                     systemImage: ownPhotos == 0 ? "circle.dotted" : "checkmark.circle.fill"
@@ -207,6 +212,8 @@ private struct ProductJourneySummaryView: View {
                         : "Inventory recorded",
                     systemImage: (product.onHandUnits ?? 0) <= 0 ? "circle.dotted" : "checkmark.circle.fill"
                 )
+            }
+            if isService || product.ownershipEvidence.state != .exited {
                 Link(
                     "Review purchase and statement",
                     destination: appModel.webURL(for: .product, id: product.id.rawValue))

@@ -1,5 +1,6 @@
 import { type ComponentProps, useState } from "react";
 
+import { recordFilterOption } from "~/entity/filter-option-presentation";
 import { GapChipCluster } from "~/entity/work-queue/work-queue-display";
 import { ChipCluster } from "~/ui/common/chip-cluster";
 import { DateDisplay } from "~/ui/common/date-display";
@@ -13,6 +14,7 @@ import { Panel } from "~/ui/layout/panel";
 import { EnumPill } from "~/ui/primitives/enum-pill";
 
 import { Demo, DemoGrid } from "../components/design-section";
+import { demoProducts } from "../data/samples";
 import {
   demoCategoryOptions,
   demoGaps,
@@ -32,6 +34,45 @@ const FILTER_FIELDS: FilterBarField[] = [
     label: "Status",
     type: "select",
     options: demoStatusOptions.filter((option) => !option.meta),
+  },
+  {
+    key: "purchase",
+    label: "Purchase",
+    type: "multiselect",
+    valueType: "entity",
+    referenceEntity: "purchase",
+    options: [
+      recordFilterOption(
+        "purchase",
+        {
+          id: "PUR-2222",
+          label: "Autumn wardrobe",
+          detail: "Example Apparel · Oct 12, 2026",
+          count: 8,
+        },
+        demoProducts[0]?.images[0] ?? null,
+      ),
+      recordFilterOption(
+        "purchase",
+        {
+          id: "PUR-3333",
+          label: "Boots and care supplies",
+          detail: "Example Outfitters · Sep 24, 2026",
+          count: 3,
+        },
+        demoProducts[1]?.images[0] ?? null,
+      ),
+      recordFilterOption(
+        "purchase",
+        {
+          id: "PUR-4444",
+          label: "Replacement hardware",
+          detail: "Example Hardware · Sep 18, 2026",
+          count: 2,
+        },
+        null,
+      ),
+    ],
   },
   { key: "location", label: "Location", type: "text" },
 ];
@@ -152,7 +193,7 @@ export function ValuesSection() {
         </Demo>
         <Demo
           name="<FilterBar fields filters />"
-          note="The manifest filter bar: search, Filter · N opening the grouped panel, and one chip per active filter. Edits apply as they are made."
+          note="One focused editor from Filters, headers, or active chips. Record identity, context and facet counts stay separate; edits apply immediately."
           className="md:col-span-2"
         >
           <FilterBar

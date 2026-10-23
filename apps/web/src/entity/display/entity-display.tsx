@@ -27,7 +27,10 @@ import prettyBytes from "pretty-bytes";
 import { Fragment, type ReactNode } from "react";
 import { z } from "zod";
 
-import { EntityRefLink } from "~/entity/components/entity-ref-link";
+import {
+  EntityRefLink,
+  EntityFilterLink,
+} from "~/entity/components/entity-ref-link";
 import { ReferencePreview } from "~/entity/components/reference-preview";
 import {
   fieldQualityChecks,
@@ -141,7 +144,8 @@ const isProseField = (key: string, control: DisplayField["control"]) =>
 
 function renderProseValue(value: ScalarDisplayValue, surface: DisplaySurface) {
   if (value.kind !== "text") return renderScalarValue(value, surface);
-  if (!value.label) return <NoneValue />;
+  if (!value.label)
+    return surface === "detail" ? "Not recorded" : <NoneValue />;
   return surface === "list" ? (
     <span className="block truncate" title={value.label}>
       <ShortcodeProse>{value.label}</ShortcodeProse>
@@ -268,7 +272,10 @@ function renderFormattedScalar(
   }
   if (value.kind === "empty")
     return (
-      context?.field.display.emptyLabel ?? renderScalarValue(value, surface)
+      context?.field.display.emptyLabel ??
+      (surface === "detail"
+        ? "Not recorded"
+        : renderScalarValue(value, surface))
     );
   switch (format) {
     // Known counts read literally: `0` is a fact, never a dash.
@@ -388,13 +395,17 @@ function resolutionEmptyLabel(
   entity: Entity,
   record: unknown,
   field: DisplayField,
+  explainMissing = false,
 ): ReactNode {
   const resolution = fieldResolutionFor(record, field.key);
   if (!resolution || resolution.value !== null) return null;
+  // Allocations have multiple reference values rather than one scalar value.
+  if (resolution.mode === "allocated") return null;
   const labels = resolutionPolicyFor(entity, field.key)?.labels;
   const label =
     resolution.mode === "inherit" ? labels?.unresolved : labels?.none;
-  return label ? <span className="text-muted-foreground">{label}</span> : null;
+  const text = label ?? (explainMissing ? resolution.source : null);
+  return text ? <span className="text-muted-foreground">{text}</span> : null;
 }
 
 /**
@@ -616,12 +627,10 @@ function referenceLink(
     );
   return (
     <EntityRefLink
-      variant="chip"
       entity={routed}
       id={item.id}
       name={item.name}
       emoji={item.emoji}
-      compact={compact}
     />
   );
 }
@@ -655,13 +664,7 @@ export function renderSuggestedListFieldValue<TRecord extends { id: string }>(
     // manifest entry and is a member of the audit entity-kind roster.
     const entityKind = field.reference.entity as AuditEntityKind;
     return (
-      <EntityRefLink
-        variant="byId"
-        entityKind={entityKind}
-        entityId={referenceId.data}
-        name={label}
-        compact
-      />
+      <EntityRefLink entity={entityKind} id={referenceId.data} name={label} />
     );
   }
   if (label) return <span className="min-w-0 truncate">{label}</span>;
@@ -695,14 +698,14 @@ export function renderDetailFieldValue<TRecord extends object>(
   field: DisplayField,
 ): ReactNode {
   if (field.kind === "dateRange") return renderDateRangeValue(record, field);
-  const emptyLabel = resolutionEmptyLabel(entity, record, field);
+  const emptyLabel = resolutionEmptyLabel(entity, record, field, true);
   if (emptyLabel) return emptyLabel;
   if (field.display.itemsPath) {
     const parsed = displayItems.safeParse(
       readPathValue(record, field.display.itemsPath),
     );
     const items = parsed.success ? (parsed.data ?? []) : [];
-    if (items.length === 0) return <NoneValue />;
+    if (items.length === 0) return "Not recorded";
     return (
       <RecordList>
         {items.map((item) => (
@@ -724,7 +727,7 @@ export function renderDetailFieldValue<TRecord extends object>(
   if (field.display.detailLabelPath) {
     const label = readLabel(record, field.display.detailLabelPath);
     return label === null ? (
-      <NoneValue />
+      <>Not recorded</>
     ) : (
       <span className="whitespace-pre-line">{label}</span>
     );
@@ -735,7 +738,11 @@ export function renderDetailFieldValue<TRecord extends object>(
       reference.items.length === 0 &&
       !reference.unclassifiedAllocations?.length
     )
-      return reference.incomplete ? <span>Unclassified</span> : <NoneValue />;
+      return reference.incomplete ? (
+        <span>Unclassified</span>
+      ) : (
+        <>Not recorded</>
+      );
     return (
       <>
         {referenceBrowse(record, field)}
@@ -914,8 +921,7 @@ function cohortFilterAction<TRecord extends object>(
   const recordId = explainedRecordSchema.safeParse(record);
   if (countFilter !== null && recordId.success) {
     return (
-      <EntityRefLink
-        variant="filter"
+      <EntityFilterLink
         to={countFilter.to}
         search={countFilter.search(recordId.data.id)}
         label={`Show all ${countFilter.plural}`}
@@ -930,8 +936,7 @@ function cohortFilterAction<TRecord extends object>(
   const plural = entityPluralLabel(entity).toLocaleLowerCase();
   const label = field.label.toLocaleLowerCase();
   const linkTo = (value: string, text: string) => (
-    <EntityRefLink
-      variant="filter"
+    <EntityFilterLink
       key={value}
       to={entities[entity].routes.list}
       search={{ [urlKey]: value }}
@@ -1213,11 +1218,11 @@ export function EntityBasicInfo<TRecord extends object>({
         const decoratedValue = field.control?.suggest ? (
           <span className="inline-flex max-w-full min-w-0 items-center gap-1">
             <RecordFieldSuggestion record={record} field={field.key}>
-              {rendered.value ?? <NoneValue />}
+              {rendered.value ?? "Not recorded"}
             </RecordFieldSuggestion>
           </span>
         ) : (
-          (rendered.value ?? <NoneValue />)
+          (rendered.value ?? "Not recorded")
         );
         return [
           {
@@ -1419,9 +1424,11 @@ function renderEditableField<TRecord extends object>(
     (candidate) => candidate.key === field.key,
   );
   const displayed = (rendered: ReactNode) =>
-    resolution && displayField
-      ? renderCompactFieldValue(entity, record, displayField)
-      : rendered;
+    surface === "detail" && displayField
+      ? renderDetailFieldValue(entity, record, displayField)
+      : resolution && displayField
+        ? renderCompactFieldValue(entity, record, displayField)
+        : rendered;
   switch (clipboard.kind) {
     case "text":
     case "textarea": {
@@ -2337,8 +2344,7 @@ export function createEntityDisplayColumns<TRecord extends object>(
               )
                 return rendered;
               return (
-                <EntityRefLink
-                  variant="filter"
+                <EntityFilterLink
                   display="value"
                   to={countFilter.to}
                   search={countFilter.search(recordId.data.id)}
@@ -2346,7 +2352,7 @@ export function createEntityDisplayColumns<TRecord extends object>(
                   className="tabular-nums"
                 >
                   {rendered}
-                </EntityRefLink>
+                </EntityFilterLink>
               );
             },
           },

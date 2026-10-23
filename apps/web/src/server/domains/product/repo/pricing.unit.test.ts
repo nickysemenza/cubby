@@ -13,7 +13,7 @@ describe("resolveProductPricing", () => {
         unknownExpenseCount: 0,
         knownUnitCount: 5,
       }),
-    ).toEqual({
+    ).toMatchObject({
       derivedPrice: 6.8,
       effectivePrice: 6.8,
       source: "derived",
@@ -32,7 +32,7 @@ describe("resolveProductPricing", () => {
         unknownExpenseCount: 2,
         knownUnitCount: 3,
       }),
-    ).toEqual({
+    ).toMatchObject({
       derivedPrice: 3.33,
       effectivePrice: 9.99,
       source: "explicit",
@@ -51,7 +51,7 @@ describe("resolveProductPricing", () => {
         unknownExpenseCount: 3,
         knownUnitCount: 0,
       }),
-    ).toEqual({
+    ).toMatchObject({
       derivedPrice: null,
       effectivePrice: null,
       source: "none",

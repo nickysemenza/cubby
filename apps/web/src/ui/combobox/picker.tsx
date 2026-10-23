@@ -379,7 +379,7 @@ const popupClass = cn(
 const popupWidthClass = (records: boolean, layout: PickerRowLayout) =>
   records
     ? "w-[max(var(--anchor-width),36rem)] max-w-[min(var(--available-width),calc(100vw-16px))]"
-    : // Each secondary/trailing column takes 7.5rem; under the 16rem cap a
+    : // Secondary/trailing columns can take 7.5rem; under the 16rem cap a
       // counted roster (a compact quick filter's accounts) wrapped its labels
       // one word per line.
       layout.secondary || layout.trailing > 0
@@ -426,7 +426,7 @@ function PickerChipView({ chip }: { chip: PickerChip }) {
   return (
     <span
       className={cn(
-        "h-5 max-w-full min-w-0 shrink truncate rounded-[3px] px-1.5 font-mono text-xs leading-5 tabular-nums",
+        "h-5 max-w-30 min-w-0 shrink truncate rounded-[3px] px-1.5 font-mono text-xs leading-5 tabular-nums",
         chipToneClass[chip.tone ?? "neutral"],
       )}
     >
@@ -446,7 +446,7 @@ function PickerRowContent<TId extends string>({
 }) {
   const presentation = item.presentation;
   const style: React.CSSProperties & { "--picker-columns": string } = {
-    "--picker-columns": `minmax(0,1fr)${layout.secondary ? " 7.5rem" : ""}${" 7.5rem".repeat(layout.trailing)}`,
+    "--picker-columns": `minmax(0,1fr)${layout.secondary ? " 7.5rem" : ""}${" minmax(0,max-content)".repeat(layout.trailing)}`,
   };
   if (renderItem)
     return <span className="min-w-0 flex-1">{renderItem(item)}</span>;

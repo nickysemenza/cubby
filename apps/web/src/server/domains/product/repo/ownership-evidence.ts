@@ -1,5 +1,9 @@
 import type { ProductId } from "@cubby/schemas/identifiers";
 import type { ProductOwnershipEvidenceOut } from "@cubby/schemas/product";
+import {
+  isServiceProductCategory,
+  type ProductCategorySummary,
+} from "@cubby/schemas/product-category-fields";
 
 import type { ProductOwnershipTimeline } from "~/lib/tool-timeline";
 import type { Database } from "~/server/db";
@@ -11,7 +15,15 @@ import { loadProductOwnershipQuantityEvidence } from "./quantity-ledger";
 export async function loadProductOwnershipEvidence(
   db: Database,
   id: ProductId,
+  category: ProductCategorySummary | null,
 ): Promise<ProductOwnershipEvidenceOut> {
+  if (isServiceProductCategory(category))
+    return {
+      state: "uncertain",
+      acquiredAt: null,
+      exitedAt: null,
+      confidenceLostAt: null,
+    };
   const [timelines, quantities] = await Promise.all([
     loadProductOwnershipTimelines(getDb(db), [id]),
     loadProductOwnershipQuantityEvidence(db, [id]),

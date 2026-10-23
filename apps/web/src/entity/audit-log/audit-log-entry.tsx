@@ -6,7 +6,10 @@ import { countLabel } from "@cubby/shared/pluralize";
 import { RobotIcon } from "@phosphor-icons/react/dist/csr/Robot";
 import { sortBy } from "es-toolkit";
 
-import { EntityRefLink } from "~/entity/components/entity-ref-link";
+import {
+  EntityRefLink,
+  EntityAuditLink,
+} from "~/entity/components/entity-ref-link";
 import { categoryReference } from "~/entity/presentation/category-reference";
 import { dateSpanParts } from "~/lib/date-span";
 import { formatCount } from "~/lib/number-format";
@@ -219,8 +222,7 @@ function LedgerValueText({
     );
     if (category) return category;
     return (
-      <EntityRefLink
-        variant="audit"
+      <EntityAuditLink
         entityKind={parsed.type}
         entityId={parsed.shortcode}
         name={reference.name}
@@ -353,11 +355,10 @@ export const auditFacts = (entry: AuditLogEntry): Fact[] => [
           label: "Run",
           value: (
             <EntityRefLink
-              variant="chip"
               entity="run"
               id={entry.runId}
               name={entry.runId}
-              displayImage={null}
+
               emoji={null}
             />
           ),
@@ -442,8 +443,7 @@ export function AuditRecordRow({
       primary={
         <>
           {showEntityLink && entry.entityId ? (
-            <EntityRefLink
-              variant="audit"
+            <EntityAuditLink
               entityKind={entry.entityKind}
               entityId={entry.entityId}
               name={entry.entityName}

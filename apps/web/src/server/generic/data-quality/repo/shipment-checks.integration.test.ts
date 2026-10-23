@@ -1,11 +1,12 @@
 import type { ShipmentObservationInput } from "@cubby/schemas/shipment-evidence";
-import { eq, sql } from "drizzle-orm";
+import { datedShipmentEventTime } from "@cubby/schemas/shipment-evidence";
+import { and, eq, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
 import { unwrapDb } from "~/server/db/helpers";
-import { shipment } from "~/server/db/schema";
+import { shipment, shipmentObservation } from "~/server/db/schema";
 import { listShipmentsRead } from "~/server/domains/shipment/repo/entity-repository";
 import {
   canonicalShipment,
@@ -71,6 +72,9 @@ describe("Shipment evidence quality", () => {
             purpose: "outbound",
             observations: observations.map((observation, index) => ({
               ...observation,
+              time: datedShipmentEventTime.safeParse(observation.time).success
+                ? observation.time
+                : day("2026-06-01"),
               sourceEventKey: `event-${index}`,
             })),
           },
@@ -79,7 +83,23 @@ describe("Shipment evidence quality", () => {
       ctx.actor,
     );
     const code = result.shipmentIds[0]!;
-    return { code, row: await canonicalShipment(ctx.db, code) };
+    const row = await canonicalShipment(ctx.db, code);
+    // Legacy undated rows remain readable, but the current writer correctly refuses creating them.
+    for (const [index, observation] of observations.entries()) {
+      if (!datedShipmentEventTime.safeParse(observation.time).success)
+        await unwrapDb(ctx.db)
+          .update(shipmentObservation)
+          .set({
+            event: { ...observation, sourceEventKey: `event-${index}` },
+          })
+          .where(
+            and(
+              eq(shipmentObservation.shipmentId, row.id),
+              eq(shipmentObservation.sourceEventKey, `event-${index}`),
+            ),
+          );
+    }
+    return { code, row };
   };
 
   it("requires shipped, delivered, dated, consistent evidence spanning strictly over one day", async () => {
@@ -128,6 +148,18 @@ describe("Shipment evidence quality", () => {
       },
       {
         events: [
+          shipped,
+          event("delivered", {
+            kind: "local",
+            value: "2026-06-03T09:00:00",
+            timezone: "America/Los_Angeles",
+          }),
+        ],
+        score: 100,
+        gaps: [],
+      },
+      {
+        events: [
           event("carrier_possession", day("2026-06-01")),
           event("delivered", day("2026-06-02")),
         ],
@@ -141,6 +173,18 @@ describe("Shipment evidence quality", () => {
       },
       {
         events: [event("carrier_possession", { kind: "unknown" }), delivered],
+        score: 80,
+        gaps: ["shipment_dates", "shipment_span"],
+      },
+      {
+        events: [
+          event("carrier_possession", {
+            kind: "local",
+            value: "Wednesday morning",
+            timezone: null,
+          }),
+          delivered,
+        ],
         score: 80,
         gaps: ["shipment_dates", "shipment_span"],
       },
@@ -212,7 +256,7 @@ describe("Shipment evidence quality", () => {
     }
   });
 
-  it("re-evaluates current revisions and retains an unknown date gap without inventing capture dates", async () => {
+  it("re-evaluates current revisions using dated local clocks without inventing exact times", async () => {
     const parcel = await seed([shipped, delivered]);
     const timeline = await readShipmentTimeline(ctx.db, parcel.code);
     await editShipmentObservation(
@@ -223,7 +267,7 @@ describe("Shipment evidence quality", () => {
           (observation) => observation.kind === "delivered",
         )!.observationId,
         patch: {
-          time: { kind: "local", value: "Wednesday morning", timezone: null },
+          time: { kind: "local", value: "2026-06-03T09:00:00", timezone: null },
         },
       },
       ctx.actor,
@@ -231,9 +275,7 @@ describe("Shipment evidence quality", () => {
     const quality = (
       await loadDataQualities(ctx.db, "shipment", [parcel.row.id])
     ).get(parcel.row.id)!;
-    expect(quality.gaps.map((gap) => gap.check)).toEqual(
-      expect.arrayContaining(["shipment_span", "shipment_dates"]),
-    );
+    expect(quality.gaps).toHaveLength(0);
     expect(quality.gaps.map((gap) => gap.check)).not.toContain(
       "shipment_chronology",
     );
@@ -241,6 +283,6 @@ describe("Shipment evidence quality", () => {
       (await readShipmentTimeline(ctx.db, parcel.code)).timeline,
     );
     expect(current.eventCount).toBe(2);
-    expect(current.eventSpanHours).toBeNull();
+    expect(current.eventSpanHours).toBe(48);
   });
 });

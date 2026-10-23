@@ -450,7 +450,6 @@ function NextWork({ tasks }: { tasks: TaskOut[] }) {
                   }
                   entity="project"
                   data={{ id: task.projectId, name: task.projectName }}
-                  truncate
                 />
               </span>
             )}

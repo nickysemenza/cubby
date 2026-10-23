@@ -9,7 +9,7 @@ import { WrenchIcon } from "@phosphor-icons/react/dist/csr/Wrench";
 import { Link } from "@tanstack/react-router";
 import { sumBy } from "es-toolkit";
 
-import { EntityRefLink } from "~/entity/components/entity-ref-link";
+import { EntityFilterLink } from "~/entity/components/entity-ref-link";
 import { Panel, Row } from "~/ui/layout";
 import { Image } from "~/ui/primitives/image";
 
@@ -29,8 +29,7 @@ function RecipeSourceBadges({ recipe }: { recipe: RecipeOut }) {
       {recipe.source?.type === "book" && (
         <Row align="center" gap="tight">
           <RecipeSourceLink source={recipe.source} iconSize={12} />
-          <EntityRefLink
-            variant="filter"
+          <EntityFilterLink
             to="/recipes"
             search={
               recipe.source.cookbookId
@@ -46,24 +45,21 @@ function RecipeSourceBadges({ recipe }: { recipe: RecipeOut }) {
         </Row>
       )}
       {recipe.source?.type === "website" && (
-        <EntityRefLink
-          variant="filter"
+        <EntityFilterLink
           to="/recipes"
           search={{ sourceType: "Website" }}
           label="Show all recipes from websites"
         />
       )}
       {recipe.source?.type === "notion" && (
-        <EntityRefLink
-          variant="filter"
+        <EntityFilterLink
           to="/recipes"
           search={{ sourceType: "Notion" }}
           label="Show all recipes from Notion"
         />
       )}
       {recipe.source?.type === "other" && (
-        <EntityRefLink
-          variant="filter"
+        <EntityFilterLink
           to="/recipes"
           search={{ sourceType: "Other" }}
           label="Show all recipes from other sources"
