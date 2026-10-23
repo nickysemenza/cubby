@@ -67,10 +67,10 @@ constrained desktop and phone widths, then drives the shared action/editor dialo
 once on the phone. Do not repeat full navigation or seed an unrelated Product list
 for header coverage; category navigation stays in the emoji/category journey.
 
-The all-matching bulk-edit browser owner uses a one-row page with two matching
-Tasks and one outside its filter. Hold the next-page response until admission;
-read back both matching writes and the untouched outside row. Filling the default
-hundred-row page adds setup work without strengthening that unloaded-row contract.
+Infinite entity lists disable URL pagination synchronization; `pageSize` in a
+list URL does not shrink their loaded page. Unloaded-selection browser fixtures
+must cross the actual default page boundary and hold the next-page response
+until admission. Do not shrink that cohort using an ignored URL parameter.
 
 For a same-kind fixture cohort without intermediate reads, use
 `createEntityFixtures`; it writes through the kernel in one transaction and

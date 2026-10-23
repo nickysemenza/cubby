@@ -12,6 +12,7 @@ import {
   seedUnlinkedExpensePrerequisite,
 } from "./fixtures/catalog";
 import { createEntityFixture, createEntityFixtures } from "./fixtures/core";
+import { defaultPagination } from "~/ui/data-table/table-utils";
 import { BROWSER_OPERATION_PATH } from "~/lib/browser-operation-path";
 import {
   dispatchesOperation,
@@ -78,15 +79,14 @@ test("task board multi-select bulk-edits status without touching other fields", 
   }
 });
 
-// Cross one page boundary with the smallest cohort: the write must include
-// the unloaded record and preserve the filter scope without hydrating it.
+// Cross exactly one default page boundary: the write must include the unloaded
+// record and preserve the filter scope without hydrating rows just to select.
 test("all matching selection bulk-edits unloaded tasks within the active scope", async ({
   page,
 }) => {
   test.slow();
   const prefix = uniqueName(test.info(), "Complete matching tasks");
-  const pageSize = 1;
-  const count = pageSize + 1;
+  const count = defaultPagination.pageSize + 1;
   const selected = await createEntityFixtures(
     page,
     "task",
@@ -125,7 +125,7 @@ test("all matching selection bulk-edits unloaded tasks within the active scope",
     await page.setViewportSize({ width: 1440, height: 900 });
     await gotoAuthenticatedPage(
       page,
-      `/tasks?name=${encodeURIComponent(prefix)}&pageSize=${pageSize}`,
+      `/tasks?name=${encodeURIComponent(prefix)}`,
     );
     await expect(
       page
@@ -134,15 +134,12 @@ test("all matching selection bulk-edits unloaded tasks within the active scope",
         .filter({ hasText: prefix })
         .first(),
     ).toBeVisible();
-    await expect(
-      page.getByRole("table").getByRole("row").filter({ hasText: prefix }),
-    ).toHaveCount(pageSize);
     await page
       .getByRole("table")
       .getByRole("checkbox", { name: "Select all", exact: true })
       .check();
     const bar = page.locator("[data-bulk-action-bar]");
-    await expect(bar).toContainText(`${pageSize} selected`);
+    await expect(bar).toContainText(`${defaultPagination.pageSize} selected`);
     await bar
       .getByRole("button", { name: `Select all ${count}`, exact: true })
       .click();
