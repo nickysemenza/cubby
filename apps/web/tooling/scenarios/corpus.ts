@@ -797,6 +797,7 @@ async function seedConnectedHousehold(
     });
   }
   const carrier = await create("vendor", { name: "Cedar Example Parcel" });
+  const carrierCode = parseShortcodeFor("vendor", carrier.id);
   await recordShipmentEvidence(
     db,
     {
@@ -808,13 +809,13 @@ async function seedConnectedHousehold(
         content:
           "Synthetic parcel: collected, then delivered to Cedar Household.",
       },
-      purchaseId: purchases[0]!.id,
+      purchaseId: parseShortcodeFor("purchase", purchases[0]!.id),
       shipments: [
         {
           shipmentId: null,
           sourceShipmentKey: "cedar-package-one",
           distinctPackageEvidence: null,
-          carrierId: carrier.id,
+          carrierId: carrierCode,
           carrierName: "Cedar Example Parcel",
           trackingNumber: "CEDAR-DEMO-PARCEL",
           extraTrackingNumbers: [],
@@ -826,7 +827,7 @@ async function seedConnectedHousehold(
               time: { kind: "date", value: day(-18) },
               rawStatus: "Collected from seller",
               location: "Example origin depot",
-              carrierId: carrier.id,
+              carrierId: carrierCode,
               carrierName: "Cedar Example Parcel",
               trackingNumber: "CEDAR-DEMO-PARCEL",
             },
@@ -836,7 +837,7 @@ async function seedConnectedHousehold(
               time: { kind: "date", value: day(-15) },
               rawStatus: "Delivered",
               location: "Example destination",
-              carrierId: carrier.id,
+              carrierId: carrierCode,
               carrierName: "Cedar Example Parcel",
               trackingNumber: "CEDAR-DEMO-PARCEL",
             },
