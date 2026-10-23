@@ -425,9 +425,7 @@ stock evidence through the shared read context. One grouped inventory/location
 relation preserves the canonical absent, mixed-unit and installed-stock rules;
 record-scoped queue and ordinary Product reads retain indexed scalar lookups.
 Unsupported evidence fields fall back to their canonical reads, and unused
-relations are omitted. Catalog quality filters pass an explicit read context even
-without a joined relation, so Product price membership uses shared bulk evidence;
-an absent context retains bounded scalar price reads after paging.
+relations are omitted. Catalog quality filters read published quality rows.
 Positive-stock applicability guards resolve unavailable stock to false before
 kit or ledger-quantity reads; the underlying quantity stays null.
 
