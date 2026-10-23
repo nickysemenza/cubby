@@ -424,7 +424,9 @@ A PostgreSQL test file that starts workerd belongs in
 that job's fresh bundle. An unlisted consumer fails in the ordinary integration
 job.
 A runtime borrowing a `withTestDb` database must close in `afterEach` before
-the next reset. Suite-level reuse leaves unowned Worker database sessions and
+the next reset. Reset diagnostics include backend state, wait type and backend/state ages, without
+SQL text or connection credentials, so recurring foreign-session failures can be
+attributed before weakening the ownership guard. Suite-level reuse leaves unowned Worker database sessions and
 causes reset to fail; `afterAll` cleanup is too late.
 Purchase-agent scenarios capture source/build provenance at suite boundaries and
 write one checksummed bundle with separate per-case reports. Their Workers still

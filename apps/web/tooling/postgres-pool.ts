@@ -30,8 +30,16 @@ export async function terminateOtherPostgresConnections(
     const { rows: selected } = await control.query<{
       pid: number;
       started: string;
+      state: string | null;
+      waitType: string | null;
+      backendAgeMs: number;
+      stateAgeMs: number | null;
     }>(`
-      SELECT pid, backend_start::text AS started FROM pg_stat_activity
+      SELECT pid, backend_start::text AS started, state,
+        wait_event_type AS "waitType",
+        (extract(epoch FROM clock_timestamp() - backend_start) * 1000)::int AS "backendAgeMs",
+        (extract(epoch FROM clock_timestamp() - state_change) * 1000)::int AS "stateAgeMs"
+      FROM pg_stat_activity
       WHERE datname = current_database() AND pid <> pg_backend_pid()
         AND backend_type = 'client backend'`);
     // Match actual connected-driver identity, never guessed URL equivalence.
@@ -53,7 +61,7 @@ export async function terminateOtherPostgresConnections(
     const unowned = selected.filter(({ pid }) => !byPid.has(pid));
     if (unowned.length)
       throw new Error(
-        `Postgres reset found unowned database sessions: ${unowned.map(({ pid }) => pid).join(", ")}. Close and drain separate-process runtimes and borrowed clients before resetting their database.`,
+        `Postgres reset found unowned database sessions: ${JSON.stringify(unowned)}. Close and drain separate-process runtimes and borrowed clients before resetting their database.`,
       );
     const targets = selected.map(({ pid }) => byPid.get(pid)!);
     const listeners = targets.map(({ client }) => {
