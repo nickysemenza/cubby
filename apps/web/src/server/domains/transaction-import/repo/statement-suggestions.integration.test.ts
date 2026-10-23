@@ -1393,7 +1393,7 @@ describe("statement Transaction suggestions", () => {
     await record(ctx, [rowInput()]);
     await generate(ctx);
     const runId = await ensureRun(ctx.db, ctx.actor, { purpose: "background" });
-    const startedAt = Date.now();
+    let admissionAt = 0;
     let attempts = 0;
     const first = await runStatementLabels(ctx.db, {
       runId,
@@ -1401,6 +1401,7 @@ describe("statement Transaction suggestions", () => {
       port: answering({ kind: "purchase", counterparty: "business" }),
       spendingAdvice: async () => {
         vi.useFakeTimers();
+        admissionAt = Date.now();
         try {
           const pending = coordinatedGatewayRequest(
             {
@@ -1452,7 +1453,7 @@ describe("statement Transaction suggestions", () => {
       labels: { generated: 2 },
     });
     expect(attempts).toBe(1);
-    expect(first.waitingUntil).toBeGreaterThanOrEqual(startedAt + 15_000);
+    expect(first.waitingUntil).toBe(admissionAt + 1_000);
     expect(first.next).toMatchObject({ inclusive: true });
     const [saved] = await statementSuggestionsRepo.suggestionsNeedingLabels(
       ctx.db,
