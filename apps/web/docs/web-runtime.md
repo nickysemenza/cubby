@@ -253,6 +253,11 @@ preparation, then individually cached decision waves and existing assessment
 publication. Ordinary `entity.listEnrichment` reads remain provider-free.
 Queued batches discard cancelled members after shared admission; started work
 retains normal publication and freshness checks.
+Field renderers subscribe to mutable page review state only for fields in
+current suggestion admission or retained live, stored or accepted state.
+Retained proposals remain visible even after automatic admission for their
+field is removed. Other columns consume a stable eligibility scope and retain
+their ordinary content when another field's review state changes.
 
 Canonical repository lists use `listScaffold.read` with schema-picked output
 bindings in `list-projection.ts`. The assembler selects and validates present

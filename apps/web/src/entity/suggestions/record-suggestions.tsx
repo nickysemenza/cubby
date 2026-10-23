@@ -38,6 +38,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useMemo,
   useRef,
   useState,
   type ContextType,
@@ -124,6 +125,10 @@ const SuggestionSchedulerContext = createContext<ReturnType<
 const ActiveSuggestionRecordsContext = createContext<
   ((id: string) => () => void) | null
 >(null);
+const RecordSuggestionFieldsContext = createContext<{
+  entity: StandardEntity;
+  fields: ReadonlySet<string>;
+} | null>(null);
 
 const recordSchema = z.looseObject({ id: z.string() });
 const mutationPatchSchema = z.record(z.string(), z.json());
@@ -1404,6 +1409,25 @@ function BoundRecordSuggestions({
       ),
     );
   }
+  const participatingFieldsKey = JSON.stringify(
+    [
+      ...new Set([
+        ...pageFields,
+        ...[...stored.values()].map((proposal) => proposal.field),
+        ...[...accepted.values()].map((value) => value.field),
+        ...[...rows.values()].flatMap((row) => [...row.sourceByField.keys()]),
+      ]),
+    ].sort(),
+  );
+  const fieldScope = useMemo(
+    () => ({
+      entity,
+      fields: new Set(
+        textArraySchema.parse(JSON.parse(participatingFieldsKey)),
+      ),
+    }),
+    [entity, participatingFieldsKey],
+  );
   const context = {
     entity,
     runKey,
@@ -1674,29 +1698,31 @@ function BoundRecordSuggestions({
       value={viewportOnly ? activateRecord : null}
     >
       <SuggestionSchedulerContext value={scheduler}>
-        <RecordSuggestionsContext value={context}>
-          <SuggestionStatusPlacement target={statusTarget}>
-            {status}
-          </SuggestionStatusPlacement>
-          {children}
-          {correctionRecord ? (
-            <EntityEditDialog<EditableEntity>
-              open
-              onOpenChange={(open) => {
-                if (!open) setCorrectionRecord(null);
-              }}
-              request={
-                // SAFETY: StandardEntity is the generated browser-editable
-                // roster, and correctionRecord is its freshly read projection.
-                detailEditRequest(
-                  entity,
-                  correctionRecord as never,
-                ) as EntityEditDialogRequest<EditableEntity>
-              }
-              mutationPort={mutationPort}
-            />
-          ) : null}
-        </RecordSuggestionsContext>
+        <RecordSuggestionFieldsContext value={fieldScope}>
+          <RecordSuggestionsContext value={context}>
+            <SuggestionStatusPlacement target={statusTarget}>
+              {status}
+            </SuggestionStatusPlacement>
+            {children}
+            {correctionRecord ? (
+              <EntityEditDialog<EditableEntity>
+                open
+                onOpenChange={(open) => {
+                  if (!open) setCorrectionRecord(null);
+                }}
+                request={
+                  // SAFETY: StandardEntity is the generated browser-editable
+                  // roster, and correctionRecord is its freshly read projection.
+                  detailEditRequest(
+                    entity,
+                    correctionRecord as never,
+                  ) as EntityEditDialogRequest<EditableEntity>
+                }
+                mutationPort={mutationPort}
+              />
+            ) : null}
+          </RecordSuggestionsContext>
+        </RecordSuggestionFieldsContext>
       </SuggestionSchedulerContext>
     </ActiveSuggestionRecordsContext>
   );
@@ -1932,13 +1958,7 @@ function ResolvedFieldSuggestion({
   );
 }
 
-export function RecordFieldSuggestion({
-  record,
-  field: column,
-  children,
-  surface = "inline",
-  renderValue,
-}: {
+type RecordFieldSuggestionProps = {
   record: unknown;
   field: string;
   children: ReactNode;
@@ -1946,7 +1966,26 @@ export function RecordFieldSuggestion({
    * 32px table row; `"inline"` (detail facts, phone cards) renders it directly. */
   surface?: "inline" | "cell";
   renderValue?: (value: JsonValue) => ReactNode;
-}) {
+};
+
+export function RecordFieldSuggestion(props: RecordFieldSuggestionProps) {
+  const scope = useContext(RecordSuggestionFieldsContext);
+  const field = scope
+    ? findEntityField(scope.entity, props.field)?.key
+    : undefined;
+  // Retained proposals may outlive automatic admission for their field.
+  // Only cells outside both current admission and retained state can opt out.
+  if (!field || !scope?.fields.has(field)) return props.children;
+  return <BoundRecordFieldSuggestion {...props} />;
+}
+
+function BoundRecordFieldSuggestion({
+  record,
+  field: column,
+  children,
+  surface = "inline",
+  renderValue,
+}: RecordFieldSuggestionProps) {
   const context = useContext(RecordSuggestionsContext);
   const parsed = recordSchema.safeParse(record);
   const row = parsed.success ? context?.rows.get(parsed.data.id) : undefined;

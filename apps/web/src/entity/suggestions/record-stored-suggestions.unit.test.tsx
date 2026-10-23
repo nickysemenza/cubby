@@ -17,6 +17,7 @@ import {
   screen,
   waitFor,
 } from "@testing-library/react";
+import { Profiler } from "react";
 import { describe, expect, it, vi } from "vitest";
 
 import { MobileCardView } from "~/entity/table/mobile-card-view";
@@ -184,6 +185,55 @@ function setup(
 }
 
 describe("stored suggestions in generic list cells", () => {
+  it("does not update an unsuggestible field when another field's stored suggestion arrives", async () => {
+    const harness = createBrowserTestHarness();
+    const pending = Promise.withResolvers<SuggestionReviewRow[]>();
+    const operations: StoredSuggestionOperations = {
+      ...validatedStoredOperations([]),
+      list: vi.fn(() => pending.promise),
+    };
+    const commits = vi.fn();
+    const view = render(
+      <RecordSuggestionsProvider
+        entity="product"
+        records={[record]}
+        fieldKeys={["categoryId"]}
+        operations={{
+          suggestFields: ai.suggestFields.withTransport(async () => ({
+            suggestions: {},
+            outcomes: {},
+          })),
+        }}
+        storedSuggestionOperations={operations}
+      >
+        <Profiler id="unrelated-field" onRender={commits}>
+          <RecordFieldSuggestion record={record} field="expenseCount">
+            <span>12 expenses</span>
+          </RecordFieldSuggestion>
+        </Profiler>
+        <RecordFieldSuggestion
+          record={record}
+          field="categoryId"
+          renderValue={() => <span>Suggested category</span>}
+        >
+          <span>Current category</span>
+        </RecordFieldSuggestion>
+      </RecordSuggestionsProvider>,
+      { wrapper: harness.wrapper },
+    );
+    try {
+      await waitFor(() => expect(operations.list).toHaveBeenCalled());
+      const before = commits.mock.calls.length;
+      pending.resolve([suggestion()]);
+      await screen.findByText("Suggested category");
+      expect(commits).toHaveBeenCalledTimes(before);
+      expect(screen.getByText("12 expenses")).toBeVisible();
+    } finally {
+      view.unmount();
+      harness.dispose();
+    }
+  });
+
   it.each([false, true])(
     "withholds a stored ancestor correction from cell and bulk acceptance (hierarchy loaded: %s)",
     async (hierarchyLoaded) => {
