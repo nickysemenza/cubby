@@ -713,6 +713,11 @@ export default defineEntity({
         name: "SourceTransactionRecord_source_charge_idx",
         on: ["source", "chargeKey"],
       },
+      {
+        name: "SourceTransactionRecord_source_legacyReference_idx",
+        on: ["source", "legacyReference"],
+        where: "{deletedAt} IS NULL AND {legacyReference} IS NOT NULL",
+      },
       { name: "SourceTransactionRecord_batchId_idx", on: ["batchId"] },
       {
         name: "SourceTransactionRecord_statementDate_idx",
