@@ -1,6 +1,5 @@
 import {
   dataExceptionReason,
-  dataCheckExemptible,
   dataQualityStatus,
   relatedDataQualityEntities,
   scoredEntities,
@@ -151,12 +150,10 @@ describe("calculateDataQualityScore", () => {
 });
 
 /**
- * Postgres has no common-subexpression elimination: every inlined copy of a
- * correlated predicate is planned again (one list once planned ~0.5 GB). The
- * score and status read each check's `expected`, `missing` and exception
- * lookup once, from one state column per check.
+ * List reads never re-run check or waiver SQL: score and status come only from
+ * published rows through primary-key lookups.
  */
-describe("score and status evaluate each predicate once", () => {
+describe("score and status read only published quality rows", () => {
   it.each([
     ["scoreSql", scoreSql],
     ["statusSql", statusSql],
@@ -165,12 +162,15 @@ describe("score and status evaluate each predicate once", () => {
       (entity: "vendor") => statusCondition(entity, "complete"),
     ],
   ] as const)("%s", (_, build) => {
-    const rendered = render(build("vendor"));
-    const exemptible = checksOf("vendor").filter(
-      (check) => dataCheckExemptible[check],
-    ).length;
-    expect(rendered.split('FROM "DataException"').length - 1).toBe(exemptible);
-    expect(rendered.split("OFFSET 0").length - 1).toBe(1);
+    const sources = [...render(build("vendor")).matchAll(/FROM "(\w+)"/gu)].map(
+      ([, table]) => table,
+    );
+    expect(sources.length).toBeGreaterThan(0);
+    expect(
+      sources.every(
+        (table) => table === "EntityQuality" || table === "EntityQualityCheck",
+      ),
+    ).toBe(true);
   });
 
   it("sorts records without a score after every scored record", () => {
