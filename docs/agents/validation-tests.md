@@ -139,6 +139,10 @@ Shopping-list quantity assertions scope to the named Ingredient row’s Need cel
 meal fixtures may legitimately produce the same quantity for other ingredients.
 A row filter’s `has` locator is relative to that row; do not repeat an ancestor
 region in the inner locator.
+Bulk-edit browser checks identify the named Bulk edit dialog. Date popovers also
+use the dialog role and can remain mounted while closing; an unqualified dialog
+locator can match both after Update and fail before the editor closure is checked.
+Keep the real closure and stored-write assertions.
 Connection-path assertions choose a visible matching link rather than the first
 DOM match, because collapsed/responsive branches can retain hidden duplicates.
 Native-workspace session bootstrap assertions include the response body on a
