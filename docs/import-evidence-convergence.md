@@ -459,6 +459,9 @@ Shared preparation failures fall back to
 isolated reads, and publication/booking never use the page cache as commit
 validation. The later label step retains
 ownership of model decisions and reuses compatible durable label checkpoints.
+Live source observations have separate source-scoped occurrence and legacy-reference
+lookup indexes. Candidate ownership checks retain both reference forms; the
+legacy lookup must not scan every observation of the source for each candidate.
 Charge pagination applies the whole-charge cursor before aggregating retained
 observations, while preserving every observation within each selected identity.
 Label selection limits candidate identities before hydrating immutable judgments.

@@ -1,0 +1,1 @@
+CREATE INDEX "SourceTransactionRecord_source_legacyReference_idx" ON "SourceTransactionRecord" USING btree ("source","legacyReference") WHERE "SourceTransactionRecord"."deletedAt" IS NULL AND "SourceTransactionRecord"."legacyReference" IS NOT NULL;
