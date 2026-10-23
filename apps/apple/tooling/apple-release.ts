@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Decides whether Apple TestFlight publishes current main, and guards an
 // upload against an out-of-order run. Read-only: it inspects git and the
-// GitHub API and prints its decision. Node builtins only, so the macOS
+// GitHub API and prints its decision. No installed dependencies, so the macOS
 // release jobs run `guard` without installing dependencies.
 //
 //   node apps/apple/tooling/apple-release.ts plan    decide; write GITHUB_OUTPUT
@@ -13,7 +13,7 @@ import { execFileSync } from "node:child_process";
 import { appendFileSync } from "node:fs";
 import path from "node:path";
 
-import { APPLE_CLIENT_COMPATIBILITY_VERSION } from "@cubby/shared/apple-client-version";
+import { APPLE_CLIENT_COMPATIBILITY_VERSION } from "cubby/native/client-version";
 
 // Build numbers are this plus the workflow's run_number, shared by both
 // platforms. Mac build numbers must keep increasing; the offset sits above the

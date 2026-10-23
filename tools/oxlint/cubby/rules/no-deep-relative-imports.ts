@@ -17,6 +17,8 @@ export const noDeepRelativeImportsRule = defineRule({
     },
     messages: {
       deep: "Replace this deep relative module import with a package export or a runtime-supported alias. Nearby ./ and ../ imports are allowed; Node scripts stay TypeScript. See docs/development.md#typescript-imports.",
+      sourceAlias:
+        "Application source must use ~/ instead of #web/src/ so source import guards apply. The native Node source alias is reserved for tooling outside apps/web/src. See docs/development.md#typescript-imports.",
     },
   },
   createOnce(context) {
@@ -24,6 +26,12 @@ export const noDeepRelativeImportsRule = defineRule({
       const source = staticSource(node);
       if (node && source && /^(?:\.\.\/){3}/u.test(source))
         context.report({ node, messageId: "deep" });
+      if (
+        node &&
+        source?.startsWith("#web/src/") &&
+        context.filename.replaceAll("\\", "/").includes("/apps/web/src/")
+      )
+        context.report({ node, messageId: "sourceAlias" });
     };
     return {
       ImportDeclaration(node) {

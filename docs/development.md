@@ -26,10 +26,15 @@ TypeScript `paths` describe resolution; they do not rewrite emitted imports.
 The web Vite and Vitest configurations support the web aliases. Scripts run
 directly by Node remain TypeScript and use native type stripping. Within the
 web package, `#web/…` is a package-local `imports` mapping with explicit `.ts`
-extensions; it works in Node without reading tsconfig. Shared root script helpers
-are exported through `cubby/tooling/…`; the web package declares that workspace
+extensions; it works in Node without reading tsconfig.
+Application source under `apps/web/src` must keep using `~/…`: the lint rule
+reserves `#web/src/…` for tooling outside that tree so it cannot bypass source
+import guards.
+Shared root script helpers are exported through `cubby/tooling/…`; the web package declares that workspace
 dependency. Root asset exports also give bundled raw imports stable specifiers.
 These mappings name the existing files rather than adding wrapper modules.
+The TestFlight release script runs before dependency installation and reads its
+pure version constant through the root self-export `cubby/native/client-version`.
 Filesystem paths, `new URL(…, import.meta.url)` and glob patterns are not module
 specifiers; preserve their runtime semantics. Raw asset module imports still
 follow the lint rule.

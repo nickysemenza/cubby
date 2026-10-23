@@ -3,6 +3,7 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./native/client-version": "./packages/shared/src/apple-client-version.ts",
     "./tooling/run": "./scripts/lib/run.ts",
     "./tooling/tree-digest": "./scripts/lib/tree-digest.ts",
     "./tooling/type-checker": "./scripts/tsc.ts",

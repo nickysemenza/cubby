@@ -135,6 +135,21 @@ test("deep module imports are rejected across static, dynamic, type and require 
   );
 });
 
+test("application source cannot bypass guards with the native Node source alias", () => {
+  const diagnostics = lintScopedFixture(
+    "no-deep-relative-imports",
+    "native-source-alias.txt",
+  );
+  assert.deepEqual(
+    diagnostics.map((diagnostic) => diagnostic.labels[0]?.span.line).sort(),
+    [1, 2, 3],
+  );
+  assert.deepEqual(
+    lintFixture("no-deep-relative-imports", "native-source-alias.txt", "cubby"),
+    [],
+  );
+});
+
 test("raw enum values in Drizzle SQL are rejected", () => {
   // The rule is global, so an OS-tmpdir fixture runs it; a fixture under
   // apps/web/src/server races the generator's import-boundary scan in CI.
