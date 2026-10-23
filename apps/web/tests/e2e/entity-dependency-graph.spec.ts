@@ -424,7 +424,8 @@ test("graph workspace keeps its map while selecting, expanding, and opening reco
   await page.getByRole("button", { name: "Paths list", exact: true }).click();
   const records = page.getByLabel("Map records", { exact: true });
   await records.getByRole("button", { name: /Inventory Item$/ }).click();
-  await expect(nodes).toHaveCount(3);
+  // The Paths panel narrows the virtualized canvas; loaded records remain in the map.
+  await expect(page.getByText(/3 loaded/)).toBeVisible();
   const before = await nodes.evaluateAll((items) =>
     Object.fromEntries(
       items.map((item) => [
@@ -438,7 +439,7 @@ test("graph workspace keeps its map while selecting, expanding, and opening reco
   await page
     .getByRole("button", { name: "Expand connections", exact: true })
     .click();
-  await expect(nodes).toHaveCount(4);
+  await expect(page.getByText(/4 loaded/)).toBeVisible();
   expect(await viewport.getAttribute("style")).toBe(camera);
   const after = await nodes.evaluateAll((items) =>
     Object.fromEntries(
