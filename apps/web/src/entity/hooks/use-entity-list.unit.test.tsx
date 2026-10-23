@@ -127,7 +127,7 @@ describe("useEntityList", () => {
               ),
             )}
           </output>
-          <button onClick={() => void list.retryEnrichment(0, "quality")}>
+          <button onClick={() => void list.retryEnrichment?.(0, "quality")}>
             Retry evidence
           </button>
         </>
@@ -147,6 +147,7 @@ describe("useEntityList", () => {
         groups: [
           {
             id: "quality",
+            fields: ["classificationEvidence"],
             state: "error",
             error: {
               code: "INTERNAL_SERVER_ERROR",
