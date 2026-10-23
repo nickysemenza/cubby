@@ -12,7 +12,12 @@ import { z } from "zod";
 
 import { formatCurrency } from "~/lib/number-format";
 import type { Database, DrizzleTransaction } from "~/server/db";
-import { getDb, notDeleted, unwrapDb } from "~/server/db/helpers";
+import {
+  getDb,
+  notDeleted,
+  unwrapDb,
+  uuidArrayParam,
+} from "~/server/db/helpers";
 import { actualExpenseSql } from "~/server/db/helpers/predicates";
 import { product } from "~/server/db/schema";
 import {

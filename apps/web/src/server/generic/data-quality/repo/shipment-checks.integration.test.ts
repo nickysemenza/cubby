@@ -2,7 +2,7 @@ import { dataQuality } from "@cubby/schemas/data-quality";
 import type { ShipmentObservationInput } from "@cubby/schemas/shipment-evidence";
 import { datedShipmentEventTime } from "@cubby/schemas/shipment-evidence";
 import { generateShortcode } from "@cubby/shared";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { countTestDbQueries, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
