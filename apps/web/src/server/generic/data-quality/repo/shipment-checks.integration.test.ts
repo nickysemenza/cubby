@@ -488,7 +488,7 @@ describe("Shipment evidence quality", () => {
     ).toEqual([]);
   });
 
-  it("rejects a prepared publication when a later write invalidates its Job generation", async () => {
+  it("publishes the latest verdict when a write lands during preparation", async () => {
     const parcel = await seed([shipped, delivered]);
     const timeline = await readShipmentTimeline(ctx.db, parcel.code);
     const [intent] = await unwrapDb(ctx.db)
@@ -514,9 +514,8 @@ describe("Shipment evidence quality", () => {
         },
       },
     });
-    expect(result).toBe("superseded");
-    expect(await unwrapDb(ctx.db).select().from(entityQuality)).toEqual([]);
-    await refresh();
+    // The pass in progress is not restarted; its publication reads the edit.
+    expect(result).toBe("succeeded");
     expect(
       (
         await loadDataQualities(ctx.db, "shipment", [parcel.row.id], "stored")

@@ -1,7 +1,8 @@
-import { eq } from "drizzle-orm";
+import { count, eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import { entityQuality } from "~/server/db/entity-quality-schema";
 import { getDb, withTransactionDatabase } from "~/server/db/helpers";
 import {
   job,
@@ -22,7 +23,7 @@ import {
   refreshFamilyHandler,
 } from "~/server/workflows/background-tasks/refresh-families";
 
-import { scheduleRefreshFamilies } from "./families";
+import { invalidateRefreshFamily, scheduleRefreshFamilies } from "./families";
 
 // Broad pages must discover writes without endpoint capture, retain later
 // invalidation during preparation, and never publish stale output after it.
@@ -110,6 +111,55 @@ describe("broad refresh jobs", () => {
       .from(job)
       .where(eq(job.id, qualityJob.id));
     expect(qualityPass?.state).toBe("completed");
+  });
+
+  it("finishes a quality pass that household writes keep invalidating", async () => {
+    // Production writes arrive faster than a full pass; each one used to
+    // restart the pass and supersede the page in flight.
+    await insertEntityFixtures(
+      ctx.db,
+      location,
+      "location",
+      Array.from({ length: 201 }, (_, index) => ({
+        shortcode: `LOC-${String(3000 + index)}`,
+        name: `Synthetic room ${index}`,
+        type: "room",
+      })),
+    );
+    await invalidateRefreshFamily(ctx.db, "quality");
+    const current = async () => {
+      const [row] = await getDb(ctx.db)
+        .select()
+        .from(job)
+        .where(eq(job.key, "refresh:quality"));
+      if (!row) throw new Error("Expected quality intent");
+      return row;
+    };
+    const first = await current();
+    await advanceJob(ctx.db, first.id, {
+      "refresh.family": refreshFamilyHandler,
+    });
+    const between = await current();
+    expect(between.cursor).not.toBeNull();
+    await invalidateRefreshFamily(ctx.db, "quality");
+    expect(await current()).toMatchObject({
+      generation: between.generation,
+      cursor: between.cursor,
+    });
+    for (let page = 0; (await current()).state !== "completed"; page++) {
+      if (page === 10) throw new Error("Quality pass did not finish");
+      await advanceJob(ctx.db, first.id, {
+        "refresh.family": refreshFamilyHandler,
+      });
+    }
+    const [published] = await getDb(ctx.db)
+      .select({ n: count() })
+      .from(entityQuality)
+      .where(eq(entityQuality.kind, "location"));
+    const [locations] = await getDb(ctx.db)
+      .select({ n: count() })
+      .from(location);
+    expect(published?.n).toBe(locations?.n);
   });
 
   it("leaves no Run for a pass with nothing to change", async () => {
