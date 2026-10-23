@@ -43,7 +43,7 @@ export type DataQualityEntries = {
 };
 
 /**
- * Every scored entity's SQL bindings, keyed by entity. `satisfies` is the
+ * Every scored entity's evaluator, keyed by entity. `satisfies` is the
  * gate: a manifest that declares `capabilities.dataQuality` for an entity
  * with no entry here — or an entry missing one of the entity's generated
  * check ids — fails typecheck. Exported with its inferred (per-table) type so
