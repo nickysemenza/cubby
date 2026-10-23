@@ -613,8 +613,9 @@ links remain in Git history.
   `isolate: false` (−14%) and more workers. The worker gain needs more cores
   than a hosted runner has. The former isolated `worker-safety` catalog smoke
   check is removed: `mcp-worklist.spec.ts` exercises the same catalog
-  introspection inside the real built Worker, whose runtime itself forbids
-  dynamic code generation. Only the
+  introspection inside the real built Worker. Both smoke checks list tools;
+  neither compiles tool-output validators, which the SDK does on `callTool`.
+  They do not establish validator code-generation coverage. Only the
   `workers` project measured a reliable per-project gain (21 s to 9 s), and
   `scripts`/`packages` stayed within noise. `vmThreads`/`vmForks` fail the
   process and file-system tooling tests.

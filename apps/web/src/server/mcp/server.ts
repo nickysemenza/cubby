@@ -73,14 +73,6 @@ Workflow tips:
 - entity_read.list returns { meta, items } paginated objects. Every other action documents its own batch behavior.
 - structuredContent is canonical; text content mirrors the same JSON.`;
 
-// Re-exported for the unit test, which exercises the slim projections directly.
-export {
-  slimMeal,
-  slimProduct,
-  slimProductDetail,
-  slimUsdaFood,
-} from "~/contracts/mcp-projections";
-
 function registerEntityCatalog(server: McpServer) {
   server.registerResource(
     "entities_catalog",
