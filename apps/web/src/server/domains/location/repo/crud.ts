@@ -45,6 +45,7 @@ import {
   unwrapDb,
   updateLiveAndReturn,
   withTransaction,
+  withTransactionOn,
 } from "~/server/db/helpers";
 import {
   aiAnalysis,
@@ -84,6 +85,7 @@ import {
   computeChanges,
   logAuditEntry,
 } from "~/server/generic/audit-log/repo/audit-log";
+import { recordChange } from "~/server/generic/changes/repo/change";
 import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
 import {
   type ListContext,
@@ -1041,28 +1043,34 @@ export const updateLocationAiDescription = async (
   id: LocationId,
   aiDescription: string | null,
 ) => {
-  const client = unwrapDb(db);
-  await client
-    .update(aiAnalysis)
-    .set({ deletedAt: new Date() })
-    .where(
-      and(
-        eq(aiAnalysis.entityKind, "location"),
-        eq(aiAnalysis.entityId, id),
-        eq(aiAnalysis.feature, LOCATION_DESCRIPTION_FEATURE_ID),
-        aiDescription === null ? undefined : eq(aiAnalysis.model, "manual"),
-        notDeleted(aiAnalysis),
-      ),
-    );
-  if (aiDescription === null) return;
-  await client.insert(aiAnalysis).values({
-    entityKind: "location",
-    entityId: id,
-    feature: LOCATION_DESCRIPTION_FEATURE_ID,
-    model: "manual",
-    promptVersion: "manual",
-    inputFingerprint: `manual:${id}`,
-    result: { description: aiDescription, confidence: "low" },
+  await withTransactionOn(db, async (tx) => {
+    const client = unwrapDb(tx);
+    await client
+      .update(aiAnalysis)
+      .set({ deletedAt: new Date() })
+      .where(
+        and(
+          eq(aiAnalysis.entityKind, "location"),
+          eq(aiAnalysis.entityId, id),
+          eq(aiAnalysis.feature, LOCATION_DESCRIPTION_FEATURE_ID),
+          aiDescription === null ? undefined : eq(aiAnalysis.model, "manual"),
+          notDeleted(aiAnalysis),
+        ),
+      );
+    if (aiDescription !== null)
+      await client.insert(aiAnalysis).values({
+        entityKind: "location",
+        entityId: id,
+        feature: LOCATION_DESCRIPTION_FEATURE_ID,
+        model: "manual",
+        promptVersion: "manual",
+        inputFingerprint: `manual:${id}`,
+        result: { description: aiDescription, confidence: "low" },
+      });
+    await recordChange(tx, {
+      kind: "source",
+      categories: ["location"],
+    });
   });
 };
 

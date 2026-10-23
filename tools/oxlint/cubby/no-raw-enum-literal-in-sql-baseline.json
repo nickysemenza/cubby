@@ -6,7 +6,7 @@
   "apps/web/src/server/generic/data-quality/repo/checks/image.ts": 8,
   "apps/web/src/server/generic/data-quality/repo/checks/ledger-transfer.ts": 1,
   "apps/web/src/server/generic/data-quality/repo/checks/meal.ts": 3,
-  "apps/web/src/server/generic/data-quality/repo/checks/recipe.ts": 4,
+  "apps/web/src/server/generic/data-quality/repo/checks/recipe.ts": 1,
   "apps/web/src/server/generic/data-quality/repo/checks/vendor.ts": 3,
   "apps/web/src/server/entity-kernel/repo/entity-display-image.ts": 9,
   "apps/web/src/server/entity-kernel/repo/entity-identity.integration.test.ts": 1,

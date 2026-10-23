@@ -1,72 +1,101 @@
-import { sql } from "drizzle-orm";
+import { and, sql } from "drizzle-orm";
 
+import type { Database, DrizzleTransaction } from "~/server/db";
+import { notDeleted, unwrapDb, uuidArrayParam } from "~/server/db/helpers";
 import { recipe } from "~/server/db/retained-tables";
+import { entityDisplayImagePresenceSql } from "~/server/entity-kernel/repo/entity-display-image";
+import { qualityCheck } from "~/server/generic/data-quality/repo/builders";
+import { defineStoredEntityChecks } from "~/server/generic/data-quality/repo/stored-registry";
 
-import { defineEntityChecks } from "../registry";
+export const RECIPE_QUALITY_RULES_VERSION = 1;
 
-type Recipe = typeof recipe;
+type RecipeQualityRecord = Awaited<
+  ReturnType<typeof loadRecipeQualityRecords>
+>[number];
+const observed = qualityCheck.observed<RecipeQualityRecord>;
+const when = qualityCheck.when<RecipeQualityRecord>;
+const recipeColumn = (column: string) =>
+  sql`"Recipe".${sql.identifier(column)}`;
 
-// Mirrors `ownRecipeCountForIngredientSql` (repo/recipe/helpers.ts): a recipe
-// with no cookbook is the household's own, as opposed to one imported from a
-// cookbook's extraction.
-const isOwnRecipe = (t: Recipe) => sql`${t.cookbookId} IS NULL`;
-
-// Must agree with the `no-instructions` curated view (view-manifest.ts,
-// recipe): Book/Notion recipes carry their text in the source, not here, so
-// the check never lights up a book you own or a Notion page you sync.
-const expectsInstructions = (t: Recipe) => sql`(${isOwnRecipe(t)}
-  AND ${t.sourceType} IS DISTINCT FROM 'Book'
-  AND ${t.sourceType} IS DISTINCT FROM 'Notion')`;
-
-// A line only counts while it names a live Ingredient; a line left pointing
-// at a deleted one contributes nothing to cooking, nutrition, or cost.
-const hasIngredientLines = (t: Recipe) => sql`EXISTS (
-  SELECT 1 FROM "RecipeSection" dq_rec_sec
-  JOIN "RecipeSectionIngredient" dq_rec_line
-    ON dq_rec_line."recipeSectionId" = dq_rec_sec."id"
-    AND dq_rec_line."deletedAt" IS NULL
-  JOIN "Ingredient" dq_rec_ing
-    ON dq_rec_ing."id" = dq_rec_line."ingredientId"
-    AND dq_rec_ing."deletedAt" IS NULL
-  WHERE dq_rec_sec."recipeId" = ${t.id} AND dq_rec_sec."deletedAt" IS NULL
-)`;
-
-// A live section with at least one instruction whose text is not blank: an
-// array of empty steps (`[{"text": ""}]`) is not written instructions.
-// Sections store `{text}` objects; a bare string element is legacy.
-const hasInstructions = (t: Recipe) => sql`EXISTS (
-  SELECT 1 FROM "RecipeSection" dq_rec_instr
-  CROSS JOIN LATERAL jsonb_array_elements(
-    CASE WHEN jsonb_typeof(dq_rec_instr."instructions") = 'array'
-      THEN dq_rec_instr."instructions" ELSE '[]'::jsonb END
-  ) dq_rec_step(step)
-  WHERE dq_rec_instr."recipeId" = ${t.id} AND dq_rec_instr."deletedAt" IS NULL
-    AND trim(COALESCE(
-      CASE WHEN jsonb_typeof(dq_rec_step.step) = 'string' THEN dq_rec_step.step #>> '{}' END,
-      dq_rec_step.step ->> 'text',
-      ''
-    )) <> ''
-)`;
-
-export const recipeChecks = defineEntityChecks({
+export const recipeChecks = defineStoredEntityChecks({
   entity: "recipe",
   table: recipe,
+  rulesVersion: RECIPE_QUALITY_RULES_VERSION,
+  load: loadRecipeQualityRecords,
   checks: {
-    recipe_ingredients: {
-      expected: isOwnRecipe,
-      missing: (t) => sql`NOT ${hasIngredientLines(t)}`,
-    },
-    recipe_instructions: {
-      expected: expectsInstructions,
-      missing: (t) => sql`NOT ${hasInstructions(t)}`,
-    },
-    recipe_source: {
-      expected: isOwnRecipe,
-      // `webProvenance(null)` (recipe/source.ts) stamps a URL-less manual
-      // recipe as sourceType 'Other' with no url or label, not a null
-      // sourceType — a genuinely untyped legacy row is the other, rarer half.
-      missing: (t) =>
-        sql`(${t.sourceType} IS NULL OR (${t.sourceType} = 'Other' AND ${t.sourceUrl} IS NULL AND ${t.sourceLabel} IS NULL))`,
-    },
+    recipe_display_image: qualityCheck.hasImage,
+    recipe_ingredients: when(
+      (record) => record.cookbookId === null,
+      observed((record) => record.hasIngredientLines),
+    ),
+    recipe_instructions: when(
+      (record) =>
+        record.cookbookId === null &&
+        record.sourceType !== "Book" &&
+        record.sourceType !== "Notion",
+      observed((record) => record.hasInstructions),
+    ),
+    recipe_source: when(
+      (record) => record.cookbookId === null,
+      observed(
+        (record) =>
+          record.sourceType !== null &&
+          !(
+            record.sourceType === "Other" &&
+            record.sourceUrl === null &&
+            record.sourceLabel === null
+          ),
+      ),
+    ),
   },
 });
+
+async function loadRecipeQualityRecords(
+  db: Database | DrizzleTransaction,
+  ids: readonly string[],
+) {
+  if (!ids.length) return [];
+  return unwrapDb(db)
+    .select({
+      id: recipe.id,
+      shortcode: recipe.shortcode,
+      cookbookId: recipe.cookbookId,
+      sourceType: recipe.sourceType,
+      sourceUrl: recipe.sourceUrl,
+      sourceLabel: recipe.sourceLabel,
+      hasIngredientLines: sql<boolean>`EXISTS (
+        SELECT 1 FROM "RecipeSection" dq_recipe_section
+        JOIN "RecipeSectionIngredient" dq_recipe_line
+          ON dq_recipe_line."recipeSectionId" = dq_recipe_section."id"
+          AND dq_recipe_line."deletedAt" IS NULL
+        JOIN "Ingredient" dq_recipe_ingredient
+          ON dq_recipe_ingredient."id" = dq_recipe_line."ingredientId"
+          AND dq_recipe_ingredient."deletedAt" IS NULL
+        WHERE dq_recipe_section."recipeId" = ${recipeColumn("id")}
+          AND dq_recipe_section."deletedAt" IS NULL
+      )`,
+      hasInstructions: sql<boolean>`EXISTS (
+        SELECT 1 FROM "RecipeSection" dq_recipe_instructions
+        CROSS JOIN LATERAL jsonb_array_elements(
+          CASE WHEN jsonb_typeof(dq_recipe_instructions."instructions") = 'array'
+            THEN dq_recipe_instructions."instructions" ELSE '[]'::jsonb END
+        ) dq_recipe_step(step)
+        WHERE dq_recipe_instructions."recipeId" = ${recipeColumn("id")}
+          AND dq_recipe_instructions."deletedAt" IS NULL
+          AND trim(COALESCE(
+            CASE WHEN jsonb_typeof(dq_recipe_step.step) = 'string'
+              THEN dq_recipe_step.step #>> '{}' END,
+            dq_recipe_step.step ->> 'text',
+            ''
+          )) <> ''
+      )`,
+      hasDisplayImage: sql<boolean>`${entityDisplayImagePresenceSql(
+        "recipe",
+        recipeColumn("id"),
+      )}`,
+    })
+    .from(recipe)
+    .where(
+      and(notDeleted(recipe), sql`${recipe.id} = ANY(${uuidArrayParam(ids)})`),
+    );
+}
