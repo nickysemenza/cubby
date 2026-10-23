@@ -250,7 +250,7 @@ export const AUDIT_RECOVERY_MODEL =
   "claude-opus-5-5" satisfies AnthropicChatModel;
 /**
  * The decision tier's baseline model: TypeSafe's Jev, a closed-set decision model
- * served directly by TypeSafe rather than a chat endpoint, so it
+ * served through AI Gateway with TypeSafe BYOK rather than a chat endpoint, so it
  * is not a {@link SupportedChatModel} and takes no chat adapter.
  */
 export const DECISION_MODEL = "typesafe/jev" satisfies SupportedDecisionModel;

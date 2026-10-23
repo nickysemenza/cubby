@@ -34,7 +34,7 @@ import {
 } from "~/server/cf-env";
 
 import { coordinatedGatewayRequest } from "./gateway-egress-client";
-import { isDirectJevEndpoint } from "./gateway-egress-contract";
+import { isByokJevEndpoint } from "./gateway-egress-contract";
 
 /**
  * A call's gateway labels (`feature`, `operation`, optional `entityKind`);
@@ -87,10 +87,7 @@ export interface GatewayCallOptions
   onTransport?: (transport: GatewayTransport) => void;
 }
 
-export type GatewayTransport = Extract<
-  AiUsageTransport,
-  "gateway" | "chatgpt" | "direct"
->;
+export type GatewayTransport = Extract<AiUsageTransport, "gateway" | "chatgpt">;
 
 function validatedCacheTtlSeconds(ttl: number | undefined): number | undefined {
   if (ttl === undefined) return undefined;
@@ -249,12 +246,10 @@ export function gatewayFetch(
         aiGatewayId(controls.metadata.environment),
       );
       if (egress) {
-        if (isDirectJevEndpoint(provider, request.endpoint))
-          opts.onTransport?.("direct");
         return coordinatedGatewayRequest(egress, provider, request, controls);
       }
-      if (isDirectJevEndpoint(provider, request.endpoint))
-        throw new Error("Direct Jev requires the shared egress binding");
+      if (isByokJevEndpoint(provider, request.endpoint))
+        throw new Error("Jev BYOK requires the shared egress binding");
       if (provider === "workers-ai")
         return workersAiFetch(request, {
           id: aiGatewayId(controls.metadata.environment),

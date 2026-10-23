@@ -6,6 +6,7 @@ import {
   runUniversalGateway,
   runNativeGateway,
   workersAiModel,
+  workersAiRunRequest,
 } from "@cubby/shared/ai/gateway-request";
 import { scrubCredentialValues } from "@cubby/worker-tracing/scrub-error-message";
 import { DurableObject } from "cloudflare:workers";
@@ -14,7 +15,7 @@ import { aiBudgetWindow } from "~/server/ai/budget-window";
 import {
   GATEWAY_EGRESS_LIMITS,
   TYPESAFE_EGRESS_LIMITS,
-  isDirectJevEndpoint,
+  isByokJevEndpoint,
   gatewayEgressInput,
   type GatewayAdmission,
 } from "~/server/ai/gateway-egress-contract";
@@ -26,7 +27,7 @@ const {
   requestDeadlineMs: REQUEST_DEADLINE_MS,
 } = GATEWAY_EGRESS_LIMITS;
 
-const TYPESAFE_BUCKET = "direct:typesafe";
+const TYPESAFE_BUCKET = "byok:typesafe";
 const CREDIT_BUCKET = "subscriber-credit:anthropic";
 
 const windowStart = (now: number) =>
@@ -204,7 +205,7 @@ export class AiGatewayEgressDurableObject extends DurableObject<Env> {
         .one();
       if (inputTokens > TYPESAFE_EGRESS_LIMITS.inputTokensPerWindow)
         throw new Error(
-          "Jev request exceeds the direct-provider admission token budget; reduce the batch size",
+          "Jev request exceeds the TypeSafe BYOK admission token budget; reduce the batch size",
         );
       if (
         recent.count >= TYPESAFE_EGRESS_LIMITS.requestsPerWindow ||
@@ -305,10 +306,10 @@ export class AiGatewayEgressDurableObject extends DurableObject<Env> {
 
   async fetch(request: Request): Promise<Response> {
     const input = gatewayEgressInput.parse(await request.json());
-    const directJev = isDirectJevEndpoint(input.provider, input.endpoint);
-    if (directJev && !this.env.TYPESAFE_API_KEY)
-      throw new Error("Direct Jev requires the TYPESAFE_API_KEY Worker secret");
-    const directBody = JSON.stringify({ ...input.query, model: "jev-1.13.0" });
+    const byokJev = isByokJevEndpoint(input.provider, input.endpoint);
+    if (byokJev && !this.env.AI_GATEWAY_API_KEY)
+      throw new Error("Jev BYOK requires the AI_GATEWAY_API_KEY Worker secret");
+    const directBody = byokJev ? JSON.stringify(input.query) : "";
     // UTF-8 bytes plus framing conservatively overestimate textual input tokens.
     const inputTokens = new TextEncoder().encode(directBody).length + 1024;
     // Stored-key traffic does not consume Unified Billing's capacity window.
@@ -317,9 +318,9 @@ export class AiGatewayEgressDurableObject extends DurableObject<Env> {
       input.headers["cf-aig-byok-alias"] === "subscriber-credit" &&
       input.headers["cf-aig-no-wholesale"] === "true";
     const admitted = await this.admit(
-      directJev ? TYPESAFE_BUCKET : credit ? CREDIT_BUCKET : "unified",
+      byokJev ? TYPESAFE_BUCKET : credit ? CREDIT_BUCKET : "unified",
       Date.now(),
-      directJev ? inputTokens : 0,
+      byokJev ? inputTokens : 0,
     );
     if (admitted.kind === "refused") return creditRefusedResponse(admitted);
     if (admitted.kind === "wait")
@@ -383,16 +384,20 @@ export class AiGatewayEgressDurableObject extends DurableObject<Env> {
         throw new Error(
           "Named subscriber-credit BYOK requires the AI_GATEWAY_API_KEY Worker secret for native gateway authentication",
         );
-      const response = directJev
-        ? await fetch("https://api.typesafe.ai/v1/systemone", {
-            method: "POST",
-            headers: {
-              authorization: `Bearer ${this.env.TYPESAFE_API_KEY}`,
-              "content-type": "application/json",
-            },
-            body: directBody,
+      const byokRequest = byokJev
+        ? workersAiRunRequest({
+            accountId: CF_ACCOUNT_ID,
+            token: this.env.AI_GATEWAY_API_KEY,
+            model: workersAiModel(endpoint),
+            input: query,
+            gateway: { id: gatewayId, ...controls },
             signal: controller.signal,
           })
+        : null;
+      // Require stored TypeSafe credentials; never spend Unified Billing credits.
+      byokRequest?.init.headers.set("cf-aig-no-wholesale", "true");
+      const response = byokRequest
+        ? await fetch(byokRequest.url, byokRequest.init)
         : credit
           ? await runNativeGateway({
               accountId: CF_ACCOUNT_ID,

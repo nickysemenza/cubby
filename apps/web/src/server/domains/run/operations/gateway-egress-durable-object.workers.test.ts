@@ -353,12 +353,12 @@ describe("shared Gateway admission", () => {
   });
 });
 
-describe("direct Jev egress", () => {
-  it("uses TypeSafe credentials without consuming Unified Billing or inheriting its cooldown", async () => {
+describe("Jev BYOK egress", () => {
+  it("uses stored TypeSafe credentials without consuming Unified Billing or inheriting its cooldown", async () => {
     const stub = env.AI_GATEWAY_EGRESS.getByName(crypto.randomUUID());
     await runInDurableObject(stub, async (instance) => {
       Object.defineProperty(instance, "env", {
-        value: { TYPESAFE_API_KEY: "synthetic-typesafe-key" },
+        value: { AI_GATEWAY_API_KEY: "synthetic-gateway-key" },
       });
       const unified = await instance.admit("unified");
       expect(unified.kind).toBe("admitted");
@@ -387,17 +387,19 @@ describe("direct Jev egress", () => {
         expect(response.status).toBe(200);
         await response.text();
         expect(upstream).toHaveBeenCalledOnce();
-        expect(upstream.mock.calls[0]?.[0]).toBe(
-          "https://api.typesafe.ai/v1/systemone",
+        expect(upstream.mock.calls[0]?.[0]).toEqual(
+          expect.stringMatching(/\/ai\/run$/),
         );
         const init = upstream.mock.calls[0]?.[1];
         expect(new Headers(init?.headers).get("authorization")).toBe(
-          "Bearer synthetic-typesafe-key",
+          "Bearer synthetic-gateway-key",
+        );
+        expect(new Headers(init?.headers).get("cf-aig-no-wholesale")).toBe(
+          "true",
         );
         expect(JSON.parse(String(init?.body))).toEqual({
-          state: "synthetic",
-          questions: {},
-          model: "jev-1.13.0",
+          model: "typesafe/jev",
+          input: { state: "synthetic", questions: {} },
         });
         expect((await instance.admit("unified")).kind).toBe("wait");
       } finally {
@@ -406,18 +408,18 @@ describe("direct Jev egress", () => {
     });
   });
 
-  it("shares the direct token budget across callers and reopens after its rolling window", async () => {
+  it("shares the TypeSafe token budget across callers and reopens after its rolling window", async () => {
     const stub = env.AI_GATEWAY_EGRESS.getByName(crypto.randomUUID());
     await runInDurableObject(stub, async (instance) => {
       const now = Date.now();
-      const first = await instance.admit("direct:typesafe", now, 50_000);
+      const first = await instance.admit("byok:typesafe", now, 50_000);
       expect(first.kind).toBe("admitted");
-      expect(await instance.admit("direct:typesafe", now, 40_000)).toEqual({
+      expect(await instance.admit("byok:typesafe", now, 40_000)).toEqual({
         kind: "wait",
         until: now + 1_000,
       });
       expect(
-        (await instance.admit("direct:typesafe", now + 1_000, 40_000)).kind,
+        (await instance.admit("byok:typesafe", now + 1_000, 40_000)).kind,
       ).toBe("admitted");
       expect((await instance.admit("unified", now)).kind).toBe("admitted");
     });

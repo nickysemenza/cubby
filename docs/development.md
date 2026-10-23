@@ -129,16 +129,18 @@ Start streams   →  cancellable workflow streams
   the public MCP tools ([ADR 0010](adr/0010-mail-import-unattended-burn-down-interactive.md)).
   The map of queue events, Run services and owning files is
   [`apps/web/src/server/domains/purchase-import/service/README.md`](../apps/web/src/server/domains/purchase-import/service/README.md).
-- Jev text decisions use the direct TypeSafe System One API, pinned to
-  `jev-1.13.0`, with the `TYPESAFE_API_KEY` Worker secret. The shared egress
-  Durable Object admits at most 20 requests and 80,000 conservatively estimated
-  input tokens per rolling second, with 16 requests in flight. UTF-8 request
-  bytes plus 1,024 framing tokens bound admission; provider 429s retain their
-  cooldown. Missing credentials fail visibly without Cloudflare fallback.
+- Jev text decisions use AI Gateway's Workers AI route with the TypeSafe
+  provider key stored under the `default` alias on the production gateway.
+  Requests use `AI_GATEWAY_API_KEY` for Gateway authentication and require BYOK
+  with `cf-aig-no-wholesale: true`; no Unified Billing fallback is allowed.
+  The shared egress Durable Object admits at most 20 Jev requests and 80,000
+  conservatively estimated input tokens per rolling second, with 16 in flight.
+  UTF-8 request bytes plus 1,024 framing tokens bound admission; provider 429s
+  retain their own cooldown independently of Unified Billing traffic.
   Text decisions use a stable 90% Jev / 10% Clef split; vision stays on Clef.
-  Clef retains Unified Billing admission. Existing response caching, paid
-  admission, usage accounting and Run checkpoints remain shared; Jev usage is
-  labeled Direct. Install the secret before activating this revision.
+  Existing response caching, paid admission, usage accounting, Gateway
+  observability and Run checkpoints remain shared. Install the Gateway BYOK
+  key before activating this revision. No TypeSafe key is needed in the Worker.
 - OpenAI Responses calls use the household's ChatGPT plan when connected in
   Settings, retaining the declared Luna/Sol choices. `CHATGPT_PLAN` owns OAuth
   credentials and serializes rotating refreshes. Other providers and embeddings

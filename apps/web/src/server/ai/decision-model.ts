@@ -264,8 +264,7 @@ async function requestDecision(
     throw wrapAiGatewayError(error, {
       model: feature.model,
       provider: providerFor(feature.model),
-      route:
-        feature.model === "typesafe/jev" ? "typesafe-direct" : "workers-ai",
+      route: feature.model === "typesafe/jev" ? "typesafe-byok" : "workers-ai",
       feature: feature.feature,
       operation: ctx.operation,
       gatewayLogId: gateway?.gatewayLogId,

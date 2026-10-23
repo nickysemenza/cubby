@@ -121,7 +121,6 @@ export const productionWorker = defineWorker({
     R2_SECRET_ACCESS_KEY: bindings.secret(),
     // Also queries Workers Observability for the Run page's inline Job logs.
     AI_GATEWAY_API_KEY: bindings.secret(),
-    TYPESAFE_API_KEY: bindings.secret(),
 
     NODE_ENV: bindings.text("production"),
     ALLOW_SIGNUP: bindings.text("false"),
