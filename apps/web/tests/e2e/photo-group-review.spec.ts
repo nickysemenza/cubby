@@ -6,6 +6,7 @@ import { BROWSER_OPERATION_PATH } from "~/lib/browser-operation-path";
 import {
   dispatchOperations,
   operationResult,
+  performOperation,
   unbatchFor,
 } from "./support/dispatch-wire";
 import { reviewPhotoGroupsOutput } from "@cubby/schemas/photo-import-run";
@@ -15,20 +16,17 @@ import {
   seedProductPrerequisite,
   seedInventoryPrerequisites,
 } from "./fixtures/catalog";
-import { and, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type { TestHarness } from "wrangler";
-import { memberImport } from "~/server/domains/purchase-import/operations/order-import.fixtures";
-import {
-  prepareSourceOrderReconciliation,
-  commitAcceptedSourceOrderReconciliation,
-} from "~/server/domains/purchase-import/repo/reconciliation";
 import { getDb } from "~/server/db/helpers";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { loadRejectedPhotoProductCandidates } from "~/server/domains/photo-import/repo/photo-group-candidates";
+import { listPhotoGroupProposals } from "~/server/domains/photo-import/repo/run/proposals";
 import * as schema from "~/server/db/schema";
 import {
   createEvidenceHarnessContext,
   createEntityFixture,
+  createFixtureGraph,
 } from "./fixtures/core";
 import {
   seedPhotoGroupReviewRun,
@@ -62,29 +60,35 @@ test.afterEach(async ({ e2eRuntime }) => {
 });
 
 // Applying historical evidence must neither receive stock nor replace fields
-// the reviewer did not select. An unresolved proposal and a fractional count
-// cannot be applied using an older saved payload.
-test("resolves identity, validates counts, and applies selected fields without receiving historical stock", async ({
+// the reviewer did not select. Resolve identity before approving the notes-only
+// historical update; the native owner retains failed-save recovery.
+test("applies selected notes to a resolved historical Product without changing its name or stock", async ({
   page,
   e2eRuntime,
 }) => {
   // Includes upload seeding, lazy hydration, and several persisted edits.
   test.setTimeout(Math.max(test.info().timeout, 60_000));
   const name = `Synthetic review ${Date.now()}`;
-  const existing = await createEntityFixture(page, "product", {
-    name: `${name} shirt`,
-    notes: "Original catalog notes",
-  });
   const seed = await seedPhotoGroupReviewRun(
     page,
     name,
     e2eRuntime.objectStorageUrl,
   );
-  const incompatibleStock = await createEntityFixture(page, "inventory", {
-    productId: existing.id,
-    locationId: seed.location.id,
-    amount: { value: 2, unit: "kg" },
-  });
+  const { existing, historicalStock } = await createFixtureGraph(
+    page,
+    async (create) => {
+      const existing = await create("product", {
+        name: `${name} shirt`,
+        notes: "Original catalog notes",
+      });
+      const historicalStock = await create("inventory", {
+        productId: existing.id,
+        locationId: seed.location.id,
+        amount: { value: 2, unit: "kg" },
+      });
+      return { existing, historicalStock };
+    },
+  );
   const proposed = await startOperation(
     page.request,
     "photoImport.saveGroups",
@@ -110,23 +114,6 @@ test("resolves identity, validates counts, and applies selected fields without r
     `/runs/${seed.runId}#photo-group-g1`,
     page.getByRole("heading", { name: "Photo review" }),
   );
-  const other = page.locator("#photo-group-g2");
-  await other.scrollIntoViewIfNeeded();
-  await other
-    .getByRole("button", { name: /^(Change|Open) Own it now\?$/ })
-    .click();
-  await other.getByRole("combobox", { name: "stock decision" }).click();
-  await page
-    .getByRole("option", { name: "Yes, add to inventory", exact: true })
-    .click();
-  // Receiving a reference-only group lands where its siblings receive.
-  await expect(
-    other.getByText(`Create a count of 1 at Home › ${name} location.`),
-  ).toBeVisible();
-  await other.getByRole("combobox", { name: "stock decision" }).click();
-  await page
-    .getByRole("option", { name: "Just a reference photo", exact: true })
-    .click();
   const group = page.locator("#photo-group-g1");
   await expect(
     group.getByRole("button", { name: "Attach 1 photo", exact: true }),
@@ -135,35 +122,6 @@ test("resolves identity, validates counts, and applies selected fields without r
   await group
     .getByRole("button", { name: "Change Own it now?", exact: true })
     .click();
-  // A failed existing-entry selection can be replaced with a fresh count.
-  await group.getByRole("combobox", { name: "existing stock entry" }).click();
-  await page
-    .getByRole("option")
-    .filter({ hasText: `${name} shirt` })
-    .first()
-    .click();
-  await expect(
-    group.getByText("Retry the stock-entry selection before applying"),
-  ).toBeVisible();
-  await group
-    .getByRole("button", { name: "Create a fresh count here", exact: true })
-    .click();
-  await expect(
-    group.getByText("Retry the stock-entry selection before applying"),
-  ).toHaveCount(0);
-  const quantity = group.getByRole("spinbutton", { name: "Qty" });
-  await quantity.fill("1.5");
-  await group
-    .getByRole("button", { name: "Attach 1 photo", exact: true })
-    .click();
-  await expect(
-    group.getByText("Enter a whole number greater than 0."),
-  ).toBeVisible();
-  await expect(
-    group.getByRole("button", { name: "Attach 1 photo", exact: true }),
-  ).toBeVisible();
-  await quantity.fill("1");
-  await quantity.blur();
   await group.getByRole("combobox", { name: "stock decision" }).click();
   await page
     .getByRole("option", {
@@ -178,19 +136,6 @@ test("resolves identity, validates counts, and applies selected fields without r
   await group
     .getByRole("button", { name: "Show unchanged fields", exact: true })
     .click();
-  const changeName = group.getByRole("checkbox", {
-    name: "Change name",
-    exact: true,
-  });
-  await changeName.click();
-  await expect(changeName).toBeChecked();
-  const editedName = group.getByRole("textbox", {
-    name: "New name",
-    exact: true,
-  });
-  await editedName.fill("x".repeat(501));
-  await editedName.blur();
-  await expect(page.getByText(/Changes were not saved:/)).toBeVisible();
   const changeNotes = group.getByRole("checkbox", {
     name: "Change notes",
     exact: true,
@@ -201,15 +146,6 @@ test("resolves identity, validates counts, and applies selected fields without r
     .getByRole("textbox", { name: "New notes", exact: true })
     .fill("Label confirmed: medium");
   await group.getByRole("textbox", { name: "New notes", exact: true }).blur();
-  await group
-    .getByRole("button", { name: "Attach 1 photo", exact: true })
-    .click();
-  await expect(editedName).toBeFocused();
-  await expect(
-    group.getByRole("button", { name: "Attach 1 photo", exact: true }),
-  ).toBeVisible();
-  // Reverting the failed field to its saved value must unblock this group.
-  await editedName.fill(`${name} shirt`);
   await group
     .getByRole("button", { name: "Attach 1 photo", exact: true })
     .click();
@@ -228,34 +164,16 @@ test("resolves identity, validates counts, and applies selected fields without r
     name: `${name} shirt`,
     notes: "Label confirmed: medium",
   });
+  if (!product) throw new Error("Reviewed Product missing after approval");
   const stock = await db.query.inventoryEntry.findMany({
-    where: eq(schema.inventoryEntry.productId, product!.id),
+    where: eq(schema.inventoryEntry.productId, product.id),
   });
   expect(stock).toHaveLength(1);
-  expect(stock[0]?.shortcode).toBe(incompatibleStock.id);
-  await expect(
-    page.getByRole("navigation", { name: "Section index" }),
-  ).toHaveCount(1);
-  await expect(
-    page.getByText("Run cost · includes all nested work"),
-  ).toBeVisible();
-
-  await page.setViewportSize({ width: 402, height: 874 });
-  await expect
-    .poll(() =>
-      page.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
-    )
-    .toBe(true);
-
-  // The optional editor primed this Product's detail cache before applying.
-  // Following its result link must show the committed fields immediately.
-  await group
-    .getByRole("link", { name: `${name} shirt`, exact: true })
-    .first()
-    .click();
-  await expect(
-    page.getByText("Label confirmed: medium", { exact: true }),
-  ).toBeVisible();
+  expect(stock[0]).toMatchObject({
+    shortcode: historicalStock.id,
+    amountValue: 2,
+    amountUnit: "kg",
+  });
 });
 
 test("approves two selected photo groups with one reviewed batch action", async ({
@@ -633,7 +551,7 @@ test("suggests an existing variant and previews every merge decision for a creat
   expect(existing.id).not.toBe(createdId);
 });
 
-test("reviews an occupied location and links a chosen unlinked Expense after photo approval", async ({
+test("reviews an occupied location and adds the photo count to its chosen stock entry", async ({
   page,
   e2eRuntime,
 }) => {
@@ -645,66 +563,18 @@ test("reviews an occupied location and links a chosen unlinked Expense after pho
   });
   const context = await createEvidenceHarnessContext(page);
   const db = getDb(context.db);
-  const member = await db.query.ledgerParty.findFirst({
-    where: and(
-      eq(schema.ledgerParty.userId, context.actor.userId),
-      eq(schema.ledgerParty.kind, "member"),
-    ),
-  });
-  if (!member) {
-    await insertWithShortcode(context.db, "ledgerParty", {
-      kind: "member",
-      userId: context.actor.userId,
-      name: `Synthetic reviewer ${name}`,
+  const productId = await resolveOrThrow(
+    context.db,
+    "product",
+    stock.products[0]!.id,
+  );
+  const stockRows = () =>
+    db.query.inventoryEntry.findMany({
+      where: eq(schema.inventoryEntry.productId, productId),
     });
-  }
-  const merchant = `Synthetic photo retailer ${name}`;
-  const vendor = await createEntityFixture(page, "vendor", { name: merchant });
-  const sourceKey = `synthetic:photo-link:${crypto.randomUUID()}`;
-  await memberImport(context.db, context.actor, {
-    key: sourceKey,
-    orders: [
-      {
-        stableOrderId: sourceKey,
-        vendorId: parseShortcodeFor("vendor", vendor.id),
-        source: {
-          kind: "receipt_photo",
-          externalKey: sourceKey,
-          checksum: "b".repeat(64),
-        },
-        extraction: {
-          status: "ready",
-          candidate: {
-            orderId: sourceKey,
-            orderedAt: "2026-01-05T12:00:00Z",
-            merchant,
-            currency: "USD",
-            printedGrandTotal: 87,
-            lines: [
-              {
-                title: `${existingName} purchase line`,
-                amount: 87,
-                lineKind: "principal",
-                quantity: 1,
-              },
-            ],
-            payments: [{ amount: 87 }],
-            allShipmentsDelivered: false,
-          },
-        },
-      },
-    ],
-  });
-  const expense = await db.query.expense.findFirst({
-    where: eq(schema.expense.name, `${existingName} purchase line`),
-  });
-  if (!expense?.purchaseId)
-    throw new Error("Accepted unlinked Expense missing");
-  const association = await db.query.importSourceOrder.findFirst({
-    where: eq(schema.importSourceOrder.purchaseId, expense.purchaseId),
-  });
-  if (!association?.acceptedObservationId)
-    throw new Error("Accepted source snapshot missing");
+  const before = await stockRows();
+  expect(before).toHaveLength(1);
+  expect(before[0]).toMatchObject({ amountValue: 2, amountUnit: "each" });
   const seed = await seedPhotoGroupReviewRun(
     page,
     name,
@@ -722,11 +592,6 @@ test("reviews an occupied location and links a chosen unlinked Expense after pho
     },
     seed.groups[1]!,
   ];
-  await gotoAuthenticatedPage(
-    page,
-    `/runs/${seed.runId}#work`,
-    page.getByRole("heading", { name: "Photo review" }),
-  );
   await configureVariantDecisions(e2eRuntime.harness, [
     {
       feature: "product-variant-relation",
@@ -739,23 +604,11 @@ test("reviews an occupied location and links a chosen unlinked Expense after pho
     groups,
   });
   expect(saved.ok(), await saved.text()).toBeTruthy();
-  // Selected Products show inline evidence; the create group owns alternative comparisons.
-  await page.locator("#photo-group-g2").scrollIntoViewIfNeeded();
-  await page
-    .locator("#photo-group-g2")
-    .getByRole("button", { name: /^Compare(?: existing Products)?$/ })
-    .click();
-  const comparison = page
-    .locator("#photo-group-g2")
-    .locator("[data-record-list]");
-  await expect(comparison.getByText(existingName).first()).toBeVisible();
-  await expect(comparison.getByText(/Titles agree/).first()).toBeVisible();
-  await expect(
-    comparison.getByText("Recorded count", { exact: true }).first(),
-  ).toBeVisible();
-  await expect(
-    comparison.getByText("Expected", { exact: true }).first(),
-  ).toBeVisible();
+  await gotoAuthenticatedPage(
+    page,
+    `/runs/${seed.runId}#work`,
+    page.getByRole("heading", { name: "Photo review" }),
+  );
   await page
     .locator("#photo-group-g1")
     .getByRole("button", { name: "Change Own it now?", exact: true })
@@ -781,85 +634,14 @@ test("reviews an occupied location and links a chosen unlinked Expense after pho
       .getByRole("navigation", { name: "Section index" })
       .locator('a[href="#photo-group-g1"] [aria-label="Applied"]'),
   ).toBeVisible();
-  const review = await page.request.get(
-    `/api/v1/photoImport/review?runId=${seed.runId}`,
-  );
-  const body = await review.json();
-  expect(
-    body.review.proposals.find(
-      (group: { groupKey: string }) => group.groupKey === "g1",
-    )?.committedInventoryId,
-  ).toBeTruthy();
-  await page
-    .getByRole("heading", { name: `Approved · ${existingName}` })
-    .click();
-  await page
-    .getByRole("heading", { name: "Link a purchase line", exact: true })
-    .click();
-  const linkSection = page.getByRole("region", {
-    name: "Unlinked purchase lines",
+  const updated = await stockRows();
+  expect(updated).toHaveLength(1);
+  expect(updated[0]).toMatchObject({
+    id: before[0]?.id,
+    locationId: before[0]?.locationId,
+    amountValue: 3,
+    amountUnit: "each",
   });
-  await expect(
-    linkSection.getByText(`${existingName} purchase line`),
-  ).toBeVisible();
-  await expect(
-    linkSection.getByText(/expected quantity remains uncertain/),
-  ).toBeVisible();
-  const preserved = async () => ({
-    inventory: await db.select().from(schema.inventoryEntry),
-    payments: await db.select().from(schema.purchasePaymentEvidence),
-    allocations: await db.select().from(schema.financialTransactionAllocation),
-    attributions: await db.select().from(schema.expenseAttribution),
-  });
-  const beforeLink = await preserved();
-  const reviewed = await prepareSourceOrderReconciliation(
-    context.db,
-    {
-      sourceOrderId: association.id,
-      resolution: {
-        kind: "attach_only",
-        lines: [
-          {
-            lineIndex: 0,
-            expenseId: parseShortcodeFor("expense", expense.shortcode),
-            productId: parseShortcodeFor("product", stock.products[0]!.id),
-          },
-        ],
-      },
-    },
-    context.actor,
-  );
-  expect(await preserved()).toEqual(beforeLink);
-  await linkSection.getByRole("button", { name: "Review this link" }).click();
-  const linkReview = linkSection.getByLabel("Reviewed Expense association");
-  await expect(linkReview).toContainText("$87.00");
-  await linkReview
-    .getByRole("button", { name: "Confirm reviewed link" })
-    .click();
-  await expect(
-    linkSection.getByText(`${existingName} purchase line`),
-  ).toHaveCount(0);
-  const linked = await db.query.expense.findFirst({
-    where: eq(schema.expense.id, expense.id),
-  });
-  expect(linked).toMatchObject({
-    id: expense.id,
-    cost: expense.cost,
-    productQuantity: 1,
-  });
-  expect(linked?.productId).not.toBeNull();
-  expect(await preserved()).toEqual(beforeLink);
-  expect(
-    await commitAcceptedSourceOrderReconciliation(
-      context.db,
-      {
-        sourceOrderId: association.id,
-        resolution: reviewed.resolution,
-      },
-      context.actor,
-    ),
-  ).toMatchObject({ alreadyApplied: true });
-  expect(await preserved()).toEqual(beforeLink);
 });
 
 // Concern resolution must be explicit: editing the draft cannot silently unblock
@@ -1244,11 +1026,11 @@ test("keeps proposed edits separate while saved product evidence loads, fails, a
   ).toHaveText("104");
 });
 
-test("persists rejected photo candidates after reload and regroup", async ({
+test("rejects a photo candidate and persists the reviewed rejection", async ({
   page,
   e2eRuntime,
 }) => {
-  const { productName, seed, groups } = await seedEvidenceReview(
+  const { productName, seed } = await seedEvidenceReview(
     page,
     e2eRuntime.objectStorageUrl,
   );
@@ -1258,41 +1040,22 @@ test("persists rejected photo candidates after reload and regroup", async ({
     page.getByRole("heading", { name: "Photo review" }),
   );
   const attach = page.locator("#photo-group-g1");
-  await attach
-    .getByRole("button", { name: "Not this one…", exact: true })
-    .click();
+  await performOperation(page, "photoImport.rejectCandidate", () =>
+    attach.getByRole("button", { name: "Not this one…", exact: true }).click(),
+  );
   await expect(
     attach.getByText(`${productName} · Rejected`, { exact: true }).first(),
   ).toBeVisible();
   await expect(
     attach.getByRole("button", { name: "Attach 1 photo", exact: true }),
   ).toHaveCount(0);
-  const regrouped = await startOperation(
-    page.request,
-    "photoImport.saveGroups",
-    {
-      runId: seed.runId,
-      groups: [
-        {
-          ...groups[0]!,
-          groupKey: "regrouped",
-          product: {
-            kind: "create",
-            create: { name: "Synthetic replacement jacket" },
-          },
-        },
-      ],
-      removeGroupKeys: ["g1"],
-    },
-  );
-  expect(regrouped.ok(), await regrouped.text()).toBeTruthy();
-  await page.reload();
-  await expect(
-    page
-      .locator("#photo-group-regrouped")
-      .getByText(`${productName} · Rejected`, { exact: true })
-      .first(),
-  ).toBeVisible();
+  const { db } = await createEvidenceHarnessContext(page);
+  const saved = await listPhotoGroupProposals(db, seed.runId);
+  const proposal = saved.proposals.find((group) => group.groupKey === "g1");
+  if (!proposal) throw new Error("Rejected photo proposal missing");
+  expect(
+    await loadRejectedPhotoProductCandidates(db, seed.runId, proposal),
+  ).toMatchObject([{ name: productName, rejected: true }]);
 });
 
 // A failed inference read is recoverable evidence, never a new apply blocker.

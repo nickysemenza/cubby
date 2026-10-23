@@ -794,6 +794,7 @@ it("shows exact-identifier evidence without hiding a conflicting size", async ()
 
 // Dirty input must survive a background saved snapshot; approval's blur barrier
 // must submit that input before reading the revision used for approval.
+// A successful sibling save must not acknowledge a rejected field draft.
 it("keeps a dirty field through refresh and saves it before approval", async () => {
   const proposal: PhotoGroupProposal = {
     ...proposedSweater,
@@ -810,6 +811,8 @@ it("keeps a dirty field through refresh and saves it before approval", async () 
   };
   presentProposal(proposal);
   let savedName: string | undefined;
+  let savedNotes: string | null | undefined;
+  let rejectName = true;
   let submittedRevision: string | undefined;
   const savedRevision = "2026-09-20T16:06:00.000Z";
   restoreDispatch = overrideStartDispatch(async (operation, input) => {
@@ -818,8 +821,12 @@ it("keeps a dirty field through refresh and saves it before approval", async () 
     if (operation === "photoImport.saveGroups") {
       const body = photoImportContract.ops.saveGroups.input.parse(input);
       const group = body.groups[0];
-      if (group?.product.kind === "create")
+      if (group?.product.kind === "create") {
+        if (rejectName && group.product.create.name === "Unsaved sweater name")
+          throw new Error("Synthetic name save rejected");
         savedName = group.product.create.name;
+        savedNotes = group.product.create.notes;
+      }
       return {
         ok: true,
         data: reviewPhotoGroupsOutput.parse({
@@ -827,7 +834,10 @@ it("keeps a dirty field through refresh and saves it before approval", async () 
           proposals: [
             {
               ...proposal,
-              product: { kind: "create", create: { name: savedName } },
+              product: {
+                kind: "create",
+                create: { name: savedName, notes: savedNotes },
+              },
               updatedAt: savedRevision,
             },
           ],
@@ -861,7 +871,26 @@ it("keeps a dirty field through refresh and saves it before approval", async () 
     product: { kind: "create", create: { name: "Refreshed saved name" } },
   });
   await waitFor(() => expect(name).toHaveValue("Unsaved sweater name"));
-  await userEvent.click(screen.getByRole("button", { name: "Create product" }));
+  const approve = screen.getByRole("button", { name: "Create product" });
+  await userEvent.click(approve);
+  await screen.findByText(
+    /Changes were not saved:.*Synthetic name save rejected/,
+  );
+  expect(submittedRevision).toBeUndefined();
+
+  await userEvent.click(screen.getByText("Notes and tags", { exact: true }));
+  const notes = screen.getByRole("textbox", { name: "Product notes" });
+  await userEvent.type(notes, "Label confirmed: medium");
+  await userEvent.click(name);
+  await waitFor(() => expect(savedNotes).toBe("Label confirmed: medium"));
+  // A valid sibling save cannot acknowledge the rejected name draft.
+  await userEvent.click(approve);
+  await waitFor(() => expect(name).toHaveFocus());
+  expect(name).toHaveValue("Unsaved sweater name");
+  expect(submittedRevision).toBeUndefined();
+
+  rejectName = false;
+  await userEvent.click(approve);
   await waitFor(() =>
     expect(screen.getByLabelText("Products from this import")).toBeVisible(),
   );

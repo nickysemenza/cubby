@@ -35,6 +35,39 @@ repositories or the entity kernel. Runtime route creation, singular image owners
 and SQL relationship traversal stay in the existing photo-import transaction
 integration suite, which already imports those production bindings.
 
+The required `photo-run-detail.preview.test.tsx` dirty-field workflow also owns
+failed-save recovery: a rejected name stays dirty through refresh, valid notes
+can save without acknowledging that name, approval remains blocked, and retry
+submits the saved revision before approval. It drives the real `CommitInput` and
+photo draft barrier shared by create and existing-Product edits. The selected-field
+E2E retains real identity resolution, the historical stock decision, notes-only
+application preserving the original Product name, and exact unchanged 2 kg stock.
+Batch the existing Product and its stock together; finish at the committed
+read-back. `run/proposals.integration.test.ts`'s explicit-resolution/selected-fields
+case owns unresolved refusal, selective mutation and replay. Incompatible-entry
+recovery, fractional-count error presentation, the sibling reference/receive
+preview, repeated Run totals/phone overflow and the Product-detail cache-freshness
+visit are omitted from this journey. These are deliberate interaction/composition
+gaps, alongside its removed existing-Product failed-name HTTP save/retry sequence;
+the shared native failed-save barrier remains required coverage.
+
+The occupied-location browser journey owns choosing an existing stock entry,
+the Add 1 to 2 decision, and exact 3 each on the same row and Location after
+approval. Save prerequisite groups before entering the page; this case does not
+own live grouping progress. Omit its sibling comparison matrix and separate
+accepted-source Expense association workflow.
+`accepted-source-association.integration.test.ts` owns the photographed Product
+association, retained item cost/quantity, payment/attribution/stock preservation
+and idempotent replay. Its photo-specific inline review/confirm HTTP composition
+is a deliberate gap; the domain write remains tested at the SQL boundary.
+
+The candidate-rejection browser journey keeps Not this one, its committed
+operation, Rejected/no-attach state and stored rejection read-back. The existing
+`run/proposals.integration.test.ts` Wrong-candidate combine/split case owns
+suppression across regrouping and inference failure. Do not repeat regrouping
+and another document load in this browser case. Reloaded rejected-marker
+presentation is the deliberate composition gap.
+
 Photo-group review prerequisites create their Location and Product category in one
 fixture graph. Independent shirt, label and boots uploads run together; keep their
 ordered result tuple and wait for every verified Image before linking the Run's
