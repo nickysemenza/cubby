@@ -35,11 +35,8 @@ import { loadDataQualities } from "./hydrate";
 
 /**
  * For each finance/project scored entity, one row that trips a real check and
- * one that satisfies it, asserted through `loadDataQualities` — the same
- * evaluation the list `dataStatus`/`dataGap` filters and the list's
- * `dataQuality` column read from (see `pantry-checks.integration.test.ts` for
- * the pantry/garden equivalent, `data-quality.integration.test.ts` for
- * product/purchase).
+ * one that satisfies it. Ported entries pass `source: "live"` to exercise the
+ * batch TypeScript evaluator; unported entries still exercise their SQL path.
  */
 describe("data quality: finance and project entities", () => {
   const ctx = withTestDb();
@@ -61,11 +58,12 @@ describe("data quality: finance and project entities", () => {
       dates: { start: "2026-01-01", end: null },
     });
 
-    const hydrated = await loadDataQualities(ctx.db, "project", [
-      gap.entityId,
-      notStarted.entityId,
-      complete.entityId,
-    ]);
+    const hydrated = await loadDataQualities(
+      ctx.db,
+      "project",
+      [gap.entityId, notStarted.entityId, complete.entityId],
+      "live",
+    );
     const gapChecks = hydrated.get(gap.entityId)?.gaps.map((g) => g.check);
     expect(gapChecks).toContain("project_kind");
     expect(gapChecks).toContain("project_start_date");
@@ -396,10 +394,12 @@ describe("data quality: finance and project entities", () => {
       ctx.actor,
     );
 
-    const hydrated = await loadDataQualities(ctx.db, "wish", [
-      gap.entityId,
-      complete.entityId,
-    ]);
+    const hydrated = await loadDataQualities(
+      ctx.db,
+      "wish",
+      [gap.entityId, complete.entityId],
+      "live",
+    );
     const gapChecks = hydrated.get(gap.entityId)?.gaps.map((g) => g.check);
     expect(gapChecks).toContain("wish_candidate");
     expect(hydrated.get(complete.entityId)).toMatchObject({
