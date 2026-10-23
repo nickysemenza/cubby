@@ -670,11 +670,13 @@ async function runStatementLabelBatch(
     JOB_PAGE_LIMITS.suggestionsPerPage,
   );
   const prepareDeadline = Date.now() + 20_000;
-  const rows = await suggestionsNeedingLabels(
-    db,
-    limit + 1,
-    input.after,
-    input.importId ?? null,
+  const rows = await time("statement_selection", () =>
+    suggestionsNeedingLabels(
+      db,
+      limit + 1,
+      input.after,
+      input.importId ?? null,
+    ),
   );
   if (!rows.length) return { ...empty, active: true };
   const runId =
@@ -1067,20 +1069,22 @@ async function runStatementLabelBatch(
         fail(current.charge, error);
       }
     }
-    const { applied, rebuild } = await applyPublishedStatementLabels(db, {
-      targets,
-      receipts,
-      published,
-      skipped,
-      failedCharges,
-      completed,
-      unfinished,
-      importId: input.importId,
-      reconsidered: new Set(
-        ready.map(({ current }) => chargeId(current.charge)),
-      ),
-      fail,
-    });
+    const { applied, rebuild } = await time("statement_application", () =>
+      applyPublishedStatementLabels(db, {
+        targets,
+        receipts,
+        published,
+        skipped,
+        failedCharges,
+        completed,
+        unfinished,
+        importId: input.importId,
+        reconsidered: new Set(
+          ready.map(({ current }) => chargeId(current.charge)),
+        ),
+        fail,
+      }),
+    );
     if (rebuild.size && round === MAX_LABEL_ROUNDS - 1) {
       const remaining = targets.filter((target) =>
         rebuild.has(chargeId(target.charge)),
