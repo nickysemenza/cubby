@@ -1,5 +1,5 @@
 import { and, asc, eq } from "drizzle-orm";
-import { entityExternalId } from "~/server/db/schema";
+import { entityExternalId, financialAccount } from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/db/helpers";
 import { gotoAuthenticatedPage } from "./support/e2e-helpers";
 import { expect, test } from "./support/e2e-test";
@@ -154,9 +154,13 @@ test("a new account must choose its identity kind instead of getting a default",
   await page.getByRole("option", { name: "Primary" }).click();
   await dialog.getByRole("button", { name: "Create" }).click();
   await expect(dialog).toBeHidden();
-  const row = page.getByRole("row").filter({ hasText: name });
-  await expect(row).toBeVisible();
-  await expect(row).toContainText("Credit card");
+  const stored = await getDb(getFixtureDb()).query.financialAccount.findFirst({
+    where: and(eq(financialAccount.name, name), notDeleted(financialAccount)),
+  });
+  expect(stored).toMatchObject({
+    identity: { kind: "credit_card", issuer: "Example Credit Union" },
+    cardNumbers: [{ last4: "4242", kind: "primary" }],
+  });
 });
 
 // Tester Army (web) found the Edit dialog refusing a source-claim description edit with

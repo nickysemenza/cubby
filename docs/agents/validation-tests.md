@@ -26,6 +26,11 @@ The emoji/category browser journey retains actual editors and category navigatio
 This removes the dedicated HTTP Vendor-apply smoke; production serialization
 conflicts remain separately tracked rather than being claimed fixed by this move.
 
+Structured Account creation reads back its saved identity and card numbers after
+the real editor closes. Its contract is schema/editor persistence; a searched
+list’s post-create indexing and invalidation are separate outcomes. Do not make
+this editor regression depend on the newly created row entering that list.
+
 Connected-record Plant/Project/Task and both purchase paths use one fixture
 graph with one shared brand. Booking-review prerequisites settle once before the
 first browser action; its reimbursement credit is still created after booking.
