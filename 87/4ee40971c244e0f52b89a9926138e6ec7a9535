@@ -1,0 +1,45 @@
+apps/web/src/server/domains/financial-transaction/repo/financial-reconciliation.ts
+  s_7b8700ee7a9c2b::t_a3e990b24a76b5 118-123,222-225
+apps/web/src/server/domains/financial-transaction/repo/financial-transaction-itemization.integration.test.ts
+  s_7b8700ee7a9c2b::t_7c2344b487b99d 11,170
+apps/web/src/server/domains/financial-transaction/repo/settlement-conflicts.integration.test.ts
+  s_7b8700ee7a9c2b::t_24c56cbb5a6d88 18,22,33-38
+apps/web/src/server/domains/purchase/repo/purchase-evidence-policy.integration.test.ts
+  s_7b8700ee7a9c2b::t_f50de57cf7b353 20,23,42-45,207,267-268,290,293,296,299,535,580,622,625,628,631,826
+apps/web/src/server/domains/purchase/repo/purchase-evidence-policy.ts
+  s_7b8700ee7a9c2b::t_42a5d1c33fce31 197,219
+apps/web/src/server/domains/purchase/repo/purchase-paperwork.integration.test.ts
+  s_7b8700ee7a9c2b::t_082a16e6ffe71f 6,8,16-19
+apps/web/src/server/domains/purchase/repo/purchase-reconciliation-filter.integration.test.ts
+  s_7b8700ee7a9c2b::t_bd2e4d1fc249c7 6,8,14,17-20,99-102
+apps/web/src/server/domains/purchase/repo/purchase.ts
+  s_7b8700ee7a9c2b::t_3582d22e726fba 136,609-610,616,2417-2419
+apps/web/src/server/generic/data-quality/repo/checks/purchase.ts
+  s_7b8700ee7a9c2b::t_3f426e79fd78a5 1-5,8,10-11,13,15-16,18,24-26,28-35,37,40-41,51-97,100-184
+apps/web/src/server/generic/data-quality/repo/filter-read-parity.integration.test.ts
+  s_7b8700ee7a9c2b::t_dba97554ef66f2 157
+apps/web/src/server/generic/data-quality/repo/purchase-checks.integration.test.ts
+  s_7b8700ee7a9c2b::t_397e70deb42889 1-221
+apps/web/src/server/generic/data-quality/repo/sql.unit.test.ts
+  s_7b8700ee7a9c2b::t_6d5adf24f7757f 185,188-189,233-234,256-257
+apps/web/src/server/generic/problems/repo/problems.integration.test.ts
+  s_7b8700ee7a9c2b::t_ac5dbe748f5501 23,762-765,813,880,888,958-961,1012-1016,1116-1117,1121,1123-1125,1127-1128,1136
+docs/entities.md
+  s_7b8700ee7a9c2b::t_78a1746a5cd009 2607-2624
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "874ee40971c244e0f52b89a9926138e6ec7a9535",
+  "prompts": {},
+  "sessions": {
+    "s_7b8700ee7a9c2b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a16aa3-b63d-7e70-8a12-2185f530da26",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
