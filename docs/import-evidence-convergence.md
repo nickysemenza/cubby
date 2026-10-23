@@ -459,14 +459,17 @@ PostgreSQL through
 the same writers the routes dispatch: real normalization, persistence,
 retailer preparation/commit, photo staging/finalization/review, normalized intake,
 booking, finding resolution, and order-mail linking.
-`import-order-convergence.spec.ts` retains two browser orders: statement-first
-requires reviewed receipt reconciliation; receipt-first links existing
-itemization. Both retain signed photo upload, photo review approval, normalized evidence recording, and vendor-to-Purchase-to-Product navigation. The statement-first case
-also retains the Problems fix beyond the overview's first twelve findings.
-The PostgreSQL matrix owns sampled source-ordering coverage. Only external
-classifier/image-description output is deterministic. Both assert the final Product, inventory ownership, Expense,
-Purchase allocation, and original source edges; neither seeds the economic
-graph or repair it at the end.
+The composite `import-order-convergence.spec.ts` browser journey is removed.
+`gmail.input-first-import.spec.ts` retains input acquisition, reviewed statement
+booking and receipt reconciliation, Product conflict review, and Vendor-to-Purchase
+and original Email navigation. Photo review and photo-first journeys retain signed
+upload, review approval and persisted image roles. The crowded Problems sample
+regression belongs to `run-service.integration.test.ts`; the Gmail journey still
+applies the reviewed fix from the Run page.
+The PostgreSQL matrix owns the six sampled source orders and exact final Product,
+inventory ownership, Expense, Purchase allocation and original source edges.
+External classifier/image-description output is deterministic. The combined
+four-source browser sequence no longer has a dedicated owner.
 
 The normalized evidence PostgreSQL contracts retain replay, complete-window
 admission, distinct occurrences, immutable revisions and monotonic withdrawal.

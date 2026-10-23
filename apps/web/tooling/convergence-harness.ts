@@ -2,8 +2,6 @@ import type {
   TransactionImportInput,
   SourceTransactionRecordInput,
 } from "@cubby/schemas/source-transaction-record";
-import { suggestionStatus } from "@cubby/schemas/ai";
-import { assessmentFamily } from "@cubby/schemas/assessment";
 import { readRetainedMail } from "~/server/domains/mail/repo/retained-mail";
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -529,16 +527,6 @@ export async function convergenceProjection(
       (SELECT count(*)::int FROM "AssessmentEmailLink" d JOIN "OrderMailEvent" e ON e.id = d."eventId" JOIN "OrderMail" m ON m.id = e."orderMailId" JOIN "Email" email ON email."orderMailId" = m.id AND email."ledgerPartyId" = m."ledgerPartyId" WHERE email."messageId" = ${messageId} AND email."ledgerPartyId" = ${memberId} AND email.provider = 'gmail' AND email."deletedAt" IS NULL AND e."supersededAt" IS NULL AND d.decision = 'linked') AS "linkedMail"
   `);
   return rows[0];
-}
-
-/** Open Run findings on this vendor's Purchases. */
-export async function openFindingCount(db: Database, vendorId: string) {
-  const { rows } = await getDb(db).execute(sql`
-    SELECT count(*)::int AS count FROM "AssessmentState" f
-    JOIN "Purchase" p ON p.id = f."recordId"
-    WHERE p."vendorId" = ${vendorId} AND f.family = ${assessmentFamily.enum.run_finding} AND f.active AND f.status = ${suggestionStatus.enum.pending}
-  `);
-  return Number(rows[0]?.count);
 }
 
 /** The Product-page #images/#labels rows for one Product. */

@@ -614,6 +614,40 @@ describe("purchase import run admission", () => {
     });
   });
 
+  it("keeps a Run's findings readable beyond the global Problems sample", async () => {
+    const party = await createMember();
+    const earlier = await startAgentRun(party);
+    await seedRunFindings(
+      ctx.db,
+      Array.from({ length: 13 }, (_, index) => ({
+        runId: earlier.id,
+        ledgerPartyId: party.id,
+        entityKind: "run",
+        entityId: earlier.id,
+        kind: "synthetic_review",
+        summary: "Synthetic earlier finding",
+        proposedFix: null,
+        evidenceFingerprint: `earlier-${index}`,
+      })),
+    );
+    const current = await startAgentRun(party);
+    const [finding] = await seedRunFindings(ctx.db, [
+      {
+        runId: current.id,
+        ledgerPartyId: party.id,
+        entityKind: "run",
+        entityId: current.id,
+        kind: "synthetic_review",
+        summary: "Synthetic current finding",
+        proposedFix: null,
+        evidenceFingerprint: "current",
+      },
+    ]);
+    if (!finding) throw new Error("Synthetic current finding missing");
+    const detail = await loadRunDetail(ctx.db, current.publicId);
+    expect(detail.findings.map(({ id }) => id)).toEqual([finding.id]);
+  });
+
   // Production still holds findings whose fix kinds ADR 0010 retired until
   // the contract migration dismisses them; they must read as non-executable.
   it("reads findings carrying retired fix kinds as having no executable fix", async () => {
