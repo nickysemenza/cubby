@@ -11,6 +11,7 @@ import { getDb } from "~/server/db/helpers";
 import { location, product } from "~/server/db/schema";
 import { createProductCategory } from "~/server/domains/product-category/repo/product-category";
 import { attachProductComponents } from "~/server/domains/product/repo/product-components";
+import { projectList } from "~/server/domains/project/repo/lookup";
 import { readWorkQueue } from "~/server/generic/work-queue/service/work-queue-read";
 import {
   createInventoryFixture,
@@ -225,6 +226,97 @@ describe("product list declared filters", () => {
         .map((row) => row.id)
         .sort(),
     );
+  });
+
+  it("filters effective projects without sharing attribution between sibling lines", async () => {
+    const fallback = await createRepoEntity(ctx, "project", {
+      name: "Synthetic fallback project",
+    });
+    const explicit = await createRepoEntity(ctx, "project", {
+      name: "Synthetic explicit project",
+    });
+    const vendor = await createRepoEntity(ctx, "vendor", {
+      name: "Synthetic project supplier",
+    });
+    const purchase = await createRepoEntity(ctx, "purchase", {
+      vendorId: vendor.output.id,
+      defaultProjectId: fallback.output.id,
+    });
+    const make = async (name: string) =>
+      createProductFixture(ctx.db, makeProductInput({ name }), ctx.actor);
+    const split = await make("Synthetic multiple project lines");
+    const overridden = await make("Synthetic explicit sibling");
+    const inherited = await make("Synthetic default sibling");
+    const unassigned = await make("Synthetic unattributed line");
+    for (const item of [split, overridden])
+      await createRepoEntity(
+        ctx,
+        "expense",
+        makeExpenseInput({
+          name: "Synthetic explicit attribution",
+          productId: item.id,
+          purchaseId: purchase.output.id,
+          projectId: explicit.output.id,
+        }),
+      );
+    for (const item of [split, inherited])
+      await createRepoEntity(
+        ctx,
+        "expense",
+        makeExpenseInput({
+          name: "Synthetic inherited attribution",
+          productId: item.id,
+          purchaseId: purchase.output.id,
+        }),
+      );
+    await createRepoEntity(
+      ctx,
+      "expense",
+      makeExpenseInput({
+        name: "Synthetic no project",
+        productId: unassigned.id,
+      }),
+    );
+    const all = [split, overridden, inherited, unassigned];
+    const cases: Array<[ProductFilters, typeof all]> = [
+      [{ projectPresenceFilter: "has" }, [split, overridden, inherited]],
+      [{ projectPresenceFilter: "none" }, [unassigned]],
+      [{ projectId: [fallback.output.id] }, [split, inherited]],
+      [
+        { projectId: [fallback.output.id], projectPresenceFilter: "none" },
+        [split, inherited, unassigned],
+      ],
+      // ID and search may be witnessed by different effective Projects.
+      [{ projectId: [fallback.output.id], projectSearch: "explicit" }, [split]],
+    ];
+    for (const [filters, expected] of cases) {
+      const result = await productList(
+        ctx.db,
+        { ...filters, ids: all.map((item) => item.id) },
+        [],
+        { pageIndex: 0, pageSize: 50 },
+      );
+      expect(result.count).toBe(expected.length);
+      expect(result.data.map((row) => row.id).sort()).toEqual(
+        expected.map((item) => item.id).sort(),
+      );
+    }
+    for (const scope of [
+      { item: inherited, projects: [fallback] },
+      { item: overridden, projects: [explicit] },
+      { item: split, projects: [fallback, explicit] },
+    ]) {
+      const inverse = await projectList(
+        ctx.db,
+        { purchasedProductId: [scope.item.id] },
+        [],
+        { pageIndex: 0, pageSize: 50 },
+      );
+      expect(inverse.count).toBe(scope.projects.length);
+      expect(inverse.data.map((row) => row.id).sort()).toEqual(
+        scope.projects.map((item) => item.output.id).sort(),
+      );
+    }
   });
 
   it("narrows by each declared filter", async () => {
