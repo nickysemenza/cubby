@@ -74,6 +74,7 @@ import { decideStatementKind } from "~/server/domains/transaction-import/repo/st
 import { applyAutomaticRulesForCharge } from "~/server/generic/assessment/repo/automatic-rule-runtime";
 import { matchStatementRules } from "~/server/generic/assessment/repo/automatic-rules";
 import { withJobPhase } from "~/server/generic/jobs/context";
+import type { PageWork } from "~/server/generic/jobs/page-work";
 import { canonicalJson } from "~/server/lib/canonical-json";
 import { isWorkflowInterrupted } from "~/server/workflows/runs/execution";
 import { runFailureText } from "~/server/workflows/runs/lifecycle";
@@ -81,7 +82,9 @@ import { runFailureText } from "~/server/workflows/runs/lifecycle";
 // A label page includes merchant discovery in addition to batched decisions.
 // Keep its retry/checkpoint unit small enough to settle within a live Job claim.
 const STATEMENT_LABEL_BATCH = 32;
-const STATEMENT_SPENDING_CONCURRENCY = 8;
+// Admit one default page together so a slow merchant does not serialize four waves.
+// Larger explicit pages still retain a bounded wave and the cooperative deadline.
+const STATEMENT_SPENDING_CONCURRENCY = 32;
 /** Page rebuilds after automatic rules move the ledger mid-page. */
 const MAX_LABEL_ROUNDS = 3;
 const log = createLogger("statement-suggestion-labels");
@@ -618,6 +621,7 @@ async function runStatementLabelBatch(
     limit?: number;
     decisionLimit?: number;
     cooperative?: boolean;
+    work?: PageWork;
     port?: DecisionPort;
     spendingAdvice?: SpendingAdvicePort;
     /** The Run the model calls are accounted to (a Sweep's step). */
@@ -642,6 +646,10 @@ async function runStatementLabelBatch(
   waitingUntil: number | null;
   paused: { reason: string; until: string } | null;
 }> {
+  const time = <T>(phase: string, work: () => Promise<T>) =>
+    withJobPhase(phase, () =>
+      input.work ? input.work.time(phase, work) : work(),
+    );
   const skippedIds: string[] = [];
   const empty = {
     labelled: 0,
@@ -762,16 +770,18 @@ async function runStatementLabelBatch(
     current: ChargeProposal & { amount: number };
   };
   for (let round = 0; round < MAX_LABEL_ROUNDS && targets.length; round++) {
-    const proposals = await buildPage(
-      db,
-      targets
-        .filter(
-          (target) =>
-            !target.row.applicationPending &&
-            !failedCharges.has(chargeId(target.charge)),
-        )
-        .map((target) => target.charge),
-      fail,
+    const proposals = await time("statement_discovery", () =>
+      buildPage(
+        db,
+        targets
+          .filter(
+            (target) =>
+              !target.row.applicationPending &&
+              !failedCharges.has(chargeId(target.charge)),
+          )
+          .map((target) => target.charge),
+        fail,
+      ),
     );
     const ready = targets.flatMap<ReadyLabels>((target) => {
       if (target.row.applicationPending) return [];
@@ -847,7 +857,7 @@ async function runStatementLabelBatch(
           }))
         : [],
     );
-    const answers = await withJobPhase("statement_decisions", () =>
+    const answers = await time("statement_decisions", () =>
       settleDecisionChoices(decisions, (decision) => decision.args, {
         cooperative: input.cooperative,
       }),
@@ -867,10 +877,12 @@ async function runStatementLabelBatch(
     });
     let spendingPage: FinancialSpendingPage | undefined;
     try {
-      spendingPage = await prepareStatementSpendingFacts(
-        db,
-        classified.flatMap((result) =>
-          result.status === "fulfilled" ? [result.value.judgment] : [],
+      spendingPage = await time("statement_spending_facts", () =>
+        prepareStatementSpendingFacts(
+          db,
+          classified.flatMap((result) =>
+            result.status === "fulfilled" ? [result.value.judgment] : [],
+          ),
         ),
       );
     } catch (error) {
@@ -913,7 +925,7 @@ async function runStatementLabelBatch(
         );
       return computed;
     };
-    const computed = await withJobPhase("statement_spending", () =>
+    const computed = await time("statement_spending", () =>
       input.cooperative ? withCooperativeAiWork(finish) : finish(),
     );
     const publications = new Map<
@@ -1026,9 +1038,11 @@ async function runStatementLabelBatch(
       const item = publications.get(chargeId(current.charge));
       return item ? [item] : [];
     });
-    const outcomes = await publishCompleteStatementLabels(
-      db,
-      complete.map((item) => item.input),
+    const outcomes = await time("statement_publication", () =>
+      publishCompleteStatementLabels(
+        db,
+        complete.map((item) => item.input),
+      ),
     );
     for (const item of complete) {
       const { current, target } = item.entry;

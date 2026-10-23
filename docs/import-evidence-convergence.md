@@ -414,8 +414,11 @@ or candidates retire the old labels atomically with the replacement; suppressed
 or settled charges remain excluded. Generation commits bounded batches of
 independent charges. Label pages default to 32 suggestions, retaining the shared
 512-suggestion ceiling for explicit callers. Identity questions remain batched;
-merchant/spending preparation runs in waves of at most eight, with field questions
-batched within each wave. Cooperative pages stop admitting new spending work
+merchant/spending preparation runs in waves of at most 32, with field questions
+batched within each wave. The default page admits one spending wave instead of
+serializing behind four wave barriers. RunStep page samples retain discovery,
+decision, spending-fact, spending and publication wall times plus database metrics.
+Cooperative pages stop admitting new spending work
 after 20 seconds, settle started work, and save partial answers before yielding.
 This deadline does not interrupt an in-flight provider request. Cache contention
 and lookup deferrals remain typed waits through item isolation; they neither

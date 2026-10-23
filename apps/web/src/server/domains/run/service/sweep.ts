@@ -454,7 +454,7 @@ const statementLabel: StepDriversFor<"sweep">["statement_label"] = {
     ),
     boundary: null,
   }),
-  page: async ({ db, run, step, retrying }) => {
+  page: async ({ db, run, step, retrying, work }) => {
     const { labelStatementSuggestions } =
       await import("~/server/domains/transaction-import/service/statement-suggestion-labels");
     let outcome: Awaited<ReturnType<typeof labelStatementSuggestions>>;
@@ -462,6 +462,7 @@ const statementLabel: StepDriversFor<"sweep">["statement_label"] = {
       outcome = await labelStatementSuggestions(db, {
         runId: run.id,
         cooperative: true,
+        work,
         after: retrying
           ? null
           : z

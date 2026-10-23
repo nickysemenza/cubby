@@ -1485,7 +1485,7 @@ describe("statement Transaction suggestions", () => {
     await card(ctx);
     await record(
       ctx,
-      Array.from({ length: 9 }, (_, index) =>
+      Array.from({ length: 33 }, (_, index) =>
         rowInput({
           rawDescription: `SYNTHETIC DEADLINE ${index}`,
           merchant: `Example deadline ${index}`,
@@ -1500,15 +1500,16 @@ describe("statement Transaction suggestions", () => {
       const first = await runStatementLabels(ctx.db, {
         runId: await ensureRun(ctx.db, ctx.actor, { purpose: "background" }),
         cooperative: true,
+        limit: 33,
         port: answering({ kind: "purchase", counterparty: "business" }),
         spendingAdvice: async () => {
-          if (++spendingCalls === 8) vi.setSystemTime(Date.now() + 21_000);
+          if (++spendingCalls === 32) vi.setSystemTime(Date.now() + 21_000);
           return financialSpendingAdvice.parse({});
         },
       });
-      expect(spendingCalls).toBe(8);
+      expect(spendingCalls).toBe(32);
       expect(first).toMatchObject({
-        completed: 8,
+        completed: 32,
         failed: [],
         next: { inclusive: true },
       });
@@ -2149,7 +2150,7 @@ describe("statement Transaction suggestions", () => {
       expect(publicationsAfterQueue).toBe(2);
       expect(modelPeak).toBeGreaterThanOrEqual(30);
       expect(spendingPeak).toBeGreaterThan(1);
-      expect(spendingPeak).toBeLessThanOrEqual(8);
+      expect(spendingPeak).toBeLessThanOrEqual(32);
       expect(outcome).toMatchObject({
         labelled: 168,
         labels: { generated: 504 },
