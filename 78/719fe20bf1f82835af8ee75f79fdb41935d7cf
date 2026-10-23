@@ -1,0 +1,39 @@
+packages/schemas/src/entity-definitions/05-inventory.entity.ts
+  s_ed2722acae67f0::t_bfdee8a6d706c4 277,282-283
+packages/schemas/src/entity-definitions/11-vendor.entity.ts
+  s_ed2722acae67f0::t_6e10be2fe516ac 521,526,531-532
+packages/schemas/src/entity-definitions/14-financialTransaction.entity.ts
+  s_ed2722acae67f0::t_9cbf2aecb00093 661,667-670,676-679,685,691,697,703,709-712,718-721
+packages/schemas/src/entity-definitions/16-expense.entity.ts
+  s_ed2722acae67f0::t_2752afb7d10af7 451,456-460
+packages/schemas/src/entity-definitions/20-gardenEntry.entity.ts
+  s_ed2722acae67f0::t_a6f4e88eb681ad 140,146-147
+packages/schemas/src/entity-definitions/22-productCategory.entity.ts
+  s_ed2722acae67f0::t_0260dcc5922199 202-205,210-211,216-217
+packages/schemas/src/entity-definitions/23-run.entity.ts
+  s_ed2722acae67f0::t_938d84089fc1bc 1,22-47,436,456,461,466-469,474-477,482,487
+packages/schemas/src/entity-definitions/24-device.entity.ts
+  s_ed2722acae67f0::t_ea50835595f536 111,116
+packages/schemas/src/entity-definitions/28-email.entity.ts
+  s_ed2722acae67f0::t_0d089d9d4f17d5 1,24-55,68,77,111,116,121,126,277-278,315-316,357-358,521-522
+packages/schemas/src/entity-definitions/29-imageJob.entity.ts
+  s_ed2722acae67f0::t_b5681047df65c0 1,21-25,29
+packages/schemas/src/entity-definitions/32-shipment.entity.ts
+  s_ed2722acae67f0::t_d3227ddcb8cc67 1,7,13-27,207
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "78719fe20bf1f82835af8ee75f79fdb41935d7cf",
+  "prompts": {},
+  "sessions": {
+    "s_ed2722acae67f0": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "70bdc447-cdb2-41d4-ae32-5abdda1f043e",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
