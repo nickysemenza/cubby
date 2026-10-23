@@ -1,10 +1,10 @@
-import { describe, expect, it } from "vitest";
-
 import {
   syntheticBundle,
   syntheticCookbookArchive,
   syntheticZip,
-} from "../../../../tooling/cookbook-bundle-fixture";
+} from "tooling/cookbook-bundle-fixture";
+import { describe, expect, it } from "vitest";
+
 import { openCookbookBundle } from "./bundle";
 
 // Archive failures: whole-file reads, unselected payload reads, corrupt/oversized

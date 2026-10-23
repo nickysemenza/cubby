@@ -2,7 +2,7 @@ import type { ChildTableDeclaration } from "../../../../packages/schemas/src/ent
 import { z } from "zod";
 import { retainedTableExports } from "../../../../packages/schemas/src/child-tables/retained.ts";
 
-import type { EntityDeclarationMetadata } from "../../../../packages/schemas/src/entity-definitions/definition.ts";
+import type { EntityDeclarationMetadata } from "@cubby/schemas/entity-definitions/definition";
 import {
   type CompiledEntity,
   type CompiledEntityTable,

@@ -1,4 +1,4 @@
-import { pascalCase } from "../../../../../packages/shared/src/text-case.ts";
+import { pascalCase } from "@cubby/shared/text-case";
 import { generatedHeader, yamlGeneratedHeader } from "../../artifacts.ts";
 import type {
   CompiledEntity,

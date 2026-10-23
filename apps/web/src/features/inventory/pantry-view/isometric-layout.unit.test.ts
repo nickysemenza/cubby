@@ -1,8 +1,8 @@
 import { type InfLocation, infLocation } from "@cubby/schemas/location";
 import { testCompleteDataQuality, testShortcode } from "@cubby/schemas/testing";
+import { categorySummaryFixture } from "tooling/product-category-fixtures";
 import { describe, expect, it, vi } from "vitest";
 
-import { categorySummaryFixture } from "../../../../tooling/product-category-fixtures";
 import { buildRooms, type InventoryData } from "./isometric-layout";
 
 describe("isometric pantry layout", () => {

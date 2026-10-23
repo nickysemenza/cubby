@@ -1,9 +1,9 @@
 import { fromPartial } from "@total-typescript/shoehorn";
+import { withTestDb } from "tooling/test-setup";
 import { expect, it } from "vitest";
 
 import { CRON_SCHEDULES } from "~/server/worker-identity";
 
-import { withTestDb } from "../../../tooling/test-setup";
 import { handleScheduledInvocation } from "./scheduled";
 
 const ctx = withTestDb();

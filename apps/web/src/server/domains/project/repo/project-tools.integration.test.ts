@@ -1,6 +1,7 @@
 import type { ProductId, ProductShortcode } from "@cubby/schemas/identifiers";
 import { and, eq } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
+import { taxonomyShortcode } from "tooling/product-category-fixtures";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
@@ -21,7 +22,6 @@ import {
 } from "~/server/testing/repo.fixtures";
 import { createTestRequestContext } from "~/server/testing/request-context";
 
-import { taxonomyShortcode } from "../../../../../tooling/product-category-fixtures";
 import { deleteProjects } from "./crud";
 import { attachProjectResources, repointProjectUses } from "./tools";
 

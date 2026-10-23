@@ -1,4 +1,4 @@
-import { pascalCase } from "../../../../packages/shared/src/text-case.ts";
+import { pascalCase } from "@cubby/shared/text-case";
 import { readFileSync } from "node:fs";
 import { z } from "zod";
 

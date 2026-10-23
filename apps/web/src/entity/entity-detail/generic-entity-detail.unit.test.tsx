@@ -13,6 +13,7 @@ import {
   waitFor,
   within,
 } from "@testing-library/react";
+import { categorySummaryFixture } from "tooling/product-category-fixtures";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { getEntityDetailOutputSchema } from "~/entity/generated/entity-details.gen";
@@ -25,7 +26,6 @@ import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 import { mock } from "~/lib/test/mock-schema";
 import { buildQualityBreakdown } from "~/server/generic/data-quality/repo/hydrate";
 
-import { categorySummaryFixture } from "../../../tooling/product-category-fixtures";
 import type { DetailRecordOf, GenericDetailEntity } from "./detail-record";
 import { GenericEntityDetail } from "./generic-entity-detail";
 

@@ -1,8 +1,5 @@
 import { z } from "zod";
-import {
-  entityKeys,
-  entitySummary,
-} from "../../../../packages/schemas/src/generated/entity-summary.gen.ts";
+import { entityKeys, entitySummary } from "@cubby/schemas/entity-summary";
 import { generatedEntityFieldModels } from "../../../../packages/schemas/src/generated/entity-field-model.gen.ts";
 import {
   type HeroActionBodyValue,

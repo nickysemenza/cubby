@@ -1,5 +1,5 @@
 import { declarationModules } from "../declarations.ts";
-import { pascalCase } from "../../../../../packages/shared/src/text-case.ts";
+import { pascalCase } from "@cubby/shared/text-case";
 import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";

@@ -1,4 +1,4 @@
-import { capitalize } from "../../../../../packages/shared/src/text-case.ts";
+import { capitalize } from "@cubby/shared/text-case";
 import { z } from "zod";
 
 import type {
@@ -6,7 +6,7 @@ import type {
   StructuredNode,
   StructuredOption,
   StructuredValueSchema,
-} from "../../../../../packages/schemas/src/structured-value-schema.ts";
+} from "@cubby/schemas/structured-value-schema";
 
 export type ValueSchemaJSON = StructuredValueSchema;
 type NodeJSON = StructuredNode;

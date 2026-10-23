@@ -12,10 +12,10 @@ import {
   evalCostUsd,
   meteredStructuredPorts,
 } from "tooling/ai/eval-support";
+import { localSecret } from "tooling/local-secret";
 import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
-import { localSecret } from "../../../tooling/local-secret";
 import { INLINE_EMAIL_PNG_BASE64 } from "../domains/purchase-import/service/gmail/email-html.fixtures";
 
 // The compactor's developer timing warning includes source snippets.

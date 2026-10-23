@@ -5,6 +5,28 @@ troubleshooting a dev session, see [local development](local-development.md).
 For what Cubby is and how its entities fit together, see the
 [README](../README.md).
 
+## TypeScript imports
+
+Keep nearby implementation files and colocated tests on relative imports. For
+distant web source dependencies, use `~/…`; for web tooling dependencies loaded
+through the web resolver, use `tooling/…`. Three or more parent traversals are a
+signal to look for an existing alias or package export. Do not add a second
+source-root spelling such as `@/` alongside `~/`.
+
+Across workspace packages, use their `@cubby/<package>/<subpath>` exports and
+declare the dependency in the consuming package. Do not add tsconfig mappings
+into another package's source tree or create barrels only to shorten imports.
+Generators may read declaration files and fixtures directly when those files
+are their compilation inputs rather than a package API.
+
+TypeScript `paths` describe resolution; they do not rewrite emitted imports.
+The web Vite and Vitest configurations support the web aliases. Scripts run
+directly by Node use explicit `.ts` extensions for relative imports and must not
+depend on web-only aliases. Filesystem paths, `new URL(…, import.meta.url)` and
+glob patterns are not module specifiers; preserve their runtime semantics.
+The [repository typecheck boundary](#typechecking) also constrains which imports
+must use aliases.
+
 ## Architecture
 
 ```

@@ -3,11 +3,11 @@ import { imageOut } from "@cubby/schemas/image";
 import type { InfLocation, LocationType } from "@cubby/schemas/location";
 import { testCompleteDataQuality, testShortcode } from "@cubby/schemas/testing";
 import { cleanup, render, screen } from "@testing-library/react";
+import { categorySummaryFixture } from "tooling/product-category-fixtures";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
-import { categorySummaryFixture } from "../../../tooling/product-category-fixtures";
 import { LocationVisual } from "./location-visual";
 
 let harness: ReturnType<typeof createBrowserTestHarness>;

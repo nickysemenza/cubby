@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { humanize } from "../../../../packages/shared/src/text-case.ts";
+import { humanize } from "@cubby/shared/text-case";
 
 import {
   type CompiledEntity,

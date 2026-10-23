@@ -1,9 +1,9 @@
 import type { SearchHit } from "@cubby/schemas/search";
 import { testShortcode } from "@cubby/schemas/testing";
 import { render } from "@testing-library/react";
+import { categorySummaryFixture } from "tooling/product-category-fixtures";
 import { describe, expect, it } from "vitest";
 
-import { categorySummaryFixture } from "../../../tooling/product-category-fixtures";
 import {
   buildLocationComboboxItem,
   buildProductComboboxItem,

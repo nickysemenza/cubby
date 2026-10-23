@@ -3,7 +3,7 @@ import type { ChildTableDeclaration } from "../../../../../packages/schemas/src/
 import {
   entityFieldControlKinds as fieldControlKinds,
   entityFieldKinds as fieldKinds,
-} from "../../../../../packages/schemas/src/entity-definitions/definition.ts";
+} from "@cubby/schemas/entity-definitions/definition";
 import { CURRENT_MEMBER_FILTER } from "../../../../../packages/shared/src/filter.ts";
 import { compactLiteral, generatedHeader } from "../../artifacts.ts";
 import {
