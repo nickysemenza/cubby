@@ -1,0 +1,21 @@
+apps/web/src/ui/common/stacked-value.tsx
+  s_778d7cda70b989::t_1597364875c44e 29
+apps/web/src/ui/data-table/filter-bar.tsx
+  s_778d7cda70b989::t_681f22cf7597a5 868
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "114be1e4d8e804b8f3fd5641c9bfef91aa44cfe5",
+  "prompts": {},
+  "sessions": {
+    "s_778d7cda70b989": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a16a8b-f8eb-7851-9ace-3f155d2bf4ef",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
