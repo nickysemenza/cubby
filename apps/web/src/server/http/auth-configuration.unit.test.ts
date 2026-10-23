@@ -32,6 +32,9 @@ it("refreshes auth policy and credentials when bindings change in a reused isola
     }),
     async () => {
       const auth = getAuth();
+      // Construction starts async plugin initialization and logging. Settle it
+      // within this invocation before Vitest tears down its console transport.
+      await auth.$context;
       expect(getAuth()).toBe(auth);
       expect(auth.options.emailAndPassword.disableSignUp).toBe(false);
       expect(auth.options.advanced.useSecureCookies).toBe(false);
@@ -55,6 +58,7 @@ it("refreshes auth policy and credentials when bindings change in a reused isola
     }),
     async () => {
       const auth = getAuth();
+      await auth.$context;
       expect(auth).not.toBe(initial);
       expect(auth.options.secret).toBe(getAuthSecret());
       expect(
@@ -81,6 +85,7 @@ it("retains each invocation's configuration across overlapping async work", asyn
     bindings({ BETTER_AUTH_SECRET: firstSecret, ALLOW_SIGNUP: "true" }),
     async () => {
       const auth = getAuth();
+      await auth.$context;
       await gate;
       expect(getAuthSecret()).toBe(firstSecret);
       expect(getAuthConfiguration().ALLOW_SIGNUP).toBe("true");
@@ -93,6 +98,7 @@ it("retains each invocation's configuration across overlapping async work", asyn
       bindings({ BETTER_AUTH_SECRET: secondSecret }),
       async () => {
         await Promise.resolve();
+        await getAuth().$context;
         expect(getAuthSecret()).toBe(secondSecret);
         expect(getAuth().options.emailAndPassword.disableSignUp).toBe(true);
       },
@@ -113,6 +119,7 @@ it("accepts empty optional provider bindings from the default local profile", as
       BETTER_AUTH_URL: "",
     }),
     async () => {
+      await getAuth().$context;
       expect(getAuthConfiguration()).toMatchObject({
         GOOGLE_CLIENT_ID: undefined,
         GOOGLE_CLIENT_SECRET: undefined,

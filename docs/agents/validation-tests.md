@@ -2,6 +2,13 @@
 
 [Validation policy](validation.md) owns test selection, failure-first evidence,
 retention, delivery, and delegated check results. This page owns runtime traps.
+Auth configuration tests await each constructed instance's `$context` inside
+the invocation that supplied its bindings. Better Auth construction starts async
+plugin initialization and logging; inspecting only synchronous options can leave
+that work running when Vitest closes its console transport. Keep configuration
+and overlapping-invocation assertions in the existing owner, without suppressing
+console errors or introducing a delay.
+
 The UI project shares module state between files. Its shared teardown clears
 Sonner notifications as well as React trees: unmounting a Toaster leaves its
 notifications available to the next test.
