@@ -9,7 +9,11 @@ import {
 } from "./support/e2e-helpers";
 import { expect, test } from "./support/e2e-test";
 import { createEntityFixture, createFixtureGraph } from "./fixtures/core";
-import { dispatchesOperation, unbatchFor } from "./support/dispatch-wire";
+import {
+  dispatchesOperation,
+  performOperation,
+  unbatchFor,
+} from "./support/dispatch-wire";
 
 test("linked Expense categories display their readable label and transaction expectation", async ({
   page,
