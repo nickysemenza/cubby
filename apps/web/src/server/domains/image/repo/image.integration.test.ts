@@ -48,6 +48,8 @@ import {
 
 import {
   createOrReuseAttachedImage,
+  reapUnreferencedImages,
+  attachExistingImageToEntity,
   createPendingImageRecord,
   createUploadedImageRecord,
   publishImageSourceClassifications,
@@ -992,6 +994,220 @@ describe("image repository — purchase (charge) documents", () => {
   // `PurchaseImage` row directly (the normal attach path always flips PENDING
   // -> UPLOADED in the same statement), to pin the guard against a future
   // write path reintroducing this combination.
+
+  it("rechecks ownership after a concurrent attachment releases the image lock", async () => {
+    const project = await createRepoEntity(ctx, "project", {
+      name: "Synthetic concurrent image owner",
+    });
+    const photo = await createUploadedImageRecord(ctx.db, {
+      key: "test/concurrent-share.jpg",
+      filename: "concurrent-share.jpg",
+      contentType: "image/jpeg",
+      size: 1024,
+    });
+    let reaping: Promise<unknown> | undefined;
+    try {
+      await withTransaction(ctx.db, async (holder) => {
+        await holder
+          .select({ id: image.id })
+          .from(image)
+          .where(eq(image.id, photo.id))
+          .for("update");
+        const holderPid = (
+          await holder.execute<{ pid: number }>(
+            sql`SELECT pg_backend_pid() AS pid`,
+          )
+        ).rows[0]!.pid;
+        reaping = withTransaction(ctx.db, (tx) =>
+          reapUnreferencedImages(tx, [photo.id]),
+        ).catch((error: unknown) => error);
+        await expect
+          .poll(
+            async () =>
+              (
+                await getDb(ctx.db).execute<{ waiting: boolean }>(sql`
+          SELECT EXISTS(SELECT 1 FROM pg_stat_activity WHERE datname=current_database()
+          AND ${holderPid}::int = ANY(pg_blocking_pids(pid))) AS waiting`)
+              ).rows[0]?.waiting,
+            { timeout: 5000, interval: 20 },
+          )
+          .toBe(true);
+        await associatePendingImages(
+          holder,
+          imageJoinBindings.project,
+          project.entityId,
+          [parseEntityId("image", photo.id)],
+        );
+      });
+    } finally {
+      await reaping;
+    }
+    expect(await reaping).toMatchObject({ deletedIds: [], deletedKeys: [] });
+    expect(
+      await getDb(ctx.db).select().from(image).where(eq(image.id, photo.id)),
+    ).toHaveLength(1);
+    expect(
+      await getDb(ctx.db)
+        .select()
+        .from(entityAttachment)
+        .where(eq(entityAttachment.imageId, photo.id)),
+    ).toMatchObject([{ entityId: project.entityId }]);
+  });
+
+  it("serializes opposite singular replacements without deadlocking", async () => {
+    const left = await createRepoEntity(ctx, "vendor", {
+      name: "Synthetic left logo",
+    });
+    const right = await createRepoEntity(ctx, "vendor", {
+      name: "Synthetic right logo",
+    });
+    const owner = await createRepoEntity(ctx, "project", {
+      name: "Synthetic shared logo originals",
+    });
+    const first = await createOrReuseAttachedImage(
+      ctx.db,
+      {
+        key: "test/left-logo.jpg",
+        filename: "left.jpg",
+        contentType: "image/jpeg",
+        size: 1024,
+      },
+      { entity: "vendor", id: left.entityId },
+    );
+    const second = await createOrReuseAttachedImage(
+      ctx.db,
+      {
+        key: "test/right-logo.jpg",
+        filename: "right.jpg",
+        contentType: "image/jpeg",
+        size: 1024,
+      },
+      { entity: "vendor", id: right.entityId },
+    );
+    await insertEntityAttachments(ctx.db, {
+      entityId: owner.entityId,
+      imageId: first.row.id,
+    });
+    await insertEntityAttachments(ctx.db, {
+      entityId: owner.entityId,
+      imageId: second.row.id,
+    });
+    const results = await Promise.all([
+      attachExistingImageToEntity(
+        ctx.db,
+        {
+          imageId: parseShortcodeFor("image", second.row.shortcode),
+          targetId: left.output.id,
+          role: "logo",
+        },
+        ctx.actor,
+      ),
+      attachExistingImageToEntity(
+        ctx.db,
+        {
+          imageId: parseShortcodeFor("image", first.row.shortcode),
+          targetId: right.output.id,
+          role: "logo",
+        },
+        ctx.actor,
+      ),
+    ]);
+    expect(results).toEqual([{ reused: false }, { reused: false }]);
+    const rows = await getDb(ctx.db)
+      .select()
+      .from(entityAttachment)
+      .where(
+        inArray(entityAttachment.entityId, [left.entityId, right.entityId]),
+      );
+    expect(rows.filter((row) => row.deletedAt === null)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          entityId: left.entityId,
+          imageId: second.row.id,
+        }),
+        expect.objectContaining({
+          entityId: right.entityId,
+          imageId: first.row.id,
+        }),
+      ]),
+    );
+  });
+
+  it("replaces singular attachments atomically, preserves shared images, and deduplicates retries", async () => {
+    const vendor = await createRepoEntity(ctx, "vendor", {
+      name: "Synthetic logo supplier",
+    });
+    const project = await createRepoEntity(ctx, "project", {
+      name: "Synthetic shared image",
+    });
+    const target = { entity: "vendor", id: vendor.entityId } as const;
+    const attach = (key: string, expectedImageCount: number) =>
+      createOrReuseAttachedImage(
+        ctx.db,
+        {
+          key: `test/${key}.jpg`,
+          filename: `${key}.jpg`,
+          contentType: "image/jpeg",
+          size: 1024,
+          idempotencyKey: key,
+          expectedImageCount,
+        },
+        target,
+      );
+    const first = await attach("first-logo", 0);
+    await insertEntityAttachments(ctx.db, {
+      entityId: project.entityId,
+      imageId: first.row.id,
+    });
+    const second = await attach("second-logo", 1);
+    expect(second.detachedImageKeys).toEqual([]);
+    expect(
+      await getDb(ctx.db)
+        .select()
+        .from(image)
+        .where(eq(image.id, first.row.id)),
+    ).toHaveLength(1);
+    const retry = await attach("second-logo", 0);
+    expect(retry.reused).toBe(true);
+    expect(retry.row.id).toBe(second.row.id);
+    await expect(attach("stale-logo", 0)).rejects.toThrow(
+      "Expected 0 attached images, found 1",
+    );
+    const third = await attach("third-logo", 1);
+    expect(third.detachedImageKeys).toEqual([second.row.key]);
+    const active = await getDb(ctx.db)
+      .select()
+      .from(entityAttachment)
+      .where(eq(entityAttachment.entityId, vendor.entityId));
+    expect(active.filter((row) => row.deletedAt === null)).toMatchObject([
+      { role: "logo", imageId: third.row.id },
+    ]);
+    const book = await upsertCookbook(
+      ctx.db,
+      {
+        name: "Synthetic image book",
+        rawJson: makeCookbookExtraction(),
+        sourceLabel: "Synthetic book",
+      },
+      ctx.actor,
+    );
+    const cover = await createOrReuseAttachedImage(
+      ctx.db,
+      {
+        key: "test/cover.jpg",
+        filename: "cover.jpg",
+        contentType: "image/jpeg",
+        size: 1024,
+      },
+      { entity: "cookbook", id: book.entityId },
+    );
+    expect(
+      await getDb(ctx.db)
+        .select()
+        .from(entityAttachment)
+        .where(eq(entityAttachment.entityId, book.entityId)),
+    ).toMatchObject([{ role: "cover", imageId: cover.row.id }]);
+  });
 
   describe("detachImagesFromEntity", () => {
     const attachToProject = async (projectId: ProjectId, filename: string) =>

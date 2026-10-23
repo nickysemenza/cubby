@@ -3011,6 +3011,24 @@ Direct files are `EntityAttachment` rows: gallery photos and purchase documents
 attachments are detached and reaped, and an upload's idempotency key belongs to
 the attachment rather than the file.
 
+The shared image API (`image.attach_files`, `image.attach_existing`, and staged
+`image.create_uploads`) accepts every declared direct-image target. Galleries
+use `role: "attachment"` by default; Cookbook covers require `role: "cover"`
+and Vendor logos require `role: "logo"`. Singular attachments replace the live
+slot only after image validation succeeds; PDFs cannot fill those slots. The
+subject lock serializes replacement, count preconditions, and idempotency keys.
+A retry reuses only the still-active attachment. Replacement locks incoming and
+outgoing images in ID order; reaping checks ownership after acquiring the image
+lock, so a concurrent attachment cannot be deleted by a stale reference check.
+Replaced images are reaped only when no other live record references them.
+
+Vendor list row menus, details, inspectors, and Problems offer explicit logo
+fetching from the recorded website. Missing logos use Fetch logo; existing logos
+use Refresh logo. Equivalent controls share per-record pending state. Missing
+websites keep the action disabled with an explanation and the route to Edit;
+fetch failures retain the existing image and expose raw diagnostics for retry.
+Native uses one Fetch or refresh logo action with the same website prerequisite.
+
 Attachment inputs labeled `application/octet-stream` are unknown formats, not
 an additional accepted file format. The shared attachment service inspects their
 bytes using the same supported image/PDF signature checks (and image dimensions)

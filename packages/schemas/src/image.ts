@@ -1,5 +1,11 @@
 import imageDefinition from "./entity-definitions/18-image.entity";
-import { imageProcessingIssue } from "./image-processing";
+import {
+  imageProcessingIssue,
+  imageAssociationEntity,
+  imageAssociationRole,
+} from "./image-processing";
+import { imageAssociationStorage } from "./entity-definitions/image-associations";
+import { parseShortcode } from "@cubby/shared";
 import { IMAGE_FIELD_KEYS } from "./image-field-keys";
 import { productImagePurpose } from "./image-summary";
 import { imageOut } from "./entity-definitions/field-primitives";
@@ -21,7 +27,6 @@ import {
   coverEntities,
   galleryEntities,
   logoEntities,
-  type GalleryEntity,
   type ShortcodeEntity,
 } from "./entity-manifest";
 import { anyShortcodeSchema } from "./identifiers";
@@ -277,17 +282,34 @@ export const importImageFromUrlSchema = z.object({
   entityKind: entityImage.optional(),
 });
 
-// The image-bearing entities exposed as attach targets — every entity the
-// manifest declares `capabilities.images: "gallery"`, derived rather than
-// hand-listed so a new gallery entity is automatically attachable the moment
-// its manifest declaration lands. Cookbook is excluded because it uses a
-// single write-once `coverImageId` (replace, not append), unlike these
-// ordered `<Entity>Image` join tables. Lowercase to match the `entitySchema`
-// slug convention the rest of the MCP surface uses; mapped to the join
-// dispatch server-side.
-export const attachableImageEntity = z.enum(
-  nonEmptyTuple<GalleryEntity>(galleryEntities),
-);
+// All declared direct-image targets share the attachment API. Singular roles
+// replace the current attachment; gallery attachments append.
+export const attachableImageEntity = imageAssociationEntity;
+export const attachmentRoleForEntity = (
+  entity: z.infer<typeof attachableImageEntity>,
+) => {
+  const storage = imageAssociationStorage.shape[entity].value;
+  return storage === "gallery" ? "attachment" : storage;
+};
+
+export const validateAttachmentRole = (
+  entityId: string,
+  role: z.infer<typeof imageAssociationRole> | undefined,
+  ctx: z.RefinementCtx,
+) => {
+  const entity = attachableImageEntity.safeParse(
+    parseShortcode(entityId)?.type,
+  );
+  if (!entity.success) return;
+  const expected = attachmentRoleForEntity(entity.data);
+  if ((role ?? "attachment") !== expected) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["role"],
+      message: `Use role "${expected}" for ${entity.data} attachments`,
+    });
+  }
+};
 export type AttachableImageEntity = z.infer<typeof attachableImageEntity>;
 
 export { productImagePurpose } from "./image-summary";
@@ -304,12 +326,29 @@ export const imageAttachExistingInput = z
   .object({
     imageId: imageShortcode.describe("Existing uploaded image shortcode"),
     targetId: attachableImageEntityId.describe(
-      "Shortcode of a live gallery record to attach the image to",
+      "Shortcode of a live image-bearing record",
     ),
+    role: imageAssociationRole
+      .optional()
+      .describe(
+        "Defaults to attachment for galleries. Specify cover or logo to replace a singular image.",
+      ),
     sortOrder: z.number().int().nonnegative().optional(),
     purpose: productImagePurpose.optional(),
   })
   .superRefine((value, ctx) => {
+    validateAttachmentRole(value.targetId, value.role, ctx);
+    if (
+      value.role &&
+      value.role !== "attachment" &&
+      value.sortOrder !== undefined
+    ) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["sortOrder"],
+        message: "sortOrder is only supported for gallery attachments",
+      });
+    }
     if (
       value.purpose !== undefined &&
       !productShortcode.safeParse(value.targetId).success
@@ -340,6 +379,11 @@ export const attachFileFields = {
     "Target entity type to attach the file to",
   ),
   entityId: attachableImageEntityId.describe("Shortcode of the target entity"),
+  role: imageAssociationRole
+    .optional()
+    .describe(
+      "Defaults to attachment for galleries. Specify cover or logo to replace a singular image after validation succeeds.",
+    ),
   url: z
     .url()
     .optional()
@@ -407,6 +451,15 @@ export const attachFileFields = {
 export const mcpAttachFileInput = z
   .strictObject(attachFileFields)
   .superRefine((value, ctx) => {
+    validateAttachmentRole(value.entityId, value.role, ctx);
+    const targetKind = parseShortcode(value.entityId)?.type;
+    if (targetKind !== value.entityKind) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["entityKind"],
+        message: "entityKind must match entityId",
+      });
+    }
     const sources = [value.url, value.data, value.uploadId].filter(Boolean);
     if (sources.length !== 1) {
       ctx.addIssue({

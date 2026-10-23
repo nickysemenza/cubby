@@ -71,6 +71,8 @@ export interface ActionVerb {
 
 export const actionVerbs = {
   // — navigation ————————————————————————————————————————————————————
+  fetchLogo: { label: "Fetch logo", icon: ImagesIcon },
+  refreshLogo: { label: "Refresh logo", icon: ArrowsClockwiseIcon },
   printLabel: { label: "Print label", icon: PrinterIcon },
   printLabels: { label: "Print labels", icon: PrinterIcon },
   addToInventory: { label: "Add to inventory", icon: PackageIcon },

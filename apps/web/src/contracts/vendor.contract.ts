@@ -21,6 +21,13 @@ export const vendorContract = defineContract("vendor", {
     invalidates: ["vendorMerge"],
   }),
   fetchLogo: mutation({
+    native: "Vendor logo action",
+    command: {
+      label: "Fetch or refresh logo",
+      confirmation: null,
+      success: "Vendor logo saved",
+      affectedEntities: ["vendor", "image"],
+    },
     mcp: {
       omit: "operator_maintenance",
       note: "Favicon fetch for a vendor logo",

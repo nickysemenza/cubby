@@ -26,6 +26,7 @@ import {
 } from "@cubby/schemas/image";
 import {
   attachableImageEntityId,
+  attachmentRoleForEntity,
   IMAGE_METADATA_REVISION,
   imageWithEntitySchema,
   storedImageEmbeddedMetadataSchema,
@@ -112,6 +113,8 @@ import {
 } from "~/server/db/image-processing-schema";
 import {
   aiAnalysis,
+  cookbook,
+  vendor,
   entityAttachment,
   gardenEntry,
   image,
@@ -149,6 +152,10 @@ import {
   type MutationReceipt,
   defineMutationWriter,
 } from "~/server/entity-kernel/repo/repository";
+import {
+  replaceSingularAttachment,
+  singularAttachmentImageIds,
+} from "~/server/entity-kernel/repo/singular-attachment";
 import { createAppError } from "~/server/errors/app-error";
 import { retireAssessmentTargetsTx } from "~/server/generic/assessment/repo/assessment-state";
 import { logAuditEntry } from "~/server/generic/audit-log/repo/audit-log";
@@ -170,7 +177,7 @@ import {
 import { SHORTCODE_TABLE } from "~/server/generic/shortcode/repo/shortcode-tables";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
-/** A gallery target's discriminator and branded private ID travel together. */
+/** An image target's discriminator and branded private ID travel together. */
 export type AttachableImageRef = Extract<
   EntityRef,
   { entity: AttachableImageEntity }
@@ -241,6 +248,7 @@ export const attachExistingImageToEntity = async (
     targetId: string;
     sortOrder?: number;
     purpose?: ProductImagePurpose;
+    role?: ImageAssociation["role"];
   },
   actor: ActorContext,
 ): Promise<{ reused: boolean }> => {
@@ -249,19 +257,41 @@ export const attachExistingImageToEntity = async (
   if (!target || !attachableImageEntityId.safeParse(input.targetId).success) {
     throw createAppError(
       "IMAGE_ATTACH_FAILED",
-      `Target ${input.targetId} is not a live gallery record`,
+      `Target ${input.targetId} is not a live image-bearing record`,
     );
   }
-  // SAFETY: target shortcode validation restricts the resolved live ref to the gallery roster.
+  // SAFETY: target shortcode validation restricts the resolved live ref to declared image targets.
   const entity = target as AttachableImageRef;
 
   const attached = await withTransaction(db, async (tx) => {
     await lockAttachableEntity(tx, entity);
-    const [source] = await tx
-      .select({ status: image.status })
+    const role = attachmentRoleForEntity(entity.entity);
+    const current =
+      role === "attachment"
+        ? undefined
+        : (await singularAttachmentImageIds(tx, [entity.id], role)).get(
+            entity.id,
+          );
+    // Lock incoming and outgoing images together: opposite replacements must
+    // not each hold the image the other transaction needs for cleanup.
+    const locked = await tx
+      .select({
+        id: image.id,
+        status: image.status,
+        contentType: image.contentType,
+      })
       .from(image)
-      .where(and(eq(image.id, imageId), notDeleted(image)))
+      .where(
+        and(
+          inArray(image.id, [
+            ...new Set([imageId, ...(current ? [current] : [])]),
+          ]),
+          notDeleted(image),
+        ),
+      )
+      .orderBy(asc(image.id))
       .for("update");
+    const source = locked.find((row) => row.id === imageId);
     if (!source || source.status !== "UPLOADED") {
       throw createAppError(
         "IMAGE_ATTACH_FAILED",
@@ -269,7 +299,28 @@ export const attachExistingImageToEntity = async (
       );
     }
 
+    if (
+      attachmentRoleForEntity(entity.entity) !== "attachment" &&
+      !source.contentType.startsWith("image/")
+    ) {
+      throw createAppError(
+        "IMAGE_ATTACH_FAILED",
+        "Covers and logos require an image, not a document",
+      );
+    }
     const now = new Date();
+    let previousImageId: string | null = null;
+    const replace = async (role: "cover" | "logo") => {
+      const current = await singularAttachmentImageIds(tx, [entity.id], role);
+      if (current.get(entity.id) === imageId) return true;
+      ({ previousImageId } = await replaceSingularAttachment(
+        tx,
+        entity.id,
+        role,
+        imageId,
+      ));
+      return false;
+    };
     const reused = await match(entity)
       .with({ entity: "product" }, ({ id }) =>
         attachExistingWithBinding(
@@ -343,6 +394,8 @@ export const attachExistingImageToEntity = async (
           input.sortOrder,
         ),
       )
+      .with({ entity: "vendor" }, () => replace("logo"))
+      .with({ entity: "cookbook" }, () => replace("cover"))
       .exhaustive();
 
     const purposeChanged =
@@ -380,9 +433,14 @@ export const attachExistingImageToEntity = async (
       kind: "source",
       categories: ["image", "relatedData"],
     });
-    return { reused };
+    const detached = await reapUnreferencedImages(
+      tx,
+      previousImageId ? [previousImageId] : [],
+    );
+    return { reused, detachedImageKeys: detached.deletedKeys };
   });
-  return attached;
+  await deleteStoredObjects(attached.detachedImageKeys);
+  return { reused: attached.reused };
 };
 
 export const createPendingImageRecord = async (
@@ -2229,6 +2287,18 @@ export const detachImagesFromEntity = async (
           ),
         ),
     )
+    .with({ entity: "vendor" }, { entity: "cookbook" }, ({ id }) =>
+      tx
+        .update(entityAttachment)
+        .set({ deletedAt: new Date(), updatedAt: new Date() })
+        .where(
+          and(
+            eq(entityAttachment.entityId, id),
+            inArray(entityAttachment.imageId, imageIds),
+            notDeleted(entityAttachment),
+          ),
+        ),
+    )
     .exhaustive();
 
   return await reapUnreferencedImages(tx, imageIds);
@@ -2258,6 +2328,14 @@ export const reapUnreferencedImages = async (
       deletedShortcodes: [],
       deletedKeys: [],
     };
+  // Existing-image attaches take this lock before adding ownership. Check
+  // references only after waiting, so a newly committed shared owner survives.
+  await tx
+    .select({ id: image.id })
+    .from(image)
+    .where(inArray(image.id, imageIds))
+    .orderBy(asc(image.id))
+    .for("update");
   const referenced = await findReferencedImageIds(tx, imageIds);
   return await deleteImagesTx(
     tx,
@@ -2396,6 +2474,12 @@ export const assertAttachableEntityExists = async (
     .with({ entity: "task" }, ({ id }) =>
       countWhere(db, task, and(eq(task.id, id), notDeleted(task))),
     )
+    .with({ entity: "vendor" }, ({ id }) =>
+      countWhere(db, vendor, and(eq(vendor.id, id), notDeleted(vendor))),
+    )
+    .with({ entity: "cookbook" }, ({ id }) =>
+      countWhere(db, cookbook, and(eq(cookbook.id, id), notDeleted(cookbook))),
+    )
     .exhaustive();
   if (count === 0) {
     throw createAppError(
@@ -2437,120 +2521,19 @@ export const getImagesAttachedToEntity = async (
   entity: AttachableImageRef,
 ): Promise<Array<typeof image.$inferSelect>> => {
   const dbc = getDb(db);
-  return await match(entity)
-    .with({ entity: "product" }, ({ id }) =>
-      dbc
-        .select({ image })
-        .from(entityAttachment)
-        .innerJoin(image, eq(entityAttachment.imageId, image.id))
-        .where(
-          and(
-            eq(entityAttachment.entityId, id),
-            notDeleted(entityAttachment),
-            notDeleted(image),
-          ),
-        )
-        .then((rows) => rows.map((row) => row.image)),
-    )
-    .with({ entity: "recipe" }, ({ id }) =>
-      dbc
-        .select({ image })
-        .from(entityAttachment)
-        .innerJoin(image, eq(entityAttachment.imageId, image.id))
-        .where(
-          and(
-            eq(entityAttachment.entityId, id),
-            notDeleted(entityAttachment),
-            notDeleted(image),
-          ),
-        )
-        .then((rows) => rows.map((row) => row.image)),
-    )
-    .with({ entity: "location" }, ({ id }) =>
-      dbc
-        .select({ image })
-        .from(entityAttachment)
-        .innerJoin(image, eq(entityAttachment.imageId, image.id))
-        .where(
-          and(
-            eq(entityAttachment.entityId, id),
-            notDeleted(entityAttachment),
-            notDeleted(image),
-          ),
-        )
-        .then((rows) => rows.map((row) => row.image)),
-    )
-    .with({ entity: "project" }, ({ id }) =>
-      dbc
-        .select({ image })
-        .from(entityAttachment)
-        .innerJoin(image, eq(entityAttachment.imageId, image.id))
-        .where(
-          and(
-            eq(entityAttachment.entityId, id),
-            notDeleted(entityAttachment),
-            notDeleted(image),
-          ),
-        )
-        .then((rows) => rows.map((row) => row.image)),
-    )
-    .with({ entity: "purchase" }, ({ id }) =>
-      dbc
-        .select({ image })
-        .from(entityAttachment)
-        .innerJoin(image, eq(entityAttachment.imageId, image.id))
-        .where(
-          and(
-            eq(entityAttachment.entityId, id),
-            notDeleted(entityAttachment),
-            notDeleted(image),
-          ),
-        )
-        .then((rows) => rows.map((row) => row.image)),
-    )
-    .with({ entity: "gardenEntry" }, ({ id }) =>
-      dbc
-        .select({ image })
-        .from(entityAttachment)
-        .innerJoin(image, eq(entityAttachment.imageId, image.id))
-        .where(
-          and(
-            eq(entityAttachment.entityId, id),
-            notDeleted(entityAttachment),
-            notDeleted(image),
-          ),
-        )
-        .then((rows) => rows.map((row) => row.image)),
-    )
-    .with({ entity: "meal" }, ({ id }) =>
-      dbc
-        .select({ image })
-        .from(entityAttachment)
-        .innerJoin(image, eq(entityAttachment.imageId, image.id))
-        .where(
-          and(
-            eq(entityAttachment.entityId, id),
-            notDeleted(entityAttachment),
-            notDeleted(image),
-          ),
-        )
-        .then((rows) => rows.map((row) => row.image)),
-    )
-    .with({ entity: "task" }, ({ id }) =>
-      dbc
-        .select({ image })
-        .from(entityAttachment)
-        .innerJoin(image, eq(entityAttachment.imageId, image.id))
-        .where(
-          and(
-            eq(entityAttachment.entityId, id),
-            notDeleted(entityAttachment),
-            notDeleted(image),
-          ),
-        )
-        .then((rows) => rows.map((row) => row.image)),
-    )
-    .exhaustive();
+  const rows = await dbc
+    .select({ image })
+    .from(entityAttachment)
+    .innerJoin(image, eq(entityAttachment.imageId, image.id))
+    .where(
+      and(
+        eq(entityAttachment.entityId, entity.id),
+        eq(entityAttachment.role, attachmentRoleForEntity(entity.entity)),
+        notDeleted(entityAttachment),
+        notDeleted(image),
+      ),
+    );
+  return rows.map((row) => row.image);
 };
 
 export const updateImageIntegrity = async (
@@ -2896,6 +2879,20 @@ const lockAttachableEntity = async (
         .where(and(eq(task.id, id), notDeleted(task)))
         .for("update"),
     )
+    .with({ entity: "vendor" }, ({ id }) =>
+      tx
+        .select({ id: vendor.id })
+        .from(vendor)
+        .where(and(eq(vendor.id, id), notDeleted(vendor)))
+        .for("update"),
+    )
+    .with({ entity: "cookbook" }, ({ id }) =>
+      tx
+        .select({ id: cookbook.id })
+        .from(cookbook)
+        .where(and(eq(cookbook.id, id), notDeleted(cookbook)))
+        .for("update"),
+    )
     .exhaustive();
   if (rows.length === 0) {
     throw createAppError(
@@ -2916,130 +2913,43 @@ const countAttachmentPreconditionImages = async (
   tx: DrizzleTransaction,
   entity: AttachableImageRef,
 ): Promise<number> => {
-  const whereImage = and(notDeleted(image), displayableImageWhere);
-  const totals = await match(entity)
-    .with({ entity: "product" }, ({ id }) =>
-      tx
-        .select({ total: count() })
-        .from(entityAttachment)
-        .innerJoin(image, eq(entityAttachment.imageId, image.id))
-        .where(
-          and(
-            eq(entityAttachment.entityId, id),
-            notDeleted(entityAttachment),
-            notDeleted(image),
-          ),
-        ),
-    )
-    .with({ entity: "recipe" }, ({ id }) =>
-      tx
-        .select({ total: count() })
-        .from(entityAttachment)
-        .innerJoin(image, eq(entityAttachment.imageId, image.id))
-        .where(
-          and(
-            eq(entityAttachment.entityId, id),
-            notDeleted(entityAttachment),
-            whereImage,
-          ),
-        ),
-    )
-    .with({ entity: "location" }, ({ id }) =>
-      tx
-        .select({ total: count() })
-        .from(entityAttachment)
-        .innerJoin(image, eq(entityAttachment.imageId, image.id))
-        .where(
-          and(
-            eq(entityAttachment.entityId, id),
-            notDeleted(entityAttachment),
-            whereImage,
-          ),
-        ),
-    )
-    .with({ entity: "project" }, ({ id }) =>
-      tx
-        .select({ total: count() })
-        .from(entityAttachment)
-        .innerJoin(image, eq(entityAttachment.imageId, image.id))
-        .where(
-          and(
-            eq(entityAttachment.entityId, id),
-            notDeleted(entityAttachment),
-            whereImage,
-          ),
-        ),
-    )
-    .with({ entity: "purchase" }, ({ id }) =>
-      tx
-        .select({ total: count() })
-        .from(entityAttachment)
-        .innerJoin(image, eq(entityAttachment.imageId, image.id))
-        .where(
-          and(
-            eq(entityAttachment.entityId, id),
-            notDeleted(entityAttachment),
-            whereImage,
-          ),
-        ),
-    )
-    .with({ entity: "gardenEntry" }, ({ id }) =>
-      tx
-        .select({ total: count() })
-        .from(entityAttachment)
-        .innerJoin(image, eq(entityAttachment.imageId, image.id))
-        .where(
-          and(
-            eq(entityAttachment.entityId, id),
-            notDeleted(entityAttachment),
-            whereImage,
-          ),
-        ),
-    )
-    .with({ entity: "meal" }, ({ id }) =>
-      tx
-        .select({ total: count() })
-        .from(entityAttachment)
-        .innerJoin(image, eq(entityAttachment.imageId, image.id))
-        .where(
-          and(
-            eq(entityAttachment.entityId, id),
-            notDeleted(entityAttachment),
-            whereImage,
-          ),
-        ),
-    )
-    .with({ entity: "task" }, ({ id }) =>
-      tx
-        .select({ total: count() })
-        .from(entityAttachment)
-        .innerJoin(image, eq(entityAttachment.imageId, image.id))
-        .where(
-          and(
-            eq(entityAttachment.entityId, id),
-            notDeleted(entityAttachment),
-            whereImage,
-          ),
-        ),
-    )
-    .exhaustive();
-  return Number(totals[0]?.total ?? 0);
+  const [total] = await tx
+    .select({ total: count() })
+    .from(entityAttachment)
+    .innerJoin(image, eq(entityAttachment.imageId, image.id))
+    .where(
+      and(
+        eq(entityAttachment.entityId, entity.id),
+        eq(entityAttachment.role, attachmentRoleForEntity(entity.entity)),
+        notDeleted(entityAttachment),
+        notDeleted(image),
+        entity.entity === "product" ||
+          entity.entity === "vendor" ||
+          entity.entity === "cookbook"
+          ? undefined
+          : displayableImageWhere,
+      ),
+    );
+  return Number(total?.total ?? 0);
 };
 
 /**
- * Attach an already-UPLOADED image to one of the gallery entities by
- * dispatching to its join table. Mirrors {@link associateImagesWithProduct} for
- * the others; `.exhaustive()` forces this to grow if `attachableImageEntity`
- * does. Takes a client-or-tx so it can run inside the insert transaction (see
- * {@link createOrReuseAttachedImage}).
+ * Append a gallery image or replace a declared singular attachment inside the
+ * upload transaction. Returns the previous singular image for ownership-aware
+ * cleanup; gallery writes return null.
  */
 const associateImageWithEntity = async (
-  dbc: DrizzleClient | DrizzleTransaction,
+  dbc: DrizzleTransaction,
   entity: AttachableImageRef,
   imageId: ImageId,
   documentKind?: PurchaseDocumentKind,
   purpose?: ProductImagePurpose,
-): Promise<void> => {
+): Promise<string | null> => {
+  const role = attachmentRoleForEntity(entity.entity);
+  if (role !== "attachment") {
+    return (await replaceSingularAttachment(dbc, entity.id, role, imageId))
+      .previousImageId;
+  }
   await match(entity)
     .with({ entity: "product" }, async ({ id }) => {
       const sortOrder = await nextImageSortOrder(
@@ -3093,7 +3003,9 @@ const associateImageWithEntity = async (
     .with({ entity: "task" }, ({ id }) =>
       associatePendingImages(dbc, imageJoinBindings.task, id, [imageId]),
     )
+    .with({ entity: "vendor" }, { entity: "cookbook" }, () => undefined)
     .exhaustive();
+  return null;
 };
 
 /**
@@ -3111,7 +3023,11 @@ export const createOrReuseAttachedImage = async (
   },
   entity: AttachableImageRef,
   documentKind?: PurchaseDocumentKind,
-): Promise<{ row: typeof image.$inferSelect; reused: boolean }> => {
+): Promise<{
+  row: typeof image.$inferSelect;
+  reused: boolean;
+  detachedImageKeys?: string[];
+}> => {
   const attached = await withTransaction(db, async (tx) => {
     await lockAttachableEntity(tx, entity);
     if (params.idempotencyKey) {
@@ -3152,7 +3068,18 @@ export const createOrReuseAttachedImage = async (
         )
       : await insertUploadedImageRecord(tx, record);
     const imageId = parseEntityId("image", row.id);
-    await associateImageWithEntity(tx, entity, imageId, documentKind, purpose);
+    const previousImageId = await associateImageWithEntity(
+      tx,
+      entity,
+      imageId,
+      documentKind,
+      purpose,
+    );
+    const detached = await reapUnreferencedImages(
+      tx,
+      previousImageId ? [previousImageId] : [],
+    );
+    await touchAttachableEntity(tx, entity, new Date());
     if (idempotencyKey) {
       await tx
         .update(entityAttachment)
@@ -3169,7 +3096,7 @@ export const createOrReuseAttachedImage = async (
       kind: "source",
       categories: ["image", "relatedData"],
     });
-    return { row, reused: false };
+    return { row, reused: false, detachedImageKeys: detached.deletedKeys };
   });
   return attached;
 };

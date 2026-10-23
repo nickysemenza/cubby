@@ -1,5 +1,6 @@
 import {
   attachableImageEntity,
+  validateAttachmentRole,
   attachFileFields,
   attachFileResponse,
   createFileUploadInput,
@@ -44,6 +45,7 @@ const attachFileItem = z
     ),
   })
   .superRefine((value, ctx) => {
+    validateAttachmentRole(value.entityId, value.role, ctx);
     const sources = [value.url, value.uploadId].filter(Boolean);
     if (sources.length !== 1) {
       ctx.addIssue({

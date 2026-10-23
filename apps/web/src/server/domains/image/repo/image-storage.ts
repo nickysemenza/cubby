@@ -14,6 +14,7 @@ import type {
 } from "@cubby/schemas/image";
 import {
   ALLOWED_IMAGE_TYPES,
+  attachmentRoleForEntity,
   CULL_PENDING_IMAGES_DEFAULT_HOURS,
   MAX_IMAGE_UPLOAD_BYTES,
   PDF_CONTENT_TYPE,
@@ -101,7 +102,11 @@ export interface ImageStoragePorts<TDatabase> {
     createOrReuseAttachedImage: (
       database: TDatabase,
       ...args: WithoutDatabase<typeof createOrReuseAttachedImage>
-    ) => Promise<{ row: AttachedImageRecord; reused: boolean }>;
+    ) => Promise<{
+      row: AttachedImageRecord;
+      reused: boolean;
+      detachedImageKeys?: string[];
+    }>;
     createPendingImageRecord: (
       database: TDatabase,
       ...args: WithoutDatabase<typeof createPendingImageRecord>
@@ -800,6 +805,15 @@ const attachFileToEntityWithPorts = async <TDatabase>(
   const { contentType, isDocument, inspected } =
     await validateAttachmentSource(source);
   if (
+    isDocument &&
+    attachmentRoleForEntity(input.entityKind) !== "attachment"
+  ) {
+    throw createAppError(
+      "IMAGE_ATTACH_FAILED",
+      "Covers and logos require an image, not a document",
+    );
+  }
+  if (
     input.expectedBytes !== undefined &&
     source.bytes.length !== input.expectedBytes
   ) {
@@ -864,7 +878,11 @@ const attachFileToEntityWithPorts = async <TDatabase>(
   }
   // Promote the pending row + associate it in one repository transaction. A
   // failure removes the object before its pending cleanup record.
-  let created: { row: AttachedImageRecord; reused: boolean };
+  let created: {
+    row: AttachedImageRecord;
+    reused: boolean;
+    detachedImageKeys?: string[];
+  };
   try {
     created = await ports.repository.createOrReuseAttachedImage(
       db,
@@ -912,6 +930,15 @@ const attachFileToEntityWithPorts = async <TDatabase>(
   }
 
   let cleanupWarning: string | undefined;
+  if (created.detachedImageKeys?.length) {
+    try {
+      await deleteStoredObjectsWithPorts(ports, created.detachedImageKeys);
+    } catch (error) {
+      log.error("Failed to clean up replaced attachment", { error });
+      cleanupWarning =
+        "The image was attached, but the replaced image storage could not be cleaned up.";
+    }
+  }
   if (created.reused) {
     try {
       await ports.objectStorage.deleteObject(key);

@@ -95,8 +95,8 @@ describe("VendorLogoFetchAction", () => {
     await waitFor(() => expect(requests).toEqual([{ id: vendor.id }]));
   });
 
-  it("renders no action until a website is recorded", () => {
-    const { container } = render(
+  it("explains how to enable fetching when no website is recorded", () => {
+    render(
       <VendorLogoFetchAction
         vendor={{ ...vendor, website: null }}
         operations={createOperations().operations}
@@ -104,7 +104,14 @@ describe("VendorLogoFetchAction", () => {
       { wrapper: harness.wrapper },
     );
 
-    expect(container).toBeEmptyDOMElement();
+    expect(screen.getByRole("button", { name: "Fetch logo" })).toBeDisabled();
+    expect(
+      screen.getByText("Add a website in Edit to fetch a logo."),
+    ).toBeVisible();
+    expect(screen.getByRole("link", { name: "Open vendor" })).toHaveAttribute(
+      "href",
+      `/vendors/${vendor.id}`,
+    );
   });
 
   it("shows a disabled pending state", async () => {

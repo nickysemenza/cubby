@@ -1,6 +1,10 @@
 import { galleryEntities } from "@cubby/schemas/entity-manifest";
-import type { ImageWithEntity } from "@cubby/schemas/image";
-import { getErrorMessage } from "@cubby/shared";
+import {
+  attachableImageEntity,
+  attachmentRoleForEntity,
+  type ImageWithEntity,
+} from "@cubby/schemas/image";
+import { getErrorMessage, parseShortcode } from "@cubby/shared";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { toast } from "sonner";
@@ -40,7 +44,9 @@ export function AttachExistingImageDialog({
   const targetSearch = useQuery({
     ...findTargets.queryOptions({
       query: query.trim() || "_",
-      entityKinds: [...galleryEntities],
+      entityKinds: image.contentType.startsWith("image/")
+        ? [...attachableImageEntity.options]
+        : [...galleryEntities],
       limit: 10,
     }),
     enabled: query.trim().length > 0,
@@ -64,7 +70,13 @@ export function AttachExistingImageDialog({
     }),
   );
   const targetId = target?.id ?? "";
-  const isProduct = targetId.startsWith("PRD-");
+  const targetKind = attachableImageEntity.safeParse(
+    parseShortcode(targetId)?.type,
+  );
+  const role = targetKind.success
+    ? attachmentRoleForEntity(targetKind.data)
+    : undefined;
+  const isProduct = targetKind.success && targetKind.data === "product";
 
   return (
     <Overlay
@@ -73,17 +85,23 @@ export function AttachExistingImageDialog({
         if (!open) onClose();
       }}
       title="Attach to record"
-      description="Search any live gallery record by name or shortcode. Garden entries use GDE- codes."
+      description="Search a record by name or shortcode. Choosing a Vendor or Cookbook replaces its logo or cover."
       onCancel={onClose}
       error={attach.error ? getErrorMessage(attach.error) : null}
       primary={{
-        label: "Attach",
+        label:
+          role === "logo"
+            ? "Replace logo"
+            : role === "cover"
+              ? "Replace cover"
+              : "Attach",
         pending: attach.isPending,
-        disabled: !target,
+        disabled: !target || !role,
         onClick: async () => {
           await attach.mutateAsync({
             imageId: image.id,
             targetId,
+            role,
             purpose: isProduct ? purpose : undefined,
           });
         },

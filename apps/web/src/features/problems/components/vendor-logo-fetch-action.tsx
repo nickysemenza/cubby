@@ -1,47 +1,55 @@
 import type { VendorOut } from "@cubby/schemas/vendor";
 import { ImageIcon } from "@phosphor-icons/react/dist/csr/Image";
 
-import { useActionMutation } from "~/entity/hooks/use-action-mutation";
-import { vendor as vendorOperations } from "~/integrations/tanstack-query/generated/catalog/vendor.gen";
+import {
+  missingLogoWebsiteReason,
+  productionLogoOperations,
+  useFetchVendorLogo,
+  type VendorLogoFetchOperations,
+} from "~/entity/actions/vendor-logo-entity-action";
+export type { VendorLogoFetchOperations } from "~/entity/actions/vendor-logo-entity-action";
+import { Link } from "@tanstack/react-router";
+
 import { Button } from "~/ui/primitives/button";
 
 type VendorLogoTarget = Pick<VendorOut, "id" | "name" | "website">;
-type FetchLogoMutationOptions =
-  typeof vendorOperations.fetchLogo.mutationOptions;
-
-export interface VendorLogoFetchOperations {
-  fetchLogo: FetchLogoMutationOptions;
-}
-
-const productionOperations: VendorLogoFetchOperations = {
-  fetchLogo: vendorOperations.fetchLogo.mutationOptions,
-};
-
 /** Explicit per-item replacement for the retired vendor-logo seeder. */
 export function VendorLogoFetchAction({
   vendor,
-  operations = productionOperations,
+  operations = productionLogoOperations,
 }: {
   vendor: VendorLogoTarget;
   operations?: VendorLogoFetchOperations;
 }) {
-  const fetchLogo = useActionMutation({
-    mutationFn: operations.fetchLogo,
-    success: `Added logo for ${vendor.name}`,
-  });
-
-  // A website is a reviewed identity claim. Never guess one from the name just
-  // to make the action available; opening the vendor is the path to add it.
-  if (!vendor.website) return null;
-
+  const fetchLogo = useFetchVendorLogo(operations);
+  const pending = fetchLogo.isPending(vendor.id);
+  const reason = !vendor.website ? missingLogoWebsiteReason : undefined;
   return (
-    <Button
-      size="sm"
-      onClick={() => fetchLogo.mutate({ id: vendor.id })}
-      disabled={fetchLogo.isPending}
-    >
-      <ImageIcon className="mr-1 size-3" />
-      {fetchLogo.isPending ? "Fetching…" : "Fetch logo"}
-    </Button>
+    <div className="flex flex-col items-start gap-1">
+      <Button
+        size="sm"
+        onClick={() => {
+          void fetchLogo.fetch(vendor.id).catch(() => {
+            // SILENT: useFetchVendorLogo already displays the raw mutation error.
+          });
+        }}
+        disabled={pending || Boolean(reason)}
+      >
+        <ImageIcon className="mr-1 size-3" />
+        {pending ? "Fetching…" : "Fetch logo"}
+      </Button>
+      {reason && (
+        <p className="text-xs text-muted-foreground">
+          {reason}{" "}
+          <Link
+            className="text-link hover:underline"
+            to="/vendors/$shortcode"
+            params={{ shortcode: vendor.id }}
+          >
+            Open vendor
+          </Link>
+        </p>
+      )}
+    </div>
   );
 }

@@ -234,11 +234,12 @@ struct CollectionActionTests {
         let attach = try plan(.attachImage, .image)
         let product = try await runner.perform(
             attach, on: .image, row: Self.row("IMG-4K7M"),
-            values: ["targetId": " prd-4k7m ", "purpose": "label"], confirmed: false)
+            values: ["targetId": " prd-4k7m ", "purpose": "label", "role": "attachment"], confirmed: false)
         let sent = try #require(recorder.requests.first)
         #expect(sent.path == "/api/v1/image/attachExisting")
         #expect(sent.body["targetId"] == "PRD-4K7M")
         #expect(sent.body["purpose"] == "label")
+        #expect(sent.body["role"] == "attachment")
         // The screens showing the image and the record it joined both refresh.
         guard case .completed(_, let changed) = product else {
             Issue.record("expected completion")
@@ -248,7 +249,7 @@ struct CollectionActionTests {
 
         _ = try await runner.perform(
             attach, on: .image, row: Self.row("IMG-4K7M"),
-            values: ["targetId": "RCP-4K7M", "purpose": "label"], confirmed: false)
+            values: ["targetId": "RCP-4K7M", "purpose": "label", "role": "attachment"], confirmed: false)
         // The server rejects a purpose on any record that is not a Product.
         #expect(recorder.requests.last?.body["targetId"] == "RCP-4K7M")
         #expect(recorder.requests.last?.body["purpose"] == nil)

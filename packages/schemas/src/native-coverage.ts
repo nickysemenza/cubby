@@ -315,13 +315,15 @@ export const nativeCoverage = {
       "delete",
       "discard",
       "markPurchased",
+      "fetchLogo",
       "recordSale",
       "setStatus",
     ]),
     // `edit` is the toolbar's editor. `bulkEdit` is a list/multi-select verb: on a task's detail
     // hero it is the same field editor over one row, which the toolbar `edit` already is, and a
     // selection-wide edit has no row to anchor to on a detail screen.
-    ...ownedElsewhere(["edit", "bulkEdit"]),
+    // Native uses one Fetch or refresh logo operation for both states.
+    ...ownedElsewhere(["edit", "bulkEdit", "refreshLogo"]),
   },
   /**
    * `implemented` slots are the generated `ImplementedDetailSlotID`, which `DetailSlotRegistry`
@@ -615,6 +617,20 @@ const tradeOptions = tradeValues.map((value) => ({
  * (asserted by the unit test). Emitted into `native-coverage.json`.
  */
 export const nativeHeroActionPlans = {
+  fetchLogo: {
+    label: "Fetch or refresh logo",
+    symbol: "photo",
+    kind: "operation",
+    operation: "vendor.fetchLogo",
+    entities: ["vendor"],
+    confirmation: "none",
+    requires: {
+      path: "website",
+      reason: "Add a website in Edit to fetch a logo.",
+    },
+    fields: [],
+    body: { id: "$row.id" },
+  },
   delete: {
     label: "Delete",
     symbol: "trash",
@@ -760,6 +776,17 @@ export const nativeCollectionActionPlans = {
     confirmation: "none",
     fields: [
       { key: "targetId", label: "Record shortcode", kind: "text" },
+      {
+        key: "role",
+        label: "Attachment role",
+        kind: "choice",
+        default: "attachment",
+        options: [
+          { value: "attachment", label: "Gallery attachment" },
+          { value: "cover", label: "Replace Cookbook cover" },
+          { value: "logo", label: "Replace Vendor logo" },
+        ],
+      },
       // Sent only for a Product target; the server rejects a purpose on any other record.
       {
         key: "purpose",
@@ -775,6 +802,7 @@ export const nativeCollectionActionPlans = {
     body: {
       imageId: "$row.id",
       targetId: "$field.targetId",
+      role: "$field.role",
       purpose: "$field.purpose",
     },
   },
