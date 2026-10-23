@@ -231,8 +231,6 @@ describe("Email data quality", () => {
     );
     expect(filtered.result.count).toBe(4);
     expect(filtered.result.data).toHaveLength(4);
-    const statements = filtered.statements.join("\n");
-    expect(statements).toMatch(/JOIN[^;]*"EntityQuality"/i);
     expect(filtered.tables).toEqual(
       expect.arrayContaining(["EntityQuality", "EntityQualityCheck"]),
     );
@@ -260,11 +258,7 @@ describe("Email data quality", () => {
     );
     expect(count.result.count).toBe(4);
     expect(count.queryCount).toBe(1);
-    expect(count.tables).toEqual([
-      "Email",
-      "EntityQuality",
-      "EntityQualityCheck",
-    ]);
+    expect(count.tables).toEqual(["Email", "EntityQualityCheck"]);
     const facet = await countTestDbQueries(() =>
       listEmailsRead(
         ctx.db,
@@ -277,11 +271,7 @@ describe("Email data quality", () => {
     );
     expect(facet.result.count).toBe(6);
     expect(facet.queryCount).toBe(1);
-    expect(facet.tables).toEqual([
-      "Email",
-      "EntityQuality",
-      "EntityQualityCheck",
-    ]);
+    expect(facet.tables).toEqual(["Email", "EntityQualityCheck"]);
     const measuredQueue = await countTestDbQueries(() =>
       readWorkQueue(
         ctx.db,

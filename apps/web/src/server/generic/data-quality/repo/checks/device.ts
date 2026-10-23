@@ -8,7 +8,7 @@ import { qualityCheck } from "~/server/generic/data-quality/repo/builders";
 import { defineStoredEntityChecks } from "~/server/generic/data-quality/repo/stored-registry";
 
 /** Bump when the rules or their declared scoring metadata change. */
-export const DEVICE_QUALITY_RULES_VERSION = 1;
+const DEVICE_QUALITY_RULES_VERSION = 1;
 
 type DeviceQualityRecord = Awaited<
   ReturnType<typeof loadDeviceQualityRecords>

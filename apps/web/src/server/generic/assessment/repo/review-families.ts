@@ -447,7 +447,7 @@ export async function readAssessmentRecordRefs(
 }
 
 /** Admission is data, so callers cannot bind aliases or spell status values in SQL. */
-export type AssessmentEligibility =
+type AssessmentEligibility =
   | {
       kind: "suggestions";
       families: readonly ReviewFamily[];

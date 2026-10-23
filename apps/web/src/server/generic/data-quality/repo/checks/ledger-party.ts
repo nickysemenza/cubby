@@ -8,7 +8,7 @@ import { qualityCheck } from "~/server/generic/data-quality/repo/builders";
 import { defineStoredEntityChecks } from "~/server/generic/data-quality/repo/stored-registry";
 
 /** Bump when the rules or their declared scoring metadata change. */
-export const LEDGER_PARTY_QUALITY_RULES_VERSION = 1;
+const LEDGER_PARTY_QUALITY_RULES_VERSION = 1;
 
 type LedgerPartyQualityRecord = Awaited<
   ReturnType<typeof loadLedgerPartyQualityRecords>
