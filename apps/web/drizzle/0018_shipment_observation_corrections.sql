@@ -1,1 +1,1 @@
-ALTER TABLE "ShipmentObservation" ADD COLUMN "correctionReason" text;
+ALTER TABLE "ShipmentObservation" ADD COLUMN "memberReviewed" boolean DEFAULT false NOT NULL;

@@ -1,5 +1,5 @@
 {
-  "id": "8fe3afbe-c5c8-4ecb-b401-4335fff7cbe8",
+  "id": "e53645f2-b1b4-4c23-87b0-efa05ef65598",
   "prevId": "780a28f7-6023-44e0-886b-4e8536eae179",
   "version": "7",
   "dialect": "postgresql",
@@ -19215,11 +19215,12 @@
           "primaryKey": false,
           "notNull": true
         },
-        "correctionReason": {
-          "name": "correctionReason",
-          "type": "text",
+        "memberReviewed": {
+          "name": "memberReviewed",
+          "type": "boolean",
           "primaryKey": false,
-          "notNull": false
+          "notNull": true,
+          "default": false
         },
         "event": {
           "name": "event",

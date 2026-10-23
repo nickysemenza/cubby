@@ -77,12 +77,12 @@ does not make explicitly distinct vendor packages one Shipment.
 
 Correct extracted observation fields with `shipments.edit_observation`: use the
 current Shipment and `observationId` from `shipments_read.timeline`, supply only
-changed fields in `patch`, and explain the evidence in `reason`. A supplied
+changed fields in `patch`. A supplied
 `time` replaces the complete time object; explicit null clears a nullable field.
 The source event key and capture identity stay immutable. The writer appends a
 reviewed revision, retains the original and all captures, audits the correction,
 and preserves it on source replay. A changed edit against a superseded handle
-requires a fresh timeline read. Inspect the readback's `correctionReason` and
+requires a fresh timeline read. Inspect the readback's `memberReviewed` flag and
 active timeline rather than recording a corrected scan as another source event.
 
 Existing accepted Emails are not replayed merely because this feature exists.

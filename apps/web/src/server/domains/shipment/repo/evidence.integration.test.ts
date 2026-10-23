@@ -101,8 +101,6 @@ describe("Shipment retained evidence", () => {
         time: { kind: "instant", value: "2026-06-03T09:00:00-07:00" },
         location: "Synthetic West Coast Facility",
       },
-      reason:
-        "Verified local timezone and facility from retained source context",
     };
     await editShipmentObservation(ctx.db, edit, ctx.actor);
     await editShipmentObservation(ctx.db, edit, ctx.actor);
@@ -131,7 +129,7 @@ describe("Shipment retained evidence", () => {
     ).toMatchObject({
       time: original.time,
       superseded: true,
-      correctionReason: null,
+      memberReviewed: false,
     });
     expect(after.timeline[0]?.event).toEqual({
       ...event,
@@ -142,7 +140,7 @@ describe("Shipment retained evidence", () => {
     expect(
       after.observations.find((observation) => !observation.superseded),
     ).toMatchObject({
-      correctionReason: edit.reason,
+      memberReviewed: true,
       captureIds: original.captureIds,
     });
     expect(after.milestones.carrierPossessionAt).toBe(
@@ -193,7 +191,6 @@ describe("Shipment retained evidence", () => {
         shipmentId: code,
         observationId: original.observationId,
         patch: { rawStatus: "Member verified pickup", location: null },
-        reason: "Reviewed source wording",
       },
       ctx.actor,
     );

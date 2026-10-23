@@ -792,7 +792,7 @@ export const MCP_TOOLS = defineMcpTools({
       edit_observation: mcpAction({
         op: shipmentContract.ops.edit_observation,
         description:
-          "Partially edit one retained observation using its observationId from shipments_read.timeline and current Shipment reference. Supply only changed fields in patch and an evidence-backed reason; omitted fields and source identity remain unchanged. Appends a reviewed revision, retains original captures and history, and protects it from source replay. A superseded observation refuses a different edit; read the current revision first. Interactive members only.",
+          "Partially edit one retained observation using its observationId from shipments_read.timeline and current Shipment reference. Supply only changed fields in patch; omitted fields and source identity remain unchanged. Appends a reviewed revision, retains original captures and history, and protects it from source replay. A superseded observation refuses a different edit; read the current revision first. Interactive members only.",
       }),
       reassign: mcpAction({
         op: shipmentContract.ops.reassign,

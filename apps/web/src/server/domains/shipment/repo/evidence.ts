@@ -498,7 +498,7 @@ export async function recordShipmentEvidence(
         const restored =
           prior?.supersededById &&
           current &&
-          !current.correctionReason &&
+          !current.memberReviewed &&
           observedAt >= current.lastSeenAt &&
           observedAt > prior.lastSeenAt;
         let retainedId: string;
@@ -519,7 +519,7 @@ export async function recordShipmentEvidence(
         } else {
           const canSupersede =
             !current ||
-            (!current.correctionReason && current.lastSeenAt < observedAt);
+            (!current.memberReviewed && current.lastSeenAt < observedAt);
           const [created] = await database
             .insert(shipmentObservation)
             .values({
@@ -654,7 +654,7 @@ export async function editShipmentObservation(
         successor &&
         !successor.supersededById &&
         successor.fingerprint === fingerprint &&
-        successor.correctionReason === input.reason
+        successor.memberReviewed
       )
         return result;
       return refuse(
@@ -674,7 +674,7 @@ export async function editShipmentObservation(
         occurrenceKey: original.occurrenceKey,
         fingerprint,
         event,
-        correctionReason: input.reason,
+        memberReviewed: true,
         firstSeenAt: now,
         lastSeenAt: now,
       })
@@ -705,7 +705,6 @@ export async function editShipmentObservation(
         changes: {
           observation: { from: original.event, to: event },
           observationRevision: { from: original.id, to: revision.id },
-          correctionReason: { from: null, to: input.reason },
         },
       },
     ]);

@@ -150,7 +150,6 @@ export const editShipmentObservationInput = z.strictObject({
       (patch) => Object.values(patch).some((value) => value !== undefined),
       "Supply a changed field.",
     ),
-  reason: text.max(2000),
 });
 export const shipmentReferenceOut = z.object({
   shipmentId: shortcodeSchema("shipment"),
@@ -170,7 +169,7 @@ export const shipmentTimelineObservation = shipmentObservationInput.extend({
   firstSeenAt: z.iso.datetime(),
   lastSeenAt: z.iso.datetime(),
   superseded: z.boolean(),
-  correctionReason: z.string().nullable(),
+  memberReviewed: z.boolean(),
 });
 export const shipmentTimelineOut = z.object({
   shipmentId: shortcodeSchema("shipment"),
