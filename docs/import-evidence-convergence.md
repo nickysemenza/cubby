@@ -135,6 +135,10 @@ Tracking reports show the source Email's received timestamp when the event time
 is unknown, labeled as Email receipt rather than an observed event time. This
 display fallback does not replace retained event time or enter milestone duration
 calculations.
+The reconciled history uses the shared records timeline and date formatter,
+including relative age. Each row exposes its normalized event status alongside
+the original source wording and links. Retained observations remain available
+in a separate evidence table; formatting never changes their timestamps.
 
 Explicit Purchase attachment or detachment is a reviewed decision that replay
 cannot override. `shipments.reassign` moves an incorrectly associated source
