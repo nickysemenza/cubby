@@ -339,13 +339,13 @@ Native relation journeys scroll the navigation row back into view after inspecti
 its badges, then wait for the destination detail marker before inspecting
 inverse evidence. A successful tap alone does not establish navigation.
 
-The Plant
-connection browser owner keeps its multi-hop task/project paths, both purchases,
+The Plant connection browser owner keeps its multi-hop task/project paths, both purchases,
 Open all plantings and Project/Task composition. Product inverse navigation stays
 in `product-clarity.spec.ts`; the existing connected-record SQL owner checks
 Vendor purchased-Product traversal and duplicate Expense paths. Dedicated Vendor
 Product-section rendering and its path-copy check are a presentation tradeoff;
 do not repeat those visits inside the Plant journey.
+
 Rows with interactive facts expose a separate title identifier; navigation
 tests target that title rather than the aggregate row, whose center can land
 on a field explanation control.
