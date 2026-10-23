@@ -56,6 +56,15 @@ finance-evidence-journey retains source-record navigation and provider immutabil
 Dedicated HTTP routing for the two correction operations is no longer sampled
 by that case; generic operation transport and direct correction outcomes remain.
 
+Run-progress browser coverage loads one target-free Run and retains phase counts,
+paused-rate context, completed work, expandable Workflow handoffs, readable errors
+and phone visibility. The required `run-detail.preview.test.tsx` owns shared step
+counts and uncounted steps; `work-progress.unit.test.ts` owns unknown-population
+and paused-rate ETA rules. Do not repeat full database snapshots merely to inspect
+indeterminate animation CSS or a second progress-count presentation. Indeterminate
+count/ARIA presentation, animation/reduced-motion styling and the pre-sample
+generation fallback display no longer have dedicated native-browser sampling.
+
 Detail renderer and browser tests assert the continuous page: every section is
 accessible without a view switch. Select a section hash to verify scrolling,
 focus and history; empty sections retain headings, index entries and actions.

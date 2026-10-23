@@ -113,7 +113,7 @@ test("related Runs show account labels and shared quality", async ({
 });
 
 // Phase work must survive target-free Runs; handoff grouping must leave errors readable.
-test("Run work shows phase progress, unknown totals, and expandable handoffs", async ({
+test("Run work shows phase progress and expandable handoffs", async ({
   page,
 }) => {
   const { db, actor } = await createEvidenceHarnessContext(page);
@@ -218,85 +218,4 @@ test("Run work shows phase progress, unknown totals, and expandable handoffs", a
 
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(bar).toBeVisible();
-
-  await getDb(db)
-    .update(runStep)
-    .set({
-      meta: {
-        work: {
-          current: {
-            phase: "discover",
-            label: "Discovering",
-            unit: "items",
-            processed: 7,
-            total: null,
-            failures: 0,
-            sampledAt: at,
-            ratePerSecond: 1,
-            finished: false,
-          },
-          completed: [],
-        },
-      },
-    })
-    .where(eq(runStep.runId, owner.id));
-  await page.reload();
-  const unknown = page.getByRole("progressbar", { name: "Discovering" });
-  await expect(unknown).not.toHaveAttribute("aria-valuenow");
-  await expect(
-    page.getByText("7 / unknown items · 0 failed", { exact: true }),
-  ).toBeVisible();
-  await page.emulateMedia({ reducedMotion: "no-preference" });
-
-  // Unknown work must remain visible and animate; skeletons deliberately do neither.
-  const indicator = unknown.locator(":scope > div");
-  await expect(indicator).not.toHaveCSS("animation-name", "none");
-  await page.emulateMedia({ reducedMotion: "reduce" });
-  await expect(indicator).toHaveCSS("animation-name", "none");
-  await expect(indicator).not.toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
-  const widths = await unknown.evaluate((track) => ({
-    track: track.getBoundingClientRect().width,
-    indicator: track.firstElementChild?.getBoundingClientRect().width ?? 0,
-  }));
-  expect(widths.indicator).toBeGreaterThan(0);
-  expect(widths.indicator).toBeLessThan(widths.track);
-  await page.setViewportSize({ width: 1280, height: 900 });
-
-  // A pre-sample generation checkpoint already knows its scope and completed work.
-  await getDb(db)
-    .update(runStep)
-    .set({
-      key: "statement_transaction",
-      label: "Statements",
-      found: 200,
-      done: 60,
-      skipped: 0,
-      failed: 0,
-      meta: {
-        work: {
-          completed: [],
-          current: {
-            phase: "statement_generate",
-            label: "Generating suggestions",
-            unit: "charges",
-            processed: 10,
-            total: null,
-            failures: 0,
-            sampledAt: at,
-            ratePerSecond: 2,
-            finished: false,
-          },
-        },
-      },
-    })
-    .where(eq(runStep.runId, owner.id));
-  await page.reload();
-  const generation = page.getByRole("progressbar", {
-    name: "Generating suggestions",
-  });
-  await expect(generation).toHaveAttribute("aria-valuenow", "60");
-  await expect(generation).toHaveAttribute("aria-valuemax", "200");
-  await expect(page.getByText(/30% · 140 charges left/)).toBeVisible();
-
-  await page.setViewportSize({ width: 390, height: 844 });
 });
