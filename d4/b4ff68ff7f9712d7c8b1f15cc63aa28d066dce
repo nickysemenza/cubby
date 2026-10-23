@@ -1,0 +1,422 @@
+apps/web/src/server/observability/tracing.ts
+  s_16882afa1e38ca::t_273c78512a0436 3,90-102,112-120,129-135,144-152,160-164
+apps/web/src/server/db/db-pg-tracing.unit.test.ts
+  s_16882afa1e38ca::t_2311041b48bb26 5-8,33-119
+docs/infrastructure.md
+  s_16882afa1e38ca::t_fd58c2a76b94c9 942-952
+apps/web/src/server/db/db-pg-tracing.ts
+  s_16882afa1e38ca::t_23b11981425377 5,7-11,235-238,249
+apps/web/docs/web-runtime.md
+  s_16882afa1e38ca::t_8e4645eeac07e2 278-285
+apps/web/src/server/ai/field-suggest/registry.ts
+  s_16882afa1e38ca::t_167d4b8eaf80ae 500
+apps/web/src/server/domains/location/repo/location.integration.test.ts
+  s_16882afa1e38ca::t_6b01150e585cf3 9,13,15,47-83
+apps/web/src/server/domains/location/repo/lookup.ts
+  s_16882afa1e38ca::t_2106027a2500ce 16,89,130,132-133,138,145,149
+apps/web/src/server/domains/product/repo/list.integration.test.ts
+  s_16882afa1e38ca::t_6a30ed5f758d48 304-347
+apps/web/src/server/domains/product/repo/match/product-match-review.ts
+  s_16882afa1e38ca::t_23c3bfb73290f1 32-35,166
+apps/web/src/server/domains/run/service/suggestion-sweep.integration.test.ts
+  s_0cc53fa46ecbd7::t_f6f7c84d88ccb4 6,186-197,200-204
+apps/web/src/server/domains/run/service/suggestion-sweep.ts
+  s_0cc53fa46ecbd7::t_467f3bdbdeb115 40,270-274,276
+apps/web/drizzle/0022_entity_quality.sql
+  s_8fd3a19aead36e::t_c6cf62b9312443 1-19
+  s_0cc53fa46ecbd7::t_e7f34181bde605 20-21
+  s_0cc53fa46ecbd7::t_fd867d8db27e3e 20-21
+apps/web/drizzle/meta/_journal.json
+  s_8fd3a19aead36e::t_e49894d08f32c9 144-147,164
+apps/web/src/server/db/entity-quality-schema.ts
+  s_8fd3a19aead36e::t_d948af7f74ea6b 1-73
+apps/web/src/server/db/retained-tables.ts
+  s_8fd3a19aead36e::t_41f703b556bee5 1
+  s_0cc53fa46ecbd7::t_20270adca3c461 273-275
+  s_0cc53fa46ecbd7::t_b96dc0f69258ff 273-275
+apps/web/src/server/entity-kernel/repo/entity-identity-writer.ts
+  s_8fd3a19aead36e::t_252412108cce54 13-16,22,95-103
+apps/web/src/server/generic/data-quality/repo/builders.ts
+  s_8fd3a19aead36e::t_c847eb17f934b6 1-2,4-6,8-11,13-21,23-25,27-29,31-36
+  s_8fd3a19aead36e::t_0b3752d3be38d7 3,7,12,22,26,30,37-39
+apps/web/src/server/generic/data-quality/repo/entries.ts
+  s_8fd3a19aead36e::t_1796eac32a3d55 33,79,80-81
+  s_c8aa3bc2b247bc::t_7d4d8ca50e11e4 41
+  s_0cc53fa46ecbd7::t_65c8f0fcd54bf3 18,37,82
+apps/web/src/server/generic/data-quality/repo/exceptions.ts
+  s_8fd3a19aead36e::t_51008c67184ca0 29,32,78
+  s_707664f32c0885::t_2edd449d7c3250 176-179
+  s_0cc53fa46ecbd7::t_250300b0f976d6 31,39,75-77,79-82,101-107
+  s_0cc53fa46ecbd7::t_88cd68048483df 31,39,75-77,79-82,101-107
+  s_0cc53fa46ecbd7::t_9403b3420f3ac2 24,159-160
+apps/web/src/server/generic/data-quality/repo/hydrate.ts
+  s_8fd3a19aead36e::t_fdc6b5863a5d0c 36,38,217,227-233,244,246,256,258,336-339,390
+  s_8fd3a19aead36e::t_bab230c83e783a 198,249,318-319
+  s_0cc53fa46ecbd7::t_338f12ed40d549 376-378,384,404
+  s_0cc53fa46ecbd7::t_f61f5b8b98d983 37,251,259-279,295-296,309-317,321,323
+  s_0cc53fa46ecbd7::t_ef215696e2c825 37,251,259-279,295-296,309-317,321,323
+apps/web/src/server/generic/data-quality/repo/refresh.ts
+  s_8fd3a19aead36e::t_b2d6a1b957472d 1-89
+apps/web/src/server/generic/data-quality/repo/sql.ts
+  s_8fd3a19aead36e::t_c1936e6e2d30cd 16,21,116-120,138-141,145-146
+  s_0cc53fa46ecbd7::t_d2c67e9fa39952 29,142
+  s_0cc53fa46ecbd7::t_7d5dc3ad97a995 18,27-28,36-38,45,50-51,53,58-61,63,70,73,78-81,124-125,130,136-137,143-144,153,226,234,259,264
+  s_0cc53fa46ecbd7::t_43224173b2bd86 18,27-28,36-38,45,50-51,53,58-61,63,70,73,78-81,124-125,130,136-137,143-144,153,259,264
+apps/web/src/server/generic/data-quality/repo/stored-registry.ts
+  s_8fd3a19aead36e::t_95f1dcff3e78a7 1-9,11-20,22-25,26-32,34-46,48-49,50-66
+  s_0cc53fa46ecbd7::t_54c87c68efde8d 10,21,33,47
+apps/web/src/server/generic/data-quality/repo/stored-sql.ts
+  s_8fd3a19aead36e::t_a8b203436d31a3 1-7,9-13,14,16-18,21
+  s_0cc53fa46ecbd7::t_433ff792bd274e 8,15,19-20
+apps/web/src/server/generic/data-quality/repo/stored.ts
+  s_8fd3a19aead36e::t_7d03e4d1408eb3 1-34,36-65,69-162,173-242
+  s_8fd3a19aead36e::t_e3583d1beedcb8 35,163-172
+  s_707664f32c0885::t_fb5f7fa232f45d 66-68
+apps/web/src/server/generic/derived-refresh/repo/process.ts
+  s_8fd3a19aead36e::t_ab01a4bbf7b758 23,119
+apps/web/src/server/generic/list/repo/list-projection.ts
+  s_8fd3a19aead36e::t_db48ce38b69b35 394,463
+apps/web/tooling/typecheck-repositories.ts
+  s_8fd3a19aead36e::t_8f21b9894e752a 18
+docs/entities.md
+  s_8fd3a19aead36e::t_13b316caf3e5ab 2278,2530-2534,2542-2549,2556
+  s_8fd3a19aead36e::t_4024ae3259be4c 2508-2516
+  s_707664f32c0885::t_5a03c14e4f39c8 2569-2573,2577-2589,2629-2630
+  s_778d7cda70b989::t_5dc2f4a30309eb 2608-2613,2615-2616,2619-2627
+  s_0cc53fa46ecbd7::t_a2265d28e3fb7d 2537-2538,2598,2617-2618,2634-2636
+  s_0cc53fa46ecbd7::t_77d2d0e8fdd8ec 448,2517-2526,2535-2536,2539-2541,2550-2555,2614,2631-2633,2644,2662,2701,2736,2855-2859,2864,2870-2873,2877
+  s_0cc53fa46ecbd7::t_bfcfbf47f81bb4 428
+  s_0cc53fa46ecbd7::t_4dfd6c75ff66a9 2673-2675,2901-2904,2910,2918,2920
+packages/schemas/src/activity-fields.ts
+  s_8fd3a19aead36e::t_f304613bda74d2 294-302
+packages/schemas/src/data-quality-shape.ts
+  s_8fd3a19aead36e::t_c88d386b507cb3 19-27
+apps/web/src/server/domains/shipment/repo/entity-repository.ts
+  s_8fd3a19aead36e::t_accd6a98018499 130-132
+apps/web/src/server/generic/data-quality/repo/checks/shipment.ts
+  s_8fd3a19aead36e::t_f0d10cfeaa2fcc 5,7-9,11-16,18-19,21-26,29-30,32-45,48-55,59-114
+  s_0cc53fa46ecbd7::t_97225610d45cca 1-4,56-58
+apps/web/src/server/generic/data-quality/repo/shipment-checks.integration.test.ts
+  s_8fd3a19aead36e::t_06cab8ee346863 1,4,6,9-15,17,28,31-41,124-145,242-245,249-253,260-273,277-279,281-284,287-329,349,361-374,378-384,390-393,398-406,409-414,416,418-429,431-432,434-439,440-443,445-446,448-455,457-461,463,465-508,510-520,525
+  s_0cc53fa46ecbd7::t_40d17b946f8096 375-377,521-523
+  s_0cc53fa46ecbd7::t_3a44e43d0bad7b 385-389,394-397
+  s_0cc53fa46ecbd7::t_f5cdac93755480 433
+  s_0cc53fa46ecbd7::t_a17296712e0a64 5
+  s_0cc53fa46ecbd7::t_71ac47825c7b48 407-408,415,417,430,444,447,456,462,464,509,524
+apps/web/tooling/entity-quality-migration.integration.test.ts
+  s_8fd3a19aead36e::t_9a9a77620b348e 1-6,9-11,13-27,29-31,34,36-73
+  s_0cc53fa46ecbd7::t_f730c31a64c153 7-8,28,32,35
+apps/web/tooling/scenarios/performance.integration.test.ts
+  s_8fd3a19aead36e::t_f3fe8b5583b9e6 1,12-16,43-44,69-70,84-85,123-135
+  s_0cc53fa46ecbd7::t_a5be77651ab4e8 110-122
+apps/web/tooling/scenarios/performance.ts
+  s_8fd3a19aead36e::t_49ba9aefcd88e6 7-8,37-41,190-217,219-276,354-355,561-572,594
+docs/local-development.md
+  s_8fd3a19aead36e::t_4c05ab7abc8330 254,259
+packages/schemas/src/entity-definitions/32-shipment.entity.ts
+  s_8fd3a19aead36e::t_b2d534ef4ce488 544
+apps/web/src/server/generic/assessment/repo/review-families.ts
+  s_c21400fba7a125::t_d139095a662749 7,21-34,39,46-48,58-92,242,263,283-290,322,337-342,344-356,358-368,370,449,451-456,463-499,501-602,604-629,632,636-638
+  s_0cc53fa46ecbd7::t_29f62c4cfebf83 603
+  s_0cc53fa46ecbd7::t_e765aef10d1cbd 457-462,500
+  s_0cc53fa46ecbd7::t_97a9862a68d0b7 450
+apps/web/src/server/generic/assessment/repo/suggestion-families.ts
+  s_c21400fba7a125::t_97247c575bcbf8 61-64,646
+apps/web/src/server/generic/assessment/repo/suggestion-list.ts
+  s_c21400fba7a125::t_c809e7e2000920 235-240
+docs/adr/0016-shared-assessments-and-feedback.md
+  s_c21400fba7a125::t_9588285e089335 116-126
+apps/web/src/server/domains/image/repo/image.ts
+  s_707664f32c0885::t_cd5b6fa3a6d779 2553-2565
+apps/web/src/server/domains/product/repo/crud.ts
+  s_707664f32c0885::t_6edf152b418db7 700,702-705
+  s_0cc53fa46ecbd7::t_91470226c165ff 701
+apps/web/src/server/domains/product/repo/displayable-image-predicate.integration.test.ts
+  s_707664f32c0885::t_b262da7001a612 18,106,123,144
+apps/web/src/server/domains/product/repo/pricing.ts
+  s_707664f32c0885::t_c61fa5df03cb14 412-413,459,462-463
+  s_0cc53fa46ecbd7::t_6f280e09f1c106 15-20
+apps/web/src/server/generic/data-quality/repo/checks/product.ts
+  s_707664f32c0885::t_05c70710f83751 2,4,6,11,13-15,92-93,95-101,103,106-107,109-115,117-125,129-146,149-166,169-193
+apps/web/src/server/generic/data-quality/repo/data-quality.integration.test.ts
+  s_707664f32c0885::t_8ba458892e308d 31,61-78,100,129,195,198,218,240,257-259,266,274,297,303,329,358,367,380,383,408-413,503,606,638-643,708,726,735,746,799,806,837,857-858,880-882,893,895-898,957,982,993,1015
+  s_0cc53fa46ecbd7::t_b88ab85ac82f96 905-907
+apps/web/src/server/generic/data-quality/repo/product-checks.integration.test.ts
+  s_707664f32c0885::t_ade3bcacaceabc 1-114,116-119,122-127,131-145,147-163,165-322,324-341
+  s_0cc53fa46ecbd7::t_96e36c5f49c4d8 128-130,146,164,323
+  s_0cc53fa46ecbd7::t_44e10a3fd69e5a 115,120-121
+apps/web/src/server/generic/data-quality/repo/sql.unit.test.ts
+  s_707664f32c0885::t_e2a3201d90d5f2 194-195,211-212
+  s_0cc53fa46ecbd7::t_ea421a7c5e83da 13,100,102-111
+apps/web/src/server/generic/work-queue/repo/work-queue.integration.test.ts
+  s_707664f32c0885::t_ea7b7bd1d2d652 47-48,54,56-60,62-63,129,185,264,418,567,655,671,717,784,796
+  s_0cc53fa46ecbd7::t_36bb00236c22b3 31,55,61
+apps/web/src/server/generic/work-queue/repo/work-queue.ts
+  s_707664f32c0885::t_f122a26aa395c4 957
+  s_0cc53fa46ecbd7::t_b54c0bb0042207 726-731
+  s_0cc53fa46ecbd7::t_2e084a044bc701 64-65,68-69,221,307-308,312,320,328,355,362,372,380,390,394,398,459,463-464,510,514,523,966
+  s_0cc53fa46ecbd7::t_b3634a62a6fd77 951
+apps/web/src/server/testing/quality.fixtures.ts
+  s_707664f32c0885::t_b14e5eab1ef6b0 1-4,9-31
+  s_0cc53fa46ecbd7::t_e2de5808d3c448 5-8,32-37
+packages/schemas/src/entity-definitions/00-product.entity.ts
+  s_707664f32c0885::t_d6789e06479cb9 267
+apps/web/src/server/domains/expense/repo/expense-derived-read.ts
+  s_e5624ca02fc242::t_2f545589970c65 148-150
+apps/web/src/server/domains/expense/repo/expense.integration.test.ts
+  s_7717bec03adabc::t_88e640a00d02e0 62,307
+apps/web/src/server/domains/expense/repo/lookup.ts
+  s_c8aa3bc2b247bc::t_1265924aa694cf 22,257-261,273-276
+  s_0cc53fa46ecbd7::t_f58a75aa20e30d 272
+apps/web/src/server/generic/data-quality/repo/checks/expense.ts
+  s_e5624ca02fc242::t_649f5eb6d48d18 1,3-4,6,8-10,12-13,15-19,21,24-25,27-49,52-86
+apps/web/src/server/generic/data-quality/repo/expense-checks.integration.test.ts
+  s_7717bec03adabc::t_8423165a6f0ec6 1-184,188-267
+  s_0cc53fa46ecbd7::t_8bd31982603a64 185-187
+apps/web/src/server/generic/data-quality/repo/finance-checks.integration.test.ts
+  s_7717bec03adabc::t_f5c0f53811b306 6
+apps/web/src/server/generic/assessment/repo/automatic-decisions.ts
+  s_0cc53fa46ecbd7::t_8d47ff837ec777 43-47
+apps/web/src/server/generic/data-quality/repo/checks/device.ts
+  s_308eb1d4a9403a::t_829f0205df6813 1,3-4,6-8,10,13-15,17,20-21,23-26,29-46
+  s_0cc53fa46ecbd7::t_6bc3e0feb74299 11
+apps/web/src/server/generic/data-quality/repo/checks/garden-entry.ts
+  s_308eb1d4a9403a::t_e15680d9ccbecc 1-4,6-8,10,13-15,17,20-21,23-31,34-56
+  s_0cc53fa46ecbd7::t_a5bb8c124bbbe3 11
+apps/web/src/server/generic/data-quality/repo/checks/image-job.ts
+  s_308eb1d4a9403a::t_3f4c4492c38361 2,4-5,7-9,11,14-16,18,21-22,24-33,36-57
+  s_0cc53fa46ecbd7::t_6e39afd30d6f44 12
+apps/web/src/server/generic/data-quality/repo/email-checks.integration.test.ts
+  s_f8222ceba4ac4a::t_6aff3370c6e70e 258,534
+  s_0cc53fa46ecbd7::t_d2bb8db4d67539 261,274
+  s_0cc53fa46ecbd7::t_45acd2692a7f71 331-333
+  s_0cc53fa46ecbd7::t_b2db86762a08e9 39,192
+apps/web/src/server/generic/data-quality/repo/checks/inventory.ts
+  s_0cc53fa46ecbd7::t_a795df0c95dae6 11
+apps/web/src/server/generic/data-quality/repo/checks/ledger-party.ts
+  s_0cc53fa46ecbd7::t_b9dc26d6283746 11
+apps/web/src/server/generic/data-quality/repo/checks/ledger-transfer.ts
+  s_0cc53fa46ecbd7::t_c8181f3e77fadf 14
+apps/web/src/server/generic/data-quality/repo/checks/plant.ts
+  s_0cc53fa46ecbd7::t_be501562504876 11
+apps/web/src/server/generic/data-quality/repo/checks/planting.ts
+  s_0cc53fa46ecbd7::t_b64d5947c00ee5 11
+apps/web/src/server/generic/data-quality/repo/checks/project.ts
+  s_0cc53fa46ecbd7::t_06e649c2c2c00a 11
+apps/web/src/server/generic/data-quality/repo/checks/spending-category.ts
+  s_0cc53fa46ecbd7::t_a5121d9ea474b0 11
+apps/web/src/server/generic/data-quality/repo/checks/wish.ts
+  s_0cc53fa46ecbd7::t_848c7a0eb47e32 11
+apps/web/src/server/generic/problems/repo/detectors-coverage.integration.test.ts
+  s_0cc53fa46ecbd7::t_b5d747774c1c5d 5,31,100
+apps/web/src/server/generic/problems/repo/problems.integration.test.ts
+  s_0cc53fa46ecbd7::t_03a08e904a9d2f 290,461,565
+  s_0cc53fa46ecbd7::t_2153d3d2823da2 23-26,641,748
+apps/web/src/server/domains/inventory/repo/inventory-list-filters.integration.test.ts
+  s_0cc53fa46ecbd7::t_7fb3548ddbb90a 9,138-139
+apps/web/src/server/generic/data-quality/repo/purchase-checks.integration.test.ts
+  s_0cc53fa46ecbd7::t_43ece1288d3cfe 147-149
+apps/web/src/server/generic/list/repo/list-projection.integration.test.ts
+  s_0cc53fa46ecbd7::t_58d9f27dfa37b7 316-317
+apps/web/src/server/generic/list/repo/list.integration.test.ts
+  s_0cc53fa46ecbd7::t_2db0aaa76310c4 10,153
+apps/web/src/server/generic/data-quality/repo/checks/cookbook.ts
+  s_0cc53fa46ecbd7::t_90eff77c50f21e 12
+apps/web/src/server/generic/data-quality/repo/checks/image.ts
+  s_0cc53fa46ecbd7::t_2ee2268dd17d22 11
+apps/web/src/server/generic/data-quality/repo/checks/ingredient.ts
+  s_0cc53fa46ecbd7::t_9ed971096d2c1c 10
+apps/web/src/server/generic/data-quality/repo/checks/location.ts
+  s_0cc53fa46ecbd7::t_39b409107da431 13
+  s_0cc53fa46ecbd7::t_6433f38167d115 39,42
+apps/web/src/server/generic/data-quality/repo/checks/meal.ts
+  s_0cc53fa46ecbd7::t_79f7b87cc65df8 10
+apps/web/src/server/generic/data-quality/repo/checks/product-category.ts
+  s_0cc53fa46ecbd7::t_04da7c99503e77 11
+apps/web/src/server/generic/data-quality/repo/checks/recipe.ts
+  s_0cc53fa46ecbd7::t_64b589d835fcec 10
+apps/web/src/server/generic/data-quality/repo/checks/vendor.ts
+  s_0cc53fa46ecbd7::t_a14558240824c7 11
+apps/web/src/server/domains/purchase/repo/purchase.ts
+  s_0cc53fa46ecbd7::t_ab3143aec078b1 136,602,611,639-640,648-650,684-685,714,894
+apps/web/src/server/generic/data-quality/repo/quality-score.integration.test.ts
+  s_0cc53fa46ecbd7::t_5b9c973422daea 12,45-48,50,53,61,75,77
+apps/web/src/server/generic/data-quality/repo/registry.ts
+  s_0cc53fa46ecbd7::t_d63b62453ae60d 1,16-24,26-28,30-37
+apps/web/src/server/generic/list/repo/list.ts
+  s_0cc53fa46ecbd7::t_3536ebd02a81f4 1666-1668,1701,1723,1865,1868,1949,2111,2127,2196,2275,2278-2280
+apps/web/tests/e2e/quality-explanations.spec.ts
+  s_0cc53fa46ecbd7::t_31a890b5c16f28 12,70,74
+docs/agents/domain-rules.md
+  s_0cc53fa46ecbd7::t_9b148bfba27c34 297-300
+  s_a93264be297e14::t_4e091afb7c93e1 249-261
+docs/agents/validation-tests.md
+  s_0cc53fa46ecbd7::t_290a5f0914b576 266-267
+packages/schemas/src/entity-definitions/definition.ts
+  s_0cc53fa46ecbd7::t_777e19cbf8ee31 2185-2186
+packages/schemas/src/field-explanation.ts
+  s_0cc53fa46ecbd7::t_2c2cd1c78c1e6a 61-62,65
+  s_0cc53fa46ecbd7::t_bd07f6af696ccb 63-64
+apps/web/src/server/domains/financial-transaction/repo/financial-transaction.ts
+  s_0cc53fa46ecbd7::t_0cbad38ffb48a8 55,441-442
+apps/web/src/server/generic/problems/repo/detectors-financial.ts
+  s_0cc53fa46ecbd7::t_f0da4332fad803 17-18,166,168
+apps/web/src/server/domains/financial-transaction/repo/financial-transaction-allocations.integration.test.ts
+  s_0cc53fa46ecbd7::t_06750828350635 207-209,230-232
+apps/web/src/server/domains/vendor-account/repo/vendor-account-coverage.integration.test.ts
+  s_0cc53fa46ecbd7::t_4396bd354b657e 13-14,16,33-43
+apps/web/src/server/entity-kernel/list-read.integration.test.ts
+  s_0cc53fa46ecbd7::t_494c36d574d211 179,185,208
+apps/web/src/server/entity-kernel/repo/entity-records.integration.test.ts
+  s_0cc53fa46ecbd7::t_aaac0d62e5b508 12,16,30-36
+apps/web/src/server/mcp/availability-explanation.integration.test.ts
+  s_0cc53fa46ecbd7::t_5d9fc5f7b54d93 24,79,81
+apps/web/src/server/mcp/catalog.integration.test.ts
+  s_0cc53fa46ecbd7::t_a0f58b18b815d6 26,336-337
+apps/web/src/server/mcp/work-queue.integration.test.ts
+  s_0cc53fa46ecbd7::t_c5b6b7700ba617 37,40-41,66-74
+apps/web/src/server/domains/financial-transaction/repo/financial-reconciliation.ts
+  s_0cc53fa46ecbd7::t_a721190e3dafbd 118-178
+apps/web/src/server/domains/financial-transaction/repo/financial-transaction-itemization.integration.test.ts
+  s_0cc53fa46ecbd7::t_8eaf400539016b 169
+apps/web/src/server/domains/email/repo/email.ts
+  s_0cc53fa46ecbd7::t_9794ace40cfaf7 299
+apps/web/src/server/domains/run/repo/ensure-run.ts
+  s_0cc53fa46ecbd7::t_c07396594c6794 91-99
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "d4b4ff68ff7f9712d7c8b1f15cc63aa28d066dce",
+  "prompts": {},
+  "sessions": {
+    "s_0cc53fa46ecbd7": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2e7ff6fb-224e-42e0-a270-a92fc1131a0c",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    },
+    "s_16882afa1e38ca": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a16a6a-0a75-7111-9f3c-b5b97e53f6bd",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    },
+    "s_308eb1d4a9403a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a16a89-9819-73a2-bc4c-b4a703c65c22",
+        "model": "gpt-6-luna"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    },
+    "s_4f032629b22ae8": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "45e3573a-1f3e-4def-b556-d6f649cef913",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    },
+    "s_6675782fc2eb68": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a16aab-bf56-7163-8ed3-20fe20183146",
+        "model": "gpt-6-luna"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    },
+    "s_707664f32c0885": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a16a7f-c3d4-7ea0-b5de-eb61b28fbc97",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    },
+    "s_7717bec03adabc": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a16a8d-f23a-7601-895b-007c7f2cef59",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    },
+    "s_778d7cda70b989": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a16a8b-f8eb-7851-9ace-3f155d2bf4ef",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    },
+    "s_7b8700ee7a9c2b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a16aa3-b63d-7e70-8a12-2185f530da26",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    },
+    "s_8fd3a19aead36e": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a16a6a-52a7-79f0-b86f-568877e9845d",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    },
+    "s_a93264be297e14": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a16a93-fd3c-7863-95ad-e4ea84a5110e",
+        "model": "gpt-6-luna"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    },
+    "s_b482ddf18fd369": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a16ab6-0dc3-79f3-9afb-58b7be67db69",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    },
+    "s_c21400fba7a125": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a16a72-4f47-7a60-9771-96d0347cb8d7",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    },
+    "s_c8aa3bc2b247bc": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "0181e2f0-f185-4152-ba43-ee5218e4e423",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    },
+    "s_e5624ca02fc242": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "93788da9-bc92-4923-88d3-4f8e5d66a342",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    },
+    "s_f8222ceba4ac4a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a16a9c-1cbd-7ae2-beda-2ce80e62e68c",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
