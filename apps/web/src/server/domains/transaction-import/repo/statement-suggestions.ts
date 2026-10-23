@@ -53,7 +53,6 @@ import {
 } from "~/server/domains/financial-transaction/repo/financial-statement-preview";
 import { findTransferPairsForCharges } from "~/server/domains/financial-transaction/repo/transfer-pair-suggestions";
 import {
-  CHARGE_STATE,
   chargeKeyOf,
   chargeStateOf,
   pendingSuggestion,
@@ -92,6 +91,7 @@ import { runFailureText } from "~/server/workflows/runs/lifecycle";
 import {
   statementHoldAccounts as holdAccounts,
   statementInputCharges,
+  statementInputChargeKeys,
   statementPendingInputTransactions,
   type StatementSuggestionScope,
 } from "./statement-input";
@@ -190,16 +190,23 @@ async function nextUnmatchedCharges(
     scope: StatementSuggestionScope;
   },
 ): Promise<ChargeRef[]> {
-  const after = input.after
-    ? sql`AND (cs.source, cs."chargeKey") > (${input.after.source}, ${input.after.chargeKey})`
-    : sql``;
-  const { rows } = await unwrapDb(db).execute<ChargeRef>(sql`
-    SELECT cs.source, cs."chargeKey" FROM (${statementInputCharges(input.scope)}) cs
-    WHERE true ${after}
-    ORDER BY cs.source, cs."chargeKey"
-    LIMIT ${input.limit}
-  `);
-  return rows.map((row) => ({ source: row.source, chargeKey: row.chargeKey }));
+  const result: ChargeRef[] = [];
+  let after = input.after;
+  for (;;) {
+    const { rows: keys } = await unwrapDb(db).execute<ChargeRef>(
+      statementInputChargeKeys(input.scope, after, input.limit),
+    );
+    if (!keys.length) return result;
+    const { rows } = await unwrapDb(db).execute<ChargeRef>(sql`
+      SELECT cs.source,cs."chargeKey" FROM (${statementInputCharges(input.scope, keys)}) cs
+      ORDER BY cs.source,cs."chargeKey"`);
+    result.push(
+      ...rows.map((row) => ({ source: row.source, chargeKey: row.chargeKey })),
+    );
+    if (result.length >= input.limit) return result.slice(0, input.limit);
+    if (keys.length < input.limit) return result;
+    after = keys.at(-1)!;
+  }
 }
 
 /**
@@ -676,8 +683,8 @@ export async function buildChargeProposals(
     chargeKey: string;
     shortcode: string;
   }>(sql`
-    SELECT cs.source, cs."chargeKey", cs.shortcode FROM ${CHARGE_STATE} cs
-    WHERE (cs.source, cs."chargeKey") IN (${tuples(charges)}) AND cs.shortcode IS NOT NULL
+    SELECT cs.source, cs."chargeKey", cs.shortcode FROM ${chargeStateOf(sql`(r.source, ${chargeKeyOf("r")}) IN (${tuples(charges)})`)} cs
+    WHERE cs.shortcode IS NOT NULL
       AND NOT cs.ignored AND NOT cs.superseded
   `);
   const matchedByCharge = new Map(
@@ -2313,30 +2320,36 @@ export async function suggestionsNeedingLabels(
 ) {
   const positionAt = sql`coalesce((s.data->'applicationOrder'->>'createdAt')::timestamp, s."createdAt")`;
   const positionId = sql`coalesce((s.data->'applicationOrder'->>'id')::uuid, s.id)`;
-  const { rows } = await unwrapDb(db).execute<{
-    id: string;
-    createdAt: string;
-    subject: unknown;
-    judgment: unknown;
-    amount: unknown;
-    evidenceFingerprint: string;
-    checkpoint: unknown;
-    applicationPending: boolean;
-    cursorId: string;
-  }>(sql`
-    SELECT s.id, to_char(${positionAt}, 'YYYY-MM-DD"T"HH24:MI:SS.US') AS "createdAt", ${positionId} AS "cursorId",
-      a.subject, a.judgment, s.data->'amount' AS amount,
-      ${suggestionField("evidenceFingerprint")} AS "evidenceFingerprint",
-      s.data->'labelCheckpoint' AS checkpoint,
-      coalesce((s.data->>'applicationPending')::boolean, false) AS "applicationPending"
-    FROM "AssessmentState" s JOIN "Assessment" a ON a.id = s.id
+  // The materialized roster is narrow: payloads are fetched only after LIMIT.
+  // Retain the Assessment join here so orphan projections cannot consume slots.
+  const query = sql`WITH selected AS MATERIALIZED (
+    SELECT s.id, ${positionAt} AS "positionAt", ${positionId} AS "positionId"
+    FROM "AssessmentState" s JOIN "Assessment" a ON a.id=s.id
     WHERE ${pendingSuggestion()} AND ((${suggestionField("needsLabel")})::boolean
       OR coalesce((s.data->>'applicationPending')::boolean, false))
       ${importScope(importId)}
       ${after ? sql`AND (${positionAt}, ${positionId}) ${after.inclusive ? sql`>=` : sql`>`} (${after.createdAt}::timestamp, ${after.id}::uuid)` : sql``}
-    ORDER BY ${positionAt}, ${positionId}
-    LIMIT ${limit}
-  `);
+    ORDER BY ${positionAt},${positionId} LIMIT ${limit}
+  )
+  SELECT s.id,to_char(selected."positionAt",'YYYY-MM-DD"T"HH24:MI:SS.US') AS "createdAt",selected."positionId" AS "cursorId",
+    a.subject,a.judgment,s.data->'amount' AS amount,
+    ${suggestionField("evidenceFingerprint")} AS "evidenceFingerprint",s.data->'labelCheckpoint' AS checkpoint,
+    coalesce((s.data->>'applicationPending')::boolean,false) AS "applicationPending"
+  FROM selected JOIN "AssessmentState" s ON s.id=selected.id JOIN "Assessment" a ON a.id=s.id
+  ORDER BY selected."positionAt",selected."positionId"`;
+  const read = (client: Database) =>
+    unwrapDb(client).execute<{
+      id: string;
+      createdAt: string;
+      subject: unknown;
+      judgment: unknown;
+      amount: unknown;
+      evidenceFingerprint: string;
+      checkpoint: unknown;
+      applicationPending: boolean;
+      cursorId: string;
+    }>(query);
+  const { rows } = await read(db);
   return rows.map((row) => ({
     ...row,
     judgment: assessmentJudgments.statement_transaction.parse(row.judgment),

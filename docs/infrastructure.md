@@ -890,6 +890,9 @@ Step pages record their own sample through `measurePage`
 - **Queries.** The page runs inside `withDatabaseOperationMetrics`, so
   `queries` counts the traced pool's statements. Zero counted means the page ran
   outside the traced pool and stores null ("not measured").
+- **Database waits.** Measured pages retain total wall time plus query, pool
+  acquisition and client-queue durations from the traced pool. Summed durations
+  can overlap across concurrent work; they are not additive phase timings.
 - **Unmeasured drivers.** A page that records no phase stores no sample.
 
 ### Error tracking and traces

@@ -333,15 +333,6 @@ const transferPairLabel: StepDriversFor<"sweep">["transfer_pair_label"] = {
 const statementCursor = z
   .object({
     after: z.object({ source: z.string(), chargeKey: z.string() }).nullable(),
-    precomputedAfter: z
-      .object({
-        createdAt: z.string(),
-        id: z.string(),
-        inclusive: z.boolean().optional(),
-      })
-      .nullable()
-      .optional(),
-    speculativeUntil: z.number().nullable().optional(),
   })
   .nullable();
 
@@ -387,44 +378,15 @@ const statementGenerate: StepDriversFor<"sweep">["statement_generate"] = {
     const cursor = statementCursor.parse(step.cursor ?? null) ?? {
       after: null,
     };
-    const generation = generateStatementSuggestionPage(db, {
+    // Optional model preparation belongs to statement_label; it must never hold
+    // an already published generation page behind an unrelated provider/SQL wait.
+    const page = await generateStatementSuggestionPage(db, {
       limit: JOB_PAGE_LIMITS.suggestionsPerPage,
       after: cursor.after,
       runId: run.id,
       scope,
       work,
     });
-    // Labels the next step needs are computed while generation waits on I/O.
-    const { precomputeStatementSuggestionLabels } =
-      await import("~/server/domains/transaction-import/service/statement-suggestion-labels");
-    const speculative =
-      (cursor.speculativeUntil ?? 0) > Date.now()
-        ? Promise.resolve(null)
-        : precomputeStatementSuggestionLabels(db, {
-            runId: run.id,
-            importId: scope.importId ?? null,
-            cooperative: true,
-            after: cursor.precomputedAfter ?? null,
-            maxBytes: 2 * 1024 * 1024,
-            maxMs: 5_000,
-            beforeCheckpoint: async () => {
-              await generation;
-            },
-          });
-    const [generated, computed] = await Promise.allSettled([
-      generation,
-      speculative,
-    ]);
-    if (generated.status === "rejected") throw generated.reason;
-    if (
-      computed.status === "rejected" &&
-      (await import("~/server/workflows/runs/execution")).isWorkflowInterrupted(
-        computed.reason,
-      )
-    )
-      throw computed.reason;
-    const page = generated.value;
-    const precompute = computed.status === "fulfilled" ? computed.value : null;
     return {
       kind: "progress",
       delta: {
@@ -444,13 +406,6 @@ const statementGenerate: StepDriversFor<"sweep">["statement_generate"] = {
       cursor: page.next
         ? {
             after: page.next,
-            precomputedAfter:
-              precompute?.next ??
-              precompute?.through ??
-              cursor.precomputedAfter ??
-              null,
-            speculativeUntil:
-              precompute?.waitingUntil ?? cursor.speculativeUntil ?? null,
           }
         : null,
       done: page.next === null,

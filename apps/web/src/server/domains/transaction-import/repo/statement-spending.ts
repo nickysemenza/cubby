@@ -86,7 +86,7 @@ const spendingTarget = (judgment: StatementTransactionJudgment) =>
 
 /**
  * Spending previews prepared at once per statement page. It leaves pooled
- * connections for publication and speculative label work.
+ * connections for publication and other background work.
  */
 export const STATEMENT_SPENDING_PREPARATION_CONCURRENCY = 4;
 
@@ -96,6 +96,9 @@ export async function prepareStatementSpendingPage(
   judgments: readonly StatementTransactionJudgment[],
 ) {
   const page = await prepareFinancialSpendingPage(db, {
+    sources: judgments.flatMap((judgment) =>
+      judgment.create ? [judgment.create] : [],
+    ),
     accountIds: judgments.map((judgment) =>
       parseEntityId("financialAccount", judgment.accountId),
     ),
