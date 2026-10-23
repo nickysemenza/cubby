@@ -1,0 +1,51 @@
+apps/web/src/integrations/tanstack-query/database-changes.ts
+  s_f1ac5eb353befe::t_fadc731edcc879 3,56-58,68-70
+apps/web/src/lib/http-route-template.ts
+  s_f1ac5eb353befe::t_3129d1a94601dd 40
+apps/web/src/server/domains/image-processing/operations/durable-object.ts
+  s_f1ac5eb353befe::t_512486bebbfbec 5-8,10,13-15,22,25-29,32-33,36-37
+apps/web/src/server/domains/image-processing/repo/image-processing-history.integration.test.ts
+  s_f1ac5eb353befe::t_c0c44dadb0b710 273
+apps/web/src/server/domains/image-processing/repo/image-processing-history.ts
+  s_f1ac5eb353befe::t_521d3e948ba30e 74,158,162,175-176,179
+apps/web/src/server/domains/image-processing/service/contracts.ts
+  s_f1ac5eb353befe::t_2366414b7af850 1,4,6-7
+apps/web/src/server/domains/image-processing/service/dispatch.ts
+  s_f1ac5eb353befe::t_1b0e1c514d326b 139-144,146-148
+apps/web/src/server/domains/image-processing/service/image-processing.service.ts
+  s_f1ac5eb353befe::t_e2146d1dd239cd 467-468
+apps/web/src/server/generic/problems/operations/database-freshness-durable-object.ts
+  s_f1ac5eb353befe::t_5420055c116709 1-4,7,12-16,20-23,37,41-43,48,51-52,55
+apps/web/src/server/worker/http.ts
+  s_f1ac5eb353befe::t_ae70a6b95b1f4c 7,124-126
+apps/web/tests/e2e/companion-doorbell.spec.ts
+  s_f1ac5eb353befe::t_88188af62d017d 3,8,15,38-42,45-46,48-60,63,126-128,139-170,173-174,177-181
+apps/web/src/lib/doorbell.ts
+  s_0a3e5c08059595::t_c94a1f015f78f7 3-8,10-22,24-31
+apps/web/src/server/http/doorbell.ts
+  s_0a3e5c08059595::t_050ba214b38656 1-10,13-32,35-44,46,51,53-101
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "d17645d84372d60ddc086d51aa2d508295b321ab",
+  "prompts": {},
+  "sessions": {
+    "s_0a3e5c08059595": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a16a69-ca1d-7651-b625-4f834a5ce93e",
+        "model": "unknown"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    },
+    "s_f1ac5eb353befe": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a229dffd-cbfc-4ada-b803-ecb84a02290e",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}

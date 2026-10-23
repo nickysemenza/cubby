@@ -1,0 +1,33 @@
+apps/apple/App/Shared/AppShell/AppModel.swift
+  s_f1ac5eb353befe::t_6586062c958478 630,632
+apps/apple/CubbyKit/Sources/CubbyKit/ImageProcessing/CompanionImageWorker.swift
+  s_f1ac5eb353befe::t_1384050e002cb6 71-73,78-82,91,103-104,106-107,113-114,117,122,124-125,135,145-148,161,177,230-231,238,240,262-268,333-334,345-346,348-352,354-357,359-361,365-381,383-405,407-410,415-416,421-422,429,433,441-443,461,476-477,483,489,492,509-511
+apps/apple/CubbyKit/Sources/CubbyKit/ImageProcessing/ImageProcessingProtocol.swift
+  s_f1ac5eb353befe::t_04027fc62f6ee7 5-7,14-16,27-47
+apps/apple/CubbyKit/Sources/cubby/CompanionCommand.swift
+  s_f1ac5eb353befe::t_e43e5487f47d75 104
+apps/apple/CubbyKit/Tests/CubbyKitTests/ImageProcessing/CompanionImageBackgroundTests.swift
+  s_f1ac5eb353befe::t_d240aaaa26fcfe 18-20
+apps/apple/README.md
+  s_f1ac5eb353befe::t_d4d18bb52c1511 134,137,159-164
+apps/web/docs/web-runtime.md
+  s_f1ac5eb353befe::t_43201918a6c248 184-187
+apps/apple/CubbyKit/Tests/CubbyKitTests/ImageProcessing/CompanionImageWorkerTests.swift
+  s_f1ac5eb353befe::t_a024a0c0937f9a 9,15-35,116,125,155-156,159,176,181,196-197,199,214-216,218,233-260
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "573410ea801b3d5fb5ad13473e752360d5bcfa0d",
+  "prompts": {},
+  "sessions": {
+    "s_f1ac5eb353befe": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a229dffd-cbfc-4ada-b803-ecb84a02290e",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
