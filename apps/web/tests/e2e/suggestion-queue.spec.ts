@@ -1,6 +1,7 @@
 import { eq, inArray } from "drizzle-orm";
 import type { Page } from "@playwright/test";
 import { productShortcode } from "@cubby/schemas/identifiers";
+import { assessmentReviewBatchOut } from "@cubby/schemas/assessment";
 
 import { getDb } from "~/server/db/helpers";
 import {
@@ -28,6 +29,7 @@ import { seedUnimportedOrderMail } from "./fixtures/mail";
 import { seedImagePrerequisite } from "./fixtures/photos";
 import { gotoAuthenticatedPage, uniqueName } from "./support/e2e-helpers";
 import { expect, test } from "./support/e2e-test";
+import { dispatchesOperation, operationResult } from "./support/dispatch-wire";
 
 async function seedTagProposal(page: Page, sourceId: string, tag: string) {
   const { db } = await createEvidenceHarnessContext(page);
@@ -149,7 +151,22 @@ test("one queue confirms proposals and records automatic-history feedback", asyn
     .getByRole("row")
     .filter({ hasText: "Synthetic acquisition connection" });
   await expect(proposal).toHaveCount(1);
-  await proposal.getByRole("button", { name: "Confirm", exact: true }).click();
+  // Feedback precedes the application transaction; only its response proves commit.
+  const [application] = await Promise.all([
+    page.waitForResponse((response) =>
+      dispatchesOperation(response.request(), "assessment.reviewBatch"),
+    ),
+    proposal.getByRole("button", { name: "Confirm", exact: true }).click(),
+  ]);
+  expect(
+    await operationResult(
+      application,
+      "assessment.reviewBatch",
+      assessmentReviewBatchOut,
+    ),
+  ).toMatchObject([
+    { ok: true, assessmentId: connection.review.assessmentId, applied: true },
+  ]);
   await expect
     .poll(async () =>
       (

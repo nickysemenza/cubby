@@ -173,7 +173,10 @@ review or stale-support edit.
 
 The queue/history journey confirms a connection in the global Suggestions table,
 reads back its Expense Product link and unchanged cost, then records incorrect
-feedback in automatic history. Global and record review use the same
+feedback in automatic history. Decode the successful `assessment.reviewBatch`
+response, including its applied item, before storage read-back: the member
+Feedback event is persisted before the application transaction and is not a
+commit signal. Global and record review use the same
 `SuggestionActions` renderer. Do not repeat Product-detail and Expense-list visits
 for that write. `suggestion-list.integration.test.ts` owns both-endpoint filtering;
 the current-policy research recommendation in `assessment-product.integration.test.ts`
