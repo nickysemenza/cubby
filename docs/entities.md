@@ -1951,6 +1951,10 @@ pagination and input equality fingerprints retain their existing meanings.
 
 ## Filters and search
 
+Task effective due dates use the ordered parts in `apps/web/src/lib/task-dates.ts`.
+In-memory reads and SQL predicates compile the same precedence; calendar overlap
+queries separately keep their start-date fallback for the beginning of a window.
+
 Product expected-quantity range and unknown-quantity filters share catalog kit
 walks and grouped Expense ledgers before testing their values. They use the same signed unit
 contributions, live-ancestor rules, weights, and depth cap as the scalar and

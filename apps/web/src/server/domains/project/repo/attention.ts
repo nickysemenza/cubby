@@ -45,6 +45,7 @@ import {
   householdLocalDate,
   plainDateDaysBetween,
 } from "~/lib/household-date";
+import { effectiveTaskDueDate } from "~/lib/task-dates";
 import type { Database } from "~/server/db";
 import { effectiveFieldSql } from "~/server/db/computed/effective-field";
 import { plannedExpense } from "~/server/db/computed/expense-aggregate-sql";
@@ -256,7 +257,9 @@ export async function computeAttentionItems(
   // per-task granularity (not aggregated per project).
   const appendOverdueTasks = () => {
     for (const row of overdueTaskRows) {
-      const effectiveDue = row.dueEndDate ?? row.dueDate;
+      const effectiveDue = effectiveTaskDueDate({
+        due: { start: row.dueDate, end: row.dueEndDate },
+      });
       if (!effectiveDue || effectiveDue >= today) continue;
       items.push(
         attentionItem({

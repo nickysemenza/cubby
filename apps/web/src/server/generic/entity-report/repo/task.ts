@@ -1,6 +1,8 @@
 import type { EntityReportOut } from "@cubby/schemas/entity-report";
 import type { TaskTodayBriefingOut } from "@cubby/schemas/project";
 
+import { effectiveTaskDueDate } from "~/lib/task-dates";
+
 /** Presentation consumes the bounded SQL projection without fetching an actionable graph. */
 export function taskBriefingReport(
   data: TaskTodayBriefingOut,
@@ -29,7 +31,7 @@ export function taskBriefingReport(
           entity: "task",
           id: row.id,
           title: row.name,
-          trailing: row.due?.end ?? row.due?.start ?? null,
+          trailing: effectiveTaskDueDate(row),
           badges: [{ label: row.status.replaceAll("_", " ") }],
           lines:
             row.projectName && row.projectId
