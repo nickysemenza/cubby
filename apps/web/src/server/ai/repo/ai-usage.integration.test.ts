@@ -523,6 +523,14 @@ describe("AiUsage transport", () => {
     calls: (Partial<typeof aiUsage.$inferInsert> & { minute: number })[],
   ) {
     const runId = await ensureRun(ctx.db, ctx.actor, { purpose: "ai_suggest" });
+    // Keep ordered calls inside one recent household day, including near midnight.
+    const now = new Date(Date.now());
+    const base = Date.UTC(
+      now.getUTCFullYear(),
+      now.getUTCMonth(),
+      now.getUTCDate() - 1,
+      18,
+    );
     await getDb(ctx.db)
       .insert(aiUsage)
       .values(
@@ -535,7 +543,7 @@ describe("AiUsage transport", () => {
           status: "succeeded" as const,
           transport: "gateway" as const,
           durationMs: 1,
-          createdAt: new Date(Date.now() - (60 - minute) * 60_000),
+          createdAt: new Date(base + minute * 60_000),
           ...call,
         })),
       );
@@ -607,28 +615,36 @@ describe("AiUsage transport", () => {
   });
 
   it("keeps transports apart in the daily summary and run usage", async () => {
-    const runId = await insertCalls([
-      { minute: 1, transport: "gateway" },
-      { minute: 2, transport: "chatgpt" },
-      { minute: 3, transport: "chatgpt" },
-    ]);
+    // Hour-relative fixture rows used to straddle household midnight here.
+    const clock = vi
+      .spyOn(Date, "now")
+      .mockReturnValue(Date.UTC(2026, 8, 21, 7, 57, 30));
+    try {
+      const runId = await insertCalls([
+        { minute: 1, transport: "gateway" },
+        { minute: 2, transport: "chatgpt" },
+        { minute: 3, transport: "chatgpt" },
+      ]);
 
-    const summary = await summarizeAiUsage(ctx.db, 7);
-    expect(
-      summary
-        .map((row) => ({ transport: row.transport, count: row.count }))
-        .sort((a, b) => a.transport.localeCompare(b.transport)),
-    ).toEqual([
-      { transport: "chatgpt", count: 2 },
-      { transport: "gateway", count: 1 },
-    ]);
+      const summary = await summarizeAiUsage(ctx.db, 7);
+      expect(
+        summary
+          .map((row) => ({ transport: row.transport, count: row.count }))
+          .sort((a, b) => a.transport.localeCompare(b.transport)),
+      ).toEqual([
+        { transport: "chatgpt", count: 2 },
+        { transport: "gateway", count: 1 },
+      ]);
 
-    const run = await listAiUsageForRun(ctx.db, runId);
-    expect(run.records.map((row) => row.transport)).toEqual([
-      "chatgpt",
-      "chatgpt",
-      "gateway",
-    ]);
+      const run = await listAiUsageForRun(ctx.db, runId);
+      expect(run.records.map((row) => row.transport)).toEqual([
+        "chatgpt",
+        "chatgpt",
+        "gateway",
+      ]);
+    } finally {
+      clock.mockRestore();
+    }
   });
 
   // Rows written before the writer zeroed them carry tokens but no cost; the

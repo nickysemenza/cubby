@@ -45,6 +45,10 @@ dispatch remains in `table-header-layout.unit.test.tsx`; do not duplicate its
 hover/focus disclosure in a backend-connected grouping journey.
 Testing Library role queries use exact string names by default; Playwright's
 `exact` option is not a Testing Library option.
+Daily aggregation fixtures keep same-day rows on one recent household day;
+minute offsets from wall-clock time can straddle midnight and correctly produce
+multiple day groups. Keep the transport-summary regression pinned to that boundary.
+
 For conditional expected output, construct expected data and assert once; keep
 `expect` calls and asymmetric matchers outside branches.
 
