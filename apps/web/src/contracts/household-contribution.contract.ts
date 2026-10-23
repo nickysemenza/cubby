@@ -27,7 +27,7 @@ export const householdContributionContract = defineContract(
     /** Read-only candidate worklist of opposite-signed cross-account pairs (MCP `finance_read`). */
     transferPairs: query({
       description:
-        "An ad hoc candidate lookup pairing selected Financial Transaction evidence with opposite-signed, different-account matches. The transfer_pair Suggestions queue (suggestions.list family transfer_pair) is the primary review path; use this to inspect specific transactions. It never creates Ledger Transfers, attaches evidence, or decides a match; to pair two existing legs directly, pass a reviewed candidate's outflowTransactionId and inflowTransactionId to finance.accept_transfer_pair.",
+        "An ad hoc candidate lookup pairing selected Financial Transaction evidence with opposite-signed, different-account matches. The transfer_pair Suggestions queue (suggestions_read.list family transfer_pair) is the primary review path; use this to inspect specific transactions. It never creates Ledger Transfers, attaches evidence, or decides a match; to pair two existing legs directly, pass a reviewed candidate's outflowTransactionId and inflowTransactionId to finance.accept_transfer_pair.",
       input: suggestFinancialTransferPairsInput,
       output: financialTransferPairSuggestionsOut,
     }),

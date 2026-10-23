@@ -103,7 +103,7 @@ export const suggestionsContract = defineContract(
     /** A member's switch: on requires eligibility, off is always allowed. */
     setRule: mutation({
       description:
-        "Turn one Automatic rule on or off ({ruleKey, enabled}) on the member's instruction. On requires eligibility (read suggestions.rules) and refuses with the raw numbers otherwise; off is always allowed.",
+        "Turn one Automatic rule on or off ({ruleKey, enabled}) on the member's instruction. On requires eligibility (read suggestions_read.rules) and refuses with the raw numbers otherwise; off is always allowed.",
       command: { label: "Set automatic rule", confirmation: null },
       input: setAutomaticRuleInput,
       output: automaticRuleOut,

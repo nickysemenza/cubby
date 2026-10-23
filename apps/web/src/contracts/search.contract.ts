@@ -60,7 +60,7 @@ export const searchContract = defineContract(
     }),
     requestEmbeddingRefresh: mutation({
       description:
-        "Queue embedding refresh for the selected records or search partition. This schedules model-backed indexing work; inspect search.debug after it finishes.",
+        "Queue embedding refresh for the selected records or search partition. This schedules model-backed indexing work; inspect search_read.debug after it finishes.",
       input: requestEmbeddingRefreshInputSchema,
       output: requestEmbeddingRefreshOutSchema,
       invalidates: [],
@@ -69,7 +69,7 @@ export const searchContract = defineContract(
     /** Lexical hits plus, on request, semantic related hits kept separate. */
     global: query({
       description:
-        "Fast name, alias, identifier, and shortcode search across Cubby entities. Pass entityKinds to restrict results. Every hit carries its public shortcode in id, ready for entity_read.get. This lexical lookup never calls an embedding provider. Set includeRelated only when useful; semantic results come back separately and never replace direct matches. For entity-to-entity matching use search.similar.",
+        "Fast name, alias, identifier, and shortcode search across Cubby entities. Pass entityKinds to restrict results. Every hit carries its public shortcode in id, ready for entity_read.get. This lexical lookup never calls an embedding provider. Set includeRelated only when useful; semantic results come back separately and never replace direct matches. For entity-to-entity matching use search_read.similar.",
       input: globalSearchMcpInputSchema,
       output: globalSearchMcpOut,
     }),

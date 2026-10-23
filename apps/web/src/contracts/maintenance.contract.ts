@@ -30,7 +30,7 @@ export const maintenanceContract = defineContract(
     }),
     run: mutation({
       description:
-        "Start the named maintenance operation. It may update derived or support records; inspect maintenance.status for progress and outcome.",
+        "Start the named maintenance operation. It may update derived or support records; inspect maintenance_read.status for progress and outcome.",
       input: z.undefined(),
       output: maintenanceRunOutSchema,
       invalidates: ["maintenance", "runOnly"],
@@ -59,7 +59,7 @@ export const maintenanceContract = defineContract(
     }),
     backfillImageSearch: mutation({
       description:
-        "Backfill image search records from retained images. This changes derived search data; use search.debug to inspect index coverage afterward.",
+        "Backfill image search records from retained images. This changes derived search data; use search_read.debug to inspect index coverage afterward.",
       input: backfillImageSearchInputSchema,
       output: backfillImageSearchOutSchema,
       invalidates: ["maintenance"],
