@@ -26,7 +26,7 @@ export function useDenseCell(stacked?: boolean) {
 }
 
 /** A stacked value's muted second line: 12px on 13px. */
-export const STACKED_SECONDARY_CLASS =
+const STACKED_SECONDARY_CLASS =
   "block truncate text-xs leading-[13px] font-normal text-muted-foreground no-underline";
 
 /**

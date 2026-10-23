@@ -865,7 +865,7 @@ function FieldValueEditor(props: FieldEditorProps) {
   return <SingleValueEditor {...props} />;
 }
 
-export function FilterFieldEditor(props: FieldEditorProps) {
+function FilterFieldEditor(props: FieldEditorProps) {
   if (props.field.unsupportedReason)
     return (
       <p className="text-xs text-muted-foreground">
