@@ -1,5 +1,10 @@
 # Purchase, photo, and statement evidence
 
+Source-reference invalidation checks include removed observations: a retained
+reference to a deleted, ignored or superseded observation invalidates current
+advice. The source/external-ID lookup index therefore includes tombstones; the
+separate live-only unique index still enforces active observation identity.
+
 Bank transactions are evidence; Expenses are the spending ledger. Statement
 imports and re-imports discover booking work for every observed charge,
 including unchanged observations already matched to an unbooked transaction.
