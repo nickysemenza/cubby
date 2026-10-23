@@ -21,7 +21,14 @@ delivery attempts the drain even when unreadable, and always acknowledges.
 Transport owns no retry budget. Admission stores the JSON wire shape,
 omitting undefined optional properties.
 
-A claim has one generation, token, expiration and finite attempt budget. Claims
+A claim has one generation, token and expiration. Ordinary Jobs have a finite
+consecutive attempt budget. Sweep Jobs opt into a 30-minute useful-progress
+recovery window instead: interrupted claims can recover on the same Job beyond
+three attempts while new durable partial answers or settled population inputs
+continue to commit. Waiting, heartbeats and replayed answers never renew that
+window. An idle window ends in a retained failure, requiring explicit member
+retry; retry renews the window without clearing domain checkpoints or receipts.
+Terminal Jobs are never revived by migration or routine wakes. Claims
 are renewed during provider preparation. Native pulls use their requested
 bounded duration on that same Job lease. Successful bounded pages commit their
 output and cursor together and reset the consecutive failure budget. The drain

@@ -31,6 +31,7 @@ import {
   dueJobs,
   dueJobsAhead,
   failJob,
+  lockJobProgress,
   pauseJob,
   publishJobPage,
   renewJob,
@@ -733,6 +734,65 @@ describe("durable jobs", () => {
         .from(job)
         .where(eq(job.key, "synthetic.rollback")),
     ).toEqual([]);
+  });
+
+  it("recovers interrupted progress-budget Jobs beyond the attempt ceiling but stops idle waits", async () => {
+    const saved = await enqueueJob(ctx.db, {
+      key: "synthetic.progress-recovery",
+      kind: "refresh.search",
+      input: {},
+      maxAttempts: 1,
+      recoveryTimeoutMs: 30 * 60_000,
+    });
+    let claim = await claimJob(ctx.db, saved.id);
+    if (!claim) throw new Error("Expected initial claim");
+    await failJob(ctx.db, claim, new Error("Synthetic interrupted page"));
+    await getDb(ctx.db)
+      .update(job)
+      .set({ availableAt: new Date(0) })
+      .where(eq(job.id, saved.id));
+    claim = await claimJob(ctx.db, saved.id);
+    expect(claim?.attempts).toBe(2);
+    if (!claim) throw new Error("Expected same-Job recovery");
+    const recovery = claim;
+    await withTransactionDatabase(ctx.db, async (tx) => {
+      const progress = await lockJobProgress(tx, recovery);
+      await progress();
+    });
+    const beforeWait = (
+      await getDb(ctx.db).select().from(job).where(eq(job.id, saved.id))
+    )[0]!;
+    expect(
+      await publishJobPage(ctx.db, claim, {
+        done: false,
+        waitUntil: new Date(Date.now() + 60 * 60_000),
+        waitReason: "provider_capacity",
+      }),
+    ).toBe(true);
+    const afterWait = (
+      await getDb(ctx.db).select().from(job).where(eq(job.id, saved.id))
+    )[0]!;
+    expect(afterWait.lastUsefulProgressAt).toEqual(
+      beforeWait.lastUsefulProgressAt,
+    );
+    await getDb(ctx.db)
+      .update(job)
+      .set({ lastUsefulProgressAt: new Date(Date.now() - 31 * 60_000) })
+      .where(eq(job.id, saved.id));
+    await dueJobs(ctx.db);
+    const stopped = (
+      await getDb(ctx.db).select().from(job).where(eq(job.id, saved.id))
+    )[0]!;
+    expect(stopped).toMatchObject({
+      state: "failed",
+      error: "Job stopped after its useful-progress recovery window expired",
+    });
+    expect(await claimJob(ctx.db, saved.id)).toBeNull();
+    const retried = await retryJob(ctx.db, saved.id);
+    expect(retried?.generation).toBe(stopped.generation + 1);
+    expect(retried!.lastUsefulProgressAt!.getTime()).toBeGreaterThan(
+      stopped.lastUsefulProgressAt!.getTime(),
+    );
   });
 
   it("claims committed work without a queue notification and refuses an expired owner", async () => {

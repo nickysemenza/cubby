@@ -1,6 +1,6 @@
 {
-  "id": "e53645f2-b1b4-4c23-87b0-efa05ef65598",
-  "prevId": "780a28f7-6023-44e0-886b-4e8536eae179",
+  "id": "90056813-c4ac-4308-b424-c77b7624d842",
+  "prevId": "e53645f2-b1b4-4c23-87b0-efa05ef65598",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -2391,6 +2391,18 @@
           "primaryKey": false,
           "notNull": true,
           "default": 3
+        },
+        "recoveryTimeoutMs": {
+          "name": "recoveryTimeoutMs",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "lastUsefulProgressAt": {
+          "name": "lastUsefulProgressAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": false
         },
         "availableAt": {
           "name": "availableAt",

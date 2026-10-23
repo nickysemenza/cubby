@@ -402,7 +402,17 @@ copy only the model votes and candidate labels, and recompute kind and clean
 status from current rules, history and transfer evidence. Changed model inputs
 or candidates retire the old labels atomically with the replacement; suppressed
 or settled charges remain excluded. Generation commits bounded batches of
-independent charges. Complete labels publish in batches of at most 32 charges,
+independent charges. Label pages default to 32 suggestions, retaining the shared
+512-suggestion ceiling for explicit callers. Identity questions remain batched;
+merchant/spending preparation runs in waves of at most eight, with field questions
+batched within each wave. Cooperative pages stop admitting new spending work
+after 20 seconds, settle started work, and save partial answers before yielding.
+This deadline does not interrupt an in-flight provider request. Cache contention
+and lookup deferrals remain typed waits through item isolation; they neither
+become retained item failures nor trigger uncached model calls. Unfinished charges
+resume inclusively. Failed items remain unresolved even after scanning ends;
+a completed scan with retained failures is not completed reconciliation.
+Complete labels publish in batches of at most 32 charges,
 with at most four publication transactions in flight; partial checkpoints remain
 per charge. Each completed label retains its own producer, checkpoint, Assessment
 receipt and original application order. A failed batch reconciles each charge

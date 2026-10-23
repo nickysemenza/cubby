@@ -62,6 +62,7 @@ import {
 import {
   statementLabelInputs,
   statementLabelSubject,
+  statementCandidateSubject,
 } from "~/server/domains/transaction-import/repo/statement-label-input";
 import {
   decideStatementKind,
@@ -81,7 +82,9 @@ import {
   automaticRuleStamp,
   matchStatementRules,
 } from "~/server/generic/assessment/repo/automatic-rules";
+import { currentJobExecution } from "~/server/generic/jobs/context";
 import { type PageWork, peakWorkers } from "~/server/generic/jobs/page-work";
+import { lockJobProgress } from "~/server/generic/jobs/repo/jobs";
 import { canonicalJson, jsonSnapshot } from "~/server/lib/canonical-json";
 import {
   assertWorkflowEffect,
@@ -2623,7 +2626,28 @@ export async function recordStatementLabelCheckpoint(
 ): Promise<"saved" | "settled" | "moved"> {
   const checkpoint = statementLabelCheckpoint.parse(input.checkpoint);
   return withTransactionDatabase(db, async (tx) => {
+    const owner = currentJobExecution();
+    const progress = owner
+      ? await lockJobProgress(tx, owner.claim)
+      : async () => {};
     await assertWorkflowEffect(tx);
+    let gainedAnswers = false;
+    const answerIds = (value: StatementLabelCheckpoint | null) =>
+      new Set([
+        ...(value?.judgment.candidates.flatMap((candidate) =>
+          candidate.label !== null
+            ? [
+                canonicalJson({
+                  id: candidate.transactionId,
+                  input: statementCandidateSubject(candidate),
+                }),
+              ]
+            : [],
+        ) ?? []),
+        ...(value?.kind ? ["kind"] : []),
+        ...(value?.counterparty ? ["counterparty"] : []),
+        ...(value?.spending ? ["spending"] : []),
+      ]);
     let matched = 0;
     await transitionAssessmentStates(
       tx,
@@ -2633,16 +2657,71 @@ export async function recordStatementLabelCheckpoint(
       AND ${suggestionField("evidenceFingerprint", STATE)} = ${input.evidenceFingerprint}`,
       (row) => {
         matched += 1;
+        const data = stateData.parse(row.data ?? {});
+        const previous = statementLabelCheckpoint.safeParse(
+          data.labelCheckpoint,
+        );
+        const merged = structuredClone(checkpoint);
+        const retained =
+          previous.success &&
+          previous.data.revision === checkpoint.revision &&
+          canonicalJson(statementLabelSubject(previous.data.judgment)) ===
+            canonicalJson(statementLabelSubject(checkpoint.judgment))
+            ? previous.data
+            : null;
+        if (retained) {
+          // First committed answers win; a stale preparation cannot erase them
+          // and later replay them as supposedly new recovery progress.
+          for (const candidate of merged.judgment.candidates)
+            candidate.label =
+              retained.judgment.candidates.find(
+                (saved) =>
+                  saved.transactionId === candidate.transactionId &&
+                  canonicalJson(statementCandidateSubject(saved)) ===
+                    canonicalJson(statementCandidateSubject(candidate)),
+              )?.label ?? candidate.label;
+          const create = merged.judgment.create;
+          if (create && retained.judgment.create) {
+            if (retained.kind)
+              create.votes.label = retained.judgment.create.votes.label;
+            if (retained.counterparty)
+              create.counterparty.label =
+                retained.judgment.create.counterparty.label;
+            Object.assign(
+              create,
+              decideStatementKind({
+                amount: create.amount,
+                votes: create.votes,
+                counterparty: create.counterparty,
+                transfer: merged.judgment.transfer,
+              }),
+            );
+          }
+          if (retained.spending)
+            merged.judgment.spending = retained.judgment.spending;
+          merged.kind ||= retained.kind;
+          merged.counterparty ||= retained.counterparty;
+          merged.spending ||= retained.spending;
+          merged.models = [...new Set([...retained.models, ...merged.models])];
+          merged.model = merged.models.length === 1 ? merged.models[0]! : null;
+        }
+        const committedAnswers = answerIds(retained);
+        gainedAnswers ||= [...answerIds(merged)].some(
+          (id) => !committedAnswers.has(id),
+        );
         return {
           data: {
-            ...stateData.parse(row.data ?? {}),
-            labelCheckpoint: z.json().parse(jsonSnapshot.parse(checkpoint)),
+            ...data,
+            labelCheckpoint: z.json().parse(jsonSnapshot.parse(merged)),
           },
         };
       },
       { kind: "statement_label_checkpoint" },
     );
-    if (matched) return "saved";
+    if (matched) {
+      if (gainedAnswers) await progress();
+      return "saved";
+    }
     const { rows: settled } = await unwrapDb(tx).execute(sql`
     SELECT 1 FROM "AssessmentState" s
     WHERE s.family = ${assessmentFamily.enum.statement_transaction}

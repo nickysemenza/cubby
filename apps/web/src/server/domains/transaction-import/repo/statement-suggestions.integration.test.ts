@@ -65,6 +65,7 @@ import {
   listSuggestionPage,
 } from "~/server/generic/assessment/repo/suggestion-list";
 import { currentJobExecution } from "~/server/generic/jobs/context";
+import { JobDeferredError } from "~/server/generic/jobs/errors";
 import { cancelJob, renewJob } from "~/server/generic/jobs/repo/jobs";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { readWorkQueue } from "~/server/generic/work-queue/service/work-queue-read";
@@ -1388,6 +1389,155 @@ describe("statement Transaction suggestions", () => {
     }
   });
 
+  it("retains partial answers when merchant preparation defers on the response cache", async () => {
+    await card(ctx);
+    await record(ctx, [rowInput()]);
+    await generate(ctx);
+    const until = new Date(Date.now() + 15_000);
+    const runId = await ensureRun(ctx.db, ctx.actor, { purpose: "background" });
+    const first = await withJobFixtureExecution(
+      ctx.db,
+      {
+        key: "synthetic.cache-progress",
+        kind: "run.execute",
+        input: {},
+        recoveryTimeoutMs: 30 * 60_000,
+      },
+      async () => {
+        const owner = currentJobExecution()!;
+        const before = new Date(Date.now() - 60_000);
+        await getDb(ctx.db)
+          .update(job)
+          .set({ lastUsefulProgressAt: before })
+          .where(eq(job.id, owner.claim.id));
+        const result = await runStatementLabels(ctx.db, {
+          runId,
+          cooperative: true,
+          port: answering({ kind: "purchase", counterparty: "business" }),
+          spendingAdvice: async () => {
+            throw new Error("Synthetic merchant lookup", {
+              cause: new JobDeferredError(
+                "Synthetic cache contention",
+                until,
+                "provider_capacity",
+              ),
+            });
+          },
+        });
+        const [saved] = await statementSuggestionsRepo.suggestionsNeedingLabels(
+          ctx.db,
+          1,
+        );
+        const checkpoint = saved!.checkpoint!;
+        const readProgress = async () =>
+          (
+            await getDb(ctx.db)
+              .select()
+              .from(job)
+              .where(eq(job.id, owner.claim.id))
+          )[0]!.lastUsefulProgressAt;
+        const committed = await readProgress();
+        expect(committed!.getTime()).toBeGreaterThan(before.getTime());
+        const subject = assessmentSubjects.statement_transaction.parse(
+          saved!.subject,
+        );
+        const stale = structuredClone(checkpoint);
+        stale.kind = false;
+        stale.judgment.create!.votes.label = null;
+        await statementSuggestionsRepo.recordStatementLabelCheckpoint(ctx.db, {
+          charge: subject,
+          evidenceFingerprint: saved!.evidenceFingerprint,
+          checkpoint: stale,
+        });
+        expect(await readProgress()).toEqual(committed);
+        expect(
+          (
+            await statementSuggestionsRepo.suggestionsNeedingLabels(ctx.db, 1)
+          )[0]!.checkpoint,
+        ).toMatchObject({ kind: true, counterparty: true });
+        await statementSuggestionsRepo.recordStatementLabelCheckpoint(ctx.db, {
+          charge: subject,
+          evidenceFingerprint: saved!.evidenceFingerprint,
+          checkpoint,
+        });
+        expect(await readProgress()).toEqual(committed);
+        return result;
+      },
+    );
+    expect(first).toMatchObject({
+      completed: 0,
+      failed: [],
+      labels: { generated: 2 },
+      waitingUntil: until.getTime(),
+      next: { inclusive: true },
+    });
+    const resumed = await label(ctx, async () => {
+      throw new Error("Durable answers must survive cache contention");
+    });
+    expect(resumed).toMatchObject({
+      completed: 1,
+      failed: [],
+      labels: { generated: 1, reused: 2 },
+    });
+  });
+
+  it("checkpoints unstarted spending after the cooperative page deadline", async () => {
+    await card(ctx);
+    await record(
+      ctx,
+      Array.from({ length: 9 }, (_, index) =>
+        rowInput({
+          rawDescription: `SYNTHETIC DEADLINE ${index}`,
+          merchant: `Example deadline ${index}`,
+          providerAmount: -100 - index,
+        }),
+      ),
+    );
+    await generate(ctx);
+    let spendingCalls = 0;
+    vi.useFakeTimers({ toFake: ["Date"] });
+    try {
+      const first = await runStatementLabels(ctx.db, {
+        runId: await ensureRun(ctx.db, ctx.actor, { purpose: "background" }),
+        cooperative: true,
+        port: answering({ kind: "purchase", counterparty: "business" }),
+        spendingAdvice: async () => {
+          if (++spendingCalls === 8) vi.setSystemTime(Date.now() + 21_000);
+          return financialSpendingAdvice.parse({});
+        },
+      });
+      expect(spendingCalls).toBe(8);
+      expect(first).toMatchObject({
+        completed: 8,
+        failed: [],
+        next: { inclusive: true },
+      });
+      const pending = await statementSuggestionsRepo.suggestionsNeedingLabels(
+        ctx.db,
+        10,
+        first.next,
+      );
+      expect(pending).toHaveLength(1);
+      expect(pending[0]!.checkpoint).toMatchObject({
+        kind: true,
+        counterparty: true,
+        spending: false,
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+    const resumed = await label(ctx, async () => {
+      throw new Error(
+        "The next page must reuse its committed decision answers",
+      );
+    });
+    expect(resumed).toMatchObject({
+      completed: 1,
+      failed: [],
+      labels: { reused: 2, generated: 1 },
+    });
+  });
+
   it("durably defers cooperative spending finish after one gateway admission refusal", async () => {
     await card(ctx);
     await record(ctx, [rowInput()]);
@@ -1893,6 +2043,9 @@ describe("statement Transaction suggestions", () => {
     const release = Promise.withResolvers<void>();
     const started = Promise.withResolvers<void>();
     const answer = answering({ kind: "purchase", counterparty: "business" });
+    let spendingActive = 0;
+    let spendingPeak = 0;
+    const spendingAdvice = await statementSpendingAdvice(ctx.db);
     let modelActive = 0;
     let modelPeak = 0;
     let publishActive = 0;
@@ -1932,7 +2085,7 @@ describe("statement Transaction suggestions", () => {
         input: {},
       },
       () =>
-        labelStatementSuggestions(ctx.db, {
+        runStatementLabels(ctx.db, {
           port: async (input) => {
             modelPeak = Math.max(modelPeak, ++modelActive);
             started.resolve();
@@ -1944,6 +2097,15 @@ describe("statement Transaction suggestions", () => {
             }
           },
           runId,
+          limit: 168,
+          spendingAdvice: async (input) => {
+            spendingPeak = Math.max(spendingPeak, ++spendingActive);
+            try {
+              return await spendingAdvice!(input);
+            } finally {
+              spendingActive--;
+            }
+          },
         }),
     );
     try {
@@ -1986,6 +2148,8 @@ describe("statement Transaction suggestions", () => {
       expect(await renewal).toBe(true);
       expect(publicationsAfterQueue).toBe(2);
       expect(modelPeak).toBeGreaterThanOrEqual(30);
+      expect(spendingPeak).toBeGreaterThan(1);
+      expect(spendingPeak).toBeLessThanOrEqual(8);
       expect(outcome).toMatchObject({
         labelled: 168,
         labels: { generated: 504 },

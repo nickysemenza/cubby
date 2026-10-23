@@ -2,7 +2,15 @@ import { aiEvaluationState } from "@cubby/schemas/ai-evaluation";
 import { runEntityId, type RunId } from "@cubby/schemas/identifiers";
 import { jobState } from "@cubby/schemas/job";
 import { runStepState } from "@cubby/schemas/run-step";
-import { and, eq, getTableColumns, inArray, isNull, sql } from "drizzle-orm";
+import {
+  and,
+  or,
+  eq,
+  getTableColumns,
+  inArray,
+  isNull,
+  sql,
+} from "drizzle-orm";
 
 import {
   describeErrorCauses,
@@ -22,7 +30,11 @@ import {
 } from "~/server/generic/jobs/repo/execution";
 import { enqueueJob, retryJob } from "~/server/generic/jobs/repo/jobs";
 
-import type { WorkflowRunParams, ExecutedRunPurpose } from "./contract";
+import {
+  runJobRecovery,
+  type WorkflowRunParams,
+  type ExecutedRunPurpose,
+} from "./contract";
 
 export const runFailureText = (
   error: Error | string,
@@ -105,13 +117,18 @@ export async function launchWorkflowRun(
     let execution = await enqueueJob(tx, {
       key: `run:${input.runId}`,
       kind: "run.execute",
+      ...runJobRecovery(input.purpose),
       input: { runId: input.runId, purpose: input.purpose },
       runId: input.runId,
       priority,
     });
     if (["failed", "cancelled", "paused"].includes(execution.state)) {
       if (input.automatic) return null;
-      const retried = await retryJob(tx, execution.id);
+      const retried = await retryJob(
+        tx,
+        execution.id,
+        runJobRecovery(input.purpose).recoveryTimeoutMs,
+      );
       if (retried) execution = retried;
     }
     if (execution.state === "completed") {
@@ -128,6 +145,7 @@ export async function launchWorkflowRun(
         key: execution.key,
         kind: execution.kind,
         input: execution.input,
+        ...runJobRecovery(input.purpose),
         runId: input.runId,
         priority,
         invalidate: true,
@@ -236,14 +254,28 @@ export async function failWorkflowRun(
 
 /** Lost wakes and interrupted workers are recovered by dueJobs, never new Run attempts. */
 export async function reconcileWorkflowRuns(db: Database) {
+  const reconcilable = () =>
+    or(
+      eq(runTable.status, "running"),
+      and(
+        eq(runTable.status, "paused_auth"),
+        eq(runTable.failureCode, "execution_limit"),
+      ),
+    );
   const rows = await getDb(db)
-    .select({ runId: job.runId, state: job.state, error: job.error })
+    .select({
+      id: job.id,
+      generation: job.generation,
+      runId: job.runId,
+      state: job.state,
+      error: job.error,
+    })
     .from(job)
     .innerJoin(runTable, eq(runTable.id, job.runId))
     .where(
       and(
         eq(job.kind, "run.execute"),
-        eq(runTable.status, "running"),
+        reconcilable(),
         inArray(job.state, ["failed", "cancelled", "paused"]),
       ),
     )
@@ -251,19 +283,40 @@ export async function reconcileWorkflowRuns(db: Database) {
   for (const row of rows) {
     if (!row.runId || !["failed", "cancelled", "paused"].includes(row.state))
       continue;
-    await getDb(db)
-      .update(runTable)
-      .set({
-        status: row.state === "paused" ? "paused" : "failed",
-        dispatchError: row.error,
-        failureCode:
-          row.state === "cancelled"
-            ? "user_cancelled"
-            : row.state === "failed"
-              ? "job_failed"
-              : null,
-      })
-      .where(and(eq(runTable.id, row.runId), eq(runTable.status, "running")));
+    await withTransactionDatabase(db, async (tx) => {
+      // Match launch's Run-before-Job order without waiting on an active writer.
+      const [owner] = await getDb(tx)
+        .select({ id: runTable.id })
+        .from(runTable)
+        .where(and(eq(runTable.id, row.runId!), reconcilable()))
+        .for("update", { skipLocked: true });
+      if (!owner) return;
+      const [current] = await getDb(tx)
+        .select({ id: job.id })
+        .from(job)
+        .where(
+          and(
+            eq(job.id, row.id),
+            eq(job.generation, row.generation),
+            eq(job.state, row.state),
+          ),
+        )
+        .for("update", { skipLocked: true });
+      if (!current) return;
+      await getDb(tx)
+        .update(runTable)
+        .set({
+          status: row.state === "paused" ? "paused" : "failed",
+          dispatchError: row.error,
+          failureCode:
+            row.state === "cancelled"
+              ? "user_cancelled"
+              : row.state === "failed"
+                ? "job_failed"
+                : null,
+        })
+        .where(and(eq(runTable.id, row.runId!), reconcilable()));
+    });
   }
   return rows.length;
 }
