@@ -1,0 +1,1 @@
+CREATE INDEX "SourceTransactionRecord_transfer_seed_idx" ON "SourceTransactionRecord" USING btree (('stmt:' || "source" || ':' || "chargeKey") COLLATE "C") WHERE "SourceTransactionRecord"."deletedAt" IS NULL AND "SourceTransactionRecord"."sourceCategory" IS NOT NULL;

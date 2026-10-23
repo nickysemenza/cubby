@@ -1,6 +1,6 @@
 {
-  "id": "6ad131b9-23da-49c6-8ddb-62420073370d",
-  "prevId": "6d794edc-2df7-4e7a-b14a-ea117a1b17b6",
+  "id": "780a28f7-6023-44e0-886b-4e8536eae179",
+  "prevId": "6ad131b9-23da-49c6-8ddb-62420073370d",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -20227,6 +20227,22 @@
           ],
           "isUnique": false,
           "where": "\"SourceTransactionRecord\".\"deletedAt\" IS NULL AND \"SourceTransactionRecord\".\"legacyReference\" IS NOT NULL",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "SourceTransactionRecord_transfer_seed_idx": {
+          "name": "SourceTransactionRecord_transfer_seed_idx",
+          "columns": [
+            {
+              "expression": "('stmt:' || \"source\" || ':' || \"chargeKey\") COLLATE \"C\"",
+              "asc": true,
+              "isExpression": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "\"SourceTransactionRecord\".\"deletedAt\" IS NULL AND \"SourceTransactionRecord\".\"sourceCategory\" IS NOT NULL",
           "concurrently": false,
           "method": "btree",
           "with": {}

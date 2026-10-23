@@ -90,6 +90,7 @@ const POOL_WINDOW_DAYS = 2 * CANDIDATE_WINDOW_DAYS;
 import {
   transferPairMoneyMoveKinds,
   transferPairSeedKeys,
+  transferPairSeedPage,
 } from "./transfer-pair-input";
 
 const PREVIEW_CHUNK = 500;
@@ -1512,11 +1513,9 @@ async function nextTransferPairSeeds(
     createdBefore?: string | null;
   },
 ) {
-  const { rows } = await unwrapDb(db).execute<{ key: string }>(sql`
-    SELECT key FROM (${transferPairSeedKeys(input)}) seeds
-    ${input.after ? sql`WHERE key COLLATE "C" > ${input.after} COLLATE "C"` : sql``}
-    ORDER BY key COLLATE "C" LIMIT ${input.limit}
-  `);
+  const { rows } = await unwrapDb(db).execute<{ key: string }>(
+    transferPairSeedPage(input),
+  );
   return rows.map((row) => row.key);
 }
 

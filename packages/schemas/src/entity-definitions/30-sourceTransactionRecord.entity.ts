@@ -718,6 +718,13 @@ export default defineEntity({
         on: ["source", "legacyReference"],
         where: "{deletedAt} IS NULL AND {legacyReference} IS NOT NULL",
       },
+      {
+        name: "SourceTransactionRecord_transfer_seed_idx",
+        on: [
+          { sql: "('stmt:' || {source} || ':' || {chargeKey}) COLLATE \"C\"" },
+        ],
+        where: "{deletedAt} IS NULL AND {sourceCategory} IS NOT NULL",
+      },
       { name: "SourceTransactionRecord_batchId_idx", on: ["batchId"] },
       {
         name: "SourceTransactionRecord_statementDate_idx",

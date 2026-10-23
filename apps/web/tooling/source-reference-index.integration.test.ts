@@ -7,12 +7,39 @@ import { withMigrationDatabase } from "./test-database-lease";
 // Rehearse both the deployed prefix and the immediate stacked predecessor.
 // Shared legacy references and noncurrent observations must remain independent.
 it.each([
-  "0013_photo_regroup_source_evidence",
-  "0014_shipment_tracking",
-  "0015_statement_label_cursor_work",
+  {
+    through: "0013_photo_regroup_source_evidence",
+    target: "0016_source_legacy_reference_lookup",
+    indexName: "SourceTransactionRecord_source_legacyReference_idx",
+  },
+  {
+    through: "0014_shipment_tracking",
+    target: "0016_source_legacy_reference_lookup",
+    indexName: "SourceTransactionRecord_source_legacyReference_idx",
+  },
+  {
+    through: "0015_statement_label_cursor_work",
+    target: "0016_source_legacy_reference_lookup",
+    indexName: "SourceTransactionRecord_source_legacyReference_idx",
+  },
+  {
+    through: "0013_photo_regroup_source_evidence",
+    target: "0017_transfer_seed_streaming",
+    indexName: "SourceTransactionRecord_transfer_seed_idx",
+  },
+  {
+    through: "0014_shipment_tracking",
+    target: "0017_transfer_seed_streaming",
+    indexName: "SourceTransactionRecord_transfer_seed_idx",
+  },
+  {
+    through: "0016_source_legacy_reference_lookup",
+    target: "0017_transfer_seed_streaming",
+    indexName: "SourceTransactionRecord_transfer_seed_idx",
+  },
 ])(
-  "preserves populated source references and pending work from %s",
-  async (through) => {
+  "preserves populated source references and pending work from $through through $target",
+  async ({ through, target, indexName }) => {
     await withMigrationDatabase(async (client) => {
       const db = drizzle(client);
       await migrateDatabase(db, { through });
@@ -55,8 +82,8 @@ it.each([
         );
         await client.query(
           `INSERT INTO "SourceTransactionRecord"
-        (id,shortcode,"batchId",source,"externalId","legacyReference","chargeKey","current","withdrawnAt","deletedAt","accountDescriptor","statementDate",amount,"providerAmount","rawDescription")
-        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'Synthetic card','2026-01-01',20,-20,'Synthetic retained charge')`,
+        (id,shortcode,"batchId",source,"externalId","legacyReference","chargeKey","current","withdrawnAt","deletedAt","accountDescriptor","statementDate",amount,"providerAmount","rawDescription","sourceCategory")
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'Synthetic card','2026-01-01',20,-20,'Synthetic retained charge','Transfer')`,
           [
             rowId,
             shortcode,
@@ -115,12 +142,12 @@ it.each([
       };
       const before = await retained();
       await migrateDatabase(db, {
-        through: "0016_source_legacy_reference_lookup",
+        through: target,
       });
       expect(await retained()).toEqual(before);
       // Canonical journal bookkeeping also makes the same boundary idempotent.
       await migrateDatabase(db, {
-        through: "0016_source_legacy_reference_lookup",
+        through: target,
       });
       expect(await retained()).toEqual(before);
       const matches = await client.query<{ externalId: string }>(
@@ -135,8 +162,11 @@ it.each([
       const index = await client.query<{
         unique: boolean;
         valid: boolean;
-      }>(`SELECT i.indisunique AS unique,i.indisvalid AS valid FROM pg_index i
-      JOIN pg_class c ON c.oid=i.indexrelid WHERE c.relname='SourceTransactionRecord_source_legacyReference_idx'`);
+      }>(
+        `SELECT i.indisunique AS unique,i.indisvalid AS valid FROM pg_index i
+      JOIN pg_class c ON c.oid=i.indexrelid WHERE c.relname=$1`,
+        [indexName],
+      );
       expect(index.rows).toEqual([{ unique: false, valid: true }]);
     });
   },
