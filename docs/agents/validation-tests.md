@@ -533,6 +533,14 @@ required files through `capability` once; explicit `--project preview` retains
 the full optional preview command. Each Vitest shard uploads its blob and browser
 failure attachments (`.vitest/attachments/`) for the merged CI report.
 
+`spend-chart.preview.test.tsx` owns the real detail chart's roving keyboard focus,
+single tab stop and portal readouts bounded at both viewport edges, with the chart
+inside an overflow-clipped container. PostgreSQL `detail-data.integration.test.ts`
+owns twelve-month zero filling and distinct live Expense sums. The continuous
+Product E2E keeps the evening calendar-day Activity label; it no longer repeats
+chart keyboard/geometry checks through a full server-backed record. Dedicated
+Product hero chart-composition sampling is the deliberate gap in that move.
+
 The compound date editor owner verifies local drafts, atomic replace/clear and
 responsive nested popovers on desktop and phone.
 
