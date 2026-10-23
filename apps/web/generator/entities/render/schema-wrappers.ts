@@ -33,7 +33,7 @@ import type { CompiledEntity, EntityArtifacts } from "../declarations.ts";
 const WRAPPERS = {
   sourceTransactionRecord: "out+ update+ filtersBase",
   transactionImport: "out+ filtersBase",
-  shipment: "out+ filtersBase",
+  shipment: "update+ out+ filtersBase",
   email: "out+ filtersBase",
   device: "create+ update+ updateInput out+ filters+",
   expense: "update+ updateInput+ out+ listItem+ filtersBase",

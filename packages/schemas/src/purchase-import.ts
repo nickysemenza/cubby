@@ -13,7 +13,11 @@ import { mailAdmissionPath, mailEvent } from "./mailbox-research";
 import { importSourceIdentity, importSourceKind } from "./import-source";
 export { importSourceIdentity, importSourceKind } from "./import-source";
 import { money } from "./money";
-import { shipmentEvidence } from "./shipment-evidence";
+import {
+  shipmentEvidence,
+  retainedShipmentEvidence,
+} from "./shipment-evidence";
+import { shipmentPurpose } from "./shipment-fields";
 import { contributionRole } from "./ledger-party-fields";
 import { runPurpose, runStatus, runTrigger } from "./run-fields";
 import { costTypeSchema } from "./expense-fields";
@@ -197,7 +201,7 @@ export const extractedOrderCandidate = z.object({
   // Retained-only legacy evidence: old accepted extractions keep their literal
   // boolean. It grants no package identity, delivery or receiving authority.
   allShipmentsDelivered: z.boolean().nullable().optional(),
-  shipments: z.array(shipmentEvidence).max(50).optional(),
+  shipments: z.array(retainedShipmentEvidence).max(50).optional(),
   sourceEvent: mailEvent
     .optional()
     .describe(
@@ -776,7 +780,13 @@ const preparedImportOrderInput = z
     via: mailAdmissionPath.optional(),
     evidenceChecksum: z.string().regex(/^[a-f0-9]{64}$/),
     extractionRevision: z.string().trim().min(1).max(200),
-    extraction: importExtractionOutcome,
+    extraction: importExtractionOutcome.refine(
+      (value) =>
+        (value.candidate?.shipments ?? []).every(
+          (packet) => shipmentPurpose.safeParse(packet.purpose).success,
+        ),
+      "New shipment purposes must be incoming, outgoing or unknown.",
+    ),
     lineIds: z.array(stableImportItemId).max(500),
     primaryDocumentImageId: imageShortcode.nullable().default(null),
     screenshotImageId: imageShortcode.nullable().default(null),

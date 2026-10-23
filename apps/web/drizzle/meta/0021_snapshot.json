@@ -1,6 +1,6 @@
 {
-  "id": "9cc65378-8677-4a9a-a94d-73c8ca114757",
-  "prevId": "90056813-c4ac-4308-b424-c77b7624d842",
+  "id": "9344f97b-6ee4-4c7f-b908-7e2acc455469",
+  "prevId": "9cc65378-8677-4a9a-a94d-73c8ca114757",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -19169,7 +19169,7 @@
       "checkConstraints": {
         "Shipment_purpose_check": {
           "name": "Shipment_purpose_check",
-          "value": "\"Shipment\".\"purpose\" IN ('outbound', 'replacement', 'return', 'unknown')"
+          "value": "\"Shipment\".\"purpose\" IN ('incoming', 'outgoing', 'unknown')"
         }
       },
       "isRLSEnabled": false

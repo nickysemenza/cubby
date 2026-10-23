@@ -135,6 +135,15 @@ with the current observation ID from the timeline, Shipment reference and a
 partial patch. This is the same ownership-checked, revision-preserving writer as MCP.
 The CLI retains its credential locally; scripts do not export or print it.
 
+Shipment purpose is direction relative to the household: incoming, outgoing or
+unknown. New SMS packages default to incoming; member eBay sales and purchased
+postage labels (including Shippo) are outgoing. Explicit member classifications
+use generic audited Shipment updates and survive evidence replay. Replacement
+and return details remain in source evidence. Retained extraction purpose text
+is immutable historical evidence: retired fulfillment categories establish no
+direction, so their live package projection is unknown. Extraction JSON,
+fingerprints and durable preparation receipts remain unchanged.
+
 Relevance routing retains actual recipient parcel notices from vendors, carriers
 and Shop even when no merchant, order, amount or Purchase is known; shipping
 promotions and scanned-letter digests remain unrelated. A Shipment is one

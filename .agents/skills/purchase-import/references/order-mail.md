@@ -23,6 +23,13 @@ interrupted searches before repeating them.
 
 ## Record shipment evidence
 
+Purpose is direction relative to the household: incoming, outgoing or unknown.
+Treat received carrier SMS as incoming, with outgoing evidence taking precedence:
+the member's eBay sales and purchased shipping labels (including Shippo) are
+outgoing. Distinguish eBay sales from purchases using the message's buyer/seller
+role. Correct existing purpose through the generic Shipment update; evidence
+replay preserves the stored member classification.
+
 Every observation needs a calendar date. Prefer the stated event time; when
 none is stated, use the source notification's calendar date at date-only precision.
 Retain whether the wording is an estimate, notification or completed scan.

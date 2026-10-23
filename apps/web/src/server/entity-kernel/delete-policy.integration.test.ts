@@ -1301,7 +1301,7 @@ async function seedShipmentReferences(
           carrierName: "Synthetic deletion carrier",
           trackingNumber: "SYNTHETIC-DELETE-PACKAGE",
           extraTrackingNumbers: [],
-          purpose: "outbound",
+          purpose: "incoming",
           observations: [
             {
               sourceEventKey: "pickup",

@@ -61,7 +61,7 @@ describe("progressive list readers", () => {
           carrierName: null,
           trackingNumber: key,
           extraTrackingNumbers: [],
-          purpose: "outbound",
+          purpose: "incoming",
           observations: [
             {
               sourceEventKey: key,

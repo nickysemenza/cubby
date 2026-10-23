@@ -7,6 +7,7 @@ import type {
 import { testUserId } from "@cubby/schemas/testing";
 import { eq } from "drizzle-orm";
 import { createRepoIdentity } from "tooling/factories/repo";
+import { buildKernelContext } from "tooling/scenarios/context";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
@@ -25,6 +26,7 @@ import {
   retainedMailFixture,
 } from "~/server/domains/purchase-import/operations/order-import.fixtures";
 import { mergeVendors } from "~/server/domains/vendor/repo/vendor";
+import { executeEntity } from "~/server/entity-kernel";
 import { shipmentTrackingReport } from "~/server/generic/entity-report/repo/shipment";
 
 import {
@@ -44,7 +46,7 @@ const packet = (number = "EXAMPLE-123"): ShipmentEvidence => ({
   carrierName: "Synthetic Parcel Carrier",
   trackingNumber: number,
   extraTrackingNumbers: [],
-  purpose: "outbound",
+  purpose: "incoming",
   observations: [
     {
       sourceEventKey: "scan-one",
@@ -125,7 +127,7 @@ describe("Shipment retained evidence", () => {
         content: "Synthetic Parcel Carrier: EXAMPLE-123 picked up.",
       },
       purchaseId: null,
-      shipments: [packet()],
+      shipments: [{ ...packet(), purpose: "unknown" }],
     };
     const first = await recordShipmentEvidence(ctx.db, input, ctx.actor);
     const replay = await recordShipmentEvidence(ctx.db, input, ctx.actor);
@@ -133,6 +135,30 @@ describe("Shipment retained evidence", () => {
     expect(replay.insertedObservations).toBe(0);
     const code = first.shipmentIds[0];
     if (!code) throw new Error("Synthetic Shipment missing");
+    const kernel = buildKernelContext(ctx.db, ctx.actor.userId);
+    expect(
+      await executeEntity(kernel, {
+        action: "get",
+        entity: "shipment",
+        id: code,
+        missing: "error",
+      }),
+    ).toMatchObject({ item: { purpose: "incoming" } });
+    await executeEntity(kernel, {
+      action: "bulkUpdate",
+      entity: "shipment",
+      ids: [code],
+      data: { purpose: "outgoing" },
+    });
+    await recordShipmentEvidence(ctx.db, input, ctx.actor);
+    expect(
+      await executeEntity(kernel, {
+        action: "get",
+        entity: "shipment",
+        id: code,
+        missing: "error",
+      }),
+    ).toMatchObject({ item: { purpose: "outgoing" } });
     const timeline = await readShipmentTimeline(ctx.db, code);
     expect(timeline.observations).toHaveLength(1);
     expect(timeline.observations[0]?.source).toMatchObject({

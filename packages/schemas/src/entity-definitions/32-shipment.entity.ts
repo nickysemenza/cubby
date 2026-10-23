@@ -190,7 +190,11 @@ export default defineEntity({
             label: capitalize(value),
           })),
         },
-        validation: { read: shipmentPurpose, create: null, update: null },
+        validation: {
+          read: shipmentPurpose,
+          create: null,
+          update: shipmentPurpose.optional(),
+        },
       },
       {
         key: "notes",
@@ -313,7 +317,7 @@ export default defineEntity({
       "deletedAt",
     ],
     create: [],
-    update: [],
+    update: ["purpose"],
     audit: [
       "name",
       "purchaseId",
@@ -367,7 +371,7 @@ export default defineEntity({
   },
   fields: {
     create: null,
-    update: null,
+    update: { module: "@cubby/schemas/shipment", export: "shipmentUpdateData" },
     output: { module: "@cubby/schemas/shipment", export: "shipmentOut" },
   },
   storage: {
@@ -479,7 +483,7 @@ export default defineEntity({
     softDelete: true,
     delete: null,
     merge: false,
-    lifecycle: "readOnly",
+    lifecycle: "mutable",
     timeline: "default",
     dataQuality: {
       displayImage: false,
