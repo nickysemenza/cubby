@@ -33,6 +33,17 @@ fixture graph. Independent shirt, label and boots uploads run together; keep the
 ordered result tuple and wait for every verified Image before linking the Run's
 ordered roster. This batches setup without changing photo groups or assertions.
 
+Nutrition-label review fixtures already upload servable bytes and persist verified
+hash/dimensions before attaching the label. Inject the external description against
+that verified source; do not repeat `verifyImages` or visit an auth page just to
+obtain its mutation Origin. Keep the source-panel image, Cancel preserving current
+nutrition, native serving edit/Save, exact saved nutrients, image-code provenance
+and inference evidence. `product-photo-first.spec.ts` owns real saved-label gallery
+rendering; a dedicated label-thumbnail reload after nutrition Save is removed.
+`image-verification.service.unit.test.ts` retains missing-object, legacy backfill
+and changed-byte mismatch checks; this nutrition case no longer samples the
+manual `verifyImages` HTTP composition.
+
 The saved-photo evidence browser journey keeps attach/create distinctions, a real
 saved cover that decodes, native label-to-name editing and one phone overflow
 check. `photo-run-detail.preview.test.tsx` owns native review presentation and

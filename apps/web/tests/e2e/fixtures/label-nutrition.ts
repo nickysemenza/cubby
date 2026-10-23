@@ -1,8 +1,3 @@
-import type { Page } from "@playwright/test";
-import superjson from "superjson";
-import { z } from "zod";
-import { productWithFoodOut } from "@cubby/schemas/product";
-import { browserOperationPath } from "~/lib/browser-operation-path";
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import { and, eq } from "drizzle-orm";
 import { entityAttachment, image, product } from "~/server/db/schema";
@@ -15,31 +10,9 @@ import {
 } from "~/server/domains/image/service/image-description.service";
 import { getFixtureDb } from "./core";
 
-/** Synthetic provider output injected at the external AI seam; upload/review/save remain real. */
-export async function seedDetectedLabelNutrition(
-  page: Page,
-  productName: string,
-) {
+/** Synthetic provider output for a verified, servable label; review/save remain real. */
+export async function seedDetectedLabelNutrition(productName: string) {
   const db = getFixtureDb();
-  const [target] = await getDb(db)
-    .select({ id: product.id, shortcode: product.shortcode })
-    .from(product)
-    .where(eq(product.name, productName));
-  if (!target) throw new Error("Synthetic label Product was not created");
-  const verified = await page.request.post(
-    browserOperationPath("product.verifyImages"),
-    {
-      headers: { Origin: new URL(page.url()).origin },
-      data: superjson.serialize({
-        operation: "product.verifyImages",
-        input: { id: target.shortcode },
-      }),
-    },
-  );
-  if (!verified.ok()) throw new Error(await verified.text());
-  z.object({ ok: z.literal(true), data: productWithFoodOut }).parse(
-    superjson.deserialize(await verified.json()),
-  );
   const [source] = await getDb(db)
     .select({
       id: image.id,
