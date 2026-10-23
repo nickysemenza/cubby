@@ -519,6 +519,67 @@ and structured logs; it also supplies live tail and interactive single-secret
 operations and the name-based queue maintenance commands in the migration
 runbook. It does not own builds, deployment or local dev startup.
 
+## Local scripting
+
+Use `cubby call` for local Mac scripts when the operation is in `call --list`.
+It uses the existing host-specific login, sends JSON and returns JSON without
+exposing the saved credential to the calling agent. Build and sign in through
+the [Apple tooling](../apps/apple/README.md#running); then reuse the built
+`apps/apple/CubbyKit/.build/debug/cubby` executable inside loops rather than
+running the build wrapper for each request. Examples below assume that executable
+is on `PATH`.
+
+```sh
+cubby auth login
+cubby call --list
+cubby call entity.list --json-body '{"entity":"shipment","filters":{},"pagination":{"pageIndex":0,"pageSize":10}}'
+cubby call shipment.timeline --query shipmentId=SHIP-EXAMPLE
+```
+
+`--json-body` takes a JSON string; it has no stdin or body-file mode. In Python,
+pass serialized JSON as a subprocess argument rather than interpolating source
+content into shell code:
+
+```python
+import json
+import subprocess
+
+payload = {"entity": "shipment", "filters": {},
+           "pagination": {"pageIndex": 0, "pageSize": 10}}
+result = subprocess.run(
+    ["cubby", "call", "entity.list", "--json-body", json.dumps(payload)],
+    check=True, capture_output=True, text=True,
+)
+shipments = json.loads(result.stdout)
+```
+
+CLI operation IDs and HTTP routes come from the generated `native:` catalog.
+MCP tool/action names can differ: `shipments.record` maps to `shipment.record`;
+omit the MCP `action` wrapper from the HTTP/CLI input. Check the catalog before
+choosing a transport. An absent CLI operation may require rebuilding after a
+contract change, or may be MCP-only. For example, Gmail `mail.search` currently
+uses MCP. Neither CLI nor curl exposes operations missing from the HTTP contract.
+
+Use curl when a script needs direct HTTP or a JSON body file. Supply an existing
+API key through `CUBBY_API_KEY`; curl does not reuse the CLI's saved login.
+Keep credentials out of transcripts and committed files. MCP OAuth credentials
+are separate from HTTP session credentials.
+
+```sh
+# payload.json contains the same entity.list body shown above.
+curl --fail-with-body --silent --show-error \
+  'https://cubby.nickysemenza.com/api/v1/entity/list' \
+  -H "x-api-key: ${CUBBY_API_KEY}" \
+  -H 'Content-Type: application/json' \
+  --data-binary @payload.json
+```
+
+Transport choice preserves the operation's ownership, evidence and mutation
+rules. For long imports, save durable checkpoints, verify retained results and
+resume unresolved inputs. Start with serial requests; add concurrency only
+after checking service limits. A failed request is not proof that a write did
+not commit, so reconcile its result before retrying.
+
 ## Auth and HTTP API
 
 Better-Auth (`better-auth/tanstack-start`), with config in

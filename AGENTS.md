@@ -68,6 +68,8 @@ Read the binding [README tenets](README.md#tenets) before changing product
 behavior. For error surfaces, follow [raw diagnostics](docs/agents/domain-rules.md#error-diagnostics).
 [Development](docs/development.md) owns architecture, commands and deployment.
 Read the relevant heading, not the whole reference.
+For local scripts or direct JSON API calls, load
+[local scripting](docs/development.md#local-scripting).
 
 Use one owning skill; add another only for a distinct concern. Use the skill
 catalog's task triggers; app rules below own UI skill selection.
