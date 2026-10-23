@@ -24,6 +24,8 @@ export const shipmentContract = defineContract("shipment", {
     invalidates: ["shipment", "purchase"],
   }),
   record: mutation({
+    native: "Record source-backed shipment evidence from the CLI",
+    nativeModels: { input: "json", output: "json" },
     input: recordShipmentEvidenceInput,
     output: recordShipmentEvidenceOut,
     invalidates: ["shipment", "purchase"],
@@ -39,6 +41,8 @@ export const shipmentContract = defineContract("shipment", {
     invalidates: ["shipment", "purchase"],
   }),
   timeline: query({
+    native: "Verify retained shipment evidence from the CLI",
+    nativeModels: { output: "json" },
     input: shipmentTimelineInput,
     output: shipmentTimelineOut,
     readPolicy: "strong",
