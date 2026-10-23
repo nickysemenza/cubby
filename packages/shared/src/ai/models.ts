@@ -250,14 +250,14 @@ export const AUDIT_RECOVERY_MODEL =
   "claude-opus-5-5" satisfies AnthropicChatModel;
 /**
  * The decision tier's baseline model: TypeSafe's Jev, a closed-set decision model
- * served by Workers AI over its native route rather than a chat one, so it
+ * served through AI Gateway with TypeSafe BYOK rather than a chat endpoint, so it
  * is not a {@link SupportedChatModel} and takes no chat adapter.
  */
 export const DECISION_MODEL = "typesafe/jev" satisfies SupportedDecisionModel;
 export const CLEF_MODEL =
   "@cf/cloudflare/clef" satisfies SupportedDecisionModel;
 /** Set to 0 to return all decisions to Jev, or 1 to send all to Clef. */
-const CLEF_TRAFFIC_SHARE = 0.5;
+const CLEF_TRAFFIC_SHARE = 0.1;
 
 /**
  * The trial split. A `key` (the decision's own input) always maps to the same

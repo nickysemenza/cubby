@@ -6,6 +6,7 @@ import {
   runUniversalGateway,
   runNativeGateway,
   workersAiModel,
+  workersAiRunRequest,
 } from "@cubby/shared/ai/gateway-request";
 import { scrubCredentialValues } from "@cubby/worker-tracing/scrub-error-message";
 import { DurableObject } from "cloudflare:workers";
@@ -13,6 +14,8 @@ import { DurableObject } from "cloudflare:workers";
 import { aiBudgetWindow } from "~/server/ai/budget-window";
 import {
   GATEWAY_EGRESS_LIMITS,
+  TYPESAFE_EGRESS_LIMITS,
+  isByokJevEndpoint,
   gatewayEgressInput,
   type GatewayAdmission,
 } from "~/server/ai/gateway-egress-contract";
@@ -24,6 +27,7 @@ const {
   requestDeadlineMs: REQUEST_DEADLINE_MS,
 } = GATEWAY_EGRESS_LIMITS;
 
+const TYPESAFE_BUCKET = "byok:typesafe";
 const CREDIT_BUCKET = "subscriber-credit:anthropic";
 
 const windowStart = (now: number) =>
@@ -71,6 +75,9 @@ export class AiGatewayEgressDurableObject extends DurableObject<Env> {
     );
     ctx.storage.sql.exec(
       "CREATE TABLE IF NOT EXISTS cooldowns (bucket TEXT PRIMARY KEY, until_ms INTEGER NOT NULL)",
+    );
+    ctx.storage.sql.exec(
+      "CREATE TABLE IF NOT EXISTS typesafe_starts (started INTEGER NOT NULL, input_tokens INTEGER NOT NULL)",
     );
     // A provider credit refusal (ADR 0017) refuses credit admission until
     // `until_ms`, except one probe per six-hour window; `probe_window` is the
@@ -167,7 +174,11 @@ export class AiGatewayEgressDurableObject extends DurableObject<Env> {
     );
   }
 
-  async admit(bucket: string, now = Date.now()): Promise<GatewayAdmission> {
+  async admit(
+    bucket: string,
+    now = Date.now(),
+    inputTokens = 0,
+  ): Promise<GatewayAdmission> {
     const sql = this.ctx.storage.sql;
     sql.exec("DELETE FROM starts WHERE started <= ?", now - WINDOW_MS);
     sql.exec("DELETE FROM permits WHERE deadline <= ?", now);
@@ -182,11 +193,36 @@ export class AiGatewayEgressDurableObject extends DurableObject<Env> {
         until: refusal.until_ms,
         reason: refusal.reason,
       };
+    if (bucket === TYPESAFE_BUCKET) {
+      sql.exec(
+        "DELETE FROM typesafe_starts WHERE started <= ?",
+        now - TYPESAFE_EGRESS_LIMITS.windowMs,
+      );
+      const recent = sql
+        .exec<{ count: number; tokens: number; earliest: number | null }>(
+          "SELECT count(*) AS count, coalesce(sum(input_tokens), 0) AS tokens, min(started) AS earliest FROM typesafe_starts",
+        )
+        .one();
+      if (inputTokens > TYPESAFE_EGRESS_LIMITS.inputTokensPerWindow)
+        throw new Error(
+          "Jev request exceeds the TypeSafe BYOK admission token budget; reduce the batch size",
+        );
+      if (
+        recent.count >= TYPESAFE_EGRESS_LIMITS.requestsPerWindow ||
+        recent.tokens + inputTokens >
+          TYPESAFE_EGRESS_LIMITS.inputTokensPerWindow
+      )
+        return {
+          kind: "wait",
+          until: (recent.earliest ?? now) + TYPESAFE_EGRESS_LIMITS.windowMs,
+        };
+    }
     const cooldown =
       sql
         .exec<{ until_ms: number }>(
-          "SELECT max(until_ms) AS until_ms FROM cooldowns WHERE bucket IN (?, 'all')",
+          "SELECT max(until_ms) AS until_ms FROM cooldowns WHERE bucket IN (?, ?)",
           bucket,
+          bucket === TYPESAFE_BUCKET ? bucket : "all",
         )
         .one().until_ms ?? 0;
     if (cooldown > now) return { kind: "wait", until: cooldown };
@@ -196,6 +232,11 @@ export class AiGatewayEgressDurableObject extends DurableObject<Env> {
         bucket,
       )
       .one();
+    if (
+      bucket === TYPESAFE_BUCKET &&
+      active.count >= TYPESAFE_EGRESS_LIMITS.maxInFlight
+    )
+      return { kind: "wait", until: Math.min(active.earliest, now + 1_000) };
     if (bucket === "unified" && active.count >= UNIFIED_MAX_IN_FLIGHT)
       return { kind: "wait", until: Math.min(active.earliest, now + 1_000) };
     if (bucket === "unified") {
@@ -216,6 +257,8 @@ export class AiGatewayEgressDurableObject extends DurableObject<Env> {
         windowStart(now),
         CREDIT_BUCKET,
       );
+    if (bucket === TYPESAFE_BUCKET)
+      sql.exec("INSERT INTO typesafe_starts VALUES (?, ?)", now, inputTokens);
     sql.exec("INSERT INTO starts VALUES (?, ?)", bucket, now);
     sql.exec(
       "INSERT INTO permits VALUES (?, ?, ?)",
@@ -263,12 +306,22 @@ export class AiGatewayEgressDurableObject extends DurableObject<Env> {
 
   async fetch(request: Request): Promise<Response> {
     const input = gatewayEgressInput.parse(await request.json());
+    const byokJev = isByokJevEndpoint(input.provider, input.endpoint);
+    if (byokJev && !this.env.AI_GATEWAY_API_KEY)
+      throw new Error("Jev BYOK requires the AI_GATEWAY_API_KEY Worker secret");
+    const directBody = byokJev ? JSON.stringify(input.query) : "";
+    // UTF-8 bytes plus framing conservatively overestimate textual input tokens.
+    const inputTokens = new TextEncoder().encode(directBody).length + 1024;
     // Stored-key traffic does not consume Unified Billing's capacity window.
     const credit =
       input.provider === "anthropic" &&
       input.headers["cf-aig-byok-alias"] === "subscriber-credit" &&
       input.headers["cf-aig-no-wholesale"] === "true";
-    const admitted = await this.admit(credit ? CREDIT_BUCKET : "unified");
+    const admitted = await this.admit(
+      byokJev ? TYPESAFE_BUCKET : credit ? CREDIT_BUCKET : "unified",
+      Date.now(),
+      byokJev ? inputTokens : 0,
+    );
     if (admitted.kind === "refused") return creditRefusedResponse(admitted);
     if (admitted.kind === "wait")
       return new Response(
@@ -331,27 +384,41 @@ export class AiGatewayEgressDurableObject extends DurableObject<Env> {
         throw new Error(
           "Named subscriber-credit BYOK requires the AI_GATEWAY_API_KEY Worker secret for native gateway authentication",
         );
-      const response = credit
-        ? await runNativeGateway({
+      const byokRequest = byokJev
+        ? workersAiRunRequest({
             accountId: CF_ACCOUNT_ID,
-            gatewayId,
-            provider,
             token: this.env.AI_GATEWAY_API_KEY,
-            request: outbound,
-            controls,
+            model: workersAiModel(endpoint),
+            input: query,
+            gateway: { id: gatewayId, ...controls },
+            signal: controller.signal,
           })
-        : provider === "workers-ai"
-          ? await this.env.AI.run(workersAiModel(endpoint), query, {
-              gateway: { id: gatewayId, ...controls },
-              returnRawResponse: true,
-              signal: controller.signal,
-            })
-          : await runUniversalGateway(
-              this.env.AI.gateway(gatewayId),
+        : null;
+      // Require stored TypeSafe credentials; never spend Unified Billing credits.
+      byokRequest?.init.headers.set("cf-aig-no-wholesale", "true");
+      const response = byokRequest
+        ? await fetch(byokRequest.url, byokRequest.init)
+        : credit
+          ? await runNativeGateway({
+              accountId: CF_ACCOUNT_ID,
+              gatewayId,
               provider,
-              outbound,
-              { id: gatewayId, ...controls },
-            );
+              token: this.env.AI_GATEWAY_API_KEY,
+              request: outbound,
+              controls,
+            })
+          : provider === "workers-ai"
+            ? await this.env.AI.run(workersAiModel(endpoint), query, {
+                gateway: { id: gatewayId, ...controls },
+                returnRawResponse: true,
+                signal: controller.signal,
+              })
+            : await runUniversalGateway(
+                this.env.AI.gateway(gatewayId),
+                provider,
+                outbound,
+                { id: gatewayId, ...controls },
+              );
       if (!(response instanceof Response))
         throw new Error("AI Gateway returned no raw Response");
       if (credit && response.ok)

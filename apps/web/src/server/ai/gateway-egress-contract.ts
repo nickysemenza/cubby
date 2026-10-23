@@ -22,6 +22,17 @@ export const GATEWAY_EGRESS_LIMITS = {
   requestDeadlineMs: 10 * 60_000,
 } as const;
 
+/** Conservative initial TypeSafe BYOK admission; bytes bound input tokens above. */
+export const TYPESAFE_EGRESS_LIMITS = {
+  windowMs: 1_000,
+  requestsPerWindow: 20,
+  inputTokensPerWindow: 80_000,
+  maxInFlight: 16,
+} as const;
+
+export const isByokJevEndpoint = (provider: string, endpoint: string) =>
+  provider === "workers-ai" && endpoint === "run/typesafe/jev";
+
 export const gatewayEgressInput = z.object({
   provider: gatewayProviderSchema,
   endpoint: z.string().min(1),

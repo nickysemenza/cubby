@@ -482,7 +482,7 @@ describe("gatewayFetch Workers AI", () => {
       metadata,
       cacheTtlSeconds: 604_800,
       requestTimeoutMs: 30_000,
-    })(`${gatewayBaseURL("workers-ai")}/run/typesafe/jev`, {
+    })(`${gatewayBaseURL("workers-ai")}/run/@cf/cloudflare/clef`, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(decisionInput),
@@ -493,7 +493,7 @@ describe("gatewayFetch Workers AI", () => {
     expect(universal).not.toHaveBeenCalled();
     expect(runs).toEqual([
       [
-        "typesafe/jev",
+        "@cf/cloudflare/clef",
         decisionInput,
         {
           gateway: {
@@ -523,7 +523,7 @@ describe("gatewayFetch Workers AI", () => {
       skipCache: true,
       cacheTtlSeconds: 600,
       requestTimeoutMs: 30000,
-    })(`${gatewayBaseURL("workers-ai")}/run/typesafe/jev`, {
+    })(`${gatewayBaseURL("workers-ai")}/run/@cf/cloudflare/clef`, {
       method: "POST",
       body: JSON.stringify(decisionInput),
     });
@@ -542,7 +542,7 @@ describe("gatewayFetch Workers AI", () => {
     expect(headers.get("cf-aig-cache-ttl")).toBe("600");
     expect(headers.get("cf-aig-request-timeout")).toBe("30000");
     expect(JSON.parse(String(call?.init?.body))).toEqual({
-      model: "typesafe/jev",
+      model: "@cf/cloudflare/clef",
       input: decisionInput,
     });
   });

@@ -34,6 +34,7 @@ import {
 } from "~/server/cf-env";
 
 import { coordinatedGatewayRequest } from "./gateway-egress-client";
+import { isByokJevEndpoint } from "./gateway-egress-contract";
 
 /**
  * A call's gateway labels (`feature`, `operation`, optional `entityKind`);
@@ -244,8 +245,11 @@ export function gatewayFetch(
       const egress = getAiGatewayEgress(
         aiGatewayId(controls.metadata.environment),
       );
-      if (egress)
+      if (egress) {
         return coordinatedGatewayRequest(egress, provider, request, controls);
+      }
+      if (isByokJevEndpoint(provider, request.endpoint))
+        throw new Error("Jev BYOK requires the shared egress binding");
       if (provider === "workers-ai")
         return workersAiFetch(request, {
           id: aiGatewayId(controls.metadata.environment),

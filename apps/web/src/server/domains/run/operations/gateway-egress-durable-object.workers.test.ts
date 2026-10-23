@@ -352,3 +352,76 @@ describe("shared Gateway admission", () => {
     });
   });
 });
+
+describe("Jev BYOK egress", () => {
+  it("uses stored TypeSafe credentials without consuming Unified Billing or inheriting its cooldown", async () => {
+    const stub = env.AI_GATEWAY_EGRESS.getByName(crypto.randomUUID());
+    await runInDurableObject(stub, async (instance) => {
+      Object.defineProperty(instance, "env", {
+        value: { AI_GATEWAY_API_KEY: "synthetic-gateway-key" },
+      });
+      const unified = await instance.admit("unified");
+      expect(unified.kind).toBe("admitted");
+      if (unified.kind !== "admitted") throw new Error("Expected permit");
+      await instance.finish(unified.token, 429, "60");
+      const upstream = vi
+        .spyOn(globalThis, "fetch")
+        .mockResolvedValue(new Response('{"answers":{}}'));
+      try {
+        const request = new Request("https://gateway.internal/egress", {
+          method: "POST",
+          body: JSON.stringify({
+            provider: "workers-ai",
+            endpoint: "run/typesafe/jev",
+            query: { state: "synthetic", questions: {} },
+            controls: {
+              metadata: {
+                environment: "production",
+                feature: "field-suggestion",
+                operation: "synthetic",
+              },
+            },
+          }),
+        });
+        const response = await instance.fetch(request);
+        expect(response.status).toBe(200);
+        await response.text();
+        expect(upstream).toHaveBeenCalledOnce();
+        expect(upstream.mock.calls[0]?.[0]).toEqual(
+          expect.stringMatching(/\/ai\/run$/),
+        );
+        const init = upstream.mock.calls[0]?.[1];
+        expect(new Headers(init?.headers).get("authorization")).toBe(
+          "Bearer synthetic-gateway-key",
+        );
+        expect(new Headers(init?.headers).get("cf-aig-no-wholesale")).toBe(
+          "true",
+        );
+        expect(JSON.parse(String(init?.body))).toEqual({
+          model: "typesafe/jev",
+          input: { state: "synthetic", questions: {} },
+        });
+        expect((await instance.admit("unified")).kind).toBe("wait");
+      } finally {
+        upstream.mockRestore();
+      }
+    });
+  });
+
+  it("shares the TypeSafe token budget across callers and reopens after its rolling window", async () => {
+    const stub = env.AI_GATEWAY_EGRESS.getByName(crypto.randomUUID());
+    await runInDurableObject(stub, async (instance) => {
+      const now = Date.now();
+      const first = await instance.admit("byok:typesafe", now, 50_000);
+      expect(first.kind).toBe("admitted");
+      expect(await instance.admit("byok:typesafe", now, 40_000)).toEqual({
+        kind: "wait",
+        until: now + 1_000,
+      });
+      expect(
+        (await instance.admit("byok:typesafe", now + 1_000, 40_000)).kind,
+      ).toBe("admitted");
+      expect((await instance.admit("unified", now)).kind).toBe("admitted");
+    });
+  });
+});

@@ -24,8 +24,8 @@ describe("selectDecisionModel", () => {
       expect([DECISION_MODEL, CLEF_MODEL]).toContain(model);
       if (model === CLEF_MODEL) clef += 1;
     }
-    expect(clef / total).toBeGreaterThan(0.45);
-    expect(clef / total).toBeLessThan(0.55);
+    expect(clef / total).toBeGreaterThan(0.07);
+    expect(clef / total).toBeLessThan(0.13);
   });
 
   it("routes image decisions to the vision model regardless of key", () => {

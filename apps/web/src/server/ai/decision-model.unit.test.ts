@@ -1,10 +1,9 @@
 import { runEntityId } from "@cubby/schemas/identifiers";
 import { fromPartial } from "@total-typescript/shoehorn";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   DECISION_MAX_CANDIDATES,
-  decisionModelFor,
   type DecisionChoiceResponse,
   type DecisionPort,
   runDecisionChoice,
@@ -12,6 +11,7 @@ import {
 import { type DecisionImage } from "~/server/ai/policy/decision-choice";
 import * as cfEnv from "~/server/cf-env";
 
+import { gatewayEgressInput } from "./gateway-egress-contract";
 import { FIELD_SUGGESTION_FEATURE } from "./policy/features";
 
 // Pinned so routing never depends on the input-keyed trial split; the split
@@ -54,6 +54,45 @@ function decisionPortFor(
   return port;
 }
 
+// This suite owns decision parsing/batching; the Worker suite owns direct egress.
+async function resetDecisionTransport() {
+  vi.resetModules();
+  const current = await import("~/server/cf-env");
+  const fixture = fromPartial<Env>({
+    AI_GATEWAY_EGRESS: {
+      getByName: () =>
+        fromPartial<ReturnType<Env["AI_GATEWAY_EGRESS"]["getByName"]>>({
+          fetch: async (request: Request) => {
+            const body = gatewayEgressInput.parse(await request.json());
+            const headers = new Headers(body.headers);
+            headers.set("cf-aig-gateway-id", "cubby");
+            headers.set(
+              "cf-aig-skip-cache",
+              String(body.controls.skipCache ?? false),
+            );
+            headers.set(
+              "cf-aig-collect-log-payload",
+              String(body.controls.collectPayload ?? true),
+            );
+            return globalThis.fetch("https://synthetic.invalid/ai/run", {
+              method: "POST",
+              headers,
+              signal: request.signal,
+              body: JSON.stringify({
+                model: body.endpoint.replace("run/", ""),
+                input: body.query,
+              }),
+            });
+          },
+        }),
+    },
+  });
+  current.setCfEnv(fixture);
+  cfEnv.setCfEnv(fixture);
+}
+
+beforeEach(resetDecisionTransport);
+
 afterEach(() => {
   vi.restoreAllMocks();
   vi.useRealTimers();
@@ -67,6 +106,7 @@ describe("decisionModelFor", () => {
   // and the trial key must include every rendered question input.
   it("routes the full question and preserves explicit overrides and injected ports", async () => {
     const models = await import("@cubby/shared/ai/models");
+    const { decisionModelFor } = await import("./decision-model");
     const { buildChoiceInput } = await import("./policy/decision-choice");
     const select = vi.spyOn(models, "selectDecisionModel");
     const question = {
@@ -168,7 +208,7 @@ describe("runDecisionChoice", () => {
   // Images must override even a pinned Jev and survive the native gateway envelope.
   it("forces Clef for embedded images instead of a pinned text-only model", async () => {
     vi.stubEnv("AI_GATEWAY_API_KEY", "dev-token");
-    vi.resetModules();
+    await resetDecisionTransport();
     const { runDecisionChoice: request } = await import("./decision-model");
     const fetch = vi.fn(async (_url: string, _init?: RequestInit) =>
       Response.json(answerFor("c0", { c0: 0.9, none: 0.1 })),
@@ -194,7 +234,7 @@ describe("runDecisionChoice", () => {
       vi.useFakeTimers();
       vi.setSystemTime(new Date("2026-09-01T00:00:00Z"));
       vi.stubEnv("AI_GATEWAY_API_KEY", "dev-token");
-      vi.resetModules();
+      await resetDecisionTransport();
       const { runDecisionChoice: request } = await import("./decision-model");
       const fetch = vi
         .fn()
@@ -232,7 +272,7 @@ describe("runDecisionChoice", () => {
   it("keeps a caller-pinned model and omits payload logging when trial sampling would choose Clef", async () => {
     vi.stubEnv("AI_GATEWAY_API_KEY", "dev-token");
     vi.spyOn(Math, "random").mockReturnValue(0.75);
-    vi.resetModules();
+    await resetDecisionTransport();
     const { runDecisionChoice: route } = await import("./decision-model");
     const sent: RequestInit[] = [];
     vi.stubGlobal("fetch", (_url: string, init: RequestInit) => {
@@ -269,7 +309,7 @@ describe("runDecisionChoice", () => {
     async ({ status, retryAfter, attempts }) => {
       vi.useFakeTimers();
       vi.stubEnv("AI_GATEWAY_API_KEY", "dev-token");
-      vi.resetModules();
+      await resetDecisionTransport();
       const { runDecisionChoice: request } = await import("./decision-model");
       const fetch = vi.fn(
         async () =>
@@ -293,7 +333,7 @@ describe("runDecisionChoice", () => {
 
   it("preserves the complete provider rejection body", async () => {
     vi.stubEnv("AI_GATEWAY_API_KEY", "dev-token");
-    vi.resetModules();
+    await resetDecisionTransport();
     const { runDecisionChoice: request } = await import("./decision-model");
     const body = "synthetic provider diagnostic ".repeat(20);
     vi.stubGlobal("fetch", async () => new Response(body, { status: 401 }));
@@ -306,7 +346,7 @@ describe("runDecisionChoice", () => {
   // failed every decision as "invalid choice response".
   it("unwraps the gateway run route's completed-run envelope", async () => {
     vi.stubEnv("AI_GATEWAY_API_KEY", "dev-token");
-    vi.resetModules();
+    await resetDecisionTransport();
     const { runDecisionChoice: request } = await import("./decision-model");
     vi.stubGlobal(
       "fetch",
@@ -336,7 +376,7 @@ describe("runDecisionChoice", () => {
   // gateway's own cache policy free to replay a stale choice.
   it("asks the gateway to skip its cache for an uncacheable decision", async () => {
     vi.stubEnv("AI_GATEWAY_API_KEY", "dev-token");
-    vi.resetModules();
+    await resetDecisionTransport();
     const { runDecisionChoice: request } = await import("./decision-model");
     const fetch = vi.fn(
       async (_url: string, _init?: RequestInit) =>
@@ -352,7 +392,7 @@ describe("runDecisionChoice", () => {
 
   it("surfaces an unfinished run's state and errors instead of a generic parse failure", async () => {
     vi.stubEnv("AI_GATEWAY_API_KEY", "dev-token");
-    vi.resetModules();
+    await resetDecisionTransport();
     const { runDecisionChoice: request } = await import("./decision-model");
     vi.stubGlobal(
       "fetch",
@@ -374,7 +414,7 @@ describe("runDecisionChoice", () => {
   it("aborts a stalled gateway request at the overall deadline", async () => {
     vi.useFakeTimers();
     vi.stubEnv("AI_GATEWAY_API_KEY", "dev-token");
-    vi.resetModules();
+    await resetDecisionTransport();
     const { runDecisionChoice: request } = await import("./decision-model");
     const fetch = vi.fn(
       (_url: string, init: RequestInit) =>
@@ -532,11 +572,11 @@ describe("runDecisionChoice", () => {
     { model: "typesafe/jev" as const, selector: undefined },
     { model: "@cf/cloudflare/clef" as const, selector: "clef" },
   ])(
-    "posts the selected $model to the gateway-scoped run route",
+    "passes the selected $model through shared egress",
     async ({ model, selector }) => {
       // Jev wraps its answer in a completed run; Clef returns it directly.
       vi.stubEnv("AI_GATEWAY_API_KEY", "dev-token");
-      vi.resetModules();
+      await resetDecisionTransport();
       const { runDecisionChoice: devRunDecisionChoice } =
         await import("./decision-model");
       const sent: { url: string; init: RequestInit | undefined }[] = [];
@@ -573,10 +613,7 @@ describe("runDecisionChoice", () => {
         ],
       });
       const [call] = sent;
-      expect(call?.url).toMatch(/\/ai\/run$/);
-      expect(new Headers(call?.init?.headers).get("authorization")).toBe(
-        "Bearer dev-token",
-      );
+      expect(new Headers(call?.init?.headers).get("authorization")).toBeNull();
       const sentBody = JSON.parse(String(call?.init?.body));
       expect(sentBody.model).toBe(model);
       expect(sentBody.input).toMatchObject({ state: "pick red" });
@@ -592,7 +629,7 @@ describe("runDecisionChoice", () => {
     "rejects malformed flat Clef answers: %j",
     async (response) => {
       vi.stubEnv("AI_GATEWAY_API_KEY", "dev-token");
-      vi.resetModules();
+      await resetDecisionTransport();
       const { runDecisionChoice: request } = await import("./decision-model");
       vi.stubGlobal("fetch", async () => Response.json(response));
       await expect(
@@ -608,7 +645,7 @@ describe("runDecisionChoice", () => {
   it("keeps the input's trial model through a throttled retry", async () => {
     vi.useFakeTimers();
     vi.stubEnv("AI_GATEWAY_API_KEY", "dev-token");
-    vi.resetModules();
+    await resetDecisionTransport();
     const { runDecisionChoice: request } = await import("./decision-model");
     const sent: string[] = [];
     vi.stubGlobal("fetch", async (_url: string, init?: RequestInit) => {
@@ -635,7 +672,7 @@ describe("runDecisionChoice", () => {
   // keys, so a repeat paid for a second model answer half the time.
   it("answers a repeated unpinned question from one model's cache", async () => {
     vi.stubEnv("AI_GATEWAY_API_KEY", "dev-token");
-    vi.resetModules();
+    await resetDecisionTransport();
     const { runDecisionChoice: request } = await import("./decision-model");
     const sent: string[] = [];
     vi.stubGlobal("fetch", async (_url: string, init?: RequestInit) => {
@@ -688,7 +725,7 @@ describe("runDecisionChoice", () => {
 
   it("isolates and reuses each model's cached choice for the same input", async () => {
     vi.stubEnv("AI_GATEWAY_API_KEY", "dev-token");
-    vi.resetModules();
+    await resetDecisionTransport();
     const { runDecisionChoice: request } = await import("./decision-model");
     const sent: string[] = [];
     vi.stubGlobal("fetch", async (_url: string, init?: RequestInit) => {
@@ -807,7 +844,7 @@ describe("runDecisionChoices", () => {
 
   it("batches cold questions, maps answers by id, and retains individual cache entries", async () => {
     vi.stubEnv("AI_GATEWAY_API_KEY", "dev-token");
-    vi.resetModules();
+    await resetDecisionTransport();
     const { runDecisionChoice, runDecisionChoices } =
       await import("./decision-model");
     const tokenCounts: number[] = [];
@@ -866,7 +903,7 @@ describe("runDecisionChoices", () => {
   // their individual cache keys. A warm sibling must never reach the model.
   it("batches prepared list misses and reuses answers across singleton entry points", async () => {
     vi.stubEnv("AI_GATEWAY_API_KEY", "dev-token");
-    vi.resetModules();
+    await resetDecisionTransport();
     const { runDecisionChoice, settleDecisionWorkItems } =
       await import("./decision-model");
     const requests: number[] = [];
@@ -918,7 +955,7 @@ describe("runDecisionChoices", () => {
 
   it("splits at the context bound without dropping questions", async () => {
     vi.stubEnv("AI_GATEWAY_API_KEY", "dev-token");
-    vi.resetModules();
+    await resetDecisionTransport();
     const { runDecisionChoices } = await import("./decision-model");
     let count = 0;
     let calls = 0;
@@ -960,7 +997,7 @@ describe("runDecisionChoices", () => {
 
   it("coalesces duplicate cold questions without a cache-lease deadlock", async () => {
     vi.stubEnv("AI_GATEWAY_API_KEY", "dev-token");
-    vi.resetModules();
+    await resetDecisionTransport();
     const { runDecisionChoices } = await import("./decision-model");
     const fetch = vi.fn(async () =>
       Response.json({ result: answerFor("c0", { c0: 1 }) }),
@@ -980,7 +1017,7 @@ describe("runDecisionChoices", () => {
 
   it("rejects incomplete batch answers and releases claims for a retry", async () => {
     vi.stubEnv("AI_GATEWAY_API_KEY", "dev-token");
-    vi.resetModules();
+    await resetDecisionTransport();
     const { runDecisionChoices } = await import("./decision-model");
     const inputs = ["left", "right"].map((label) => ({
       ...base,
@@ -1016,7 +1053,7 @@ describe("runDecisionChoices", () => {
 
   it("bounds question counts and keeps sampled models in separate requests", async () => {
     vi.stubEnv("AI_GATEWAY_API_KEY", "dev-token");
-    vi.resetModules();
+    await resetDecisionTransport();
     const { runDecisionChoices } = await import("./decision-model");
     const requests: { model: string; count: number }[] = [];
     vi.stubGlobal("fetch", async (_url: string, init?: RequestInit) => {
@@ -1064,7 +1101,7 @@ describe("runDecisionChoices", () => {
 describe("shared-image decision batches", () => {
   it("sends shared media once, preserves vision routing and reuses individual cache entries", async () => {
     vi.stubEnv("AI_GATEWAY_API_KEY", "dev-token");
-    vi.resetModules();
+    await resetDecisionTransport();
     const { runDecisionChoice, runDecisionChoices } =
       await import("./decision-model");
     const base64 = "AAAA".repeat(20_000);
@@ -1105,7 +1142,7 @@ describe("shared-image decision batches", () => {
 
   it("keeps different media and text questions in separate requests", async () => {
     vi.stubEnv("AI_GATEWAY_API_KEY", "dev-token");
-    vi.resetModules();
+    await resetDecisionTransport();
     const { runDecisionChoices } = await import("./decision-model");
     const media: unknown[] = [];
     vi.stubGlobal("fetch", async (_url: string, init?: RequestInit) => {

@@ -1,6 +1,6 @@
 /**
  * The decision-tier runner: closed-set questions placed with Jev or Clef
- * over Workers AI. The chat-tier counterpart is `run-feature.ts`.
+ * through shared egress. The chat-tier counterpart is `run-feature.ts`.
  */
 import { AsyncLocalStorage } from "node:async_hooks";
 
@@ -264,7 +264,7 @@ async function requestDecision(
     throw wrapAiGatewayError(error, {
       model: feature.model,
       provider: providerFor(feature.model),
-      route: "workers-ai",
+      route: feature.model === "typesafe/jev" ? "typesafe-byok" : "workers-ai",
       feature: feature.feature,
       operation: ctx.operation,
       gatewayLogId: gateway?.gatewayLogId,
