@@ -20,16 +20,38 @@ export function InspectableValue({
   value: string;
   className?: string;
 }) {
-  const [open, setOpen] = useState(false);
+  const [mode, setMode] = useState<"closed" | "preview" | "pinned">("closed");
   const triggerId = useId();
   return (
-    <Popover open={open} onOpenChange={setOpen} triggerId={triggerId}>
+    <Popover
+      open={mode !== "closed"}
+      triggerId={triggerId}
+      onOpenChange={(next, details) => {
+        if (!next && details.reason === "trigger-hover" && mode === "pinned")
+          return;
+        if (details.reason === "trigger-press") {
+          // A press pins a preview even when the primitive proposes closing it.
+          setMode(mode === "pinned" ? "closed" : "pinned");
+          return;
+        }
+        setMode(next ? "preview" : "closed");
+      }}
+    >
       <PopoverTrigger
         id={triggerId}
-        openOnHover
+        openOnHover={mode !== "pinned"}
         delay={300}
         closeDelay={150}
-        onFocus={() => setOpen(true)}
+        onFocus={(event) => {
+          // Pointer focus must not turn a hover preview into a toggle before click.
+          const from = event.relatedTarget;
+          if (
+            from instanceof Element &&
+            from.closest('[data-slot="popover-content"]')
+          )
+            return;
+          if (event.currentTarget.matches(":focus-visible")) setMode("preview");
+        }}
         className={cn(
           "max-w-full cursor-help rounded-sm text-left underline decoration-muted-foreground/50 decoration-dotted underline-offset-4 outline-none hover:decoration-foreground focus-visible:ring-2 focus-visible:ring-ring",
           className,
