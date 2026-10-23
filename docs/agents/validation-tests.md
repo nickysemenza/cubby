@@ -467,7 +467,7 @@ The removed pinned-order round trip no longer has a dedicated browser regression
 
 Purchase Email review retains dismissal across reload, replacement with a link,
 Email original navigation and failed-preview evidence preservation. Vendor Email
-link composition stays in `import-order-convergence.spec.ts`; the review journey
+link composition stays in `gmail.input-first-import.spec.ts`; the review journey
 opens the Email directly from its Purchase row.
 
 ## Test and dev data factories

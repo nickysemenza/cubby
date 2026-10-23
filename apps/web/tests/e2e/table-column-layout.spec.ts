@@ -55,10 +55,12 @@ async function pointerDrag(
   };
   await page.mouse.move(from.x, from.y);
   await page.mouse.down();
-  await page.mouse.move(from.x + 8, from.y + 8, { steps: 4 });
-  await page.mouse.move(to.x, to.y, { steps: 16 });
+  await page.mouse.move(from.x + 8, from.y + 8);
+  // Activation, target collision and the final update exercise native drag
+  // behavior; interpolating sixteen input events adds seconds on CI.
+  await page.mouse.move(to.x, to.y, { steps: 2 });
   // Settle over the target so collision detection resolves it before drop.
-  await page.mouse.move(to.x + 1, to.y, { steps: 2 });
+  await page.mouse.move(to.x + 1, to.y);
   await page.mouse.up();
 }
 
