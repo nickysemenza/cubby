@@ -13,6 +13,7 @@ import { chooseListView } from "./support/e2e-helpers";
  */
 
 import superjson from "superjson";
+import { entityListEnrichmentOutputSchema } from "~/entity/generated/entity-lists.gen";
 import { z } from "zod";
 
 import {
@@ -333,11 +334,13 @@ test("base list keeps row identity, selection and phone cards while enrichment f
       await route.continue();
       return;
     }
-    const payload = superjson.deserialize<{
-      input: { entity: string; ids: string[]; groups: string[] };
-    }>(JSON.parse(route.request().postData() ?? "{}"));
     requested();
     await held;
+    // Preserve the real exact-field acknowledgement while injecting a failure.
+    const response = await route.fetch();
+    const result = z
+      .object({ ok: z.literal(true), data: entityListEnrichmentOutputSchema })
+      .parse(superjson.deserialize(await response.json()));
     await route.fulfill({
       status: 200,
       contentType: "application/json",
@@ -345,9 +348,10 @@ test("base list keeps row identity, selection and phone cards while enrichment f
         superjson.serialize({
           ok: true,
           data: {
-            entity: payload.input.entity,
-            groups: payload.input.groups.map((id) => ({
+            entity: result.data.entity,
+            groups: result.data.groups.map(({ id, fields }) => ({
               id,
+              fields,
               state: "error",
               error: {
                 code: "INTERNAL_SERVER_ERROR",

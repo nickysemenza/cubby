@@ -28,7 +28,7 @@ const LocationSearch = referenceEntitySearch("location");
 interface BulkReparentLocationsDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  locations: LocationListItemOut[];
+  locations: Pick<LocationListItemOut, "id" | "name" | "parent">[];
   onSuccess: () => void;
 }
 

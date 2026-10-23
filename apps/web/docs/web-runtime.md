@@ -238,6 +238,10 @@ missing IDs and failed reads; cached matches remain visible during refresh error
 Progressive row views preserve the data array and unaffected record objects
 until their immutable base pages or enrichment patches change; loading and
 summary-only updates must not rebuild the table dataset.
+Custom renderers declare additional row reads in column metadata; Project task
+progress requests its rollup alongside its textual value. Action admission parses
+only the identity and fields consumed by the action, so deferred list fields
+cannot hide actions on a selected base row.
 Column read demand includes the top-level roots of declared explanation source
 dependencies, so explanation evidence remains available when reads are narrowed.
 Reference demand includes canonical labels, allocations and assignment

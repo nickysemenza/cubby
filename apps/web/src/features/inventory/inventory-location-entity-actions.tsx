@@ -1,8 +1,4 @@
-import {
-  type LocationListItemOut,
-  locationListItemOut,
-  locationOut,
-} from "@cubby/schemas/location";
+import { locationListItemOut } from "@cubby/schemas/location";
 import { useNavigate } from "@tanstack/react-router";
 import { useCallback } from "react";
 
@@ -26,8 +22,18 @@ const asInventoryItem = (row: EntityActionRow): InventoryDialogItem | null => {
   return parsed.success ? parsed.data : null;
 };
 
-const asLocationItem = (row: EntityActionRow): LocationListItemOut | null => {
-  const parsed = locationListItemOut.safeParse(row);
+// Action admission must work before deferred list fields arrive.
+const locationActionItemSchema = locationListItemOut.pick({
+  id: true,
+  name: true,
+  parent: true,
+});
+const locationLabelItemSchema = locationListItemOut.pick({
+  id: true,
+  type: true,
+});
+const asLocationItem = (row: EntityActionRow) => {
+  const parsed = locationActionItemSchema.safeParse(row);
   return parsed.success ? parsed.data : null;
 };
 
@@ -74,7 +80,7 @@ function usePrintLocationLabelsAction(): EntityActionHandles {
   const navigate = useNavigate();
   const availability: EntityActionHandles["availability"] = useCallback(
     ({ rows }) => {
-      const parsed = rows.map((row) => locationOut.safeParse(row));
+      const parsed = rows.map((row) => locationLabelItemSchema.safeParse(row));
       if (parsed.some((result) => !result.success)) {
         return { status: "hidden" };
       }
@@ -109,7 +115,7 @@ function usePrintLocationLabelsAction(): EntityActionHandles {
     run,
     availability,
     rowMenuItem: (row) => {
-      const parsed = locationOut.safeParse(row);
+      const parsed = locationLabelItemSchema.safeParse(row);
       if (!parsed.success) return null;
       const disabledReason = typeSupportsQrCode(parsed.data.type)
         ? undefined
@@ -187,6 +193,7 @@ export const inventoryLocationEntityActionDefinitions = [
   }),
   defineEntityAction({
     id: "move-location-under",
+    readFields: ["parent"],
     verb: "moveUnder",
     entities: ["location"],
     arity: "both",
