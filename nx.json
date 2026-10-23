@@ -74,13 +74,6 @@
       // Workflows that deploy, publish, review, or run journeys run no check.
       "!{workspaceRoot}/.github/workflows/{deploy.yaml,deploy-nx-cache.yaml,apple-testflight.yaml,claude.yml,journeys.yaml}"
     ],
-    // Only targets consuming bundled guide/playbook Markdown include this.
-    "playbookMarkdown": [
-      { "runtime": "node scripts/runtime-markdown.ts --playbooks" }
-    ],
-    "webMarkdown": [
-      { "runtime": "node scripts/runtime-markdown.ts --plugins" }
-    ],
     // What Cargo reads for the recipebridge and cubby-ffi merge-gate lanes:
     // the workspace crates, the golden vectors their tests read, and the CI
     // configuration that runs them. rust-toolchain.toml names a floating

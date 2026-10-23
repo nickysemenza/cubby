@@ -5,7 +5,6 @@
   "exports": {
     "./native/client-version": "./packages/shared/src/apple-client-version.ts",
     "./tooling/run": "./scripts/lib/run.ts",
-    "./tooling/playbook-sources": "./scripts/lib/playbook-sources.ts",
     "./tooling/tree-digest": "./scripts/lib/tree-digest.ts",
     "./tooling/type-checker": "./scripts/tsc.ts",
     "./tooling/apple-ffi": "./scripts/apple-ffi.ts",

@@ -47,7 +47,7 @@ env:
   NX_CACHE_URL: https://cubby-nx-cache.nicky.workers.dev
   NX_CACHE_TOKEN: ${{ secrets.NX_CACHE_TOKEN }}
 
-# Editorial docs run formatting and links only. Other changes start every Linux
+# Repository docs run generation, formatting and links only. Other changes start every Linux
 # lane and replay unchanged tasks from Nx; Rust and Apple remain path-filtered.
 # `CI passed` is the one required check (docs/adr/0020-cache-routed-ci.md).
 jobs:
@@ -56,15 +56,16 @@ jobs:
     runs-on: ubuntu-slim
     timeout-minutes: 5
     outputs:
-      runtime: ${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || steps.docs.outputs.runtime == 'true' }}
+      runtime: ${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || steps.filter.outputs.runtime == 'true' || steps.filter.outputs.guide == 'true' }}
       # Nightly and manual runs start every filtered lane.
-      rust: ${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (steps.docs.outputs.runtime == 'true' && steps.filter.outputs.rust == 'true') }}
-      apple: ${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || (steps.docs.outputs.runtime == 'true' && steps.filter.outputs.apple == 'true') }}
+      rust: ${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || steps.filter.outputs.rust == 'true' }}
+      apple: ${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || steps.filter.outputs.apple == 'true' }}
       purchase: ${{ inputs.purchase-import || steps.filter.outputs.purchase == 'true' }}
     steps:
       # A push diffs against its `before` commit with git; a pull request
       # lists its files through the API.
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - if: github.event_name == 'push'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - id: filter
         if: github.event_name == 'push' || github.event_name == 'pull_request'
         uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4
@@ -73,10 +74,14 @@ jobs:
           # tasks read directly, not the generator's web inputs: a PR that
           # changes only the generated Swift client (contracts, schemas) skips
           # the Apple lanes, and the nightly run catches what that misses.
-          list-files: json
+          predicate-quantifier: some-with-excludes
           filters: |
-            all:
+            runtime:
               - '**'
+              - '!docs/**/*.{md,mdx,markdown}'
+              - '!{AGENTS,CLAUDE}.md'
+            guide:
+              - 'docs/guide/**'
             rust: &rust
               - 'recipebridge/**'
               - 'cookbook-wasm/**'
@@ -110,16 +115,6 @@ jobs:
               - 'apps/web/src/server/mcp/purchase-agent-protocol.ts'
               - '.agents/skills/purchase-import/**'
               - 'packages/schemas/src/purchase*'
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
-        if: github.event_name == 'push' || github.event_name == 'pull_request'
-        with:
-          node-version-file: .nvmrc
-          package-manager-cache: false
-      - id: docs
-        if: github.event_name == 'push' || github.event_name == 'pull_request'
-        env:
-          CHANGED_FILES: ${{ steps.filter.outputs.all_files }}
-        run: node scripts/ci-docs.ts >> "$GITHUB_OUTPUT"
 
   validation:
     name: Validation and docs
@@ -135,10 +130,9 @@ jobs:
         uses: ./.github/actions/setup-node-with-deps
         with:
           wasm: ${{ needs.plan.outputs.runtime == 'true' && 'restore' || 'false' }}
-          workspace-filter: ${{ needs.plan.outputs.runtime != 'true' && 'cubby' || '' }}
       # Independent failures stay red but do not hide the remaining diagnostics.
       - name: Generated contracts
-        if: ${{ !cancelled() && steps.setup.outcome == 'success' && needs.plan.outputs.runtime == 'true' }}
+        if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
         run: pnpm exec nx run cubby-checks:generate --outputStyle=stream
       - name: Design tokens
         if: ${{ !cancelled() && steps.setup.outcome == 'success' && needs.plan.outputs.runtime == 'true' }}

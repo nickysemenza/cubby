@@ -10,8 +10,6 @@
         "apps/apple/tooling/apple.ts!",
         "apps/apple/tooling/apple-release.ts!",
         "scripts/ensure.ts!",
-        "scripts/ci-docs.ts!",
-        "scripts/runtime-markdown.ts!",
         "scripts/design-tokens.ts!"
       ],
       "project": [

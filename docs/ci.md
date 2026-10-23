@@ -4,9 +4,9 @@ Every required check is an Nx target. Cacheable targets' `inputs` decide their
 cache keys; a passing result for the same key in the shared Nx remote cache replays
 in seconds and satisfies the merge gate
 ([ADR 0009](adr/0009-content-hash-merge-gate.md),
-[validation policy](agents/validation.md)). Editorial-only changes run formatting and relative Markdown links. Other
-changes start every Linux lane and let the cache skip unchanged work; the Rust
-and Apple lanes are also path-filtered ([ADR 0020](adr/0020-cache-routed-ci.md)). Selected
+[validation policy](agents/validation.md)). Repository Markdown-only changes run generation, formatting and links; guides
+and other changes start every Linux lane and let the cache skip unchanged work.
+The Rust and Apple lanes are also path-filtered ([ADR 0020](adr/0020-cache-routed-ci.md)). Selected
 Apple host and simulator checks always execute on macOS, using ordinary compiler
 and artifact caches. Merging to `main` independently
 deploys the web Worker, including after a documentation-only change;
@@ -33,26 +33,13 @@ now runs even when the subsequent test target replays a cached pass.
 `Test report` and `CI passed` use `ubuntu-slim`; reporting installs dependencies
 and merges blobs without building the app or installing browsers.
 
-## Editorial documentation
-
-`Plan` lists the changed files for PRs and main pushes. A nonempty diff containing
-only Markdown under `docs/` or `AGENTS.md`/`CLAUDE.md` instructions takes the
-editorial path, unless it touches the guide or a served playbook source.
-Mixed changes, unknown paths, household skills and plugin files keep full Linux
-validation. Nightly and manual runs always select full validation.
-
-`scripts/lib/playbook-sources.ts` owns the household skill list and one-hop link
-resolution used by generation, CI selection and source fingerprints. Linking a
-new reference from a household skill makes it a runtime input automatically.
-Generation fingerprints only playbook Markdown, excluding the guide it emits;
-web checks also fingerprint guide sources. No generated path-filter allowlist
-or private Nx hash API is maintained.
-
-The editorial validation job uses a root-only dependency install (skipping web
-postinstall generation), formatting and relative Markdown links. It starts no
-WASM preparation, application build, test services or report job. `CI passed`
-allows the deliberately unselected lanes but still rejects planning/validation
-failures and cancellations.
+Repository docs-only PRs and main pushes (Markdown under `docs/`, plus root
+`AGENTS.md`/`CLAUDE.md`) run generation, formatting and relative links without
+WASM, builds, test services or reports. Generation validates served playbooks
+and their links. Guide, skill, plugin, mixed and unknown-path changes retain full
+Linux validation. The existing path-filter action owns selection; no custom
+classifier or generated allowlist is maintained. Nightly/manual runs stay full,
+and `CI passed` accepts only the deliberately unselected lanes.
 
 ## Journeys
 
@@ -83,10 +70,9 @@ include Node, platform/architecture, the hosted image version, CI mode, locale
 and timezone, each as a plain Nx `env` or `runtime` input. A runtime input's
 command must print only deterministic stdout: Nx hashes stdout and stderr. Web targets add ignored env files, generated WASM and the
 selectors in `apps/web/project.json`; shard selection is keyed per target and
-browser worker count is part of the target command. Runtime Markdown is limited to `docs/guide/**/*.md`, the household playbook
-skills and their one-hop Markdown references. The generator, web result passes
-and build provenance use the shared playbook source resolver; unrelated prose
-is excluded from those keys. Plugin Markdown remains an input of web tests. Native App source
+browser worker count is part of the target command. Web test keys hash the guide and plugin Markdown, and reuse existing generation
+dependency outputs for served playbooks and prompts. Repository prose is not an
+input of the shared `gate`; generation still tracks the docs it reads. Native App source
 is excluded only from web-specific passes; root tooling keeps broad coverage.
 Rust checks include their actual compiler, platform and Cargo warning policy.
 CI establishes `CARGO_BUILD_WARNINGS=deny` for native compilation. Portable generation and
@@ -389,8 +375,7 @@ design-token, types, lint, Knip, bindings, Swift lint and format targets, then
 the offline relative-link check, as individual steps. It runs no tests; every
 Vitest suite runs in the Vitest shards. `pnpm check:all` runs those targets and
 the fast web `test` target locally. It stays a separate job rather than part of
-`Plan`: `Plan` selects editorial versus runtime validation and gates the Rust
-and Apple lanes on a 1-vCPU runner, so the static
+`Plan`: `Plan` gates the Rust and Apple lanes on a 1-vCPU runner, so the static
 checks there would delay them and run several times slower.
 Dependency advisory audits and deduplication are not CI or local validation
 gates; dependency maintenance is handled separately from code validation. The

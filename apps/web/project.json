@@ -7,15 +7,18 @@
     // the inputs the browser/database/Worker lanes actually consume.
     "webGate": [
       "gate",
-      "webMarkdown",
+      // Tests consume generated playbooks/prompts rather than every repo doc.
+      // Reuse the existing generation and WASM dependencies' output hashes.
+      { "dependentTasksOutputFiles": "**/*" },
+      {
+        "runtime": "git ls-files -z -co --exclude-standard -- docs/guide plugins | xargs -0 shasum -a 256"
+      },
       // Native App implementation is not consumed by web/runtime tests. Root
       // tooling checks retain their broad gate and still validate native layout.
       "!{workspaceRoot}/apps/apple/App/**/*",
       {
         "runtime": "git ls-files --others --ignored --exclude-standard -- ':(glob)**/.env*' | git hash-object --stdin-paths"
       },
-      // Built from Rust inputs and toolchain the file key cannot see.
-      { "dependentTasksOutputFiles": "packages/wasm/**/*" },
       // Switches the built Worker to its development preview configuration.
       { "env": "CUBBY_DEV_PREVIEW_BUILD" },
       { "env": "NODE_ENV" },

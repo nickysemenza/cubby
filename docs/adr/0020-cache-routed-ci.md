@@ -54,22 +54,15 @@ Mac (63 hits and 50 rebuilds that day) and never matched the Linux probe's key
   skips the Apple lanes; the nightly run catches a native break it causes.
 - Selected Apple checks run against the runner's current toolchain.
 
-## Amendment: editorial Markdown
+## Amendment: repository documentation
 
-Editorial-only PRs and main pushes run formatting and relative Markdown links,
-without starting runtime Linux lanes, Rust, Apple, or report jobs. Nightly and
-manual runs retain full lane selection. The required aggregate accepts only
-these planned skips.
+The existing path-filter action selects generation, formatting and relative
+links for Markdown-only changes under `docs/` and root agent instructions.
+Guide, skill, plugin and mixed changes retain full Linux validation. Nightly
+and manual runs remain full; the required aggregate accepts planned skips.
 
-The blanket `docs/` digest invalidated every web result for developer prose such
-as `docs/development.md`, defeating the intended cache shortcut. Runtime
-Markdown inputs now use the same household skill list and one-hop reference
-resolver as playbook generation, plus the app's guide for web consumers. Only
-these consumers opt into Markdown inputs; the generic `gate` excludes prose.
-Build provenance uses that same source set. New linked playbook references
-participate automatically; generated guides do not feed generation's own key.
-
-The editorial classifier permits only documentation and agent instructions;
-unknown paths and mixed changes retain broad validation. This adds one small
-docs exception using the existing changed-file action and source resolver,
-without restoring per-lane filters or the retired Nx digest graph.
+Remove the blanket docs digest from the shared Nx gate. Web tests instead
+hash guide/plugin Markdown and the outputs of their existing generation and
+WASM dependencies. Generation retains its own docs inputs because it bundles
+playbook references. This avoids invalidating application tests for developer
+prose without adding a classifier, digest script or source-discovery layer.
