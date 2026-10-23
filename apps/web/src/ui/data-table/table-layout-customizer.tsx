@@ -31,6 +31,7 @@ import {
   type ColumnRegion as Region,
   columnRegionSchema,
   columnsByRegion,
+  columnBands,
   isLockedColumn,
   moveColumn,
   useColumnLayoutDndProps,
@@ -243,6 +244,7 @@ function Zone<TData extends RowData>({
   table: Table<TData>;
 }) {
   const movable = columns.filter((column) => !isLockedColumn(column));
+  const bands = columnBands(columns);
   const { setNodeRef, isOver } = useDroppable({
     id: `zone:${region}`,
     data: { region },
@@ -261,13 +263,92 @@ function Zone<TData extends RowData>({
           items={columns.map((column) => column.id)}
           strategy={verticalListSortingStrategy}
         >
-          {columns.map((column) => (
-            <SortableColumn
-              key={column.id}
-              column={column}
-              regionColumns={movable}
-              table={table}
-            />
+          {bands.map((band, bandIndex) => (
+            <div key={band.columns[0]?.id} className="space-y-1">
+              {band.label && (
+                <div className="flex items-center gap-1 px-1 py-1 text-xs">
+                  <span className="min-w-0 flex-1 truncate font-medium">
+                    {band.label}
+                  </span>
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label={`Move ${band.label} group earlier`}
+                    disabled={
+                      bandIndex === 0 ||
+                      bands[bandIndex - 1]?.columns.some(isLockedColumn)
+                    }
+                    onClick={() => {
+                      const first = band.columns[0];
+                      const target = bands[bandIndex - 1]?.columns[0];
+                      if (first && target)
+                        moveColumn(table, {
+                          kind: "reorder-group",
+                          id: first.id,
+                          over: target.id,
+                        });
+                    }}
+                  >
+                    <ArrowUpIcon className="size-3" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    aria-label={`Move ${band.label} group later`}
+                    disabled={
+                      bandIndex === bands.length - 1 ||
+                      bands[bandIndex + 1]?.columns.some(isLockedColumn)
+                    }
+                    onClick={() => {
+                      const first = band.columns[0];
+                      const target = bands[bandIndex + 1]?.columns[0];
+                      if (first && target)
+                        moveColumn(table, {
+                          kind: "reorder-group",
+                          id: first.id,
+                          over: target.id,
+                        });
+                    }}
+                  >
+                    <ArrowDownIcon className="size-3" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    aria-label={`${band.columns.some((column) => column.getIsVisible()) ? "Hide" : "Show"} ${band.label} group`}
+                    onClick={() => {
+                      const visible = !band.columns.some((column) =>
+                        column.getIsVisible(),
+                      );
+                      table.setColumnVisibility((current) => ({
+                        ...current,
+                        ...Object.fromEntries(
+                          band.columns
+                            .filter((column) => column.getCanHide())
+                            .map((column) => [column.id, visible]),
+                        ),
+                      }));
+                    }}
+                  >
+                    {band.columns.some((column) => column.getIsVisible())
+                      ? "Hide"
+                      : "Show"}
+                  </Button>
+                </div>
+              )}
+              {band.columns.map((column) => (
+                <SortableColumn
+                  key={column.id}
+                  column={column}
+                  regionColumns={movable.filter(
+                    (item) =>
+                      item.columnDef.meta?.columnGroup ===
+                      column.columnDef.meta?.columnGroup,
+                  )}
+                  table={table}
+                />
+              ))}
+            </div>
           ))}
         </SortableContext>
       </div>
@@ -304,6 +385,14 @@ export default function TableLayoutCustomizer<TData extends RowData>({
 
   return (
     <div className="space-y-2 p-2">
+      {table
+        .getAllLeafColumns()
+        .some((column) => column.columnDef.meta?.columnGroup) && (
+        <p className="px-1 text-xs text-muted-foreground">
+          Move columns within their group. Pinning a grouped column moves its
+          whole group.
+        </p>
+      )}
       <DndContext {...dndProps} onDragEnd={onDragEnd}>
         <Zone
           region="start"

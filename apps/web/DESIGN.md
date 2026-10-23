@@ -180,6 +180,10 @@ These are Cubby's own components, designed and built here rather than adopted fr
 - **`Picker`** (`ui/combobox/picker.tsx`) with `PickerField`, `PickerVisual` and `PickerOption` — every value choice: choose, search and segmented modes, single and multiple values, records with pictures and options with glyphs (`/design#picker`).
 - **Records ledger and timeline** — `RecordsBlockView` (`entity/entity-detail/records-block.tsx`), `Ledger`/`LedgerRow`/`LedgerCell` (`ui/common/ledger.tsx`), and `RecordList` with its `Record*` parts (`ui/common/record-list.tsx`) (`/design#records`).
 - **`RTable`** (`entity/table/table.tsx`), reached through `ListWorkbench` (`/design#rtable`).
+  Optional thematic header bands keep the white surface, a 24px label row
+  and hairline group boundaries above the existing leaf headers. They add no
+  row height to the 32px data rows. Columns exposes whole-group visibility and
+  movement; leaf sorting, filtering and sizing stay on individual headers.
   Its synthetic showcase compares plain and visual cells alongside editing,
   range copy/paste, and grouping. `CellBar` and `CellSparkline`
   (`ui/data-table/visuals/cell-visual.tsx`) supplement

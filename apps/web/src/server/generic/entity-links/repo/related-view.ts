@@ -149,6 +149,7 @@ const SQL_RELATED_VIEWS = {
     `COALESCE(t."date"::timestamp, t."createdAt")`,
   ),
   "vendor.products": named(),
+  "vendor.brandedProducts": named(),
   "vendor.projects": named(),
   "vendor.transactions": dated(
     `COALESCE(NULLIF(t."merchant", ''), NULLIF(t."rawDescription", ''), t."shortcode")`,

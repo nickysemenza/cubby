@@ -25,13 +25,17 @@ import {
   product,
   vendor,
 } from "~/server/db/schema";
-import { updateProduct } from "~/server/domains/product/repo/crud";
+import {
+  updateProduct,
+  deleteProducts,
+} from "~/server/domains/product/repo/crud";
 import {
   deletePurchases,
   findOrCreatePurchase,
   getPurchaseByID,
   getPurchaseExpenses,
 } from "~/server/domains/purchase/repo/purchase";
+import { loadRelatedPreviews } from "~/server/generic/entity-links/repo/related-view";
 import { resolveLiveShortcode } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import {
@@ -210,6 +214,129 @@ describe("vendor declared scalar updates", () => {
 
 describe("vendor repository — spend rollup", () => {
   const ctx = withTestDb();
+
+  it("separates brand catalog and spend from seller history and coverage", async () => {
+    const seller = await findOrCreateVendor(ctx.db, "Synthetic Seller");
+    const brand = await findOrCreateVendor(ctx.db, "Synthetic Brand");
+    const sellerRef = (await getVendorByID(ctx.db, seller)).id;
+    const { output: category } = await createRepoEntity(
+      ctx,
+      "productCategory",
+      { name: "Synthetic category" },
+    );
+    await updateVendor(
+      ctx.db,
+      sellerRef,
+      { itemizationExpectation: "required" },
+      ctx.actor,
+    );
+    const branded = await createProductFixture(
+      ctx.db,
+      makeProductInput({
+        name: "Synthetic branded item",
+        brandId: brand,
+        categoryId: category.id,
+      }),
+      ctx.actor,
+    );
+    const removed = await createProductFixture(
+      ctx.db,
+      makeProductInput({ name: "Synthetic removed item", brandId: brand }),
+      ctx.actor,
+    );
+    await deleteProducts(ctx.db, [removed.entityId], ctx.actor);
+    const { output: order } = await createRepoEntity(ctx, "purchase", {
+      date: "2024-01-15",
+      vendorId: sellerRef,
+      itemizationExpectation: "required",
+    });
+    await createRepoEntity(ctx, "expense", {
+      date: "2024-01-15",
+      name: "Synthetic item line",
+      trade: "other",
+      costType: "materials",
+      cost: 10,
+      purchaseId: order.id,
+      productId: branded.id,
+    });
+    await createRepoEntity(ctx, "expense", {
+      date: "2024-01-15",
+      name: "Synthetic brand refund",
+      trade: "other",
+      costType: "materials",
+      cost: -3,
+      purchaseId: order.id,
+      productId: branded.id,
+    });
+    await createRepoEntity(ctx, "expense", {
+      date: "2024-01-15",
+      name: "Synthetic unattributed line",
+      trade: "other",
+      costType: "materials",
+      cost: 5,
+      purchaseId: order.id,
+      lineKind: "unclassified",
+    });
+    const sellerRow = await getVendorByID(ctx.db, seller);
+    expect(sellerRow).toMatchObject({
+      brandedProductCount: 0,
+      brandSpend: 0,
+      spend: 12,
+      expenseCount: 3,
+      firstPurchaseDate: "2024-01-15",
+      documentedPurchaseCount: 0,
+      missingItemizationCount: 1,
+    });
+    expect(await getVendorByID(ctx.db, brand)).toMatchObject({
+      brandedProductCount: 1,
+      brandCategoryCount: 1,
+      purchasedBrandProductCount: 1,
+      brandSpend: 7,
+      spend: 0,
+      expenseCount: 0,
+      firstPurchaseDate: null,
+      missingItemizationCount: 0,
+    });
+    const listed = await vendorList(ctx.db, {}, [], page);
+    expect(
+      listed.data.find((row) => row.id === sellerRef)?.brandedProductCount,
+    ).toBe(0);
+    expect(
+      listed.data.find((row) => row.id === branded.brandId)
+        ?.brandedProductCount,
+    ).toBe(1);
+    const brandRef = (await getVendorByID(ctx.db, brand)).id;
+    const previews = await loadRelatedPreviews(ctx.db, {
+      source: "vendor",
+      sourceIds: [sellerRef, brandRef],
+      relationKeys: ["vendor.brandedProducts", "vendor.products"],
+    });
+    expect(
+      previews
+        .find(
+          (preview) =>
+            preview.sourceId === brandRef &&
+            preview.relationKey === "vendor.brandedProducts",
+        )
+        ?.items.map((item) => item.id),
+    ).toEqual([branded.id]);
+    expect(
+      previews.find(
+        (preview) =>
+          preview.sourceId === sellerRef &&
+          preview.relationKey === "vendor.brandedProducts",
+      )?.totalCount ?? 0,
+    ).toBe(0);
+    expect(
+      previews
+        .find(
+          (preview) =>
+            preview.sourceId === sellerRef &&
+            preview.relationKey === "vendor.products",
+        )
+        ?.items.map((item) => item.id),
+    ).toEqual([branded.id]);
+  });
 
   it("spend is SUM(expense.cost), never the charge's statedTotal", async () => {
     const vendorId = await findOrCreateVendor(ctx.db, "Spend Rollup Vendor");

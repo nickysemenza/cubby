@@ -31,6 +31,7 @@ import type {
   EntityDeclarationMetadata,
   EntityFieldModelMetadata,
 } from "../../../../packages/schemas/src/entity-definitions/definition.ts";
+
 import {
   EntityDeclarationError,
   objectValue,
@@ -494,6 +495,14 @@ const validateFieldOverrides = (
   titleField: string,
   index: number,
 ) => {
+  if (field.display.columnBar && field.kind !== "number")
+    throw new EntityDeclarationError(
+      `${context}.display.columnBar requires a numeric field.`,
+    );
+  if (field.display.columnGroup && field.display.standard)
+    throw new EntityDeclarationError(
+      `${context}.display.columnGroup cannot group a structural identity column.`,
+    );
   const key = field.key;
   const inferredLabel = inferredFieldLabel(key, field.reference !== null);
   if (field.label === inferredLabel)
@@ -516,6 +525,16 @@ const validateFieldOverrides = (
       `${context}.display.listOrderOverride is redundant with model order.`,
     );
 };
+
+/** Omit unused table presentation so ordinary fields do not grow the manifest. */
+function columnPresentation(
+  display: EntityFieldModelMetadata["fields"][number]["display"],
+) {
+  return {
+    columnGroup: display.columnGroup ?? undefined,
+    columnBar: display.columnBar || undefined,
+  };
+}
 
 // oxlint-disable-next-line eslint/complexity -- Field compilation enforces cross-property model invariants in one pass.
 const compileFieldModel = (
@@ -664,6 +683,7 @@ const compileFieldModel = (
         listHidden: field.display.listHidden ?? false,
         referencePreviewLimit: field.display.referencePreviewLimit ?? null,
         columnLabel: field.display.columnLabel ?? null,
+        ...columnPresentation(field.display),
         valueOptions: field.display.valueOptions
           ? compileEnumOptions(
               field.display.valueOptions,

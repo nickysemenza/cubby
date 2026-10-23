@@ -22,6 +22,7 @@ import { entityPreviewFieldKeys } from "@cubby/schemas/entity-preview";
 import { generatedEntitySort } from "@cubby/schemas/entity-sort";
 import { entitySummary } from "@cubby/schemas/entity-summary";
 import { resolvedListSchema } from "@cubby/schemas/field-resolution";
+import { flexRender } from "@tanstack/react-table";
 import prettyBytes from "pretty-bytes";
 import { Fragment, type ReactNode } from "react";
 import { z } from "zod";
@@ -80,11 +81,13 @@ import {
   createCubbyColumnCollection,
   type CubbyColumnCollection,
   type CubbyColumnHelper,
+  type CubbyColumnDef,
 } from "~/ui/data-table/table-features";
 import {
   attachCubbyColumnMeta,
   type MobileColumnMeta,
 } from "~/ui/data-table/table-meta";
+import { CellMagnitudeBar } from "~/ui/data-table/visuals/cell-visual";
 import { ExternalLinkText } from "~/ui/external-link";
 import { Button } from "~/ui/primitives/button";
 import { Checkbox } from "~/ui/primitives/checkbox";
@@ -1845,8 +1848,10 @@ export function createEntityDisplayColumns<TRecord extends object>(
       // column sizing reserves its slot from this flag. A column headed by
       // the field's label paints its short form.
       const headerForm = columnHeaderFor(field);
-      const add: typeof addColumn = (column) => {
+      const add = <TValue,>(column: CubbyColumnDef<TRecord, TValue>) => {
         const meta = { ...column.meta };
+        if (field.display.columnGroup)
+          meta.columnGroup = field.display.columnGroup;
         meta.valueKind = isMoneyField(field)
           ? "money"
           : field.reference?.entity === "ledgerParty"
@@ -1866,7 +1871,33 @@ export function createEntityDisplayColumns<TRecord extends object>(
             meta.shortHeader = headerForm.short;
           if (headerForm.countOf) meta.countOf = headerForm.countOf;
         }
-        addColumn({ ...column, meta });
+        const decorated: CubbyColumnDef<TRecord, TValue> = {
+          ...column,
+          meta,
+          ...(field.display.columnBar
+            ? {
+                cell: (context) => {
+                  const maximum = context.table
+                    .getPrePaginatedRowModel()
+                    .flatRows.reduce((max, row) => {
+                      const value = row.getValue(columnId);
+                      return typeof value === "number" && Number.isFinite(value)
+                        ? Math.max(max, Math.abs(value))
+                        : max;
+                    }, 0);
+                  return (
+                    <CellMagnitudeBar
+                      value={context.getValue()}
+                      maximum={maximum}
+                    >
+                      {flexRender(column.cell, context)}
+                    </CellMagnitudeBar>
+                  );
+                },
+              }
+            : {}),
+        };
+        addColumn(decorated);
       };
       const isIdentityField = field.readKey === titleField;
       // The standard-column pipeline owns the one canonical identity lane; an
