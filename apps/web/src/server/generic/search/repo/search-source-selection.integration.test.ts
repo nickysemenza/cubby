@@ -1,6 +1,11 @@
+import { sql } from "drizzle-orm";
 import { countTestDbQueries, withTestDb } from "tooling/test-setup";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
+import { normalizeSearchText } from "~/lib/search-normalization";
+import { TEXT_WHITESPACE } from "~/lib/text-whitespace";
+import { normalizeSearchTextSql } from "~/server/db/computed/search-normalization";
+import { unwrapDb } from "~/server/db/helpers";
 import { captureBackgroundQueue } from "~/server/testing/background-queue";
 import {
   createProductIdentityFixture,
@@ -15,6 +20,22 @@ import { prepareSearchDocuments } from "./search-document";
 // Stable source columns and recursive location paths must survive narrowing.
 describe("search source selection", () => {
   const ctx = withTestDb();
+
+  it("normalizes document text and query input with the same recipe", async () => {
+    for (const text of [
+      "",
+      TEXT_WHITESPACE,
+      `${TEXT_WHITESPACE}Blue\t\nTARP${TEXT_WHITESPACE}`,
+      "CAFÉ\u00a0KIT",
+      "a\u200bb",
+    ]) {
+      const result = await unwrapDb(ctx.db).execute<{ normalized: string }>(sql`
+        SELECT ${normalizeSearchTextSql(sql`${text}::text`)} AS normalized
+      `);
+      expect(result.rows[0]?.normalized).toBe(normalizeSearchText(text));
+    }
+  });
+
   let queue: ReturnType<typeof captureBackgroundQueue>;
   beforeEach(() => {
     queue = captureBackgroundQueue();

@@ -11,6 +11,7 @@ import type {
 import type { Trade } from "@cubby/schemas/task-fields";
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 
+import { normalizeSearchText } from "~/lib/search-normalization";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { effectiveFieldSql } from "~/server/db/computed/effective-field";
 import { locationAiDescriptionExtras } from "~/server/db/computed/location-ai-description";
@@ -83,7 +84,6 @@ import {
   buildTaskEmbeddingText,
   buildVendorEmbeddingText,
   buildWishEmbeddingText,
-  normalizeSearchText,
 } from "~/server/generic/embedding/repo/semantic/text";
 import type { SemanticEmbeddingConfig } from "~/server/generic/embedding/service/semantic/config";
 import { settlementRefsFor } from "~/server/generic/entity-links/repo/entity-external-ids";

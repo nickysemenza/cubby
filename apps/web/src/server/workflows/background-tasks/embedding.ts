@@ -8,6 +8,7 @@ import {
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
 
+import { normalizeSearchText } from "~/lib/search-normalization";
 import type { Database } from "~/server/db";
 import { entityIdentity } from "~/server/db/entity-identity-schema";
 import { getDb, withTransactionDatabase } from "~/server/db/helpers";
@@ -15,7 +16,6 @@ import { entityEmbedding, job } from "~/server/db/retained-tables";
 import { recordChange } from "~/server/generic/changes/repo/change";
 import { vectorPayloadHash } from "~/server/generic/embedding/repo/embedding-artifact";
 import { embeddingTextHash } from "~/server/generic/embedding/repo/semantic/hash";
-import { normalizeSearchText } from "~/server/generic/embedding/repo/semantic/text";
 import {
   getSemanticEmbeddingConfig,
   type SemanticEmbeddingConfig,

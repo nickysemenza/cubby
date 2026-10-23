@@ -8,6 +8,7 @@ import {
 import { and, eq, inArray, isNotNull, isNull, type SQL } from "drizzle-orm";
 import { z } from "zod";
 
+import { normalizeSearchText } from "~/lib/search-normalization";
 import type { Database } from "~/server/db";
 import { getDb } from "~/server/db/helpers";
 import { job } from "~/server/db/retained-tables";
@@ -17,7 +18,6 @@ import {
   searchDocument,
 } from "~/server/db/schema";
 import { embeddingTextHash } from "~/server/generic/embedding/repo/semantic/hash";
-import { normalizeSearchText } from "~/server/generic/embedding/repo/semantic/text";
 import type { SemanticEmbeddingConfig } from "~/server/generic/embedding/service/semantic/config";
 import type {
   PhysicalVectorMatch,

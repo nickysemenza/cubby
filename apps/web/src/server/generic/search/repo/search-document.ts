@@ -11,11 +11,13 @@ import { sha256Hex } from "@cubby/shared/sha256";
 import { type SQL, sql } from "drizzle-orm";
 import { z } from "zod";
 
+import { normalizeSearchText } from "~/lib/search-normalization";
 import { wasm } from "~/lib/wasm";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { effectiveFieldSql } from "~/server/db/computed/effective-field";
 import { productBrandNameSql } from "~/server/db/computed/product-brand-sql";
 import { categorySummarySql } from "~/server/db/computed/product-category-sql";
+import { normalizeSearchTextSql } from "~/server/db/computed/search-normalization";
 import {
   unwrapDb,
   uuidArrayParam,
@@ -30,7 +32,6 @@ import {
   getEmbeddingTextsForRefs,
   type SearchableEntityText,
 } from "~/server/generic/embedding/repo/entity-embedding";
-import { normalizeSearchText } from "~/server/generic/embedding/repo/semantic/text";
 import type { SemanticEmbeddingConfig } from "~/server/generic/embedding/service/semantic/config";
 import { assertCurrentJob } from "~/server/generic/jobs/repo/execution";
 
@@ -859,14 +860,6 @@ export async function getSearchDocumentEmbeddingTexts(
 
 const SEARCH_DOCUMENT_WORKFLOW_PAGE_SIZE = 250;
 
-/**
- * The SQL twin of `normalizeSearchText` (trim, collapse whitespace, lowercase),
- * so "is this document's vector current?" can be answered inside Postgres
- * without shipping every body to JS to hash. Equal normalized texts hash equal.
- */
-const normalizedTextSql = (column: SQL): SQL =>
-  sql`lower(regexp_replace(btrim(${column}), '\\s+', ' ', 'g'))`;
-
 // Bound as individual parameters, joined by a literal comma — never a JS
 // array interpolated directly into `IN (...)`, which drizzle would render as
 // a row constructor rather than a list (the `no-unsafe-sql-array-interpolation`
@@ -906,7 +899,7 @@ const unembeddedDocumentsSql = (
   WHERE sd."deletedAt" IS NULL
     AND sd."entityKind" IN (${embeddableEntityKindsSql})
     AND (ee.id IS NULL
-      OR ${normalizedTextSql(sql`ee."embeddingText"`)} <> ${normalizedTextSql(sql`sd."semanticText"`)})
+      OR ${normalizeSearchTextSql(sql`ee."embeddingText"`)} <> ${normalizeSearchTextSql(sql`sd."semanticText"`)})
     ${updatedBefore ? sql`AND sd."updatedAt" <= ${updatedBefore}::timestamp` : sql``}
 `;
 
