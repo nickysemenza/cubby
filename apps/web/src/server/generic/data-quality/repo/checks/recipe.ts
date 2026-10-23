@@ -1,13 +1,14 @@
 import { and, sql } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
+import { hasTextSql } from "~/server/db/computed/text-whitespace";
 import { notDeleted, unwrapDb, uuidArrayParam } from "~/server/db/helpers";
 import { recipe } from "~/server/db/retained-tables";
 import { entityDisplayImagePresenceSql } from "~/server/entity-kernel/repo/entity-display-image";
 import { qualityCheck } from "~/server/generic/data-quality/repo/builders";
 import { defineStoredEntityChecks } from "~/server/generic/data-quality/repo/stored-registry";
 
-const RECIPE_QUALITY_RULES_VERSION = 1;
+const RECIPE_QUALITY_RULES_VERSION = 2;
 
 type RecipeQualityRecord = Awaited<
   ReturnType<typeof loadRecipeQualityRecords>
@@ -82,12 +83,12 @@ async function loadRecipeQualityRecords(
         ) dq_recipe_step(step)
         WHERE dq_recipe_instructions."recipeId" = ${recipeColumn("id")}
           AND dq_recipe_instructions."deletedAt" IS NULL
-          AND trim(COALESCE(
+          AND ${hasTextSql(sql`COALESCE(
             CASE WHEN jsonb_typeof(dq_recipe_step.step) = 'string'
               THEN dq_recipe_step.step #>> '{}' END,
             dq_recipe_step.step ->> 'text',
             ''
-          )) <> ''
+          )`)}
       )`,
       hasDisplayImage: sql<boolean>`${entityDisplayImagePresenceSql(
         "recipe",

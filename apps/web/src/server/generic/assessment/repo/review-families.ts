@@ -35,6 +35,7 @@ import { alias, QueryBuilder } from "drizzle-orm/pg-core";
 import { z } from "zod";
 
 import type { Database } from "~/server/db";
+import { hasTextSql } from "~/server/db/computed/text-whitespace";
 import { unwrapDb, uuidArrayParam } from "~/server/db/helpers";
 import { assessment, assessmentState, feedback, run } from "~/server/db/schema";
 import {
@@ -240,7 +241,7 @@ export const reviewFamilyDeclarations = {
     ...assessmentReviewFamilies.image_description,
     records: one,
     primaryOnly: true,
-    actionable: sql`jsonb_typeof(a.judgment) = 'string' AND length(trim(a.judgment #>> '{}')) > 0`,
+    actionable: sql`jsonb_typeof(a.judgment) = 'string' AND ${hasTextSql(sql`a.judgment #>> '{}'`)}`,
   },
   statement_transaction: {
     ...assessmentReviewFamilies.statement_transaction,

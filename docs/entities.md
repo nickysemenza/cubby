@@ -2509,6 +2509,13 @@ and emit no migration.
 
 ## Data quality
 
+Blank text uses the ECMAScript whitespace set owned by
+`apps/web/src/lib/text-whitespace.ts`. Stored quality checks and SQL blank tests
+compile that set, including tabs, nonbreaking spaces and Unicode separators;
+a zero-width space is content. Rule versions invalidate affected published quality.
+The generic SQL helper also owns trimming for grouping keys, graph label fallbacks
+and Brand matching; domain-specific merchant/title canonicalization is separate.
+
 Shipment is the first stored-quality kind. Its batch loader reconciles current
 observations once, then shares `reconcileShipmentTimeline`,
 `shipmentEventSummary` and `shipmentMilestones` with the tracking report.

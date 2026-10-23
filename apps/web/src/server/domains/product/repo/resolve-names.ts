@@ -13,6 +13,7 @@ import {
   productBrandNameSql,
   productBrandCodeSql,
 } from "~/server/db/computed/product-brand-sql";
+import { hasTextSql } from "~/server/db/computed/text-whitespace";
 import { getDb, notDeleted, unwrapDb } from "~/server/db/helpers";
 import { product } from "~/server/db/schema";
 import {
@@ -216,7 +217,7 @@ export async function findProductIdentityReviewCandidates(
     .where(
       and(
         notDeleted(product),
-        sql`length(trim(${productBrandNameSql(product.brandId)})) > 0`,
+        hasTextSql(productBrandNameSql(product.brandId)),
         sql`strpos(${" " + title + " "}, ' ' || trim(regexp_replace(lower(${productBrandNameSql(product.brandId)}), '[^a-z0-9]+', ' ', 'g')) || ' ') > 0`,
       ),
     );

@@ -23,6 +23,7 @@ import { groupBy } from "es-toolkit";
 import { z } from "zod";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
+import { trimTextSql } from "~/server/db/computed/text-whitespace";
 import { vendorAccountLabelFor } from "~/server/db/computed/vendor-account-label";
 import { unwrapDb } from "~/server/db/helpers";
 import { resolveEntityDisplayImages } from "~/server/entity-kernel/repo/entity-display-image";
@@ -280,7 +281,7 @@ export const labelSql = (entity: Entity, alias: string) => {
     // `server/domains/meal/repo/helpers.ts` (an unnamed meal is identified by its
     // date, not by falling through to the shortcode).
     case "meal":
-      return sql`COALESCE(NULLIF(TRIM(${column("name")}), ''), ${column("date")}::text, ${column("shortcode")})`;
+      return sql`COALESCE(NULLIF(${trimTextSql(column("name"))}, ''), ${column("date")}::text, ${column("shortcode")})`;
     // `purchaseLabel(...)`'s ladder (`apps/web/src/lib/purchase-label.ts`):
     // orderId, else vendor name + date, else vendor name; a nonblank
     // `displayLabel` is appended parenthetically without replacing the
@@ -290,13 +291,13 @@ export const labelSql = (entity: Entity, alias: string) => {
     case "purchase":
       return sql`COALESCE(
         (CASE
-          WHEN NULLIF(TRIM(${column("orderId")}), '') IS NOT NULL THEN ${column("orderId")}
+          WHEN NULLIF(${trimTextSql(column("orderId"))}, '') IS NOT NULL THEN ${column("orderId")}
           WHEN ${column("date")} IS NOT NULL THEN
             COALESCE((SELECT v."name" FROM "Vendor" v WHERE v."id" = ${column("vendorId")}), 'Unknown vendor')
               || ' · ' || to_char(${column("date")}::date, 'FMMon FMDD, YYYY')
           ELSE COALESCE((SELECT v."name" FROM "Vendor" v WHERE v."id" = ${column("vendorId")}), 'Unknown vendor')
         END)
-          || COALESCE(' (' || NULLIF(TRIM(${column("displayLabel")}), '') || ')', ''),
+          || COALESCE(' (' || NULLIF(${trimTextSql(column("displayLabel"))}, '') || ')', ''),
         ${column("shortcode")}
       )`;
     // `merchant || rawDescription || capitalized kind` — mirrors

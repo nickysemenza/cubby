@@ -1,5 +1,7 @@
 import type { EntityQualityCheckState } from "@cubby/schemas/data-quality-shape";
 
+import { hasText } from "~/lib/text-whitespace";
+
 type CheckState = Exclude<EntityQualityCheckState, "waived">;
 export type QualityCheck<Record> = (record: Record) => CheckState;
 
@@ -15,7 +17,7 @@ const required = <R>(field: keyof R): QualityCheck<R> =>
     return (
       value !== null &&
       value !== undefined &&
-      (typeof value !== "string" || value.trim().length > 0)
+      (typeof value !== "string" || hasText(value))
     );
   });
 

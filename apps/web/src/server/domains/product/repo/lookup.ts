@@ -13,7 +13,6 @@ import { and, eq, ilike, inArray, or, type SQL, sql } from "drizzle-orm";
 import { match } from "ts-pattern";
 
 import type { Database } from "~/server/db";
-import { trimBrandNameSql } from "~/server/db/computed/brand-name-sql";
 import {
   productBrandNameSql,
   productBrandCodeSql,
@@ -23,6 +22,7 @@ import {
   categorySummarySql,
 } from "~/server/db/computed/product-category-sql";
 import { productClassificationEvidenceSql } from "~/server/db/computed/product-classification-evidence";
+import { trimTextSql } from "~/server/db/computed/text-whitespace";
 import { escapeLike, getDb, imageOrder, notDeleted } from "~/server/db/helpers";
 import {
   entityExternalId,
@@ -296,7 +296,7 @@ export const findProductByNameWithBrandClaim = async (
           notDeleted(vendor),
           generic
             ? eq(vendor.systemKey, "generic-unbranded")
-            : sql`(lower(${trimBrandNameSql(vendor.name)})=lower(${claim}) OR EXISTS (SELECT 1 FROM unnest(${vendor.aliases}) alias WHERE lower(${trimBrandNameSql(sql`alias`)})=lower(${claim})))`,
+            : sql`(lower(${trimTextSql(vendor.name)})=lower(${claim}) OR EXISTS (SELECT 1 FROM unnest(${vendor.aliases}) alias WHERE lower(${trimTextSql(sql`alias`)})=lower(${claim})))`,
         ),
       )
       .limit(2);
