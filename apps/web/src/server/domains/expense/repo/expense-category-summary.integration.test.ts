@@ -1,9 +1,10 @@
 import { financialTransactionFiltersSchema } from "@cubby/schemas/financial-transaction";
 import { spendingCategorySummarySchema } from "@cubby/schemas/spending-classification";
-import { createRepoEntity } from "tooling/factories/repo";
+import { createRepoEntity, createRepoIdentity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import { withTransactionDatabase } from "~/server/db/helpers";
 import { listFinancialTransactions } from "~/server/domains/financial-transaction/repo/financial-transaction";
 import { getPurchaseByID } from "~/server/domains/purchase/repo/purchase";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
@@ -40,6 +41,23 @@ describe("live Expense category summaries", () => {
         lineKind: "principal",
         lineBasis: "item_line",
       });
+    // The final tax line must contribute even beyond 25 linked records.
+    // Free classified lines cross that boundary without changing the money.
+    await withTransactionDatabase(ctx.db, async (db) => {
+      for (let index = 0; index < 23; index++) {
+        await createRepoIdentity({ db, actor: ctx.actor }, "expense", {
+          name: `Synthetic free classified line ${index}`,
+          cost: 0,
+          spendingCategoryId: tools.shortcode,
+          purchaseId: purchase.shortcode,
+          date: "2026-09-20",
+          costType: "materials",
+          trade: "other",
+          lineKind: "principal",
+          lineBasis: "item_line",
+        });
+      }
+    });
     await insertWithShortcode(ctx.db, "expense", {
       name: "Sales tax",
       cost: 5,
@@ -55,8 +73,8 @@ describe("live Expense category summaries", () => {
     );
     expect(summary).toMatchObject({
       state: "mixed",
-      lineCount: 3,
-      categorizedLineCount: 3,
+      lineCount: 26,
+      categorizedLineCount: 26,
       uncategorizedLineCount: 0,
       complete: true,
       amountsKnown: true,
@@ -84,7 +102,7 @@ describe("live Expense category summaries", () => {
     );
     expect(transactionSummary).toMatchObject({
       state: "mixed",
-      lineCount: 3,
+      lineCount: 26,
       complete: true,
       amountsKnown: false,
     });
