@@ -36,6 +36,12 @@ The emoji/category browser journey retains actual editors and category navigatio
 This removes the dedicated HTTP Vendor-apply smoke; production serialization
 conflicts remain separately tracked rather than being claimed fixed by this move.
 
+MCP budget-policy unit coverage waits for the actual in-memory SDK handler to
+start, then advances a fake clock across the read/model thresholds. Do not use
+a short wall-clock sleep between those budgets: a busy CI event loop can turn
+an intended 45ms response into a false 60ms model timeout. Drain late work before
+restoring real time; production deadline values remain unchanged.
+
 Structured Account creation reads back its saved identity and card numbers after
 the real editor closes. Its contract is schema/editor persistence; a searched
 list’s post-create indexing and invalidation are separate outcomes. Do not make
