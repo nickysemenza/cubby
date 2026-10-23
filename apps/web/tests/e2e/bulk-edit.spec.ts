@@ -49,7 +49,7 @@ test("task board multi-select bulk-edits status without touching other fields", 
 
   const session = await page.context().newCDPSession(page);
   await session.send("Emulation.setCPUThrottlingRate", { rate: 6 });
-  const dialog = page.getByRole("dialog");
+  const dialog = page.getByRole("dialog", { name: /^Bulk edit \d+ / });
   try {
     await page
       .locator("[data-bulk-action-bar]")
@@ -109,7 +109,7 @@ test("plantings list bulk-edits status finished plus a date in one write", async
     .getByRole("button", { name: "Bulk edit...", exact: true })
     .click();
 
-  const dialog = page.getByRole("dialog");
+  const dialog = page.getByRole("dialog", { name: /^Bulk edit \d+ / });
   await expect(dialog.getByText("Bulk edit 1 Planting?")).toBeVisible();
   await expect(
     dialog.getByRole("button", { name: "Update", exact: true }),
@@ -154,7 +154,7 @@ async function openBulkEdit(page: Page, rowNames: string[]) {
     .locator("[data-bulk-action-bar]")
     .getByRole("button", { name: "Bulk edit...", exact: true })
     .click();
-  return page.getByRole("dialog");
+  return page.getByRole("dialog", { name: /^Bulk edit \d+ / });
 }
 
 const stockTrackedOut = z.object({ stockTracked: z.boolean().nullable() });
