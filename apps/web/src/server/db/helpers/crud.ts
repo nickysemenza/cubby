@@ -9,17 +9,23 @@ import type {
   GetColumnData,
   InferInsertModel,
   InferSelectModel,
-  SQL,
 } from "drizzle-orm";
 import {
   and,
+  Column,
+  is,
   eq,
   getTableColumns,
   getTableName,
   inArray,
   sql,
+  SQL,
 } from "drizzle-orm";
-import type { PgTable, PgUpdateSetSource } from "drizzle-orm/pg-core";
+import {
+  PgDialect,
+  type PgTable,
+  type PgUpdateSetSource,
+} from "drizzle-orm/pg-core";
 import { type JSONType, z } from "zod";
 
 import type { Database } from "~/server/db/database";
@@ -108,6 +114,159 @@ export const updateAndReturn = async <T extends PgTable>(
     return updated;
   });
 };
+
+/**
+ * Update distinct rows by one unique key, preserving input order and native
+ * column encoding/return decoding. Undefined/empty patches do not write; null
+ * writes SQL NULL. Callers supply SQL explicitly when they need JSON null.
+ * The key is immutable here. Transactions and domain events belong to callers.
+ */
+export async function updateManyAndReturn<
+  T extends PgTable,
+  K extends keyof T["_"]["columns"] & keyof InferSelectModel<T> & string,
+>(
+  db: Database | RepositoryQueryTransaction,
+  table: T,
+  input: {
+    key: K;
+    changes: readonly {
+      keyValue: InferSelectModel<T>[K];
+      patch: PgUpdateSetSource<T>;
+    }[];
+  },
+): Promise<InferSelectModel<T>[]> {
+  const columns = getTableColumns(table);
+  const keyColumn = columns[input.key];
+  if (!keyColumn) throw new Error("Unknown bulk update key");
+  const keyIdentity = (value: InferSelectModel<T>[K]) => {
+    const encoded: unknown = keyColumn.mapToDriverValue(value);
+    if (typeof encoded === "string")
+      return keyColumn.getSQLType() === "uuid"
+        ? z.guid().parse(encoded).toLowerCase()
+        : encoded;
+    if (typeof encoded === "number" || typeof encoded === "bigint")
+      return encoded;
+    throw new Error("Bulk updates require scalar unique keys");
+  };
+  const dialect = new PgDialect();
+  const columnCount = Object.keys(columns).length;
+  const parameterLimit = 30000;
+  const seen = new Set<string | number | bigint>();
+  const groups = new Map<
+    string,
+    {
+      keyValue: InferSelectModel<T>[K];
+      values: [string, unknown][];
+      parameters: number;
+      bytes: number;
+    }[]
+  >();
+  for (const { keyValue, patch } of input.changes) {
+    const identity = keyIdentity(keyValue);
+    if (seen.has(identity)) throw new Error("Duplicate bulk update key");
+    seen.add(identity);
+    const values = Object.entries(patch)
+      .filter(([, value]) => value !== undefined)
+      .sort(([a], [b]) => a.localeCompare(b));
+    if (!values.length) continue;
+    if (values.some(([key]) => key === input.key || !columns[key]))
+      throw new Error("Bulk updates require known non-key columns");
+    // Compile each value expression, including nested SQL parameters, before
+    // any writes. The extra key per column and WHERE key conservatively cover
+    // CASE admission; omitted native update hooks have column-count headroom.
+    let parameters = 1;
+    let bytes = 0;
+    for (const [key, value] of values) {
+      const column = columns[key];
+      if (!column) throw new Error("Unknown bulk update column");
+      const encoded =
+        is(value, SQL) || is(value, Column) ? value : sql.param(value, column);
+      const compiled = dialect.sqlToQuery(sql`${encoded}`);
+      parameters += 1 + compiled.params.length;
+      bytes += compiled.sql.length * 3;
+      for (const parameter of compiled.params)
+        bytes += typeof parameter === "string" ? parameter.length * 3 : 32;
+    }
+    if (parameters + columnCount > parameterLimit)
+      throw new Error("Individual bulk update exceeds parameter budget");
+    const columnSet = JSON.stringify(values.map(([key]) => key));
+    const group = groups.get(columnSet) ?? [];
+    group.push({ keyValue, values, parameters, bytes });
+    groups.set(columnSet, group);
+  }
+  const byKey = new Map<string | number | bigint, InferSelectModel<T>>();
+  for (const group of groups.values()) {
+    const first = group[0];
+    if (!first) continue;
+    for (let offset = 0; offset < group.length;) {
+      let end = offset;
+      let parameters = columnCount;
+      let bytes = 0;
+      while (end < group.length && end - offset < 128) {
+        const entry = group[end];
+        if (!entry) break;
+        if (
+          end > offset &&
+          (parameters + entry.parameters > parameterLimit ||
+            bytes + entry.bytes > 2_000_000)
+        )
+          break;
+        parameters += entry.parameters;
+        bytes += entry.bytes;
+        end += 1;
+      }
+      const batch = group.slice(offset, end);
+      offset = end;
+      const values = Object.fromEntries(
+        first.values.map(([key], index) => {
+          const column = columns[key];
+          if (!column) throw new Error("Unknown bulk update column");
+          const firstValue = batch[0]?.values[index]?.[1];
+          if (batch.every((entry) => entry.values[index]?.[1] === firstValue)) {
+            const encoded =
+              is(firstValue, SQL) || is(firstValue, Column)
+                ? firstValue
+                : sql.param(firstValue, column);
+            return [key, sql`${encoded}`];
+          }
+          const branches = batch.map((entry) => {
+            const value = entry.values[index]?.[1];
+            const encoded =
+              is(value, SQL) || is(value, Column)
+                ? value
+                : sql.param(value, column);
+            return sql`WHEN ${sql.param(entry.keyValue, keyColumn)} THEN ${encoded}`;
+          });
+          // ELSE supplies the actual column type even for an all-null CASE.
+          return [
+            key,
+            sql`CASE ${keyColumn} ${sql.join(branches, sql` `)} ELSE ${column} END`,
+          ];
+        }),
+      );
+      // SAFETY: keys were checked against this table and every write is SQL;
+      // Drizzle's generic mapped set type cannot retain that relationship.
+      const result = await unwrapDb(db)
+        .update(table)
+        .set(values as PgUpdateSetSource<T>)
+        .where(
+          inArray(
+            keyColumn,
+            batch.map((entry) => entry.keyValue),
+          ),
+        )
+        .returning(getTableColumns(table));
+      // SAFETY: the native full-column returning projection belongs to T;
+      // the query-result HKT union obscures only its shared array container.
+      for (const row of result as InferSelectModel<T>[])
+        byKey.set(keyIdentity(row[input.key]), row);
+    }
+  }
+  return input.changes.flatMap(({ keyValue }) => {
+    const row = byKey.get(keyIdentity(keyValue));
+    return row ? [row] : [];
+  });
+}
 
 export const updateLiveAndReturn = async <
   T extends PgTable & { id: AnyColumn; deletedAt: AnyColumn },

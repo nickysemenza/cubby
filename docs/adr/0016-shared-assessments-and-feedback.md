@@ -138,7 +138,14 @@ Declaration-owned Assessment and Feedback history is separate from a shared
 AssessmentState projection. Assessment subjects and predictions never change;
 AssessmentState owns current targets, pending/resolved/superseded state,
 confirmed values and explicitly scoped suppression. Its physical entity,
-recordId, field, family and state columns preserve indexed discovery.
+recordId, field, family and state columns preserve indexed discovery. The shared
+transition writer locks current rows in ID order and records one exact changed
+column patch per row as projection Feedback. It batches heterogeneous updates by
+written column set through native, keyed updates; omitted columns stay unchanged,
+JSON null suggestions remain JSON, and returned rows retain column decoding.
+Events, updates and commit-only invalidation remain in the caller's transaction;
+rebuilding does not depend on batch boundaries. Native update hooks run once per
+statement, so rows in a batch may share an update timestamp.
 Pending field reads compare captured authoritative field, basis and reference
 snapshots and the latest explicit field-write intent. Applying locks those
 inputs through commit and repeats the specific fingerprint check; unrelated
