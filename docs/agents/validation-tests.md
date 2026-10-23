@@ -116,6 +116,10 @@ navigation. An open editor and an active chip may share the same accessible
 label; that transient duplication is not a failed filter. Keep shared range,
 quality and presentation permutations in their owning regressions rather than
 repeating them in each list journey.
+The Gmail Product-merge browser setup creates both conflicting identities in one
+fixture graph and scopes the merge list by their shared synthetic Product name.
+Keep both exact-identifier conflicts, explicit choice and native merge readback;
+loading unrelated Products does not strengthen those boundaries.
 The import-convergence browser journey covers statement-first reviewed booking
 and navigation; the PostgreSQL suite owns arrival-order permutations. Socket
 lifecycle checks use a warm baseline and two read/write rounds with real idle
