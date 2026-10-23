@@ -32,6 +32,7 @@ import {
   unwrapDb,
   withTransaction,
 } from "~/server/db/helpers";
+import type { ListReadIntent } from "~/server/db/helpers/query";
 import {
   financialAccount,
   financialTransaction,
@@ -286,10 +287,11 @@ export const listFinancialAccountsRead = (
   sorts: SortParams[],
   pagination: PaginationParams,
   projection: ListProjection = { kind: "full" },
+  readIntent: ListReadIntent = "page",
 ) =>
   financialAccountScaffold.read(
     db,
-    { filters, sorts, pagination, projection },
+    { filters, sorts, pagination, projection, readIntent },
     {
       select: (page) =>
         selectAccountsRead(db, projection)

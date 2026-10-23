@@ -24,8 +24,15 @@ export const recipeRepository = defineRepository("recipe", {
   lifecycle: { delete: RECIPE_DELETE_EDGE_POLICY },
   get: (ctx, id) => getRecipeByShortcode(ctx.db, id),
   list: listOn(recipeList),
-  listRead: (ctx, filters, sorts, pagination, projection) =>
-    recipeListRead(ctx.db, filters, sorts, pagination, "page", projection),
+  listRead: (
+    ctx,
+    filters,
+    sorts,
+    pagination,
+    projection,
+    readIntent = "page",
+  ) =>
+    recipeListRead(ctx.db, filters, sorts, pagination, readIntent, projection),
   create: async (ctx, data) => {
     const output = await createRecipe(ctx.db, data, ctx.actorContext);
     const entityId = await recipeShortcodes.one(ctx.db, output.id);

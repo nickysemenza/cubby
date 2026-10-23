@@ -30,6 +30,7 @@ import {
   unwrapDb,
   withTransaction,
 } from "~/server/db/helpers";
+import type { ListReadIntent } from "~/server/db/helpers/query";
 import { entityLink, product, wish } from "~/server/db/schema";
 import {
   effectiveProductPriceSql,
@@ -274,10 +275,11 @@ export const wishListRead = async (
   sorts: SortParams[],
   pagination: PaginationParams,
   projection: ListProjection = { kind: "full" },
+  readIntent: ListReadIntent = "page",
 ) => {
   return wishScaffold.read(
     db,
-    { filters, sorts, pagination, projection },
+    { filters, sorts, pagination, projection, readIntent },
     {
       read: wishRead,
     },

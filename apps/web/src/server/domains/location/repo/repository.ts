@@ -29,8 +29,22 @@ export const locationRepository = defineRepository("location", {
   get: onDb(getLocationByShortcode),
   list: (ctx, filters, sorts, pagination) =>
     locationList(ctx.db, filters, sorts, pagination),
-  listRead: (ctx, filters, sorts, pagination, projection) =>
-    locationListRead(ctx.db, filters, sorts, pagination, projection),
+  listRead: (
+    ctx,
+    filters,
+    sorts,
+    pagination,
+    projection,
+    readIntent = "page",
+  ) =>
+    locationListRead(
+      ctx.db,
+      filters,
+      sorts,
+      pagination,
+      projection,
+      readIntent,
+    ),
   create: async (ctx, data) => {
     const { output, entityId } = await createLocationRecord(
       ctx.db,

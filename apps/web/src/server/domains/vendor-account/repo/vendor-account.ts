@@ -31,6 +31,7 @@ import type { Database, DrizzleTransaction } from "~/server/db";
 import { vendorAccountLabelSql } from "~/server/db/computed/vendor-account-label";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import { notDeleted, unwrapDb, withTransaction } from "~/server/db/helpers";
+import type { ListReadIntent } from "~/server/db/helpers/query";
 import { ledgerParty, purchase, run, vendorAccount } from "~/server/db/schema";
 import { patchEntityRows } from "~/server/entity-kernel/repo/entity-patch";
 import {
@@ -374,10 +375,11 @@ export const listVendorAccountsRead = (
   sorts: SortParams[],
   pagination: PaginationParams,
   projection: ListProjection = { kind: "full" },
+  readIntent: ListReadIntent = "page",
 ) =>
   scaffold.read(
     db,
-    { filters, sorts, pagination, projection },
+    { filters, sorts, pagination, projection, readIntent },
     {
       where: buildVendorAccountWhere(filters),
       select: (page) =>

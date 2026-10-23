@@ -22,8 +22,14 @@ export const mealRepository = defineRepository("meal", {
   lifecycle: { delete: MEAL_DELETE_EDGE_POLICY },
   get: onDb(getMealByShortcode),
   list: listOn(mealList),
-  listRead: (ctx, filters, sorts, pagination, projection) =>
-    mealListRead(ctx.db, filters, sorts, pagination, "page", projection),
+  listRead: (
+    ctx,
+    filters,
+    sorts,
+    pagination,
+    projection,
+    readIntent = "page",
+  ) => mealListRead(ctx.db, filters, sorts, pagination, readIntent, projection),
   create: asActor(createMealWithEntityId),
   update: async (ctx, id, data) => {
     const entityId = await mealShortcodes.one(ctx.db, id);

@@ -29,6 +29,7 @@ import {
   unwrapDb,
   withTransaction,
 } from "~/server/db/helpers";
+import type { ListReadIntent } from "~/server/db/helpers/query";
 import {
   expenseAttribution,
   financialAccount,
@@ -480,6 +481,7 @@ export const listLedgerPartiesRead = (
   sorts: SortParams[],
   pagination: PaginationParams,
   projection: ListProjection = { kind: "full" },
+  readIntent: ListReadIntent = "page",
 ) =>
   scaffold.read(
     db,
@@ -488,6 +490,7 @@ export const listLedgerPartiesRead = (
       sorts: sorts.length ? sorts : [{ orderBy: "name", direction: "asc" }],
       pagination,
       projection,
+      readIntent,
     },
     {
       where: buildLedgerPartyWhere(filters),

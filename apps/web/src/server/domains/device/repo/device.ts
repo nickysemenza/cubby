@@ -27,6 +27,7 @@ import {
   unwrapDb,
   withTransaction,
 } from "~/server/db/helpers";
+import type { ListReadIntent } from "~/server/db/helpers/query";
 import { device, imageSighting, runPushRegistration } from "~/server/db/schema";
 import { deriveAndStoreImageCapture } from "~/server/domains/image/repo/image-capture-derivation";
 import {
@@ -111,10 +112,11 @@ export const listDevicesRead = (
   sorts: SortParams[],
   pagination: PaginationParams,
   projection: ListProjection = { kind: "full" },
+  readIntent: ListReadIntent = "page",
 ) =>
   scaffold.read(
     db,
-    { filters, sorts, pagination, projection },
+    { filters, sorts, pagination, projection, readIntent },
     {
       read: deviceRead,
     },

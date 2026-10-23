@@ -41,6 +41,7 @@ import {
   updateLiveAndReturn,
   withTransaction,
 } from "~/server/db/helpers";
+import type { ListReadIntent } from "~/server/db/helpers/query";
 import {
   entityLink,
   gardenEntry,
@@ -894,10 +895,11 @@ export const plantingListRead = async (
   pagination: PaginationParams,
   sorts: SortParams[] = [],
   projection: ListProjection = { kind: "full" },
+  readIntent: ListReadIntent = "page",
 ) => {
   return plantingScaffold.read(
     db,
-    { filters, sorts, pagination, projection },
+    { filters, sorts, pagination, projection, readIntent },
     {
       load: (where, selected) =>
         unwrapDb(db).query.planting.findMany({
@@ -1000,10 +1002,11 @@ export const gardenEntryListRead = async (
   pagination: PaginationParams,
   sorts: SortParams[] = [],
   projection: ListProjection = { kind: "full" },
+  readIntent: ListReadIntent = "page",
 ) => {
   return gardenEntryScaffold.read(
     db,
-    { filters, sorts, pagination, projection },
+    { filters, sorts, pagination, projection, readIntent },
     {
       // `createdAt desc` is a deliberate stable tiebreak — a `tieBreaker`, not
       // a `resolve` special-case, so it can't swallow a second user-requested

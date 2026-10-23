@@ -25,6 +25,7 @@ import { getDb } from "~/server/db/helpers";
 import { findOrCreateIngredient } from "~/server/domains/ingredient/repo/crud";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { executeEntity } from "~/server/entity-kernel";
+import { ENTITY_KERNEL_BINDINGS } from "~/server/generated/entity-kernel-bindings.gen";
 import { ENTITY_LIST_READ_OPERATIONS } from "~/server/generated/entity-list-read-bindings.gen";
 
 import {
@@ -150,24 +151,50 @@ describe("standard progressive list composition", () => {
   it("counts every declared saved view as its applied list reads it", async () => {
     await seedReferenceUniverse(ctx.db);
     const context = buildKernelContext(ctx.db);
-    const operation = ENTITY_LIST_READ_OPERATIONS.task;
-    const specs = getEntityFilters("task");
-    const views = viewsForEntity("task").map((view) => {
-      const values = new Map(view.filters.map(({ id, value }) => [id, value]));
-      return {
-        id: view.id,
-        filters: buildFiltersFromManifest(specs, (id) => values.get(id)),
-      };
-    });
-    expect(views.length).toBeGreaterThan(1);
-    const counts = await operation.viewCounts(context, { views });
-    for (const view of views) {
-      const base = await operation.base(context, {
-        filters: view.filters,
+    for (const entity of listEntities) {
+      if (entity !== "task" && entity !== "product") continue;
+      const operation = ENTITY_LIST_READ_OPERATIONS[entity];
+      const specs = getEntityFilters(entity);
+      const views = viewsForEntity(entity).map((view) => {
+        const values = new Map(
+          view.filters.map(({ id, value }) => [id, value]),
+        );
+        return {
+          id: view.id,
+          filters: buildFiltersFromManifest(specs, (id) => values.get(id)),
+        };
+      });
+      expect(views.length).toBeGreaterThan(1);
+      const counts = await operation.viewCounts(context, { views });
+      const unfiltered = await operation.base(context, {
+        filters: {},
         pagination: { pageIndex: 0, pageSize: 1 },
       });
-      expect(counts.views.find((count) => count.id === view.id)?.count).toBe(
-        base.meta.totalCount,
+      expect(counts.total).toBe(unfiltered.meta.totalCount);
+      for (const view of views) {
+        const base = await operation.base(context, {
+          filters: view.filters,
+          pagination: { pageIndex: 0, pageSize: 1 },
+        });
+        expect(counts.views.find((count) => count.id === view.id)?.count).toBe(
+          base.meta.totalCount,
+        );
+      }
+    }
+    const productOperation = ENTITY_LIST_READ_OPERATIONS.product;
+    const expected = await productOperation.base(context, { filters: {} });
+    // A count must not select row columns and discard them afterward.
+    await getDb(ctx.db).execute(
+      sql`ALTER TABLE "Product" RENAME COLUMN name TO "UnavailableName"`,
+    );
+    try {
+      const countOnly = await productOperation.viewCounts(context, {
+        views: [],
+      });
+      expect(countOnly.total).toBe(expected.meta.totalCount);
+    } finally {
+      await getDb(ctx.db).execute(
+        sql`ALTER TABLE "Product" RENAME COLUMN "UnavailableName" TO name`,
       );
     }
   });
@@ -185,6 +212,19 @@ describe("standard progressive list composition", () => {
       const operation = ENTITY_LIST_READ_OPERATIONS[entity];
       const base = await operation.base(context, input);
       expect(base.meta.totalCount).toBe(full.meta.totalCount);
+      const repository = ENTITY_KERNEL_BINDINGS[entity].repository;
+      if (!repository.listRead)
+        throw new Error(`Missing list reader: ${entity}`);
+      const counted = await repository.listRead(
+        context,
+        {},
+        [],
+        { pageIndex: 0, pageSize: 1 },
+        { kind: "base" },
+        "count",
+      );
+      expect(counted.data).toEqual([]);
+      expect(counted.count).toBe(base.meta.totalCount);
       expect(base.data.map((row) => row.id)).toEqual(
         full.items.map((row) => row.id),
       );
