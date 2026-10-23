@@ -5,7 +5,10 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { withTransactionDatabase } from "~/server/db/helpers";
-import { listFinancialTransactions } from "~/server/domains/financial-transaction/repo/financial-transaction";
+import {
+  listFinancialTransactions,
+  updateFinancialTransaction,
+} from "~/server/domains/financial-transaction/repo/financial-transaction";
 import { getPurchaseByID } from "~/server/domains/purchase/repo/purchase";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
@@ -25,6 +28,7 @@ describe("live Expense category summaries", () => {
     const purchase = await insertWithShortcode(ctx.db, "purchase", {
       vendorId: vendor.id,
       date: "2026-09-20",
+      itemizationExpectation: "not_expected",
     });
     for (const [name, cost, category] of [
       ["Synthetic tool", 30, tools],
@@ -128,6 +132,47 @@ describe("live Expense category summaries", () => {
     expect(
       source.output.dataQuality.gaps.map((entry) => entry.check),
     ).not.toContain("financial_transaction_spending_category");
+    const explicit = await updateFinancialTransaction(
+      ctx.db,
+      source.output.id,
+      {
+        itemizationExpectation: "required",
+      },
+      ctx.actor,
+    );
+    expect(explicit.output).toMatchObject({
+      itemizationExpectation: "required",
+      coverage: { expectation: "required" },
+      fieldResolutions: {
+        itemizationExpectation: {
+          mode: "explicit",
+          storedValue: "required",
+          value: "required",
+        },
+      },
+    });
+    const inherited = await updateFinancialTransaction(
+      ctx.db,
+      source.output.id,
+      {
+        itemizationExpectation: null,
+      },
+      ctx.actor,
+    );
+    expect(inherited.output).toMatchObject({
+      itemizationExpectation: null,
+      fieldResolutions: {
+        itemizationExpectation: {
+          mode: "inherit",
+          storedValue: null,
+          value: "not_expected",
+          sourceEntity: {
+            entityKind: "purchase",
+            entityId: purchase.shortcode,
+          },
+        },
+      },
+    });
   });
   it("distinguishes unknown adjustment weights from missing price or project context", async () => {
     const category = await insertWithShortcode(ctx.db, "spendingCategory", {

@@ -17,7 +17,6 @@ import {
 
 test("linked Expense categories display their readable label and transaction expectation", async ({
   page,
-  baseURL,
 }) => {
   test.setTimeout(60_000);
   const tag = `Synthetic category display ${Date.now()}`;
@@ -172,69 +171,6 @@ test("linked Expense categories display their readable label and transaction exp
       })
       .parse(await unchanged.json()),
   ).toEqual({ itemizationExpectation: null, spendingCategoryId: null });
-  const updated = await entityApi(page.request).update(
-    "financialTransaction",
-    transactionId,
-    { itemizationExpectation: "required" },
-    { headers: { Origin: baseURL! } },
-  );
-  expect(updated.ok(), await updated.text()).toBeTruthy();
-  const explicit = await entityApi(page.request).get(
-    "financialTransaction",
-    transactionId,
-    {},
-  );
-  expect(
-    z
-      .object({
-        itemizationExpectation: z.string(),
-        coverage: z.object({ expectation: z.string() }),
-      })
-      .parse(await explicit.json()),
-  ).toEqual({
-    itemizationExpectation: "required",
-    coverage: { expectation: "required" },
-  });
-  await gotoAuthenticatedPage(page, `/financial-transactions/${transactionId}`);
-  await expect(
-    page.getByText("Set here", { exact: true }).first(),
-  ).toBeVisible();
-  await expect(
-    page.getByText("Expected", { exact: true }).first(),
-  ).toBeVisible();
-  await performOperation(page, "entity.mutate", () =>
-    page
-      .getByRole("button", { name: "Use inherited", exact: true })
-      .first()
-      .click(),
-  );
-  const inherited = await entityApi(page.request).get(
-    "financialTransaction",
-    transactionId,
-    {},
-  );
-  expect(
-    z
-      .object({
-        itemizationExpectation: z.string().nullable(),
-        fieldResolutions: z.object({
-          itemizationExpectation: fieldResolutionSchema,
-        }),
-      })
-      .parse(await inherited.json()),
-  ).toMatchObject({
-    itemizationExpectation: null,
-    fieldResolutions: {
-      itemizationExpectation: { mode: "inherit", value: "not_expected" },
-    },
-  });
-  await expect(
-    page
-      .locator(
-        `[data-slot="field-resolution"] a[href="/purchases/${purchaseId}"]`,
-      )
-      .first(),
-  ).toBeVisible();
 });
 
 test("draft category edits hide obsolete policy provenance while the replacement request is pending", async ({
