@@ -297,7 +297,7 @@ describe("reviewed booking category and refund capacity", () => {
     expect(storedLine?.spendingCategoryId).toBe(otherCategory.id);
     expect(storedPurchase?.spendingCategoryId).toBe(otherCategory.id);
   });
-  it("reattaches a reimbursement to an unclassified Purchase without erasing its explicit line category", async () => {
+  it("reattaches reimbursement, preserves categories and money, and converts only unchanged bookings", async () => {
     const { category, vendor, purchase, transaction, line, owner } =
       await fixture();
     await line(120);
@@ -396,7 +396,7 @@ describe("reviewed booking category and refund capacity", () => {
     );
     await expect(
       commitFinancialBookingCorrection(ctx.db, stale.review, ctx.actor),
-    ).rejects.toThrow(/changed after review/);
+    ).rejects.toThrow(/original booking was edited/);
     expect(
       await getDb(ctx.db).query.expense.findFirst({
         where: eq(expense.shortcode, stale.booking.expenseId),

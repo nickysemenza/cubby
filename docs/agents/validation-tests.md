@@ -36,6 +36,16 @@ graph with one shared brand. Booking-review prerequisites settle once before the
 first browser action; its reimbursement credit is still created after booking.
 Keep all route, stale-approval, replay and signed-money assertions.
 
+Reviewed booking corrections belong in the existing PostgreSQL category/refund
+owner: reimbursement reattachment preserves category and net money, transfer
+conversion retires its generated Expense and exposes non-booking coverage, and
+an edited Expense prevents conversion without changing its money or transfer.
+The removed API-only browser case exercised no UI. The financial-booking-review
+browser journey retains stale approval, replay and reimbursement interactions;
+finance-evidence-journey retains source-record navigation and provider immutability.
+Dedicated HTTP routing for the two correction operations is no longer sampled
+by that case; generic operation transport and direct correction outcomes remain.
+
 Detail renderer and browser tests assert the continuous page: every section is
 accessible without a view switch. Select a section hash to verify scrolling,
 focus and history; empty sections retain headings, index entries and actions.
