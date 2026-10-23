@@ -355,11 +355,18 @@ quantity discrepancy and nested beneficiary evidence remain native assertions.
 
 Receiving after photo inventory exercises the Purchase's real per-line
 `ReceiveExpenseDialog`: possible photo match, no-write default, required typed
-quantity, exact received amount and fresh stock when reopened. Purchase and
+quantity and exact received amount. Purchase and
 Expense compose the same dialog; do not repeat a full Expense/Purchase route
 pair just to assert its default again. Dedicated Expense action-launch composition
 and collapse/reopen quantity sampling are removed; typed-quantity admission,
 stock persistence and real Purchase composition remain.
+Continue from the initial no-write review into additional-unit entry without
+closing and refetching unchanged context; finish at the exact saved stock.
+`receiving-context.integration.test.ts`'s receiving-defaults case reads before
+and after stock creation and owns current-stock guidance. The dialog still uses
+fresh `receivingContext` on every open. The Nothing new arrived button's close-only
+composition and frontend fresh-stock reopen are deliberate gaps; opening review
+still asserts zero stock writes.
 
 Inheritance browser coverage owns the real reset from a matching explicit Project
 into live Purchase inheritance, with stored-mode readback and visible provenance.

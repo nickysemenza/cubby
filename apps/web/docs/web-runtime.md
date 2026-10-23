@@ -206,6 +206,13 @@ resume, reconnect or explicit refresh. Notification failures are logged separate
 and never make an accepted save fail. Existing workflow progress polling remains
 owned by its workflow and is not a guarantee that every derived value is current.
 
+Receiving dialogs reuse the Product label already present on the Expense detail
+or Purchase line. Do not fetch a full Product detail solely for that label; fall
+back to its public identity when the parent has no label. Receiving stock,
+possible photo matches and allowed plans still come from `receivingContext` on
+every open with zero stale/garbage-collection time. Presentation labels must not
+replace this fresh decision read or the receiving command's current-stock checks.
+
 ## List loading and enrichment
 
 Extend the generic list enrichment pipeline for data shared across rows,

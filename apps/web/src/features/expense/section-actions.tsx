@@ -56,6 +56,7 @@ export const ReceiveExpenseAction: SectionActionComponent<"expense"> = ({
           open={open}
           onOpenChange={setOpen}
           productId={expense.productId}
+          productName={expense.productName ?? expense.productId}
           expenseName={expense.name}
           expenseId={expense.id}
         />

@@ -54,6 +54,7 @@ export const PurchaseReceiving: DetailSlotComponent<"purchase"> = ({
             if (!next) setReceiving(null);
           }}
           productId={receiving.productId}
+          productName={receiving.productName ?? receiving.productId}
           expenseName={receiving.name}
           expenseId={receiving.id}
         />
