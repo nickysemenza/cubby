@@ -40,8 +40,7 @@ export async function listAutomaticDecisions(
     records: resolved
       ? [...resolved].map(([code, record]) => ({ code, ...record }))
       : undefined,
-    eligibility: sql`a.served AND ${automaticAssessmentCandidate} AND (${automaticFamilyEligibility} OR ${rule} IS NOT NULL)
-      ${input.family ? sql`AND a.family = ${input.family}` : sql``}`,
+    eligibility: { kind: "automatic", family: input.family },
   });
   if (touching?.size === 0)
     return automaticDecisionListOut.parse({

@@ -20,7 +20,6 @@ import {
   type SuggestionListRow,
   type SuggestionOrder,
 } from "@cubby/schemas/suggestion-list";
-import { sql } from "drizzle-orm";
 import { z } from "zod";
 
 import type { Database } from "~/server/db";
@@ -233,12 +232,12 @@ async function scopedFamilyQuery(db: Database, filters: SuggestionListFilters) {
   const touching = await touchingAssessmentIds(db, {
     entity: filters.entity,
     records: query.records,
-    eligibility: sql`a.served AND s.family IN (${sql.join(
-      families.map((family) => sql`${family}`),
-      sql`, `,
-    )})
-      AND s.status = ${filters.status} ${filters.status === "pending" ? sql`AND s.active` : sql``}
-      ${filters.runId ? sql`AND s."runId" = (SELECT id FROM "Run" WHERE shortcode = ${filters.runId})` : sql``}`,
+    eligibility: {
+      kind: "suggestions",
+      families,
+      status: filters.status,
+      runCode: filters.runId,
+    },
   });
   const familyScope = {
     filters: { ...query.filters, entity: undefined, recordIds: undefined },

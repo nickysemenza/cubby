@@ -4,6 +4,7 @@ import {
   assessmentJudgments,
   assessmentProducer,
   feedbackAuthority,
+  feedbackVerdict,
   type AssessmentFamily,
 } from "@cubby/schemas/assessment";
 import { assessmentReviewFamilies } from "@cubby/schemas/assessment-review-family";
@@ -17,16 +18,35 @@ import { mailboxClassificationStage } from "@cubby/schemas/mailbox-research";
 import { statementTransactionAction } from "@cubby/schemas/statement-suggestion";
 import { suggestionRecordRef } from "@cubby/schemas/suggestion-list";
 import { parseShortcode } from "@cubby/shared";
-import { sql, type SQL } from "drizzle-orm";
+import {
+  and,
+  eq,
+  inArray,
+  isNotNull,
+  isNull,
+  ne,
+  exists,
+  notExists,
+  or,
+  sql,
+  type SQL,
+} from "drizzle-orm";
+import { alias, QueryBuilder } from "drizzle-orm/pg-core";
 import { z } from "zod";
 
 import type { Database } from "~/server/db";
 import { unwrapDb, uuidArrayParam } from "~/server/db/helpers";
+import { assessment, assessmentState, feedback, run } from "~/server/db/schema";
 import {
   EMAIL_APPLICATION_RECEIPT,
   EMAIL_OBSERVATION_RECEIPT,
 } from "~/server/generic/assessment/repo/assessment-email";
 import { lookupShortcodes } from "~/server/generic/shortcode/repo/shortcode-resolver";
+
+import { automaticApplicationRule } from "./assessment";
+
+const reviewAssessment = alias(assessment, "a");
+const reviewState = alias(assessmentState, "s");
 
 const entities = z.enum(shortcodeEntities).enum;
 type DecisionValue = z.infer<ReturnType<typeof z.json>>;
@@ -37,10 +57,41 @@ const one = sql`jsonb_build_array(${primary})`;
 const linkedPurchases = sql`COALESCE((SELECT jsonb_agg(${ref(sql`${entities.purchase}`, sql`link.data->>'purchaseId'`)}) FROM "AssessmentState" link JOIN "Assessment" publication ON publication.id = link.id
   WHERE link.family = ${assessmentFamily.enum.email_link} AND link.active AND link.data->>${assessmentJudgments.email_link.keyof().enum.decision} = ${assessmentJudgments.email_link.shape.decision.enum.linked}
     AND EXISTS (SELECT 1 FROM "Email" mail WHERE mail.id = s."recordId" AND mail."deletedAt" IS NULL AND (publication.subject->>'recordId' = mail.id::text OR publication.subject->>'originalId' = mail."orderMailId"::text))), '[]'::jsonb)`;
-const emailApplication = sql`EXISTS (SELECT 1 FROM "Feedback" receipt WHERE receipt."assessmentId" = a.id AND receipt.authority = ${feedbackAuthority.enum.automatic}
-  AND (receipt.metadata->>${assessmentProducer.keyof().enum.kind} = ${EMAIL_APPLICATION_RECEIPT} OR receipt."operationId" = ${mailboxClassificationStage.enum.resolution}))`;
-const emailAudit = sql`NOT EXISTS (SELECT 1 FROM "Feedback" member_resolution WHERE member_resolution."assessmentId" = a.id AND member_resolution."operationId" = ${mailboxClassificationStage.enum.resolution} AND member_resolution.authority = ${feedbackAuthority.enum.member})
-  AND (${emailApplication} OR NOT EXISTS (SELECT 1 FROM "Feedback" observed WHERE observed."assessmentId" = a.id AND observed.metadata->>${assessmentProducer.keyof().enum.kind} = ${EMAIL_OBSERVATION_RECEIPT}))`;
+const receipt = alias(feedback, "receipt");
+const reviewQueryBuilder = new QueryBuilder();
+const receiptKind = sql<string>`${receipt.metadata}->>${assessmentProducer.keyof().enum.kind}`;
+const feedbackForAssessment = (predicate: SQL | undefined) =>
+  reviewQueryBuilder
+    .select({ id: receipt.id })
+    .from(receipt)
+    .where(and(eq(receipt.assessmentId, reviewAssessment.id), predicate));
+const emailApplication = exists(
+  feedbackForAssessment(
+    and(
+      eq(receipt.authority, feedbackAuthority.enum.automatic),
+      or(
+        eq(receiptKind, EMAIL_APPLICATION_RECEIPT),
+        eq(receipt.operationId, mailboxClassificationStage.enum.resolution),
+      ),
+    ),
+  ),
+);
+const emailAudit = and(
+  notExists(
+    feedbackForAssessment(
+      and(
+        eq(receipt.operationId, mailboxClassificationStage.enum.resolution),
+        eq(receipt.authority, feedbackAuthority.enum.member),
+      ),
+    ),
+  ),
+  or(
+    emailApplication,
+    notExists(
+      feedbackForAssessment(eq(receiptKind, EMAIL_OBSERVATION_RECEIPT)),
+    ),
+  ),
+)!;
 const fieldReferencesFor = (requested?: readonly string[]) => {
   const referenceFields = Object.entries(entityFieldModels).flatMap(
     ([entity, model]) =>
@@ -190,6 +241,7 @@ export const reviewFamilyDeclarations = {
   image_description: {
     ...assessmentReviewFamilies.image_description,
     records: one,
+    primaryOnly: true,
     actionable: sql`jsonb_typeof(a.judgment) = 'string' AND length(trim(a.judgment #>> '{}')) > 0`,
   },
   statement_transaction: {
@@ -210,6 +262,7 @@ export const reviewFamilyDeclarations = {
   email_relevance: {
     ...assessmentReviewFamilies.email_relevance,
     records: one,
+    primaryOnly: true,
     actionable: sql`false`,
     audit: emailAudit,
     verified: emailApplication,
@@ -229,7 +282,14 @@ export const reviewFamilyDeclarations = {
     records: emailLinkRecords(),
     recordsFor: emailLinkRecords,
     actionable: sql`false`,
-    audit: sql`EXISTS (SELECT 1 FROM "Feedback" original WHERE original."assessmentId" = a.id AND original."operationId" = ${mailboxClassificationStage.enum.decision} AND original.authority = ${feedbackAuthority.enum.automatic})`,
+    audit: exists(
+      feedbackForAssessment(
+        and(
+          eq(receipt.operationId, mailboxClassificationStage.enum.decision),
+          eq(receipt.authority, feedbackAuthority.enum.automatic),
+        ),
+      ),
+    ),
     summarize: (value: unknown) =>
       `Email link ${assessmentJudgments.email_link.parse(value).decision}`,
     correction: {
@@ -261,6 +321,7 @@ export const reviewFamilyDeclarations = {
     kind: "proposal" | "automatic_decision";
     label: string;
     records: SQL;
+    primaryOnly?: boolean;
     recordsFor?: (entities: readonly string[]) => SQL;
     actionable: SQL;
     scopes?: typeof recommendationScopes;
@@ -275,24 +336,40 @@ export const reviewFamilyDeclarations = {
 >;
 
 /** Rule applications leave pending; automatic families retain legacy pending history. */
-export const automaticAssessmentCandidate = sql`(a.family IN (${sql.join(
-  Object.keys(reviewFamilyDeclarations).map((family) => sql`${family}`),
-  sql`, `,
-)}) AND (a.family IN (${sql.join(
-  Object.entries(reviewFamilyDeclarations).flatMap(([family, declaration]) =>
-    declaration.kind === "automatic_decision" ? [sql`${family}`] : [],
+export const automaticAssessmentCandidate = and(
+  inArray(
+    reviewAssessment.family,
+    Object.keys(reviewFamilyDeclarations).map((family) =>
+      assessmentFamily.parse(family),
+    ),
   ),
-  sql`, `,
-)}) OR s.status <> ${suggestionStatus.enum.pending}))`;
+  or(
+    inArray(
+      reviewAssessment.family,
+      Object.entries(reviewFamilyDeclarations).flatMap(
+        ([family, declaration]) =>
+          declaration.kind === "automatic_decision"
+            ? [assessmentFamily.parse(family)]
+            : [],
+      ),
+    ),
+    ne(reviewState.status, suggestionStatus.enum.pending),
+  ),
+)!;
 
-export const automaticFamilyEligibility = sql`(${sql.join(
-  Object.entries(reviewFamilyDeclarations).flatMap(([family, declaration]) =>
-    "audit" in declaration
-      ? [sql`(a.family = ${family} AND ${declaration.audit})`]
-      : [],
+export const automaticFamilyEligibility = or(
+  ...Object.entries(reviewFamilyDeclarations).flatMap(
+    ([family, declaration]) =>
+      "audit" in declaration
+        ? [
+            and(
+              eq(reviewAssessment.family, assessmentFamily.parse(family)),
+              declaration.audit,
+            )!,
+          ]
+        : [],
   ),
-  sql` OR `,
-)})`;
+)!;
 export const automaticApplicationVerified = sql`CASE ${sql.join(
   Object.entries(reviewFamilyDeclarations).flatMap(([family, declaration]) =>
     "verified" in declaration
@@ -371,35 +448,193 @@ export async function readAssessmentRecordRefs(
   );
 }
 
-/** Eligibility fragments use `a` for Assessment and `s` for AssessmentState. */
+/** Admission is data, so callers cannot bind aliases or spell status values in SQL. */
+export type AssessmentEligibility =
+  | {
+      kind: "suggestions";
+      families: readonly ReviewFamily[];
+      status: z.infer<typeof suggestionStatus>;
+      runCode?: string;
+    }
+  | { kind: "automatic"; family?: ReviewFamily };
+
+export type AssessmentRecordScope = {
+  entity?: string;
+  records?: readonly { code: string; entity: string; id: string }[];
+  eligibility: AssessmentEligibility;
+};
+
+function assessmentAdmission(db: Database, eligibility: AssessmentEligibility) {
+  const a = reviewAssessment;
+  const s = reviewState;
+  if (eligibility.kind === "automatic")
+    return and(
+      a.served,
+      automaticAssessmentCandidate,
+      eligibility.family ? eq(a.family, eligibility.family) : undefined,
+    );
+  return and(
+    a.served,
+    inArray(s.family, [...eligibility.families]),
+    eq(s.status, eligibility.status),
+    eligibility.status === suggestionStatus.enum.pending ? s.active : undefined,
+    eligibility.runCode
+      ? eq(
+          s.runId,
+          unwrapDb(db)
+            .select({ id: run.id })
+            .from(run)
+            .where(eq(run.shortcode, eligibility.runCode)),
+        )
+      : undefined,
+  );
+}
+
+function assessmentAudit(eligibility: AssessmentEligibility) {
+  return eligibility.kind === "automatic"
+    ? or(
+        automaticFamilyEligibility,
+        isNotNull(automaticApplicationRule(sql`${reviewAssessment.id}`)),
+      )
+    : undefined;
+}
+
+/** Member rejection and current suppression independently remove pending connections. */
+export function pendingRecommendationEligibility() {
+  const suppressed = alias(assessmentState, "suppressed");
+  const suppressionValue = (key: "scope" | "candidateKey" | "fingerprint") =>
+    sql<string>`${suppressed.suppression}->>${key}`;
+  return and(
+    notExists(
+      feedbackForAssessment(
+        and(
+          eq(receipt.authority, feedbackAuthority.enum.member),
+          inArray(receipt.verdict, [
+            feedbackVerdict.enum.wrong,
+            feedbackVerdict.enum.dismissed,
+          ]),
+        ),
+      ),
+    ),
+    notExists(
+      reviewQueryBuilder
+        .select({ id: suppressed.id })
+        .from(suppressed)
+        .where(
+          and(
+            suppressed.active,
+            eq(suppressed.entity, reviewState.entity),
+            eq(suppressed.recordId, reviewState.recordId),
+            eq(
+              suppressionValue("scope"),
+              sql<string>`${reviewAssessment.subject}->>'scope'`,
+            ),
+            eq(
+              suppressionValue("candidateKey"),
+              sql<string>`${reviewAssessment.subject}->>'candidateKey'`,
+            ),
+            or(
+              isNull(suppressionValue("fingerprint")),
+              eq(suppressionValue("fingerprint"), reviewAssessment.fingerprint),
+            ),
+          ),
+        ),
+    ),
+  );
+}
+
+function assessmentRecordMatch(scope: AssessmentRecordScope): SQL {
+  const requested = scope.entity
+    ? [scope.entity]
+    : scope.records?.map((r) => r.entity);
+  const primaryFamilies = Object.entries(reviewFamilyDeclarations).flatMap(
+    ([family]) =>
+      family !== assessmentFamily.enum.email_link &&
+      family !== assessmentFamily.enum.statement_transaction &&
+      family !== assessmentFamily.enum.transfer_pair
+        ? [assessmentFamily.parse(family)]
+        : [],
+  );
+  const primaryMatch = and(
+    inArray(reviewAssessment.family, primaryFamilies),
+    scope.entity ? eq(reviewState.entity, scope.entity) : undefined,
+    scope.records
+      ? or(
+          ...scope.records.map((r) =>
+            and(
+              eq(reviewState.entity, r.entity),
+              inArray(sql<string>`${reviewState.recordId}::text`, [
+                r.id,
+                r.code,
+              ]),
+            ),
+          ),
+        )
+      : undefined,
+  );
+  const refs = sql`CASE ${sql.join(
+    Object.entries(reviewFamilyDeclarations).flatMap(([family, spec]) =>
+      "primaryOnly" in spec
+        ? []
+        : [
+            sql`WHEN a.family = ${family} THEN ${requested && "recordsFor" in spec ? spec.recordsFor(requested) : spec.records}`,
+          ],
+    ),
+    sql` `,
+  )} ELSE '[]'::jsonb END`;
+  const recordMatch = scope.records
+    ? or(
+        ...scope.records.map((r) =>
+          and(
+            eq(sql<string>`r->>'entity'`, r.entity),
+            inArray(sql<string>`r->>'id'`, [r.id, r.code]),
+          ),
+        ),
+      )
+    : undefined;
+  // CASE guarantees the expensive secondary graph is skipped for a primary hit.
+  return sql`CASE WHEN ${primaryMatch} THEN true ELSE EXISTS (SELECT 1 FROM jsonb_array_elements(${refs}) r WHERE ${and(isNotNull(sql`r->>'id'`), scope.entity ? eq(sql<string>`r->>'entity'`, scope.entity) : undefined, recordMatch)}) END`;
+}
+
+/** Scope identities before expensive automatic receipts; retain a statement-local barrier. */
+export function touchingAssessmentQuery(
+  db: Database,
+  scope: AssessmentRecordScope,
+) {
+  const client = unwrapDb(db);
+  const a = reviewAssessment;
+  const s = reviewState;
+  const matched = client
+    .select({ id: a.id })
+    .from(a)
+    .innerJoin(s, eq(s.id, a.id))
+    .where(
+      and(
+        assessmentAdmission(db, scope.eligibility),
+        assessmentRecordMatch(scope),
+        !scope.records ? assessmentAudit(scope.eligibility) : undefined,
+      ),
+    );
+  if (scope.eligibility.kind === "suggestions" || !scope.records)
+    return matched.getSQL();
+  // Drizzle 0.45 has no MATERIALIZED CTE option; only this boundary is raw SQL.
+  const ids = sql`(WITH matched AS MATERIALIZED (${matched}) SELECT id FROM matched)`;
+  return client
+    .select({ id: a.id })
+    .from(a)
+    .innerJoin(s, eq(s.id, a.id))
+    .where(and(inArray(a.id, ids), assessmentAudit(scope.eligibility)))
+    .getSQL();
+}
+
 export async function touchingAssessmentIds(
   db: Database,
-  scope: {
-    entity?: string;
-    records?: readonly { code: string; entity: string; id: string }[];
-    eligibility: SQL;
-  },
+  scope: AssessmentRecordScope,
 ) {
   if (!scope.entity && !scope.records) return null;
   if (scope.records?.length === 0) return new Set<string>();
-  const recordMatch = scope.records
-    ? sql`AND (${sql.join(
-        scope.records.map(
-          (record) =>
-            sql`(r->>'entity' = ${record.entity} AND r->>'id' IN (${record.id}, ${record.code}))`,
-        ),
-        sql` OR `,
-      )})`
-    : sql``;
-  // Carry refs through the eligibility barrier: base-table rejoins can expand
-  // unrelated history before the planner intersects the eligible identities.
-  const { rows } = await unwrapDb(db).execute<{
-    id: string;
-  }>(sql`WITH eligible AS MATERIALIZED (
-      SELECT a.id, ${assessmentRecordsSql(scope.entity ? [scope.entity] : scope.records ? [...new Set(scope.records.map((r) => r.entity))] : undefined)} AS refs
-      FROM "Assessment" a JOIN "AssessmentState" s ON s.id = a.id WHERE ${scope.eligibility}
-    ) SELECT id FROM eligible
-    WHERE EXISTS (SELECT 1 FROM jsonb_array_elements(refs) r WHERE r->>'id' IS NOT NULL
-      ${scope.entity ? sql`AND r->>'entity' = ${scope.entity}` : sql``} ${recordMatch})`);
+  const { rows } = await unwrapDb(db).execute<{ id: string }>(
+    touchingAssessmentQuery(db, scope),
+  );
   return new Set(rows.map((row) => row.id));
 }
