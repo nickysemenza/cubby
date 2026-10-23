@@ -236,6 +236,9 @@ jobs:
       - name: Install Chromium for required component-browser tests
         if: ${{ matrix.vitest }}
         run: pnpm --filter @cubby/web run test:e2e:install-browser -- chromium
+      - name: Restore or build web app
+        if: ${{ matrix.vitest }}
+        run: pnpm exec nx run @cubby/web:build-cf --outputStyle=stream
       - name: Run Vitest shard
         if: ${{ matrix.vitest }}
         run: ${{ matrix.run }}
@@ -389,7 +392,7 @@ jobs:
     name: Test report
     needs: [validation, lanes]
     if: ${{ !cancelled() }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-slim
     timeout-minutes: 10
     permissions:
       actions: read
