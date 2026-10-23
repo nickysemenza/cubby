@@ -457,6 +457,19 @@ to assert header position costs a full browser journey for a presentation detail
 Shared responsive capabilities do not establish sticky behavior; verify that
 visual detail during relevant layout work instead.
 
+The column-layout browser journey owns native header pointer/keyboard ordering,
+locked edges, pointer pin transfer, downward customizer drag placement and
+session reset. `table-layout-customizer.unit.test.tsx` and
+`column-layout.unit.test.tsx` own shared visibility, pinning and structural
+policy. Repeated per-route audit timestamp formatting and pin/unpin permutations
+are omitted; the date composition journey retains the browser timestamp tooltip.
+The removed pinned-order round trip no longer has a dedicated browser regression.
+
+Purchase Email review retains dismissal across reload, replacement with a link,
+Email original navigation and failed-preview evidence preservation. Vendor Email
+link composition stays in `import-order-convergence.spec.ts`; the review journey
+opens the Email directly from its Purchase row.
+
 ## Test and dev data factories
 
 One layer builds data for Vitest, E2E, and the dev corpus:

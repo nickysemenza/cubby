@@ -1,8 +1,7 @@
 /**
  * Failure modes: an exact order match must show as Suggested on its Purchase
  * (and a same-total order with a different order number must not); a
- * dismissal must survive a reload; Link must replace it; the Vendor page must
- * show the per-Purchase state; the Email page must keep the Gmail original.
+ * dismissal must survive a reload; Link must replace it; the Email page must keep the Gmail original.
  */
 import { seedVendorMailReviewPrerequisite } from "./fixtures/mail";
 import { gotoAuthenticatedPage } from "./support/e2e-helpers";
@@ -37,23 +36,7 @@ test("reviews an Email's Purchase link from the Purchase's Emails section", asyn
   await choose("Link to this Purchase");
   await expect(row.getByText("Linked", { exact: true })).toBeVisible();
 
-  await gotoAuthenticatedPage(
-    page,
-    `/vendors/${seed.vendor.shortcode}`,
-    page.locator("#emails").getByText("Synthetic order receipt"),
-  );
-  const vendorRow = page
-    .locator("#emails")
-    .getByRole("row")
-    .filter({ has: page.getByText("Synthetic order receipt") });
-  await expect(
-    vendorRow.getByRole("link", { name: "SYN-ORDER-1001", exact: true }),
-  ).toHaveAttribute("href", `/purchases/${seed.purchase.shortcode}`);
-  await expect(vendorRow.getByText("Linked").first()).toBeVisible();
-
-  await vendorRow
-    .getByRole("link", { name: "Synthetic order receipt" })
-    .click();
+  await row.getByRole("link", { name: "Synthetic order receipt" }).click();
   await expect(
     page.getByRole("link", { name: "Open in Gmail" }),
   ).toHaveAttribute(
