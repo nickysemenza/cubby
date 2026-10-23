@@ -374,6 +374,7 @@ export const nativeCoverage = {
       "product.recipe-appearances",
       "image.associations",
       "imageJob.attempts",
+      "shipment.tracking",
       "purchase.runs",
       "location.ai-description",
       // Finance slots: the same report view draws their `records` rows (checked rows, footer and

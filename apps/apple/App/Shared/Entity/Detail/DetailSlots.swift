@@ -63,6 +63,8 @@ enum DetailSlotRegistry {
             return reportSlot(.imageAssociations, row)
         case .imageJobAttempts:
             return reportSlot(.imageJobAttempts, row)
+        case .shipmentTracking:
+            return reportSlot(.shipmentTracking, row)
         case .purchaseRuns:
             return reportSlot(.purchaseRuns, row)
         case .locationAiDescription:

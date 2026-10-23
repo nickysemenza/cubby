@@ -129,12 +129,11 @@ same outcome without prescribing an agent runtime.
   Separate charges at one venue or event (each festival stand, each bar tab)
   are separate Purchases grouped by their Project, never one event Purchase:
   funders derive per Purchase, so grouping blends every card into every line.
-- Inventory never auto-increments. An `arrived` finding asks a human to receive.
-  An import that first sees delivery, or a source reconciliation that first
-  marks the order delivered, files it only when a delivered line is unresolved or its
-  Product is stock-tracked or undecided — the Product's own decision, else
-  its Product Category's ([ADR 0013](../../../docs/adr/0013-stock-tracking-inherits-from-product-category.md)).
-  Stock tracking decides; whether a Product is consumable does not.
+- Shipment evidence records packages and their source observations, with an
+  optional Purchase association. Follow [shipment intake](references/order-mail.md#record-shipment-evidence)
+  for Email, Shop and interactive tracking pages. A partial package timeline
+  never proves whole-order delivery. Inventory changes only by a deliberate
+  member action; imports and shipment events never receive stock.
 - Use source totals and itemization exactly as printed. Never scale lines to
   `statedTotal`, infer tax, or fabricate a transaction to close a gap.
 - Unknown facts stay unknown. A missing cost, date, quantity, or order id is
@@ -402,7 +401,7 @@ coverage limits alongside accuracy.
 
 ## Agent authority
 
-Pi's Mail import mounts only Email reads, `mail.*`, `purchase_import` and read
+Pi's Mail import mounts only Email reads, `mail.*`, `shipments.record`, `purchase_import` and read
 tools; any other write needs a member's approval. A member's Claude or Codex
 session writes with the member's authority and preserves research in notes.
 Evidence-backed interactive duplicate cleanup follows
@@ -414,5 +413,5 @@ and inventory never changes merely because an order arrived.
 ## Completion report
 
 Report source coverage by outcome, touched Purchases, settlement matches,
-enrichment performed, and every open finding. State that inventory was not
+recorded Shipments and unmatched package evidence, enrichment performed, and every open finding. State that inventory was not
 received.

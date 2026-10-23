@@ -1,7 +1,6 @@
 /**
- * Failures: a rule-settled lifecycle notice writes different rows than the
- * coordinator's `mail.resolve` link, publishes no gradable rule Assessment,
- * skips the Run target outcome, or still reaches the coordinator; a confident
+ * Failures: a lifecycle notice bypasses package extraction merely because
+ * its Purchase is imported; a confident
  * unrelated classification is not disposed of exactly as `mail.resolve`
  * `unrelated` would; a refund notice is settled without the coordinator; the
  * claimed Email arrives without its compact read; a repeated claim duplicates
@@ -31,7 +30,6 @@ import {
   orderMail,
   orderMailEvent,
   runOperation,
-  vendorAccount,
 } from "~/server/db/schema";
 import type { RetainedMail } from "~/server/domains/mail/repo/retained-mail";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
@@ -262,7 +260,7 @@ describe("Mail import claim", () => {
     expect(email?.status).toBe("researching");
   });
 
-  it("settles same-Vendor lifecycle and confident unrelated Emails without the coordinator, as mail.resolve does", async () => {
+  it("hands lifecycle evidence to the coordinator while settling confident unrelated Emails", async () => {
     const { party, seller, order, retain, itemize } = await world();
     const ruleTarget = await order("SYN-2001");
     await itemize(ruleTarget.id, "rule-order-SYN-2001");
@@ -331,86 +329,33 @@ describe("Mail import claim", () => {
       // The agent's tool step accepts only JSON: no `undefined` fields.
       expect(JSON.parse(JSON.stringify(work))).toStrictEqual(work);
       expect(work).toMatchObject({
-        remaining: 1,
-        read: {
-          messageId: refund.messageId,
-          checksum: refund.rawChecksum,
-          boundToRun: true,
-          content: { bodyText: expect.stringContaining("Refund issued") },
-        },
+        read: { messageId: work.email.messageId, boundToRun: true },
         known: {
           senderVendor: { id: seller.shortcode, name: seller.name },
           orderIds: expect.arrayContaining(["SYN-2001"]),
-          purchases: [
-            {
-              id: ruleTarget.shortcode,
-              orderId: "SYN-2001",
-              vendorId: seller.shortcode,
-              date: null,
-              imported: true,
-            },
-          ],
+          purchases: [{ id: ruleTarget.shortcode, imported: true }],
         },
       });
       await resolveMail(
         ctx.db,
         {
           mailboxId,
-          messageId: refund.messageId,
-          checksum: refund.rawChecksum,
+          messageId: work.email.messageId,
+          checksum: work.read!.checksum,
           disposition: {
             kind: "unresolved",
-            reason: "Synthetic refund awaits member review.",
+            reason: "Synthetic package or refund needs evidence review.",
           },
         },
         pi,
       );
     }
-    expect(claimed).toEqual([refund.messageId]);
-
-    const rule = await linkRows(ruleShipped);
-    const control = await linkRows(controlShipped);
-    expect(rule).toEqual({
-      ...control,
-      links: control.links.map((link) => ({
-        ...link,
-        evidenceChecksum: ruleShipped.rawChecksum,
-        proposedBy: "heuristic",
-      })),
+    expect(claimed).toEqual([ruleShipped.messageId, refund.messageId]);
+    expect(await linkRows(ruleShipped)).toMatchObject({
+      events: [],
+      links: [],
+      email: { status: "blocked" },
     });
-    expect(rule).toMatchObject({
-      events: ["shipped"],
-      links: [{ decision: "linked" }],
-      email: { status: "completed", classification: "related" },
-      target: [{ state: "completed", outcome: "verified", fingerprint: true }],
-    });
-    const [ruleEvent] = await getDb(ctx.db)
-      .select({ orderId: orderMailEvent.orderId })
-      .from(orderMailEvent)
-      .where(eq(orderMailEvent.orderMailId, ruleShipped.id));
-    expect(ruleEvent?.orderId).toBe("SYN-2001");
-    const linkAssessments = await getDb(ctx.db)
-      .select({ subject: assessment.subject, producer: assessment.producer })
-      .from(assessment)
-      .where(eq(assessment.family, "email_link"));
-    expect(
-      linkAssessments.find(
-        ({ subject }) =>
-          (subject as { purchaseId?: string }).purchaseId === ruleTarget.id,
-      )?.producer,
-    ).toEqual({
-      kind: "rule",
-      model: null,
-      revision: MAIL_IMPORT_RULE_REVISION,
-      runId: owner.id,
-      evaluationId: null,
-    });
-    expect(
-      await getDb(ctx.db)
-        .select({ id: vendorAccount.id })
-        .from(vendorAccount)
-        .where(eq(vendorAccount.vendorId, seller.id)),
-    ).toHaveLength(1);
 
     const unrelated = await linkRows(newsletter);
     expect(unrelated).toMatchObject({

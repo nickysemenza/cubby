@@ -540,6 +540,8 @@ type RelatedViewSource = (typeof relatedViewRegistry)[number]["source"];
  * same empty `.filter()` result.
  */
 const ENTITIES_WITHOUT_RELATED_VIEWS = {
+  shipment:
+    "Purchase and carrier render as declared Shipment references; tracking evidence uses the timeline report.",
   sourceTransactionRecord:
     "Imports and accepted transactions render as detail relation sections.",
   transactionImport:

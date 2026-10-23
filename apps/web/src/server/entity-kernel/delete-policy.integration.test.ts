@@ -35,7 +35,7 @@ import {
   EXTERNAL_ID_KINDS,
   entityExternalIdKind,
 } from "@cubby/schemas/external-id";
-import { parseEntityId } from "@cubby/schemas/identifiers";
+import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type {
   DeviceId,
   ExpenseId,
@@ -112,6 +112,7 @@ import {
   sourceOrderObservationFixture,
 } from "~/server/domains/purchase-import/operations/order-import.fixtures";
 import { writeOutcomeReceipts } from "~/server/domains/purchase-import/service/run-outcome.fixtures";
+import { recordShipmentEvidence } from "~/server/domains/shipment/repo/evidence";
 import { recordSourceTransactionRecords } from "~/server/domains/transaction-import/repo/source-transaction-record";
 import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
 import { executeEntity } from "~/server/entity-kernel";
@@ -1275,6 +1276,51 @@ async function seedImageProcessingRows(db: Database, ids: StagingIds) {
  * subsequent delete of one of those rows exercises the edge's real
  * disposition.
  */
+async function seedShipmentReferences(
+  db: Database,
+  codes: ReadonlyMap<string, string>,
+) {
+  const carrierId = parseShortcodeFor("vendor", codes.get("VEN-"));
+  await recordShipmentEvidence(
+    db,
+    {
+      source: {
+        kind: "tracking_page",
+        url: "https://tracking.example/delete-policy",
+        externalKey: "delete-policy-package",
+        capturedAt: new Date().toISOString(),
+        content: "Synthetic package collected by carrier",
+      },
+      purchaseId: parseShortcodeFor("purchase", codes.get("PUR-")),
+      shipments: [
+        {
+          shipmentId: null,
+          sourceShipmentKey: "delete-policy-package",
+          distinctPackageEvidence: null,
+          carrierId,
+          carrierName: "Synthetic deletion carrier",
+          trackingNumber: "SYNTHETIC-DELETE-PACKAGE",
+          extraTrackingNumbers: [],
+          purpose: "outbound",
+          observations: [
+            {
+              sourceEventKey: "pickup",
+              kind: "carrier_possession",
+              time: { kind: "unknown" },
+              rawStatus: "Collected",
+              location: null,
+              carrierId,
+              carrierName: "Synthetic deletion carrier",
+              trackingNumber: "SYNTHETIC-DELETE-PACKAGE",
+            },
+          ],
+        },
+      ],
+    },
+    buildKernelContext(db).actorContext,
+  );
+}
+
 async function seedDeletePolicyStagingRows(
   db: Database,
   shortcodeByPrefix: ReadonlyMap<string, string>,
@@ -1308,6 +1354,7 @@ async function seedDeletePolicyStagingRows(
   };
 
   await seedMealChildRows(db, ids);
+  await seedShipmentReferences(db, shortcodeByPrefix);
   await seedProductMatchCandidate(db, ids);
   await seedLedgerSourceClaims(db, ids);
   await seedSourceTransactionRecord(db, ids);

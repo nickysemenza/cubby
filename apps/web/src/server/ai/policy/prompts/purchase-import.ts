@@ -102,7 +102,7 @@ const exampleInvalidExtraction: ImportExtractionOutcome = {
       { title: "Cordless drill kit", amount: 79.95, lineKind: "principal" },
     ],
     payments: [],
-    allShipmentsDelivered: null,
+    shipments: [],
   },
 };
 

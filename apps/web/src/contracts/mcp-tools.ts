@@ -70,6 +70,7 @@ import {
 import { recommendationsContract } from "~/contracts/recommendations.contract";
 import { runContract } from "~/contracts/run.contract";
 import { searchContract } from "~/contracts/search.contract";
+import { shipmentContract } from "~/contracts/shipment.contract";
 import { sourceTransactionRecordContract } from "~/contracts/source-transaction-record.contract";
 import { spendingClassificationContract } from "~/contracts/spending-classification.contract";
 import { suggestionsContract } from "~/contracts/suggestions.contract";
@@ -784,6 +785,44 @@ export const MCP_TOOLS = defineMcpTools({
     },
   },
 
+  shipments: {
+    description:
+      "Retain source-backed package tracking evidence without changing money or inventory.",
+    actions: {
+      reassign: mcpAction({
+        op: shipmentContract.ops.reassign,
+        description:
+          "Explicitly move a misassociated source package and all its retained tracking observations to another Shipment. Use sourcePackageId from shipments_read.timeline; replay follows the corrected association.",
+      }),
+      record: mcpAction({
+        op: shipmentContract.ops.record,
+        description:
+          "Record shipment observations from an owned retained Email/checksum or an interactive tracking-page capture. Keep unmatched packages; never invent a Purchase. Carrier references are Vendors. Label creation or vendor shipped wording does not prove carrier possession. Repeated identical observations update first/last seen; all distinct sources and revisions remain retained.",
+      }),
+      associate: mcpAction({
+        op: shipmentContract.ops.associate,
+        description:
+          "Explicitly attach, detach or correct a Shipment's Purchase association. No financial or inventory effects.",
+      }),
+      merge: mcpAction({
+        op: shipmentContract.ops.merge,
+        description:
+          "Explicitly merge two proven duplicate packages, retaining observations and the old SHIP reference. Conflicting Purchase associations require correction first.",
+      }),
+    },
+  },
+  shipments_read: {
+    description:
+      "Read retained shipment evidence and reconciled tracking milestones.",
+    actions: {
+      timeline: mcpAction({
+        op: shipmentContract.ops.timeline,
+        description:
+          "Read every retained source observation and the deduplicated timeline. Exact durations require exact endpoints; missing or conflicting evidence remains unknown.",
+      }),
+    },
+  },
+
   mail: {
     description:
       "A member's retained order Email: search Gmail for a missing original and record what an Email means for Purchases (read one with imports_read.mail). Emails are named by their Gmail mailboxId and messageId, so they correlate with your own Gmail connector.",
@@ -1041,7 +1080,7 @@ export const MCP_TOOLS = defineMcpTools({
       set_credit_budget: mcpAction({
         op: aiFundingContract.ops.setCreditBudget,
         description:
-          "Set the household Claude subscriber-credit budget per six-hour window (creditLimitUsd, standard API cost; default $1.50). Background work past it moves to the ChatGPT plan (its own $2 budget), then pays within the paid budget. Also clears a recorded Claude credit refusal, and work paused for free capacity retries now. Returns ai_funding_read.status.",
+          "Set household AI budgets per six-hour window: creditLimitUsd (Claude standard API cost), planLimitUsd (ChatGPT standard API cost, default $2), and paidLimitUsd (charged cost, default $1). Background work moves from credit to plan, then paid within these limits. Also clears a recorded Claude credit refusal, and work paused for free capacity retries now. Returns ai_funding_read.status.",
       }),
       reset_credit_refusal: mcpAction({
         op: aiFundingContract.ops.resetCreditRefusal,

@@ -53,7 +53,6 @@ import {
   effectiveExpenseTradeSql,
   validateExpenseInheritance,
 } from "~/server/domains/expense/repo/expense-inheritance";
-import { receivableProductIds } from "~/server/domains/inventory/repo/stock-tracking";
 import { readRetainedMail } from "~/server/domains/mail/repo/retained-mail";
 import {
   externalIdKey,
@@ -109,6 +108,7 @@ import {
 } from "./retained-settlement";
 import { recordRunWrites } from "./run-audit";
 import { publishRunFinding } from "./run-finding";
+import { recordImportedShipmentEvidence } from "./shipment-intake";
 
 const PURCHASE_EXTERNAL_ID_KIND = "retailer_sku" as const;
 
@@ -723,7 +723,6 @@ async function fileFinding(
     | "kit_double_booked"
     | "variant_doubt"
     | "product_unresolved"
-    | "arrived"
     | "other",
   summary: string,
   proposedFix: ProposedImportFix | null,
@@ -748,22 +747,6 @@ async function fileFinding(
       evidenceFingerprint,
     })
   ).id;
-}
-
-/** The one `arrived` prompt, shared by import and delivered reconciliation. */
-export function fileArrivedFinding(
-  tx: DrizzleTransaction,
-  input: FindingOrigin,
-  purchaseId: ReturnType<typeof parseEntityId<"purchase">>,
-) {
-  return fileFinding(
-    tx,
-    input,
-    purchaseId,
-    "arrived",
-    "All shipments are marked delivered. Review and receive this purchase.",
-    { kind: "receive_purchase", purchaseId },
-  );
 }
 
 async function fileSourceReconciliation(
@@ -1028,64 +1011,9 @@ async function recordImportSourceAssociation(
 
 /**
  * Atomic vendor-order writer. The source claim is checked before any conflict
- * rules, so an exact replay is a true no-op even when the destination has
- * since accumulated additional evidence.
+ * rules, so replay preserves accepted spending even when the destination has
+ * accumulated later evidence. Package observations use their own idempotent intake.
  */
-/**
- * Receiving is for stock-tracked goods (ADR 0013): goods still unresolved, or a
- * principal Product line whose Product is effectively tracked or undecided.
- * Groceries and other untracked Products, expense-only lines (meals, tickets)
- * and lines the decision model judged not worth a Product have nothing to receive. A new
- * Product starts uncategorized and undecided, so it asks — including a
- * promotion still pending because a reviewed aggregate replacement defers
- * Product creation; applying that replacement later never re-evaluates this
- * prompt. A Product line already on the Purchase counts too (an aggregate has
- * none).
- */
-export async function arrivalAsksToReceive(
-  tx: DrizzleTransaction,
-  input: {
-    purchaseId: PurchaseId;
-    identityDecisions: readonly LineIdentityDecision[];
-    productLines: ReadonlyArray<{ lineIndex: number; productId: string }>;
-  },
-): Promise<boolean> {
-  const { purchaseId, identityDecisions, productLines } = input;
-  const principal = identityDecisions.filter(
-    (decision) => decision.lineKind === "principal",
-  );
-  if (principal.some((decision) => decision.unresolvedReason)) return true;
-  const pendingPromotion = identityDecisions.some(
-    (decision, lineIndex) =>
-      decision.lineKind === "principal" &&
-      decision.promote &&
-      !decision.productId &&
-      !productLines.some((line) => line.lineIndex === lineIndex),
-  );
-  if (pendingPromotion) return true;
-  const existingLines = await tx
-    .select({ productId: expense.productId })
-    .from(expense)
-    .where(
-      and(
-        eq(expense.purchaseId, purchaseId),
-        eq(expense.lineKind, "principal"),
-        isNotNull(expense.productId),
-        notDeleted(expense),
-      ),
-    );
-  const productIds = [
-    ...productLines.map((line) => parseEntityId("product", line.productId)),
-    ...principal.flatMap((decision) =>
-      decision.productId ? [parseEntityId("product", decision.productId)] : [],
-    ),
-    ...existingLines.flatMap((line) =>
-      line.productId ? [line.productId] : [],
-    ),
-  ];
-  return (await receivableProductIds(tx, productIds, purchaseId)).size > 0;
-}
-
 export async function importVendorOrder(
   db: Database,
   rawInput: ImportWriterInput,
@@ -1349,6 +1277,19 @@ export async function importVendorOrder(
           updatedAt: new Date(),
         })
         .where(eq(importSourceClaim.id, family.root.id));
+      await recordImportedShipmentEvidence(
+        databaseForTransaction(tx),
+        {
+          source: input.source,
+          runId: runEntityId.parse(input.runId),
+          ledgerPartyId: partyId,
+          purchaseId: existingOrder.purchaseId,
+          shipments: candidate.shipments ?? [],
+        },
+        buildActorContext(userIdSchema.parse(actorUserId), "mcp", {
+          runId: runEntityId.parse(input.runId),
+        }),
+      );
       return importWriterOutput.parse({
         outcome: "replayed",
         purchaseId: existingOrder.purchaseId,
@@ -1438,6 +1379,19 @@ export async function importVendorOrder(
         },
         purchaseId,
         existingOrder.outputFingerprint,
+      );
+      await recordImportedShipmentEvidence(
+        databaseForTransaction(tx),
+        {
+          source: input.source,
+          runId: runEntityId.parse(input.runId),
+          ledgerPartyId: partyId,
+          purchaseId,
+          shipments: candidate.shipments ?? [],
+        },
+        buildActorContext(userIdSchema.parse(actorUserId), "mcp", {
+          runId: runEntityId.parse(input.runId),
+        }),
       );
       return importWriterOutput.parse({
         outcome: "updated",
@@ -2069,17 +2023,6 @@ export async function importVendorOrder(
     // A line's Product must be allowed by its effective spending category.
     await validateProductPolicy(tx, { purchaseId });
 
-    if (
-      candidate.allShipmentsDelivered === true &&
-      (await arrivalAsksToReceive(tx, {
-        purchaseId,
-        identityDecisions,
-        productLines,
-      }))
-    ) {
-      findingIds.push(await fileArrivedFinding(tx, input, purchaseId));
-    }
-
     const claimFingerprint = await sha256Hex(
       JSON.stringify({
         purchaseId,
@@ -2102,6 +2045,19 @@ export async function importVendorOrder(
       purchaseId,
       claimFingerprint,
       recordCanonicalProductBindings,
+    );
+    await recordImportedShipmentEvidence(
+      databaseForTransaction(tx),
+      {
+        source: input.source,
+        runId: runEntityId.parse(input.runId),
+        ledgerPartyId: partyId,
+        purchaseId,
+        shipments: candidate.shipments ?? [],
+      },
+      buildActorContext(userIdSchema.parse(actorUserId), "mcp", {
+        runId: runEntityId.parse(input.runId),
+      }),
     );
     // Publish after retained bindings and identifiers settle, so their invalidation triggers
     // cannot retire this import's fresh collision evidence before commit.

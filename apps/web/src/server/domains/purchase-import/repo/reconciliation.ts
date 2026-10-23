@@ -1,7 +1,11 @@
 import type { ActorContext } from "@cubby/schemas/context";
 import { costTypeSchema } from "@cubby/schemas/expense-fields";
 import { cardLastFoursOn } from "@cubby/schemas/financial-account";
-import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
+import {
+  parseEntityId,
+  parseShortcodeFor,
+  runEntityId,
+} from "@cubby/schemas/identifiers";
 import {
   prepareSourceOrderReconciliationInput,
   prepareSourceOrderReconciliationOut,
@@ -63,7 +67,6 @@ import {
   sourceObservationIdentitySql,
 } from "./reconciliation-observations";
 import {
-  isFirstAcceptance,
   loadSourceReconciliationState,
   lockFindingSettlement,
   sourceReconciliationStateFingerprint,
@@ -77,12 +80,8 @@ import {
   runFindingData,
   runFindingStatus,
 } from "./run-finding";
-import {
-  arrivalAsksToReceive,
-  fileArrivedFinding,
-  receiptProductQuantity,
-  resolveLineProduct,
-} from "./writer";
+import { recordImportedShipmentEvidence } from "./shipment-intake";
+import { receiptProductQuantity, resolveLineProduct } from "./writer";
 export { commitAcceptedSourceOrderReconciliation } from "./reconciliation-accepted";
 
 /**
@@ -1058,36 +1057,19 @@ export async function commitSourceOrderReconciliation(
       .update(importSourceClaim)
       .set({ checksum: fix.source.checksum, updatedAt: new Date() })
       .where(eq(importSourceClaim.id, state.family.root.id));
-  // The writer files `arrived` when an import first sees delivery; a later
-  // source that reconciles the order as delivered files it here instead. First
-  // delivery is a first acceptance or a known undelivered accepted
-  // extraction; an accepted source whose extraction is unknown may already
-  // have prompted.
-  if (
-    !productOnly &&
-    candidate.allShipmentsDelivered === true &&
-    (isFirstAcceptance(state) ||
-      (state.accepted !== null &&
-        state.accepted.extraction.candidate?.allShipmentsDelivered !== true)) &&
-    (resolvedBindings.some(
-      (binding) =>
-        binding.productId === null &&
-        candidate.lines[binding.lineIndex]?.lineKind === "principal",
-    ) ||
-      (await arrivalAsksToReceive(tx, {
-        purchaseId: state.target.id,
-        identityDecisions: [],
-        productLines: [],
-      })))
-  )
-    await fileArrivedFinding(
-      tx,
+  if (!productOnly)
+    await recordImportedShipmentEvidence(
+      databaseForTransaction(tx),
       {
-        ledgerPartyId: ownerId,
-        runId: state.observation.runId,
         source: fix.source,
+        runId: state.observation.runId
+          ? runEntityId.parse(state.observation.runId)
+          : null,
+        ledgerPartyId: ownerId,
+        purchaseId: state.target.id,
+        shipments: candidate.shipments ?? [],
       },
-      state.target.id,
+      actor,
     );
   audit.push({
     entityKind: "purchase" as const,

@@ -84,6 +84,10 @@ import type { AnyColumn } from "drizzle-orm";
 
 import {
   vendor,
+  shipment,
+  shipmentObservation,
+  shipmentSourceCapture,
+  shipmentSourcePackage,
   aiUsage,
   mcpToolCall,
   imageProcessingAttempt,
@@ -328,6 +332,22 @@ function linkEdgesFor<E extends Entity>(entity: E): LinkEdgesOf<E> {
 }
 
 export const ENTITY_EDGES = {
+  shipment: edges({
+    "ShipmentObservation.shipmentId": {
+      column: shipmentObservation.shipmentId,
+      role: "history",
+      label: "tracking observations",
+      description: "Retained tracking evidence for this package.",
+      liveness: { kind: "must-target-live" },
+    },
+    "ShipmentSourcePackage.shipmentId": {
+      column: shipmentSourcePackage.shipmentId,
+      role: "history",
+      label: "source package identities",
+      description: "Stable source package associations for replay.",
+      liveness: { kind: "must-target-live" },
+    },
+  }),
   sourceTransactionRecord: edges({
     "SourceTransactionRecord.supersededByRowId": {
       column: sourceTransactionRecord.supersededByRowId,
@@ -416,6 +436,17 @@ export const ENTITY_EDGES = {
     },
   }),
   email: edges({
+    "ShipmentSourceCapture.emailId": {
+      column: shipmentSourceCapture.emailId,
+      role: "history",
+      label: "shipment source captures",
+      description: "Retained reference to the original shipping Email.",
+      liveness: {
+        kind: "allow-target-deleted",
+        reason:
+          "Shipment provenance retains the Email identity after its removal.",
+      },
+    },
     "EmailCandidateObservation.emailId": {
       column: emailCandidateObservation.emailId,
       role: "history",
@@ -1160,6 +1191,13 @@ export const ENTITY_EDGES = {
     ...externalIdEdgesFor("task"),
   },
   vendor: edges({
+    "Shipment.carrierId": {
+      column: shipment.carrierId,
+      role: "reference",
+      label: "carried shipments",
+      description: "The carrier's existing Vendor identity.",
+      liveness: { kind: "must-target-live" },
+    },
     "PhotoGroupProposal.productCreateBrandId": {
       column: photoGroupProposal.productCreateBrandId,
       role: "metadata",
@@ -1265,6 +1303,13 @@ export const ENTITY_EDGES = {
   }),
   purchase: {
     ...edges({
+      "Shipment.purchaseId": {
+        column: shipment.purchaseId,
+        role: "reference",
+        label: "shipments",
+        description: "The package's currently accepted order association.",
+        liveness: { kind: "must-target-live" },
+      },
       "SourceOrderObservation.purchaseId": {
         column: sourceOrderObservation.purchaseId,
         role: "history",

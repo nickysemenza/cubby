@@ -101,6 +101,9 @@ export const ENTITY_EDGE_OWNERS = {
   EntityExternalId: { ownerIdentity: entityExternalId.entityId },
   ProductUnitMapping: { owner: productUnitMappings.productId },
   PurchasePaymentEvidence: { owner: purchasePaymentEvidence.purchaseId },
+  ShipmentObservation: { excluded: WORKFLOW },
+  ShipmentSourcePackage: { excluded: WORKFLOW },
+  ShipmentSourceCapture: { excluded: WORKFLOW },
   RecipeSection: { owner: recipeSection.recipeId },
   RecipeSectionIngredient: {
     via: {

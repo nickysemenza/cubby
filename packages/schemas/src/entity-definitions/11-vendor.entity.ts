@@ -44,7 +44,7 @@ export default defineEntity({
     titleField: "name",
     domain: "finance",
     description:
-      "Marketed brands and sellers for purchases and expense evidence.",
+      "Brands, sellers and service providers, including shipment carriers.",
     emptyState: {
       title: "No vendors yet",
       description:

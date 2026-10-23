@@ -36,6 +36,7 @@ export interface ConnectedView {
 export const connectedViews = {
   sourceTransactionRecord: [],
   transactionImport: [],
+  shipment: [],
   email: [],
   imageJob: [],
   product: [

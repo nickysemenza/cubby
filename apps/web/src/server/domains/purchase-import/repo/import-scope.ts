@@ -196,7 +196,7 @@ export async function canonicalMailSourceKey(
  */
 export async function readUnchangedMailSource(
   db: Database,
-  scope: ImportScope,
+  scope: { ledgerPartyId: LedgerPartyId; purpose: RunPurpose | null },
   source: z.infer<typeof importSourceIdentity>,
   evidenceChecksum: string,
 ): Promise<RetainedMailSource | null> {

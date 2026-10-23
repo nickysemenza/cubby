@@ -80,6 +80,10 @@ import {
   purchaseHasPrimaryDocumentSql,
 } from "~/server/domains/purchase/repo/purchase-evidence-policy";
 import { vendorEvidenceFieldResolutionsSql } from "~/server/domains/purchase/repo/purchase-evidence-policy";
+import {
+  assertShipmentCarrierDeletionAllowed,
+  repointShipmentCarrierReferences,
+} from "~/server/domains/shipment/repo/carrier-references";
 import { assertReviewedSpendingClassification } from "~/server/domains/spending-category/repo/spending-classification-review-authorization";
 import { foldVendorAccountsInto } from "~/server/domains/vendor-account/repo/vendor-account";
 import { agentHintsLabel } from "~/server/entity-kernel/repo/detail-display-labels";
@@ -130,6 +134,12 @@ import {
 import { loadVendorCategoryEvidence } from "./vendor-suggestion-context";
 
 export const VENDOR_DELETE_EDGE_POLICY = {
+  "Shipment.carrierId": {
+    code: "block-carried-shipments",
+    effect: "block",
+    description:
+      "Shipments retain their carrier identity until explicitly reassigned.",
+  },
   "PhotoGroupProposal.productCreateBrandId": {
     code: "block-photo-brand-proposals",
     effect: "block",
@@ -199,6 +209,11 @@ export const VENDOR_DELETE_EDGE_POLICY = {
 } as const satisfies IncomingEdgePolicy<"vendor", OperationDisposition>;
 
 export const VENDOR_MERGE_EDGE_POLICY = {
+  "Shipment.carrierId": {
+    code: "repoint-shipment-carrier",
+    effect: "repoint",
+    description: "Shipments name the surviving carrier Vendor.",
+  },
   "PhotoGroupProposal.productCreateBrandId": {
     code: "repoint-photo-brand-proposals",
     effect: "repoint",
@@ -1430,6 +1445,8 @@ export const mergeVendors = async (
       },
     });
 
+    await repointShipmentCarrierReferences(tx, keepId, losers, actor);
+
     type VendorMergeSurvivorChanges = {
       mergedFrom: { from: null; to: VendorId[] };
       carriedOver?: { from: null; to: VendorMergePlan["carried"] };
@@ -1482,5 +1499,6 @@ export const mergeVendors = async (
  * provenance block it; its logo attachment goes with it (ADR 0006).
  */
 export const deleteVendors = policyDelete("vendor", VENDOR_DELETE_EDGE_POLICY, {
+  beforeDelete: assertShipmentCarrierDeletionAllowed,
   overrides: { "ExternalSource.vendorId": detachVendorIdentifierSources },
 });

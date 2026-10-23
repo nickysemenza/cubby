@@ -251,6 +251,10 @@ const entityDefinitions = withEntityNames({
     ...generatedBrowserRoutes.transactionImport,
     color: INK.slate,
   },
+  shipment: {
+    ...generatedBrowserRoutes.shipment,
+    color: INK.slate,
+  },
   spendingCategory: {
     ...generatedBrowserRoutes.spendingCategory,
     color: INK.slate,

@@ -188,7 +188,7 @@ export const SETTLEMENT_CANDIDATE_RANK_FEATURE = defineFeature({
 export const MAILBOX_TRIAGE_FEATURE = defineFeature({
   prompt: mailTriagePrompt,
   feature: "mailbox-triage",
-  promptVersion: "2026-10-18.1",
+  promptVersion: "2026-10-22.1",
   cache: true,
   tier: "decision",
   collectPayload: false,
@@ -221,7 +221,7 @@ export const MERCHANT_IDENTITY_SUPPORT_FEATURE = defineFeature({
 export const MAILBOX_RELEVANCE_FEATURE = defineFeature({
   request: mailRelevanceRequest,
   feature: "mailbox-relevance",
-  promptVersion: "2026-10-18.1",
+  promptVersion: "2026-10-22.1",
   cache: true,
   collectPayload: false,
   tier: "fast",
@@ -460,7 +460,7 @@ export const PURCHASE_IMPORT_EXTRACTION_FEATURE = defineFeature({
   maxTokens: 4_000,
   effort: "low",
   cache: true,
-  promptVersion: "2026-10-11.2",
+  promptVersion: "2026-10-22.1",
   schema: importExtractionModelOutput,
 }) satisfies AiStructuredFeature<ImportExtractionModelOutput>;
 
@@ -471,7 +471,7 @@ export const PURCHASE_IMPORT_RECEIPT_FEATURE = defineFeature({
   maxTokens: 4_000,
   effort: "low",
   cache: true,
-  promptVersion: "2026-10-11.2",
+  promptVersion: "2026-10-22.1",
   schema: importExtractionModelOutput,
 }) satisfies AiStructuredFeature<ImportExtractionModelOutput>;
 
@@ -482,7 +482,7 @@ export const PURCHASE_IMPORT_MAIL_FEATURE = defineFeature({
   maxTokens: 1_000,
   effort: "low",
   cache: true,
-  promptVersion: "2026-09-27.1",
+  promptVersion: "2026-10-22.1",
   schema: orderMailMessageClassification,
 }) satisfies AiStructuredFeature<OrderMailMessageClassification>;
 
@@ -521,7 +521,7 @@ export const PURCHASE_IMPORT_REPAIR_FEATURE = defineFeature({
   maxTokens: 4_000,
   effort: "high",
   cache: true,
-  promptVersion: "2026-10-11.2",
+  promptVersion: "2026-10-22.1",
   schema: importExtractionModelOutput,
 }) satisfies AiStructuredFeature<ImportExtractionModelOutput>;
 

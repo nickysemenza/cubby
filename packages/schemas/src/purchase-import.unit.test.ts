@@ -1,9 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
+import { shipmentEvidence } from "./shipment-evidence";
+import { mailResolveInput } from "./mailbox-research";
 
 import {
   importExtractionModelOutput,
   extractedPurchaseLine,
+  extractedOrderCandidate,
   importAuditModelOutput,
   importExtractionOutcome,
   importSourceIdentity,
@@ -13,6 +16,121 @@ import {
 } from "./purchase-import";
 
 describe("purchase import contracts", () => {
+  const packet = shipmentEvidence.parse({
+    shipmentId: null,
+    sourceShipmentKey: "parcel-1",
+    distinctPackageEvidence: "Package 1 of 2: replacement filter",
+    carrierId: null,
+    carrierName: "Synthetic Courier",
+    trackingNumber: "SYN-TRACK-101",
+    extraTrackingNumbers: [],
+    purpose: "outbound",
+    observations: [
+      {
+        sourceEventKey: null,
+        kind: "vendor_shipped",
+        time: { kind: "local", value: "2026-10-20T10:30", timezone: null },
+        rawStatus: "Your first package has shipped",
+        location: null,
+        carrierId: null,
+        carrierName: "Synthetic Courier",
+        trackingNumber: "SYN-TRACK-101",
+      },
+    ],
+  });
+  const order = {
+    orderId: "SYN-ORDER-101",
+    orderedAt: null,
+    merchant: "Synthetic Supplies",
+    currency: "USD",
+    printedGrandTotal: null,
+    lines: [],
+    payments: [],
+  };
+
+  it("retains historical booleans verbatim without inventing package evidence", () => {
+    const legacy = { ...order, allShipmentsDelivered: true };
+    expect(extractedOrderCandidate.parse(legacy)).toEqual(legacy);
+    expect(extractedOrderCandidate.parse(legacy)).not.toHaveProperty(
+      "shipments",
+    );
+  });
+
+  it("normalizes structured package evidence without inventing a timezone or whole-order delivery", () => {
+    const output = normalizeImportExtractionModelOutput(
+      importExtractionModelOutput.parse({
+        status: "ready",
+        reason: null,
+        detail: null,
+        candidate: { ...order, shipments: [packet] },
+      }),
+    );
+    expect(output.candidate?.shipments).toEqual([packet]);
+    expect(output.candidate).not.toHaveProperty("allShipmentsDelivered");
+    const candidateSchema = z.toJSONSchema(importExtractionModelOutput);
+    expect(JSON.stringify(candidateSchema)).not.toContain(
+      "allShipmentsDelivered",
+    );
+    expect(() =>
+      importExtractionModelOutput.parse({
+        status: "ready",
+        reason: null,
+        detail: null,
+        candidate: order,
+      }),
+    ).toThrow(/shipments/);
+  });
+
+  it("refuses an unidentified trackingless package but retains a distinct source package", () => {
+    expect(() =>
+      extractedOrderCandidate.parse({
+        ...order,
+        shipments: [
+          {
+            ...packet,
+            trackingNumber: null,
+            sourceShipmentKey: null,
+          },
+        ],
+      }),
+    ).toThrow("stable source shipment key");
+    expect(
+      extractedOrderCandidate.parse({
+        ...order,
+        shipments: [
+          {
+            ...packet,
+            trackingNumber: null,
+          },
+        ],
+      }).shipments?.[0]?.distinctPackageEvidence,
+    ).toBe(packet.distinctPackageEvidence);
+  });
+
+  it("requires linked shipment packets to name a selected Purchase", () => {
+    const input = {
+      mailboxId: "synthetic-mailbox",
+      messageId: "synthetic-shipping",
+      checksum: "a".repeat(64),
+      disposition: {
+        kind: "linked",
+        event: "shipped",
+        purchaseIds: ["PUR-ABCDE"],
+        shipments: [{ purchaseId: "PUR-ABCDF", shipments: [packet] }],
+      },
+    };
+    expect(() => mailResolveInput.parse(input)).toThrow("linked Purchase");
+    expect(
+      mailResolveInput.parse({
+        ...input,
+        disposition: {
+          ...input.disposition,
+          shipments: [{ purchaseId: "PUR-ABCDE", shipments: [packet] }],
+        },
+      }).disposition.kind,
+    ).toBe("linked");
+  });
+
   it("retains a typed candidate when an extraction needs review", () => {
     const outcome = importExtractionOutcome.parse({
       status: "needs_review",
@@ -119,7 +237,7 @@ describe("purchase import contracts", () => {
             description: null,
           },
         ],
-        allShipmentsDelivered: null,
+        shipments: [],
       },
     });
 
@@ -140,7 +258,7 @@ describe("purchase import contracts", () => {
           },
         ],
         payments: [{ amount: 24 }],
-        allShipmentsDelivered: null,
+        shipments: [],
       },
     });
 

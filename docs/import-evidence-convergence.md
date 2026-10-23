@@ -91,6 +91,70 @@ checksums before any paid attribution or relationship judgment. Admission
 decisions cannot repair altered bytes; the writer repeats those checks and
 requires roster membership inside its transaction.
 
+Shipment intake shares `recordShipmentEvidence` across structured confirmation
+extraction, linked `mail.resolve` package packets, and standalone
+`shipments.record`. Import and reconciliation resolve a verified retained Email
+to its public EML-code and the accepted Purchase to its PUR-code inside their
+existing transaction. Attachment extraction also revalidates the retained
+attachment checksum before recording its parent Email source. Tracking-page
+intake retains URL, stable external key, offset capture time and literal
+content. Browser order extractions keep their package facts in the accepted
+extraction; callers record a tracking capture explicitly through
+`shipments.record` when they have the original page content.
+
+Relevance routing retains actual recipient parcel notices from vendors, carriers
+and Shop even when no merchant, order, amount or Purchase is known; shipping
+promotions and scanned-letter digests remain unrelated. A Shipment is one
+package with optional Purchase association. Unmatched
+packages retain their Email or page source with no invented Purchase. A Shipment
+source capture protects its retained Email original from unrelated-mail disposal,
+including when no Purchase association exists. A new
+trackingless package requires a stable source package key and distinct-package
+evidence. Carrier identity uses Vendor, preserving literal carrier wording and
+structured handoff tracking pairs. Observations retain raw status, location,
+source event keys and exact time precision/timezone. Receipt/capture time never
+supplies a missing shipment event time. Label creation and vendor-shipped
+reports do not establish carrier possession. Repeated source observations use
+the shared writer's idempotent path; conflicts remain evidence.
+
+Source package identity is retained separately from event versions. Identical
+tracked packages across lifecycle Emails reuse the established Purchase,
+resolved carrier and tracking reference. Extraction leaves
+`distinctPackageEvidence` null for these updates; only explicit evidence of a
+separate package bypasses that matching. A new Email, item list or status change
+alone does not establish a separate package. Trackingless packages still need
+a stable source package key and distinct-package evidence. Identical
+unkeyed source rows retain their multiplicity; replay updates the same
+occurrences. Native event keys scope changed versions to their source package.
+A later A → B → A report retains a third version, while stale captures cannot
+replace a newer current version. Every supporting capture retains membership
+with its observations, including unchanged events in changed page snapshots.
+Page content is retained and hashed without trimming. Email captures retain
+their original content alongside the verified Email reference and checksum.
+
+Explicit Purchase attachment or detachment is a reviewed decision that replay
+cannot override. `shipments.reassign` moves an incorrectly associated source
+package and its observations; later replay follows that corrected binding.
+`shipments.merge` uses the shared Entity redirect registry, preserving the old
+SHIP-code for reads while refusing writes through it. Carrier references in
+structured extra tracking numbers follow Vendor merges, while source wording
+and historical observations remain evidence.
+
+The extraction schema accepts optional `allShipmentsDelivered` only to decode
+historically accepted raw extractions without rewriting their literal evidence
+or fingerprints. New model output requires structured `shipments`. No writer
+or reconciliation action reads that boolean to create packages, mark an order
+delivered, file receiving prompts or receive stock. Existing receiving findings
+remain reviewable historical work. A delivered package never establishes that
+all packages in its Purchase were delivered. Shipment writes create no
+Expenses, settlement allocations or inventory receipts.
+
+Email agents route package observations through `shipments.record` and use
+`mail.resolve` for association/disposition; linked resolutions can include
+per-Purchase packets atomically. The claim prepass settles only confident unrelated mail; related lifecycle
+and duplicate confirmation originals reach the agent for package extraction. Historical retained-Email replay is a
+separately requested `mail.import` operation, not an implicit deployment job.
+
 `finance.converge` also retains its verified financial-mail convergence path.
 The server rechecks posted transaction identity, stable provider references,
 live account funding and exact Vendor identity. An existing Purchase requires

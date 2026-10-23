@@ -58,6 +58,7 @@ import {
   type ReportViewer,
 } from "./records";
 import type { RunReportSlot } from "./run";
+import { shipmentTrackingReport } from "./shipment";
 import { vendorMailSearchReport } from "./vendor";
 
 /** Run service imports remain outside every other report's closure. */
@@ -117,6 +118,7 @@ const reportBuilder = (build: ReportBuilder) =>
   });
 
 const REPORTS = {
+  "shipment.tracking": reportBuilder(shipmentTrackingReport),
   "email.review": reportBuilder(emailReviewReport),
   "project.budget": reportDependency(async (execution) => ({
     blocks: await projectBudgetReport(
