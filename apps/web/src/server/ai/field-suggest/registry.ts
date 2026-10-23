@@ -15,7 +15,6 @@ import {
   entityFieldModels,
   type GeneratedSuggestFieldKey,
 } from "@cubby/schemas/entity-fields";
-import type { ProductId } from "@cubby/schemas/identifiers";
 import { MAX_PAGE_SIZE } from "@cubby/schemas/pagination";
 import {
   TRADE_LABELS,
@@ -70,7 +69,6 @@ import {
   findLexicalSearchCandidates,
   type InternalSearchCandidate,
 } from "~/server/generic/search/service/search.service";
-import { resolveLiveShortcode } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 import { issuerCandidates, hasCreditCardIdentity } from "./account-evidence";
 import { rankCategoryCandidates } from "./category-ranking";
@@ -499,13 +497,7 @@ const FIELD_SUGGEST_OVERRIDES = {
     roster: async (db, _basis, raw) => {
       const productShortcode = raw.productId;
       if (!productShortcode) return [];
-      const productId: ProductId | null = await resolveLiveShortcode(
-        db,
-        productShortcode,
-        "product",
-      );
-      if (!productId) return [];
-      return getLocationPutAwayCandidates(db, productId);
+      return getLocationPutAwayCandidates(db, productShortcode);
     },
     idOf: (c) => c.id,
     labelOf: (c) => c.name,

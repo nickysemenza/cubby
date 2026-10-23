@@ -29,7 +29,10 @@ import {
 import { type EntityKernelContext } from "~/server/entity-kernel";
 import { mergeReviewedProductPair } from "~/server/generic/assessment/repo/assessment-product";
 import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
-import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
+import {
+  resolveAllOrThrow,
+  resolveOrThrow,
+} from "~/server/generic/shortcode/repo/shortcode-resolver";
 const BOTH_STOCKED_WARNING =
   "Both Products have stock. Identity merging combines quantities; any duplicate receiving requires a separate reviewed inventory correction.";
 
@@ -160,9 +163,7 @@ export async function getProductMatchQueue(
 }
 
 async function resolvePair(db: Database, codes: readonly ProductShortcode[]) {
-  const values = await Promise.all(
-    codes.map((code) => resolveOrThrow(db, "product", code)),
-  );
+  const values = await resolveAllOrThrow(db, "product", codes);
   const pair = z.tuple([productId, productId]).parse(values);
   if (pair[0] === pair[1])
     throw new Error("A Product cannot be paired with itself");

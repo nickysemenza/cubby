@@ -6,11 +6,13 @@ import {
   TEST_HOME_ID,
   TEST_HOME_SHORTCODE,
   withTestDb,
+  countTestDbQueries,
 } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import { fieldSuggestSpecFor } from "~/server/ai/field-suggest/registry";
 import { getDb } from "~/server/db/helpers";
-import { location } from "~/server/db/schema";
+import { location, product } from "~/server/db/schema";
 import {
   createGardenEntry,
   createPlanting,
@@ -41,6 +43,43 @@ import { createTestRequestContext } from "~/server/testing/request-context";
 
 import { createLocation, deleteLocations, getLocationById } from "./crud";
 import { buildLocationTree } from "./tree";
+
+describe("inventory location suggestion roster", () => {
+  const ctx = withTestDb();
+
+  it("carries the source Product ID without a separate lookup and excludes deleted sources", async () => {
+    const item = await createProductFixture(
+      ctx.db,
+      makeProductInput({ name: "Synthetic put-away source" }),
+      ctx.actor,
+    );
+    const spec = fieldSuggestSpecFor("inventory", "locationId");
+    if (!spec || !("roster" in spec))
+      throw new Error("Expected reference roster");
+    const measured = await countTestDbQueries(() =>
+      spec.roster(ctx.db, {}, { productId: ` ${item.id.toLowerCase()} ` }),
+    );
+    expect(measured.result).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ id: TEST_HOME_SHORTCODE }),
+      ]),
+    );
+    expect(measured.queryCount).toBe(4);
+    expect(
+      measured.statements.filter((statement) =>
+        statement.startsWith('select "id" from "Product" where'),
+      ),
+    ).toEqual([]);
+    await getDb(ctx.db)
+      .update(product)
+      .set({ deletedAt: new Date() })
+      .where(eq(product.shortcode, item.id));
+    expect(await spec.roster(ctx.db, {}, { productId: item.id })).toEqual([]);
+    expect(
+      await spec.roster(ctx.db, {}, { productId: TEST_HOME_SHORTCODE }),
+    ).toEqual([]);
+  });
+});
 
 describe("createLocation name race", () => {
   const ctx = withTestDb();
