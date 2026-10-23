@@ -825,6 +825,10 @@ not derive their own cover.
 
 Shipment reads use this same resolver and defer `displayImages` in the list
 media group, including when the Shipment has no eligible related image.
+Its declared fallback order is directly attached Purchase images, Purchase
+Product images, seller Vendor images, then carrier Vendor images. Seller Vendor
+is read from the linked Purchase and supports list sorting and filtering without
+duplicating that association on Shipment.
 
 `extensions.ports` is the explicit seam map for entity-wide behavior the
 compiler must not infer: the kernel repository binding, entity label and

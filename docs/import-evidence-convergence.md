@@ -131,6 +131,10 @@ replace a newer current version. Every supporting capture retains membership
 with its observations, including unchanged events in changed page snapshots.
 Page content is retained and hashed without trimming. Email captures retain
 their original content alongside the verified Email reference and checksum.
+Tracking reports show the source Email's received timestamp when the event time
+is unknown, labeled as Email receipt rather than an observed event time. This
+display fallback does not replace retained event time or enter milestone duration
+calculations.
 
 Explicit Purchase attachment or detachment is a reviewed decision that replay
 cannot override. `shipments.reassign` moves an incorrectly associated source
