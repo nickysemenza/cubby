@@ -107,7 +107,7 @@ use `performOperation` from `tests/e2e/support/dispatch-wire.ts` when direct
 read-back needs the commit: it observes the named operation and decodes success
 for singleton and batched responses. Poll only genuinely eventual work.
 Filter/sort SQL-plan matrices use production progressive core reads when
-available, retaining full kernel baselines and unmatched-identity checks.
+available, including their baseline counts and unmatched-identity checks.
 `list-read.integration.test.ts` owns complete-row/enrichment equivalence;
 plan probes do not need unrelated media or quality hydration.
 Filter-oracle tests that compare only row identities likewise use core reads;
