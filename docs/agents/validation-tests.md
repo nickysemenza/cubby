@@ -107,6 +107,21 @@ finance-evidence-journey retains source-record navigation and provider immutabil
 Dedicated HTTP routing for the two correction operations is no longer sampled
 by that case; generic operation transport and direct correction outcomes remain.
 
+The signed-settlement browser journey keeps the refund-specific interaction:
+negative default, refusal of a positive draft without writing, explicit approval,
+exact negative allocation, unchanged itemized Expense and no received stock.
+Build its small prerequisite graph once. The split-settlement browser owner
+keeps charge splitting and accepted residual preservation; do not repeat those
+steps or reopen the dialog here. `source-transaction-record.integration.test.ts`
+owns immutable intake and replay, `financial-convergence.integration.test.ts`
+owns accepted-identity replay and attachment without another Expense, and
+`gmail.input-first-import.spec.ts` retains real captured-import review.
+`purchase-settlement-allocation.unit.test.ts` owns signed draft conservation;
+`financial-transaction-allocations.integration.test.ts` owns stored signed splits
+and refusal of mixed signs. Combined statement intake/retailer import/refund
+HTTP composition and reopening an accepted split are deliberate coverage gaps
+in this smaller browser journey. No scenario is added, deleted or split.
+
 Run-progress browser coverage loads one target-free Run and retains phase counts,
 paused-rate context, completed work, expandable Workflow handoffs, readable errors
 and phone visibility. The required `run-detail.preview.test.tsx` owns shared step
