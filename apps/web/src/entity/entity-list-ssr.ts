@@ -7,7 +7,6 @@ import {
   entityListBaseFor,
 } from "~/entity/entity-list";
 
-import { defaultSortDirectionFor, defaultSortFor } from "./entities";
 import { listNested } from "./entity-list/list-nesting";
 import type { ListSearch } from "./entity-list/list-slot-types";
 import { resolveListView } from "./entity-list/resolve-list-view";
@@ -19,6 +18,7 @@ import {
   resolveOpeningFilters,
 } from "./filters";
 import type { ListEntity } from "./generated/entity-lists.gen";
+import { entityListDefaultSort } from "./sortable-fields";
 
 const ROOTS_SCOPE = { scope: "roots" } as const;
 
@@ -134,13 +134,5 @@ export function searchWithInitialFilter(
   return {
     ...search,
     ...encodeFilters(specs, filterGetterFromColumnFilters<unknown>(initial)),
-  };
-}
-
-/** Mirrors `useEntityListPresentation`'s opening table-state sort. */
-export function entityListDefaultSort<E extends ListEntity>(entity: E) {
-  return {
-    orderBy: defaultSortFor(entity),
-    direction: defaultSortDirectionFor(entity),
   };
 }

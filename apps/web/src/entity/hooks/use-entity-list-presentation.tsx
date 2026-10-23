@@ -6,8 +6,11 @@ import type { ColumnVisibilityState } from "@tanstack/react-table";
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import { defaultSortDirectionFor, defaultSortFor } from "~/entity/entities";
 import { getEntityFilters } from "~/entity/filter-manifest";
+import {
+  defaultSortDirectionFor,
+  defaultSortFor,
+} from "~/entity/sortable-fields";
 import type { RowLinkResolver } from "~/entity/table/column-helpers";
 import {
   type TableStateReturn,

@@ -33,6 +33,7 @@ import type {
   ListEnrichmentGroup,
   ListReadRow,
 } from "./model/list-read-fields";
+import { entityListDefaultSort } from "./sortable-fields";
 
 export type EntityListParams<E extends ListEntity> =
   EntityListParamsByEntity[E];
@@ -76,9 +77,7 @@ export function compileEntityListInput<E extends ListEntity>(
   // person selected it deliberately.
   if (parsedSort) input.sort = parsedSort;
   else if (!searching) {
-    input.sort = [
-      options.defaultSort ?? { orderBy: "createdAt", direction: "desc" },
-    ];
+    input.sort = [options.defaultSort ?? entityListDefaultSort(entity)];
   }
   const dimensions = options.groupBy ?? listGroupBy(validatedSearch);
   if (dimensions?.length) input.groupBy = dimensions;
