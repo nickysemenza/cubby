@@ -79,6 +79,7 @@ describe("useInfiniteTableList", () => {
                 groups: [
                   {
                     id: "derived" as const,
+                    fields: ["count"],
                     state: "ready" as const,
                     data: [{ id: "first", count: 1 }],
                   },
@@ -107,6 +108,7 @@ describe("useInfiniteTableList", () => {
       refresh = invalidateOperationTags(client, entityRipple("product"));
     });
     await waitFor(() => expect(baseReads).toBe(2));
+    expect(result.current.isFieldReady("first", "count")).toBe(false);
     expect(result.current.sums).toEqual({ count: 1 });
     expect(result.current.summaryState).toEqual({ state: "ready" });
     expect(result.current.enrichmentState?.("first", "count")).toEqual({
@@ -118,6 +120,7 @@ describe("useInfiniteTableList", () => {
       await refresh;
     });
     await waitFor(() => expect(enrichmentReads).toBeGreaterThan(1));
+    expect(result.current.isFieldReady("first", "count")).toBe(false);
     expect(result.current.enrichmentState?.("first", "count")).toEqual({
       state: "ready",
     });
@@ -125,14 +128,20 @@ describe("useInfiniteTableList", () => {
     await act(async () =>
       enrichmentRefresh.resolve({
         groups: [
-          { id: "derived", state: "ready", data: [{ id: "first", count: 2 }] },
+          {
+            id: "derived",
+            fields: ["count"],
+            state: "ready",
+            data: [{ id: "first", count: 1 }],
+          },
         ],
         missingIds: [],
       }),
     );
     await waitFor(() =>
-      expect(result.current.data).toEqual([{ id: "first", count: 2 }]),
+      expect(result.current.isFieldReady("first", "count")).toBe(true),
     );
+    expect(result.current.data).toEqual([{ id: "first", count: 1 }]);
   });
 
   it("invalidates the generated base catalog plan after an entity mutation", async () => {
@@ -180,6 +189,7 @@ describe("useInfiniteTableList", () => {
     const old = Promise.withResolvers<{
       groups: {
         id: "derived";
+        fields: string[];
         state: "ready";
         data: { id: string; cost: number }[];
       }[];
@@ -201,7 +211,7 @@ describe("useInfiniteTableList", () => {
       progressive: {
         enrich: async (
           _ids: string[],
-          _groups: ("media" | "quality" | "relations" | "derived")[],
+          _fields: string[],
           signal: AbortSignal,
         ) => {
           signals.push(signal);
@@ -211,6 +221,7 @@ describe("useInfiniteTableList", () => {
                 groups: [
                   {
                     id: "derived" as const,
+                    fields: ["cost"],
                     state: "ready" as const,
                     data: [{ id: "first", cost: 5 }],
                   },
@@ -239,7 +250,12 @@ describe("useInfiniteTableList", () => {
       expect(signals[0]?.aborted).toBe(true);
       old.resolve({
         groups: [
-          { id: "derived", state: "ready", data: [{ id: "first", cost: 999 }] },
+          {
+            id: "derived",
+            fields: ["cost"],
+            state: "ready",
+            data: [{ id: "first", cost: 999 }],
+          },
         ],
         missingIds: [],
       });
@@ -255,6 +271,7 @@ describe("useInfiniteTableList", () => {
     const old = Promise.withResolvers<{
       groups: {
         id: "derived";
+        fields: string[];
         state: "ready";
         data: { id: string; cost: number }[];
       }[];
@@ -270,7 +287,7 @@ describe("useInfiniteTableList", () => {
       progressive: {
         enrich: async (
           _ids: string[],
-          _groups: ("media" | "quality" | "relations" | "derived")[],
+          _fields: string[],
           signal: AbortSignal,
         ) => {
           if (filters.scope === "old") {
@@ -281,6 +298,7 @@ describe("useInfiniteTableList", () => {
             groups: [
               {
                 id: "derived" as const,
+                fields: ["cost"],
                 state: "error" as const,
                 error: {
                   code: "INTERNAL_SERVER_ERROR",
@@ -318,7 +336,12 @@ describe("useInfiniteTableList", () => {
     await act(async () =>
       old.resolve({
         groups: [
-          { id: "derived", state: "ready", data: [{ id: "new", cost: 999 }] },
+          {
+            id: "derived",
+            fields: ["cost"],
+            state: "ready",
+            data: [{ id: "new", cost: 999 }],
+          },
         ],
         missingIds: [],
       }),
@@ -331,6 +354,7 @@ describe("useInfiniteTableList", () => {
     const enrichment = Promise.withResolvers<{
       groups: {
         id: "derived";
+        fields: string[];
         state: "ready";
         data: { id: string; cost: number }[];
       }[];
@@ -347,7 +371,7 @@ describe("useInfiniteTableList", () => {
       progressive: {
         enrich: async (
           _ids: string[],
-          _groups: ("media" | "quality" | "relations" | "derived")[],
+          _fields: string[],
           signal: AbortSignal,
         ) => {
           enrichmentSignal = signal;
@@ -377,7 +401,12 @@ describe("useInfiniteTableList", () => {
     expect(enrichmentSignal?.aborted).toBe(true);
     enrichment.resolve({
       groups: [
-        { id: "derived", state: "ready", data: [{ id: "first", cost: 99 }] },
+        {
+          id: "derived",
+          fields: ["cost"],
+          state: "ready",
+          data: [{ id: "first", cost: 99 }],
+        },
       ],
       missingIds: [],
     });

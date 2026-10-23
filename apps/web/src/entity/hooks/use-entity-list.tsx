@@ -1186,10 +1186,7 @@ export function useEntityList<
   return {
     workbench: {
       entity,
-      isFieldReady: (id: string, field: string) => {
-        const state = enrichmentState(id, field);
-        return state === undefined || state.state === "ready";
-      },
+      isFieldReady: infiniteResult.isFieldReady,
       table,
       isLoading,
       error,

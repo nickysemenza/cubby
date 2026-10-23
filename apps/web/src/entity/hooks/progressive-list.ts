@@ -1,15 +1,17 @@
+import type { z } from "zod";
+
+import type {
+  entityListEnrichmentOutputSchema,
+  entityListGroupSchema,
+} from "~/entity/generated/entity-lists.gen";
 import {
   listReadRowSchema,
   type ListReadRow,
 } from "~/entity/model/list-read-fields";
 import { StartOperationError } from "~/integrations/tanstack-query/start-transport";
-import type { PublicStartOperationError } from "~/server/operation-runtime/start-operation.contract";
 
-export type ListReadGroup = "media" | "quality" | "relations" | "derived";
-export interface DeferredListGroup {
-  id: ListReadGroup;
-  fields: string[];
-}
+export type DeferredListGroup = z.output<typeof entityListGroupSchema>;
+export type ListReadGroup = DeferredListGroup["id"];
 export type ListGroupState =
   | { state: "pending" | "loading" | "ready" | "missing" }
   | { state: "error"; error: string; cause?: unknown };
@@ -18,20 +20,23 @@ export interface ListEnrichmentFailure {
   group: ListReadGroup;
   state: Extract<ListGroupState, { state: "error" }>;
 }
-export interface ListEnrichmentResponse {
+type WireEnrichment = z.output<typeof entityListEnrichmentOutputSchema>;
+type WireGroup = WireEnrichment["groups"][number];
+export type ListEnrichmentResponse = Pick<WireEnrichment, "missingIds"> & {
   groups: (
-    | { id: ListReadGroup; state: "ready"; data: ListReadRow[] }
-    | { id: ListReadGroup; state: "error"; error: PublicStartOperationError }
+    | (Omit<Extract<WireGroup, { state: "ready" }>, "data"> & {
+        data: ListReadRow[];
+      })
+    | Extract<WireGroup, { state: "error" }>
   )[];
-  missingIds: string[];
-}
+};
 export type LoadListEnrichment = (
   ids: string[],
-  groups: ListReadGroup[],
+  fields: string[],
   signal: AbortSignal,
 ) => Promise<ListEnrichmentResponse>;
 
-/** One mounted generation; completed groups survive added pages/columns. */
+/** One mounted generation; completed fields survive added pages/columns. */
 export class ProgressiveListSession<T extends { id: string } = { id: string }> {
   private controller = new AbortController();
   private generation = "";
@@ -62,6 +67,7 @@ export class ProgressiveListSession<T extends { id: string } = { id: string }> {
     deferredFields: readonly string[] = [],
   ) {
     this.patches = new Map(previous.patches);
+    this.retained = new Set(previous.retained);
     this.rowViews.clear();
     this.mergedRows = undefined;
     // A confirmed full-record read can publish deferred values into base rows.
@@ -71,12 +77,14 @@ export class ProgressiveListSession<T extends { id: string } = { id: string }> {
         const canonical = listReadRowSchema.parse(row);
         const patch: ListReadRow = { ...this.patches.get(row.id), id: row.id };
         for (const field of deferredFields) {
-          if (field in canonical) patch[field] = canonical[field];
+          if (field in canonical) {
+            patch[field] = canonical[field];
+            this.retained.add(`${row.id}:${field}`);
+          }
         }
         this.patches.set(row.id, patch);
       }
     }
-    this.retained = new Set(previous.retained);
     for (const [key, state] of previous.states)
       if (state.state === "ready") this.retained.add(key);
   }
@@ -104,8 +112,11 @@ export class ProgressiveListSession<T extends { id: string } = { id: string }> {
     this.pages = pages;
     this.mergedRows = undefined;
   }
-  state(id: string, group: ListReadGroup): ListGroupState {
-    const key = `${id}:${group}`;
+  freshState(id: string, field: string): ListGroupState {
+    return this.states.get(`${id}:${field}`) ?? { state: "pending" };
+  }
+  state(id: string, field: string): ListGroupState {
+    const key = `${id}:${field}`;
     const state = this.states.get(key) ?? { state: "pending" as const };
     return this.retained.has(key) &&
       (state.state === "pending" || state.state === "loading")
@@ -137,71 +148,154 @@ export class ProgressiveListSession<T extends { id: string } = { id: string }> {
   }
   async load(
     rows: readonly T[],
-    requested: readonly ListReadGroup[],
+    requested: readonly DeferredListGroup[],
     loader: LoadListEnrichment,
   ) {
-    const groups = requested.filter((group) =>
-      rows.some((row) => {
-        const state = this.states.get(`${row.id}:${group}`);
-        return !state || state.state === "pending";
-      }),
-    );
-    if (rows.length === 0 || groups.length === 0) return;
+    const owners = new Map<string, ListReadGroup>();
+    for (const group of requested)
+      for (const field of group.fields) {
+        const prior = owners.get(field);
+        if (prior && prior !== group.id)
+          throw new Error(`Conflicting enrichment owner: ${field}`);
+        owners.set(field, group.id);
+      }
+    const buckets = new Map<string, { fields: string[]; ids: string[] }>();
+    for (const row of rows) {
+      const fields = [...owners.keys()]
+        .filter((field) => this.freshState(row.id, field).state === "pending")
+        .sort();
+      if (!fields.length) continue;
+      const key = JSON.stringify(fields);
+      const bucket = buckets.get(key) ?? { fields, ids: [] };
+      bucket.ids.push(row.id);
+      buckets.set(key, bucket);
+      // Claim synchronously, before any request yields to an overlapping load.
+      for (const field of fields)
+        this.states.set(`${row.id}:${field}`, { state: "loading" });
+    }
+    if (!buckets.size) return;
     const generation = this.generation;
     const signal = this.controller.signal;
-    const ids = rows.map((row) => row.id);
-    for (const id of ids)
-      for (const group of groups)
-        this.states.set(`${id}:${group}`, { state: "loading" });
     this.publish();
-    try {
-      const response = await loader(ids, groups, signal);
-      if (signal.aborted || generation !== this.generation) return;
-      this.applyResponse(ids, groups, response);
-    } catch (error) {
-      if (signal.aborted || generation !== this.generation) return;
-      for (const id of ids)
-        for (const group of groups)
-          this.states.set(`${id}:${group}`, {
-            state: "error",
-            error: error instanceof Error ? error.message : String(error),
-            cause: error,
-          });
-    }
-    this.publish();
+    await Promise.all(
+      [...buckets.values()].flatMap(({ fields, ids }) => {
+        const requests: Promise<void>[] = [];
+        for (let offset = 0; offset < ids.length; offset += 500) {
+          const batch = ids.slice(offset, offset + 500);
+          requests.push(
+            (async () => {
+              try {
+                const response = await loader(batch, fields, signal);
+                if (signal.aborted || generation !== this.generation) return;
+                this.applyResponse(batch, fields, owners, response);
+              } catch (error) {
+                if (signal.aborted || generation !== this.generation) return;
+                for (const id of batch)
+                  for (const field of fields)
+                    this.states.set(`${id}:${field}`, {
+                      state: "error",
+                      error:
+                        error instanceof Error ? error.message : String(error),
+                      cause: error,
+                    });
+              }
+              this.publish();
+            })(),
+          );
+        }
+        return requests;
+      }),
+    );
   }
   async retry(
     rows: readonly T[],
-    groups: readonly ListReadGroup[],
+    groups: readonly DeferredListGroup[],
     loader: LoadListEnrichment,
   ) {
+    const buckets = new Map<
+      string,
+      { rows: T[]; groups: DeferredListGroup[] }
+    >();
+    for (const row of rows) {
+      const failed = groups
+        .map((group) => ({
+          ...group,
+          fields: group.fields.filter(
+            (field) => this.freshState(row.id, field).state === "error",
+          ),
+        }))
+        .filter((group) => group.fields.length > 0);
+      if (!failed.length) continue;
+      const key = JSON.stringify(failed);
+      const bucket = buckets.get(key) ?? { rows: [], groups: failed };
+      bucket.rows.push(row);
+      buckets.set(key, bucket);
+    }
     await Promise.all(
-      groups.map((group) => {
-        const failed = rows.filter(
-          (row) => this.state(row.id, group).state === "error",
-        );
-        for (const row of failed)
-          this.states.set(`${row.id}:${group}`, { state: "pending" });
-        return this.load(failed, [group], loader);
+      [...buckets.values()].map((bucket) => {
+        for (const row of bucket.rows)
+          for (const field of bucket.groups.flatMap((group) => group.fields))
+            this.states.set(`${row.id}:${field}`, { state: "pending" });
+        return this.load(bucket.rows, bucket.groups, loader);
       }),
     );
   }
   private applyResponse(
     ids: string[],
-    groups: ListReadGroup[],
+    fields: string[],
+    owners: ReadonlyMap<string, ListReadGroup>,
     response: ListEnrichmentResponse,
   ) {
+    const requested = new Set(fields);
+    const allowed = new Set(ids);
     const missing = new Set(response.missingIds);
-    const allowed = new Set(ids.filter((id) => !missing.has(id)));
-    for (const group of groups) {
-      const result = response.groups.find((entry) => entry.id === group);
-      for (const id of ids) this.retained.delete(`${id}:${group}`);
-      for (const id of ids)
+    for (const id of missing)
+      if (!allowed.has(id))
+        throw new Error(`Unexpected missing enrichment row: ${id}`);
+    const results = new Map<string, ListEnrichmentResponse["groups"][number]>();
+    const patches = new Map<ListReadGroup, Map<string, ListReadRow>>();
+    // Validate acknowledgements before publishing any part of this response.
+    for (const result of response.groups) {
+      for (const field of result.fields) {
+        if (
+          !requested.has(field) ||
+          owners.get(field) !== result.id ||
+          results.has(field)
+        )
+          throw new Error(
+            `Unexpected enrichment acknowledgement: ${result.id}.${field}`,
+          );
+        results.set(field, result);
+      }
+      if (result.state !== "ready") continue;
+      if (patches.has(result.id))
+        throw new Error(`Duplicate enrichment group: ${result.id}`);
+      const rows = new Map<string, ListReadRow>();
+      for (const patch of result.data) {
+        const row = listReadRowSchema.parse(patch);
+        if (!allowed.has(row.id) || missing.has(row.id) || rows.has(row.id))
+          throw new Error(`Unexpected enrichment row: ${row.id}`);
+        rows.set(row.id, row);
+      }
+      patches.set(result.id, rows);
+    }
+    for (const id of ids) {
+      const prior = this.patches.get(id);
+      const patch: ListReadRow = { ...prior, id };
+      let changed = false;
+      for (const field of fields) {
+        const key = `${id}:${field}`;
+        const result = results.get(field);
+        const row =
+          result?.state === "ready"
+            ? patches.get(result.id)?.get(id)
+            : undefined;
+        this.retained.delete(key);
         this.states.set(
-          `${id}:${group}`,
+          key,
           missing.has(id)
             ? { state: "missing" }
-            : result?.state === "ready"
+            : row
               ? { state: "ready" }
               : {
                   state: "error",
@@ -212,17 +306,25 @@ export class ProgressiveListSession<T extends { id: string } = { id: string }> {
                   error:
                     result?.state === "error"
                       ? result.error.message
-                      : `No ${group} enrichment returned`,
+                      : `No ${field} enrichment returned for ${id}`,
                 },
         );
-      if (result?.state !== "ready") continue;
-      for (const patch of result.data) {
-        const identity = listReadRowSchema.safeParse(patch);
-        if (!identity.success || !allowed.has(identity.data.id)) continue;
-        this.patches.set(identity.data.id, {
-          ...this.patches.get(identity.data.id),
-          ...identity.data,
-        });
+        if (!row) continue;
+        if (Object.hasOwn(row, field)) {
+          if (
+            !Object.hasOwn(patch, field) ||
+            !Object.is(patch[field], row[field])
+          )
+            changed = true;
+          patch[field] = row[field];
+        } else if (Object.hasOwn(patch, field)) {
+          // A successful optional omission supersedes retained display data.
+          delete patch[field];
+          changed = true;
+        }
+      }
+      if (changed) {
+        this.patches.set(id, patch);
         this.mergedRows = undefined;
       }
     }

@@ -31,9 +31,8 @@ it("admits only declared shape and preserves unknown evidence", () => {
 it("describes list projections from declarations, not supplied field names", () => {
   const metadata = requestedReadMetadata("entity.listEnrichment", {
     entity: "product",
-    groups: ["derived"],
     ids: ["synthetic-private-id"],
-    fields: ["synthetic-secret"],
+    fields: ["unitPrice"],
   });
   expect(metadata).toMatchObject({
     kind: "list",
@@ -42,14 +41,14 @@ it("describes list projections from declarations, not supplied field names", () 
     loadedDependencies: null,
   });
   expect(JSON.stringify(metadata)).not.toContain("synthetic-");
-  expect(metadata).toMatchObject({ declaredFields: expect.any(Array) });
+  expect(metadata).toMatchObject({ declaredFields: ["unitPrice"] });
   expect(
     requestedReadMetadata("entity.listSummary", { entity: "product" }),
   ).toMatchObject({ declaredFields: null });
   expect(
     requestedReadMetadata("entity.listEnrichment", {
       entity: "product",
-      groups: ["synthetic-secret"],
+      fields: ["synthetic-secret"],
     }),
   ).toBeNull();
 });

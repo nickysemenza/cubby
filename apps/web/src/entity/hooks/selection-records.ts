@@ -1,3 +1,4 @@
+import { readListEnrichmentGroup } from "~/ui/hooks/list-enrichment";
 import type { ListQueryOptionsFn } from "~/ui/hooks/use-paginated-table-core";
 
 /** Resolve action data only on demand, after lightweight identity selection. */
@@ -31,34 +32,35 @@ export async function loadSelectionRecords<
       );
     }
     const patches = new Map<string, object>();
-    const deferred = page.deferredGroups?.map((group) => group.id) ?? [];
+    const deferred = page.deferredGroups ?? [];
     if (deferred.length) {
       if (!plan.progressive)
         throw new Error(
           "Selected records require enrichment, but the list has no enrichment reader.",
         );
-      const enrichment = await plan.progressive.enrich(batch, deferred, signal);
+      const enrichment = await plan.progressive.enrich(
+        batch,
+        deferred.flatMap((group) => group.fields),
+        signal,
+      );
       if (enrichment.missingIds.length)
         throw new Error(
           "Selected records disappeared while checking the action. Select them again.",
         );
-      for (const group of enrichment.groups) {
+      for (const requested of deferred) {
+        const group = enrichment.groups.find(
+          (entry) => entry.id === requested.id,
+        );
+        if (!group) throw new Error(`No ${requested.id} enrichment returned`);
         if (group.state === "error")
           throw new Error(JSON.stringify(group.error));
-        for (const patch of group.data)
+        for (const patch of readListEnrichmentGroup({
+          ids: batch,
+          requested,
+          result: group,
+          missingIds: [],
+        }).values())
           patches.set(patch.id, { ...patches.get(patch.id), ...patch });
-      }
-      if (
-        deferred.some(
-          (id) =>
-            !enrichment.groups.some(
-              (group) => group.id === id && group.state === "ready",
-            ),
-        )
-      ) {
-        throw new Error(
-          "Selected-record enrichment did not return every required field group.",
-        );
       }
     }
     for (const id of batch) {

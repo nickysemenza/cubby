@@ -94,6 +94,7 @@ describe("useEntityList", () => {
             groups: [
               {
                 id: "quality",
+                fields: ["classificationEvidence"],
                 state: "ready",
                 data: [{ id: TEST_ROWS[0]!.id, classificationEvidence: null }],
               },

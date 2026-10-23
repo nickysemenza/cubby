@@ -9,6 +9,7 @@ import {
 } from "~/integrations/tanstack-query/operation-catalog";
 import { StartOperationError } from "~/integrations/tanstack-query/start-transport";
 import { defaultPagination } from "~/ui/data-table/table-utils";
+import { readListEnrichmentGroup } from "~/ui/hooks/list-enrichment";
 
 import { listGroupBy } from "./entity-list/list-grouping";
 import type { ListSearch } from "./entity-list/list-slot-types";
@@ -29,9 +30,9 @@ import {
   type ListEntity,
   parseEntityListInput,
 } from "./generated/entity-lists.gen";
-import type {
-  ListEnrichmentGroup,
-  ListReadRow,
+import {
+  type ListEnrichmentGroup,
+  type ListReadRow,
 } from "./model/list-read-fields";
 import { entityListDefaultSort } from "./sortable-fields";
 
@@ -217,11 +218,8 @@ export function entityListBaseFor<E extends ListEntity>(entity: E) {
         };
       },
       progressive: {
-        enrich: (
-          ids: string[],
-          groups: import("~/entity/hooks/progressive-list").ListReadGroup[],
-          signal: AbortSignal,
-        ) => enrichment.call({ entity, ids, groups }, { signal }),
+        enrich: (ids: string[], fields: string[], signal: AbortSignal) =>
+          enrichment.call({ entity, ids, fields }, { signal }),
         summary: async (signal: AbortSignal) => {
           const { sums, totalLabels } = await summary.call(parsed, { signal });
           return { sums, totalLabels };
@@ -307,26 +305,35 @@ export function entityListBaseFor<E extends ListEntity>(entity: E) {
             pagination: { ...firstPage.pagination, pageIndex: pageParam },
           });
           const page = await plan.execute(signal);
-          const requested = selected.filter((id) =>
-            page.deferredGroups.some((group) => group.id === id),
-          );
+          const requested = page.deferredGroups
+            .filter((group) => selected.includes(group.id))
+            .map((group) => ({
+              ...group,
+              fields: group.fields.filter((field) => field in schema.shape),
+            }))
+            .filter((group) => group.fields.length > 0);
           if (page.items.length === 0 || requested.length === 0)
             return parsePage(page);
           const response = await plan.progressive.enrich(
             page.items.map((row) => row.id),
-            requested,
+            requested.flatMap((group) => group.fields),
             signal,
           );
           const patches = new Map<string, ListReadRow>();
-          for (const id of requested) {
+          const missing = new Set(response.missingIds);
+          for (const { id, fields } of requested) {
             const group = response.groups.find((entry) => entry.id === id);
             if (!group) throw new Error(`No ${id} enrichment returned`);
             if (group.state === "error")
               throw new StartOperationError(group.error);
-            for (const row of group.data)
-              patches.set(row.id, { ...patches.get(row.id), ...row });
+            for (const patch of readListEnrichmentGroup({
+              ids: page.items.map((row) => row.id),
+              requested: { id, fields },
+              result: group,
+              missingIds: response.missingIds,
+            }).values())
+              patches.set(patch.id, { ...patches.get(patch.id), ...patch });
           }
-          const missing = new Set(response.missingIds);
           return parsePage({
             ...page,
             items: page.items

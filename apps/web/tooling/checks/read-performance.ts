@@ -131,7 +131,7 @@ export async function readPerformance(
   const rowSchema = z.object({ id: z.string() }).passthrough();
   const baseSchema = z.object({
     data: z.array(rowSchema),
-    groups: z.array(z.object({ id: z.string() })),
+    groups: z.array(z.object({ id: z.string(), fields: z.array(z.string()) })),
   });
   const patchSchema = z.object({
     groups: z.array(z.object({ state: z.enum(["ready", "error"]) })),
@@ -253,7 +253,7 @@ export async function readPerformance(
         ? read("/api/v1/entity/listEnrichment", {
             entity,
             ids: base.data.map((row) => row.id),
-            groups: base.groups.map((group) => group.id),
+            fields: base.groups.flatMap((group) => group.fields),
           }).then((result) => {
             if (
               patchSchema

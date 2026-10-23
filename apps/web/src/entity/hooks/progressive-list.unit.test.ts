@@ -2,16 +2,37 @@ import { describe, expect, it } from "vitest";
 
 import { getAppErrorDetails } from "~/lib/error-utils";
 
-import { ProgressiveListSession } from "./progressive-list";
+import {
+  ProgressiveListSession,
+  type ListEnrichmentResponse,
+  type LoadListEnrichment,
+} from "./progressive-list";
 
 const rows = [
   { id: "first", name: "First" },
   { id: "second", name: "Second" },
 ];
+const derived = (fields: string[]) => [{ id: "derived" as const, fields }];
+const media = [{ id: "media" as const, fields: ["images"] }];
+const quality = [{ id: "quality" as const, fields: ["dataQuality"] }];
+const error = {
+  code: "INTERNAL_SERVER_ERROR",
+  message: "Synthetic lookup failure",
+  requestId: "synthetic-request",
+  diagnostics: {
+    origin: "server" as const,
+    operation: "entity.listEnrichment",
+    stage: "run" as const,
+    causes: [
+      {
+        name: "PostgresError",
+        message: "SELECT synthetic_column FROM synthetic_table",
+        code: "42703",
+      },
+    ],
+  },
+};
 
-// A late response must not patch another query or refreshed page. A failed
-// enrichment must not hide base rows or invent healthy/zero values. New pages
-// and newly visible groups must reuse completed groups rather than reread them.
 describe("progressive list lifecycle", () => {
   it("retains unchanged row views while exposing fresh base and enrichment values", async () => {
     const session = new ProgressiveListSession<(typeof rows)[number]>(() => {});
@@ -19,23 +40,21 @@ describe("progressive list lifecycle", () => {
     const initial = session.rows();
     session.setPages([rows]);
     expect(session.rows()).toBe(initial);
-    const response = Promise.withResolvers<{
-      groups: {
-        id: "derived";
-        state: "ready";
-        data: { id: string; count: number }[];
-      }[];
-      missingIds: string[];
-    }>();
+    const response = Promise.withResolvers<ListEnrichmentResponse>();
     const loading = session.load(
       [rows[0]!],
-      ["derived"],
+      derived(["count"]),
       async () => response.promise,
     );
     expect(session.rows()).toBe(initial);
     response.resolve({
       groups: [
-        { id: "derived", state: "ready", data: [{ id: "first", count: 1 }] },
+        {
+          id: "derived",
+          fields: ["count"],
+          state: "ready",
+          data: [{ id: "first", count: 1 }],
+        },
       ],
       missingIds: [],
     });
@@ -58,27 +77,16 @@ describe("progressive list lifecycle", () => {
 
   it("keeps base order and isolates group errors while excluding missing ids", async () => {
     const session = new ProgressiveListSession(() => {});
-    session.reset("initial");
     session.setPages([rows]);
-    await session.load(rows, ["media", "quality"], async () => ({
+    await session.load(rows, [...media, ...quality], async () => ({
       groups: [
         {
           id: "media",
+          fields: ["images"],
           state: "ready",
-          data: [
-            { id: "second", images: [] },
-            { id: "first", images: ["photo"] },
-            { id: "other", images: ["wrong"] },
-          ],
+          data: [{ id: "first", images: ["photo"] }],
         },
-        {
-          id: "quality",
-          state: "error",
-          error: {
-            code: "INTERNAL_SERVER_ERROR",
-            message: "Synthetic upstream failure",
-          },
-        },
+        { id: "quality", fields: ["dataQuality"], state: "error", error },
       ],
       missingIds: ["second"],
     }));
@@ -86,134 +94,101 @@ describe("progressive list lifecycle", () => {
       { ...rows[0], images: ["photo"] },
       rows[1],
     ]);
-    expect(session.state("first", "media").state).toBe("ready");
-    expect(session.state("second", "media").state).toBe("missing");
-    expect(session.state("first", "quality")).toMatchObject({
+    expect(session.state("first", "images").state).toBe("ready");
+    expect(session.state("second", "images").state).toBe("missing");
+    expect(session.state("first", "dataQuality")).toMatchObject({
       state: "error",
-      error: "Synthetic upstream failure",
+      error: error.message,
     });
   });
 
-  // Retrying must preserve successful fields, retain the normalized diagnostic
-  // payload, and coalesce repeated clicks while a failed group is in flight.
-  it("retries only failed groups once while retaining server diagnostics", async () => {
+  it("retries only failed fields once while retaining server diagnostics", async () => {
     const session = new ProgressiveListSession(() => {});
     session.setPages([rows]);
-    const error = {
-      code: "INTERNAL_SERVER_ERROR",
-      message: "Synthetic lookup failure",
-      requestId: "synthetic-request",
-      diagnostics: {
-        origin: "server" as const,
-        operation: "entity.listEnrichment",
-        stage: "run" as const,
-        causes: [
-          {
-            name: "PostgresError",
-            message: "SELECT synthetic_column FROM synthetic_table",
-            code: "42703",
-          },
-        ],
-      },
-    };
-    await session.load(rows, ["media", "derived"], async () => ({
+    await session.load(rows, [...media, ...derived(["cost"])], async () => ({
       groups: [
         {
           id: "media",
+          fields: ["images"],
           state: "ready",
           data: rows.map((row) => ({ id: row.id, images: [] })),
         },
-        { id: "derived", state: "error", error },
+        { id: "derived", fields: ["cost"], state: "error", error },
       ],
       missingIds: [],
     }));
-    const failed = session.state("first", "derived");
-    expect(failed.state).toBe("error");
+    const failed = session.state("first", "cost");
     expect(
       getAppErrorDetails("cause" in failed ? failed.cause : undefined),
     ).toMatchObject(error);
-    const response = Promise.withResolvers<{
-      groups: {
-        id: "derived";
-        state: "ready";
-        data: { id: string; cost: number }[];
-      }[];
-      missingIds: string[];
-    }>();
+    const response = Promise.withResolvers<ListEnrichmentResponse>();
     const calls: string[][] = [];
-    const loader = async (
-      _ids: string[],
-      groups: ("media" | "quality" | "relations" | "derived")[],
-    ) => {
-      calls.push(groups);
+    const loader: LoadListEnrichment = async (_ids, fields) => {
+      calls.push(fields);
       return response.promise;
     };
-    const first = session.retry(rows, ["media", "derived"], loader);
-    const second = session.retry(rows, ["derived"], loader);
-    expect(calls).toEqual([["derived"]]);
-    expect(session.state("first", "media").state).toBe("ready");
+    const first = session.retry(
+      rows,
+      [...media, ...derived(["cost", "unrequested"])],
+      loader,
+    );
+    const second = session.retry(rows, derived(["cost"]), loader);
+    expect(calls).toEqual([["cost"]]);
+    expect(session.state("first", "images").state).toBe("ready");
     response.resolve({
       groups: [
-        { id: "derived", state: "ready", data: [{ id: "first", cost: 5 }] },
+        {
+          id: "derived",
+          fields: ["cost"],
+          state: "ready",
+          data: rows.map((row) => ({ id: row.id, cost: 5 })),
+        },
       ],
       missingIds: [],
     });
     await Promise.all([first, second]);
     expect(session.rows()[0]).toEqual({ ...rows[0], images: [], cost: 5 });
+    expect(session.freshState("first", "unrequested").state).toBe("pending");
   });
 
   it("aborts and ignores stale enrichment after filter change or refresh", async () => {
     const session = new ProgressiveListSession(() => {});
-    const response = Promise.withResolvers<{
-      groups: {
-        id: "derived";
-        state: "ready";
-        data: { id: string; cost: number }[];
-      }[];
-      missingIds: string[];
-    }>();
+    const response = Promise.withResolvers<ListEnrichmentResponse>();
     let signal: AbortSignal | undefined;
     session.reset("old");
     session.setPages([rows]);
     const old = session.load(
       rows,
-      ["derived"],
-      async (_ids, _groups, received) => {
+      derived(["cost"]),
+      async (_ids, _fields, received) => {
         signal = received;
         return response.promise;
       },
     );
     session.reset("new");
-    session.setPages([rows]);
     response.resolve({
       groups: [
-        { id: "derived", state: "ready", data: [{ id: "first", cost: 999 }] },
+        {
+          id: "derived",
+          fields: ["cost"],
+          state: "ready",
+          data: [{ id: "first", cost: 999 }],
+        },
       ],
       missingIds: [],
     });
     await old;
     expect(signal?.aborted).toBe(true);
     expect(session.rows()).toEqual(rows);
-    expect(session.state("first", "derived").state).toBe("pending");
+    expect(session.state("first", "cost").state).toBe("pending");
   });
 
-  it("keeps a confirmed reference when a later base refresh omits it and enrichment fails", async () => {
+  it("keeps a confirmed reference while revalidating and clears an optional omission", async () => {
     const previous = new ProgressiveListSession<{
       id: string;
       name: string;
       project?: string;
     }>(() => {});
-    previous.setPages([[{ id: "first", name: "First" }]]);
-    await previous.load(rows.slice(0, 1), ["relations"], async () => ({
-      groups: [
-        {
-          id: "relations",
-          state: "ready",
-          data: [{ id: "first", project: "Old project" }],
-        },
-      ],
-      missingIds: [],
-    }));
     previous.setPages([
       [{ id: "first", name: "First", project: "Confirmed project" }],
     ]);
@@ -223,50 +198,179 @@ describe("progressive list lifecycle", () => {
       project?: string;
     }>(() => {});
     refreshed.retain(previous, ["project"]);
-    refreshed.setPages([[{ id: "first", name: "First" }]]);
-    await refreshed.load(rows.slice(0, 1), ["relations"], async () => ({
+    refreshed.setPages([[rows[0]!]]);
+    const groups = [{ id: "relations" as const, fields: ["project"] }];
+    const response = Promise.withResolvers<ListEnrichmentResponse>();
+    const loading = refreshed.load(
+      [rows[0]!],
+      groups,
+      async () => response.promise,
+    );
+    expect(refreshed.rows()[0]).toMatchObject({ project: "Confirmed project" });
+    expect(refreshed.freshState("first", "project").state).toBe("loading");
+    response.resolve({
+      groups: [{ id: "relations", fields: ["project"], state: "error", error }],
+      missingIds: [],
+    });
+    await loading;
+    expect(refreshed.rows()[0]).toMatchObject({ project: "Confirmed project" });
+    expect(refreshed.state("first", "project").state).toBe("error");
+    await refreshed.retry([rows[0]!], groups, async () => ({
       groups: [
         {
           id: "relations",
-          state: "error",
-          error: {
-            code: "INTERNAL_SERVER_ERROR",
-            message: "Synthetic relation refresh failed",
-          },
+          fields: ["project"],
+          state: "ready",
+          data: [{ id: "first" }],
         },
       ],
       missingIds: [],
     }));
-    expect(refreshed.rows()).toEqual([
-      { id: "first", name: "First", project: "Confirmed project" },
-    ]);
-    expect(refreshed.state("first", "relations").state).toBe("error");
+    expect(refreshed.rows()[0]).toEqual(rows[0]);
+    expect(refreshed.state("first", "project").state).toBe("ready");
   });
 
-  it("batches missing visible groups once per page and reuses ready groups", async () => {
+  it("fetches newly revealed fields in a ready group and reuses hidden completed fields", async () => {
     const session = new ProgressiveListSession(() => {});
-    const requests: string[][] = [];
-    const load = async (
-      _ids: string[],
-      groups: ("media" | "quality" | "relations" | "derived")[],
-    ) => {
-      requests.push(groups);
+    session.setPages([rows]);
+    const requests: { ids: string[]; fields: string[] }[] = [];
+    const loader: LoadListEnrichment = async (ids, fields) => {
+      requests.push({ ids, fields });
       return {
-        groups: groups.map((id) => ({ id, state: "ready" as const, data: [] })),
+        groups: [
+          {
+            id: "derived",
+            fields,
+            state: "ready",
+            data: ids.map((id) => ({
+              id,
+              ...Object.fromEntries(fields.map((field) => [field, 1])),
+            })),
+          },
+        ],
         missingIds: [],
       };
     };
-    session.reset("initial");
-    session.setPages([rows]);
-    await session.load(rows, ["media"], load);
-    await session.load(rows, ["media", "quality"], load);
+    await session.load(rows, derived(["count"]), loader);
+    await session.load(rows, derived(["count", "cost"]), loader);
+    await session.load(rows, derived(["count"]), loader);
+    await session.load(rows, derived(["count", "cost"]), loader);
     session.setPages([rows, [{ id: "third", name: "Third" }]]);
-    await session.load(rows, ["media", "quality"], load);
-    expect(requests).toEqual([["media"], ["quality"]]);
+    await session.load([{ id: "third" }], derived(["count"]), loader);
+    expect(requests).toEqual([
+      { ids: ["first", "second"], fields: ["count"] },
+      { ids: ["first", "second"], fields: ["cost"] },
+      { ids: ["third"], fields: ["count"] },
+    ]);
     expect(session.rows().map((row) => row.id)).toEqual([
       "first",
       "second",
       "third",
     ]);
+  });
+
+  it("claims overlapping requests synchronously without reloading ready or in-flight pairs", async () => {
+    const session = new ProgressiveListSession(() => {});
+    session.setPages([rows]);
+    const gate = Promise.withResolvers<ListEnrichmentResponse>();
+    const calls: { ids: string[]; fields: string[] }[] = [];
+    const loader: LoadListEnrichment = async (ids, fields) => {
+      calls.push({ ids, fields });
+      if (calls.length === 1) return gate.promise;
+      return {
+        groups: [
+          {
+            id: "derived",
+            fields,
+            state: "ready",
+            data: ids.map((id) => ({ id, count: 1, cost: 2 })),
+          },
+        ],
+        missingIds: [],
+      };
+    };
+    const first = session.load([rows[0]!], derived(["count"]), loader);
+    await session.load(rows, derived(["count", "cost"]), loader);
+    expect(calls).toEqual([
+      { ids: ["first"], fields: ["count"] },
+      { ids: ["first"], fields: ["cost"] },
+      { ids: ["second"], fields: ["cost", "count"] },
+    ]);
+    gate.resolve({
+      groups: [
+        {
+          id: "derived",
+          fields: ["count"],
+          state: "ready",
+          data: [{ id: "first", count: 1, unwanted: "ignored" }],
+        },
+      ],
+      missingIds: [],
+    });
+    await first;
+    expect(session.rows()).toEqual(
+      rows.map((row) => ({ ...row, count: 1, cost: 2 })),
+    );
+  });
+
+  it("never marks an omitted successful row ready", async () => {
+    const session = new ProgressiveListSession(() => {});
+    await session.load(rows, derived(["count"]), async () => ({
+      groups: [
+        {
+          id: "derived",
+          fields: ["count"],
+          state: "ready",
+          data: [{ id: "first", count: 1 }],
+        },
+      ],
+      missingIds: [],
+    }));
+    expect(session.state("first", "count").state).toBe("ready");
+    expect(session.state("second", "count")).toMatchObject({
+      state: "error",
+      error: "No count enrichment returned for second",
+    });
+  });
+
+  it("rejects acknowledgements outside the requested field ownership before applying patches", async () => {
+    const session = new ProgressiveListSession(() => {});
+    session.setPages([rows]);
+    await session.load(rows, derived(["count"]), async () => ({
+      groups: [
+        {
+          id: "media",
+          fields: ["count"],
+          state: "ready",
+          data: [{ id: "first", count: 99 }],
+        },
+      ],
+      missingIds: [],
+    }));
+    expect(session.rows()).toEqual(rows);
+    expect(session.state("first", "count").state).toBe("error");
+  });
+
+  it("keeps wire batches bounded independently of page size", async () => {
+    const session = new ProgressiveListSession(() => {});
+    const records = Array.from({ length: 501 }, (_, index) => ({
+      id: `row-${index}`,
+    }));
+    const sizes: number[] = [];
+    await session.load(records, derived(["count"]), async (ids, fields) => {
+      sizes.push(ids.length);
+      return {
+        groups: [
+          {
+            id: "derived",
+            fields,
+            state: "ready",
+            data: ids.map((id) => ({ id, count: 1 })),
+          },
+        ],
+        missingIds: [],
+      };
+    });
+    expect(sizes).toEqual([500, 1]);
   });
 });

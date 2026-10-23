@@ -1728,7 +1728,9 @@ reject dependency cycles, and supply browser and native metadata.
 Base reads perform authoritative filtering, ordering, grouping, pagination, and
 exact counts; expensive expressions that select or order rows still run before
 base results return. Enrichment reads accept public IDs, resolve declared
-dependencies, and return canonical patches for requested groups. Summaries apply
+dependencies, and return canonical patches for requested top-level fields. Each
+group result acknowledges exactly its requested fields; dependency outputs stay
+private unless requested. Core fields come from the base read. Summaries apply
 the complete filter population, including ID restrictions, independently of the
 visible page. Complete readers call the same selectors and loaders and validate
 the composed canonical result. Specialist workflows keep their own readers.
@@ -1736,11 +1738,16 @@ the composed canonical result. Specialist workflows keep their own readers.
 The browser list session and native enrichment model track field readiness
 separately: a pending value is not zero, a missing image, or healthy quality.
 Visible columns and structural/provider dependencies determine requested
-groups. Superseded work is cancelled, responses from earlier generations are
+fields. Groups retain loader and error ownership. The browser tracks completion
+per record and field, fetching only unfinished demand when columns change.
+Native group consumers request all advertised fields of their selected groups.
+Superseded work is cancelled, responses from earlier generations are
 discarded, and ready patches preserve row identity and order. A failed combined
 enrichment read falls back to the same reader per group so independent fields
 stay available; healthy batches select their page once. Failed groups can be
-retried.
+retried for their failed fields. Successful optional omissions remove retained
+values, and a missing successful patch never marks a record ready. Same-scope
+refreshes retain display values while fresh field completion is revalidated.
 
 MCP `entity_read.list` at the default summary detail publishes only
 `entitySummaryFields` (`contracts/mcp-projections.ts`), so it runs `listFields`:

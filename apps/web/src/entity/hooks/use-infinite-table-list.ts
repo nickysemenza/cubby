@@ -86,6 +86,7 @@ interface UseInfiniteTableListReturn<
   retryEnrichment: (pageIndex: number, group: ListReadGroup) => Promise<void>;
   retrySummary: () => void;
   enrichmentState: (id: string, field: string) => ListGroupState | undefined;
+  isFieldReady: (id: string, field: string) => boolean;
   groups?: ListGroupSummary[];
   memberships?: ListGroupMembership[];
   isLoading: boolean;
@@ -421,6 +422,7 @@ export function useInfiniteTableList<
       ? progressive.summaryState
       : { state: "ready" },
     enrichmentState: progressive.enrichmentState,
+    isFieldReady: progressive.isFieldReady,
     enrichmentFailures: progressive.enrichmentFailures,
     retryEnrichment: progressive.retryEnrichment,
     retrySummary: progressive.retrySummary,

@@ -7,7 +7,6 @@ import type {
   ListQueryPlan,
   ListQueryResponse,
 } from "../../ui/hooks/use-paginated-table-core";
-import type { ListReadGroup } from "./progressive-list";
 import { useProgressiveList } from "./use-progressive-list";
 
 const abortable = <T,>(signal: AbortSignal, value: T) =>
@@ -29,13 +28,16 @@ const plan: ListQueryPlan<{ id: string }> = {
   queryKey: ["synthetic-list"],
   execute: async () => pages[0]!,
   progressive: {
-    enrich: (ids, groups: ListReadGroup[], signal) =>
+    enrich: (ids, fields, signal) =>
       abortable(signal, {
-        groups: groups.map((id) => ({
-          id,
-          state: "ready" as const,
-          data: ids.map((row) => ({ id: row, count: 1 })),
-        })),
+        groups: [
+          {
+            id: "derived" as const,
+            fields,
+            state: "ready" as const,
+            data: ids.map((row) => ({ id: row, count: 1 })),
+          },
+        ],
         missingIds: [],
       }),
     summary: (signal) => abortable(signal, { sums: { count: 2 } }),

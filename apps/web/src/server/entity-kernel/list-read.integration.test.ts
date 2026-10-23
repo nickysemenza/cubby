@@ -57,6 +57,52 @@ describe("standard progressive list composition", () => {
       expect.objectContaining({ path: ["false"], count: 1 }),
     ]);
   });
+  it("acknowledges only selected deferred fields and rejects unknown or core demand before empty reads", async () => {
+    await seedReferenceUniverse(ctx.db);
+    const context = buildKernelContext(ctx.db);
+    const operation = ENTITY_LIST_READ_OPERATIONS.product;
+    const full = await executeEntity(context, {
+      action: "list",
+      entity: "product",
+      filters: {},
+      pagination: { pageIndex: 0, pageSize: 25 },
+    });
+    if (full.action !== "list") throw new Error("Wrong list action");
+    const result = await operation.enrich(context, {
+      ids: full.items.map((row) => String(row.id)),
+      fields: ["unitPrice", "unitPrice"],
+    });
+    expect(result.groups).toHaveLength(1);
+    expect(result.groups[0]).toMatchObject({
+      id: "derived",
+      fields: ["unitPrice"],
+      state: "ready",
+    });
+    const ready = result.groups[0];
+    if (ready?.state !== "ready")
+      throw new Error("Expected selected enrichment");
+    expect(new Map(ready.data.map((row) => [row.id, row]))).toEqual(
+      new Map(
+        full.items.map((row) => [
+          row.id,
+          { id: row.id, unitPrice: row.unitPrice },
+        ]),
+      ),
+    );
+    await expect(
+      operation.enrich(context, { ids: [], fields: ["unknownField"] }),
+    ).rejects.toThrow("Unknown list field");
+    await expect(
+      operation.enrich(context, { ids: [], fields: ["id"] }),
+    ).rejects.toThrow("requires a deferred field");
+    expect(
+      await operation.enrich(context, { ids: [], fields: ["unitPrice"] }),
+    ).toMatchObject({
+      groups: [{ fields: ["unitPrice"], data: [] }],
+      missingIds: [],
+    });
+  });
+
   // Core reads must survive an unavailable deferred inheritance dependency.
   it("reads expense core without evaluating deferred inheritance", async () => {
     await seedReferenceUniverse(ctx.db);
@@ -74,7 +120,7 @@ describe("standard progressive list composition", () => {
       expect(base.meta.totalCount).toBeGreaterThan(0);
       const enrichment = await operation.enrich(context, {
         ids: base.data.map((row) => String(row.id)),
-        groups: ["derived"],
+        fields: listReadFields("expense").derived,
       });
       expect(
         enrichment.groups.find((group) => group.id === "derived")?.state,
@@ -100,7 +146,10 @@ describe("standard progressive list composition", () => {
     try {
       const result = await operation.enrich(context, {
         ids: base.data.map((row) => String(row.id)),
-        groups: ["media", "quality"],
+        fields: [
+          ...listReadFields("product").media,
+          ...listReadFields("product").quality,
+        ],
       });
       expect(result.groups.find((group) => group.id === "quality")?.state).toBe(
         "error",
@@ -132,7 +181,10 @@ describe("standard progressive list composition", () => {
       expect(base.data.length).toBeGreaterThan(0);
       const result = await operation.enrich(context, {
         ids: base.data.map((row) => String(row.id)),
-        groups: ["media", "quality"],
+        fields: [
+          ...listReadFields("image").media,
+          ...listReadFields("image").quality,
+        ],
       });
       expect(result.groups.find((group) => group.id === "quality")?.state).toBe(
         "error",
@@ -230,7 +282,7 @@ describe("standard progressive list composition", () => {
       );
       const enrichment = await operation.enrich(context, {
         ids: base.data.map((row) => String(row.id)),
-        groups: base.groups.map((group) => group.id),
+        fields: base.groups.flatMap((group) => group.fields),
       });
       const patches = new Map(
         base.data.map((row) => [String(row.id), { ...row }]),
