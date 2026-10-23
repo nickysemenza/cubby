@@ -540,6 +540,10 @@ describe("finance.book_transaction", () => {
   it("books posted income as a reimbursement into an existing Purchase over MCP", async () => {
     const { purchase, income } = await fixture();
     const transactionId = await income();
+    await getDb(ctx.db)
+      .update(financialTransaction)
+      .set({ itemizationExpectation: "required" })
+      .where(eq(financialTransaction.shortcode, transactionId));
     const result = await callMcpTool(
       createMcpServer(),
       "finance",
@@ -569,9 +573,30 @@ describe("finance.book_transaction", () => {
       )
       .where(eq(financialTransaction.shortcode, transactionId));
     expect(linked).toEqual([{ purchaseId: purchase.id }]);
+    expect(await getPurchaseByID(ctx.db, purchase.id)).toMatchObject({
+      expenseTotal: 60,
+      statedTotal: null,
+      financialReconciliation: { status: "match", delta: 0 },
+    });
     expect(
-      (await getPurchaseByID(ctx.db, purchase.id)).financialReconciliation,
-    ).toMatchObject({ status: "match", delta: 0 });
+      await financialTransactionRepository.repository.get(
+        kernelCtx(ctx),
+        transactionId,
+      ),
+    ).toMatchObject({
+      itemizationExpectation: "required",
+      fieldResolutions: {
+        itemizationExpectation: {
+          mode: "allocated",
+          storedValue: "required",
+          value: "not_expected",
+          fallbackValue: "not_expected",
+          source: "reviewed reimbursement",
+          sourceEntity: null,
+          canReset: true,
+        },
+      },
+    });
   });
 
   it("creates a lump Purchase for the merchant's Vendor when none is named", async () => {

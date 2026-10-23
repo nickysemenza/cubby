@@ -5,7 +5,6 @@ import {
 } from "@cubby/schemas/financial-booking";
 import { z } from "zod";
 import {
-  chooseOption,
   gotoAuthenticatedPage,
   selectComboboxItem,
 } from "./support/e2e-helpers";
@@ -14,9 +13,9 @@ import { dispatchesOperation } from "./support/dispatch-wire";
 import { createFixtureGraph, ensureMemberParty } from "./fixtures/core";
 
 // A stale screen must not book changed bank evidence. Retries must preserve the
-// approved decision, and negative income must expose reimbursement review.
+// approved decision. Reimbursement interaction and signed money have native/SQL owners.
 // Optional paperwork must stay absent from both transaction UI and Purchase gaps.
-test("reviews spending and reimbursement in the browser with stale and replay guards", async ({
+test("reviews spending in the browser with stale and replay guards", async ({
   page,
   baseURL,
 }) => {
@@ -30,44 +29,32 @@ test("reviews spending and reimbursement in the browser with stale and replay gu
     );
   const vendorName = "Synthetic review cafe";
   const owner = await ensureMemberParty(page, "Synthetic booking member");
-  const { transactionId, creditId } = await createFixtureGraph(
-    page,
-    async (create) => {
-      await create("spendingCategory", {
-        name: "Synthetic reviewed dining",
-        itemizationExpectation: "not_expected",
-        productExpectation: "not_expected",
-      });
-      await create("vendor", {
-        name: vendorName,
-        itemizationExpectation: "not_expected",
-      });
-      const account = await create("financialAccount", {
-        name: "Synthetic review card",
-        identity: { kind: "credit_card", issuer: null, network: "visa" },
-        ledgerPartyId: owner.shortcode,
-        provisional: false,
-      });
-      const transaction = await create("financialTransaction", {
-        accountId: account.id,
-        amount: 120,
-        merchant: vendorName,
-        kind: "purchase",
-        status: "posted",
-        postedDate: "2026-09-10",
-      });
-      const credit = await create("financialTransaction", {
-        accountId: account.id,
-        amount: -40,
-        merchant: "Synthetic friend contribution",
-        kind: "income",
-        status: "posted",
-        postedDate: "2026-09-12",
-        itemizationExpectation: "required",
-      });
-      return { transactionId: transaction.id, creditId: credit.id };
-    },
-  );
+  const { transactionId } = await createFixtureGraph(page, async (create) => {
+    await create("spendingCategory", {
+      name: "Synthetic reviewed dining",
+      itemizationExpectation: "not_expected",
+      productExpectation: "not_expected",
+    });
+    await create("vendor", {
+      name: vendorName,
+      itemizationExpectation: "not_expected",
+    });
+    const account = await create("financialAccount", {
+      name: "Synthetic review card",
+      identity: { kind: "credit_card", issuer: null, network: "visa" },
+      ledgerPartyId: owner.shortcode,
+      provisional: false,
+    });
+    const transaction = await create("financialTransaction", {
+      accountId: account.id,
+      amount: 120,
+      merchant: vendorName,
+      kind: "purchase",
+      status: "posted",
+      postedDate: "2026-09-10",
+    });
+    return { transactionId: transaction.id };
+  });
   await gotoAuthenticatedPage(
     page,
     `/financial-transactions/${transactionId}`,
@@ -167,92 +154,7 @@ test("reviews spending and reimbursement in the browser with stale and replay gu
     {},
   );
   const purchase = z
-    .object({ displayName: z.string(), expenseTotal: z.number() })
+    .object({ expenseTotal: z.number() })
     .parse(await purchaseResponse.json());
   expect(purchase.expenseTotal).toBe(125);
-  await gotoAuthenticatedPage(
-    page,
-    `/financial-transactions/${creditId}`,
-    page.getByRole("button", { name: "Review Expense", exact: true }),
-  );
-  await chooseOption(
-    page,
-    page.getByRole("combobox", { name: "Credit purpose", exact: true }),
-    "Friend reimbursement",
-  );
-  await selectComboboxItem(
-    page,
-    page.getByRole("combobox", { name: "Existing purchase", exact: true }),
-    purchase.displayName,
-    { query: vendorName, code: result.purchaseId },
-  );
-  await page
-    .getByRole("button", { name: "Review Expense", exact: true })
-    .click();
-  await expect(page.getByText(/as a reimbursement credit/)).toBeVisible();
-  const creditResponse = waitForOperation("commitBooking");
-  await page
-    .getByRole("button", { name: "Record Expense", exact: true })
-    .click();
-  const credit = await creditResponse;
-  expect(credit.ok(), await credit.text()).toBeTruthy();
-  expect(
-    z
-      .object({
-        json: z.object({ ok: z.literal(true), data: financialBookingResult }),
-      })
-      .parse(await credit.json()).json.data.purchaseId,
-  ).toBe(result.purchaseId);
-  const netResponse = await entityApi(page.request).get(
-    "purchase",
-    result.purchaseId,
-    {},
-  );
-  const netPurchase = z
-    .object({
-      expenseTotal: z.number(),
-      statedTotal: z.null(),
-      dataQuality: z.object({ gaps: z.array(z.object({ check: z.string() })) }),
-    })
-    .parse(await netResponse.json());
-  expect(netPurchase).toMatchObject({ expenseTotal: 85, statedTotal: null });
-  expect(netPurchase.dataQuality.gaps.map((gap) => gap.check)).not.toContain(
-    "order_id",
-  );
-  const reviewed = await entityApi(page.request).get(
-    "financialTransaction",
-    creditId,
-    {},
-  );
-  expect(
-    z
-      .object({
-        itemizationExpectation: z.string(),
-        fieldResolutions: z.object({
-          itemizationExpectation: z.object({
-            mode: z.string(),
-            storedValue: z.string(),
-            value: z.string(),
-            fallbackValue: z.string(),
-            source: z.string(),
-            sourceEntity: z.null(),
-            canReset: z.boolean(),
-          }),
-        }),
-      })
-      .parse(await reviewed.json()),
-  ).toEqual({
-    itemizationExpectation: "required",
-    fieldResolutions: {
-      itemizationExpectation: {
-        mode: "allocated",
-        storedValue: "required",
-        value: "not_expected",
-        fallbackValue: "not_expected",
-        source: "reviewed reimbursement",
-        sourceEntity: null,
-        canReset: true,
-      },
-    },
-  });
 });
