@@ -1,3 +1,4 @@
+import { entityDisplayImagesInput } from "@cubby/schemas/entity-media";
 import type {
   EntityReportOut,
   ReportCommand,
@@ -102,6 +103,85 @@ describe("EntityReportSlot records", () => {
       wrapper: harness.wrapper,
     });
     expect(screen.getByRole("heading", { name: "Due & state" })).toBeVisible();
+  });
+
+  it("batches summary target, path and line covers through the shared media resolver", async () => {
+    const cover =
+      "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
+    restoreDispatch();
+    restoreDispatch = overrideStartDispatch(async (operation, input) => {
+      calls.push({ operation, input });
+      if (operation !== "entityMedia.displayImages")
+        throw new Error(`Unexpected summary operation ${operation}`);
+      const { refs } = entityDisplayImagesInput.parse(input);
+      return {
+        ok: true,
+        data: Object.fromEntries(
+          refs.map((ref) => [
+            `${ref.entityKind}:${ref.entityId}`,
+            { url: cover },
+          ]),
+        ),
+      };
+    });
+    const { container } = render(
+      <CompactSummaryReport
+        blocks={[
+          {
+            kind: "records",
+            empty: "No related records",
+            rows: [
+              {
+                entity: "email",
+                id: "EML-4K7M",
+                title: "Synthetic receipt",
+                trailing: null,
+                paths: [
+                  [
+                    {
+                      entityKind: "product",
+                      entityId: "PRD-4K7M",
+                      label: "Synthetic lamp",
+                    },
+                    {
+                      entityKind: "purchase",
+                      entityId: "PUR-4K7M",
+                      label: "Synthetic order",
+                    },
+                    {
+                      entityKind: "email",
+                      entityId: "EML-4K7M",
+                      label: "Synthetic receipt",
+                    },
+                  ],
+                ],
+                lines: [
+                  {
+                    text: "Synthetic seller",
+                    ref: { entity: "vendor", id: "VEN-4K7M" },
+                  },
+                ],
+              },
+            ],
+          },
+        ]}
+      />,
+      { wrapper: harness.wrapper },
+    );
+    await waitFor(() =>
+      expect(container.querySelectorAll(`img[src="${cover}"]`)).toHaveLength(3),
+    );
+    const media = calls.filter(
+      (call) => call.operation === "entityMedia.displayImages",
+    );
+    expect(media).toHaveLength(1);
+    expect(entityDisplayImagesInput.parse(media[0]!.input).refs).toEqual(
+      expect.arrayContaining([
+        { entityKind: "email", entityId: "EML-4K7M" },
+        { entityKind: "purchase", entityId: "PUR-4K7M" },
+        { entityKind: "vendor", entityId: "VEN-4K7M" },
+      ]),
+    );
   });
 
   // A diagnostic link must stay navigable without sending a report command.
