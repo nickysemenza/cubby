@@ -434,7 +434,22 @@ export async function resolveDraftExpenseFields(
   const lineKind = resolveExpenseLineKind(draft);
   const trade = draft.trade ?? null;
 
-  const result = await unwrapDb(db).execute<DraftResolutionRow>(sql`
+  let row: DraftResolutionRow | undefined;
+  if (!draft.projectId && !draft.productId && !draft.purchaseId) {
+    // No ancestry can supply a fallback or the food classification default.
+    row = {
+      effectiveProjectShortcode: null,
+      effectiveProjectName: null,
+      purchaseName: null,
+      fallbackProjectShortcode: null,
+      effectiveTrade: lineKind === "unclassified" ? null : trade,
+      fallbackTrade: null,
+      purchaseDefaultProjectShortcode: null,
+      purchaseDefaultTrade: null,
+      foodDefaulted: false,
+    };
+  } else {
+    const result = await unwrapDb(db).execute<DraftResolutionRow>(sql`
     WITH candidate AS (
       SELECT ${lineKind}::text AS "lineKind", ${projectId}::uuid AS "projectId",
         ${productId}::uuid AS "productId", ${purchaseId}::uuid AS "purchaseId",
@@ -485,7 +500,8 @@ export async function resolveDraftExpenseFields(
       ON live_product."id" = ${productId}::uuid
      AND live_product."deletedAt" IS NULL
   `);
-  const row = result.rows[0];
+    row = result.rows[0];
+  }
   if (!row) return {};
   const projectExplicit = lineKind === "principal" && projectId !== null;
 

@@ -28,6 +28,65 @@ import {
 const fixtureDate = "2026-09-20";
 describe("purchase inheritance lifecycle", () => {
   const ctx = withTestDb();
+  it.each([
+    {
+      draft: { lineKind: "principal" as const },
+      projectMode: "inherit",
+      tradeMode: "inherit",
+      tradeValue: null,
+    },
+    {
+      draft: { lineKind: "principal" as const, trade: "electrical" as const },
+      projectMode: "inherit",
+      tradeMode: "explicit",
+      tradeValue: "electrical",
+    },
+    {
+      draft: {
+        lineKind: "unclassified" as const,
+        trade: "electrical" as const,
+      },
+      projectMode: "none",
+      tradeMode: "none",
+      tradeValue: null,
+    },
+    {
+      draft: { lineKind: "tax" as const, costType: "services" as const },
+      projectMode: "allocated",
+      tradeMode: "allocated",
+      tradeValue: null,
+    },
+    {
+      draft: { lineKind: "shipping" as const, trade: "logistics" as const },
+      projectMode: "allocated",
+      tradeMode: "explicit",
+      tradeValue: "logistics",
+    },
+    {
+      draft: { name: "Sales tax", lineKind: "auto" as const },
+      projectMode: "none",
+      tradeMode: "none",
+      tradeValue: null,
+    },
+  ])(
+    "preserves resolution and provenance for unlinked drafts: $draft",
+    async ({ draft, projectMode, tradeMode, tradeValue }) => {
+      const result = await resolveDraftExpenseFields(ctx.db, draft);
+      expect(result).toMatchObject({
+        projectId: {
+          mode: projectMode,
+          value: null,
+          fallbackValue: null,
+          canReset: false,
+        },
+        trade: { mode: tradeMode, value: tradeValue, fallbackValue: null },
+      });
+      expect(result.costType?.storedValue).toBe(
+        draft.lineKind === "tax" ? "services" : undefined,
+      );
+    },
+  );
+
   const fixture = async () => {
     const vendor = await insertWithShortcode(ctx.db, "vendor", {
       name: "Inheritance fixture vendor",
