@@ -833,7 +833,6 @@ describe("data quality: list filters, sort and hydration agree", () => {
       check: "retired_synthetic_check",
       reason: "unavailable",
       note: "Synthetic retired metadata awaiting contraction.",
-      fingerprint: "retired_synthetic_check:false",
     });
     const quality = await publishedQualities(ctx.db, "product", [row.entityId]);
     expect(quality.get(row.entityId)?.exceptions).toEqual([]);
@@ -873,7 +872,6 @@ describe("data quality: list filters, sort and hydration agree", () => {
       check: "product_external_id",
       reason: "not_issued",
       note: "Synthetic component has no issued identifier.",
-      fingerprint: "product_external_id:false",
     });
     await unwrapDb(ctx.db)
       .update(product)
@@ -904,9 +902,9 @@ describe("data quality: list filters, sort and hydration agree", () => {
     ).not.toContain("product_external_id");
   });
 
-  // Mixed batches retain waivers independently of legacy fingerprints and do
-  // not add source-evidence reads for rows with a waiver.
-  it("product: retains durable waivers across a mixed batch regardless of legacy evidence", async () => {
+  // Mixed batches retain waivers and do not add source-evidence reads for
+  // rows with a waiver.
+  it("product: retains durable waivers across a mixed batch", async () => {
     const knownBrandId = await findOrCreateVendor(ctx.db, "Acme");
     const make = (
       name: string,
@@ -947,7 +945,6 @@ describe("data quality: list filters, sort and hydration agree", () => {
           check: "product_external_id",
           reason: "not_issued",
           note: "Synthetic component has no issued identifier.",
-          fingerprint: "product_external_id:false",
         },
         {
           entityId: mismatched.entityId,
@@ -955,7 +952,6 @@ describe("data quality: list filters, sort and hydration agree", () => {
           check: "product_external_id",
           reason: "not_issued",
           note: "Synthetic evidence has since changed.",
-          fingerprint: "product_external_id:synthetic-earlier-evidence",
         },
       ]);
     const qualities = await publishedQualities(ctx.db, "product", [

@@ -270,11 +270,9 @@ export const searchDocument = pgTable(
 );
 
 /**
- * A reasoned, evidence-bound "this gap does not apply" for one data-quality
- * check on one entity (ADR 0006). Replaces the per-table `dataExceptions`
- * jsonb columns so any exception-capable entity can record one. The
- * fingerprint is the check's evidence signature when the exception was set;
- * any evidence change makes it stale.
+ * A member's "this gap does not apply" for one data-quality check on one
+ * entity (ADR 0006). The waiver holds until the member clears it; evidence
+ * changes never reopen it.
  */
 export const dataExceptionRecord = pgTable(
   "DataException",
@@ -284,7 +282,6 @@ export const dataExceptionRecord = pgTable(
     check: text("check").notNull(),
     reason: text("reason").notNull(),
     note: text("note").notNull(),
-    fingerprint: text("fingerprint").notNull(),
     ...baseTimestamps(),
   },
   (table) => [

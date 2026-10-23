@@ -1,8 +1,6 @@
 import {
   dataExceptionReason,
-  dataCheck,
   dataCheckExemptible,
-  dataQualityExceptionEntities,
   dataQualityStatus,
   relatedDataQualityEntities,
   scoredEntities,
@@ -13,7 +11,7 @@ import { describe, expect, it } from "vitest";
 
 import { product } from "~/server/db/schema";
 
-import { dataQualityEntries, storedEntryFor } from "./entries";
+import { dataQualityEntries } from "./entries";
 import { calculateDataQualityScore } from "./hydrate";
 import {
   checksOf,
@@ -100,36 +98,18 @@ describe("data-quality predicate grouping", () => {
   );
 });
 
-/** The manifest and the SQL registry must describe the same checks. */
+/** Check coverage is typed by `defineStoredEntityChecks`; links come from the manifest. */
 describe("data-quality registry", () => {
-  it.each(scoredEntities)("%s binds exactly its declared checks", (entity) => {
-    const entry = entryFor(entity);
-    expect(entry.entity).toBe(entity);
-    expect(Object.keys(entry.checks).sort()).toEqual(
-      [...checksOf(entity)].sort(),
-    );
-    expect(Object.keys(entry.related ?? {}).sort()).toEqual(
-      [...relatedDataQualityEntities[entity]].sort(),
-    );
-  });
-
-  // An exception is keyed by the check's evidence fingerprint, so every check
-  // of an exception-bearing entity must declare its inputs.
-  it.each(
-    scoredEntities.filter(
-      (entity) =>
-        dataQualityExceptionEntities[entity] && !storedEntryFor(entity),
-    ),
-  )("%s declares fingerprint inputs for every check", (entity) => {
-    const entry = entryFor(entity);
-    expect(
-      Object.entries(entry.checks).flatMap(([check, binding]) =>
-        binding.fingerprint || !dataCheckExemptible[dataCheck.parse(check)]
-          ? []
-          : [check],
-      ),
-    ).toEqual([]);
-  });
+  it.each(scoredEntities)(
+    "%s binds exactly its declared roll-ups",
+    (entity) => {
+      const entry = entryFor(entity);
+      expect(entry.entity).toBe(entity);
+      expect(Object.keys(entry.related ?? {}).sort()).toEqual(
+        [...relatedDataQualityEntities[entity]].sort(),
+      );
+    },
+  );
 
   it("registers every scored entity and nothing else", () => {
     expect(Object.keys(dataQualityEntries).sort()).toEqual(

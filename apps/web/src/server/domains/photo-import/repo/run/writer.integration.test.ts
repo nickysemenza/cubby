@@ -13,7 +13,6 @@ import {
   photoRunImage,
   inventoryEntry,
   product,
-  dataExceptionRecord,
 } from "~/server/db/schema";
 import { getProductByShortcode } from "~/server/domains/product/repo/crud";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
@@ -317,16 +316,6 @@ describe("commitPhotoGroup", () => {
         state: "active",
       }),
     );
-    // Preserve the shipped fingerprint while no new label evidence exists.
-    await getDb(ctx.db)
-      .update(dataExceptionRecord)
-      .set({ fingerprint: "product_external_id:false" })
-      .where(
-        and(
-          eq(dataExceptionRecord.entityId, existing.entityId),
-          eq(dataExceptionRecord.check, "product_external_id"),
-        ),
-      );
     const historical = await getProductByShortcode(ctx.db, existing.id);
     expect(historical?.dataQuality.exceptions).toContainEqual(
       expect.objectContaining({

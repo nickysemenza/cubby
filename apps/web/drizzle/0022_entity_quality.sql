@@ -17,4 +17,5 @@ CREATE TABLE "EntityQualityCheck" (
 --> statement-breakpoint
 ALTER TABLE "EntityQuality" ADD CONSTRAINT "EntityQuality_entity_fk" FOREIGN KEY ("entityId","kind") REFERENCES "public"."Entity"("id","kind") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "EntityQualityCheck" ADD CONSTRAINT "EntityQualityCheck_entity_fk" FOREIGN KEY ("entityId","kind") REFERENCES "public"."Entity"("id","kind") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-CREATE INDEX "EntityQualityCheck_kind_check_state_idx" ON "EntityQualityCheck" USING btree ("kind","checkKey","state");
+CREATE INDEX "EntityQualityCheck_kind_check_state_idx" ON "EntityQualityCheck" USING btree ("kind","checkKey","state");--> statement-breakpoint
+ALTER TABLE "DataException" DROP COLUMN "fingerprint";

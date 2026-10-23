@@ -4,7 +4,8 @@ import { expect, it } from "vitest";
 import { migrateDatabase } from "./db-migrate";
 import { withMigrationDatabase } from "./test-database-lease";
 
-// The additive quality migration must preserve identity, source facts and member decisions.
+// The quality migration must preserve identity, source facts and member decisions,
+// including waivers whose legacy evidence signature no longer matched.
 it("preserves populated identities and waivers while adding kind-checked quality rows", async () => {
   await withMigrationDatabase(async (client) => {
     const db = drizzle(client);
@@ -24,13 +25,14 @@ it("preserves populated identities and waivers while adding kind-checked quality
       [id],
     );
     const before = await client.query(
-      `SELECT e.*, s.name, d.note, d.fingerprint FROM "Entity" e
+      `SELECT e.*, s.name, d."check", d.reason, d.note FROM "Entity" e
       JOIN "Shipment" s ON s.id = e.id JOIN "DataException" d ON d."entityId" = e.id WHERE e.id = $1`,
       [id],
     );
+    expect(before.rows).toHaveLength(1);
     await migrateDatabase(db, { through: "0021_entity_quality" });
     const after = await client.query(
-      `SELECT e.*, s.name, d.note, d.fingerprint FROM "Entity" e
+      `SELECT e.*, s.name, d."check", d.reason, d.note FROM "Entity" e
       JOIN "Shipment" s ON s.id = e.id JOIN "DataException" d ON d."entityId" = e.id WHERE e.id = $1`,
       [id],
     );

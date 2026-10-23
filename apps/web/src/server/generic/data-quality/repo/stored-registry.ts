@@ -7,7 +7,7 @@ import type { EntityQualityCheckState } from "@cubby/schemas/data-quality-shape"
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import type {
-  EntityChecks,
+  RelatedQualityLinks,
   ScoredTable,
 } from "~/server/generic/data-quality/repo/registry";
 
@@ -18,12 +18,11 @@ export type QualityEvaluation = QualityRecord & {
   checks: Readonly<Partial<Record<DataCheck, EntityQualityCheckState>>>;
 };
 
-/** The per-entity switch: SQL bindings or a versioned batch-loaded TS evaluator. */
+/** One scored entity's versioned, batch-loaded TypeScript evaluator. */
 export interface StoredEntityChecks<
   E extends ScoredEntity,
   T extends ScoredTable,
 > {
-  storage: "stored";
   entity: E;
   table: T;
   rulesVersion: number;
@@ -31,7 +30,7 @@ export interface StoredEntityChecks<
     db: Database | DrizzleTransaction,
     ids: readonly string[],
   ): Promise<QualityEvaluation[]>;
-  related?: EntityChecks<E, T>["related"];
+  related?: RelatedQualityLinks<T>;
 }
 
 /** A loader owns all source reads for its ID page; functions only inspect its records. */
@@ -45,10 +44,9 @@ export function defineStoredEntityChecks<
   rulesVersion: number;
   load(db: Database | DrizzleTransaction, ids: readonly string[]): Promise<R[]>;
   checks: { readonly [C in DataCheckOf<E>]: QualityCheck<R> };
-  related?: EntityChecks<E, T>["related"];
+  related?: RelatedQualityLinks<T>;
 }): StoredEntityChecks<E, T> {
   return {
-    storage: "stored",
     entity: entry.entity,
     table: entry.table,
     rulesVersion: entry.rulesVersion,

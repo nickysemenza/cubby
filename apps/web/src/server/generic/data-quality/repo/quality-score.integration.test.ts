@@ -9,7 +9,7 @@ import { z } from "zod";
 
 import { unwrapDb } from "~/server/db/helpers";
 
-import { qualityStateCode, scoreFromStates, statusFromStates } from "./sql";
+import { qualityStateCode, statusFromStates } from "./sql";
 
 const weights = [0, 1, 3, 7] as const;
 const caps = [null, 0, 40, 98] as const;
@@ -38,23 +38,19 @@ const cases = (): QualityTerm[][] => {
       })),
     );
   }
-  // 999/1000 must cap at 99 in SQL as well, not round to 100.
-  result.push([
-    { weight: 999, scoreCap: null, defect: false, state: "satisfied" },
-    { weight: 1, scoreCap: null, defect: false, state: "gap" },
-  ]);
   return result;
 };
 
 /**
- * The list sort, the `dataStatus` filter and `entity.records` read the SQL
- * score and status; hydration and the explanation read the TS core. They must
- * agree on every combination of weight, cap, kind and state.
+ * Stored scores come from the TS core. The `dataStatus` filter and
+ * `entity.records` derive status in SQL from published check states, so it
+ * must agree with the TS core on every combination of weight, cap, kind and
+ * state.
  */
-describe("quality score: TS and SQL agree", () => {
+describe("quality status: TS and SQL agree", () => {
   const ctx = withTestDb();
 
-  it("computes the same score and status for every term set", async () => {
+  it("computes the same status for every term set", async () => {
     const all = cases();
     const rows = sql.join(
       all.map((terms, index) => {
@@ -62,7 +58,7 @@ describe("quality score: TS and SQL agree", () => {
           ...term,
           state: sql.raw(String(qualityStateCode[term.state])),
         }));
-        return sql`SELECT ${index} AS "index", ${scoreFromStates(sqlTerms)}::float8 AS "score", ${statusFromStates(sqlTerms)} AS "status"`;
+        return sql`SELECT ${index} AS "index", ${statusFromStates(sqlTerms)} AS "status"`;
       }),
       sql` UNION ALL `,
     );
@@ -70,22 +66,15 @@ describe("quality score: TS and SQL agree", () => {
       .array(
         z.object({
           index: z.coerce.number(),
-          score: z.number().nullable(),
           status: z.string(),
         }),
       )
       .parse((await unwrapDb(ctx.db).execute(rows)).rows);
     expect(result).toHaveLength(all.length);
     for (const row of result) {
-      const expected = scoreQualityTerms(all[row.index]!);
-      expect({
+      expect({ index: row.index, status: row.status }).toEqual({
         index: row.index,
-        score: row.score,
-        status: row.status,
-      }).toEqual({
-        index: row.index,
-        score: expected.score,
-        status: expected.status,
+        status: scoreQualityTerms(all[row.index]!).status,
       });
     }
   });

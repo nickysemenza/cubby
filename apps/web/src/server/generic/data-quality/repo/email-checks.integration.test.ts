@@ -36,7 +36,7 @@ import { refreshFamilyHandler } from "~/server/workflows/background-tasks/refres
 
 import { emailChecks, EMAIL_QUALITY_RULES_VERSION } from "./checks/email";
 import { loadDataQualities, loadQualityBreakdown } from "./hydrate";
-import { gapCondition, qualityFilterSource, qualityFilterContext } from "./sql";
+import { gapCondition } from "./sql";
 
 // Failure modes: original/import evidence crosses Email or member boundaries;
 // filtered list counts and Work queue branches re-run live acceptance policy;
@@ -189,7 +189,7 @@ describe("Email data quality", () => {
         status: "pending",
       });
     await refresh();
-    const statement = sql`SELECT "Email".id, ${gapCondition("email", "email_not_imported", undefined, qualityFilterContext("email"))} AS gap FROM ${qualityFilterSource("email")}`;
+    const statement = sql`SELECT "Email".id, ${gapCondition("email", "email_not_imported")} AS gap FROM ${email}`;
     const rows = await getDb(ctx.db).execute(statement);
     const gaps = z.array(z.object({ gap: z.boolean() })).parse(rows.rows);
     expect(gaps).toHaveLength(6);

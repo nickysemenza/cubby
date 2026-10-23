@@ -281,17 +281,10 @@ a disable comment with the reason.
 Inside the entity kernel's write transaction every DB touch must go through the
 transaction-bound context: a service still bound to the request pool that
 updates the row the transaction holds deadlocks silently, and only E2E on
-workerd exposes it. For unported SQL quality entities, a data exception's fingerprint is declared per check in
-that check's registry binding (`CheckBinding.fingerprint(t)` in
-`apps/web/src/server/generic/data-quality/repo/checks/<entity>.ts`) — the inputs it
-reads, for example the live Expense count or primary-document set — not
-`updatedAt`: unrelated edits must not reopen it, while changed evidence must.
-Hydration and the filter/sort SQL evaluate that same binding (one SQL
-expression per check, shared by `hydrate.ts` and `sql.ts`), so the two paths
-cannot drift apart; legacy `updatedAt` fingerprints remain stale until an
-explicit migration proves the old exception is still active. Stored-quality
-entities instead evaluate TypeScript checks and retain waivers across input
-changes, ignoring legacy fingerprints; see [Data quality](../entities.md#data-quality).
+workerd exposes it. Data-quality checks are TypeScript functions over one batch
+loader per ID page; list SQL reads only their published outcomes, so hydration
+and filters cannot drift apart. Waivers hold across input changes until cleared;
+see [Data quality](../entities.md#data-quality).
 
 Unit vocabulary derives from `recipebridge`'s `size_unit_aliases()`; the TS
 title matcher and the Postgres prefilter both build from it — never hand-list

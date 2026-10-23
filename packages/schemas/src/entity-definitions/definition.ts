@@ -2182,8 +2182,8 @@ const buildMetadataSchemas = () => {
       /** Disable when quality measures evidence completeness independently of imagery. */
       displayImage: z.boolean().optional().default(true),
       /**
-       * True where the entity may record `DataException` rows; every check
-       * then declares fingerprint inputs so an exception can go stale.
+       * True where the entity may record `DataException` rows: durable member
+       * waivers that hold until cleared.
        */
       exceptions: z
         .boolean({ error: "must be a boolean" })

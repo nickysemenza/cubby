@@ -15,10 +15,7 @@ import { runChecks } from "~/server/generic/data-quality/repo/checks/run";
 import { shipmentChecks } from "~/server/generic/data-quality/repo/checks/shipment";
 import { spendingCategoryChecks } from "~/server/generic/data-quality/repo/checks/spending-category";
 import { wishChecks } from "~/server/generic/data-quality/repo/checks/wish";
-import type {
-  EntityChecks,
-  ScoredTable,
-} from "~/server/generic/data-quality/repo/registry";
+import type { ScoredTable } from "~/server/generic/data-quality/repo/registry";
 
 import { cookbookChecks } from "./checks/cookbook";
 import { expenseChecks } from "./checks/expense";
@@ -37,9 +34,7 @@ import type { StoredEntityChecks } from "./stored-registry";
 
 /** The registry's owner contract: one entry per scored entity. */
 export type DataQualityEntries = {
-  readonly [E in ScoredEntity]:
-    | EntityChecks<E, ScoredTable>
-    | StoredEntityChecks<E, ScoredTable>;
+  readonly [E in ScoredEntity]: StoredEntityChecks<E, ScoredTable>;
 };
 
 /**
@@ -82,16 +77,6 @@ export const dataQualityEntries = {
   image: imageChecks,
 } satisfies DataQualityEntries;
 
-export function qualityEntryFor(
-  entity: ScoredEntity,
-): DataQualityEntries[ScoredEntity] {
-  return dataQualityEntries[entity];
-}
-
-/** New ports opt in here by returning defineStoredEntityChecks from their registry module. */
 export const storedEntryFor = (
   entity: ScoredEntity,
-): StoredEntityChecks<ScoredEntity, ScoredTable> | undefined => {
-  const entry = qualityEntryFor(entity);
-  return entry.storage === "stored" ? entry : undefined;
-};
+): StoredEntityChecks<ScoredEntity, ScoredTable> => dataQualityEntries[entity];

@@ -263,8 +263,8 @@ initial picker list and disappear when typed search resolves. For typed search,
 use the picker helper's query/code option to wait for the actual search response
 before selecting the record.
 The quality-exception browser journey batches its fixture graph, then accepts one
-exception, changes the evidence, reloads to establish persistence and clears the
-stale exception through the real UI. Keep required-note admission and saved
+exception, changes the evidence, reloads to establish that the waiver persists and
+clears it through the real UI. Keep required-note admission and saved
 Markdown links. Do not add a second accept/clear/accept cycle: the existing
 `data-quality.integration.test.ts` active-exception case owns clearing and score
 restoration; `availability-explanation.integration.test.ts` owns MCP set/clear,

@@ -87,8 +87,6 @@ export const dataException = z.object({
   check: dataCheck,
   reason: dataExceptionReason,
   note: z.string().trim().min(1),
-  /** Legacy SQL evidence signature; stored-quality waivers leave this empty. */
-  fingerprint: z.string(),
 });
 export type DataException = z.infer<typeof dataException>;
 

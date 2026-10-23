@@ -1,4 +1,4 @@
-import type { DataCheckOf, ScoredEntity } from "@cubby/schemas/data-quality";
+import type { ScoredEntity } from "@cubby/schemas/data-quality";
 import { sql, type AnyColumn, type SQL } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
 
@@ -13,72 +13,25 @@ export type ScoredTable = PgTable & {
 export const liveQualityRow = (t: ScoredTable): SQL =>
   t.deletedAt ? sql`${t.deletedAt} IS NULL` : sql`TRUE`;
 
+/** Statement-local evidence explicitly requested by a caller. */
+export type QualityReadContext = {
+  /** Unsupported fields return undefined to retain their canonical scalar read. */
+  readonly derivedValue?: (
+    field: string,
+    entityId: AnyColumn,
+  ) => SQL | undefined;
+};
+
 /**
- * One check's SQL, written once against `t` — the entity's own table or an
- * `alias()` of it, so a Purchase can evaluate a linked Product's check under
- * `"dq_r"` with the same binding the Product list uses. Method signatures
- * (not arrow properties) keep the registry assignable across table types.
+ * How a related scored entity's row (by its id) links to this row, for the
+ * manifest's `related` roll-up: `relatedGaps`, `relatedExceptions`, and the
+ * `dataGap` filter accepting the related entity's check ids.
  */
-/** Joined hydration values or statement-local evidence explicitly requested by a caller. */
-export type QualityReadContext =
-  | {
-      readonly derivedAlias: string;
-      readonly derivedValue?: never;
-    }
-  | {
-      readonly derivedAlias?: never;
-      /** Unsupported fields return undefined to retain their canonical scalar read. */
-      readonly derivedValue?: (
-        field: string,
-        entityId: AnyColumn,
-      ) => SQL | undefined;
-    };
-
-export interface CheckBinding<T extends ScoredTable> {
-  /** Whether the check applies to this row at all; omitted = always. */
-  expected?(t: T, context?: QualityReadContext): SQL;
-  /** Evaluated only under `expected`. */
-  missing(t: T, context?: QualityReadContext): SQL;
-  /**
-   * The inputs this check reads, so a stored exception stays active until
-   * that evidence changes. Required exactly when the entity has exceptions.
-   */
-  fingerprint?(t: T, context?: QualityReadContext): readonly SQL[];
-}
-
-export interface EntityChecks<E extends ScoredEntity, T extends ScoredTable> {
-  storage?: "sql";
-  entity: E;
-  table: T;
-  /** One row per entityId; all checks share it for the selected ID batch. */
-  derivedRead?(ids: SQL): SQL;
-  /** One row per entityId for bulk filters and score sorting, before paging. */
-  filterRead?(): SQL;
-  /** Domain checks are exhaustive; entryFor supplies the shared display-image check. */
-  checks: {
-    readonly [
-      C in Exclude<DataCheckOf<E>, `${Lowercase<E>}_display_image`>
-    ]: CheckBinding<T>;
-  };
-  /**
-   * How a related scored entity's row (by its id) links to this row, for the
-   * manifest's `related` roll-up: `relatedGaps`, `relatedExceptions`, and the
-   * `dataGap` filter accepting the related entity's check ids.
-   */
-  related?: {
-    readonly [R in ScoredEntity]?: {
-      // Bivariant on purpose (the React-props trick): a mapped type cannot
-      // carry a method signature, and a plain property would make the
-      // per-table entries unassignable to the erased registry type.
-      bivarianceHack(t: T, relatedId: SQL): SQL;
-    }["bivarianceHack"];
-  };
-}
-
-/** Identity helper so each `checks/<entity>.ts` infers its own table type. */
-export const defineEntityChecks = <
-  E extends ScoredEntity,
-  T extends ScoredTable,
->(
-  entry: EntityChecks<E, T>,
-): EntityChecks<E, T> => entry;
+export type RelatedQualityLinks<T extends ScoredTable> = {
+  readonly [R in ScoredEntity]?: {
+    // Bivariant on purpose (the React-props trick): a mapped type cannot
+    // carry a method signature, and a plain property would make the
+    // per-table entries unassignable to the erased registry type.
+    bivarianceHack(t: T, relatedId: SQL): SQL;
+  }["bivarianceHack"];
+};

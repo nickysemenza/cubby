@@ -429,14 +429,13 @@ describe("Shipment evidence quality", () => {
       score: 80,
       rulesVersion: SHIPMENT_QUALITY_RULES_VERSION,
     });
-    // Stored-mode decisions ignore legacy fingerprints and survive later evidence edits.
+    // Waivers are durable member decisions and survive later evidence edits.
     await unwrapDb(ctx.db).insert(dataExceptionRecord).values({
       entityId: parcel.row.id,
       entityKind: "shipment",
       check: "shipment_span",
       reason: "unavailable",
       note: "Synthetic retained decision",
-      fingerprint: "synthetic-legacy-fingerprint",
     });
     expect((await stored()).gaps.map((gap) => gap.check)).toContain(
       "shipment_span",
