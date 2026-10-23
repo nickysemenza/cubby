@@ -1,5 +1,6 @@
 import { buildNutrition } from "@cubby/schemas/nutrition";
 import { eq } from "drizzle-orm";
+import { taxonomyShortcode } from "tooling/product-category-fixtures";
 import { countTestDbQueries, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
@@ -14,6 +15,7 @@ import {
   mealList,
   mealListRead,
 } from "~/server/domains/meal/repo/crud";
+import { listProductCategoriesRead } from "~/server/domains/product-category/repo/product-category";
 import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import {
@@ -23,6 +25,52 @@ import {
 
 describe("progressive list readers", () => {
   const ctx = withTestDb();
+
+  it("resolves category reference features without derived catalog, quality or media reads", async () => {
+    const pagination = { pageIndex: 0, pageSize: 500 };
+    const core = await countTestDbQueries(() =>
+      listProductCategoriesRead(ctx.db, {}, [], pagination, { kind: "base" }),
+    );
+    expect(core.result.data.every((row) => !("effectiveFeature" in row))).toBe(
+      true,
+    );
+    const references = await countTestDbQueries(() =>
+      listProductCategoriesRead(ctx.db, {}, [], pagination, {
+        kind: "enrichment",
+        groups: ["relations"],
+      }),
+    );
+    expect(
+      references.result.data.find(
+        (row) => row.id === taxonomyShortcode("tools"),
+      ),
+    ).toMatchObject({ effectiveFeature: "tools" });
+    expect(
+      references.tables.filter(
+        (table) =>
+          /^[A-Z]/.test(table) &&
+          !["ProductCategory", "SpendingCategory"].includes(table),
+      ),
+    ).toEqual([]);
+    for (const row of references.result.data) {
+      expect(row).not.toHaveProperty("fieldResolutions");
+      expect(row).not.toHaveProperty("productCount");
+      expect(row).not.toHaveProperty("spendingCategoryMapping");
+      expect(row).not.toHaveProperty("dataQuality");
+      expect(row).not.toHaveProperty("displayImages");
+    }
+    const empty = await countTestDbQueries(() =>
+      listProductCategoriesRead(
+        ctx.db,
+        { search: "Synthetic nonexistent category vocabulary" },
+        [],
+        pagination,
+        { kind: "enrichment", groups: ["relations"] },
+      ),
+    );
+    expect(empty.result.data).toEqual([]);
+    expect(empty.queryCount).toBe(core.queryCount);
+  });
 
   // Reading core scalars must not resolve FKs, score quality, or resolve media;
   // partial patches must agree with the corresponding fields of the full read.
