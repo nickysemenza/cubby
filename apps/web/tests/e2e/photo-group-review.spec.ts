@@ -884,6 +884,10 @@ test("distinguishes attach and create and exposes saved photo evidence", async (
   await expect(
     attach.getByRole("button", { name: "Attach 1 photo", exact: true }),
   ).toBeEnabled();
+  // The cover is lazy-loaded below the record summary.
+  await attach
+    .getByRole("img", { name: "In Cubby cover" })
+    .scrollIntoViewIfNeeded();
   await expect
     .poll(() =>
       attach

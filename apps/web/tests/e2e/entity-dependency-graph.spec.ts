@@ -49,20 +49,22 @@ test("connections workspace shares dense facts, linked paths, and native handoff
     projectId: project.id,
   });
   await gotoAuthenticatedPage(page, `/products/${product.id}`);
-  const context = page.getByRole("region", { name: "Connection context" });
+  const context = page.getByRole("region", {
+    name: "Purchase projects",
+    exact: true,
+  });
   await expect(
     context.getByRole("link", { name: "Connection patio project" }),
   ).toBeVisible();
-  await context
-    .getByText("Show connection paths", { exact: true })
-    .first()
-    .click();
   await expect(
-    context.getByRole("link", { name: "Connection lighting purchase" }),
+    context.getByTitle("Expense: Connection lighting purchase", {
+      exact: true,
+    }),
   ).toBeVisible();
-  await context
-    .getByRole("link", { name: "Open connections", exact: true })
-    .click();
+  await gotoAuthenticatedPage(
+    page,
+    `/connections?source=product&id=${product.id}`,
+  );
   const graph = page.getByLabel("Relationship graph", { exact: true });
   const card = graph.locator(
     `.react-flow__node[data-id="product:${product.id}"]`,
