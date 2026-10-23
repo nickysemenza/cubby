@@ -1917,6 +1917,7 @@ export async function updateProduct<TOutput>(
     tx: DrizzleTransaction,
     beforeProduct: typeof product.$inferSelect,
     beforeExternalIds: Array<typeof entityExternalId.$inferSelect>,
+    resolvedBrandId: VendorId | null | undefined,
   ) => {
     if (unitMappings !== undefined) assertNoCanonicalPriceMapping(unitMappings);
     const { barcode, aliases, tags, ...columnData } = productData;
@@ -1930,9 +1931,7 @@ export async function updateProduct<TOutput>(
     effectiveIdentity = {
       name: columnData.name ?? beforeProduct.name,
       brandId:
-        columnData.brandId === undefined
-          ? beforeProduct.brandId
-          : await resolveProductBrand(tx, columnData.brandId),
+        resolvedBrandId === undefined ? beforeProduct.brandId : resolvedBrandId,
       upc: incomingGtin ?? undefined,
     };
     const updateData: Partial<typeof product.$inferInsert> = {
@@ -2016,6 +2015,12 @@ export async function updateProduct<TOutput>(
 
   try {
     const updatedProduct = await withTransaction(db, async (tx) => {
+      // Vendor merge locks identities before their Products. Match that order
+      // even when an edit resubmits the Product's current Brand.
+      const resolvedBrandId =
+        productData.brandId === undefined
+          ? undefined
+          : await resolveProductBrand(tx, productData.brandId);
       await lockExternalIdentifierParents(tx, [
         { entityId: id, entityKind: "product" },
       ]);
@@ -2040,7 +2045,12 @@ export async function updateProduct<TOutput>(
             });
 
       const { desiredExternalIds, incomingGtin, updateData } =
-        await prepareUpdate(tx, beforeProduct, beforeExternalIds);
+        await prepareUpdate(
+          tx,
+          beforeProduct,
+          beforeExternalIds,
+          resolvedBrandId,
+        );
 
       // A caller that only touches a child table — unitMappings, externalIds,
       // pendingImageIds/removeImageIds/imageOrder — leaves no `product` column
