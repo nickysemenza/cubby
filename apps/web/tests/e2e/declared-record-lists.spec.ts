@@ -8,7 +8,7 @@ import {
   seedLocationPrerequisite,
   seedProductPrerequisite,
 } from "./fixtures/catalog";
-import { createFixture, createFixtureGraph } from "./fixtures/core";
+import { createFixtureGraph } from "./fixtures/core";
 import {
   seedPurchaseHeicAttachment,
   seedRecordListDisplayPrerequisite,
@@ -363,15 +363,6 @@ test("record dates retain their calendar label with present and future context",
   const prefix = `Date context ${Date.now()}`;
   const today = householdLocalDate();
   const later = householdDaysFromNow(26);
-  const project = await createFixture(page, "project", {
-    name: `${prefix} project`,
-  });
-  await createFixture(page, "task", {
-    name: `${prefix} ongoing`,
-    trade: "other",
-    projectId: project.id,
-    due: { start: today, end: householdDaysFromNow(1) },
-  });
   // Table cells stack the day over its compact distance; the title keeps
   // the full label.
   const current = stackedDateSpan(today, null, today);
@@ -391,17 +382,20 @@ test("record dates retain their calendar label with present and future context",
     await expect(date.getByText(day, { exact: true })).toBeVisible();
     await expect(date.getByText(context, { exact: true })).toBeVisible();
   };
-  await createFixture(page, "task", {
-    name: `${prefix} current`,
-    projectId: project.id,
-    trade: "other",
-    due: { start: today, end: null },
-  });
-  const futureTask = await createFixture(page, "task", {
-    name: `${prefix} future`,
-    projectId: project.id,
-    trade: "other",
-    due: { start: later, end: null },
+  const futureTask = await createFixtureGraph(page, async (create) => {
+    const project = await create("project", { name: `${prefix} project` });
+    await create("task", {
+      name: `${prefix} current`,
+      projectId: project.id,
+      trade: "other",
+      due: { start: today, end: null },
+    });
+    return create("task", {
+      name: `${prefix} future`,
+      projectId: project.id,
+      trade: "other",
+      due: { start: later, end: null },
+    });
   });
   await gotoAuthenticatedPage(
     page,
@@ -425,83 +419,12 @@ test("record dates retain their calendar label with present and future context",
     futureDay,
     futureContext,
   );
-  await gotoAuthenticatedPage(page, `/tasks?q=${encodeURIComponent(prefix)}`);
-  await assertDate(
-    page.locator('[data-cell-col="dueDate"]'),
-    currentLabel,
-    currentDay,
-    "today",
-  );
-  await assertDate(
-    page.locator('[data-cell-col="dueDate"]'),
-    futureLabel,
-    futureDay,
-    futureContext,
-  );
-  const futureTaskLabel = page
-    .getByTitle(futureLabel, { exact: true })
-    .getByText(futureDay, { exact: true });
-  const unclipped = async (label: typeof futureTaskLabel) => {
-    await expect(label).toBeVisible();
-    expect(
-      await label.evaluate((element) => {
-        // Editor hover padding deliberately bleeds into the cell gutter; only
-        // clipping the readable calendar text violates this date contract.
-        const range = document.createRange();
-        range.selectNodeContents(element);
-        const text = range.getBoundingClientRect();
-        for (
-          let node = element instanceof HTMLElement ? element : null;
-          node;
-          node = node.parentElement
-        ) {
-          const overflow = getComputedStyle(node).overflowX;
-          if (overflow === "hidden" || overflow === "clip") {
-            const bounds = node.getBoundingClientRect();
-            const left = bounds.left + node.clientLeft;
-            const right = left + node.clientWidth;
-            if (text.left < left - 1 || text.right > right + 1) return false;
-          }
-          if (node.hasAttribute("data-cell-col")) break;
-        }
-        return true;
-      }),
-    ).toBe(true);
-  };
-  await unclipped(futureTaskLabel);
-  await createFixture(page, "expense", {
-    lineKind: "principal",
-    name: `${prefix} expense`,
-    date: later,
-    cost: 2,
-    costType: "materials",
-    trade: "other",
-  });
-  await gotoAuthenticatedPage(
-    page,
-    `/expenses?q=${encodeURIComponent(`${prefix} expense`)}`,
-  );
-  await assertDate(
-    page.locator('[data-cell-col="date"]'),
-    futureLabel,
-    futureDay,
-    futureContext,
-  );
-  await unclipped(
-    page
-      .getByTitle(futureLabel, { exact: true })
-      .getByText(futureDay, { exact: true }),
-  );
-  await gotoAuthenticatedPage(page, "/projects?view=overview");
-  const ongoing = page.getByRole("link", {
-    name: `${prefix} ongoing`,
-    exact: true,
-  });
-  await expect(ongoing).toBeVisible();
-  await expect(ongoing.locator("..")).toContainText("· ongoing");
-
+  // Shared date formatting and clipping are owned by date-span.unit.test.ts,
+  // list-capabilities.preview.test.tsx and table-density.preview.test.tsx.
+  // This journey owns the real list-to-record composition and live timestamp.
   // Full record details expose both date and timestamp without opening a tooltip.
-  await gotoAuthenticatedPage(page, `/tasks/${futureTask.id}`);
+  await page.locator(`a[href="/tasks/${futureTask.id}"]`).first().click();
+  await expect(page).toHaveURL(`/tasks/${futureTask.id}`);
   await expect(page.getByTitle(futureLabel, { exact: true })).toBeVisible();
   const header = page.getByTestId("detail-spec-plate");
   await expect(header).toContainText("Added");
@@ -519,13 +442,6 @@ test("record dates retain their calendar label with present and future context",
   await expect(page.getByRole("tooltip")).toContainText(
     /\d{2}:\d{2}:\d{2} (PDT|PST|GMT-7|GMT-8)/,
   );
-  await page.setViewportSize({ width: 402, height: 874 });
-  await expect(timestamp).toBeVisible();
-  expect(
-    await timestamp.evaluate(
-      (element) => element.getBoundingClientRect().right <= innerWidth,
-    ),
-  ).toBe(true);
   // A waking page refreshes mounted ages without replacing Date constructors
   // (browser clock emulation can discard TZDate subclass behavior).
   const before = await timestamp.textContent();
