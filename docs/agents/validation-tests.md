@@ -943,8 +943,8 @@ storage-fixture capabilities, not replacements for `buildEntity`/`createEntity`.
 Use `withMigrationDatabase` (`apps/web/tooling/test-database-lease.ts`) for
 migration regressions. It owns an empty IntegreSQL lease, connection setup, and
 cleanup on success or failure; the current-schema Vitest template cannot test a
-predecessor. Use `migrationTags` and `migrateDatabase` from `tooling/db-migrate.ts`
-to select and apply the committed boundaries. Keep predecessor-schema fixtures
+predecessor. Use `migrateDatabase` from `tooling/db-migrate.ts` with exact `through` tags
+from the committed journal to select and apply the boundaries. Keep predecessor-schema fixtures
 and preservation assertions in the test; bootstrap credentials, database names,
 and CREATE/DROP lifecycle belong to the shared lease infrastructure.
 
