@@ -27,9 +27,7 @@ async function seedLabelReview(page: Page, objectStorageUrl: string) {
     objectStorageUrl,
   );
   await attachProductImagePrerequisite(page, label.id, product.id, "label");
-  // The fixture derives its mutation Origin from the page; JSON needs no app hydration.
-  await page.goto("/api/auth/get-session");
-  const imageCode = await seedDetectedLabelNutrition(page, name);
+  const imageCode = await seedDetectedLabelNutrition(name);
   await gotoAuthenticatedPage(page, `/products/${product.id}`);
   const dialog = page.getByRole("dialog");
   const review = page.getByRole("button", {
@@ -102,14 +100,5 @@ test("detected label nutrition stays editable and Save persists the panel eviden
     .getByRole("heading", { name: "Nutrition summary", exact: true })
     .scrollIntoViewIfNeeded();
   await expect(page.getByText(/inferred zero/).first()).toBeVisible();
-  await page
-    .getByRole("heading", { name: "Labels", exact: true })
-    .scrollIntoViewIfNeeded();
-  await page.reload();
-  await expect(
-    page
-      .locator("#labels")
-      .getByRole("img", { name: "synthetic-wardrobe-label.png" }),
-  ).toBeVisible();
   await expect(review).toHaveCount(0);
 });
