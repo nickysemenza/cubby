@@ -1,6 +1,5 @@
 import { createFixtureGraph } from "./fixtures/core";
 import {
-  openCellExplanation,
   gotoAuthenticatedPage,
   inlineExplanation,
 } from "./support/e2e-helpers";
@@ -8,9 +7,9 @@ import { expect, test } from "./support/e2e-test";
 
 test.setTimeout(60_000);
 
-// A partial location must survive its discrepancy caption; list and detail
-// explanations use the same recorded policy and quantity evidence.
-test("product location context preserves links and explains the same partial gap on detail", async ({
+// The detail must retain a known location alongside the partial-gap caption,
+// and nested ownership evidence must remain inspectable.
+test("product location detail preserves its partial gap and nested ownership evidence", async ({
   page,
 }) => {
   const name = `Synthetic location context ${Date.now()}`;
@@ -45,21 +44,6 @@ test("product location context preserves links and explains the same partial gap
   );
   await gotoAuthenticatedPage(
     page,
-    `/products?searchQuery=${encodeURIComponent(name)}`,
-  );
-  const row = page.getByRole("row").filter({ hasText: name });
-  await expect(row).toContainText("1 expected item unlocated");
-  await expect(row.getByText("Unknown", { exact: true })).toBeVisible();
-  await expect(
-    row.locator(`a[href="/locations/${location.id}"]`).first(),
-  ).toBeVisible();
-  await openCellExplanation(row, "How locations is determined");
-  const explanation = page.locator('[data-slot="popover-content"]:visible');
-  await expect(explanation).toContainText("Stock not tracked");
-  await expect(explanation).toContainText("1 expected item unlocated");
-  await page.keyboard.press("Escape");
-  await gotoAuthenticatedPage(
-    page,
     `/products/${product.id}#stocked-at`,
     page.getByRole("button", {
       name: "How inventory status is determined",
@@ -80,6 +64,9 @@ test("product location context preserves links and explains the same partial gap
   ).toBeVisible();
   await expect(
     page.getByRole("heading", { name: "Stocked at", exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.locator(`a[href="/locations/${location.id}"]:visible`).first(),
   ).toBeVisible();
   const ownerControl = page
     .getByRole("button", { name: "How owner is determined", exact: true })

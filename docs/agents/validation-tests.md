@@ -365,8 +365,13 @@ principal trade, recomputing the adjustment to its Purchase fallback and preserv
 stored null. Do not repeat that API-only update with a second browser document;
 this removes dedicated HTTP sampling of that explanation refresh, while the
 native contributor interaction remains. Location explanation fixtures commit
-Product, Location, acquisition and Inventory together; list/detail links, partial
-quantity discrepancy and nested beneficiary evidence remain native assertions.
+Product, Location, acquisition and Inventory together. Keep the Product-detail
+location link, partial quantity discrepancy, tracking policy and nested beneficiary
+evidence in one document. `stock-context.unit.test.ts` owns comparable partial-gap
+and tracking-policy derivation; `quantity-ledger.integration.test.ts` owns quantity
+evidence. Omit the preceding list visit and its repeated explanation. Partial-gap
+list-cell/Unknown-marker presentation and that cell's explanation popover are
+deliberate composition gaps; the real detail explanation remains.
 
 Receiving after photo inventory exercises the Purchase's real per-line
 `ReceiveExpenseDialog`: possible photo match, no-write default, required typed
