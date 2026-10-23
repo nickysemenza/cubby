@@ -5,6 +5,7 @@ import { LinkIcon } from "@phosphor-icons/react/dist/csr/Link";
 import { type Control, Controller } from "react-hook-form";
 
 import { cn } from "~/lib/utils";
+import { FormFieldGroup } from "~/ui/forms/form-field-group";
 import { Row, Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 import { Description } from "~/ui/primitives/description";
@@ -13,7 +14,6 @@ import { Input } from "~/ui/primitives/input";
 import { Spinner } from "~/ui/primitives/spinner";
 import { Textarea } from "~/ui/primitives/textarea";
 
-import { FormFieldGroup } from "../../../ui/forms/form-field-group";
 import { formatRichText } from "../richtext";
 import {
   IngredientPreviewTable,

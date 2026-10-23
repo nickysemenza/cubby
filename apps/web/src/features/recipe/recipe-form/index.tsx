@@ -14,9 +14,16 @@ import { toast } from "sonner";
 import { z } from "zod";
 
 import { EntityPrimitiveFields } from "~/entity/editing/entity-primitive-fields";
+import { PendingImageUpload } from "~/entity/entity-media/pending-image-upload";
 import { recipe as recipeOperations } from "~/integrations/tanstack-query/generated/catalog/recipe.gen";
 import { wasm } from "~/lib/wasm";
 import { showErrorToast } from "~/ui/feedback/error-details";
+import { FormFieldGroup } from "~/ui/forms/form-field-group";
+import {
+  FormWrapper,
+  getSubmitButtonText,
+  UnifiedTextField,
+} from "~/ui/forms/form-utils";
 import { useImageState } from "~/ui/hooks/use-image-state";
 import { Row, Section, Stack } from "~/ui/layout";
 import {
@@ -31,13 +38,6 @@ import {
 } from "~/ui/primitives/alert-dialog";
 import { Button } from "~/ui/primitives/button";
 
-import { PendingImageUpload } from "../../../entity/entity-media/pending-image-upload";
-import { FormFieldGroup } from "../../../ui/forms/form-field-group";
-import {
-  FormWrapper,
-  getSubmitButtonText,
-  UnifiedTextField,
-} from "../../../ui/forms/form-utils";
 import { parseRichTextSafe } from "../richtext";
 import {
   recipeFormValuesToCreateInput,

@@ -12,8 +12,8 @@ import {
 } from "@cubby/schemas/recipe-shared";
 import { z } from "zod";
 
-import type { PendingImage } from "../../../entity/entity-media/pending-image-upload";
-import { ComboboxItem } from "../../../ui/combobox/combobox-types";
+import type { PendingImage } from "~/entity/entity-media/pending-image-upload";
+import { ComboboxItem } from "~/ui/combobox/combobox-types";
 
 // Draft shape for an ingredient amount, edited via separate qty/unit inputs.
 // Either part may be blank so an amount-less ingredient (e.g. oil for frying) can
