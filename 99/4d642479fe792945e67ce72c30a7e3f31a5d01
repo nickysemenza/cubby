@@ -1,0 +1,49 @@
+.github/workflows/ci.yaml
+  s_7523c5f706d337::t_c184cacf51f4d9 50-51,59,61-62,67,76,78-79,113-122,126,137-138,141,144,147,150,153,156,159,178-179,401,410-411
+apps/web/generator/playbooks.ts
+  s_7523c5f706d337::t_72c0590c66dbf3 1-2,7-13,54-61,65,80
+apps/web/project.json
+  s_7523c5f706d337::t_6289568e867b6e 10
+apps/web/tooling/web-build-provenance.ts
+  s_7523c5f706d337::t_c7754a68a0c232 9,125,128-129
+apps/web/tooling/web-build-provenance.unit.test.ts
+  s_7523c5f706d337::t_46121e6a008246 292-297,300-308
+docs/adr/0020-cache-routed-ci.md
+  s_7523c5f706d337::t_6d7eb7e121b6dd 56-75
+docs/agents/validation.md
+  s_7523c5f706d337::t_58a9c8d6edc2f6 238-239,351-352
+docs/ci.md
+  s_7523c5f706d337::t_05c4148bd16ed7 7-9,36-56,86-89,387,392-393
+knip.json
+  s_7523c5f706d337::t_ad6393f87d376a 13-14
+nx.json
+  s_7523c5f706d337::t_1629fee364b89b 75-82
+package.json
+  s_7523c5f706d337::t_aa0d0f00c9e2d5 8
+project.json
+  s_7523c5f706d337::t_5c5eeee7de3523 18,25
+scripts/ci-docs.test.ts
+  s_7523c5f706d337::t_431ed5bf6f8120 1-78
+scripts/ci-docs.ts
+  s_7523c5f706d337::t_1cdc6af86f5596 1-30
+scripts/lib/playbook-sources.ts
+  s_7523c5f706d337::t_72947d2d2364ea 1-64
+scripts/runtime-markdown.ts
+  s_7523c5f706d337::t_da91df0af2b64a 1-23
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "994d642479fe792945e67ce72c30a7e3f31a5d01",
+  "prompts": {},
+  "sessions": {
+    "s_7523c5f706d337": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a16a4f-5cbc-7101-a438-b0084deab1e5",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
