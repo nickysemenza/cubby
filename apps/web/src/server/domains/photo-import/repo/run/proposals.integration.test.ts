@@ -4,6 +4,7 @@ import type { PhotoGroupProposalGroup } from "@cubby/schemas/photo-import-run";
 import { testUserId } from "@cubby/schemas/testing";
 import { generateShortcode } from "@cubby/shared";
 import { and, eq, ilike, sql } from "drizzle-orm";
+import { createRepoEntity } from "tooling/factories/repo";
 import { TEST_HOME_SHORTCODE, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
@@ -1429,11 +1430,14 @@ describe("photo group proposals", () => {
     const brand = await insertWithShortcode(ctx.db, "vendor", {
       name: "ForgeWear",
     });
+    const category = await createRepoEntity(ctx, "productCategory", {
+      name: "Synthetic reviewed apparel",
+    });
     const changed = await updatePhotoGroupProductDraft(ctx.db, {
       runId: run.shortcode,
       groupKey: "shirt",
       name: "Synthetic Canvas Shirt, Medium",
-      categoryId: null,
+      categoryId: category.output.id,
       brandId: parseShortcodeFor("vendor", brand.shortcode),
       model: null,
       notes: "Size confirmed from tag",
@@ -1444,12 +1448,24 @@ describe("photo group proposals", () => {
       create: {
         name: "Synthetic Canvas Shirt, Medium",
         brandId: brand.shortcode,
+        categoryId: category.output.id,
         notes: "Size confirmed from tag",
       },
     });
     expect(group?.images).toEqual([{ id: codes[0], purpose: "item" }]);
     expect(group?.skip).toEqual([{ id: codes[1], reason: "Out of focus" }]);
     expect(group?.evidence).toBe("One garment, second photo is unusable");
+    const applied = await approvePhotoGroupProposals(
+      ctx.db,
+      { runId: run.shortcode, groupKeys: ["shirt"] },
+      ctx.actor,
+    );
+    expect(applied.results[0]?.outcome).toBe("committed");
+    const [saved] = await getDb(ctx.db)
+      .select({ categoryId: product.categoryId })
+      .from(product)
+      .where(eq(product.name, "Synthetic Canvas Shirt, Medium"));
+    expect(saved).toEqual({ categoryId: category.entityId });
   });
 
   describe("propose validation", () => {

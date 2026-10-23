@@ -35,9 +35,12 @@ ordered roster. This batches setup without changing photo groups or assertions.
 
 The approve/discard photo journey saves its prerequisite proposals before opening
 the Run; it does not wait for an API-seeded empty page to discover them through
-live polling. Keep native label-purpose editing, decoded images, category-alias
-selection and narrow taxonomy reads, blur-and-approve name saving, discard and
-completion. Read back the corrected Product, exactly two received units and no
+live polling. Keep native label-purpose editing, decoded images,
+blur-and-approve name saving, discard and completion. The existing proposed-Product
+draft-edit case in `run/proposals.integration.test.ts` owns a selected category
+through draft save, approval and exact Product read-back. The browser no longer
+samples category-alias selection or taxonomy request shapes; these are deliberate
+picker-composition and performance-sampling gaps. Read back the corrected Product, exactly two received units and no
 Product for the discarded group. The existing completed-Run case in
 `run/lifecycle.integration.test.ts` also owns restart: a distinct successor keeps
 the predecessor, input and every ordered image/fingerprint, resetting copied work
