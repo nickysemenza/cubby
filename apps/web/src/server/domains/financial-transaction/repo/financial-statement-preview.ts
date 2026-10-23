@@ -302,10 +302,8 @@ export async function previewFinancialTransactionImport(
         )
     : [];
 
-  // Transactions already holding one of these rows' settlement references,
-  // probed on the live `(source, kind, externalId)` unique. The source comes
-  // from the row rather than a literal, so a non-monarch export looks itself
-  // up rather than nothing.
+  // Global settlement references survive date corrections. A relation of exact
+  // source/ref pairs avoids quadratic planning of a large correlated OR tree.
   const pairs = uniqBy(
     [
       ...input.rows.flatMap((row, index) => [
@@ -319,17 +317,17 @@ export async function previewFinancialTransactionImport(
   const sourceRefLookup =
     pairs.length === 0
       ? undefined
-      : sql`EXISTS (
-          SELECT 1 FROM "EntityExternalId" px
-          WHERE px."entityId" = "FinancialTransaction"."id"
-            AND px."kind" = 'settlement_ref' AND px."deletedAt" IS NULL
-            AND (${sql.join(
-              pairs.map(
-                (pair) =>
-                  sql`(px."source" = ${pair.source} AND px."externalId" = ${pair.externalId})`,
-              ),
-              sql` OR `,
-            )})
+      : sql`${financialTransaction.id} IN (
+          SELECT px."entityId"
+          FROM (VALUES ${sql.join(
+            pairs.map(
+              (pair) => sql`(${pair.source}::text, ${pair.externalId}::text)`,
+            ),
+            sql`, `,
+          )}) AS requested(source, "externalId")
+          JOIN "EntityExternalId" px ON px.source = requested.source
+            AND px."externalId" = requested."externalId"
+          WHERE px.kind = 'settlement_ref' AND px."deletedAt" IS NULL
         )`;
   const [preparation, transactions] = await Promise.all([
     options.preparation ?? prepareFinancialStatementPreview(db),
