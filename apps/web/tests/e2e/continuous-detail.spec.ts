@@ -2,7 +2,7 @@ import {
   seedProductPrerequisite,
   seedProductCategoryPrerequisite,
 } from "./fixtures/catalog";
-import { createEntityFixture, createEntityFixtures } from "./fixtures/core";
+import { createEntityFixture } from "./fixtures/core";
 import {
   householdDateTime,
   householdDaysFromNow,
@@ -101,10 +101,11 @@ test("dense record header preserves identity, actions, and the editor", async ({
     e2eRuntime.objectStorageUrl,
   );
   await attachProductImagePrerequisite(page, image.id, product.id, "item");
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await gotoAuthenticatedPage(page, `/products/${product.id}`);
+  const header = page.getByTestId("detail-spec-plate");
   for (const width of [1440, 1024, 390]) {
     await page.setViewportSize({ width, height: 900 });
-    await gotoAuthenticatedPage(page, `/products/${product.id}`);
-    const header = page.getByTestId("detail-spec-plate");
     const title = header.getByRole("heading", { level: 1 });
     await expect(title).toHaveText(name);
     await expect(
@@ -145,60 +146,37 @@ test("dense record header preserves identity, actions, and the editor", async ({
         page.getByRole("navigation", { name: "Section index" }),
       ).toBeVisible();
 
-    await header
-      .getByRole("button", { name: "More actions", exact: true })
-      .click();
-    const overflow = page.getByRole("dialog", {
-      name: "More actions",
-      exact: true,
-    });
-    await expect(
-      overflow.getByRole("button", { name: "Copy codes", exact: true }),
-    ).toBeVisible();
-    await expect(
-      overflow.getByRole("button", { name: "Discard...", exact: true }),
-    ).toBeVisible();
-    await page.keyboard.press("Escape");
-    await expect(overflow).toBeHidden();
-    await header.getByRole("button", { name: "Edit Product" }).click();
-    const editor = page.getByRole("dialog", {
-      name: "Edit product",
-      exact: true,
-    });
-    await expect(editor).toBeVisible();
-    await expect(
-      editor.getByRole("textbox", { name: "Name", exact: true }),
-    ).toHaveValue(name);
-
-    await editor.getByRole("button", { name: "Cancel", exact: true }).click();
-    await expect(editor).toBeHidden();
     await expectViewportBounded(page);
   }
-  const brand = await createEntityFixture(page, "vendor", {
-    name: "Example maker",
+  // The shared controls are visible at every width; drive their dialogs once
+  // at the narrowest viewport instead of repeating the same registry actions.
+  await header
+    .getByRole("button", { name: "More actions", exact: true })
+    .click();
+  const overflow = page.getByRole("dialog", {
+    name: "More actions",
+    exact: true,
   });
-  await createEntityFixtures(
-    page,
-    "product",
-    Array.from({ length: 18 }, (_, index) => ({
-      name: `Example household item ${String(index + 1).padStart(2, "0")}`,
-      brandId: brand.id,
-      categoryId: category.id,
-      tags: [],
-    })),
-  );
-  await page.setViewportSize({ width: 1440, height: 900 });
-  await gotoAuthenticatedPage(page, "/products");
-  await expect(page.getByRole("link", { name, exact: true })).toBeVisible();
-  const row = page
-    .getByRole("row")
-    .filter({ has: page.getByRole("link", { name, exact: true }) });
   await expect(
-    row.locator('[data-cell-col="categoryId"]').getByRole("link", {
-      name: "Example essentials",
-      exact: true,
-    }),
+    overflow.getByRole("button", { name: "Copy codes", exact: true }),
   ).toBeVisible();
+  await expect(
+    overflow.getByRole("button", { name: "Discard...", exact: true }),
+  ).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(overflow).toBeHidden();
+  await header.getByRole("button", { name: "Edit Product" }).click();
+  const editor = page.getByRole("dialog", {
+    name: "Edit product",
+    exact: true,
+  });
+  await expect(editor).toBeVisible();
+  await expect(
+    editor.getByRole("textbox", { name: "Name", exact: true }),
+  ).toHaveValue(name);
+
+  await editor.getByRole("button", { name: "Cancel", exact: true }).click();
+  await expect(editor).toBeHidden();
 });
 
 // Regressions: empty declared sections disappear; a hash selects a hidden view;

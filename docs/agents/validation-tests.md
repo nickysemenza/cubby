@@ -62,6 +62,16 @@ kernel also creates their SearchDocument. A raw row insert can appear in the
 initial picker list and disappear when typed search resolves. For typed search,
 use the picker helper's query/code option to wait for the actual search response
 before selecting the record.
+Dense-header browser coverage resizes one populated detail page across desktop,
+constrained desktop and phone widths, then drives the shared action/editor dialogs
+once on the phone. Do not repeat full navigation or seed an unrelated Product list
+for header coverage; category navigation stays in the emoji/category journey.
+
+Infinite entity lists disable URL pagination synchronization; `pageSize` in a
+list URL does not shrink their loaded page. Unloaded-selection browser fixtures
+must cross the actual default page boundary and hold the next-page response
+until admission. Do not shrink that cohort using an ignored URL parameter.
+
 For a same-kind fixture cohort without intermediate reads, use
 `createEntityFixtures`; it writes through the kernel in one transaction and
 settles the frontier after the cohort commits. This keeps background publication
