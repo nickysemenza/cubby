@@ -2509,13 +2509,18 @@ The retired SQL rule also inferred ordering conflicts from coarse calendar-day
 intervals and other movement kinds; those no longer establish a defect. Missing
 or coarse timing still affects the dates/span checks without inventing instants.
 
-Stored quality is being ported one entity at a time. `defineStoredEntityChecks`
-(`generic/data-quality/repo/stored-registry.ts`) is the registry switch: a
+Stored quality ports use `defineStoredEntityChecks`
+(`generic/data-quality/repo/stored-registry.ts`) as the registry switch: a
 versioned TypeScript evaluator replaces that kind's SQL bindings. Its single
 batch loader produces the records consumed by pure shared `qualityCheck` builders
 (`required`, `observed`, `hasRelated`, `hasImage`, `when`). Declarations in
 `packages/schemas` continue to own check identity, weight, caps and placement.
 The shared `data-quality-score.ts` formula owns stored scores too.
+
+In addition to Shipment, stored checks now cover Device, GardenEntry, ImageJob,
+Inventory, Plant, Planting, Project, SpendingCategory, Wish, LedgerParty and
+LedgerTransfer. Related-row loaders batch live Locations, candidate Products,
+FinancialAccounts and non-void FinancialTransactions with each ID page.
 
 `EntityQuality` stores a nullable score, rules version and computation time;
 `EntityQualityCheck` stores pass, gap, waived or not_applicable for each check.

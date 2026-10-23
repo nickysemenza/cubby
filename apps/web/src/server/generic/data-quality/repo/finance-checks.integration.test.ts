@@ -536,11 +536,12 @@ describe("data quality: finance and project entities", () => {
       "gardenEntry",
       (await resolveLiveShortcode(ctx.db, harvestGap.id, "gardenEntry"))!,
     );
-    const hydrated = await loadDataQualities(ctx.db, "gardenEntry", [
-      gapId,
-      completeId,
-      harvestGapId,
-    ]);
+    const hydrated = await loadDataQualities(
+      ctx.db,
+      "gardenEntry",
+      [gapId, completeId, harvestGapId],
+      "live",
+    );
     const gapChecks = hydrated.get(gapId)?.gaps.map((g) => g.check);
     expect(gapChecks).toContain("garden_entry_note");
     expect(hydrated.get(harvestGapId)?.gaps.map((g) => g.check)).toContain(
@@ -575,11 +576,12 @@ describe("data quality: finance and project entities", () => {
       ledgerPartyId: complete.output.id,
     });
 
-    const hydrated = await loadDataQualities(ctx.db, "ledgerParty", [
-      guest.entityId,
-      gap.entityId,
-      complete.entityId,
-    ]);
+    const hydrated = await loadDataQualities(
+      ctx.db,
+      "ledgerParty",
+      [guest.entityId, gap.entityId, complete.entityId],
+      "live",
+    );
     // A guest party is never expected to map to a financial account.
     expect(hydrated.get(guest.entityId)).toMatchObject({
       score: 99,
@@ -661,10 +663,12 @@ describe("data quality: finance and project entities", () => {
       ctx.actor,
     );
 
-    const hydrated = await loadDataQualities(ctx.db, "ledgerTransfer", [
-      gap.entityId,
-      complete.entityId,
-    ]);
+    const hydrated = await loadDataQualities(
+      ctx.db,
+      "ledgerTransfer",
+      [gap.entityId, complete.entityId],
+      "live",
+    );
     const gapChecks = hydrated.get(gap.entityId)?.gaps.map((g) => g.check);
     expect(gapChecks).toContain("ledger_transfer_transaction");
     expect(hydrated.get(complete.entityId)).toMatchObject({
