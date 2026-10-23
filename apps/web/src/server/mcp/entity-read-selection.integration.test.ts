@@ -414,8 +414,7 @@ describe("entity_read field selection", () => {
             return null;
           }
         };
-        for (const entity of listEntities) {
-          if (!listed.has(entity)) continue;
+        const inspectEntity = async (entity: (typeof listEntities)[number]) => {
           const declared = listReadFields(entity);
           const fields = [
             ...declared.core.filter((field) => field !== "id").slice(0, 1),
@@ -431,7 +430,7 @@ describe("entity_read field selection", () => {
           if (listedCompact)
             failed.push(...compactViolations(entity, listedCompact));
           const id = z.string().optional().parse(listedCompact?.["id"]);
-          if (!id) continue;
+          if (!id) return;
           // A get selects from the published detail schema, not the list one.
           const detail: z.core.$ZodType =
             ENTITY_SCHEMA_BINDINGS[entity].mcpDetail;
@@ -461,7 +460,17 @@ describe("entity_read field selection", () => {
                 `${entity} compact keys differ: list-only ${onlyList.join(",")}; get-only ${onlyGet.join(",")}`,
               );
           }
-        }
+        };
+        // Every probe only reads the seeded world. A shared iterator assigns
+        // each entity once across two lanes, below the database pool size.
+        const entities = listEntities
+          .filter((entity) => listed.has(entity))
+          .values();
+        await Promise.all(
+          Array.from({ length: 2 }, async () => {
+            for (const entity of entities) await inspectEntity(entity);
+          }),
+        );
         return failed;
       },
     );

@@ -10,8 +10,9 @@ import { generatedEntityListFields } from "@cubby/schemas/entity-list-fields";
  * This file drives EVERY declared filter (one at a time) and EVERY declared
  * sort field, for EVERY kernel entity with a list operation, through the real
  * production list readers against real Postgres. Plan probes use progressive
- * core reads, avoiding unrelated media/quality hydration. Baselines and unmatched-ID checks use the same core reader; complete
- * kernel output/enrichment compatibility belongs to list-read.integration.test.ts.
+ * core reads, avoiding unrelated media/quality hydration. Baselines and
+ * unmatched-ID checks use the same core reader; complete kernel output and
+ * enrichment compatibility belongs to list-read.integration.test.ts.
  * Postgres raises an alias mismatch at PLAN
  * time, so even a query matching zero rows exercises the SQL — the one
  * exception is a filter that must RESOLVE a shortcode to a real row (e.g.

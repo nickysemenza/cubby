@@ -109,7 +109,9 @@ for singleton and batched responses. Poll only genuinely eventual work.
 Filter/sort SQL-plan matrices use production progressive core reads when
 available, including their baseline counts and unmatched-identity checks.
 `list-read.integration.test.ts` owns complete-row/enrichment equivalence;
-plan probes do not need unrelated media or quality hydration.
+plan probes do not need unrelated media or quality hydration. The MCP all-kind
+selection matrix keeps each entity’s four reads together and overlaps at most
+two entities against its read-only seeded world, below the file’s pool size.
 Filter-oracle tests that compare only row identities likewise use core reads;
 retain their real PostgreSQL predicates and expected-ID assertions.
 Mutation fanout probes request identity receipts when measuring bounded write
