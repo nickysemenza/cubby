@@ -45,6 +45,11 @@ The emoji/category browser journey retains actual editors and category navigatio
 This removes the dedicated HTTP Vendor-apply smoke; production serialization
 conflicts remain separately tracked rather than being claimed fixed by this move.
 
+Decision-batching model fixtures assign answers by question ID, independently of
+question insertion order after asynchronous cache preparation. Reverse the returned
+answer order to exercise keyed routing; choosing by enumeration position makes a
+correct asynchronous batch fail nondeterministically.
+
 MCP budget-policy unit coverage waits for the actual in-memory SDK handler to
 start, then advances a fake clock across the read/model thresholds. Do not use
 a short wall-clock sleep between those budgets: a busy CI event loop can turn
