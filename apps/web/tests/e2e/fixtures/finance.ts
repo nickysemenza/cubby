@@ -191,15 +191,7 @@ export async function seedInheritancePrerequisite(page: Page, name: string) {
       cost: 10,
       costType: "materials",
     });
-    const charge = await create("expense", {
-      name: `${name} tax`,
-      date: "2026-09-20",
-      purchaseId: purchase.id,
-      cost: 1,
-      costType: "services",
-      lineKind: "tax",
-    });
-    return { project, purchase, expense, charge };
+    return { project, expense };
   });
 }
 

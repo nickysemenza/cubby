@@ -120,6 +120,13 @@ The Gmail Product-merge browser setup creates both conflicting identities in one
 fixture graph and scopes the merge list by their shared synthetic Product name.
 Keep both exact-identifier conflicts, explicit choice and native merge readback;
 loading unrelated Products does not strengthen those boundaries.
+Inheritance browser coverage owns the real reset from a matching explicit Project
+into live Purchase inheritance, with stored-mode readback and visible provenance.
+Allocation contributor interactions belong in `resolution-evidence.spec.ts`;
+`purchase-inheritance.integration.test.ts` owns exact Project shares on detail
+and list explanations and absence of a stored override. Do not add tax fixtures,
+extra detail visits or Purchase-cell overflow checks to the reset journey.
+
 The import-convergence browser journey covers statement-first reviewed booking
 and navigation; the PostgreSQL suite owns arrival-order permutations. Socket
 lifecycle checks use a warm baseline and two read/write rounds with real idle
