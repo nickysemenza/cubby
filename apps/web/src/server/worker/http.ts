@@ -4,7 +4,7 @@ import { createLogger, originalLoggedError } from "@cubby/worker-tracing";
 import * as Sentry from "@sentry/cloudflare";
 
 import { isBrowserOperationPath } from "~/lib/browser-operation-path";
-import { DATABASE_CHANGES_SOCKET_PATH } from "~/lib/database-changes";
+import { DOORBELL_PATH } from "~/lib/doorbell";
 import { scrubErrorMessage } from "~/lib/error-diagnostics";
 import {
   TELEMETRY_SCHEMA_VERSION,
@@ -30,7 +30,6 @@ import {
   withErrorReporting,
 } from "~/server/errors/report-error";
 import { withUnhandledErrorBody } from "~/server/errors/unhandled-error-body";
-import { IMAGE_PROCESSING_SOCKET_PATH } from "~/server/http/direct-socket-paths";
 import {
   isMaintenanceMode,
   maintenanceResponse,
@@ -122,15 +121,9 @@ async function invokeApplication(
   request: Request,
   url: URL,
 ): Promise<Response> {
-  if (url.pathname === DATABASE_CHANGES_SOCKET_PATH)
-    return (
-      await import("~/server/http/database-changes-socket")
-    ).handleDatabaseChangesSocket(request);
-  if (url.pathname === IMAGE_PROCESSING_SOCKET_PATH)
-    return withTrace("cf.imageProcessingSocket", async () =>
-      (
-        await import("~/server/domains/image-processing/service/direct-socket-route")
-      ).handleImageProcessingSocketUpgrade(request),
+  if (url.pathname === DOORBELL_PATH)
+    return withTrace("cf.doorbell", async () =>
+      (await import("~/server/http/doorbell")).handleDoorbellUpgrade(request),
     );
   if (isBrowserOperationPath(url.pathname)) {
     const module = await getBrowserOperation();

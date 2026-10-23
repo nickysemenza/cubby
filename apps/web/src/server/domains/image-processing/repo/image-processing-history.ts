@@ -57,7 +57,6 @@ export async function insertImageProcessingAttempt(
     state: "running" | "failed";
     executor?: ActivityExecutor;
     userId?: string;
-    connectionId?: string;
     diagnostics?: unknown;
     result?: unknown;
     error?: string;
@@ -72,7 +71,7 @@ export async function insertImageProcessingAttempt(
       coalesce((SELECT max(a.number) FROM "ImageProcessingAttempt" a WHERE a."jobId" = j.id), 0) + 1,
       j."submissionId", ${input.state},
       ${input.executor ? JSON.stringify(input.executor) : null}::jsonb,
-      ${input.userId ?? null}, ${input.connectionId ?? null},
+      ${input.userId ?? null}, null,
       jsonb_build_object(
         'sourceContentHash', j."sourceContentHash",
         'sourceKey', i.key,
@@ -103,7 +102,6 @@ export async function assignImageProcessingExecutor(
     attemptId: string;
     executor: ActivityExecutor;
     userId?: string;
-    connectionId?: string;
     diagnostics?: unknown;
   },
 ): Promise<boolean> {
@@ -142,7 +140,6 @@ export async function assignImageProcessingExecutor(
       state: "running",
       executor,
       userId: input.userId,
-      connectionId: input.connectionId,
       diagnostics: input.diagnostics,
     });
     if (number === null) return false;
@@ -158,16 +155,15 @@ export async function assignImageProcessingExecutor(
   });
 }
 
-/** The attempt's assignment when it went to this member's device, else null. */
+/** Whether the attempt went to this member's device. */
 export async function findImageProcessingDeviceAssignment(
   db: Database,
   input: { jobId: string; attemptId: string; deviceId: string; userId: string },
-): Promise<{ connectionId: string | null } | null> {
+): Promise<boolean> {
   const [attempt] = await getDb(db)
     .select({
       executor: imageProcessingAttempt.executor,
       userId: imageProcessingAttempt.assignedUserId,
-      connectionId: imageProcessingAttempt.assignedConnectionId,
     })
     .from(imageProcessingAttempt)
     .where(
@@ -176,11 +172,11 @@ export async function findImageProcessingDeviceAssignment(
         eq(imageProcessingAttempt.jobId, input.jobId),
       ),
     );
-  return attempt?.executor?.kind === "device" &&
+  return (
+    attempt?.executor?.kind === "device" &&
     attempt.executor.deviceId === input.deviceId &&
     attempt.userId === input.userId
-    ? { connectionId: attempt.connectionId }
-    : null;
+  );
 }
 
 export const createImageProcessingSubmission = (db: Database) =>

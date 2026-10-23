@@ -37,7 +37,7 @@ const STATIC_TRACE_ROUTES = new Set([
   "/api/debug/usda-release",
   "/api/import/agent/oauth/callback",
   "/api/import/agent/oauth/start",
-  "/api/companion/image-processing/socket",
+  "/api/doorbell",
   "/api/mcp",
   "/api/native-workspace/session",
   "/auth/native",

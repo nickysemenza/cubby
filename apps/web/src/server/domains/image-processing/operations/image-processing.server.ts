@@ -40,7 +40,6 @@ export const imageProcessingHandlers = implementOperationDomain(
         userId: context.actorContext.userId,
       }),
     }),
-    validateCompanionMessage: async () => ({ message: null }),
     status: async (context, input) =>
       getImageProcessingReadProjection(
         context.db,

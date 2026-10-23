@@ -136,26 +136,16 @@ export async function dispatchImageProcessingWakeup(
         : "skipped";
     }
 
+    // Device work goes back to the claimable pool; a ring tells companions to
+    // pull it, and the pull assigns and leases it.
+    await markImageProcessingWaitingForDevice(db, {
+      jobId: claimed.id,
+      attemptId: claimed.attemptId,
+    });
     const namespace = getImageProcessingNamespace();
-    if (!namespace) {
-      await markImageProcessingWaitingForDevice(db, {
-        jobId: claimed.id,
-        attemptId: claimed.attemptId,
-      });
-      return "waiting";
-    }
-    const command = await prepareCompanionImageCommand(claimed);
-    const dispatched = await companionRpc(
-      namespace.getByName("household"),
-    ).dispatch(command);
-    if (!dispatched) {
-      await markImageProcessingWaitingForDevice(db, {
-        jobId: claimed.id,
-        attemptId: claimed.attemptId,
-      });
-      return "waiting";
-    }
-    return "dispatched";
+    if (!namespace) return "waiting";
+    const reached = await companionRpc(namespace.getByName("household")).ring();
+    return reached > 0 ? "dispatched" : "waiting";
   } catch (error) {
     const deferred = findErrorCause(
       error,

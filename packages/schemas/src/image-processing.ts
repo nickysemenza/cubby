@@ -262,42 +262,6 @@ export type ImageProcessingTerminalResult = z.infer<
   typeof imageProcessingTerminalResult
 >;
 
-export const imageProcessingClientMessage = z.discriminatedUnion("type", [
-  imageProcessingHello,
-  z.object({
-    protocolVersion: z.literal(IMAGE_PROCESSING_PROTOCOL_VERSION),
-    type: z.literal("result"),
-    result: imageProcessingResult,
-  }),
-]);
-
-export const imageProcessingServerMessage = z.discriminatedUnion("type", [
-  z.object({
-    protocolVersion: z.literal(IMAGE_PROCESSING_PROTOCOL_VERSION),
-    type: z.literal("command"),
-    command: imageProcessingCommand,
-  }),
-  z.object({
-    protocolVersion: z.literal(IMAGE_PROCESSING_PROTOCOL_VERSION),
-    type: z.literal("acknowledge"),
-    jobId: z.uuid(),
-    attemptId: z.uuid(),
-  }),
-  z.object({
-    protocolVersion: z.literal(IMAGE_PROCESSING_PROTOCOL_VERSION),
-    type: z.literal("helloAck"),
-    remotePaused: z.boolean(),
-  }),
-]);
-
-// Named wrappers keep the wire unions addressable for OpenAPI/Swift generation.
-export const validateImageProcessingCompanionMessageInput = z.object({
-  message: imageProcessingClientMessage,
-});
-export const validateImageProcessingCompanionMessageOutput = z.object({
-  message: imageProcessingServerMessage.nullable(),
-});
-
 /** Read projection shared by galleries, covers, logos, summaries, and MCP. */
 export {
   imageRepresentations,

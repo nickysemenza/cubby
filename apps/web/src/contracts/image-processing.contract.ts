@@ -17,8 +17,6 @@ import {
   imageProcessingStatusOutput,
   scheduleImageProcessingInput,
   scheduleImageProcessingOutput,
-  validateImageProcessingCompanionMessageInput,
-  validateImageProcessingCompanionMessageOutput,
 } from "@cubby/schemas/image-processing";
 
 import { defineContract, mutation, query } from "~/contracts/define";
@@ -65,16 +63,6 @@ export const imageProcessingContract = defineContract("imageProcessing", {
     input: retryImageProcessingInput,
     output: retryImageProcessingOutput,
     invalidates: ["image"],
-  }),
-  // WebSockets do not have an OpenAPI operation of their own. This native-only
-  // validation operation makes the exact shared wire unions generator-visible
-  // without inventing a second set of Swift DTOs or carrying binary data over
-  // an HTTP fallback.
-  validateCompanionMessage: mutation({
-    mcp: { omit: "device_protocol" },
-    native: "Image processing companion protocol",
-    input: validateImageProcessingCompanionMessageInput,
-    output: validateImageProcessingCompanionMessageOutput,
   }),
   status: query({
     native: "Image processing status",

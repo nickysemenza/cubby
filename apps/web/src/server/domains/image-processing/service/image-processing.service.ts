@@ -464,9 +464,8 @@ export async function pullCompanionImageProcessing(
 }
 
 /**
- * Claim and assign the next job a participating device can run. Both the HTTP
- * pull and a socket's hello/result claim through here, so a device takes
- * waiting work the moment it can run it rather than at the next wakeup.
+ * Claim and assign the next job a participating device can run, for the
+ * device's `imageProcessing.pull`.
  */
 export async function claimCompanionImageCommand(
   db: Database,
@@ -474,8 +473,6 @@ export async function claimCompanionImageCommand(
     device: CompanionDevice;
     userId: string;
     leaseMs: number;
-    /** The socket the command goes to; absent for an HTTP pull. */
-    connectionId?: string;
   },
 ): Promise<ImageProcessingCommand | null> {
   const { device } = input;
@@ -495,7 +492,6 @@ export async function claimCompanionImageCommand(
       jobId: claimed.id,
       attemptId: claimed.attemptId,
       userId: input.userId,
-      connectionId: input.connectionId,
       executor: {
         kind: "device",
         deviceId: device.deviceId,
