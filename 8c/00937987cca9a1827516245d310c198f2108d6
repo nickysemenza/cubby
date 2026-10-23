@@ -1,0 +1,19 @@
+apps/web/tooling/scenarios/performance.integration.test.ts
+  s_0cc53fa46ecbd7::t_a5be77651ab4e8 110-122
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "8c00937987cca9a1827516245d310c198f2108d6",
+  "prompts": {},
+  "sessions": {
+    "s_0cc53fa46ecbd7": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2e7ff6fb-224e-42e0-a270-a92fc1131a0c",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}

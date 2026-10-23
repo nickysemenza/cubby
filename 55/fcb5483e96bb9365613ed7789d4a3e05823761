@@ -1,0 +1,41 @@
+apps/web/src/server/domains/financial-transaction/repo/financial-transaction-allocations.integration.test.ts
+  s_0cc53fa46ecbd7::t_06750828350635 207-209,230-232
+apps/web/src/server/domains/vendor-account/repo/vendor-account-coverage.integration.test.ts
+  s_0cc53fa46ecbd7::t_4396bd354b657e 13-14,16,33-43
+apps/web/src/server/entity-kernel/list-read.integration.test.ts
+  s_0cc53fa46ecbd7::t_494c36d574d211 179,185,208
+apps/web/src/server/entity-kernel/repo/entity-records.integration.test.ts
+  s_0cc53fa46ecbd7::t_aaac0d62e5b508 12,16,30-36
+apps/web/src/server/mcp/availability-explanation.integration.test.ts
+  s_0cc53fa46ecbd7::t_5d9fc5f7b54d93 25,83,85
+apps/web/src/server/mcp/catalog.integration.test.ts
+  s_0cc53fa46ecbd7::t_a0f58b18b815d6 26,337-338
+apps/web/src/server/mcp/work-queue.integration.test.ts
+  s_0cc53fa46ecbd7::t_c5b6b7700ba617 37,41-42,67-75
+docs/agents/domain-rules.md
+  s_a93264be297e14::t_4e091afb7c93e1 249-261
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "55fcb5483e96bb9365613ed7789d4a3e05823761",
+  "prompts": {},
+  "sessions": {
+    "s_0cc53fa46ecbd7": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2e7ff6fb-224e-42e0-a270-a92fc1131a0c",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    },
+    "s_a93264be297e14": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a16a93-fd3c-7863-95ad-e4ea84a5110e",
+        "model": "gpt-6-luna"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}

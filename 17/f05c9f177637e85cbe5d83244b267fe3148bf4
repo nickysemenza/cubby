@@ -1,0 +1,21 @@
+apps/web/src/server/domains/financial-transaction/repo/financial-reconciliation.ts
+  s_0cc53fa46ecbd7::t_a721190e3dafbd 118-178
+apps/web/src/server/domains/financial-transaction/repo/financial-transaction-itemization.integration.test.ts
+  s_0cc53fa46ecbd7::t_8eaf400539016b 169
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "17f05c9f177637e85cbe5d83244b267fe3148bf4",
+  "prompts": {},
+  "sessions": {
+    "s_0cc53fa46ecbd7": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2e7ff6fb-224e-42e0-a270-a92fc1131a0c",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
