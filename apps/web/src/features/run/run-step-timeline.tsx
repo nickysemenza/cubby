@@ -6,6 +6,7 @@ import { formatInstant } from "~/lib/date-format";
 import { formatDuration } from "~/lib/format-duration";
 import { formatCount } from "~/lib/number-format";
 import { cn } from "~/lib/utils";
+import { InspectableValue } from "~/ui/common/inspectable-value";
 import { type KeyNumber, KeyNumbers } from "~/ui/common/key-numbers";
 import {
   RecordDot,
@@ -102,7 +103,13 @@ export function ReasonBreakdown({
                       row.depth === 2 && "pl-8",
                     )}
                   >
-                    {row.label}
+                    {row.code ? (
+                      <InspectableValue value={row.code}>
+                        {row.label}
+                      </InspectableValue>
+                    ) : (
+                      row.label
+                    )}
                   </span>
                   <span className="text-right font-mono tabular-nums">
                     {formatCount(row.count)}
@@ -130,10 +137,6 @@ export function ReasonBreakdown({
                       >
                         Show ↓
                       </button>
-                    ) : row.code ? (
-                      <code className="font-mono text-2xs text-muted-foreground max-md:hidden">
-                        {row.code}
-                      </code>
                     ) : null}
                   </span>
                 </div>
@@ -437,10 +440,14 @@ export function RunStepTimeline({
                     step.phase === "failed" && "font-medium text-destructive",
                   )}
                 >
-                  {STEP_PHASE_LABEL[step.phase]}
+                  <InspectableValue value={step.phase}>
+                    {STEP_PHASE_LABEL[step.phase]}
+                  </InspectableValue>
                 </span>
                 <span className="inline-flex h-4.5 items-center rounded-md border border-border px-1.5 text-2xs text-muted-foreground">
-                  {INPUT_MODE_LABEL[step.mode]}
+                  <InspectableValue value={step.mode}>
+                    {INPUT_MODE_LABEL[step.mode]}
+                  </InspectableValue>
                 </span>
               </span>
             }

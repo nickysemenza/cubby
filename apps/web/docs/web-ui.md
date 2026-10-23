@@ -200,3 +200,14 @@ button-only props on the button supplied through `render`.
 
 For component-level exceptions and examples, load the relevant heading in [the
 preserved web UI reference](web-ui-reference.md).
+
+## Technical representations
+
+Use `InspectableValue` (`ui/common/inspectable-value.tsx`) for explicitly chosen
+readable/raw pairs. Keep the readable label visible with a dotted underline;
+hover or keyboard focus reveals the exact raw value, and click/tap keeps the
+popover open for selection and Copy. Escape and outside interaction dismiss it.
+Pass the exact technical string rather than reconstructing it from display text.
+Do not hide essential facts, wrap existing buttons/links, or automatically make
+every field inspectable. Run types and run timeline reason, phase and input-mode
+labels use this shared component; standalone technical facts remain visible.
