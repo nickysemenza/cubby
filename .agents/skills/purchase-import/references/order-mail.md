@@ -60,8 +60,11 @@ to avoid blocking or provide additional facts.
 
 Expand package history and retain supported scans, including carrier possession,
 exceptions and delivery. Keep estimated delivery windows in the captured source;
-they are not delivery events. Preserve local scan times with an unknown timezone
-when the page supplies only "Local Time". Read back the retained timeline after
+they are not delivery events. Resolve "Local Time" from an unambiguous scan
+location using its IANA timezone and the event date's daylight-saving rules.
+Alternatively, use the tracker's explicit timezone selector and retain its
+selected setting with the capture. Leave the timezone unknown only when neither
+establishes it, such as a locationless scan. Read back the retained timeline after
 recording. Report current status, outstanding gaps and whether future checks
 were actually scheduled.
 
