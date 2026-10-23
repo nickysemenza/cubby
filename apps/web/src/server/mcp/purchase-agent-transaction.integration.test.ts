@@ -14,8 +14,9 @@ import {
 } from "~/server/entity-kernel";
 import { resolveLiveShortcode } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { requireActor } from "~/server/http/request-context";
-import { McpOperationContext } from "~/server/mcp/operation-context";
+import { inPurchaseAgentTransaction } from "~/server/mcp/purchase-agent-protocol";
 import { drainRecipeRefreshJobs } from "~/server/testing/background-queue";
+import { mcpTestPrincipal } from "~/server/testing/mcp-test-utils";
 import {
   createImageFixture,
   ingredientRef,
@@ -26,8 +27,8 @@ import { createTestRequestContext } from "~/server/testing/request-context";
 
 /**
  * The purchase agent runs an approved tool inside ONE MCP transaction
- * (`McpOperationContext.inTransaction`); the kernel's own write units nest in
- * it as savepoints. Two regressions guarded here:
+ * (`inPurchaseAgentTransaction`); the kernel's own write units nest in it as
+ * savepoints. Two regressions guarded here:
  *
  * - a service still bound to the request pool (recipe costing's stale mark)
  *   UPDATEs a Recipe row the MCP transaction already locked and waits on it
@@ -36,7 +37,7 @@ import { createTestRequestContext } from "~/server/testing/request-context";
  *   before the real commit, so a rolled-back agent call still woke consumers
  *   and destroyed bytes for rows that survived.
  */
-describe("MCP operation transaction", () => {
+describe("purchase-agent transaction", () => {
   const ctx = withTestDb();
   const published: string[] = [];
   /** Object paths R2 was asked to DELETE (the S3 API goes through `fetch`). */
@@ -78,7 +79,9 @@ describe("MCP operation transaction", () => {
     requireActor(
       createTestRequestContext(ctx.db, { auth: { userId: ctx.actor.userId } }),
     );
-  const operationContext = () => new McpOperationContext(requestContext());
+  const inTransaction = <T>(
+    run: (transactional: ReturnType<typeof mcpTestPrincipal>) => Promise<T>,
+  ) => inPurchaseAgentTransaction(mcpTestPrincipal(requestContext()), run);
 
   const seedAliasRecipe = async () => {
     const keeper = await findOrCreateIngredient(ctx.db, "agent keeper flour");
@@ -119,9 +122,9 @@ describe("MCP operation transaction", () => {
     async () => {
       const { keeper, alias, recipeId } = await seedAliasRecipe();
 
-      await operationContext().inTransaction(async (prepared) => {
+      await inTransaction(async (transactional) => {
         await executeEntity(
-          entityKernelContextSchema.parse(prepared.entityKernel),
+          entityKernelContextSchema.parse(transactional.context),
           {
             action: "merge",
             entity: "ingredient",
@@ -170,8 +173,8 @@ describe("MCP operation transaction", () => {
       storageDeletes.length = 0;
 
       await expect(
-        operationContext().inTransaction(async (prepared) => {
-          const kernel = entityKernelContextSchema.parse(prepared.entityKernel);
+        inTransaction(async (transactional) => {
+          const kernel = entityKernelContextSchema.parse(transactional.context);
           await executeEntity(kernel, {
             action: "merge",
             entity: "ingredient",

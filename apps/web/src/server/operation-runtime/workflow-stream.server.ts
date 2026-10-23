@@ -4,6 +4,13 @@ import type { StartOperationIdOfKind } from "~/lib/generated/start-operation-reg
 import { startOperationDefinition } from "~/lib/start-operation-observability";
 import { recordDatabaseWrite } from "~/server/db/freshness/client";
 import { withErrorReporting } from "~/server/errors/report-error";
+import {
+  authenticate,
+  type Authenticate,
+  BROWSER_AUTH,
+  challengeError,
+  isChallenge,
+} from "~/server/http/authenticate";
 import { actorSpanAttributes } from "~/server/http/request-context";
 import type { Workload } from "~/server/http/workload";
 import { observeOperation } from "~/server/observability/observed-request";
@@ -15,8 +22,8 @@ import {
   unparsedStartOperationDataSchema,
 } from "~/server/operation-runtime/start-operation.contract";
 import {
+  assertClientMayWrite,
   type AuthenticatedStartOperationContext,
-  authenticateStartOperation,
   normalizeStartOperationError,
   type OperationStage,
   throwIfStartOperationAborted,
@@ -38,13 +45,13 @@ export const workflowStreamError = (
   });
 
 export interface WorkflowStreamRuntime {
-  authenticate: typeof authenticateStartOperation;
+  authenticate: Authenticate;
   observe: typeof observeOperation;
   recordDatabaseWrite: typeof recordDatabaseWrite;
 }
 
 const productionWorkflowStreamRuntime = {
-  authenticate: authenticateStartOperation,
+  authenticate,
   observe: observeOperation,
   recordDatabaseWrite,
 } satisfies WorkflowStreamRuntime;
@@ -90,20 +97,24 @@ export async function workflowStream<InputSchema extends z.ZodType, Event>(
             async (span) => {
               span.setAttribute("cubby.authenticated", false);
               throwIfStartOperationAborted(signal);
+              const principal = await runtime.authenticate(
+                options.request,
+                BROWSER_AUTH,
+              );
+              if (isChallenge(principal)) throw challengeError(principal);
               // A fresh request context has one database handle, the
               // authoritative one, so a stream needs no read-policy selection.
-              const context = await runtime.authenticate(
-                options.request.headers,
-                span,
-              );
-              span.setAttributes(
-                actorSpanAttributes(
+              const { context } = principal;
+              span.setAttributes({
+                "cubby.authenticated": true,
+                ...actorSpanAttributes(
                   context.auth.sessionId,
                   context.actorContext,
                 ),
-              );
+              });
 
               actorVerified = true;
+              assertClientMayWrite(principal);
               stage = "input";
               const input = options.inputSchema.parse(options.input);
 

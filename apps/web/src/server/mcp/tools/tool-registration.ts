@@ -1,6 +1,5 @@
 import { runEntityId } from "@cubby/schemas/identifiers";
 import { purchaseImportRunExecution } from "@cubby/schemas/purchase-import";
-import { createLogger } from "@cubby/worker-tracing";
 import {
   type McpServer,
   type ToolCallback,
@@ -11,41 +10,47 @@ import { eq } from "drizzle-orm";
 import { type JSONType, z } from "zod";
 
 import type { McpActionSpec } from "~/contracts/mcp-define";
+import type { StartOperationIdOfKind } from "~/lib/generated/start-operation-registry.gen";
 import { roundTo } from "~/lib/round-to";
-import type { StartOperationId } from "~/lib/start-operation-observability";
-import { DECISION_DEADLINE_MS } from "~/server/ai/decision-model";
-import { recordDatabaseWrite } from "~/server/db/freshness/client";
 import { getDb } from "~/server/db/helpers";
-import { type ReadPolicy, readPolicyFor } from "~/server/db/read-policy";
 import { run as runTable } from "~/server/db/schema";
-import { scheduleCalendarFeedDirty } from "~/server/domains/calendar/repo/client";
 import { assertPurchaseAgentAction } from "~/server/domains/purchase-import/repo/capabilities";
-import { AppError, toPublicErrorPayload } from "~/server/errors/app-error";
+import { toPublicErrorPayload } from "~/server/errors/app-error";
 import {
   errorReportingHeaders,
   withErrorReporting,
 } from "~/server/errors/report-error";
-import type { AuthenticatedRequestContext } from "~/server/http/request-context";
+import {
+  type Principal,
+  principalWithContext,
+} from "~/server/http/authenticate";
 import {
   batchInputSchema,
   batchOutputSchema,
   runMcpBatch,
 } from "~/server/mcp/batch";
 import type { KernelMcpAction } from "~/server/mcp/kernel-actions";
-import { getEntityKernelContext } from "~/server/mcp/kernel-context";
-import { McpOperationContext } from "~/server/mcp/operation-context";
 import {
   executePurchaseAgentMutation,
   purchaseAgentSelfGoverned,
-  trustedPurchaseAgent,
 } from "~/server/mcp/purchase-agent-protocol";
 import { getRequestId } from "~/server/observability/tracing";
-import type { DirectOperationRun } from "~/server/operation-runtime/operation-domain.server";
-import { publicStartOperationErrorSchema } from "~/server/operation-runtime/start-operation.contract";
+import {
+  dispatchStartOperation,
+  type StartOperationHandlerLoaders,
+} from "~/server/operation-runtime/start-operation-dispatch.server";
+import {
+  type PublicStartOperationError,
+  publicStartOperationErrorSchema,
+  type StartOperationResult,
+  unparsedStartOperationDataSchema,
+} from "~/server/operation-runtime/start-operation.contract";
 import {
   normalizeStartOperationError,
   type OperationFailureContext,
   type OperationStage,
+  runStartOperation,
+  withinCompositeBudget,
 } from "~/server/operation-runtime/start-operation.server";
 
 import {
@@ -61,15 +66,14 @@ import { safeToJsonSchema, sdkOutputSchema } from "./tool-json-schema";
 
 /**
  * The MCP SDK adapter: registers every generated tool binding
- * (`server/generated/mcp-tools.gen.ts`) as one `{ action, ...input }` tool, and
- * owns what every call shares — read-policy selection, the purchase-agent
- * gate and approval protocol, output validation, error shape, calendar and
- * freshness bookkeeping.
+ * (`server/generated/mcp-tools.gen.ts`) as one `{ action, ...input }` tool.
+ * Every action runs through the shared runner (`runStartOperation`): an
+ * operation action by id through `dispatchStartOperation`, a kernel verb as an
+ * ad hoc runner operation named by its tool action. The runner owns read
+ * policy, the per-principal deadline, calendar and freshness bookkeeping; this
+ * adapter owns tool grouping, published schemas, output projections, the
+ * error shape, and the purchase-agent gate and approval protocol.
  */
-
-export type McpRequestContext = AuthenticatedRequestContext;
-
-const log = createLogger("MCP");
 
 const toolArgumentsSchema = z.looseObject({});
 const emptyInputSchema = z.object({});
@@ -78,6 +82,8 @@ export type ToolArguments = z.output<typeof toolArgumentsSchema>;
 export type ToolEntityExtractor = (params: ToolArguments) => string | undefined;
 export type ToolExtra = Parameters<ToolCallback<typeof emptyInputSchema>>[1];
 type JsonObject = Extract<JSONType, { [key: string]: JSONType }>;
+
+type McpOperationId = StartOperationIdOfKind<"query" | "mutation">;
 
 type McpToolBindingAction =
   | {
@@ -88,8 +94,7 @@ type McpToolBindingAction =
   | {
       readonly kind: "query" | "mutation";
       readonly spec: McpActionSpec;
-      readonly operation: StartOperationId;
-      readonly run: DirectOperationRun | undefined;
+      readonly operation: McpOperationId;
     };
 
 export type McpToolBindings = Readonly<
@@ -104,52 +109,51 @@ export type McpToolBindings = Readonly<
   >
 >;
 
-/**
- * Wall-clock budget for one MCP tool call, by declared action budget. A call that dies at
- * the platform (an empty 503 from a Worker resource limit) reaches the MCP
- * client as no JSON-RPC response at all, which the connector proxy reports as
- * a bare "Invalid content from server"; answering first keeps the tool name,
- * request id, and next step in front of the caller.
- *
- * - Reads, 18 s: the motivating read's HTTP twin died with an empty 503 after
- *   ~22 s. Abandoning a read loses nothing, and the caller can narrow it.
- * - Model-backed reads (`modelBacked` on the action), the decision model's 30 s retry budget
- *   plus 15 s for the database work around it: a Retry-After inside the decision model's
- *   budget must not turn into an MCP timeout.
- * - Writes, 230 s: the Postgres work is not cancelled, so an early answer only
- *   turns a likely success into an unknown one. AI-backed imports legitimately
- *   run for minutes: the connector held tool calls open for up to ~208 s that
- *   returned 200, and one at ~240 s ended in a 500.
- *
- * A deadline only fires when the call yields to the event loop; a synchronous
- * CPU loop or an out-of-memory kill still ends the request without an answer.
- */
-const MCP_TOOL_DEADLINE_MS = {
-  read: 18_000,
-  modelRead: DECISION_DEADLINE_MS + 15_000,
-  write: 230_000,
-} as const satisfies Record<ToolBudget, number>;
-
-type ToolBudget = "read" | "modelRead" | "write";
-
-const budgetOf = (action: CompiledAction | undefined): ToolBudget =>
-  action?.kind === "mutation"
-    ? "write"
-    : action?.spec.modelBacked
-      ? "modelRead"
-      : "read";
-
 export interface McpToolRegistrationRuntime {
-  markCalendarDirty(reason: string): void;
-  recordDatabaseWrite?(source: string): Promise<void>;
-  /** Overrides {@link MCP_TOOL_DEADLINE_MS}; tests shorten it. */
-  toolDeadlineMs?: Record<ToolBudget, number>;
+  /** Operation handlers by id; tests bind their own. */
+  loaders?: StartOperationHandlerLoaders;
+  /** The kernel verbs' runner; tests observe its side effects. */
+  runStartOperation?: typeof runStartOperation;
+  /** A composite unit's overrun write; tests observe it. */
+  recordDatabaseWrite?: (operation: string) => Promise<void>;
 }
 
-const productionMcpToolRegistrationRuntime: McpToolRegistrationRuntime = {
-  markCalendarDirty: (reason) => scheduleCalendarFeedDirty(reason),
-  recordDatabaseWrite,
-};
+/**
+ * The principal `authenticate(request, MCP_AUTH)` minted, which the MCP
+ * ingress places in the SDK's untyped authInfo bag.
+ */
+function principalFromExtra(extra: ToolExtra): Principal {
+  const principal = principalInExtra(extra);
+  if (!principal) throw new Error("Authenticated MCP principal is missing");
+  return principal;
+}
+
+export function principalInExtra(extra: ToolExtra): Principal | undefined {
+  const candidate: unknown = extra.http?.authInfo?.extra?.principal;
+  return isPrincipal(candidate) ? candidate : undefined;
+}
+
+const principalFields = z.looseObject({
+  channel: z.string(),
+  context: z.looseObject({
+    db: z.custom((value) => value !== undefined),
+    actorContext: z.custom((value) => value !== undefined),
+  }),
+});
+const isPrincipal = (value: unknown): value is Principal =>
+  principalFields.safeParse(value).success;
+
+/**
+ * A failure the runner already normalized, reported and described. It is
+ * thrown to roll back a delegated transaction or to fail one batch item, and
+ * rendered as is: normalizing it again would replace its raw cause.
+ */
+class SettledToolFailure extends Error {
+  constructor(readonly detail: PublicStartOperationError) {
+    super(detail.message);
+    this.name = "SettledToolFailure";
+  }
+}
 
 const toolEntityExtractors = new WeakMap<
   McpServer,
@@ -192,11 +196,14 @@ function annotationsFor(tool: McpToolBindings[string]): ToolAnnotations {
   };
 }
 
+/** `outputSchema` is absent when the runner already parsed `data`. */
 function structuredSuccess(
   data: unknown,
-  outputSchema: z.ZodType,
+  outputSchema: z.ZodType | undefined,
 ): CallToolResult {
-  const parsed = z.looseObject({}).parse(outputSchema.parse(data));
+  const parsed = z
+    .looseObject({})
+    .parse(outputSchema ? outputSchema.parse(data) : data);
   return {
     structuredContent: parsed,
     content: [{ type: "text", text: JSON.stringify(parsed) }],
@@ -207,15 +214,13 @@ function structuredSuccess(
  * Refusal details stay in `_meta`, not `structuredContent`. The reference SDK
  * validates structured content against the success schema even for `isError`,
  * so putting `{code, reason}` there makes an ordinary refusal throw McpError.
+ * `suffix` is appended after reporting, so it can name the captured Sentry
+ * event.
  */
-function structuredError<T>(
-  error: T,
-  context: OperationFailureContext,
-  stage: OperationStage,
-  /** Appended after reporting, so it can name the captured Sentry event. */
+function renderToolError(
+  detail: ToolErrorDetail,
   suffix?: (detail: ToolErrorDetail) => string,
 ): CallToolResult {
-  const detail = describeToolError(error, context, stage);
   if (suffix) detail.message += suffix(detail);
   return {
     content: [
@@ -239,6 +244,12 @@ export function describeToolError<T>(
   context?: OperationFailureContext,
   stage: OperationStage = "run",
 ): ToolErrorDetail {
+  if (error instanceof SettledToolFailure) {
+    const detail: ToolErrorDetail = structuredClone(error.detail);
+    if (context?.batchIndex !== undefined && detail.diagnostics)
+      detail.diagnostics.batchIndex = context.batchIndex;
+    return detail;
+  }
   if (context) {
     const headers = context.headers ?? errorReportingHeaders();
     const detail = normalizeStartOperationError(
@@ -268,83 +279,30 @@ export function describeToolError<T>(
 }
 
 /**
- * The answer for a call that outlived its {@link MCP_TOOL_DEADLINE_MS} budget:
- * which call, how long, which request and Sentry event, and what the caller
- * can do next. The error reaches Sentry as the bare overrun; the suffix is
- * appended once the event id is known.
+ * What the caller of a call that outlived its principal's budget
+ * (`MCP_TOOL_DEADLINE_MS`) reads after the bare overrun: how long, which
+ * request and Sentry event, and what it can do next. The error reaches Sentry
+ * as the bare overrun; the suffix is appended once the event id is known.
  */
-function deadlineError(
-  name: string,
-  write: boolean,
-  budgetMs: number,
-  elapsedMs: number,
-) {
+function deadlineSuffix(write: boolean, elapsedMs: number) {
   const next = write
     ? "The write may have completed; re-read the affected records before retrying."
     : "The work may still be running server-side; it is too slow for the connector. Try a narrower request or the web app.";
-  return {
-    error: new AppError({
-      code: "INTERNAL_SERVER_ERROR",
-      reason: "MCP_TOOL_DEADLINE_EXCEEDED",
-      message: `${name} did not finish within ${budgetMs / 1000}s`,
-    }),
-    suffix: ({ requestId, diagnostics }: ToolErrorDetail) => {
-      const request = requestId ? `; Cubby request ${requestId}` : "";
-      const sentry = diagnostics?.sentryEventId
-        ? `; Sentry ${diagnostics.sentryEventId}`
-        : "";
-      return ` (answered after ${roundTo(elapsedMs / 1000, 1)}s${request}${sentry}). ${next}`;
-    },
+  return ({ requestId, diagnostics }: ToolErrorDetail) => {
+    const request = requestId ? `; Cubby request ${requestId}` : "";
+    const sentry = diagnostics?.sentryEventId
+      ? `; Sentry ${diagnostics.sentryEventId}`
+      : "";
+    return ` (answered after ${roundTo(elapsedMs / 1000, 1)}s${request}${sentry}). ${next}`;
   };
 }
+
+const overran = (detail: ToolErrorDetail) =>
+  detail.reason === "MCP_TOOL_DEADLINE_EXCEEDED";
 
 function formatToolError({ code, reason, message }: ToolErrorDetail): string {
   if (!code) return message;
   return reason ? `${code}: ${message} (${reason})` : `${code}: ${message}`;
-}
-
-const present = z.custom((value) => value !== undefined);
-const authenticatedRequestFields = z.looseObject({
-  db: present,
-  actorContext: present,
-});
-const requestContextSchema = z.custom<McpRequestContext>(
-  (value) => authenticatedRequestFields.safeParse(value).success,
-  "expected an authenticated request context",
-);
-
-/** The policy-selected request context `prepareToolExtra` placed in the SDK's untyped authInfo bag. */
-function getRequestContext(extra: ToolExtra): McpRequestContext {
-  const candidate = extra.http?.authInfo?.extra?.requestContext;
-  if (candidate === undefined)
-    throw new Error("Authenticated request context is missing");
-  return requestContextSchema.parse(candidate);
-}
-
-export function operationContextFromExtra(
-  extra: ToolExtra,
-): McpOperationContext | undefined {
-  const candidate = extra.http?.authInfo?.extra?.operationContext;
-  return candidate instanceof McpOperationContext ? candidate : undefined;
-}
-
-async function prepareToolExtra(
-  extra: ToolExtra,
-  policy: ReadPolicy,
-): Promise<ToolExtra> {
-  const operationContext = operationContextFromExtra(extra);
-  if (!operationContext || !extra.http?.authInfo) return extra;
-  const prepared = await operationContext.prepare(policy);
-  return {
-    ...extra,
-    http: {
-      ...extra.http,
-      authInfo: {
-        ...extra.http.authInfo,
-        extra: { ...extra.http.authInfo.extra, ...prepared },
-      },
-    },
-  };
 }
 
 /**
@@ -394,11 +352,14 @@ function strictInput(name: string, object: z.ZodObject) {
  * it except through one of those schemas.
  */
 type ActionValue = z.output<z.ZodType>;
-type ActionReadPolicy = McpActionSpec["readPolicy"];
 
-const isReadPolicyFunction = (
-  policy: ActionReadPolicy,
-): policy is (input: ActionValue) => ReadPolicy => typeof policy === "function";
+/** How one call reaches the runner, under the call's principal. */
+type ActionCall = {
+  principal: Principal;
+  headers: Headers | undefined;
+  signal: AbortSignal;
+  runtime: McpToolRegistrationRuntime;
+};
 
 type CompiledAction = {
   name: string;
@@ -413,15 +374,35 @@ type CompiledAction = {
   /** Tool arguments (minus `action` and the run envelope) → action input. */
   prepareInput: (args: ToolArguments) => ToolArguments;
   output: z.ZodType;
-  readPolicy: (input: ActionValue) => ReadPolicy;
+  /** Whether the runner's output parse leaves the published shape unchecked. */
+  parsesOutput: boolean;
+  /** A composite runs its inner runner calls inside one budget of its own. */
+  composite: boolean;
   telemetryEntity: (input: ActionValue) => string | undefined;
+  /**
+   * Run one call. A runner failure is thrown as a {@link SettledToolFailure},
+   * so a delegated transaction rolls back and a batch item fails alone.
+   */
   invoke: (
     input: ActionValue,
-    extra: ToolExtra,
+    call: ActionCall,
     toolAction: string,
     execution: z.output<typeof purchaseImportRunExecution> | undefined,
+    /** The tool arguments `input` parsed from, for a member the runner parses. */
+    raw: ToolArguments,
   ) => Promise<ActionValue>;
 };
+
+const settled = <T>(result: StartOperationResult<T>): T => {
+  if (!result.ok) throw new SettledToolFailure(result.error);
+  return result.data;
+};
+
+/** An operation action's published schemas: its contract member's own. */
+const memberSchemas = z.object({
+  input: z.custom<z.ZodType>(),
+  output: z.custom<z.ZodType>(),
+});
 
 const entityOf = z.object({ entity: z.string() });
 // Inputs have already been parsed into domain values (including Dates).
@@ -461,14 +442,6 @@ function compileAction(
   binding: McpToolBindingAction,
 ): CompiledAction {
   const { spec, kind } = binding;
-  const readPolicyOf =
-    (fallback: ReadPolicy) =>
-    (input: ActionValue): ReadPolicy =>
-      kind === "mutation"
-        ? "strong"
-        : isReadPolicyFunction(spec.readPolicy)
-          ? spec.readPolicy(input)
-          : (spec.readPolicy ?? fallback);
 
   if ("kernel" in binding) {
     const { kernel } = binding;
@@ -482,18 +455,42 @@ function compileAction(
       prepareInput: (args) =>
         kernel.verb ? { ...args, action: kernel.verb } : args,
       output: kernel.output,
-      readPolicy: readPolicyOf("strong"),
+      parsesOutput: true,
+      composite: false,
       telemetryEntity: (input) =>
         spec.telemetryEntity?.(input) ??
         entityOf.safeParse(input).data?.entity ??
         entityOf.safeParse(firstItem(input)).data?.entity,
-      invoke: (input, extra, name, execution) =>
-        kernel.run(input, extra, name, execution),
+      // The verb runs as an ad hoc runner operation named by its tool action;
+      // its input was already parsed, so the runner parses only its output.
+      invoke: async (input, call, name, execution) =>
+        settled(
+          await (call.runtime.runStartOperation ?? runStartOperation)({
+            operation: { id: name, kind },
+            type: kind,
+            input,
+            inputSchema: z.unknown(),
+            outputSchema: kernel.output,
+            request: {
+              principal: call.principal,
+              headers: call.headers ?? new Headers(),
+              signal: call.signal,
+              modelBacked: spec.modelBacked,
+            },
+            run: (context, parsed) =>
+              kernel.run(
+                parsed,
+                principalWithContext(call.principal, context),
+                name,
+                execution,
+              ),
+          }),
+        ),
     };
   }
 
-  const operation = binding.run;
-  if (!operation) throw new Error(`${toolAction} has no bound handler`);
+  const operation = memberSchemas.parse(spec.op);
+  const operationId = binding.operation;
   const { object, toMember } = memberInput(toolAction, operation.input);
   let published = object;
   if (spec.strict) {
@@ -504,15 +501,28 @@ function compileAction(
     published = strictInput(toolAction, object);
   }
   const memberOutput = spec.output ?? operation.output;
-  const runMember = async (input: ActionValue, extra: ToolExtra) => {
-    const member = toMember(z.looseObject({}).parse(input ?? {}));
-    const result = await operation.run(
-      { ...getRequestContext(extra), signal: extra.mcpReq.signal },
-      member,
+  // The runner parses the member's own input and output from the raw tool
+  // arguments; the published parse here only names fields, refuses unknown
+  // keys, and feeds telemetry and the purchase-agent fingerprint.
+  const runMember = async (raw: ActionValue, call: ActionCall) => {
+    const member = toMember(z.looseObject({}).parse(raw ?? {}));
+    const result = settled<ActionValue>(
+      await dispatchStartOperation(
+        {
+          operation: operationId,
+          input: unparsedStartOperationDataSchema.parse(member),
+          request: {
+            principal: call.principal,
+            headers: call.headers ?? new Headers(),
+            signal: call.signal,
+            modelBacked: spec.modelBacked,
+          },
+        },
+        call.runtime.loaders,
+      ),
     );
     return spec.project ? spec.project(result, member) : result;
   };
-  const readPolicy = readPolicyOf(readPolicyFor(binding.operation, kind));
 
   if (spec.batch) {
     const batch = spec.batch;
@@ -536,15 +546,17 @@ function compileAction(
       input,
       prepareInput: (args) => args,
       output: batchOutputSchema(memberOutput),
-      readPolicy,
+      parsesOutput: false,
+      composite: true,
       telemetryEntity: (value) => {
         const item = firstItem(value);
         return (
           spec.telemetryEntity?.(item) ?? entityOf.safeParse(item).data?.entity
         );
       },
-      invoke: (value, extra, name, execution) => {
+      invoke: (value, call, name, execution, raw) => {
         const parsed = parsedBatch.parse(value);
+        const rawItems = batchItems.parse(raw).items;
         return runMcpBatch(
           {
             name,
@@ -553,14 +565,15 @@ function compileAction(
             itemOutput: memberOutput,
             reference: batch.reference,
             mutation: kind === "mutation",
-            run: runMember,
+            run: (_item, principal, _detail, index) =>
+              runMember(rawItems[index], { ...call, principal }),
           },
           {
             items: parsed.items,
             resultDetail: parsed.resultDetail,
             execution,
           },
-          extra,
+          call.principal,
         );
       },
     };
@@ -582,10 +595,12 @@ function compileAction(
       return { ...member, action: operationAction };
     },
     output: memberOutput,
-    readPolicy,
+    // A projection changes the member's shape after the runner's parse.
+    parsesOutput: !spec.project,
+    composite: false,
     telemetryEntity: (input) =>
       spec.telemetryEntity?.(input) ?? entityOf.safeParse(input).data?.entity,
-    invoke: (input, extra) => runMember(input, extra),
+    invoke: (_input, call, _name, _execution, raw) => runMember(raw, call),
   };
 }
 
@@ -773,7 +788,7 @@ export function registerMcpTools(
   server: McpServer,
   bindings: McpToolBindings,
   descriptions: Readonly<Record<string, { description: string }>>,
-  runtime: McpToolRegistrationRuntime = productionMcpToolRegistrationRuntime,
+  runtime: McpToolRegistrationRuntime = {},
 ): void {
   for (const tool of compileTools(bindings, descriptions))
     registerCompiledTool(server, tool, runtime);
@@ -811,185 +826,136 @@ function registerCompiledTool(
       const startedAt = performance.now();
       let stage: OperationStage = "input";
       let entity: string | undefined;
-      let mutation = false;
-      let enteredHandler = false;
       let operationName = tool.name;
-      const budget = budgetOf(actionOf(params));
-      const budgetMs = (runtime.toolDeadlineMs ?? MCP_TOOL_DEADLINE_MS)[budget];
-      // The deadline aborts the same signal a client cancel does. Only work
-      // that reads it stops (AI and upstream fetches); kernel verbs and
-      // Postgres queries run on until they finish or the request ends.
-      const deadline = new AbortController();
-      const callExtra: ToolExtra = {
-        ...extra,
-        mcpReq: {
-          ...extra.mcpReq,
-          signal: AbortSignal.any([extra.mcpReq.signal, deadline.signal]),
-        },
-      };
-      const failure = <T>(
-        error: T,
-        suffix?: (detail: ToolErrorDetail) => string,
-      ) =>
-        structuredError(
+      let mutation = false;
+      const answer = <T>(error: T) => {
+        const detail = describeToolError(
           error,
-          {
-            operation: operationName,
-            authenticated: extra.http?.authInfo !== undefined,
-            entity,
-          },
+          { operation: operationName, authenticated: true, entity },
           stage,
-          suffix,
         );
-      const execute = async (): Promise<CallToolResult> => {
-        try {
-          const action = actionOf(params);
-          if (!action)
-            throw new Error(
-              `${tool.name} needs an \`action\`: one of ${actionNames.join(", ")}.`,
-            );
-          operationName = action.name;
-          const execution = purchaseImportRunExecution
-            .optional()
-            .parse(params._runExecution);
-          const input = action.input.parse(
-            action.prepareInput(
-              actionArguments(
-                action,
-                params,
-                trustedPurchaseAgent(callExtra)?.generation,
-              ),
-            ),
-          );
-          entity = action.telemetryEntity(input);
-          stage = "context";
-          mutation = action.kind === "mutation";
-          const preparedExtra = await prepareToolExtra(
-            callExtra,
-            action.readPolicy(input),
-          );
-          enteredHandler = true;
-          const trusted = trustedPurchaseAgent(preparedExtra);
-          if (trusted)
-            await assertPurchaseAgentAction(
-              getEntityKernelContext(preparedExtra).db,
-              trusted.runId,
-              action.name,
-              mutation,
-              entity,
-            );
-          const governed = selfGoverned(action);
-          // A self-governed writer that reads the envelope must name the
-          // delegated Run; one without it (mail.*) is bound by the actor's
-          // delegated runId instead.
-          if (trusted && mutation && governed && action.keepsRunExecution) {
-            if (!execution)
-              throw new Error(
-                "Purchase-agent writes require the run execution envelope",
-              );
-            const [delegatedRun] = await getDb(
-              getEntityKernelContext(preparedExtra).db,
-            )
-              .select({ id: runTable.id })
-              .from(runTable)
-              .where(eq(runTable.id, runEntityId.parse(trusted.runId)))
-              .limit(1);
-            if (delegatedRun?.id !== execution.runId)
-              throw new Error(
-                "Purchase-agent run execution does not match its delegation",
-              );
-          }
-          stage = "run";
-          const result =
-            trusted && mutation && !governed
-              ? await (async () => {
-                  const operationContext =
-                    operationContextFromExtra(preparedExtra);
-                  if (!operationContext)
-                    throw new Error(
-                      "Purchase-agent operation context is missing",
-                    );
-                  if (!execution)
-                    throw new Error(
-                      "Purchase-agent writes require the run execution envelope",
-                    );
-                  const kernel = getEntityKernelContext(preparedExtra);
-                  return executePurchaseAgentMutation({
-                    db: kernel.db,
-                    actor: kernel.actorContext,
-                    operationContext,
-                    trusted,
-                    toolName: action.name,
-                    args: input,
-                    execution,
-                    run: (transactionExtra) =>
-                      action.invoke(
-                        input,
-                        transactionExtra,
-                        action.name,
-                        execution,
-                      ),
-                    baseExtra: preparedExtra,
-                  });
-                })()
-              : await action.invoke(
-                  input,
-                  preparedExtra,
-                  action.name,
-                  execution,
-                );
-          stage = "output";
-          const response = structuredSuccess(result, action.output);
-          if (mutation) runtime.markCalendarDirty(`mcp.${action.name}`);
-          return response;
-        } catch (error) {
-          // Past the deadline the caller already has its answer; the abandoned
-          // work's own late failure is not a second error to report.
-          if (deadline.signal.aborted) throw error;
-          return failure(error);
-        }
+        return renderToolError(
+          detail,
+          overran(detail)
+            ? deadlineSuffix(
+                mutation,
+                Math.round(performance.now() - startedAt),
+              )
+            : undefined,
+        );
       };
-
-      let timer: ReturnType<typeof setTimeout> | undefined;
-      const expired = new Promise<void>((resolve) => {
-        timer = setTimeout(resolve, budgetMs);
-      });
-      const work = execute();
       try {
-        const finished = await Promise.race([work, expired]);
-        if (finished) return finished;
-        const elapsedMs = Math.round(performance.now() - startedAt);
-        deadline.abort(
-          new DOMException(
-            `${operationName} exceeded its ${budgetMs} ms MCP deadline`,
-            "TimeoutError",
-          ),
+        const action = actionOf(params);
+        if (!action)
+          throw new Error(
+            `${tool.name} needs an \`action\`: one of ${actionNames.join(", ")}.`,
+          );
+        operationName = action.name;
+        mutation = action.kind === "mutation";
+        const principal = principalFromExtra(extra);
+        const { delegation } = principal;
+        const execution = purchaseImportRunExecution
+          .optional()
+          .parse(params._runExecution);
+        const raw = action.prepareInput(
+          actionArguments(action, params, delegation?.generation),
         );
-        // SILENT: the abandoned work rejects only after the abort above, and
-        // its outcome no longer reaches anyone.
-        void work.catch(() => undefined);
-        log.warn("MCP tool deadline exceeded", {
-          tool: operationName,
-          stage,
-          budgetMs,
-          elapsedMs,
-        });
-        const overrun = deadlineError(
-          operationName,
-          budget === "write",
-          budgetMs,
-          elapsedMs,
+        const input = action.input.parse(raw);
+        entity = action.telemetryEntity(input);
+        stage = "context";
+        if (delegation)
+          await assertPurchaseAgentAction(
+            principal.context.db,
+            delegation.runId,
+            action.name,
+            mutation,
+            entity,
+          );
+        const governed = selfGoverned(action);
+        // A self-governed writer that reads the envelope must name the
+        // delegated Run; one without it (mail.*) is bound by the actor's
+        // delegated runId instead.
+        if (delegation && mutation && governed && action.keepsRunExecution) {
+          if (!execution)
+            throw new Error(
+              "Purchase-agent writes require the run execution envelope",
+            );
+          const [delegatedRun] = await getDb(principal.context.db)
+            .select({ id: runTable.id })
+            .from(runTable)
+            .where(eq(runTable.id, runEntityId.parse(delegation.runId)))
+            .limit(1);
+          if (delegatedRun?.id !== execution.runId)
+            throw new Error(
+              "Purchase-agent run execution does not match its delegation",
+            );
+        }
+        stage = "run";
+        const call: ActionCall = {
+          principal,
+          headers: errorReportingHeaders(),
+          signal: extra.mcpReq.signal,
+          runtime,
+        };
+        // A delegated write the writer does not govern runs in one
+        // transaction with its approval and replay record.
+        const transactional = delegation && mutation && !governed;
+        const invoke = (unit: ActionCall) => {
+          if (!transactional)
+            return action.invoke(input, unit, action.name, execution, raw);
+          if (!execution)
+            throw new Error(
+              "Purchase-agent writes require the run execution envelope",
+            );
+          return executePurchaseAgentMutation({
+            principal: unit.principal,
+            delegation,
+            toolName: action.name,
+            args: input,
+            execution,
+            run: (inTransaction) =>
+              action.invoke(
+                input,
+                { ...unit, principal: inTransaction },
+                action.name,
+                execution,
+                raw,
+              ),
+          });
+        };
+        // One call is budgeted by the runner. A composite spends one budget
+        // around all of its inner calls: none of them may answer a deadline
+        // from inside a delegated transaction.
+        const outcome =
+          action.composite || transactional
+            ? await withinCompositeBudget<
+                { ok: true; value: ActionValue } | { ok: false; error: Error }
+              >({
+                principal,
+                name: action.name,
+                kind: action.kind,
+                modelBacked: action.spec.modelBacked,
+                signal: call.signal,
+                recordWrite: runtime.recordDatabaseWrite,
+                work: async (unbudgeted, signal) => ({
+                  ok: true,
+                  value: await invoke({
+                    ...call,
+                    principal: unbudgeted,
+                    signal,
+                  }),
+                }),
+                expired: (error) => ({ ok: false, error }),
+              })
+            : { ok: true as const, value: await invoke(call) };
+        if (!outcome.ok) return answer(outcome.error);
+        stage = "output";
+        return structuredSuccess(
+          outcome.value,
+          action.parsesOutput ? undefined : action.output,
         );
-        return failure(overrun.error, overrun.suffix);
-      } finally {
-        clearTimeout(timer);
-        // A tool can commit before later validation or another item in a batch
-        // fails, or after its deadline answered. Advancing the shared window
-        // here keeps every client strong for that possible partial write
-        // without turning a committed response into an error when the Durable
-        // Object is unavailable.
-        if (enteredHandler && mutation)
-          await runtime.recordDatabaseWrite?.(`mcp.${operationName}`);
+      } catch (error) {
+        return answer(error);
       }
     });
 

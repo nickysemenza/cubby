@@ -25,14 +25,7 @@ type ToolDeclaration = { actions: Record<string, ActionSpec> };
 
 type ResolvedAction =
   | { name: string; kind: Kind; kernel: string }
-  | {
-      name: string;
-      kind: Kind;
-      operation: string;
-      module: string;
-      exportName: string;
-      member: string;
-    };
+  | { name: string; kind: Kind; operation: string };
 
 type ResolvedTool = {
   name: string;
@@ -163,9 +156,10 @@ const loadMcpTools = async (): Promise<Record<string, ToolDeclaration>> => {
 
 /**
  * Bind every declared action to the contract member it names (identity match
- * against the loaded contracts) and that member's `implementOperationDomain`
- * handler. Fails when a tool mixes queries and mutations: MCP clients approve
- * per tool, so one write action would make every read in the tool ask.
+ * against the loaded contracts); the runner dispatches it by that id. Fails
+ * when the member has no `implementOperationDomain` handler, or when a tool
+ * mixes queries and mutations: MCP clients approve per tool, so one write
+ * action would make every read in the tool ask.
  */
 const resolveMcpTools = async (): Promise<ResolvedTool[]> => {
   const tools = await loadMcpTools();
@@ -204,8 +198,7 @@ const resolveMcpTools = async (): Promise<ResolvedTool[]> => {
           throw new Error(
             `MCP action ${name}.${action} names ${member.operation}, a ${member.kind}; only queries and mutations can be tool actions`,
           );
-        const handler = operations.get(member.operation);
-        if (!handler)
+        if (!operations.has(member.operation))
           throw new Error(
             `MCP action ${name}.${action} names ${member.operation}, which has no implementOperationDomain handler`,
           );
@@ -213,9 +206,6 @@ const resolveMcpTools = async (): Promise<ResolvedTool[]> => {
           name: action,
           kind: member.kind,
           operation: member.operation,
-          module: handler.module,
-          exportName: handler.exportName,
-          member: handler.member,
         };
       },
     );
@@ -247,20 +237,6 @@ const property = (key: string) =>
   /^[A-Za-z_$][\w$]*$/u.test(key) ? `.${key}` : `[${JSON.stringify(key)}]`;
 
 const renderServerBindings = (tools: ResolvedTool[]): string => {
-  const imports = new Map<string, Set<string>>();
-  for (const tool of tools)
-    for (const action of tool.actions)
-      if ("module" in action) {
-        const names = imports.get(action.module) ?? new Set();
-        names.add(action.exportName);
-        imports.set(action.module, names);
-      }
-  const importLines = [...imports]
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(
-      ([module, names]) =>
-        `import { ${[...names].sort().join(", ")} } from ${JSON.stringify(module)};`,
-    );
   const body = tools
     .map((tool) => {
       const actions = tool.actions
@@ -269,7 +245,7 @@ const renderServerBindings = (tools: ResolvedTool[]): string => {
           const target =
             "kernel" in action
               ? `kernel: KERNEL_MCP_ACTIONS${property(action.kernel)}`
-              : `operation: ${JSON.stringify(action.operation)}, run: ${action.exportName}.runs${property(action.member)}`;
+              : `operation: ${JSON.stringify(action.operation)}`;
           return `      ${JSON.stringify(action.name)}: { kind: ${JSON.stringify(action.kind)}, spec: ${spec}, ${target} },`;
         })
         .join("\n");
@@ -280,9 +256,8 @@ const renderServerBindings = (tools: ResolvedTool[]): string => {
     generatedHeader +
     `import { MCP_TOOLS } from "~/contracts/mcp-tools";\n` +
     `import { KERNEL_MCP_ACTIONS } from "~/server/mcp/kernel-actions";\n` +
-    `import type { McpToolBindings } from "~/server/mcp/tools/tool-registration";\n` +
-    `${importLines.join("\n")}\n\n` +
-    `/** Every MCP tool with its actions bound to their handlers; read by \`registerMcpTools\`. */\n` +
+    `import type { McpToolBindings } from "~/server/mcp/tools/tool-registration";\n\n` +
+    `/** Every MCP tool with its actions bound to their operations; read by \`registerMcpTools\`. */\n` +
     `export const MCP_TOOL_BINDINGS = {\n${body}\n} as const satisfies McpToolBindings;\n`
   );
 };

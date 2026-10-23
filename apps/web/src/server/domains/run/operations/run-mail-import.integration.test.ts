@@ -12,12 +12,11 @@ import { appSettings, job, run, user } from "~/server/db/schema";
 import { startMailDiscovery } from "~/server/domains/purchase-import/operations/gmail/discovery";
 import { checkpointMailboxCoverage } from "~/server/domains/purchase-import/repo/gmail/persistence";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { systemPrincipal } from "~/server/http/authenticate";
 import { requireActor } from "~/server/http/request-context";
-import type { AppSpan } from "~/server/observability/tracing";
-import { createStartOperationRunner } from "~/server/operation-runtime/start-operation.server";
+import { dispatchAs } from "~/server/operation-runtime/browser-operation-dispatch";
+import { startOperationDispatchInput } from "~/server/operation-runtime/start-operation-dispatch.contract";
 import { createTestRequestContext } from "~/server/testing/request-context";
-
-import { runHandlers } from "./run.server";
 
 // Failures: an unauthenticated or foreign toggle; discovery running while the
 // switch is off; a launch fanning out to another mailbox or duplicating an
@@ -27,41 +26,26 @@ describe("automatic Mail import switch", () => {
   const ctx = withTestDb();
   afterEach(() => setCfEnv(undefined));
   const mailboxId = "synthetic-mail-import-mailbox";
-  const span: AppSpan = {
-    isRecording: false,
-    setAttribute: () => undefined,
-    setAttributes: () => undefined,
-    setError: () => undefined,
-    recordException: () => undefined,
-  };
-  const invoke = async (member: string, input: JSONType, signedIn = true) => {
-    const operation = runHandlers.runs[member];
-    if (!operation) throw new Error(`Missing public run.${member} operation`);
-    const runner = createStartOperationRunner({
-      authenticate: async () =>
-        requireActor(
-          createTestRequestContext(ctx.db, {
-            auth: signedIn ? { userId: ctx.actor.userId } : undefined,
-          }),
-        ),
-      observe: async (_definition, _observation, execute) => execute(span),
-      markCalendarDirty: () => undefined,
-      recordDatabaseWrite: async () => undefined,
-    });
-    return runner({
-      operation: operation.id,
-      type: member === "mailImport" ? "query" : "mutation",
-      input,
-      inputSchema: operation.input,
-      outputSchema: operation.output,
-      request: { headers: new Headers(), signal: new AbortController().signal },
-      run: (context, parsed) =>
-        operation.run(
-          { ...context, signal: new AbortController().signal },
-          parsed,
-        ),
-    });
-  };
+  /** The browser endpoint's dispatch, signed in or refused by the Auth step. */
+  const invoke = async (member: string, input: JSONType, signedIn = true) =>
+    dispatchAs(
+      signedIn
+        ? systemPrincipal(
+            requireActor(
+              createTestRequestContext(ctx.db, {
+                auth: { userId: ctx.actor.userId },
+              }),
+            ),
+            { channel: "browser", credential: "cookie" },
+          )
+        : {
+            status: 401,
+            code: "UNAUTHORIZED",
+            message: "Valid bearer token, or session required",
+          },
+      startOperationDispatchInput.parse({ operation: `run.${member}`, input }),
+      new Request("https://cubby.test/api/operations", { method: "POST" }),
+    );
   const seed = async () => {
     const party = await insertWithShortcode(ctx.db, "ledgerParty", {
       name: "Synthetic Mail import member",

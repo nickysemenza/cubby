@@ -10,8 +10,11 @@ import { withErrorReporting } from "~/server/errors/report-error";
 import { MCP_TOOL_BINDINGS } from "~/server/generated/mcp-tools.gen";
 import { encodeAuditCursor } from "~/server/generic/audit-log/repo/audit-log";
 
-import { callMcpTool, registerTestTool } from "../testing/mcp-test-utils";
-import { McpOperationContext } from "./operation-context";
+import {
+  callMcpTool,
+  observedMcpRuntime,
+  registerTestTool,
+} from "../testing/mcp-test-utils";
 import { listMcpToolCatalog } from "./server";
 import { mergeActionInputSchemas } from "./tools/action-schema";
 import {
@@ -385,7 +388,7 @@ describe("MCP catalog schemas", () => {
         output: z.object({ ok: z.boolean() }),
         run: async () => ({ ok: true }),
       },
-      { markCalendarDirty },
+      observedMcpRuntime({ markCalendarDirty }),
     );
     await callMcpTool(
       server,
@@ -407,7 +410,7 @@ describe("MCP catalog schemas", () => {
         output: z.object({ ok: z.boolean() }),
         run: async () => ({ ok: true }),
       },
-      { markCalendarDirty },
+      observedMcpRuntime({ markCalendarDirty }),
     );
     await callMcpTool(readServer, "calendar_read", { action: "run" }, {});
     expect(markCalendarDirty).toHaveBeenCalledTimes(1);
@@ -424,7 +427,7 @@ describe("MCP catalog schemas", () => {
           throw new Error("write failed");
         },
       },
-      { markCalendarDirty },
+      observedMcpRuntime({ markCalendarDirty }),
     );
     await callMcpTool(
       failingServer,
@@ -448,7 +451,7 @@ describe("MCP catalog schemas", () => {
         run: async () =>
           fromAny<{ ok: boolean }, { ok: string }>({ ok: "invalid" }),
       },
-      { markCalendarDirty: vi.fn(), recordDatabaseWrite },
+      observedMcpRuntime({ recordDatabaseWrite }),
     );
 
     const result = await callMcpTool(
@@ -460,46 +463,8 @@ describe("MCP catalog schemas", () => {
 
     expect(result.isError).toBe(true);
     expect(recordDatabaseWrite).toHaveBeenCalledWith(
-      "mcp.write_with_invalid_output.run",
+      "write_with_invalid_output.run",
     );
-  });
-
-  it("prepares an authoritative read separately for each tool execution", async () => {
-    const server = new McpServer({ name: "test", version: "1.0.0" });
-    const operationContext = new McpOperationContext(fromAny({}));
-    const prepare = vi
-      .spyOn(operationContext, "prepare")
-      .mockResolvedValue(fromAny({ requestContext: {}, entityKernel: {} }));
-    registerTestTool(server, {
-      name: "authoritative_scoped_read",
-      kind: "query",
-      input: z.object({}),
-      output: z.object({ ok: z.boolean() }),
-      run: async () => ({ ok: true }),
-    });
-
-    await callMcpTool(
-      server,
-      "authoritative_scoped_read",
-      { action: "run" },
-      {},
-      {
-        operationContext,
-      },
-    );
-    await callMcpTool(
-      server,
-      "authoritative_scoped_read",
-      { action: "run" },
-      {},
-      {
-        operationContext,
-      },
-    );
-
-    expect(prepare).toHaveBeenCalledTimes(2);
-    expect(prepare).toHaveBeenNthCalledWith(1, "strong");
-    expect(prepare).toHaveBeenNthCalledWith(2, "strong");
   });
 
   it("publishes concrete, mock-free input and output schemas for the live catalog", async () => {

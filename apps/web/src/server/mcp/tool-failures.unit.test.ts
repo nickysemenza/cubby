@@ -9,6 +9,7 @@ import { withErrorReporting } from "~/server/errors/report-error";
 
 import {
   callMcpTool,
+  observedMcpRuntime,
   registerTestTool,
   withTestClient,
 } from "../testing/mcp-test-utils";
@@ -24,6 +25,8 @@ import { handleMcpHttpRequest, type McpServe } from "./http-handler";
 const RAY = "8c1f00d5e2a1-SJC";
 const rayHeaders = () => new Headers({ "cf-ray": RAY });
 const deadlines = { read: 30, modelRead: 60, write: 60 };
+/** The principal's budget, shortened from the production MCP budget. */
+const shortBudget = { budget: { ms: deadlines } };
 
 const errorText = (result: Awaited<ReturnType<typeof callMcpTool>>) =>
   z.array(z.object({ text: z.string() })).parse(result.content)[0]!.text;
@@ -45,11 +48,12 @@ describe("MCP tool deadline", () => {
           return new Promise<{ ok: boolean }>(() => {});
         },
       },
-      { markCalendarDirty: vi.fn(), toolDeadlineMs: deadlines },
+      observedMcpRuntime({}),
     );
 
     const result = await withErrorReporting(
-      () => callMcpTool(server, "slow_read", { action: "run" }),
+      () =>
+        callMcpTool(server, "slow_read", { action: "run" }, {}, shortBudget),
       rayHeaders(),
       capture,
     );
@@ -94,11 +98,18 @@ describe("MCP tool deadline", () => {
         output: z.object({ ok: z.boolean() }),
         run: () => new Promise<{ ok: boolean }>(() => {}),
       },
-      { markCalendarDirty: vi.fn(), toolDeadlineMs: deadlines },
+      observedMcpRuntime({}),
     );
 
     const result = await withErrorReporting(
-      () => callMcpTool(server, "slow_forged_ray", { action: "run" }),
+      () =>
+        callMcpTool(
+          server,
+          "slow_forged_ray",
+          { action: "run" },
+          {},
+          shortBudget,
+        ),
       new Headers({ "cf-ray": "token=fixture-ray-secret" }),
       vi.fn(() => "sentry-event-5"),
     );
@@ -121,11 +132,12 @@ describe("MCP tool deadline", () => {
         output: z.object({ ok: z.boolean() }),
         run: () => new Promise<{ ok: boolean }>(() => {}),
       },
-      { markCalendarDirty, recordDatabaseWrite, toolDeadlineMs: deadlines },
+      observedMcpRuntime({ markCalendarDirty, recordDatabaseWrite }),
     );
 
     const result = await withErrorReporting(
-      () => callMcpTool(server, "slow_write", { action: "run" }),
+      () =>
+        callMcpTool(server, "slow_write", { action: "run" }, {}, shortBudget),
       rayHeaders(),
       vi.fn(() => "sentry-event-2"),
     );
@@ -139,7 +151,7 @@ describe("MCP tool deadline", () => {
     expect(result._meta).toMatchObject({
       "cubby/error": { reason: "MCP_TOOL_DEADLINE_EXCEEDED", requestId: RAY },
     });
-    expect(recordDatabaseWrite).toHaveBeenCalledWith("mcp.slow_write.run");
+    expect(recordDatabaseWrite).toHaveBeenCalledWith("slow_write.run");
     expect(markCalendarDirty).not.toHaveBeenCalled();
   });
 
@@ -159,15 +171,16 @@ describe("MCP tool deadline", () => {
       },
       // The run outlasts the read budget; the write budget is wide so a slow
       // CI runner cannot time it out (a 40 ms run once took 89 ms).
-      {
-        markCalendarDirty: vi.fn(),
-        toolDeadlineMs: { ...deadlines, write: 1_000 },
-      },
+      observedMcpRuntime({}),
     );
 
-    const result = await callMcpTool(server, "write_between_budgets", {
-      action: "run",
-    });
+    const result = await callMcpTool(
+      server,
+      "write_between_budgets",
+      { action: "run" },
+      {},
+      { budget: { ms: { ...deadlines, write: 1_000 } } },
+    );
 
     expect(result.isError).not.toBe(true);
     expect(result.structuredContent).toEqual({ ok: true });
@@ -195,7 +208,7 @@ describe("MCP tool deadline policy", () => {
           run,
           spec: { modelBacked: true },
         },
-        { markCalendarDirty: vi.fn(), toolDeadlineMs: deadlines },
+        observedMcpRuntime({}),
       );
       const plainServer = new McpServer({ name: "test", version: "1.0.0" });
       registerTestTool(
@@ -207,20 +220,31 @@ describe("MCP tool deadline policy", () => {
           output: z.object({ ok: z.boolean() }),
           run,
         },
-        { markCalendarDirty: vi.fn(), toolDeadlineMs: deadlines },
+        observedMcpRuntime({}),
       );
 
       // Advance only after the SDK enters the handler and installs its deadline.
-      const modelCall = callMcpTool(modelServer, "model_read", {
-        action: "run",
-      });
+      const modelCall = callMcpTool(
+        modelServer,
+        "model_read",
+        { action: "run" },
+        {},
+        shortBudget,
+      );
       await started.promise;
       await vi.advanceTimersByTimeAsync(45);
       const modelResult = await modelCall;
 
       started = Promise.withResolvers<void>();
       const plainCall = withErrorReporting(
-        () => callMcpTool(plainServer, "plain_read", { action: "run" }),
+        () =>
+          callMcpTool(
+            plainServer,
+            "plain_read",
+            { action: "run" },
+            {},
+            shortBudget,
+          ),
         rayHeaders(),
         vi.fn(() => "sentry-event-4"),
       );
@@ -272,18 +296,14 @@ describe("MCP tool work that settles after its deadline", () => {
             };
           }),
       },
-      {
-        markCalendarDirty: vi.fn(),
-        recordDatabaseWrite,
-        toolDeadlineMs: deadlines,
-      },
+      observedMcpRuntime({ recordDatabaseWrite }),
     );
 
     // The transports stay open through the late settle, so a second response
     // would actually be sent and counted.
     const result = await withErrorReporting(
       () =>
-        withTestClient(server, {}, {}, async (client) => {
+        withTestClient(server, {}, shortBudget, async (client) => {
           const answer = await client.callTool({
             name: "late_write",
             arguments: { action: "run" },
@@ -319,7 +339,8 @@ describe("MCP tool work that settles after its deadline", () => {
     expect(errorText(result)).toContain("late_write.run did not finish");
     expect(responses).toHaveLength(1);
     expect(capture).toHaveBeenCalledOnce();
-    expect(recordDatabaseWrite).toHaveBeenCalledOnce();
+    // Once when the deadline answers, again when the abandoned write ends.
+    expect(recordDatabaseWrite).toHaveBeenCalledTimes(2);
     expect(unhandled).not.toHaveBeenCalled();
   });
 

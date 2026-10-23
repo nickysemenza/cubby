@@ -39,7 +39,6 @@ import {
   listMcpTools,
   type McpTestRequestContext,
 } from "../testing/mcp-test-utils";
-import { McpOperationContext } from "./operation-context";
 import { createMcpServer, listMcpToolCatalog } from "./server";
 import type { ToolArguments } from "./tools/tool-registration";
 let backgroundQueue: ReturnType<typeof captureBackgroundQueue>;
@@ -560,9 +559,8 @@ describe("MCP catalog", () => {
     });
     const { tools } = await listMcpTools(
       createMcpServer(),
-      {},
+      requireActor(requestContext),
       {
-        operationContext: new McpOperationContext(requireActor(requestContext)),
         purchaseAgent: { runId: run.id, grantId: "catalog-photo-grant" },
       },
     );

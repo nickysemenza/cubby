@@ -1,3 +1,5 @@
+import { buildActorContext } from "@cubby/schemas/context";
+import { userId } from "@cubby/schemas/identifiers";
 import type {
   McpTelemetryIdentity,
   McpToolCallTelemetry,
@@ -12,19 +14,32 @@ import { mutation, query } from "~/contracts/define";
 import { isKernelActionRef, type McpActionSpec } from "~/contracts/mcp-define";
 import type { EntityKernelContext } from "~/server/entity-kernel";
 import { MCP_TOOL_BINDINGS } from "~/server/generated/mcp-tools.gen";
+import type { StartOperationHandler } from "~/server/generated/start-operation-handlers.gen";
+import {
+  type DeadlineBudget,
+  MCP_TOOL_DEADLINE_MS,
+  type Principal,
+  type RunDelegation,
+} from "~/server/http/authenticate";
+import type { AuthenticatedRequestContext } from "~/server/http/request-context";
 import {
   createKernelMcpActions,
   type McpEntityExecutor,
 } from "~/server/mcp/kernel-actions";
-import type { McpOperationContext } from "~/server/mcp/operation-context";
+import { observeOperation } from "~/server/observability/observed-request";
+import {
+  createStartOperationRunner,
+  runStartOperation,
+} from "~/server/operation-runtime/start-operation.server";
 
 import {
-  type McpRequestContext,
   type McpToolBindings,
   type McpToolRegistrationRuntime,
   registerMcpTools,
   type ToolArguments,
 } from "../mcp/tools/tool-registration";
+
+type McpRequestContext = AuthenticatedRequestContext;
 
 /**
  * The production tool bindings with the entity-kernel verbs rebuilt over
@@ -61,9 +76,31 @@ export function bindingsWithKernelExecutor(
 }
 
 /**
+ * A registration runtime whose runner reports its calendar and freshness side
+ * effects to the given spies (absent spies discard them).
+ */
+export function observedMcpRuntime(spies: {
+  markCalendarDirty?: (reason: string) => void;
+  recordDatabaseWrite?: (operation: string) => Promise<void>;
+}): McpToolRegistrationRuntime {
+  const recordDatabaseWrite =
+    spies.recordDatabaseWrite ?? (async () => undefined);
+  return {
+    runStartOperation: createStartOperationRunner({
+      observe: observeOperation,
+      markCalendarDirty: (reason) => spies.markCalendarDirty?.(reason),
+      recordDatabaseWrite,
+    }),
+    recordDatabaseWrite,
+  };
+}
+
+/**
  * Register one single-action tool backed by an ad hoc handler, for tests of
- * the shared adapter (errors, read policy, batches, bookkeeping). The action
- * is `run`; call it as `{ action: "run", ...input }`.
+ * the shared adapter (errors, deadlines, batches, bookkeeping). The action is
+ * `run`; call it as `{ action: "run", ...input }`. The handler runs through
+ * `runtime.runStartOperation` (default: the production runner) as the ad hoc
+ * operation `${name}.run`, the way a generated handler runs its operation.
  */
 export function registerTestTool<
   Input extends z.ZodType,
@@ -87,6 +124,18 @@ export function registerTestTool<
     config.kind === "query"
       ? query({ input: config.input, output: config.output })
       : mutation({ input: config.input, output: config.output });
+  const run = runtime?.runStartOperation ?? runStartOperation;
+  const handler: StartOperationHandler<z.output<Output>> = (options) =>
+    run({
+      operation: { id: `${config.name}.run`, kind: config.kind },
+      type: config.kind,
+      input: options.data,
+      inputSchema: config.input,
+      outputSchema: config.output,
+      request: options.request,
+      run: (context, input, signal) =>
+        config.run({ ...context, signal }, input),
+    });
   const bindings: McpToolBindings = {
     [config.name]: {
       readOnly: config.kind === "query",
@@ -96,16 +145,9 @@ export function registerTestTool<
         run: {
           kind: config.kind,
           spec: { op: member, description: "Test action.", ...config.spec },
-          // SAFETY: a test operation id is not in the generated registry; it
-          // only keys the read-policy lookup, which defaults to "context".
+          // SAFETY: a test operation id is not in the generated registry; the
+          // loader below is the only one that resolves it.
           operation: fromAny("test.run"),
-          run: {
-            id: fromAny("test.run"),
-            input: config.input,
-            output: config.output,
-            // SAFETY: the adapter parses input with `config.input` first.
-            run: (context, input) => config.run(context, fromAny(input)),
-          },
         },
       },
     },
@@ -114,7 +156,11 @@ export function registerTestTool<
     server,
     bindings,
     { [config.name]: { description: "Test tool." } },
-    runtime,
+    {
+      ...runtime,
+      // SAFETY: the loader map is keyed by registry ids; this test id is not one.
+      loaders: fromAny({ "test.run": async () => handler }),
+    },
   );
 }
 
@@ -129,9 +175,10 @@ type McpTestEntityKernelContext = {
 
 interface ToolCallExtra {
   entityKernel?: McpTestEntityKernelContext;
-  operationContext?: McpOperationContext;
   /** The delegation a trusted purchase agent's token carries. */
-  purchaseAgent?: { runId: string; grantId: string };
+  purchaseAgent?: RunDelegation;
+  /** Default: the production MCP budget. */
+  budget?: DeadlineBudget | null;
   telemetry?: {
     identity: McpTelemetryIdentity;
     emit: (event: McpToolCallTelemetry) => Promise<void>;
@@ -150,6 +197,42 @@ export function kernelRequestContext(
   // `actorContext`, the USDA/UPC clients, `services.recipeCosting`) is present
   // on the kernel context; absent request-only members stay undefined.
   return kernel as McpTestRequestContext;
+}
+
+const TEST_USER = userId.parse("mcp-test-user");
+
+/**
+ * The principal `authenticate(request, MCP_AUTH)` would mint for this
+ * context: the entity-kernel and request contexts merged, with a synthetic
+ * actor and auth when the test supplies none.
+ */
+export function mcpTestPrincipal(
+  requestContext: McpTestRequestContext,
+  extra: ToolCallExtra = {},
+): Principal {
+  const merged = { ...extra.entityKernel, ...requestContext };
+  const actorContext =
+    merged.actorContext ??
+    buildActorContext(TEST_USER, "mcp", {
+      runId: fromAny(extra.purchaseAgent?.runId ?? null),
+    });
+  return {
+    channel: "mcp",
+    credential: "mcp-token",
+    // SAFETY: a test supplies only the members the tool under test reads.
+    context: fromAny({
+      db: null,
+      auth: { userId: actorContext.userId, sessionId: null },
+      ...merged,
+      actorContext,
+    }),
+    client: null,
+    delegation: extra.purchaseAgent ?? null,
+    budget:
+      extra.budget === undefined ? { ms: MCP_TOOL_DEADLINE_MS } : extra.budget,
+    session: null,
+    responseHeaders: new Headers(),
+  };
 }
 
 /**
@@ -175,12 +258,8 @@ export async function withTestClient<T>(
         clientId: "test",
         scopes: [],
         extra: {
-          requestContext: {
-            db: null,
-            actorContext: null,
-            ...requestContext,
-          },
-          ...extra,
+          principal: mcpTestPrincipal(requestContext, extra),
+          telemetry: extra.telemetry,
         },
       },
     });

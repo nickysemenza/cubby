@@ -10,7 +10,7 @@ import {
 import {
   isStartOperationEntity,
   type StartOperationId,
-  type StartOperationDefinition,
+  type StartOperationKind,
   startOperationDefinitionFor,
 } from "~/lib/start-operation-observability";
 import { noteRequestOperation } from "~/server/db/db-observability";
@@ -22,7 +22,9 @@ import {
 } from "~/server/db/read-policy";
 import { scheduleCalendarFeedDirty } from "~/server/domains/calendar/repo/client";
 import {
+  AppError,
   appErrorFromUnknown,
+  createAppError,
   isExpectedAppError,
   toPublicErrorPayload,
 } from "~/server/errors/app-error";
@@ -31,13 +33,19 @@ import {
   reportServerError,
   withErrorReporting,
 } from "~/server/errors/report-error";
+import { appleClientUpdateError } from "~/server/http/apple-client-gate";
+import type {
+  Channel,
+  DeadlineBudget,
+  DeadlineClass,
+  Principal,
+} from "~/server/http/authenticate";
 import {
   actorSpanAttributes,
-  createRequestContext,
-  requireActor,
+  type AuthenticatedRequestContext,
   selectOperationContext,
 } from "~/server/http/request-context";
-import type { Workload } from "~/server/http/workload";
+import type { RequestOrigin, Workload } from "~/server/http/workload";
 import {
   type ObservedFailure,
   type OperationObservation,
@@ -57,16 +65,16 @@ import type {
 const log = createLogger("start-operation");
 
 export type StartOperationRequest = {
+  /** Minted by `authenticate` before any request JSON is read. */
+  principal: Principal;
+  /** Correlation only (request id, ray); never authority. */
   headers: Headers;
   signal: AbortSignal;
-  /** Supplied only by the authenticated HTTP adapter, never request JSON. */
-  apiContext?: AuthenticatedStartOperationContext;
-  verifiedContext?: AuthenticatedStartOperationContext;
+  /** A read that may wait on a model runs against the principal's model-read budget. */
+  modelBacked?: boolean;
 };
 
-export type AuthenticatedStartOperationContext = ReturnType<
-  typeof requireActor
->;
+export type AuthenticatedStartOperationContext = AuthenticatedRequestContext;
 
 export type OperationStage =
   | "context"
@@ -85,6 +93,13 @@ type StartOperationFailureCause = ObservedFailure;
 type NormalizedStartOperationError = {
   publicError: PublicStartOperationError;
   observedError: StartOperationFailureCause;
+};
+
+/** What a deadline answer reports about the call it abandoned. */
+type RunState = {
+  stage: OperationStage;
+  mutationStarted: boolean;
+  entity: string | undefined;
 };
 
 type StartOperationInspection = {
@@ -185,6 +200,21 @@ function normalizePublicError<TError>(
       publicError,
       observedError: knownError,
     };
+  }
+
+  // A legacy refusal carrier (`{ code, cause: { reason, blockers } }`) with
+  // an expected refusal code keeps its classification, as Sentry already
+  // does; an infrastructure error's own `code` (`ECONNRESET`) does not.
+  const carried = toPublicErrorPayload(failure);
+  if (carried.code && failure instanceof Error && isExpectedAppError(failure)) {
+    const { code, ...details } = carried;
+    const publicError: PublicStartOperationError = {
+      code,
+      message: failure.message || "The operation could not be completed",
+      ...details,
+    };
+    if (requestId) publicError.requestId = requestId;
+    return { publicError, observedError: failure };
   }
 
   const publicError: PublicStartOperationError = {
@@ -288,41 +318,130 @@ function reportOperationFailure<TError>(
 }
 
 /**
- * Resolve the actor for a Start request and record the one span fact both
- * transports report identically.
- *
- * This is the whole of what `runStartOperation` and `workflowStream`
- * share. Everything downstream differs BECAUSE one transport returns a value
- * and the other a stream: read-policy selection, output parsing, and the
- * result envelope have no counterpart on the stream side, and the same-origin
- * check, per-event `eventSchema.parse`, and NDJSON framing have none here.
+ * An outdated Apple build keeps its reads, so one changed shape fails one
+ * screen, not the app; a write or a stream could carry a field whose meaning
+ * changed, so it is refused with the actionable update message.
  */
-export async function authenticateStartOperation(
-  headers: Headers,
-  span: AppSpan,
-): Promise<AuthenticatedStartOperationContext> {
-  const authenticated = requireActor(await createRequestContext({ headers }));
-  span.setAttribute("cubby.authenticated", true);
-  return authenticated;
+export function assertClientMayWrite(principal: Principal): void {
+  const outdated = principal.client?.updateRequired;
+  if (outdated)
+    throw createAppError(
+      "CLIENT_UPDATE_REQUIRED",
+      appleClientUpdateError(outdated).message,
+    );
 }
 
+const EXPIRED = Symbol("deadline expired");
+
+const deadlineClassOf = (
+  kind: StartOperationKind,
+  modelBacked?: boolean,
+): DeadlineClass =>
+  kind === "mutation" ? "write" : modelBacked ? "modelRead" : "read";
+
+/** The refusal a call that outlived its budget answers with. */
+const deadlineExceededError = (name: string, budgetMs: number) =>
+  new AppError({
+    code: "INTERNAL_SERVER_ERROR",
+    reason: "MCP_TOOL_DEADLINE_EXCEEDED",
+    message: `${name} did not finish within ${budgetMs / 1000}s`,
+  });
+
+/**
+ * Race `work` against the principal's budget. On expiry the work's signal
+ * aborts and `expired` answers instead; only work that reads the signal stops
+ * (AI and upstream fetches), and Postgres work runs on until it finishes or
+ * the request ends. A null budget runs `work` unbounded.
+ *
+ * Work that holds a transaction open must sit inside one budget, never race
+ * one from within the transaction: answering early from inside it would roll
+ * back under work still using the connection.
+ */
+async function withinBudget<T>(
+  budget: DeadlineBudget | null,
+  deadlineClass: DeadlineClass,
+  signal: AbortSignal,
+  work: (signal: AbortSignal) => Promise<T>,
+  expired: (budgetMs: number) => Promise<T>,
+): Promise<T> {
+  if (!budget) return work(signal);
+  const budgetMs = budget.ms[deadlineClass];
+  const deadline = new AbortController();
+  const pending = work(AbortSignal.any([signal, deadline.signal]));
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<typeof EXPIRED>((resolve) => {
+    timer = setTimeout(() => resolve(EXPIRED), budgetMs);
+  });
+  try {
+    const settled = await Promise.race([pending, timeout]);
+    if (settled !== EXPIRED) return settled;
+  } finally {
+    clearTimeout(timer);
+  }
+  deadline.abort(
+    new DOMException(`exceeded its ${budgetMs} ms deadline`, "TimeoutError"),
+  );
+  // SILENT: the abandoned work settles only after the abort above, and its
+  // outcome no longer reaches anyone.
+  void pending.catch(() => undefined);
+  return expired(budgetMs);
+}
+
+/**
+ * One budget around a composite unit (an MCP batch, a delegated
+ * transaction) whose inner calls run through the runner under an unbudgeted
+ * principal. On expiry the possible write is recorded here, as the runner's
+ * own overrun does, before `expired` answers with the deadline error.
+ */
+export function withinCompositeBudget<T>(options: {
+  principal: Principal;
+  name: string;
+  kind: "query" | "mutation";
+  modelBacked?: boolean;
+  signal: AbortSignal;
+  work: (unbudgeted: Principal, signal: AbortSignal) => Promise<T>;
+  expired: (error: AppError) => T;
+  recordWrite?: (operation: string) => Promise<void>;
+}): Promise<T> {
+  const unbudgeted: Principal = { ...options.principal, budget: null };
+  return withinBudget(
+    options.principal.budget,
+    deadlineClassOf(options.kind, options.modelBacked),
+    options.signal,
+    (signal) => options.work(unbudgeted, signal),
+    async (budgetMs) => {
+      log.warn("operation deadline exceeded", {
+        operation: options.name,
+        budgetMs,
+      });
+      if (options.kind === "mutation")
+        await (options.recordWrite ?? recordDatabaseWrite)(options.name);
+      return options.expired(deadlineExceededError(options.name, budgetMs));
+    },
+  );
+}
+
+/** How each client family is observed and names its calendar dirty marks. */
+const CHANNEL_OBSERVATION = {
+  browser: { origin: "ui", workload: "ui", source: "browser" },
+  native: { origin: "api", workload: "other", source: "api" },
+  cli: { origin: "api", workload: "other", source: "api" },
+  mcp: { origin: "mcp", workload: "mcp", source: "mcp" },
+  system: { origin: "api", workload: "other", source: "system" },
+} as const satisfies Record<
+  Channel,
+  { origin: RequestOrigin; workload: Workload; source: string }
+>;
+
 export interface StartOperationRuntime {
-  authenticate(
-    headers: Headers,
-    span: AppSpan,
-  ): Promise<AuthenticatedStartOperationContext>;
   observe<Result>(
-    definition: StartOperationDefinition,
+    definition: { readonly id: string; readonly kind: StartOperationKind },
     observation: OperationObservation<Result>,
     run: (span: AppSpan) => Promise<Result>,
   ): Promise<Result>;
-  markCalendarDirty(
-    context: AuthenticatedStartOperationContext,
-    headers: Headers,
-    operation: StartOperationId,
-  ): void;
+  markCalendarDirty(reason: string, headers: Headers): void;
   /** Best-effort post-write notification; failures never alter the response. */
-  recordDatabaseWrite?(operation: StartOperationId): Promise<void>;
+  recordDatabaseWrite?(operation: string): Promise<void>;
 }
 
 type OutputSchemaResolver<
@@ -341,11 +460,21 @@ function isOutputSchemaResolver<
 
 const operationEntityInputSchema = z.object({ entity: z.string() });
 
+/**
+ * An operation outside the generated registry that still runs the whole
+ * pipeline: MCP's entity-kernel verbs, named by their tool action
+ * (`entity.create`), and test handlers. Its id never shadows a registry id.
+ */
+export type AdHocOperation = {
+  readonly id: string;
+  readonly kind: "query" | "mutation";
+};
+
 export type RunStartOperationOptions<
   InputSchema extends z.ZodType,
   OutputSchema extends z.ZodType,
 > = {
-  operation: StartOperationId;
+  operation: StartOperationId | AdHocOperation;
   type: "query" | "mutation" | "subscription";
   input: z.input<z.ZodUnknown>;
   inputSchema: InputSchema;
@@ -356,162 +485,218 @@ export type RunStartOperationOptions<
   run: (
     context: AuthenticatedStartOperationContext,
     input: z.output<InputSchema>,
+    /** The request's signal, also aborted when the principal's budget runs out. */
+    signal: AbortSignal,
   ) => Promise<z.input<OutputSchema>>;
 };
 
+function runnerDefinition(operation: StartOperationId | AdHocOperation) {
+  if (typeof operation === "string") {
+    const registered = startOperationDefinitionFor(operation);
+    return registered && { ...registered, registered: operation };
+  }
+  if (startOperationDefinitionFor(operation.id))
+    throw new Error(`Ad hoc operation ${operation.id} shadows a registry id`);
+  return { id: operation.id, kind: operation.kind, registered: undefined };
+}
+
 export function createStartOperationRunner(runtime: StartOperationRuntime) {
+  const recordWrite = runtime.recordDatabaseWrite ?? recordDatabaseWrite;
   return async function runStartOperation<
     InputSchema extends z.ZodType,
     OutputSchema extends z.ZodType,
   >(
     options: RunStartOperationOptions<InputSchema, OutputSchema>,
   ): Promise<StartOperationResult<z.output<OutputSchema>>> {
-    const workload =
-      options.workload ?? (options.request.apiContext ? "other" : "ui");
-    const definition = startOperationDefinitionFor(options.operation);
+    const { principal } = options.request;
+    const channel = CHANNEL_OBSERVATION[principal.channel];
+    const workload = options.workload ?? channel.workload;
+    const definition = runnerDefinition(options.operation);
     if (!definition || definition.kind !== options.type) {
       throw new Error(
-        `Unregistered Start operation: ${options.operation} (${options.type})`,
+        `Unregistered Start operation: ${definition?.id ?? String(options.operation)} (${options.type})`,
       );
     }
-    return await withErrorReporting(async () => {
-      const observed = await runtime.observe<
-        ObservedStartResult<z.output<OutputSchema>>
-      >(
-        definition,
-        {
-          origin: options.request.apiContext ? "api" : "ui",
-          workload,
-          inspectResult: (result) => {
-            const inspection: StartOperationInspection = {
-              workload,
-            };
-            if (result.observedError) {
-              inspection.error = result.observedError;
-              inspection.reported = true;
-            }
-            return inspection;
-          },
-        },
-        async (span) => {
-          span.setAttribute("cubby.authenticated", false);
-          let stage: OperationStage = "context";
-          let mutationStarted = false;
-          let actorVerified = false;
-          let entity: string | undefined;
-          try {
-            throwIfStartOperationAborted(options.request.signal);
-            const authenticated =
-              options.request.apiContext ??
-              options.request.verifiedContext ??
-              (await runtime.authenticate(options.request.headers, span));
-            actorVerified = true;
-            span.setAttributes({
-              "cubby.authenticated": true,
-              ...actorSpanAttributes(
-                authenticated.auth.sessionId,
-                authenticated.actorContext,
-              ),
-            });
-            const readPolicy =
-              options.type !== "query"
-                ? "strong"
-                : (options.readPolicy ??
-                  readPolicyFor(options.operation, "query"));
-            const context = await selectOperationContext(
-              authenticated,
-              readPolicy,
-            );
-            span.setAttributes({
-              "cubby.request_origin": context.requestOrigin,
-              "cubby.read.consistency":
-                readPolicy === "strong"
-                  ? "strong"
-                  : context.readConsistency.consistency,
-              "cubby.read.reason":
-                readPolicy === "strong"
-                  ? options.type === "mutation"
-                    ? "mutation"
-                    : "authoritative-operation"
-                  : context.readConsistency.reason,
-            });
+    const requestId = getRequestId(options.request.headers);
+    const state: RunState = {
+      stage: "context",
+      mutationStarted: false,
+      entity: undefined,
+    };
+    const failureContext = (): OperationFailureContext => ({
+      operation: definition.id,
+      authenticated: true,
+      entity: state.entity,
+      headers: options.request.headers,
+    });
 
-            stage = "input";
-            const input = options.inputSchema.parse(options.input);
-            const entityInput = operationEntityInputSchema.safeParse(input);
-            entity =
-              entityInput.success &&
-              isStartOperationEntity(definition.id, entityInput.data.entity)
-                ? entityInput.data.entity
-                : undefined;
-            if (entity) span.setAttribute("cubby.entity", entity);
-            noteRequestOperation(options.operation, entity);
-            throwIfStartOperationAborted(options.request.signal);
+    const execute = async (
+      span: AppSpan,
+      signal: AbortSignal,
+    ): Promise<ObservedStartResult<z.output<OutputSchema>>> => {
+      try {
+        // Client cancellation, not the budget: work that finishes past its
+        // deadline still parses its output and schedules its side effects.
+        throwIfStartOperationAborted(options.request.signal);
+        const authenticated = principal.context;
+        span.setAttributes({
+          "cubby.authenticated": true,
+          ...actorSpanAttributes(
+            authenticated.auth.sessionId,
+            authenticated.actorContext,
+          ),
+        });
+        if (options.type !== "query") assertClientMayWrite(principal);
+        const readPolicy =
+          options.type !== "query"
+            ? "strong"
+            : (options.readPolicy ?? readPolicyFor(definition.id, "query"));
+        const context = await selectOperationContext(authenticated, readPolicy);
+        span.setAttributes({
+          "cubby.request_origin": context.requestOrigin,
+          "cubby.read.consistency":
+            readPolicy === "strong"
+              ? "strong"
+              : context.readConsistency.consistency,
+          "cubby.read.reason":
+            readPolicy === "strong"
+              ? options.type === "mutation"
+                ? "mutation"
+                : "authoritative-operation"
+              : context.readConsistency.reason,
+        });
 
-            stage = "run";
-            mutationStarted =
-              options.type === "mutation" &&
-              mutationChangesHouseholdData(options.operation);
-            const rawOutput = await options.run(context, input);
-            throwIfStartOperationAborted(options.request.signal);
+        state.stage = "input";
+        const input = options.inputSchema.parse(options.input);
+        const entityInput = operationEntityInputSchema.safeParse(input);
+        state.entity =
+          entityInput.success &&
+          (!definition.registered ||
+            isStartOperationEntity(
+              definition.registered,
+              entityInput.data.entity,
+            ))
+            ? entityInput.data.entity
+            : undefined;
+        if (state.entity) span.setAttribute("cubby.entity", state.entity);
+        noteRequestOperation(definition.id, state.entity);
+        throwIfStartOperationAborted(options.request.signal);
 
-            stage = "output";
-            const outputSchema = isOutputSchemaResolver(options.outputSchema)
-              ? options.outputSchema(input)
-              : options.outputSchema;
-            const data = outputSchema.parse(rawOutput);
-            throwIfStartOperationAborted(options.request.signal);
-            if (mutationStarted) {
-              runtime.markCalendarDirty(
-                context,
-                options.request.headers,
-                options.operation,
-              );
-            }
-            const result: StartOperationResult<z.output<OutputSchema>> = {
-              ok: true,
-              data,
-            };
-            return { result };
-          } catch (error) {
-            if (options.request.signal.aborted)
-              throw abortError(options.request.signal);
-            const requestId = getRequestId(options.request.headers);
-            const normalized = normalizeStartOperationError(
-              error,
-              stage,
-              requestId,
-              {
-                operation: options.operation,
-                authenticated: actorVerified,
-                entity,
-                headers: options.request.headers,
-              },
-            );
-            if (normalized.publicError.code === "INTERNAL_SERVER_ERROR") {
-              log.error("failure", {
-                operation: options.operation,
-                stage,
-                requestId,
-                cfRayId: cloudflareRayId(options.request.headers),
-                error: normalized.observedError,
-              });
-            }
-            const result: StartOperationResult<z.output<OutputSchema>> = {
+        state.stage = "run";
+        state.mutationStarted =
+          options.type === "mutation" &&
+          mutationChangesHouseholdData(definition.id);
+        const rawOutput = await options.run(context, input, signal);
+        throwIfStartOperationAborted(options.request.signal);
+
+        state.stage = "output";
+        const outputSchema = isOutputSchemaResolver(options.outputSchema)
+          ? options.outputSchema(input)
+          : options.outputSchema;
+        const data = outputSchema.parse(rawOutput);
+        throwIfStartOperationAborted(options.request.signal);
+        if (state.mutationStarted) {
+          runtime.markCalendarDirty(
+            `${channel.source}.${definition.id}`,
+            options.request.headers,
+          );
+        }
+        const result: StartOperationResult<z.output<OutputSchema>> = {
+          ok: true,
+          data,
+        };
+        return { result };
+      } catch (error) {
+        if (options.request.signal.aborted)
+          throw abortError(options.request.signal);
+        // Past its deadline the caller already has its answer; the abandoned
+        // work's own late failure is not a second error to report. The span
+        // records the overrun (already reported) instead.
+        if (signal.aborted)
+          return {
+            result: {
               ok: false,
-              error: normalized.publicError,
-            };
-            return {
-              result,
-              observedError: normalized.observedError,
-            };
-          } finally {
-            if (mutationStarted) {
-              await (runtime.recordDatabaseWrite ?? recordDatabaseWrite)(
-                options.operation,
-              );
-            }
-          }
+              error: {
+                code: "INTERNAL_SERVER_ERROR",
+                reason: "MCP_TOOL_DEADLINE_EXCEEDED",
+                message: "Abandoned after its deadline",
+              },
+            },
+            observedError: parseObservedFailure(signal.reason),
+          };
+        const normalized = normalizeStartOperationError(
+          error,
+          state.stage,
+          requestId,
+          failureContext(),
+        );
+        if (normalized.publicError.code === "INTERNAL_SERVER_ERROR") {
+          log.error("failure", {
+            operation: definition.id,
+            stage: state.stage,
+            requestId,
+            cfRayId: cloudflareRayId(options.request.headers),
+            error: normalized.observedError,
+          });
+        }
+        const result: StartOperationResult<z.output<OutputSchema>> = {
+          ok: false,
+          error: normalized.publicError,
+        };
+        return {
+          result,
+          observedError: normalized.observedError,
+        };
+      } finally {
+        if (state.mutationStarted) await recordWrite(definition.id);
+      }
+    };
+
+    return await withErrorReporting(async () => {
+      const observed = await withinBudget(
+        principal.budget,
+        deadlineClassOf(options.type, options.request.modelBacked),
+        options.request.signal,
+        (signal) =>
+          runtime.observe<ObservedStartResult<z.output<OutputSchema>>>(
+            definition,
+            {
+              origin: channel.origin,
+              workload,
+              inspectResult: (result) => {
+                const inspection: StartOperationInspection = {
+                  workload,
+                };
+                if (result.observedError) {
+                  inspection.error = result.observedError;
+                  inspection.reported = true;
+                }
+                return inspection;
+              },
+            },
+            (span) => execute(span, signal),
+          ),
+        async (budgetMs) => {
+          log.warn("operation deadline exceeded", {
+            operation: definition.id,
+            stage: state.stage,
+            budgetMs,
+            requestId,
+          });
+          // The work may commit after this answer: keep every client strong
+          // for that possible write now; the work records again when it ends.
+          if (state.mutationStarted) await recordWrite(definition.id);
+          return {
+            result: {
+              ok: false as const,
+              error: normalizeStartOperationError(
+                deadlineExceededError(definition.id, budgetMs),
+                state.stage,
+                requestId,
+                failureContext(),
+              ).publicError,
+            },
+          };
         },
       );
       return observed.result;
@@ -520,9 +705,8 @@ export function createStartOperationRunner(runtime: StartOperationRuntime) {
 }
 
 const productionStartOperationRuntime = {
-  authenticate: authenticateStartOperation,
   observe: observeOperation,
-  markCalendarDirty: (context, headers, operation) => {
+  markCalendarDirty: (reason, headers) => {
     const headerOrigin = headers.get("origin");
     const host = headers.get("host");
     const origin = headerOrigin
@@ -530,12 +714,7 @@ const productionStartOperationRuntime = {
       : host
         ? `${headers.get("x-forwarded-proto") ?? (host.startsWith("localhost") ? "http" : "https")}://${host}`
         : undefined;
-    scheduleCalendarFeedDirty(
-      `${context.requestOrigin === "api" ? "api" : "browser"}.${operation}`,
-      {
-        origin,
-      },
-    );
+    scheduleCalendarFeedDirty(reason, { origin });
   },
   recordDatabaseWrite,
 } satisfies StartOperationRuntime;

@@ -7,8 +7,8 @@ import { describe, expect, it } from "vitest";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { requireActor } from "~/server/http/request-context";
 import { purchaseAgentToolCatalog } from "~/server/mcp/agent-tool-catalog";
-import { McpOperationContext } from "~/server/mcp/operation-context";
 import { handleMcpRequest } from "~/server/mcp/server";
+import { mcpTestPrincipal } from "~/server/testing/mcp-test-utils";
 import { createTestRequestContext } from "~/server/testing/request-context";
 
 import { cubbyMcpExtension } from "./cubby-mcp";
@@ -50,14 +50,14 @@ describe("purchase agent Cubby MCP client", () => {
           clientId: "purchase-agent",
           scopes: [],
           extra: {
-            operationContext: new McpOperationContext(
+            principal: mcpTestPrincipal(
               requireActor(
                 createTestRequestContext(ctx.db, {
                   auth: { userId: ctx.actor.userId },
                 }),
               ),
+              { purchaseAgent: { runId: run.id, grantId: "synthetic-grant" } },
             ),
-            purchaseAgent: { runId: run.id, grantId: "synthetic-grant" },
           },
         });
       },

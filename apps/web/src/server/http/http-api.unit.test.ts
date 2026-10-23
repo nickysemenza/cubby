@@ -1,21 +1,20 @@
-import { fromPartial } from "@total-typescript/shoehorn";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { createAuthenticator } from "./authenticate";
 import { createHttpApiHandler } from "./http-api-handler";
 
 const ports = {
   getSession: vi.fn(),
   verifyApiKey: vi.fn(),
+  verifyMcpToken: vi.fn(),
   context: vi.fn(),
+  delegationHolds: vi.fn(),
   dispatch: vi.fn(),
 };
-const handleHttpOperation = createHttpApiHandler(
-  fromPartial<Parameters<typeof createHttpApiHandler>[0]>({
-    auth: { getSession: ports.getSession, verifyApiKey: ports.verifyApiKey },
-    context: ports.context,
-    dispatch: ports.dispatch,
-  }),
-);
+const handleHttpOperation = createHttpApiHandler({
+  authenticate: createAuthenticator(ports),
+  dispatch: ports.dispatch,
+});
 const request = (path: string, init?: RequestInit) =>
   handleHttpOperation(
     new Request(
@@ -49,33 +48,24 @@ beforeEach(() => {
 });
 
 describe("HTTP boundary", () => {
-  it("still serves reads to an outdated native app", async () => {
+  it("hands an outdated native app's principal to the runner, which gates its writes", async () => {
     const response = await request("entity/list", {
       headers: { "user-agent": "cubby-apple/1.0 (ios; none)" },
     });
     expect(response.status).toBe(200);
-    expect(ports.dispatch).toHaveBeenCalledOnce();
-  });
-
-  it("refuses an outdated native app's writes with a structured update-required error before authenticating", async () => {
-    const response = await request("entity/mutate", {
-      method: "POST",
-      body: "{}",
-      headers: {
-        "content-type": "application/json",
-        origin: "https://cubby.example",
-        "user-agent": "cubby-apple/1.0 (ios; none)",
-      },
-    });
-    expect(response.status).toBe(426);
-    expect(response.headers.get("cache-control")).toBe("no-store");
-    expect(await response.json()).toMatchObject({
-      code: "UPGRADE_REQUIRED",
-      reason: "CLIENT_UPDATE_REQUIRED",
-      message: expect.stringContaining("TestFlight"),
-    });
-    expect(ports.getSession).not.toHaveBeenCalled();
-    expect(ports.dispatch).not.toHaveBeenCalled();
+    expect(ports.dispatch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        request: expect.objectContaining({
+          principal: expect.objectContaining({
+            channel: "native",
+            client: expect.objectContaining({
+              product: "cubby-apple",
+              updateRequired: expect.objectContaining({ current: "1.0" }),
+            }),
+          }),
+        }),
+      }),
+    );
   });
 
   it("distinguishes authenticated adapter failures from auth-provider failures", async () => {
@@ -369,6 +359,7 @@ describe("HTTP boundary", () => {
     ["PRECONDITION_FAILED", 412],
     ["CONFLICT", 409],
     ["NOT_FOUND", 404],
+    ["UPGRADE_REQUIRED", 426],
   ] as const)(
     "answers a dispatched %s as %i with its body",
     async (code, status) => {

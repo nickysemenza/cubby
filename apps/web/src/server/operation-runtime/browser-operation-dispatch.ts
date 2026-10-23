@@ -5,11 +5,16 @@ import { browserOperationPath } from "~/lib/browser-operation-path";
 import { startOperationDefinitionFor } from "~/lib/start-operation-observability";
 import { superJsonResultSchema } from "~/lib/superjson-wire";
 import {
-  appleClientUpdateError,
-  appleClientUpdateRequired,
-} from "~/server/http/apple-client-gate";
+  authenticate,
+  BROWSER_AUTH,
+  type Challenge,
+  challengeError,
+  isChallenge,
+  type Principal,
+} from "~/server/http/authenticate";
 import { getRequestId } from "~/server/observability/tracing";
 import { startOperationDispatchInput } from "~/server/operation-runtime/start-operation-dispatch.contract";
+import type { StartOperationDispatchInput } from "~/server/operation-runtime/start-operation-dispatch.contract";
 import { dispatchStartOperation } from "~/server/operation-runtime/start-operation-dispatch.server";
 import { normalizeStartOperationError } from "~/server/operation-runtime/start-operation.server";
 import { settleBatch } from "~/server/workflows/settle-batch";
@@ -30,16 +35,43 @@ const startOperationDispatchBatch = z.object({
     .max(20),
 });
 
+/**
+ * One operation under the request's principal; without one, the same
+ * unauthenticated failure every operation in the request reports.
+ */
+export async function dispatchAs(
+  authenticated: Principal | Challenge,
+  input: StartOperationDispatchInput,
+  request: Request,
+) {
+  if (!isChallenge(authenticated))
+    return dispatchStartOperation({
+      ...input,
+      request: {
+        principal: authenticated,
+        headers: request.headers,
+        signal: request.signal,
+      },
+    });
+  return {
+    ok: false as const,
+    error: normalizeStartOperationError(
+      challengeError(authenticated),
+      "context",
+      getRequestId(request.headers),
+      {
+        operation: input.operation,
+        authenticated: false,
+        headers: request.headers,
+      },
+    ).publicError,
+  };
+}
+
 export async function handleBrowserOperationDispatch(
   request: Request,
 ): Promise<Response> {
-  const headers = { "cache-control": "no-store" };
-  const outdated = appleClientUpdateRequired(request.headers);
-  if (outdated)
-    return Response.json(appleClientUpdateError(outdated), {
-      status: 426,
-      headers,
-    });
+  const headers = new Headers({ "cache-control": "no-store" });
   if (request.method !== "POST")
     return Response.json(
       superjson.serialize({
@@ -48,20 +80,19 @@ export async function handleBrowserOperationDispatch(
       }),
       { status: 405, headers },
     );
-  const origin = new URL(request.url).origin;
-  const requestOrigin = request.headers.get("origin");
-  if (
-    (requestOrigin && requestOrigin !== origin) ||
-    (!requestOrigin && request.headers.get("sec-fetch-site") !== "same-origin")
-  )
-    return Response.json(
-      superjson.serialize({
-        ok: false,
-        error: { code: "FORBIDDEN", message: "Same-origin request required" },
-      }),
-      { status: 403, headers },
-    );
   try {
+    const authenticated = await authenticate(request, BROWSER_AUTH);
+    if (isChallenge(authenticated) && authenticated.status === 403)
+      return Response.json(
+        superjson.serialize({
+          ok: false,
+          error: { code: authenticated.code, message: authenticated.message },
+        }),
+        { status: 403, headers },
+      );
+    if (!isChallenge(authenticated))
+      for (const [name, value] of authenticated.responseHeaders)
+        headers.append(name, value);
     const body = superjson.deserialize(
       superJsonResultSchema.parse(await request.json()),
     );
@@ -74,8 +105,8 @@ export async function handleBrowserOperationDispatch(
           batched.data.batch.map(({ operation }) => operation),
         ),
       ).parse(new URL(request.url).pathname);
-      // Each operation still authenticates and settles independently; the
-      // batch shares only this isolate and its request-scoped database pool.
+      // The request authenticated once; each operation still settles
+      // independently, sharing this isolate and its request-scoped pool.
       // Results stream as NDJSON in finish order, so a fast read never waits
       // behind a slow sibling.
       const { readable, writable } = new TransformStream<Uint8Array>();
@@ -85,10 +116,7 @@ export async function handleBrowserOperationDispatch(
         batched.data.batch,
         async (input) => {
           try {
-            return await dispatchStartOperation({
-              ...input,
-              request: { headers: request.headers, signal: request.signal },
-            });
+            return await dispatchAs(authenticated, input, request);
           } catch (error) {
             if (request.signal.aborted) throw error;
             return {
@@ -119,19 +147,21 @@ export async function handleBrowserOperationDispatch(
         () => writer.close(),
         (error: Error) => writer.abort(error),
       );
-      return new Response(readable, {
-        headers: { ...headers, "content-type": "application/x-ndjson" },
-      });
+      headers.set("content-type", "application/x-ndjson");
+      return new Response(readable, { headers });
     }
     const input = startOperationDispatchInput.parse(body);
     z.literal(browserOperationPath(input.operation)).parse(
       new URL(request.url).pathname,
     );
-    const result = await dispatchStartOperation({
-      ...input,
-      request: { headers: request.headers, signal: request.signal },
+    const result = await dispatchAs(authenticated, input, request);
+    // The hosted native workspace turns a 426 into its update prompt; the
+    // envelope is the same `{ ok: false }` body every refusal carries.
+    return Response.json(superjson.serialize(result), {
+      status:
+        !result.ok && result.error.code === "UPGRADE_REQUIRED" ? 426 : 200,
+      headers,
     });
-    return Response.json(superjson.serialize(result), { headers });
   } catch (error) {
     if (request.signal.aborted) throw error;
     const normalized = normalizeStartOperationError(

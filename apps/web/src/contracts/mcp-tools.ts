@@ -55,10 +55,7 @@ import {
 import { playbookContract } from "~/contracts/mcp.contract";
 import { mealContract } from "~/contracts/meal.contract";
 import { photoImportContract } from "~/contracts/photo-import.contract";
-import {
-  problemReportWantsCounts,
-  problemsContract,
-} from "~/contracts/problems.contract";
+import { problemsContract } from "~/contracts/problems.contract";
 import { productContract } from "~/contracts/product.contract";
 import { projectContract } from "~/contracts/project.contract";
 import { purchaseImportContract } from "~/contracts/purchase-import.contract";
@@ -149,7 +146,6 @@ export const MCP_TOOLS = defineMcpTools({
       }),
       preview: mcpAction({
         op: kernelAction("preview", "query"),
-        readPolicy: "strong",
         // A create preview asks the decision model for manifest-declared field suggestions.
         modelBacked: true,
         description:
@@ -162,7 +158,6 @@ export const MCP_TOOLS = defineMcpTools({
       }),
       connections: mcpAction({
         op: entityGraphContract.ops.connections,
-        readPolicy: "strong",
         description:
           'One-hop physical connections of any entity: what points at it (`incoming`) and what it points at (`outgoing`), grouped by edge with a count and the first linked records. A merged-away code reads its survivor and reports `redirectedFrom`. Pass `operation: "delete"` or `"merge"` to see each incoming group\'s declared disposition (block, detach, repoint, ...) before running it; advisory, since the mutation re-validates.',
       }),
@@ -531,7 +526,6 @@ export const MCP_TOOLS = defineMcpTools({
     actions: {
       preview: mcpAction({
         op: spendingClassificationContract.ops.preview,
-        readPolicy: "strong",
         description:
           "Nonmutating historical impact preview. Supply one complete Product Category mapping, Vendor spending policy, selected Expense category assignment/reset, or Spending Category merge (`spendingCategoryMerge` with keepId and mergeIds; entity.merge refuses one that moves Expense history). Returns signed exact-cent category totals and deltas including shared adjustments, unknown coverage, and a fingerprint. Review before applying; stored source evidence and Expense amounts remain unchanged.",
       }),
@@ -601,7 +595,6 @@ export const MCP_TOOLS = defineMcpTools({
       }),
       preview_import: mcpAction({
         op: financialTransactionContract.ops.previewTransactionImport,
-        readPolicy: "strong",
         description:
           "Preview client-parsed Monarch statement rows before recording settlement evidence. Normalized rows only — never a CSV path, upload, or file contents; at most 200 rows. Monarch charges are negative in the export and are normalized to positive Cubby outflows; credits become negative. The preview derives a stable source reference from account/date/amount/original statement, resolves an existing Financial Account only when unambiguous, and returns already_recorded, ready_to_create, possible_existing, unresolved_account, or indistinguishable_duplicate per row. Eligible rows may include advisory vendorInference from prior settled transactions with the same Merchant label; it neither matches nor links anything. Unresolved rows include a non-persisted provisional Account suggestion. It never creates Accounts, Financial Transactions, Purchases, or links: create only user-approved ready_to_create rows afterwards with entity.create(financialTransaction), then review every result.",
       }),
@@ -765,8 +758,6 @@ export const MCP_TOOLS = defineMcpTools({
       }),
       problems: mcpAction({
         op: problemsContract.ops.report,
-        readPolicy: (input) =>
-          problemReportWantsCounts(input) ? "strong" : "context",
         description:
           'Data-quality problems and optional coverage backlogs across products, inventory, locations, recipes, and vendors, plus household-tracker items needing attention (overdue tasks, stalled/blocked projects, past-due planned expenses, missing budgets, unclassified expenses). countsOnly=true is the cheap triage; type="duplicateInventory" finds unique Products stored in more than one location; type="purchasesNotReconciling" holds only the unexplained Purchase differences.',
       }),

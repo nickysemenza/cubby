@@ -1,19 +1,15 @@
 import { chatGptStatus, chatGptModel } from "@cubby/schemas/chatgpt";
-import { userId } from "@cubby/schemas/identifiers";
 import { getErrorMessage } from "@cubby/shared";
-import { z } from "zod";
+import type { z } from "zod";
 
-import { getAuth } from "~/lib/auth";
 import { scrubErrorMessage } from "~/lib/error-diagnostics";
 import type { HttpRouteHandlers } from "~/lib/http/route-handler";
 import { requireChatGptPlan } from "~/server/ai/chatgpt/client";
-import { verifyHttpApiKeyActor } from "~/server/http/http-api-handler";
-import { authenticateHttpSession } from "~/server/http/http-session-cache";
-import type { RequestActor } from "~/server/http/request-context";
 import {
-  createRequestContext,
-  requireActor,
-} from "~/server/http/request-context";
+  API_AUTH,
+  authenticate,
+  isChallenge,
+} from "~/server/http/authenticate";
 
 async function handle(
   request: Request,
@@ -24,49 +20,15 @@ async function handle(
   >,
 ) {
   try {
-    let actor: RequestActor | null = null;
-    const headers = new Headers({ "Cache-Control": "private, no-store" });
-    if (request.headers.has("x-api-key")) {
-      actor = await verifyHttpApiKeyActor(request, getAuth().api);
-    } else {
-      const authenticated = await authenticateHttpSession({
-        headers: request.headers,
-        getSession: getAuth().api.getSession,
-      });
-      authenticated.headers.forEach((value, name) =>
-        headers.append(name, value),
-      );
-      if (authenticated.response)
-        actor = {
-          userId: userId.parse(authenticated.response.user.id),
-          sessionId: authenticated.response.session.id,
-          channel: "api",
-        };
-    }
-    if (!actor)
+    const authenticated = await authenticate(request, API_AUTH);
+    if (isChallenge(authenticated))
       return Response.json(
-        { error: "Valid API key, bearer token or session required" },
-        { status: 401 },
+        { error: authenticated.message },
+        { status: authenticated.status },
       );
-    requireActor(
-      await createRequestContext({ headers: request.headers, actor }),
-    );
-    const explicitCredential =
-      request.headers.has("x-api-key") ||
-      /^bearer\s+\S/iu.test(request.headers.get("authorization") ?? "");
-    if (
-      request.method !== "GET" &&
-      !explicitCredential &&
-      request.headers.get("origin") !== new URL(request.url).origin
-    ) {
-      return Response.json(
-        { error: "Same-origin request required" },
-        { status: 403 },
-      );
-    }
-    return Response.json(await action(), {
-      headers,
-    });
+    const headers = new Headers(authenticated.responseHeaders);
+    headers.set("Cache-Control", "private, no-store");
+    return Response.json(await action(), { headers });
   } catch (error) {
     return Response.json(
       { error: scrubErrorMessage(getErrorMessage(error)) },

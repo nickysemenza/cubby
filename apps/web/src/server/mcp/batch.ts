@@ -2,17 +2,12 @@ import { mcpResultDetail } from "@cubby/schemas/mcp-detail";
 import type { purchaseImportRunExecution } from "@cubby/schemas/purchase-import";
 import { z } from "zod";
 
-import { getEntityKernelContext } from "~/server/mcp/kernel-context";
-import {
-  executePurchaseAgentMutation,
-  trustedPurchaseAgent,
-} from "~/server/mcp/purchase-agent-protocol";
+import type { Principal } from "~/server/http/authenticate";
+import { executePurchaseAgentMutation } from "~/server/mcp/purchase-agent-protocol";
 
 import {
   describeToolError,
-  operationContextFromExtra,
   type ToolErrorDetail,
-  type ToolExtra,
   toolErrorDetailSchema,
 } from "./tools/tool-registration";
 
@@ -41,7 +36,7 @@ export interface McpBatchConfig<TItemInput extends z.ZodType, TItemOutput> {
   completeOutput?: (
     produced: z.output<z.ZodType>,
     item: z.output<TItemInput>,
-    extra: ToolExtra,
+    principal: Principal,
   ) => Promise<z.output<z.ZodType>>;
   reference: (item: TItemOutput) => string;
   maxItems?: number;
@@ -52,8 +47,9 @@ export interface McpBatchConfig<TItemInput extends z.ZodType, TItemOutput> {
   /** Its result is parsed by `itemOutput` before anything reads it. */
   run: (
     item: z.output<TItemInput>,
-    extra: ToolExtra,
+    principal: Principal,
     resultDetail: BatchResultDetail,
+    index: number,
   ) => Promise<z.output<z.ZodType>>;
 }
 
@@ -150,9 +146,9 @@ export async function runMcpBatch<TItemInput extends z.ZodType, TItemOutput>(
     resultDetail: BatchResultDetail;
     execution: z.output<typeof purchaseImportRunExecution> | undefined;
   },
-  extra: ToolExtra,
+  principal: Principal,
 ) {
-  const trusted = config.mutation ? trustedPurchaseAgent(extra) : null;
+  const trusted = config.mutation ? principal.delegation : null;
   const { execution } = input;
   if (trusted) {
     const itemOperationIds = execution?.itemOperationIds;
@@ -173,10 +169,8 @@ export async function runMcpBatch<TItemInput extends z.ZodType, TItemOutput>(
     try {
       const produced = trusted
         ? await executePurchaseAgentMutation({
-            db: getEntityKernelContext(extra).db,
-            actor: getEntityKernelContext(extra).actorContext,
-            operationContext: requireOperationContext(extra),
-            trusted,
+            principal,
+            delegation: trusted,
             toolName: config.name,
             args: { index, item },
             execution: {
@@ -184,11 +178,10 @@ export async function runMcpBatch<TItemInput extends z.ZodType, TItemOutput>(
               runId: execution!.runId,
               operationId: execution!.itemOperationIds![index]!,
             },
-            run: (transactionExtra) =>
-              config.run(item, transactionExtra, input.resultDetail),
-            baseExtra: extra,
+            run: (transactional) =>
+              config.run(item, transactional, input.resultDetail, index),
           })
-        : await config.run(item, extra, input.resultDetail);
+        : await config.run(item, principal, input.resultDetail, index);
       stage = "output";
       if (input.resultDetail === "summary" && config.summaryOutput) {
         results.push({
@@ -200,7 +193,7 @@ export async function runMcpBatch<TItemInput extends z.ZodType, TItemOutput>(
       }
       const completed =
         input.resultDetail === "full" && config.completeOutput
-          ? await config.completeOutput(produced, item, extra)
+          ? await config.completeOutput(produced, item, principal)
           : produced;
       const parsed = config.itemOutput.parse(completed);
       const success: BatchSuccess<TItemOutput> = {
@@ -218,7 +211,7 @@ export async function runMcpBatch<TItemInput extends z.ZodType, TItemOutput>(
           error,
           {
             operation: config.name,
-            authenticated: extra.http?.authInfo !== undefined,
+            authenticated: true,
             entity: config.telemetryEntity?.(input.items),
             batchIndex: index,
           },
@@ -238,10 +231,4 @@ export async function runMcpBatch<TItemInput extends z.ZodType, TItemOutput>(
     },
     results,
   };
-}
-
-function requireOperationContext(extra: ToolExtra) {
-  const context = operationContextFromExtra(extra);
-  if (!context) throw new Error("Purchase-agent operation context is missing");
-  return context;
 }

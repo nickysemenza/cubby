@@ -1,22 +1,15 @@
-import { userId } from "@cubby/schemas/identifiers";
 import { getErrorMessage } from "@cubby/shared";
 
-import { getAuth } from "~/lib/auth";
 import type { HttpRouteHandlers } from "~/lib/http/route-handler";
 import { getUsdaReleaseEnv } from "~/server/cf-env";
 import { db } from "~/server/db";
 import type { UsdaReleaseRpc } from "~/server/domains/usda-release/operations/rpc";
 import { activeUsdaRelease } from "~/server/domains/usda-release/service/client";
 import {
-  hasExplicitCredential,
-  verifyHttpApiKeyActor,
-} from "~/server/http/http-api-handler";
-import { authenticateHttpSession } from "~/server/http/http-session-cache";
-import {
-  createRequestContext,
-  requireActor,
-} from "~/server/http/request-context";
-import type { RequestActor } from "~/server/http/request-context";
+  API_AUTH,
+  authenticate,
+  isChallenge,
+} from "~/server/http/authenticate";
 
 const headers = { "Cache-Control": "private, no-store" };
 
@@ -26,48 +19,16 @@ async function timed<T>(fn: () => PromiseLike<T>) {
   return { ms: Math.round((performance.now() - start) * 10) / 10, value };
 }
 
-async function authenticate(request: Request): Promise<Response | null> {
-  let actor: RequestActor | null = null;
-  if (request.headers.has("x-api-key")) {
-    actor = await verifyHttpApiKeyActor(request, getAuth().api);
-  } else {
-    const session = await authenticateHttpSession({
-      headers: request.headers,
-      getSession: getAuth().api.getSession,
-    });
-    if (session.response)
-      actor = {
-        userId: userId.parse(session.response.user.id),
-        sessionId: session.response.session.id,
-        channel: "api",
-      };
-    // A cookie-authenticated write must come from this origin.
-    if (
-      actor &&
-      !hasExplicitCredential(request) &&
-      request.method !== "GET" &&
-      request.headers.get("origin") !== new URL(request.url).origin
-    )
-      return Response.json(
-        { error: "Same-origin request required" },
-        { status: 403, headers },
-      );
-  }
-  if (!actor)
-    return Response.json(
-      { error: "Valid API key, bearer token or session required" },
-      { status: 401, headers },
-    );
-  requireActor(await createRequestContext({ headers: request.headers, actor }));
-  return null;
-}
-
 async function withRelease(
   request: Request,
   action: (release: UsdaReleaseRpc) => Promise<object>,
 ) {
-  const denied = await authenticate(request);
-  if (denied) return denied;
+  const authenticated = await authenticate(request, API_AUTH);
+  if (isChallenge(authenticated))
+    return Response.json(
+      { error: authenticated.message },
+      { status: authenticated.status, headers },
+    );
   const env = getUsdaReleaseEnv();
   if (!env)
     return Response.json(

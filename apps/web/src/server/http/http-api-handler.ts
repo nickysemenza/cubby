@@ -1,4 +1,3 @@
-import { userId } from "@cubby/schemas/identifiers";
 import { isAppRoute, type AppRoute, type AppRouter } from "@ts-rest/core";
 import {
   createFetchHandler,
@@ -17,15 +16,12 @@ import { httpRoutes } from "~/lib/http-api/routes";
 import { startOperationDefinitionFor } from "~/lib/start-operation-observability";
 import { withErrorReporting } from "~/server/errors/report-error";
 import {
-  appleClientUpdateError,
-  appleClientUpdateRequired,
-} from "~/server/http/apple-client-gate";
-import {
-  authenticateHttpSession,
-  type HttpSessionReader,
-} from "~/server/http/http-session-cache";
-import type { RequestActor, requireActor } from "~/server/http/request-context";
-import { getRequestId, withTrace } from "~/server/observability/tracing";
+  API_AUTH,
+  type Authenticate,
+  isChallenge,
+  type Principal,
+} from "~/server/http/authenticate";
+import { getRequestId } from "~/server/observability/tracing";
 import type { dispatchStartOperation } from "~/server/operation-runtime/start-operation-dispatch.server";
 import {
   type PublicStartOperationError,
@@ -38,27 +34,11 @@ import {
 } from "~/server/operation-runtime/start-operation.server";
 
 interface HttpApiPorts {
-  auth: {
-    getSession: HttpSessionReader;
-    verifyApiKey(options: {
-      body: { key: string; configId: "http-api" };
-    }): Promise<{
-      valid: boolean;
-      key?: { configId?: string | null; referenceId: string } | null;
-    }>;
-  };
-  context: (options: {
-    headers: Headers;
-    actor: RequestActor;
-  }) => Promise<ReturnType<typeof requireActor>>;
+  authenticate: Authenticate;
   dispatch: typeof dispatchStartOperation;
 }
 
-type ApiRequest = TsRestRequest & {
-  apiContext?: ReturnType<typeof requireActor>;
-  sessionDataCookies?: string[];
-  sessionAuthToken?: string;
-};
+type ApiRequest = TsRestRequest & { principal?: Principal };
 
 const statuses = new Map(Object.entries(StatusCodes));
 const validationPart = z
@@ -189,63 +169,6 @@ function methodTable(router: AppRouter) {
 }
 
 /**
- * Every route an outdated native build may not call: anything but a query.
- * Its reads keep running so one changed shape fails one screen, not the app;
- * a write could carry a field whose meaning changed, so it is refused.
- */
-function writeRoutes(router: AppRouter) {
-  return httpRoutes(router)
-    .filter(
-      (route) =>
-        startOperationDefinitionFor(
-          httpMetadataSchema.parse(route.metadata).operation,
-        )?.kind !== "query",
-    )
-    .map((route) => ({
-      method: route.method,
-      pattern: routePattern(routeKey(route)),
-    }));
-}
-
-/**
- * Explicit credentials (an API key or a bearer token) are attached by the
- * caller per request; only ambient cookies can be sent cross-site by a browser,
- * so the same-origin gate applies to cookie sessions alone.
- */
-export const hasExplicitCredential = (request: Request) =>
-  request.headers.has("x-api-key") ||
-  /^bearer\s+\S/iu.test(request.headers.get("authorization") ?? "");
-
-export async function verifyHttpApiKeyActor(
-  request: Request,
-  auth: Pick<HttpApiPorts["auth"], "verifyApiKey">,
-): Promise<RequestActor | null> {
-  const key = request.headers.get("x-api-key");
-  const verification = key
-    ? await auth.verifyApiKey({ body: { key, configId: "http-api" } })
-    : null;
-  return verification?.valid && verification.key?.configId === "http-api"
-    ? {
-        userId: userId.parse(verification.key.referenceId),
-        sessionId: null,
-        channel: "api",
-      }
-    : null;
-}
-
-const sessionDataCookieName =
-  /^(?:__Secure-)?better-auth\.session_data(?:\.\d+)?$/u;
-
-const sessionDataCookiesFrom = (headers: Headers): string[] =>
-  headers.getSetCookie().filter((cookie) => {
-    const separator = cookie.indexOf("=");
-    return (
-      separator > 0 &&
-      sessionDataCookieName.test(cookie.slice(0, separator).trim())
-    );
-  });
-
-/**
  * ts-rest's `TsRestRequest` subclasses the global `Request`, whose constructor
  * reads undici's private state from its input. The Vite dev server passes
  * srvx's `NodeRequest`, which is `instanceof Request` without that state, so
@@ -264,70 +187,21 @@ async function nativeRequest(request: Request): Promise<Request> {
 
 export function createHttpApiHandler(ports: HttpApiPorts) {
   const methods = methodTable(httpContract);
-  const writes = writeRoutes(httpContract);
   const diagnosticContexts = new WeakMap<
     Request,
     { authenticated: boolean; operation: string; stage: OperationStage }
   >();
 
   const authenticate = async (request: ApiRequest) => {
-    const url = new URL(request.url);
-    const actor = await withTrace("http.api.authenticate", async (span) => {
-      span.setAttribute(
-        "cubby.auth.method",
-        request.headers.has("x-api-key")
-          ? "api-key"
-          : request.headers.has("authorization")
-            ? "bearer"
-            : "session",
-      );
-      let actor: RequestActor | null = null;
-      if (request.headers.has("x-api-key")) {
-        actor = await verifyHttpApiKeyActor(request, ports.auth);
-      } else {
-        const sessionResult = await authenticateHttpSession({
-          headers: request.headers,
-          getSession: ports.auth.getSession,
-        });
-        const session = sessionResult.response;
-        if (session && request.headers.has("authorization")) {
-          request.sessionAuthToken =
-            sessionResult.headers.get("set-auth-token") ?? undefined;
-        }
-        request.sessionDataCookies = sessionDataCookiesFrom(
-          sessionResult.headers,
-        );
-        if (session)
-          actor = {
-            userId: userId.parse(session.user.id),
-            sessionId: session.session.id,
-            channel: "api",
-          };
-      }
-      span.setAttribute("cubby.auth.authenticated", actor !== null);
-      if (!actor)
-        throw failure(
-          "UNAUTHORIZED",
-          "Valid API key, bearer token, or session required",
-        );
-      if (
-        !hasExplicitCredential(request) &&
-        request.method !== "GET" &&
-        request.headers.get("origin") !== url.origin
-      )
-        throw failure("FORBIDDEN", "Same-origin request required");
-      return actor;
-    });
     const diagnostics = diagnosticContexts.get(request);
-    if (diagnostics) diagnostics.authenticated = true;
-    const headers = new Headers(request.headers);
-    headers.set("origin", url.origin);
-    request.apiContext = await withTrace("http.api.context", () =>
-      ports.context({
-        headers,
-        actor,
-      }),
-    );
+    const authenticated = await ports.authenticate(request, API_AUTH, {
+      onVerified: () => {
+        if (diagnostics) diagnostics.authenticated = true;
+      },
+    });
+    if (isChallenge(authenticated))
+      throw failure(authenticated.code, authenticated.message);
+    request.principal = authenticated;
   };
 
   const implement = (route: AppRoute) => {
@@ -351,13 +225,10 @@ export function createHttpApiHandler(ports: HttpApiPorts) {
         if (!isOrdinaryOperation(operation))
           throw failure("NOT_FOUND", "Unknown operation");
         const { request, responseHeaders } = context;
-        if (request.sessionAuthToken)
-          responseHeaders.set("set-auth-token", request.sessionAuthToken);
-        for (const cookie of request.sessionDataCookies ?? [])
-          responseHeaders.append("Set-Cookie", cookie);
-        const apiContext = request.apiContext;
-        if (!apiContext)
-          throw failure("UNAUTHORIZED", "Authentication missing");
+        const { principal } = request;
+        if (!principal) throw failure("UNAUTHORIZED", "Authentication missing");
+        for (const [name, value] of principal.responseHeaders)
+          responseHeaders.append(name, value);
         const url = new URL(request.url);
         const headers = new Headers(request.headers);
         headers.set("origin", url.origin);
@@ -368,11 +239,7 @@ export function createHttpApiHandler(ports: HttpApiPorts) {
         const result = await ports.dispatch({
           operation,
           input,
-          request: {
-            headers,
-            signal: request.signal,
-            apiContext,
-          },
+          request: { principal, headers, signal: request.signal },
         });
         if (!result.ok)
           return {
@@ -494,19 +361,7 @@ export function createHttpApiHandler(ports: HttpApiPorts) {
   return async function handleHttpOperation(
     incoming: Request,
   ): Promise<Response> {
-    const outdated = appleClientUpdateRequired(incoming.headers);
     const pathname = new URL(incoming.url).pathname;
-    if (
-      outdated &&
-      writes.some(
-        (route) =>
-          route.method === incoming.method && route.pattern.test(pathname),
-      )
-    )
-      return Response.json(appleClientUpdateError(outdated), {
-        status: StatusCodes.UPGRADE_REQUIRED,
-        headers: { "Cache-Control": "no-store" },
-      });
     const request = await nativeRequest(incoming);
     const matching = methods.filter((entry) => entry.pattern.test(pathname));
     if (

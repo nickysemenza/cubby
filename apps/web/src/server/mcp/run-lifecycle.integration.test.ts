@@ -25,10 +25,8 @@ import { requireActor } from "~/server/http/request-context";
 import { createMcpServer } from "~/server/mcp/server";
 import { createTestRequestContext } from "~/server/testing/request-context";
 
-import { callMcpTool } from "../testing/mcp-test-utils";
-import { McpOperationContext } from "./operation-context";
+import { callMcpTool, mcpTestPrincipal } from "../testing/mcp-test-utils";
 import { executePurchaseAgentMutation } from "./purchase-agent-protocol";
-import type { ToolExtra } from "./tools/tool-registration";
 
 // Failure modes: lifecycle controls are unavailable; approval leaks through the
 // narrower surface; foreign Runs can be stopped; retries mutate settled attempts
@@ -482,16 +480,15 @@ describe("Mail import switch and discovery through MCP", () => {
   it("executes permitted agent work without an approval lifecycle call", async () => {
     const run = await agentRun();
     const pending = {
-      db: ctx.db,
-      actor: ctx.actor,
-      operationContext: new McpOperationContext(
-        requireActor(
+      principal: mcpTestPrincipal({
+        ...requireActor(
           createTestRequestContext(ctx.db, {
             auth: { userId: ctx.actor.userId },
           }),
         ),
-      ),
-      trusted: { runId: run.id, grantId: "synthetic-grant" },
+        actorContext: ctx.actor,
+      }),
+      delegation: { runId: run.id, grantId: "synthetic-grant" },
       toolName: "entity.update",
       args: {
         entity: "sourceTransactionRecord",
@@ -500,7 +497,6 @@ describe("Mail import switch and discovery through MCP", () => {
       },
       execution: { runId: run.id, operationId: "synthetic:mcp-approve" },
       run: async () => ({ accepted: true }),
-      baseExtra: fromPartial<ToolExtra>({}),
     };
     await expect(executePurchaseAgentMutation(pending)).resolves.toEqual({
       accepted: true,
