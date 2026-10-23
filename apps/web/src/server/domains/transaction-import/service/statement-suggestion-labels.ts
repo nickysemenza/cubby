@@ -56,13 +56,16 @@ import {
   type ChargeRef,
   isClean,
   labelledProposal,
-  publishChargeProposal,
+  publishCompleteStatementLabels,
+  type CompleteStatementLabelPublication,
+  type StatementLabelPublicationResult,
   regenerateCharges,
   STATEMENT_PUBLISH_CONCURRENCY,
   suggestionsNeedingLabels,
   type LabelCursor,
   recordStatementLabelCheckpoint,
   completeStatementApplications,
+  repairStatementApplicationReceipts,
 } from "~/server/domains/transaction-import/repo/statement-suggestions";
 import { decideStatementKind } from "~/server/domains/transaction-import/repo/statement-transaction-kind";
 import { applyAutomaticRulesForCharge } from "~/server/generic/assessment/repo/automatic-rule-runtime";
@@ -372,44 +375,42 @@ function prepareLabelledJudgment(
   };
 }
 
-/** A complete publication owns durability; a failed one retains only newly computed answers. */
-async function publishStatementLabels(
-  db: Database,
-  input: {
-    proposal: ChargeProposal;
-    checkpoint: Parameters<typeof recordStatementLabelCheckpoint>[1];
-    producer: Parameters<typeof publishChargeProposal>[2];
-    retainProgress: () => Promise<boolean>;
-  },
+/** A genuine publication failure retains newly computed answers without hiding either failure. */
+async function retainFailedStatementPublication(
+  publicationError: unknown,
+  retainProgress: () => Promise<boolean>,
 ) {
+  if (isWorkflowInterrupted(publicationError)) throw publicationError;
   try {
-    return await publishChargeProposal(
-      db,
-      await labelledProposal(
-        input.proposal,
-        input.checkpoint.checkpoint.judgment,
-      ),
-      input.producer,
-      input.checkpoint,
+    if (!(await retainProgress())) return;
+  } catch (checkpointError) {
+    if (isWorkflowInterrupted(checkpointError)) throw checkpointError;
+    throw new AggregateError(
+      [publicationError, checkpointError],
+      [publicationError, checkpointError]
+        .map((error) =>
+          runFailureText(error instanceof Error ? error : String(error)),
+        )
+        .join("\n"),
+      { cause: checkpointError },
     );
-  } catch (publicationError) {
-    if (isWorkflowInterrupted(publicationError)) throw publicationError;
-    try {
-      if (!(await input.retainProgress())) return null;
-    } catch (checkpointError) {
-      if (isWorkflowInterrupted(checkpointError)) throw checkpointError;
-      throw new AggregateError(
-        [publicationError, checkpointError],
-        [publicationError, checkpointError]
-          .map((error) =>
-            runFailureText(error instanceof Error ? error : String(error)),
-          )
-          .join("\n"),
-        { cause: checkpointError },
-      );
-    }
-    throw publicationError;
   }
+  throw publicationError;
+}
+
+async function completeStatementPublicationResult(
+  result: StatementLabelPublicationResult | undefined,
+  retainProgress: () => Promise<boolean>,
+) {
+  if (!result || result.kind === "failed") {
+    await retainFailedStatementPublication(
+      result?.error ??
+        new Error("Complete statement publication returned no outcome"),
+      retainProgress,
+    );
+    return null;
+  }
+  return result.kind === "ready" ? result : null;
 }
 
 function statementLabelCursors(
@@ -573,6 +574,21 @@ async function runStatementLabelBatch(
       { charge: { source, chargeKey }, expected: row.evidenceFingerprint, row },
     ];
   });
+  const pendingReceipts = targets.filter(
+    (target) => target.row.applicationPending,
+  );
+  try {
+    await repairStatementApplicationReceipts(
+      db,
+      pendingReceipts.map((target) => ({
+        assessmentId: target.row.id,
+        charge: target.charge,
+      })),
+    );
+  } catch (error) {
+    if (isWorkflowInterrupted(error)) throw error;
+    for (const target of pendingReceipts) fail(target.charge, error);
+  }
   let stale = 0;
   const skipped = new Set<string>();
   const labelled = new Set<string>();
@@ -719,6 +735,14 @@ async function runStatementLabelBatch(
     const computed = await (input.cooperative
       ? withCooperativeAiWork(finish)
       : finish());
+    const publications = new Map<
+      string,
+      {
+        entry: ReadyLabels;
+        input: CompleteStatementLabelPublication;
+        retainProgress: () => Promise<boolean>;
+      }
+    >();
     await forEachConcurrently(
       ready.map((entry, index) => ({
         ...entry,
@@ -790,23 +814,23 @@ async function runStatementLabelBatch(
               );
             return;
           }
-          const outcome = await publishStatementLabels(db, {
-            proposal: entry.current,
-            checkpoint: checkpointInput,
-            producer: producer(result.model),
-            retainProgress,
-          });
-          if (!outcome) return;
-          if (outcome.outcome !== "published") {
-            skipped.add(chargeId(current.charge));
-            unfinished.delete(target.row.cursorId);
-            return;
+          try {
+            publications.set(chargeId(current.charge), {
+              entry,
+              input: {
+                proposal: await labelledProposal(
+                  current,
+                  result.checkpoint.judgment,
+                ),
+                evidenceFingerprint: target.expected,
+                checkpoint: result.checkpoint,
+                producer: producer(result.model),
+              },
+              retainProgress,
+            });
+          } catch (error) {
+            await retainFailedStatementPublication(error, retainProgress);
           }
-          labelled.add(chargeId(current.charge));
-          published.set(chargeId(current.charge), current.evidenceFingerprint);
-          receipts.set(chargeId(current.charge), outcome.assessmentId);
-          target.row.id = outcome.assessmentId;
-          target.row.applicationPending = true;
         } catch (error) {
           if (isWorkflowInterrupted(error)) throw error;
           // The budget pauses the whole pass; any other failure is this charge's.
@@ -817,6 +841,36 @@ async function runStatementLabelBatch(
         }
       },
     );
+    const complete = ready.flatMap(({ current }) => {
+      const item = publications.get(chargeId(current.charge));
+      return item ? [item] : [];
+    });
+    const outcomes = await publishCompleteStatementLabels(
+      db,
+      complete.map((item) => item.input),
+    );
+    for (const item of complete) {
+      const { current, target } = item.entry;
+      const key = chargeId(current.charge);
+      try {
+        const outcome = await completeStatementPublicationResult(
+          outcomes.get(key),
+          item.retainProgress,
+        );
+        if (!outcome) {
+          skipped.add(key);
+          unfinished.delete(target.row.cursorId);
+          continue;
+        }
+        if (outcome.origin === "published") labelled.add(key);
+        published.set(key, outcome.receipt.evidenceFingerprint);
+        receipts.set(key, outcome.receipt.assessmentId);
+        target.row.id = outcome.receipt.assessmentId;
+        target.row.applicationPending = true;
+      } catch (error) {
+        fail(current.charge, error);
+      }
+    }
     // Model work may finish out of order; effects admit only the original
     // ready prefix. Later publications keep their receipts for durable resume.
     const applied = new Set<string>();

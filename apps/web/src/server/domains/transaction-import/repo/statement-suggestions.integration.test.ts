@@ -1,3 +1,4 @@
+import { assessmentSubjects } from "@cubby/schemas/assessment";
 import { financialSpendingAdvice } from "@cubby/schemas/financial-booking";
 import type { FinancialTransactionKind } from "@cubby/schemas/financial-transaction";
 import {
@@ -25,6 +26,7 @@ import { coordinatedGatewayRequest } from "~/server/ai/gateway-egress-client";
 import { activateAiRefresh } from "~/server/ai/repo/ai-refresh";
 import * as cfEnv from "~/server/cf-env";
 import { getDb, notDeleted } from "~/server/db/helpers";
+import * as databaseHelpers from "~/server/db/helpers";
 import {
   assessmentState,
   expense,
@@ -37,15 +39,21 @@ import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixture
 import { answering } from "~/server/domains/transaction-import/repo/statement-decision-port.fixtures";
 import * as statementSuggestionsRepo from "~/server/domains/transaction-import/repo/statement-suggestions";
 import { labelStatementSuggestions as runStatementLabels } from "~/server/domains/transaction-import/service/statement-suggestion-labels";
+import * as assessmentRepo from "~/server/generic/assessment/repo/assessment";
 import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
 import { setAutomaticRule } from "~/server/generic/assessment/repo/automatic-rule-runtime";
 import {
   acceptCleanSuggestions,
   listSuggestionPage,
 } from "~/server/generic/assessment/repo/suggestion-list";
+import { currentJobExecution } from "~/server/generic/jobs/context";
+import { cancelJob } from "~/server/generic/jobs/repo/jobs";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { readWorkQueue } from "~/server/generic/work-queue/service/work-queue-read";
-import { captureBackgroundQueue } from "~/server/testing/background-queue";
+import {
+  captureBackgroundQueue,
+  withJobFixtureExecution,
+} from "~/server/testing/background-queue";
 
 import {
   getSourceTransactionRecordSummary,
@@ -281,18 +289,23 @@ async function enableStatementAttach(ctx: Ctx) {
 }
 
 /** A real PostgreSQL publication refusal leaves the other pooled writers usable. */
-async function rejectStatementPublication(ctx: Ctx, chargeKey: string) {
+async function rejectStatementPublication(
+  ctx: Ctx,
+  chargeKey: string,
+  producerKind?: "model",
+) {
   const client = getDb(ctx.db);
   await client.execute(
-    sql`CREATE TABLE "SyntheticStatementPublicationFailure" ("chargeKey" text PRIMARY KEY)`,
+    sql`CREATE TABLE "SyntheticStatementPublicationFailure" ("chargeKey" text PRIMARY KEY, "producer" jsonb)`,
   );
   await client.execute(
-    sql`INSERT INTO "SyntheticStatementPublicationFailure" VALUES (${chargeKey})`,
+    sql`INSERT INTO "SyntheticStatementPublicationFailure" VALUES (${chargeKey}, ${producerKind ? JSON.stringify({ kind: producerKind }) : null}::jsonb)`,
   );
   await client.execute(sql`
     CREATE FUNCTION synthetic_statement_publication_failure() RETURNS trigger LANGUAGE plpgsql AS $$
     BEGIN
-      IF EXISTS (SELECT 1 FROM "SyntheticStatementPublicationFailure" f WHERE f."chargeKey" = NEW.subject->>'chargeKey') THEN
+      IF EXISTS (SELECT 1 FROM "SyntheticStatementPublicationFailure" f WHERE f."chargeKey" = NEW.subject->>'chargeKey'
+        AND (f.producer IS NULL OR NEW.producer @> f.producer)) THEN
         RAISE EXCEPTION 'Synthetic statement publication failure';
       END IF;
       RETURN NEW;
@@ -312,6 +325,62 @@ async function rejectStatementPublication(ctx: Ctx, chargeKey: string) {
       sql`DROP TABLE "SyntheticStatementPublicationFailure"`,
     );
   };
+}
+
+async function completeLabelPublications(ctx: Ctx) {
+  const pending = await statementSuggestionsRepo.suggestionsNeedingLabels(
+    ctx.db,
+    100,
+  );
+  const subjects = pending.map((row) =>
+    assessmentSubjects.statement_transaction.parse(row.subject),
+  );
+  const proposals = await buildChargeProposals(
+    ctx.db,
+    subjects.map(({ source, chargeKey }) => ({ source, chargeKey })),
+  );
+  return Promise.all(
+    pending.map(async (row, index) => {
+      const subject = subjects[index]!;
+      const proposal = proposals.find(
+        (entry) =>
+          entry.charge.source === subject.source &&
+          entry.charge.chargeKey === subject.chargeKey,
+      );
+      if (!proposal) throw new Error("Expected synthetic charge proposal");
+      const judgment = structuredClone(proposal.judgment);
+      if (judgment.create) {
+        judgment.create.votes.label = "purchase";
+        judgment.create.counterparty.label = "business";
+      }
+      for (const candidate of judgment.candidates)
+        candidate.label = {
+          same: "different",
+          confidence: "high",
+          model: DECISION_MODEL,
+        };
+      return {
+        proposal: await labelledProposal(proposal, judgment),
+        evidenceFingerprint: row.evidenceFingerprint,
+        checkpoint: {
+          revision: STATEMENT_LABEL_REVISION,
+          model: DECISION_MODEL,
+          models: [DECISION_MODEL],
+          judgment,
+          kind: true,
+          counterparty: true,
+          spending: true,
+        },
+        producer: {
+          kind: "model" as const,
+          model: DECISION_MODEL,
+          revision: STATEMENT_LABEL_REVISION,
+          runId: null,
+          evaluationId: null,
+        },
+      };
+    }),
+  );
 }
 
 describe("statement Transaction suggestions", () => {
@@ -1809,11 +1878,13 @@ describe("statement Transaction suggestions", () => {
     let modelPeak = 0;
     let publishActive = 0;
     let publishPeak = 0;
-    const publish = statementSuggestionsRepo.publishChargeProposal;
+    const publish = assessmentRepo.publishAssessments;
+    const batchSizes: number[] = [];
     const spy = vi
-      .spyOn(statementSuggestionsRepo, "publishChargeProposal")
+      .spyOn(assessmentRepo, "publishAssessments")
       .mockImplementation(async (...args) => {
         publishPeak = Math.max(publishPeak, ++publishActive);
+        batchSizes.push(args[1].length);
         try {
           await new Promise((resolve) => setTimeout(resolve, 5));
           return await publish(...args);
@@ -1848,6 +1919,7 @@ describe("statement Transaction suggestions", () => {
       });
       expect(publishPeak).toBeGreaterThan(1);
       expect(publishPeak).toBeLessThanOrEqual(4);
+      expect(batchSizes.sort((a, b) => a - b)).toEqual([8, 32]);
     } finally {
       release.resolve();
       await pending;
@@ -1911,6 +1983,242 @@ describe("statement Transaction suggestions", () => {
     expect(result.labelled).toBe(0);
     expect(await suggestions(ctx)).toEqual([]);
   });
+
+  it("recovers a committed label receipt before its obsolete input fence after retirement failure", async () => {
+    const account = (await card(ctx)).output;
+    await record(ctx, [rowInput()]);
+    await generate(ctx);
+    const [before] = await statementSuggestionsRepo.suggestionsNeedingLabels(
+      ctx.db,
+      10,
+    );
+    await createRepoIdentity(ctx, "financialTransaction", {
+      accountId: account.id,
+      kind: "purchase",
+      status: "posted",
+      amount: 42.5,
+      postedDate: "2026-05-05",
+      merchant: "Example Grocer",
+      rawDescription: "SYNTHETIC NEW LEDGER CANDIDATE",
+      sourceRefs: [],
+    });
+    const entries = await completeLabelPublications(ctx);
+    expect(entries).toHaveLength(1);
+    expect(entries[0]!.proposal.evidenceFingerprint).not.toBe(
+      entries[0]!.evidenceFingerprint,
+    );
+    const afterCommit = databaseHelpers.runAfterCommit;
+    let interrupted = false;
+    const effect = vi
+      .spyOn(databaseHelpers, "runAfterCommit")
+      .mockImplementation((db, work) =>
+        afterCommit(db, async (committed) => {
+          if (!interrupted) {
+            interrupted = true;
+            throw new Error(
+              "Synthetic retirement admission failure after commit",
+            );
+          }
+          return work(committed);
+        }),
+      );
+    const publication = vi.spyOn(assessmentRepo, "publishAssessments");
+    try {
+      const first =
+        await statementSuggestionsRepo.publishCompleteStatementLabels(
+          ctx.db,
+          entries,
+        );
+      const key = statementSuggestionsRepo.chargeId(
+        entries[0]!.proposal.charge,
+      );
+      const receipt = first.get(key);
+      expect(receipt).toMatchObject({ kind: "ready", origin: "recovered" });
+      if (receipt?.kind !== "ready")
+        throw new Error("Expected recovered receipt");
+      expect(receipt.receipt.applicationOrder).toEqual({
+        createdAt: before!.createdAt,
+        id: before!.cursorId,
+      });
+      const [pending] = await statementSuggestionsRepo.suggestionsNeedingLabels(
+        ctx.db,
+        10,
+      );
+      expect(pending!.id).toBe(receipt.receipt.assessmentId);
+      expect(pending!.checkpoint).toEqual(entries[0]!.checkpoint);
+      expect(pending!.applicationPending).toBe(true);
+      expect(
+        (
+          await statementSuggestionsRepo.publishCompleteStatementLabels(
+            ctx.db,
+            entries,
+          )
+        ).get(key),
+      ).toEqual(receipt);
+      expect(publication).toHaveBeenCalledTimes(1);
+      expect(
+        await label(ctx, async () => {
+          throw new Error("Recovered labels must not call the model");
+        }),
+      ).toMatchObject({
+        completed: 1,
+        labelled: 0,
+        failed: [],
+        labels: { generated: 0 },
+      });
+      expect(
+        (
+          await statementSuggestionsRepo.publishCompleteStatementLabels(
+            ctx.db,
+            entries,
+          )
+        ).get(key),
+      ).toEqual({ kind: "resolved", reason: "unchanged" });
+      expect(publication).toHaveBeenCalledTimes(1);
+    } finally {
+      publication.mockRestore();
+      effect.mockRestore();
+    }
+  });
+
+  it("repairs committed application receipts on resume when retirement never succeeded", async () => {
+    await card(ctx);
+    await record(ctx, [
+      rowInput(),
+      rowInput({
+        rawDescription: "SYNTHETIC SECOND RECEIPT",
+        providerAmount: -12,
+      }),
+    ]);
+    await generate(ctx);
+    const entries = await completeLabelPublications(ctx);
+    const afterCommit = databaseHelpers.runAfterCommit;
+    const effect = vi
+      .spyOn(databaseHelpers, "runAfterCommit")
+      .mockImplementation((db) =>
+        afterCommit(db, async () => {
+          throw new Error("Synthetic unavailable retirement connection");
+        }),
+      );
+    const publication = vi.spyOn(assessmentRepo, "publishAssessments");
+    try {
+      const first =
+        await statementSuggestionsRepo.publishCompleteStatementLabels(
+          ctx.db,
+          entries,
+        );
+      expect([...first.values()].map((result) => result.kind)).toEqual([
+        "failed",
+        "failed",
+      ]);
+      const pending = await statementSuggestionsRepo.suggestionsNeedingLabels(
+        ctx.db,
+        10,
+      );
+      expect(pending).toHaveLength(2);
+      expect(pending.every((row) => row.applicationPending)).toBe(true);
+      expect(pending.map((row) => row.checkpoint)).toEqual(
+        entries.map((entry) => entry.checkpoint),
+      );
+      effect.mockRestore();
+      const repair = vi.spyOn(
+        statementSuggestionsRepo,
+        "repairStatementApplicationReceipts",
+      );
+      try {
+        expect(
+          await label(ctx, async () => {
+            throw new Error(
+              "Durable model answers must survive failed retirement",
+            );
+          }),
+        ).toMatchObject({
+          completed: 2,
+          labelled: 0,
+          failed: [],
+          labels: { generated: 0 },
+        });
+        expect(repair).toHaveBeenCalledWith(
+          ctx.db,
+          pending.map((row, index) => ({
+            assessmentId: row.id,
+            charge: entries[index]!.proposal.charge,
+          })),
+        );
+        expect(publication).toHaveBeenCalledTimes(1);
+        expect(
+          await statementSuggestionsRepo.suggestionsNeedingLabels(ctx.db, 10),
+        ).toEqual([]);
+      } finally {
+        repair.mockRestore();
+      }
+    } finally {
+      publication.mockRestore();
+      effect.mockRestore();
+    }
+  });
+
+  it.each(["cancelled", "expired"] as const)(
+    "rolls back complete label batches under %s Job ownership",
+    async (failure) => {
+      await card(ctx);
+      await record(ctx, [
+        rowInput(),
+        rowInput({
+          rawDescription: "SYNTHETIC FENCED PEER",
+          providerAmount: -12,
+        }),
+      ]);
+      await generate(ctx);
+      const before = await statementSuggestionsRepo.suggestionsNeedingLabels(
+        ctx.db,
+        10,
+      );
+      const entries = await completeLabelPublications(ctx);
+      const publish = assessmentRepo.publishAssessments;
+      const publication = vi
+        .spyOn(assessmentRepo, "publishAssessments")
+        .mockImplementation(async (...args) => {
+          const result = await publish(...args);
+          const owner = currentJobExecution();
+          if (!owner) throw new Error("Expected real Job execution");
+          vi.setSystemTime(owner.claim.leaseExpiresAt.getTime() + 1);
+          return result;
+        });
+      vi.useFakeTimers({ toFake: ["Date"] });
+      try {
+        await expect(
+          withJobFixtureExecution(
+            ctx.db,
+            {
+              key: "synthetic.label-batch-fence",
+              kind: "synthetic.label-batch",
+              input: {},
+            },
+            async () => {
+              const owner = currentJobExecution();
+              if (!owner) throw new Error("Expected real Job execution");
+              if (failure === "cancelled")
+                await cancelJob(ctx.db, owner.claim.id);
+              return statementSuggestionsRepo.publishCompleteStatementLabels(
+                ctx.db,
+                entries,
+              );
+            },
+          ),
+        ).rejects.toThrow("Job generation or lease is obsolete");
+        expect(
+          await statementSuggestionsRepo.suggestionsNeedingLabels(ctx.db, 10),
+        ).toEqual(before);
+        expect(publication).toHaveBeenCalledTimes(
+          failure === "cancelled" ? 0 : 1,
+        );
+      } finally {
+        vi.useRealTimers();
+        publication.mockRestore();
+      }
+    },
+  );
 
   // Publication failure must not discard a completely paid judgment before retry.
   it("resumes automatic application after a crash following model publication", async () => {
@@ -2104,18 +2412,10 @@ describe("statement Transaction suggestions", () => {
           throw new Error("Synthetic earlier model failure");
         return answer(request);
       };
-      const originalPublish = statementSuggestionsRepo.publishChargeProposal;
-      const publish = vi
-        .spyOn(statementSuggestionsRepo, "publishChargeProposal")
-        .mockImplementation(async (...args) => {
-          if (
-            failure === "publication" &&
-            failing &&
-            args[1].charge.chargeKey === earlier!.chargeKey
-          )
-            throw new Error("Synthetic earlier publication failure");
-          return originalPublish(...args);
-        });
+      let removeFailure =
+        failure === "publication"
+          ? await rejectStatementPublication(ctx, earlier!.chargeKey, "model")
+          : undefined;
       try {
         const first = await label(ctx, port);
         expect(first).toMatchObject({ labelled: 1, completed: 0 });
@@ -2140,6 +2440,10 @@ describe("statement Transaction suggestions", () => {
         expect(pending[1]!.applicationPending).toBe(true);
         const retainedLaterCalls = laterCalls;
         failing = resolution === "exhausted";
+        if (removeFailure && !failing) {
+          await removeFailure();
+          removeFailure = undefined;
+        }
         const resumed = await labelStatementSuggestions(ctx.db, {
           port,
           runId: await ensureRun(ctx.db, ctx.actor, { purpose: "background" }),
@@ -2164,7 +2468,7 @@ describe("statement Transaction suggestions", () => {
           rows.find((row) => row.rawDescription === loser)?.matchState,
         ).toBe("unmatched");
       } finally {
-        publish.mockRestore();
+        await removeFailure?.();
       }
     },
   );
@@ -2243,9 +2547,9 @@ describe("statement Transaction suggestions", () => {
       calls++;
       return answer(input);
     };
-    const publish = vi
-      .spyOn(statementSuggestionsRepo, "publishChargeProposal")
-      .mockRejectedValueOnce(new Error("Synthetic publication failure"));
+    const [pending] = await suggestions(ctx);
+    let removeFailure: (() => Promise<void>) | undefined =
+      await rejectStatementPublication(ctx, pending!.chargeKey, "model");
     try {
       const first = await label(ctx, port);
       expect(first.failed).toHaveLength(1);
@@ -2262,12 +2566,14 @@ describe("statement Transaction suggestions", () => {
           },
         },
       });
+      await removeFailure();
+      removeFailure = undefined;
       const resumed = await label(ctx, port);
       expect(resumed.labelled).toBe(1);
       expect(resumed.labels).toEqual({ reused: 3, generated: 0 });
       expect(calls).toBe(2);
     } finally {
-      publish.mockRestore();
+      await removeFailure?.();
     }
   });
 

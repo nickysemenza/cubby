@@ -387,8 +387,19 @@ copy only the model votes and candidate labels, and recompute kind and clean
 status from current rules, history and transfer evidence. Changed model inputs
 or candidates retire the old labels atomically with the replacement; suppressed
 or settled charges remain excluded. Generation commits bounded batches of
-independent charges; label publication commits per charge. Interruption preserves
-reusable labels and completed publications.
+independent charges. Complete labels publish in batches of at most 32 charges,
+with at most four publication transactions in flight; partial checkpoints remain
+per charge. Each completed label retains its own producer, checkpoint, Assessment
+receipt and original application order. A failed batch reconciles each charge
+through the same locked admission path: committed publications recover their
+pending application receipts before testing the obsolete input fence, and finish
+retirement before acknowledgement. Recovery does not recreate or restamp labels.
+Resumed application receipts repeat that exact retirement check before application,
+including recovery from a crash before the after-commit callback started.
+Automatic financial application still admits only the original ready prefix,
+sequentially. Interruption preserves reusable labels and completed publications.
+An obsolete Job generation or lease interrupts the invocation; per-charge error
+isolation must not turn that ownership signal into an item failure or retry.
 Acceptance always validates the current broader evidence fingerprint.
 
 Within one read-only proposal page, spending preparation loads shared account

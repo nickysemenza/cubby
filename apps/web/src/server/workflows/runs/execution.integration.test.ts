@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import { getDb, withTransactionDatabase } from "~/server/db/helpers";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { withJobExecution } from "~/server/generic/jobs/context";
+import { JobSupersededError } from "~/server/generic/jobs/errors";
 import {
   cancelJob,
   claimJob,
@@ -12,10 +13,25 @@ import {
   retryJob,
 } from "~/server/generic/jobs/repo/jobs";
 
-import { assertWorkflowEffect, withWorkflowExecution } from "./execution";
+import {
+  assertWorkflowEffect,
+  isWorkflowInterrupted,
+  withWorkflowExecution,
+} from "./execution";
 
 describe("Workflow effect admission", () => {
   const ctx = withTestDb();
+
+  it("recognizes obsolete Job ownership through wrapped causes", () => {
+    const error = new JobSupersededError();
+    expect(isWorkflowInterrupted(error)).toBe(true);
+    expect(
+      isWorkflowInterrupted(new Error("Publication failed", { cause: error })),
+    ).toBe(true);
+    expect(isWorkflowInterrupted(new Error("Synthetic item failure"))).toBe(
+      false,
+    );
+  });
 
   // Workflow context must retain the Job fence across cancellation and replacement.
   it("rechecks current Job authority inside every publication transaction", async () => {

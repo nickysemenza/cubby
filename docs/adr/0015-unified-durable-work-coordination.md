@@ -28,6 +28,8 @@ output and cursor together and reset the consecutive failure budget. The drain
 continues immediately runnable pages and sends another wake if its budget runs out. Publication locks the Job and checks
 its current generation, token, running state and live lease. A stopped,
 superseded or pre-cutover worker cannot publish using its former domain token.
+Loss of Job ownership is an invocation interruption, including through wrapped
+causes; per-item isolation must propagate it instead of retrying individual effects.
 Expensive preparation, paid calls and remote mutations happen outside that
 transaction; the publication callback performs database work only. Specific
 captured authoritative inputs are rechecked before prepared results publish.
