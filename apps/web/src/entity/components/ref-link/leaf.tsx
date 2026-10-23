@@ -11,7 +11,6 @@ import { Suspense } from "react";
 import { EntityIdentityMark } from "~/entity/components/entity-identity-mark";
 import { EntityPill } from "~/entity/components/entity-pill";
 import type { EntityPreviewContent as EntityPreviewContentComponent } from "~/entity/components/entity-preview-content";
-import { RecordMarkByReference } from "~/entity/components/record-mark";
 import {
   entities,
   entityDetailParams,
@@ -293,15 +292,7 @@ export function ChipRefLink({
       name={label}
       displayImage={image}
       emoji={emoji}
-      fallback={
-        <RecordMarkByReference
-          entity={entity}
-          recordId={id}
-          emoji={emoji}
-          size={12}
-          fallback={fallback}
-        />
-      }
+      fallback={fallback}
     />
   );
   return isHoverPreviewEntity(entity) ? (

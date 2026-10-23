@@ -1,10 +1,10 @@
 import { useMemo } from "react";
 
+import { EntityPill } from "~/entity/components/entity-pill";
+import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { compileEntityListInput } from "~/entity/entity-list";
 import { useServerTree } from "~/entity/hooks/use-server-tree";
 import { NoneValue } from "~/ui/primitives/none-value";
-
-import { SpendingCategoryPill } from "./spending-category-pill";
 
 // One cached hierarchy read shared by every pill on the page.
 const SPENDING_CATEGORY_TREE_INPUT = compileEntityListInput(
@@ -42,8 +42,8 @@ function findSpendingCategory(
 }
 
 /**
- * The one presentation of a spending category value: its emoji and full path
- * on a finance-tinted pill that opens the category. A known `name` and
+ * A spending category supplies its emoji and full path to the shared identity.
+ * A known `name` and
  * `emoji` stand in while the hierarchy loads or when it cannot be read.
  * Without an `id` (a review snapshot that kept only the name) the pill stays
  * unlinked.
@@ -67,11 +67,21 @@ export function SpendingCategoryLabel({
   );
   const label = resolved?.path.join(" / ") || name || id;
   if (!label) return <NoneValue />;
-  return (
-    <SpendingCategoryPill
+  const mark = resolved?.emoji ?? emoji;
+  return id ? (
+    <EntityRefLink
+      entity="spendingCategory"
       id={id}
-      label={label}
-      emoji={resolved?.emoji ?? emoji}
+      name={label}
+      emoji={mark}
+    />
+  ) : (
+    <EntityPill
+      entity="spendingCategory"
+      id=""
+      name={label}
+      emoji={mark}
+      displayImage={null}
     />
   );
 }

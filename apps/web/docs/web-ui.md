@@ -266,4 +266,6 @@ entity declarations own labels and identity data. Candidate filter rows reuse
 the same noninteractive identity, with detail and counts outside the pill.
 Resolve canonical display images in batches at collection boundaries and pass
 them through the display-image provider, including transitive images. Never
-start an image query from a cell or option row.
+start an image or record-mark metadata query from a cell or option row. Use
+identity metadata already supplied by the owner; a missing mark falls back to
+the canonical entity mark.
