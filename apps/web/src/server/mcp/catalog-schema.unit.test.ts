@@ -673,6 +673,8 @@ describe("MCP catalog schemas", () => {
       "recipe_import.lineId",
       // Retained shipment source packages are child rows; reassign takes this handle.
       "shipments.sourcePackageId",
+      // Observation edits address only the retained child returned by timeline.
+      "shipments.observationId",
       // Stable source/workflow identifiers are opaque import evidence keys,
       // not Cubby entity UUIDs or public shortcodes.
       "purchase_import.orders[].stableOrderId",

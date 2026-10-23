@@ -109,6 +109,7 @@ const actionCapability = {
   "shipments.record": "commit_purchase_import",
   "shipments.associate": "member_decision",
   "shipments.reassign": "member_decision",
+  "shipments.edit_observation": "member_decision",
   "shipments.merge": "member_decision",
   "mail.decide_purchase": "member_decision",
   "purchase_import.prepare": "prepare",

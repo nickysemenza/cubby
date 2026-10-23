@@ -28,6 +28,9 @@ describe("import run capabilities", () => {
     expect(capabilityForPurchaseAgentAction("run.set_mail_import")).toBe(
       "member_decision",
     );
+    expect(capabilityForPurchaseAgentAction("shipments.edit_observation")).toBe(
+      "member_decision",
+    );
   });
 
   it("keys capability on the tool action, so one action never authorizes another", () => {

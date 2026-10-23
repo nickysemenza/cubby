@@ -4,11 +4,14 @@ import {
   associateShipment,
   mergeShipment,
   reassignShipmentEvidence,
+  editShipmentObservation,
 } from "~/server/domains/shipment/repo/evidence";
 import { readShipmentTimeline } from "~/server/domains/shipment/repo/timeline";
 import { implementOperationDomain } from "~/server/operation-runtime/operation-domain.server";
 
 export const shipmentHandlers = implementOperationDomain(shipmentContract, {
+  edit_observation: (context, input) =>
+    editShipmentObservation(context.db, input, context.actorContext),
   reassign: (context, input) =>
     reassignShipmentEvidence(context.db, input, context.actorContext),
   record: (context, input) =>
