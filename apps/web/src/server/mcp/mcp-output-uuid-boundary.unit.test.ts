@@ -34,28 +34,28 @@ const DECLARED_UUID_OUTPUT_PATHS = new Set([
   "entity_read.items[].unitMappings[].id",
   // Image processing jobs are internal queue handles, not Image entity links.
   "image.jobIds[]",
-  // A recipe line has no shortcode; recipe_import.patch_line takes this id.
-  "recipe_insights.recipes[].usages[].lineId",
-  // MealRecipe has no shortcode. meal_recipe.add exposes the newly inserted
-  // occurrence handle that meal_recipe update/remove/save_preparation take.
-  "meal_recipe.mealRecipeId",
-  "meal_recipe.recipes[].id",
-  "nutrition.preparations[].mealRecipeId",
+  // A recipe line has no shortcode; recipe_insights.patch_line takes this id.
+  "recipe_insights_read.recipes[].usages[].lineId",
+  // MealRecipe has no shortcode. nutrition.plan_recipe exposes the newly inserted
+  // occurrence handle that nutrition update/remove/save_preparation take.
+  "nutrition.recipes[].id",
+  "nutrition.mealRecipeId",
+  "nutrition_read.preparations[].mealRecipeId",
   // Import findings are internal review proposals. Their own id is the write
   // handle for apply/dismiss, while proposed fixes retain the exact internal
   // rows the audited transaction would mutate; neither is an entity link.
-  "activity.runFindings[].id",
-  "activity.runFindings[].proposedFix.expenseId",
-  "activity.runFindings[].proposedFix.productId",
-  "activity.runFindings[].proposedFix.purchaseId",
+  "activity_read.runFindings[].id",
+  "activity_read.runFindings[].proposedFix.expenseId",
+  "activity_read.runFindings[].proposedFix.productId",
+  "activity_read.runFindings[].proposedFix.purchaseId",
   // Nullable row handles in the reviewed replacement snapshot participate in
   // the approval fingerprint and attribution comparison in applyFix.
-  "activity.runFindings[].proposedFix.reviewedLineIdentities[].productId",
-  "activity.runFindings[].proposedFix.reviewedLineIdentities[].distinctFrom[].productId",
-  "activity.runFindings[].proposedFix.reviewedLineAttributions[].partyId",
+  "activity_read.runFindings[].proposedFix.reviewedLineIdentities[].productId",
+  "activity_read.runFindings[].proposedFix.reviewedLineIdentities[].distinctFrom[].productId",
+  "activity_read.runFindings[].proposedFix.reviewedLineAttributions[].partyId",
   // The source observation a reconcile_source_order proposal was built from;
   // applyFix commits exactly that observation, never a newer one.
-  "activity.runFindings[].proposedFix.observationId",
+  "activity_read.runFindings[].proposedFix.observationId",
   // purchase_import.prepare_reconciliation echoes the finding id it reviewed
   // (the same row handle as activity.runFindings[].id) or the accepted source
   // order it reviewed, and its commits take those handles back. An accepted
@@ -63,40 +63,57 @@ const DECLARED_UUID_OUTPUT_PATHS = new Set([
   // can prepare that order's reconciliation.
   "purchase_import.id",
   "purchase_import.sourceOrderId",
-  "imports_read.candidates[].purchaseLines[].acceptedSourceLines[].sourceOrderId",
-  // Retained Email reads supply the same accepted-order handle for reviewed repair.
-  "imports_read.acceptedSourceOrders[].sourceOrderId",
-  // The producing read: entity_read.suggestion_queue's row ids (Assessment
-  // handles) and its field evidence row ids.
-  "entity_read.items[].id",
-  "entity_read.items[].evidence.id",
-  "entity_read.items[].evidence.assessmentId",
-  "entity_read.items[].evidence.review.assessmentId",
-  // Assessments and Feedback are child-row review/receipt handles without
-  // shortcodes; review and batch review return those exact handles.
-  "entity_read.items[].assessmentId",
-  // Mail outcome history uses the same Assessment grading handle and opaque
-  // evaluation receipt; its producing Run is an entity shortcode.
-  "imports_read.items[].assessmentId",
-  "imports_read.items[].producer.evaluationId",
-  "entity.proposals[].review.assessmentId",
-  "entity.assessmentId",
-  "entity.feedbackId",
-  "entity.items[].assessmentId",
-  "entity.items[].feedbackId",
-  "activity.duplicateProductIdentities[].assessmentId",
-  "activity.duplicateProductIdentities[].pairs[].assessmentId",
-  // Audit rows are opaque receipts, not entity links; these identify the exact acceptance writes.
-  "entity_read.items[].evidence.acceptanceReceipt.auditIds[]",
-  "run.id",
+  // Review proposals and feedback use child-row handles with no shortcodes.
+  "activity_read.duplicateProductIdentities[].assessmentId",
+  "activity_read.duplicateProductIdentities[].pairs[].assessmentId",
   // Shipment evidence child rows have no shortcodes. These handles preserve
   // capture membership, timeline provenance and explicit source reassignment;
   // Shipment, Purchase, Email and Vendor entity references remain shortcodes.
+  "shipments_read.timeline[].observationIds[]",
+  // Newly exposed capabilities retain opaque workflow, audit and child-row
+  // handles consumed by their matching follow-up actions. Entity references
+  // in these outputs remain shortcodes.
+  "activity.id",
+  "ai_read.latestRunId",
+  "ai.id",
+  "entity_graph.proposals[].review.assessmentId",
+  "image.deletedIds[]",
+  "inventory.items[].product.externalIds[].id",
+  "inventory.items[].product.unitMappings[].id",
+  "inventory.item.product.externalIds[].id",
+  "inventory.item.product.unitMappings[].id",
+  "maintenance.nextCursor",
+  "maintenance_read.items[].targetId",
+  "maintenance_read.items[].sourceId",
+  "maintenance_read.entries[].id",
+  "nutrition.id",
+  "photo_run_read.candidates[].purchaseLines[].acceptedSourceLines[].sourceOrderId",
+  "product_enrichment.product.externalIds[].id",
+  "purchase_import_read.items[].assessmentId",
+  "purchase_import_read.items[].producer.evaluationId",
+  "purchase_import_read.acceptedSourceOrders[].sourceOrderId",
+  "run_read.entries[].commandId",
+  "run.run.findings[].proposedFix.purchaseId",
+  "run.run.findings[].proposedFix.observationId",
+  "run.run.findings[].proposedFix.reviewedLineIdentities[].productId",
+  "run.run.findings[].proposedFix.reviewedLineIdentities[].distinctFrom[].productId",
+  "run.run.findings[].proposedFix.reviewedLineAttributions[].partyId",
+  "run.run.findings[].proposedFix.expenseId",
+  "run.run.findings[].proposedFix.productId",
   "shipments_read.observations[].observationId",
   "shipments_read.observations[].sourceCaptureId",
   "shipments_read.observations[].sourcePackageId",
   "shipments_read.observations[].captureIds[]",
-  "shipments_read.timeline[].observationIds[]",
+  "suggestions_read.items[].id",
+  "suggestions_read.items[].assessmentId",
+  "suggestions_read.items[].evidence.assessmentId",
+  "suggestions_read.items[].evidence.acceptanceReceipt.auditIds[]",
+  "suggestions_read.items[].evidence.id",
+  "suggestions_read.items[].evidence.review.assessmentId",
+  "suggestions.assessmentId",
+  "suggestions.items[].assessmentId",
+  "suggestions.feedbackId",
+  "suggestions.items[].feedbackId",
 ]);
 
 const NOT_YET_CUT_OVER: string[] = [];

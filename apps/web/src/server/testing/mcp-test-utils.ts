@@ -221,7 +221,8 @@ export function mcpTestPrincipal(
     credential: "mcp-token",
     // SAFETY: a test supplies only the members the tool under test reads.
     context: fromAny({
-      db: null,
+      // A pool-bound stand-in: the runner's after-commit work runs at once.
+      db: {},
       auth: { userId: actorContext.userId, sessionId: null },
       ...merged,
       actorContext,

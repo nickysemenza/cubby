@@ -93,76 +93,58 @@ export const entitySelectionIdsOutputSchema = z.object({
   nextCursor: z.string().min(1).nullable(),
 });
 
-export const entityListContract = defineContract("entity", {
-  selectionIds: query({
-    mcp: { omit: "client_view" },
-    input: entitySelectionIdsInputSchema,
-    output: entitySelectionIdsOutputSchema,
-    observability: { entities: listEntities },
-  }),
-  listBase: query({
-    mcp: {
-      omit: "kernel_alternative",
-      kernel: ["list"],
+export const entityListContract = defineContract(
+  "entity",
+  {
+    selectionIds: query({
+      input: entitySelectionIdsInputSchema,
+      output: entitySelectionIdsOutputSchema,
+      observability: { entities: listEntities },
+    }),
+    listBase: query({
       note: "The progressive list split for native; agents use entity_read.list",
-    },
-    input: entityListInputSchema,
-    output: entityListBaseOutputSchema,
-    native: "Progressive standard entity lists",
-    nativeModels: { input: "json", output: "json" },
-    observability: { entities: listEntities },
-  }),
-  listEnrichment: query({
-    mcp: {
-      omit: "kernel_alternative",
-      kernel: ["list"],
+      input: entityListInputSchema,
+      output: entityListBaseOutputSchema,
+      native: "Progressive standard entity lists",
+      nativeModels: { input: "json", output: "json" },
+      observability: { entities: listEntities },
+    }),
+    listEnrichment: query({
       note: "The progressive list split for native; agents use entity_read.list",
-    },
-    input: entityListEnrichmentInputSchema,
-    output: entityListEnrichmentOutputSchema,
-    transport: "post",
-    native: "Deferred list fields",
-    nativeModels: { input: "json", output: "json" },
-    observability: { entities: listEntities },
-  }),
-  listSummary: query({
-    mcp: {
-      omit: "kernel_alternative",
-      kernel: ["list"],
+      input: entityListEnrichmentInputSchema,
+      output: entityListEnrichmentOutputSchema,
+      transport: "post",
+      native: "Deferred list fields",
+      nativeModels: { input: "json", output: "json" },
+      observability: { entities: listEntities },
+    }),
+    listSummary: query({
       note: "Full-filter totals; entity_read.list returns its total",
-    },
-    input: entityListInputSchema,
-    output: entityListSummaryOutputSchema,
-    native: "Full-filter list totals",
-    nativeModels: { input: "json", output: "json" },
-    observability: { entities: listEntities },
-  }),
-  facetCounts: query({
-    mcp: { omit: "client_view" },
-    input: entityFacetCountsInputSchema,
-    output: entityFacetCountsOutputSchema,
-    observability: { entities: listEntities },
-  }),
-  viewCounts: query({
-    mcp: { omit: "client_view" },
-    input: entityViewCountsInputSchema,
-    output: entityViewCountsOutputSchema,
-    observability: { entities: listEntities },
-  }),
-  list: query({
-    mcp: {
-      omit: "kernel_alternative",
-      kernel: ["list"],
+      input: entityListInputSchema,
+      output: entityListSummaryOutputSchema,
+      native: "Full-filter list totals",
+      nativeModels: { input: "json", output: "json" },
+      observability: { entities: listEntities },
+    }),
+    facetCounts: query({
+      input: entityFacetCountsInputSchema,
+      output: entityFacetCountsOutputSchema,
+      observability: { entities: listEntities },
+    }),
+    viewCounts: query({
+      input: entityViewCountsInputSchema,
+      output: entityViewCountsOutputSchema,
+      observability: { entities: listEntities },
+    }),
+    list: query({
       note: "The browser list read; agents use entity_read.list",
-    },
-    // Type-only carriers: the per-entity runtime schemas live in the generated
-    // list bindings and are applied by the browser `parse` policy and the
-    // server handler; HTTP carries the loose kernel wire.
-    input: z.custom<EntityListInputByEntity[ListEntity]>(),
-    output: z.custom<EntityListResultByEntity[ListEntity]>(),
-    nativeModels: { input: "json", output: "json" },
-    httpWire: kernelRecordWire,
-    native: "Full-row entity lists (pickers, Spotlight, sheets)",
-    observability: { entities: listEntities },
-  }),
-});
+      input: z.custom<EntityListInputByEntity[ListEntity]>(),
+      output: z.custom<EntityListResultByEntity[ListEntity]>(),
+      nativeModels: { input: "json", output: "json" },
+      httpWire: kernelRecordWire,
+      native: "Full-row entity lists (pickers, Spotlight, sheets)",
+      observability: { entities: listEntities },
+    }),
+  },
+  { exposure: "view" },
+);

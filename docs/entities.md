@@ -507,7 +507,7 @@ shows several slots of one record (a Run) polls one `entityReport.getMany`, so t
 record once per poll.
 
 **Run work progress.** The storage-only `getRunWorkProgress` projection supplies
-both `imports_read.run_status.workProgress` and the Run's shared `progress`
+both `run.work_snapshot.workProgress` and the Run's shared `progress`
 report block. Every Run purpose declares a count source: step receipts,
 target outcomes, operations, images, model calls, or its typed checkpoint.
 Exploratory populations have `total: null`, never an invented zero. Step drivers
@@ -1048,7 +1048,7 @@ object keys while preserving array order and JSON scalar encoding; it must not
 revalidate or clone each nested subtree. Normalize dates and optional values at
 the input boundary before serialization.
 
-All five review families use this storage: fields, Email relevance and event/Purchase links, image descriptions, Product pairs, and generic recommendations. `assessment.review` and `assessment.reviewBatch` (MCP `entity.review_assessment` and `entity.review_assessments`) settle immutable review independently of apply intent. Each batch item has its own outcome. Draft acceptance records history; saved application has a separate transaction-bound receipt. Current-evidence and domain-authority checks fence field writes, Email corrections and pair merges. Email link application revalidates its expected active Assessment and current target after Purchase, Original and Email locks, so a waiting review cannot replace newer authority. Relevance application requires an explicit domain-supported related or uncertain correction before recording Feedback; unrelated grading remains history-only. Unserved model trials stay outside member review.
+All five review families use this storage: fields, Email relevance and event/Purchase links, image descriptions, Product pairs, and generic recommendations. `assessment.review` and `assessment.reviewBatch` (MCP `suggestions.review` and `suggestions.review_batch`) settle immutable review independently of apply intent. Each batch item has its own outcome. Draft acceptance records history; saved application has a separate transaction-bound receipt. Current-evidence and domain-authority checks fence field writes, Email corrections and pair merges. Email link application revalidates its expected active Assessment and current target after Purchase, Original and Email locks, so a waiting review cannot replace newer authority. Relevance application requires an explicit domain-supported related or uncertain correction before recording Feedback; unrelated grading remains history-only. Unserved model trials stay outside member review.
 
 A new bare wrong verdict is a Miss, without suppressing future evidence. It resolves the current Problem, and canonical publication of the same pair evidence and decision policy preserves that review. Relevant evidence or policy revisions may publish a fresh Assessment. Publication identity excludes requesting Run and execution IDs; the first actual producer and evidence snapshot remain immutable. Exact command retries replay the same receipt; conflicting operation-ID reuse is refused. Legacy ambiguous reject/dismiss outcomes remain ungraded, retaining their original field-value, pair, recommendation-group, relatedness or tag-preference suppression. Existing corrected values and explicit labels retain their recorded semantics. Field applications keep existing AuditLog receipts and distinguish automatic acceptance from explicit member acceptance. New evaluation-only Email grades never change routing; frozen sample rosters retain original predictions, strata and inclusion probabilities.
 
@@ -1718,11 +1718,11 @@ hold no business logic; there is no per-transport `*-browser.server.ts` module.
 Removing an operation has no deployment shim: a tab loaded before that
 deployment must reload before calling the removed function.
 
-The MCP surface is declared once in `apps/web/src/contracts/mcp-tools.ts`: grouped
-tools, each a group of actions called as `{ action, ...fields }`, where an
-action is a contract member or an entity-kernel verb. `pnpm generate` binds
-every action to its `implementOperationDomain` handler and refuses a tool that
-mixes queries and mutations, so read-only tools stay auto-approvable. MCP
+The MCP surface is generated from `capability` contract members plus the
+entity-kernel verbs declared in `apps/web/src/contracts/mcp-tools.ts`
+([MCP exposure](agents/mcp.md#exposure)). `pnpm generate` requires every
+action's `implementOperationDomain` handler and splits a group that mixes
+queries and mutations, so read-only tools stay auto-approvable. MCP
 invokes `executeEntity` through the kernel verbs of the `entity` (writes) and
 `entity_read` (reads) tools and publishes their machine-readable contract at
 `entities://catalog`. MCP, jobs, repositories, entity modules, and kernel tests must
@@ -2381,7 +2381,7 @@ presence key it was already published under (expense
 `projectPresenceFilter`); others get the generated
 `<columnId>PresenceFilter`.
 
-A repository reference column may opt into `entity_read.connections` with
+A repository reference column may opt into `entity_graph.connections` with
 `{ reference: "financialTransaction", connection: true }`. Only mark the
 canonical direction: the row's `owner` is the source and the reference is the
 target; the reader exposes both outgoing and incoming groups under
@@ -2629,7 +2629,7 @@ Problems, Email attention, findings and account work. It derives a filterable
 Waiting for column from current source/account authority, with Either for
 shared research and unresolved for missing private ownership. Its filter is
 any-of: Me (mine or Either), Either, a member (routed to them only), and No
-value for Unresolved. This is a read projection, not a new entity or assignment ledger. MCP `activity.work_queue`
+value for Unresolved. This is a read projection, not a new entity or assignment ledger. MCP `activity.for_member`
 uses the connected member implicitly and filters eligibility before counts
 and paging; the household UI's routing filters do not grant private access.
 
@@ -2799,8 +2799,8 @@ an `EXISTS` against an aliased related table using that entity's own
 bindings; `generic/list/repo/list.ts` binds the resulting filters and sort for every
 scored entity's list in one place.
 
-Durable "not available" exceptions (`data_exception.set`/
-`data_exception.clear`) live in the `DataException` table, keyed by an
+Durable "not available" exceptions (`data_exception.set_exception`/
+`data_exception.clear_exception`) live in the `DataException` table, keyed by an
 `Entity(id, kind)` FK, for every entity whose declaration sets `exceptions`.
 Enabling it requires fingerprint inputs for every check and an allowed-reason
 list per check (`EXCEPTION_REASONS` in `generic/data-quality/repo/exception-reasons.ts`, exposed on each
@@ -3018,8 +3018,8 @@ Direct files are `EntityAttachment` rows: gallery photos and purchase documents
 attachments are detached and reaped, and an upload's idempotency key belongs to
 the attachment rather than the file.
 
-The shared image API (`image.attach_files`, `image.attach_existing`, and staged
-`image.create_uploads`) accepts every declared direct-image target. Galleries
+The shared image API (`image.attach_file`, `image.attach_existing`, and staged
+`image.create_file_upload`) accepts every declared direct-image target. Galleries
 use `role: "attachment"` by default; Cookbook covers require `role: "cover"`
 and Vendor logos require `role: "logo"`. Singular attachments replace the live
 slot only after image validation succeeds; PDFs cannot fill those slots. The
@@ -3059,7 +3059,7 @@ The physical graph is composed at read time from `ENTITY_EDGES` and
 `ENTITY_EDGE_OWNERS` (`generic/entity-links/repo/entity-edge-source.ts`): `(edgeKey, sourceKind,
 sourceId, targetKind, targetId)` with both ends live. It backs the Relations
 tab's Connections, the impact preview, the graph explorer's physical edges,
-the Problems orphan finder, and MCP `entity_read.connections`. Writes never go
+the Problems orphan finder, and MCP `entity_graph.connections`. Writes never go
 through it.
 
 The orphan finder restricts graph arms to edges touching its checked kinds

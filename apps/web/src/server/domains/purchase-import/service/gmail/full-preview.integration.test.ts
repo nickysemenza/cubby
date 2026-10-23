@@ -106,7 +106,7 @@ describe("full read-only Email preview", () => {
               (
                 await callMcpTool(
                   createMcpServer(),
-                  "imports_read",
+                  "purchase_import_read",
                   {
                     action: "mail_triage_preview",
                     mailboxId,

@@ -31,7 +31,7 @@ payment rail (a payment app, a bank) is the Financial Account of its transaction
    shared-expense export says which charges belong to the trip and who repaid;
    its amounts can be temporary holds, subtotals before tax and tip, or typos.
 2. **Orders first.** Import each order with an Email or order page through
-   `mail.import` or `purchase_import.prepare`. When Luna marks an order
+   `purchase_import.email_import` or `purchase_import.prepare`. When Luna marks an order
    unresolved because the Email was unreadable, prepare it from the receipt or
    order page as a `vendor_export` source.
 3. **Statement-only spend.** Venue food, a driver paid by bank transfer, and

@@ -21,7 +21,7 @@ ownership checks, retained-Email checksums, replay, money conservation and
 safe writes. Source-backed orders pass through `purchase_import` rather than
 generic entity mutation.
 
-Start backlog triage with `activity.work_queue`: it offers the connected
+Start backlog triage with `activity_read.for_member`: it offers the connected
 member's current source/account work plus shared research. Its household UI is
 the Work queue page linked from Problems and Research, with a Waiting for
 filter. Unknown private ownership requires review; queue membership does not
@@ -35,8 +35,8 @@ booked Expenses under [duplicate bookkeeping](references/duplicates.md).
 Its evidence and impact checks allow routine cleanup without another
 confirmation; ambiguous identity, attribution or money still needs review.
 
-Use `imports_read.run_status` to inspect an existing Run before controlling it.
-Use `imports_read.run_transcript` for its committed coordinator messages and exact
+Use `run_read.work_snapshot` to inspect an existing Run before controlling it.
+Use `run_read.transcript` for its committed coordinator messages and exact
 tool inputs, results and errors. Follow `nextCursor` until null; this read does
 not authorize or start execution. An absent conversation may have been retired
 and is not proof that the Run never executed. Running snapshots can change
@@ -47,7 +47,7 @@ separate evidence.
 `run.lifecycle` takes every Run `controlAction` (cancel, retry, restart,
 resume …) through the shared member-owned controls; cancel refuses a Run that
 already ended. Spending and review decisions (`run.set_mail_import`,
-`run.discover_mail`, `run.commit_prepared`, `run.resolve_finding`) are
+`run.discover_mail`, `run.commit_prepared`, `activity.resolve_run_finding`) are
 callable, but only on the member's explicit instruction; never infer one.
 Per-operation approvals no longer exist. Runs that were approval-paused are now
 member `paused`, and their never-run operations are `failed` ("Approval pause
@@ -57,8 +57,8 @@ Respect an explicit member pause: do
 not retry or restart until imports are resumed. Follow the returned successor;
 the preceding attempt remains immutable.
 
-An explicit `mail.import` selection — up to 50 Emails, each by its `id`
-(`EML-` code) and current checksum as `mail.search` and `imports_read.mail`
+An explicit `purchase_import.email_import` selection — up to 50 Emails, each by its `id`
+(`EML-` code) and current checksum as `purchase_import.mail_search` and `purchase_import_read.mail_read`
 return them — starts Luna as foreground work outside the household AI budget. An Email with no order id that is already linked to exactly
 one Purchase imports into that Purchase rather than booking a second one.
 Member-controlled retries
@@ -80,7 +80,7 @@ checksums, replay, money conservation and unresolved-identity review still apply
    status; related originals and useful attachments become retained evidence.
    Frontier chat-model calls share the household AI budget, a $1 per six-hour
    UTC safety net; classification, decision models and embeddings are not
-   budgeted (`imports_read.mail_import` shows the window).
+   budgeted (`purchase_import.mail_read_import` shows the window).
    Confirmation,
    shipping, delivery, cancellation and refund mail may link to one Purchase.
    An exact order id helps; a unique supported match can use account, items,
@@ -97,7 +97,7 @@ checksums, replay, money conservation and unresolved-identity review still apply
 2. For Monarch MCP transactions or statement exports, use
    [financial-evidence-import](../financial-evidence-import/SKILL.md). That skill
    owns client parsing, complete source enumeration, normalization and bounded
-   `source_transaction_records.record` calls. Cubby owns scheduling, matching and booking;
+   `finance.record` calls. Cubby owns scheduling, matching and booking;
    financial intake does not chain agent transaction/Expense writes. Inspect
    retained Source transaction records and Transaction imports through
    `entity_read` (`sourceTransactionRecord` / `transactionImport`), using their
@@ -189,7 +189,7 @@ same outcome without prescribing an agent runtime.
    opens its own import Run and returns its `RUN-` code; pass it back as
    `_runExecution.run` to commit. Preserve the preparation revision and stable
    line ids. A retained Email source is `mail_message` with key
-   `gmail:<mailboxId>:<messageId>` and the checksum `imports_read.mail` returned;
+   `gmail:<mailboxId>:<messageId>` and the checksum `purchase_import_read.mail_read` returned;
    committing it links the Email to the Purchase.
 4. Resolve every principal line. Prefer exact-variant identifiers: a
    per-variant retailer SKU, ASIN, UPC/GTIN, or exact manufacturer part number.
@@ -241,7 +241,7 @@ same outcome without prescribing an agent runtime.
    unbound, unclaimed principal rows and retain the original source-line
    associations. Amounts, dates, purpose and adjustment rows stay intact.
    Ambiguous rows, conflicting Products and previously accepted sources require
-   source-order reconciliation review. `imports_read.mail.acceptedSourceOrders`
+   source-order reconciliation review. `purchase_import_read.mail_read.acceptedSourceOrders`
    supplies accepted order handles and exact source identities; lifecycle-only
    Purchase links do not supply a repair handle. A known accepted original with missing
    Product bindings uses `purchase_import.commit_accepted_reconciliation`
@@ -271,7 +271,7 @@ same outcome without prescribing an agent runtime.
    `attributionTargets` for beneficiary and funder. Copy the parties from the
    preview's `originalAttributions`: an empty `beneficiaries` field on the
    Expense can still resolve to a named party. Then
-   `run.resolve_finding` with `apply` and the returned `reviewedFingerprint`.
+   `activity.resolve_run_finding` with `apply` and the returned `reviewedFingerprint`.
 6. Inspect every ordered result. `created`, `updated`, and `replayed` are
    terminal; `conflict` requires review.
 7. Resolve the Purchase's VendorAccount before reporting completion. List the
@@ -288,7 +288,7 @@ same outcome without prescribing an agent runtime.
    Report every conflict or open finding; resolve it through the Problems UI.
 
 Mail import is Pi's version of this flow; [mail-import.md](references/mail-import.md)
-adds the Email dispositions (`mail.resolve`: a lifecycle `linked` event,
+adds the Email dispositions (`purchase_import.mail_resolve`: a lifecycle `linked` event,
 `unresolved` with its gap, or `unrelated`). A member resolves an Email the same
 way.
 
@@ -300,7 +300,7 @@ retain the checksum and account review through later deletion or account drift;
 they never change money, account aliases, allocations or stock.
 
 An interrupted mutation is recovered through
-`imports_read.purchase_status` with its original operation id. Repeating
+`purchase_import_read.operation_status` with its original operation id. Repeating
 the source payload is replay, not a way to revise a reviewed decision; a
 correction creates a linked successor run and new decision revision.
 
@@ -333,7 +333,7 @@ relevance gates. A new Vendor or member-owned VendorAccount may be created from
 sufficient retained purchase evidence. This records a vendor relationship,
 not proof of a login.
 Related mail can converge on the same Purchase in either arrival order. Preserve
-explicit member link and dismissal decisions (`mail.decide_purchase`, per Email
+explicit member link and dismissal decisions (`purchase_import.email_purchase_decide`, per Email
 and Purchase); an import-accepted source cannot be dismissed. Competing
 supported matches stay unresolved. A cancellation or refund can attach evidence and record its event;
 changing existing Expenses or writing refund Expenses requires review.
@@ -346,7 +346,7 @@ not proof the email or account lacks exact links. An order thumbnail remains
 provisional until exact-variant research verifies a representative image.
 
 For every exact merchant descriptor observed on that member's statement, call
-`purchase_import.confirm_vendor` after the human/vendor mapping is known.
+`purchase_import.confirm_merchant_vendor` after the human/vendor mapping is known.
 
 ## Settlement
 

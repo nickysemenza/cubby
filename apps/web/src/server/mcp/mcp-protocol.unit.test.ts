@@ -18,12 +18,14 @@ import {
   StreamableHTTPClientTransport,
 } from "@modelcontextprotocol/client";
 import { McpServer } from "@modelcontextprotocol/server";
+import { fromAny } from "@total-typescript/shoehorn";
 import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
 import { projectEntityResult } from "~/contracts/mcp-projections";
-import { MCP_TOOLS } from "~/contracts/mcp-tools";
+import { MCP_TOOL_DESCRIPTIONS } from "~/contracts/mcp-tools";
 import { mock } from "~/lib/test/mock-schema";
+import type { Database } from "~/server/db";
 import {
   entityMcpReadCommandSchema,
   entityMutationReadResultSchema,
@@ -61,7 +63,7 @@ function kernelServer(
   registerMcpTools(
     server,
     bindingsWithKernelExecutor(execute),
-    MCP_TOOLS,
+    MCP_TOOL_DESCRIPTIONS,
     runtime ?? observedMcpRuntime({}),
   );
   return server;
@@ -134,8 +136,11 @@ describe("MCP protocol smoke", () => {
       );
       // Unsupported problem types return before any database read.
       const result = await client.callTool({
-        name: "activity",
-        arguments: { action: "problems", type: "notAProblemType" },
+        name: "activity_read",
+        arguments: {
+          action: "report",
+          input: { type: "notAProblemType" },
+        },
       });
       expect(result.isError).not.toBe(true);
       expect(result.structuredContent).toBeDefined();
@@ -148,7 +153,7 @@ describe("MCP protocol smoke", () => {
           userId: "user_1",
           clientId: "test",
           surface: "external_mcp",
-          toolName: "activity",
+          toolName: "activity_read",
           outcome: "success",
           registeredAtCall: true,
         }),
@@ -237,7 +242,7 @@ describe("MCP protocol smoke", () => {
     // into `entity` / `entity_read`; none may come back.
     expect(
       [...names].filter((name) =>
-        /^(get|list|search|create|update|delete)_/u.test(name),
+        /^(get|list|search|create|update|delete)_(?!read$)/u.test(name),
       ),
     ).toEqual([]);
     for (const retired of [
@@ -292,7 +297,8 @@ describe("MCP protocol smoke", () => {
     // dispatches. The executor is mocked here, so only that capability shape
     // is exercised, not a database-backed operation.
     const entityKernel = {
-      db: null,
+      // SAFETY: a pool-bound stand-in; the runner's after-commit work runs at once.
+      db: fromAny<Database, object>({}),
       actorContext: null,
       usdaClient: null,
       upcLookupClient: null,
@@ -376,7 +382,8 @@ describe("MCP protocol smoke", () => {
 
   const nullKernel = {
     entityKernel: {
-      db: null,
+      // SAFETY: a pool-bound stand-in; the runner's after-commit work runs at once.
+      db: fromAny<Database, object>({}),
       actorContext: null,
       usdaClient: null,
       upcLookupClient: null,

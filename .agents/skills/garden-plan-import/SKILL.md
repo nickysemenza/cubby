@@ -72,7 +72,7 @@ Location (bed/planter/area) ──< Planting >── Plant (cultivar/species; ga
    import that reads as complete.
 3. Resolve Locations. Search existing Locations by name before creating any
    (`entity_read {action:"list", entity:"location", filters:{search:"..."}}` or
-   `search.global`). Create only what's missing: beds `type: "bed"`, pots/
+   `search_read.global`). Create only what's missing: beds `type: "bed"`, pots/
    containers `type: "planter"`, open ground `type: "area"`. Set `type`
    whether or not the Location links a Product (a bought raised bed still
    carries `type: "bed"`) — the Product supplies identity and price, `type`

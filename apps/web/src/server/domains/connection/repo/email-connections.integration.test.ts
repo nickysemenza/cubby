@@ -23,7 +23,7 @@ import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-re
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 // Failure modes: discovery grants operational link authority; inverse discovery
 // misses retained events; subject similarity invents identity; a changed checksum
-// or superseded event applies; foreign members/agents bypass mail.resolve;
+// or superseded event applies; foreign members/agents bypass purchase_import.mail_resolve;
 // a failed outer transaction leaks a link and a retry applies twice.
 import { reconcileDerivedRefreshInputs } from "~/server/testing/background-queue";
 
@@ -362,7 +362,7 @@ describe("fresh retained Email connection recommendations", () => {
         { ...context, actorContext: { ...ctx.actor, runId: run.id } },
         command,
       ),
-    ).rejects.toThrow(/mail.resolve|member/i);
+    ).rejects.toThrow(/purchase_import.mail_resolve|member/i);
     const foreign = await insertWithShortcode(ctx.db, "ledgerParty", {
       name: "Synthetic other member",
       kind: "member",

@@ -34,7 +34,7 @@ and retain their behavior checks; passing the helper's own tests proves only tha
   add maintenance steps (`server/domains/maintenance/service/maintenance-run.ts`). AI
   work fans out as `ai.evaluation` Jobs owned or requested by the Run itself, never a
   child Run, queue chain or ad hoc counter.
-- Suggestion review: `suggestions.list`/`acceptClean` over the family registry
+- Suggestion review: `suggestions_read.list`/`acceptClean` over the family registry
   (`server/generic/assessment/repo/suggestion-families.ts`) and the Suggestions page; apply
   stays the family's `reviewAssessment` handler. `review-families.ts` declares affected
   records, actionability and automatic application. Web list badges and detail sections

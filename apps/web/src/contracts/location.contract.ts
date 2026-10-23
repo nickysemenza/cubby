@@ -24,59 +24,48 @@ const searchOutput = z.object({
 });
 const shortcodeInput = z.object({ shortcode: z.string() });
 
-export const locationContract = defineContract("location", {
-  makeTree: query({
-    mcp: { omit: "client_view" },
-    native: "Audit scope picker",
-    input: z.undefined(),
-    output: infLocationListOut,
-    cache: { profile: "browse" },
-  }),
-  // Bounded Home summary; see expense.monthlySummary.
-  valuationSummary: query({
-    mcp: { omit: "client_view" },
-    readPolicy: "strong",
-    input: z.undefined(),
-    output: locationValuationSummaryOut,
-  }),
-  ensureGlobalUnknown: mutation({
-    mcp: { omit: "client_view", note: "The audit's relocate target" },
-    native: "Audit relocate target",
-    input: z.undefined(),
-    output: infLocation,
-    invalidates: ["location"],
-  }),
-  getByShortcodes: query({
-    mcp: {
-      omit: "kernel_alternative",
-      kernel: ["get", "list"],
+export const locationContract = defineContract(
+  "location",
+  {
+    makeTree: query({
+      native: "Audit scope picker",
+      input: z.undefined(),
+      output: infLocationListOut,
+      cache: { profile: "browse" },
+    }),
+    // Bounded Home summary; see expense.monthlySummary.
+    valuationSummary: query({
+      readPolicy: "strong",
+      input: z.undefined(),
+      output: locationValuationSummaryOut,
+    }),
+    ensureGlobalUnknown: mutation({
+      note: "The audit's relocate target",
+      native: "Audit relocate target",
+      input: z.undefined(),
+      output: infLocation,
+      invalidates: ["location"],
+    }),
+    getByShortcodes: query({
       note: "entity_read.get per id, or entity_read.list with an ids filter on locations",
-    },
-    input: locationShortcodesInput,
-    output: locationsWithParentNameOut,
-  }),
-  search: query({
-    mcp: {
-      omit: "kernel_alternative",
-      kernel: ["search"],
+      input: locationShortcodesInput,
+      output: locationsWithParentNameOut,
+    }),
+    search: query({
       note: "entity_read.search on locations",
-    },
-    input: rosterInput,
-    output: searchOutput,
-  }),
-  subtree: query({
-    mcp: {
-      omit: "kernel_alternative",
-      kernel: ["list"],
+      input: rosterInput,
+      output: searchOutput,
+    }),
+    subtree: query({
       note: "entity_read.list on locations filtered by parent",
-    },
-    input: shortcodeInput,
-    output: infLocationListOut,
-  }),
-  inventoryBreakdown: query({
-    mcp: { omit: "client_view" },
-    input: shortcodeInput,
-    output: locationInventoryBreakdownOut.nullable(),
-    cache: { tags: [["location", "inventoryBreakdown"], ["inventory"]] },
-  }),
-});
+      input: shortcodeInput,
+      output: infLocationListOut,
+    }),
+    inventoryBreakdown: query({
+      input: shortcodeInput,
+      output: locationInventoryBreakdownOut.nullable(),
+      cache: { tags: [["location", "inventoryBreakdown"], ["inventory"]] },
+    }),
+  },
+  { exposure: "view" },
+);

@@ -25,6 +25,20 @@ export const collectionSubject = z.discriminatedUnion("subject", [
 ]);
 export type CollectionSubject = z.infer<typeof collectionSubject>;
 
+const collectionSubjectInput = <Fields extends z.ZodRawShape>(fields: Fields) =>
+  z.discriminatedUnion("subject", [
+    z.object({
+      subject: z.literal("product"),
+      id: productShortcode,
+      ...fields,
+    }),
+    z.object({
+      subject: z.literal("location"),
+      id: locationShortcode,
+      ...fields,
+    }),
+  ]);
+
 export const collectionSummaryOut = z.object({
   slug: collectionSlug,
   productCount: z.number().int().nonnegative(),
@@ -231,9 +245,10 @@ export const collectionMatrixOut = z.object({
 });
 export type CollectionMatrixOut = z.infer<typeof collectionMatrixOut>;
 
-export const collectionTagSetInput = collectionSubject.and(
-  z.object({ collection: collectionSlug, assigned: z.boolean() }),
-);
+export const collectionTagSetInput = collectionSubjectInput({
+  collection: collectionSlug,
+  assigned: z.boolean(),
+});
 export type CollectionTagSetInput = z.infer<typeof collectionTagSetInput>;
 
 export const collectionTagSetOut = z.object({
@@ -241,9 +256,9 @@ export const collectionTagSetOut = z.object({
   assigned: z.boolean(),
 });
 
-export const collectionCreateInput = collectionSubject.and(
-  z.object({ collection: collectionSlug }),
-);
+export const collectionCreateInput = collectionSubjectInput({
+  collection: collectionSlug,
+});
 
 export const smartCollectionSummary = z.object({
   key: smartCollectionKey,

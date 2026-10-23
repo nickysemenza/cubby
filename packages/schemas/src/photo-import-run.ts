@@ -505,7 +505,7 @@ export const photoRunImage = z.object({
 export type PhotoRunImage = z.infer<typeof photoRunImage>;
 
 /**
- * The agent's per-photo summary in `imports_read.photo_context`. Every field is
+ * The agent's per-photo summary in `photo_run.run_context`. Every field is
  * carried in each later model call, so timings and cutout state are left out
  * and image URLs are opt-in.
  */

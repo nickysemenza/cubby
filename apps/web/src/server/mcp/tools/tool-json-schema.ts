@@ -60,6 +60,9 @@ export function safeToJsonSchema(
       io,
       unrepresentable: "any",
       override: ({ jsonSchema }) => {
+        // `format: date` is not consistently accepted by MCP client validators;
+        // retain the date-only string shape without advertising the format.
+        if (jsonSchema.format === "date") delete jsonSchema.format;
         // Clients cache `tools/list` across deploys and validate results
         // against it; a closed output object turns every added output field
         // into a failure for every open session. Outputs are published open;

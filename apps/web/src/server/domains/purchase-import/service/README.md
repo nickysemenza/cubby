@@ -59,7 +59,7 @@ pending: nothing here starts Product research.
    mail keeps only its provider identity. Coverage is checkpointed with a
    compare-and-swap in the same transaction as the page's events
    (`gmail/persistence.ts`).
-   A member's **Reclassify** (`gmail/reclassify.ts`, MCP `mail.reclassify`)
+   A member's **Reclassify** (`gmail/reclassify.ts`, MCP `purchase_import.email_reclassify`)
    reruns these stages, including the relevance model, for up to 200 selected
    Emails through the same ingest path in its `reclassify` mode: the result is
    history, it replaces Relevance only without dropping retained content or an
@@ -67,7 +67,7 @@ pending: nothing here starts Product research.
    Each relevance rerun stores a versioned publication-receipt checkpoint in
    `Run.progress` before work, after every reached Email, and with the deferred
    tail on completion. The frozen
-   selection and checksums remain in `Run.input`. `imports_read.run_status`
+   selection and checksums remain in `Run.input`. `run.work_snapshot`
    exposes `mailReclassification` through a narrow member-owned read: selected
    Email codes/checksums, exact receipts, retained notes, and separately labeled
    immutable classification observations. A client timeout does not imply the
@@ -98,7 +98,7 @@ pending: nothing here starts Product research.
    claimed Email's compact read (`readMail`, bounded by `fitMailRead`). Before
    claiming, it settles leading roster Emails a Mail import rule decides
    (`service/mail-import-rule.ts`, revision `MAIL_IMPORT_RULE_REVISION`)
-   through `mail.resolve`'s own writer, with no model call: a shipped,
+   through `purchase_import.mail_resolve`'s own writer, with no model call: a shipped,
    delivered or duplicate confirmation notice (subject phrase; no refund,
    cancellation, return or failure wording, including item cancellations in
    the body) whose complete compact read's printed order identifier
@@ -112,7 +112,7 @@ pending: nothing here starts Product research.
    that proves no Vendor) resolves
    `unrelated` (its resolution observation carries the revision, so its
    `email_relevance` Assessment's producer is that rule). Everything else,
-   an incomplete or paged compact read, and any refusal `mail.resolve`
+   an incomplete or paged compact read, and any refusal `purchase_import.mail_resolve`
    returns, goes to the coordinator. A rule
    link skips the `mail-attribution` judgment: on the owner's own account it
    cannot change what the link writes. An Email handed to the coordinator
@@ -120,14 +120,14 @@ pending: nothing here starts Product research.
    recognized order identifiers and up to five live Purchases holding one),
    so the coordinator skips the Vendor and order-id lookups most Emails
    otherwise start with.
-4. **Writes**: `imports_read.mail` reads a retained Email (`mail-tool.ts`
+4. **Writes**: `purchase_import.mail_read` reads a retained Email (`mail-tool.ts`
    `readMail`); `purchase_import.prepare/commit` (`import-orders.ts`) import an
    order through `writer.ts`, and a mail-sourced commit (message or
    attachment) links and settles the Email as the Purchase's confirmation,
    and a commit that creates Products starts a `scheduled` category
    suggestion sweep for them when AI refresh is active
    (`import-category-sweep.ts`);
-   `mail.resolve` records a lifecycle link, an unresolved gap or an unrelated
+   `purchase_import.mail_resolve` records a lifecycle link, an unresolved gap or an unrelated
    disposal (which deletes the retained copy unless a reviewed decision or
    import uses it; the daily catch-up retries a disposal lost after its
    disposition, and a repeated `unrelated` resolve replays without the

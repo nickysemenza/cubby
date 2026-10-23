@@ -35,7 +35,7 @@ import { gotoAuthenticatedPage } from "./support/e2e-helpers";
 import { expect, test } from "./support/e2e-test";
 
 // Only external model judgment is scripted. Admission, Pi's tools, in-process
-// MCP (imports_read.mail, purchase_import, mail.resolve), the report commands
+// MCP (purchase_import.mail_read, purchase_import, purchase_import.mail_resolve), the report commands
 // and the writer run in the Worker.
 test.use({ workerdProfile: "purchase-agent" });
 

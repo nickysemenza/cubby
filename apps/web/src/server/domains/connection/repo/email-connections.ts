@@ -57,7 +57,7 @@ export async function retrieveEmailConnectionCandidates(
         contradictions: [],
         unknowns: [
           "Confirm this event belongs to the Purchase; matching evidence alone grants no import authority",
-          "Acceptance is restricted to the Email owner; agents use mail.resolve",
+          "Acceptance is restricted to the Email owner; agents use purchase_import.mail_resolve",
         ],
       },
     };

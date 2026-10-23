@@ -86,7 +86,7 @@ const checksum = (digit: string) => digit.repeat(64);
 
 // Caller-driven import: a member (or Pi) prepares and commits from a retained
 // Email through the public writers, Email dispositions are recorded through
-// `mail.resolve`, and nothing launches unattended Product research.
+// `purchase_import.mail_resolve`, and nothing launches unattended Product research.
 describe("caller-driven purchase import", () => {
   const ctx = withTestDb();
 

@@ -59,20 +59,26 @@ import {
   requiredFields,
 } from "./action-schema";
 import {
+  describeToolOutputSchema,
+  withProgressiveDisclosure,
+} from "./progressive-disclosure";
+import {
   declareToolInputJsonSchema,
   declareToolOutputSchema,
 } from "./tool-catalog";
 import { safeToJsonSchema, sdkOutputSchema } from "./tool-json-schema";
 
 /**
- * The MCP SDK adapter: registers every generated tool binding
- * (`server/generated/mcp-tools.gen.ts`) as one `{ action, ...input }` tool.
- * Every action runs through the shared runner (`runStartOperation`): an
- * operation action by id through `dispatchStartOperation`, a kernel verb as an
- * ad hoc runner operation named by its tool action. The runner owns read
- * policy, the per-principal deadline, calendar and freshness bookkeeping; this
- * adapter owns tool grouping, published schemas, output projections, the
- * error shape, and the purchase-agent gate and approval protocol.
+ * The MCP SDK adapter registers every generated tool binding
+ * (`server/generated/mcp-tools.gen.ts`). Capability groups publish compact
+ * `{ action, input }` schemas with a `describe` action; the entity-kernel tools
+ * keep detailed schemas. Every action runs through the shared runner
+ * (`runStartOperation`): an operation action by id through
+ * `dispatchStartOperation`, a kernel verb as an ad hoc runner operation named
+ * by its tool action. The runner owns read policy, the per-principal deadline,
+ * calendar and freshness bookkeeping; this adapter owns tool grouping,
+ * published schemas, output projections, the error shape, and the
+ * purchase-agent gate and approval protocol.
  */
 
 const toolArgumentsSchema = z.looseObject({});
@@ -611,6 +617,7 @@ type CompiledTool = {
   annotations: ToolAnnotations;
   actions: Map<string, CompiledAction>;
   actionJson: Map<string, JsonObject>;
+  compact: boolean;
   inputJsonSchema: JsonObject;
   output: z.ZodType;
 };
@@ -630,6 +637,7 @@ const shortName = (action: CompiledAction) => action.name.split(".")[1]!;
 function toolDescription(
   declaration: string,
   actions: ReadonlyArray<{ action: CompiledAction; json: JsonObject }>,
+  compact = false,
 ): string {
   const lines = actions.map(({ action, json }) => {
     const required = requiredFields(json);
@@ -637,14 +645,50 @@ function toolDescription(
       required.length > 0 ? ` Requires: ${required.join(", ")}.` : "";
     return `- ${shortName(action)}: ${action.spec.description}${suffix}`;
   });
-  return `${declaration}\n\nCall with {action, ...fields}. Actions:\n${lines.join("\n")}`;
+  return compact
+    ? `${declaration}\n\nCall with {action, input}. Use action \`describe\` with input.actions to inspect full action schemas. Actions:\n${lines.join("\n")}`
+    : `${declaration}\n\nCall with {action, ...fields}. Actions:\n${lines.join("\n")}`;
 }
 
 function toolSchema(
   declaration: string,
   actions: ReadonlyArray<{ action: CompiledAction; json: JsonObject }>,
   runExecution = true,
+  compact = false,
 ) {
+  if (compact) {
+    const actionNames = actions.map(({ action }) => shortName(action));
+    return {
+      description: toolDescription(declaration, actions, true),
+      inputJsonSchema: {
+        type: "object",
+        properties: {
+          action: {
+            type: "string",
+            enum: [...actionNames, "describe"],
+            description:
+              "Which action to run, or describe to inspect action schemas.",
+          },
+          input: {
+            type: "object",
+            description:
+              "Action-specific input. For describe, pass { actions: [actionName, ...] }.",
+            properties: {
+              actions: {
+                type: "array",
+                items: { type: "string", enum: actionNames },
+                minItems: 1,
+              },
+            },
+            additionalProperties: true,
+          },
+          ...(runExecution ? { _runExecution: runExecutionJsonSchema } : {}),
+        },
+        required: ["action", "input"],
+        additionalProperties: false,
+      } satisfies JsonObject,
+    };
+  }
   return {
     description: toolDescription(declaration, actions),
     inputJsonSchema: mergeActionInputSchemas(
@@ -695,6 +739,7 @@ export function narrowedToolSchema(
       json: tool.actionJson.get(shortName(action))!,
     })),
     actions.some(agentReadsRunExecution),
+    tool.compact,
   );
   narrowedSchemas.set(key, schema);
   return schema;
@@ -714,6 +759,9 @@ function compileTools(
   const cached = compiledTools.get(bindings);
   if (cached) return cached;
   const tools = Object.entries(bindings).map(([name, tool]): CompiledTool => {
+    const compact = !Object.values(tool.actions).some(
+      (binding) => "kernel" in binding,
+    );
     const actions = new Map(
       Object.entries(tool.actions).map(([action, binding]) => [
         action,
@@ -731,14 +779,20 @@ function compileTools(
     return {
       name,
       declaration,
-      ...toolSchema(declaration, withJson),
+      ...toolSchema(declaration, withJson, true, compact),
       annotations: annotationsFor(tool),
       actions,
+      compact,
       actionJson: new Map(
         withJson.map(({ action, json }) => [shortName(action), json]),
       ),
-      output:
-        outputs.length === 1
+      output: compact
+        ? z.union([
+            describeToolOutputSchema,
+            // SAFETY: generated compact tools always have at least one action output.
+            ...(outputs as [z.ZodType, ...z.ZodType[]]),
+          ])
+        : outputs.length === 1
           ? outputs[0]!
           : // SAFETY: a tool has at least one action; zod needs a tuple type.
             z.union(outputs as [z.ZodType, z.ZodType, ...z.ZodType[]]),
@@ -959,7 +1013,13 @@ function registerCompiledTool(
       }
     });
 
-  const registeredInput = z.looseObject({ action: z.string() });
+  const registeredInput = z.looseObject({
+    action: z.string(),
+    input: z.looseObject({}).optional(),
+  });
+  const registeredCallback = tool.compact
+    ? withProgressiveDisclosure(callback, tool)
+    : callback;
   server.registerTool(
     tool.name,
     {
@@ -972,7 +1032,7 @@ function registerCompiledTool(
     // loose object. This callback accepts that argument bag, parses each
     // action's own schema, preserves ToolExtra, and returns a CallToolResult
     // in every branch.
-    callback as ToolCallback<typeof registeredInput>,
+    registeredCallback as ToolCallback<typeof registeredInput>,
   );
 }
 

@@ -575,8 +575,8 @@ describe("member actionable Work queue", () => {
     ) => {
       const response = await callMcpTool(
         createMcpServer(),
-        "activity",
-        { action: "work_queue", source, query, pageSize: 1 },
+        "activity_read",
+        { action: "for_member", source, query, pageSize: 1 },
         requireActor(
           createTestRequestContext(ctx.db, {
             auth: { userId: actorUserId },
@@ -781,8 +781,8 @@ describe("member actionable Work queue", () => {
     ) => {
       const response = await callMcpTool(
         createMcpServer(),
-        "activity",
-        { action: "work_queue", source, query },
+        "activity_read",
+        { action: "for_member", source, query },
         requireActor(
           createTestRequestContext(ctx.db, {
             auth: { userId: ctx.actor.userId },
@@ -886,9 +886,9 @@ describe("member actionable Work queue", () => {
     ) =>
       callMcpTool(
         createMcpServer(),
-        "activity",
+        "activity_read",
         {
-          action: "work_queue",
+          action: "for_member",
           source: "problem",
           query: account.shortcode,
           pageSize,
@@ -1198,8 +1198,8 @@ describe("member actionable Work queue", () => {
     const read = (actorUserId: typeof otherUserId, fields = {}) =>
       callMcpTool(
         createMcpServer(),
-        "activity",
-        { action: "work_queue", ...fields },
+        "activity_read",
+        { action: "for_member", ...fields },
         requireActor(
           createTestRequestContext(ctx.db, {
             auth: { userId: actorUserId },

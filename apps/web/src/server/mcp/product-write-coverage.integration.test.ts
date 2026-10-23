@@ -195,8 +195,8 @@ describe("coverage diagnostics on product and recipe writes", () => {
 
   it("returns lineCoverage from recipe_import writes", async () => {
     const { call } = await setup();
-    const imported = await call("recipe_import", {
-      action: "from_text",
+    const imported = await call("recipe_insights", {
+      action: "create_from_text",
       name: "Coverage flatbread",
       sections: [
         { ingredients: ["1 cup coverage flour"], instructions: ["Fry."] },

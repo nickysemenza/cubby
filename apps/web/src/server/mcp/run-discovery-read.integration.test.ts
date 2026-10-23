@@ -74,8 +74,8 @@ describe("member discovery readiness through MCP", () => {
       );
       const result = await callMcpTool(
         createMcpServer(),
-        "imports_read",
-        { action: "run_status", runId: discovery.shortcode },
+        "run_read",
+        { action: "work_snapshot", runId: discovery.shortcode },
         mcpContext,
       );
       expect(result.isError).not.toBe(true);
@@ -203,16 +203,11 @@ describe("member discovery readiness through MCP", () => {
       }),
     );
     const read = (
-      action: "run_status" | "run_transcript",
+      action: "work_snapshot" | "transcript",
       runId = discovery.shortcode,
     ) =>
-      callMcpTool(
-        createMcpServer(),
-        "imports_read",
-        { action, runId },
-        mcpContext,
-      );
-    const status = await read("run_status");
+      callMcpTool(createMcpServer(), "run_read", { action, runId }, mcpContext);
+    const status = await read("work_snapshot");
     expect(status.isError).not.toBe(true);
     expect(status.structuredContent).toMatchObject({
       workProgress: {
@@ -259,7 +254,7 @@ describe("member discovery readiness through MCP", () => {
         },
       },
     });
-    expect(await read("run_transcript")).toMatchObject({
+    expect(await read("transcript")).toMatchObject({
       structuredContent: {
         status: "absent",
         messages: [],
@@ -275,8 +270,8 @@ describe("member discovery readiness through MCP", () => {
       .update(run)
       .set({ ledgerPartyId: foreignParty.id })
       .where(eq(run.id, id));
-    expect((await read("run_status")).isError).toBe(true);
-    expect((await read("run_transcript")).isError).toBe(true);
+    expect((await read("work_snapshot")).isError).toBe(true);
+    expect((await read("transcript")).isError).toBe(true);
     await getDb(ctx.db)
       .update(run)
       .set({ ledgerPartyId: party.id })

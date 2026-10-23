@@ -86,7 +86,7 @@ async function decideOnce(
   if (actor.runId)
     throw createAppError(
       "MAIL_REQUEST_REFUSED",
-      "Only a member reviews an Email's Purchase link; agents use mail.resolve.",
+      "Only a member reviews an Email's Purchase link; agents use purchase_import.mail_resolve.",
     );
   const purchaseId = await resolveOrThrow(db, "purchase", input.purchaseId);
   return withTransaction(db, async (tx) => {
@@ -202,7 +202,7 @@ async function decideOnce(
     // The order events this pair rests on: suggested ones and ones already
     // decided for this Purchase. Never every event of the Email: a member's
     // link to an unsuggested Purchase takes the Email's one active event,
-    // and an Email with several events needs mail.resolve to name them.
+    // and an Email with several events needs purchase_import.mail_resolve to name them.
     const events = new Map<string, EventChoice>();
     for (const row of evidence)
       if (
@@ -229,7 +229,7 @@ async function decideOnce(
       if (!only || active.length > 1)
         throw createAppError(
           "MAIL_REQUEST_REFUSED",
-          `This Email has ${active.length === 0 ? "no" : "several"} order events and none matches ${input.purchaseId}; link it with mail.resolve, which names the event.`,
+          `This Email has ${active.length === 0 ? "no" : "several"} order events and none matches ${input.purchaseId}; link it with purchase_import.mail_resolve, which names the event.`,
         );
       events.set(only.id, { proposedBy: "member", kind: "manual" });
     }

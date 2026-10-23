@@ -5,23 +5,26 @@ import { z } from "zod";
 
 import { defineContract, mutation, query } from "~/contracts/define";
 
-export const cookbookContract = defineContract("cookbook", {
-  // The full roster for the recipe cookbook pickers; browsing pages the
-  // kernel list (`resources.cookbook.list`).
-  list: query({
-    input: z.null(),
-    output: cookbookSummariesOut,
-    cache: { tags: [["cookbook"]], profile: "browse" },
-  }),
-  // A retitle also moves every recipe's source label.
-  update: mutation({
-    mcp: {
-      omit: "kernel_alternative",
-      kernel: ["update"],
+export const cookbookContract = defineContract(
+  "cookbook",
+  {
+    // The full roster for the recipe cookbook pickers; browsing pages the
+    // kernel list (`resources.cookbook.list`).
+    list: query({
+      description:
+        "Cookbooks (recipe sources) with the number of recipes from each.",
+      input: z.null(),
+      output: cookbookSummariesOut,
+      cache: { tags: [["cookbook"]], profile: "browse" },
+    }),
+    // A retitle also moves every recipe's source label.
+    update: mutation({
+      exposure: "view",
       note: "entity.update on a cookbook",
-    },
-    input: z.object({ id: cookbookShortcode, data: cookbookUpdateInput }),
-    output: cookbookSummary,
-    invalidates: ["recipeCookbook"],
-  }),
-});
+      input: z.object({ id: cookbookShortcode, data: cookbookUpdateInput }),
+      output: cookbookSummary,
+      invalidates: ["recipeCookbook"],
+    }),
+  },
+  { exposure: "capability", mcpToolGroup: "recipe_insights" },
+);

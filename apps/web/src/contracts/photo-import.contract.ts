@@ -279,338 +279,369 @@ export type PhotoImportFinalizeOutput = z.output<
 
 const [saveGroupsAction] = reviewPhotoGroupsAction.options;
 
-export const photoImportContract = defineContract("photoImport", {
-  startGrouping: mutation({
-    mcp: {
-      omit: "device_protocol",
+export const photoImportContract = defineContract(
+  "photoImport",
+  {
+    startGrouping: mutation({
+      exposure: "internal",
       note: "The uploader starts grouping after finalize",
-    },
-    native: "Start photo grouping after a finalized upload",
-    input: z.object({ runId: runShortcode }),
-    output: z.object({
-      runId: runShortcode,
-      started: z.boolean(),
-      /** Pending photos whose description is still queued or running; grouping waits for them. */
-      waitingForAnalysis: z.number().int().nonnegative(),
+      native: "Start photo grouping after a finalized upload",
+      input: z.object({ runId: runShortcode }),
+      output: z.object({
+        runId: runShortcode,
+        started: z.boolean(),
+        /** Pending photos whose description is still queued or running; grouping waits for them. */
+        waitingForAnalysis: z.number().int().nonnegative(),
+      }),
+      invalidates: ["runOnly"],
     }),
-    invalidates: ["runOnly"],
-  }),
-  review: query({
-    mcp: {
-      omit: "client_view",
-      note: "Agents read proposals through imports_read.photo_proposals",
-    },
-    native: "Review proposed photo groups and processing status in Apple apps",
-    input: z.object({ runId: runShortcode }),
-    output: photoRunReviewResponse,
-    cache: { tags: [["run"]] },
-  }),
-  candidates: query({
-    mcp: {
-      omit: "client_view",
-      note: "Agents read candidates through imports_read.photo_candidates",
-    },
-    native: "Explain possible Product matches for a proposed photo group",
-    input: z.object({
-      runId: runShortcode,
-      groupKey: z.string().min(1).max(200),
+    review: query({
+      exposure: "view",
+      note: "Agents read proposals through photo_run.proposals",
+      native:
+        "Review proposed photo groups and processing status in Apple apps",
+      input: z.object({ runId: runShortcode }),
+      output: photoRunReviewResponse,
+      cache: { tags: [["run"]] },
     }),
-    output: photoProductCandidatesResponse,
-    cache: {
-      tags: [
-        ["run"],
-        ["product"],
-        ["inventory"],
-        ["expense"],
-        ["purchase"],
-        ["image"],
-      ],
-    },
-  }),
-  candidatesBatch: query({
-    mcp: {
-      omit: "client_view",
+    candidates: query({
+      exposure: "view",
+      note: "Agents read candidates through photo_run.product_candidates",
+      native: "Explain possible Product matches for a proposed photo group",
+      input: z.object({
+        runId: runShortcode,
+        groupKey: z.string().min(1).max(200),
+      }),
+      output: photoProductCandidatesResponse,
+      cache: {
+        tags: [
+          ["run"],
+          ["product"],
+          ["inventory"],
+          ["expense"],
+          ["purchase"],
+          ["image"],
+        ],
+      },
+    }),
+    candidatesBatch: query({
+      exposure: "view",
       note: "Agents can read individual photo candidates",
-    },
-    native:
-      "Check all candidates for every group with independent failure results",
-    input: z.object({
-      runId: runShortcode,
-      /** Partition large Runs across Worker invocations; omitted reads every group. */
-      groupKeys: z.array(z.string().min(1).max(200)).max(6).optional(),
+      native:
+        "Check all candidates for every group with independent failure results",
+      input: z.object({
+        runId: runShortcode,
+        /** Partition large Runs across Worker invocations; omitted reads every group. */
+        groupKeys: z.array(z.string().min(1).max(200)).max(6).optional(),
+      }),
+      output: photoRunCandidatesResponse,
+      cache: {
+        tags: [
+          ["run"],
+          ["product"],
+          ["inventory"],
+          ["expense"],
+          ["purchase"],
+          ["image"],
+        ],
+      },
     }),
-    output: photoRunCandidatesResponse,
-    cache: {
-      tags: [
-        ["run"],
-        ["product"],
-        ["inventory"],
-        ["expense"],
-        ["purchase"],
-        ["image"],
-      ],
-    },
-  }),
-  productEvidence: query({
-    mcp: { omit: "client_view" },
-    native: "Read selected Product history independently of candidate ranking",
-    input: z.object({ runId: runShortcode, productId: productShortcode }),
-    output: photoProductEvidence,
-    cache: {
-      tags: [["product"], ["inventory"], ["expense"], ["purchase"], ["image"]],
-    },
-  }),
-  rejectCandidate: mutation({
-    native: "Record Not this one for the photos in a group",
-    input: z.object({
-      runId: runShortcode,
-      groupKey: z.string().min(1).max(200),
-      productId: productShortcode,
-      operationId: z
-        .string()
-        .min(1)
-        .max(200)
-        .describe(
-          "Caller-generated retry key for this candidate rejection, not an entity reference. Reuse it only for an identical decision.",
-        ),
+    productEvidence: query({
+      exposure: "view",
+      native:
+        "Read selected Product history independently of candidate ranking",
+      input: z.object({ runId: runShortcode, productId: productShortcode }),
+      output: photoProductEvidence,
+      cache: {
+        tags: [
+          ["product"],
+          ["inventory"],
+          ["expense"],
+          ["purchase"],
+          ["image"],
+        ],
+      },
     }),
-    output: reviewPhotoGroupsOutput,
-    invalidates: ["runOnly"],
-  }),
-  linkableExpenses: query({
-    mcp: { omit: "client_view" },
-    input: z.object({
-      runId: runShortcode,
-      groupKey: z.string().min(1).max(200),
-      search: z.string().trim().max(200).optional(),
+    rejectCandidate: mutation({
+      description:
+        "Record the member's Not this one verdict for a candidate Product. Suppression follows the group's photos through combine/split; supply a stable operationId.",
+      native: "Record Not this one for the photos in a group",
+      input: z.object({
+        runId: runShortcode,
+        groupKey: z.string().min(1).max(200),
+        productId: productShortcode,
+        operationId: z
+          .string()
+          .min(1)
+          .max(200)
+          .describe(
+            "Caller-generated retry key for this candidate rejection, not an entity reference. Reuse it only for an identical decision.",
+          ),
+      }),
+      output: reviewPhotoGroupsOutput,
+      invalidates: ["runOnly"],
     }),
-    output: z.object({
-      productId: productShortcode,
-      productName: z.string(),
-      lines: z.array(
-        z.object({
-          expenseId: expenseShortcode,
-          name: z.string(),
-          date: z.string().nullable(),
-          cost: z.number().nullable(),
-          productQuantity: z.number().nullable(),
-          purchaseId: z.string().nullable(),
-          purchaseLabel: z.string().nullable(),
-          expectedQuantityDelta: z.number().nullable(),
-          acceptedSourceLines: z.array(photoAcceptedSourceLine),
-        }),
-      ),
-    }),
-    cache: { tags: [["run"]] },
-  }),
-  chooseExisting: mutation({
-    native: "Select an existing Product for a proposed photo group",
-    input: z.object({
-      runId: runShortcode,
-      groupKey: z.string().min(1).max(200),
-      productId: productShortcode,
-    }),
-    output: reviewPhotoGroupsOutput,
-  }),
-  resolveConcern: mutation({
-    native: "Explicitly resolve an agent concern without erasing its history",
-    input: z.object({
-      runId: runShortcode,
-      groupKey: z.string().min(1).max(200),
-      reply: z
-        .string()
-        .trim()
-        .max(500)
-        .regex(/^[^\r\n]*$/, "Use a one-line reply")
-        .optional(),
-      expectedRevision: z.iso.datetime().optional(),
-    }),
-    output: reviewPhotoGroupsOutput,
-    invalidates: ["runOnly"],
-  }),
-  updateDraft: mutation({
-    nativeModels: { input: "json" },
-    native: "Correct proposed product identity before approving photos",
-    input: z.object({
-      runId: runShortcode,
-      groupKey: z.string().min(1).max(200),
-      name: z.string().trim().min(1).max(500),
-      categoryId: productCategoryShortcode.nullable().optional(),
-      brandId: vendorShortcode.nullable().optional(),
-      model: z.string().trim().max(500).nullable().optional(),
-      notes: z.string().trim().max(5000).nullable().optional(),
-    }),
-    output: reviewPhotoGroupsOutput,
-  }),
-  approveGroups: mutation({
-    command: { label: "Approve photo groups", confirmation: null },
-    native: "Approve reviewed photo groups in Apple apps",
-    input: z.object({
-      runId: runShortcode,
-      /** Omit to approve every `proposed` group. */
-      groupKeys: z.array(z.string().min(1).max(200)).min(1).max(200).optional(),
-      expectedRevisions: z
-        .array(
+    linkableExpenses: query({
+      exposure: "view",
+      input: z.object({
+        runId: runShortcode,
+        groupKey: z.string().min(1).max(200),
+        search: z.string().trim().max(200).optional(),
+      }),
+      output: z.object({
+        productId: productShortcode,
+        productName: z.string(),
+        lines: z.array(
           z.object({
-            groupKey: z.string().min(1),
-            updatedAt: z.iso.datetime(),
+            expenseId: expenseShortcode,
+            name: z.string(),
+            date: z.string().nullable(),
+            cost: z.number().nullable(),
+            productQuantity: z.number().nullable(),
+            purchaseId: z.string().nullable(),
+            purchaseLabel: z.string().nullable(),
+            expectedQuantityDelta: z.number().nullable(),
+            acceptedSourceLines: z.array(photoAcceptedSourceLine),
           }),
-        )
-        .max(200)
-        .optional(),
+        ),
+      }),
+      cache: { tags: [["run"]] },
     }),
-    output: reviewPhotoGroupsOutput,
-    invalidates: ["runOnly", "product", "inventory"],
-  }),
-  discardGroup: mutation({
-    command: { label: "Discard photo group", confirmation: null },
-    native: "Discard a proposed photo group in Apple apps",
-    input: z.object({
-      runId: runShortcode,
-      groupKey: z.string().min(1).max(200),
+    chooseExisting: mutation({
+      description: "Point one proposed group at an existing productId.",
+      native: "Select an existing Product for a proposed photo group",
+      input: z.object({
+        runId: runShortcode,
+        groupKey: z.string().min(1).max(200),
+        productId: productShortcode,
+      }),
+      output: reviewPhotoGroupsOutput,
     }),
-    output: reviewPhotoGroupsOutput,
-    invalidates: ["runOnly"],
-  }),
-  saveGroups: mutation({
-    command: { label: "Save photo group edits", confirmation: null },
-    native:
-      "Save photo group review edits (ownership, inventory) in Apple apps",
-    input: saveGroupsAction
-      .omit({ action: true })
-      .extend({ runId: runShortcode }),
-    output: reviewPhotoGroupsOutput,
-    invalidates: ["runOnly"],
-  }),
-  stage: mutation({
-    mcp: { omit: "device_protocol", note: "Native manifest import" },
-    native: "Manifest photo import staging",
-    input: photoImportStageInputSchema,
-    output: photoImportStageOutputSchema,
-  }),
-  commit: mutation({
-    mcp: { omit: "device_protocol", note: "Native manifest import" },
-    native: "Atomic manifest photo import commit",
-    input: photoImportCommitInputSchema,
-    output: photoImportCommitResultSchema,
-  }),
-  createRun: mutation({
-    mcp: { omit: "device_protocol" },
-    native: "Start a photo-inventory import run",
-    input: photoImportCreateRunInputSchema,
-    output: photoImportCreateRunOutputSchema,
-  }),
-  admitBatch: mutation({
-    mcp: { omit: "device_protocol" },
-    native: "Admit another photo upload batch into a photo-inventory run",
-    input: photoImportAdmitBatchInput,
-    output: photoImportAdmitBatchOutput,
-    invalidates: ["runOnly"],
-  }),
-  sealBatch: mutation({
-    command: {
-      label: "Finish with uploaded photos",
-      confirmation: null,
-      success: "Upload batches closed; uploaded photos retained",
-    },
-    mcp: { omit: "device_protocol" },
-    native: "Close a photo upload batch so grouping can start",
-    input: photoImportSealBatchInput,
-    output: photoRunLifecycleOutput,
-    invalidates: ["runOnly"],
-  }),
-  setProcessor: mutation({
-    mcp: { omit: "client_view" },
-    native: "Choose Cubby grouping or a Claude/Codex handoff for a photo run",
-    input: photoRunSetProcessorInput,
-    output: photoRunLifecycle,
-    invalidates: ["runOnly"],
-  }),
-  excludeFailed: mutation({
-    command: {
-      label: "Continue without failed photos",
-      confirmation: null,
-      success: "Failed photos skipped; originals retained",
-    },
-    mcp: { omit: "client_view" },
-    native: "Continue a photo run without photos whose description failed",
-    input: photoRunExcludeFailedInput,
-    output: photoRunLifecycle,
-    invalidates: ["runOnly"],
-  }),
-  registerLiveActivity: mutation({
-    mcp: { omit: "device_protocol" },
-    native: "Register this device's Live Activity push token for a photo run",
-    input: photoRunLiveActivityRegisterInput,
-    output: photoRunLiveActivityRegisterOutput,
-  }),
-  endLiveActivity: mutation({
-    mcp: { omit: "device_protocol" },
-    native: "Stop Live Activity pushes for a photo run on this device",
-    input: photoRunLiveActivityEndInput,
-    output: photoRunLiveActivityEndOutput,
-  }),
-  registerNotification: mutation({
-    mcp: { omit: "device_protocol" },
-    native: "Notify this device when a photo run is ready or needs attention",
-    input: photoRunNotificationRegisterInput,
-    output: photoRunNotificationRegisterOutput,
-  }),
-  endNotification: mutation({
-    mcp: { omit: "device_protocol" },
-    native: "Stop photo run notifications on this device",
-    input: photoRunNotificationEndInput,
-    output: photoRunNotificationEndOutput,
-  }),
-  finalize: mutation({
-    mcp: { omit: "device_protocol" },
-    native: "Finalize bulk-uploaded photos into a photo-inventory run",
-    input: photoImportFinalizeInputSchema,
-    output: photoImportFinalizeOutputSchema,
-  }),
-  reconcile: mutation({
-    mcp: { omit: "device_protocol" },
-    native: "Lock-aware photo import reconciliation",
-    input: photoImportReconcileInputSchema,
-    output: photoImportReconcileOutputSchema,
-  }),
-  // Agent-facing (MCP `imports_read`, `photo_run`): the photo agent's reads
-  // and bounded writers.
-  /** One bounded page of a run's photos in capture order, with owner and notes. */
-  runContext: query({
-    input: z.object({
-      runId: runShortcode,
-      cursor: z.number().int().nonnegative().optional(),
-      limit: z.number().int().min(1).max(PHOTO_CONTEXT_PAGE_MAX).optional(),
-      withImageUrls: z.boolean().optional(),
+    resolveConcern: mutation({
+      description:
+        "Explicitly resolve the agent's original identity concern, preserving it with member/time and an optional reply. Product edits never resolve a concern.",
+      native: "Explicitly resolve an agent concern without erasing its history",
+      input: z.object({
+        runId: runShortcode,
+        groupKey: z.string().min(1).max(200),
+        reply: z
+          .string()
+          .trim()
+          .max(500)
+          .regex(/^[^\r\n]*$/, "Use a one-line reply")
+          .optional(),
+        expectedRevision: z.iso.datetime().optional(),
+      }),
+      output: reviewPhotoGroupsOutput,
+      invalidates: ["runOnly"],
     }),
-    output: z.object({
-      runId: runShortcode,
-      ledgerPartyId: ledgerPartyShortcode,
-      notes: z.string().nullable(),
-      totalImages: z.number().int().nonnegative(),
-      nextCursor: z.number().int().nonnegative().nullable(),
-      images: z.array(photoRunContextImage),
+    updateDraft: mutation({
+      description:
+        "Correct one proposed group's new-Product identity before approval.",
+      nativeModels: { input: "json" },
+      native: "Correct proposed product identity before approving photos",
+      input: z.object({
+        runId: runShortcode,
+        groupKey: z.string().min(1).max(200),
+        name: z.string().trim().min(1).max(500),
+        categoryId: productCategoryShortcode.nullable().optional(),
+        brandId: vendorShortcode.nullable().optional(),
+        model: z.string().trim().max(500).nullable().optional(),
+        notes: z.string().trim().max(5000).nullable().optional(),
+      }),
+      output: reviewPhotoGroupsOutput,
     }),
-  }),
-  productCandidates: query({
-    input: photoProductCandidateSearchInput,
-    output: photoProductCandidatesResponse,
-  }),
-  proposals: query({
-    input: listPhotoGroupProposalsInput,
-    output: photoGroupProposalList,
-  }),
-  /** Upsert proposed groups for human review; writes no Product or Inventory. */
-  proposeGroups: mutation({
-    input: proposePhotoGroupsInput,
-    output: proposePhotoGroupsOutput,
-    invalidates: ["runOnly"],
-  }),
-  /** The bounded writer approval runs; idempotent per (runId, groupKey). */
-  commitGroup: mutation({
-    input: commitPhotoGroupInput,
-    output: commitPhotoGroupOutput,
-    invalidates: ["runOnly", "product", "inventory"],
-  }),
-});
+    approveGroups: mutation({
+      description:
+        "Approve proposed groups (all when groupKeys is omitted), committing each as commit_group would; expectedRevisions refuses groups changed since review. Only on the member's instruction.",
+      command: { label: "Approve photo groups", confirmation: null },
+      native: "Approve reviewed photo groups in Apple apps",
+      input: z.object({
+        runId: runShortcode,
+        /** Omit to approve every `proposed` group. */
+        groupKeys: z
+          .array(z.string().min(1).max(200))
+          .min(1)
+          .max(200)
+          .optional(),
+        expectedRevisions: z
+          .array(
+            z.object({
+              groupKey: z.string().min(1),
+              updatedAt: z.iso.datetime(),
+            }),
+          )
+          .max(200)
+          .optional(),
+      }),
+      output: reviewPhotoGroupsOutput,
+      invalidates: ["runOnly", "product", "inventory"],
+    }),
+    discardGroup: mutation({
+      description: "Discard one proposed group.",
+      command: { label: "Discard photo group", confirmation: null },
+      native: "Discard a proposed photo group in Apple apps",
+      input: z.object({
+        runId: runShortcode,
+        groupKey: z.string().min(1).max(200),
+      }),
+      output: reviewPhotoGroupsOutput,
+      invalidates: ["runOnly"],
+    }),
+    saveGroups: mutation({
+      description: "Save the run page's reviewed group edits in one call.",
+      command: { label: "Save photo group edits", confirmation: null },
+      native:
+        "Save photo group review edits (ownership, inventory) in Apple apps",
+      input: saveGroupsAction
+        .omit({ action: true })
+        .extend({ runId: runShortcode }),
+      output: reviewPhotoGroupsOutput,
+      invalidates: ["runOnly"],
+    }),
+    stage: mutation({
+      exposure: "internal",
+      note: "Native manifest import",
+      native: "Manifest photo import staging",
+      input: photoImportStageInputSchema,
+      output: photoImportStageOutputSchema,
+    }),
+    commit: mutation({
+      exposure: "internal",
+      note: "Native manifest import",
+      native: "Atomic manifest photo import commit",
+      input: photoImportCommitInputSchema,
+      output: photoImportCommitResultSchema,
+    }),
+    createRun: mutation({
+      exposure: "internal",
+      native: "Start a photo-inventory import run",
+      input: photoImportCreateRunInputSchema,
+      output: photoImportCreateRunOutputSchema,
+    }),
+    admitBatch: mutation({
+      exposure: "internal",
+      native: "Admit another photo upload batch into a photo-inventory run",
+      input: photoImportAdmitBatchInput,
+      output: photoImportAdmitBatchOutput,
+      invalidates: ["runOnly"],
+    }),
+    sealBatch: mutation({
+      exposure: "internal",
+      command: {
+        label: "Finish with uploaded photos",
+        confirmation: null,
+        success: "Upload batches closed; uploaded photos retained",
+      },
+      native: "Close a photo upload batch so grouping can start",
+      input: photoImportSealBatchInput,
+      output: photoRunLifecycleOutput,
+      invalidates: ["runOnly"],
+    }),
+    setProcessor: mutation({
+      exposure: "view",
+      native: "Choose Cubby grouping or a Claude/Codex handoff for a photo run",
+      input: photoRunSetProcessorInput,
+      output: photoRunLifecycle,
+      invalidates: ["runOnly"],
+    }),
+    excludeFailed: mutation({
+      exposure: "view",
+      command: {
+        label: "Continue without failed photos",
+        confirmation: null,
+        success: "Failed photos skipped; originals retained",
+      },
+      native: "Continue a photo run without photos whose description failed",
+      input: photoRunExcludeFailedInput,
+      output: photoRunLifecycle,
+      invalidates: ["runOnly"],
+    }),
+    registerLiveActivity: mutation({
+      exposure: "internal",
+      native: "Register this device's Live Activity push token for a photo run",
+      input: photoRunLiveActivityRegisterInput,
+      output: photoRunLiveActivityRegisterOutput,
+    }),
+    endLiveActivity: mutation({
+      exposure: "internal",
+      native: "Stop Live Activity pushes for a photo run on this device",
+      input: photoRunLiveActivityEndInput,
+      output: photoRunLiveActivityEndOutput,
+    }),
+    registerNotification: mutation({
+      exposure: "internal",
+      native: "Notify this device when a photo run is ready or needs attention",
+      input: photoRunNotificationRegisterInput,
+      output: photoRunNotificationRegisterOutput,
+    }),
+    endNotification: mutation({
+      exposure: "internal",
+      native: "Stop photo run notifications on this device",
+      input: photoRunNotificationEndInput,
+      output: photoRunNotificationEndOutput,
+    }),
+    finalize: mutation({
+      exposure: "internal",
+      native: "Finalize bulk-uploaded photos into a photo-inventory run",
+      input: photoImportFinalizeInputSchema,
+      output: photoImportFinalizeOutputSchema,
+    }),
+    reconcile: mutation({
+      exposure: "internal",
+      native: "Lock-aware photo import reconciliation",
+      input: photoImportReconcileInputSchema,
+      output: photoImportReconcileOutputSchema,
+    }),
+    // Agent-facing (MCP `imports_read`, `photo_run`): the photo agent's reads
+    // and bounded writers.
+    /** One bounded page of a run's photos in capture order, with owner and notes. */
+    runContext: query({
+      description:
+        "One photo-inventory run's owner, notes, and one page of its photos in capture order (undated photos last) with their capture time, cloud descriptions and recognized text. Pass `nextCursor` back as `cursor` until it is null; an item photographed across a page boundary continues on the next page. Set `withImageUrls` only if you can open images. Read this before proposing groups.",
+      input: z.object({
+        runId: runShortcode,
+        cursor: z.number().int().nonnegative().optional(),
+        limit: z.number().int().min(1).max(PHOTO_CONTEXT_PAGE_MAX).optional(),
+        withImageUrls: z.boolean().optional(),
+      }),
+      output: z.object({
+        runId: runShortcode,
+        ledgerPartyId: ledgerPartyShortcode,
+        notes: z.string().nullable(),
+        totalImages: z.number().int().nonnegative(),
+        nextCursor: z.number().int().nonnegative().nullable(),
+        images: z.array(photoRunContextImage),
+      }),
+    }),
+    productCandidates: query({
+      description:
+        "Existing Products for a photo group, before proposing a new one: name/variant candidates and whether each has a purchase, own photo, earlier photo import, or inventory. Compare exact size and color yourself; the rank is not proof and human approval is required to attach photos.",
+      input: photoProductCandidateSearchInput,
+      output: photoProductCandidatesResponse,
+    }),
+    proposals: query({
+      description:
+        "A photo-inventory run's proposed, committed and discarded item groups, including any name-collision `conflict` or `lastError` from a failed approval, and the pending images no proposed group mentions yet.",
+      input: listPhotoGroupProposalsInput,
+      output: photoGroupProposalList,
+    }),
+    /** Upsert proposed groups for human review; writes no Product or Inventory. */
+    proposeGroups: mutation({
+      description:
+        "Propose how a run's images group into items, for a human to review and approve on the run page — nothing is written to Products or Inventory until approval, which runs photo_run.commit_group with each group's payload. Each group has commit_group's shape (minus runId) plus optional `evidence` (why these photos are one item, and why this Product). Upserts by groupKey: a still-`proposed` group is replaced; a `committed` or `discarded` groupKey is left untouched and returned in `frozenGroupKeys`. `removeGroupKeys` drops proposed groups. Every image must be a `pending` target of the run and, across the run's proposed groups after this call, appear in exactly one group (attached or skipped) — otherwise the whole call is refused. Returns every proposal plus the pending images no group mentions yet.",
+      input: proposePhotoGroupsInput,
+      output: proposePhotoGroupsOutput,
+      invalidates: ["runOnly"],
+    }),
+    /** The bounded writer approval runs; idempotent per (runId, groupKey). */
+    commitGroup: mutation({
+      description:
+        'The bounded writer approval runs. Product/Inventory writes require explicit review with observedName, stockIntent and a null unresolvedReason; skip-only groups need no review. Prefer photo_run.propose_groups and let the user approve on the run page; call this only when the user explicitly asks to skip review. Turns one group of already-staged images into one Product (an existing Product by id, or a genuinely new one) with each image attached under an `item` or `label` purpose, and optionally one Inventory entry. Idempotent per (runId, groupKey): the exact same call replays the prior result; a changed payload under the same groupKey is refused unless the earlier attempt failed. When a `create` name or alias exactly (case-insensitively) matches a live Product, nothing is written and the call returns `outcome: "conflict"` with the colliding Product ids — never a speculative new Product. Every listed image must be a `pending` target of the run and appear in exactly one of `images` (attach) or `skip` (with a reason); a skip-only group touches no Product. Marks the run `completed` once no `pending` target remains.',
+      input: commitPhotoGroupInput,
+      output: commitPhotoGroupOutput,
+      invalidates: ["runOnly", "product", "inventory"],
+    }),
+  },
+  { exposure: "capability", mcpToolGroup: "photo_run" },
+);

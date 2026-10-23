@@ -514,7 +514,7 @@ async function linkOrderMail(
     event: MailEvent;
     actorUserId: string;
     /**
-     * `agent` for a `mail.resolve` session or Pi, `import` for a commit,
+     * `agent` for a `purchase_import.mail_resolve` session or Pi, `import` for a commit,
      * `heuristic` for a Mail import rule (`rule` names its revision and Run).
      */
     proposedBy: "agent" | "import" | "heuristic";
@@ -1317,7 +1317,7 @@ export async function linkImportedMail(
  * Scoped live Gmail search for a missing original. Spam and Trash are
  * excluded; under Pi's Mail import Run matches are classified exactly as
  * discovery would, while a member's own search retains each new match as an `uncertain`
- * candidate for the caller to settle with `mail.resolve` and leaves an Email
+ * candidate for the caller to settle with `purchase_import.mail_resolve` and leaves an Email
  * with a decided Relevance as it is. Search never advances mailbox coverage.
  */
 export async function searchMail(
@@ -1370,7 +1370,7 @@ export async function searchMail(
       messageIds,
     };
     // Pi's paid classification is billed to its Run; a member without a Run
-    // gets rules only and judges each candidate through `mail.resolve`.
+    // gets rules only and judges each candidate through `purchase_import.mail_resolve`.
     if (actor.runId) ingest.runId = actor.runId;
     else ingest.callerJudges = true;
     await ingestGmailMessages(db, provider, ingest);

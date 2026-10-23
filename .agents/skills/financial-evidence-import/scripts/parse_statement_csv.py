@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Parse legacy exports locally into source_transaction_records.record request batches."""
+"""Parse legacy exports locally into finance.record request batches."""
 
 import argparse
 import csv

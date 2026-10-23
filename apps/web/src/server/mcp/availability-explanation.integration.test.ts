@@ -40,7 +40,7 @@ describe("availability explanations through MCP", () => {
         createMcpServer(),
         "data_exception",
         {
-          action,
+          action: `${action}_exception`,
           entityId: saved.id,
           check: "product_brand",
           ...(action === "set" ? { reason: "unavailable", note } : {}),

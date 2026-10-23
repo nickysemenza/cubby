@@ -300,7 +300,7 @@ describe("Mail import switch and discovery through MCP", () => {
       name: "Synthetic MCP discovery vendor",
     });
     expect(
-      (await call("imports_read", { action: "mail_import" })).structuredContent,
+      (await call("run_read", { action: "mail_import" })).structuredContent,
     ).toMatchObject({ mailboxes: [{ mailboxId, enabled: false }] });
     expect(
       (
@@ -375,7 +375,7 @@ describe("Mail import switch and discovery through MCP", () => {
       plan: { limitUsd: 2, spentUsd: 0, state: "disconnected", until: null },
     });
     expect(
-      (await call("imports_read", { action: "mail_import" })).structuredContent,
+      (await call("run_read", { action: "mail_import" })).structuredContent,
     ).not.toHaveProperty("budget");
     const reset = await call("ai_funding", { action: "reset_credit_refusal" });
     expect(reset.isError).not.toBe(true);

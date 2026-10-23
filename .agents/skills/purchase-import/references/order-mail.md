@@ -2,22 +2,22 @@
 
 ## Recover an original for interactive research
 
-From a full Product read, use `entity_read.connections` to find its Expenses,
+From a full Product read, use `entity_graph_read.connections` to find its Expenses,
 read each Expense's `purchaseId`, then read the Purchase. List Email with
 `filters.purchaseId` and read retained Email for its `mailboxId` and `messageId`;
-pass those handles to `imports_read.mail` for the original. Purchase research
+pass those handles to `purchase_import_read.mail_read` for the original. Purchase research
 notes may already supply the Gmail message handle. An empty
 Purchase-scoped Email list is not proof that the original is missing:
-`imports_read.mail` can read a message Cubby already holds as an Email, at any
+`purchase_import_read.mail_read` can read a message Cubby already holds as an Email, at any
 Relevance, within the connected member's authorized mailbox. A known message
 handle alone cannot read mail Cubby has never recorded. Respect explicitly
 selected source tools rather than silently switching connectors.
 
 If no usable handle remains, search owned mail by the exact order reference
-before generic product searches. `mail.search` retains new matches as uncertain
+before generic product searches. `purchase_import.mail_search` retains new matches as uncertain
 Email candidates; it is a mutation. Read-only research workers hand the query
 back to their writer. Inspect and settle every retained candidate through
-`mail.resolve` under this workflow; a search hit alone proves neither order
+`purchase_import.mail_resolve` under this workflow; a search hit alone proves neither order
 identity nor a new purchase. On resumption, inspect retained candidates from
 interrupted searches before repeating them.
 
@@ -28,7 +28,7 @@ Email, then call `shipments.record` with `source: {kind: "email", emailId:
 <the read's EML-code>, checksum: <the read's checksum>}`, the evidence-backed
 `purchaseId` or null, and structured `shipments` from
 [package extraction](extraction.md#package-observations). Keep the source even
-when no Purchase can be established. Use `mail.resolve` separately for Email
+when no Purchase can be established. Use `purchase_import.mail_resolve` separately for Email
 association and disposition: `linked` when a Purchase is established,
 `unresolved` with the concrete gap otherwise. Recording a package neither
 creates an order nor changes money or inventory. A `linked` disposition may
@@ -94,7 +94,7 @@ requires a fresh timeline read. Inspect the readback's `memberReviewed` flag and
 active timeline rather than recording a corrected scan as another source event.
 
 Existing accepted Emails are not replayed merely because this feature exists.
-Historical replay is separately requested through the existing `mail.import`
+Historical replay is separately requested through the existing `purchase_import.email_import`
 selection and retained-original workflow, using the same shipment packets and
 writer. Old accepted extraction booleans remain literal historical evidence;
 replay needs actual package facts from the original.
@@ -108,7 +108,7 @@ purchases; promotions, transfers and bank statements have different roles.
 The decision model routes mail cheaply and escalates uncertainty to the researcher rather than
 discarding unfamiliar vendors or formats. Read related retained originals and
 use the hosted research workflow's task and evidence references.
-When a stored Relevance looks wrong, `mail.reclassify` reruns routing from
+When a stored Relevance looks wrong, `purchase_import.email_reclassify` reruns routing from
 the original. Routine decisions stay with the decision model; uncertainty may
 use Luna relevance fallback. Unaccepted negatives settle automatically through
 protected original disposal while preserving classification history. Completed
@@ -152,7 +152,7 @@ HTML with `includeHtml` when the text lost a needed detail (an HTML read
 replaces the text); a Run's coordinator is refused HTML and resolves a
 still-incomplete Email `unresolved` instead.
 
-`imports_read.mail` returns the Email's `id` (`EML-` code), checksum and the
+`purchase_import_read.mail_read` returns the Email's `id` (`EML-` code), checksum and the
 complete persisted `purchaseIds` and `purchaseAssociations`, each with
 `purchaseDeleted` and `kind`: `accepted` (an import accepted this Email as the
 Purchase's source) or `linked` (a reviewed lifecycle link). Thread context and

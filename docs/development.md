@@ -66,6 +66,12 @@ Start streams   →  cancellable workflow streams
   (`src/server/domains/<domain>/operations.server.ts` or `operations/*.server.ts`).
   The browser, HTTP API and MCP are adapters over it. Generated browser module
   ownership and command loading live in [browser cache policy](entities.md#browser-cache-policy).
+  Every query and mutation contract member has an `exposure`, inherited from
+  its contract default or set on the member. `capability` members generate MCP
+  actions; `view` and `internal` members remain off MCP. A contract's optional
+  `mcpToolGroup` sets the generated tool name (split into a `_read` tool when
+  the group mixes reads and writes), while each action name comes from its
+  member in snake_case. See [MCP exposure](agents/mcp.md#exposure).
   HTTP `httpWire` projections can narrow unused optional native input fields
   without narrowing browser contracts. The calendar's typed window retains date
   limits and kinds; web queries additionally accept source filters. Use
@@ -557,7 +563,7 @@ CLI operation IDs and HTTP routes come from the generated `native:` catalog.
 MCP tool/action names can differ: `shipments.record` maps to `shipment.record`;
 omit the MCP `action` wrapper from the HTTP/CLI input. Check the catalog before
 choosing a transport. An absent CLI operation may require rebuilding after a
-contract change, or may be MCP-only. For example, Gmail `mail.search` currently
+contract change, or may be MCP-only. For example, Gmail `purchase_import.mail_search` currently
 uses MCP. Neither CLI nor curl exposes operations missing from the HTTP contract.
 
 Use curl when a script needs direct HTTP or a JSON body file. Supply an existing

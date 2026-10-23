@@ -220,7 +220,7 @@ describe("reconcilePurchase", () => {
 });
 
 /**
- * The MCP `expenses.split` arithmetic: `originalCost`/`partsSum`/`delta`. This
+ * The MCP `expenses.split_with_delta` arithmetic: `originalCost`/`partsSum`/`delta`. This
  * pure helper describes any inputs; the priced write path separately requires
  * a zero delta before replacing the original Expense.
  */

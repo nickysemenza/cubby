@@ -16,7 +16,7 @@ import {
  * payload's field order and these break, which is the regression that would
  * orphan every stored `v1:` ref. Whether the function agrees with the refs
  * already in the database is a separate question, answered once by re-deriving
- * live refs through `finance_read.preview_import` and confirming they
+ * live refs through `finance.preview_transaction_import` and confirming they
  * came back `already_recorded` — a check against production data, which is
  * exactly why it does not belong in a committed fixture.
  */

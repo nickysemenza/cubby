@@ -16,7 +16,7 @@ import {
 import { ingredientRef, makeRecipeInput } from "~/server/testing/repo.fixtures";
 import { createTestRequestContext } from "~/server/testing/request-context";
 
-describe("recipe_import.patch_line", () => {
+describe("recipe_insights.patch_line", () => {
   const ctx = withTestDb();
 
   it("changes one line and leaves every other line, section and instruction in place", async () => {
@@ -69,7 +69,7 @@ describe("recipe_import.patch_line", () => {
     const server = createMcpServer();
     const result = await callMcpTool(
       server,
-      "recipe_import",
+      "recipe_insights",
       {
         action: "patch_line",
         recipeId: before.id,
@@ -116,7 +116,7 @@ describe("recipe_import.patch_line", () => {
 
     const repointed = await callMcpTool(
       server,
-      "recipe_import",
+      "recipe_insights",
       {
         action: "patch_line",
         recipeId: before.id,
@@ -154,7 +154,7 @@ describe("recipe_import.patch_line", () => {
     const server = createMcpServer();
     const result = await callMcpTool(
       server,
-      "recipe_import",
+      "recipe_insights",
       {
         action: "patch_line",
         recipeId: created.item.id,

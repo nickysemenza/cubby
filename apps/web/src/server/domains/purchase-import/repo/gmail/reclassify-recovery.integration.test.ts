@@ -104,8 +104,8 @@ describe("durable member reclassification recovery", () => {
       );
       return callMcpTool(
         createMcpServer(),
-        "imports_read",
-        { action: "run_status", runId },
+        "run_read",
+        { action: "work_snapshot", runId },
         mcpContext,
       );
     }

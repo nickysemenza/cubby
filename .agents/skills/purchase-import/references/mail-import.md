@@ -152,6 +152,6 @@ shipping and other non-principal lines have none.
 Input rejection has not prepared an order. For an interrupted write whose
 outcome is unknown, stop for member review with the original operation id and
 diagnostic. The member can read its durable result through
-`imports_read.purchase_status`; this Run's tools do not expose that action.
+`purchase_import_read.operation_status`; this Run's tools do not expose that action.
 Stop for review when the valid contract cannot express the source evidence,
 and retain the exact diagnostic and evidence gap.

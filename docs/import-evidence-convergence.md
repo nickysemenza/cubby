@@ -83,7 +83,7 @@ survives policy revisions and is rechecked inside the application transaction.
 Resuming permits future import processing to book current clean plans; it does
 not immediately apply every existing Pending suggestion. Optional measured-rule
 switches and withheld audit samples do not gate enabled import-clean booking.
-Each application still uses `entity.review_assessment(s)` and records automatic
+Each application still uses `suggestions.review` or `suggestions.review_batch` and records automatic
 authority and its policy revision in Automatic history.
 Changing a booking policy never turns an old transaction-only receipt into
 proof of spending; regenerate and revalidate the unbooked work.
@@ -102,7 +102,7 @@ decisions cannot repair altered bytes; the writer repeats those checks and
 requires roster membership inside its transaction.
 
 Shipment intake shares `recordShipmentEvidence` across structured confirmation
-extraction, linked `mail.resolve` package packets, and standalone
+extraction, linked `purchase_import.mail_resolve` package packets, and standalone
 `shipments.record`. Import and reconciliation resolve a verified retained Email
 to its public EML-code and the accepted Purchase to its PUR-code inside their
 existing transaction. Attachment extraction also revalidates the retained
@@ -214,10 +214,10 @@ all packages in its Purchase were delivered. Shipment writes create no
 Expenses, settlement allocations or inventory receipts.
 
 Email agents route package observations through `shipments.record` and use
-`mail.resolve` for association/disposition; linked resolutions can include
+`purchase_import.mail_resolve` for association/disposition; linked resolutions can include
 per-Purchase packets atomically. The claim prepass settles only confident unrelated mail; related lifecycle
 and duplicate confirmation originals reach the agent for package extraction. Historical retained-Email replay is a
-separately requested `mail.import` operation, not an implicit deployment job.
+separately requested `purchase_import.email_import` operation, not an implicit deployment job.
 
 `finance.converge` also retains its verified financial-mail convergence path.
 The server rechecks posted transaction identity, stable provider references,
@@ -316,7 +316,7 @@ itemized, or source-claimed lines require individual review.
 Both entities use generated list and detail routes in the Financial evidence
 area: `/source-transaction-records` and `/transaction-imports`.
 
-Source transaction records enter through `source_transaction_records.record`.
+Source transaction records enter through `finance.record`.
 Generic create and merge are unavailable. Provider facts, identity, revisions,
 collection membership and source coverage remain intake-owned and immutable
 through generic commands. Generic updates edit only declared household judgment
@@ -350,7 +350,7 @@ delete APIs have no separate replacement surface.
 
 Claude/Codex use the [financial-evidence-import skill](../.agents/skills/financial-evidence-import/SKILL.md)
 to read Monarch MCP or parse Monarch, Mint, Copilot and Apple Card exports
-locally. Cubby accepts normalized observations through `source_transaction_records.record`;
+locally. Cubby accepts normalized observations through `finance.record`;
 the application has no financial CSV parser, upload, mapping, preview/commit,
 native file picker or CSV CLI. USDA parsing and expense report exports are
 independent of financial intake.
@@ -586,7 +586,7 @@ A member-reviewed refund reference from an Email is an
 `EmailFinancialAssociation`. It retains the exact Email checksum, the original
 account label, the reviewed account and decision provenance; it survives
 deletion as history, exposes later account drift, and never writes financial
-allocations. `mail.resolve` can link a lifecycle Email to several existing
+allocations. `purchase_import.mail_resolve` can link a lifecycle Email to several existing
 Purchases through `purchaseIds`.
 
 The contracts above are deployed. Remaining live acceptance work belongs in

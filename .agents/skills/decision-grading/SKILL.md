@@ -28,12 +28,12 @@ existing local-secret loader. Keep calls sequential and show sample sizes first.
   replay calls. Keep private worklists and originals in session memory; files
   contain aggregates and synthetic examples only.
 - Keep originals immutable. Use the grading paths below for measurement;
-  `mail.reclassify` and member review/apply through `review_assessment` change
+  `purchase_import.email_reclassify` and member review/apply through `review_assessment` change
   operational authority rather than record an independent evaluation.
 
 ## Field decisions (Jev vs Clef, prompts, options)
 
-1. Sample `entity_read.suggestion_queue` across pending, applied, rejected
+1. Sample `suggestions_read.list` across pending, applied, rejected
    and superseded statuses with `family: "field"`, filtered by `entity` and
    `where {field: {in: [...]}}`.
    Luna/Sol may grade any sample independently from its captured evidence.
@@ -43,7 +43,7 @@ existing local-secret loader. Keep calls sequential and show sample sizes first.
    their preferred value. Neither determines the model grade. Unknown legacy
    acceptance has no trustworthy automatic/member attribution. Keep generating
    provenance, supersession and acceptance receipts with the sampled outcome.
-2. Replay: for each sampled record, call `entity_read.suggest_fields` with
+2. Replay: for each sampled record, call `ai_read.suggest_fields` with
    `entityId`, `targets: [field]`, `basisMode: "provided"`, captured declared
    basis fields (excluding the target value for set suggestions, preserving
    captured target entries for prune suggestions because they are the candidates), and
@@ -68,13 +68,13 @@ existing local-secret loader. Keep calls sequential and show sample sizes first.
 1. Get member approval before `mail.accuracy_sample` freezes a stratified sample
    (it keeps inclusion probabilities); `imports_read.email_accuracy_blind` reads
    it without predictions.
-2. Grade each item from `imports_read.mail` (or the member's Gmail
+2. Grade each item from `purchase_import_read.mail_read` (or the member's Gmail
    connector), using [Relevance](../../../docs/guide/terminology.md#purchase-research)
    as the label contract. Missing originals are unavailable, never guessed.
    Lock grades before opening predictions. If the member changes the label
    contract after scoring, preserve the original blind grades and report the
    policy-adjusted scores separately.
-3. `imports_read.mail_triage_preview` runs the deployed full classification on one
+3. `purchase_import.mail_read_triage_preview` runs the deployed full classification on one
    Email: Jev/Clef followed by Luna only after uncertainty (optionally pin
    `decisionModel`). It publishes no Email changes; its diagnostic Run records
    model usage. Read `triage` separately from the final classification, and inspect
@@ -93,13 +93,13 @@ existing local-secret loader. Keep calls sequential and show sample sizes first.
 
 ## Mail import outcomes
 
-1. Read the sampled Email's retained original through `imports_read.mail` before
+1. Read the sampled Email's retained original through `purchase_import_read.mail_read` before
    revealing its `mail_import_outcome` Assessment. Lock a session-only judgment:
    imported lines and signed total, linked lifecycle event and order/vendor targets, unrelated with reason,
    or unresolved with the missing evidence. Missing original/attachments or
    unavailable Purchase context stays unavailable; a body-only replay cannot
    establish full-context parity.
-2. Read the Email's Assessment history through `imports_read.mail_outcomes`
+2. Read the Email's Assessment history through `purchase_import.mail_read_outcomes`
    and retain its Assessment handle and producer in session memory. Rule and
    coordinator outcomes are separate evidence; do not attribute a rule result
    to the coordinator model. Agent producer model is null until a causal settling
@@ -135,7 +135,7 @@ existing local-secret loader. Keep calls sequential and show sample sizes first.
    judgments in the session; production MCP cannot grade disposable database
    handles.
 5. After member confirmation, record each served outcome's grade through
-   `entity.review_assessments` with `assessmentId`, unique `operationId`,
+   `suggestions.reviews` with `assessmentId`, unique `operationId`,
    `intent: "history"`, `verdict`, and optional `reason`/`correction`. A correction
    carries the complete outcome, including reason or imported lines/total.
    Session model opinions remain independent grades until the member confirms

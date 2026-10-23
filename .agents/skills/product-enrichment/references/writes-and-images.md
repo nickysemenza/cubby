@@ -26,7 +26,7 @@ enriched as if it stood alone. Confirm through `dataGap:
 product_unpurchased`/`entity_read.resolve` or the server's automatic detector,
 then follow [product identity](product-identity.md): merge a source-proven
 obvious duplicate when its evidence and impact checks pass; propose ambiguous
-pairs with `product_enrichment.propose_match` for human review.
+pairs with `product_enrichment.propose_product_match` for human review.
 
 Record why in ordinary `notes`: preserve existing text and add useful URLs or
 Cubby record shortcodes, relevant excerpts, observation dates and variant context.
@@ -51,7 +51,7 @@ an ASIN's canonical display link is derived. Follow the
 for normalization and preconditions. Full-array replacement is deliberate:
 preserve every intended ID and remove MCP-only timestamps first.
 
-For settled attachments, call `image.attach_files({items})`; every item supplies an
+For settled attachments, call `image.attach_file({items})`; every item supplies an
 `entityId`, one `url` or `uploadId`, its idempotency key, a `source` (`own`,
 `catalog`, or `unknown` — never omitted), and the freshly read
 `expectedImageCount` for a Product gallery. This count includes all attachments,

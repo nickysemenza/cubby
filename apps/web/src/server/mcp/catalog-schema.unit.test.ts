@@ -7,7 +7,10 @@ import { beforeAll, describe, expect, it, vi } from "vitest";
 import { type JSONType, z } from "zod";
 
 import { withErrorReporting } from "~/server/errors/report-error";
-import { MCP_TOOL_BINDINGS } from "~/server/generated/mcp-tools.gen";
+import {
+  MCP_TOOL_BINDINGS,
+  MCP_TOOL_DECLARATIONS,
+} from "~/server/generated/mcp-tools.gen";
 import { encodeAuditCursor } from "~/server/generic/audit-log/repo/audit-log";
 
 import {
@@ -17,10 +20,12 @@ import {
 } from "../testing/mcp-test-utils";
 import { listMcpToolCatalog } from "./server";
 import { mergeActionInputSchemas } from "./tools/action-schema";
+import { describeMcpActions } from "./tools/progressive-disclosure";
 import {
   safeToJsonSchema,
   stripMockFromJsonSchema,
 } from "./tools/tool-json-schema";
+import { compiledMcpTools } from "./tools/tool-registration";
 
 type JsonObject = Extract<JSONType, { [key: string]: JSONType }>;
 
@@ -210,12 +215,14 @@ describe("MCP catalog schemas", () => {
       const validate = validator.compile(tool.inputSchema);
       expect(validate(input)).toBe(true);
     };
-    accepts("activity", {
-      action: "recent",
-      cursor: encodeAuditCursor({
-        createdAt: new Date("2026-07-20T12:00:00Z"),
-        id: "00000000-0000-4000-8000-000000000001",
-      }),
+    accepts("activity_read", {
+      action: "list",
+      input: {
+        cursor: encodeAuditCursor({
+          createdAt: new Date("2026-07-20T12:00:00Z"),
+          id: "00000000-0000-4000-8000-000000000001",
+        }),
+      },
     });
     accepts("entity", {
       action: "update",
@@ -228,8 +235,10 @@ describe("MCP catalog schemas", () => {
       },
     });
     accepts("image", {
-      action: "attach_files",
-      items: [{ entityId: "PRD-4K7M", url: "https://example.com/item.jpg" }],
+      action: "attach_file",
+      input: {
+        items: [{ entityId: "PRD-4K7M", url: "https://example.com/item.jpg" }],
+      },
     });
   });
 
@@ -469,7 +478,7 @@ describe("MCP catalog schemas", () => {
 
   it("publishes concrete, mock-free input and output schemas for the live catalog", async () => {
     const { tools } = catalog;
-    const looseOutputs = new Set(["activity"]);
+    const looseOutputs = new Set(["ai_read", "maintenance_read"]);
     const emptyProperties = <TSchema>(schema: TSchema) => {
       const properties = schemaProperties(schema);
       return properties !== undefined && Object.keys(properties).length === 0;
@@ -510,11 +519,12 @@ describe("MCP catalog schemas", () => {
   // Regression: #2741 added compact-read fields (preheader, images,
   // structured data, paging) and every member session's Email read failed
   // client-side output validation with "must NOT have additional properties".
-  it("accepts a compact Email read in the published imports_read output schema", async () => {
+  it("accepts a compact Email read in the published purchase_import_read output schema", async () => {
     const tool = catalog.tools.find(
-      (candidate) => candidate.name === "imports_read",
+      (candidate) => candidate.name === "purchase_import_read",
     );
-    if (!tool?.outputSchema) throw new Error("Missing imports_read output");
+    if (!tool?.outputSchema)
+      throw new Error("Missing purchase_import_read output");
     const validate = new Ajv({ strict: false, validateFormats: true }).compile(
       tool.outputSchema,
     );
@@ -628,61 +638,9 @@ describe("MCP catalog schemas", () => {
       "entity.commands[].data.sections[].ingredients[].id",
       "entity.commands[].data.sections[].instructions[].id",
       "entity.commands[].data.unitMappings[].id",
-      // meal_recipe update/remove take the meal-recipe row id, and
-      // save_preparation its mealRecipeId: the row has no shortcode.
-      "meal_recipe.id",
-      "meal_recipe.mealRecipeId",
       // Product resolve lines carry retailer/catalog identifiers (ASIN, SKU),
       // not Cubby entity ids.
       "entity_read.lines[].externalIds[].id",
-      "recipe_import.lineId",
-      // Retained shipment source packages are child rows; reassign takes this handle.
-      "shipments.sourcePackageId",
-      // Observation edits address only the retained child returned by timeline.
-      "shipments.observationId",
-      // Stable source/workflow identifiers are opaque import evidence keys,
-      // not Cubby entity UUIDs or public shortcodes.
-      "purchase_import.orders[].stableOrderId",
-      "purchase_import.reviewedPreparation.stableOrderId",
-      "purchase_import.orders[].itemOperationId",
-      "purchase_import.orders[].lineIds",
-      "purchase_import.prepareOperationId",
-      "purchase_import.resolutions[].stableOrderId",
-      "purchase_import.resolutions[].stableLineId",
-      // Email is addressed by its connected mailbox and Gmail message and
-      // attachment ids, so a caller's own Gmail connector can correlate it.
-      "imports_read.mailboxId",
-      "imports_read.messageId",
-      "imports_read.attachmentId",
-      "mail.mailboxId",
-      "mail.messageId",
-      "mail.disposition.via[].mailboxId",
-      "mail.disposition.via[].messageId",
-      "purchase_import.orders[].via[].mailboxId",
-      "purchase_import.orders[].via[].messageId",
-      "run.mailboxId",
-      // Assessment child handles and caller-generated idempotency keys do
-      // not address shortcode entities. Batch review uses the same contract.
-      "entity.assessmentId",
-      "product_enrichment.assessmentId",
-      "entity.operationId",
-      "entity.items[].assessmentId",
-      "entity.items[].operationId",
-      // photo_run.reject_candidate retries by the same caller-generated key.
-      "photo_run.operationId",
-      // suggest_fields' entityId and suggestion_queue's recordIds are
-      // shortcodes of the kind `entity` names, so no single prefix pattern
-      // fits.
-      "entity_read.entityId",
-      "entity_read.recordIds",
-      "spending_classification_write.entityId",
-      // commit_prepared carries the same opaque operation and import keys as
-      // purchase_import.commit; resolve_finding takes the finding row id.
-      "run.operationId",
-      "run.prepareOperationId",
-      "run.resolutions[].stableOrderId",
-      "run.resolutions[].stableLineId",
-      "run.id",
       "entity_read.filters.mailboxId",
       // An Image job joins image-processing submissions by their `IPS-` public
       // id; a submission is a child row, not a shortcode entity.
@@ -690,10 +648,65 @@ describe("MCP catalog schemas", () => {
       // A tree list's children scope names a parent of the listed entity's own
       // kind, so no single prefix pattern fits.
       "entity_read.nesting.parentId",
-      // Reconciliation is addressed by its finding or accepted source order;
-      // none of those rows has a shortcode.
-      "purchase_import.id",
-      "purchase_import.sourceOrderId",
+      // Agent-facing operation inputs preserve opaque row, idempotency and
+      // source-evidence handles; entity references remain self-describing where
+      // the operation has a single entity kind. Polymorphic references use a
+      // separate discriminator, so no one shortcode prefix can describe them.
+      "activity.resolve_run_finding.id",
+      "ai.apply_finance_category_suggestion.entityId",
+      "ai.pause_suggestion_sweep.runId",
+      "ai.resume_suggestion_sweep.runId",
+      "ai_read.suggest_fields.entityId",
+      "field_explanation.explain.entityId",
+      "maintenance.classify_image_provenance.afterId",
+      "maintenance_read.logs.jobId",
+      "nutrition.remove_food.id",
+      "nutrition.remove_recipe.id",
+      "nutrition.save_food.id",
+      "nutrition.save_preparation.mealRecipeId",
+      "nutrition.update_recipe.id",
+      "photo_run.reject_candidate.operationId",
+      "product_enrichment.merge_product_match.assessmentId",
+      "purchase_import.commit.prepareOperationId",
+      "purchase_import.commit.resolutions[].stableOrderId",
+      "purchase_import.commit.resolutions[].stableLineId",
+      "purchase_import.commit_accepted_reconciliation.sourceOrderId",
+      "purchase_import.commit_accepted_reconciliation.reviewedPreparation.stableOrderId",
+      "purchase_import_read.mail_import_outcomes.mailboxId",
+      "purchase_import_read.mail_import_outcomes.messageId",
+      "purchase_import_read.mail_read.mailboxId",
+      "purchase_import_read.mail_read.messageId",
+      "purchase_import_read.mail_read.attachmentId",
+      "purchase_import.mail_resolve.mailboxId",
+      "purchase_import.mail_resolve.messageId",
+      "purchase_import.mail_resolve.disposition.via[].mailboxId",
+      "purchase_import.mail_resolve.disposition.via[].messageId",
+      "purchase_import.mail_search.mailboxId",
+      "purchase_import_read.mail_triage_preview.mailboxId",
+      "purchase_import_read.mail_triage_preview.messageId",
+      "purchase_import.prepare.orders[].stableOrderId",
+      "purchase_import.prepare.orders[].itemOperationId",
+      "purchase_import.prepare.orders[].via[].mailboxId",
+      "purchase_import.prepare.orders[].via[].messageId",
+      "purchase_import.prepare.orders[].lineIds",
+      "purchase_import.prepare_reconciliation.id",
+      "purchase_import.prepare_reconciliation.sourceOrderId",
+      "recipe_insights.patch_line.lineId",
+      "recipe_insights.reparse_line.lineId",
+      "run.commit_prepared.prepareOperationId",
+      "run.commit_prepared.resolutions[].stableOrderId",
+      "run.commit_prepared.resolutions[].stableLineId",
+      "run.commit_prepared.operationId",
+      "run.discover_mail.mailboxId",
+      "run.set_mail_import.mailboxId",
+      "shipments.edit_observation.observationId",
+      "shipments.reassign.sourcePackageId",
+      "suggestions_read.automatic_decisions.recordIds",
+      "suggestions_read.list.recordIds",
+      "suggestions.review.operationId",
+      "suggestions.review.assessmentId",
+      "suggestions.review_batch.items[].operationId",
+      "suggestions.review_batch.items[].assessmentId",
     ]);
     const freeTextIds = new Set([
       "orderId",
@@ -710,54 +723,75 @@ describe("MCP catalog schemas", () => {
       // shortcode) is the native app's own local identifier — never a
       // public Cubby entity reference.
       "installationId",
+      // Usage analytics records the authenticated account and browser client;
+      // neither value addresses a Cubby entity.
+      "userId",
+      "clientId",
     ]);
     const violations: string[] = [];
     // Every published Ledger Party filter must accept `@me` (ADR 0018): the
     // clients offer "Me" on each one, so a shortcode-only schema rejects it.
     const partyFiltersWithoutMe: string[] = [];
     const stillExceptional = new Set<string>();
+    const compiled = compiledMcpTools(MCP_TOOL_BINDINGS, MCP_TOOL_DECLARATIONS);
     for (const tool of catalog.tools) {
-      const schema = parseJsonObject(tool.inputSchema);
-      const definitionsCandidate = schema.$defs ?? schema.definitions;
-      const definitions =
-        definitionsCandidate && isJsonObject(definitionsCandidate)
-          ? definitionsCandidate
-          : {};
-      const fields: IdField[] = [];
-      collectIdFields(schema, "", fields, definitions);
-      for (const { path, node } of fields) {
-        const key = `${tool.name}.${path}`;
-        const leaf = path.split(".").at(-1)?.replaceAll("[]", "") ?? "";
-        if (freeTextIds.has(leaf)) continue;
-        const missingPattern = stringSchemas(node, definitions).some(
-          (stringSchema) => {
-            const pattern = stringSchema.pattern;
-            return (
-              pattern === undefined ||
-              !isString(pattern) ||
-              !PUBLIC_SHORTCODE_PREFIXES.some((prefix) =>
-                pattern.includes(prefix),
-              )
+      const fullInputs = KERNEL_TOOLS.has(tool.name)
+        ? [{ prefix: tool.name, schema: parseJsonObject(tool.inputSchema) }]
+        : (() => {
+            const binding = compiled.find(
+              (candidate) => candidate.name === tool.name,
             );
-          },
-        );
-        // `ids` selects the listed kind's own records, not a person filter.
-        if (
-          path.startsWith("filters.") &&
-          leaf !== "ids" &&
-          stringSchemas(node, definitions).some(
-            ({ pattern }) =>
-              pattern !== undefined &&
-              isString(pattern) &&
-              pattern.includes("LPY-") &&
-              !pattern.includes("@me"),
+            if (!binding)
+              throw new Error(`${tool.name} has no compiled MCP tool`);
+            return describeMcpActions(binding, [
+              ...binding.actions.keys(),
+            ]).actions.map(({ action, inputSchema }) => ({
+              prefix: `${tool.name}.${action}`,
+              schema: parseJsonObject(inputSchema),
+            }));
+          })();
+      for (const { prefix, schema } of fullInputs) {
+        const definitionsCandidate = schema.$defs ?? schema.definitions;
+        const definitions =
+          definitionsCandidate && isJsonObject(definitionsCandidate)
+            ? definitionsCandidate
+            : {};
+        const fields: IdField[] = [];
+        collectIdFields(schema, "", fields, definitions);
+        for (const { path, node } of fields) {
+          const key = `${prefix}.${path}`;
+          const leaf = path.split(".").at(-1)?.replaceAll("[]", "") ?? "";
+          if (freeTextIds.has(leaf)) continue;
+          const missingPattern = stringSchemas(node, definitions).some(
+            (stringSchema) => {
+              const pattern = stringSchema.pattern;
+              return (
+                pattern === undefined ||
+                !isString(pattern) ||
+                !PUBLIC_SHORTCODE_PREFIXES.some((prefix) =>
+                  pattern.includes(prefix),
+                )
+              );
+            },
+          );
+          // `ids` selects the listed kind's own records, not a person filter.
+          if (
+            path.startsWith("filters.") &&
+            leaf !== "ids" &&
+            stringSchemas(node, definitions).some(
+              ({ pattern }) =>
+                pattern !== undefined &&
+                isString(pattern) &&
+                pattern.includes("LPY-") &&
+                !pattern.includes("@me"),
+            )
           )
-        )
-          partyFiltersWithoutMe.push(key);
-        if (uuidExceptions.has(key)) {
-          if (missingPattern) stillExceptional.add(key);
-        } else if (missingPattern) {
-          violations.push(key);
+            partyFiltersWithoutMe.push(key);
+          if (uuidExceptions.has(key)) {
+            if (missingPattern) stillExceptional.add(key);
+          } else if (missingPattern) {
+            violations.push(key);
+          }
         }
       }
     }
@@ -769,25 +803,10 @@ describe("MCP catalog schemas", () => {
   });
 });
 
-/**
- * The purchase agent resends every mounted tool's input schema on every model call, so each
- * published schema has a ceiling. Before consolidation the largest tool was
- * `entity` at 242,971 characters and the largest non-kernel tool
- * `prepare_purchase_import` at 8,616. The two entity-kernel tools carry every
- * kind's schema and get their own ceiling; every other tool stays under the
- * workflow ceiling, about twice that largest pre-consolidation workflow tool.
- * Both rose one step when every scope filter (a relation back-filter, a
- * deep-link id) gained the generated Exclude / Any value keys every other
- * compiled value filter has. The kernel ceiling rose again when the filters
- * over row sets (`model.rows`, #2607) gained the same keys plus Match all,
- * and the workflow ceiling when a project page's embedded scope became the
- * project list's own filter keys (`projectScope`, #2610).
- */
+/** Kernel tools keep full schemas; capability tools publish compact envelopes
+ * and return a selected member schema through progressive disclosure. */
 const KERNEL_SCHEMA_BUDGET = 143_360;
-const WORKFLOW_SCHEMA_BUDGET = 19_456;
-// Retained shipment packages and observations expand purchase-import inputs.
-// Keep this allowance scoped to that tool rather than every workflow.
-const PURCHASE_IMPORT_SCHEMA_BUDGET = 20_480;
+const WORKFLOW_SCHEMA_BUDGET = 2_048;
 const KERNEL_TOOLS = new Set(["entity", "entity_read"]);
 
 function isObject(value: JSONType | undefined): value is JsonObject {
@@ -796,7 +815,11 @@ function isObject(value: JSONType | undefined): value is JsonObject {
 
 /** Every `$ref` target and every `properties` map in a schema tree. */
 function schemaFaults(schema: JsonObject): string[] {
-  const definitions = isObject(schema.definitions) ? schema.definitions : {};
+  const definitions = isObject(schema.$defs)
+    ? schema.$defs
+    : isObject(schema.definitions)
+      ? schema.definitions
+      : {};
   const faults: string[] = [];
   const visit = (node: JSONType, path: string) => {
     if (Array.isArray(node)) {
@@ -806,7 +829,7 @@ function schemaFaults(schema: JsonObject): string[] {
     if (!isObject(node)) return;
     const ref = z.string().safeParse(node.$ref).data;
     if (ref) {
-      const name = ref.replace("#/definitions/", "");
+      const name = ref.replace(/^#\/(?:definitions|\$defs)\//u, "");
       if (!definitions[name]) faults.push(`${path}: dangling ${ref}`);
     }
     if (isObject(node.properties) && "$ref" in node.properties)
@@ -819,7 +842,7 @@ function schemaFaults(schema: JsonObject): string[] {
 }
 
 describe("MCP catalog publication without services", () => {
-  it("keeps every tool read-only-homogeneous", async () => {
+  it("marks a tool read-only only when every generated action is a query", async () => {
     const { tools } = catalog;
     for (const tool of tools) {
       const binding = Object.entries(MCP_TOOL_BINDINGS).find(
@@ -829,10 +852,9 @@ describe("MCP catalog publication without services", () => {
       const kinds = new Set(
         Object.values(binding.actions).map((action) => action.kind),
       );
-      expect([tool.name, [...kinds]]).toEqual([
-        tool.name,
-        [tool.annotations?.readOnlyHint ? "query" : "mutation"],
-      ]);
+      expect(tool.annotations?.readOnlyHint).toBe(
+        [...kinds].every((kind) => kind === "query"),
+      );
     }
   });
 
@@ -849,14 +871,14 @@ describe("MCP catalog publication without services", () => {
         false,
       ]);
       expect("oneOf" in schema || "allOf" in schema).toBe(false);
-      expect(schema.required).toEqual(["action"]);
+      expect(schema.required).toEqual(
+        KERNEL_TOOLS.has(tool.name) ? ["action"] : ["action", "input"],
+      );
       expect(schemaFaults(schema)).toEqual([]);
       const size = JSON.stringify(schema).length;
       const budget = KERNEL_TOOLS.has(tool.name)
         ? KERNEL_SCHEMA_BUDGET
-        : tool.name === "purchase_import"
-          ? PURCHASE_IMPORT_SCHEMA_BUDGET
-          : WORKFLOW_SCHEMA_BUDGET;
+        : WORKFLOW_SCHEMA_BUDGET;
       if (size > budget) oversized.push(`${tool.name}: ${size} > ${budget}`);
     }
     expect(oversized).toEqual([]);

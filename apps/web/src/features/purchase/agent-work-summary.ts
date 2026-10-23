@@ -51,12 +51,12 @@ const WORK_LABELS = {
 
 function toolWorkKind(action: string): WorkKind | null {
   switch (action) {
-    case "imports_read.photo_context":
+    case "photo_run.run_context":
       return "photo-context";
-    case "imports_read.image_processing":
+    case "image.status":
       return "photo-analysis";
     case "entity_read.resolve":
-    case "imports_read.photo_candidates":
+    case "photo_run.product_candidates":
       return "catalog";
     case "entity_read.get":
     case "entity_read.list":
@@ -64,7 +64,7 @@ function toolWorkKind(action: string): WorkKind | null {
       return "records";
     case "photo_run.propose_groups":
       return "photo-groups";
-    case "product_enrichment.propose_match":
+    case "product_enrichment.propose_product_match":
       return "product-match";
     case "purchase_import.prepare":
       return "purchase-review";

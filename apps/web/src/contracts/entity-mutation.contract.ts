@@ -8,28 +8,25 @@ import type {
   EntityBrowserMutationResult,
 } from "~/server/entity-kernel/contracts";
 
-export const entityMutationContract = defineContract("entity", {
-  mutate: mutation({
-    mcp: {
-      omit: "kernel_alternative",
-      kernel: ["create", "update", "delete", "commands"],
+export const entityMutationContract = defineContract(
+  "entity",
+  {
+    mutate: mutation({
       note: "The browser write path; agents use the entity tool's create, update, delete, and commands actions",
-    },
-    // Type-only carriers: the per-entity runtime schemas live in the entity
-    // kernel and are applied by the server handler; HTTP carries the loose
-    // kernel wire.
-    input: z.custom<EntityBrowserMutationInput>(),
-    output: z.custom<EntityBrowserMutationResult>(),
-    nativeModels: { input: "json", output: "json" },
-    httpWire: kernelRecordWire,
-    native: "Native create, update, delete and image attach/order",
-    observability: {
-      entities: [
-        ...entityMutationOutputEntities,
-        "ledgerParty",
-        "ledgerTransfer",
-        "image",
-      ],
-    },
-  }),
-});
+      input: z.custom<EntityBrowserMutationInput>(),
+      output: z.custom<EntityBrowserMutationResult>(),
+      nativeModels: { input: "json", output: "json" },
+      httpWire: kernelRecordWire,
+      native: "Native create, update, delete and image attach/order",
+      observability: {
+        entities: [
+          ...entityMutationOutputEntities,
+          "ledgerParty",
+          "ledgerTransfer",
+          "image",
+        ],
+      },
+    }),
+  },
+  { exposure: "view" },
+);

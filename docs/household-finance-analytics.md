@@ -9,7 +9,7 @@ Net worth stays gated on amending the trusted-household tenet.
 
 ## Category breakdown
 
-`expense.analyze` (MCP `spending_classification_read.analyze`; it exceeds
+`expense.analyze` (MCP `expenses.analyze`; it exceeds
 `project_overview`'s schema budget) accepts `spendingCategoryRollup: "root"` on
 a Spending Category row or column. Buckets are root categories plus two
 unresolved buckets that stay distinct so totals reconcile:
@@ -48,7 +48,7 @@ point of the cash-flow page.
 
 ## Cash flow
 
-`/cash-flow` (Finance) and MCP `finance_read.cash_flow` project household-local
+`/cash-flow` (Finance) and MCP `finance.projection` project household-local
 months over a 6-, 12-, or 24-month horizon. Inputs live in URL state; there are
 no stored presets because the view manifest declares only entity list views.
 
