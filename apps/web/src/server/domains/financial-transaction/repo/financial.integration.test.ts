@@ -790,23 +790,79 @@ describe("financial repositories — critical invariants", () => {
         rowPosition: 1,
       })),
     });
+    const emptyPreparation = await prepareFinancialStatementPreview(ctx.db);
+    // With no ledger candidates, retained file rows cannot affect admission.
+    await previewFinancialTransactionImport(ctx.db, input, {
+      preparation: emptyPreparation,
+    });
+    expect(emptyPreparation.sameFiles.size).toBe(0);
+    const createdAccount = (
+      await createFinancialAccount(
+        ctx.db,
+        account("Fixture Cached Visa", [
+          {
+            source: "monarch",
+            alias: "Fixture Cached Visa",
+            externalAccountId: null,
+          },
+        ]),
+        ctx.actor,
+      )
+    ).output;
+    const proposed = (
+      await previewFinancialTransactionImport(ctx.db, {
+        rows: input.rows.slice(0, 1),
+      })
+    ).rows[0]!.proposed;
+    const { rows: retained } = await getDb(ctx.db).execute<{
+      externalId: string;
+    }>(sql`
+      SELECT r."externalId" FROM "SourceTransactionRecord" r
+      JOIN "TransactionImport" i ON i.id = r."batchId"
+      WHERE i.fingerprint = ${fingerprints[0]} AND r."deletedAt" IS NULL
+    `);
+
+    await createRepoEntity(ctx, "financialTransaction", {
+      accountId: createdAccount.id,
+      kind: proposed.kind,
+      status: proposed.status,
+      amount: proposed.amount,
+      transactionDate: proposed.transactionDate,
+      postedDate: proposed.postedDate,
+      merchant: proposed.merchant,
+      rawDescription: proposed.rawDescription,
+      sourceRefs: [
+        { source: "monarch", externalId: retained[0]!.externalId },
+        { source: "monarch", externalId: "fixture-known-miss" },
+      ],
+    });
     const preparation = await prepareFinancialStatementPreview(ctx.db);
     await previewFinancialTransactionImport(
       ctx.db,
       { rows: input.rows.slice(0, 1) },
       { preparation },
     );
-    expect(preparation.sameFiles.size).toBe(1);
+    const firstScopes = preparation.sameFiles.get(fingerprints[0]!)!;
+    const original = [...firstScopes.values()];
     expect(
-      await previewFinancialTransactionImport(ctx.db, input, { preparation }),
-    ).toEqual(await previewFinancialTransactionImport(ctx.db, input));
-    expect(preparation.sameFiles.size).toBe(2);
-    for (const fingerprint of fingerprints)
-      expect((await preparation.sameFiles.get(fingerprint))?.size).toBe(1);
-    const [first, second] = await Promise.all(
-      fingerprints.map((fingerprint) => preparation.sameFiles.get(fingerprint)),
+      (await Promise.all(original)).map((positions) => positions.size).sort(),
+    ).toEqual([0, 1]);
+    const [cached, concurrent] = await Promise.all([
+      previewFinancialTransactionImport(ctx.db, input, { preparation }),
+      previewFinancialTransactionImport(ctx.db, input, { preparation }),
+    ]);
+    expect(cached).toEqual(
+      await previewFinancialTransactionImport(ctx.db, input),
     );
-    expect([...(first?.keys() ?? [])]).not.toEqual([...(second?.keys() ?? [])]);
+    expect(concurrent).toEqual(cached);
+    expect([...firstScopes.values()]).toEqual(original);
+    expect(preparation.sameFiles.size).toBe(2);
+    const secondScopes = preparation.sameFiles.get(fingerprints[1]!)!;
+    expect(
+      (await Promise.all(secondScopes.values())).every(
+        (positions) => positions.size === 0,
+      ),
+    ).toBe(true);
   });
 
   it("batches distinct purchase previews and filters linked finance data", async () => {
