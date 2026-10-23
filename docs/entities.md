@@ -1887,8 +1887,8 @@ pagination and input equality fingerprints retain their existing meanings.
 
 ## Filters and search
 
-Product expected-quantity range filters share a catalog kit walk and grouped
-Expense ledger before applying their bounds. They use the same signed unit
+Product expected-quantity range and unknown-quantity filters share catalog kit
+walks and grouped Expense ledgers before testing their values. They use the same signed unit
 contributions, live-ancestor rules, weights, and depth cap as the scalar and
 page-sized quantity reads; missing history still yields a known balance of zero.
 

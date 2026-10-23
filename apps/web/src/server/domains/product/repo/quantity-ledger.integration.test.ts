@@ -22,6 +22,7 @@ import { attachProductComponents } from "./product-components";
 import {
   hasUnknownQuantityLinesSql,
   hasUnknownAcquisitionLinesSql,
+  unknownQuantityLinesReadSql,
   loadProductDetailQuantityLedgers,
   loadProductPickerQuantities,
   loadProductQuantityLedgers,
@@ -225,6 +226,25 @@ describe("loadProductQuantityLedgers", () => {
       sql`SELECT "id" FROM "Product" WHERE "id"=${part.entityId} AND NOT ${hasUnknownQuantityLinesSql(product.id)}`,
     );
     expect(excluded.rows).toHaveLength(0);
+    const catalog = await getDb(ctx.db).execute(
+      sql`SELECT ${product.id}, gaps.value,
+        ${hasUnknownQuantityLinesSql(product.id)} AS scalar
+      FROM ${product}
+      JOIN (${unknownQuantityLinesReadSql()}) gaps ON gaps.id = ${product.id}
+      WHERE ${product.deletedAt} IS NULL`,
+    );
+    expect(catalog.rows.length).toBeGreaterThan(1);
+    for (const row of catalog.rows) expect(row.value).toBe(row.scalar);
+    const filter = await buildProductWhere(ctx.db, {
+      unknownQuantityLinesFilter: "has",
+    });
+    const filtered = await getDb(ctx.db)
+      .select({ id: product.id })
+      .from(product)
+      .where(filter);
+    expect(filtered.map((row) => row.id).sort()).toEqual(
+      [kit.entityId, part.entityId].sort(),
+    );
   });
 
   it("keeps non-count units and incomplete history incomparable in SQL and hydrated summaries", async () => {

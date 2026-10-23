@@ -5,7 +5,7 @@ import type {
   ProductQuantitySummaryOut,
 } from "@cubby/schemas/product";
 import type { AnyColumn } from "drizzle-orm";
-import { and, eq, inArray, isNotNull, sql } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, sql, type SQL } from "drizzle-orm";
 import { z } from "zod";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
@@ -73,13 +73,13 @@ const QUANTITY_PROJECTION_FROM = kitProjectionFrom(QUANTITY_OWN_AGGREGATE);
 const PROJECTED_ACQUIRED = unitWeighted(`"acquiredUnits"`);
 const PROJECTED_EXITED = unitWeighted(`"exitedUnits"`);
 const PROJECTED_EXPECTED = `COALESCE(${PROJECTED_ACQUIRED} - ${PROJECTED_EXITED}, 0)::double precision`;
+const PROJECTED_UNKNOWN_QUANTITY = `COALESCE(sum(ko."unknownAcquisitionLines") + sum(ko."unknownExitLines"), 0) > 0`;
 
 /**
- * Every product's expected quantity as `("id", "value")`: catalog filters
- * share one kit walk and own ledger aggregation before testing balances.
- * Agrees row for row with `expectedQuantitySql`.
+ * Catalog quantity filters share one kit walk and own ledger aggregation
+ * before evaluating their measure for each target.
  */
-export const expectedQuantityReadSql = () => sql`${kitAncestorCteSql(
+const quantityMeasureReadSql = (value: SQL) => sql`${kitAncestorCteSql(
   kitSeedForProductIds([], true),
   { groupedSiblingQuantities: true },
 )}, kit_own AS MATERIALIZED (
@@ -88,9 +88,16 @@ export const expectedQuantityReadSql = () => sql`${kitAncestorCteSql(
   WHERE ${sql.raw(QUANTITY_OWN_PREDICATES)}
   GROUP BY kqe."productId"
 )
-SELECT ka.target AS "id", ${sql.raw(PROJECTED_EXPECTED)} AS "value"
+SELECT ka.target AS "id", ${value} AS "value"
 FROM kit_anc ka LEFT JOIN kit_own ko ON ko."productId" = ka."productId"
 GROUP BY ka.target`;
+/** Every Product's expected balance as (id, value), matching expectedQuantitySql. */
+export const expectedQuantityReadSql = () =>
+  quantityMeasureReadSql(sql.raw(PROJECTED_EXPECTED));
+
+/** Catalog quantity gaps reuse the same live ancestry and unknown-line counts. */
+export const unknownQuantityLinesReadSql = () =>
+  quantityMeasureReadSql(sql.raw(PROJECTED_UNKNOWN_QUANTITY));
 const PROJECTED_COMPARABLE_HISTORY = `COALESCE(sum(ko."unknownAcquisitionLines") + sum(ko."unknownExitLines"), 0) = 0 AND COALESCE(${PROJECTED_ACQUIRED} + ${PROJECTED_EXITED}, 0) > 0`;
 const comparableQuantityHistorySql = (productAlias = '"product"') =>
   `(${kitAncestorCteText(kitSeedForProductAlias(productAlias))} SELECT ${PROJECTED_COMPARABLE_HISTORY} ${QUANTITY_PROJECTION_FROM})`;
@@ -187,7 +194,7 @@ export const onHandUnitsFilterSql = (
 /** Quantity gaps include inherited kit lines, matching the displayed ledger. */
 export const hasUnknownQuantityLinesSql = (productId: AnyColumn) =>
   sql`(${kitAncestorCteSql(sql`SELECT ${productId}, ${productId}, 1::numeric, 1::numeric, 0`)}
-    SELECT COALESCE(sum(ko."unknownAcquisitionLines") + sum(ko."unknownExitLines"), 0) > 0
+    SELECT ${sql.raw(PROJECTED_UNKNOWN_QUANTITY)}
     ${sql.raw(QUANTITY_PROJECTION_FROM)})`;
 
 /** An unknown acquisition anywhere in the kit ancestry keeps disposal uncertain. */
