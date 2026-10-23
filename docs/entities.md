@@ -2662,15 +2662,9 @@ Derived-refresh Run telemetry registers projection changes so a quality pass
 cannot invalidate itself while recording its own progress.
 
 An Email's completed-import check matches a live, completed Mail import Run
-owned by the same member with the original in its source list. Bulk filtering,
-score sorting, and bounded hydration join a shared, deduplicated Email quality
-relation before evaluating the check, so ordinary join planning can spill rather
-than rescanning a source set per Email when a hashed SubPlan exceeds memory.
-The relation also carries the Email's linked state, evaluated once for the
-checks that read it. The data-quality registry owns both the relation and the
-predicate context; list reads and Work queue counts use the same binding. Plain lists and counts
-join no quality relation unless quality filtering or score sorting needs it.
-Single-record predicates retain JSON containment. Historical source JSON allows
+owned by the same member with the original in its source list. The Email
+loader evaluates this once per ID page; list filters, score sorting and Work
+queue counts read the published outcome. Source checks retain JSON containment. Historical source JSON allows
 extra fields, excludes missing keys and malformed source arrays, and distinguishes
 an explicit JSON null from an absent key.
 
@@ -2896,17 +2890,16 @@ diagnostic, so recorded identity can earn points without purchase history.
 Core identity, classification, usable evidence, and financial consistency matter
 more than optional imagery and descriptions. Score explanations name deductions
 and applicable caps. Related gaps remain separate from the owner's score and
-must not propagate through recursive relationship chains. The score is unindexed — a correlated `EXISTS`
-per check per row — which is fine at household scale. `related` roll-ups add
-an `EXISTS` against an aliased related table using that entity's own
-bindings; `generic/list/repo/list.ts` binds the resulting filters and sort for every
+must not propagate through recursive relationship chains. Filters and the score
+sort read published rows by primary key. `related` roll-ups add an `EXISTS`
+against an aliased related table that reads its published check states;
+`generic/list/repo/list.ts` binds the resulting filters and sort for every
 scored entity's list in one place.
 
 Durable "not available" exceptions (`data_exception.set`/
 `data_exception.clear`) live in the `DataException` table, keyed by an
 `Entity(id, kind)` FK, for every entity whose declaration sets `exceptions`.
-Enabling it requires fingerprint inputs for every check and an allowed-reason
-list per check (`EXCEPTION_REASONS` in `generic/data-quality/repo/exception-reasons.ts`, exposed on each
+Enabling it requires an allowed-reason list per check (`EXCEPTION_REASONS` in `generic/data-quality/repo/exception-reasons.ts`, exposed on each
 explained check as `exceptionReasons`). An
 exception goes with its entity when the entity is removed or merged away.
 
@@ -2914,9 +2907,9 @@ Recording a finding requires a nonblank explanation of what was checked and
 what was found; include source references where available. Explanation notes render
 Markdown source links in web and Apple controls. Those controls
 never substitute the reason label for that explanation. Existing reason choices,
-evidence fingerprints, audit history and scoring remain shared across entities.
+audit history and scoring remain shared across entities.
 Clearing removes the finding and reopens its gap; it does not block a later
-source-backed finding. Changes to the fingerprint evidence make a finding stale.
+source-backed finding. Evidence changes never reopen a finding.
 
 Reference read surfaces display effective resolution, while editors retain the
 stored assignment baseline. Quality cells retain their semantic null state in

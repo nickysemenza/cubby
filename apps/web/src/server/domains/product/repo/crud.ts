@@ -698,7 +698,7 @@ const productWhere = async (
   });
   return {
     // This predicate also feeds standalone sums and callers with their own FROM.
-    // Only an explicit caller context may reference a statement-local quality alias.
+    // Only an explicit caller context may supply statement-local stock evidence.
     where: productScaffold.where(filters, {
       context,
       readContext: readContext ?? {},

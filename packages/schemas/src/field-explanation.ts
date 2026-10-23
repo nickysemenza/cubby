@@ -60,8 +60,8 @@ export const qualityBreakdown = z.object({
       ),
       /**
        * The recorded exception that `clearException` removes. Waivers never
-       * reopen, so `state` is always `active`; `stale` remains for native wire
-       * compatibility.
+       * reopen; `stale` marks only a recorded waiver on a check that no longer
+       * accepts waivers.
        */
       exception: z
         .object({

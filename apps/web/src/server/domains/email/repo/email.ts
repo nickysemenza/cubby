@@ -55,7 +55,6 @@ import {
   createEntityReader,
   defineRepository,
 } from "~/server/entity-kernel/repo/repository";
-import type { QualityReadContext } from "~/server/generic/data-quality/repo/registry";
 import {
   ListContext,
   listPrepare,
@@ -294,12 +293,10 @@ export async function resolveEmailScope(
   return { kind: "vendorAccount", ...account };
 }
 
-/** A `readContext` binds the bulk quality relation its caller joins. */
 export const buildEmailWhere = (
   filters: EmailFilters,
   context: ListContext = ListContext.empty,
-  readContext?: QualityReadContext,
-) => scaffold.where(filters, { context, readContext });
+) => scaffold.where(filters, { context });
 
 /** Accepted import evidence, else the import Run's own status. */
 const OUTCOME = emailImportOutcome.enum;

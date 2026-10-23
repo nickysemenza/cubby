@@ -21,6 +21,7 @@ import {
   computeChanges,
   logAuditEntry,
 } from "~/server/generic/audit-log/repo/audit-log";
+import { recordChange } from "~/server/generic/changes/repo/change";
 import { exceptionReasonsFor } from "~/server/generic/data-quality/repo/exception-reasons";
 import { liveQualityRow } from "~/server/generic/data-quality/repo/registry";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
@@ -155,6 +156,8 @@ const mutateException = async (
     await tx.execute(
       sql`UPDATE ${table} SET "updatedAt" = ${now} WHERE ${table.id} = ${id}`,
     );
+    // A waiver changes the published check state; enroll the quality family.
+    await recordChange(tx, { kind: "source", categories: [entityKind] });
     const changes = computeChanges(
       { dataExceptions: current },
       { dataExceptions: next },

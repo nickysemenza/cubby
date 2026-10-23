@@ -112,12 +112,13 @@ describe("stored Product quality", () => {
     return { item, kit };
   };
 
-  it("uses two bounded reads for a batch and never repairs publications on a read", async () => {
+  it("uses three bounded reads for a batch and never repairs publications on a read", async () => {
     const { item, kit } = await seed();
     const measured = await countTestDbQueries(() =>
       productChecks.evaluate(ctx.db, [item.entityId, kit.entityId]),
     );
-    expect(measured.queryCount).toBe(2);
+    // Product facts, then pricing aggregates and service-charge averages.
+    expect(measured.queryCount).toBe(3);
     expect(measured.result).toHaveLength(2);
     expect(
       (await countTestDbQueries(() => productChecks.evaluate(ctx.db, [])))

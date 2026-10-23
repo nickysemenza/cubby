@@ -88,26 +88,15 @@ export async function ensureRun(
   // table's per-row suggestions multiplied into Hyperdrive pool starvation.
   const clientKey = input.clientKey;
   if (clientKey) {
-    const existing = await withTransactionDatabase(db, async (tx) => {
-      const [existing] = await getDb(tx)
-        .update(runTable)
-        .set({
-          endedAt: sql`CASE WHEN ${runTable.status} = 'completed' THEN ${now}::timestamptz ELSE ${runTable.endedAt} END`,
-        })
-        .where(eq(runTable.clientKey, clientKey))
-        .returning({
-          id: runTable.id,
-          purpose: runTable.purpose,
-          status: runTable.status,
-        });
-      if (existing?.status === "completed")
-        await recordChange(tx, {
-          kind:
-            existing.purpose === "derived_refresh" ? "projection" : "source",
-          categories: ["run"],
-        });
-      return existing;
-    });
+    // The touch only advances a completed Run's endedAt, which no quality
+    // verdict reads, so it enrolls no refresh.
+    const [existing] = await database
+      .update(runTable)
+      .set({
+        endedAt: sql`CASE WHEN ${runTable.status} = 'completed' THEN ${now}::timestamptz ELSE ${runTable.endedAt} END`,
+      })
+      .where(eq(runTable.clientKey, clientKey))
+      .returning({ id: runTable.id });
     if (existing) return existing.id;
   }
   const trigger = input.trigger ?? "ephemeral";

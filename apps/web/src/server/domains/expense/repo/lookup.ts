@@ -269,7 +269,7 @@ export const buildExpenseWhereClause = async (
       filters: selected,
       readIntent: "count",
     }));
-  // Standalone totals and callers with their own FROM have no quality join.
+  // Standalone totals and callers with their own FROM supply no statement-local evidence.
   return expenseScaffold.where(selected, {
     context,
     readContext: options?.readContext ?? {},

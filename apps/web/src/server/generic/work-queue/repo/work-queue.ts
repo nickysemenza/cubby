@@ -948,7 +948,7 @@ async function queryWorkQueue(
     sql`, `,
   );
   // Keep routed candidates behind a statement-local boundary before eligibility:
-  // search pushdown can turn bulk quality joins into repeated nested-loop work.
+  // search pushdown can turn bulk evidence joins into repeated nested-loop work.
   // Only sort/filter facts enter that population; page facts share their declaration.
   // Limit the correctly filtered/sorted population before assigning JSON order,
   // rather than window-sorting every eligible row and sorting again by position.
