@@ -1,0 +1,49 @@
+apps/web/src/lib/text-whitespace.ts
+  s_a3b6b46af29582::t_277234273a5454 1-12
+apps/web/src/server/db/computed/text-whitespace.ts
+  s_a3b6b46af29582::t_3b0b9d90fb384b 3-9
+apps/web/src/server/domains/product/repo/lookup.ts
+  s_a3b6b46af29582::t_64ab1d9fa30bff 25,299
+apps/web/src/server/domains/vendor/repo/product-brand.ts
+  s_a3b6b46af29582::t_c53aba36175a04 6,45
+apps/web/src/server/generic/data-quality/repo/builders.ts
+  s_a3b6b46af29582::t_7ce950f823151b 3-4,20
+apps/web/src/server/generic/data-quality/repo/checks/location.ts
+  s_a3b6b46af29582::t_ff4e8587f8d913 4,14
+apps/web/src/server/generic/data-quality/repo/checks/product-category.ts
+  s_a3b6b46af29582::t_35f18a0d78e550 3,12
+apps/web/src/server/generic/data-quality/repo/checks/product.ts
+  s_a3b6b46af29582::t_e71825278b7019 4,7,85,95
+apps/web/src/server/generic/data-quality/repo/checks/recipe.ts
+  s_a3b6b46af29582::t_9135b7f72d5233 4,11,86,91
+apps/web/src/server/generic/data-quality/repo/checks/run.ts
+  s_a3b6b46af29582::t_8ab44dd5e6782d 4,51
+apps/web/src/server/generic/data-quality/repo/checks/vendor.ts
+  s_a3b6b46af29582::t_8a73578a6c4b5e 3,12
+apps/web/src/server/generic/data-quality/repo/data-quality.integration.test.ts
+  s_a3b6b46af29582::t_b26ffc2adc1f27 11-12,47,64-92
+apps/web/src/server/generic/entity-graph/repo/entity-graph.ts
+  s_a3b6b46af29582::t_27417baf2eea14 26,284,294,300
+apps/web/src/server/generic/list/repo/field-compiler.ts
+  s_a3b6b46af29582::t_9e04de339bebaf 34,880,904,921
+apps/web/src/server/generic/problems/repo/detectors-label-variants.ts
+  s_a3b6b46af29582::t_69deb052bc0fc5 6,66
+docs/entities.md
+  s_a3b6b46af29582::t_45d6dc9c9312a4 2507-2513
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "b52c1e53f54d2ef0cf7abd2acd569de708c9ad0a",
+  "prompts": {},
+  "sessions": {
+    "s_a3b6b46af29582": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a16ae9-09b9-7271-bc7a-c96487de65fa",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}

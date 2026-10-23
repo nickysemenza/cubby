@@ -1,0 +1,58 @@
+apps/web/src/server/domains/image/repo/image-displayability.ts
+  s_a3b6b46af29582::t_a8f1a3d2426dcc 5,13-14,18-21,49
+apps/web/src/server/domains/product/repo/displayable-image-predicate.integration.test.ts
+  s_a3b6b46af29582::t_b365e5870bcc9b 1-4,41-62,68-69
+apps/web/src/server/generic/data-quality/repo/checks/cookbook.ts
+  s_a3b6b46af29582::t_f7cc8dcac4fa12 7,58
+apps/web/src/server/generic/data-quality/repo/checks/location.ts
+  s_a3b6b46af29582::t_2ae71602cc1f5a 8,66
+apps/web/src/server/generic/data-quality/repo/checks/vendor.ts
+  s_a3b6b46af29582::t_71918891d52265 6,80
+apps/web/src/server/generic/entity-links/repo/related-view.ts
+  s_a3b6b46af29582::t_3311ae58d030a3 32,758,764,768,796
+docs/entities.md
+  s_a3b6b46af29582::t_8b4b316366605b 864-867
+  s_a3b6b46af29582::t_b2e03d3631049d 1954-1957
+packages/schemas/src/image.ts
+  s_a3b6b46af29582::t_09b567830d3fe3 136-145,147-149
+tools/oxlint/cubby/no-raw-enum-literal-in-sql-baseline.json
+  s_a3b6b46af29582::t_fa18fccdfd1c61 18
+apps/web/src/features/calendar/calendar-schedule.tsx
+  s_a3b6b46af29582::t_f413c952cf9e54 19,32
+apps/web/src/lib/task-dates.ts
+  s_a3b6b46af29582::t_c3a9ed4e63e454 4-5,7-11
+apps/web/src/server/domains/calendar/repo/calendar.ts
+  s_a3b6b46af29582::t_a93c4f3d759bf7 35,55,169,272,521
+apps/web/src/server/domains/calendar/service/caldav-ics.ts
+  s_a3b6b46af29582::t_84a66dff523ac8 20,309-311
+apps/web/src/server/domains/project/repo/attention.ts
+  s_a3b6b46af29582::t_dcab97447af05e 48,260-262
+apps/web/src/server/domains/project/repo/lookup.ts
+  s_a3b6b46af29582::t_a3b833d0dfe203 29,148
+apps/web/src/server/domains/task/repo/helpers.ts
+  s_a3b6b46af29582::t_67b1c6a02973b0 14,25-33
+apps/web/src/server/domains/task/repo/summary.ts
+  s_a3b6b46af29582::t_63be5ac1301dab 18,44,47-48
+apps/web/src/server/domains/task/repo/today-briefing.ts
+  s_a3b6b46af29582::t_ea26903a808406 15,71,74-75,84,87
+apps/web/src/server/generic/entity-report/repo/task.ts
+  s_a3b6b46af29582::t_6df3ebdcbba8de 4-5,34
+apps/web/src/server/generic/list/repo/relative-dates.integration.test.ts
+  s_a3b6b46af29582::t_0a5547ef3b22a4 19,48-63
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "f4cd4020ce14783aade5b71581831d91511d3aa8",
+  "prompts": {},
+  "sessions": {
+    "s_a3b6b46af29582": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a16ae9-09b9-7271-bc7a-c96487de65fa",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}

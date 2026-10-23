@@ -1,0 +1,27 @@
+apps/web/src/features/wish/wish-rows.unit.test.ts
+  s_a3b6b46af29582::t_148663820831a4 34
+apps/web/src/server/domains/wish/price-range.ts
+  s_a3b6b46af29582::t_577df7a654ecb3 1-18
+apps/web/src/server/domains/wish/repo.integration.test.ts
+  s_a3b6b46af29582::t_f33d7f72d68da6 1,9,17-18,23-75
+apps/web/src/server/domains/wish/repo.ts
+  s_a3b6b46af29582::t_7ba8c776ec8f54 20-23,38,70-71,89,97,103,105-107,115,126-144,146-148,189,244,252-254,259-260
+docs/entities.md
+  s_a3b6b46af29582::t_10fb25c7a3e91b 1954-1958
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "805457471271bb133567acc7e52b26ad3070ceb5",
+  "prompts": {},
+  "sessions": {
+    "s_a3b6b46af29582": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a16ae9-09b9-7271-bc7a-c96487de65fa",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
