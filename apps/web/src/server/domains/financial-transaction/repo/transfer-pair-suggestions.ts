@@ -92,8 +92,6 @@ import {
   transferPairSeedKeys,
 } from "./transfer-pair-input";
 
-export { transferPairSeedKeys } from "./transfer-pair-input";
-
 const PREVIEW_CHUNK = 500;
 // Amortize Job dispatch between pages; the byte bound still limits publications.
 export const TRANSFER_PAIR_GENERATION_PAGE = 128;

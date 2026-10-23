@@ -10,9 +10,9 @@ import { sql } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { unwrapDb } from "~/server/db/helpers";
+import { transactionImportMembers } from "~/server/domains/transaction-import/repo/transaction-import-membership";
 
 import { CHARGE_STATE, chargeKeyOf, chargeStateOf } from "./statement-charge";
-import { transactionImportMembers } from "./transaction-import-membership";
 
 /** Which unmatched charges a generation pass covers; empty covers the ledger. */
 export type StatementSuggestionScope = {

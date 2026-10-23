@@ -23,7 +23,7 @@ import { listPrepare } from "~/server/generic/list/repo/field-compiler";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 /** Current eligibility under recorded scope; Runs do not retain input membership. */
-export async function runStepInputWhere(
+async function runStepInputWhere(
   db: Database | DrizzleTransaction,
   entity: RunStepInputInspection["entity"],
   token: unknown,

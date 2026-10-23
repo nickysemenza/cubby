@@ -18,7 +18,6 @@ import {
 } from "@cubby/schemas/run-work-progress";
 
 import type { RunDetailStep } from "~/contracts/run-detail.contract";
-import { entityListHref } from "~/entity/entity-list-href";
 import { formatCalendarDay } from "~/lib/date-format";
 import { formatDuration } from "~/lib/format-duration";
 import { formatCount } from "~/lib/number-format";
@@ -36,6 +35,10 @@ type PlanStep = Pick<
   | "meta"
 > &
   Partial<{ [K in "startedAt" | "endedAt"]: RunDetailStep[K] | Date }>;
+type InputListHref = (
+  entity: "financialTransaction" | "sourceTransactionRecord",
+  token: string,
+) => string;
 type PlanTableRow = Extract<ReportBlock, { kind: "table" }>["rows"][number];
 
 function stepState(step: PlanStep | undefined) {
@@ -135,6 +138,7 @@ function inputInspection(
   runId: string | undefined,
   key: string,
   counted: boolean,
+  inputHref: InputListHref | undefined,
 ) {
   if (!runId) return null;
   const list = (
@@ -142,9 +146,7 @@ function inputInspection(
     label: string,
   ) => ({
     label,
-    href: entityListHref(entity, {
-      filters: [{ id: "runStepInput", value: `${runId}:${key}` }],
-    }),
+    href: inputHref ? inputHref(entity, `${runId}:${key}`) : "",
   });
   const current = counted
     ? "Current eligibility under the Run scope and recorded cutoff; original membership was not saved."
@@ -153,33 +155,36 @@ function inputInspection(
     case "transfer_pair_scan":
       return {
         kind: "links",
-        links: counted
-          ? [
-              list("financialTransaction", "Transactions"),
-              list("sourceTransactionRecord", "Source records"),
-            ]
-          : [],
+        links:
+          counted && inputHref
+            ? [
+                list("financialTransaction", "Transactions"),
+                list("sourceTransactionRecord", "Source records"),
+              ]
+            : [],
         note: `Live categorized source charge keys, plus dated observed/pending/posted transactions without a transfer that have a movement kind or category. Date/cutoff apply; accounts are checked later. Source rows include every live observation for selected keys, so row counts differ. ${current}`,
       } satisfies NonNullable<PlanTableRow["presentation"]>[string];
     case "statement_generate":
       return {
         kind: "links",
-        links: counted
-          ? [
-              list(
-                "sourceTransactionRecord",
-                "Source records for eligible charges",
-              ),
-            ]
-          : [],
+        links:
+          counted && inputHref
+            ? [
+                list(
+                  "sourceTransactionRecord",
+                  "Source records for eligible charges",
+                ),
+              ]
+            : [],
         note: `Non-ignored, non-superseded charges needing a match, lifecycle correction or spending booking. Import/date scope selects charge keys; account admission happens later. All live observations for selected keys are shown, so row counts differ. ${current}`,
       } satisfies NonNullable<PlanTableRow["presentation"]>[string];
     case "statement_holds":
       return {
         kind: "links",
-        links: counted
-          ? [list("financialTransaction", "Pending transactions to inspect")]
-          : [],
+        links:
+          counted && inputHref
+            ? [list("financialTransaction", "Pending transactions to inspect")]
+            : [],
         note: `Live pending transactions in selected accounts whose settlement references all have provider-pending evidence. Import/date restrictions do not apply. Inspection does not imply a hold can be voided. ${current}`,
       } satisfies NonNullable<PlanTableRow["presentation"]>[string];
     case "transfer_pair_retire":
@@ -210,6 +215,7 @@ export function runPlanBlocks(
   run: {
     purpose: string;
     runId?: string;
+    inputHref?: InputListHref;
     input: unknown;
     steps: readonly PlanStep[];
   },
@@ -267,6 +273,7 @@ export function runPlanBlocks(
           run.runId,
           declaration.key,
           frozen?.mode === "count",
+          run.inputHref,
         );
         return {
           id: declaration.key,

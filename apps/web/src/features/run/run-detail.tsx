@@ -8,6 +8,7 @@ import { Link } from "@tanstack/react-router";
 import { useCallback, useSyncExternalStore } from "react";
 
 import { ReportBlocks } from "~/entity/entity-detail/report-slot";
+import { entityListHref } from "~/entity/entity-list-href";
 import { job } from "~/integrations/tanstack-query/generated/catalog/job.gen";
 import { runDetail } from "~/integrations/tanstack-query/generated/catalog/runDetail.gen";
 import { formatCount } from "~/lib/number-format";
@@ -234,6 +235,10 @@ export function RunStepsDetail({ record }: { record: RunOut }) {
       <ReportBlocks
         blocks={runPlanBlocks({
           runId: record.id,
+          inputHref: (entity, token) =>
+            entityListHref(entity, {
+              filters: [{ id: "runStepInput", value: token }],
+            }),
           purpose: record.purpose,
           input: steps.data?.input,
           steps: steps.data?.steps ?? [],
