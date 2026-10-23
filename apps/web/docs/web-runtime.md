@@ -90,7 +90,11 @@ is Rolldown `codeSplitting.groups` in `vite.config.ts`; never group `@base-ui`
 or do a naive vendor split — it drags lazy-route code into first paint. Detail
 and list slot fills stay `lazy` in their registries (`detail-slots.tsx`,
 `list-slots.ts`): every generic list route shares one closure, so one static
-slot import ships to every list.
+slot import ships to every list. Keep schema modules on the default graph:
+bounded entry-aware schema grouping read an undefined `schema.shape` during
+Product startup in a paired probe. A successful bundle build does not
+establish client initialization; verify real authenticated navigation when
+changing chunk boundaries.
 Specialist list columns are declared as `route.listColumns` source references.
 The account menu loads after hydration behind its existing SSR placeholder;
 its session-dependent controls do not belong in the Worker render closure.
