@@ -227,17 +227,15 @@ initialization before accepting storage operations. Keep synchronous critical
 sections synchronous; adding an `await` can change interleaving even when the
 queries are equivalent.
 
-The initial adoption migrations preserve existing tables and rows instead of
-resetting objects or replaying unconditional table creation. Check legacy
-schema compatibility before recording adoption, and verify both an empty object
-and populated predecessor storage through real DO tests. Include shapes retained
-from older deployed constructors: removing a column's callers or its old ALTER
-statement does not remove that column from an existing object. Freshness adoption
-preserves the retired `write_sequence` and `refresh_due_at` columns. Later migrations run
-against the recorded history. Drizzle migrations change SQLite tables within
-each instance; Cloudflare configuration migrations separately own DO class
-lifecycle. Preserve class exports, bindings and object names during storage
-refactors.
+The initial adoption is complete for the existing relational stores. One-time
+pre-journal catalog checks and frozen predecessor fixtures have been removed;
+the preserving baseline SQL, journals and snapshots remain. Fresh objects run
+the full migration history, and existing objects run only pending migrations.
+Keep populated-predecessor coverage with future schema changes and preserve
+stored columns until an explicit migration removes them. Drizzle migrations
+change SQLite tables within each instance; Cloudflare configuration migrations
+separately own DO class lifecycle. Preserve class exports, bindings and object
+names during storage refactors.
 
 ### Neon cache diagnostics
 

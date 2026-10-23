@@ -23,10 +23,7 @@ export class DatabaseFreshnessDurableObject
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
     this.store = new DatabaseFreshnessStore(ctx.storage);
-    void ctx.blockConcurrencyWhile(async () => {
-      await this.store.migrate();
-      await ctx.storage.deleteAlarm();
-    });
+    void ctx.blockConcurrencyWhile(() => this.store.migrate());
   }
 
   async fetch(request: Request): Promise<Response> {

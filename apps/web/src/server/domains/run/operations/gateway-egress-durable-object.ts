@@ -75,11 +75,7 @@ export class AiGatewayEgressDurableObject extends DurableObject<Env> {
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
     this.db = drizzle(ctx.storage);
-    void ctx.blockConcurrencyWhile(async () => {
-      await initializeGatewayEgress(ctx.storage);
-      // Postgres Jobs now retain startup, recovery and funding intent.
-      await ctx.storage.deleteAlarm();
-    });
+    void ctx.blockConcurrencyWhile(() => initializeGatewayEgress(ctx.storage));
   }
 
   private creditEpoch() {
