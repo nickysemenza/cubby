@@ -328,7 +328,9 @@ describe("Email data quality", () => {
     if (!message) throw new Error("Synthetic Email missing");
     const emailId = parseEntityId("email", message.id);
     const published = async () =>
-      (await loadDataQualities(ctx.db, "email", [emailId])).get(emailId)!;
+      (await loadDataQualities(ctx.db, "email", [emailId], "stored")).get(
+        emailId,
+      )!;
     expect((await published()).status).toBe("not_assessed");
     expect(
       (

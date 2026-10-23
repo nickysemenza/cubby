@@ -182,9 +182,9 @@ describe("stored Expense quality", () => {
         pageSize: 10,
       });
     const quality = async () =>
-      (await loadDataQualities(ctx.db, "expense", [line.entityId])).get(
-        line.entityId,
-      )!;
+      (
+        await loadDataQualities(ctx.db, "expense", [line.entityId], "stored")
+      ).get(line.entityId)!;
     expect((await quality()).status).toBe("not_assessed");
     expect(
       (await loadQualityBreakdown(ctx.db, "expense", line.output.id)).checks,

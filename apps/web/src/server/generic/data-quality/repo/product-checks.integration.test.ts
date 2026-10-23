@@ -124,9 +124,9 @@ describe("stored Product quality", () => {
         .queryCount,
     ).toBe(0);
     expect(
-      (await loadDataQualities(ctx.db, "product", [item.entityId])).get(
-        item.entityId,
-      )?.status,
+      (
+        await loadDataQualities(ctx.db, "product", [item.entityId], "stored")
+      ).get(item.entityId)?.status,
     ).toBe("not_assessed");
     expect(
       (await loadQualityBreakdown(ctx.db, "product", item.id)).checks
@@ -142,7 +142,7 @@ describe("stored Product quality", () => {
       .where(eq(entityQuality.entityId, item.entityId));
     expect(published?.rulesVersion).toBe(PRODUCT_QUALITY_RULES_VERSION);
     const priceGap = async () =>
-      (await loadDataQualities(ctx.db, "product", [item.entityId]))
+      (await loadDataQualities(ctx.db, "product", [item.entityId], "stored"))
         .get(item.entityId)
         ?.gaps.some((gap) => gap.check === "product_price");
     expect(await priceGap()).toBe(true);
@@ -160,7 +160,7 @@ describe("stored Product quality", () => {
   it("enrolls Expense, kit, attachment and image-integrity inputs and converges through the family", async () => {
     const { item, kit } = await seed();
     const gaps = async () =>
-      (await loadDataQualities(ctx.db, "product", [item.entityId]))
+      (await loadDataQualities(ctx.db, "product", [item.entityId], "stored"))
         .get(item.entityId)!
         .gaps.map((gap) => gap.check);
     const assertEnrolled = async <T>(write: () => Promise<T>) => {
@@ -319,7 +319,7 @@ describe("stored Product quality", () => {
     );
     await refresh();
     const quality = (
-      await loadDataQualities(ctx.db, "product", [item.entityId])
+      await loadDataQualities(ctx.db, "product", [item.entityId], "stored")
     ).get(item.entityId)!;
     expect(quality.exceptions).toContainEqual(
       expect.objectContaining({ check: "product_price", state: "active" }),

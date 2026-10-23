@@ -6,6 +6,7 @@ import { describe, expect, it } from "vitest";
 import { getDb } from "~/server/db/helpers";
 import { inventoryEntry, location } from "~/server/db/schema";
 import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
+import { publishQualityFixtures } from "~/server/testing/quality.fixtures";
 import {
   createInventoryFixture,
   createLocationFixture,
@@ -134,6 +135,8 @@ describe("inventory list declared filters", () => {
 
   it("narrows by each declared filter and never returns an entry at a deleted Location", async () => {
     const w = await world();
+    // locationRole reads the published inventory_unknown_location check.
+    await publishQualityFixtures(ctx.db, "inventory");
     const cases: Array<[Filters, Array<{ id: string }>]> = [
       [{ productNameFilter: "parity drill" }, [w.drillOnRack, w.drillInGarage]],
       [{ locationNameFilter: "parity rack" }, [w.drillOnRack]],

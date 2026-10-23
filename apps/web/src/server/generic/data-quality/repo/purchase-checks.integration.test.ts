@@ -144,9 +144,9 @@ describe("stored Purchase quality", () => {
       }),
     );
     const quality = async () =>
-      (await loadDataQualities(ctx.db, "purchase", [order.entityId])).get(
-        order.entityId,
-      )!;
+      (
+        await loadDataQualities(ctx.db, "purchase", [order.entityId], "stored")
+      ).get(order.entityId)!;
     const list = () =>
       purchaseList(ctx.db, { dataGap: ["paperwork_mismatch"] }, [], {
         pageIndex: 0,

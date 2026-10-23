@@ -372,9 +372,9 @@ describe("Shipment evidence quality", () => {
     );
     const parcel = await seed([shipped, delivered]);
     const stored = async () =>
-      (await loadDataQualities(ctx.db, "shipment", [parcel.row.id])).get(
-        parcel.row.id,
-      )!;
+      (
+        await loadDataQualities(ctx.db, "shipment", [parcel.row.id], "stored")
+      ).get(parcel.row.id)!;
     expect((await stored()).status).toBe("not_assessed");
     expect(
       (await loadQualityBreakdown(ctx.db, "shipment", parcel.code)).score,
@@ -513,9 +513,9 @@ describe("Shipment evidence quality", () => {
     expect(await unwrapDb(ctx.db).select().from(entityQuality)).toEqual([]);
     await refresh();
     expect(
-      (await loadDataQualities(ctx.db, "shipment", [parcel.row.id])).get(
-        parcel.row.id,
-      )?.score,
+      (
+        await loadDataQualities(ctx.db, "shipment", [parcel.row.id], "stored")
+      ).get(parcel.row.id)?.score,
     ).toBe(80);
   });
 });
