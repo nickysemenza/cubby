@@ -68,14 +68,18 @@ public struct CompanionImageJobReport: Sendable, Equatable {
     }
 }
 
-/// Whether an incoming command should be executed — `false` when the web has paused this
-/// connection (`ImageProcessingServerMessageHelloAck.remotePaused`), same as participation-off.
-/// A tiny pure decision, kept apart from the actor so it is directly unit-testable without a live
-/// socket.
+/// Whether a pulled command should be executed — `false` when the web has paused this device
+/// (`PullCompanionImageProcessingOutput.remotePaused`), same as participation-off. A tiny pure
+/// decision, kept apart from the actor so it is directly unit-testable.
 enum CompanionWorkAcceptance {
     static func acceptsCommand(remotePaused: Bool) -> Bool { !remotePaused }
 }
 
+/// The foreground companion. It subscribes to the `imageProcessing.work` doorbell and, when the
+/// subscription opens and on every ring, drains claimable work through `imageProcessing.pull`,
+/// executing up to `maximumConcurrentCommands` at once and finishing each with
+/// `imageProcessing.complete`. A ring carries no state; a missed one costs latency only, because
+/// every reconnect drains again.
 public actor CompanionImageWorker {
     public typealias FailureObserver = @Sendable (any Error) -> Void
     public typealias ActivityObserver = @Sendable (CompanionImageWorkerActivity) -> Void
@@ -84,6 +88,7 @@ public actor CompanionImageWorker {
     private let baseURL: URL
     private let credentials: CredentialProvider
     private let session: URLSession
+    private let transport: any CompanionImageBackgroundTransport
     private let execute: @Sendable (ImageProcessingCommand) async throws -> ImageProcessingResult
     private let outbox: CompanionResultOutbox<ImageProcessingResult>
     /// Durably records a finished command's result; tests hold this boundary open.
@@ -95,31 +100,29 @@ public actor CompanionImageWorker {
     private let deviceName: String
     private var foreground: Bool
     /// The master "Automatic work on this device" switch. `false` keeps `start()`/`stop()` working
-    /// normally but never opens a socket (`platformAllowsConnection`); flipping it off mid-session
-    /// closes the socket via `reconcileConnection()`, and flipping it back on reconnects.
+    /// normally but never subscribes (`platformAllowsConnection`); flipping it off mid-session
+    /// closes the subscription via `reconcileConnection()`, and flipping it back on reconnects.
     private var isParticipating: Bool
-    /// Set from `.helloAck(remotePaused)` on the current connection: the server paused this device
-    /// from the web. Reset on every new connection attempt.
+    /// From the latest pull: the server paused this device from the web. Reset on every new
+    /// subscription.
     private var remotePaused = false
     private var shouldRun = false
     private var connectionGeneration = 0
     private var connectionTask: Task<Void, Never>?
     private var socket: URLSessionWebSocketTask?
-    /// The socket whose hello has been sent; `drainState()` is connected only while it is `socket`.
-    private var greetedSocket: URLSessionWebSocketTask?
+    /// The subscription that has opened; `drainState()` is connected only while it is `socket`.
+    private var openedSocket: URLSessionWebSocketTask?
     private var backgroundTask: Task<Bool, Never>?
     private let backgroundRunner: CompanionImageBackgroundRunner
-    /// The server dispatches every queued job at once; executing each inline in the receive loop
-    /// ran a photo run's describe and cutout jobs strictly one after another. Commands now run
-    /// concurrently up to this bound, and each command's own deadline still applies while queued.
+    /// Commands run concurrently up to this bound; each command's own deadline still applies.
     static let maximumConcurrentCommands = 4
     private var commandTasks: [String: Task<Void, Never>] = [:]
     private enum Acceptance { case open, paused, stopped }
     private var acceptance = Acceptance.open
-    private var deferredCommands: [(ImageProcessingCommand, URLSessionWebSocketTask?)] = []
+    private var deferredCommands: [ImageProcessingCommand] = []
     private var running: [String: CompanionImageWorkerActivity] = [:]
-    private var runningCount = 0
-    private var slotWaiters: [CheckedContinuation<Void, Never>] = []
+    private var isDraining = false
+    private var drainRequested = false
 
     public init(
         baseURL: URL,
@@ -129,6 +132,7 @@ public actor CompanionImageWorker {
         foreground: Bool,
         isParticipating: Bool = true,
         outbox: CompanionResultOutbox<ImageProcessingResult>,
+        identity: ClientIdentity = .unknown,
         session: URLSession = .cubbyShared,
         executor: CompanionImageCommandExecutor = CompanionImageCommandExecutor(),
         failureObserver: FailureObserver? = nil,
@@ -138,7 +142,10 @@ public actor CompanionImageWorker {
         self.init(
             baseURL: baseURL, credentials: credentials, deviceID: deviceID, deviceName: deviceName,
             foreground: foreground, isParticipating: isParticipating, outbox: outbox,
-            session: session, failureObserver: failureObserver, activityObserver: activityObserver,
+            session: session,
+            transport: CubbyClient(
+                baseURL: baseURL, credentials: credentials, identity: identity, session: session),
+            failureObserver: failureObserver, activityObserver: activityObserver,
             jobObserver: jobObserver, execute: { command in try await executor.execute(command) })
     }
 
@@ -151,6 +158,7 @@ public actor CompanionImageWorker {
         isParticipating: Bool = true,
         outbox: CompanionResultOutbox<ImageProcessingResult>,
         session: URLSession = .cubbyShared,
+        transport: any CompanionImageBackgroundTransport,
         failureObserver: FailureObserver? = nil,
         activityObserver: ActivityObserver? = nil,
         jobObserver: JobObserver? = nil,
@@ -166,6 +174,7 @@ public actor CompanionImageWorker {
         self.outbox = outbox
         self.recordResult = recordResult ?? { try await outbox.record($0, for: $1) }
         self.session = session
+        self.transport = transport
         self.execute = execute
         self.failureObserver = failureObserver
         self.activityObserver = activityObserver
@@ -218,23 +227,17 @@ public actor CompanionImageWorker {
     }
 
     /// The master "Automatic work on this device" switch. `start()` is still what arms
-    /// `shouldRun` — this only gates whether `reconcileConnection()` is allowed to open a socket,
-    /// so a later flip back on reconnects without a fresh `start()`.
+    /// `shouldRun` — this only gates whether `reconcileConnection()` may subscribe, so a later
+    /// flip back on reconnects without a fresh `start()`.
     public func setParticipating(_ participating: Bool) {
         isParticipating = participating
         if !participating { backgroundTask?.cancel() }
         reconcileConnection()
     }
 
-    /// The charging task owns this finite HTTP window; it does not reopen an iOS socket.
+    /// The charging task owns this finite HTTP window; it does not reopen an iOS subscription.
     public func runInBackground(client: CubbyClient) async -> Bool {
-        guard
-            case .hello(let hello) = ImageProcessingClientMessage.companionHello(
-                deviceID: deviceID, deviceName: deviceName, foreground: false,
-                imageDescriptionAvailable: FoundationModelsImageDescriber().availability() == .available,
-                automaticWork: isParticipating)
-        else { return false }
-        return await runInBackground(transport: client, hello: hello)
+        await runInBackground(transport: client, hello: hello(foreground: false))
     }
 
     func runInBackground(
@@ -254,6 +257,13 @@ public actor CompanionImageWorker {
 
     public func endBackgroundRun() {
         backgroundTask?.cancel()
+    }
+
+    private func hello(foreground: Bool) -> ImageProcessingHello {
+        .companion(
+            deviceID: deviceID, deviceName: deviceName, foreground: foreground,
+            imageDescriptionAvailable: FoundationModelsImageDescriber().availability() == .available,
+            automaticWork: isParticipating)
     }
 
     private var platformAllowsConnection: Bool {
@@ -320,7 +330,8 @@ public actor CompanionImageWorker {
     private func runOneConnection(generation: Int) async throws {
         let token = try await credentials.bearerToken()
         let endpoint = try AuthenticatedSocketSupport.socketURL(
-            baseURL: baseURL, path: "/api/companion/image-processing/socket")
+            baseURL: baseURL, path: CompanionImageProcessingProtocol.doorbellPath,
+            queryItems: [CompanionImageProcessingProtocol.doorbellTopic])
         let request = try AuthenticatedSocketSupport.request(
             url: endpoint,
             bearerToken: token,
@@ -331,103 +342,95 @@ public actor CompanionImageWorker {
         guard generation == connectionGeneration else { throw CancellationError() }
         self.socket = socket
         socket.resume()
-        // Per-connection: a stale pause from a prior connection must not survive a reconnect that
-        // (re)establishes an unpaused session.
+        // Per-subscription: a stale pause must not survive a reconnect whose first pull reports
+        // otherwise.
         remotePaused = false
+        // A protocol ping confirms the subscription opened; an application frame would end it.
+        try await withCheckedThrowingContinuation { (opened: CheckedContinuation<Void, Error>) in
+            socket.sendPing { error in
+                if let error { opened.resume(throwing: error) } else { opened.resume() }
+            }
+        }
+        openedSocket = socket
+        activityObserver?(.init(phase: .idle))
+        // Work already waiting is claimable now; do not wait for the first ring.
+        requestDrain()
+        while !Task.isCancelled, generation == connectionGeneration, self.socket === socket {
+            // Any frame is a ring; its content is a refetch hint this worker does not need.
+            _ = try await socket.receive()
+            requestDrain()
+        }
+    }
 
-        let descriptionAvailable =
-            FoundationModelsImageDescriber().availability() == .available
+    /// Coalesces rings: one drain runs at a time, and a ring during it runs one more pass.
+    func requestDrain() {
+        guard shouldRun else { return }
+        drainRequested = true
+        guard !isDraining else { return }
+        isDraining = true
+        Task { await self.drainWhileRequested() }
+    }
+
+    private func drainWhileRequested() async {
+        defer { isDraining = false }
+        while drainRequested, shouldRun {
+            drainRequested = false
+            do {
+                try await drainOnce()
+            } catch {
+                failureObserver?(error)
+            }
+        }
+    }
+
+    /// Delivers recorded results, then pulls until no work is claimable or every slot is busy. A
+    /// finished command requests another drain to refill its slot.
+    private func drainOnce() async throws {
+        for entry in try await outbox.pending() {
+            try await transport.complete(deviceID: deviceID.uuidString.lowercased(), result: entry.result)
+            try await outbox.acknowledge(entry.key)
+        }
         #if os(macOS)
             let advertisedForeground = true
         #else
             let advertisedForeground = foreground
         #endif
-        try await send(
-            .companionHello(
-                deviceID: deviceID, deviceName: deviceName, foreground: advertisedForeground,
-                imageDescriptionAvailable: descriptionAvailable, automaticWork: isParticipating),
-            on: socket)
-        greetedSocket = socket
-        activityObserver?(.init(phase: .idle))
-        for pending in try await outbox.pending() {
-            try await send(.companionResult(pending.result), on: socket)
-        }
-
-        while !Task.isCancelled, generation == connectionGeneration, self.socket === socket {
-            guard
-                let data = AuthenticatedSocketSupport.data(from: try await socket.receive())
-            else { continue }
-            let message = try JSONDecoder.companionImageProcessing.decode(
-                ImageProcessingServerMessage.self, from: data)
-            try await handle(message, socket: socket)
-        }
-    }
-
-    private func handle(
-        _ message: ImageProcessingServerMessage, socket: URLSessionWebSocketTask
-    ) async throws {
-        switch message {
-        case .helloAck(let ack):
-            guard ack.protocolVersion == ._1 else {
-                throw UnsupportedNativeResponse(
-                    context: "image-processing protocol version", raw: .number(ack.protocolVersion.rawValue))
+        while shouldRun, acceptance == .open,
+            commandTasks.count < Self.maximumConcurrentCommands
+        {
+            let pulled = try await transport.pull(
+                hello: hello(foreground: advertisedForeground), leaseSeconds: 90)
+            if pulled.remotePaused != remotePaused {
+                remotePaused = pulled.remotePaused
+                reportActivity()
             }
-            // The web paused this device (`Device.remotePaused`): treat it like participation-off
-            // for this connection — no work is accepted until a fresh hello reports otherwise.
-            remotePaused = ack.remotePaused
-            activityObserver?(.init(phase: .idle, remotePaused: ack.remotePaused))
-        case .acknowledge(let envelope):
-            guard envelope.protocolVersion == ._1 else {
-                throw UnsupportedNativeResponse(
-                    context: "image-processing protocol version",
-                    raw: .number(envelope.protocolVersion.rawValue))
-            }
-            try await outbox.acknowledge(
-                CompanionImageProcessingProtocol.attemptKey(
-                    jobID: envelope.jobId, attemptID: envelope.attemptId))
-        case .command(let envelope):
-            guard envelope.protocolVersion == ._1 else {
-                throw UnsupportedNativeResponse(
-                    context: "image-processing protocol version",
-                    raw: .number(envelope.protocolVersion.rawValue))
-            }
-            guard shouldRun, self.socket === socket else { return }
-            guard CompanionWorkAcceptance.acceptsCommand(remotePaused: remotePaused) else { return }
-            let command = envelope.command
-            let metadata = try CompanionImageCommandMetadata(command)
-            let key = CompanionImageProcessingProtocol.attemptKey(
-                jobID: metadata.jobID, attemptID: metadata.attemptID)
-            if let completed = try await outbox.result(for: key) {
-                try await send(.companionResult(completed), on: socket)
-                return
-            }
-            startCommand(command, socket: socket)
-        case .unrecognized(let raw):
-            throw UnsupportedNativeResponse(context: "image-processing socket", raw: raw)
+            guard let command = pulled.command,
+                CompanionWorkAcceptance.acceptsCommand(remotePaused: pulled.remotePaused)
+            else { return }
+            startCommand(command)
         }
     }
 
     /// Tracks the command in `commandTasks` from acceptance until its result is durably recorded,
-    /// which is what `drainState()` counts as outstanding. A `nil` socket (tests) records the
-    /// result without sending it, exactly like a socket that dropped mid-command.
-    func startCommand(_ command: ImageProcessingCommand, socket: URLSessionWebSocketTask?) {
+    /// which is what `drainState()` counts as outstanding.
+    func startCommand(_ command: ImageProcessingCommand) {
         let metadata: CompanionImageCommandMetadata
         do { metadata = try CompanionImageCommandMetadata(command) } catch { failureObserver?(error); return }
         guard acceptance == .open else {
             // Held, not started: a paused check resumes it; a stopped worker drops it and the
-            // server's lease expiry re-offers the job.
-            if acceptance == .paused { deferredCommands.append((command, socket)) }
+            // server's lease expiry offers the job again.
+            if acceptance == .paused { deferredCommands.append(command) }
             return
         }
         let key = CompanionImageProcessingProtocol.attemptKey(
             jobID: metadata.jobID, attemptID: metadata.attemptID)
         guard commandTasks[key] == nil else { return }
         commandTasks[key] = Task { [weak self] in
-            await self?.run(command, key: key, socket: socket)
+            await self?.run(command, key: key)
         }
     }
 
-    /// Stops starting newly delivered commands for the rest of this worker's life (a standalone
+    /// Stops starting newly pulled commands for the rest of this worker's life (a standalone
     /// companion's shutdown); accepted ones keep running, recording, and delivering.
     public func stopAccepting() {
         acceptance = .stopped
@@ -435,10 +438,9 @@ public actor CompanionImageWorker {
     }
 
     /// The only safe "settled → stop" check. It closes acceptance first, so no command can start
-    /// while it awaits the outbox (an actor suspension that let one start uncounted before), then
-    /// answers whether nothing is outstanding or unacknowledged. `true` leaves acceptance closed
-    /// for the caller to `stop()`; `false` reopens it (unless `stopAccepting()` was called) and
-    /// starts any command that arrived meanwhile.
+    /// while it awaits the outbox, then answers whether nothing is outstanding or undelivered.
+    /// `true` leaves acceptance closed for the caller to `stop()`; `false` reopens it (unless
+    /// `stopAccepting()` was called) and starts any command that arrived meanwhile.
     public func pauseAcceptingIfSettled() async throws -> Bool {
         if acceptance == .open { acceptance = .paused }
         // Acceptance is closed, so `commandTasks` can only shrink across this suspension; a
@@ -456,7 +458,7 @@ public actor CompanionImageWorker {
         return settled
     }
 
-    /// Whether a connection loop is running, the only path that opens a socket.
+    /// Whether a connection loop is running, the only path that subscribes.
     var isConnecting: Bool { connectionTask != nil }
 
     /// Returns once every accepted command has recorded its result or stopped.
@@ -471,25 +473,23 @@ public actor CompanionImageWorker {
         acceptance = .open
         let deferred = deferredCommands
         deferredCommands.removeAll()
-        for (command, socket) in deferred { startCommand(command, socket: socket) }
+        for command in deferred { startCommand(command) }
+        requestDrain()
     }
 
     /// Advisory counts for logging and the `--once` quiet window. It can over-count a finishing
     /// command but is not atomic with acceptance; stop on `pauseAcceptingIfSettled()`, not this.
     public func drainState() async throws -> CompanionDrainState {
-        let connected = socket != nil && socket === greetedSocket
+        let connected = socket != nil && socket === openedSocket
         let outstanding = commandTasks.count
         let pending = try await outbox.pending().count
         return .init(connected: connected, outstandingCommands: outstanding, pendingResults: pending)
     }
 
-    private func run(
-        _ command: ImageProcessingCommand, key: String, socket: URLSessionWebSocketTask?
-    ) async {
-        await acquireSlot()
+    private func run(_ command: ImageProcessingCommand, key: String) async {
         defer {
-            releaseSlot()
             commandTasks[key] = nil
+            requestDrain()
         }
         guard !Task.isCancelled else { return }
         defer { running[key] = nil; reportActivity() }
@@ -506,27 +506,11 @@ public actor CompanionImageWorker {
             guard !Task.isCancelled else { return }
             jobObserver?(.init(result, kind: metadata.kind, duration: started.duration(to: .now)))
             try await recordResult(result, key)
-            // A reconnect replays the outbox, so a result from a dropped socket is not lost.
-            guard let socket, self.socket === socket else { return }
-            try await send(.companionResult(result), on: socket)
+            // A failed delivery stays in the outbox; the next drain delivers it.
+            try await transport.complete(deviceID: deviceID.uuidString.lowercased(), result: result)
+            try await outbox.acknowledge(key)
         } catch {
             failureObserver?(error)
-        }
-    }
-
-    private func acquireSlot() async {
-        guard runningCount >= Self.maximumConcurrentCommands else {
-            runningCount += 1
-            return
-        }
-        await withCheckedContinuation { slotWaiters.append($0) }
-    }
-
-    private func releaseSlot() {
-        if slotWaiters.isEmpty {
-            runningCount -= 1
-        } else {
-            slotWaiters.removeFirst().resume()
         }
     }
 
@@ -540,12 +524,4 @@ public actor CompanionImageWorker {
         let oldest = running.values.min { ($0.startedAt ?? .distantPast) < ($1.startedAt ?? .distantPast) }
         activityObserver?(oldest ?? .init(phase: .idle, remotePaused: remotePaused))
     }
-
-    private func send(
-        _ message: ImageProcessingClientMessage, on socket: URLSessionWebSocketTask
-    ) async throws {
-        let data = try JSONEncoder.companionImageProcessing.encode(message)
-        try await socket.send(.data(data))
-    }
-
 }

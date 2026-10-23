@@ -15,12 +15,9 @@ struct CompanionImageBackgroundTests {
             ImageProcessingCommand.self, from: Data(value.utf8))
     }
     private func hello() -> ImageProcessingHello {
-        guard
-            case .hello(let value) = ImageProcessingClientMessage.companionHello(
-                deviceID: UUID(), deviceName: "Synthetic phone", foreground: false,
-                imageDescriptionAvailable: true, automaticWork: true)
-        else { preconditionFailure("Expected hello") }
-        return value
+        .companion(
+            deviceID: UUID(), deviceName: "Synthetic phone", foreground: false,
+            imageDescriptionAvailable: true, automaticWork: true)
     }
     private func outboxFile() throws -> URL {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(
