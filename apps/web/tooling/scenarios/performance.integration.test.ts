@@ -107,14 +107,19 @@ it("seeds connected performance history readable by the real Work queue", async 
       completedAt: "2026-01-15T12:01:00.000Z",
     }),
   ]);
-  const [qualityIntent] = await getDb(ctx.db)
-    .select()
-    .from(job)
-    .where(eq(job.key, "refresh:quality"));
-  if (!qualityIntent) throw new Error("Missing quality refresh intent");
-  await advanceJob(ctx.db, qualityIntent.id, {
-    "refresh.family": refreshFamilyHandler,
-  });
+  // Each advance publishes one page; the seed spans several scored kinds.
+  for (let page = 0; ; page++) {
+    const [qualityIntent] = await getDb(ctx.db)
+      .select()
+      .from(job)
+      .where(eq(job.key, "refresh:quality"));
+    if (!qualityIntent) throw new Error("Missing quality refresh intent");
+    if (qualityIntent.state === "completed") break;
+    if (page === 50) throw new Error("Quality pass exceeded page budget");
+    await advanceJob(ctx.db, qualityIntent.id, {
+      "refresh.family": refreshFamilyHandler,
+    });
+  }
   const parcels = await countTestDbQueries(() =>
     listShipmentsRead(
       ctx.db,
