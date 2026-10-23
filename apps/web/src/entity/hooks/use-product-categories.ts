@@ -15,6 +15,7 @@ const vocabulary = productCategoryOut.pick({
   description: true,
   path: true,
   feature: true,
+  effectiveFeature: true,
 });
 const groups = ["relations"] as const;
 const input = {
@@ -41,7 +42,14 @@ export function useProductCategories() {
   return {
     categories,
     isLoading: useHydratedLoading(
-      query.isPending || query.hasNextPage || query.isFetchingNextPage,
+      !query.isError &&
+        (query.isPending || query.hasNextPage || query.isFetchingNextPage),
     ),
+    error: query.error,
+    isComplete:
+      !query.isPending &&
+      !query.hasNextPage &&
+      !query.isFetchingNextPage &&
+      !query.isError,
   };
 }

@@ -220,6 +220,12 @@ including saved suggestion outcomes and review status. Batch server reads and
 share preparation across the bounded record set; HTTP batching alone still
 repeats work when each operation prepares and queries independently. Preserve
 per-record cache identity, errors, cancellation and progressive delivery.
+Category reference pills share the complete projected vocabulary used by pickers
+and filters. Its `effectiveFeature` scalar uses the declared category inheritance
+resolver; displaying a reference must not load the full nested hierarchy or
+category stock, mapping and product-count provenance. Hierarchy views retain
+server-defined nesting. Unresolved references distinguish pending pages, completed
+missing IDs and failed reads; cached matches remain visible during refresh errors.
 Progressive row views preserve the data array and unaffected record objects
 until their immutable base pages or enrichment patches change; loading and
 summary-only updates must not rebuild the table dataset.

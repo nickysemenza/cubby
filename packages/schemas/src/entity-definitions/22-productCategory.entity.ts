@@ -59,6 +59,7 @@ export default defineEntity({
         relations: [
           "parentId",
           "parentName",
+          "effectiveFeature",
           "path",
           "pathLabel",
           "spendingCategoryName",
@@ -522,6 +523,26 @@ Rules:
         validation: { read: z.string().nullable(), create: null, update: null },
       },
       {
+        key: "effectiveFeature",
+        kind: "text",
+        nullable: true,
+        display: { list: false, detail: false },
+        provenance: {
+          kind: "derived",
+          sources: [{ label: "Category ancestry" }],
+        },
+        explanation: {
+          ruleId: "productCategory.effective-feature",
+          description:
+            "The category's permanent feature binding or nearest live ancestor fallback.",
+        },
+        validation: {
+          read: productCategoryFeature.nullable(),
+          create: null,
+          update: null,
+        },
+      },
+      {
         key: "path",
         kind: "json",
         display: { list: false, detailLabelPath: "pathLabel" },
@@ -697,6 +718,7 @@ Rules:
       "spendingCategoryMode",
       "spendingCategoryId",
       "fieldResolutions",
+      "effectiveFeature",
       "id",
       "name",
       "aliases",

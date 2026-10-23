@@ -26,6 +26,7 @@ import {
   getProductCategoryByShortcode,
   listProductCategories,
   listProductCategoryTreeOptions,
+  loadCategorySummaries,
   updateProductCategory,
 } from "./product-category";
 
@@ -98,6 +99,12 @@ describe("product category hierarchy", () => {
     const detail = await getProductCategoryByShortcode(ctx.db, type.output.id);
     expect(detail?.productCount).toBe(1);
     expect(detail?.feature).toBeNull();
+    expect(detail?.effectiveFeature).toBe("tools");
+    const summary = (await loadCategorySummaries(ctx.db, [type.entityId])).get(
+      type.entityId,
+    );
+    expect(detail?.path).toEqual(summary?.path);
+    expect(detail?.effectiveFeature).toEqual(summary?.feature);
     expect(detail?.fieldResolutions?.feature).toMatchObject({
       mode: "inherit",
       value: "tools",
@@ -166,6 +173,7 @@ describe("product category hierarchy", () => {
         "A category behavior binding cannot be cleared or replaced",
       );
       expect((await read())?.feature).toBe("tools");
+      expect((await read())?.effectiveFeature).toBe("tools");
     }
     await updateProductCategory(
       ctx.db,
@@ -189,6 +197,10 @@ describe("product category hierarchy", () => {
       canReset: false,
       sourceEntity: { entityId: parent.output.id },
     });
+    expect(
+      (await getProductCategoryByShortcode(ctx.db, inheriting.output.id))
+        ?.effectiveFeature,
+    ).toBe("books");
     await updateProductCategory(
       ctx.db,
       inheriting.output.id,
@@ -215,6 +227,10 @@ describe("product category hierarchy", () => {
       fallbackValue: null,
       canReset: false,
     });
+    expect(
+      (await getProductCategoryByShortcode(ctx.db, inheriting.output.id))
+        ?.effectiveFeature,
+    ).toBe("electronics");
     // Legacy deleted ancestry must never remain an effective source.
     await getDb(ctx.db)
       .update(productCategory)
@@ -230,6 +246,10 @@ describe("product category hierarchy", () => {
       sourceEntity: null,
       canReset: false,
     });
+    expect(
+      (await getProductCategoryByShortcode(ctx.db, inheriting.output.id))
+        ?.effectiveFeature,
+    ).toBeNull();
   });
 
   // Failure modes: an ancestor's default skips a nearer decision; a

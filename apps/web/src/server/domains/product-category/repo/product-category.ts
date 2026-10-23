@@ -333,6 +333,27 @@ const categoryRead = {
       bind(productCategoryOut.pick({ feature: true }), (row) => ({
         feature: parseFeature(row.feature),
       })),
+      bind
+        .batch(async ({ db, rows }) => {
+          const resolved = await unwrapDb(db)
+            .select({ id: productCategory.id, effectiveFeature })
+            .from(productCategory)
+            .where(
+              inArray(
+                productCategory.id,
+                rows.map((row) => row.id),
+              ),
+            );
+          return new Map(
+            resolved.map((row) => [row.id, parseFeature(row.effectiveFeature)]),
+          );
+        })
+        .fields(
+          productCategoryOut.pick({ effectiveFeature: true }),
+          (row, loaded) => ({
+            effectiveFeature: loaded.get(row.id) ?? null,
+          }),
+        ),
       mappings.fields(
         productCategoryOut.pick({
           spendingCategoryMapping: true,
