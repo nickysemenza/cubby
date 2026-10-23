@@ -128,7 +128,7 @@ extension EntityDescriptor {
     }
 
     /// One row by shortcode, as the dynamic projection `EntityRow` reads.
-    func getRow(client: CubbyClient, id: String) async throws -> JSONValue {
+    func getRow(client: CubbyClient, id: String) async throws -> JSONValue? {
         try require(.get)
         let input: JSONValue = ["entity": .string(key.rawValue), "shortcode": .string(id)]
         return try await client.native_entity_detail(body: input)

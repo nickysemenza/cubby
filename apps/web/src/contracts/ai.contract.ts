@@ -78,7 +78,6 @@ export const aiContract = defineContract(
   "ai",
   {
     describeLocation: mutation({
-      native: "Analyze a location's photos from its AI description section",
       input: aiLocationIdInput,
       output: locationDescriptionWithProvenance,
       invalidates: ["location"],
@@ -87,7 +86,6 @@ export const aiContract = defineContract(
       input: detectInventoryItemsInput,
       output: detectedInventoryWithProvenance,
       invalidates: ["inventory"],
-      native: "Detect items in a just-added location photo",
     }),
     approveDetectedInventoryItem: mutation({
       exposure: "capability",
@@ -96,7 +94,6 @@ export const aiContract = defineContract(
       input: approveDetectedInventoryItemInput,
       output: approveDetectedInventoryItemOut,
       invalidates: ["inventory"],
-      native: "Approve one detected item into a location's inventory",
     }),
     identifyProduct: mutation({
       input: productIdentificationInput,
@@ -119,8 +116,6 @@ export const aiContract = defineContract(
       output: ingredientMergeSuggestionBatchOut,
       invalidates: ["ingredient"],
     }),
-    // Nested `basis` can't ride the HTTP GET projection (precedent:
-    // `entity-list.contract.ts`'s `list`) — `.queryOptions()` still works.
     // AI and externally hydrated food reads own authoritative database helpers.
     applyFinanceCategorySuggestion: mutation({
       exposure: "capability",
@@ -135,7 +130,6 @@ export const aiContract = defineContract(
         "vendor",
         "product",
       ],
-      native: "Reviewed saved finance category suggestions",
     }),
     suggestFields: query({
       exposure: "capability",
@@ -159,8 +153,6 @@ export const aiContract = defineContract(
       readPolicy: "strong",
       input: fieldSuggestionsInput,
       output: fieldSuggestionsReviewOut,
-      transport: "post",
-      native: "Reviewed manifest field suggestions with nullable proposals",
       cache: { profile: "stable" },
       queryKeyOmit: ["runKey"],
     }),
@@ -169,7 +161,6 @@ export const aiContract = defineContract(
       input: settledSuggestionQuestionsInput,
       output: settledSuggestionQuestionsOut,
       readPolicy: "strong",
-      transport: "post",
       // List pages batch this read and cache each question separately, tagged
       // with the entity kinds its decision reads (`record-suggestions.tsx`).
       cache: { profile: "stable", tags: [["ai", "settledSuggestionQuestion"]] },
@@ -214,7 +205,6 @@ export const aiContract = defineContract(
       output: suggestionSweepStatusOut,
       cache: { profile: "stable" },
     }),
-    // Same reason as `suggestFields`: a per-row hint, not a public HTTP query.
     suggestExternalIdKind: query({
       readPolicy: "strong",
       input: externalIdKindSuggestionInput,
@@ -239,7 +229,6 @@ export const aiContract = defineContract(
       input: aiUsageRecentInput,
       output: aiUsageRecentOut,
       // Nested `filters` has no GET query projection.
-      transport: "post",
       cache: { tags: [["ai", "usage"]] },
     }),
     usageSummary: query({

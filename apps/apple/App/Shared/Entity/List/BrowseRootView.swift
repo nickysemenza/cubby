@@ -134,7 +134,7 @@ struct BrowseRootView: View {
     }
 }
 
-/// Row counts from `GET /api/v1/dashboard/counts`, loaded once per host. `nil` while loading or on
+/// Row counts from `dashboard.counts`, loaded once per host. `nil` while loading or on
 /// failure, so a Browse row shows nothing on the right rather than a stale or fabricated number.
 @Observable
 final class BrowseCountsModel {

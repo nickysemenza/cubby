@@ -18,12 +18,9 @@ private final class QueryStub: URLProtocol, @unchecked Sendable {
     static func session() -> URLSession { StubNetworking.session(protocolClass: self) }
 }
 
-/// `/api/v1` dropped ts-rest's `jsonQuery` convention (quoted, JSON-typed query values) for a
-/// plain query-parameter API: scalars travel as their literal string, and an array repeats its
-/// key rather than serializing as `["a","b"]`. These pin that shape at the wire, using
-/// `CubbyClient`'s own public surface rather than the generated `Client` directly, so a
-/// regression here is one a real call site would hit.
-@Suite("CubbyClient query wire shape", .serialized)
+/// The shared operation route carries every input as JSON in a POST envelope. These pin that
+/// shape through `CubbyClient`'s public surface, so a regression is one a real call site would hit.
+@Suite("CubbyClient operation wire shape", .serialized)
 struct ClientQueryTests {
     private func makeClient() throws -> CubbyClient {
         let store = InMemorySessionTokenStore()
@@ -32,21 +29,6 @@ struct ClientQueryTests {
         return CubbyClient(
             baseURL: URL(string: "http://localhost:3000")!, credentials: credentials,
             session: QueryStub.session())
-    }
-
-    private func capture(returning payload: Data, _ body: (CubbyClient) async throws -> Void) async throws
-        -> URLRequest
-    {
-        defer { QueryStub.handler.withLock { $0 = nil } }
-        let seen = Mutex<URLRequest?>(nil)
-        QueryStub.handler.withLock { handler in
-            handler = { request in
-                seen.withLock { $0 = request }
-                return (200, payload)
-            }
-        }
-        try await body(try makeClient())
-        return try #require(seen.withLock { $0 })
     }
 
     /// `capture` for a POST whose JSON body is the contract: the request and its decoded body.
@@ -64,11 +46,10 @@ struct ClientQueryTests {
         try await body(try makeClient())
         let (request, data) = try #require(seen.withLock { $0 })
         #expect(request.httpMethod == "POST")
-        return (request, try JSONDecoder().decode(JSONValue.self, from: try #require(data)))
-    }
-
-    private func queryItems(of request: URLRequest) -> [URLQueryItem] {
-        URLComponents(url: request.url!, resolvingAgainstBaseURL: false)?.queryItems ?? []
+        let envelope = try JSONDecoder().decode(JSONValue.self, from: try #require(data))
+        let operation = request.url?.lastPathComponent
+        #expect(envelope["operation"]?.stringValue == operation)
+        return (request, try #require(envelope["input"]))
     }
 
     private static func requestBody(_ request: URLRequest) throws -> Data {
@@ -78,7 +59,7 @@ struct ClientQueryTests {
         defer { stream.close() }
         var data = Data()
         var buffer = [UInt8](repeating: 0, count: 4096)
-        // OpenAPI's Darwin transport writes this bound stream asynchronously. Read blocks until
+        // The Darwin transport writes this bound stream asynchronously. Read blocks until
         // bytes or EOF; `hasBytesAvailable` can still be false before the writer's first chunk.
         while true {
             let count = stream.read(&buffer, maxLength: buffer.count)
@@ -101,7 +82,7 @@ struct ClientQueryTests {
                 [LocationCode("LOC-2345"), LocationCode("LOC-2345")], into: LocationCode("LOC-3456"))
             #expect(count == 1)
         }
-        #expect(request.url?.path == "/api/v1/entity/mutate")
+        #expect(request.url?.path == "/api/operations/entity.mutate")
         #expect(body["action"]?.stringValue == "bulkUpdate")
         #expect(body["entity"]?.stringValue == "location")
         #expect(body["ids"] == .array([.string("LOC-2345")]))
@@ -119,14 +100,14 @@ struct ClientQueryTests {
                 EntityCatalog[.location], ids: ["LOC-2345"], data: ["parentId": .null])
             #expect(count == 1)
         }
-        #expect(request.url?.path == "/api/v1/entity/mutate")
+        #expect(request.url?.path == "/api/operations/entity.mutate")
         #expect(body["action"]?.stringValue == "bulkUpdate")
         #expect(body["entity"]?.stringValue == "location")
         #expect(body["data"] == .object(["parentId": .null]))
     }
 
     @Test func relationRowsSendsTargetedPagination() async throws {
-        let request = try await capture(
+        let (request, body) = try await captureBody(
             returning: Data(
                 #"{"entity":"purchase","relation":"products","id":"PUR-2345","items":[],"totalCount":0}"#.utf8
             )
@@ -136,31 +117,29 @@ struct ClientQueryTests {
                 targetIDs: ["PRD-3456"], offset: 3, limit: 7)
             #expect(result["totalCount"]?.doubleValue == 0)
         }
-        #expect(request.url?.path == "/api/v1/entity/relation")
-        #expect(request.httpMethod == "GET")
-        let query = queryItems(of: request)
-        for item in [
-            URLQueryItem(name: "entity", value: "purchase"),
-            URLQueryItem(name: "relation", value: "products"),
-            URLQueryItem(name: "id", value: "PUR-2345"),
-            URLQueryItem(name: "targetIds", value: "PRD-3456"),
-            URLQueryItem(name: "offset", value: "3"),
-            URLQueryItem(name: "limit", value: "7"),
-        ] {
-            #expect(query.contains(item))
-        }
+        #expect(request.url?.path == "/api/operations/entity.relation")
+        #expect(request.url?.query == nil)
+        #expect(body["entity"] == "purchase")
+        #expect(body["relation"] == "products")
+        #expect(body["id"] == "PUR-2345")
+        #expect(body["targetIds"] == ["PRD-3456"])
+        #expect(body["offset"] == 3)
+        #expect(body["limit"] == 7)
     }
 
     @Test func auditHistoryUsesTypedPagedRead() async throws {
-        let request = try await capture(returning: Data(#"{"entries":[],"nextCursor":"page-3"}"#.utf8)) {
+        let (request, body) = try await captureBody(
+            returning: Data(#"{"entries":[],"nextCursor":"page-3"}"#.utf8)
+        ) {
             client in
             let page = try await client.auditHistory(cursor: "page-2", limit: 7)
             #expect(page.entries.isEmpty)
             #expect(page.nextCursor == "page-3")
         }
-        #expect(request.url?.path == "/api/v1/auditLog/list")
-        #expect(queryItems(of: request).contains(URLQueryItem(name: "cursor", value: "page-2")))
-        #expect(queryItems(of: request).contains(URLQueryItem(name: "limit", value: "7")))
+        #expect(request.url?.path == "/api/operations/auditLog.list")
+        #expect(request.url?.query == nil)
+        #expect(body["cursor"] == "page-2")
+        #expect(body["limit"] == 7)
     }
 
     /// An attach patch's `data` carries only `pendingImageIds`: an omitted field means "leave as
@@ -171,8 +150,9 @@ struct ClientQueryTests {
         QueryStub.handler.withLock { handler in
             handler = { request in
                 do {
-                    let fields = try JSONDecoder().decode(
-                        [String: JSONValue].self, from: Self.requestBody(request))
+                    let envelope = try JSONDecoder().decode(
+                        JSONValue.self, from: Self.requestBody(request))
+                    let fields = try #require(envelope["input"]?.objectValue)
                     seen.withLock { $0.append(fields) }
                 } catch { Issue.record(error) }
                 // The test captures request encoding; reject before any response mapping.
@@ -194,14 +174,14 @@ struct ClientQueryTests {
     }
 
     /// A 1-based native page travels as the kernel's 0-based `pageIndex`, and `-name` as a
-    /// typed descending sort rather than a raw string the server would have to parse.
-    @Test func listSendsPlainPagingParamsWithTheBearerHeader() async throws {
+    /// typed descending sort in the JSON operation input.
+    @Test func listSendsJsonPagingInputWithTheBearerHeader() async throws {
         let (request, body) = try await captureBody(
             returning: try Fixtures.data(named: "products-list.json")
         ) { client in
             _ = try await client.list(EntityCatalog[.product], page: 1, pageSize: 20, sort: "-name")
         }
-        #expect(request.url?.path == "/api/v1/entity/list")
+        #expect(request.url?.path == "/api/operations/entity.list")
         #expect(request.url?.query == nil)
         #expect(
             body == [
@@ -211,25 +191,24 @@ struct ClientQueryTests {
         #expect(request.value(forHTTPHeaderField: "Authorization") == "Bearer tok")
     }
 
-    /// `row(_:id:)` answers a 404 with `nil` rather than throwing.
-    @Test func rowReturnsNilOn404() async throws {
+    /// A missing row is represented as nullable `data`, with the normal success status.
+    @Test func rowReturnsNilFromNullableData() async throws {
         defer { QueryStub.handler.withLock { $0 = nil } }
-        let notFound = Data(#"{"code":"NOT_FOUND","message":"No product called PRD-0000"}"#.utf8)
         QueryStub.handler.withLock { handler in
-            handler = { _ in (404, notFound) }
+            handler = { _ in (200, Data("null".utf8)) }
         }
         let row = try await makeClient().row(EntityCatalog[.product], id: "PRD-0000")
         #expect(row == nil)
     }
 
-    /// The enum filter travels as its plain string literal, not a JSON-quoted `"has"`.
+    /// The enum filter travels as a JSON string literal.
     @Test func stockedProductsSendsTheEnumFilterAsAPlainLiteral() async throws {
         let (request, body) = try await captureBody(
             returning: try Fixtures.data(named: "products-list.json")
         ) { client in
             _ = try await client.stockedProducts(page: 2, pageSize: 20)
         }
-        #expect(request.url?.path == "/api/v1/entity/list")
+        #expect(request.url?.path == "/api/operations/entity.list")
         #expect(body["pagination"] == ["pageIndex": 1, "pageSize": 20])
         #expect(body["filters"] == ["relatedInventoryPresenceFilter": "has"])
     }
@@ -248,10 +227,8 @@ struct ClientQueryTests {
         let seen = Mutex<(path: String, body: [String: JSONValue])?>(nil)
         QueryStub.handler.withLock { handler in
             handler = { request in
-                let fields = try? JSONDecoder().decode(
-                    [String: JSONValue].self,
-                    from: Self.requestBody(request)
-                )
+                let envelope = try? JSONDecoder().decode(JSONValue.self, from: Self.requestBody(request))
+                let fields = envelope?["input"]?.objectValue
                 if let fields {
                     seen.withLock { $0 = (request.url?.path ?? "", fields) }
                 }
@@ -263,7 +240,7 @@ struct ClientQueryTests {
 
         #expect(destination == EntityRef(entity: .inventory, id: "INV-2002"))
         let request = try #require(seen.withLock { $0 })
-        #expect(request.path == "/api/v1/inventory/moveEntries")
+        #expect(request.path == "/api/operations/inventory.moveEntries")
         #expect(
             request.body["items"]
                 == .array([
@@ -274,18 +251,17 @@ struct ClientQueryTests {
                 ]))
     }
 
-    @Test func searchRepeatsTheArrayKeyForEachEntityKind() async throws {
+    @Test func searchSendsEntityKindsAsAJsonArray() async throws {
         // An empty result page: only the outgoing request matters here, and `search-find.json`
         // (built for `SearchHitTests`'s lenient decode of an unknown `entityKind`) would fail the
         // real typed decode this call makes.
-        let request = try await capture(returning: Data("[]".utf8)) { client in
+        let (request, body) = try await captureBody(returning: Data("[]".utf8)) { client in
             _ = try await client.search("sample", kinds: [.product, .location], limit: 5)
         }
-        let items = queryItems(of: request)
-        #expect(items.contains(URLQueryItem(name: "query", value: "sample")))
-        #expect(items.contains(URLQueryItem(name: "limit", value: "5")))
-        // One repeated key, not a single JSON-array-encoded value.
-        #expect(items.filter { $0.name == "entityKinds" }.map(\.value) == ["product", "location"])
-        #expect(!items.contains { $0.value?.contains("[") == true })
+        #expect(request.url?.path == "/api/operations/search.find")
+        #expect(request.url?.query == nil)
+        #expect(body["query"] == "sample")
+        #expect(body["limit"] == 5)
+        #expect(body["entityKinds"] == ["product", "location"])
     }
 }

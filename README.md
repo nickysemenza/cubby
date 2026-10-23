@@ -255,11 +255,11 @@ TanStack Start + React on Cloudflare Workers, Drizzle + PostgreSQL (Neon via
 Hyperdrive), R2, Rust → WASM for ingredient parsing and unit conversion, and a
 SwiftUI app.
 
-| Path                                                                          | What                                                   |
-| ----------------------------------------------------------------------------- | ------------------------------------------------------ |
-| [apps/web](apps/web)                                                          | The main app, HTTP API and MCP server (Worker `cubby`) |
-| [apps/apple](apps/apple)                                                      | Native iOS/macOS app, `CubbyKit`, `cubby` CLI          |
-| [packages/](packages), [recipebridge/](recipebridge), [cubby-ffi/](cubby-ffi) | Shared schemas, WASM and Swift FFI                     |
+| Path                                                                          | What                                                                    |
+| ----------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| [apps/web](apps/web)                                                          | The main app, shared operation HTTP API and MCP server (Worker `cubby`) |
+| [apps/apple](apps/apple)                                                      | Native iOS/macOS app, `CubbyKit`, `cubby` CLI                           |
+| [packages/](packages), [recipebridge/](recipebridge), [cubby-ffi/](cubby-ffi) | Shared schemas, WASM and Swift FFI                                      |
 
 Everything runs in one Cloudflare Worker. Every client and background job
 reaches the same contracts, and every entity write goes through the entity
@@ -270,7 +270,7 @@ kernel ([architecture](docs/development.md#architecture),
 flowchart LR
   Agents(["Claude / Codex<br/>sessions"]) --> MCP["/api/mcp"]
   Web(["Web app"]) --> SSR["Pages +<br/>server functions"]
-  Apple(["iOS / macOS app,<br/>cubby CLI"]) --> HTTP["/api/v1<br/>HTTP + OpenAPI"]
+  Apple(["iOS / macOS app,<br/>cubby CLI"]) --> HTTP["/api/operations/{operationId}<br/>POST + JSON"]
   Cal(["Calendar apps"]) --> Feeds["webcal feeds"]
   Gmail(["Gmail"]) -- "discovery" --> BG["Cron, queues,<br/>Workflows"]
 

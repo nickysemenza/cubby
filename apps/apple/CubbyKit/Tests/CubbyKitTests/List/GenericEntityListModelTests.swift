@@ -577,7 +577,7 @@ struct GenericEntityListModelTests {
                 + #""meta":{"totalCount":0,"pageIndex":0,"pageSize":200}}"#).utf8)
         ListStub.handler.withLock { handler in
             handler = { request in
-                guard request.url!.path.hasSuffix("/timeline") else { return (200, list) }
+                guard request.url!.path == "/api/operations/entity.timeline" else { return (200, list) }
                 let call = timelineCalls.withLock { value in
                     value += 1
                     return value
@@ -720,13 +720,14 @@ struct GenericEntityListModelTests {
         body(of: request)["filters"] ?? [:]
     }
 
-    /// The JSON body of a kernel list request; `.null` for anything else, so a stub that sees a
+    /// The JSON input of a kernel list request; `.null` for anything else, so a stub that sees a
     /// request off the kernel list route answers it as if unscoped.
     nonisolated private static func body(of request: URLRequest) -> JSONValue {
-        guard request.url?.path == "/api/v1/entity/list", let data = try? requestBody(request) else {
+        guard request.url?.path == "/api/operations/entity.list", let data = try? requestBody(request) else {
             return .null
         }
-        return (try? JSONDecoder().decode(JSONValue.self, from: data)) ?? .null
+        guard let envelope = try? JSONDecoder().decode(JSONValue.self, from: data) else { return .null }
+        return envelope["input"] ?? .null
     }
 
     nonisolated private static func requestBody(_ request: URLRequest) throws -> Data {

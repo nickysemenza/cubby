@@ -36,8 +36,6 @@ export const productContract = defineContract(
   {
     createWithInventory: mutation({
       note: "entity.commands creates the Product and its Inventory; image.attach_file adds the photo",
-      native:
-        "Create a Product and staged photo with explicit Inventory placement atomically",
       input: productCreateWithInventoryInput,
       output: productCreateWithInventoryOut,
       invalidates: ["product", "inventory"],
@@ -77,7 +75,6 @@ export const productContract = defineContract(
       exposure: "capability",
       description:
         "Find or create a product by UPC barcode: the local DB, then USDA, then the UPC lookup service. This WRITES — it mints a Product when nothing matches, named by whatever the lookup returned. To only ask what a barcode names, use product_enrichment_read.lookup_upc.",
-      native: "Capture unknown barcode",
       ...productWorkflowSchemas.findOrCreateByUPC,
       invalidates: ["productLookup"],
     }),
@@ -86,7 +83,6 @@ export const productContract = defineContract(
       note: "product_enrichment.find_or_create_by_upc covers UPCs only, not ISBNs",
       description:
         "Resolve an ISBN or another declared Product code and create a Product only when no matching identity exists. Read the match result before adding price or inventory.",
-      native: "Search tab create from a barcode or ISBN",
       ...productWorkflowSchemas.findOrCreateByCode,
       invalidates: ["productLookup"],
     }),
@@ -166,19 +162,16 @@ export const productContract = defineContract(
         affectedEntities: ["product", "inventory", "expense"],
         resultFields: [{ label: "Stored quantity", path: "storedQuantity" }],
       },
-      native: "Discard product units from the hero action",
       ...productWorkflowSchemas.discard,
       invalidates: ["expense"],
     }),
     /** The proposed amount and warnings for stocking one product, before the write. */
     addToInventoryPreview: query({
-      native: "Add to inventory preview for the hero action",
       ...productWorkflowSchemas.addToInventoryPreview,
       cache: { tags: [["product"], ["inventory"]] },
     }),
     /** Which shelf a discard touches and what it will warn about, before it commits. */
     discardPreview: query({
-      native: "Discard preview for the hero action confirmation",
       ...productWorkflowSchemas.discardPreview,
       cache: { tags: [["product"], ["inventory"]] },
     }),

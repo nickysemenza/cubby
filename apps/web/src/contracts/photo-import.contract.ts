@@ -94,9 +94,8 @@ const photoImportStageInputSchema = z.object({
   runId: runShortcode.optional(),
 });
 
-// Keep these as ordinary unions on the native HTTP surface. The OpenAPI pass
-// requires every discriminated member to be a named component, while these
-// deliberately small variants are private to the enclosing response schema.
+// Keep these as ordinary unions on the shared JSON wire. The native model
+// generator projects these small variants inline within the response schema.
 const photoImportStageItemSchema = z.union([
   z.object({
     kind: z.literal("existing"),
@@ -138,7 +137,7 @@ const photoImportReconcileOutputSchema = z.object({
 });
 
 /**
- * A fresh schema instance every call, deliberately: the OpenAPI generator
+ * A fresh schema instance every call, deliberately: Swift model generator
  * dedupes an object schema into one shared, positionally-named
  * (`InputSchemaNN`) component the moment the SAME instance appears at two
  * input positions — which would collapse the commit contract's inlined,
@@ -283,9 +282,8 @@ export const photoImportContract = defineContract(
   "photoImport",
   {
     startGrouping: mutation({
-      exposure: "internal",
+      exposure: "view",
       note: "The uploader starts grouping after finalize",
-      native: "Start photo grouping after a finalized upload",
       input: z.object({ runId: runShortcode }),
       output: z.object({
         runId: runShortcode,
@@ -298,8 +296,6 @@ export const photoImportContract = defineContract(
     review: query({
       exposure: "view",
       note: "Agents read proposals through photo_run_read.proposals",
-      native:
-        "Review proposed photo groups and processing status in Apple apps",
       input: z.object({ runId: runShortcode }),
       output: photoRunReviewResponse,
       cache: { tags: [["run"]] },
@@ -307,7 +303,6 @@ export const photoImportContract = defineContract(
     candidates: query({
       exposure: "view",
       note: "Agents read candidates through photo_run_read.product_candidates",
-      native: "Explain possible Product matches for a proposed photo group",
       input: z.object({
         runId: runShortcode,
         groupKey: z.string().min(1).max(200),
@@ -327,8 +322,6 @@ export const photoImportContract = defineContract(
     candidatesBatch: query({
       exposure: "view",
       note: "Agents can read individual photo candidates",
-      native:
-        "Check all candidates for every group with independent failure results",
       input: z.object({
         runId: runShortcode,
         /** Partition large Runs across Worker invocations; omitted reads every group. */
@@ -348,8 +341,6 @@ export const photoImportContract = defineContract(
     }),
     productEvidence: query({
       exposure: "view",
-      native:
-        "Read selected Product history independently of candidate ranking",
       input: z.object({ runId: runShortcode, productId: productShortcode }),
       output: photoProductEvidence,
       cache: {
@@ -365,7 +356,6 @@ export const photoImportContract = defineContract(
     rejectCandidate: mutation({
       description:
         "Record the member's Not this one verdict for a candidate Product. Suppression follows the group's photos through combine/split; supply a stable operationId.",
-      native: "Record Not this one for the photos in a group",
       input: z.object({
         runId: runShortcode,
         groupKey: z.string().min(1).max(200),
@@ -409,7 +399,6 @@ export const photoImportContract = defineContract(
     }),
     chooseExisting: mutation({
       description: "Point one proposed group at an existing productId.",
-      native: "Select an existing Product for a proposed photo group",
       input: z.object({
         runId: runShortcode,
         groupKey: z.string().min(1).max(200),
@@ -420,7 +409,6 @@ export const photoImportContract = defineContract(
     resolveConcern: mutation({
       description:
         "Explicitly resolve the agent's original identity concern, preserving it with member/time and an optional reply. Product edits never resolve a concern.",
-      native: "Explicitly resolve an agent concern without erasing its history",
       input: z.object({
         runId: runShortcode,
         groupKey: z.string().min(1).max(200),
@@ -439,7 +427,6 @@ export const photoImportContract = defineContract(
       description:
         "Correct one proposed group's new-Product identity before approval.",
       nativeModels: { input: "json" },
-      native: "Correct proposed product identity before approving photos",
       input: z.object({
         runId: runShortcode,
         groupKey: z.string().min(1).max(200),
@@ -455,7 +442,6 @@ export const photoImportContract = defineContract(
       description:
         "Approve proposed groups (all when groupKeys is omitted), committing each as commit_group would; expectedRevisions refuses groups changed since review. Only on the member's instruction.",
       command: { label: "Approve photo groups", confirmation: null },
-      native: "Approve reviewed photo groups in Apple apps",
       input: z.object({
         runId: runShortcode,
         /** Omit to approve every `proposed` group. */
@@ -480,7 +466,6 @@ export const photoImportContract = defineContract(
     discardGroup: mutation({
       description: "Discard one proposed group.",
       command: { label: "Discard photo group", confirmation: null },
-      native: "Discard a proposed photo group in Apple apps",
       input: z.object({
         runId: runShortcode,
         groupKey: z.string().min(1).max(200),
@@ -491,8 +476,6 @@ export const photoImportContract = defineContract(
     saveGroups: mutation({
       description: "Save the run page's reviewed group edits in one call.",
       command: { label: "Save photo group edits", confirmation: null },
-      native:
-        "Save photo group review edits (ownership, inventory) in Apple apps",
       input: saveGroupsAction
         .omit({ action: true })
         .extend({ runId: runShortcode }),
@@ -500,47 +483,41 @@ export const photoImportContract = defineContract(
       invalidates: ["runOnly"],
     }),
     stage: mutation({
-      exposure: "internal",
+      exposure: "view",
       note: "Native manifest import",
-      native: "Manifest photo import staging",
       input: photoImportStageInputSchema,
       output: photoImportStageOutputSchema,
     }),
     commit: mutation({
-      exposure: "internal",
+      exposure: "view",
       note: "Native manifest import",
-      native: "Atomic manifest photo import commit",
       input: photoImportCommitInputSchema,
       output: photoImportCommitResultSchema,
     }),
     createRun: mutation({
-      exposure: "internal",
-      native: "Start a photo-inventory import run",
+      exposure: "view",
       input: photoImportCreateRunInputSchema,
       output: photoImportCreateRunOutputSchema,
     }),
     admitBatch: mutation({
-      exposure: "internal",
-      native: "Admit another photo upload batch into a photo-inventory run",
+      exposure: "view",
       input: photoImportAdmitBatchInput,
       output: photoImportAdmitBatchOutput,
       invalidates: ["runOnly"],
     }),
     sealBatch: mutation({
-      exposure: "internal",
+      exposure: "view",
       command: {
         label: "Finish with uploaded photos",
         confirmation: null,
         success: "Upload batches closed; uploaded photos retained",
       },
-      native: "Close a photo upload batch so grouping can start",
       input: photoImportSealBatchInput,
       output: photoRunLifecycleOutput,
       invalidates: ["runOnly"],
     }),
     setProcessor: mutation({
       exposure: "view",
-      native: "Choose Cubby grouping or a Claude/Codex handoff for a photo run",
       input: photoRunSetProcessorInput,
       output: photoRunLifecycle,
       invalidates: ["runOnly"],
@@ -552,44 +529,37 @@ export const photoImportContract = defineContract(
         confirmation: null,
         success: "Failed photos skipped; originals retained",
       },
-      native: "Continue a photo run without photos whose description failed",
       input: photoRunExcludeFailedInput,
       output: photoRunLifecycle,
       invalidates: ["runOnly"],
     }),
     registerLiveActivity: mutation({
-      exposure: "internal",
-      native: "Register this device's Live Activity push token for a photo run",
+      exposure: "view",
       input: photoRunLiveActivityRegisterInput,
       output: photoRunLiveActivityRegisterOutput,
     }),
     endLiveActivity: mutation({
-      exposure: "internal",
-      native: "Stop Live Activity pushes for a photo run on this device",
+      exposure: "view",
       input: photoRunLiveActivityEndInput,
       output: photoRunLiveActivityEndOutput,
     }),
     registerNotification: mutation({
-      exposure: "internal",
-      native: "Notify this device when a photo run is ready or needs attention",
+      exposure: "view",
       input: photoRunNotificationRegisterInput,
       output: photoRunNotificationRegisterOutput,
     }),
     endNotification: mutation({
-      exposure: "internal",
-      native: "Stop photo run notifications on this device",
+      exposure: "view",
       input: photoRunNotificationEndInput,
       output: photoRunNotificationEndOutput,
     }),
     finalize: mutation({
-      exposure: "internal",
-      native: "Finalize bulk-uploaded photos into a photo-inventory run",
+      exposure: "view",
       input: photoImportFinalizeInputSchema,
       output: photoImportFinalizeOutputSchema,
     }),
     reconcile: mutation({
-      exposure: "internal",
-      native: "Lock-aware photo import reconciliation",
+      exposure: "view",
       input: photoImportReconcileInputSchema,
       output: photoImportReconcileOutputSchema,
     }),

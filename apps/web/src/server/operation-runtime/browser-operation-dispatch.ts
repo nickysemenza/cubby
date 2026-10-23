@@ -1,51 +1,134 @@
+import { StatusCodes } from "http-status-codes";
 import superjson from "superjson";
 import { z } from "zod";
 
 import { browserOperationPath } from "~/lib/browser-operation-path";
+import type { ErrorDiagnostics } from "~/lib/error-diagnostics";
 import { startOperationDefinitionFor } from "~/lib/start-operation-observability";
 import { superJsonResultSchema } from "~/lib/superjson-wire";
 import {
+  API_AUTH,
   authenticate,
-  BROWSER_AUTH,
-  type Challenge,
   challengeError,
   isChallenge,
+  type AuthPolicy,
+  type Challenge,
   type Principal,
 } from "~/server/http/authenticate";
 import { getRequestId } from "~/server/observability/tracing";
 import { startOperationDispatchInput } from "~/server/operation-runtime/start-operation-dispatch.contract";
 import type { StartOperationDispatchInput } from "~/server/operation-runtime/start-operation-dispatch.contract";
 import { dispatchStartOperation } from "~/server/operation-runtime/start-operation-dispatch.server";
+import type { PublicStartOperationError } from "~/server/operation-runtime/start-operation.contract";
+import {
+  unparsedStartOperationDataSchema,
+  type UnparsedStartOperationData,
+} from "~/server/operation-runtime/start-operation.contract";
 import { normalizeStartOperationError } from "~/server/operation-runtime/start-operation.server";
 import { settleBatch } from "~/server/workflows/settle-batch";
 
-const batchBodySchema = z.object({ batch: z.array(z.unknown()) });
+type ValueCodec = "json" | "superjson";
+type Dispatch = typeof dispatchStartOperation;
+type Authenticate = (
+  request: Request,
+  policy: AuthPolicy,
+) => Promise<Principal | Challenge>;
 
-/** Concurrent reads a browser coalesced into one request; queries only. */
-const startOperationDispatchBatch = z.object({
-  batch: z
-    .array(
-      startOperationDispatchInput.refine(
-        ({ operation }) =>
-          startOperationDefinitionFor(operation)?.kind === "query",
-        "Only queries can be batched",
-      ),
-    )
-    .min(1)
-    .max(20),
+const cacheHeaders = { "cache-control": "no-store" };
+const statusCodes = new Map(Object.entries(StatusCodes));
+const statusForCode = (code: string): number => {
+  const status = statusCodes.get(code);
+  return typeof status === "number" && status >= 400 && status <= 599
+    ? status
+    : StatusCodes.INTERNAL_SERVER_ERROR;
+};
+const publicError = (
+  code: string,
+  message: string,
+  requestId: string,
+  operation = "dispatch",
+  stage: ErrorDiagnostics["stage"] = "context",
+): PublicStartOperationError => ({
+  code,
+  message,
+  requestId,
+  diagnostics: { origin: "server", operation, stage, causes: [] },
 });
 
-/**
- * One operation under the request's principal; without one, the same
- * unauthenticated failure every operation in the request reports.
- */
+const codecFor = (request: Request): ValueCodec | null => {
+  const codec = request.headers.get("x-cubby-value-codec");
+  if (codec === null || codec === "json") return "json";
+  return codec === "superjson" ? "superjson" : null;
+};
+
+const encode = (value: unknown, codec: ValueCodec): string =>
+  JSON.stringify(codec === "superjson" ? superjson.serialize(value) : value) ??
+  "null";
+
+const decode = (
+  value: unknown,
+  codec: ValueCodec,
+): UnparsedStartOperationData =>
+  unparsedStartOperationDataSchema.parse(
+    codec === "superjson"
+      ? superjson.deserialize(superJsonResultSchema.parse(value))
+      : value,
+  );
+
+const responseHeaders = (codec: ValueCodec, extra?: HeadersInit): Headers => {
+  const headers = new Headers(extra);
+  headers.set("cache-control", cacheHeaders["cache-control"]);
+  headers.set("content-type", "application/json; charset=utf-8");
+  if (codec === "superjson") headers.set("x-cubby-value-codec", codec);
+  else headers.delete("x-cubby-value-codec");
+  return headers;
+};
+
+const jsonResponse = (
+  body: unknown,
+  status: number,
+  codec: ValueCodec,
+  extraHeaders?: HeadersInit,
+) =>
+  new Response(encode(body, codec), {
+    status,
+    headers: responseHeaders(codec, extraHeaders),
+  });
+
+const parseEnvelope = (value: unknown) => {
+  const envelope = z.record(z.string(), z.unknown()).parse(value);
+  const operation = z.string().parse(envelope.operation);
+  return startOperationDispatchInput.parse({
+    operation,
+    // Omitted input is the JSON equivalent of an operation with no input.
+    input: Object.hasOwn(envelope, "input") ? envelope.input : undefined,
+  });
+};
+
+const parseBody = async (request: Request, codec: ValueCodec) =>
+  decode(await request.json(), codec);
+
+const errorResponse = (
+  error: PublicStartOperationError,
+  codec: ValueCodec,
+  extraHeaders?: HeadersInit,
+  status = statusForCode(error.code),
+) => jsonResponse(error, status, codec, extraHeaders);
+
+const isBatchBody = (value: unknown): value is { batch: unknown[] } =>
+  typeof value === "object" &&
+  value !== null &&
+  "batch" in value &&
+  Array.isArray(value.batch);
+
 export async function dispatchAs(
   authenticated: Principal | Challenge,
   input: StartOperationDispatchInput,
   request: Request,
+  dispatch: Dispatch = dispatchStartOperation,
 ) {
   if (!isChallenge(authenticated))
-    return dispatchStartOperation({
+    return dispatch({
       ...input,
       request: {
         principal: authenticated,
@@ -68,115 +151,161 @@ export async function dispatchAs(
   };
 }
 
-export async function handleBrowserOperationDispatch(
-  request: Request,
-): Promise<Response> {
-  const headers = new Headers({ "cache-control": "no-store" });
-  if (request.method !== "POST")
-    return Response.json(
-      superjson.serialize({
-        ok: false,
-        error: { code: "METHOD_NOT_ALLOWED", message: "POST required" },
-      }),
-      { status: 405, headers },
-    );
-  try {
-    const authenticated = await authenticate(request, BROWSER_AUTH);
-    if (isChallenge(authenticated) && authenticated.status === 403)
-      return Response.json(
-        superjson.serialize({
-          ok: false,
-          error: { code: authenticated.code, message: authenticated.message },
-        }),
-        { status: 403, headers },
-      );
-    if (!isChallenge(authenticated))
-      for (const [name, value] of authenticated.responseHeaders)
-        headers.append(name, value);
-    const body = superjson.deserialize(
-      superJsonResultSchema.parse(await request.json()),
-    );
-    // A body with `batch` is a batch: report its own validation issues rather
-    // than falling through to the single-operation parser's misleading error.
-    if (batchBodySchema.safeParse(body).success) {
-      const batched = { data: startOperationDispatchBatch.parse(body) };
-      z.literal(
-        browserOperationPath(
-          batched.data.batch.map(({ operation }) => operation),
+export function createBrowserOperationHandler(options?: {
+  authenticate?: Authenticate;
+  dispatch?: Dispatch;
+}) {
+  const authenticateRequest = options?.authenticate ?? authenticate;
+  const dispatch = options?.dispatch ?? dispatchStartOperation;
+
+  return async function handleBrowserOperationDispatch(
+    request: Request,
+  ): Promise<Response> {
+    const requestId = getRequestId(request.headers) ?? crypto.randomUUID();
+    let operation = "dispatch";
+    let requestAuthenticated = false;
+    const codec = codecFor(request);
+    if (codec === null)
+      return errorResponse(
+        publicError(
+          "UNSUPPORTED_MEDIA_TYPE",
+          "Unsupported value codec",
+          requestId,
         ),
-      ).parse(new URL(request.url).pathname);
-      // The request authenticated once; each operation still settles
-      // independently, sharing this isolate and its request-scoped pool.
-      // Results stream as NDJSON in finish order, so a fast read never waits
-      // behind a slow sibling.
-      const { readable, writable } = new TransformStream<Uint8Array>();
-      const writer = writable.getWriter();
-      const encoder = new TextEncoder();
-      void settleBatch(
-        batched.data.batch,
-        async (input) => {
-          try {
-            return await dispatchAs(authenticated, input, request);
-          } catch (error) {
-            if (request.signal.aborted) throw error;
-            return {
-              ok: false as const,
-              error: normalizeStartOperationError(
-                error,
-                "input",
-                getRequestId(request.headers),
-                {
-                  operation: input.operation,
-                  authenticated: false,
-                  headers: request.headers,
-                },
-              ).publicError,
-            };
-          }
-        },
-        {
-          concurrency: 4,
-          onSettled: (index, result) =>
-            void writer.write(
-              encoder.encode(
-                `${JSON.stringify({ i: index, r: superjson.serialize(result) })}\n`,
-              ),
-            ),
-        },
-      ).then(
-        () => writer.close(),
-        (error: Error) => writer.abort(error),
+        "json",
+        undefined,
+        StatusCodes.UNSUPPORTED_MEDIA_TYPE,
       );
-      headers.set("content-type", "application/x-ndjson");
-      return new Response(readable, { headers });
+    if (request.method !== "POST")
+      return errorResponse(
+        publicError("METHOD_NOT_ALLOWED", "POST required", requestId),
+        codec,
+        { allow: "POST" },
+        StatusCodes.METHOD_NOT_ALLOWED,
+      );
+
+    try {
+      // Authenticate exactly once, before reading the request body. In
+      // particular, API_AUTH applies the cookie same-origin rule to writes.
+      const authenticated = await authenticateRequest(request, API_AUTH);
+      const authHeaders = isChallenge(authenticated)
+        ? undefined
+        : authenticated.responseHeaders;
+      if (isChallenge(authenticated)) {
+        const error = normalizeStartOperationError(
+          challengeError(authenticated),
+          "context",
+          requestId,
+          {
+            operation,
+            authenticated: false,
+            headers: request.headers,
+          },
+        ).publicError;
+        return errorResponse(error, codec, undefined, authenticated.status);
+      }
+      requestAuthenticated = true;
+
+      const body = await parseBody(request, codec);
+      const pathname = new URL(request.url).pathname;
+
+      if (isBatchBody(body)) {
+        const batch = z
+          .array(z.unknown())
+          .min(1)
+          .max(20)
+          .parse(body.batch)
+          .map(parseEnvelope);
+        operation = batch.map(({ operation }) => operation).join(", ");
+        if (
+          batch.some(
+            ({ operation }) =>
+              startOperationDefinitionFor(operation)?.kind !== "query" ||
+              startOperationDefinitionFor(operation)?.exposure === "internal",
+          )
+        )
+          throw new z.ZodError([
+            {
+              code: "custom",
+              path: ["batch"],
+              message: "Only queries can be batched",
+            },
+          ]);
+        z.literal(
+          browserOperationPath(batch.map(({ operation }) => operation)),
+        ).parse(pathname);
+        const { readable, writable } = new TransformStream<Uint8Array>();
+        const writer = writable.getWriter();
+        const encoder = new TextEncoder();
+        void settleBatch(
+          batch,
+          async (input) => {
+            try {
+              return await dispatchAs(authenticated, input, request, dispatch);
+            } catch (error) {
+              if (request.signal.aborted) throw error;
+              return {
+                ok: false as const,
+                error: normalizeStartOperationError(error, "input", requestId, {
+                  operation: input.operation,
+                  authenticated: requestAuthenticated,
+                  headers: request.headers,
+                }).publicError,
+              };
+            }
+          },
+          {
+            concurrency: 4,
+            onSettled: (index, result) => {
+              const value =
+                codec === "superjson" ? superjson.serialize(result) : result;
+              void writer.write(
+                encoder.encode(`${JSON.stringify({ i: index, r: value })}\n`),
+              );
+            },
+          },
+        ).then(
+          () => writer.close(),
+          (error: Error) => writer.abort(error),
+        );
+        const headers = responseHeaders(codec, authHeaders);
+        headers.set("content-type", "application/x-ndjson; charset=utf-8");
+        return new Response(readable, { headers });
+      }
+
+      const envelope = parseEnvelope(body);
+      operation = envelope.operation;
+      z.literal(browserOperationPath(envelope.operation)).parse(pathname);
+      if (startOperationDefinitionFor(operation)?.exposure === "internal")
+        return errorResponse(
+          publicError("NOT_FOUND", "Operation not found", requestId, operation),
+          codec,
+          authHeaders,
+          StatusCodes.NOT_FOUND,
+        );
+      const result = await dispatchAs(
+        authenticated,
+        envelope,
+        request,
+        dispatch,
+      );
+      if (!result.ok) return errorResponse(result.error, codec, authHeaders);
+      return jsonResponse(result, StatusCodes.OK, codec, authHeaders);
+    } catch (error) {
+      if (request.signal.aborted) throw error;
+      const normalized = normalizeStartOperationError(
+        error,
+        "input",
+        requestId,
+        {
+          operation,
+          authenticated: requestAuthenticated,
+          headers: request.headers,
+        },
+      );
+      return errorResponse(normalized.publicError, codec);
     }
-    const input = startOperationDispatchInput.parse(body);
-    z.literal(browserOperationPath(input.operation)).parse(
-      new URL(request.url).pathname,
-    );
-    const result = await dispatchAs(authenticated, input, request);
-    // The hosted native workspace turns a 426 into its update prompt; the
-    // envelope is the same `{ ok: false }` body every refusal carries.
-    return Response.json(superjson.serialize(result), {
-      status:
-        !result.ok && result.error.code === "UPGRADE_REQUIRED" ? 426 : 200,
-      headers,
-    });
-  } catch (error) {
-    if (request.signal.aborted) throw error;
-    const normalized = normalizeStartOperationError(
-      error,
-      "input",
-      getRequestId(request.headers),
-      {
-        operation: "dispatch",
-        authenticated: false,
-        headers: request.headers,
-      },
-    );
-    return Response.json(
-      superjson.serialize({ ok: false, error: normalized.publicError }),
-      { headers },
-    );
-  }
+  };
 }
+
+export const handleBrowserOperationDispatch = createBrowserOperationHandler();

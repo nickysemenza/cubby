@@ -16,7 +16,7 @@ private final class FilterStub: URLProtocol, @unchecked Sendable {
     static func session() -> URLSession { StubNetworking.session(protocolClass: self) }
 }
 
-/// `listPage`/`timeline` re-nest each flat filter name under the kernel body's `filters` and
+/// `listPage`/`timeline` re-nest each flat filter name under the operation input's `filters` and
 /// type its value from `Generated/entity-kernel.json`; these pin the JSON each parameter kind
 /// produces, one row per kind the catalog declares
 /// (`apps/web/generator/http-api/entity-kernel.ts`).
@@ -36,7 +36,7 @@ struct EntityFilterTests {
 
     /// The JSON body of the one request `body` sends, answered with `response`.
     private func requestBody(
-        answering response: Data = emptyPage, path: String = "/api/v1/entity/list",
+        answering response: Data = emptyPage, path: String = "/api/operations/entity.list",
         _ body: (CubbyClient) async throws -> Void
     ) async throws -> JSONValue {
         defer { FilterStub.handler.withLock { $0 = nil } }
@@ -55,7 +55,9 @@ struct EntityFilterTests {
         let request = try #require(requests.first)
         #expect(request.method == "POST")
         #expect(request.path == path)
-        return try JSONDecoder().decode(JSONValue.self, from: try #require(request.body))
+        let envelope = try JSONDecoder().decode(JSONValue.self, from: try #require(request.body))
+        #expect(envelope["operation"]?.stringValue == path.split(separator: "/").last.map(String.init))
+        return try #require(envelope["input"])
     }
 
     private static func bodyData(_ request: URLRequest) throws -> Data {
@@ -191,7 +193,9 @@ struct EntityFilterTests {
         let filters = EntityFilterState([
             "ids": ["PRD-2345"], "order": ["desc"], "tagFilters": ["a"],
         ])
-        let body = try await requestBody(answering: Data(response.utf8), path: "/api/v1/entity/timeline") {
+        let body = try await requestBody(
+            answering: Data(response.utf8), path: "/api/operations/entity.timeline"
+        ) {
             client in
             let timeline = try await client.timeline(EntityCatalog[.product], filters: filters)
             #expect(timeline.groups.isEmpty)

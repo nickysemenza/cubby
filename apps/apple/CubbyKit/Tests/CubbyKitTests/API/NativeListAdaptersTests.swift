@@ -50,7 +50,7 @@ struct NativeListAdaptersTests {
         #expect(deferred.groups.map(\.id) == ["media"])
         _ = try await deferred.enrich(["PRD-SYNTHETIC"], ["media"])
         let body = try #require(bodies.withLock { $0.first })
-        let input = try JSONDecoder().decode(JSONValue.self, from: body)
+        let input = try Self.operationInput(from: body)
         #expect(input["fields"] == ["displayImages", "images"])
         #expect(input["groups"] == nil)
     }
@@ -65,8 +65,8 @@ struct NativeListAdaptersTests {
     }
 
     /// Regression: native cookbooks sorted a client-side copy through a hand-kept field allow-list
-    /// that threw `invalidValue` for the manifest's `createdAt` sort. Cookbook now reads the
-    /// kernel list like every other entity, so a declared sort reaches the server.
+    /// that threw `invalidValue` for the manifest's `createdAt` sort. Cookbook now reads through
+    /// the shared entity list operation, so a declared sort reaches the server.
     @Test func cookbookListSendsDeclaredSortsToTheServer() async throws {
         defer { NativeListStub.handler.withLock { $0 = nil } }
         let requests = Mutex<[(String, Data?)]>([])
@@ -83,8 +83,8 @@ struct NativeListAdaptersTests {
 
         #expect(page.items.map(\.id) == ["CKB-1", "CKB-2"])
         let (path, body) = try #require(requests.withLock { $0.first })
-        #expect(path == "/api/v1/entity/list")
-        let input = try JSONDecoder().decode(JSONValue.self, from: try #require(body))
+        #expect(path == "/api/operations/entity.list")
+        let input = try Self.operationInput(from: try #require(body))
         #expect(input["entity"] == "cookbook")
         #expect(input["pagination"] == ["pageIndex": 1, "pageSize": 1])
         #expect(
@@ -137,8 +137,7 @@ struct NativeListAdaptersTests {
         #expect(page.items.map(\.id) == ["12345"])
         #expect(page.items.first?.title == "Numeric food")
         let encoded = try #require(body.withLock { $0 })
-        let object = try #require(
-            JSONDecoder().decode(JSONValue.self, from: encoded).objectValue)
+        let object = try #require(try Self.operationInput(from: encoded).objectValue)
         let expectedFilters: JSONValue = [
             "nameFilter": "12345",
             "dataTypeFilter": ["branded_food"],
@@ -173,15 +172,17 @@ struct NativeListAdaptersTests {
         }
     }
 
-    @Test func cookbookDetailUsesTheKernelGetAndUsdaKeepsItsTypedRPC() async throws {
+    @Test func cookbookAndUsdaDetailsUseOperationPostBodies() async throws {
         defer { NativeListStub.handler.withLock { $0 = nil } }
-        let urls = Mutex<[URL]>([])
+        let requests = Mutex<[(path: String, body: Data?)]>([])
         NativeListStub.handler.withLock { handler in
             handler = { request in
-                if let url = request.url { urls.withLock { $0.append(url) } }
+                requests.withLock {
+                    $0.append((request.url?.path ?? "", try? Self.requestBody(request)))
+                }
                 switch request.url?.path {
-                case "/api/v1/entity/detail": return (200, Self.cookbookDetailPayload)
-                case "/api/v1/usda-food/detail": return (200, Self.usdaDetailPayload)
+                case "/api/operations/entity.detail": return (200, Self.cookbookDetailPayload)
+                case "/api/operations/usda-food.detail": return (200, Self.usdaDetailPayload)
                 default: return (500, Data())
                 }
             }
@@ -197,11 +198,12 @@ struct NativeListAdaptersTests {
         #expect(food.title == "Numeric food")
         #expect(food.raw["id"] == "12345")
 
-        let queryItems = urls.withLock { urls in
-            urls.map { URLComponents(url: $0, resolvingAgainstBaseURL: false)?.queryItems ?? [] }
-        }
-        try #require(queryItems.count == 2)
-        #expect(queryItems[1].contains(URLQueryItem(name: "id", value: "12345")))
+        let captured = requests.withLock { $0 }
+        try #require(captured.count == 2)
+        #expect(
+            captured.map(\.path) == ["/api/operations/entity.detail", "/api/operations/usda-food.detail"])
+        #expect(try Self.operationInput(from: try #require(captured[0].body))["shortcode"] == "CKB-1")
+        #expect(try Self.operationInput(from: try #require(captured[1].body))["id"] == 12345)
     }
 
     nonisolated private static let usdaFood = FoodSummaryWithLinkedProducts(
@@ -255,7 +257,7 @@ struct NativeListAdaptersTests {
         cookbook("CKB-1", "Alpha Cookbook"), cookbook("CKB-2", "Beta Cookbook"),
     ]
 
-    /// The kernel `get` adds the shared detail media to the cookbook summary.
+    /// The entity detail operation adds shared media to the cookbook summary.
     nonisolated private static let cookbookDetailPayload: Data = {
         let summary = try! JSONEncoder.cubby().encode(cookbooks[0])
         var object = try! JSONSerialization.jsonObject(with: summary) as! [String: Any]
@@ -265,6 +267,11 @@ struct NativeListAdaptersTests {
         object["sources"] = [Any]()
         return try! JSONSerialization.data(withJSONObject: object)
     }()
+
+    nonisolated private static func operationInput(from data: Data) throws -> JSONValue {
+        let envelope = try JSONDecoder().decode(JSONValue.self, from: data)
+        return try #require(envelope["input"])
+    }
 
     nonisolated private static func requestBody(_ request: URLRequest) throws -> Data {
         if let body = request.httpBody { return body }

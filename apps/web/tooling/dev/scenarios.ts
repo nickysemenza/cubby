@@ -178,11 +178,14 @@ export async function seedLocalFixturePack(
             import.meta.url,
           ),
         );
-        const init = await client.post("/api/v1/image/uploadImage", {
+        const init = await client.post("/api/operations/image.uploadImage", {
           data: {
-            filename: "synthetic-fixture-shirt.png",
-            contentType: "image/png",
-            size: bytes.length,
+            operation: "image.uploadImage",
+            input: {
+              filename: "synthetic-fixture-shirt.png",
+              contentType: "image/png",
+              size: bytes.length,
+            },
           },
         });
         if (!init.ok())
@@ -190,7 +193,7 @@ export async function seedLocalFixturePack(
             `Local image upload initiation failed: ${init.status()} ${await init.text()}`,
           );
         const upload = initiateUploadWithoutEntityResponseSchema.parse(
-          await init.json(),
+          (await init.json()).data,
         );
         if (new URL(upload.uploadUrl).origin !== new URL(baseURL).origin)
           throw new Error("Local image upload escaped the local origin");
@@ -202,8 +205,11 @@ export async function seedLocalFixturePack(
           throw new Error(
             `Local image storage failed: ${stored.status()} ${await stored.text()}`,
           );
-        const final = await client.post("/api/v1/image/markUploaded", {
-          data: { id: upload.imageId },
+        const final = await client.post("/api/operations/image.markUploaded", {
+          data: {
+            operation: "image.markUploaded",
+            input: { id: upload.imageId },
+          },
         });
         if (!final.ok())
           throw new Error(

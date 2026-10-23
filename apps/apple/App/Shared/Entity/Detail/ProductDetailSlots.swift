@@ -5,7 +5,10 @@ import SwiftUI
 struct ProductNutritionDetailSlot: View {
     let row: EntityRow
 
-    private var display: ProductNutritionDisplay? { try? row.decode(ProductDetail.self).nutritionDisplay }
+    private var display: ProductDetailNutritionDisplay? {
+        guard let detail = try? row.decode(ProductDetail.self) else { return nil }
+        return detail.nutritionDisplay
+    }
 
     var body: some View {
         if let display {

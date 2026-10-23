@@ -17,13 +17,12 @@ them `axiom:axiom-*`), plus the relevant platform skill.
 
 ## Wire rules (non-negotiable)
 
-- `/api/v1` has no `{ok,data}` envelope: a 2xx body _is_ the payload. Every error status carries
-  one bare `ApiError` body (`{code, message, reason?, requestId?, validationIssues?}`), decoded by
-  `CubbyAPIError` — never a per-operation error type.
-- A flat list/get query is plain GET query params: `page=1&pageSize=20&sort=-name`, literal values
-  (never JSON-quoted), and an array repeats its key (`tagFilters=a&tagFilters=b`), never a
-  JSON-encoded array value. A structured query (search, a filter tree, anything nested) is a POST
-  body instead — never hand-build a query string for one.
+- Every query and mutation uses POST /api/operations/{operationId} with
+  {operation, input?}. Responses use {ok: true, data}; nullable outputs
+  keep data: null. Errors use the public ApiError body (code, message, optional
+  reason, request id, validation issues and diagnostics), decoded by
+  CubbyAPIError — never a per-operation error type. Apple sends plain JSON;
+  the browser opts into superjson with x-cubby-value-codec: superjson.
 - Send `Origin: cubby-mobile://` on every `/api/auth/*` request (Better Auth trusts this origin;
   omitting it fails sign-in).
 - Store the `set-auth-token` response header verbatim in Keychain. If a _later_ `/api/auth/*`
@@ -53,39 +52,29 @@ them `axiom:axiom-*`), plus the relevant platform skill.
   retain raw values; surface unsupported diagnostics and disable interpretation-dependent
   actions. Fix codecs in `apps/web/generator/http-api/swift-models.ts`, with executable
   regressions in `NativeCodecTests.swift`.
-- The server answers an outdated `cubby-apple` build's writes (every non-query
-  operation) with 426 and `reason: CLIENT_UPDATE_REQUIRED` and still serves its
-  reads; `RequestTrace` latches it and `RootView` pins `UpdateAvailableBanner`
-  above the app, which stays usable. Follow the shared
-  [version rule](../../docs/agents/domain-rules.md#breaking-changes)
-  and [release policy](../../docs/ci.md#apple-testflight-release).
+- The server answers an outdated cubby-apple build's writes with 426 and
+  reason CLIENT_UPDATE_REQUIRED. Reads are not gated, but a changed response
+  shape can break an old build. RequestTrace latches the write refusal and
+  RootView pins UpdateAvailableBanner above the app, which stays usable.
+  Follow the shared version rule and release policy.
 - Manifest-driven bodies are composed JSON sent directly through `CubbyClient.request`;
   server declarations validate them. Typed models preserve omitted/null/value states with
   `NativeField` for optional nullable fields. Omit optional non-nullable fields; encode
   explicit null only where the declaration permits it. The
   [native model pipeline](CubbyKit/Sources/CubbyAPI/README.md) owns representation rules.
 
-- Never hand-write a `(method, path)` pair. `OperationRoute.all` is generated from native declarations
-  by `apps/web/generator/http-api/native-operations.ts` into `Generated/OperationRoutes.swift`
-  (`pnpm generate`). Look routes up
-  by operation id; entity reads go through `CubbyClient.list`/`row`, never a path. Entity reads
-  and writes go through generic kernel operations (`entity.detail`, `entity.list`,
-  `entity.mutate`, `entity.timeline`); declared relationship rows use the paged
-  `CubbyClient.relationRows` adapter over `entity.relation`, retaining server provenance.
-  Kernel actions are dispatched by the hand-written
-  `Manifest/EntityKernel.swift` over the generated `Generated/entity-kernel.json` (per-entity
-  actions, image attach/reorder, and every list/timeline filter name with its JSON kind). Not
-  every entity has every action: read-only `image`, `cookbook` and `run` have no `create`;
-  `usda-food`, the external USDA catalog, reads through its flagged `usdaFood.list`/`detail`
-  RPCs. Kernel bodies and responses are untyped JSON on the wire; the server parses each with the
-  entity's schema, and hand-written Swift decodes a typed record only through the short
-  `NATIVE_TYPED_RECORDS` keep-list (`apps/web/generator/http-api/type-overrides.ts`).
-  `delete` is destructive: only `HeroActionRunner` calls it, after an explicit
-  confirmation behind the connection-impact preview. The HTTP API carries exactly the
-  operations flagged `native: "<why>"` on their contract member
-  (`apps/web/src/contracts/*.contract.ts`).
-  Generated models, operation methods, routes and `entity-kernel.json` are emitter-owned.
-  Generation rejects unsupported wire shapes; host tests exercise the actual generated codecs.
+- Never hand-write an operation id roster. OperationCatalog.all and generated
+  methods come from every capability and view query or mutation contract
+  through apps/web/generator/http-api/native-operations.ts (pnpm generate).
+  Internal operations and subscriptions do not use the HTTP route. The shared
+  transport builds /api/operations/{operationId} from that id. Entity reads go
+  through CubbyClient.list/row, never a path. Entity reads and writes go
+  through generic kernel operations (entity.detail, entity.list, entity.mutate,
+  entity.timeline); declared relationship rows use the paged CubbyClient
+  relationRows adapter over entity.relation, retaining server provenance.
+  Kernel actions are dispatched by Manifest/EntityKernel.swift over the generated
+  entity-kernel.json. Not every entity has every action: read-only image,
+  cookbook and run have no create; usda-food reads through usdaFood.list/detail.
 - `App/<platform>/Info.plist` is generated by XcodeGen from `project.yml` `info.properties`;
   edit the YAML, never the plist (a regenerate silently reverts hand edits, including URL schemes).
 - Presigned image PUTs (`PresignedUpload`) send only `Content-Type` and no auth header; every
@@ -150,7 +139,7 @@ None is committed; edit the generator or its inputs, never the output. A missing
 | ------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------ |
 | `CubbyKit/Sources/CubbyKit/Generated/native-coverage.json`                                                               | `packages/schemas/src/native-coverage.ts`                                                                    |
 | `Generated/{entity-manifest.json,EntityDescriptors,EntityVocabulary}.swift`, `CubbyAPISupport/Generated/EntityKey.swift` | `apps/web/generator/entities/render/swift-catalog.ts`                                                        |
-| `Generated/{OperationRoutes,NativeOperations,APITypes}.swift`                                                            | `apps/web/generator/http-api/native-artifacts.ts`, `native-operations.ts`                                    |
+| Generated/{OperationCatalog,NativeOperations,APITypes}.swift                                                             | apps/web/generator/http-api/native-artifacts.ts, native-operations.ts                                        |
 | `Generated/entity-kernel.json`                                                                                           | `apps/web/generator/http-api/entity-kernel.ts`                                                               |
 | `Generated/SharedConstants.swift`                                                                                        | `packages/shared/src/client-constants.ts`, `apps/web/cloudflare.config.ts`, `WAYFINDING_DOMAIN_PRESENTATION` |
 | `CubbyAPI/Models/*.gen.swift`                                                                                            | `apps/web/generator/http-api/native-contract.ts`, `swift-models.ts`                                          |

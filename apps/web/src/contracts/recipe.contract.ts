@@ -202,7 +202,6 @@ export const recipeContract = defineContract(
       cache: { tags: [["recipe", "dependencyGraph"]] },
     }),
     getIngredientUsage: query({
-      native: "Cookbook contents",
       input: recipeCookbookScopeInput,
       output: ingredientUsageSchema,
       cache: { tags: [["recipe", "ingredientUsage"]] },
@@ -238,7 +237,6 @@ export const recipeContract = defineContract(
     }),
     generateFlow: mutation({
       command: { label: "Generate walkthrough", confirmation: null },
-      native: "Generate a recipe's AI walkthrough from its report",
       input: recipeFlowGenerateInputSchema,
       output: recipeFlowArtifactSchema,
       invalidates: ["recipe"],
@@ -324,18 +322,16 @@ export const recipeContract = defineContract(
      * caps it): the same workflow, finalized per window, answered with where to continue.
      */
     reprocessCookbookOnce: mutation({
-      exposure: "internal",
+      exposure: "view",
       note: "The stream-less chunking of reprocessCookbook for the Apple app",
-      native: "Reprocess a cookbook from its report command",
       input: cookbookReprocessChunkInput,
       output: cookbookReprocessOnceOut,
       invalidates: ["recipe", "cookbook"],
     }),
     /** `importCookbookStream` for one capped chunk of source recipes, answered with its counts. */
     importCookbookRecipesOnce: mutation({
-      exposure: "internal",
+      exposure: "view",
       note: "The stream-less chunking of importCookbookStream for the Apple app",
-      native: "Add source recipes to a cookbook from its report command",
       input: cookbookImportChunkInput,
       output: cookbookImportOnceOut,
       invalidates: ["recipe", "cookbook"],
@@ -347,7 +343,6 @@ export const recipeContract = defineContract(
       description:
         "Reparse one recipe ingredient line after a parser upgrade or source correction. This changes the saved line; use recipe.patch_line for ordinary member edits.",
       command: { label: "Reparse line", confirmation: null },
-      native: "Re-parse a recipe line from a report row",
       input: recipeLineReparseInput,
       output: recipeLineReparseOut,
       invalidates: ["recipe", "ingredient"],

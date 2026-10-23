@@ -72,10 +72,6 @@ const getHandler = moduleLoader(
   "cf.importHandler",
   () => import("@tanstack/react-start/server-entry"),
 );
-const getHttpApi = moduleLoader(
-  "cf.importHttpApi",
-  () => import("~/server/http/http-api"),
-);
 const getBrowserOperation = moduleLoader(
   "cf.importBrowserOperation",
   () => import("~/server/operation-runtime/browser-operation-dispatch"),
@@ -128,10 +124,6 @@ async function invokeApplication(
   if (isBrowserOperationPath(url.pathname)) {
     const module = await getBrowserOperation();
     return module.handleBrowserOperationDispatch(request);
-  }
-  if (url.pathname.startsWith("/api/v1/")) {
-    const module = await getHttpApi();
-    return module.handleHttpOperation(request);
   }
   const module = await getHandler();
   return module.default.fetch(request);

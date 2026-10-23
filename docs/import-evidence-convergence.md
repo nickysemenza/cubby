@@ -129,7 +129,7 @@ Unattended Mail import cannot submit SMS exports.
 Interactive scripts can use the existing CLI login and `cubby call
 shipment.record --json-body '<JSON>'` to send the same evidence packets over
 the authenticated HTTP API. Omit MCP's top-level `action` from the request body.
-Read back with `cubby call shipment.timeline --query shipmentId=SHIP-4K7MN`.
+Read back with `cubby call shipment.timeline --json-body '{"shipmentId":"SHIP-4K7MN"}'`.
 Reviewed corrections use `cubby call shipment.edit_observation --json-body '<JSON>'`
 with the current observation ID from the timeline, Shipment reference and a
 partial patch. This is the same ownership-checked, revision-preserving writer as MCP.

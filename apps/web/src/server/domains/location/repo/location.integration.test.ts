@@ -453,7 +453,7 @@ describe("deleteLocations hierarchy", () => {
  * The detail payload's `inventoryItems` and `directItemCount` are one query
  * (`location/stock-items.ts`). They used to be two: the count came from its
  * own GROUP BY while the item list was never mapped, so the HTTP kernel
- * detail (`POST /api/v1/entity/detail`, the CLI's `entity get location`)
+ * detail (`/api/operations/entity.detail`, the CLI's `entity get location`)
  * reported `directItemCount: 12` next to `inventoryItems: []`. The web page
  * never noticed because its Contents table reads the inventory list instead.
  *

@@ -42,6 +42,10 @@ private final class NativeTransportStub: URLProtocol, @unchecked Sendable {
 
 @Suite("Native HTTP transport", .serialized)
 struct NativeHTTPTransportTests {
+    private static func success(_ data: String = "null") -> Data {
+        Data("{\"ok\":true,\"data\":\(data)}".utf8)
+    }
+
     private func provider(with credential: CubbyCredential?) throws -> (
         CredentialProvider, InMemorySessionTokenStore
     ) {
@@ -60,19 +64,25 @@ struct NativeHTTPTransportTests {
             observer: observer)
     }
 
-    @Test func queryPreservesLiteralPlusSpacesPercentAndRepeatedKeys() async throws {
+    @Test func operationUsesPostEnvelopeWithJSONInput() async throws {
         let (credentials, _) = try provider(with: nil)
+        let body = Data(#"{"q":"USB+C %","tag":["a+b","c"]}"#.utf8)
         NativeTransportStub.handler.withLock {
             $0 = { request in
-                #expect(
-                    request.url?.absoluteString
-                        == "https://cubby.example/api/v1/search/find?q=USB%2BC%20%25&tag=a%2Bb&tag=c")
-                return (200, Data(), [:])
+                #expect(request.url?.path == "/api/operations/search.find")
+                #expect(request.httpMethod == "POST")
+                let envelope = try #require(
+                    JSONSerialization.jsonObject(with: try StubNetworking.requestBody(request))
+                        as? [String: Any])
+                #expect(envelope["operation"] as? String == "search.find")
+                let input = try #require(envelope["input"] as? [String: Any])
+                #expect(input["q"] as? String == "USB+C %")
+                #expect(input["tag"] as? [String] == ["a+b", "c"])
+                return (200, Self.success(), [:])
             }
         }
         _ = try await transport(credentials).send(
-            route: OperationRoute.all["search.find"]!,
-            query: [("q", "USB+C %"), ("tag", "a+b"), ("tag", "c")])
+            operationID: "search.find", body: body)
     }
 
     @Test func headersApplyEvenWhenResponseBodyFails() async throws {
@@ -93,7 +103,7 @@ struct NativeHTTPTransportTests {
                 credentials: credentials, identity: .unknown, session: URLSession(configuration: .ephemeral),
                 observer: observer)
             do {
-                _ = try await client.send(route: OperationRoute.all["entity.list"]!)
+                _ = try await client.send(operationID: "entity.list")
                 Issue.record("Expected interrupted body")
             } catch {}
             #expect(await trace.last?.status == status, "Partial HTTP status \(status)")
@@ -115,14 +125,14 @@ struct NativeHTTPTransportTests {
                 #expect(
                     request.value(forHTTPHeaderField: "x-cubby-device")
                         == installation.uuidString.lowercased())
-                return (200, Data("{}".utf8), [:])
+                return (200, Self.success("{}"), [:])
             }
         }
         let client = transport(
             credentials,
             identity: ClientIdentity(
                 product: "cubby-apple", version: "1.2.3", platform: "ios", installationID: installation))
-        #expect(try await client.send(route: OperationRoute.all["entity.list"]!) == Data("{}".utf8))
+        #expect(try await client.send(operationID: "entity.list") == Data("{}".utf8))
     }
 
     @Test func apiKeyAndCLIIdentityDoNotSendBearerOrDeviceHeaders() async throws {
@@ -133,13 +143,13 @@ struct NativeHTTPTransportTests {
                 #expect(request.value(forHTTPHeaderField: "Authorization") == nil)
                 #expect(request.value(forHTTPHeaderField: "x-cubby-device") == nil)
                 #expect(request.value(forHTTPHeaderField: "User-Agent") == "cubby-cli/0 (macos; none)")
-                return (200, Data(), [:])
+                return (200, Self.success(), [:])
             }
         }
         _ = try await transport(
             credentials, identity: ClientIdentity(product: "cubby-cli", version: "0", platform: "macos")
         )
-        .send(route: OperationRoute.all["entity.list"]!)
+        .send(operationID: "entity.list")
     }
 
     @Test func rotationPersistsOnlySignedSessionDataCookies() async throws {
@@ -147,7 +157,7 @@ struct NativeHTTPTransportTests {
         NativeTransportStub.handler.withLock {
             $0 = { _ in
                 (
-                    200, Data(),
+                    200, Self.success(),
                     [
                         "set-auth-token": "after",
                         "Set-Cookie": "better-auth.session_data=cache; Max-Age=300; Path=/",
@@ -156,17 +166,17 @@ struct NativeHTTPTransportTests {
             }
         }
         let client = transport(credentials)
-        _ = try await client.send(route: OperationRoute.all["entity.list"]!)
+        _ = try await client.send(operationID: "entity.list")
         #expect(await credentials.current() == .bearer("after"))
         #expect(await credentials.currentState()?.sessionDataCookies == ["better-auth.session_data": "cache"])
         NativeTransportStub.handler.withLock {
             $0 = { request in
                 #expect(request.value(forHTTPHeaderField: "Authorization") == "Bearer after")
                 #expect(request.value(forHTTPHeaderField: "Cookie") == "better-auth.session_data=cache")
-                return (200, Data(), ["Set-Cookie": "better-auth.session_token=never-copy; Path=/"])
+                return (200, Self.success(), ["Set-Cookie": "better-auth.session_token=never-copy; Path=/"])
             }
         }
-        _ = try await client.send(route: OperationRoute.all["entity.list"]!)
+        _ = try await client.send(operationID: "entity.list")
         #expect(await credentials.currentState()?.sessionDataCookies == ["better-auth.session_data": "cache"])
     }
 
@@ -180,7 +190,7 @@ struct NativeHTTPTransportTests {
             }
         }
         let client = transport(credentials)
-        let pending = Task { try await client.send(route: OperationRoute.all["entity.list"]!) }
+        let pending = Task { try await client.send(operationID: "entity.list") }
         await gate.arrivals()
         try await credentials.set(.bearer("new"))
         gate.open()
@@ -201,7 +211,7 @@ struct NativeHTTPTransportTests {
             }
         }
         do {
-            _ = try await transport(credentials).send(route: OperationRoute.all["entity.list"]!)
+            _ = try await transport(credentials).send(operationID: "entity.list")
             Issue.record("Expected authentication failure")
         } catch let error as CubbyAPIError {
             #expect(error.status == 401)
@@ -217,7 +227,7 @@ struct NativeHTTPTransportTests {
         NativeTransportStub.handler.withLock { $0 = { _ in (426, Data(), [:]) } }
         do {
             _ = try await transport(credentials, observer: trace).send(
-                route: OperationRoute.all["entity.mutate"]!)
+                operationID: "entity.mutate")
             Issue.record("Expected update requirement")
         } catch let error as CubbyAPIError {
             #expect(error.isClientUpdateRequired)
@@ -234,7 +244,7 @@ struct NativeHTTPTransportTests {
         let body = Data("Synthetic upstream failure".utf8)
         NativeTransportStub.handler.withLock { $0 = { _ in (502, body, [:]) } }
         do {
-            _ = try await transport(credentials).send(route: OperationRoute.all["entity.list"]!)
+            _ = try await transport(credentials).send(operationID: "entity.list")
             Issue.record("Expected upstream failure")
         } catch let error as CubbyAPIError {
             #expect(error.status == 502)
@@ -250,11 +260,11 @@ struct NativeHTTPTransportTests {
         NativeTransportStub.handler.withLock {
             $0 = { _ in
                 try await gate.pass()
-                return (200, Data(), [:])
+                return (200, Self.success(), [:])
             }
         }
         let client = transport(credentials)
-        let pending = Task { try await client.send(route: OperationRoute.all["entity.list"]!) }
+        let pending = Task { try await client.send(operationID: "entity.list") }
         await gate.arrivals()
         pending.cancel()
         do {

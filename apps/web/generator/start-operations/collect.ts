@@ -42,15 +42,15 @@ export type ContractMember = {
   openWorld?: true;
   modelBacked?: true;
   command?: import("../../src/contracts/define").MutationContract["command"];
+  input?: z.ZodType;
+  output?: z.ZodType;
+  event?: z.ZodType;
+  operationWire?: { input: z.ZodType; output: z.ZodType; nullable?: true };
+  nativeModels?: { input?: "json"; output?: "json" };
   observability?: {
     entities?: readonly string[];
     productPhases?: readonly string[];
   };
-  /** The loose HTTP wire of a type-only carrier (see contracts/define.ts). */
-  httpWire?: { input: z.ZodType; output: z.ZodType; nullable?: true };
-  /** Why the Apple app calls this operation (see contracts/define.ts). */
-  native?: string;
-  transport?: "post";
   /** Keeps a query on the authoritative adapter (see contracts/define.ts). */
   readPolicy?: "strong";
   /** Browser cache tags / profile of a query (see contracts/cache-policy.ts). */
@@ -60,7 +60,6 @@ export type ContractMember = {
   };
   /** Ripple keys a mutation invalidates (see contracts/cache-policy.ts). */
   invalidates?: readonly string[];
-  input?: z.ZodType;
 };
 type Contract = {
   domain: string;
@@ -74,15 +73,11 @@ export type LoadedContract = {
   module: string;
   contract: Contract;
 };
-export type DeclaredOperation = {
+type DeclaredOperation = {
   kind: Kind;
+  exposure?: "capability" | "view" | "internal";
   observability: OperationObservability;
-  /** HTTP carries the member's `httpWire`, always as a POST body. */
-  httpWire: boolean;
-  native: boolean;
   strongRead: boolean;
-  transport?: "post";
-  input: z.ZodType | undefined;
   exportName: string;
   member: string;
 };
@@ -177,7 +172,7 @@ const runtimeImportSources = (body: Program["body"]): string[] =>
 
 /**
  * Contract modules are imported by the browser catalog, the server
- * implementers, the ts-rest router, and this generator, so they may depend
+ * implementers, and this generator, so they may depend
  * only on schema code. A runtime import outside this list would either drag
  * server code into the client bundle or make the generator's import fail.
  */
@@ -320,7 +315,7 @@ let cachedOperations: Promise<Map<string, DeclaredOperation>> | undefined;
  * id is a fail-fast error: whichever schema the single handler used would win
  * silently otherwise.
  */
-export const collectDeclaredOperations = (): Promise<
+const collectDeclaredOperations = (): Promise<
   Map<string, DeclaredOperation>
 > => {
   cachedOperations ??= (async () => {
@@ -328,6 +323,7 @@ export const collectDeclaredOperations = (): Promise<
     for (const { exportName, contract } of await loadContracts()) {
       for (const [member, definition] of Object.entries(contract.ops)) {
         const operation = `${contract.domain}.${member}`;
+        const exposure = definition.exposure ?? contract.exposure;
         const existing = byOperation.get(operation);
         if (existing)
           throw new Error(
@@ -335,15 +331,12 @@ export const collectDeclaredOperations = (): Promise<
           );
         byOperation.set(operation, {
           kind: definition.kind,
+          ...(exposure === undefined ? {} : { exposure }),
           observability: {
             entities: [...(definition.observability?.entities ?? [])],
             productPhases: [...(definition.observability?.productPhases ?? [])],
           },
-          httpWire: definition.httpWire !== undefined,
-          transport: definition.transport,
-          native: definition.native !== undefined,
           strongRead: definition.readPolicy === "strong",
-          input: definition.input,
           exportName,
           member,
         });
@@ -525,7 +518,14 @@ async function collectHandlerVariable(
  * loader's `satisfies` exhaustiveness failure (which stays as belt-and-braces).
  */
 export const collectStartOperations = async (): Promise<
-  Map<string, { kind: Kind; observability: OperationObservability }>
+  Map<
+    string,
+    {
+      kind: Kind;
+      exposure?: "capability" | "view" | "internal";
+      observability: OperationObservability;
+    }
+  >
 > => {
   const declarations = await collectDeclaredOperations();
   const handlers = await collectStartOperationHandlers();
@@ -545,7 +545,13 @@ export const collectStartOperations = async (): Promise<
   return new Map(
     [...declarations].map(([operation, declared]) => [
       operation,
-      { kind: declared.kind, observability: declared.observability },
+      {
+        kind: declared.kind,
+        ...(declared.exposure === undefined
+          ? {}
+          : { exposure: declared.exposure }),
+        observability: declared.observability,
+      },
     ]),
   );
 };
@@ -566,11 +572,14 @@ export const validateStrongQueryOperations = async (): Promise<void> => {
   }
 };
 
-/** RPC ids flagged `native:` on their contract member. */
-export const collectNativeOperationIds = async (): Promise<string[]> => {
+/** Every capability and view operation is reachable through shared HTTP. */
+export const collectOperationIds = async (): Promise<string[]> => {
   const ids: string[] = [];
   for (const [operation, declared] of await collectDeclaredOperations()) {
-    if (declared.native) ids.push(operation);
+    if (declared.kind === "subscription") continue;
+    if (declared.exposure === undefined)
+      throw new Error(`${operation} must declare an exposure kind.`);
+    if (declared.exposure !== "internal") ids.push(operation);
   }
   return ids;
 };

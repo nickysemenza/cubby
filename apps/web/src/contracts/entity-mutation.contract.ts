@@ -16,8 +16,7 @@ export const entityMutationContract = defineContract(
       input: z.custom<EntityBrowserMutationInput>(),
       output: z.custom<EntityBrowserMutationResult>(),
       nativeModels: { input: "json", output: "json" },
-      httpWire: kernelRecordWire,
-      native: "Native create, update, delete and image attach/order",
+      operationWire: kernelRecordWire,
       observability: {
         entities: [
           ...entityMutationOutputEntities,

@@ -49,7 +49,7 @@ describe("Worker event composition", () => {
       CF_VERSION_METADATA: version,
     });
     const response = await handleHttpRequest(
-      new Request("https://fixture.example/api/v1/entity/list", {
+      new Request("https://fixture.example/api/operations/entity.list", {
         headers: { "cf-ray": "1234567890abcdef-SJC" },
       }),
       env,

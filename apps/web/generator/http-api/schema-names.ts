@@ -2,13 +2,13 @@ import { pascalCase } from "@cubby/shared/text-case";
 import { readFileSync } from "node:fs";
 import { z } from "zod";
 
-import { childSchemas, discriminatorOf } from "../../src/lib/http-api/wire.ts";
+import { childSchemas, discriminatorOf } from "../../src/lib/operation-wire.ts";
 
 /**
  * Native models are named after the Zod schemas the packages export:
  * `productTopLevelOut` becomes `ProductTopLevelOut`. Every exported schema
  * of these modules is registered in `z.globalRegistry` under that name
- * BEFORE the HTTP contract is imported, so the wire projections built from
+ * BEFORE operation contracts are imported, so the wire projections built from
  * them carry the names into the document.
  *
  * Precedence: an explicit `.meta({ id })` wins; the first export of an
@@ -19,7 +19,7 @@ import { childSchemas, discriminatorOf } from "../../src/lib/http-api/wire.ts";
 
 /**
  * Package export subpaths that hold test helpers or transport contracts, not
- * schemas (`@cubby/usda/contract` is the ts-rest endpoint contract).
+ * schemas (`@cubby/usda/contract` is a generated operation contract).
  */
 const EXCLUDED_SUBPATHS = new Set(["./testing", "./contract"]);
 

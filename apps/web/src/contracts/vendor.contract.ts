@@ -24,7 +24,6 @@ export const vendorContract = defineContract(
       description:
         "Fetch a representative logo from the Vendor’s public website and store it on the Vendor. Review the resolved site before calling; the fetched image may be an external match.",
       openWorld: true,
-      native: "Vendor logo action",
       command: {
         label: "Fetch or refresh logo",
         confirmation: null,

@@ -17,7 +17,7 @@ import { z } from "zod";
 export const COLLECTION_PATCH_OPS = ["add", "replace", "remove"] as const;
 export type CollectionPatchOp = (typeof COLLECTION_PATCH_OPS)[number];
 
-/** A collection keyed by its own value (`aliases`, `tags`). One instance, so every field shares its OpenAPI components. */
+/** A collection keyed by its own value (`aliases`, `tags`). One instance, so every field shares generated models. */
 export const valueCollectionPatch = z
   .array(
     z.discriminatedUnion("op", [
@@ -135,7 +135,7 @@ export type ValueCollectionPatch = z.infer<typeof valueCollectionPatch>;
 
 /**
  * A collection of records keyed by declared identity fields (`externalIds`).
- * `id` names the OpenAPI components of its items.
+ * `id` names the generated models for its items.
  */
 export const keyedCollectionPatch = <
   Key extends z.ZodObject,

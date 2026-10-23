@@ -158,25 +158,46 @@ export async function readPerformance(
     const started = performance.now();
     const headers = new Headers(authHeaders);
     if (body !== undefined) headers.set("content-type", "application/json");
+    const isOperation = !path.startsWith("/");
+    const operationPath = isOperation ? `/api/operations/${path}` : path;
     const options: RequestInit = {
-      method,
+      method: isOperation ? "POST" : method,
       headers,
 
       redirect: "error",
       signal: AbortSignal.timeout(120_000),
     };
-    if (body !== undefined) options.body = JSON.stringify(body);
-    const response = await fetch(new URL(path, origin), options);
+    if (body !== undefined)
+      options.body = JSON.stringify(
+        isOperation ? { operation, input: body } : body,
+      );
+    else if (isOperation) options.body = JSON.stringify({ operation });
+    const response = await fetch(new URL(operationPath, origin), options);
     const firstResponseMs = performance.now() - started;
     if (!response.ok)
       throw new Error(
-        `Read failed: ${method} ${path.split("?")[0]} status ${response.status}`,
+        `Read failed: ${options.method} ${operationPath.split("?")[0]} status ${response.status}`,
       );
     const responseBody = await response.arrayBuffer();
-    const result =
+    const payload =
       method === "OPTIONS" || method === "PROPFIND"
         ? null
         : JSON.parse(new TextDecoder().decode(responseBody));
+    let result = payload;
+    if (isOperation) {
+      const envelope = z
+        .object({
+          ok: z.boolean(),
+          data: z.unknown().optional(),
+          error: z.object({ message: z.string() }).optional(),
+        })
+        .parse(payload);
+      if (!envelope.ok)
+        throw new Error(
+          `Operation read failed: ${envelope.error?.message ?? "unknown error"}`,
+        );
+      result = envelope.data;
+    }
     const measurement = {
       operation,
       version: response.headers.get("x-cubby-worker-version"),
@@ -206,17 +227,14 @@ export async function readPerformance(
     const started = performance.now();
     const measurements: typeof requests = [];
     const read = async (path: string, body?: ReadInput, method = "POST") => {
-      const operation =
-        mode === "complete"
-          ? "resource.list"
-          : (path.split("/").at(-1) ?? "unknown");
+      const operation = mode === "complete" ? "resource.list" : path;
       if (sample >= 0) {
         const metadataInput = unparsedStartOperationDataSchema.safeParse(body);
         requestedReads.push({
           entity,
           operation,
           shape: metadataInput.success
-            ? requestedReadMetadata(`entity.${operation}`, metadataInput.data)
+            ? requestedReadMetadata(operation, metadataInput.data)
             : null,
         });
       }
@@ -245,12 +263,12 @@ export async function readPerformance(
       return;
     }
     const base = baseSchema.parse(
-      await read("/api/v1/entity/listBase", { ...readInput, entity }),
+      await read("entity.listBase", { ...readInput, entity }),
     );
     const usableMs = performance.now() - started;
     const enrichment =
       base.groups.length && base.data.length
-        ? read("/api/v1/entity/listEnrichment", {
+        ? read("entity.listEnrichment", {
             entity,
             ids: base.data.map((row) => row.id),
             fields: base.groups.flatMap((group) => group.fields),
@@ -265,7 +283,7 @@ export async function readPerformance(
         : Promise.resolve();
     await Promise.all([
       enrichment,
-      read("/api/v1/entity/listSummary", { ...readInput, entity }),
+      read("entity.listSummary", { ...readInput, entity }),
     ]);
     observations.push({
       entity,

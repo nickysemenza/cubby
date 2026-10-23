@@ -33,7 +33,7 @@ struct StatementMatchSessionTests {
         let seen = Mutex<[Seen]>([])
         var requests: [Seen] { seen.withLock { $0 } }
         /// Entity writes: every create/update/delete is one `entity.mutate` POST.
-        func writes() -> [Seen] { requests.filter { $0.path == "/api/v1/entity/mutate" } }
+        func writes() -> [Seen] { requests.filter { $0.path == "/api/operations/entity.mutate" } }
     }
 
     private func makeClient() throws -> CubbyClient {
@@ -50,32 +50,16 @@ struct StatementMatchSessionTests {
         let recorder = Recorder()
         MatchStub.handler.withLock { handler in
             handler = { request in
-                let data = (try? Self.requestBody(request)) ?? Data()
                 let seen = Seen(
                     method: request.httpMethod, path: request.url?.path ?? "",
                     query: request.url?.query ?? "",
-                    body: (try? JSONDecoder().decode(JSONValue.self, from: data)) ?? .null)
+                    body: StubNetworking.operationInput(of: request) ?? .null)
                 recorder.seen.withLock { $0.append(seen) }
                 guard let route = routes[seen.path] else { return (500, Data()) }
                 return (200, Data(route(seen).utf8))
             }
         }
         return recorder
-    }
-
-    nonisolated private static func requestBody(_ request: URLRequest) throws -> Data {
-        if let body = request.httpBody { return body }
-        guard let stream = request.httpBodyStream else { return Data() }
-        stream.open()
-        defer { stream.close() }
-        var data = Data()
-        var buffer = [UInt8](repeating: 0, count: 4096)
-        while true {
-            let count = stream.read(&buffer, maxLength: buffer.count)
-            if count <= 0 { break }
-            data.append(contentsOf: buffer.prefix(count))
-        }
-        return data
     }
 
     // MARK: - Fixtures
@@ -146,7 +130,7 @@ struct StatementMatchSessionTests {
         -> (StatementMatchSession, Recorder)
     {
         var routes = recorderRoutes
-        routes["/api/v1/purchase/settlementCandidates"] = { _ in Self.candidatesJSON }
+        routes["/api/operations/purchase.settlementCandidates"] = { _ in Self.candidatesJSON }
         let recorder = serve(routes)
         let session = StatementMatchSession(purchaseID: "PUR-2345", client: try makeClient())
         await session.load()
@@ -168,7 +152,7 @@ struct StatementMatchSessionTests {
 
     @Test @MainActor func aSuggestionOrdersAndBadgesButNeverSelectsOrWrites() async throws {
         let (session, recorder) = try await loaded([
-            "/api/v1/purchase/suggestSettlementMatch": { _ in Self.rankedJSON }
+            "/api/operations/purchase.suggestSettlementMatch": { _ in Self.rankedJSON }
         ])
         #expect(
             session.suggestionNote
@@ -185,12 +169,15 @@ struct StatementMatchSessionTests {
         #expect(recorder.writes().isEmpty)
         #expect(
             recorder.requests.map(\.path)
-                == ["/api/v1/purchase/settlementCandidates", "/api/v1/purchase/suggestSettlementMatch"])
+                == [
+                    "/api/operations/purchase.settlementCandidates",
+                    "/api/operations/purchase.suggestSettlementMatch",
+                ])
     }
 
     @Test @MainActor func showsTheRawDiagnosticWhenASuggestionIsUnavailable() async throws {
         let (session, _) = try await loaded([
-            "/api/v1/purchase/suggestSettlementMatch": { _ in
+            "/api/operations/purchase.suggestSettlementMatch": { _ in
                 """
                 {"status":"unavailable","error":"gateway timeout","note":"Suggestion unavailable: gateway timeout"}
                 """
@@ -203,7 +190,7 @@ struct StatementMatchSessionTests {
 
     @Test @MainActor func asksTheServerAboutExactlyTheRowsTyped() async throws {
         let (session, recorder) = try await loaded([
-            "/api/v1/purchase/checkSettlementAllocation": { _ in
+            "/api/operations/purchase.checkSettlementAllocation": { _ in
                 Self.check(
                     allocations: "null", total: 42.5, remaining: 48.5,
                     reason: "Row 2: enter a Purchase code such as PUR-4K7M.")
@@ -214,7 +201,7 @@ struct StatementMatchSessionTests {
         #expect(session.check?.reason == "Row 2: enter a Purchase code such as PUR-4K7M.")
         #expect(!session.canSave)
         let ask = try #require(recorder.requests.last)
-        #expect(ask.path == "/api/v1/purchase/checkSettlementAllocation")
+        #expect(ask.path == "/api/operations/purchase.checkSettlementAllocation")
         #expect(
             ask.body
                 == [
@@ -228,13 +215,13 @@ struct StatementMatchSessionTests {
 
     @Test @MainActor func savesOnlyWhatTheServerReturnsAsTheTransactionsOwnUpdate() async throws {
         let (session, recorder) = try await loaded([
-            "/api/v1/purchase/checkSettlementAllocation": { _ in
+            "/api/operations/purchase.checkSettlementAllocation": { _ in
                 Self.check(
                     allocations:
                         "[{\"purchaseId\":\"PUR-2345\",\"amount\":42.5},{\"purchaseId\":\"PUR-3456\",\"amount\":48.5}]",
                     total: 91, remaining: 0, reason: nil)
             },
-            "/api/v1/entity/mutate": { _ in
+            "/api/operations/entity.mutate": { _ in
                 """
                 {"action":"update","entity":"financialTransaction","item":\(Self.transaction("FTX-4K7M", amount: 91, merchant: "Example Hardware North")),"sideEffects":{}}
                 """
@@ -266,7 +253,7 @@ struct StatementMatchSessionTests {
 
     @Test @MainActor func aRefusedCheckSendsNoWrite() async throws {
         let (session, recorder) = try await loaded([
-            "/api/v1/purchase/checkSettlementAllocation": { _ in
+            "/api/operations/purchase.checkSettlementAllocation": { _ in
                 Self.check(
                     allocations: "null", total: 42.5, remaining: 48.5,
                     reason: "Allocations total $42.50, not $91.00.")

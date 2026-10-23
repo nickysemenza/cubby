@@ -2,6 +2,7 @@ import type { APIRequestContext } from "@playwright/test";
 import type { z } from "zod";
 
 import type { entityKernelObject } from "~/contracts/entity-kernel-wire";
+import { browserOperationPath } from "~/lib/browser-operation-path";
 
 type RequestOptions = Parameters<APIRequestContext["post"]>[1];
 /** The kernel's loose wire body; the server parses it with the entity's schema. */
@@ -27,13 +28,26 @@ export function entityApi(request: APIRequestContext) {
       }
       headers = { Origin: await origin };
     }
-    const response = await request.post(`/api/v1/entity/${operation}`, {
+    const operationId = `entity.${operation}`;
+    const response = await request.post(browserOperationPath(operationId), {
       ...options,
       headers,
-      data,
+      data: { operation: operationId, input: data },
     });
+    const envelope = (await response.json()) as
+      | { ok: true; data: unknown }
+      | unknown;
+    const body =
+      typeof envelope === "object" && envelope !== null && "ok" in envelope
+        ? envelope.ok === true && "data" in envelope
+          ? envelope.data
+          : "error" in envelope
+            ? envelope.error
+            : envelope
+        : envelope;
     return Object.assign(response, {
-      parsedBody: (await response.json()) as unknown,
+      parsedBody: body as unknown,
+      json: async () => body,
     });
   };
   return {

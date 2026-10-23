@@ -17,8 +17,7 @@ export const entityDetailContract = defineContract(
       input: z.custom<EntityDetailInputByEntity[DetailEntity]>(),
       output: z.custom<EntityDetailByEntity[DetailEntity] | null>(),
       nativeModels: { input: "json", output: "json" },
-      httpWire: kernelDetailWire,
-      native: "Native record detail reads",
+      operationWire: kernelDetailWire,
       observability: {
         entities: detailEntities,
         productPhases: [

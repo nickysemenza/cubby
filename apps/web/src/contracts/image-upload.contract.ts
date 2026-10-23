@@ -69,17 +69,17 @@ export const imageUploadContract = defineContract(
   "image",
   {
     markUploaded: mutation({
-      native: "PhotoService",
+      exposure: "view",
       input: getImageByIdSchema,
       output: imageWithEntitySchema,
     }),
     uploadImage: mutation({
-      native: "PhotoService",
+      exposure: "view",
       input: initiateUploadWithoutEntitySchema,
       output: initiateUploadWithoutEntityResponseSchema,
     }),
     uploadDocument: mutation({
-      native: "Purchase import receipt evidence",
+      exposure: "view",
       input: initiateDocumentUploadSchema,
       output: initiateUploadWithoutEntityResponseSchema,
     }),

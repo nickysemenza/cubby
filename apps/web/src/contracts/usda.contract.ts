@@ -41,7 +41,6 @@ export const usdaFoodContract = defineContract(
       exposure: "view",
       note: "Native browse with linked-product filters; agents search with usda_food.search",
       readPolicy: "strong",
-      native: "Native USDA food browse",
       input: usdaListInput,
       output: usdaFoodListOut,
       cache: { tags: [["usda-food"]] },
@@ -49,7 +48,6 @@ export const usdaFoodContract = defineContract(
     detail: query({
       exposure: "view",
       readPolicy: "strong",
-      native: "Native USDA food detail",
       input: usdaFoodIdInput,
       output: foodSummaryWithLinkedProducts.nullable(),
       cache: { tags: [["usda-food"]], profile: "stable" },

@@ -43,13 +43,11 @@ export const entityGraphContract = defineContract(
   "entity",
   {
     monthlyExpenseSpend: query({
-      native: "Native generic detail monthly expense chart",
       input: monthlyExpenseSpendInputSchema,
       output: monthlyExpenseSpendOutputSchema,
       cache: { tags: [["relatedData"], ...ENTITY_ROOT_TAGS] },
     }),
     detailActivity: query({
-      native: "Native generic detail activity timeline",
       input: detailActivityInputSchema,
       output: detailActivityOutputSchema,
       cache: { tags: [["relatedData"], ...ENTITY_ROOT_TAGS] },
@@ -61,31 +59,26 @@ export const entityGraphContract = defineContract(
       cache: { tags: [["relatedData"], ...ENTITY_ROOT_TAGS] },
     }),
     connectedRecords: query({
-      native: "Complete connection tables with record path evidence",
       input: connectedRecordsInputSchema,
       output: connectedRecordsOutputSchema,
       cache: { tags: [["relatedData"], ...ENTITY_ROOT_TAGS] },
     }),
     connectedRecordsPreview: query({
-      native: "Detail-page connected records, first rows of every view",
       input: connectedRecordsPreviewInputSchema,
       output: connectedRecordsPreviewOutputSchema,
       cache: { tags: [["relatedData"], ...ENTITY_ROOT_TAGS] },
     }),
     explore: query({
-      native: "Native relationship explorer",
       input: entityGraphExploreInputSchema,
       output: entityGraphExploreOutputSchema,
       cache: { tags: [["relatedData"], ...ENTITY_ROOT_TAGS] },
     }),
     graph: query({
-      native: "Native relationship branch paging",
       input: entityGraphInputSchema,
       output: entityGraphOutputSchema,
       cache: { tags: [["relatedData"], ...ENTITY_ROOT_TAGS] },
     }),
     graphPaths: query({
-      native: "Native relationship path evidence",
       input: entityGraphPathsInputSchema,
       output: entityGraphPathsOutputSchema,
       cache: { tags: [["relatedData"], ...ENTITY_ROOT_TAGS] },
@@ -94,7 +87,6 @@ export const entityGraphContract = defineContract(
       exposure: "capability",
       description:
         'A counted page of declared relation rows (`offset`, `limit`, optional `targetIds`). Purchase products and inverse product purchases union live Expense evidence with explicit links. Movement kinds describe actual Expenses and acquisition confirmations; hasPlanned marks future Expenses. Only explicit links can be unlinked. `purchase` `products`: the Products one Purchase names; `source` says why a row is there: "expense" when one of the order\'s own live Expenses names the product, "link" for an explicit purchaseProduct link (goods bought through allocation-basis installment Expenses, which never carry a productId), "both" when each exists. This is provenance, not money — no amount or quantity, nothing summed into spend; `linkAttachedAt` is null on an "expense" row, so only rows with it set have a link to unlink. `product` `components`: what one kit or multi-pack Product is made of, one row per distinct component with its quantity; each row\'s `price` is the component\'s effective price, which already blends its quantity-weighted share of every kit it is in — do not add a kit share on top. `project` `resources`: the reusable tools and software explicitly used on one exact project; tools carry lifetime purchase/use economics, software the non-additive household spend charged during the project\'s window. Sub-project uses are separate.',
-      native: "Paged declared relation rows with provenance and movement facts",
       input: generatedEntityRelationListInputSchema,
       output: generatedEntityRelationListOutputSchema,
       cache: { tags: [["relatedData"], ...ENTITY_ROOT_TAGS] },
@@ -103,7 +95,6 @@ export const entityGraphContract = defineContract(
       exposure: "capability",
       description:
         'One-hop physical connections of any entity: what points at it (`incoming`) and what it points at (`outgoing`), grouped by edge with a count and the first linked records. A merged-away code reads its survivor and reports `redirectedFrom`. Pass `operation: "delete"` or `"merge"` to see each incoming group\'s declared disposition (block, detach, repoint, ...) before running it; advisory, since the mutation re-validates.',
-      native: "Native one-hop physical connections and delete/merge impact",
       input: entityConnectionsInput,
       output: entityConnectionsOut,
       cache: { tags: [["relatedData"], ...ENTITY_ROOT_TAGS] },
@@ -125,7 +116,6 @@ export const connectionContract = defineContract(
           ...allEntities.map((entity) => [entity] as const),
         ],
       },
-      native: "Read stored connection candidates from either endpoint",
     }),
     readBatch: query({
       input: z.object({ sources: z.array(entityGraphRootSchema).max(250) }),
@@ -145,7 +135,6 @@ export const connectionContract = defineContract(
       input: entityGraphRootSchema,
       output: connectionDiscoveryOut,
       invalidates: ["connections"],
-      native: "Explicitly discover connections using existing typed matchers",
     }),
   },
   { exposure: "view", mcpToolGroup: "entity_graph" },

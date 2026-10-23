@@ -93,7 +93,6 @@ export const projectContract = defineContract(
   "project",
   {
     dashboardSummary: query({
-      native: "Project analytics summary",
       nativeModels: { output: "json" },
       input: schemas.projectDashboardFiltersSchema,
       output: schemas.projectDashboardSummaryOut,

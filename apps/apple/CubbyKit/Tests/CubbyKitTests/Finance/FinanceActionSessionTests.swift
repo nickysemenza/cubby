@@ -51,32 +51,16 @@ struct FinanceActionSessionTests {
         let recorder = Recorder()
         ActionStub.handler.withLock { handler in
             handler = { request in
-                let data = (try? Self.requestBody(request)) ?? Data()
                 let seen = Seen(
                     method: request.httpMethod, path: request.url?.path ?? "",
                     query: request.url?.query ?? "",
-                    body: (try? JSONDecoder().decode(JSONValue.self, from: data)) ?? .null)
+                    body: StubNetworking.operationInput(of: request) ?? .null)
                 recorder.seen.withLock { $0.append(seen) }
                 guard let route = routes[seen.path] else { return (500, Data()) }
                 return (200, Data(route(seen).utf8))
             }
         }
         return recorder
-    }
-
-    nonisolated private static func requestBody(_ request: URLRequest) throws -> Data {
-        if let body = request.httpBody { return body }
-        guard let stream = request.httpBodyStream else { return Data() }
-        stream.open()
-        defer { stream.close() }
-        var data = Data()
-        var buffer = [UInt8](repeating: 0, count: 4096)
-        while true {
-            let count = stream.read(&buffer, maxLength: buffer.count)
-            if count <= 0 { break }
-            data.append(contentsOf: buffer.prefix(count))
-        }
-        return data
     }
 
     // MARK: - Split fixtures
@@ -128,22 +112,22 @@ struct FinanceActionSessionTests {
     // MARK: - Split
 
     @Test @MainActor func startsFromTheServersPartsNotOneOfItsOwn() async throws {
-        let recorder = serve(["/api/v1/purchase/splitStart": { _ in Self.splitStart() }])
+        let recorder = serve(["/api/operations/purchase.splitStart": { _ in Self.splitStart() }])
         let session = ExpenseSplitSession(expenseID: "EXP-4K7M", client: try makeClient())
         await session.load()
 
         #expect(session.parts.map(\.name) == ["Sample kit", ""])
         #expect(session.parts.map(\.cost) == ["0.3", ""])
-        #expect(recorder.requests.map(\.path) == ["/api/v1/purchase/splitStart"])
-        #expect(recorder.requests[0].query.contains("expenseId=EXP-4K7M"))
+        #expect(recorder.requests.map(\.path) == ["/api/operations/purchase.splitStart"])
+        #expect(recorder.requests[0].body["expenseId"] == "EXP-4K7M")
     }
 
     @Test @MainActor func splitPartRoleKeepsAutomaticAndUnclassifiedDistinctOnTheWire() async throws {
         let recorder = serve([
-            "/api/v1/purchase/splitStart": { _ in
+            "/api/operations/purchase.splitStart": { _ in
                 Self.splitStart(firstLineKind: "unclassified")
             },
-            "/api/v1/purchase/checkSplit": { _ in Self.acceptedSplit },
+            "/api/operations/purchase.checkSplit": { _ in Self.acceptedSplit },
         ])
         let session = ExpenseSplitSession(expenseID: "EXP-4K7M", client: try makeClient())
         await session.load()
@@ -152,7 +136,7 @@ struct FinanceActionSessionTests {
         await session.recheck()
 
         var checkedParts = try #require(
-            recorder.posts(to: "/api/v1/purchase/checkSplit").last?.body["parts"]?.arrayValue
+            recorder.posts(to: "/api/operations/purchase.checkSplit").last?.body["parts"]?.arrayValue
         )
         #expect(checkedParts[0]["lineKind"]?.stringValue == "unclassified")
         #expect(checkedParts[1]["lineKind"] == nil)
@@ -161,16 +145,16 @@ struct FinanceActionSessionTests {
         session.update(second) { $0.lineKind = "tax" }
         await session.recheck()
         checkedParts = try #require(
-            recorder.posts(to: "/api/v1/purchase/checkSplit").last?.body["parts"]?.arrayValue
+            recorder.posts(to: "/api/operations/purchase.checkSplit").last?.body["parts"]?.arrayValue
         )
         #expect(checkedParts[1]["lineKind"]?.stringValue == "tax")
     }
 
     @Test @MainActor func neverWritesWithoutAnExplicitConfirmation() async throws {
         let recorder = serve([
-            "/api/v1/purchase/splitStart": { _ in Self.splitStart() },
-            "/api/v1/purchase/checkSplit": { _ in Self.acceptedSplit },
-            "/api/v1/purchase/split": { _ in Self.splitResult },
+            "/api/operations/purchase.splitStart": { _ in Self.splitStart() },
+            "/api/operations/purchase.checkSplit": { _ in Self.acceptedSplit },
+            "/api/operations/purchase.split": { _ in Self.splitResult },
         ])
         let session = ExpenseSplitSession(expenseID: "EXP-4K7M", client: try makeClient())
         await session.load()
@@ -182,17 +166,17 @@ struct FinanceActionSessionTests {
             _ = try await session.save(confirmed: false)
         }
         #expect(session.confirmation?.contains("deleted") == true)
-        #expect(recorder.posts(to: "/api/v1/purchase/split").isEmpty)
+        #expect(recorder.posts(to: "/api/operations/purchase.split").isEmpty)
         // Not even a check goes out: nothing is asked of the server for an unconfirmed save.
-        #expect(recorder.posts(to: "/api/v1/purchase/checkSplit").isEmpty)
+        #expect(recorder.posts(to: "/api/operations/purchase.checkSplit").isEmpty)
     }
 
     @Test @MainActor func aRefusedCheckSendsNoWrite() async throws {
         let reason = "Split parts must add up to the original cost exactly."
         let recorder = serve([
-            "/api/v1/purchase/splitStart": { _ in Self.splitStart() },
-            "/api/v1/purchase/checkSplit": { _ in Self.refusedSplit(reason) },
-            "/api/v1/purchase/split": { _ in Self.splitResult },
+            "/api/operations/purchase.splitStart": { _ in Self.splitStart() },
+            "/api/operations/purchase.checkSplit": { _ in Self.refusedSplit(reason) },
+            "/api/operations/purchase.split": { _ in Self.splitResult },
         ])
         let session = ExpenseSplitSession(expenseID: "EXP-4K7M", client: try makeClient())
         await session.load()
@@ -202,14 +186,14 @@ struct FinanceActionSessionTests {
         await #expect(throws: ExpenseSplitSession.Failure.refused(reason)) {
             _ = try await session.save(confirmed: true)
         }
-        #expect(recorder.posts(to: "/api/v1/purchase/split").isEmpty)
+        #expect(recorder.posts(to: "/api/operations/purchase.split").isEmpty)
     }
 
     @Test @MainActor func writesExactlyTheBodyTheServerReturnedAfterConfirming() async throws {
         let recorder = serve([
-            "/api/v1/purchase/splitStart": { _ in Self.splitStart() },
-            "/api/v1/purchase/checkSplit": { _ in Self.acceptedSplit },
-            "/api/v1/purchase/split": { _ in Self.splitResult },
+            "/api/operations/purchase.splitStart": { _ in Self.splitStart() },
+            "/api/operations/purchase.checkSplit": { _ in Self.acceptedSplit },
+            "/api/operations/purchase.split": { _ in Self.splitResult },
         ])
         let session = ExpenseSplitSession(expenseID: "EXP-4K7M", client: try makeClient())
         await session.load()
@@ -226,12 +210,12 @@ struct FinanceActionSessionTests {
         _ = try await session.save(confirmed: true)
 
         // The check was asked about the parts as typed — text, not numbers the client added up.
-        let asked = try #require(recorder.posts(to: "/api/v1/purchase/checkSplit").last)
+        let asked = try #require(recorder.posts(to: "/api/operations/purchase.checkSplit").last)
         let askedParts = try #require(asked.body["parts"]?.arrayValue)
         #expect(askedParts.map { $0["cost"]?.stringValue } == ["0.1", "0.2"])
         #expect(asked.body["attributionPolicy"] == nil)
 
-        let write = try #require(recorder.posts(to: "/api/v1/purchase/split").last)
+        let write = try #require(recorder.posts(to: "/api/operations/purchase.split").last)
         #expect(write.body["expenseId"]?.stringValue == "EXP-4K7M")
         let written = try #require(write.body["parts"]?.arrayValue)
         #expect(written.map { $0["name"]?.stringValue } == ["Saw", "Blade"])
@@ -240,20 +224,22 @@ struct FinanceActionSessionTests {
 
     @Test @MainActor func sendsTheAttributionChoiceOnlyOnceChosen() async throws {
         let recorder = serve([
-            "/api/v1/purchase/splitStart": { _ in Self.splitStart() },
-            "/api/v1/purchase/checkSplit": { _ in Self.acceptedSplit },
+            "/api/operations/purchase.splitStart": { _ in Self.splitStart() },
+            "/api/operations/purchase.checkSplit": { _ in Self.acceptedSplit },
         ])
         let session = ExpenseSplitSession(expenseID: "EXP-4K7M", client: try makeClient())
         await session.load()
         session.attributionPolicy = "clear"
         await session.recheck()
 
-        let asked = try #require(recorder.posts(to: "/api/v1/purchase/checkSplit").last)
+        let asked = try #require(recorder.posts(to: "/api/operations/purchase.checkSplit").last)
         #expect(asked.body["attributionPolicy"]?.stringValue == "clear")
     }
 
     @Test @MainActor func onlyOnePartKeepsTheProduct() async throws {
-        _ = serve(["/api/v1/purchase/splitStart": { _ in Self.splitStart(productNote: "Hands it over.") }])
+        _ = serve([
+            "/api/operations/purchase.splitStart": { _ in Self.splitStart(productNote: "Hands it over.") }
+        ])
         let session = ExpenseSplitSession(expenseID: "EXP-4K7M", client: try makeClient())
         await session.load()
         let first = session.parts[0].id
@@ -267,7 +253,7 @@ struct FinanceActionSessionTests {
     }
 
     @Test @MainActor func keepsAtLeastTwoPartsAndAtMostTheServersLimit() async throws {
-        _ = serve(["/api/v1/purchase/splitStart": { _ in Self.splitStart() }])
+        _ = serve(["/api/operations/purchase.splitStart": { _ in Self.splitStart() }])
         let session = ExpenseSplitSession(expenseID: "EXP-4K7M", client: try makeClient())
         await session.load()
         session.removePart(session.parts[0].id)
@@ -348,7 +334,7 @@ struct FinanceActionSessionTests {
 
     @Test @MainActor func asksTheServerForTheScopeAndSearchChosen() async throws {
         let recorder = serve([
-            "/api/v1/purchase/linkExpenseCandidates": { _ in Self.expenseCandidates }
+            "/api/operations/purchase.linkExpenseCandidates": { _ in Self.expenseCandidates }
         ])
         let session = PurchaseExpenseLinkSession(purchaseID: "PUR-4K7M", client: try makeClient())
         await session.load()
@@ -356,18 +342,18 @@ struct FinanceActionSessionTests {
         await session.setSearch("board")
 
         let last = try #require(recorder.requests.last)
-        #expect(last.query.contains("purchaseId=PUR-4K7M"))
-        #expect(last.query.contains("scope=any"))
-        #expect(last.query.contains("search=board"))
+        #expect(last.body["purchaseId"] == "PUR-4K7M")
+        #expect(last.body["scope"] == "any")
+        #expect(last.body["search"] == "board")
         #expect(session.candidates?.candidates.map(\.id) == ["EXP-AAAA", "EXP-BBBB"])
     }
 
     @Test @MainActor func neverAttachesWhatTheServerRefused() async throws {
         let recorder = serve([
-            "/api/v1/purchase/checkLinkExpenses": { _ in
+            "/api/operations/purchase.checkLinkExpenses": { _ in
                 Self.linkCheck(ids: nil, reason: "EXP-AAAA is already on this purchase.")
             },
-            "/api/v1/purchase/link": { _ in Self.purchaseOut },
+            "/api/operations/purchase.link": { _ in Self.purchaseOut },
         ])
         let session = PurchaseExpenseLinkSession(purchaseID: "PUR-4K7M", client: try makeClient())
         session.toggle("EXP-AAAA")
@@ -377,16 +363,16 @@ struct FinanceActionSessionTests {
         ) {
             try await session.attach(confirmed: true)
         }
-        #expect(recorder.posts(to: "/api/v1/purchase/link").isEmpty)
+        #expect(recorder.posts(to: "/api/operations/purchase.link").isEmpty)
     }
 
     @Test @MainActor func movingExpensesOffAnotherPurchaseNeedsAConfirmation() async throws {
         let sentence = "Attaching moves 1 expense off its current purchase."
         let recorder = serve([
-            "/api/v1/purchase/checkLinkExpenses": { _ in
+            "/api/operations/purchase.checkLinkExpenses": { _ in
                 Self.linkCheck(ids: ["EXP-AAAA", "EXP-BBBB"], confirm: sentence)
             },
-            "/api/v1/purchase/link": { _ in Self.purchaseOut },
+            "/api/operations/purchase.link": { _ in Self.purchaseOut },
         ])
         let session = PurchaseExpenseLinkSession(purchaseID: "PUR-4K7M", client: try makeClient())
         session.toggle("EXP-AAAA")
@@ -395,24 +381,24 @@ struct FinanceActionSessionTests {
         await #expect(throws: PurchaseExpenseLinkSession.Failure.needsConfirmation(sentence)) {
             try await session.attach(confirmed: false)
         }
-        #expect(recorder.posts(to: "/api/v1/purchase/link").isEmpty)
+        #expect(recorder.posts(to: "/api/operations/purchase.link").isEmpty)
     }
 
     @Test @MainActor func attachesExactlyTheIdsTheServerReturned() async throws {
         let recorder = serve([
-            "/api/v1/purchase/checkLinkExpenses": { _ in
+            "/api/operations/purchase.checkLinkExpenses": { _ in
                 Self.linkCheck(ids: ["EXP-AAAA"])
             },
-            "/api/v1/purchase/link": { _ in Self.purchaseOut },
+            "/api/operations/purchase.link": { _ in Self.purchaseOut },
         ])
         let session = PurchaseExpenseLinkSession(purchaseID: "PUR-4K7M", client: try makeClient())
         session.toggle("EXP-AAAA")
         try await session.attach(confirmed: false)
 
-        let asked = try #require(recorder.posts(to: "/api/v1/purchase/checkLinkExpenses").last)
+        let asked = try #require(recorder.posts(to: "/api/operations/purchase.checkLinkExpenses").last)
         #expect(asked.body["purchaseId"]?.stringValue == "PUR-4K7M")
         #expect(asked.body["expenseIds"]?.arrayValue?.compactMap(\.stringValue) == ["EXP-AAAA"])
-        let write = try #require(recorder.posts(to: "/api/v1/purchase/link").last)
+        let write = try #require(recorder.posts(to: "/api/operations/purchase.link").last)
         #expect(write.body["expenseIds"]?.arrayValue?.compactMap(\.stringValue) == ["EXP-AAAA"])
         #expect(session.selection.isEmpty)
     }
@@ -438,8 +424,8 @@ struct FinanceActionSessionTests {
 
     @Test @MainActor func attachesExactlyTheCheckedProducts() async throws {
         let recorder = serve([
-            "/api/v1/purchase/linkProductCandidates": { _ in Self.productCandidates },
-            "/api/v1/purchase/attachProducts": { _ in
+            "/api/operations/purchase.linkProductCandidates": { _ in Self.productCandidates },
+            "/api/operations/purchase.attachProducts": { _ in
                 "{\"changed\":2,\"attached\":2,\"alreadySatisfied\":0}"
             },
         ])
@@ -451,8 +437,9 @@ struct FinanceActionSessionTests {
 
         #expect(changed == 2)
         let search = try #require(recorder.requests.first)
-        #expect(search.query.contains("search=saw"))
-        let write = try #require(recorder.posts(to: "/api/v1/purchase/attachProducts").last)
+        #expect(search.body["purchaseId"] == "PUR-4K7M")
+        #expect(search.body["search"] == "saw")
+        let write = try #require(recorder.posts(to: "/api/operations/purchase.attachProducts").last)
         #expect(write.body["purchaseId"]?.stringValue == "PUR-4K7M")
         #expect(write.body["productIds"]?.arrayValue?.compactMap(\.stringValue) == ["PRD-BBBB", "PRD-AAAA"])
     }

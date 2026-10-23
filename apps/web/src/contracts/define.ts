@@ -21,10 +21,9 @@ import type { QueryCachePolicy, RippleKey } from "~/contracts/cache-policy";
  * catalog (generated per-domain catalog modules, which resolves the cache data and
  * defaults every query's tags to `[domain, member]`), the server implementers
  * (`implementOperationDomain` / `implementSubscriptionDomain`), the operation
- * registry generator (which imports these modules at build time), and the
- * ts-rest HTTP router. Modules under `~/contracts` may import only `zod`,
- * `@cubby/*`, other contracts, and generated entity artifacts; the registry
- * generator enforces that boundary.
+ * registry generator, and the shared HTTP operation route. Modules under
+ * `~/contracts` may import only `zod`, `@cubby/*`, other contracts, and
+ * generated entity artifacts; the registry generator enforces that boundary.
  */
 
 interface OperationObservability {
@@ -42,23 +41,20 @@ export interface OperationContractDefaults {
   readonly mcpToolGroup?: string;
 }
 
-/** The HTTP wire of a type-only carrier operation; see `QueryContract`. */
-export interface HttpWire {
+/** A client-facing wire projection for a type-only carrier operation. */
+export interface OperationWire {
   readonly input: z.ZodTypeAny;
   readonly output: z.ZodTypeAny;
+  /** Null is a successful output value. */
   readonly nullable?: true;
 }
 
 /**
- * `httpWire` projects an operation's HTTP input and output, always as a POST
- * body. Entity kernel operations use loose wire schemas while their handlers
- * parse the real per-entity input; native-only views can instead narrow an
- * unused optional input surface. The handler still owns domain validation.
- * `nullable` turns a null result into 404.
- *
- * `native` names the reason the Apple app calls this operation. The HTTP API
- * carries exactly the flagged members, so the flag is the only way an
- * operation reaches HTTP and CubbyKit.
+ * `operationWire` projects an operation's input and output for generated clients.
+ * Entity kernel operations use loose wire schemas while their handlers parse
+ * the real per-entity input; a projection can narrow unused input surfaces.
+ * The operation handler owns domain validation. Null remains a successful
+ * output value.
  *
  * `exposure` determines which clients can invoke the operation. Capability
  * descriptions and behavior hints are consumed by the generated MCP catalog.
@@ -71,14 +67,11 @@ export interface QueryContract<
   Output extends z.ZodTypeAny = z.ZodTypeAny,
 > {
   readonly kind: "query";
-  /** Large batched reads use a JSON body rather than a bounded URL. */
-  readonly transport?: "post";
   readonly input: Input;
   readonly output: Output;
   readonly observability?: OperationObservability;
-  readonly httpWire?: HttpWire;
-  readonly native?: string;
-  /** Native consumers that render declarations carry JSON rather than per-operation models. */
+  readonly operationWire?: OperationWire;
+  /** Dynamic consumers may carry JSON rather than per-operation models. */
   readonly nativeModels?: { readonly input?: "json"; readonly output?: "json" };
   readonly exposure?: OperationExposure;
   readonly note?: string;
@@ -107,8 +100,7 @@ export interface MutationContract<
   readonly input: Input;
   readonly output: Output;
   readonly observability?: OperationObservability;
-  readonly httpWire?: HttpWire;
-  readonly native?: string;
+  readonly operationWire?: OperationWire;
   readonly nativeModels?: { readonly input?: "json"; readonly output?: "json" };
   readonly exposure?: OperationExposure;
   readonly note?: string;

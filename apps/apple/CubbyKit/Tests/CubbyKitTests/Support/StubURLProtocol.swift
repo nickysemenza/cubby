@@ -1,6 +1,8 @@
 import Foundation
 import Synchronization
 
+@testable import CubbyKit
+
 /// Shared plumbing for a per-suite network stub: a handler installed per test answers every
 /// request, on a private session configuration that never touches the real network.
 ///
@@ -55,13 +57,58 @@ enum StubNetworking {
         _ request: URLRequest, with answer: (status: Int, data: Data), client: URLProtocolClient?,
         target: URLProtocol
     ) {
+        let responseData = operationResponseData(
+            request: request, status: answer.status, data: answer.data)
         let response = HTTPURLResponse(
             url: request.url!, statusCode: answer.status, httpVersion: "HTTP/1.1",
             headerFields: ["Content-Type": "application/json"]
         )!
         client?.urlProtocol(target, didReceive: response, cacheStoragePolicy: .notAllowed)
-        client?.urlProtocol(target, didLoad: answer.data)
+        client?.urlProtocol(target, didLoad: responseData)
         client?.urlProtocolDidFinishLoading(target)
+    }
+
+    static func operationInput(of request: URLRequest) -> JSONValue? {
+        guard request.url?.path.hasPrefix("/api/operations/") == true,
+            let data = try? requestBody(request),
+            let envelope = try? JSONDecoder().decode(JSONValue.self, from: data),
+            envelope["operation"]?.stringValue == request.url?.lastPathComponent
+        else { return nil }
+        return envelope["input"]
+    }
+
+    static func operationFields(of request: URLRequest) -> [String: JSONValue] {
+        operationInput(of: request)?.objectValue ?? [:]
+    }
+
+    static func operationResponseData(request: URLRequest, status: Int, data: Data) -> Data {
+        guard request.url?.path.hasPrefix("/api/operations/") == true,
+            (200..<300).contains(status)
+        else { return data }
+        let payload =
+            data.isEmpty
+            ? NSNull()
+            : (try? JSONSerialization.jsonObject(with: data, options: [.fragmentsAllowed])) ?? NSNull()
+        if (payload as? [String: Any])?["ok"] is Bool { return data }
+        return
+            (try? JSONSerialization.data(
+                withJSONObject: ["ok": true, "data": payload],
+                options: [.fragmentsAllowed, .sortedKeys])) ?? data
+    }
+
+    static func requestBody(_ request: URLRequest) throws -> Data {
+        if let body = request.httpBody { return body }
+        guard let stream = request.httpBodyStream else { throw URLError(.cannotDecodeRawData) }
+        stream.open()
+        defer { stream.close() }
+        var data = Data()
+        var buffer = [UInt8](repeating: 0, count: 4096)
+        while true {
+            let count = stream.read(&buffer, maxLength: buffer.count)
+            if count < 0 { throw stream.streamError ?? URLError(.cannotDecodeRawData) }
+            if count == 0 { return data }
+            data.append(contentsOf: buffer.prefix(count))
+        }
     }
 
     static func session(protocolClass: AnyClass) -> URLSession {

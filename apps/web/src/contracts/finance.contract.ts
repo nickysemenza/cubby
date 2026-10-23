@@ -80,7 +80,6 @@ export const cashFlowContract = defineContract(
       input: cashFlowProjectionInput,
       output: cashFlowProjectionOut,
       // Scenarios are an array of objects; keep them out of a bounded URL.
-      transport: "post",
       cache: { tags: [["expense"], ["project"], ["spendingCategory"]] },
     }),
   },
@@ -98,8 +97,6 @@ export const financialTransactionContract = defineContract(
       output: financialSettlementAllocationInput.omit({
         priorAllocations: true,
       }),
-      native:
-        "Save reviewed settlement without replacing a changed allocation graph",
       invalidates: ["financialTransaction", "purchase", "expense"],
     }),
     acceptTransferPair: mutation({
@@ -108,7 +105,6 @@ export const financialTransactionContract = defineContract(
       command: { label: "Accept transfer pair", confirmation: null },
       input: acceptFinancialTransferPairInput,
       output: acceptFinancialTransferPairOut,
-      native: "Accept a reviewed transfer pair as a Ledger Transfer",
       invalidates: ["financialTransaction", "ledgerTransfer"],
     }),
     converge: mutation({
@@ -116,7 +112,6 @@ export const financialTransactionContract = defineContract(
         "Automatically book a posted genuine purchase payment only when current server evidence establishes identity, account authority, exact money and unchanged accepted facts. Optionally provide a retained Email for checksum-fenced financial event extraction; transfers, card repayments, refunds, reimbursements and incoming payments are never turned into new purchases. A sole candidate or model ranking grants no write authority. Returns review_required without spending writes when evidence is incomplete or ambiguous.",
       input: financialConvergenceInput,
       output: financialConvergenceResult,
-      native: "Converge uniquely verified financial evidence",
       invalidates: ["financialTransaction", "purchase", "expense", "email"],
     }),
     bookTransaction: mutation({
@@ -132,8 +127,6 @@ export const financialTransactionContract = defineContract(
         "Preview a correction to existing Financial Transaction booking data. It is read-only and returns the proposed changes and blockers; commit only the reviewed correction.",
       input: financialBookingCorrectionInput,
       output: financialBookingCorrectionPreview,
-      transport: "post",
-      native: "Review reimbursement moves and transfer corrections",
       cache: {
         tags: [
           ["financialTransaction"],
@@ -149,7 +142,6 @@ export const financialTransactionContract = defineContract(
       command: { label: "Commit booking correction", confirmation: null },
       input: financialBookingCorrectionPreview,
       output: financialBookingCorrectionResult,
-      native: "Apply reviewed financial corrections atomically",
       invalidates: [
         "financialTransaction",
         "purchase",
@@ -162,8 +154,6 @@ export const financialTransactionContract = defineContract(
         "Preview booking for the selected transaction evidence without writing. Review candidate account, date, and amount assignments before calling commit_booking.",
       input: financialBookingInput,
       output: financialBookingPreview,
-      transport: "post",
-      native: "Review spending before booking",
       cache: { tags: [["financialTransaction"], ["purchase"], ["expense"]] },
     }),
     commitBooking: mutation({
@@ -172,7 +162,6 @@ export const financialTransactionContract = defineContract(
       command: { label: "Commit booking", confirmation: null },
       input: financialBookingPreview,
       output: financialBookingResult,
-      native: "Book reviewed spending",
       invalidates: ["financialTransaction", "purchase", "expense"],
     }),
     previewTransactionImport: query({

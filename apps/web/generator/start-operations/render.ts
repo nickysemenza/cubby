@@ -1,17 +1,11 @@
-import { join } from "node:path";
-import { pathToFileURL } from "node:url";
-import { z } from "zod";
 import { generatedHeader } from "../artifacts.ts";
 import type { EntityArtifacts } from "../entities/declarations.ts";
 import {
-  collectDeclaredOperations,
-  loadContracts,
-  collectNativeOperationIds,
+  collectOperationIds,
   collectStartOperationHandlers,
   validateStrongQueryOperations,
   collectStartOperations,
   type HandlerDefinition,
-  SOURCE_ROOT,
 } from "./collect.ts";
 import { renderClientCatalog } from "./client-catalog.ts";
 
@@ -23,8 +17,11 @@ const renderStartOperationRegistry = async (): Promise<string> => {
   return (
     generatedHeader +
     `export const START_OPERATIONS = {\n${operations
-      .map(([operation, { kind, observability }]) => {
+      .map(([operation, { kind, exposure, observability }]) => {
         const metadata = [
+          exposure === undefined
+            ? undefined
+            : `exposure: ${JSON.stringify(exposure)}`,
           observability.entities.length > 0
             ? `entities: ${JSON.stringify(observability.entities)}`
             : undefined,
@@ -78,100 +75,10 @@ const renderStartOperationHandlers = async (): Promise<string> => {
   );
 };
 
-/** The wire projection the router itself uses, for the transport decision. */
-type WireModule = {
-  toWire: (schema: z.ZodType, io: "input") => z.ZodType;
-  isFlatQueryInput: (wire: z.ZodType) => boolean;
-};
-
-const loadWire = async (): Promise<WireModule> => {
-  const wire: object = await import(
-    pathToFileURL(join(SOURCE_ROOT, "lib/http-api/wire.ts")).href
-  );
-  // SAFETY: the module is the router's own wire projection; a missing export
-  // fails at the first call below, at generation time.
-  return wire as WireModule;
-};
-
-/**
- * A query travels as GET parameters when its input is flat (scalars, enums,
- * dates, lists of those) and as a POST body otherwise.
- */
-const queryHelper = (
-  wire: WireModule,
-  input: z.ZodType | undefined,
-): "rpcQuery" | "rpcQueryPost" =>
-  input === undefined ||
-  input instanceof z.ZodUndefined ||
-  wire.isFlatQueryInput(wire.toWire(input, "input"))
-    ? "rpcQuery"
-    : "rpcQueryPost";
-
-/**
- * The HTTP contract is a real ts-rest router whose routes reference contract
- * members by name, so the generated file stays statically typed without
- * copying any schema source. It carries exactly the operations flagged
- * `native:`: the Apple app is the HTTP API's only client.
- */
-const renderHttpContract = async (): Promise<string> => {
-  const declarations = [...(await collectDeclaredOperations())].sort(
-    ([a], [b]) => a.localeCompare(b),
-  );
-  const wire = await loadWire();
-  const contractModules = new Map(
-    (await loadContracts()).map(({ exportName, module }) => [
-      exportName,
-      module,
-    ]),
-  );
-  const usedContracts = new Map<string, string>();
-  const domains = new Map<string, string[]>();
-  for (const [id, declaration] of declarations) {
-    if (declaration.kind === "subscription" || !declaration.native) continue;
-    const module = contractModules.get(declaration.exportName);
-    if (!module)
-      throw new Error(`No contract module for ${declaration.exportName}`);
-    usedContracts.set(declaration.exportName, module);
-    const domain = id.slice(0, id.length - declaration.member.length - 1);
-    const helper =
-      declaration.kind === "query"
-        ? declaration.transport === "post" || declaration.httpWire
-          ? "rpcQueryPost"
-          : queryHelper(wire, declaration.input)
-        : "rpcMutation";
-    const members = domains.get(domain) ?? [];
-    members.push(
-      `${JSON.stringify(declaration.member)}: ${helper}(${JSON.stringify(domain)}, ${JSON.stringify(declaration.member)}, ${declaration.exportName}.ops[${JSON.stringify(declaration.member)}]),`,
-    );
-    domains.set(domain, members);
-  }
-  return (
-    generatedHeader +
-    [...usedContracts]
-      .map(([name, module]) => `import { ${name} } from "${module}";`)
-      .join("\n") +
-    "\n" +
-    `import { httpContractBuilder, httpRouterOptions, rpcMutation, rpcQuery, rpcQueryPost } from "~/lib/http-api/router";\n` +
-    `export const httpContract = httpContractBuilder.router({\n` +
-    [...domains]
-      .map(
-        ([name, members]) =>
-          `${JSON.stringify(name)}: {\n${members.join("\n")}\n},`,
-      )
-      .join("\n") +
-    `\n}, httpRouterOptions);\n`
-  );
-};
-
-/**
- * Stage 2 of `pnpm generate`: the Start operation registry, the lazy handler
- * loaders, the browser client catalog, and the ts-rest HTTP contract. Runs after stage 1's files are on
- * disk (the contracts runtime-import `~/entity/generated/*.gen.ts`).
- */
+/** Stage 2 of `pnpm generate`: operation catalogs, lazy handler loaders and MCP tools. */
 export const renderStartOperationArtifacts = async (): Promise<{
   artifacts: EntityArtifacts[];
-  /** RPC ids flagged `native:`, for the native contract stage's client filter. */
-  nativeOperations: string[];
+  operationIds: string[];
 }> => {
   const catalog = await renderClientCatalog();
   return {
@@ -190,11 +97,7 @@ export const renderStartOperationArtifacts = async (): Promise<{
       catalog.all,
       catalog.commands,
       catalog.commandRuntime,
-      {
-        relativePath: "apps/web/src/lib/generated/http-contract.gen.ts",
-        source: await renderHttpContract(),
-      },
     ],
-    nativeOperations: await collectNativeOperationIds(),
+    operationIds: await collectOperationIds(),
   };
 };

@@ -29,12 +29,23 @@ nonisolated private final class TodayModelStub: URLProtocol, @unchecked Sendable
     override func stopLoading() {}
 
     func respond(status: Int, data: Data) {
+        var responseData = data
+        if request.url?.path.hasPrefix("/api/operations/") == true,
+            (200..<300).contains(status)
+        {
+            let payload =
+                (try? JSONSerialization.jsonObject(
+                    with: data, options: [.fragmentsAllowed])) ?? NSNull()
+            responseData =
+                (try? JSONSerialization.data(
+                    withJSONObject: ["ok": true, "data": payload], options: [.fragmentsAllowed])) ?? data
+        }
         let response = HTTPURLResponse(
             url: request.url!, statusCode: status, httpVersion: "HTTP/1.1",
             headerFields: ["Content-Type": "application/json"]
         )!
         client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
-        client?.urlProtocol(self, didLoad: data)
+        client?.urlProtocol(self, didLoad: responseData)
         client?.urlProtocolDidFinishLoading(self)
     }
 
@@ -73,7 +84,7 @@ struct TodayModelTests {
         TodayModelStub.handler.withLock { handler in
             handler = { request, stub in
                 switch request.url!.path() {
-                case "/api/v1/entityReport/get":
+                case "/api/operations/entityReport.get":
                     stub.respond(status: 200, data: Self.tasksPayload)
                 default:
                     pendingContinuation.yield(TodayModelStub.deferResponse(for: stub))
@@ -112,7 +123,7 @@ struct TodayModelTests {
         let shouldFail = Mutex(false)
         TodayModelStub.handler.withLock { handler in
             handler = { request, stub in
-                guard request.url!.path() == "/api/v1/entityReport/get" else {
+                guard request.url!.path() == "/api/operations/entityReport.get" else {
                     stub.respond(status: 500, data: Self.failurePayload)
                     return
                 }

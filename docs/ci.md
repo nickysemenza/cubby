@@ -192,9 +192,9 @@ resource-safe on the same machine. Keep heavy local runs coordinated when the
 host is constrained.
 
 `pnpm apple check` runs lint, prepares artifacts, then executes selected native
-checks sequentially. `apple:host-tests` runs CubbyKit's package tests and the
-OpenAPI warning gate; `apple:simulator-build` compiles `Cubby-iOS` for a generic
-simulator. Neither boots a simulator. `apple:lint` runs Swift formatting
+checks sequentially. `apple:host-tests` runs CubbyKit's package tests, including
+the shared operation transport contract; `apple:simulator-build` compiles
+`Cubby-iOS` for a generic simulator. Neither boots a simulator. `apple:lint` runs Swift formatting
 without Xcode. Missing Xcode fails native builds.
 The `rust` target runs fmt/clippy/test per
 crate (`recipebridge/project.json`, `cubby-ffi/project.json`, and

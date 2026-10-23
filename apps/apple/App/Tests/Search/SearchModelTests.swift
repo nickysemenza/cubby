@@ -19,7 +19,19 @@ nonisolated private final class SearchModelStub: URLProtocol, @unchecked Sendabl
         // Off the loading thread, so a handler parked on a Gate cannot stall a later request.
         let request = request
         DispatchQueue.global().async {
-            let (status, data) = handler(request)
+            let (status, rawData) = handler(request)
+            var data = rawData
+            if request.url?.path.hasPrefix("/api/operations/") == true,
+                (200..<300).contains(status)
+            {
+                let payload =
+                    (try? JSONSerialization.jsonObject(
+                        with: rawData, options: [.fragmentsAllowed])) ?? NSNull()
+                data =
+                    (try? JSONSerialization.data(
+                        withJSONObject: ["ok": true, "data": payload], options: [.fragmentsAllowed]))
+                    ?? rawData
+            }
             let response = HTTPURLResponse(
                 url: request.url!, statusCode: status, httpVersion: "HTTP/1.1",
                 headerFields: ["Content-Type": "application/json"]
@@ -49,7 +61,7 @@ struct SearchModelTests {
         defer { first.open() }
         SearchModelStub.handler.withLock { handler in
             handler = { request in
-                let query = Self.queryItem("query", in: request) ?? ""
+                let query = Self.operationInput(request)["query"]?.stringValue ?? ""
                 requestedQueries.withLock { $0.append(query) }
                 if query == "first" { first.holdBlocking() }
                 return (200, Self.searchPayload(title: query))
@@ -77,8 +89,8 @@ struct SearchModelTests {
             handler = { request in
                 entityKinds.withLock { values in
                     values =
-                        URLComponents(url: request.url!, resolvingAgainstBaseURL: false)?
-                        .queryItems?.filter { $0.name == "entityKinds" }.compactMap(\.value) ?? []
+                        Self.operationInput(request)["entityKinds"]?.arrayValue?.compactMap(\.stringValue)
+                        ?? []
                 }
                 return (200, Self.searchPayload(title: "scoped"))
             }
@@ -156,9 +168,11 @@ struct SearchModelTests {
         )
     }
 
-    nonisolated private static func queryItem(_ name: String, in request: URLRequest) -> String? {
-        URLComponents(url: request.url!, resolvingAgainstBaseURL: false)?.queryItems?
-            .first(where: { $0.name == name })?.value
+    nonisolated private static func operationInput(_ request: URLRequest) -> JSONValue {
+        guard let data = request.httpBody,
+            let envelope = try? JSONDecoder().decode(JSONValue.self, from: data)
+        else { return .null }
+        return envelope["input"] ?? .null
     }
 
     nonisolated private static func searchPayload(title: String) -> Data {

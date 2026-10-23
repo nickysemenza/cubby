@@ -92,21 +92,27 @@ test("browser receives a Vite HMR update without navigation", async ({
 test("the USDA release object and UPC cache serve their synthetic fixtures", async ({
   request,
 }) => {
-  const counts = await request.get("/api/v1/dashboard/counts");
-  expect(counts.status()).toBe(200);
-  const parsed = dashboardCountsOut.parse(await counts.json());
+  const call = async (operation: string, input?: unknown) => {
+    const response = await request.post(`/api/operations/${operation}`, {
+      data: { operation, ...(input === undefined ? {} : { input }) },
+    });
+    expect(response.status(), await response.text()).toBe(200);
+    const result = await response.json();
+    expect(result.ok).toBe(true);
+    return result.data;
+  };
+  const counts = await call("dashboard.counts");
+  const parsed = dashboardCountsOut.parse(counts);
   expect(parsed.usdaFoodsAvailable).toBe(true);
   // Three foundation foods and one branded food (tooling/dev/usda-synthetic-release.ts).
   expect(parsed.usdaFoods).toBe(4);
-  const food = await request.get("/api/v1/usda-food/detail?id=9900001");
-  expect(food.status()).toBe(200);
-  expect(
-    foodSummaryWithLinkedProducts.parse(await food.json()).foodInfo.description,
-  ).toBe("Synthetic rolled oats");
+  const food = await call("usdaFood.detail", { id: "9900001" });
+  expect(foodSummaryWithLinkedProducts.parse(food).foodInfo.description).toBe(
+    "Synthetic rolled oats",
+  );
 
-  const upc = await request.get("/api/v1/upc/lookup?upc=012345678905");
-  expect(upc.status(), await upc.text()).toBe(200);
-  const lookup = productLookupResponseSchema.parse(await upc.json());
+  const upc = await call("upc.lookup", { upc: "012345678905" });
+  const lookup = productLookupResponseSchema.parse(upc);
   expect(lookup).toMatchObject({
     name: "Synthetic cotton shirt",
     upc: "012345678905",

@@ -104,7 +104,6 @@ export const mealContract = defineContract(
       exposure: "view",
       note: "Home macro tiles for a meal or a household day; agents read nutrition_read.daily_intake per person and nutrition_read.preparations_detail per meal",
       readPolicy: "strong",
-      native: "Meal and daily macro summaries",
       input: schemas.mealNutritionInput,
       output: schemas.mealNutritionOut,
       cache: {
@@ -179,7 +178,6 @@ export const mealContract = defineContract(
           },
         ],
       },
-      native: "Plan a recipe into a meal from its composition report",
       input: schemas.mealAddRecipeInput,
       output: schemas.mealOut,
       invalidates: ["meal"],
@@ -200,7 +198,6 @@ export const mealContract = defineContract(
           },
         ],
       },
-      native: "Change a meal recipe's scale from the composition report",
       input: schemas.mealUpdateRecipeInput,
       output: schemas.mealOut,
       invalidates: ["meal"],
@@ -208,7 +205,6 @@ export const mealContract = defineContract(
     removeRecipe: mutation({
       description: "Remove a planned recipe from its meal.",
       command: { label: "Remove recipe", confirmation: null },
-      native: "Remove a recipe from a meal from the composition report",
       input: schemas.mealRecipeIdInput,
       output: schemas.mealOut,
       invalidates: ["meal"],
@@ -234,8 +230,6 @@ export const mealContract = defineContract(
       description:
         "Record measured yield and portions served from one planned recipe occurrence. Assigned portions count in daily intake by the target meal date: future is planned, today/past is logged. Confirmation fields remain for legacy compatibility and do not gate daily intake.",
       command: { label: "Save preparation", confirmation: null },
-      native:
-        "Set or remove portions and the yield from the composition report",
       input: schemas.saveMealRecipePreparationInput,
       output: schemas.saveMealRecipePreparationOut,
       invalidates: ["meal"],

@@ -33,7 +33,6 @@ export const assessmentContract = defineContract(
         "sourceTransactionRecord",
         "financialTransaction",
       ],
-      native: "Review an Assessment, with optional saved application",
     }),
     reviewBatch: mutation({
       description:
@@ -59,7 +58,6 @@ export const assessmentContract = defineContract(
         "sourceTransactionRecord",
         "financialTransaction",
       ],
-      native: "Settle Assessment reviews independently",
     }),
   },
   { exposure: "capability", mcpToolGroup: "suggestions" },

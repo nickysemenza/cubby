@@ -4,8 +4,7 @@ import { generatedHeader } from "../artifacts.ts";
 import type { EntityArtifacts } from "../entities/declarations.ts";
 import type { KernelActions } from "../entities/render/index.ts";
 import { renderEntityKernelArtifacts } from "./entity-kernel.ts";
-import { httpRoutes } from "../../src/lib/http-api/routes.ts";
-import { httpMetadataSchema } from "../../src/lib/http-api/router.ts";
+import { loadContracts } from "../start-operations/collect.ts";
 import { checkHeroActionPlans } from "./native-plan-validation.ts";
 import { collectNativeContract } from "./native-contract.ts";
 import { renderNativeCommands } from "./native-commands.ts";
@@ -13,21 +12,20 @@ import { renderNativeOperations } from "./native-operations.ts";
 import { pascal, registerSchemaNames } from "./schema-names.ts";
 import { renderSwiftModels } from "./swift-models.ts";
 import { NATIVE_TYPED_RECORDS, TYPE_OVERRIDES } from "./type-overrides.ts";
-import { toWire } from "../../src/lib/http-api/wire.ts";
+import { toWire } from "../../src/lib/operation-wire.ts";
 
 type EntityOutputs = ReadonlyMap<string, string | null>;
 
 /** Native artifacts are derived from declarations, independently of documentation formats. */
 export async function renderDirectNativeArtifacts(
   actions: KernelActions,
-  nativeOperations: readonly string[],
+  operationIds: readonly string[],
   entityOutputs: EntityOutputs,
 ): Promise<EntityArtifacts[]> {
   const named = await registerSchemaNames(
     new URL("../../src/", import.meta.url),
   );
-  const { httpContract } =
-    await import("../../src/lib/generated/http-contract.gen.ts");
+  const contracts = await loadContracts();
   const { detailEntities, getEntityDetailOutputSchema } =
     await import("../../src/entity/generated/entity-details.gen.ts");
   const records = new Map<string, z.ZodType>();
@@ -49,20 +47,33 @@ export async function renderDirectNativeArtifacts(
       ),
     );
   }
-  const contract = collectNativeContract(httpContract, named, records);
+  const contract = collectNativeContract(
+    contracts,
+    records,
+    named,
+    operationIds,
+  );
   const exposed = new Set(contract.operations.map(({ id }) => id));
   if (
-    nativeOperations.length !== exposed.size ||
-    nativeOperations.some((id) => !exposed.has(id))
+    operationIds.length !== exposed.size ||
+    operationIds.some((id) => !exposed.has(id))
   )
-    throw new Error("Native operation declarations and HTTP routes disagree");
+    throw new Error("Operation ids and contract members disagree");
   const bodies = new Map<string, z.ZodType>();
-  for (const route of httpRoutes(httpContract)) {
-    if ("body" in route && route.body instanceof z.ZodType)
-      bodies.set(
-        httpMetadataSchema.parse(route.metadata).operation,
-        route.body,
-      );
+  const httpOperations = new Set(operationIds);
+  for (const { contract: declaration } of contracts) {
+    for (const [member, definition] of Object.entries(declaration.ops)) {
+      if (
+        definition.kind !== "subscription" &&
+        httpOperations.has(`${declaration.domain}.${member}`) &&
+        definition.input instanceof z.ZodType
+      ) {
+        bodies.set(
+          `${declaration.domain}.${member}`,
+          definition.operationWire?.input ?? definition.input,
+        );
+      }
+    }
   }
   checkHeroActionPlans({ bodies, generatedOperationIds: exposed, actions });
   const models = renderSwiftModels(contract);
@@ -127,7 +138,7 @@ export async function renderDirectNativeArtifacts(
     ...models.artifacts,
     ...renderNativeOperations(contract, models),
     renderNativeCommands(contract),
-    ...renderEntityKernelArtifacts(actions, nativeOperations),
+    ...renderEntityKernelArtifacts(actions, operationIds),
     {
       relativePath:
         "apps/apple/CubbyKit/Sources/CubbyKit/Generated/APITypes.swift",

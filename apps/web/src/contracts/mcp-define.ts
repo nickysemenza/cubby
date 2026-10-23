@@ -99,6 +99,8 @@ export interface McpActionSpec<
    * Writes already have the longer write budget.
    */
   readonly modelBacked?: true;
+  /** Selects the authoritative database for queries that require current data. */
+  readonly readPolicy?: QueryContract["readPolicy"];
   readonly batch?: McpBatchSpec<Projected>;
   /**
    * The entity a call acted on, for `McpToolCall.entityKind` (a batch passes

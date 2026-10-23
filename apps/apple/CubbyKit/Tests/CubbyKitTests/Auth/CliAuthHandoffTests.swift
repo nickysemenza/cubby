@@ -31,7 +31,7 @@
                 CliAuthOrigin.of(URL(string: "https://cubby.example.com/")!)
                     == "https://cubby.example.com")
             #expect(
-                CliAuthOrigin.of(URL(string: "http://localhost:3000/api/v1")!)
+                CliAuthOrigin.of(URL(string: "http://localhost:3000/api/operations/entity.list")!)
                     == "http://localhost:3000")
             #expect(
                 CliAuthOrigin.of(URL(string: "HTTPS://EXAMPLE.COM:8443/x")!)

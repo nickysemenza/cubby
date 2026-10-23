@@ -143,7 +143,7 @@ extension ProductDetail {
     public var coverImageURL: URL? { coverImageUrl.flatMap(URL.init(string:)) }
 }
 
-extension UpcLookupOutput {
+extension UpcLookupOutputValue {
     /// `manufacturer` when the catalog knows one, else the brand it printed on the label.
     public var manufacturerOrBrand: String? { manufacturer ?? brand }
     public var imageURL: URL? { imageUrl.flatMap(URL.init(string:)) }
@@ -299,7 +299,7 @@ extension PhotoLocalAnalysis {
     /// (`image.analysis`), so the R2 image detail's "server (at import)" Diagnostics column can be
     /// built by the same `PhotoDiagnostics.report` the device's own fresh run uses — one report
     /// shape either side of the wire, not a bespoke comparison renderer.
-    public init(payload: ImageAnalysisOutput) {
+    public init(payload: ImageAnalysisOutputValue) {
         self.init(
             id: payload.sha256,
             analysisVersion: payload.analysisVersion,
@@ -326,7 +326,7 @@ extension PhotoLocalAnalysis {
     }
 }
 
-extension ImageAnalysisOutput {
+extension ImageAnalysisOutputValue {
     /// The wire payload for `recordImageAnalysis`, built from a device-run `PhotoLocalAnalysis` —
     /// the inverse of `PhotoLocalAnalysis.init(payload:)` above. Shared by
     /// `PhotoImportRunUploader`'s post-finalize analysis phase and (via that same shape) the

@@ -16,8 +16,6 @@ export const entityReportContract = defineContract(
      */
     get: query({
       note: "Detail slot reports",
-      transport: "post",
-      native: "Detail slot reports",
       input: entityReportInput,
       output: entityReportOut,
       cache: {
@@ -52,7 +50,6 @@ export const entityReportContract = defineContract(
      * once per poll instead of once per slot.
      */
     getMany: query({
-      native: "Detail slot reports, batched per record",
       input: entityReportManyInput,
       output: entityReportManyOut,
       cache: {

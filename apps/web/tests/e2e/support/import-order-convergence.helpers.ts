@@ -132,12 +132,13 @@ export async function applyReviewedSourceReconciliation(
     data: PrepareSourceOrderReconciliationInput | ResolveRunFindingInput,
     output: { parse(value: unknown): Output },
   ) => {
-    const response = await page.request.post(`/api/v1/${path}`, {
-      data,
+    const operation = path.replace("/", ".");
+    const response = await page.request.post(`/api/operations/${operation}`, {
+      data: { operation, input: data },
       headers: { Origin: input.baseURL },
     });
     expect(response.ok(), await response.text()).toBe(true);
-    return output.parse(await response.json());
+    return output.parse((await response.json()).data);
   };
   const expenseId = parseShortcodeFor("expense", aggregate[0]!.shortcode);
   const review = await send(

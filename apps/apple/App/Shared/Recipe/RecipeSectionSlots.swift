@@ -94,7 +94,7 @@ struct CookbookContentsSlot: View {
         error = nil
         do {
             let loaded = try await appModel.client.ingredientUsage(
-                .init(input: .init(cookbookId: CookbookShortcode(cookbookID))))
+                .init(cookbookId: CookbookShortcode(cookbookID)))
             guard !Task.isCancelled else { return }
             usage = loaded
         } catch {

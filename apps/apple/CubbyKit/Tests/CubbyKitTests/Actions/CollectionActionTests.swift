@@ -46,8 +46,7 @@ struct CollectionActionTests {
         let recorder = Recorder()
         CollectionStub.handler.withLock { handler in
             handler = { request in
-                let data = (try? Self.requestBody(request)) ?? Data()
-                let fields = (try? JSONDecoder().decode([String: JSONValue].self, from: data)) ?? [:]
+                let fields = StubNetworking.operationFields(of: request)
                 recorder.seen.withLock {
                     $0.append(
                         Seen(
@@ -58,21 +57,6 @@ struct CollectionActionTests {
             }
         }
         return recorder
-    }
-
-    nonisolated private static func requestBody(_ request: URLRequest) throws -> Data {
-        if let body = request.httpBody { return body }
-        guard let stream = request.httpBodyStream else { return Data() }
-        stream.open()
-        defer { stream.close() }
-        var data = Data()
-        var buffer = [UInt8](repeating: 0, count: 4096)
-        while true {
-            let count = stream.read(&buffer, maxLength: buffer.count)
-            if count <= 0 { break }
-            data.append(contentsOf: buffer.prefix(count))
-        }
-        return data
     }
 
     private static func row(_ id: String, raw: JSONValue = [:]) -> EntityRow {
@@ -90,10 +74,10 @@ struct CollectionActionTests {
         for action in CollectionActionID.allCases {
             let plan = try #require(coverage.collectionActionPlan[action.rawValue], "\(action)")
             let operation = try #require(plan.operation, "\(action) is an operation plan")
-            #expect(OperationRoute.all[operation.operation] != nil, "\(action): \(operation.operation)")
+            #expect(OperationCatalog.all.contains(operation.operation), "\(action): \(operation.operation)")
             #expect(HeroActionRunner.handledOperations.contains(operation.operation), "\(action)")
             if let preview = operation.preview {
-                #expect(OperationRoute.all[preview.operation] != nil, "\(action) preview")
+                #expect(OperationCatalog.all.contains(preview.operation), "\(action) preview")
                 #expect(HeroActionRunner.handledPreviews.contains(preview.operation), "\(action) preview")
             }
             #expect(operation.confirmation == .none)
@@ -188,7 +172,7 @@ struct CollectionActionTests {
         let outcome = try await makeRunner().perform(
             try plan(.analyzeLocation, .location), on: .location, row: Self.row("LOC-4K7M"),
             values: [:], confirmed: false)
-        #expect(recorder.requests.first?.path == "/api/v1/ai/describeLocation")
+        #expect(recorder.requests.first?.path == "/api/operations/ai.describeLocation")
         #expect(recorder.requests.first?.body["locationId"] == "LOC-4K7M")
         // The run already saved the description, so the review is an acknowledgement: it carries
         // both sides of the diff, the model and the answer's age, and the screens that show the
@@ -236,7 +220,7 @@ struct CollectionActionTests {
             attach, on: .image, row: Self.row("IMG-4K7M"),
             values: ["targetId": " prd-4k7m ", "purpose": "label", "role": "attachment"], confirmed: false)
         let sent = try #require(recorder.requests.first)
-        #expect(sent.path == "/api/v1/image/attachExisting")
+        #expect(sent.path == "/api/operations/image.attachExisting")
         #expect(sent.body["targetId"] == "PRD-4K7M")
         #expect(sent.body["purpose"] == "label")
         #expect(sent.body["role"] == "attachment")

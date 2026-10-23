@@ -17,10 +17,9 @@ private final class CatchUpStub: URLProtocol, @unchecked Sendable {
 
 @Suite("Catch-up request", .serialized)
 struct CatchUpRequestTests {
-    /// The server validates a `z.undefined()` mutation input as an object and answers a bodiless
-    /// POST with 400 "expected object, received undefined", even though the spec marks the body
-    /// optional. Seen in the simulator on every app activation.
-    @Test func sendsAnEmptyJSONObjectBody() async throws {
+    /// The operation declares no input, so the envelope carries its operation id without an
+    /// `input` member.
+    @Test func sendsNoInputInTheOperationEnvelope() async throws {
         let store = InMemorySessionTokenStore()
         try store.save(.bearer("tok"), for: "localhost:3000")
         let client = CubbyClient(
@@ -45,8 +44,9 @@ struct CatchUpRequestTests {
         }
         try await client.requestCatchUp()
         let request = try #require(sent.withLock { $0 })
-        #expect(request.path == "/api/v1/maintenance/requestCatchUp")
-        let object = try JSONDecoder().decode([String: JSONValue].self, from: request.body)
-        #expect(object.isEmpty)
+        #expect(request.path == "/api/operations/maintenance.requestCatchUp")
+        let envelope = try JSONDecoder().decode(JSONValue.self, from: request.body)
+        #expect(envelope["operation"] == "maintenance.requestCatchUp")
+        #expect(envelope["input"] == nil)
     }
 }

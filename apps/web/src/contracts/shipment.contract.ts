@@ -18,7 +18,6 @@ export const shipmentContract = defineContract(
     edit_observation: mutation({
       description:
         "Partially edit one retained observation using its observationId from shipments_read.timeline and current Shipment reference. Supply only changed fields in patch; omitted fields and source identity remain unchanged. Appends a reviewed revision, retains original captures and history, and protects it from source replay. A superseded observation refuses a different edit; read the current revision first. Interactive members only.",
-      native: "Correct retained shipment observations from the CLI",
       nativeModels: { input: "json", output: "json" },
       input: editShipmentObservationInput,
       output: shipmentReferenceOut,
@@ -34,7 +33,6 @@ export const shipmentContract = defineContract(
     record: mutation({
       description:
         "Record shipment observations from an owned retained Email/checksum, an interactive tracking-page capture, or an exported SMS. Keep unmatched packages; never invent a Purchase. Carrier references are Vendors. Label creation or vendor shipped wording does not prove carrier possession. Repeated identical observations update first/last seen; all distinct sources and revisions remain retained.",
-      native: "Record source-backed shipment evidence from the CLI",
       nativeModels: { input: "json", output: "json" },
       input: recordShipmentEvidenceInput,
       output: recordShipmentEvidenceOut,
@@ -57,7 +55,6 @@ export const shipmentContract = defineContract(
     timeline: query({
       description:
         "Read every retained source observation and the deduplicated timeline. Exact durations require exact endpoints; missing or conflicting evidence remains unknown.",
-      native: "Verify retained shipment evidence from the CLI",
       nativeModels: { output: "json" },
       input: shipmentTimelineInput,
       output: shipmentTimelineOut,

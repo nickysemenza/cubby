@@ -43,7 +43,7 @@ Web boards use pointer/touch dragging; keyboard users use the Earlier/Later butt
 ## Generic by default
 
 Cubby's entities share one declaration spine, and every client — web, iOS and
-macOS, HTTP/OpenAPI, MCP, and the server — should need as little hand-written
+macOS, HTTP operations, MCP, and the server — should need as little hand-written
 per-entity code as possible.
 
 - **Manifest first.** Entity behavior (fields, shapes, filters, sorts, list
@@ -58,7 +58,7 @@ per-entity code as possible.
   inventing one.
 - **Derive types; never restate them.** TypeScript types come from Zod
   (`z.infer`), generated manifests, Drizzle, or `Pick`/`Omit` of those; Swift
-  types come from the generated OpenAPI and entity manifest. Cross-Worker RPCs
+  types come from the generated operation models and entity manifest. Cross-Worker RPCs
   share one Zod contract.
 - **Generate over hand-write.** Code that is a function of declarations or
   contracts belongs in `pnpm generate` output with a drift check.
@@ -265,7 +265,7 @@ One generator (`apps/web/generator/main.ts`) writes the entity artifacts first
 (`apps/web/generator/entities/`), then the artifacts derived from the operation
 contracts: the operation registry, handler loaders, the browser client catalog
 that resolves each contract's cache tags and invalidation data
-(`apps/web/generator/start-operations/`), and the HTTP OpenAPI document with its
+(`apps/web/generator/start-operations/`), and shared operation transport artifacts with their
 native derivations (`apps/web/generator/http-api/`). Generation fails on invalid
 metadata, duplicate entity keys or routes, invalid relation policies, and
 unsupported capabilities. Generated files are never committed:
@@ -284,7 +284,7 @@ derived paths and image fallback paths. Notifications add those consumers' cache
 roots without recursively applying their mutation ripples or scheduling Jobs.
 
 Progressive list enrichment reuses one exported error schema across entities,
-so OpenAPI and Swift emit one shared error type while each entity retains its
+so generated operation models emit one shared error type while each entity retains its
 own successful enrichment shape. Base-list responses likewise share one
 metadata schema, so each entity uses the same pagination and grouping type.
 
@@ -658,7 +658,7 @@ the server refuses a change too) locks it on edit, and `.meta({ notice })` shows
 
 An `implemented` hero action also needs a plan in `nativeHeroActionPlans` (same
 file, emitted as `heroActionPlan`): the declared verb maps to one generated
-operation (flag its contract member `native:`), an input form, and a
+operation from its contract, an input form, and a
 confirmation (`destructive` for delete and discard). The native
 `HeroActionRunner` executes every plan, and `pnpm generate` fails when the
 operation is not on the generated client or the body names a field the
@@ -1299,7 +1299,7 @@ Unlocated products whose single acquisition would hand the owner down. My stuff,
 `apparel` category family), Bought for me, and the ownership work queues are
 saved views over these filters.
 
-Native saved views compile column filters to HTTP query parameters, expanding
+Native saved views compile column filters into operation JSON inputs, expanding
 nullable sentinels into presence filters and static range presets into their
 declared patches. A saved range preset must have a declarative expansion;
 generation refuses an unsupported expansion rather than dropping its scope.
@@ -1375,7 +1375,7 @@ emits the roster as `generatedEntitySort` in
 derives the kernel's `EntitySortContract` from that map, so no repository
 hand-lists its own sort roster. The compiler enforces
 `default ∈ fields` and rejects a sort entry whose derived field cannot order
-(below). The same roster narrows the `/api/v1` list route (`sort` refined to
+(below). The same roster narrows the `entity.list` operation input (`sort` refined to
 `fields`).
 The native `EntityDescriptor.sortFields` is emitted from that same roster;
 generic table headers enable server sorting only for those column ids. Native
@@ -3013,7 +3013,7 @@ an Image.
 Web and the Apple apps render the graph, paths, inspector, and connection review
 through one React workspace. Swift owns its authenticated host and native record
 navigation; ranking and eligibility remain server-owned. CubbyKit retains the
-ordinary `/api/v1` mappings for native API consumers. The cross-client wire
+ordinary operation calls for native API consumers. The cross-client wire
 example `packages/schemas/fixtures/relationship-discovery.json` feeds both Zod
 and Swift mapping tests. Inline previews and the full Relationships section
 share one query result; the workspace's graph and list share selection and

@@ -461,11 +461,17 @@ test("suggests an existing variant and previews every merge decision for a creat
   let createdId: string | undefined;
   await expect
     .poll(async () => {
-      const review = await page.request.get(
-        `/api/v1/photoImport/review?runId=${seed.runId}`,
+      const review = await page.request.post(
+        "/api/operations/photoImport.review",
+        {
+          data: {
+            operation: "photoImport.review",
+            input: { runId: seed.runId },
+          },
+        },
       );
       if (!review.ok()) throw new Error(await review.text());
-      const body = await review.json();
+      const body = (await review.json()).data;
       createdId = body.review.proposals.find(
         (item: { groupKey: string }) => item.groupKey === "g1",
       )?.committedProduct?.id;

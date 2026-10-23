@@ -29,7 +29,6 @@ export const searchContract = defineContract(
   {
     find: query({
       exposure: "view",
-      native: "Search and intents",
       input: searchQueryInputSchema,
       output: searchHitsOut,
     }),

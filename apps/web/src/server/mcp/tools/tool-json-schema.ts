@@ -1,6 +1,6 @@
 import { type JSONType, z } from "zod";
 
-import { toWire } from "~/lib/http-api/wire";
+import { toWire } from "~/lib/operation-wire";
 
 type JsonObject = Extract<JSONType, { [key: string]: JSONType }>;
 

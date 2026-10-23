@@ -17,7 +17,6 @@ export const dataQualityContract = defineContract(
     setException: mutation({
       description:
         "Record why a fact is absent or a mismatch is expected. The note is required and should explain why the fact was not issued, is unavailable/not applicable, lacks sufficient detail, or why a mismatch is expected. Upserts by check without duplicates. Only after the available sources have been searched.",
-      native: "Accept a data gap as a recorded exception",
       input: setDataExceptionInput,
       output: dataQuality,
       invalidates: [
@@ -31,7 +30,6 @@ export const dataQualityContract = defineContract(
     clearException: mutation({
       description:
         "Clear exactly one explicit exception; any still-missing fact immediately reappears as a gap.",
-      native: "Clear a recorded data exception",
       input: clearDataExceptionInput,
       output: dataQuality,
       invalidates: [

@@ -22,6 +22,7 @@ import { superJsonResultSchema } from "~/lib/superjson-wire";
 import {
   type StartOperationResult,
   type UnparsedStartOperationData,
+  publicStartOperationErrorSchema,
   unparsedStartOperationResultSchema,
 } from "~/server/operation-runtime/start-operation.contract";
 
@@ -84,6 +85,7 @@ const postInit = (
 ): RequestInit => {
   const headers = new Headers(headersInit);
   headers.set("content-type", "application/json");
+  headers.set("x-cubby-value-codec", "superjson");
   return {
     method: "POST",
     headers,
@@ -145,6 +147,11 @@ async function postDispatch(
   try {
     body = await response.text();
     const json: unknown = JSON.parse(body);
+    if (!response.ok)
+      return {
+        ok: false,
+        error: publicStartOperationErrorSchema.parse(json),
+      };
     const parsed = superJsonResultSchema.parse(json);
     return unparsedStartOperationResultSchema.parse(
       superjson.deserialize(parsed),

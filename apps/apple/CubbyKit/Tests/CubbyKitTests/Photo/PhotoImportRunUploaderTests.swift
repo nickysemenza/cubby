@@ -14,7 +14,10 @@ private final class PhotoImportRunUploaderStub: URLProtocol, @unchecked Sendable
     override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
     override func startLoading() {
         let cancel = Self.cancelNextResponse.withLock { suffix in
-            guard let value = suffix, request.url?.path.hasSuffix(value) == true else { return false }
+            guard let value = suffix else { return false }
+            let operationSuffix = value.replacingOccurrences(of: "/", with: ".")
+                .trimmingCharacters(in: CharacterSet(charactersIn: "."))
+            guard request.url?.path.hasSuffix(operationSuffix) == true else { return false }
             suffix = nil
             return true
         }
@@ -58,7 +61,11 @@ private final class RunUploaderScript: @unchecked Sendable {
     private let failDeviceWorkReports = Mutex<Bool>(false)
 
     var seen: [Seen] { seenBox.withLock { $0 } }
-    func requests(matching suffix: String) -> [Seen] { seen.filter { $0.path.hasSuffix(suffix) } }
+    func requests(matching suffix: String) -> [Seen] {
+        let operationSuffix = suffix.replacingOccurrences(of: "/", with: ".")
+            .trimmingCharacters(in: CharacterSet(charactersIn: "."))
+        return seen.filter { $0.path.hasSuffix(operationSuffix) }
+    }
     /// Number of `recordAnalysis` calls seen for one image id, keyed by the id `stage` assigned it
     /// (`"IMG-\(clientId)"` below).
     func analysisCallCount(forImageID imageID: String) -> Int {
@@ -82,13 +89,11 @@ private final class RunUploaderScript: @unchecked Sendable {
 
     var handler: StubNetworking.Handler {
         { [self] request in
-            let fields =
-                (try? JSONDecoder().decode(
-                    [String: JSONValue].self, from: Self.body(of: request))) ?? [:]
+            let fields = StubNetworking.operationFields(of: request)
             let path = request.url?.path ?? ""
             seenBox.withLock { $0.append(Seen(path: path, fields: fields)) }
 
-            if path.hasSuffix("/photoImport/createRun") {
+            if path.hasSuffix("photoImport.createRun") {
                 admittedBatchID.withLock { $0 = fields["clientBatchId"]?.stringValue }
                 let shouldFail = failNextCreateRun.withLock { pending in
                     defer { pending = false }
@@ -98,8 +103,8 @@ private final class RunUploaderScript: @unchecked Sendable {
                 admittedBatchID.withLock { $0 = fields["clientBatchId"]?.stringValue }
                 return (200, Data(#"{"runId": "RUN-TEST"}"#.utf8))
             }
-            if path.hasSuffix("/photoImport/admitBatch") || path.hasSuffix("/photoImport/sealBatch") {
-                if path.hasSuffix("/photoImport/admitBatch") {
+            if path.hasSuffix("photoImport.admitBatch") || path.hasSuffix("photoImport.sealBatch") {
+                if path.hasSuffix("photoImport.admitBatch") {
                     admittedBatchID.withLock { $0 = fields["clientBatchId"]?.stringValue }
                 } else if fields["clientBatchId"]?.stringValue != admittedBatchID.withLock({ $0 }) {
                     return (400, Data(#"{"code":"VALIDATION","message":"Unknown upload batch"}"#.utf8))
@@ -111,7 +116,7 @@ private final class RunUploaderScript: @unchecked Sendable {
                             .utf8)
                 )
             }
-            if path.hasSuffix("/photoImport/stage") {
+            if path.hasSuffix("photoImport.stage") {
                 let items = fields["items"]?.arrayValue ?? []
                 let responseItems = items.map { item -> String in
                     let clientID = item["clientId"]?.stringValue ?? ""
@@ -123,7 +128,7 @@ private final class RunUploaderScript: @unchecked Sendable {
                 }
                 return (200, Data(#"{"items": [\#(responseItems.joined(separator: ","))]}"#.utf8))
             }
-            if path.hasSuffix("/photoImport/finalize") {
+            if path.hasSuffix("photoImport.finalize") {
                 let ids = (fields["images"]?.arrayValue ?? []).compactMap { $0["imageId"]?.stringValue }
                 let shouldFail = failNextFinalize.withLock { pending in
                     let was = pending
@@ -140,13 +145,13 @@ private final class RunUploaderScript: @unchecked Sendable {
                 let json = #"{"finalized": [], "alreadyFinalized": [\#(idsJSON)], "submissionId": "sub-1"}"#
                 return (200, Data(json.utf8))
             }
-            if path.hasSuffix("/image/recordAnalysis") {
+            if path.hasSuffix("image.recordAnalysis") {
                 if let imageID = fields["id"]?.stringValue {
                     analysisCalls.withLock { $0[imageID, default: 0] += 1 }
                 }
                 return (200, Data(#"{"saved": true}"#.utf8))
             }
-            if path.hasSuffix("/run/reportDeviceWork") {
+            if path.hasSuffix("run.reportDeviceWork") {
                 if let image = fields["image"]?.stringValue, let state = fields["state"]?.stringValue {
                     deviceWorkReportsBox.withLock {
                         $0.append(
@@ -162,22 +167,6 @@ private final class RunUploaderScript: @unchecked Sendable {
         }
     }
 
-    /// The OpenAPI Darwin transport writes the request body via a bound stream asynchronously;
-    /// `httpBody` is empty until it's read this way (mirrors `PhotoImportStagerTests`).
-    private static func body(of request: URLRequest) -> Data {
-        if let body = request.httpBody, !body.isEmpty { return body }
-        guard let stream = request.httpBodyStream else { return Data() }
-        stream.open()
-        defer { stream.close() }
-        var data = Data()
-        var buffer = [UInt8](repeating: 0, count: 4096)
-        while true {
-            let count = stream.read(&buffer, maxLength: buffer.count)
-            if count <= 0 { break }
-            data.append(contentsOf: buffer.prefix(count))
-        }
-        return data
-    }
 }
 
 @Suite("PhotoImportRunUploader", .timeLimit(.minutes(1)), .serialized)

@@ -15,12 +15,12 @@ public actor CubbyDebugClient {
             session: session, observer: nil)
     }
 
-    /// Literal scalar query values; repeat a key for an array. Response bytes are retained.
+    /// Sends a JSON input value and retains the operation's JSON response bytes.
     public func call(
-        _ route: OperationRoute,
-        query: [(String, String)] = [],
-        body: Data? = nil
+        operationID: String,
+        input: Data? = nil,
+        nullInput: Bool = false
     ) async throws -> Data {
-        try await transport.send(route: route, query: query, body: body)
+        try await transport.send(operationID: operationID, body: input, nullInput: nullInput)
     }
 }

@@ -221,16 +221,20 @@ public struct HeroActionRunner: Sendable {
                 return .discard(
                     try await client.discardPreview(
                         .init(
-                            productId: ProductCode(rawValue: rowID), quantity: body["quantity"]?.doubleValue,
+                            productId: ProductCode(rawValue: rowID),
+                            quantity: body["quantity"].map { .value($0.doubleValue) } ?? .absent,
                             adjustInventory: body["adjustInventory"]?.boolValue,
-                            inventoryEntryId: body["inventoryEntryId"]?.stringValue.map(
-                                InventoryEntryCode.init(rawValue:)))))
+                            inventoryEntryId: body["inventoryEntryId"].map {
+                                .value($0.stringValue.map(InventoryEntryCode.init(rawValue:)))
+                            } ?? .absent)))
             case "product.addToInventoryPreview":
                 return .addToInventory(
                     try await client.addToInventoryPreview(
                         .init(
                             productId: ProductCode(rawValue: rowID),
-                            locationId: body["locationId"]?.stringValue.map(LocationCode.init(rawValue:)))))
+                            locationId: body["locationId"].map {
+                                .value($0.stringValue.map(LocationCode.init(rawValue:)))
+                            } ?? .absent)))
             default: throw HeroActionError.unsupported(preview.operation)
             }
         case .create, .setField, .toggleField:

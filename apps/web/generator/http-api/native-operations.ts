@@ -18,28 +18,13 @@ export function renderNativeOperations(
     if (!name) throw new Error(`Missing Swift type for ${key}`);
     return name;
   };
-  const queryParameters = (operation: NativeOperation) =>
-    Object.keys(
-      operation.query
-        ? (contract.models[operation.query]?.properties ?? {})
-        : {},
-    );
   const parameter = (operation: NativeOperation) =>
-    operation.input === "none" || operation.input === "null"
-      ? ""
-      : operation.body
-        ? `body: ${type(operation.body)}`
-        : operation.query && queryParameters(operation).length
-          ? `query: ${type(operation.query)}`
-          : "";
-  const argument = (operation: NativeOperation) =>
-    operation.body && (operation.input === "none" || operation.input === "null")
-      ? ", body: JSONValue.object([:])"
-      : operation.body
-        ? ", body: body"
-        : operation.query && queryParameters(operation).length
-          ? ", query: query"
-          : "";
+    operation.input === "body" ? `body: ${type(operation.body!)}` : "";
+  const argument = (operation: NativeOperation) => {
+    if (operation.input === "body") return ", body: body";
+    if (operation.input === "null") return ", nullInput: true";
+    return "";
+  };
   const methods = contract.operations
     .map(
       (operation) =>
@@ -53,25 +38,14 @@ export function renderNativeOperations(
       );
       if (!operation)
         throw new Error(`${id}: native convenience has no operation`);
-      const input =
-        operation.input === "none" || operation.input === "null"
-          ? undefined
-          : (operation.body ??
-            (queryParameters(operation).length ? operation.query : undefined));
-      const label = operation.body ? "body" : "query";
-      const alias =
-        operation.query && input
-          ? `    public typealias ${entry.method[0]!.toUpperCase()}${entry.method.slice(1)}Query = CubbyAPI.${type(input)}\n`
-          : "";
-      return `${alias}${entry.doc ? `    /// ${entry.doc}\n` : ""}    public func ${entry.method}(${input ? `_ input: ${type(input)}` : ""}) async throws -> ${type(operation.output)} {\n        try await native_${swiftId(id)}(${input ? `${label}: input` : ""})\n    }`;
+      const input = operation.input === "body" ? operation.body : undefined;
+      return `${entry.doc ? `    /// ${entry.doc}\n` : ""}    public func ${entry.method}(${input ? `_ input: ${type(input)}` : ""}) async throws -> ${type(operation.output)} {\n        try await native_${swiftId(id)}(${input ? "body: input" : ""})\n    }`;
     })
     .join("\n\n");
-  const routes = contract.operations
-    .map(
-      (operation) =>
-        `        (${JSON.stringify(operation.id)}, .init(operationID: ${JSON.stringify(operation.id)}, method: .${operation.method.toLowerCase()}, path: ${JSON.stringify(operation.path)}, queryParameters: ${JSON.stringify(queryParameters(operation))}, hasBody: ${operation.body !== undefined}))`,
-    )
-    .join(",\n");
+  const ids = contract.operations.map(({ id }) => JSON.stringify(id));
+  const nullInputs = contract.operations
+    .filter(({ input }) => input === "null")
+    .map(({ id }) => JSON.stringify(id));
   return [
     {
       relativePath:
@@ -80,8 +54,8 @@ export function renderNativeOperations(
     },
     {
       relativePath:
-        "apps/apple/CubbyKit/Sources/CubbyKit/Generated/OperationRoutes.swift",
-      source: `${generatedHeader}// swift-format-ignore-file\nextension OperationRoute {\n    public static let all: [String: OperationRoute] = Dictionary(uniqueKeysWithValues: [\n${routes}\n    ])\n}\n`,
+        "apps/apple/CubbyKit/Sources/CubbyKit/Generated/OperationCatalog.swift",
+      source: `${generatedHeader}// swift-format-ignore-file\npublic enum OperationCatalog {\n    public static let all: [String] = [${ids.join(", ")}]\n    public static let nullInput: Set<String> = [${nullInputs.join(", ")}]\n}\n`,
     },
   ];
 }

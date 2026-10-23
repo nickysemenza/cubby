@@ -46,7 +46,6 @@ export const problemsContract = defineContract(
     }),
     getCounts: query({
       readPolicy: "strong",
-      native: "Today problems tile",
       input: noInput,
       output: problemsCountSchema,
       cache: { profile: "stable" },
@@ -116,7 +115,6 @@ export const problemsContract = defineContract(
         confirmation: null,
         success: "Import finding resolved",
       },
-      native: "Review and apply import corrections",
       input: resolveRunFindingInput,
       output: resolveRunFindingOut,
       invalidates: [

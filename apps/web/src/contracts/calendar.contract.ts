@@ -21,10 +21,9 @@ export const calendarContract = defineContract(
     range: query({
       exposure: "view",
       note: "Agents read meals and tasks by date through entity_read.list",
-      native: "Meal calendar",
-      // Native applies list filters through the meal list, so its typed range
-      // request does not need every calendar source's filter model.
-      httpWire: { input: calendarWindowInput, output: calendarRangeOut },
+      // Clients use entity.list for source filters; this wire carries the
+      // bounded calendar window only.
+      operationWire: { input: calendarWindowInput, output: calendarRangeOut },
       input: calendarRangeInput,
       output: calendarRangeOut,
     }),

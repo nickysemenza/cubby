@@ -12,7 +12,6 @@ export const auditLogContract = defineContract(
       readPolicy: "strong",
       input: auditLogListInput,
       output: auditLogListOut,
-      native: "Native recent activity and audit history",
     }),
   },
   { exposure: "capability", mcpToolGroup: "activity" },

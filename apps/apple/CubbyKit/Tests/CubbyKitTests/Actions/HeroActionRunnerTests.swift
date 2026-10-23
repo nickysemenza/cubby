@@ -48,8 +48,7 @@ struct HeroActionRunnerTests {
         let recorder = Recorder()
         HeroStub.handler.withLock { handler in
             handler = { request in
-                let data = (try? Self.requestBody(request)) ?? Data()
-                let fields = (try? JSONDecoder().decode([String: JSONValue].self, from: data)) ?? [:]
+                let fields = StubNetworking.operationFields(of: request)
                 recorder.seen.withLock {
                     $0.append(
                         Seen(
@@ -60,21 +59,6 @@ struct HeroActionRunnerTests {
             }
         }
         return recorder
-    }
-
-    nonisolated private static func requestBody(_ request: URLRequest) throws -> Data {
-        if let body = request.httpBody { return body }
-        guard let stream = request.httpBodyStream else { return Data() }
-        stream.open()
-        defer { stream.close() }
-        var data = Data()
-        var buffer = [UInt8](repeating: 0, count: 4096)
-        while true {
-            let count = stream.read(&buffer, maxLength: buffer.count)
-            if count <= 0 { break }
-            data.append(contentsOf: buffer.prefix(count))
-        }
-        return data
     }
 
     nonisolated private static let deleted = Data(
@@ -94,10 +78,10 @@ struct HeroActionRunnerTests {
     @Test func everyPlanOperationIsAGeneratedRouteTheRunnerHandles() throws {
         for (verb, plan) in NativeCoverageManifest.shared.heroActionPlan {
             guard case .operation(let operation) = plan.kind else { continue }
-            #expect(OperationRoute.all[operation.operation] != nil, "\(verb): \(operation.operation)")
+            #expect(OperationCatalog.all.contains(operation.operation), "\(verb): \(operation.operation)")
             #expect(HeroActionRunner.handledOperations.contains(operation.operation), "\(verb)")
             if let preview = operation.preview {
-                #expect(OperationRoute.all[preview.operation] != nil, "\(verb) preview")
+                #expect(OperationCatalog.all.contains(preview.operation), "\(verb) preview")
                 #expect(HeroActionRunner.handledPreviews.contains(preview.operation), "\(verb) preview")
             }
         }
@@ -112,7 +96,7 @@ struct HeroActionRunnerTests {
             ids.insert(try #require(HeroActionRunner.operationID(for: plan, on: key), "\(key)"))
         }
         #expect(ids == ["entity.mutate"])
-        #expect(OperationRoute.all["entity.mutate"]?.method == .post)
+        #expect(OperationCatalog.all.contains("entity.mutate"))
         // The detail sheet's old "Preview delete impact" gate is now true for kernel entities.
         #expect(EntityKey.task.nativeActions.contains(.delete))
     }
@@ -163,7 +147,7 @@ struct HeroActionRunnerTests {
         _ = try await runner.perform(plan, on: .task, row: Self.row("TSK-4K7M"), values: [:], confirmed: true)
         let request = try #require(recorder.requests.first)
         #expect(request.method == "POST")
-        #expect(request.path == "/api/v1/entity/mutate")
+        #expect(request.path == "/api/operations/entity.mutate")
         #expect(request.body == ["action": "delete", "entity": "task", "ids": ["TSK-4K7M"]])
     }
 
@@ -226,7 +210,7 @@ struct HeroActionRunnerTests {
             ], confirmed: true)
         let request = try #require(recorder.requests.first)
         #expect(request.method == "POST")
-        #expect(request.path == "/api/v1/product/discard")
+        #expect(request.path == "/api/operations/product.discard")
         #expect(request.body["productId"] == "PRD-4K7M")
         #expect(request.body["inventoryEntryId"] == "INV-4K7M")
         #expect(request.body["date"] == "2026-06-03")
@@ -320,7 +304,7 @@ struct HeroActionRunnerTests {
         model.submit(confirmed: true) { _ in finished.withLock { $0 += 1 } }
         #expect(model.isRunning)
         await model.submission?.waitUnlessCancelled()
-        #expect(recorder.requests.filter { $0.path.hasSuffix("/discard") }.count == 1)
+        #expect(recorder.requests.filter { $0.path == "/api/operations/product.discard" }.count == 1)
         #expect(finished.withLock { $0 } == 1)
     }
 
@@ -333,7 +317,7 @@ struct HeroActionRunnerTests {
             confirmed: false)
         let unacquired = try #require(recorder.requests.first)
         #expect(unacquired.method == "POST")
-        #expect(unacquired.path == "/api/v1/entity/mutate")
+        #expect(unacquired.path == "/api/operations/entity.mutate")
         #expect(unacquired.body["action"] == "update")
         #expect(unacquired.body["entity"] == "wish")
         #expect(unacquired.body["id"] == "WSH-4K7M")

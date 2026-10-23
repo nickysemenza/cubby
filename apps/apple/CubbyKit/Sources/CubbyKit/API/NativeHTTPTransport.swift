@@ -11,32 +11,33 @@ struct NativeHTTPTransport: Sendable {
     let observer: (any RequestObserver)?
 
     func send(
-        route: OperationRoute,
-        query: [(String, String)] = [],
-        body: Data? = nil
+        operationID: String,
+        body: Data? = nil,
+        nullInput: Bool = false
     ) async throws -> Data {
         try Task.checkCancellation()
-        guard
-            var components = URLComponents(
-                url: baseURL.appending(path: route.path), resolvingAgainstBaseURL: false
-            )
-        else {
-            throw URLError(.badURL)
+        guard OperationCatalog.all.contains(operationID) else {
+            throw NativeRequestError.unknownOperation(operationID)
         }
-        if !query.isEmpty {
-            components.queryItems = query.map { URLQueryItem(name: $0.0, value: $0.1) }
-            // URLSearchParams treats an unescaped plus as a space. Preserve literal plus values.
-            components.percentEncodedQuery = components.percentEncodedQuery?.replacingOccurrences(
-                of: "+", with: "%2B")
+        guard !nullInput || body == nil else {
+            throw NativeRequestError.conflictingInput(operationID)
         }
-        guard let url = components.url else { throw URLError(.badURL) }
-        var request = URLRequest(url: url)
-        request.httpMethod = route.method.rawValue
-        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        let encodedID = operationID.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed)
+        guard let encodedID else { throw URLError(.badURL) }
+        let url = baseURL.appending(path: "api/operations/\(encodedID)")
+        var envelope: [String: Any] = ["operation": operationID]
         if let body {
-            request.httpBody = body
-            request.setValue("application/json; charset=utf-8", forHTTPHeaderField: "Content-Type")
+            envelope["input"] = try JSONSerialization.jsonObject(with: body, options: [.fragmentsAllowed])
+        } else if nullInput {
+            envelope["input"] = NSNull()
         }
+        let requestBody = try JSONSerialization.data(
+            withJSONObject: envelope, options: [.fragmentsAllowed, .sortedKeys])
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.httpBody = requestBody
+        request.setValue("application/json; charset=utf-8", forHTTPHeaderField: "Content-Type")
         let authentication = await credentials.requestState()
         var fields = HTTPFields()
         NativeRequestHeaders.apply(authentication, identity: identity, to: &fields)
@@ -52,7 +53,7 @@ struct NativeHTTPTransport: Sendable {
                 setCookieHeaders: Self.setCookieHeaders(response),
                 responseURL: response.url ?? url)
             await observer?.record(
-                operationID: route.operationID,
+                operationID: operationID,
                 ms: Date().timeIntervalSince(start) * 1000,
                 status: response.statusCode)
         }
@@ -67,9 +68,23 @@ struct NativeHTTPTransport: Sendable {
         try Task.checkCancellation()
         guard (200..<300).contains(response.statusCode) else {
             throw CubbyAPIError.decode(
-                status: response.statusCode, operationID: route.operationID, body: data)
+                status: response.statusCode, operationID: operationID, body: data)
         }
-        return data
+        do {
+            guard
+                let envelope = try JSONSerialization.jsonObject(
+                    with: data, options: [.fragmentsAllowed])
+                    as? [String: Any],
+                envelope["ok"] as? Bool == true,
+                let value = envelope["data"]
+            else {
+                throw DecodingError.dataCorrupted(
+                    .init(codingPath: [], debugDescription: "Expected a successful operation envelope"))
+            }
+            return try JSONSerialization.data(withJSONObject: value, options: [.fragmentsAllowed])
+        } catch {
+            throw CubbyAPIError.decode(status: response.statusCode, operationID: operationID, body: data)
+        }
     }
 
     private static func setCookieHeaders(_ response: HTTPURLResponse) -> [String] {
@@ -88,45 +103,26 @@ extension CubbyClient {
         try await decodeResponse(operation: operation)
     }
 
+    func request<Output: Decodable & Sendable>(
+        _ operation: String, nullInput: Bool
+    ) async throws -> Output {
+        try await decodeResponse(operation: operation, nullInput: nullInput)
+    }
+
     func request<Body: Encodable & Sendable, Output: Decodable & Sendable>(
         _ operation: String, body: Body
     ) async throws -> Output {
         try await decodeResponse(operation: operation, body: JSONEncoder.cubby().encode(body))
     }
 
-    func request<Query: Encodable & Sendable, Output: Decodable & Sendable>(
-        _ operation: String, query: Query
-    ) async throws -> Output {
-        let value = try JSONValue(encoding: query)
-        guard let fields = value.objectValue else {
-            throw NativeRequestError.invalidQuery(operation)
-        }
-        let parameters = try fields.sorted { $0.key < $1.key }.flatMap { key, value -> [(String, String)] in
-            if value == .null { return [] }
-            let values = value.arrayValue ?? [value]
-            return try values.map { value in
-                let text: String
-                switch value {
-                case .string(let string): text = string
-                case .bool(let boolean): text = boolean ? "true" : "false"
-                case .number(let number):
-                    let number = String(number)
-                    text = number.hasSuffix(".0") ? String(number.dropLast(2)) : number
-                default: throw NativeRequestError.invalidQuery("\(operation).\(key)")
-                }
-                return (key, text)
-            }
-        }
-        return try await decodeResponse(operation: operation, query: parameters)
-    }
-
     private func decodeResponse<Output: Decodable & Sendable>(
-        operation: String, query: [(String, String)] = [], body: Data? = nil
+        operation: String, body: Data? = nil, nullInput: Bool = false
     ) async throws -> Output {
-        guard let route = OperationRoute.all[operation] else {
+        guard OperationCatalog.all.contains(operation) else {
             throw NativeRequestError.unknownOperation(operation)
         }
-        let data = try await nativeTransport.send(route: route, query: query, body: body)
+        let data = try await nativeTransport.send(
+            operationID: operation, body: body, nullInput: nullInput)
         try Task.checkCancellation()
         return try JSONDecoder.cubby().decode(Output.self, from: data)
     }
@@ -134,12 +130,13 @@ extension CubbyClient {
 
 enum NativeRequestError: Error, LocalizedError {
     case unknownOperation(String)
-    case invalidQuery(String)
+    case conflictingInput(String)
 
     var errorDescription: String? {
         switch self {
         case .unknownOperation(let operation): "Undeclared native operation: \(operation)"
-        case .invalidQuery(let operation): "Native query requires flat scalar values: \(operation)"
+        case .conflictingInput(let operation):
+            "Operation input cannot be both null and a JSON body: \(operation)"
         }
     }
 }

@@ -29,7 +29,6 @@ export const recommendationsContract = defineContract(
   {
     forEntity: query({
       exposure: "view",
-      native: "Native inline relationship recommendations",
       input: entityRecommendationsInput,
       output: entityRecommendationsOut,
       cache: {

@@ -50,7 +50,7 @@ const checkOperationPlan = (
   for (const id of [plan.operation, plan.preview?.operation ?? null])
     if (id !== null && !context.generatedOperationIds.has(id))
       problems.push(
-        `${verb}: ${id} is not on the generated client (flag its contract member \`native:\`)`,
+        `${verb}: ${id} is not on the generated client (operation contracts expose every query and mutation)`,
       );
   const properties = bodyProperties(context, plan.operation);
   for (const key of templateKeys(plan.body))
@@ -99,8 +99,8 @@ const checkFieldPlan = (
 
 /**
  * A hero-action plan names operations the generated client must carry and body keys the
- * operation's request schema declares, so a renamed contract field or a dropped `native:` flag
- * fails `pnpm generate` instead of surfacing as a decode error on a device.
+ * operation's request schema declares, so a renamed contract field fails
+ * `pnpm generate` instead of surfacing as a decode error on a device.
  */
 export const checkHeroActionPlans = (context: PlanContext) => {
   const plans: Readonly<Record<string, NativeHeroActionPlan>> =
