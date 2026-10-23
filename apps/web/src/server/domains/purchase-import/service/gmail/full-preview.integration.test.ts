@@ -15,7 +15,6 @@ import {
 } from "~/server/db/schema";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { requireActor } from "~/server/http/request-context";
-import { McpOperationContext } from "~/server/mcp/operation-context";
 import { createMcpServer } from "~/server/mcp/server";
 import { callMcpTool } from "~/server/testing/mcp-test-utils";
 import { createTestRequestContext } from "~/server/testing/request-context";
@@ -113,16 +112,12 @@ describe("full read-only Email preview", () => {
                     mailboxId,
                     messageId: saved.messageId,
                   },
+                  requireActor(
+                    createTestRequestContext(ctx.db, {
+                      auth: { userId: ctx.actor.userId },
+                    }),
+                  ),
                   {},
-                  {
-                    operationContext: new McpOperationContext(
-                      requireActor(
-                        createTestRequestContext(ctx.db, {
-                          auth: { userId: ctx.actor.userId },
-                        }),
-                      ),
-                    ),
-                  },
                 )
               ).structuredContent,
             )

@@ -46,6 +46,11 @@ const ENTITY_NOT_FOUND_ERRORS = mapRecord(
 export const AppErrors = {
   // Auth
   UNAUTHORIZED: "UNAUTHORIZED",
+  // An Apple app build older than the server's minimum tried to write; its
+  // reads keep running (`apple-client-gate.ts`).
+  CLIENT_UPDATE_REQUIRED: "UPGRADE_REQUIRED",
+  // A cookie-authenticated request that can act arrived from another origin.
+  FOREIGN_ORIGIN: "FORBIDDEN",
 
   // Entity not found — one `<ENTITY>_NOT_FOUND` per shortcode entity, derived
   // from the registry so a new entity gets its reason without a line here.

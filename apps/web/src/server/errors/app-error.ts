@@ -42,6 +42,7 @@ const EXPECTED_ERROR_CODES: Set<string> = new Set([
   "BAD_REQUEST",
   "CONFLICT",
   "PRECONDITION_FAILED",
+  "UPGRADE_REQUIRED",
 ]);
 
 const unparsedErrorSchema = z.unknown();

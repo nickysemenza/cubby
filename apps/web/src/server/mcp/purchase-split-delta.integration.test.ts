@@ -25,20 +25,21 @@ import { describe, expect, it } from "vitest";
 import { splitExpenseWithDeltaOut } from "~/contracts/purchase.contract";
 import { getExpenseByShortcode } from "~/server/domains/expense/repo/crud";
 import type { EntityKernelContext } from "~/server/entity-kernel";
-import { requireActor } from "~/server/http/request-context";
+import {
+  type AuthenticatedRequestContext,
+  requireActor,
+} from "~/server/http/request-context";
 import { makeExpenseInput } from "~/server/testing/repo.fixtures";
 import { createTestRequestContext } from "~/server/testing/request-context";
 
+import { mcpTestPrincipal } from "../testing/mcp-test-utils";
 import { createMcpServer } from "./server";
-import type {
-  McpRequestContext,
-  ToolArguments,
-} from "./tools/tool-registration";
+import type { ToolArguments } from "./tools/tool-registration";
 
 async function callTool(
   name: string,
   args: ToolArguments,
-  requestContext: McpRequestContext,
+  requestContext: AuthenticatedRequestContext,
   entityKernel: EntityKernelContext,
 ): Promise<CallToolResult> {
   const server = createMcpServer();
@@ -54,7 +55,9 @@ async function callTool(
         token: "",
         clientId: "test",
         scopes: [],
-        extra: { requestContext, entityKernel },
+        extra: {
+          principal: mcpTestPrincipal(requestContext, { entityKernel }),
+        },
       },
     });
 

@@ -18,12 +18,11 @@ import {
 } from "~/server/generated/playbooks.gen";
 
 import { purchaseAgentTools } from "./agent-tool-catalog";
-import { trustedPurchaseAgent } from "./purchase-agent-protocol";
 import { installToolCallTelemetryHandler } from "./tools/tool-call-telemetry";
 import { installMockStrippedListToolsHandler } from "./tools/tool-catalog";
 import type { ToolCatalogView } from "./tools/tool-catalog";
 import {
-  operationContextFromExtra,
+  principalInExtra,
   registerMcpTools,
   type ToolExtra,
 } from "./tools/tool-registration";
@@ -151,14 +150,11 @@ function registerPlaybookResources(server: McpServer) {
 async function purchaseAgentCatalogView(
   extra: ToolExtra,
 ): Promise<ToolCatalogView | undefined> {
-  const trusted = trustedPurchaseAgent(extra);
-  if (!trusted) return undefined;
-  const operationContext = operationContextFromExtra(extra);
-  if (!operationContext) return () => null;
-  const prepared = await operationContext.prepare("strong");
+  const principal = principalInExtra(extra);
+  if (!principal?.delegation) return undefined;
   const { allowed, entityRead } = await purchaseAgentRunActions(
-    prepared.entityKernel.db,
-    trusted.runId,
+    principal.context.db,
+    principal.delegation.runId,
   );
   const tools = new Map(
     purchaseAgentTools(new Set(allowed), entityRead).map((tool) => [

@@ -193,7 +193,8 @@ export const createRequestContext = async (opts: {
   const deviceId = await resolveRequestDevice(crudServices.db, opts.headers);
   if (opts.actor) {
     const { userId, sessionId, channel, oauthClientId, runId } = opts.actor;
-    const requestOrigin: RequestOrigin = channel === "mcp" ? "mcp" : "api";
+    const requestOrigin: RequestOrigin =
+      channel === "mcp" ? "mcp" : channel === "web" ? "ui" : "api";
     const actorContext = buildActorContext(userId, channel, {
       oauthClientId,
       deviceId,

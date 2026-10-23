@@ -124,26 +124,47 @@ Source-order reconciliation preparation belongs to the mutating `purchase_import
 tool because it persists the reviewed fingerprint and may promote a validated
 historical observation; it changes no ledger or stock.
 
+Every action runs through the shared Start operation runner
+(`runStartOperation`), like a browser or native call: an operation action is
+dispatched by its id (`dispatchStartOperation`), and an entity-kernel verb
+runs as an ad hoc runner operation named by its tool action (`entity.create`).
+The runner owns read policy (strong), the per-principal deadline, the Apple
+write gate, calendar dirty marks and the freshness write. The adapter
+(`apps/web/src/server/mcp/tools/tool-registration.ts`) owns tool grouping,
+published schemas, output projections, the error shape and the purchase-agent
+protocol. The runner validates a member's own output before a projection slims
+it.
+
 A tool failure comes back as an `isError` result whose text names the cause
 and whose `_meta["cubby/error"]` carries `code`, `reason`, `requestId`, and
 `diagnostics` (operation, stage, causes, `cfRayId`, Sentry link). An output
 that fails its own schema is `INVALID_OUTPUT` and names each failing path.
+A runner failure is rendered as the runner settled it; it is not normalized or
+reported a second time.
 
-Every call has a wall-clock budget (`MCP_TOOL_DEADLINE_MS` in
-`apps/web/src/server/mcp/tools/tool-registration.ts`): 18 s for reads, 45 s
+Every MCP principal carries a wall-clock budget (`MCP_TOOL_DEADLINE_MS` in
+`apps/web/src/server/http/authenticate.ts`): 18 s for reads, 45 s
 for reads that declare `modelBacked` (the decision model's 30 s retry budget plus database
 work), and 230 s for writes. An action that can wait on the decision model or another model
 declares `modelBacked: true` in `apps/web/src/contracts/mcp-tools.ts`; today
 those are `entity_read.preview`, `entity_read.suggest_fields`,
-`entity.discover_connections` and `imports_read.mail_triage_preview`. Past its budget the call answers
+`entity.discover_connections` and `imports_read.mail_triage_preview`. The
+runner applies the budget to one call. A composite unit (an operation batch,
+or a delegated write's transaction) spends one budget around all its inner
+calls (`withinCompositeBudget`), which run unbudgeted: a deadline never answers
+from inside a transaction. Past its budget the call answers
 `MCP_TOOL_DEADLINE_EXCEEDED` with the elapsed time, request id, and Sentry event id, logs a
-warning, and reports to Sentry. The deadline aborts the call's `signal`, which
+warning, reports to Sentry, and records a possible write for a mutation. The
+deadline aborts the call's `signal`, which
 stops AI and upstream fetches but not Postgres queries or kernel verbs. Work
-that settles after the answer is dropped. Narrow a timed-out read. A timed-out
+that settles after the answer is not reported again; a write records freshness
+again when it ends. Narrow a timed-out read. A timed-out
 write may still have committed: re-read the affected records before retrying.
 
-The HTTP ingress (`apps/web/src/server/mcp/http-handler.ts`) authenticates from
-headers before it reads any body, then reads the body once under the SDK's
+The HTTP ingress (`apps/web/src/server/mcp/http-handler.ts`) authenticates
+through `authenticate(request, MCP_AUTH)` from headers before it reads any
+body, and hands the resulting principal (actor, delegation, budget) to every
+tool call. It then reads the body once under the SDK's
 4 MiB limit; a larger body is refused with JSON-RPC `-32600` (HTTP 413) without
 being buffered. A throw that escapes the SDK, including a failed body read,
 answers a JSON-RPC `-32603` error that echoes the request id and names the tool

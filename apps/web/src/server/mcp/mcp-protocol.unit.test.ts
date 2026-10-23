@@ -32,6 +32,8 @@ import {
 import {
   bindingsWithKernelExecutor,
   callMcpTool,
+  mcpTestPrincipal,
+  observedMcpRuntime,
 } from "../testing/mcp-test-utils";
 import type { McpEntityExecutor } from "./kernel-actions";
 import {
@@ -60,7 +62,7 @@ function kernelServer(
     server,
     bindingsWithKernelExecutor(execute),
     MCP_TOOLS,
-    runtime ?? { markCalendarDirty: vi.fn() },
+    runtime ?? observedMcpRuntime({}),
   );
   return server;
 }
@@ -88,7 +90,7 @@ function httpClient(
             clientId: "test",
             scopes: [],
             extra: {
-              requestContext: { db: null, actorContext: null },
+              principal: mcpTestPrincipal({}),
               telemetry: {
                 identity: {
                   userId: "user_1",
@@ -281,10 +283,10 @@ describe("MCP protocol smoke", () => {
       };
     });
     const recordDatabaseWrite = vi.fn(async () => {});
-    const server = kernelServer(runEntity, {
-      markCalendarDirty: vi.fn(),
-      recordDatabaseWrite,
-    });
+    const server = kernelServer(
+      runEntity,
+      observedMcpRuntime({ recordDatabaseWrite }),
+    );
 
     // The tool boundary validates the injected kernel capability before it
     // dispatches. The executor is mocked here, so only that capability shape
@@ -645,10 +647,10 @@ describe("MCP protocol smoke", () => {
       };
     });
     const recordDatabaseWrite = vi.fn(async () => {});
-    const server = kernelServer(runEntity, {
-      markCalendarDirty: vi.fn(),
-      recordDatabaseWrite,
-    });
+    const server = kernelServer(
+      runEntity,
+      observedMcpRuntime({ recordDatabaseWrite }),
+    );
 
     const result = await callMcpTool(
       server,
@@ -676,7 +678,7 @@ describe("MCP protocol smoke", () => {
       ],
     });
     expect(recordDatabaseWrite).toHaveBeenCalledOnce();
-    expect(recordDatabaseWrite).toHaveBeenCalledWith("mcp.entity.commands");
+    expect(recordDatabaseWrite).toHaveBeenCalledWith("entity.commands");
   });
   it("projects summary references and full receipts without an expanded output read", async () => {
     const full = mock(productTopLevelOut, { overrides: { externalIds: [] } });

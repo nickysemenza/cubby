@@ -17,6 +17,10 @@ import {
   executeEntity,
 } from "~/server/entity-kernel";
 import { refreshSearchDocument } from "~/server/generic/search/repo/search-document";
+import {
+  type AuthPorts,
+  createAuthenticator,
+} from "~/server/http/authenticate";
 import { createHttpApiHandler } from "~/server/http/http-api-handler";
 import { requireActor } from "~/server/http/request-context";
 import { createMcpServer, listMcpToolCatalog } from "~/server/mcp/server";
@@ -234,9 +238,9 @@ describe("MCP entity kernel boundary", () => {
     expect(JSON.stringify(viaMcp.content)).toContain(
       "Filter only: The effective owner is resolved",
     );
-    const http = createHttpApiHandler(
-      fromPartial<Parameters<typeof createHttpApiHandler>[0]>({
-        auth: {
+    const http = createHttpApiHandler({
+      authenticate: createAuthenticator(
+        fromPartial<AuthPorts>({
           getSession: async () => ({
             response: {
               user: { id: testUserId("test-user-id") },
@@ -244,16 +248,16 @@ describe("MCP entity kernel boundary", () => {
             },
             headers: new Headers(),
           }),
-        },
-        context: async () =>
-          requireActor(
-            createTestRequestContext(ctx.db, {
-              auth: { userId: testUserId("test-user-id") },
-            }),
-          ),
-        dispatch: dispatchStartOperation,
-      }),
-    );
+          context: async () =>
+            requireActor(
+              createTestRequestContext(ctx.db, {
+                auth: { userId: testUserId("test-user-id") },
+              }),
+            ),
+        }),
+      ),
+      dispatch: dispatchStartOperation,
+    });
     const viaHttp = await http(
       new Request("https://cubby.example/api/v1/entity/list", {
         method: "POST",

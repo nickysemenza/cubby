@@ -3,31 +3,52 @@ import type {
   WebSocket as CfWebSocket,
 } from "@cloudflare/workers-types";
 
-import { type DoorbellRing, doorbellTopic } from "~/lib/doorbell";
+import {
+  type DoorbellRing,
+  type DoorbellTopic,
+  doorbellTopic,
+} from "~/lib/doorbell";
 import {
   getDatabaseFreshnessNamespace,
   getImageProcessingNamespace,
 } from "~/server/cf-env";
-import { createRequestContext } from "~/server/http/request-context";
+import {
+  type AuthPolicy,
+  authenticate,
+  BROWSER_AUTH,
+  DEVICE_AUTH,
+  isChallenge,
+} from "~/server/http/authenticate";
 
 declare const WebSocketPair: { new (): { 0: WebSocket; 1: CfWebSocket } };
 
 /** A subscriber reconnects (and authenticates again) at least this often. */
 const SUBSCRIPTION_TTL_MS = 5 * 60_000;
 
-/** The Durable Object that owns each topic's subscribers. */
-const topicOwner = {
-  "household.changed": () =>
-    getDatabaseFreshnessNamespace()?.getByName("household", {
-      locationHint: "wnam",
-    }),
-  "imageProcessing.work": () =>
-    getImageProcessingNamespace()?.getByName("household"),
-} as const;
+/** Each topic's credential policy and the Durable Object that owns its subscribers. */
+const topics = {
+  "household.changed": {
+    policy: BROWSER_AUTH,
+    owner: () =>
+      getDatabaseFreshnessNamespace()?.getByName("household", {
+        locationHint: "wnam",
+      }),
+  },
+  "imageProcessing.work": {
+    policy: DEVICE_AUTH,
+    owner: () => getImageProcessingNamespace()?.getByName("household"),
+  },
+} satisfies Record<
+  DoorbellTopic,
+  {
+    policy: AuthPolicy;
+    owner: () => { fetch(request: Request): Promise<Response> } | undefined;
+  }
+>;
 
 /**
- * Authenticate the upgrade once and hand it to the topic's owner. A cookie
- * credential must come from this origin; native clients send a bearer token.
+ * Authenticate the upgrade once and hand it to the topic's owner. Auth refuses
+ * a cross-origin cookie upgrade; native clients send a bearer token.
  */
 export async function handleDoorbellUpgrade(
   request: Request,
@@ -42,18 +63,15 @@ export async function handleDoorbellUpgrade(
       `Unknown doorbell topic; expected one of ${doorbellTopic.options.join(", ")}`,
       { status: 400 },
     );
-  if (
-    !request.headers.has("authorization") &&
-    request.headers.get("origin") !== new URL(request.url).origin
-  )
-    return new Response("Same-origin subscription required", { status: 403 });
-  const context = await createRequestContext({ headers: request.headers });
-  if (!context.auth.userId || !context.actorContext)
-    return new Response("Authentication required", { status: 401 });
-  const owner = topicOwner[topic.data]();
-  if (!owner)
-    return new Response("Doorbell topic unavailable", { status: 503 });
-  return owner.fetch(request);
+  const { policy, owner } = topics[topic.data];
+  const authenticated = await authenticate(request, policy);
+  if (isChallenge(authenticated))
+    return new Response(authenticated.message, {
+      status: authenticated.status,
+    });
+  const stub = owner();
+  if (!stub) return new Response("Doorbell topic unavailable", { status: 503 });
+  return stub.fetch(request);
 }
 
 /** Accept one hibernating subscriber; it never sends anything back. */

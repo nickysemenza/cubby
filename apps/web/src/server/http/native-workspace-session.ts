@@ -1,36 +1,34 @@
 import { getAuth } from "~/lib/auth";
+import {
+  authenticate,
+  isChallenge,
+  NATIVE_SESSION_EXCHANGE_AUTH,
+} from "~/server/http/authenticate";
 
 /** Browser authority comes only from the supplied native credential, never an
  * ambient cookie from a different account. The signed token stays HttpOnly. */
 export async function nativeWorkspaceSession(request: Request) {
-  const authorization = request.headers.get("authorization");
-  const bearer = /^Bearer (\S+)$/u.exec(authorization ?? "")?.[1];
   const headers = new Headers({ "Cache-Control": "private, no-store" });
-  if (!bearer)
-    return new Response("Native bearer credential required", {
-      status: 401,
-      headers,
-    });
-  const auth = getAuth();
-  const session = await auth.api.getSession({
-    headers: new Headers({ Authorization: `Bearer ${bearer}` }),
-    query: { disableCookieCache: true, disableRefresh: true },
-  });
-  if (!session?.user)
+  const authenticated = await authenticate(
+    request,
+    NATIVE_SESSION_EXCHANGE_AUTH,
+  );
+  // The exchange accepts only a bearer, so a verified principal proves this
+  // header carried the token the cookie below stores.
+  const bearer = /^Bearer (\S+)$/u.exec(
+    request.headers.get("authorization") ?? "",
+  )?.[1];
+  if (isChallenge(authenticated) || !bearer || !authenticated.session)
     return new Response("Native session is expired or invalid", {
       status: 401,
       headers,
     });
-  const cookie = (await auth.$context).authCookies.sessionToken;
+  const cookie = (await getAuth().$context).authCookies.sessionToken;
   const attributes = cookie.attributes;
   // Preserve the configured name/security mode (including local HTTP tests).
   // Clamp cookie lifetime to the verified session's own expiry.
-  const lifetime = Math.max(
-    0,
-    Math.floor(
-      (new Date(session.session.expiresAt).getTime() - Date.now()) / 1000,
-    ),
-  );
+  const expiresAt = authenticated.session.expiresAt?.getTime() ?? Date.now();
+  const lifetime = Math.max(0, Math.floor((expiresAt - Date.now()) / 1000));
   headers.append(
     "Set-Cookie",
     [

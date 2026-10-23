@@ -132,7 +132,11 @@ async function dispatchServerOperation<Input>(
   return unparsedStartOperationResultSchema.parse(
     await dispatchOnServer({
       ...parsed,
-      request: { headers, signal: transport.signal ?? request.signal },
+      request: new Request(request.url, {
+        method: request.method,
+        headers,
+        signal: transport.signal ?? request.signal,
+      }),
     }),
   );
 }

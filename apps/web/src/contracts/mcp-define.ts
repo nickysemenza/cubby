@@ -95,13 +95,6 @@ export interface McpActionSpec<
    */
   readonly strict?: true;
   /**
-   * A query that must read the authoritative adapter. A function decides per
-   * input (e.g. a snapshot computation versus a paged detail read).
-   */
-  readonly readPolicy?:
-    | "strong"
-    | ((input: MemberInput<Op>) => "strong" | "context");
-  /**
    * A read that may wait on a model (the decision model or another AI call). Its MCP deadline
    * outlasts the model's retry budget instead of using the plain read budget.
    * Writes already have the longer write budget.

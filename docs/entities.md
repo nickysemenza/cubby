@@ -1677,8 +1677,8 @@ independently. URLs contain registered operation names, never input values;
 the server rejects a path/body mismatch. The Worker routes these paths directly
 to the shared dispatcher without loading the React server handler. Operation
 and entity trace headers remain available; SSR invokes the dispatcher in-process.
-Direct browser requests enforce the same native hosted-workspace version gate
-as Start requests; an already-open outdated WebView cannot bypass it.
+Every operation runs the runner's Apple version gate on its principal, so an
+already-open outdated hosted WebView keeps its reads and cannot write.
 This transport retains query coalescing and independent settlement, which the
 framework server-function transport does not supply across operations. That
 capability comparison is not a measured production latency advantage.
