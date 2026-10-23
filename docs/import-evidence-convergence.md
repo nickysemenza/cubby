@@ -431,6 +431,11 @@ from current facts. Generation logs separate selection, preparation, publication
 import-application durations with aggregate counts, without source records.
 Transfer generation hydrates eligible transaction seeds once per page, including
 known absent seeds. A failed bulk read falls back to isolated seed reads.
+Seed selection takes the first bounded keys from each disjoint origin, then
+merges them under the existing byte cursor. Statement observations are deduplicated
+before that origin's limit; an index on its byte-ordered seed key streams this
+work. Date and frozen-population predicates still precede each limit, and count
+uses the same admission predicates over the full unique roster.
 Transfer and statement-matching previews omit unused advisory Vendor inference. Statement seed preview
 batches and each seed's exact competitor pool remain
 unchanged; broader preview batches can change duplicate admission. Retirement

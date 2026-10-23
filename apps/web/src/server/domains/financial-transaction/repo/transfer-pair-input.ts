@@ -17,10 +17,13 @@ export const transferPairMoneyMoveKinds = [
  * boundary a Sweep step froze with its count, so late arrivals wait for the
  * next pass.
  */
-export const transferPairSeedKeys = (input: {
+type SeedBoundary = {
   since: string | null;
   createdBefore?: string | null;
-}) => sql`
+};
+
+const seedQueries = (input: SeedBoundary) => ({
+  transactions: sql`
       SELECT 'ftx:' || ft.shortcode AS key FROM "FinancialTransaction" ft
       WHERE ft."deletedAt" IS NULL AND ft.status IN (${sql.join(
         [
@@ -38,9 +41,37 @@ export const transferPairSeedKeys = (input: {
         )}) OR ft."sourceCategory" IS NOT NULL)
         ${input.since ? sql`AND COALESCE(ft."postedDate", ft."transactionDate") >= ${input.since}::date` : sql``}
         ${input.createdBefore ? sql`AND ft."createdAt" <= ${input.createdBefore}::timestamptz` : sql``}
-      UNION
+  `,
+  statements: sql`
       SELECT 'stmt:' || r.source || ':' || ${chargeKeyOf("r")} AS key
       FROM "SourceTransactionRecord" r
       WHERE r."deletedAt" IS NULL AND r."sourceCategory" IS NOT NULL
         ${input.since ? sql`AND r."statementDate" >= ${input.since}::date` : sql``}
-        ${input.createdBefore ? sql`AND r."createdAt" <= ${input.createdBefore}::timestamptz` : sql``}`;
+        ${input.createdBefore ? sql`AND r."createdAt" <= ${input.createdBefore}::timestamptz` : sql``}`,
+});
+
+export const transferPairSeedKeys = (input: SeedBoundary) => {
+  const queries = seedQueries(input);
+  return sql`${queries.transactions} UNION ${queries.statements}`;
+};
+
+/** Each disjoint origin contributes its first K unique keys to the global first K.
+ * Statement identity and the cursor both use byte ordering, so the work index
+ * can stream duplicate observations without sorting the remaining ledger. */
+export const transferPairSeedPage = (
+  input: SeedBoundary & { after: string | null; limit: number },
+) => {
+  const queries = seedQueries(input);
+  const after = input.after
+    ? sql`WHERE key COLLATE "C" > ${input.after} COLLATE "C"`
+    : sql``;
+  return sql`
+    SELECT key FROM (
+      (SELECT key FROM (${queries.transactions}) transactions ${after}
+        ORDER BY key COLLATE "C" LIMIT ${input.limit})
+      UNION ALL
+      (SELECT DISTINCT key COLLATE "C" AS key FROM (${queries.statements}) observations ${after}
+        ORDER BY key COLLATE "C" LIMIT ${input.limit})
+    ) seeds ORDER BY key COLLATE "C" LIMIT ${input.limit}
+  `;
+};

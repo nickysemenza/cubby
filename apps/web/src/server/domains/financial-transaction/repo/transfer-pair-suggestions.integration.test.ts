@@ -45,7 +45,12 @@ import {
 } from "~/server/workflows/runs/execution";
 
 import {
+  transferPairSeedKeys,
+  transferPairSeedPage,
+} from "./transfer-pair-input";
+import {
   applyTransferPair,
+  countTransferPairSeeds,
   countTransferPairsNeedingLabels,
   currentTransferPair,
   discoverTransferPairs,
@@ -300,6 +305,135 @@ describe("transfer-pair suggestions", () => {
       expect(rebuilt && (await fingerprintTransferPair(rebuilt))).toEqual(
         fingerprint,
       );
+    }
+  });
+
+  it("pages the complete frozen seed roster across origins and repeated observations", async () => {
+    const member = await owner("Synthetic seed member");
+    const checking = await account("Synthetic seed checking", member);
+    await transaction(checking, 10, "2026-05-04");
+    await transaction(checking, 11, "2026-05-01");
+    await transaction(checking, 12, "2026-05-04", { status: "void" });
+    const late = await transaction(checking, 13, "2026-05-06");
+    await unwrapDb(ctx.db)
+      .update(financialTransaction)
+      .set({ createdAt: new Date("2100-01-01T00:00:00Z") })
+      .where(eq(financialTransaction.shortcode, late.id));
+    await statement([
+      ...["A", "a", "á"].map((key, index) => ({
+        account: "Synthetic seed checking",
+        date: "2026-05-04",
+        amount: 20 + index,
+        description: `SYNTHETIC SEED KEY ${key}`,
+      })),
+      {
+        account: "Synthetic seed checking",
+        date: "2026-05-04",
+        amount: 30,
+        description: "SYNTHETIC SEED REVISION",
+        providerTransactionId: "synthetic-seed-revision",
+      },
+      {
+        account: "Synthetic seed checking",
+        date: "2026-05-06",
+        amount: 40,
+        description: "SYNTHETIC SEED LATE",
+      },
+      {
+        account: "Synthetic seed checking",
+        date: "2026-05-06",
+        amount: 50,
+        description: "SYNTHETIC SEED NO CATEGORY",
+        category: null,
+      },
+    ]);
+    await statement([
+      {
+        account: "Synthetic seed checking",
+        date: "2026-05-05",
+        amount: 30,
+        description: "SYNTHETIC SEED REVISION",
+        providerTransactionId: "synthetic-seed-revision",
+      },
+    ]);
+    await statement([
+      {
+        account: "Synthetic seed checking",
+        date: "2026-05-06",
+        amount: 30,
+        description: "SYNTHETIC SEED REVISION",
+        providerTransactionId: "synthetic-seed-revision",
+        category: null,
+      },
+    ]);
+    await statement(
+      [
+        {
+          account: "Synthetic seed checking",
+          date: "2026-05-06",
+          amount: 60,
+          description: "SYNTHETIC SEED OTHER SOURCE",
+        },
+      ],
+      { source: "copilot" },
+    );
+    // Opaque synthetic identities exercise the byte cursor independently of locale sorting.
+    for (const key of ["A", "a", "á"])
+      await unwrapDb(ctx.db)
+        .update(sourceTransactionRecord)
+        .set({ chargeKey: key })
+        .where(
+          eq(
+            sourceTransactionRecord.rawDescription,
+            `SYNTHETIC SEED KEY ${key}`,
+          ),
+        );
+    await unwrapDb(ctx.db)
+      .update(sourceTransactionRecord)
+      .set({ createdAt: new Date("2100-01-01T00:00:00Z") })
+      .where(eq(sourceTransactionRecord.rawDescription, "SYNTHETIC SEED LATE"));
+    const { rows: repeated } = await unwrapDb(ctx.db).execute<{
+      count: number;
+    }>(sql`
+      SELECT count(*)::int AS count FROM "SourceTransactionRecord"
+      WHERE "rawDescription"='SYNTHETIC SEED REVISION' AND "sourceCategory" IS NOT NULL
+      GROUP BY source,"chargeKey" HAVING count(*) > 1
+    `);
+    expect(repeated).toEqual([{ count: 2 }]);
+    for (const scope of [
+      { since: null, createdBefore: null },
+      { since: null, createdBefore: "2099-01-01T00:00:00Z" },
+      { since: "2026-05-05", createdBefore: "2099-01-01T00:00:00Z" },
+    ]) {
+      const { rows: expected } = await unwrapDb(ctx.db).execute<{
+        key: string;
+      }>(sql`
+        SELECT key FROM (${transferPairSeedKeys(scope)}) seeds ORDER BY key COLLATE "C"
+      `);
+      expect(await countTransferPairSeeds(ctx.db, scope)).toBe(expected.length);
+      for (const limit of [1, 3, 128]) {
+        const actual: typeof expected = [];
+        let after: string | null = null;
+        for (;;) {
+          const { rows }: { rows: typeof expected } = await unwrapDb(
+            ctx.db,
+          ).execute<{ key: string }>(
+            transferPairSeedPage({ ...scope, after, limit }),
+          );
+          const replay = await unwrapDb(ctx.db).execute<{ key: string }>(
+            transferPairSeedPage({ ...scope, after, limit }),
+          );
+          expect(replay.rows).toEqual(rows);
+          expect(rows).toEqual(
+            expected.slice(actual.length, actual.length + limit),
+          );
+          actual.push(...rows);
+          const last = rows.at(-1);
+          if (!last) break;
+          after = last.key;
+        }
+        expect(actual).toEqual(expected);
+      }
     }
   });
 
