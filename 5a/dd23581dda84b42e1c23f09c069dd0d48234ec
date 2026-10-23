@@ -1,0 +1,21 @@
+apps/web/docs/web-ui.md
+  s_778d7cda70b989::t_8824d9728755d3 98-101
+apps/web/src/ui/combobox/picker.tsx
+  s_778d7cda70b989::t_c2529e9ef454a7 382,429,449
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "5add23581dda84b42e1c23f09c069dd0d48234ec",
+  "prompts": {},
+  "sessions": {
+    "s_778d7cda70b989": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a16a8b-f8eb-7851-9ace-3f155d2bf4ef",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
