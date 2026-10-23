@@ -21,6 +21,7 @@ import {
   getConnectedRecords,
   getConnectedRecordsPreview,
 } from "./connected-records";
+import { loadRelatedBranch } from "./related-view";
 
 describe("complete connected record tables", () => {
   const ctx = withTestDb();
@@ -195,6 +196,15 @@ describe("complete connected record tables", () => {
     expect(firstRecord?.paths.filter((path) => path.length === 4)).toHaveLength(
       2,
     );
+
+    const vendorProducts = await loadRelatedBranch(ctx.db, {
+      relationKey: "vendor.products",
+      sourceId: vendor.output.id,
+      offset: 0,
+      limit: 25,
+    });
+    expect(vendorProducts.totalCount).toBe(1);
+    expect(vendorProducts.items.map((item) => item.id)).toEqual([seed.id]);
 
     // The detail page reads every view at once: totals stay complete while
     // rows stop at the preview limit, in manifest order.
