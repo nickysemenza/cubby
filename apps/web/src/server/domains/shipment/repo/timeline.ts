@@ -144,12 +144,21 @@ export async function readShipmentTimeline(db: Database, code: string) {
     source:
       source.kind === "email"
         ? source
-        : {
-            kind: source.kind,
-            url: source.url,
-            externalKey: source.externalKey,
-            capturedAt: source.capturedAt,
-          },
+        : source.kind === "tracking_page"
+          ? {
+              kind: source.kind,
+              url: source.url,
+              externalKey: source.externalKey,
+              capturedAt: source.capturedAt,
+            }
+          : {
+              kind: source.kind,
+              externalKey: source.externalKey,
+              fileName: source.fileName,
+              sender: source.sender,
+              sentAt: source.sentAt,
+              capturedAt: source.capturedAt,
+            },
     firstSeenAt: observation.firstSeenAt.toISOString(),
     lastSeenAt: observation.lastSeenAt.toISOString(),
     superseded: observation.supersededById !== null,

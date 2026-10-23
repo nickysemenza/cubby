@@ -48,6 +48,14 @@ the literal captured text and offset capture timestamp, use a stable source
 key, and associate a Purchase only when evidence establishes it. Browser
 research is interactive; package evidence does not schedule future visits.
 
+Exported SMS uses `source: {kind: "sms_export", externalKey, fileName, sender,
+sentAt, capturedAt, content}` with literal message content and a stable
+per-message key independent of filename. Preserve unknown message timezone.
+Only attach observations to explicit tracking identifiers; nearby messages or
+grouped delivery counts cannot prove package identity. Estimates are not scans,
+and message receipt time is not an unstated event time. Changed content or
+metadata under the same source key requires review, rather than replacement.
+
 For tracking enrichment, choose an accessible source with useful scan history:
 the carrier's site or a third-party tracker (for example,
 [17TRACK](https://t.17track.net/en)). Switch sources when access is blocked or

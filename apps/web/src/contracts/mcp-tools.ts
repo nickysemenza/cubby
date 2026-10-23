@@ -802,7 +802,7 @@ export const MCP_TOOLS = defineMcpTools({
       record: mcpAction({
         op: shipmentContract.ops.record,
         description:
-          "Record shipment observations from an owned retained Email/checksum or an interactive tracking-page capture. Keep unmatched packages; never invent a Purchase. Carrier references are Vendors. Label creation or vendor shipped wording does not prove carrier possession. Repeated identical observations update first/last seen; all distinct sources and revisions remain retained.",
+          "Record shipment observations from an owned retained Email/checksum, an interactive tracking-page capture, or an exported SMS. Keep unmatched packages; never invent a Purchase. Carrier references are Vendors. Label creation or vendor shipped wording does not prove carrier possession. Repeated identical observations update first/last seen; all distinct sources and revisions remain retained.",
       }),
       associate: mcpAction({
         op: shipmentContract.ops.associate,

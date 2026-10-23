@@ -41,13 +41,18 @@ const sourceLines = (
     string,
     NonNullable<ReportRecordRow["lines"]>[number]
   >();
-  for (const { source } of rows) {
+  for (const { source, sourceCaptureId } of rows) {
     if (source.kind === "email")
       lines.set(source.emailId, {
         text: source.emailId,
         ref: { entity: "email", id: source.emailId },
       });
-    else lines.set(source.url, { text: "Carrier tracking", url: source.url });
+    else if (source.kind === "tracking_page")
+      lines.set(source.url, { text: "Carrier tracking", url: source.url });
+    else
+      lines.set(sourceCaptureId, {
+        text: `SMS from ${source.sender} · ${source.fileName}`,
+      });
   }
   return [...lines.values()];
 };
