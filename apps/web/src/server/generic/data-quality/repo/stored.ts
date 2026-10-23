@@ -32,7 +32,7 @@ export type StoredEvaluation = QualityEvaluation & {
   exceptions: z.infer<typeof dataException>[];
 };
 
-export const storedQualityTerms = (
+const storedQualityTerms = (
   checks: QualityEvaluation["checks"],
 ): QualityTerm[] =>
   Object.entries(checks).map(([key, state]) => {
@@ -157,13 +157,16 @@ export async function prepareQualityPublications(
 ): Promise<QualityPublication[]> {
   const entry = storedEntryFor(kind);
   if (!entry) throw new Error(`${kind} has no stored quality evaluator`);
-  return (await evaluateLiveQuality(db, entry, ids)).map((row) => ({
-    entityId: row.id,
-    kind,
-    rulesVersion: entry.rulesVersion,
-    score: scoreQualityTerms(storedQualityTerms(row.checks)).score,
-    checks: row.checks,
-  }));
+  // Loaders need not promise source-row order; publication comparisons do.
+  return (await evaluateLiveQuality(db, entry, ids))
+    .map((row) => ({
+      entityId: row.id,
+      kind,
+      rulesVersion: entry.rulesVersion,
+      score: scoreQualityTerms(storedQualityTerms(row.checks)).score,
+      checks: row.checks,
+    }))
+    .sort((a, b) => a.entityId.localeCompare(b.entityId));
 }
 
 /** Compare only persisted outcomes and version, not a second stored input fingerprint. */

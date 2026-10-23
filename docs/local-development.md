@@ -251,12 +251,12 @@ pnpm dev seed problems
 For performance investigations, `pnpm dev seed performance` adds a larger
 connected history: 6,000 Products, 12,000 Expenses, 8,000 Emails with
 original-content records, 5,000 completed mail Runs and their outcome receipts, 1,000 failed
-Runs, 1,000 Purchases, and 3,000 kit edges. Nested kits, explicitly priced siblings, unpriced stock,
+Runs, 1,000 Purchases, 1,000 Shipments with retained tracking observations, and 3,000 kit edges. Nested kits, explicitly priced siblings, unpriced stock,
 signed exits and future Expenses exercise the same pricing, quantity and
 Email-history queries as real records. Purchases carry source accounts (or a
 routing Run), accepted source orders, a categorized spending chain, and
 settled, mismatched, pending, split or missing tenders, so settlement, routing
-and import-claim predicates run at volume. Values and relationships are entirely
+and import-claim predicates run at volume. Complete, sparse and undated Shipment timelines exercise stored quality filtering and sorting after the quality family publishes them. Values and relationships are entirely
 synthetic and deterministic; providers are never dispatched. Three quarters of
 originals include 32 KiB of fixed deterministic padding, mixing raw hash text
 with repeated synthetic prose and HTML, and short or absent snippets. The rest

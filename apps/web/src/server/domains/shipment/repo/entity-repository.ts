@@ -127,7 +127,9 @@ const reader = createEntityCrud<
         .limit(1)
     )[0],
   fromDB: async (db, row) =>
-    shipmentOut.parse((await plan.read(db, [row], { kind: "full" }))[0]),
+    shipmentOut.parse(
+      (await plan.read(db, [row], { kind: "full" }, undefined, "live"))[0],
+    ),
   toUpdate: (data) => buildPartialUpdateValues(data),
   auditUpdateFields: [...entityFieldModels.shipment.audit],
 });

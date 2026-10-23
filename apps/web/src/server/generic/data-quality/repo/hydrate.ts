@@ -202,7 +202,7 @@ export const buildQualityBreakdown = (
   });
 };
 
-/** The lazy explanation reuses the same SQL evaluation as list hydration. */
+/** The lazy explanation uses current inputs, sharing the registered check functions. */
 export const loadQualityBreakdown = async (
   db: Database | DrizzleTransaction,
   entity: ScoredEntity,
@@ -259,6 +259,7 @@ const fingerprintColumn = z
 const expectedKey = (index: number) => `e${index}`;
 const gapKey = (index: number) => `g${index}`;
 const fingerprintKey = (index: number) => `f${index}`;
+const waivedKey = (index: number) => `w${index}`;
 
 /**
  * One statement per entity: every check's `expected` and raw gap as boolean
@@ -293,18 +294,11 @@ const loadEvaluations = async (
         ...Object.fromEntries(
           checksOf(entity).flatMap((check, index) => {
             const state = row.checks[check] ?? "not_applicable";
-            // The legacy evaluator's exception comparison receives its own retained
-            // spelling only for an already-waived gap; no fingerprint is computed.
             return [
               [expectedKey(index), state !== "not_applicable"],
               [gapKey(index), state === "gap" || state === "waived"],
-              [
-                fingerprintKey(index),
-                state === "waived"
-                  ? (row.exceptions.find((e) => e.check === check)
-                      ?.fingerprint ?? null)
-                  : null,
-              ],
+              [waivedKey(index), state === "waived"],
+              [fingerprintKey(index), null],
             ];
           }),
         ),
@@ -425,29 +419,32 @@ const evaluateRow = (
     });
   });
   const rawByCheck = new Map(rawGaps.map((gap) => [gap.check, gap]));
-  const exceptions: DataQualityException[] = !dataQualityExceptionEntities[
-    entity
-  ]
-    ? []
-    : row.exceptions.map(({ fingerprint, ...exception }) => ({
-        ...exception,
-        targetType: entity,
-        targetId,
-        state:
-          dataCheckExemptible[exception.check] &&
-          (storedEntryFor(entity) ||
-            rawByCheck.get(exception.check)?.fingerprint === fingerprint)
-            ? "active"
-            : "stale",
-      }));
+  const exceptions: DataQualityException[] =
+    !dataQualityExceptionEntities[entity] && !storedEntryFor(entity)
+      ? []
+      : row.exceptions.map(({ fingerprint, ...exception }) => ({
+          ...exception,
+          targetType: entity,
+          targetId,
+          state:
+            dataCheckExemptible[exception.check] &&
+            (storedEntryFor(entity) ||
+              rawByCheck.get(exception.check)?.fingerprint === fingerprint)
+              ? "active"
+              : "stale",
+        }));
+  // Stored outcomes remain authoritative until publication, including a waiver
+  // added or withdrawn since the last pass. Live evaluation carries the same states.
   const activeChecks = new Set(
-    exceptions
-      .filter(
-        (exception) =>
-          exception.state === "active" &&
-          rawByCheck.has(dataCheck.parse(exception.check)),
-      )
-      .map((exception) => exception.check),
+    storedEntryFor(entity)
+      ? checks.filter((_, index) => row[waivedKey(index)] === true)
+      : exceptions
+          .filter(
+            (exception) =>
+              exception.state === "active" &&
+              rawByCheck.has(dataCheck.parse(exception.check)),
+          )
+          .map((exception) => exception.check),
   );
   const gaps = rawGaps
     .filter((gap) => !activeChecks.has(gap.check))

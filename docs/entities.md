@@ -2500,10 +2500,19 @@ and emit no migration.
 
 ## Data quality
 
+Shipment is the first stored-quality kind. Its batch loader reconciles current
+observations once, then shares `reconcileShipmentTimeline`,
+`shipmentEventSummary` and `shipmentMilestones` with the tracking report.
+Chronology intentionally follows `shipmentMilestones`: conflicting exact delivery
+times and reversed exact carrier-possession/delivery milestones are defects.
+The retired SQL rule also inferred ordering conflicts from coarse calendar-day
+intervals and other movement kinds; those no longer establish a defect. Missing
+or coarse timing still affects the dates/span checks without inventing instants.
+
 Stored quality is being ported one entity at a time. `defineStoredEntityChecks`
 (`generic/data-quality/repo/stored-registry.ts`) is the registry switch: a
 versioned TypeScript evaluator replaces that kind's SQL bindings. Its single
-batch loader produces the records consumed by pure shared check builders
+batch loader produces the records consumed by pure shared `qualityCheck` builders
 (`required`, `observed`, `hasRelated`, `hasImage`, `when`). Declarations in
 `packages/schemas` continue to own check identity, weight, caps and placement.
 The shared `data-quality-score.ts` formula owns stored scores too.
