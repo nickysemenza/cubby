@@ -134,6 +134,13 @@
       "when": 1792770899441,
       "tag": "0018_shipment_observation_corrections",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1792775364802,
+      "tag": "0019_job_useful_progress",
+      "breakpoints": true
     }
   ]
 }

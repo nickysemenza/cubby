@@ -15,6 +15,7 @@ import { createLogger } from "@cubby/worker-tracing";
 import { forEachConcurrently } from "~/lib/concurrency-limiter";
 import { AiBudgetExhaustedError } from "~/server/ai/budget";
 import {
+  AiWorkDeferredError,
   aiWorkDeferral,
   withCooperativeAiWork,
 } from "~/server/ai/cooperative-work";
@@ -72,11 +73,15 @@ import {
 import { decideStatementKind } from "~/server/domains/transaction-import/repo/statement-transaction-kind";
 import { applyAutomaticRulesForCharge } from "~/server/generic/assessment/repo/automatic-rule-runtime";
 import { matchStatementRules } from "~/server/generic/assessment/repo/automatic-rules";
+import { withJobPhase } from "~/server/generic/jobs/context";
 import { canonicalJson } from "~/server/lib/canonical-json";
 import { isWorkflowInterrupted } from "~/server/workflows/runs/execution";
 import { runFailureText } from "~/server/workflows/runs/lifecycle";
 
-const STATEMENT_LABEL_BATCH = JOB_PAGE_LIMITS.suggestionsPerPage;
+// A label page includes merchant discovery in addition to batched decisions.
+// Keep its retry/checkpoint unit small enough to settle within a live Job claim.
+const STATEMENT_LABEL_BATCH = 32;
+const STATEMENT_SPENDING_CONCURRENCY = 8;
 /** Page rebuilds after automatic rules move the ledger mid-page. */
 const MAX_LABEL_ROUNDS = 3;
 const log = createLogger("statement-suggestion-labels");
@@ -654,8 +659,9 @@ async function runStatementLabelBatch(
   if (!activation?.enabled && !input.port) return { ...empty, active: false };
   const limit = Math.min(
     input.limit ?? STATEMENT_LABEL_BATCH,
-    STATEMENT_LABEL_BATCH,
+    JOB_PAGE_LIMITS.suggestionsPerPage,
   );
+  const prepareDeadline = Date.now() + 20_000;
   const rows = await suggestionsNeedingLabels(
     db,
     limit + 1,
@@ -841,10 +847,10 @@ async function runStatementLabelBatch(
           }))
         : [],
     );
-    const answers = await settleDecisionChoices(
-      decisions,
-      (decision) => decision.args,
-      { cooperative: input.cooperative },
+    const answers = await withJobPhase("statement_decisions", () =>
+      settleDecisionChoices(decisions, (decision) => decision.args, {
+        cooperative: input.cooperative,
+      }),
     );
     for (const answer of answers) {
       if (answer.status === "fulfilled") answer.item.apply(answer.value);
@@ -871,25 +877,45 @@ async function runStatementLabelBatch(
       if (isWorkflowInterrupted(error)) throw error;
       // Shared discovery is advisory; isolate failures through the existing per-charge path.
     }
-    const finish = () =>
-      withFieldSuggestionBatch(() =>
-        Promise.all(
-          classified.map(async (result) => {
-            if (result.status !== "fulfilled") return result;
-            try {
-              return {
-                status: "fulfilled" as const,
-                value: await result.value.finish(spendingPage),
-              };
-            } catch (reason) {
-              return { status: "rejected" as const, reason };
-            }
-          }),
-        ),
-      );
-    const computed = await (input.cooperative
-      ? withCooperativeAiWork(finish)
-      : finish());
+    const finish = async () => {
+      const finishWave = (wave: typeof classified) =>
+        withFieldSuggestionBatch(() =>
+          Promise.all(
+            wave.map(async (result) => {
+              if (result.status !== "fulfilled") return result;
+              try {
+                if (input.cooperative && Date.now() >= prepareDeadline)
+                  result.value.retainError(
+                    new AiWorkDeferredError(Date.now() + 1_000),
+                  );
+                return {
+                  status: "fulfilled" as const,
+                  value: await result.value.finish(spendingPage),
+                };
+              } catch (reason) {
+                return { status: "rejected" as const, reason };
+              }
+            }),
+          ),
+        );
+      const computed: Awaited<ReturnType<typeof finishWave>> = [];
+      // Batch related field questions within each wave; all started work settles
+      // before another wave or publication, so no work outlives this DB scope.
+      for (
+        let offset = 0;
+        offset < classified.length;
+        offset += STATEMENT_SPENDING_CONCURRENCY
+      )
+        computed.push(
+          ...(await finishWave(
+            classified.slice(offset, offset + STATEMENT_SPENDING_CONCURRENCY),
+          )),
+        );
+      return computed;
+    };
+    const computed = await withJobPhase("statement_spending", () =>
+      input.cooperative ? withCooperativeAiWork(finish) : finish(),
+    );
     const publications = new Map<
       string,
       {

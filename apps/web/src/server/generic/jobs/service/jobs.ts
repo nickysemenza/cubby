@@ -60,6 +60,13 @@ export async function advanceJob(
       jobId: id,
       kind: claimed.kind,
       stepKey: details.stepKey,
+      phase: details.phase ?? null,
+      phaseElapsedMs: details.phaseStartedAt
+        ? Date.now() - details.phaseStartedAt
+        : null,
+      phaseMs: details.phaseMs ?? {},
+      lastUsefulProgressAtClaim: claimed.lastUsefulProgressAt,
+      recoveryTimeoutMs: claimed.recoveryTimeoutMs,
       generation: claimed.generation,
       attempt: claimed.attempts,
       waitReason: null,
@@ -70,6 +77,11 @@ export async function advanceJob(
   const heartbeat = setInterval(() => {
     if (!renewing) {
       renewing = renewJob(db, claimed)
+        .then((renewed) => {
+          if (!renewed) entry().warn("lease renewal refused");
+          else entry().info("lease renewed");
+          return renewed;
+        })
         .catch((error: unknown) => {
           entry().error("lease renewal failed", { error });
           return false;

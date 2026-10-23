@@ -1,6 +1,7 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 
 import type { UnparsedError } from "~/lib/error-utils";
+import { JobDeferredError } from "~/server/generic/jobs/errors";
 
 const cooperative = new AsyncLocalStorage<boolean>();
 
@@ -26,6 +27,12 @@ export function aiWorkDeferral(
   const seen = new Set<unknown>();
   while (error instanceof Error && !seen.has(error)) {
     if (error instanceof AiWorkDeferredError) return error;
+    // Cache contention uses the Job control signal; item isolation must retain the wait.
+    if (error instanceof JobDeferredError) {
+      const deferred = new AiWorkDeferredError(error.until.getTime());
+      deferred.cause = error;
+      return deferred;
+    }
     seen.add(error);
     error = error.cause;
   }

@@ -45,6 +45,8 @@ export const job = pgTable(
     priority: integer("priority").notNull().default(0),
     attempts: integer("attempts").notNull().default(0),
     maxAttempts: integer("maxAttempts").notNull().default(3),
+    recoveryTimeoutMs: integer("recoveryTimeoutMs"),
+    lastUsefulProgressAt: timestamp("lastUsefulProgressAt", { mode: "date" }),
     availableAt: timestamp("availableAt", { mode: "date" })
       .notNull()
       .defaultNow(),

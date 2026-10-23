@@ -99,15 +99,25 @@ The Run executor's preliminary guard selects only its identity under the running
 status and attempt predicate, omitting retained input and progress-history payloads. Callers that
 need the Run data keep the full read under the same status/attempt fence.
 Statement Transaction suggestion labels are not AiEvaluation targets: the
-background queue labels pending rule suggestions in pages of 100 once the
+background queue labels pending rule suggestions in pages of 32 once the
 deployment's AI refresh activation exists. A page builds its charges in one
-batch, labels and publishes four at a time, then applies automatic rules one
+batch, batches identity questions, prepares spending in waves of eight and
+publishes with at most four database transactions, then applies automatic rules one
 charge at a time; a rule that applied rebuilds the page's other charges and
 relabels any whose evidence moved. Unlabelled suggestions stay
 reviewable. A high-confidence same-charge label makes a single exact-amount
 attach bulk-acceptable, and every create waits for its kind and counterparty
 labels (one vote beside the category rule and merchant history); a label
 itself applies nothing.
+Sweep Jobs use a 30-minute useful-progress recovery window. New committed partial
+answers or settled population inputs renew it; cache/capacity waits, unchanged
+answers and lease heartbeats do not. Ordinary Jobs retain their consecutive
+attempt limit. A stopped Sweep needs explicit same-Run retry after inspecting
+retained state; deployment does not retry it. Job logs include phase durations
+for statement decisions and spending, the current phase on lease renewal, and
+refused versus failed renewal diagnostics. These logs establish execution timing,
+not database wait attribution or proof of useful progress.
+
 Jobs own execution retries; inference retains its bounded request deadlines. Nightly maintenance and existing
 app-open recovery reconcile stranded Runs and relevant evidence/option changes.
 The activation Job uses the current compiled manifest under its deployment

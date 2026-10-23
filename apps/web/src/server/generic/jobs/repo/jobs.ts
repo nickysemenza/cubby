@@ -50,6 +50,8 @@ export async function enqueueJob(
     runId: input.runId ? parseEntityId("run", input.runId) : null,
     priority: input.priority ?? 0,
     maxAttempts: input.maxAttempts ?? DEFAULT_JOB_MAX_ATTEMPTS,
+    recoveryTimeoutMs: input.recoveryTimeoutMs ?? null,
+    lastUsefulProgressAt: input.recoveryTimeoutMs ? new Date() : null,
     availableAt: input.availableAt ?? new Date(),
   };
   const insertion = client.insert(job).values(values);
@@ -59,6 +61,9 @@ export async function enqueueJob(
           target: job.key,
           set: {
             ...values,
+            recoveryTimeoutMs:
+              input.recoveryTimeoutMs ?? sql`${job.recoveryTimeoutMs}`,
+            lastUsefulProgressAt: sql`CASE WHEN coalesce(${input.recoveryTimeoutMs ?? null}, ${job.recoveryTimeoutMs}) IS NOT NULL THEN ${new Date().toISOString()}::timestamp ELSE NULL END`,
             generation: sql`${job.generation} + 1`,
             state: sql`CASE WHEN ${job.state}=${jobState.enum.running} THEN ${jobState.enum.running} ELSE ${jobState.enum.queued} END`,
             cursor: null,
@@ -101,11 +106,34 @@ const due = (now: Date) =>
     and(eq(job.state, "running"), lte(job.leaseExpiresAt, now)),
   );
 
+/** Expiry revokes ownership; it never reclaims a live lease for another execution. */
+async function stopStalledJobs(db: Database) {
+  await getDb(db)
+    .update(job)
+    .set({
+      state: "failed",
+      error: "Job stopped after its useful-progress recovery window expired",
+      waitReason: null,
+      waitUntil: null,
+      leaseToken: null,
+      leaseExpiresAt: null,
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        inArray(job.state, ["queued", "retry_wait", "running"]),
+        sql`${job.recoveryTimeoutMs} IS NOT NULL`,
+        sql`coalesce(${job.lastUsefulProgressAt}, ${job.createdAt}) + ${job.recoveryTimeoutMs} * interval '1 millisecond' <= ${new Date().toISOString()}::timestamp`,
+      ),
+    );
+}
+
 /**
  * Interleave kinds; a short drain starts with the kind claimed least recently.
  * Only a claim is service: invalidations and enqueues leave `lastClaimedAt`.
  */
 export async function dueJobs(db: Database, limit = JOB_DRAIN.batch) {
+  await stopStalledJobs(db);
   const result = await getDb(db).execute<{ id: string; kind: string }>(sql`
     WITH served AS (
       SELECT kind, max("lastClaimedAt") AS last_served FROM "Job" GROUP BY kind
@@ -148,7 +176,16 @@ export async function claimJob(
       .where(and(eq(job.id, id), due(now)))
       .for("update", { skipLocked: true });
     if (!available) return null;
-    if (available.attempts >= available.maxAttempts) {
+    const stalled =
+      available.recoveryTimeoutMs !== null &&
+      now.getTime() -
+        (available.lastUsefulProgressAt ?? available.createdAt).getTime() >=
+        available.recoveryTimeoutMs;
+    if (
+      stalled ||
+      (available.recoveryTimeoutMs === null &&
+        available.attempts >= available.maxAttempts)
+    ) {
       await getDb(tx)
         .update(job)
         .set({
@@ -157,7 +194,9 @@ export async function claimJob(
           waitUntil: null,
           leaseToken: null,
           leaseExpiresAt: null,
-          error: "Job exhausted attempts after interrupted execution",
+          error: stalled
+            ? "Job stopped after its useful-progress recovery window expired"
+            : "Job exhausted attempts after interrupted execution",
           updatedAt: now,
         })
         .where(eq(job.id, id));
@@ -320,7 +359,12 @@ export async function failJob(
   await getDb(db)
     .update(job)
     .set({
-      state: claim.attempts >= claim.maxAttempts ? "failed" : "retry_wait",
+      state:
+        claim.recoveryTimeoutMs === null
+          ? claim.attempts >= claim.maxAttempts
+            ? "failed"
+            : "retry_wait"
+          : "retry_wait",
       availableAt: new Date(
         Date.now() +
           Math.min(
@@ -365,7 +409,11 @@ export async function failJob(
     );
 }
 
-export async function retryJob(db: Database, id: string) {
+export async function retryJob(
+  db: Database,
+  id: string,
+  recoveryTimeoutMs?: number,
+) {
   return withTransactionDatabase(db, async (tx) => {
     const [previous] = await getDb(tx)
       .select()
@@ -394,11 +442,14 @@ export async function retryJob(db: Database, id: string) {
         priority: previous.priority,
       });
     }
+    const recovery = recoveryTimeoutMs ?? previous.recoveryTimeoutMs;
     const [row] = await getDb(tx)
       .update(job)
       .set({
         state: "queued",
         attempts: 0,
+        recoveryTimeoutMs: recovery,
+        lastUsefulProgressAt: recovery ? new Date() : null,
         generation: sql`${job.generation} + 1`,
         error: null,
         waitReason: null,
@@ -588,4 +639,31 @@ export async function bringQueuedJobsForward(db: Database, now: Date) {
       ),
     )
     .returning({ id: job.id });
+}
+
+/** Acquire before domain locks; the returned stamp commits with genuinely new work.
+ * This avoids upgrading a shared ownership fence after concurrent domain writes. */
+export async function lockJobProgress(
+  db: RepositoryQueryInput,
+  claim: JobClaim,
+) {
+  if (claim.recoveryTimeoutMs === null) return async () => {};
+  await assertJobClaim(db, claim, "update");
+  await repositoryBeforeCommit(
+    db,
+    (tx) => assertJobClaim(tx, claim, "update"),
+    { phase: "publication" },
+  );
+  return async () => {
+    await repositoryQueries(db)
+      .update(job)
+      .set({ lastUsefulProgressAt: new Date() })
+      .where(
+        and(
+          eq(job.id, claim.id),
+          eq(job.generation, claim.generation),
+          eq(job.leaseToken, claim.leaseToken),
+        ),
+      );
+  };
 }
