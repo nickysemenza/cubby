@@ -926,7 +926,9 @@ opens the Email directly from its Purchase row.
 The structured identifier browser journey applies Add, explicit primary choice
 and Replace in one draft, checks the exact saved secondary/primary values, then
 removes the saved secondary and checks the survivor. It avoids two intermediate
-save/reopen cycles. The existing `collection-patch.integration.test.ts` case
+save/reopen cycles. Locate saved collection rows by their value: a combined
+Add/Replace can reorder them, so a positional Remove label is not stable identity.
+The existing `collection-patch.integration.test.ts` case
 "adding identifiers preserves existing values and primary, and explicit promotion
 retains both" owns add-only preservation and promotion without deletion;
 `collection-edit.unit.test.ts` owns baseline-preserving Add, atomic identity
