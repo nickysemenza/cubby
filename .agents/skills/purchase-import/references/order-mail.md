@@ -48,6 +48,26 @@ the literal captured text and offset capture timestamp, use a stable source
 key, and associate a Purchase only when evidence establishes it. Browser
 research is interactive; package evidence does not schedule future visits.
 
+For tracking enrichment, choose an accessible source with useful scan history:
+the carrier's site or a third-party tracker (for example,
+[17TRACK](https://t.17track.net/en)). Switch sources when access is blocked or
+another presentation makes the history easier to inspect. A third-party
+tracker presents carrier observations; matching scans are corroboration, not
+independent events. Retain each capture under its actual URL and source key,
+reuse the verified Shipment, and preserve conflicting observations. Access and
+coverage must be checked in the current session; a fallback is not guaranteed
+to avoid blocking or provide additional facts.
+
+Expand package history and retain supported scans, including carrier possession,
+exceptions and delivery. Keep estimated delivery windows in the captured source;
+they are not delivery events. Resolve "Local Time" from an unambiguous scan
+location using its IANA timezone and the event date's daylight-saving rules.
+Alternatively, use the tracker's explicit timezone selector and retain its
+selected setting with the capture. Leave the timezone unknown only when neither
+establishes it, such as a locationless scan. Read back the retained timeline after
+recording. Report current status, outstanding gaps and whether future checks
+were actually scheduled.
+
 For a mistaken association, use `shipments.associate` to attach or explicitly
 detach the Purchase. Use `shipments.reassign` with the `sourcePackageId` from
 `shipments_read.timeline` to move a source package and its observations to the
