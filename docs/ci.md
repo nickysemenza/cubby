@@ -52,7 +52,9 @@ The editorial validation job uses a root-only dependency install (skipping web
 postinstall generation), formatting and relative Markdown links. It starts no
 WASM preparation, application build, test services or report job. `CI passed`
 allows the deliberately unselected lanes but still rejects planning/validation
-failures and cancellations.
+failures and cancellations. Editorial link checks exclude the generated
+`docs/guide/how-values-are-determined.md` destination, which is absent without
+generation; runtime validation checks that destination after generating it.
 
 ## Journeys
 
