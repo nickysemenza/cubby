@@ -6,6 +6,7 @@
   "main": "./src/index.ts",
   "types": "./src/index.ts",
   "exports": {
+    "./filter": "./src/filter.ts",
     ".": "./src/index.ts",
     "./apple-client-version": "./src/apple-client-version.ts",
     "./apple-app-identity": "./src/apple-app-identity.ts",

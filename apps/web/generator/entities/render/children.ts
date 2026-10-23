@@ -1,4 +1,4 @@
-import type { ChildTableMetadata } from "../../../../../packages/schemas/src/entity-definitions/child-definition.ts";
+import type { ChildTableMetadata } from "@cubby/schemas/compiler/entity-definitions/child-definition";
 import { TABLE_SQL_PLACEHOLDER } from "../table-storage.ts";
 
 const escapeTemplate = (value: string) =>

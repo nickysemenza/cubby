@@ -17,9 +17,9 @@ import {
   parseEntityFieldModelMetadata,
   readFieldSchemas,
 } from "@cubby/schemas/entity-definitions/definition";
-import type { ChildTableDeclaration } from "../../../packages/schemas/src/entity-definitions/child-definition";
+import type { ChildTableDeclaration } from "@cubby/schemas/compiler/entity-definitions/child-definition";
 import type { EntityDeclaration } from "@cubby/schemas/entity-definitions/definition";
-import { typeChecker } from "../../../scripts/tsc.ts";
+import { typeChecker } from "cubby/tooling/type-checker";
 import { generatedHeader, removeExtraArtifacts } from "../generator/artifacts";
 import {
   collectEntityOverrides,
@@ -556,13 +556,13 @@ describe("typed entity compiler", () => {
 
   it("keeps routing visual evidence explicit and requires image-owning targets", async () => {
     const recipe = (
-      await import("../../../packages/schemas/src/entity-definitions/01-recipe.entity")
+      await import("@cubby/schemas/compiler/entity-definitions/01-recipe.entity")
     ).default;
     const planting = (
-      await import("../../../packages/schemas/src/entity-definitions/19-planting.entity")
+      await import("@cubby/schemas/compiler/entity-definitions/19-planting.entity")
     ).default;
     const meal = (
-      await import("../../../packages/schemas/src/entity-definitions/06-meal.entity")
+      await import("@cubby/schemas/compiler/entity-definitions/06-meal.entity")
     ).default;
     expect(recipe.capabilities.images.routing?.visualEvidence).toEqual([
       { relationPath: ["meals"], priority: 1, ordering: "newest" },
@@ -1507,7 +1507,7 @@ describe("typed entity compiler", () => {
 
   it("requires inverse paths for local relationships and rejects deletion policy on views", async () => {
     const raw = (
-      await import("../../../packages/schemas/src/entity-definitions/02-ingredient.entity")
+      await import("@cubby/schemas/compiler/entity-definitions/02-ingredient.entity")
     ).default;
     const relation = {
       key: "child",

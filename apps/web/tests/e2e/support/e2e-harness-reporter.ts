@@ -13,15 +13,15 @@ import {
   writeE2ERunBundle,
   type E2ERunBundleInput,
   type E2ERunIdentity,
-} from "../../../tooling/e2e-run-bundle";
+} from "#web/tooling/e2e-run-bundle.ts";
 import {
   gitRevision,
   webBuildSourceFingerprint,
-} from "../../../tooling/web-build-provenance";
+} from "#web/tooling/web-build-provenance.ts";
 import {
   WORKERD_EXPLORER_ANNOTATION,
   WORKERD_LOGS_ATTACHMENT,
-} from "../../../tooling/e2e-workerd-logs";
+} from "#web/tooling/e2e-workerd-logs.ts";
 
 import { discoverHmrSession } from "./hmr-session";
 

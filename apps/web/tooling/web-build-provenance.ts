@@ -6,7 +6,7 @@ import { z } from "zod";
 import { OutputWorkerSchema } from "@cloudflare/config";
 
 import { type BuildSource, sourceFingerprint } from "./source-fingerprint.ts";
-import { digestFiles, walkFiles } from "../../../scripts/lib/tree-digest.ts";
+import { digestFiles, walkFiles } from "cubby/tooling/tree-digest";
 
 const buildStampSchema = z.object({
   schemaVersion: z.literal(2),

@@ -1,7 +1,7 @@
 import { request } from "@playwright/test";
 import { z } from "zod";
-import { createPostgresPool } from "../../../tooling/postgres-pool";
-import { seedCorpus } from "../../../tooling/scenarios/corpus";
+import { createPostgresPool } from "#web/tooling/postgres-pool.ts";
+import { seedCorpus } from "#web/tooling/scenarios/corpus.ts";
 import type { E2EWorkerRuntime } from "../support/e2e-worker-runtime";
 
 /** The exploration project keeps this rich world outside regression shards. */

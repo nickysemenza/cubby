@@ -1,10 +1,10 @@
 import { renderOptionGlyphs } from "./option-glyphs.ts";
-import type { ChildTableDeclaration } from "../../../../../packages/schemas/src/entity-definitions/child-definition.ts";
+import type { ChildTableDeclaration } from "@cubby/schemas/compiler/entity-definitions/child-definition";
 import {
   entityFieldControlKinds as fieldControlKinds,
   entityFieldKinds as fieldKinds,
 } from "@cubby/schemas/entity-definitions/definition";
-import { CURRENT_MEMBER_FILTER } from "../../../../../packages/shared/src/filter.ts";
+import { CURRENT_MEMBER_FILTER } from "@cubby/shared/filter";
 import { compactLiteral, generatedHeader } from "../../artifacts.ts";
 import {
   EntityDeclarationError,

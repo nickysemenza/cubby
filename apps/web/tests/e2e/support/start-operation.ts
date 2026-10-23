@@ -2,8 +2,8 @@ import type { APIRequestContext } from "@playwright/test";
 import superjson from "superjson";
 import { z } from "zod";
 
-import { browserOperationPath } from "../../../src/lib/browser-operation-path";
-import { superJsonResultSchema } from "../../../src/lib/superjson-wire";
+import { browserOperationPath } from "#web/src/lib/browser-operation-path.ts";
+import { superJsonResultSchema } from "#web/src/lib/superjson-wire.ts";
 
 const requestOrigins = new WeakMap<APIRequestContext, Promise<string>>();
 

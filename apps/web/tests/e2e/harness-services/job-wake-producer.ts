@@ -2,8 +2,8 @@ import type { DurableObjectNamespace } from "@cloudflare/workers-types";
 import { z } from "zod";
 import { agentImportRunPurpose } from "@cubby/schemas/import-run-agent";
 import { purchaseAgentEvent } from "@cubby/schemas/purchase-import";
-import { dispatchInputForEvent } from "../../../src/server/domains/purchase-agent/service/dispatch-input";
-import type { PurchaseImportRunAgent } from "../../../src/server/worker-bindings";
+import { dispatchInputForEvent } from "#web/src/server/domains/purchase-agent/service/dispatch-input.ts";
+import type { PurchaseImportRunAgent } from "#web/src/server/worker-bindings.ts";
 
 export default {
   async fetch(

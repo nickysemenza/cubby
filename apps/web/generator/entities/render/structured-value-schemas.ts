@@ -1,4 +1,4 @@
-import { drawsFromValueSchema } from "../../../../../packages/schemas/src/native-coverage.ts";
+import { drawsFromValueSchema } from "@cubby/schemas/compiler/native-coverage";
 import { collectionArraySchema } from "@cubby/schemas/entity-collection";
 import { generatedHeader } from "../../artifacts.ts";
 import type { CompiledEntity } from "../declarations.ts";

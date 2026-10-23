@@ -1,0 +1,18 @@
+import "../../../side-effect.ts";
+import type { Model } from "../../../../model.ts";
+export { value } from "../../../value.ts";
+export * from "../../../values.ts";
+export type { Kind } from "../../../kind.ts";
+const lazy = import("../../../lazy.ts");
+const template = import(`../../../template.ts`);
+type Shape = import("../../../shape.ts").Shape;
+const required = require("../../../required.ts");
+import legacy = require("../../../legacy.ts");
+import nearby from "../nearby.ts";
+import sibling from "./sibling.ts";
+import twoParents from "../../two-parents.ts";
+import packageModule from "@cubby/shared/text-case";
+import nativeAlias from "#web/tooling/example.ts";
+const file = new URL("../../../fixture.json", import.meta.url);
+const glob = import.meta.glob("../../../fixtures/*.ts");
+const text = "../../../ordinary-text.ts";

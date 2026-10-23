@@ -2,7 +2,8 @@ import { parseEntityId } from "@cubby/schemas/identifiers";
 import type { ProductVariantComparison } from "@cubby/schemas/product-variant-comparison";
 import { describe, expect, it } from "vitest";
 
-import { forgeWearEvidence } from "../../../../../tests/fixtures/product-identity-evidence";
+import { forgeWearEvidence } from "#web/tests/fixtures/product-identity-evidence.ts";
+
 import { rankPhotoProductCandidates } from "./photo-product-candidates";
 
 const brandId = parseEntityId("vendor", "00000000-0000-4000-8000-000000000041");

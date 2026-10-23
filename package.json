@@ -2,6 +2,17 @@
   "name": "cubby",
   "private": true,
   "type": "module",
+  "exports": {
+    "./native/client-version": "./packages/shared/src/apple-client-version.ts",
+    "./tooling/run": "./scripts/lib/run.ts",
+    "./tooling/tree-digest": "./scripts/lib/tree-digest.ts",
+    "./tooling/type-checker": "./scripts/tsc.ts",
+    "./tooling/apple-ffi": "./scripts/apple-ffi.ts",
+    "./tooling/simulator-server": "./apps/apple/tooling/lib/simulator-server.ts",
+    "./agent-skills/*": "./.agents/skills/*",
+    "./guide/*": "./docs/guide/*",
+    "./recipe-fixtures/*": "./recipebridge/fixtures/*"
+  },
   "scripts": {
     "agent:setup": "pnpm install --frozen-lockfile",
     "dev": "pnpm --dir apps/web exec tsx tooling/dev/index.ts",
@@ -47,6 +58,7 @@
     "@neon/env": "^1.6.3"
   },
   "devDependencies": {
+    "@cubby/shared": "workspace:*",
     "@oxlint/plugins": "1.88.0",
     "@tanstack/router-generator": "1.167.45",
     "@types/node": "^26.6.5",

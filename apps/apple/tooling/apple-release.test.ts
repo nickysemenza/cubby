@@ -1,6 +1,12 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+  copyFileSync,
+  mkdirSync,
+  mkdtempSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { test } from "vitest";
@@ -86,6 +92,37 @@ const withRepository = (
     rmSync(root, { recursive: true, force: true, maxRetries: 5 });
   }
 };
+
+test("release tooling loads with native Node TypeScript before dependency installation", () => {
+  const root = mkdtempSync(
+    path.join(tmpdir(), "cubby-release-no-dependencies-"),
+  );
+  const repository = new URL("../../../", import.meta.url);
+  try {
+    for (const file of [
+      "package.json",
+      "apps/apple/tooling/apple-release.ts",
+      "packages/shared/src/apple-client-version.ts",
+    ]) {
+      const target = path.join(root, file);
+      mkdirSync(path.dirname(target), { recursive: true });
+      copyFileSync(new URL(file, repository), target);
+    }
+    assert.doesNotThrow(() =>
+      execFileSync(
+        process.execPath,
+        [
+          "--input-type=module",
+          "--eval",
+          "await import('./apps/apple/tooling/apple-release.ts')",
+        ],
+        { cwd: root, stdio: "pipe" },
+      ),
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true, maxRetries: 5 });
+  }
+});
 
 test("only a main-branch first attempt may plan or publish", () => {
   assert.throws(

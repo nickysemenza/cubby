@@ -1,7 +1,7 @@
 import {
   childTableMetadataSchema,
   type ChildTableMetadata,
-} from "../../../../packages/schemas/src/entity-definitions/child-definition.ts";
+} from "@cubby/schemas/compiler/entity-definitions/child-definition";
 import { EntityDeclarationError } from "./declarations.ts";
 import { TABLE_SQL_PLACEHOLDER } from "./table-storage.ts";
 

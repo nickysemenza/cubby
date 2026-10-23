@@ -1,0 +1,5 @@
+import { picker } from "#web/src/lib/plain-date.ts";
+export { value } from "#web/src/server/example.ts";
+const lazy = import("#web/src/server/example.ts");
+import { date } from "~/lib/plain-date";
+import { helper } from "#web/tooling/example.ts";

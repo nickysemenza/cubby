@@ -1,6 +1,6 @@
-import type { ChildTableDeclaration } from "../../../../packages/schemas/src/entity-definitions/child-definition.ts";
+import type { ChildTableDeclaration } from "@cubby/schemas/compiler/entity-definitions/child-definition";
 import { z } from "zod";
-import { retainedTableExports } from "../../../../packages/schemas/src/child-tables/retained.ts";
+import { retainedTableExports } from "@cubby/schemas/compiler/child-tables/retained";
 
 import type { EntityDeclarationMetadata } from "@cubby/schemas/entity-definitions/definition";
 import {

@@ -4,8 +4,8 @@ import { test as base, expect, request } from "@playwright/test";
 import type {
   CreatableEntity,
   EntityOverrides,
-} from "../../../tooling/factories/build";
-import { fakerFromSeed, hashSeed } from "../../../tooling/factories/faker";
+} from "#web/tooling/factories/build.ts";
+import { fakerFromSeed, hashSeed } from "#web/tooling/factories/faker.ts";
 
 import {
   assertHmrRuntimeIdentity,
@@ -71,7 +71,7 @@ export const test = base.extend<
     const [{ executeEntity }, { createEntity }, { fixtureKernelContext }] =
       await Promise.all([
         import("~/server/entity-kernel"),
-        import("../../../tooling/factories/create"),
+        import("#web/tooling/factories/create.ts"),
         import("../fixtures/core"),
       ]);
     const run = randomUUID().slice(0, 8);

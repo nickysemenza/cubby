@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { assertManifestWire, renderManifestWire } from "./manifest-wire.ts";
-import type { ManifestWire } from "../../../../../packages/schemas/src/manifest-wire.ts";
+import type { ManifestWire } from "@cubby/schemas/compiler/manifest-wire";
 import { capitalize } from "@cubby/shared/text-case";
 import {
   excludedFilterValue,
@@ -16,7 +16,7 @@ import {
   LIST_PRESENTATION_CHOICES,
   WAYFINDING_DOMAINS,
 } from "@cubby/schemas/entity-definitions/definition";
-import { connectedViews } from "../../../../../packages/schemas/src/connected-view-definitions.ts";
+import { connectedViews } from "@cubby/schemas/compiler/connected-view-definitions";
 import {
   COLLECTION_ACTION_SCOPES,
   COLLECTION_ACTIONS,
@@ -28,10 +28,10 @@ import {
   nativeCoverage,
   requireNativeCoverage,
   nativeHeroActionPlans,
-} from "../../../../../packages/schemas/src/native-coverage.ts";
+} from "@cubby/schemas/compiler/native-coverage";
 import { SECTION_ACTION_IDS } from "@cubby/schemas/entity-section-actions";
 import { generatedHeader } from "../../artifacts.ts";
-import { parseRangeBounds } from "../../../../../packages/shared/src/filter.ts";
+import { parseRangeBounds } from "@cubby/shared/filter";
 import {
   type CompiledEntity,
   dateRangeBounds,

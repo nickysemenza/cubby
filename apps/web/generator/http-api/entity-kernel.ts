@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { entityTimelineWindowFor } from "@cubby/schemas/entity-timeline";
-import { entityInspectorMetadata } from "../../../../packages/schemas/src/generated/entity-inspector.gen.ts";
+import { entityInspectorMetadata } from "@cubby/schemas/compiler/generated/entity-inspector.gen";
 import { entityKeys } from "@cubby/schemas/entity-summary";
 import { ENTITY_SCHEMA_BINDINGS } from "../../src/server/generated/entity-bindings.gen.ts";
 import { toWire } from "../../src/lib/http-api/wire.ts";

@@ -1,7 +1,7 @@
 import { execFileSync } from "node:child_process";
 import path from "node:path";
 
-import { digestFiles, walkFiles } from "../../../scripts/lib/tree-digest.ts";
+import { digestFiles, walkFiles } from "cubby/tooling/tree-digest";
 
 // Dependency-free on purpose: Worker build scripts import it before any
 // workspace tooling runs.

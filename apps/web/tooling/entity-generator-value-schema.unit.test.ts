@@ -9,7 +9,7 @@ import {
   valueSchemaOf,
   type ValueSchemaJSON,
 } from "../generator/entities/render/value-schema";
-import { drawsFromValueSchema } from "../../../packages/schemas/src/native-coverage";
+import { drawsFromValueSchema } from "@cubby/schemas/compiler/native-coverage";
 
 const noEntity: EntityForPrefix = () => null;
 const schemaOf = (

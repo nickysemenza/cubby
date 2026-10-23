@@ -3,7 +3,7 @@ import {
   containerCli as appleCli,
   type ContainerListEntry,
 } from "./apple-container.ts";
-import { spawnToExit } from "../../../../scripts/lib/run.ts";
+import { spawnToExit } from "cubby/tooling/run";
 
 export function devContainerBackend(
   env = process.env,

@@ -2,12 +2,12 @@ import { test as base, expect } from "@playwright/test";
 import { drainDerivedRefreshFrontier } from "~/server/testing/background-queue";
 import { getFixtureDb } from "../fixtures/core";
 
-import { retryStaleKeepAlive } from "../../../tooling/stale-keep-alive";
+import { retryStaleKeepAlive } from "#web/tooling/stale-keep-alive.ts";
 import {
   WORKERD_EXPLORER_ANNOTATION,
   WORKERD_LOGS_ATTACHMENT,
-} from "../../../tooling/e2e-workerd-logs";
-import type { WorkerdProfile } from "../../../tooling/workerd-harness";
+} from "#web/tooling/e2e-workerd-logs.ts";
+import type { WorkerdProfile } from "#web/tooling/workerd-harness.ts";
 import {
   createE2EWorkerRuntime,
   type E2EWorkerRuntime,

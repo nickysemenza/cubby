@@ -3,10 +3,10 @@ import { z } from "zod";
 import {
   requireNativeCoverage,
   rendererReadInputs,
-} from "../../../../packages/schemas/src/native-coverage.ts";
+} from "@cubby/schemas/compiler/native-coverage";
 import type { RawReadSchemas } from "@cubby/schemas/entity-definitions/definition";
 import { relationshipProvenanceSchema } from "./list-fields.ts";
-import { connectedViews } from "../../../../packages/schemas/src/connected-view-definitions.ts";
+import { connectedViews } from "@cubby/schemas/compiler/connected-view-definitions";
 import { listViewId } from "@cubby/schemas/entity-definitions/definition";
 import type {
   CompiledEditSection,

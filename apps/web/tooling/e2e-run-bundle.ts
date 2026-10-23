@@ -8,7 +8,7 @@ import {
   webBuildSourceFingerprint,
   type WebBuildProvenance,
 } from "./web-build-provenance";
-import { walkFiles } from "../../../scripts/lib/tree-digest.ts";
+import { walkFiles } from "cubby/tooling/tree-digest";
 
 export interface E2ERunIdentity {
   source: { commit: string; dirty: boolean; fingerprint: string };

@@ -12,7 +12,7 @@ import { z } from "zod";
 
 import { replaySessionRoots } from "./native-replay-session.ts";
 
-import { walkFiles } from "../../../scripts/lib/tree-digest.ts";
+import { walkFiles } from "cubby/tooling/tree-digest";
 
 const milliseconds = z.number().finite().nonnegative();
 const rectangleSchema = z.object({

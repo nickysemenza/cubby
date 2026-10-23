@@ -1,7 +1,7 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { resolveDevProfile, DEV_DATABASE_ENV_KEYS } from "./dev-profile.ts";
-import { spawnToExit } from "../../../../scripts/lib/run.ts";
+import { spawnToExit } from "cubby/tooling/run";
 
 import {
   enableStatementStatistics,

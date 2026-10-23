@@ -11,7 +11,7 @@ import { homedir } from "node:os";
 import path from "node:path";
 import { z } from "zod";
 
-import { digestTree } from "../../../scripts/lib/tree-digest.ts";
+import { digestTree } from "cubby/tooling/tree-digest";
 
 export const macFixtureBundleID = "com.nickysemenza.cubby.e2e";
 export function macFixturePaths() {

@@ -77,6 +77,8 @@ export function targetPath(
 ): string | undefined {
   if (source === "@cubby/recipebridge/worker") return `${SERVER}wasm`;
   if (source.startsWith("~/")) return posix.join(SRC, source.slice(2));
+  if (source.startsWith("#web/"))
+    return posix.join("apps/web", source.slice(5));
   if (source.startsWith("./") || source.startsWith("../"))
     return posix.normalize(posix.join(posix.dirname(filename), source));
 }

@@ -1,5 +1,5 @@
 import { recordSourceTransactionRecordsOut } from "@cubby/schemas/source-transaction-record";
-import type { ConvergenceNames } from "../../../tooling/convergence-harness";
+import type { ConvergenceNames } from "#web/tooling/convergence-harness.ts";
 import { startOperation } from "./start-operation";
 import { entityApi } from "./entity-api";
 import {
@@ -53,7 +53,7 @@ import {
   shirtGroup,
   syntheticOrderIds,
   wardrobePhotos,
-} from "../../../tooling/convergence-harness";
+} from "#web/tooling/convergence-harness.ts";
 import { gotoAuthenticatedPage } from "./e2e-helpers";
 import { expect } from "./e2e-test";
 

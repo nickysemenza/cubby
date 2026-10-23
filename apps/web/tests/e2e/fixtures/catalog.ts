@@ -1,6 +1,6 @@
 import { publishEntityConnection } from "~/server/domains/connection/repo/entity-connections";
-import type { EntityOverrides } from "../../../tooling/factories/build";
-import { taxonomyShortcode } from "../../../tooling/product-category-fixtures";
+import type { EntityOverrides } from "#web/tooling/factories/build.ts";
+import { taxonomyShortcode } from "#web/tooling/product-category-fixtures.ts";
 import { type TaskStatus } from "@cubby/schemas/project";
 import type { Page } from "@playwright/test";
 import { and, eq, isNull } from "drizzle-orm";

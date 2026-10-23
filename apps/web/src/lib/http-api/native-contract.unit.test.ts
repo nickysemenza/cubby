@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 
+import { collectNativeContract } from "#web/generator/http-api/native-contract.ts";
 import { httpContract } from "~/lib/generated/http-contract.gen";
 
-import { collectNativeContract } from "../../../generator/http-api/native-contract";
 import { httpMetadataSchema } from "./router";
 import { httpRoutes } from "./routes";
 

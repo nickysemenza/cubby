@@ -4,13 +4,13 @@ import {
   parseSkillMarkdown,
   type SkillManifestEntry,
 } from "agents/skills";
+import photoWorkflow from "cubby/agent-skills/photo-inventory-import/references/run-workflow.md?raw";
+import photoInventorySkill from "cubby/agent-skills/photo-inventory-import/SKILL.md?raw";
+import productEnrichmentSkill from "cubby/agent-skills/product-enrichment/SKILL.md?raw";
+import extractionRules from "cubby/agent-skills/purchase-import/references/extraction.md?raw";
+import settlementRules from "cubby/agent-skills/purchase-import/references/financial-settlement.md?raw";
+import mailImportWorkflow from "cubby/agent-skills/purchase-import/references/mail-import.md?raw";
 
-import photoWorkflow from "../../../../../../../.agents/skills/photo-inventory-import/references/run-workflow.md?raw";
-import photoInventorySkill from "../../../../../../../.agents/skills/photo-inventory-import/SKILL.md?raw";
-import productEnrichmentSkill from "../../../../../../../.agents/skills/product-enrichment/SKILL.md?raw";
-import extractionRules from "../../../../../../../.agents/skills/purchase-import/references/extraction.md?raw";
-import settlementRules from "../../../../../../../.agents/skills/purchase-import/references/financial-settlement.md?raw";
-import mailImportWorkflow from "../../../../../../../.agents/skills/purchase-import/references/mail-import.md?raw";
 import { skillReferences as references } from "./import-run-skill-references";
 
 /** One repository skill with its `references/*.md` as readable resources. */

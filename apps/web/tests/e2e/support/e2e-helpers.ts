@@ -17,7 +17,7 @@ import {
   FAKER_SEED_ANNOTATION,
   fakerFromSeed,
   hashSeed,
-} from "../../../tooling/factories/faker";
+} from "#web/tooling/factories/faker.ts";
 
 import {
   NAVIGATION_ANNOTATION,

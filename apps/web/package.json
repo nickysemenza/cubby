@@ -2,6 +2,12 @@
   "name": "@cubby/web",
   "private": true,
   "type": "module",
+  "imports": {
+    "#web/generator/*": "./generator/*",
+    "#web/tooling/*": "./tooling/*",
+    "#web/tests/*": "./tests/*",
+    "#web/src/*": "./src/*"
+  },
   "scripts": {
     "generate:claude-plugin": "node generator/claude-plugin.ts",
     "test": "vitest run --project unit --project mcp-contract --project worker-safety --project ui --project capability --project scripts --project packages",
@@ -165,6 +171,7 @@
     "ai": "^7.0.142",
     "cf": "1.0.0-beta.18",
     "concurrently": "^10.0.6",
+    "cubby": "workspace:*",
     "drizzle-kit": "^0.31.11",
     "esbuild": "^0.28.2",
     "jsdom": "^30.1.3",

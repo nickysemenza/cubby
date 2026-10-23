@@ -22,7 +22,7 @@ import {
 } from "./dev-container.ts";
 import { holdLock, worktreeRoot } from "./harness-lock.ts";
 import { processStatus } from "./process-identity.ts";
-import { spawnToExit } from "../../../../scripts/lib/run.ts";
+import { spawnToExit } from "cubby/tooling/run";
 import {
   SHARED_POSTGRES,
   ensureSharedPostgres,

@@ -1,4 +1,4 @@
-import { runSyncChecked } from "../../../scripts/lib/run.ts";
+import { runSyncChecked } from "cubby/tooling/run";
 
 export function checkApple(root: string, scope = "all") {
   if (!["all", "host", "app", "lint"].includes(scope))
