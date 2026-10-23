@@ -26,7 +26,7 @@ export const shipmentChecks = defineEntityChecks({
   derivedRead: (ids) => shipmentQualityFacts(ids),
   filterRead: () => shipmentQualityFacts(),
   checks: {
-    shipment_event_count: {
+    shipment_events: {
       missing: (t: Shipment, ctx) =>
         sql`coalesce(${fact(t, "eventCount", ctx)}, 0) < 2`,
     },
@@ -38,11 +38,11 @@ export const shipmentChecks = defineEntityChecks({
       missing: (t: Shipment, ctx) =>
         sql`NOT coalesce(${fact(t, "delivered", ctx)}, false)`,
     },
-    shipment_event_span: {
+    shipment_span: {
       missing: (t: Shipment, ctx) =>
         sql`NOT coalesce(${fact(t, "extendedSpan", ctx)}, false)`,
     },
-    shipment_milestone_dates: {
+    shipment_dates: {
       missing: (t: Shipment, ctx) =>
         sql`NOT coalesce(${fact(t, "milestoneDates", ctx)}, false)`,
     },

@@ -89,10 +89,10 @@ describe("Shipment evidence quality", () => {
         events: [delivered],
         score: 25,
         gaps: [
-          "shipment_event_count",
+          "shipment_events",
           "shipment_shipped",
-          "shipment_event_span",
-          "shipment_milestone_dates",
+          "shipment_span",
+          "shipment_dates",
         ],
       },
       {
@@ -102,16 +102,16 @@ describe("Shipment evidence quality", () => {
         ],
         score: 25,
         gaps: [
-          "shipment_event_count",
+          "shipment_events",
           "shipment_delivered",
-          "shipment_event_span",
-          "shipment_milestone_dates",
+          "shipment_span",
+          "shipment_dates",
         ],
       },
       {
         events: [shipped, event("delivered", instant("2026-06-02T09:00:00Z"))],
         score: 90,
-        gaps: ["shipment_event_span"],
+        gaps: ["shipment_span"],
       },
       {
         events: [shipped, event("delivered", instant("2026-06-02T09:00:01Z"))],
@@ -132,17 +132,17 @@ describe("Shipment evidence quality", () => {
           event("delivered", day("2026-06-02")),
         ],
         score: 90,
-        gaps: ["shipment_event_span"],
+        gaps: ["shipment_span"],
       },
       {
         events: [event("label_created", day("2026-06-01")), delivered],
         score: 60,
-        gaps: ["shipment_shipped", "shipment_milestone_dates"],
+        gaps: ["shipment_shipped", "shipment_dates"],
       },
       {
         events: [event("carrier_possession", { kind: "unknown" }), delivered],
         score: 80,
-        gaps: ["shipment_milestone_dates", "shipment_event_span"],
+        gaps: ["shipment_dates", "shipment_span"],
       },
       {
         events: [
@@ -201,13 +201,13 @@ describe("Shipment evidence quality", () => {
       expect(Number(scalar[0]?.score)).toBe(quality.score);
       const filtered = await listShipmentsRead(
         ctx.db,
-        { dataGap: ["shipment_event_span"] },
+        { dataGap: ["shipment_span"] },
         [{ orderBy: "dataQuality", direction: "asc" }],
         { pageIndex: 0, pageSize: 100 },
         { kind: "selected", fields: ["dataQuality"], groups: ["quality"] },
       );
       expect(filtered.data.some((row) => row.id === parcel.code)).toBe(
-        quality.gaps.some((gap) => gap.check === "shipment_event_span"),
+        quality.gaps.some((gap) => gap.check === "shipment_span"),
       );
     }
   });
@@ -232,10 +232,7 @@ describe("Shipment evidence quality", () => {
       await loadDataQualities(ctx.db, "shipment", [parcel.row.id])
     ).get(parcel.row.id)!;
     expect(quality.gaps.map((gap) => gap.check)).toEqual(
-      expect.arrayContaining([
-        "shipment_event_span",
-        "shipment_milestone_dates",
-      ]),
+      expect.arrayContaining(["shipment_span", "shipment_dates"]),
     );
     expect(quality.gaps.map((gap) => gap.check)).not.toContain(
       "shipment_chronology",

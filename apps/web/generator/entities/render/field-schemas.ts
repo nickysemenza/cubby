@@ -259,7 +259,7 @@ const renderDerivedFilterFields = (
                 name: descriptor.exclude.field,
                 description:
                   descriptor.exclude.reason === null
-                    ? `Exclude rows matching any of these ${label} values; rows with no value stay`
+                    ? "Exclude any listed value; keep rows with no value"
                     : `Unsupported: ${descriptor.exclude.reason}`,
               }),
             ]),

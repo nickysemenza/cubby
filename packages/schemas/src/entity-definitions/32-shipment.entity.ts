@@ -485,7 +485,7 @@ export default defineEntity({
       displayImage: false,
       checks: [
         {
-          id: "shipment_event_count",
+          id: "shipment_events",
           facet: "provenance",
           weight: 10,
           scoreCap: 25,
@@ -515,7 +515,7 @@ export default defineEntity({
           placement: { section: "tracking" },
         },
         {
-          id: "shipment_event_span",
+          id: "shipment_span",
           facet: "provenance",
           weight: 10,
           label: "Limited event span",
@@ -525,7 +525,7 @@ export default defineEntity({
           placement: { field: "eventSpanHours" },
         },
         {
-          id: "shipment_milestone_dates",
+          id: "shipment_dates",
           facet: "provenance",
           weight: 10,
           label: "Missing milestone dates",

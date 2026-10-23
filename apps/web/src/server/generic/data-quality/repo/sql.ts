@@ -47,11 +47,14 @@ export const entryFor = (
   checks: Readonly<Partial<Record<DataCheck, CheckBinding<ScoredTable>>>>;
 } => {
   const entry = entries[entity];
+  const imageCheck = displayImageQualityCheck(entity).id;
+  if (!dataChecksByEntity[entity].options.some((check) => check === imageCheck))
+    return entry;
   return {
     ...entry,
     checks: {
       ...entry.checks,
-      [displayImageQualityCheck(entity).id]: {
+      [imageCheck]: {
         missing: (t: ScoredTable) =>
           sql`NOT ${entityDisplayImagePresenceSql(entity, sql`${t.id}`)}`,
       },
