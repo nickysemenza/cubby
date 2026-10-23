@@ -5,6 +5,7 @@ import {
 import { testUserId } from "@cubby/schemas/testing";
 import { eq } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
+import { taxonomyShortcode } from "tooling/product-category-fixtures";
 import { TEST_USER_ID, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
@@ -51,8 +52,6 @@ import {
   insertEntityAttachments,
 } from "~/server/testing/repo.fixtures";
 import { createTestRequestContext } from "~/server/testing/request-context";
-
-import { taxonomyShortcode } from "../../../../../../tooling/product-category-fixtures";
 
 type Category = Parameters<typeof taxonomyShortcode>[0];
 

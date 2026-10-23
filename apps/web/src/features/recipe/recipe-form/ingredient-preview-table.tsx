@@ -10,6 +10,10 @@ import { useMemo, useState } from "react";
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { captureRequest } from "~/entity/editing/editor-requests";
 import { EntityEditDialog } from "~/entity/editing/entity-edit-dialog";
+import {
+  entityDisplayImageKey,
+  useEntityDisplayImages,
+} from "~/entity/entity-media/entity-display-images";
 import { cn } from "~/lib/utils";
 import { Row } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
@@ -24,10 +28,6 @@ import {
 } from "~/ui/primitives/tooltip";
 import { formatAmounts } from "~/ui/text/format-amount";
 
-import {
-  entityDisplayImageKey,
-  useEntityDisplayImages,
-} from "../../../entity/entity-media/entity-display-images";
 import { DecompositionView } from "../decomposition-view";
 import {
   type IngredientMatch,

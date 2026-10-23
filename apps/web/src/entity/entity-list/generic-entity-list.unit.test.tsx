@@ -14,6 +14,7 @@ import {
   waitFor,
   within,
 } from "@testing-library/react";
+import { categorySummaryFixture } from "tooling/product-category-fixtures";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { entities } from "~/entity/entities";
@@ -40,7 +41,6 @@ import type {
   ListQueryResponse,
 } from "~/ui/hooks/use-paginated-table-core";
 
-import { categorySummaryFixture } from "../../../tooling/product-category-fixtures";
 import { listSlotFor } from "./list-slots";
 
 installFeatures();

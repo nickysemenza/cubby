@@ -17,11 +17,11 @@ import {
   evalWebRoot,
   meanEvalCostUsd,
 } from "tooling/ai/eval-support";
+import { localSecret } from "tooling/local-secret";
 import { describe, expect, it } from "vitest";
 
 import { formatCurrency } from "~/lib/number-format";
 
-import { localSecret } from "../../../tooling/local-secret";
 import {
   auditCases,
   recipeFlowCases,

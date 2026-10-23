@@ -26,6 +26,11 @@ beforeEach(() => {
 });
 afterEach(() => backgroundQueue.restore());
 
+import {
+  taxonomyId,
+  taxonomyShortcode,
+} from "tooling/product-category-fixtures";
+
 import { viewProblemDeclarations } from "~/entity/model/view-manifest";
 import { problemQueryDeclarations } from "~/entity/problems/problem-registry";
 import { householdDaysAgo } from "~/lib/household-date";
@@ -66,10 +71,6 @@ import {
 } from "~/server/testing/repo.fixtures";
 import { createTestRequestContext } from "~/server/testing/request-context";
 
-import {
-  taxonomyId,
-  taxonomyShortcode,
-} from "../../../../../tooling/product-category-fixtures";
 import {
   pruneAllUnusedAliasesWorkflow,
   reparseStaleWorkflow,

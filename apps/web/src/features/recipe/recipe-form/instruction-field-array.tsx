@@ -2,10 +2,10 @@ import { PlusIcon } from "@phosphor-icons/react/dist/csr/Plus";
 import type { FC } from "react";
 import { type UseFormReturn, useFieldArray } from "react-hook-form";
 
+import { TextareaField } from "~/ui/forms/form-utils";
 import { Row, Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 
-import { TextareaField } from "../../../ui/forms/form-utils";
 import { FieldArrayItemControls } from "./field-array-item-controls";
 import type { RecipeFormValues } from "./types";
 

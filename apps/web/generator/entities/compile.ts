@@ -2,35 +2,35 @@ import { compileListReadSchema } from "../../src/entity/model/list-read-fields.t
 import {
   withEntityListMedia,
   withEntityDetailMedia,
-} from "../../../../packages/schemas/src/entity-read-media.ts";
-import type { RawReadSchemas } from "../../../../packages/schemas/src/entity-definitions/definition.ts";
+} from "@cubby/schemas/entity-read-media";
+import type { RawReadSchemas } from "@cubby/schemas/entity-definitions/definition";
 import { resolveFieldDisplay, schemaAtReadPath } from "./presentation.ts";
 import { deriveBulkUpdateFields } from "./bulk.ts";
-import { collectionArraySchema } from "../../../../packages/schemas/src/entity-collection.ts";
+import { collectionArraySchema } from "@cubby/schemas/entity-collection";
 import type { ChildTableDeclaration } from "../../../../packages/schemas/src/entity-definitions/child-definition.ts";
 import {
   servesKernelGet,
   hasGenericListOperation,
 } from "./list-capabilities.ts";
-import { humanize } from "../../../../packages/shared/src/text-case.ts";
+import { humanize } from "@cubby/shared/text-case";
 import { parseRangeBounds } from "../../../../packages/shared/src/filter.ts";
-import { compileEnumOptions } from "../../../../packages/shared/src/enum-palette.ts";
+import { compileEnumOptions } from "@cubby/shared/enum-palette";
 import {
   FILTER_KINDS,
   defaultReadSchemas,
   parseEntityDeclarationMetadata,
-} from "../../../../packages/schemas/src/entity-definitions/definition.ts";
+} from "@cubby/schemas/entity-definitions/definition";
 import { z } from "zod";
 import {
   FILTER_ALL,
   FILTER_ANY,
   FILTER_NONE,
-} from "../../../../packages/schemas/src/filter-sentinel-fields.ts";
+} from "@cubby/schemas/filter-sentinel-fields";
 import { photoCategories } from "../../../../packages/schemas/src/photo-categories.ts";
 import type {
   EntityDeclarationMetadata,
   EntityFieldModelMetadata,
-} from "../../../../packages/schemas/src/entity-definitions/definition.ts";
+} from "@cubby/schemas/entity-definitions/definition";
 
 import {
   EntityDeclarationError,

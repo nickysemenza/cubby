@@ -2,11 +2,11 @@ import type { ImageOut } from "@cubby/schemas/image";
 import { imageOut } from "@cubby/schemas/image";
 import type { InfLocation, LocationType } from "@cubby/schemas/location";
 import { testCompleteDataQuality, testShortcode } from "@cubby/schemas/testing";
+import { categorySummaryFixture } from "tooling/product-category-fixtures";
 import { describe, expect, it } from "vitest";
 
 import { locationChildGroupLabel } from "~/lib/location-child-label";
 
-import { categorySummaryFixture } from "../../../tooling/product-category-fixtures";
 import { resolveLocationVisual } from "./location-visual-resolver";
 
 const image = (id: string, overrides: Partial<ImageOut> = {}): ImageOut =>

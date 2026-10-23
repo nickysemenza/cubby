@@ -1,5 +1,5 @@
 import { displayImageQualityCheck } from "../../../../packages/schemas/src/entity-definitions/data-quality-image.ts";
-import { dataQuality } from "../../../../packages/schemas/src/data-quality-shape.ts";
+import { dataQuality } from "@cubby/schemas/data-quality-shape";
 import {
   EntityDeclarationError,
   type CompiledEntity,

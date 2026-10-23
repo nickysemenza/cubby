@@ -1,7 +1,7 @@
 import {
   COLLECTION_TAG_PREFIX,
   collectionSlugPattern,
-} from "../../../../../packages/shared/src/collection-tag.ts";
+} from "@cubby/shared/collection-tag";
 import {
   ACTIVE_RUN_STATUSES,
   DISTINCT_FROM_QUOTE_MAX,
@@ -12,15 +12,15 @@ import {
   PRODUCT_DECISION_REASON_MAX,
   TASK_BOARD_INBOX_LABEL,
   TASK_BOARD_UNTITLED_PROJECT_LABEL,
-} from "../../../../../packages/shared/src/client-constants.ts";
-import { APPLE_CLIENT_COMPATIBILITY_VERSION } from "../../../../../packages/shared/src/apple-client-version.ts";
-import { APPLE_APP_IDENTITIES } from "../../../../../packages/shared/src/apple-app-identity.ts";
+} from "@cubby/shared/client-constants";
+import { APPLE_CLIENT_COMPATIBILITY_VERSION } from "@cubby/shared/apple-client-version";
+import { APPLE_APP_IDENTITIES } from "@cubby/shared/apple-app-identity";
 import { IMPORT_REPORT_RUN_PURPOSES } from "../../../../../packages/schemas/src/activity-fields.ts";
-import { identifierKindPresentation } from "../../../../../packages/schemas/src/external-id.ts";
+import { identifierKindPresentation } from "@cubby/schemas/external-id";
 import {
   WAYFINDING_DOMAINS,
   WAYFINDING_DOMAIN_PRESENTATION,
-} from "../../../../../packages/schemas/src/entity-definitions/definition.ts";
+} from "@cubby/schemas/entity-definitions/definition";
 import { readR2PublicUrl } from "../../../tooling/cloudflare-public-config.ts";
 import { generatedHeader } from "../../artifacts.ts";
 import type { EntityArtifacts } from "../declarations.ts";

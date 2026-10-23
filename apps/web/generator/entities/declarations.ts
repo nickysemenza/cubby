@@ -14,7 +14,7 @@ import type {
   EntityFieldControlKind,
   EntityFieldKind,
   EntityStorageDefaultKind,
-} from "../../../../packages/schemas/src/entity-definitions/definition.ts";
+} from "@cubby/schemas/entity-definitions/definition";
 import { z } from "zod";
 
 import { EntityDeclarationError, SPEC_DIRECTORY } from "./source.ts";

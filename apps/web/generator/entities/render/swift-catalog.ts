@@ -1,13 +1,13 @@
 import { z } from "zod";
 import { assertManifestWire, renderManifestWire } from "./manifest-wire.ts";
 import type { ManifestWire } from "../../../../../packages/schemas/src/manifest-wire.ts";
-import { capitalize } from "../../../../../packages/shared/src/text-case.ts";
+import { capitalize } from "@cubby/shared/text-case";
 import {
   excludedFilterValue,
   FILTER_ALL,
   FILTER_ANY,
   FILTER_NONE,
-} from "../../../../../packages/schemas/src/filter-sentinel-fields.ts";
+} from "@cubby/schemas/filter-sentinel-fields";
 import {
   entityFieldControlKinds,
   entityFieldKinds,
@@ -15,12 +15,12 @@ import {
   isSlotListView,
   LIST_PRESENTATION_CHOICES,
   WAYFINDING_DOMAINS,
-} from "../../../../../packages/schemas/src/entity-definitions/definition.ts";
+} from "@cubby/schemas/entity-definitions/definition";
 import { connectedViews } from "../../../../../packages/schemas/src/connected-view-definitions.ts";
 import {
   COLLECTION_ACTION_SCOPES,
   COLLECTION_ACTIONS,
-} from "../../../../../packages/schemas/src/entity-definitions/collection-actions.ts";
+} from "@cubby/schemas/entity-definitions/collection-actions";
 import {
   type NativeCoverageEntry,
   type NativeHeroActionPlan,
@@ -29,7 +29,7 @@ import {
   requireNativeCoverage,
   nativeHeroActionPlans,
 } from "../../../../../packages/schemas/src/native-coverage.ts";
-import { SECTION_ACTION_IDS } from "../../../../../packages/schemas/src/entity-section-actions.ts";
+import { SECTION_ACTION_IDS } from "@cubby/schemas/entity-section-actions";
 import { generatedHeader } from "../../artifacts.ts";
 import { parseRangeBounds } from "../../../../../packages/shared/src/filter.ts";
 import {

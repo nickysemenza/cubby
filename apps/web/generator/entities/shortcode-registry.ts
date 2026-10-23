@@ -1,4 +1,4 @@
-import { capitalize } from "../../../../packages/shared/src/text-case.ts";
+import { capitalize } from "@cubby/shared/text-case";
 import { readdir, readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { parseSync, type Expression, type ObjectExpression } from "oxc-parser";

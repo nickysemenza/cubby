@@ -14,8 +14,8 @@ import {
   getOptionalIngredientId,
   getOptionalRecipeId,
 } from "~/ui/forms/form-fields";
+import { buildUpdateObject } from "~/ui/forms/form-utils";
 
-import { buildUpdateObject } from "../../../ui/forms/form-utils";
 import {
   haveIngredientsChanged,
   haveInstructionsChanged,

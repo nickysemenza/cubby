@@ -16,9 +16,9 @@ import {
   parseEntityDeclarationMetadata,
   parseEntityFieldModelMetadata,
   readFieldSchemas,
-} from "../../../packages/schemas/src/entity-definitions/definition";
+} from "@cubby/schemas/entity-definitions/definition";
 import type { ChildTableDeclaration } from "../../../packages/schemas/src/entity-definitions/child-definition";
-import type { EntityDeclaration } from "../../../packages/schemas/src/entity-definitions/definition";
+import type { EntityDeclaration } from "@cubby/schemas/entity-definitions/definition";
 import { typeChecker } from "../../../scripts/tsc.ts";
 import { generatedHeader, removeExtraArtifacts } from "../generator/artifacts";
 import {

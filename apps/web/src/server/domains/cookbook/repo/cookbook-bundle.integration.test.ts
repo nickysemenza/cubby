@@ -1,8 +1,8 @@
 import { upsertCookbookInput } from "@cubby/schemas/import-recipe";
+import { syntheticBundle } from "tooling/cookbook-bundle-fixture";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { syntheticBundle } from "../../../../../tooling/cookbook-bundle-fixture";
 import { getCookbookSource, upsertCookbook } from "./cookbook";
 
 // Reimports must not fork a renamed source or replace a different book solely

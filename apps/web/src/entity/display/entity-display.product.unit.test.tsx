@@ -2,6 +2,7 @@ import type { ProductCategory } from "@cubby/shared";
 import type { CellData } from "@tanstack/react-table";
 import { render, screen } from "@testing-library/react";
 import type { ReactNode } from "react";
+import { categorySummaryFixture } from "tooling/product-category-fixtures";
 import { describe, expect, it } from "vitest";
 
 import { installFeatures } from "~/features/registry";
@@ -11,7 +12,6 @@ import {
   type CubbyColumnDef,
 } from "~/ui/data-table/table-features";
 
-import { categorySummaryFixture } from "../../../tooling/product-category-fixtures";
 import { createEntityDisplayColumns } from "./entity-display";
 
 installFeatures();

@@ -1,6 +1,7 @@
 import { entityRefKey } from "@cubby/schemas/entity";
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import { eq, sql } from "drizzle-orm";
+import { taxonomyShortcode } from "tooling/product-category-fixtures";
 import { countTestDbQueries, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
@@ -50,7 +51,6 @@ import {
 } from "~/server/testing/repo.fixtures";
 import { createTestRequestContext } from "~/server/testing/request-context";
 
-import { taxonomyShortcode } from "../../../../tooling/product-category-fixtures";
 import {
   entityDisplayImagePresenceSql,
   resolveEntityDisplayImages,

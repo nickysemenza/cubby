@@ -8,12 +8,12 @@ import {
   testEntityId,
   testShortcode,
 } from "@cubby/schemas/testing";
+import { productRowFixture } from "tooling/product-category-fixtures";
 import { describe, expect, it } from "vitest";
 
 import { getR2PublicUrl } from "~/server/clients/r2-public-url";
 import { makeCookbookExtraction } from "~/server/testing/repo.fixtures";
 
-import { productRowFixture } from "../../../../../tooling/product-category-fixtures";
 import {
   dbProductToAPI,
   dbProductToListAPI,

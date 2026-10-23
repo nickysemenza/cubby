@@ -13,6 +13,7 @@ import {
   within,
 } from "@testing-library/react";
 import { renderToString } from "react-dom/server";
+import { categorySummaryFixture } from "tooling/product-category-fixtures";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { createEntityMutationPort } from "~/entity/editing/use-entity-commands";
@@ -28,7 +29,6 @@ import { entityList } from "~/integrations/tanstack-query/generated/catalog/enti
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 import { mock } from "~/lib/test/mock-schema";
 
-import { categorySummaryFixture } from "../../../tooling/product-category-fixtures";
 import {
   EntityRelationTable,
   planRelationSection,

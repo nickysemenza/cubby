@@ -9,15 +9,12 @@ import {
 } from "react-hook-form";
 
 import { EntityPrimitiveFields } from "~/entity/editing/entity-primitive-fields";
+import { FormFieldGroup } from "~/ui/forms/form-field-group";
+import { NullableNumericField, SideBySideFields } from "~/ui/forms/form-utils";
 import { Row, Stack } from "~/ui/layout";
 import { Badge } from "~/ui/primitives/badge";
 import { Input } from "~/ui/primitives/input";
 
-import { FormFieldGroup } from "../../../ui/forms/form-field-group";
-import {
-  NullableNumericField,
-  SideBySideFields,
-} from "../../../ui/forms/form-utils";
 import type { RecipeFormValues } from "./types";
 
 // Yield and Servings fields with smart hide behavior

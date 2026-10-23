@@ -1,6 +1,6 @@
+import { categorySummaryFixture } from "tooling/product-category-fixtures";
 import { describe, expect, it } from "vitest";
 
-import { categorySummaryFixture } from "../../../tooling/product-category-fixtures";
 import {
   getLocationGlyph,
   getLocationIcon,

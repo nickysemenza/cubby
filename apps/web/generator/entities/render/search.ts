@@ -1,7 +1,7 @@
 import {
   isSlotListView,
   listViewId,
-} from "../../../../../packages/schemas/src/entity-definitions/definition.ts";
+} from "@cubby/schemas/entity-definitions/definition";
 import { generatedHeader } from "../../artifacts.ts";
 import {
   type CompiledEntity,

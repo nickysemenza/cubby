@@ -16,9 +16,9 @@ import {
   runInDurableObject,
 } from "cloudflare:test";
 import { env } from "cloudflare:workers";
+import { seedUsdaRelease } from "tooling/dev/usda-synthetic-release";
 import { describe, expect, it } from "vitest";
 
-import { seedUsdaRelease } from "../../../../../tooling/dev/usda-synthetic-release";
 import { usdaReleaseObjectName } from "../service/client";
 import type { UsdaReleaseRpc } from "./rpc";
 

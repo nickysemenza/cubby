@@ -1,4 +1,4 @@
-import { dateRangeSchema } from "../../../packages/schemas/src/date-range";
+import { dateRangeSchema } from "@cubby/schemas/date-range";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 

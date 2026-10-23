@@ -1,5 +1,5 @@
 import { drawsFromValueSchema } from "../../../../../packages/schemas/src/native-coverage.ts";
-import { collectionArraySchema } from "../../../../../packages/schemas/src/entity-collection.ts";
+import { collectionArraySchema } from "@cubby/schemas/entity-collection";
 import { generatedHeader } from "../../artifacts.ts";
 import type { CompiledEntity } from "../declarations.ts";
 import { renderRecord } from "./record.ts";

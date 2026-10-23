@@ -4,11 +4,11 @@ import {
 } from "@cubby/schemas/ingredient";
 import { productWithMappingsOut } from "@cubby/schemas/product";
 import { testEntityId, testShortcode } from "@cubby/schemas/testing";
+import { productRowFixture } from "tooling/product-category-fixtures";
 import { describe, expect, it } from "vitest";
 
 import { createDatabase } from "~/server/db/database-runtime";
 
-import { productRowFixture } from "../../../../../tooling/product-category-fixtures";
 import {
   dbIngredientToAPI,
   dbIngredientToTopLevel,

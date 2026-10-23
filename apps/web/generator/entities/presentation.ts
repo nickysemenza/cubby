@@ -1,18 +1,18 @@
-import { displayItems } from "../../../../packages/schemas/src/entity-definitions/label-field.ts";
+import { displayItems } from "@cubby/schemas/entity-definitions/label-field";
 import { z } from "zod";
 import {
   requireNativeCoverage,
   rendererReadInputs,
 } from "../../../../packages/schemas/src/native-coverage.ts";
-import type { RawReadSchemas } from "../../../../packages/schemas/src/entity-definitions/definition.ts";
+import type { RawReadSchemas } from "@cubby/schemas/entity-definitions/definition";
 import { relationshipProvenanceSchema } from "./list-fields.ts";
 import { connectedViews } from "../../../../packages/schemas/src/connected-view-definitions.ts";
-import { listViewId } from "../../../../packages/schemas/src/entity-definitions/definition.ts";
+import { listViewId } from "@cubby/schemas/entity-definitions/definition";
 import type {
   CompiledEditSection,
   EntityDeclarationMetadata,
   EntityPresentation,
-} from "../../../../packages/schemas/src/entity-definitions/definition.ts";
+} from "@cubby/schemas/entity-definitions/definition";
 import { EntityDeclarationError } from "./declarations.ts";
 import type {
   CompiledEntity,

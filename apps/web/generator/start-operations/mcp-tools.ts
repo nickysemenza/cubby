@@ -1,4 +1,4 @@
-import { pascalCase } from "../../../../packages/shared/src/text-case.ts";
+import { pascalCase } from "@cubby/shared/text-case";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { z } from "zod";
