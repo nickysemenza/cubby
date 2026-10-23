@@ -19,6 +19,9 @@
 - Comments record constraints, regressions, contracts and active TODOs. Use
   plain technical English. The done report lists deletions and unverified work.
 - Correct the owning rule when a mistake reveals a missing or unclear contract.
+- Use Google Chrome for websites that require login, reusing the member's
+  signed-in session. Check Chrome before asking the member to log in or export
+  a document; if Chrome is unavailable, report that blocker.
 
 ## Work tracking
 

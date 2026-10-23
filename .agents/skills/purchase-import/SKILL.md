@@ -134,6 +134,9 @@ same outcome without prescribing an agent runtime.
   for Email, Shop and interactive tracking pages. A partial package timeline
   never proves whole-order delivery. Inventory changes only by a deliberate
   member action; imports and shipment events never receive stock.
+  For tracking enrichment, load that reference's carrier and third-party
+  tracker guidance; outgoing postage is a service purchase, with outbound
+  Shipments linked to it and its Expenses assigned to the member's Project.
 - Use source totals and itemization exactly as printed. Never scale lines to
   `statedTotal`, infer tax, or fabricate a transaction to close a gap.
 - Unknown facts stay unknown. A missing cost, date, quantity, or order id is
@@ -271,7 +274,12 @@ same outcome without prescribing an agent runtime.
    `run.resolve_finding` with `apply` and the returned `reviewedFingerprint`.
 6. Inspect every ordered result. `created`, `updated`, and `replayed` are
    terminal; `conflict` requires review.
-7. Read back every principal merchandise line's Product binding and source
+7. Resolve the Purchase's VendorAccount before reporting completion. List the
+   Vendor's existing accounts and reuse the account belonging to the evidenced
+   member; create one when the source establishes that relationship and none
+   exists. Link it through Purchase.vendorAccountId and read it back. A signed-in
+   account invoice is sufficient evidence; ambiguous ownership stays unresolved.
+   Read back every principal merchandise line's Product binding and source
    association, the Expense row count and the printed
    total versus `SUM(Expense.cost)`, order/Expense dates and date provenance.
    Confirm original inventory quantities and own-photo covers survived. For
