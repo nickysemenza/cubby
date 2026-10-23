@@ -1,0 +1,29 @@
+apps/web/DESIGN.md
+  s_778d7cda70b989::t_bae3c4d3094fe8 32
+apps/web/docs/web-ui.md
+  s_778d7cda70b989::t_8cde4b90131f8c 269-271
+apps/web/src/entity/components/ref-link/leaf.tsx
+  s_778d7cda70b989::t_0753d97c030200 295
+apps/web/src/entity/presentation/category-label.tsx
+  s_778d7cda70b989::t_40f74e62b225be 12,16-20
+apps/web/src/entity/presentation/spending-category-label.tsx
+  s_778d7cda70b989::t_8ba457fa92ce9b 3-4,45-46,70-73,75-84
+apps/web/tests/e2e/suggestions.spec.ts
+  s_778d7cda70b989::t_58e16f614b248b 386,388
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "a86ad85096fc3719159d61a5b92765448f8c5e91",
+  "prompts": {},
+  "sessions": {
+    "s_778d7cda70b989": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a16a8b-f8eb-7851-9ace-3f155d2bf4ef",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
