@@ -9,7 +9,9 @@ notifications available to the next test.
 Keep pure logic imported directly by standalone Node subprocesses in alias-free
 `.ts` files. Vitest uses the application's configured aliases; server composition
 keeps the declared `~/server/` boundary. Temporary subprocess workspaces declare
-their module type explicitly, matching the consumer.
+their module type explicitly, matching the consumer. Build-provenance
+fixtures clone their immutable synthetic Git template with Git rather than
+recursively copying `.git` as ordinary fixture files.
 
 Photo-import route binding and source-admission unit cases import
 `photo-import-route-bindings.ts`, which evaluates contracts without loading

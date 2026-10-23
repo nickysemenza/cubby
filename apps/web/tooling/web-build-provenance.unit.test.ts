@@ -1,6 +1,5 @@
 import { execFileSync } from "node:child_process";
 import {
-  cpSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
@@ -71,7 +70,14 @@ function committedTemplate() {
 function fixture() {
   const root = mkdtempSync(path.join(tmpdir(), "cubby-provenance-"));
   roots.push(root);
-  cpSync(committedTemplate(), root, { recursive: true });
+  // Each fixture needs a complete checkout, including its Git object database.
+  execFileSync("git", [
+    "clone",
+    "--quiet",
+    "--no-hardlinks",
+    committedTemplate(),
+    root,
+  ]);
   const put = writer(root);
   put("apps/web/.cloudflare/output/v0/config.json", '{"version":0}');
   put(
