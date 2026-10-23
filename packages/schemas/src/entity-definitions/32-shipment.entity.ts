@@ -27,7 +27,7 @@ export default defineEntity({
     list: {
       read: {
         media: ["displayImages"],
-        relations: ["purchaseName", "carrierName"],
+        relations: ["purchaseName", "carrierName", "vendorId", "vendorName"],
       },
     },
     detail: {
@@ -65,6 +65,24 @@ export default defineEntity({
           create: null,
           update: null,
         },
+      },
+      {
+        key: "vendorId",
+        kind: "identifier",
+        nullable: true,
+        reference: { entity: "vendor" },
+        display: { labelPath: "vendorName" },
+        validation: {
+          read: shortcodeSchema("vendor").nullable(),
+          create: null,
+          update: null,
+        },
+      },
+      {
+        key: "vendorName",
+        kind: "text",
+        nullable: true,
+        validation: { read: z.string().nullable(), create: null, update: null },
       },
       {
         key: "carrierId",
@@ -192,6 +210,8 @@ export default defineEntity({
       "name",
       "purchaseId",
       "purchaseName",
+      "vendorId",
+      "vendorName",
       "carrierId",
       "carrierName",
       "trackingNumber",
@@ -201,7 +221,10 @@ export default defineEntity({
       "createdAt",
       "updatedAt",
     ],
-    sort: { fields: ["name", "createdAt", "updatedAt", "purpose"] },
+    derived: {
+      vendorId: { via: "purchase.vendor" },
+    },
+    sort: { fields: ["name", "vendorId", "createdAt", "updatedAt", "purpose"] },
   },
   fields: {
     create: null,
@@ -235,6 +258,14 @@ export default defineEntity({
         deriveSchema: true,
         stored: true,
         placeholder: "Filter purchases...",
+      },
+      {
+        columnId: "vendorId",
+        derived: "vendorId",
+        kind: "idMulti",
+        brandRef: { entity: "vendor" },
+        deriveSchema: true,
+        placeholder: "Filter vendors...",
       },
       {
         columnId: "carrierId",
@@ -289,7 +320,35 @@ export default defineEntity({
   search: "lexical",
   capabilities: {
     auditable: true,
-    images: { storage: false },
+    images: {
+      storage: false,
+      displaySourceOverrides: [
+        {
+          relationPath: ["purchase"],
+          priority: 1,
+          ordering: "declared",
+          identityEvidence: false,
+        },
+        {
+          relationPath: ["purchase", "products"],
+          priority: 2,
+          ordering: "declared",
+          identityEvidence: false,
+        },
+        {
+          relationPath: ["purchase", "vendor"],
+          priority: 3,
+          ordering: "declared",
+          identityEvidence: false,
+        },
+        {
+          relationPath: ["carrier"],
+          priority: 4,
+          ordering: "declared",
+          identityEvidence: false,
+        },
+      ],
+    },
     softDelete: true,
     delete: null,
     merge: false,

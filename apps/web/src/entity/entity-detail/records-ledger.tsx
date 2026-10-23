@@ -208,7 +208,10 @@ function RowTrailing({
       ) : null}
       {row.trailing && row.at ? " " : null}
       {row.at ? (
-        <DateDisplay timestamp={row.at} clock={sharedDay ? "time" : "day"} />
+        <DateDisplay
+          timestamp={row.at}
+          clock={row.showRelativeTime ? undefined : sharedDay ? "time" : "day"}
+        />
       ) : null}
     </>
   );

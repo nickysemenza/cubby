@@ -397,6 +397,8 @@ const reportRecordRow = z.object({
     .optional(),
   /** An ISO instant each client prints in its own locale and zone. */
   at: z.string().optional(),
+  /** Include relative age beside the timestamp instead of only in its tooltip. */
+  showRelativeTime: z.boolean().optional(),
   /** The list of other records this row summarises, opened as the trailing link. */
   listLink: z
     .object({
