@@ -24,12 +24,28 @@ describe("database freshness Durable Object", () => {
         "INSERT INTO freshness VALUES (1, ?)",
         lastWriteAt,
       );
+      state.storage.sql.exec(
+        "ALTER TABLE freshness ADD COLUMN write_sequence INTEGER NOT NULL DEFAULT 0",
+      );
+      state.storage.sql.exec(
+        "ALTER TABLE freshness ADD COLUMN refresh_due_at REAL",
+      );
+      state.storage.sql.exec(
+        "UPDATE freshness SET write_sequence = 7, refresh_due_at = 1234 WHERE id = 1",
+      );
       state.storage.sql.exec("CREATE TABLE problem_counts (snapshot TEXT)");
     });
     await evictDurableObject(stub);
     // An immediate RPC must wait for constructor migration and retain the hint.
     expect((await stub.readFreshness()).lastWriteAt).toBe(lastWriteAt);
     await runInDurableObject(stub, async (_instance, state) => {
+      expect(
+        state.storage.sql
+          .exec(
+            "SELECT write_sequence, refresh_due_at FROM freshness WHERE id = 1",
+          )
+          .one(),
+      ).toEqual({ write_sequence: 7, refresh_due_at: 1234 });
       expect(
         state.storage.sql.exec("SELECT * FROM __drizzle_migrations").toArray(),
       ).toHaveLength(1);

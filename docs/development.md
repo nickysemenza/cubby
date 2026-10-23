@@ -230,7 +230,10 @@ queries are equivalent.
 The initial adoption migrations preserve existing tables and rows instead of
 resetting objects or replaying unconditional table creation. Check legacy
 schema compatibility before recording adoption, and verify both an empty object
-and populated predecessor storage through real DO tests. Later migrations run
+and populated predecessor storage through real DO tests. Include shapes retained
+from older deployed constructors: removing a column's callers or its old ALTER
+statement does not remove that column from an existing object. Freshness adoption
+preserves the retired `write_sequence` and `refresh_due_at` columns. Later migrations run
 against the recorded history. Drizzle migrations change SQLite tables within
 each instance; Cloudflare configuration migrations separately own DO class
 lifecycle. Preserve class exports, bindings and object names during storage

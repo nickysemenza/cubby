@@ -42,10 +42,16 @@ export class DatabaseFreshnessStore {
           .toLowerCase()
           .replace(/if\s+not\s+exists/gu, "")
           .replace(/[\s;`"[\]]/gu, "");
+      // Older deployed constructors added these columns. Retiring their callers
+      // did not remove persisted columns, so accept and preserve those shapes.
+      const withoutRetiredColumns = (value: string) =>
+        normalize(value)
+          .replace(",write_sequenceintegernotnulldefault0", "")
+          .replace(",refresh_due_atreal", "");
       if (
         existing &&
         (typeof existing.sql !== "string" ||
-          normalize(existing.sql) !== normalize(baseline))
+          withoutRetiredColumns(existing.sql) !== normalize(baseline))
       )
         throw new Error("Incompatible legacy database freshness schema");
     }
