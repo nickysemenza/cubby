@@ -51,6 +51,23 @@ visit are omitted from this journey. These are deliberate interaction/compositio
 gaps, alongside its removed existing-Product failed-name HTTP save/retry sequence;
 the shared native failed-save barrier remains required coverage.
 
+The occupied-location browser journey owns choosing an existing stock entry,
+the Add 1 to 2 decision, and exact 3 each on the same row and Location after
+approval. Save prerequisite groups before entering the page; this case does not
+own live grouping progress. Omit its sibling comparison matrix and separate
+accepted-source Expense association workflow.
+`accepted-source-association.integration.test.ts` owns the photographed Product
+association, retained item cost/quantity, payment/attribution/stock preservation
+and idempotent replay. Its photo-specific inline review/confirm HTTP composition
+is a deliberate gap; the domain write remains tested at the SQL boundary.
+
+The candidate-rejection browser journey keeps Not this one, its committed
+operation, Rejected/no-attach state and stored rejection read-back. The existing
+`run/proposals.integration.test.ts` Wrong-candidate combine/split case owns
+suppression across regrouping and inference failure. Do not repeat regrouping
+and another document load in this browser case. Reloaded rejected-marker
+presentation is the deliberate composition gap.
+
 Photo-group review prerequisites create their Location and Product category in one
 fixture graph. Independent shirt, label and boots uploads run together; keep their
 ordered result tuple and wait for every verified Image before linking the Run's

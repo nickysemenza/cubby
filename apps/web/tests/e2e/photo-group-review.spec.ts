@@ -6,6 +6,7 @@ import { BROWSER_OPERATION_PATH } from "~/lib/browser-operation-path";
 import {
   dispatchOperations,
   operationResult,
+  performOperation,
   unbatchFor,
 } from "./support/dispatch-wire";
 import { reviewPhotoGroupsOutput } from "@cubby/schemas/photo-import-run";
@@ -15,16 +16,12 @@ import {
   seedProductPrerequisite,
   seedInventoryPrerequisites,
 } from "./fixtures/catalog";
-import { and, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type { TestHarness } from "wrangler";
-import { memberImport } from "~/server/domains/purchase-import/operations/order-import.fixtures";
-import {
-  prepareSourceOrderReconciliation,
-  commitAcceptedSourceOrderReconciliation,
-} from "~/server/domains/purchase-import/repo/reconciliation";
 import { getDb } from "~/server/db/helpers";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { loadRejectedPhotoProductCandidates } from "~/server/domains/photo-import/repo/photo-group-candidates";
+import { listPhotoGroupProposals } from "~/server/domains/photo-import/repo/run/proposals";
 import * as schema from "~/server/db/schema";
 import {
   createEvidenceHarnessContext,
@@ -630,7 +627,7 @@ test("suggests an existing variant and previews every merge decision for a creat
   expect(existing.id).not.toBe(createdId);
 });
 
-test("reviews an occupied location and links a chosen unlinked Expense after photo approval", async ({
+test("reviews an occupied location and adds the photo count to its chosen stock entry", async ({
   page,
   e2eRuntime,
 }) => {
@@ -642,66 +639,18 @@ test("reviews an occupied location and links a chosen unlinked Expense after pho
   });
   const context = await createEvidenceHarnessContext(page);
   const db = getDb(context.db);
-  const member = await db.query.ledgerParty.findFirst({
-    where: and(
-      eq(schema.ledgerParty.userId, context.actor.userId),
-      eq(schema.ledgerParty.kind, "member"),
-    ),
-  });
-  if (!member) {
-    await insertWithShortcode(context.db, "ledgerParty", {
-      kind: "member",
-      userId: context.actor.userId,
-      name: `Synthetic reviewer ${name}`,
+  const productId = await resolveOrThrow(
+    context.db,
+    "product",
+    stock.products[0]!.id,
+  );
+  const stockRows = () =>
+    db.query.inventoryEntry.findMany({
+      where: eq(schema.inventoryEntry.productId, productId),
     });
-  }
-  const merchant = `Synthetic photo retailer ${name}`;
-  const vendor = await createEntityFixture(page, "vendor", { name: merchant });
-  const sourceKey = `synthetic:photo-link:${crypto.randomUUID()}`;
-  await memberImport(context.db, context.actor, {
-    key: sourceKey,
-    orders: [
-      {
-        stableOrderId: sourceKey,
-        vendorId: parseShortcodeFor("vendor", vendor.id),
-        source: {
-          kind: "receipt_photo",
-          externalKey: sourceKey,
-          checksum: "b".repeat(64),
-        },
-        extraction: {
-          status: "ready",
-          candidate: {
-            orderId: sourceKey,
-            orderedAt: "2026-01-05T12:00:00Z",
-            merchant,
-            currency: "USD",
-            printedGrandTotal: 87,
-            lines: [
-              {
-                title: `${existingName} purchase line`,
-                amount: 87,
-                lineKind: "principal",
-                quantity: 1,
-              },
-            ],
-            payments: [{ amount: 87 }],
-            allShipmentsDelivered: false,
-          },
-        },
-      },
-    ],
-  });
-  const expense = await db.query.expense.findFirst({
-    where: eq(schema.expense.name, `${existingName} purchase line`),
-  });
-  if (!expense?.purchaseId)
-    throw new Error("Accepted unlinked Expense missing");
-  const association = await db.query.importSourceOrder.findFirst({
-    where: eq(schema.importSourceOrder.purchaseId, expense.purchaseId),
-  });
-  if (!association?.acceptedObservationId)
-    throw new Error("Accepted source snapshot missing");
+  const before = await stockRows();
+  expect(before).toHaveLength(1);
+  expect(before[0]).toMatchObject({ amountValue: 2, amountUnit: "each" });
   const seed = await seedPhotoGroupReviewRun(
     page,
     name,
@@ -719,11 +668,6 @@ test("reviews an occupied location and links a chosen unlinked Expense after pho
     },
     seed.groups[1]!,
   ];
-  await gotoAuthenticatedPage(
-    page,
-    `/runs/${seed.runId}#work`,
-    page.getByRole("heading", { name: "Photo review" }),
-  );
   await configureVariantDecisions(e2eRuntime.harness, [
     {
       feature: "product-variant-relation",
@@ -736,23 +680,11 @@ test("reviews an occupied location and links a chosen unlinked Expense after pho
     groups,
   });
   expect(saved.ok(), await saved.text()).toBeTruthy();
-  // Selected Products show inline evidence; the create group owns alternative comparisons.
-  await page.locator("#photo-group-g2").scrollIntoViewIfNeeded();
-  await page
-    .locator("#photo-group-g2")
-    .getByRole("button", { name: /^Compare(?: existing Products)?$/ })
-    .click();
-  const comparison = page
-    .locator("#photo-group-g2")
-    .locator("[data-record-list]");
-  await expect(comparison.getByText(existingName).first()).toBeVisible();
-  await expect(comparison.getByText(/Titles agree/).first()).toBeVisible();
-  await expect(
-    comparison.getByText("Recorded count", { exact: true }).first(),
-  ).toBeVisible();
-  await expect(
-    comparison.getByText("Expected", { exact: true }).first(),
-  ).toBeVisible();
+  await gotoAuthenticatedPage(
+    page,
+    `/runs/${seed.runId}#work`,
+    page.getByRole("heading", { name: "Photo review" }),
+  );
   await page
     .locator("#photo-group-g1")
     .getByRole("button", { name: "Change Own it now?", exact: true })
@@ -778,85 +710,14 @@ test("reviews an occupied location and links a chosen unlinked Expense after pho
       .getByRole("navigation", { name: "Section index" })
       .locator('a[href="#photo-group-g1"] [aria-label="Applied"]'),
   ).toBeVisible();
-  const review = await page.request.get(
-    `/api/v1/photoImport/review?runId=${seed.runId}`,
-  );
-  const body = await review.json();
-  expect(
-    body.review.proposals.find(
-      (group: { groupKey: string }) => group.groupKey === "g1",
-    )?.committedInventoryId,
-  ).toBeTruthy();
-  await page
-    .getByRole("heading", { name: `Approved · ${existingName}` })
-    .click();
-  await page
-    .getByRole("heading", { name: "Link a purchase line", exact: true })
-    .click();
-  const linkSection = page.getByRole("region", {
-    name: "Unlinked purchase lines",
+  const updated = await stockRows();
+  expect(updated).toHaveLength(1);
+  expect(updated[0]).toMatchObject({
+    id: before[0]?.id,
+    locationId: before[0]?.locationId,
+    amountValue: 3,
+    amountUnit: "each",
   });
-  await expect(
-    linkSection.getByText(`${existingName} purchase line`),
-  ).toBeVisible();
-  await expect(
-    linkSection.getByText(/expected quantity remains uncertain/),
-  ).toBeVisible();
-  const preserved = async () => ({
-    inventory: await db.select().from(schema.inventoryEntry),
-    payments: await db.select().from(schema.purchasePaymentEvidence),
-    allocations: await db.select().from(schema.financialTransactionAllocation),
-    attributions: await db.select().from(schema.expenseAttribution),
-  });
-  const beforeLink = await preserved();
-  const reviewed = await prepareSourceOrderReconciliation(
-    context.db,
-    {
-      sourceOrderId: association.id,
-      resolution: {
-        kind: "attach_only",
-        lines: [
-          {
-            lineIndex: 0,
-            expenseId: parseShortcodeFor("expense", expense.shortcode),
-            productId: parseShortcodeFor("product", stock.products[0]!.id),
-          },
-        ],
-      },
-    },
-    context.actor,
-  );
-  expect(await preserved()).toEqual(beforeLink);
-  await linkSection.getByRole("button", { name: "Review this link" }).click();
-  const linkReview = linkSection.getByLabel("Reviewed Expense association");
-  await expect(linkReview).toContainText("$87.00");
-  await linkReview
-    .getByRole("button", { name: "Confirm reviewed link" })
-    .click();
-  await expect(
-    linkSection.getByText(`${existingName} purchase line`),
-  ).toHaveCount(0);
-  const linked = await db.query.expense.findFirst({
-    where: eq(schema.expense.id, expense.id),
-  });
-  expect(linked).toMatchObject({
-    id: expense.id,
-    cost: expense.cost,
-    productQuantity: 1,
-  });
-  expect(linked?.productId).not.toBeNull();
-  expect(await preserved()).toEqual(beforeLink);
-  expect(
-    await commitAcceptedSourceOrderReconciliation(
-      context.db,
-      {
-        sourceOrderId: association.id,
-        resolution: reviewed.resolution,
-      },
-      context.actor,
-    ),
-  ).toMatchObject({ alreadyApplied: true });
-  expect(await preserved()).toEqual(beforeLink);
 });
 
 // Concern resolution must be explicit: editing the draft cannot silently unblock
@@ -1241,11 +1102,11 @@ test("keeps proposed edits separate while saved product evidence loads, fails, a
   ).toHaveText("104");
 });
 
-test("persists rejected photo candidates after reload and regroup", async ({
+test("rejects a photo candidate and persists the reviewed rejection", async ({
   page,
   e2eRuntime,
 }) => {
-  const { productName, seed, groups } = await seedEvidenceReview(
+  const { productName, seed } = await seedEvidenceReview(
     page,
     e2eRuntime.objectStorageUrl,
   );
@@ -1255,41 +1116,22 @@ test("persists rejected photo candidates after reload and regroup", async ({
     page.getByRole("heading", { name: "Photo review" }),
   );
   const attach = page.locator("#photo-group-g1");
-  await attach
-    .getByRole("button", { name: "Not this one…", exact: true })
-    .click();
+  await performOperation(page, "photoImport.rejectCandidate", () =>
+    attach.getByRole("button", { name: "Not this one…", exact: true }).click(),
+  );
   await expect(
     attach.getByText(`${productName} · Rejected`, { exact: true }).first(),
   ).toBeVisible();
   await expect(
     attach.getByRole("button", { name: "Attach 1 photo", exact: true }),
   ).toHaveCount(0);
-  const regrouped = await startOperation(
-    page.request,
-    "photoImport.saveGroups",
-    {
-      runId: seed.runId,
-      groups: [
-        {
-          ...groups[0]!,
-          groupKey: "regrouped",
-          product: {
-            kind: "create",
-            create: { name: "Synthetic replacement jacket" },
-          },
-        },
-      ],
-      removeGroupKeys: ["g1"],
-    },
-  );
-  expect(regrouped.ok(), await regrouped.text()).toBeTruthy();
-  await page.reload();
-  await expect(
-    page
-      .locator("#photo-group-regrouped")
-      .getByText(`${productName} · Rejected`, { exact: true })
-      .first(),
-  ).toBeVisible();
+  const { db } = await createEvidenceHarnessContext(page);
+  const saved = await listPhotoGroupProposals(db, seed.runId);
+  const proposal = saved.proposals.find((group) => group.groupKey === "g1");
+  if (!proposal) throw new Error("Rejected photo proposal missing");
+  expect(
+    await loadRejectedPhotoProductCandidates(db, seed.runId, proposal),
+  ).toMatchObject([{ name: productName, rejected: true }]);
 });
 
 // A failed inference read is recoverable evidence, never a new apply blocker.
