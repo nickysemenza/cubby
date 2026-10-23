@@ -59,7 +59,7 @@ type PredicateKind = Extract<DerivedField, { shape: "predicate" }>["predicate"];
  * An any-of filter's picked values and its Any value / No value key (a
  * hand-written `nullable`), ORed by the predicate.
  */
-interface AnyOfValue {
+export interface AnyOfValue {
   readonly values: readonly string[];
   readonly presence: PresenceFilter;
 }
@@ -127,6 +127,10 @@ type PrepareLoad<P> = (
 ) => Promise<P>;
 
 export interface ListPrepare<P> {
+  readonly loadShared?: (
+    scope: ListPreparationScope,
+    db: Database | DrizzleTransaction,
+  ) => Promise<P>;
   readonly load: PrepareLoad<P>;
   value(render: (prepared: P) => DerivedValue): PreparedValue;
   predicate<V>(
@@ -175,9 +179,13 @@ interface SetValue {
   readonly set: SQL;
 }
 
-export const listPrepare = <P>(load: PrepareLoad<P>): ListPrepare<P> => {
+const createListPrepare = <P>(
+  load: PrepareLoad<P>,
+  loadShared?: ListPrepare<P>["loadShared"],
+): ListPrepare<P> => {
   const handle: ListPrepare<P> = {
     load,
+    loadShared,
     value: (render) => ({
       prepare: handle,
       render: (context) => render(context.get(handle)),
@@ -193,6 +201,39 @@ export const listPrepare = <P>(load: PrepareLoad<P>): ListPrepare<P> => {
   };
   return handle;
 };
+
+export const listPrepare = <P>(load: PrepareLoad<P>): ListPrepare<P> =>
+  createListPrepare(load);
+
+/** Only filter-independent inputs may be shared by sibling list reads. */
+export const sharedListPrepare = <P>(
+  load: (db: Database | DrizzleTransaction) => Promise<P>,
+): ListPrepare<P> => {
+  const pending = new WeakMap<ListPreparationScope, Promise<P>>();
+  return createListPrepare(load, (scope, db) => {
+    const existing = pending.get(scope);
+    if (existing) return existing;
+    const promise = Promise.resolve().then(() => load(db));
+    pending.set(scope, promise);
+    return promise;
+  });
+};
+
+/** One read operation, one database identity; never retained across writes. */
+export class ListPreparationScope {
+  constructor(private readonly db: Database | DrizzleTransaction) {}
+
+  load<P>(
+    prepare: ListPrepare<P>,
+    db: Database | DrizzleTransaction,
+    filters: ListFilterValues,
+  ): Promise<P> {
+    if (db !== this.db) throw new Error("List preparation database changed");
+    return prepare.loadShared
+      ? prepare.loadShared(this, db)
+      : prepare.load(db, filters);
+  }
+}
 
 /**
  * The prepared data of one list request, loaded by `scaffold.context`, and

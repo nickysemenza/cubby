@@ -245,6 +245,10 @@ Saved-view counts forward count intent through the canonical repository reader.
 They retain the same filters, prepared membership facts and custom counts as the
 list, while skipping row selection, presentation bindings, ordering and group
 summaries. Filter-dependent preparation remains necessary for exact totals.
+Sibling saved-view counts may share explicitly filter-independent preparation
+through one database-bound operation scope. Each view still selects its own
+membership and applies its complete filters. Ordinary filter-dependent prepares
+and seeded contexts remain local; the scope ends with the count operation.
 For automatic suggestion recomputation, prioritize visible rows plus a bounded
 prefetch buffer, reuse current saved answers, and batch only missing or
 invalidated decisions after checking their individual caches. Virtualized

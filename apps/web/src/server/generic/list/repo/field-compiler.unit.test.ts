@@ -9,6 +9,8 @@ import { renderWhereSql } from "~/server/testing/mock-db";
 
 import {
   listPrepare,
+  sharedListPrepare,
+  ListPreparationScope,
   rowSetSql,
   groupSql,
   ListContext,
@@ -232,6 +234,55 @@ describe("list field compiler", () => {
       ),
     ).toBe("prepared_valuation asc nulls last");
     expect(loads).toBe(1);
+  });
+
+  it("shares only opted-in preparation within one database-bound operation", async () => {
+    let sharedLoads = 0;
+    const localFilters: unknown[] = [];
+    const shared = sharedListPrepare(async () => ++sharedLoads);
+    const local = listPrepare(async (_db, filters) => {
+      localFilters.push(filters.valuationStatus);
+      return 1;
+    });
+    const scaffold = listScaffold("inventory", inventoryEntry, {
+      derived: {
+        valuation: shared.value(() => sql`shared_valuation`),
+        valuationStatus: local.value(() => sql`local_status`),
+        amount: [sql`unit`, sql`size`],
+        ...filterOnly,
+      },
+    });
+    const preparation = new ListPreparationScope(db);
+    await scaffold.context(db, {
+      filters: {},
+      readIntent: "count",
+      preparation,
+    });
+    expect(sharedLoads).toBe(0);
+    const read = (status: string, scope = preparation) =>
+      scaffold.context(db, {
+        filters: { valuationStatus: status },
+        sorts: [{ orderBy: "valuation", direction: "asc" }],
+        projection: { kind: "full" },
+        preparation: scope,
+      });
+    const contexts = await Promise.all([read("valued"), read("unvalued")]);
+    expect(sharedLoads).toBe(1);
+    expect(contexts.map((context) => context.get(shared))).toEqual([1, 1]);
+    expect(localFilters).toEqual(["valued", "unvalued"]);
+    await read("valued", new ListPreparationScope(db));
+    expect(sharedLoads).toBe(2);
+    const failure = sharedListPrepare(async () => {
+      throw new Error("Synthetic prepare failure");
+    });
+    const failures = await Promise.allSettled([
+      preparation.load(failure, db, {}),
+      preparation.load(failure, db, {}),
+    ]);
+    expect(failures.map((result) => result.status)).toEqual([
+      "rejected",
+      "rejected",
+    ]);
   });
 
   // A row set's table, `where` columns and terminals are checked when its

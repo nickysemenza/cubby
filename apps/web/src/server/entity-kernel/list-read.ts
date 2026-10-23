@@ -17,6 +17,7 @@ import {
 } from "~/entity/model/list-read-schema";
 import { withListEntityMedia } from "~/server/entity-kernel/repo/entity-display-image";
 import { withRecordEmoji } from "~/server/entity-kernel/repo/entity-emoji";
+import { ListPreparationScope } from "~/server/generic/list/repo/field-compiler";
 import {
   listFacetCounter,
   withListGroupBy,
@@ -387,6 +388,7 @@ export function defineProgressiveListOperations<
      */
     async viewCounts(context: EntityKernelContext, value: unknown) {
       const { views } = viewCountsInputSchema.parse(value);
+      const preparation = new ListPreparationScope(context.db);
       const countOf = async (raw: z.output<typeof inputSchema>["filters"]) =>
         (
           await reader()(
@@ -396,6 +398,7 @@ export function defineProgressiveListOperations<
             { pageIndex: 0, pageSize: 1 },
             { kind: "base" },
             "count",
+            preparation,
           )
         ).count;
       const [total, ...counts] = await withTrace(
