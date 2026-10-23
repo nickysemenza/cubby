@@ -1,0 +1,47 @@
+apps/web/src/server/domains/email/repo/email-sql.ts
+  s_f8222ceba4ac4a::t_f48a132044aa06 13,15-16,46
+apps/web/src/server/domains/purchase-import/operations/mail-source-admission.ts
+  s_f8222ceba4ac4a::t_eaba3bf81efc69 254
+apps/web/src/server/domains/purchase-import/operations/run-review.ts
+  s_f8222ceba4ac4a::t_aea0949e13b764 56,265
+apps/web/src/server/domains/purchase-import/repo/gmail/ingest-state.ts
+  s_f8222ceba4ac4a::t_b79b1f229be8e5 8,17,54-65,85-91
+apps/web/src/server/domains/purchase-import/repo/gmail/observations.ts
+  s_f8222ceba4ac4a::t_5a3aca58e44343 34,91,231,374
+apps/web/src/server/domains/purchase-import/repo/gmail/persistence.ts
+  s_f8222ceba4ac4a::t_44fdc7a7d3c30f 68,264,307,346,456,744,868-877,888-902,912-918,979-980
+apps/web/src/server/domains/purchase-import/repo/mail-import-run.ts
+  s_f8222ceba4ac4a::t_f231cf9de54bf7 46,286
+apps/web/src/server/domains/purchase-import/repo/mail-run-membership.ts
+  s_f8222ceba4ac4a::t_0f5cec94e1a6fb 9-10,17,128,135,225,284
+apps/web/src/server/domains/run/repo/ensure-run.ts
+  s_f8222ceba4ac4a::t_b92ef830b63e33 25,164-165
+apps/web/src/server/generic/assessment/repo/assessment.ts
+  s_f8222ceba4ac4a::t_944ad2a5232a2f 23,170-179,266,306-314
+apps/web/src/server/generic/changes/repo/change.ts
+  s_f8222ceba4ac4a::t_840004d0464ce8 34-35,43-45
+apps/web/src/server/generic/data-quality/repo/checks/email.ts
+  s_f8222ceba4ac4a::t_a7fc91e0b2aee6 1-3,5-7,12-14,16-17,19-24,26-27,30-31,33-62,65-113
+apps/web/src/server/generic/data-quality/repo/email-checks.integration.test.ts
+  s_f8222ceba4ac4a::t_6aff3370c6e70e 3-4,12-14,21-31,35,37-39,41-43,46-67,69,77,106-107,113,118,122-123,125-127,130-133,135-137,191,223-237,239-306,312-450,540-541,543-549,653-658,680
+apps/web/src/server/generic/data-quality/repo/email-review-quality.integration.test.ts
+  s_f8222ceba4ac4a::t_16e33f1a9ce101 9,11-13,16,105,112-115,117-118
+docs/entities.md
+  s_f8222ceba4ac4a::t_1ccc04fab635f4 2566-2582
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "be0b8742504a3fcbbd5d1baa63ea2174864eddae",
+  "prompts": {},
+  "sessions": {
+    "s_f8222ceba4ac4a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a16a9c-1cbd-7ae2-beda-2ce80e62e68c",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
