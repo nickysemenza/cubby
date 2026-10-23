@@ -140,8 +140,7 @@ export function useRenderedColumnWidths<TData extends RowData>(
     const measure = () => {
       frame = 0;
       const sourceTable = pane.querySelector("table");
-      if (!sourceTable || sourceTable.getBoundingClientRect().width === 0)
-        return;
+      if (!sourceTable) return;
       const headers = [
         ...sourceTable.querySelectorAll<HTMLElement>(
           "thead th[data-column-id]",
@@ -159,6 +158,23 @@ export function useRenderedColumnWidths<TData extends RowData>(
           ...row.querySelectorAll<HTMLElement>("td[data-column-id]"),
         ]),
       ];
+      const pending: Array<{ id: string; cell: HTMLElement }> = [];
+      for (const cell of cells) {
+        const id = cell.dataset.columnId;
+        const column = id ? currentColumn(id) : undefined;
+        if (!id || !column || isLockedColumn(column)) continue;
+        if (measured.get(cell) === id) continue;
+        if (cell.querySelector("input,textarea,[contenteditable=true]"))
+          continue;
+        pending.push({ id, cell });
+      }
+      // Unrelated mutations (including rows outside the sample) must not
+      // force layout just to discover that every contribution is cached.
+      if (
+        pending.length === 0 ||
+        sourceTable.getBoundingClientRect().width === 0
+      )
+        return;
       const host = document.createElement("div");
       host.className = sourceTable.className;
       host.setAttribute("aria-hidden", "true");
@@ -166,11 +182,7 @@ export function useRenderedColumnWidths<TData extends RowData>(
       host.style.cssText =
         "position:fixed;left:-100000px;top:0;width:max-content;visibility:hidden;pointer-events:none;";
       const samples: Array<FitSample & { cell: HTMLElement }> = [];
-      for (const cell of cells) {
-        const id = cell.dataset.columnId;
-        const column = id ? currentColumn(id) : undefined;
-        if (!id || !column || isLockedColumn(column)) continue;
-        if (measured.get(cell) === id) continue;
+      for (const { id, cell } of pending) {
         const sample = fitSample(id, cell);
         if (!sample) continue;
         host.append(sample.clone);
