@@ -214,7 +214,8 @@ async function mkShipmentObservation(db: Database, targetId: string) {
     },
   });
   const sourcePackage = await insertAndReturn(db, shipmentSourcePackage, {
-    shipmentId,
+    // Isolate the observation edge; its package's own live target is a separate case.
+    shipmentId: (await mkShipment(db)).id,
     sourceKey,
     packageKey: sourceKey,
   });
