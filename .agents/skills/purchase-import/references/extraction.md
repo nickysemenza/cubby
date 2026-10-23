@@ -62,3 +62,34 @@ include the discount before adding it; never subtract it twice. Preserve the
 literal stated grand total as evidence. Correct a prior expected-mismatch
 exception only when receipt evidence establishes the correction; ambiguous
 reward-versus-tender or total evidence stays unresolved.
+
+## Package observations
+
+Return `shipments` for explicit package evidence on an order confirmation or
+order page; use an empty array when none is shown. Each packet represents one
+package, with `shipmentId` null unless a verified existing `SHIP-` is supplied.
+Preserve `sourceShipmentKey` from a stable source package identifier and quote
+its `distinctPackageEvidence`. A new package with no tracking number requires
+both; an order number or a generic order-wide status alone cannot distinguish
+packages. Keep ambiguous package facts in the original rather than inventing a
+packet. Split packages stay separate even when they belong to the same order.
+
+Retain the primary `carrierName` and `trackingNumber` verbatim, and explicit
+handoff pairs in `extraTrackingNumbers`. Carrier IDs, when supplied by verified
+lookups, are Vendor `VEN-` codes; otherwise leave `carrierId` null and let the
+writer resolve the literal name using existing Vendor name resolution. Set
+`purpose` to outbound, replacement, return or unknown from the evidence.
+
+Each observation retains `rawStatus`, source event key, location and any
+carrier/tracking wording. Use the literal supported event kind: label creation
+and vendor-reported shipping do not establish carrier possession. A handoff to
+another carrier is transit, not successful delivery to the recipient. For event
+`time`, preserve an offset ISO timestamp as `instant`, a calendar day as `date`,
+a local timestamp as `local` with its stated timezone or null, or `unknown`.
+Email receipt time and page capture time are observation provenance, never
+invented event times. Preserve conflicting observations and distinct sources.
+One package delivered never establishes whole-order delivery or receives stock.
+
+`allShipmentsDelivered` is retained only when decoding old saved extractions.
+New model output uses package evidence. The historical boolean grants no
+package identity, event time, delivery conclusion or receiving action.

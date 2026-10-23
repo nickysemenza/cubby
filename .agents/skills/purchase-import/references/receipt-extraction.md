@@ -10,3 +10,8 @@ include the discount before adding it; never subtract it twice. Preserve the
 literal stated grand total as evidence. Correct a prior expected-mismatch
 exception only when receipt evidence establishes the correction; ambiguous
 reward-versus-tender or total evidence stays unresolved.
+
+Return `shipments: []` unless the receipt explicitly identifies packages. For
+package evidence use [package observations](extraction.md#package-observations),
+preserving event precision and distinct package identity. A receipt date is not
+a shipment event time.

@@ -293,6 +293,7 @@ const buildListRendererCoverage = () => {
     imageJob: scoredCoverage<"imageJob">(),
     sourceTransactionRecord: unscoredCoverage<"sourceTransactionRecord">(),
     transactionImport: unscoredCoverage<"transactionImport">(),
+    shipment: unscoredCoverage<"shipment">(),
     "usda-food": {
       "data-quality": implemented<
         ClientListRenderer<ClientListRows["usda-food"]>

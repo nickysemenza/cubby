@@ -3,6 +3,7 @@ import {
   MAIL_READ_RESPONSE_MAX_BYTES,
   mailResolveInput,
 } from "@cubby/schemas/mailbox-research";
+import { mailResearchRunInput } from "@cubby/schemas/run-fields";
 /**
  * Failures: search reaches a mailbox the member never connected, follows a
  * page into another mailbox, pages without Spam/Trash exclusion, or advances
@@ -17,7 +18,7 @@ import {
  * Run still reads, resolves, or spends on search; linking a shipping-label Email
  * promotes printable labels to Purchase documents or discards its cost evidence.
  */
-import { mailResearchRunInput } from "@cubby/schemas/run-fields";
+import { shipmentEvidence } from "@cubby/schemas/shipment-evidence";
 import { sha256Hex } from "@cubby/shared/sha256";
 import { fromAny, fromPartial } from "@total-typescript/shoehorn";
 import { and, eq, inArray } from "drizzle-orm";
@@ -48,6 +49,10 @@ import {
   financialTransaction,
   financialTransactionAllocation,
   entityAttachment,
+  shipment,
+  shipmentObservation,
+  expense,
+  inventoryEntry,
 } from "~/server/db/schema";
 import {
   readRetainedMail,
@@ -95,6 +100,113 @@ describe("public mail tool", () => {
       userId: ctx.actor.userId,
       updatedAt: new Date(),
     });
+
+  it("records split-package evidence atomically with Email association without money or inventory", async () => {
+    const party = await member();
+    const vendor = await insertWithShortcode(ctx.db, "vendor", {
+      name: "Synthetic Package Shop",
+    });
+    const target = await insertWithShortcode(ctx.db, "purchase", {
+      vendorId: vendor.id,
+      orderId: "SYN-SPLIT-101",
+    });
+    const original = await retainedMailFixture(ctx.db, {
+      ledgerPartyId: party.id,
+      mailboxId,
+      messageId: "split-package-notice",
+      checksum: "d".repeat(64),
+      bodyText: "Order SYN-SPLIT-101: parcel A delivered; parcel B in transit.",
+    });
+    const packet = (number: string, kind: "delivered" | "in_transit") =>
+      shipmentEvidence.parse({
+        shipmentId: null,
+        sourceShipmentKey: number,
+        distinctPackageEvidence: null,
+        carrierId: null,
+        carrierName: null,
+        trackingNumber: number,
+        extraTrackingNumbers: [],
+        purpose: "outbound",
+        observations: [
+          {
+            sourceEventKey: null,
+            kind,
+            time: { kind: "date", value: "2026-10-20" },
+            rawStatus: kind,
+            location: null,
+            carrierId: null,
+            carrierName: null,
+            trackingNumber: number,
+          },
+        ],
+      });
+    const input = mailResolveInput.parse({
+      mailboxId,
+      messageId: original.messageId,
+      checksum: original.rawChecksum,
+      disposition: {
+        kind: "linked",
+        event: "shipped",
+        purchaseIds: [target.shortcode],
+        shipments: [
+          {
+            purchaseId: target.shortcode,
+            shipments: [
+              packet("SYN-PARCEL-A", "delivered"),
+              packet("SYN-PARCEL-B", "in_transit"),
+            ],
+          },
+        ],
+      },
+    });
+    const expensesBefore = await getDb(ctx.db).select().from(expense);
+    const inventoryBefore = await getDb(ctx.db).select().from(inventoryEntry);
+    await expect(
+      resolveMail(ctx.db, { ...input, checksum: "f".repeat(64) }, ctx.actor),
+    ).rejects.toThrow("changed");
+    expect(await getDb(ctx.db).select().from(shipment)).toEqual([]);
+    await resolveMail(ctx.db, input, ctx.actor);
+    await resolveMail(ctx.db, input, ctx.actor);
+    const packages = await getDb(ctx.db).select().from(shipment);
+    expect(packages).toHaveLength(2);
+    expect(packages.every((row) => row.purchaseId === target.id)).toBe(true);
+    const events = await getDb(ctx.db).select().from(shipmentObservation);
+    expect(events).toHaveLength(2);
+    expect(events.map((row) => row.event.kind).sort()).toEqual([
+      "delivered",
+      "in_transit",
+    ]);
+    expect(await getDb(ctx.db).select().from(expense)).toEqual(expensesBefore);
+    expect(await getDb(ctx.db).select().from(inventoryEntry)).toEqual(
+      inventoryBefore,
+    );
+
+    const invalid = mailResolveInput.parse({
+      ...input,
+      disposition: {
+        kind: "linked",
+        event: "shipped",
+        purchaseIds: [target.shortcode],
+        shipments: [
+          {
+            purchaseId: target.shortcode,
+            shipments: [
+              {
+                ...packet("SYN-ROLLBACK", "in_transit"),
+                shipmentId: "SHIP-ABCDE",
+              },
+            ],
+          },
+        ],
+      },
+    });
+    await expect(resolveMail(ctx.db, invalid, ctx.actor)).rejects.toThrow(
+      /Shipment|shipment/,
+    );
+    expect(await getDb(ctx.db).select().from(shipmentObservation)).toHaveLength(
+      2,
+    );
+  });
 
   it("records a member resolution after an automated unrelated original was disposed", async () => {
     const party = await member();

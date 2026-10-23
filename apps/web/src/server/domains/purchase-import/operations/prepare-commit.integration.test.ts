@@ -2596,9 +2596,8 @@ describe("shared purchase-import prepare and commit", () => {
     return finding;
   }
 
-  // A delivered order first accepted onto a hand-recorded Purchase has no
-  // earlier import that could have prompted receiving.
-  it("files arrived when a delivered order is first accepted onto a manual Purchase", async () => {
+  // Retained legacy delivery booleans have no receiving authority.
+  it("preserves a legacy delivered extraction without filing arrived on reconciliation", async () => {
     const { manualPurchase, manualExpense, productRow, result } =
       await importOverManualAggregate(false, false, false, true);
     expect(result.items[0]?.outcome).toBe("conflict");
@@ -2641,15 +2640,7 @@ describe("shared purchase-import prepare and commit", () => {
       },
       ctx.actor,
     );
-    expect(await arrived()).toEqual([
-      expect.objectContaining({
-        status: "open",
-        proposedFix: {
-          kind: "receive_purchase",
-          purchaseId: manualPurchase.id,
-        },
-      }),
-    ]);
+    expect(await arrived()).toEqual([]);
   });
 
   it("replaces a categorized aggregate with an uncategorized tax line", async () => {

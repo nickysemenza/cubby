@@ -126,19 +126,10 @@ async function settleByRule(
   try {
     await resolveMail(
       db,
-      decision.kind === "linked"
-        ? {
-            ...ref,
-            disposition: {
-              kind: "linked",
-              event: decision.event,
-              purchaseIds: [decision.purchaseId],
-            },
-          }
-        : {
-            ...ref,
-            disposition: { kind: "unrelated", reason: decision.reason },
-          },
+      {
+        ...ref,
+        disposition: { kind: "unrelated", reason: decision.reason },
+      },
       actor,
       undefined,
       undefined,

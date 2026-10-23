@@ -1,12 +1,6 @@
 import type { VendorId } from "@cubby/schemas/identifiers";
-/**
- * The deterministic outcomes a Mail import Run settles before its coordinator
- * sees an Email: a shipped, delivered or duplicate confirmation notice whose
- * printed order identifier names exactly one same-Vendor Purchase, and an
- * Email the relevance classifier confidently called unrelated. Everything
- * else (refunds, cancellations, returns, ambiguous or missing matches, new
- * orders) stays the coordinator's. Each settled outcome is an Assessment the
- * member grades like any other, produced by this revision.
+/** Only confident unrelated outcomes bypass the coordinator.
+ * Related originals need package extraction even when their order already exists.
  */
 import type {
   MailboxClassification,
@@ -18,7 +12,7 @@ import { wasm } from "~/server/wasm";
 
 import type { MailRuleCandidate } from "../repo/mail-rule-evidence";
 
-export const MAIL_IMPORT_RULE_REVISION = "mail-import-rule-2026-10-19.1";
+export const MAIL_IMPORT_RULE_REVISION = "mail-import-rule-2026-10-22.1";
 
 type RuleLifecycleEvent = Extract<
   MailEvent,
@@ -91,11 +85,6 @@ export type MailRuleEvidence = {
 };
 
 type MailRuleDecision =
-  | {
-      kind: "linked";
-      purchaseId: MailRuleCandidate["purchaseId"];
-      event: RuleLifecycleEvent;
-    }
   | { kind: "unrelated"; reason: string }
   | { kind: "coordinator"; reason: string };
 
@@ -148,30 +137,9 @@ export function decideMailByRule(evidence: MailRuleEvidence): MailRuleDecision {
       reason: `The ${evidence.classificationStage} classifier confidently classified this Email unrelated.`,
     };
   }
-  if (!event)
-    return { kind: "coordinator", reason: "No rule-settled lifecycle notice." };
-  if (!evidence.senderVendorId)
-    return { kind: "coordinator", reason: "The sender proves no Vendor." };
-  const matches = evidence.candidates.filter(
-    (candidate) => candidate.vendorId === evidence.senderVendorId,
-  );
-  const [match, ...others] = matches;
-  if (!match || others.length)
-    return {
-      kind: "coordinator",
-      reason: `${matches.length} same-Vendor Purchases match the printed order.`,
-    };
-  if (!match.ownAccount)
-    return {
-      kind: "coordinator",
-      reason: "The Purchase is not on this member's account at the Vendor.",
-    };
-  // Any lifecycle notice can carry the line table the coordinator would
-  // itemize an unitemized (for example statement-born) Purchase from.
-  if (!match.importedSource)
-    return {
-      kind: "coordinator",
-      reason: "No import itemized this order yet.",
-    };
-  return { kind: "linked", purchaseId: match.purchaseId, event };
+  // Association alone cannot establish that package evidence was extracted.
+  return {
+    kind: "coordinator",
+    reason: "Related Email needs source and package extraction.",
+  };
 }

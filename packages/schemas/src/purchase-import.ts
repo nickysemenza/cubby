@@ -13,6 +13,7 @@ import { mailAdmissionPath, mailEvent } from "./mailbox-research";
 import { importSourceIdentity, importSourceKind } from "./import-source";
 export { importSourceIdentity, importSourceKind } from "./import-source";
 import { money } from "./money";
+import { shipmentEvidence } from "./shipment-evidence";
 import { contributionRole } from "./ledger-party-fields";
 import { runPurpose, runStatus, runTrigger } from "./run-fields";
 import { costTypeSchema } from "./expense-fields";
@@ -193,7 +194,10 @@ export const extractedOrderCandidate = z.object({
   printedGrandTotal: money.nullable(),
   lines: z.array(extractedPurchaseLine).max(500),
   payments: z.array(extractedPaymentEvidence).max(100),
-  allShipmentsDelivered: z.boolean().nullable(),
+  // Retained-only legacy evidence: old accepted extractions keep their literal
+  // boolean. It grants no package identity, delivery or receiving authority.
+  allShipmentsDelivered: z.boolean().nullable().optional(),
+  shipments: z.array(shipmentEvidence).max(50).optional(),
   sourceEvent: mailEvent
     .optional()
     .describe(
@@ -278,7 +282,7 @@ const extractedOrderCandidateModelOutput = z.object({
   printedGrandTotal: money.nullable(),
   lines: z.array(extractedPurchaseLineModelOutput),
   payments: z.array(extractedPaymentEvidenceModelOutput),
-  allShipmentsDelivered: z.boolean().nullable(),
+  shipments: z.array(shipmentEvidence).max(50),
 });
 
 /**

@@ -671,6 +671,8 @@ describe("MCP catalog schemas", () => {
       // not Cubby entity ids.
       "entity_read.lines[].externalIds[].id",
       "recipe_import.lineId",
+      // Retained shipment source packages are child rows; reassign takes this handle.
+      "shipments.sourcePackageId",
       // Stable source/workflow identifiers are opaque import evidence keys,
       // not Cubby entity UUIDs or public shortcodes.
       "purchase_import.orders[].stableOrderId",

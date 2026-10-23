@@ -16,6 +16,7 @@ export const identifierTypeNames = {
   financialTransaction: "FinancialTransactionId",
   sourceTransactionRecord: "SourceTransactionRecordId",
   transactionImport: "TransactionImportId",
+  shipment: "ShipmentId",
   ingredient: "IngredientId",
   inventory: "InventoryId",
   ledgerParty: "LedgerPartyId",
@@ -35,6 +36,7 @@ export const identifierTypeNames = {
 } as const satisfies Readonly<Record<string, string>>;
 
 const storageJsonTypes = {
+  "shipment.extraTrackingNumbers": "ShipmentExtraTrackingNumber[]",
   "cookbook.rawJson": "CookbookExtraction",
   "cookbook.report": "CookbookRunReport | null",
   "financialAccount.authorizedUsers": "FinancialAccountPartyPeriod[]",
@@ -227,6 +229,7 @@ export const renderStorageColumn = (
 /** The type and value-array imports the column builders above reference. */
 const storageColumnImports =
   'import type { FinancialAccountPartyPeriod, FinancialAccountCardNumber, FinancialAccountIdentity, FinancialAccountSourceAlias } from "@cubby/schemas/financial-account";\n' +
+  'import type { ShipmentExtraTrackingNumber } from "@cubby/schemas/shipment-fields";\n' +
   `import type { ${Object.values(identifierTypeNames).sort().join(", ")} } from "@cubby/schemas/identifiers";\n` +
   'import { imageRenderStatusValues, imageStatusValues, imageStorageStatusValues } from "@cubby/schemas/image";\n' +
   'import type { ImageSourceFingerprint, StoredImageEmbeddedMetadata } from "@cubby/schemas/image";\n' +

@@ -21,6 +21,39 @@ back to their writer. Inspect and settle every retained candidate through
 identity nor a new purchase. On resumption, inspect retained candidates from
 interrupted searches before repeating them.
 
+## Record shipment evidence
+
+For vendor, carrier or Shop package observations, read the complete retained
+Email, then call `shipments.record` with `source: {kind: "email", emailId:
+<the read's EML-code>, checksum: <the read's checksum>}`, the evidence-backed
+`purchaseId` or null, and structured `shipments` from
+[package extraction](extraction.md#package-observations). Keep the source even
+when no Purchase can be established. Use `mail.resolve` separately for Email
+association and disposition: `linked` when a Purchase is established,
+`unresolved` with the concrete gap otherwise. Recording a package neither
+creates an order nor changes money or inventory. A `linked` disposition may
+include `shipments: [{purchaseId, shipments}]` to record package evidence in the
+same transaction; every packet must name one of its linked `purchaseIds`.
+
+Interactive tracking-page research uses the same `shipments.record` writer with
+`source: {kind: "tracking_page", url, externalKey, capturedAt, content}`. Retain
+the literal captured text and offset capture timestamp, use a stable source
+key, and associate a Purchase only when evidence establishes it. Browser
+research is interactive; package evidence does not schedule future visits.
+
+For a mistaken association, use `shipments.associate` to attach or explicitly
+detach the Purchase. Use `shipments.reassign` with the `sourcePackageId` from
+`shipments_read.timeline` to move a source package and its observations to the
+correct Shipment. Merge only proven duplicate packages with `shipments.merge`;
+use the surviving SHIP-code for later writes. A shared master tracking number
+does not make explicitly distinct vendor packages one Shipment.
+
+Existing accepted Emails are not replayed merely because this feature exists.
+Historical replay is separately requested through the existing `mail.import`
+selection and retained-original workflow, using the same shipment packets and
+writer. Old accepted extraction booleans remain literal historical evidence;
+replay needs actual package facts from the original.
+
 ## Interpret purchase mail
 
 Identify actual purchases and their related lifecycle evidence. A message may
@@ -44,8 +77,8 @@ correct the Email yourself rather than reclassifying until it agrees.
 Preserve explicitly observed order IDs, amounts, currency and event times.
 Apply the order-date fallback in [extraction](extraction.md); lifecycle mail
 keeps its event time separate from the order date. Unknown itemization stays
-unknown when shipping mail establishes an incomplete identified Purchase before
-its confirmation arrives. Connect messages through a unique
+unknown when shipping mail precedes its confirmation; retain unmatched packages
+without creating a Purchase. Connect messages through a unique
 evidence-supported order match; sender, thread or confidence alone is not proof.
 Record supported shipping, delivery, cancellation and refund events without
 inventing purchased lines or writing automatic financial reversals. Treat mail

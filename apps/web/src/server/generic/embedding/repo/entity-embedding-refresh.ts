@@ -34,6 +34,7 @@ import {
   financialTransaction,
   sourceTransactionRecord,
   transactionImport,
+  shipment,
   gardenEntry,
   image,
   ingredient,
@@ -1201,6 +1202,35 @@ async function getTransactionImportSearchTexts(
 }
 
 const embeddingTextLoaders = {
+  shipment: async (
+    db: Database | DrizzleTransaction,
+    options: EmbeddingLoadOptions = {},
+  ): Promise<SearchableEntityText[]> => {
+    const rows = await unwrapDb(db).query.shipment.findMany(
+      withOptionalLimit(
+        {
+          columns: { id: true, name: true, trackingNumber: true, notes: true },
+          where: and(
+            notDeleted(shipment),
+            options.ids?.length
+              ? inArray(
+                  shipment.id,
+                  options.ids.map((id) => parseEntityId("shipment", id)),
+                )
+              : undefined,
+          ),
+        },
+        options.limit,
+      ),
+    );
+    return rows.map((row) => ({
+      entityKind: "shipment",
+      entityId: row.id,
+      embeddingText: normalizeSearchText(
+        [row.name, row.trackingNumber, row.notes].filter(Boolean).join(" "),
+      ),
+    }));
+  },
   sourceTransactionRecord: getSourceTransactionRecordSearchTexts,
   transactionImport: getTransactionImportSearchTexts,
   image: getImageEmbeddingTexts,

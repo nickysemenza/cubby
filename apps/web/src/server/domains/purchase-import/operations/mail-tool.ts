@@ -78,6 +78,7 @@ import {
   assertMailRunMembership,
   assertMailRunReadAuthority,
 } from "~/server/domains/purchase-import/repo/mail-run-membership";
+import { recordShipmentEvidence } from "~/server/domains/shipment/repo/evidence";
 import { createAppError } from "~/server/errors/app-error";
 import { publishEmailLinkDecision } from "~/server/generic/assessment/repo/assessment-email-link";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
@@ -1091,6 +1092,28 @@ export async function resolveMail(
             ),
           }),
         );
+      if (disposition.shipments?.length) {
+        const message = await mailboxRow(tdb, mail);
+        if (!message)
+          throw createAppError(
+            "EMAIL_NOT_FOUND",
+            "The reviewed Email no longer exists.",
+          );
+        for (const packet of disposition.shipments)
+          await recordShipmentEvidence(
+            tdb,
+            {
+              source: {
+                kind: "email",
+                emailId: parseShortcodeFor("email", message.shortcode),
+                checksum: input.checksum,
+              },
+              purchaseId: packet.purchaseId,
+              shipments: packet.shipments,
+            },
+            actor,
+          );
+      }
       if (disposition.event === "refunded") {
         const message = await mailboxRow(tdb, mail);
         if (!message)

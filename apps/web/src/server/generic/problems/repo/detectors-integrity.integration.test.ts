@@ -54,6 +54,9 @@ import {
   runStep,
   sourceTransactionRecord,
   transactionImport,
+  shipmentObservation,
+  shipmentSourceCapture,
+  shipmentSourcePackage,
   user,
 } from "~/server/db/schema";
 import {
@@ -190,6 +193,53 @@ const mkTask = (db: Database) =>
 
 const mkVendor = (db: Database) =>
   insertWithShortcode(db, "vendor", { name: uniq("Vendor") });
+
+// Liveness fixtures deliberately construct dangling references outside the writer.
+const mkShipment = (db: Database) =>
+  insertWithShortcode(db, "shipment", { name: uniq("Synthetic parcel") });
+
+async function mkShipmentObservation(db: Database, targetId: string) {
+  const shipmentId = parseEntityId("shipment", targetId);
+  const sourceKey = uniq("synthetic-tracking");
+  const source = await insertAndReturn(db, shipmentSourceCapture, {
+    sourceKey,
+    checksum: sourceKey,
+    actorUserId: TEST_ACTOR.userId,
+    source: {
+      kind: "tracking_page",
+      url: "https://tracking.example/liveness",
+      externalKey: sourceKey,
+      capturedAt: new Date().toISOString(),
+      content: "Synthetic liveness evidence",
+    },
+  });
+  const sourcePackage = await insertAndReturn(db, shipmentSourcePackage, {
+    // Isolate the observation edge; its package's own live target is a separate case.
+    shipmentId: (await mkShipment(db)).id,
+    sourceKey,
+    packageKey: sourceKey,
+  });
+  return insertAndReturn(db, shipmentObservation, {
+    shipmentId,
+    sourceCaptureId: source.id,
+    sourcePackageId: sourcePackage.id,
+    sourceKey,
+    occurrenceKey: sourceKey,
+    fingerprint: sourceKey,
+    firstSeenAt: new Date(),
+    lastSeenAt: new Date(),
+    event: {
+      sourceEventKey: null,
+      kind: "unknown",
+      time: { kind: "unknown" },
+      rawStatus: "Synthetic scan",
+      location: null,
+      carrierId: null,
+      carrierName: null,
+      trackingNumber: null,
+    },
+  });
+}
 
 const mkPurchase = async (db: Database) => {
   const v = await mkVendor(db);
@@ -494,6 +544,7 @@ const mkRecipeSection = async (db: Database) => {
 /** One live-row factory per entity that appears as a `targetEntity` among the
  * must-target-live edges below. */
 const TARGET_FACTORIES = {
+  shipment: mkShipment,
   sourceTransactionRecord: async (db: Database) =>
     (await createFinancialEvidenceFixture(db)).record,
   transactionImport: async (db: Database) => {
@@ -561,6 +612,23 @@ const insertLedgerClaim = async (
 };
 
 const SOURCE_FACTORIES = {
+  "Shipment.carrierId": (db, targetId) =>
+    insertWithShortcode(db, "shipment", {
+      name: uniq("Synthetic carrier parcel"),
+      carrierId: parseEntityId("vendor", targetId),
+    }),
+  "Shipment.purchaseId": (db, targetId) =>
+    insertWithShortcode(db, "shipment", {
+      name: uniq("Synthetic purchase parcel"),
+      purchaseId: parseEntityId("purchase", targetId),
+    }),
+  "ShipmentObservation.shipmentId": mkShipmentObservation,
+  "ShipmentSourcePackage.shipmentId": (db, targetId) =>
+    insertAndReturn(db, shipmentSourcePackage, {
+      shipmentId: parseEntityId("shipment", targetId),
+      sourceKey: uniq("synthetic-source"),
+      packageKey: "package",
+    }),
   "SourceTransactionRecord.supersededByRowId": async (
     db: Database,
     targetId: string,

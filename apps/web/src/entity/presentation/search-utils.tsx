@@ -19,6 +19,7 @@ export type { SearchHit } from "@cubby/schemas/search";
 export const entityKindMap = {
   sourceTransactionRecord: "sourceTransactionRecord",
   transactionImport: "transactionImport",
+  shipment: "shipment",
   product: "product",
   recipe: "recipe",
   ingredient: "ingredient",
