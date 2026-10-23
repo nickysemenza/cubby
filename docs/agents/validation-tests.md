@@ -206,10 +206,17 @@ real source-list/detail navigation and immutable provider facts. The removed
 unlabeled-state visit and final source-status visit no longer sample those
 specific UI states; no review/write outcome or money assertion is removed.
 
-The Gmail Product-merge browser setup creates both conflicting identities in one
-fixture graph and scopes the merge list by their shared synthetic Product name.
-Keep both exact-identifier conflicts, explicit choice and native merge readback;
-loading unrelated Products does not strengthen those boundaries.
+The Gmail convergence journey creates both exact-identifier conflicts in one
+fixture graph, retains the explicit import choice, then merges identities through
+the same `entity.mutate` endpoint before committing the prepared import. Native
+merge confirmation remains in `suggestion-queue.spec.ts`; the real imported money,
+single Product, both identifiers, exact Email–Purchase link and no-stock outcomes
+remain in Gmail read-back.
+The retained Email opens directly for its actual Gmail-original link;
+`purchase-emails.spec.ts` owns related Email navigation. Dedicated Product-list
+multi-select merge launch and the Gmail Vendor→Purchase→Email SPA chain are
+intentional UI-composition gaps, rather than another full browser page/round trip.
+
 Allocation explanation browser coverage keeps mixed-trade contributor expansion,
 phone bounds and allocated Project evidence on one detail document. The existing
 `field-explanation.integration.test.ts` mixed-adjustment case owns clearing a

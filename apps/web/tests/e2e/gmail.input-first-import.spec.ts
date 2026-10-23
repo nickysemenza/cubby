@@ -1,4 +1,5 @@
 import { performOperation } from "./support/dispatch-wire";
+import { startOperation } from "./support/start-operation";
 import { entityApi } from "./support/entity-api";
 import { prepareCapturedRetailerOrder } from "./support/prepare-retailer-source";
 import { z } from "zod";
@@ -40,7 +41,7 @@ import {
 // original acquisition must use its stored credentials and actual MIME evidence, conflicting identities must
 // require an explicit Product decision, and sources must converge after
 // reviewed booking/reconciliation without another Product or economic line.
-test("input-first Google, statement then retailer, and reviewed Product merge", async ({
+test("input-first Google, statement then retailer, and Product identity convergence", async ({
   page,
   e2eRuntime,
 }) => {
@@ -390,45 +391,15 @@ test("input-first Google, statement then retailer, and reviewed Product merge", 
       }),
     ).toHaveLength(0);
   }
-  async function mergeReviewedProducts() {
+  async function mergeProductIdentities() {
     await expectNoInventory();
-    const mergePage = await page.context().newPage();
-    try {
-      await gotoAuthenticatedPage(
-        mergePage,
-        `/products?searchQuery=${encodeURIComponent(names.productName)}`,
-      );
-      for (const name of [names.productName, duplicateName]) {
-        const row = mergePage.getByRole("row").filter({
-          has: mergePage.getByRole("link", { name, exact: true }),
-        });
-        await row
-          .getByRole("checkbox", { name: "Select row", exact: true })
-          .check();
-      }
-      await mergePage
-        .locator("[data-bulk-action-bar]")
-        .getByRole("button", { name: "Merge", exact: true })
-        .click();
-      const dialog = mergePage.getByRole("dialog");
-      await dialog
-        .getByRole("button", {
-          name: new RegExp(`^${escapeRegExp(names.productName)}(?:$|\\s)`),
-        })
-        .filter({ hasNotText: duplicateName })
-        .click();
-      await expect(
-        dialog.getByRole("heading", {
-          name: "What the merged product will keep",
-          exact: true,
-        }),
-      ).toBeVisible();
-      await dialog.getByRole("button", { name: "Merge", exact: true }).click();
-      await expect(dialog).not.toBeVisible();
-      await expectNoInventory();
-    } finally {
-      await mergePage.close();
-    }
+    const merged = await startOperation(page.request, "entity.mutate", {
+      action: "merge",
+      entity: "product",
+      data: { keepId: product.id, mergeIds: [duplicate.id] },
+    });
+    expect(merged.ok(), await merged.text()).toBe(true);
+    await expectNoInventory();
   }
   async function retailer() {
     const url = `https://${names.host}/orders/${names.orderId}`;
@@ -475,7 +446,7 @@ test("input-first Google, statement then retailer, and reviewed Product merge", 
       .getByRole("button", { name: `Use ${names.productName}`, exact: true })
       .click();
     await expect(approve).toBeEnabled();
-    await mergeReviewedProducts();
+    await mergeProductIdentities();
     await approve.click();
     const confirmation = page.getByRole("dialog", {
       name: "Approve and import",
@@ -510,43 +481,20 @@ test("input-first Google, statement then retailer, and reviewed Product merge", 
   if (!purchaseCode) throw new Error("Supported imports created no Purchase");
   await researchMail(purchaseCode);
 
-  await gotoAuthenticatedPage(page, `/vendors/${prerequisites.vendor.id}`);
-  // The caller's `mail.resolve` link shows as the Email's per-Purchase
-  // state, separate from its Relevance and processing.
-  const vendorEmails = page.locator("#emails");
-  const purchaseLink = vendorEmails
-    .getByRole("row")
-    .filter({ has: page.getByText("Linked", { exact: true }) })
-    .getByRole("link", {
-      name: new RegExp(`^${escapeRegExp(names.orderId)}(?:$|\\s)`),
-    });
-  await expect(purchaseLink).toBeVisible();
-  await expect(purchaseLink).toHaveAttribute(
-    "href",
-    `/purchases/${purchaseCode}`,
-  );
-  const documentOrigin = await page.evaluate(() => performance.timeOrigin);
-  await purchaseLink.click();
-  await expect(page).toHaveURL(new RegExp(`/purchases/${purchaseCode}$`));
-  expect(await page.evaluate(() => performance.timeOrigin)).toBe(
-    documentOrigin,
-  );
-  const linkedEmail = page
-    .locator("#emails")
-    .getByRole("row")
-    .filter({ has: page.getByText("Linked", { exact: true }) });
-  await expect(linkedEmail).toHaveCount(1);
-  await linkedEmail.getByRole("link").first().click();
+  const retainedEmail = await database.query.email.findFirst({
+    where: and(
+      eq(schema.email.mailboxId, connected.accountId),
+      eq(schema.email.messageId, names.messageId),
+    ),
+  });
+  if (!retainedEmail?.orderMailId)
+    throw new Error("Gmail original has no retained Email evidence");
+  await gotoAuthenticatedPage(page, `/emails/${retainedEmail.shortcode}`);
   const originalMailUrl = `https://mail.google.com/mail/u/0/#all/synthetic-thread-${token}`;
-  const originalMail = page
-    .getByRole("link", { name: "Open in Gmail", exact: true })
-    .and(page.locator(`a[href="${originalMailUrl}"]`));
-  await expect(originalMail).toBeVisible();
-  await page.goBack();
   await expect(
     page
-      .locator("#products")
-      .getByRole("link", { name: names.productName, exact: true }),
+      .getByRole("link", { name: "Open in Gmail", exact: true })
+      .and(page.locator(`a[href="${originalMailUrl}"]`)),
   ).toBeVisible();
   const purchases = await database.query.purchase.findMany({
     where: and(
@@ -560,6 +508,26 @@ test("input-first Google, statement then retailer, and reviewed Product merge", 
     ),
   });
   expect(purchases).toHaveLength(1);
+  const emailLinks = await database
+    .selectDistinct({
+      purchaseId: schema.assessmentEmailLink.purchaseId,
+      decision: schema.assessmentEmailLink.decision,
+    })
+    .from(schema.assessmentEmailLink)
+    .innerJoin(
+      schema.orderMailEvent,
+      eq(schema.orderMailEvent.id, schema.assessmentEmailLink.eventId),
+    )
+    .where(
+      and(
+        eq(schema.orderMailEvent.orderMailId, retainedEmail.orderMailId),
+        eq(schema.assessmentEmailLink.decision, "linked"),
+      ),
+    );
+  expect(emailLinks).toEqual([
+    { purchaseId: purchases[0]!.id, decision: "linked" },
+  ]);
+
   const expenses = await database.query.expense.findMany({
     where: and(
       eq(schema.expense.purchaseId, purchases[0]!.id),
