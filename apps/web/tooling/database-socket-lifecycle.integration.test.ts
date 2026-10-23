@@ -1,12 +1,14 @@
 import { randomUUID } from "node:crypto";
 import { setTimeout as delay } from "node:timers/promises";
 import { request } from "@playwright/test";
+import { makeSignature } from "better-auth/crypto";
 import { expect, it } from "vitest";
 import { sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { scrubErrorMessage } from "~/lib/error-diagnostics";
 import { getDb } from "~/server/db/helpers";
+import { session } from "~/server/db/auth.schema";
 
 import { entityApi } from "../tests/e2e/support/entity-api";
 import { buildEntity } from "./factories/build";
@@ -43,25 +45,31 @@ it("real Worker reads and freshness writes release database sockets after quiet"
       poolIdleTimeoutMs: POOL_IDLE_TIMEOUT_MS,
     },
     async ({ origin: baseURL }) => {
+      const database = getDb(ctx.db);
+      const token = `synthetic-socket-${randomUUID()}`;
+      const now = new Date();
+      await database.insert(session).values({
+        id: randomUUID(),
+        token,
+        userId: ctx.actor.userId,
+        expiresAt: new Date(now.getTime() + 300_000),
+        createdAt: now,
+        updatedAt: now,
+      });
+      const signature = await makeSignature(
+        token,
+        process.env.BETTER_AUTH_SECRET || "e2e-test-secret",
+      );
       const api = await request.newContext({
         baseURL,
-        extraHTTPHeaders: { Origin: baseURL },
+        extraHTTPHeaders: {
+          Origin: baseURL,
+          Cookie: `better-auth.session_token=${encodeURIComponent(`${token}.${signature}`)}`,
+        },
       });
       retryStaleKeepAlive(api);
       const projects = entityApi(api);
       try {
-        const signedUp = await api.post("/api/auth/sign-up/email", {
-          data: {
-            email: `socket-${randomUUID()}@example.test`,
-            password: "synthetic-socket-password",
-            name: "Synthetic Socket Member",
-          },
-        });
-        expect({
-          status: signedUp.status(),
-          body: scrubErrorMessage(await signedUp.text()),
-        }).toMatchObject({ status: 200 });
-        const database = getDb(ctx.db);
         const samples: Array<{
           phase: string;
           total: number;
