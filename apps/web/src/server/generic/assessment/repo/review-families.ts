@@ -43,8 +43,6 @@ import {
 } from "~/server/generic/assessment/repo/assessment-email";
 import { lookupShortcodes } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
-import { automaticApplicationRule } from "./assessment";
-
 const reviewAssessment = alias(assessment, "a");
 const reviewState = alias(assessmentState, "s");
 
@@ -456,7 +454,12 @@ export type AssessmentEligibility =
       status: z.infer<typeof suggestionStatus>;
       runCode?: string;
     }
-  | { kind: "automatic"; family?: ReviewFamily };
+  | {
+      kind: "automatic";
+      family?: ReviewFamily;
+      /** The caller's applied-rule expression for an Assessment id; null when none applied. */
+      appliedRule: (assessmentId: SQL) => SQL;
+    };
 
 export type AssessmentRecordScope = {
   entity?: string;
@@ -494,7 +497,7 @@ function assessmentAudit(eligibility: AssessmentEligibility) {
   return eligibility.kind === "automatic"
     ? or(
         automaticFamilyEligibility,
-        isNotNull(automaticApplicationRule(sql`${reviewAssessment.id}`)),
+        isNotNull(eligibility.appliedRule(sql`${reviewAssessment.id}`)),
       )
     : undefined;
 }
