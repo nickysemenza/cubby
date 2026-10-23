@@ -1,3 +1,4 @@
+import { vendorShortcode } from "./identifier-fields";
 import productDefinition from "./entity-definitions/00-product.entity";
 import {
   productQuantityLedgerOut,
@@ -224,7 +225,8 @@ export type ProductResolveNamesInput = z.infer<typeof productResolveNamesInput>;
 export const productResolveCandidateOut = z.object({
   id: productShortcode,
   name: productTopLevelOut.shape.name,
-  manufacturer: productTopLevelOut.shape.manufacturer,
+  brandId: productTopLevelOut.shape.brandId,
+  brandName: productTopLevelOut.shape.brandName,
   category: productTopLevelOut.shape.category,
   // Same value-space narrowing as `productPickerItemOut.price` — the
   // candidates ARE picker rows.
@@ -574,14 +576,14 @@ export const productLookupUpcOut = z.object({
     .object({
       fdc_id: z.number().int(),
       name: z.string(),
-      manufacturer: z.string(),
+      brandName: z.string().nullable(),
     })
     .nullable()
     .describe("USDA branded-food match"),
   externalLookup: z
     .object({
       name: z.string(),
-      manufacturer: z.string(),
+      brandName: z.string().nullable(),
       price: moneyNullable,
       source: z.string(),
       category: z.string().nullable(),
@@ -639,7 +641,8 @@ export const productWithMappingsAndFoodMcpEntityOut =
 export const productPickerItemOut = z.object({
   id: productShortcode,
   name: z.string(),
-  manufacturer: z.string(),
+  brandId: vendorShortcode.nullable(),
+  brandName: z.string().nullable(),
   category: productCategory.nullable(),
   // Read shape but constrained nonnegative like a write boundary; kept as-is
   // (see money.ts convention note) rather than silently loosened here.
@@ -811,22 +814,12 @@ export type ProductExternalIdSourceOptionsOut = z.infer<
   typeof productExternalIdSourceOptionsOut
 >;
 
-export const productManufacturerOptionsOut = z.array(
-  z.object({
-    manufacturer: z.string(),
-    count: z.number().int().nonnegative(),
-  }),
-);
-export type ProductManufacturerOptionsOut = z.infer<
-  typeof productManufacturerOptionsOut
->;
-
 export const productTagSiblingsOut = z.object({
   siblings: z.array(
     z.object({
       id: productShortcode,
       name: z.string(),
-      manufacturer: z.string(),
+      brandName: z.string().nullable(),
       category: productCategory.nullable(),
       tags: z.array(z.string()),
     }),
@@ -874,7 +867,7 @@ export const productQuickCreatePayload = z.object({
   expectedQuantity: z.number().int().positive().nullable().optional(),
   // These are unchanged copies of the generated create field — reference it
   // directly rather than re-declaring the same schema.
-  manufacturer: generatedProductFieldSchemas.create.manufacturer,
+  brandId: generatedProductFieldSchemas.create.brandId,
   barcode: generatedProductFieldSchemas.create.barcode,
   model: generatedProductFieldSchemas.create.model,
   notes: generatedProductFieldSchemas.create.notes,
@@ -891,7 +884,8 @@ export const productMcpOut = z
   .pick({
     id: true,
     name: true,
-    manufacturer: true,
+    brandId: true,
+    brandName: true,
     model: true,
     notes: true,
     primaryGtin: true,

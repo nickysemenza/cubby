@@ -18,6 +18,7 @@ import {
   expenseDerivedValueSql,
   prepareExpenseDerivedRead,
 } from "~/server/domains/expense/repo/expense-derived-read";
+import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
 import { loadRelatedSummary } from "~/server/generic/entity-links/repo/related-view";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { insertEntityFixtures } from "~/server/testing/repo.fixtures";
@@ -710,7 +711,7 @@ describe("expense project allocation", () => {
     expect(foodCategory).toBeDefined();
     const groceries = await insertWithShortcode(ctx.db, "product", {
       name: "Synthetic oats",
-      manufacturer: "Synthetic mill",
+      brandId: await findOrCreateVendor(ctx.db, "Synthetic mill"),
       categoryId: foodCategory!.id,
     });
     const principal = (extra: Partial<typeof expense.$inferInsert>) =>

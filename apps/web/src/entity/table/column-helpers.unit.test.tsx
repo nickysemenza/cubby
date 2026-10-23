@@ -114,7 +114,7 @@ describe("createSingleEntityInlineLinkColumn", () => {
   });
 
   type ProductRelationRow = {
-    product: { id: string; name: string; manufacturer: string } | null;
+    product: { id: string; name: string; brandName: string } | null;
   };
 
   const productColumn = (editable?: {
@@ -133,7 +133,7 @@ describe("createSingleEntityInlineLinkColumn", () => {
     product: {
       id: "PRD-2ABC",
       name: "Workbench light",
-      manufacturer: "Makita",
+      brandName: "Makita",
     },
   };
 
@@ -163,14 +163,14 @@ describe("createSingleEntityInlineLinkColumn", () => {
       product: {
         id: "PRD-2ABC",
         name: "Workbench light",
-        manufacturer: "Makita",
+        brandName: "Makita",
       },
     };
     // External projections are runtime data. Break the required product field
     // after construction to cover the same malformed response a Zod boundary
     // can deliver without weakening the static fixture type.
     if (!malformed.product) throw new Error("expected a product projection");
-    Object.assign(malformed.product, { manufacturer: null });
+    Object.assign(malformed.product, { brandName: null });
 
     renderColumn(productColumn(), malformed);
     expect(screen.getByText("—")).toBeInTheDocument();
@@ -179,7 +179,7 @@ describe("createSingleEntityInlineLinkColumn", () => {
 
 describe("createEntityInlineLinkColumn", () => {
   type ProductCollectionRow = {
-    products: Array<{ id: string; name: string; manufacturer: string }>;
+    products: Array<{ id: string; name: string; brandName: string }>;
   };
 
   const productCollectionColumn = () =>
@@ -193,8 +193,8 @@ describe("createEntityInlineLinkColumn", () => {
   it("publishes collection refs for table-owned image batching", () => {
     const row: ProductCollectionRow = {
       products: [
-        { id: "PRD-2ABC", name: "Workbench light", manufacturer: "Makita" },
-        { id: "PRD-3ABC", name: "Task light", manufacturer: "DeWalt" },
+        { id: "PRD-2ABC", name: "Workbench light", brandName: "Makita" },
+        { id: "PRD-3ABC", name: "Task light", brandName: "DeWalt" },
       ],
     };
 
@@ -207,10 +207,10 @@ describe("createEntityInlineLinkColumn", () => {
   it("keeps malformed collection projections strict", () => {
     const malformed: ProductCollectionRow = {
       products: [
-        { id: "PRD-2ABC", name: "Workbench light", manufacturer: "Makita" },
+        { id: "PRD-2ABC", name: "Workbench light", brandName: "Makita" },
       ],
     };
-    Object.assign(malformed.products[0]!, { manufacturer: null });
+    Object.assign(malformed.products[0]!, { brandName: null });
 
     expect(() => renderColumn(productCollectionColumn(), malformed)).toThrow(
       "Invalid input",

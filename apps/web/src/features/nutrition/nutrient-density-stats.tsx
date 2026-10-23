@@ -112,7 +112,7 @@ export function NutrientDensityStats({
   price: number | null;
   /** The product whose weight mapping would resolve the basis — links the
    * "needs a weight mapping" nudge to where a human fixes it. */
-  mappingProduct: { id: string; name: string; manufacturer?: string };
+  mappingProduct: { id: string; name: string; brandName?: string | null };
   /**
    * Whether `mappings` actually includes the product's STORED unit mappings.
    * False on the USDA food page, whose `linkedProducts` projection has no

@@ -20,6 +20,10 @@ import {
 } from "~/server/domains/product/repo/write/product-writes";
 import { RecipeCostingService } from "~/server/domains/recipe/repo/recipe-costing";
 import type { UsdaFoodBatchPort } from "~/server/domains/usda-food/repo/usda-helpers";
+import {
+  getVendorByID,
+  findOrCreateVendor,
+} from "~/server/domains/vendor/repo/vendor";
 import { executeEntity } from "~/server/entity-kernel";
 import { runDiagnostic } from "~/server/generic/problems/service/problem-diagnostics.service";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
@@ -174,7 +178,7 @@ describe("findOrCreateByUPC", () => {
 
     expect(result.created).toBe(true);
     expect(result.product.name).toBe("Store Brand Salt");
-    expect(result.product.manufacturer).toBe("Acme");
+    expect(result.product.brandName).toBe("Acme");
     expect(result.product.primaryGtin).toBe(upc.padStart(14, "0"));
   });
 
@@ -198,7 +202,7 @@ describe("findOrCreateByUPC", () => {
 
     expect(result.created).toBe(true);
     expect(result.product.name).toBe("Widget Deluxe");
-    expect(result.product.manufacturer).toBe("Widget Co");
+    expect(result.product.brandName).toBe("Widget Co");
     expect(result.product.price).toBe(4.99);
   });
 
@@ -235,7 +239,7 @@ describe("findOrCreateByUPC", () => {
 
     expect(result.created).toBe(true);
     expect(result.product.name).toBe("Fallback Name");
-    expect(result.product.manufacturer).toBe(UNSPECIFIED_MANUFACTURER);
+    expect(result.product.brandName).toBe(UNSPECIFIED_MANUFACTURER);
     expect(result.product.primaryGtin).toBe(upc.padStart(14, "0"));
   });
 
@@ -354,7 +358,15 @@ describe("findOrCreateByCode", () => {
 
       await quickCreateProduct(
         ctx.db,
-        { name: "Hammer Guide", manufacturer: "Other Press" },
+        {
+          name: "Hammer Guide",
+          brandId: (
+            await getVendorByID(
+              ctx.db,
+              await findOrCreateVendor(ctx.db, "Other Press"),
+            )
+          ).id,
+        },
         ctx.actor,
       );
       const other = await scanIsbn("09780262033848", "Hammer Guide");

@@ -26,7 +26,7 @@ export type ListRefLinkProps = {
   | { entity: "ingredient"; items?: { name: string; id: string }[] }
   | {
       entity: "product";
-      items?: { name: string; id: string; manufacturer: string }[];
+      items?: { name: string; id: string; brandName: string | null }[];
     }
   | { entity: "recipe"; items?: { name: string; id: string }[] }
   | {
@@ -105,7 +105,7 @@ export function ListRefLink(
           compact={compact}
         />
       );
-    if (props.entity === "product" && "manufacturer" in item)
+    if (props.entity === "product" && "brandName" in item)
       return (
         <InlineRefLink
           key={key}

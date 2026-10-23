@@ -9,7 +9,7 @@ import { Stack } from "~/ui/layout";
 
 /**
  * Rolled-up total (direct + descendants, from the persisted
- * `location.valuation`) with the by-manufacturer breakdown of the items
+ * `location.valuation`) with the by-brandName breakdown of the items
  * stored directly here.
  */
 export const LocationContentsValuation: DetailSlotComponent<"location"> = ({

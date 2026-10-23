@@ -50,6 +50,7 @@ import {
 } from "~/server/db/schema";
 import { effectiveExpenseTradeSql } from "~/server/domains/expense/repo/expense-inheritance";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
+import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
 import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
 import { ensureExternalSources } from "~/server/generic/entity-links/repo/entity-external-ids";
 import { refreshSearchDocuments } from "~/server/generic/search/repo/search-document";
@@ -725,7 +726,7 @@ describe("caller-driven purchase import writes", () => {
     if (!food) throw new Error("Synthetic taxonomy lacks the food feature.");
     const item = await insertWithShortcode(ctx.db, "product", {
       name: "Synthetic ingredient",
-      manufacturer: "",
+      brandId: null,
       categoryId: food.id,
     });
     const order = {
@@ -2112,10 +2113,13 @@ describe("shared purchase-import prepare and commit", () => {
   // jar got a wall mount); tax and shipping got candidates they never resolve.
   it("offers only identity-sharing Product candidates, and none for non-principal lines", async () => {
     const { vendor } = await memberImportWorld(ctx.db, ctx.actor);
-    const seed = async (name: string, manufacturer: string) => {
+    const seed = async (
+      name: string,
+      brandId: Awaited<ReturnType<typeof findOrCreateVendor>>,
+    ) => {
       const { entityId } = await createProductFixture(
         ctx.db,
-        makeProductInput({ name, manufacturer }),
+        makeProductInput({ name, brandId }),
         ctx.actor,
       );
       await refreshSearchDocuments(ctx.db, [
@@ -2127,11 +2131,26 @@ describe("shared purchase-import prepare and commit", () => {
         .where(eq(product.id, entityId));
       return row!;
     };
-    const cumin = await seed("Ground cumin jar", "Synthetic Spice Co");
-    await seed("Synthetic television wall mount", "Synthetic Mounts");
-    await seed("Synthetic Spice Co crimp connectors", "Synthetic Spice Co");
-    await seed("Shipping tape roll", "Synthetic Office");
-    await seed("Tax ledger office chair casters", "Synthetic Office");
+    const cumin = await seed(
+      "Ground cumin jar",
+      await findOrCreateVendor(ctx.db, "Synthetic Spice Co"),
+    );
+    await seed(
+      "Synthetic television wall mount",
+      await findOrCreateVendor(ctx.db, "Synthetic Mounts"),
+    );
+    await seed(
+      "Synthetic Spice Co crimp connectors",
+      await findOrCreateVendor(ctx.db, "Synthetic Spice Co"),
+    );
+    await seed(
+      "Shipping tape roll",
+      await findOrCreateVendor(ctx.db, "Synthetic Office"),
+    );
+    await seed(
+      "Tax ledger office chair casters",
+      await findOrCreateVendor(ctx.db, "Synthetic Office"),
+    );
     const { prepared } = await prepareMemberImport(ctx.db, ctx.actor, {
       key: "noise",
       orders: [

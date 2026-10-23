@@ -1,9 +1,3 @@
-/**
- * Service for AI-powered enrichment of locations and inventory.
- *
- * Handles multi-step orchestration: fetching images, calling the AI client, persisting results.
- */
-
 import type {
   ApproveDetectedInventoryItemInput,
   ApproveDetectedInventoryItemOut,
@@ -13,6 +7,11 @@ import type {
   DetectedItem,
   LocationDescription,
 } from "@cubby/schemas/ai";
+/**
+ * Service for AI-powered enrichment of locations and inventory.
+ *
+ * Handles multi-step orchestration: fetching images, calling the AI client, persisting results.
+ */
 import type { ActorContext } from "@cubby/schemas/context";
 import {
   type RunId,
@@ -70,7 +69,8 @@ import {
   getProductByID,
   quickCreateProductRecord,
 } from "~/server/domains/product/repo/crud";
-import { findProductByNameFuzzyManufacturer } from "~/server/domains/product/repo/lookup";
+import { findProductByNameWithBrandClaim } from "~/server/domains/product/repo/lookup";
+import { resolveProductBrandName } from "~/server/domains/vendor/repo/product-brand";
 import { runMutationSideEffects } from "~/server/entity-kernel/repo/mutation-side-effects";
 import { createAppError } from "~/server/errors/app-error";
 import { semanticProductCandidates } from "~/server/generic/embedding/service/semantic-search.service";
@@ -135,7 +135,7 @@ interface DetectedProductMatch {
   id: ProductId;
   shortcode: ProductShortcode;
   name: string;
-  manufacturer: string;
+  brandName: string | null;
   category: ProductCategorySummary | null;
 }
 
@@ -477,7 +477,7 @@ async function matchDetectedItems(
     );
     const matchedItems = await Promise.all(
       batch.map(async ({ item, productName }): Promise<DetectedItem | null> => {
-        const exactMatched = await findProductByNameFuzzyManufacturer(
+        const exactMatched = await findProductByNameWithBrandClaim(
           db,
           productName,
           item.manufacturer,
@@ -491,7 +491,7 @@ async function matchDetectedItems(
                 id: parseEntityId("product", exactMatchedId),
                 shortcode: exactMatched.id,
                 name: exactMatched.name,
-                manufacturer: exactMatched.manufacturer,
+                brandName: exactMatched.brandName,
                 category: exactMatched.category,
               }
             : null;
@@ -520,7 +520,7 @@ async function matchDetectedItems(
               id: parseEntityId("product", semanticEntityId),
               shortcode: semanticShortcode,
               name: semanticMatch.item.name,
-              manufacturer: semanticMatch.item.subtitle ?? item.manufacturer,
+              brandName: semanticMatch.item.subtitle ?? item.manufacturer,
               category:
                 productCategorySummary.safeParse(semanticMatch.item.typeHint)
                   .data ?? null,
@@ -536,7 +536,7 @@ async function matchDetectedItems(
             ? {
                 id: matched.shortcode,
                 name: matched.name,
-                manufacturer: matched.manufacturer,
+                brandName: matched.brandName,
                 category: matched.category,
               }
             : null,
@@ -691,7 +691,7 @@ export async function approveDetectedInventoryItem(
     const product = await getProductByID(db, productId);
     productNameForToast = product.name;
   } else {
-    const matched = await findProductByNameFuzzyManufacturer(
+    const matched = await findProductByNameWithBrandClaim(
       db,
       productName,
       input.item.manufacturer,
@@ -705,7 +705,7 @@ export async function approveDetectedInventoryItem(
         db,
         {
           name: productName,
-          manufacturer: input.item.manufacturer,
+          brandId: await resolveProductBrandName(db, input.item.manufacturer),
         },
         actor,
       );

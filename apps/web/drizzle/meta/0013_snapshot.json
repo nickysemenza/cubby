@@ -1,6 +1,6 @@
 {
-  "id": "9efedc35-4112-4d76-a527-ff225cb850bd",
-  "prevId": "26a74d9e-9179-48f0-bee4-a2981b381591",
+  "id": "b8a57a36-86a5-4b83-8d83-fac9c18958d1",
+  "prevId": "666e49bd-4a9d-4521-9050-d985916834fa",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -14085,6 +14085,18 @@
           "primaryKey": false,
           "notNull": false
         },
+        "sourceManufacturer": {
+          "name": "sourceManufacturer",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "productCreateBrandId": {
+          "name": "productCreateBrandId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
         "productCreateCategoryId": {
           "name": "productCreateCategoryId",
           "type": "uuid",
@@ -14240,6 +14252,19 @@
           "onDelete": "no action",
           "onUpdate": "no action"
         },
+        "PhotoGroupProposal_productCreateBrandId_Vendor_id_fk": {
+          "name": "PhotoGroupProposal_productCreateBrandId_Vendor_id_fk",
+          "tableFrom": "PhotoGroupProposal",
+          "tableTo": "Vendor",
+          "columnsFrom": [
+            "productCreateBrandId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
         "PhotoGroupProposal_inventoryLocationId_Location_id_fk": {
           "name": "PhotoGroupProposal_inventoryLocationId_Location_id_fk",
           "tableFrom": "PhotoGroupProposal",
@@ -14297,6 +14322,81 @@
           "value": "\"PhotoGroupProposal\".\"origin\" IS NULL OR \"PhotoGroupProposal\".\"origin\" IN ('coordinator', 'external_agent', 'member')"
         }
       },
+      "isRLSEnabled": false
+    },
+    "public.PhotoGroupSourceEvidence": {
+      "name": "PhotoGroupSourceEvidence",
+      "schema": "",
+      "columns": {
+        "id": {
+          "name": "id",
+          "type": "uuid",
+          "primaryKey": true,
+          "notNull": true,
+          "default": "gen_random_uuid()"
+        },
+        "runId": {
+          "name": "runId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "groupKey": {
+          "name": "groupKey",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "sourceManufacturer": {
+          "name": "sourceManufacturer",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "PhotoGroupSourceEvidence_runId_idx": {
+          "name": "PhotoGroupSourceEvidence_runId_idx",
+          "columns": [
+            {
+              "expression": "runId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "PhotoGroupSourceEvidence_runId_Run_id_fk": {
+          "name": "PhotoGroupSourceEvidence_runId_Run_id_fk",
+          "tableFrom": "PhotoGroupSourceEvidence",
+          "tableTo": "Run",
+          "columnsFrom": [
+            "runId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
       "isRLSEnabled": false
     },
     "public.PhotoRunImage": {
@@ -15046,11 +15146,11 @@
           "notNull": true,
           "default": "'{}'::text[]"
         },
-        "manufacturer": {
-          "name": "manufacturer",
-          "type": "text",
+        "brandId": {
+          "name": "brandId",
+          "type": "uuid",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
         },
         "fdc_id": {
           "name": "fdc_id",
@@ -15175,8 +15275,8 @@
           "method": "btree",
           "with": {}
         },
-        "Product_name_manufacturer_key": {
-          "name": "Product_name_manufacturer_key",
+        "Product_name_brandId_key": {
+          "name": "Product_name_brandId_key",
           "columns": [
             {
               "expression": "name",
@@ -15185,7 +15285,7 @@
               "nulls": "last"
             },
             {
-              "expression": "manufacturer",
+              "expression": "brandId",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -15227,23 +15327,8 @@
           "method": "gin",
           "with": {}
         },
-        "Product_manufacturer_gin_idx": {
-          "name": "Product_manufacturer_gin_idx",
-          "columns": [
-            {
-              "expression": "\"manufacturer\" gin_trgm_ops",
-              "asc": true,
-              "isExpression": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "gin",
-          "with": {}
-        },
-        "Product_name_manufacturer_idx": {
-          "name": "Product_name_manufacturer_idx",
+        "Product_name_brandId_idx": {
+          "name": "Product_name_brandId_idx",
           "columns": [
             {
               "expression": "name",
@@ -15252,7 +15337,7 @@
               "nulls": "last"
             },
             {
-              "expression": "manufacturer",
+              "expression": "brandId",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -15279,11 +15364,11 @@
           "method": "btree",
           "with": {}
         },
-        "Product_manufacturer_active_idx": {
-          "name": "Product_manufacturer_active_idx",
+        "Product_brand_active_idx": {
+          "name": "Product_brand_active_idx",
           "columns": [
             {
-              "expression": "manufacturer",
+              "expression": "brandId",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -15291,6 +15376,21 @@
           ],
           "isUnique": false,
           "where": "\"Product\".\"deletedAt\" IS NULL",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "Product_brandId_idx": {
+          "name": "Product_brandId_idx",
+          "columns": [
+            {
+              "expression": "brandId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
           "concurrently": false,
           "method": "btree",
           "with": {}
@@ -15342,6 +15442,19 @@
         }
       },
       "foreignKeys": {
+        "Product_brandId_Vendor_id_fk": {
+          "name": "Product_brandId_Vendor_id_fk",
+          "tableFrom": "Product",
+          "tableTo": "Vendor",
+          "columnsFrom": [
+            "brandId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
         "Product_ingredientId_Ingredient_id_fk": {
           "name": "Product_ingredientId_Ingredient_id_fk",
           "tableFrom": "Product",
@@ -19317,27 +19430,6 @@
           "method": "btree",
           "with": {}
         },
-        "SourceTransactionRecord_source_externalId_lookup_idx": {
-          "name": "SourceTransactionRecord_source_externalId_lookup_idx",
-          "columns": [
-            {
-              "expression": "source",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            },
-            {
-              "expression": "externalId",
-              "isExpression": false,
-              "asc": true,
-              "nulls": "last"
-            }
-          ],
-          "isUnique": false,
-          "concurrently": false,
-          "method": "btree",
-          "with": {}
-        },
         "SourceTransactionRecord_source_externalId_key": {
           "name": "SourceTransactionRecord_source_externalId_key",
           "columns": [
@@ -20456,6 +20548,12 @@
       "name": "Vendor",
       "schema": "",
       "columns": {
+        "systemKey": {
+          "name": "systemKey",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
         "spendingProfile": {
           "name": "spendingProfile",
           "type": "text",
@@ -20589,8 +20687,8 @@
           "method": "btree",
           "with": {}
         },
-        "Vendor_name_key": {
-          "name": "Vendor_name_key",
+        "Vendor_name_idx": {
+          "name": "Vendor_name_idx",
           "columns": [
             {
               "expression": "name",
@@ -20599,8 +20697,23 @@
               "nulls": "last"
             }
           ],
-          "isUnique": true,
+          "isUnique": false,
           "where": "\"Vendor\".\"deletedAt\" IS NULL",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "Vendor_systemKey_key": {
+          "name": "Vendor_systemKey_key",
+          "columns": [
+            {
+              "expression": "systemKey",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
           "concurrently": false,
           "method": "btree",
           "with": {}

@@ -14,7 +14,7 @@ describe("semantic search text builders", () => {
   it("includes aliases in product embedding text", () => {
     const text = buildProductEmbeddingText({
       name: "Blue plastic tarp",
-      manufacturer: "generic",
+      brandName: "generic",
       category: "storage",
       aliases: ["tarpaulin", "drop cover"],
     });

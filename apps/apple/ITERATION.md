@@ -99,7 +99,7 @@ UI automation has released the host.
 checks the same synthetic valuation and financial relation evidence in the
 actual sandboxed Mac fixture app, then switches to Table with multiple rows,
 asserts ascending and descending Name order, scrolls through reused cells,
-opens a table Quality explanation, shows and hides Manufacturer values,
+opens a table Quality explanation, shows and hides Brand values,
 opens a category reference in the detail pane, and returns to List. Sorting must
 retain the AppModel dependency of every field explanation cell. It uses the existing isolated signing,
 verified process, disposable database, and checksummed artifact paths; an

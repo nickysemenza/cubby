@@ -49,6 +49,10 @@ import {
 import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
 import { effectiveFieldSql } from "~/server/db/computed/effective-field";
 import { actualExpense } from "~/server/db/computed/expense-aggregate-sql";
+import {
+  productBrandNameSql,
+  productBrandCodeSql,
+} from "~/server/db/computed/product-brand-sql";
 import { getDb, notDeleted, withTransaction } from "~/server/db/helpers";
 import {
   entityLink,
@@ -388,7 +392,7 @@ async function listProjectResources(
       productId: product.id,
       productCode: product.shortcode,
       productName: product.name,
-      manufacturer: product.manufacturer,
+      brandName: productBrandNameSql(product.brandId),
       category: reusableCategorySql(),
       attachedAt: entityLink.createdAt,
     })
@@ -448,7 +452,7 @@ async function listProjectResources(
     return {
       productId: parseShortcodeFor("product", row.productCode),
       productName: row.productName,
-      manufacturer: row.manufacturer,
+      brandName: row.brandName,
       category,
       coverImageUrl: coverImageUrls.get(row.productId) ?? null,
       attachedAt: row.attachedAt,
@@ -1328,7 +1332,7 @@ export async function suggestProjectTools(
         productId: product.id,
         productCode: product.shortcode,
         productName: product.name,
-        manufacturer: product.manufacturer,
+        brandName: productBrandNameSql(product.brandId),
         projectPurchaseCost:
           sql<number>`coalesce(sum(${expense.cost}), 0)`.mapWith(Number),
       })
@@ -1352,7 +1356,7 @@ export async function suggestProjectTools(
         product.id,
         product.shortcode,
         product.name,
-        product.manufacturer,
+        productBrandNameSql(product.brandId),
       ),
     // includes-installed: a bench-mounted vise is installed and still a tool
     // you own — this feeds "which tools are available", not a count/browse.
@@ -1423,7 +1427,7 @@ export async function suggestProjectTools(
             productId: product.id,
             productCode: product.shortcode,
             productName: product.name,
-            manufacturer: product.manufacturer,
+            brandName: productBrandNameSql(product.brandId),
             trade: effectiveExpenseTrade,
             matchingExpenseCount: count(),
           })
@@ -1450,7 +1454,7 @@ export async function suggestProjectTools(
             product.id,
             product.shortcode,
             product.name,
-            product.manufacturer,
+            productBrandNameSql(product.brandId),
             effectiveExpenseTrade,
           );
 
@@ -1488,7 +1492,7 @@ export async function suggestProjectTools(
     .map((row) => ({
       productId: parseShortcodeFor("product", row.productCode),
       productName: row.productName,
-      manufacturer: row.manufacturer,
+      brandName: row.brandName,
       coverImageUrl: coverImageUrls.get(row.productId) ?? null,
       lane: "purchased_here" as const,
       matchedTrade: null,
@@ -1563,7 +1567,7 @@ export async function suggestProjectTools(
       tradeSuggestions.push({
         productId: parseShortcodeFor("product", row.productCode),
         productName: row.productName,
-        manufacturer: row.manufacturer,
+        brandName: row.brandName,
         coverImageUrl: coverImageUrls.get(row.productId) ?? null,
         lane: "trade_match",
         matchedTrade: row.trade,
@@ -1692,12 +1696,15 @@ export async function listProductProjectUses(
 ): Promise<ProductProjectUsesOut> {
   const dbc = getDb(db);
   const productRow = await dbc.query.product.findFirst({
+    extras: {
+      brandName: productBrandNameSql(product.brandId).as("brandName"),
+      brandCode: productBrandCodeSql(product.brandId).as("brandCode"),
+    },
     where: and(eq(product.id, productId), notDeleted(product)),
     columns: {
       shortcode: true,
       categoryId: true,
       name: true,
-      manufacturer: true,
     },
   });
   if (!productRow) {
@@ -1752,7 +1759,7 @@ export async function listProductProjectUses(
   return {
     productId: parseShortcodeFor("product", productRow.shortcode),
     productName: productRow.name,
-    manufacturer: productRow.manufacturer,
+    brandName: productRow.brandName,
     category,
     canEdit: category !== null,
     ...publicResourceMetrics(reusableCategory, metrics),

@@ -21,6 +21,7 @@ import { z } from "zod";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { stockOnly } from "~/server/db/computed/inventory-placement";
 import { locationAiDescriptionSql } from "~/server/db/computed/location-ai-description";
+import { productBrandNameSql } from "~/server/db/computed/product-brand-sql";
 import { categorySummarySql } from "~/server/db/computed/product-category-sql";
 import {
   getDb,
@@ -138,6 +139,7 @@ export const buildLocationTree = async (db: Database, rootId?: LocationId) => {
       ? getDb(db).query.product.findMany({
           where: and(inArray(product.id, productIds), notDeleted(product)),
           extras: {
+            brandName: productBrandNameSql(product.brandId).as("brandName"),
             category: categorySummarySql(sql`${product.categoryId}`).as(
               "category",
             ),

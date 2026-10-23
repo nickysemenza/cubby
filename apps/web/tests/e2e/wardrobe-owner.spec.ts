@@ -1,3 +1,4 @@
+import { seedProductPrerequisite } from "./fixtures/catalog";
 import { taxonomyShortcode } from "../../tooling/product-category-fixtures";
 import {
   seedProductCategoryPrerequisite,
@@ -102,9 +103,9 @@ test("wardrobe cards section by clothing type and a header filters to one type",
       name: `${name} ${type}`,
       parentId: taxonomyShortcode("apparel"),
     });
-    const product = await createEntityFixture(page, "product", {
+    const product = await seedProductPrerequisite(page, {
       name: `${name} ${type} item`,
-      manufacturer: "Fixture",
+      brandName: "Fixture",
       categoryId: category.id,
     });
     await createEntityFixture(page, "inventory", {
@@ -157,9 +158,9 @@ test("wardrobe cards group at a category level and a header filters to that type
     ["Tops item", tops.id],
     ["Tee item", tees.id],
   ] as const) {
-    const product = await createEntityFixture(page, "product", {
+    const product = await seedProductPrerequisite(page, {
       name: `${name} ${item}`,
-      manufacturer: "Fixture",
+      brandName: "Fixture",
       categoryId,
     });
     await createEntityFixture(page, "inventory", {
@@ -212,9 +213,9 @@ test("wardrobe cards exclude a clothing type, keep uncategorized items, and a he
       name: `${name} ${type}`,
       parentId: taxonomyShortcode("apparel"),
     });
-    const product = await createEntityFixture(page, "product", {
+    const product = await seedProductPrerequisite(page, {
       name: `${name} ${type} item`,
-      manufacturer: "Fixture",
+      brandName: "Fixture",
       categoryId: category.id,
     });
     await createEntityFixture(page, "inventory", {
@@ -222,9 +223,9 @@ test("wardrobe cards exclude a clothing type, keep uncategorized items, and a he
       ...own,
     });
   }
-  const loose = await createEntityFixture(page, "product", {
+  const loose = await seedProductPrerequisite(page, {
     name: `${name} uncategorized item`,
-    manufacturer: "Fixture",
+    brandName: "Fixture",
   });
   await createEntityFixture(page, "inventory", { productId: loose.id, ...own });
 
@@ -299,7 +300,6 @@ test("mobile list section headers stay pinned while their section scrolls", asyn
     async (index) => {
       const product = await createEntityFixture(page, "product", {
         name: `${name} shirt ${index}`,
-        manufacturer: "Fixture",
         categoryId: category.id,
       });
       await createEntityFixture(page, "inventory", {

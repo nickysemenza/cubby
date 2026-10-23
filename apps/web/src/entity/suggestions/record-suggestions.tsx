@@ -356,7 +356,7 @@ function explicitSuggestionPatch(
 /** For a `remove` proposal, drops the target field's own key from the basis
  * used to fingerprint drift (Amendment 1's self-basis) — an unrelated tag
  * added after the proposal was computed shouldn't spuriously revoke it, only
- * a drift in a *sibling* restating field (manufacturer, classification)
+ * a drift in a *sibling* restating field (brandName, classification)
  * should. A `set` proposal has no self-basis to drop. */
 function basisForFingerprint(
   basis: FieldSuggestionSource["basis"],

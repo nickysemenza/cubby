@@ -254,7 +254,7 @@ struct PhotoGroupDecisionView: View {
         }
         if let evidence {
             VStack(alignment: .leading, spacing: FieldGuideTokens.Space.sm) {
-                if let manufacturer = evidence.manufacturer { Text("Manufacturer: \(manufacturer)") }
+                if let brandName = evidence.brandName { Text("Brand: \(brandName)") }
                 if let model = evidence.model { Text("Model: \(model)") }
                 if !evidence.identifiers.isEmpty { Text(evidence.identifiers.joined(separator: " · ")) }
                 ForEach(evidence.purchaseLines ?? [], id: \.expenseId) { line in

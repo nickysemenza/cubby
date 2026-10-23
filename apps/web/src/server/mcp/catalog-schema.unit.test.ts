@@ -219,7 +219,7 @@ describe("MCP catalog schemas", () => {
       entity: "product",
       id: "PRD-4K7M",
       data: {
-        manufacturer: "Example Maker",
+        brandId: "VEN-4K7M",
         notes:
           "EXP-4K7M: Original order line; observed 2026-07-20; Blue, single",
       },

@@ -28,8 +28,8 @@ const EXCEPTION_REASONS = {
   amazon_asin: ["unavailable", "insufficient_detail"],
   // A check absent from this map admits no reason and cannot be excepted.
   // Unbranded components and separately uncatalogued kit parts may have no
-  // manufacturer or issued identifier to record.
-  product_manufacturer: ["not_applicable", "unavailable"],
+  // brandName or issued identifier to record.
+  product_brand: ["not_applicable", "unavailable"],
   product_category: ["not_applicable", "insufficient_detail"],
   product_external_id: ["not_issued", "unavailable"],
   // `unavailable` is the common one and the reason this check earns its keep:

@@ -7,7 +7,7 @@ record rather than fork it. This file is the single either-side-first
 contract; the three skills point here instead of restating it.
 
 Name convention: `Brand Model — Color, Size` (omit a segment that does not
-apply). Unknown brand: describe the item instead of guessing a manufacturer —
+apply). Unknown brand: describe the item instead of guessing a brand —
 `Gray crew-neck workout shirt — M`, not `Unknown crew-neck shirt`. A missing
 or illegible tag still earns a descriptive name with color and size, never a
 vaguer placeholder than the evidence supports. One Product per exact variant:
@@ -16,7 +16,7 @@ one record. Identical copies of the same exact variant are one Product with
 an inventory quantity, never duplicate Products.
 
 Seed packets from any seed company: `<Variety> <Crop> Seeds`, with
-certifications in trailing parentheses and the company in `manufacturer`
+certifications in trailing parentheses and the packet brand in `brandId`
 only — `Lime Basil Seeds`, `Bloomsdale Spinach Seeds (Organic Heirloom)`,
 never the catalog's `Crop 'Variety'` form. Garlic bulbs and onion sets are not
 seeds and take no suffix.
@@ -24,6 +24,11 @@ seeds and take no suffix.
 Match before create. Search existing Products (name, aliases, external ids,
 `entity_read.resolve`, `search.similar`) before writing a new one — a
 duplicate costs a merge later, a missed match costs nothing now.
+
+Product Brand is an optional Vendor reference (`brandId`); `brandName` is its
+read-only label. Reuse a proven Vendor identity for a known brand, or create the
+missing identity before assigning it. Unknown stays null; Generic / Unbranded
+records an explicit classification and remains independent of commodity.
 
 ## Either side first
 
@@ -49,12 +54,14 @@ external id: it would claim one variant and collide with its siblings. Keep it
 in `model` or `notes`.
 
 An exact manufacturer part number (MPN that names one size and color) is the
-exception: store it as `manufacturer_part` with `source` set to the kebab slug
-of the Product's `manufacturer` (not the seller's slug). Support the literal
+exception: store it as `manufacturer_part` under the established issuer source
+for the Product's brand. Preserve registered source slugs across Brand renames;
+use issuer evidence rather than the seller's identity or a matching website.
+Support the literal
 part number and its connection to the selected variant with retained evidence;
 the hosted researcher derives the issuer. A group-level number without that
 connection does not prove a variant. Purchase prep still ranks a shared model/style number
-(`Product.model` within the same manufacturer) as a candidate with "confirm size
+(`Product.model` within the same brand) as a candidate with "confirm size
 and color", never as `exactIdentifierMatch`.
 
 Purchase prep only reports `exactIdentifierMatch` for identifiers stored as
@@ -86,7 +93,7 @@ purchase already exists, check for the existing purchase Product before
 creating: exact identifiers first, then the vendor's purchased Products
 (`entity_read.relations` on the purchase's `products`, `entity_read.resolve`,
 `search.similar`) for a descriptive candidate. Purchase-created
-Products usually have no category and an empty manufacturer until enriched, so
+Products may have no category or Brand reference until enriched, so
 never filter candidates by either.
 Prioritize the exact variant with no own-item photo and no earlier photo-import
 attachment; a vendor-import association is compatible with this candidate.
@@ -132,7 +139,7 @@ identity evidence (a paid, itemized order) plus whatever the photo
 contributed. The photo Product's descriptive name folds into `aliases`, and
 its images merge into the kept Product's gallery. Merge fills only the
 keeper's empty scalar fields, so after merging check the kept name and
-manufacturer: rename to the `Brand Model — Color, Size` convention when the
+Brand reference: rename to the `Brand Model — Color, Size` convention when the
 vendor title is worse.
 
 Never receive a purchase line whose item is already inventoried from photos;

@@ -64,7 +64,7 @@ export type BodyBlock =
       products: {
         id: string;
         name: string;
-        manufacturer: string;
+        brandName: string | null;
       }[];
     };
 

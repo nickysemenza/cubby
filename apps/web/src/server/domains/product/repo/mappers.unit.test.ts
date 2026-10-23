@@ -228,7 +228,7 @@ describe("product mappers", () => {
     expect(result).toMatchObject({
       id: testShortcode("product", "PRD-TEST"),
       name: "Flour",
-      manufacturer: "Generic",
+      brandName: "Generic",
       images: [
         { id: IMAGE_ID, url: getR2PublicUrl(baseImage.key), purpose: null },
       ],

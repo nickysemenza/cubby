@@ -61,6 +61,7 @@ import {
 } from "~/server/domains/purchase-import/operations/order-import.fixtures";
 import { recordSourceTransactionRecords } from "~/server/domains/transaction-import/repo/source-transaction-record";
 import { createFinancialEvidenceFixture } from "~/server/domains/transaction-import/repo/source-transaction-record.fixtures";
+import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
 import { publishAssessment } from "~/server/generic/assessment/repo/assessment";
 import { ensureExternalSources } from "~/server/generic/entity-links/repo/entity-external-ids";
 import { linkValues } from "~/server/generic/entity-links/repo/entity-links";
@@ -146,10 +147,10 @@ const mkPlant = (db: Database) =>
 const mkMeal = (db: Database) =>
   insertWithShortcode(db, "meal", { date: "2026-01-01" });
 
-const mkProduct = (db: Database) =>
+const mkProduct = async (db: Database) =>
   insertWithShortcode(db, "product", {
     name: uniq("Product"),
-    manufacturer: "Test Mfr",
+    brandId: await findOrCreateVendor(db, "Test Mfr"),
   });
 
 /** The pair table stores `productAId < productBId`; mint until the uuid lands on the requested side. */
@@ -659,10 +660,10 @@ const SOURCE_FACTORIES = {
       parentId: parseEntityId("productCategory", targetId),
     }),
 
-  "Product.categoryId": (db, targetId) =>
+  "Product.categoryId": async (db, targetId) =>
     insertWithShortcode(db, "product", {
       name: uniq("Classified product"),
-      manufacturer: "Test Mfr",
+      brandId: await findOrCreateVendor(db, "Test Mfr"),
       categoryId: parseEntityId("productCategory", targetId),
     }),
 
@@ -773,6 +774,12 @@ const SOURCE_FACTORIES = {
       name: uniq("Stored value"),
       identity: { kind: "stored_value", provider: "Synthetic store" },
       providerVendorId: parseEntityId("vendor", targetId),
+    }),
+
+  "Product.brandId": (db, targetId) =>
+    insertWithShortcode(db, "product", {
+      name: uniq("Branded product"),
+      brandId: parseEntityId("vendor", targetId),
     }),
 
   "VendorAccount.vendorId": async (db, targetId) => {
@@ -1053,17 +1060,17 @@ const SOURCE_FACTORIES = {
     });
   },
 
-  "Product.ingredientId": (db, targetId) =>
+  "Product.ingredientId": async (db, targetId) =>
     insertWithShortcode(db, "product", {
       name: uniq("Product"),
-      manufacturer: "Test Mfr",
+      brandId: await findOrCreateVendor(db, "Test Mfr"),
       ingredientId: parseEntityId("ingredient", targetId),
     }),
 
-  "Product.growsPlantId": (db, targetId) =>
+  "Product.growsPlantId": async (db, targetId) =>
     insertWithShortcode(db, "product", {
       name: uniq("Garden source"),
-      manufacturer: "Test Mfr",
+      brandId: await findOrCreateVendor(db, "Test Mfr"),
       growsPlantId: parseEntityId("plant", targetId),
     }),
 
@@ -1308,6 +1315,16 @@ const SOURCE_FACTORIES = {
     });
   },
 
+  "PhotoGroupProposal.productCreateBrandId": async (db, targetId) => {
+    const run = await mkRun(db);
+    return insertAndReturn(db, photoGroupProposal, {
+      runId: run.id,
+      groupKey: uniq("brand-group"),
+      productKind: "create",
+      productCreate: { name: uniq("Proposal") },
+      productCreateBrandId: parseEntityId("vendor", targetId),
+    });
+  },
   "PhotoGroupProposal.productCreateCategoryId": async (db, targetId) => {
     const run = await mkRun(db);
     return insertAndReturn(db, photoGroupProposal, {

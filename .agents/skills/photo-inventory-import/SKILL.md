@@ -61,7 +61,7 @@ Name and match per [product identity](../product-enrichment/references/product-i
 — its either-side-first contract governs every photo Product: `Brand Model —
 Color, Size`, one Product per exact variant. Before creating, check for an
 existing match — call `imports_read.photo_candidates` once per distinct
-item with its observed name and manufacturer. Its results include purchase,
+item with its observed name and brand text (`brandName`). Its results include purchase,
 own-photo, earlier photo-import, and inventory evidence. Compare exact variant
 facts yourself; rank and absence of an own photo are useful leads, not proof.
 Use `entity_read.resolve` or `search.similar` only
@@ -137,7 +137,7 @@ with the refusal as `unresolvedReason`.
 
 Attaching to an existing Product preserves its fields, existing gallery order,
 and cover. Only explicit `review.productChanges` updates the selected name,
-category, manufacturer, model, notes, or tags, atomically with attachments and
+category, Brand reference (`brandId`), model, notes, or tags, atomically with attachments and
 Inventory. Leave it absent unless the user chose those changes.
 
 Use a stable `groupKey` per physical item. Re-proposing a groupKey replaces

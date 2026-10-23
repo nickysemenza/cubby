@@ -330,10 +330,14 @@ function FinancialTransactionFields({ form, record }: EntityEditorFieldsProps) {
 type CandidateOption = {
   id: string;
   name: string;
-  manufacturer: string;
+  brandName: string | null;
 };
 const candidateOptions = z.array(
-  z.object({ id: z.string(), name: z.string(), manufacturer: z.string() }),
+  z.object({
+    id: z.string(),
+    name: z.string(),
+    brandName: z.string().nullable(),
+  }),
 );
 
 function WishFields({ form, record }: EntityEditorFieldsProps) {
@@ -445,7 +449,7 @@ function WishFields({ form, record }: EntityEditorFieldsProps) {
                     {product.name}
                   </span>
                   <span className="block truncate text-muted-foreground">
-                    {product.manufacturer}
+                    {product.brandName}
                   </span>
                 </Label>
               </Row>

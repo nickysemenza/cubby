@@ -5,10 +5,10 @@ import type {
 } from "@cubby/schemas/identifiers";
 import {
   ingredientShortcode,
+  vendorShortcode,
   productCategoryShortcode,
 } from "@cubby/schemas/identifiers";
 import { unitMappingInput } from "@cubby/schemas/unitmapping";
-import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
 import { fdcId } from "@cubby/usda";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { PlusIcon } from "@phosphor-icons/react/dist/csr/Plus";
@@ -80,7 +80,7 @@ type SelectFormValues = z.input<typeof selectFormSchema>;
 const createFormSchema = z
   .object({
     name: z.string().min(1, "Name is required"),
-    manufacturer: z.string().min(1, "Manufacturer is required"),
+    brandId: vendorShortcode.nullable(),
     model: z.string().nullable(),
     notes: z.string().nullable(),
     // The picker owns a string draft; parse the shortcode at the Product
@@ -159,7 +159,7 @@ export function QuickInventoryAdd({
     resolver: zodResolver(createFormSchema),
     defaultValues: {
       name: "",
-      manufacturer: UNSPECIFIED_MANUFACTURER,
+      brandId: null,
       model: null,
       notes: null,
       categoryId: null,
@@ -191,7 +191,7 @@ export function QuickInventoryAdd({
       const created = await createWithInventory.mutateAsync({
         product: {
           name: values.name,
-          manufacturer: values.manufacturer,
+          brandId: values.brandId,
           model: values.model,
           notes: values.notes,
           categoryId:
@@ -235,7 +235,7 @@ export function QuickInventoryAdd({
     (name: string): Promise<ComboboxItem<ProductShortcode>> => {
       createForm.reset({
         name,
-        manufacturer: UNSPECIFIED_MANUFACTURER,
+        brandId: null,
         model: null,
         notes: null,
         categoryId: null,

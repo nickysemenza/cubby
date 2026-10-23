@@ -29,6 +29,7 @@ import { sql, and, asc, eq, inArray, isNotNull } from "drizzle-orm";
 import { comparePlainDatesDescending } from "~/lib/household-date";
 import type { Database } from "~/server/db";
 import { actualExpense } from "~/server/db/computed/expense-aggregate-sql";
+import { productBrandNameSql } from "~/server/db/computed/product-brand-sql";
 import { categorySummarySql } from "~/server/db/computed/product-category-sql";
 import { getDb, notDeleted } from "~/server/db/helpers";
 import {
@@ -72,7 +73,7 @@ interface GraphProduct {
   id: ProductId;
   shortcode: string;
   name: string;
-  manufacturer: string;
+  brandName: string | null;
   category: ProductCategorySummary | null;
   tags: string[];
 }
@@ -254,7 +255,7 @@ const loadCollectionGraph = async (db: Database): Promise<CollectionGraph> => {
         id: product.id,
         shortcode: product.shortcode,
         name: product.name,
-        manufacturer: product.manufacturer,
+        brandName: productBrandNameSql(product.brandId),
         category: categorySummarySql(sql`${product.categoryId}`),
         tags: product.tags,
       })
@@ -381,7 +382,7 @@ export async function getSmartCollectionDetail(
       result.members.has(item.id) &&
       (!normalizedSearch ||
         item.name.toLowerCase().includes(normalizedSearch) ||
-        item.manufacturer.toLowerCase().includes(normalizedSearch)),
+        item.brandName?.toLowerCase().includes(normalizedSearch)),
   );
   const page = matching.slice(
     pagination.pageIndex * pagination.pageSize,
@@ -425,7 +426,7 @@ export async function getSmartCollectionDetail(
     products: page.map((item) => ({
       id: parseShortcodeFor("product", item.shortcode),
       name: item.name,
-      manufacturer: item.manufacturer,
+      brandName: item.brandName,
       imageUrl: images.get(item.id) ?? null,
       direct: false,
       inherited: false,
@@ -476,7 +477,7 @@ export const getCollectionDetail = async (
       member &&
       (!normalizedSearch ||
         item.name.toLocaleLowerCase().includes(normalizedSearch) ||
-        item.manufacturer.toLocaleLowerCase().includes(normalizedSearch))
+        item.brandName?.toLocaleLowerCase().includes(normalizedSearch))
     );
   });
   const start = pagination.pageIndex * pagination.pageSize;
@@ -516,7 +517,7 @@ export const getCollectionDetail = async (
     products: productPage.map((item) => ({
       id: parseShortcodeFor("product", item.shortcode),
       name: item.name,
-      manufacturer: item.manufacturer,
+      brandName: item.brandName,
       imageUrl: productCoverImageUrls.get(item.id) ?? null,
       direct: directCollectionMembership(item.tags).has(slug),
       inherited: graph.productInherited.get(item.id)?.has(slug) ?? false,
@@ -538,8 +539,8 @@ export const getCollectionMatrix = async (
   const graph = await loadCollectionGraph(db);
   const normalizedSearch = search?.toLocaleLowerCase();
   const secondaryFor = (item: GraphProduct | GraphLocation) =>
-    "manufacturer" in item
-      ? item.manufacturer
+    "brandName" in item
+      ? (item.brandName ?? "")
       : locationPath(item, graph.locationsById).join(" / ");
   const stateFor = (
     item: GraphProduct | GraphLocation,

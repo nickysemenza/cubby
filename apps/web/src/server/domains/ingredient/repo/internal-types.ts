@@ -50,6 +50,8 @@ import {
 
 type IngredientSelect = typeof ingredient.$inferSelect;
 type ProductSelect = typeof product.$inferSelect & {
+  brandName: string | null;
+  brandCode: import("@cubby/schemas/identifiers").VendorShortcode | null;
   category: ProductCategorySummary | null;
   categoryStockTracking: CategoryStockTracking | null;
   classificationEvidence: string;

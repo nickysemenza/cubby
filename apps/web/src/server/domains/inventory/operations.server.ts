@@ -528,7 +528,7 @@ async function findInventoryDuplicates(
   return duplicates.map((product) => ({
     id: parseShortcodeFor("product", product.shortcode),
     name: product.name,
-    manufacturer: product.manufacturer,
+    brandName: product.brandName,
     expectedQuantity: product.expectedQuantity,
     locations: product.inventoryEntry.map((entry) => ({
       id: parseShortcodeFor("location", entry.location.shortcode),

@@ -1,4 +1,5 @@
 import { shortcodeEntities } from "@cubby/schemas/entity-manifest";
+import { vendorShortcode } from "@cubby/schemas/identifiers";
 import {
   imageShortcode,
   ledgerPartyShortcode,
@@ -434,7 +435,7 @@ export const photoImportContract = defineContract("photoImport", {
       groupKey: z.string().min(1).max(200),
       name: z.string().trim().min(1).max(500),
       categoryId: productCategoryShortcode.nullable().optional(),
-      manufacturer: z.string().trim().max(500).nullable().optional(),
+      brandId: vendorShortcode.nullable().optional(),
       model: z.string().trim().max(500).nullable().optional(),
       notes: z.string().trim().max(5000).nullable().optional(),
     }),

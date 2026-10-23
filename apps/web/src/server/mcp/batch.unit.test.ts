@@ -110,7 +110,7 @@ describe("MCP batch actions", () => {
             action: "update",
             entity: "product",
             id: "PRD-4K7M",
-            data: { manufacturer: "Example Maker" },
+            data: { brandId: "VEN-4K7M" },
           },
         ],
       },

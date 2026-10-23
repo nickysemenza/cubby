@@ -9,6 +9,8 @@ resolves concepts whose names differ across layers.
 
 - Entity nouns are always **Vendor**, **Purchase**, and **Expense** in UI copy,
   MCP contracts, and documentation: `Vendor ──< Purchase ──< Expense`.
+  **Brand** labels the Vendor a Product is marketed under; **Seller** labels the
+  Vendor that supplied a Purchase. They are roles of the same entity.
 - A **Purchase** is one vendor order, receipt, or deliberately separate purchase
   event. It is not a card charge; “charge” remains valid only for a
   FinancialTransaction or an ordinary delivery/service charge.
@@ -76,7 +78,7 @@ USDAFood  ←(loose link, fdc_id/barcode)──  Product  ──(optional FK, in
 ```
 
 - **Product** (`Product`) — a _purchasable_ item. Two kinds:
-  - **Specific item** — has UPC, manufacturer, price, nutrition (created via
+  - **Specific item** — can record a Brand, UPC, price and nutrition (created via
     barcode scan).
   - **Misc collection** — an opaque placeholder, name only, prefixed `misc:`.
 
@@ -302,11 +304,17 @@ FinancialAccount ──< FinancialTransaction >──< Allocation >──< Purch
   history remains advisory; only an Allocation through a Purchase establishes
   the relationship.
 
-- **Vendor** (`Vendor`) — the roster of places money goes. Name is uniquely
-  indexed (live rows). Holds **identity only** — its `spend` and `purchaseCount`
-  are correlated rollups, not columns. Deliberately thin: contractor metadata
-  (license, COI) and vendor-level documents (W-9, contracts) are the natural
-  follow-ons, and would arrive as additive columns.
+- **Vendor** (`Vendor`) — a canonical identity used for marketed brands and
+  purchase sellers. Separate Vendors can share a name; a name or alias alone
+  does not establish that they are the same identity. Its `spend` and
+  `purchaseCount` are rollups through Purchases, not stored money.
+- **Brand** — the Vendor under whose name a Product is marketed. It can differ
+  from both the physical manufacturer and the Seller that supplied a Purchase.
+- **Seller** — the Vendor that supplied a Purchase. The same Vendor may also be
+  a Product's Brand, but either role can exist independently.
+- **Generic / Unbranded** — the explicitly selected Brand for a Product known
+  to be unbranded. It is different from an unknown Brand and does not establish
+  that the Product is a commodity; it cannot be a Seller or have a VendorAccount.
 - **Purchase** (`Purchase`) — one vendor order, receipt, or deliberately separate purchase event.
   `vendorId` is NOT NULL; `orderId` is the vendor's own free-text order/receipt
   id, unique per vendor via a **partial-unique `(vendorId, orderId)` index where
@@ -557,7 +565,7 @@ Checked-in, source-specific planting windows associated with a Plant through its
 _Avoid_: seasonal plan, consensus recommendation
 
 **Collection**:
-A named grouping of Products useful to browse together. Existing tag-backed Collections use direct Product assignments and inherited Location-subtree membership. Smart starters instead evaluate code-defined OR rules over Product manufacturer, exact tags, current Location/ancestor names, and directly linked actual Expense Trades. Every matching source is explained, and Products are counted once even when several sources match. Starter names and rules can be edited temporarily in a browser tab; refresh restores the defaults. Neither evaluation nor temporary editing writes tags or membership records. A Collection is not a physical Location Area, an Expense/project Trade, a future Work Area, or a Product compatibility tag.
+A named grouping of Products useful to browse together. Existing tag-backed Collections use direct Product assignments and inherited Location-subtree membership. Smart starters instead evaluate code-defined OR rules over Product Brand names, exact tags, current Location/ancestor names, and directly linked actual Expense Trades. Every matching source is explained, and Products are counted once even when several sources match. Starter names and rules can be edited temporarily in a browser tab; refresh restores the defaults. Neither evaluation nor temporary editing writes tags or membership records. A Collection is not a physical Location Area, an Expense/project Trade, a future Work Area, or a Product compatibility tag.
 _Avoid_: work area, trade, category
 
 **Book Product**:

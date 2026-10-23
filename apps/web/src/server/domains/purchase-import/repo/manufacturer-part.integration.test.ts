@@ -10,6 +10,7 @@ import {
   product,
 } from "~/server/db/schema";
 import { findProductsByExternalIds } from "~/server/domains/product/repo/find-by-external-ids";
+import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
 import { ensureExternalSources } from "~/server/generic/entity-links/repo/entity-external-ids";
 import { refreshSearchDocuments } from "~/server/generic/search/repo/search-document";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
@@ -40,7 +41,11 @@ describe("manufacturer_part identity", () => {
   const makeProduct = async (name: string) => {
     const created = await createProductIdentityFixture(
       ctx.db,
-      makeProductInput({ name, manufacturer: MAKER, model: "TEE-100" }),
+      makeProductInput({
+        name,
+        brandId: await findOrCreateVendor(ctx.db, MAKER),
+        model: "TEE-100",
+      }),
       ctx.actor,
     );
     const [row] = await getDb(ctx.db)
@@ -187,7 +192,7 @@ describe("manufacturer_part identity", () => {
       ctx.db,
       makeProductInput({
         name: "Zeta deep socket kit 36-piece",
-        manufacturer: "ForgeTools",
+        brandId: await findOrCreateVendor(ctx.db, "ForgeTools"),
         model: "KIT-360",
         aliases: ["Impact Pro deep socket kit 36-piece"],
       }),
@@ -301,7 +306,7 @@ describe("manufacturer_part identity", () => {
     ).toHaveLength(25);
   });
 
-  it("refuses a second Product claiming the same manufacturer part", async () => {
+  it("refuses a second Product claiming the same brandName part", async () => {
     const first = await makeProduct("Crew Tee Red M");
     const second = await makeProduct("Crew Tee Red M duplicate");
     const learn = (productId: typeof first.id) =>

@@ -3,6 +3,7 @@ import {
   parseEntityId,
   parseShortcodeFor,
   type ProductId,
+  type VendorShortcode,
 } from "@cubby/schemas/identifiers";
 import { preferredImageUrl } from "@cubby/schemas/image-summary";
 import { ledgerPartyKind } from "@cubby/schemas/ledger-party-fields";
@@ -19,6 +20,10 @@ import { and, desc, eq, ilike, inArray, or, sql } from "drizzle-orm";
 
 import type { AiRunContext } from "~/server/ai/run-feature";
 import type { Database } from "~/server/db";
+import {
+  productBrandCodeSql,
+  productBrandNameSql,
+} from "~/server/db/computed/product-brand-sql";
 import { getDb, ilikeContains, notDeleted } from "~/server/db/helpers";
 import {
   entityExternalId,
@@ -29,6 +34,7 @@ import {
   importSourceClaim,
   sourceOrderObservation,
   ledgerParty,
+  vendor,
 } from "~/server/db/schema";
 import { photoFieldCrossCheck } from "~/server/domains/photo-import/repo/photo-correctness";
 import { loadCategorySummaries } from "~/server/domains/product-category/repo/product-category";
@@ -180,7 +186,8 @@ type CandidateFact = {
   id: ProductId;
   shortcode: string;
   name: string;
-  manufacturer: string | null;
+  brandName: string | null;
+  brandId?: string | null;
   model?: string | null;
   aliases?: string[];
   exactIdentifier?: boolean;
@@ -200,17 +207,17 @@ type RankedCandidate = CandidateFact & {
 };
 
 export function rankPhotoProductCandidates(
-  name: string,
-  manufacturer: string | null,
+  wantedIdentity: Parameters<typeof productIdentityOverlap>[0],
   candidates: readonly CandidateFact[],
   evidenceTexts: readonly string[] = [],
   comparisons: ReadonlyMap<ProductId, ProductVariantComparison> = new Map(),
   limit = SUGGESTION_LIMIT,
 ): RankedCandidate[] {
+  const { name } = wantedIdentity;
   const wanted = productIdentityWords(name);
   const scored = candidates.flatMap((candidate) => {
     const { shared, sharedIdentity, brandMatch, relevant } =
-      productIdentityOverlap({ name, manufacturer }, candidate);
+      productIdentityOverlap(wantedIdentity, candidate);
     if (!relevant) return [];
     const firstTitle = [name, ...evidenceTexts].join("\n");
     const secondTitle = [
@@ -297,10 +304,14 @@ export async function photoProductCandidates(
       ? proposal.product.create.name
       : (proposal.product.existing?.name ?? proposal.committedProduct?.name));
   if (!name) return [];
-  const manufacturer =
+  const brandId =
     proposal.product.kind === "create"
-      ? (proposal.product.create.manufacturer ?? null)
-      : null;
+      ? proposal.product.create.brandId
+      : proposal.review?.productChanges &&
+          "brandId" in proposal.review.productChanges
+        ? proposal.review.productChanges.brandId
+        : (proposal.product.existing?.brandId ??
+          proposal.committedProduct?.brandId);
   const imageIds = new Set(proposal.images.map((entry) => entry.id));
   const evidenceTexts = images
     .filter((image) => imageIds.has(image.id))
@@ -316,7 +327,7 @@ export async function photoProductCandidates(
     db,
     {
       name,
-      manufacturer,
+      brandId,
       model:
         proposal.product.kind === "create"
           ? proposal.product.create.model
@@ -400,7 +411,8 @@ export async function findPhotoProductCandidates(
   db: Database,
   input: {
     name: string;
-    manufacturer?: string | null;
+    brandId?: VendorShortcode | null;
+    brandName?: string | null;
     model?: string | null;
     excludeId?: string;
     excludedProductIds?: readonly string[];
@@ -412,9 +424,21 @@ export async function findPhotoProductCandidates(
   actor: ActorContext,
   compareVariants: ProductVariantComparator,
 ): Promise<PhotoProductCandidate[]> {
-  const { name, manufacturer } = input;
+  const { name } = input;
+  const brandId = input.brandId
+    ? await resolveOrThrow(db, "vendor", input.brandId)
+    : null;
+  const selectedBrand = brandId
+    ? (
+        await getDb(db)
+          .select({ name: vendor.name })
+          .from(vendor)
+          .where(eq(vendor.id, brandId))
+      )[0]
+    : null;
+  const brandName = selectedBrand?.name ?? input.brandName;
   const words = [...productIdentityWords(name)];
-  const brand = manufacturer?.trim();
+  const brand = brandName?.trim();
   const descriptors = words
     .filter((word) => word.length > 3 && !brand?.toLowerCase().includes(word))
     .slice(0, 5);
@@ -444,7 +468,7 @@ export async function findPhotoProductCandidates(
     const pattern = ilikeContains(term);
     return or(
       ilike(product.name, pattern),
-      ilike(product.manufacturer, pattern),
+      ilike(productBrandNameSql(product.brandId), pattern),
       ilike(product.model, pattern),
       sql`EXISTS (SELECT 1 FROM unnest(${product.aliases}) AS alias WHERE alias ILIKE ${pattern})`,
     );
@@ -456,7 +480,8 @@ export async function findPhotoProductCandidates(
       id: product.id,
       shortcode: product.shortcode,
       name: product.name,
-      manufacturer: product.manufacturer,
+      brandId: product.brandId,
+      brandName: productBrandNameSql(product.brandId),
       model: product.model,
       aliases: product.aliases,
       hasOwnPhoto: sql<boolean>`${HAS_OWN_PHOTO}`,
@@ -501,8 +526,7 @@ export async function findPhotoProductCandidates(
     }));
   const sourceTitle = [name, ...identifiers.sort()].join("\n");
   const preliminary = rankPhotoProductCandidates(
-    name,
-    manufacturer ?? null,
+    { name, brandName: brandName ?? null, brandId },
     candidateFacts,
     (input.evidenceTexts ?? []).map((evidence) => evidence.text),
     new Map(),
@@ -530,8 +554,7 @@ export async function findPhotoProductCandidates(
     );
   }
   const ranked = rankPhotoProductCandidates(
-    name,
-    manufacturer ?? null,
+    { name, brandName: brandName ?? null, brandId },
     candidateFacts,
     (input.evidenceTexts ?? []).map((evidence) => evidence.text),
     variantComparisons,
@@ -561,9 +584,8 @@ export async function findPhotoProductCandidates(
     hasInventory: candidate.hasInventory,
     duplicateStrength:
       candidate.exactIdentifier ||
-      (Boolean(manufacturer?.trim()) &&
-        candidate.manufacturer?.trim().toLowerCase() ===
-          manufacturer?.trim().toLowerCase() &&
+      (brandId !== null &&
+        candidate.brandId === brandId &&
         ((Boolean(input.model?.trim()) &&
           input.model?.trim().toLowerCase() ===
             candidate.model?.trim().toLowerCase()) ||
@@ -572,7 +594,7 @@ export async function findPhotoProductCandidates(
               Math.max(
                 1,
                 productIdentityWords(name).size -
-                  productIdentityWords(manufacturer ?? "").size,
+                  productIdentityWords(brandName ?? "").size,
               ) >=
               0.8)))
         ? ("strong" as const)
@@ -603,7 +625,8 @@ export async function loadPhotoProductEvidence(
           id: product.id,
           shortcode: product.shortcode,
           name: product.name,
-          manufacturer: product.manufacturer,
+          brandId: productBrandCodeSql(product.brandId),
+          brandName: productBrandNameSql(product.brandId),
           model: product.model,
           notes: product.notes,
           tags: product.tags,
@@ -693,7 +716,8 @@ export async function loadPhotoProductEvidence(
         id: parseShortcodeFor("product", item.shortcode),
         name: item.name,
         coverUrl: covers.get(item.id) ?? null,
-        manufacturer: item.manufacturer,
+        brandId: item.brandId,
+        brandName: item.brandName,
         model: item.model,
         notes: item.notes,
         tags: item.tags,

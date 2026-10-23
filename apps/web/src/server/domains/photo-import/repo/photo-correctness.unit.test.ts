@@ -16,7 +16,7 @@ it("keeps short, numeric, decimal and fractional identity tokens", () => {
   const marks = photoFieldCrossCheck(
     {
       name: "Synthetic boot US 10 D",
-      manufacturer: "Forge",
+      brandName: "Forge",
       model: "X7",
       identifiers: ["ABC-100"],
     },
@@ -41,7 +41,7 @@ it("keeps short, numeric, decimal and fractional identity tokens", () => {
     photoFieldCrossCheck(
       {
         name: "Synthetic boot",
-        manufacturer: null,
+        brandName: null,
         model: null,
         identifiers: [],
       },
@@ -55,7 +55,7 @@ it("marks label size and width missing from the Product name", () => {
   const marks = photoFieldCrossCheck(
     {
       name: "Synthetic boot",
-      manufacturer: "Forge",
+      brandName: "Forge",
       model: null,
       identifiers: [],
     },
@@ -102,7 +102,7 @@ it("keeps absent catalog colours unknown and ignores repeated label boilerplate"
   const marks = photoFieldCrossCheck(
     {
       name: "Acme Gazelle Indoor — Beige/White",
-      manufacturer: "Acme",
+      brandName: "Acme",
       model: "HQ5154",
       identifiers: [],
     },
@@ -117,7 +117,7 @@ it("keeps absent catalog colours unknown and ignores repeated label boilerplate"
       "MALE",
     ],
   );
-  expect(marks.find((field) => field.field === "manufacturer")?.mark).toBe(
+  expect(marks.find((field) => field.field === "brandName")?.mark).toBe(
     "agree",
   );
   expect(marks.find((field) => field.field === "model")?.mark).toBe("agree");
@@ -272,12 +272,12 @@ it("ignores sentence punctuation around an otherwise equal size", () => {
   });
 });
 
-it("matches punctuation-separated name and manufacturer words in either direction", () => {
+it("matches punctuation-separated name and brandName words in either direction", () => {
   const marks = photoFieldCrossCheck(
-    { name: "Acme Harbor-Indoor", manufacturer: "Acme Works", identifiers: [] },
+    { name: "Acme Harbor-Indoor", brandName: "Acme Works", identifiers: [] },
     ["ACME-WORKS / HARBOR INDOOR"],
   );
-  expect(marks.find((field) => field.field === "manufacturer")).toMatchObject({
+  expect(marks.find((field) => field.field === "brandName")).toMatchObject({
     mark: "agree",
     labelValue: "acme-works",
     productValue: "Acme Works",
@@ -312,7 +312,7 @@ it("does not treat an unclassified printed code as a model contradiction", () =>
   const marks = photoFieldCrossCheck(
     {
       name: "Synthetic shell jacket blue XL",
-      manufacturer: "Synthetic Outfitters",
+      brandName: "Synthetic Outfitters",
       model: "SJ-999",
       identifiers: [],
     },

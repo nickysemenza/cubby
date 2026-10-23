@@ -32,7 +32,7 @@ interface MetadataRow {
   id: string;
   name: string;
   notes: string | null;
-  manufacturer: string;
+  brandName: string;
 }
 
 const helper = createCubbyColumnHelper<MetadataRow>();
@@ -42,7 +42,7 @@ const ignoreFilterChange = () => undefined;
 const nameEditable = { onSave: save };
 const columns = createCubbyColumnCollection<MetadataRow>((add) => {
   add(createTextColumn(helper, "notes", { editable: { onSave: save } }));
-  add(helper.accessor("manufacturer", { header: "Manufacturer" }));
+  add(helper.accessor("brandName", { header: "Manufacturer" }));
 });
 const buildFilters = () => ({});
 const queryOptions = () => ({
@@ -53,7 +53,7 @@ const queryOptions = () => ({
         id: "PRD-TEST",
         name: "Example product",
         notes: null,
-        manufacturer: "Example maker",
+        brandName: "Example maker",
       },
     ],
     meta: { pageIndex: 0, pageSize: 25, totalCount: 1 },
@@ -92,8 +92,7 @@ function MetadataTable({
   const table = list.workbench.table;
   const filterConfig = table
     .getAllLeafColumns()
-    .find((column) => column.id === "manufacturer")?.columnDef
-    .meta?.filterConfig;
+    .find((column) => column.id === "brandName")?.columnDef.meta?.filterConfig;
   const cell = table
     .getRowModel()
     .rows[0]?.getVisibleCells()
@@ -103,7 +102,7 @@ function MetadataTable({
       {filterConfig && (
         <FilterBar
           fields={[
-            barFieldFromConfig("manufacturer", "Manufacturer", filterConfig),
+            barFieldFromConfig("brandName", "Manufacturer", filterConfig),
           ]}
           filters={noFilters}
           onChange={ignoreFilterChange}

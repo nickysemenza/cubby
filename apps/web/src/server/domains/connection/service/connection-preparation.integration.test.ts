@@ -25,6 +25,7 @@ import {
   kernelCtx,
   PRIMARY_MODEL,
 } from "~/server/domains/run/service/suggestion-sweep.fixtures";
+import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
 import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
 import { getSemanticEmbeddingConfig } from "~/server/generic/embedding/service/semantic/config";
 import { createInMemoryVectorizeIndex } from "~/server/generic/embedding/service/semantic/vector-store";
@@ -143,7 +144,10 @@ describe("connection preparation and publication authority", () => {
     );
     const target = await createProductIdentityFixture(
       ctx.db,
-      makeProductInput({ name: "Synthetic Acme Driver", manufacturer: "Acme" }),
+      makeProductInput({
+        name: "Synthetic Acme Driver",
+        brandId: await findOrCreateVendor(ctx.db, "Acme"),
+      }),
       ctx.actor,
     );
     const payment = await createRepoEntity(ctx, "expense", {
@@ -339,7 +343,7 @@ describe("connection preparation and publication authority", () => {
       ctx.db,
       makeProductInput({
         name: "Synthetic basil powder",
-        manufacturer: "Synthetic pantry",
+        brandId: await findOrCreateVendor(ctx.db, "Synthetic pantry"),
       }),
       ctx.actor,
     );
@@ -347,7 +351,7 @@ describe("connection preparation and publication authority", () => {
       ctx.db,
       makeProductInput({
         name: "Synthetic unrelated socket",
-        manufacturer: "Synthetic hardware",
+        brandId: await findOrCreateVendor(ctx.db, "Synthetic hardware"),
       }),
       ctx.actor,
     );

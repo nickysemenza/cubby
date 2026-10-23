@@ -6,12 +6,12 @@ describe("redundantTokens", () => {
     const matches = redundantTokens({
       values: ["jacquemus", "apparel", "pants", "M18"],
       restating: {
-        manufacturer: "Jacquemus",
+        brandName: "Jacquemus",
         classification: ["Apparel", "Pant"],
       },
     });
     expect(matches).toEqual([
-      { value: "jacquemus", reason: "manufacturer", matched: "Jacquemus" },
+      { value: "jacquemus", reason: "brandName", matched: "Jacquemus" },
       { value: "apparel", reason: "classification", matched: "Apparel" },
       { value: "pants", reason: "classification", matched: "Pant" },
     ]);
@@ -22,7 +22,7 @@ describe("redundantTokens", () => {
       redundantTokens({
         values: ["collection:metal-working", "grinder-4.5in", "1/4-hex"],
         restating: {
-          manufacturer: "collection",
+          brandName: "collection",
           classification: ["grinder", "hex"],
         },
       }),
@@ -31,12 +31,12 @@ describe("redundantTokens", () => {
 
   it("returns [] for empty values or when nothing is restated", () => {
     expect(
-      redundantTokens({ values: [], restating: { manufacturer: "Acme" } }),
+      redundantTokens({ values: [], restating: { brandName: "Acme" } }),
     ).toEqual([]);
     expect(
       redundantTokens({
         values: ["battery", "mount"],
-        restating: { manufacturer: null, classification: undefined },
+        restating: { brandName: null, classification: undefined },
       }),
     ).toEqual([]);
   });

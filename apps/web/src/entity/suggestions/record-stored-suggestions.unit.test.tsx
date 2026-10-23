@@ -781,7 +781,7 @@ describe("stored suggestions in generic list cells", () => {
   it("accepts every pending Suggestion on the selected rows", async () => {
     const second = suggestion({
       id: "44444444-4444-4444-8444-444444444444",
-      field: "manufacturer",
+      field: "brandName",
       suggestedValue: "Synthetic maker",
     });
     const { harness, operations } = setup([suggestion(), second]);

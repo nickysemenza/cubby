@@ -18,6 +18,7 @@ import { expenseDerivedReadSql } from "~/server/domains/expense/repo/expense-der
 import { createProduct } from "~/server/domains/product/repo/crud";
 import { projectContentDatesExcluding } from "~/server/domains/project/repo/analytics";
 import { getEntityRecommendations } from "~/server/domains/recommendation/service/entity-recommendations.service";
+import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { canonicalJson } from "~/server/lib/canonical-json";
 import { makeProductInput } from "~/server/testing/repo.fixtures";
@@ -290,7 +291,7 @@ describe("expense project recommendation evidence", () => {
     ]);
     const product = await insertWithShortcode(ctx.db, "product", {
       name: "Synthetic breaker",
-      manufacturer: "Synthetic maker",
+      brandId: await findOrCreateVendor(ctx.db, "Synthetic maker"),
     });
     const line = (values: Partial<typeof expense.$inferInsert>) =>
       insertWithShortcode(ctx.db, "expense", {

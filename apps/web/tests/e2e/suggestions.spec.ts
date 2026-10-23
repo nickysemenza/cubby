@@ -1,3 +1,4 @@
+import { seedProductPrerequisite } from "./fixtures/catalog";
 import { publishFieldAssessment } from "~/server/generic/assessment/repo/assessment";
 import { fieldSuggestionsReply } from "./support/field-suggestion-wire";
 import { fieldInputFingerprint } from "~/server/generic/assessment/repo/field-input-fence";
@@ -902,9 +903,9 @@ test("prunes real Product tags and records saved Feedback and its receipt", asyn
 }, testInfo) => {
   const { db, actor } = await createEvidenceHarnessContext(page);
   const name = uniqueName(testInfo, "Prune receipt");
-  const product = await createEntityFixture(page, "product", {
+  const product = await seedProductPrerequisite(page, {
     name,
-    manufacturer: "Synthetic brand",
+    brandName: "Synthetic brand",
     tags: ["synthetic-brand", "collection:favorites", "mount"],
   });
   const id = await resolveOrThrow(db, "product", product.id);
@@ -913,7 +914,7 @@ test("prunes real Product tags and records saved Feedback and its receipt", asyn
     {
       value: "synthetic-brand",
       probability: 0.99,
-      reason: "Restates manufacturer",
+      reason: "Restates brandName",
     },
   ];
   const prediction = await publishAssessment(
@@ -955,7 +956,7 @@ test("prunes real Product tags and records saved Feedback and its receipt", asyn
                 label: "Remove synthetic-brand",
                 confidence: "high",
                 probability: 0.99,
-                detail: "Restates manufacturer",
+                detail: "Restates brandName",
                 reasoning: "Synthetic retained pruning",
                 alternatives: [],
                 operation: "remove",

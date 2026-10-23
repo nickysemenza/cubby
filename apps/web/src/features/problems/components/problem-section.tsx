@@ -126,7 +126,7 @@ export type RenderedProblemItem = {
   /**
    * The copyable code beside the subtitle. Defaults to the code `route` points
    * at; set `null` when the route opens a sample rather than the card's own
-   * subject (a manufacturer spelling links one product that uses it).
+   * subject (a brandName spelling links one product that uses it).
    */
   shortcode?: string | null;
   /** Status pills beside the title (a code, a "New image" stamp). */

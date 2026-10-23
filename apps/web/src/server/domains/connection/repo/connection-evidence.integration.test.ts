@@ -14,6 +14,7 @@ import {
   product as productTable,
 } from "~/server/db/schema";
 import { deletePurchases } from "~/server/domains/purchase/repo/purchase";
+import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { canonicalJson } from "~/server/lib/canonical-json";
 import { measureDatabaseTransfer } from "~/server/testing/database-transfer.fixtures";
@@ -75,7 +76,7 @@ describe("prepared connection bases", () => {
     });
     const product = await insertWithShortcode(ctx.db, "product", {
       name: "Synthetic basis drill",
-      manufacturer: "Synthetic maker",
+      brandId: await findOrCreateVendor(ctx.db, "Synthetic maker"),
     });
     const line = await createRepoEntity(ctx, "expense", {
       name: "Synthetic basis line",

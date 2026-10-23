@@ -30,9 +30,9 @@ decides whether an import line becomes a Product and never receives inventory.
 Enrichment never invents a price or date; a historical acquisition of unknown cost is an Expense with `cost: null` and no `date`.
 The Research queue is the `research-queue` saved view on Products (and on
 Purchases and Expenses for import gaps). For a backlog, `entity_read.list product` with `sort=dataQuality` ascending puts the
-weakest identity first (heavier identity checks — manufacturer, identifier —
+weakest identity first (heavier identity checks — brand, identifier —
 outweigh lighter ones), in pages of 25. Narrow to a specific gap with
-`filters.dataGap` on a check id: `product_manufacturer`, `product_external_id`,
+`filters.dataGap` on a check id: `product_brand`, `product_external_id`,
 `product_category`, `product_price`, `product_image`,
 `amazon_asin`. Start with summary/count reads, then
 request the relevant page; request full records only for candidates being
@@ -44,9 +44,10 @@ A Product with `commodity: true` is interchangeable goods bought from any seller
 with no single listing (loose produce, bulk meat or fish, herb bunches); the
 brand, Identifier and `amazon_asin` checks do not apply to it. Set it only when
 that holds for every purchase on the Product: an unbranded good with a real
-listing (a cable, a mop pad) is not a commodity. Never write `generic` or a
-similar placeholder as `manufacturer`; leave it `(unspecified)` so the brand gap
-stays visible until the maker is researched.
+listing (a cable, a mop pad) is not a commodity. An unknown brand stays
+`brandId: null` so the gap remains visible. Select the system Generic / Unbranded
+Vendor only when the item is explicitly unbranded; that selection does not set
+commodity or waive identifier research.
 
 Read a candidate immediately before every write. `imageCount` is the complete
 attachment count used by upload preconditions; `itemImageCount` and
@@ -67,11 +68,13 @@ facts with `data_exception` instead of repeatedly researching them. New relevant
 evidence invalidates the exception and reopens the gap. Preserve zero cost,
 source quantity and existing stock; binding a Product never receives it.
 
-For branded seed packets, `manufacturer` is the packet brand established by the
+For branded seed packets, `brandId` references the packet brand established by the
 packet or exact product source. A credited seed grower stays in the research notes;
 it does not replace the packet brand, and a retailer's name alone does not
-establish it. When the brand is unclear, keep the current value or leave it
-blank and report the gap.
+establish it. When the brand is unclear, keep the current reference or leave it
+null and report the gap. Resolve a proven brand against Vendor names and aliases;
+reuse an unambiguous identity or create the missing Vendor, then write its code
+to `brandId`. A related corporate identity or shared website does not prove a match.
 
 Start with the purchased item: recover the original order Email through
 [purchase mail](../purchase-import/references/order-mail.md#recover-an-original-for-interactive-research),
@@ -96,7 +99,7 @@ Never generate an image with AI.
 Record only published evidence: add UPC/EAN/ISBN/GTIN through the typed
 `externalIds` collection, preserving leading zeroes in source evidence. Add
 Amazon ASIN as `amazon`/`asin` and retailer SKUs in their typed slots. A proven
-exact-variant maker part uses `manufacturer_part` with its manufacturer issuer;
+exact-variant maker part uses `manufacturer_part` with its established issuer source;
 a shared family/style code stays descriptive in `model`. An unclassified printed
 code stays in evidence until its meaning is established. Use lowercase kebab-case
 source slugs. A source/kind/
@@ -143,8 +146,9 @@ Change identifier slots with `entity.update product` collection patches on
 `externalIds` (`{op: "add"|"replace"|"remove", key, value?, expect?}`), which
 preserve unrelated IDs; a full `externalIds` array is a deliberate complete
 replacement. Check `imports_read.external_id_collisions` before each new ID. Only an
-exact-variant part number goes in as `manufacturer_part` (source = manufacturer
-slug); a family/style number stays in `model`.
+exact-variant part number goes in as `manufacturer_part` under its registered
+issuer source; a family/style number stays in `model`. Brand renaming never
+relabels an existing identifier tuple.
 A collision needs the identity reference's proven merge or human review,
 never a silent identifier reassignment.
 

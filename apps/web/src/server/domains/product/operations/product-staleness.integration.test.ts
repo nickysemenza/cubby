@@ -13,6 +13,7 @@ import { findOrCreateIngredient } from "~/server/domains/ingredient/repo/crud";
 import { createProduct } from "~/server/domains/product/repo/crud";
 import { createRecipe } from "~/server/domains/recipe/repo/crud";
 import { getRecipeTotalsState } from "~/server/domains/recipe/repo/totals";
+import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
 import { executeEntity } from "~/server/entity-kernel";
 import { resolveLiveShortcode } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { requireActor } from "~/server/http/request-context";
@@ -53,7 +54,12 @@ describe("product mutation recipe-cost staleness", () => {
     (
       await createProduct(
         ctx.db,
-        makeProductInput({ name, manufacturer: name, ingredientId, price }),
+        makeProductInput({
+          name,
+          brandId: await findOrCreateVendor(ctx.db, name),
+          ingredientId,
+          price,
+        }),
         ctx.actor,
       )
     ).id;

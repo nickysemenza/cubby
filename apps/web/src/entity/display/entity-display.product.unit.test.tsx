@@ -28,7 +28,7 @@ installFeatures();
  * `ProductListItem` only where `createEntityDisplayColumns` reads it. */
 interface ProductRow {
   category: ProductCategory | null;
-  manufacturer: string;
+  brandName: string;
   primaryGtin: string | null;
   fdc_id: number | null;
   model: string | null;
@@ -58,7 +58,7 @@ interface ProductRow {
 
 const PRODUCT_ROW: ProductRow = {
   category: categorySummaryFixture("tools"),
-  manufacturer: "Acme",
+  brandName: "Acme",
   primaryGtin: "012345678905",
   fdc_id: 173944,
   model: "X-100",
@@ -133,8 +133,8 @@ function buildProductColumns() {
       );
       add(
         helper.display({
-          id: "manufacturer",
-          cell: ({ row }) => <span>{row.original.manufacturer}</span>,
+          id: "brandName",
+          cell: ({ row }) => <span>{row.original.brandName}</span>,
         }),
       );
       add(

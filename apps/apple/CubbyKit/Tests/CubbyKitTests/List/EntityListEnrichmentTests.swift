@@ -57,13 +57,13 @@ struct EntityListEnrichmentTests {
         let deferred = EntityListDeferred(
             groups: [
                 .init(id: "media", fields: ["displayImages"]),
-                .init(id: "relations", fields: ["manufacturer"]),
+                .init(id: "relations", fields: ["brandName"]),
             ],
             enrich: { _, requested in
                 let attempt = await attempts.next()
                 if attempt == 1 {
                     return [
-                        .ready(id: "relations", rows: [["id": "PRD-2345", "manufacturer": "Sample maker"]]),
+                        .ready(id: "relations", rows: [["id": "PRD-2345", "brandName": "Sample maker"]]),
                         .failed(id: "media", message: "MEDIA_FAILURE: Retry"),
                     ]
                 }
@@ -76,7 +76,7 @@ struct EntityListEnrichmentTests {
 
         let partial = try #require(model.project(page.items).first)
         #expect(partial.title == "Sample")
-        #expect(partial.raw["manufacturer"] == .string("Sample maker"))
+        #expect(partial.raw["brandName"] == .string("Sample maker"))
         #expect(partial.failedFields.contains("displayImages"))
         #expect(model.summaryError != nil)
         #expect(page.meta.totalCount == 2)
@@ -85,7 +85,7 @@ struct EntityListEnrichmentTests {
         await model.waitForBackground()
         let retried = try #require(model.project(page.items).first)
         #expect(retried.failedFields.isEmpty)
-        #expect(retried.raw["manufacturer"] == .string("Sample maker"))
+        #expect(retried.raw["brandName"] == .string("Sample maker"))
     }
 
     private nonisolated static func page(

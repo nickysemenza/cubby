@@ -1,7 +1,7 @@
 /**
  * Barcodes, as `EntityExternalId` rows.
  *
- * A product carries a SET of barcodes, not one: a manufacturer reissues a SKU,
+ * A product carries a SET of barcodes, not one: a brandName reissues a SKU,
  * a retailer relabels, two listings of one item disagree. `Product.upc` could
  * hold exactly one, so every merge of two barcoded products destroyed a real
  * identifier — this module is the replacement read/write surface.

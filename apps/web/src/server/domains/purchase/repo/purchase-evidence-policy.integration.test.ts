@@ -12,7 +12,10 @@ import {
   financialTransactionAllocation,
 } from "~/server/db/schema";
 import { financialTransactionItemizationSql } from "~/server/domains/financial-transaction/repo/financial-reconciliation";
-import { getVendorByID } from "~/server/domains/vendor/repo/vendor";
+import {
+  findOrCreateVendor,
+  getVendorByID,
+} from "~/server/domains/vendor/repo/vendor";
 import { setDataException } from "~/server/generic/data-quality/repo/exceptions";
 import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
 import { linkValues } from "~/server/generic/entity-links/repo/entity-links";
@@ -106,7 +109,7 @@ describe("purchase evidence policy", () => {
     );
     const product = await insertWithShortcode(ctx.db, "product", {
       name: "Fixture hardware cloth",
-      manufacturer: "Fixture maker",
+      brandId: await findOrCreateVendor(ctx.db, "Fixture maker"),
     });
     const line = (values: Partial<typeof expense.$inferInsert>) =>
       insertWithShortcode(ctx.db, "expense", {
@@ -213,7 +216,7 @@ describe("purchase evidence policy", () => {
     };
     const product = await insertWithShortcode(ctx.db, "product", {
       name: "Fixture steel planter",
-      manufacturer: "Fixture maker",
+      brandId: await findOrCreateVendor(ctx.db, "Fixture maker"),
     });
     await unwrapDb(ctx.db)
       .insert(entityLink)
@@ -275,7 +278,7 @@ describe("purchase evidence policy", () => {
     );
     const product = await insertWithShortcode(ctx.db, "product", {
       name: "Fixture linked good",
-      manufacturer: "Fixture maker",
+      brandId: await findOrCreateVendor(ctx.db, "Fixture maker"),
     });
     await unwrapDb(ctx.db)
       .insert(entityLink)

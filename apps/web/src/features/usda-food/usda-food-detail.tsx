@@ -59,7 +59,7 @@ function FoodNutrientDensity({
       mappingProduct={{
         id: mappingProduct.id,
         name: mappingProduct.name,
-        manufacturer: mappingProduct.manufacturer,
+        brandName: mappingProduct.brandName,
       }}
     />
   );

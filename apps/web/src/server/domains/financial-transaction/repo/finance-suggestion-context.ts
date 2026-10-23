@@ -162,7 +162,7 @@ export async function loadFinanceSuggestionContext(
     (
       await database.execute(sql`
     SELECT e.shortcode, e.name, e.cost, e."productQuantity", e.date, e.notes, e."lineKind", e."lineBasis", e."economicRole", e."costType", e.trade,
-      p.shortcode AS purchase, g.shortcode AS product, g.name AS "productName", g.manufacturer, g.model, g.notes AS "productNotes",
+      p.shortcode AS purchase, g.shortcode AS product, g.name AS "productName", (SELECT b.name FROM "Vendor" b WHERE b.id=g."brandId" AND b."deletedAt" IS NULL) AS "brandName", g.model, g.notes AS "productNotes",
       pc.shortcode AS "productCategoryId", pc.name AS "productCategory",
       e."spendingCategoryId" AS "storedSpendingCategoryId", c.shortcode AS "spendingCategoryId", c.name AS "spendingCategory",
       ${expenseSpendingCategoryResolutionSql("e")} AS "classification"

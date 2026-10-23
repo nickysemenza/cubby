@@ -590,7 +590,7 @@ function productChoice(id: string, prepared: PreparedLine): ReportChoice {
     ],
     suggestions: prepared.candidates.map((candidate) => {
       const subtitle = [
-        candidate.manufacturer,
+        candidate.brandName,
         candidate.model,
         candidate.matchReason,
       ]

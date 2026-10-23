@@ -25,7 +25,7 @@ Mail import is one switch per connected mailbox (Settings → Mail import, or
 `run.set_mail_import` over MCP). While it is on, the daily discovery pass needs
 no further approval: it classifies new mail across all senders, so an
 unfamiliar vendor can be discovered, and pages targeted history searches. Each
-known Vendor's verified receipt senders and website domain seed exact
+ordinary Vendor's verified receipt senders and website domain seed exact
 `from:`/domain searches; a Vendor name never becomes a free-text search, and a
 Vendor without a verified sender or website waits for research. Merchant
 descriptions on unallocated financial transactions seed one search per distinct
@@ -35,9 +35,14 @@ and trailing city/state removed (`parseBankDescriptor`). The raw descriptor
 stays on the transaction, and the transaction list's processor filter derives
 from it on read. Targets are recomputed on every pass; an unfinished search that is no
 longer a target is dropped, and a Vendor that gains a verified sender
-joins history search automatically. Targeted pages alternate with new mail;
+joins history search automatically. A newly created Brand uses that same
+Vendor discovery path on the next pass, without needing a Purchase or
+VendorAccount. Generic / Unbranded is excluded; its role is only Product Brand.
+An explicit immediate search uses the existing Vendor mail-search action.
+Targeted pages alternate with new mail;
 there is no all-of-Gmail crawl, and Spam and Trash are excluded. Shared
-platform domains do not identify the seller or establish purchase ownership.
+platform domains do not identify the seller, establish purchase ownership, or
+authorize an identifier issuer namespace.
 Search completion describes the scope actually scanned, not proof that every
 purchase from that Vendor has been found.
 

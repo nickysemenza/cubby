@@ -16,7 +16,7 @@ interface SmartLocation {
 export interface SmartCollectionGraph {
   products: readonly {
     id: string;
-    manufacturer: string;
+    brandName: string | null;
     tags: string[];
     category?: ProductCategorySummary | null;
   }[];
@@ -87,9 +87,9 @@ function evidenceForRule(
     case "productTagEquals":
       return product.tags.includes(rule.value) ? [`Tag: ${rule.value}`] : [];
     case "manufacturerEquals":
-      return product.manufacturer.trim().toLowerCase() ===
+      return (product.brandName ?? "").trim().toLowerCase() ===
         rule.value.trim().toLowerCase()
-        ? [`Manufacturer: ${product.manufacturer}`]
+        ? [`Manufacturer: ${product.brandName}`]
         : [];
     case "locationNameContains":
       return locationEvidence(product.id, rule.value, placements, ancestry);

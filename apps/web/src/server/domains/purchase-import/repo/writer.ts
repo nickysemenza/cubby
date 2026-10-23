@@ -532,7 +532,7 @@ export function receiptProductQuantity(
  * A created Product must not fork an Exact identity match (terminology). An
  * identifier another Product owns always refuses; exact names and strong live
  * brand/item candidates require a sourced Distinct-from decision. A distinct Product still
- * cannot take the identical name, which the (name, manufacturer) index holds.
+ * cannot take the identical name, which the (name, brandName) index holds.
  */
 async function assertNoUnreviewedIdentity(
   tx: DrizzleTransaction,
@@ -561,10 +561,10 @@ async function assertNoUnreviewedIdentity(
         "CONSTRAINT_VIOLATION",
         `Line "${line.title}" matches or resembles ${match.shortcode} ("${match.name}"); resolve the line to ${match.shortcode}, or mark it distinctFrom ${match.shortcode} with a Source showing the difference.`,
       );
-    if (match.name === line.title && match.manufacturer === "")
+    if (match.name === line.title && match.brandName === null)
       throw createAppError(
         "CONSTRAINT_VIOLATION",
-        `A distinct Product cannot take the identical name of ${match.shortcode} ("${match.name}"); give ${match.shortcode} its manufacturer or a distinguishing name first.`,
+        `A distinct Product cannot take the identical name of ${match.shortcode} ("${match.name}"); give ${match.shortcode} its brandName or a distinguishing name first.`,
       );
   }
 }
@@ -645,7 +645,7 @@ export async function resolveLineProduct(
   );
   const created = await insertWithShortcode(tx, "product", {
     name: line.title,
-    manufacturer: "",
+    brandId: null,
     notes:
       decision.distinctFrom
         ?.map(({ url, quote }) => [quote, url].filter(Boolean).join("\n"))

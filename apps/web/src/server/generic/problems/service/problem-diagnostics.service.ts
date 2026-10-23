@@ -14,7 +14,7 @@ import type { ProjectAttentionItem } from "@cubby/schemas/project";
 
 import type { DiagnosticKey } from "~/entity/problems/problem-query";
 import { completeProblemQueryDeclarations } from "~/entity/problems/problem-registry-validation";
-import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";
+import { isUnknownBrandName } from "~/lib/brand-name-utils";
 import type { UpcLookupService } from "~/server/clients/upc";
 import type { Database } from "~/server/db";
 import type { loadProjectDateWindows } from "~/server/domains/project/repo/subtree";
@@ -120,7 +120,7 @@ const runTitleSizeProposals = async (
     proposals.push({
       id: row.shortcode,
       name: row.name,
-      manufacturer: row.manufacturer,
+      brandName: row.brandName,
       category: row.category?.path.map((node) => node.name).join(" > ") ?? null,
       proposed: proposal.amount,
       token: proposal.token,
@@ -171,10 +171,10 @@ async function runUpcProposals(
     const lookup = lookups.get(candidate.upc);
     if (!lookup) continue;
     const proposed = {
-      manufacturer:
-        isUnspecifiedManufacturer(candidate.manufacturer) &&
-        !isUnspecifiedManufacturer(lookup.manufacturer ?? lookup.brand)
-          ? (lookup.manufacturer ?? lookup.brand)
+      brandName:
+        isUnknownBrandName(candidate.brandName) &&
+        !isUnknownBrandName(lookup.brand ?? lookup.manufacturer)
+          ? (lookup.brand ?? lookup.manufacturer)
           : null,
       price:
         candidate.effectivePrice == null && lookup.priceDollars != null
@@ -183,7 +183,7 @@ async function runUpcProposals(
       imageUrl: !candidate.hasImage && lookup.imageUrl ? lookup.imageUrl : null,
     };
     if (
-      proposed.manufacturer == null &&
+      proposed.brandName == null &&
       proposed.price == null &&
       proposed.imageUrl == null
     ) {
@@ -194,7 +194,7 @@ async function runUpcProposals(
       items.push({
         id: candidate.shortcode,
         name: candidate.name,
-        manufacturer: candidate.manufacturer,
+        brandName: candidate.brandName,
         upc: candidate.upc,
         proposed,
       });
@@ -321,16 +321,6 @@ export const diagnosticAdapters = {
     count: async (db) => {
       const { findWeightSoldProducts } = await loadProductDetectors();
       return healthyCount((await findWeightSoldProducts(db)).length);
-    },
-  },
-  "manufacturer-spelling-variants": {
-    sample: async (db, _options, limit) => {
-      const { findManufacturerSpellingVariants } = await loadLabelDetectors();
-      return healthySample(findManufacturerSpellingVariants(db), limit);
-    },
-    count: async (db) => {
-      const { findManufacturerSpellingVariants } = await loadLabelDetectors();
-      return healthyCount((await findManufacturerSpellingVariants(db)).length);
     },
   },
   "duplicate-vendors": {

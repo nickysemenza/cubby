@@ -3,7 +3,10 @@ import type {
   ImageShortcode,
   ProductShortcode,
 } from "@cubby/schemas/identifiers";
-import { productCategoryShortcode } from "@cubby/schemas/identifiers";
+import {
+  parseShortcodeFor,
+  productCategoryShortcode,
+} from "@cubby/schemas/identifiers";
 import type { ImageProcessingJobState } from "@cubby/schemas/image-processing";
 import type {
   PhotoGroupReview as PhotoGroupDecision,
@@ -66,7 +69,6 @@ import {
 } from "~/features/run/run-target-state";
 import { ripple } from "~/integrations/tanstack-query/cache-tags";
 import { photoImport } from "~/integrations/tanstack-query/generated/catalog/photoImport.gen";
-import { product as productOperations } from "~/integrations/tanstack-query/generated/catalog/product.gen";
 import { purchaseImport } from "~/integrations/tanstack-query/generated/catalog/purchaseImport.gen";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import { formatCurrency } from "~/lib/number-format";
@@ -258,6 +260,7 @@ type SaveGroup = (
 ) => Promise<boolean>;
 type ImagesById = ReadonlyMap<string, PhotoRunImage>;
 const WithProductCategorySearch = referenceEntitySearch("productCategory");
+const WithBrandSearch = referenceEntitySearch("vendor");
 
 const isStaleGroup = (
   proposal: PhotoGroupProposal,
@@ -820,7 +823,7 @@ function CommitInput({
           </datalist>
           <span id={hintId} className="text-muted-foreground sm:col-start-2">
             {optionsLoading
-              ? "Checking existing manufacturer names…"
+              ? "Checking existing brandName names…"
               : draft.trim()
                 ? (() => {
                     const match = options.find(
@@ -830,9 +833,9 @@ function CommitInput({
                     );
                     return match
                       ? `Existing name · used on ${countLabel(match.count, "product")}`
-                      : "New manufacturer name · saved as text on this Product";
+                      : "New brandName name · saved as text on this Product";
                   })()
-                : "Use an existing manufacturer name or enter one."}
+                : "Use an existing brandName name or enter one."}
           </span>
         </>
       ) : null}
@@ -960,7 +963,7 @@ function FieldCrossChecks({
   identifiers,
 }: {
   checks: readonly PhotoFieldCrossCheck[];
-  product?: Pick<PhotoProductEvidence, "name" | "manufacturer" | "model">;
+  product?: Pick<PhotoProductEvidence, "name" | "brandName" | "model">;
   unavailable: boolean;
   identifiers?: ReactNode;
 }) {
@@ -972,7 +975,7 @@ function FieldCrossChecks({
   const stored = (check: PhotoFieldCrossCheck) => {
     if (check.field === "identifiers") return identifiers;
     if (
-      check.field === "manufacturer" ||
+      check.field === "brandName" ||
       check.field === "model" ||
       check.field === "name"
     )
@@ -1213,7 +1216,7 @@ function SelectedProductEvidence({
               displayImage={null}
               className="font-medium"
             />
-            {product.manufacturer ? <p>{product.manufacturer}</p> : null}
+            {product.brandName ? <p>{product.brandName}</p> : null}
             {product.model ? <p>{product.model}</p> : null}
           </div>
         </Row>
@@ -1283,7 +1286,7 @@ function FieldChangeToggle({
 }
 
 const productReviewFields = (
-  ["name", "manufacturer", "model", "notes", "tags"] as const
+  ["name", "brandId", "model", "notes", "tags"] as const
 )
   .map((key) => ({
     key,
@@ -1352,6 +1355,8 @@ function ExistingProductChanges({
                         if (!checked) delete next[field];
                         else if (field === "tags")
                           next.tags = current.data?.tags ?? [];
+                        else if (field === "brandId")
+                          next.brandId = current.data?.brandId ?? null;
                         else next[field] = before;
                         return {
                           ...toGroupInput(proposal),
@@ -1381,39 +1386,79 @@ function ExistingProductChanges({
                           wrap
                         />
                       </div>
-                      <CommitInput
-                        label={`New ${presentation.label.toLocaleLowerCase()}`}
-                        required={
-                          entityFieldByKey("product", field)?.requiredOnCreate
-                        }
-                        value={after}
-                        disabled={busy}
-                        onCommit={(value, onSaved) =>
-                          save(
-                            () => ({
-                              ...toGroupInput(proposal),
-                              review: {
-                                ...review,
-                                productChanges: {
-                                  ...changes,
-                                  [field]:
-                                    field === "tags"
-                                      ? value
-                                          .split(",")
-                                          .map((tag) => tag.trim())
-                                          .filter(Boolean)
-                                      : value ||
-                                        (field === "name" ||
-                                        field === "manufacturer"
-                                          ? ""
-                                          : null),
+                      {field === "brandId" ? (
+                        <WithBrandSearch>
+                          {({
+                            items,
+                            isLoading,
+                            onSearchChange,
+                            onOpenChange,
+                            onCreateNew,
+                          }) => (
+                            <Picker
+                              entity="vendor"
+                              label="New brand"
+                              clearable
+                              items={items}
+                              value={
+                                items.find(
+                                  (item) => item.id === changes.brandId,
+                                ) ?? null
+                              }
+                              setValue={(item) =>
+                                save(() => ({
+                                  ...toGroupInput(proposal),
+                                  review: {
+                                    ...review,
+                                    productChanges: {
+                                      ...changes,
+                                      brandId: item
+                                        ? parseShortcodeFor("vendor", item.id)
+                                        : null,
+                                    },
+                                  },
+                                }))
+                              }
+                              isLoading={isLoading}
+                              onSearchChange={onSearchChange}
+                              onOpenChange={onOpenChange}
+                              onCreateNew={onCreateNew}
+                              disabled={busy}
+                            />
+                          )}
+                        </WithBrandSearch>
+                      ) : (
+                        <CommitInput
+                          label={`New ${presentation.label.toLocaleLowerCase()}`}
+                          required={
+                            entityFieldByKey("product", field)?.requiredOnCreate
+                          }
+                          value={after}
+                          disabled={busy}
+                          onCommit={(value, onSaved) =>
+                            save(
+                              () => ({
+                                ...toGroupInput(proposal),
+                                review: {
+                                  ...review,
+                                  productChanges: {
+                                    ...changes,
+                                    [field]:
+                                      field === "tags"
+                                        ? value
+                                            .split(",")
+                                            .map((tag) => tag.trim())
+                                            .filter(Boolean)
+                                        : value ||
+                                          (field === "name" ? "" : null),
+                                  },
                                 },
-                              },
-                            }),
-                            onSaved,
-                          )
-                        }
-                      />
+                              }),
+                              onSaved,
+                            )
+                          }
+                        />
+                      )}
                     </>
                   ) : null}
                 </Stack>
@@ -1552,10 +1597,6 @@ function ProductPanel({
       onSaved,
     );
   const product = proposal.product;
-  const manufacturers = useQuery({
-    ...productOperations.manufacturerOptions.queryOptions(),
-    enabled: product.kind === "create",
-  });
   const batch = usePhotoCandidates();
   const candidates = batch.data?.groups.find(
     (group) => group.groupKey === proposal.groupKey,
@@ -1581,10 +1622,44 @@ function ProductPanel({
   ) => {
     return saveGroup(() => selectPhotoProduct(proposal, next), onSaved);
   };
-  const renderCreateField = (
-    field: "manufacturer" | "model" | "notes" | "tags",
-  ) => {
+  const renderCreateField = (field: "brandId" | "model" | "notes" | "tags") => {
     if (product.kind !== "create") return null;
+    if (field === "brandId")
+      return (
+        <WithBrandSearch>
+          {({
+            items,
+            isLoading,
+            onSearchChange,
+            onOpenChange,
+            onCreateNew,
+          }) => (
+            <Picker
+              entity="vendor"
+              label="Brand"
+              clearable
+              items={items}
+              value={
+                items.find((item) => item.id === product.create.brandId) ?? null
+              }
+              setValue={(item) =>
+                saveProduct({
+                  kind: "create",
+                  create: {
+                    ...product.create,
+                    brandId: item ? parseShortcodeFor("vendor", item.id) : null,
+                  },
+                })
+              }
+              isLoading={isLoading}
+              onSearchChange={onSearchChange}
+              onOpenChange={onOpenChange}
+              onCreateNew={onCreateNew}
+              disabled={busy}
+            />
+          )}
+        </WithBrandSearch>
+      );
     const presentation = entityFieldPresentation("product", field, "create");
     if (!presentation.editable) return null;
     const value = product.create[field];
@@ -1599,22 +1674,11 @@ function ProductPanel({
         }
         value={Array.isArray(value) ? value.join(", ") : (value ?? "")}
         crossCheck={
-          field === "manufacturer" || field === "model"
+          field === "model"
             ? checks.find((check) => check.field === field)
             : undefined
         }
-        className={
-          field === "manufacturer" || field === "model" ? "flex-1" : undefined
-        }
-        options={
-          field === "manufacturer"
-            ? (manufacturers.data?.map((entry) => ({
-                value: entry.manufacturer,
-                count: entry.count,
-              })) ?? [])
-            : undefined
-        }
-        optionsLoading={field === "manufacturer" && manufacturers.isPending}
+        className={field === "model" ? "flex-1" : undefined}
         disabled={busy}
         onCommit={(next, onSaved) =>
           saveProduct(
@@ -1628,9 +1692,7 @@ function ProductPanel({
                         .split(",")
                         .map((tag) => tag.trim())
                         .filter(Boolean)
-                    : field === "manufacturer"
-                      ? next
-                      : next || null,
+                    : next || null,
               },
             },
             onSaved,
@@ -1801,7 +1863,7 @@ function ProductPanel({
               </WithProductCategorySearch>
             </label>
             <Stack gap="sm" className="min-w-0">
-              {renderCreateField("manufacturer")}
+              {renderCreateField("brandId")}
               {renderCreateField("model")}
             </Stack>
           </Stack>

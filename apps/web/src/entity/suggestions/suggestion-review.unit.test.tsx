@@ -34,12 +34,12 @@ const removeSuggestion: FieldSuggestion = {
   label: "Remove apparel, jacquemus",
   confidence: "high",
   probability: 0.9,
-  detail: "restates classification, manufacturer",
+  detail: "restates classification, brandName",
   reasoning: "",
   alternatives: [],
   operation: "remove",
   removals: [
-    { value: "jacquemus", probability: 0.95, reason: "restates manufacturer" },
+    { value: "jacquemus", probability: 0.95, reason: "restates brandName" },
     { value: "apparel", probability: 0.9, reason: "restates classification" },
   ],
 };
@@ -127,7 +127,7 @@ describe("inline suggestion review", () => {
     expect(screen.getByText("mount")).toBeInTheDocument();
     expect(
       screen.getByText(
-        "Remove apparel, jacquemus — restates classification, manufacturer",
+        "Remove apparel, jacquemus — restates classification, brandName",
       ),
     ).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Accept" }));

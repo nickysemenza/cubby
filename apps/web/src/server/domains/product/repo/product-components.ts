@@ -1,3 +1,4 @@
+import type { RelationMutationOut } from "@cubby/schemas/common";
 /**
  * What's inside a kit (`productComponent` links in `EntityLink`) — one
  * Product's own component list, and the transpose (which kits a Product is
@@ -20,8 +21,6 @@
  * sets, kept for the same reason: one fewer write shape to keep consistent
  * with the audit diff.
  */
-
-import type { RelationMutationOut } from "@cubby/schemas/common";
 import type { ActorContext } from "@cubby/schemas/context";
 import type { ProductId } from "@cubby/schemas/identifiers";
 import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
@@ -37,6 +36,7 @@ import { uniq, uniqBy } from "es-toolkit";
 
 import { comparePlainDatesDescending } from "~/lib/household-date";
 import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
+import { productBrandNameSql } from "~/server/db/computed/product-brand-sql";
 import { getDb, notDeleted, withTransaction } from "~/server/db/helpers";
 import {
   entityLink,
@@ -173,7 +173,7 @@ export async function listProductComponents(
       productId: product.id,
       productCode: product.shortcode,
       productName: product.name,
-      manufacturer: product.manufacturer,
+      brandName: productBrandNameSql(product.brandId),
       quantity: entityLink.quantity,
       attachedAt: entityLink.createdAt,
     })
@@ -207,7 +207,7 @@ export async function listProductComponents(
     return {
       productId: parseShortcodeFor("product", row.productCode),
       productName: row.productName,
-      manufacturer: row.manufacturer,
+      brandName: row.brandName,
       quantity: linkQuantity(row.quantity),
       price: prices.get(row.productId) ?? null,
       coverImageUrl: coverImageUrls.get(row.productId) ?? null,
@@ -328,7 +328,7 @@ export async function listKitMembership(
       parentId: parent.id,
       parentCode: parent.shortcode,
       parentName: parent.name,
-      manufacturer: parent.manufacturer,
+      brandName: productBrandNameSql(parent.brandId),
       quantity: entityLink.quantity,
       attachedAt: entityLink.createdAt,
     })
@@ -356,7 +356,7 @@ export async function listKitMembership(
   return rows.map((row) => ({
     parentProductId: parseShortcodeFor("product", row.parentCode),
     parentProductName: row.parentName,
-    manufacturer: row.manufacturer,
+    brandName: row.brandName,
     quantity: linkQuantity(row.quantity),
     coverImageUrl: coverImageUrls.get(row.parentId) ?? null,
     attachedAt: row.attachedAt,

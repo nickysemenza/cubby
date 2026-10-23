@@ -235,7 +235,7 @@ export const buildProductComboboxItem = (
   product: {
     id: ProductShortcode;
     name: string;
-    manufacturer: string;
+    brandName: string | null;
     category?: ProductCategory | null;
     coverImageUrl?: string | null;
     images?: Array<{
@@ -310,7 +310,7 @@ function productPickerBase(
   coverImageUrl: string | null,
 ): ComboboxItem<ProductShortcode> {
   const secondary = [
-    product.manufacturer,
+    product.brandName,
     product.category ? formatCategoryLabel(product.category) : null,
   ]
     .filter(Boolean)

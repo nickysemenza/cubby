@@ -16,7 +16,7 @@ enum AuditPreviewData {
         product: RecountRow.Product(
             id: ProductCode("PRD-2345"),
             name: "Sample Product",
-            manufacturer: "Sample Manufacturer",
+            brandName: "Sample Brand",
             coverImageURL: nil
         ),
         locationID: LocationCode("LOC-1001"),

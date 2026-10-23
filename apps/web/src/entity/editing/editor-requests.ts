@@ -120,7 +120,7 @@ export const expenseCaptureRequest = (input?: {
  */
 export const productCreateRequest = (input?: {
   name?: string;
-  manufacturer?: string;
+  brandId?: EntityEditDraft<"product">["brandId"];
   barcode?: string | null;
   fdcId?: number | null;
   ingredientId?: EntityEditDraft<"product">["ingredientId"];
@@ -129,7 +129,7 @@ export const productCreateRequest = (input?: {
 } => {
   const seed: MutableDraft<"product"> = {};
   if (input?.name) seed.name = input.name;
-  if (input?.manufacturer) seed.manufacturer = input.manufacturer;
+  if (input?.brandId !== undefined) seed.brandId = input.brandId;
   if (input?.barcode !== undefined) seed.barcode = input.barcode;
   if (input?.fdcId !== undefined) seed.fdc_id = input.fdcId;
   if (input?.ingredientId !== undefined) seed.ingredientId = input.ingredientId;

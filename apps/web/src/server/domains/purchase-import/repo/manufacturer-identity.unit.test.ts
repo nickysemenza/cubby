@@ -7,10 +7,10 @@ import {
   sharesModelWithinManufacturer,
 } from "./manufacturer-identity";
 
-const tee = { manufacturer: "ForgeWear", model: "TEE-100" };
+const tee = { brandName: "ForgeWear", model: "TEE-100" };
 
 describe("sharesModelWithinManufacturer", () => {
-  it("matches a model token in the title when the manufacturer is also named", () => {
+  it("matches a model token in the title when the brandName is also named", () => {
     expect(
       sharesModelWithinManufacturer("ForgeWear Crew Tee TEE-100 Black M", tee),
     ).toBe(true);
@@ -22,13 +22,13 @@ describe("sharesModelWithinManufacturer", () => {
     ).toBe(true);
   });
 
-  it("requires the same manufacturer: a coincidental model elsewhere does not corroborate", () => {
+  it("requires the same brandName: a coincidental model elsewhere does not corroborate", () => {
     expect(
       sharesModelWithinManufacturer("AnvilCo Work Shirt TEE-100", tee),
     ).toBe(false);
   });
 
-  it("does not match a different model of the same manufacturer", () => {
+  it("does not match a different model of the same brandName", () => {
     expect(
       sharesModelWithinManufacturer("ForgeWear Crew Tee TEE-200", tee),
     ).toBe(false);
@@ -38,17 +38,17 @@ describe("sharesModelWithinManufacturer", () => {
     for (const model of [null, "", "  ", "T1", "Crew"]) {
       expect(
         sharesModelWithinManufacturer("ForgeWear Crew T1 Tee", {
-          manufacturer: "ForgeWear",
+          brandName: "ForgeWear",
           model,
         }),
       ).toBe(false);
     }
   });
 
-  it("does not match when the product has no manufacturer", () => {
+  it("does not match when the product has no brandName", () => {
     expect(
       sharesModelWithinManufacturer("Crew Tee TEE-100", {
-        manufacturer: "",
+        brandName: "",
         model: "TEE-100",
       }),
     ).toBe(false);
@@ -64,7 +64,7 @@ describe("modelStyleTokens", () => {
 });
 
 describe("manufacturerPartRequests", () => {
-  it("guesses manufacturer sources from leading title words for the line SKU", () => {
+  it("guesses brandName sources from leading title words for the line SKU", () => {
     expect(
       manufacturerPartRequests({
         title: "ForgeWear Apparel Crew Tee",

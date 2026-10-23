@@ -3,6 +3,7 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { mock } from "~/lib/test/mock-schema";
+import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
 import {
   createProductIdentityFixture,
   makeProductInput,
@@ -47,18 +48,18 @@ const scriptedUsda = (script: {
 /**
  * Failure modes: a barcode hit is buried under name matches; a product with a
  * barcode but no USDA record never falls through to a name search; a
- * manufacturer-qualified search that finds nothing never retries on the bare
+ * brandName-qualified search that finds nothing never retries on the bare
  * name; a barcode hit is repeated by the name search.
  */
 describe("usda_food.suggest_for_product", () => {
   const ctx = withTestDb();
 
-  it("returns the barcode match first, then name+manufacturer matches without repeating it", async () => {
+  it("returns the barcode match first, then name+brandName matches without repeating it", async () => {
     const product = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({
         name: "Example Oat Flakes",
-        manufacturer: "Sample Mills",
+        brandId: await findOrCreateVendor(ctx.db, "Sample Mills"),
         barcode: "012345678905",
       }),
       ctx.actor,
@@ -92,7 +93,7 @@ describe("usda_food.suggest_for_product", () => {
       ctx.db,
       makeProductInput({
         name: "Example Lentil Pasta",
-        manufacturer: "Sample Mills",
+        brandId: await findOrCreateVendor(ctx.db, "Sample Mills"),
         barcode: "036000291452",
         fdc_id: 777001,
       }),
@@ -114,12 +115,12 @@ describe("usda_food.suggest_for_product", () => {
     expect(suggestions.currentFdcId).toBe(777001);
   });
 
-  it("retries on the bare name when the manufacturer-qualified search is empty", async () => {
+  it("retries on the bare name when the brandName-qualified search is empty", async () => {
     const product = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({
         name: "Example Chickpea Flour",
-        manufacturer: "Sample Mills",
+        brandId: await findOrCreateVendor(ctx.db, "Sample Mills"),
       }),
       ctx.actor,
     );

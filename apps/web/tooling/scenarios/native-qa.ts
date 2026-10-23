@@ -48,9 +48,12 @@ export async function seedNativeQa(
   const keyboardProduct = await createEntity(context, "product", {
     name: "Synthetic Identifier Keyboard Sample",
   });
+  const brand = await createEntity(context, "vendor", {
+    name: "Synthetic Mill",
+  });
   const product = await createEntity(context, "product", {
     name: "Synthetic Flour Bag",
-    manufacturer: "Synthetic Mill",
+    brandId: brand.id,
     model: null,
     categoryId: taxonomyShortcode("food"),
     ingredientId: ingredient.id,

@@ -496,7 +496,7 @@ const emptyLocationCardSchema = emptyLocationSchema
   .extend({ images: z.array(z.object({ id: z.string(), url: z.string() })) });
 
 const negativeQuantityCardSchema = refSchema.extend({
-  manufacturer: z.string(),
+  brandName: z.string().nullable(),
   quantityLedger: z.object({
     expectedQuantity: z.number(),
     acquiredUnits: z.number(),
@@ -507,7 +507,7 @@ const negativeQuantityCardSchema = refSchema.extend({
 });
 
 const missingPriceCardSchema = refSchema.extend({
-  manufacturer: z.string(),
+  brandName: z.string().nullable(),
   inventoryEntry: z.array(
     z.object({
       amount: z.object({ value: z.number() }),
@@ -732,7 +732,7 @@ const toNegativeExpectedQuantity = (
   const ledger = r.quantityLedger;
   const unknown = ledger.unknownAcquisitionLines + ledger.unknownExitLines;
   return problemRow("product", r, [
-    manufacturerField(r.manufacturer),
+    manufacturerField(r.brandName),
     field("Acquired", String(ledger.acquiredUnits)),
     field("Gone", String(ledger.exitedUnits)),
     field("Expected", String(ledger.expectedQuantity), "destructive"),
@@ -751,7 +751,7 @@ const toProductMissingPrice = (
     "product",
     { id: r.id, name: miscBucket ? getMiscDisplayName(r.name) : r.name },
     [
-      manufacturerField(r.manufacturer),
+      manufacturerField(r.brandName),
       field("Unvalued", countLabel(quantity, "unit"), "warning"),
     ],
     locationBadges(r.inventoryEntry.map((e) => e.location)),
@@ -764,7 +764,7 @@ const toProductWithoutMappings = (
   return {
     id: r.id,
     name: r.name,
-    manufacturer: r.manufacturer,
+    brandName: r.brandName,
     createdAt: r.createdAt,
     // The list embed is soft-delete guarded, so a deleted ingredient is no link.
     isIngredient: r.ingredient != null,

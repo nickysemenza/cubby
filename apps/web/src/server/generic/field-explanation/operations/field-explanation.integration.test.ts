@@ -22,6 +22,7 @@ import { expenseSpendingCategoryResolutionSql } from "~/server/domains/expense/r
 import { createInventoryEntry } from "~/server/domains/inventory/repo/crud";
 import { createLedgerParty } from "~/server/domains/ledger-party/repo/ledger-party";
 import { resolveProductIdentifierSource } from "~/server/domains/product/repo/product-identifier-source";
+import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
 import {
   entityKernelContextSchema,
   executeEntity,
@@ -243,7 +244,7 @@ describe("derived field explanations against canonical records", () => {
     });
     const item = await insertWithShortcode(ctx.db, "product", {
       name: "Fixture toolbox",
-      manufacturer: "Fixture",
+      brandId: await findOrCreateVendor(ctx.db, "Fixture"),
       categoryId: child.id,
     });
     const line = await insertWithShortcode(ctx.db, "expense", {
@@ -779,7 +780,7 @@ describe("derived field explanations against canonical records", () => {
     });
     const product = await insertWithShortcode(ctx.db, "product", {
       name: "Fixture tracking override",
-      manufacturer: "Fixture",
+      brandId: await findOrCreateVendor(ctx.db, "Fixture"),
       categoryId: child.id,
       stockTracked: true,
     });

@@ -19,6 +19,7 @@ import type { LocationIdentityProductRow } from "~/server/domains/location/repo/
 import type { MappableProductExternalId } from "~/server/domains/product/repo/external-id-types";
 
 type ProductSelect = typeof product.$inferSelect & {
+  brandName: string | null;
   category: ProductCategorySummary | null;
 };
 type LocationSelect = typeof location.$inferSelect;

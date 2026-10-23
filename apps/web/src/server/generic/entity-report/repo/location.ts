@@ -8,6 +8,7 @@ import { formatCurrency } from "~/lib/number-format";
 import { formatPricingCountsSummary } from "~/lib/pricing-counts";
 import type { Database } from "~/server/db";
 import { placementCondition } from "~/server/db/computed/inventory-placement";
+import { productBrandNameSql } from "~/server/db/computed/product-brand-sql";
 import { getDb, notDeleted } from "~/server/db/helpers";
 import { inventoryEntry, product } from "~/server/db/schema";
 import {
@@ -20,7 +21,7 @@ const TOP_MANUFACTURERS = 6;
 
 /**
  * Stock held directly at the location, valued per entry (the figure the
- * inventory reads show) and summed per manufacturer in SQL: only this
+ * inventory reads show) and summed per brandName in SQL: only this
  * location's entries are valued and only the top rows come back. Unpriced
  * entries (null valuation) add nothing.
  */
@@ -43,21 +44,21 @@ async function directValueByManufacturer(db: Database, locationId: LocationId) {
     await loadInventoryValuations(db, entries),
     inventoryEntry.id,
   );
-  const manufacturer = sql<string>`coalesce(nullif(${product.manufacturer}, ''), 'Unknown')`;
+  const brandName = sql<string>`coalesce(nullif(${productBrandNameSql(product.brandId)}, ''), 'Unknown')`;
   const total = sql<number>`sum(${valuation})`;
   return getDb(db)
-    .select({ manufacturer, total })
+    .select({ brandName, total })
     .from(inventoryEntry)
     .innerJoin(product, eq(product.id, inventoryEntry.productId))
     .where(and(stock, sql`${valuation} is not null`))
-    .groupBy(manufacturer)
-    .orderBy(desc(total), manufacturer)
+    .groupBy(brandName)
+    .orderBy(desc(total), brandName)
     .limit(TOP_MANUFACTURERS);
 }
 
 /**
  * The rolled-up total (direct stock plus descendants, from the persisted
- * `location.valuation`) and the by-manufacturer breakdown of the stock held
+ * `location.valuation`) and the by-brandName breakdown of the stock held
  * directly here.
  */
 export async function locationContentsValuationReport(
@@ -93,11 +94,11 @@ export async function locationContentsValuationReport(
       ? [
           {
             kind: "table" as const,
-            title: "Direct items by manufacturer",
+            title: "Direct items by brandName",
             columns: ["Manufacturer", "Value"],
             rows: breakdown.map((row) => ({
-              id: row.manufacturer,
-              cells: [row.manufacturer, formatCurrency(row.total)],
+              id: row.brandName,
+              cells: [row.brandName, formatCurrency(row.total)],
             })),
           },
         ]

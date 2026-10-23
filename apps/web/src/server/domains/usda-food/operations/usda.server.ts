@@ -9,7 +9,7 @@ import {
   type usdaProductSuggestionsOut,
   usdaFoodContract,
 } from "~/contracts/usda.contract";
-import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";
+import { isUnknownBrandName } from "~/lib/brand-name-utils";
 import type { Database } from "~/server/db";
 import { foodLookupParamFromProduct } from "~/server/domains/product/repo/helpers";
 import { getProductUsdaSuggestionSource } from "~/server/domains/product/repo/usda-suggestion-source";
@@ -28,7 +28,7 @@ const SUGGESTIONS_PER_QUERY = 5;
 /**
  * USDA foods that plausibly describe one Product, best evidence first: an
  * exact barcode hit (each of its barcodes, primary first), then a search on
- * name + manufacturer, then — only when that finds nothing — the bare name.
+ * name + brandName, then — only when that finds nothing — the bare name.
  * A food is listed once, under its strongest reason. Advisory: it never
  * writes the link (`fdc_id` stays the caller's deliberate choice).
  */
@@ -78,9 +78,9 @@ export async function suggestUsdaFoodsForProduct(
         true,
       )
     ).data;
-  const qualified = isUnspecifiedManufacturer(source.manufacturer)
+  const qualified = isUnknownBrandName(source.brandName)
     ? []
-    : await search(`${source.name} ${source.manufacturer}`);
+    : await search(`${source.name} ${source.brandName}`);
   add("name_manufacturer", qualified);
   if (qualified.length === 0) add("name", await search(source.name));
 

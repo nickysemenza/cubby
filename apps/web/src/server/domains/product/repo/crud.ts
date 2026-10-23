@@ -22,6 +22,7 @@ import type {
   LocationId,
   ProductId,
   ProductCategoryId,
+  VendorId,
 } from "@cubby/schemas/identifiers";
 import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type { ImageOut } from "@cubby/schemas/image";
@@ -45,7 +46,6 @@ import {
 } from "@cubby/schemas/product";
 import { type ProductCategorySummary } from "@cubby/schemas/product-category-fields";
 import { productQuantityVarianceState } from "@cubby/schemas/product-fields";
-import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
 import {
   and,
   asc,
@@ -72,6 +72,10 @@ import {
   productExpenseTotalFilterSql,
   actualExpense,
 } from "~/server/db/computed/expense-aggregate-sql";
+import {
+  productBrandNameSql,
+  productBrandCodeSql,
+} from "~/server/db/computed/product-brand-sql";
 import {
   categorySummarySql,
   categoryStockTrackingSql,
@@ -138,6 +142,7 @@ import {
   productHasGtin,
   productMatchesGtinTerm,
 } from "~/server/domains/product/repo/gtin";
+import { resolveProductBrand } from "~/server/domains/vendor/repo/product-brand";
 import { resolveEntityDisplayImages } from "~/server/entity-kernel/repo/entity-display-image";
 import { insertPayloadWithIdentity } from "~/server/entity-kernel/repo/entity-identity-writer";
 import { createEntityReader } from "~/server/entity-kernel/repo/repository";
@@ -160,7 +165,6 @@ import {
   listReadValue,
 } from "~/server/generic/list/repo/field-compiler";
 import { hierarchyDescendantsSql } from "~/server/generic/list/repo/hierarchy";
-import { resolveEstablishedManufacturer } from "~/server/generic/list/repo/label-canonical";
 import { listScaffold } from "~/server/generic/list/repo/list";
 import type { ListProjection } from "~/server/generic/list/repo/list-contracts";
 import {
@@ -334,6 +338,7 @@ const productScaffold = listScaffold("product", product, {
         `JOIN "Location" l ON l."id" = ie."locationId" AND l."deletedAt" IS NULL ` +
         `WHERE ie."productId" = "Product"."id" AND ie."deletedAt" IS NULL)`,
     ),
+    brandId: productBrandNameSql(product.brandId),
     categoryId: sql`${categorySummarySql(sql`${product.categoryId}`)}::jsonb->'path'`,
     price: sql.raw(effectiveProductPriceSql('"Product"')),
     primaryGtin: sql.raw(
@@ -769,7 +774,10 @@ const readProductListPage = async (
   type ProductListExtras = {
     -readonly [K in keyof typeof extras]?: (typeof extras)[K];
   };
-  const selectedExtras: ProductListExtras = {};
+  const selectedExtras: ProductListExtras = {
+    brandName: extras.brandName,
+    brandCode: extras.brandCode,
+  };
   if (relationFields) selectedExtras.category = extras.category;
   if (wantsListGroup(projection, "quality"))
     selectedExtras.classificationEvidence = extras.classificationEvidence;
@@ -1334,7 +1342,7 @@ export const productSearch = async (
   filters: Pick<
     ProductFilters,
     | "nameFilter"
-    | "manufacturerFilter"
+    | "brandFilter"
     | "upcFilter"
     | "categoryFilter"
     | "categoryFeatureFilter"
@@ -1362,7 +1370,7 @@ export const productSearch = async (
           ),
         )
       : undefined,
-    formatSearchTerm(product.manufacturer, filters.manufacturerFilter),
+    formatSearchTerm(productBrandNameSql(product.brandId), filters.brandFilter),
     filters.upcFilter ? productMatchesGtinTerm(filters.upcFilter) : undefined,
     filters.categoryFilter?.length
       ? sql`${product.categoryId} IN ${hierarchyDescendantsSql("productCategory", await resolveAllOrThrow(db, "productCategory", Array.isArray(filters.categoryFilter) ? filters.categoryFilter : [filters.categoryFilter]))}`
@@ -1375,6 +1383,14 @@ export const productSearch = async (
     {
       where: whereClause,
       orderBy: productListOrderBy(sorts),
+      load: (where) =>
+        getDb(db).query.product.findMany({
+          where,
+          extras: {
+            brandName: productBrandNameSql(product.brandId).as("brandName"),
+            brandCode: productBrandCodeSql(product.brandId).as("brandCode"),
+          },
+        }),
     },
   );
   if (!page.data.length) return { ...page, data: [] };
@@ -1410,11 +1426,15 @@ export const getProductPickerItemsByIds = async (
     // `inArray`, NOT sql`col = ANY(${arr})`: drizzle expands a JS array in a
     // template into a row constructor (`ANY(($1, $2))`), which postgres rejects.
     where: and(inArray(product.id, ids), notDeleted(product)),
+    extras: {
+      brandName: productBrandNameSql(product.brandId).as("brandName"),
+      brandCode: productBrandCodeSql(product.brandId).as("brandCode"),
+    },
     columns: {
       id: true,
       shortcode: true,
       name: true,
-      manufacturer: true,
+      brandId: true,
       categoryId: true,
     },
   });
@@ -1450,7 +1470,7 @@ export const getProductPickerItemsByIds = async (
  */
 async function throwIfDuplicateProduct<TError>(
   db: Database,
-  data: Pick<ProductCreateInput, "name" | "manufacturer"> & {
+  data: { name: string; brandId: string | null } & {
     upc?: string | null;
   },
   error: TError,
@@ -1481,7 +1501,7 @@ async function throwIfDuplicateProduct<TError>(
     );
   }
 
-  if (constraint.includes("name_manufacturer")) {
+  if (constraint.includes("name_brandId")) {
     // Re-read the blocker rather than echoing the input back. Without this the
     // message says only that *something* named this exists, and the next step
     // is always a list/search call to find out what — so name it here. The
@@ -1489,7 +1509,9 @@ async function throwIfDuplicateProduct<TError>(
     const existing = await getDb(db).query.product.findFirst({
       where: and(
         eq(product.name, data.name),
-        eq(product.manufacturer, data.manufacturer),
+        data.brandId === null
+          ? sql`${product.brandId} IS NULL`
+          : sql`(${product.brandId}::text = ${data.brandId} OR ${productBrandCodeSql(product.brandId)} = ${data.brandId})`,
         notDeleted(product),
       ),
       columns: { name: true, shortcode: true },
@@ -1497,8 +1519,8 @@ async function throwIfDuplicateProduct<TError>(
     throw createAppError(
       "PRODUCT_ALREADY_EXISTS",
       existing
-        ? `A product named “${data.name}” by “${data.manufacturer}” already exists: ${existing.shortcode}.`
-        : `A product named “${data.name}” by “${data.manufacturer}” already exists.`,
+        ? `A product named “${data.name}” by “${data.brandId ?? "unknown brand"}” already exists: ${existing.shortcode}.`
+        : `A product named “${data.name}” by “${data.brandId ?? "unknown brand"}” already exists.`,
       error,
     );
   }
@@ -1654,10 +1676,7 @@ export async function createProductRecord<TOutput>(
       await assertExternalIdsAvailable(tx, desiredExternalIds);
       const newProduct = await insertWithShortcode(tx, "product", {
         ...columnData,
-        manufacturer: await resolveEstablishedManufacturer(
-          tx,
-          productData.manufacturer,
-        ),
+        brandId: await resolveProductBrand(tx, productData.brandId),
         categoryId,
         ingredientId: ingredientId ?? null,
       });
@@ -1779,7 +1798,17 @@ export async function createProductRecord<TOutput>(
         >;
       }>(sql`SELECT ${categorySummarySql(sql`${newProduct.categoryId}::uuid`)} AS category,
         ${categoryStockTrackingSql(sql`${newProduct.categoryId}::uuid`)} AS "categoryStockTracking"`);
+      const brandProjection = (
+        await tx
+          .select({
+            brandName: productBrandNameSql(product.brandId),
+            brandCode: productBrandCodeSql(product.brandId),
+          })
+          .from(product)
+          .where(eq(product.id, newProduct.id))
+      )[0]!;
       const output = dbProductToTopLevelAPI({
+        ...brandProjection,
         classificationEvidence: await getProductClassificationEvidence(
           tx,
           newProduct.id,
@@ -1877,10 +1906,10 @@ export async function updateProduct<TOutput>(
   // The identity this update lands on, captured inside the transaction for the
   // duplicate handler outside it — a rename collides on the SAME indexes a
   // create does, and used to surface as the generic "a product with that name,
-  // manufacturer already exists" with no way to tell which product that was.
+  // brandName already exists" with no way to tell which product that was.
   let effectiveIdentity: {
     name: string;
-    manufacturer: string;
+    brandId: VendorId | null;
     upc?: string | null;
   } | null = null;
 
@@ -1900,11 +1929,15 @@ export async function updateProduct<TOutput>(
           : foldGtinIntoExternalIds(externalIds, incomingGtin);
     effectiveIdentity = {
       name: columnData.name ?? beforeProduct.name,
-      manufacturer: columnData.manufacturer ?? beforeProduct.manufacturer,
+      brandId:
+        columnData.brandId === undefined
+          ? beforeProduct.brandId
+          : await resolveProductBrand(tx, columnData.brandId),
       upc: incomingGtin ?? undefined,
     };
     const updateData: Partial<typeof product.$inferInsert> = {
       ...columnData,
+      brandId: effectiveIdentity.brandId,
       aliases: resolvedTextCollection("aliases", aliases),
       tags: resolvedTextCollection("tags", tags),
     };
@@ -2111,7 +2144,17 @@ export async function updateProduct<TOutput>(
       if (readOutput) return readOutput(tx, updated);
       const pricing = await loadProductPricing(tx, [updated]);
       const qualities = await loadProductDataQualities(tx, [updated.id]);
+      const brandProjection = (
+        await tx
+          .select({
+            brandName: productBrandNameSql(product.brandId),
+            brandCode: productBrandCodeSql(product.brandId),
+          })
+          .from(product)
+          .where(eq(product.id, updated.id))
+      )[0]!;
       return dbProductToTopLevelAPI({
+        ...brandProjection,
         classificationEvidence: await getProductClassificationEvidence(
           tx,
           updated.id,
@@ -2397,7 +2440,7 @@ const applyPrimaryBarcode = async (
 
 interface QuickCreateProductInput {
   name: string;
-  manufacturer?: string;
+  brandId?: import("@cubby/schemas/identifiers").VendorShortcode | null;
   barcode?: string | null;
   expectedQuantity?: number | null;
   model?: string | null;
@@ -2440,10 +2483,7 @@ export const quickCreateProductRecord = async (
 
   const values = {
     name: data.name,
-    manufacturer: await resolveEstablishedManufacturer(
-      db,
-      data.manufacturer ?? UNSPECIFIED_MANUFACTURER,
-    ),
+    brandId: await resolveProductBrand(db, data.brandId),
     fdc_id: data.fdc_id ?? null,
     model: data.model ?? null,
     expectedQuantity: data.expectedQuantity ?? null,
@@ -2496,7 +2536,17 @@ export const quickCreateProductRecord = async (
       loadCategorySummaries(db),
       loadCategoryStockTracking(db, newProduct.categoryId),
     ]);
+  const brandProjection = (
+    await getDb(db)
+      .select({
+        brandName: productBrandNameSql(product.brandId),
+        brandCode: productBrandCodeSql(product.brandId),
+      })
+      .from(product)
+      .where(eq(product.id, newProduct.id))
+  )[0]!;
   const output = dbProductToTopLevelAPI({
+    ...brandProjection,
     classificationEvidence,
     category: categories.get(newProduct.categoryId!) ?? null,
     categoryStockTracking,

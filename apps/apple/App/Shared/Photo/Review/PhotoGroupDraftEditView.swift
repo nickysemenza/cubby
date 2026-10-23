@@ -10,7 +10,9 @@ struct PhotoGroupDraftEditView: View {
     @Environment(AppModel.self) private var appModel
     @Environment(\.dismiss) private var dismiss
     @State private var name = ""
-    @State private var manufacturer = ""
+    @State private var brandID: String?
+    @State private var brandName: String?
+    @State private var choosingBrand = false
     @State private var modelName = ""
     @State private var notes = ""
     @State private var categoryID: String?
@@ -27,10 +29,16 @@ struct PhotoGroupDraftEditView: View {
                         .multilineTextAlignment(.trailing)
                         .labelsHidden()
                 }
-                LabeledContent("Manufacturer") {
-                    TextField("Manufacturer", text: $manufacturer, prompt: Text("None"))
-                        .multilineTextAlignment(.trailing)
-                        .labelsHidden()
+                Button {
+                    choosingBrand = true
+                } label: {
+                    LabeledContent("Brand", value: brandName ?? brandID ?? "Choose brand")
+                }
+                if brandID != nil {
+                    Button("Clear brand") {
+                        brandID = nil
+                        brandName = nil
+                    }
                 }
                 LabeledContent("Model") {
                     TextField("Model", text: $modelName, prompt: Text("None"))
@@ -73,10 +81,22 @@ struct PhotoGroupDraftEditView: View {
         .task(id: group.groupKey) {
             guard case .create(let product) = group.product else { return }
             name = product.create.name
-            manufacturer = product.create.manufacturer ?? ""
+            brandID = product.create.brandId
+            brandName = nil
             modelName = product.create.model ?? ""
             notes = product.create.notes ?? ""
             categoryID = product.create.categoryId
+            if let selectedBrandID = brandID {
+                do {
+                    let brand = try await appModel.client.row(EntityCatalog[.vendor], id: selectedBrandID)
+                    guard !Task.isCancelled, brandID == selectedBrandID else { return }
+                    brandName = brand?.title
+                } catch {
+                    guard !Task.isCancelled else { return }
+                    Diagnostics.report(error, context: "Load photo proposal brand")
+                    self.error = error.localizedDescription
+                }
+            }
         }
         .sheet(isPresented: $choosingCategory) {
             EntityPickerSheet(
@@ -85,6 +105,15 @@ struct PhotoGroupDraftEditView: View {
                 guard let category = picks.first else { return }
                 categoryID = category.id
                 categoryName = category.title
+            }
+        }
+        .sheet(isPresented: $choosingBrand) {
+            EntityPickerSheet(
+                target: .vendor, selected: [brandID].compactMap { $0 }
+            ) { picks in
+                guard let brand = picks.first else { return }
+                brandID = brand.id
+                brandName = brand.title
             }
         }
     }
@@ -96,14 +125,15 @@ struct PhotoGroupDraftEditView: View {
         defer { saving = false }
         do {
             _ = try await appModel.client.updatePhotoGroupDraft(
-                .init(
-                    runId: runID,
-                    groupKey: group.groupKey,
-                    name: name.trimmingCharacters(in: .whitespacesAndNewlines),
-                    categoryId: categoryID,
-                    manufacturer: manufacturer.isEmpty ? nil : manufacturer,
-                    model: modelName.isEmpty ? nil : modelName,
-                    notes: notes.isEmpty ? nil : notes))
+                .object([
+                    "runId": .string(runID),
+                    "groupKey": .string(group.groupKey),
+                    "name": .string(name.trimmingCharacters(in: .whitespacesAndNewlines)),
+                    "categoryId": categoryID.map(JSONValue.string) ?? .null,
+                    "brandId": brandID.map(JSONValue.string) ?? .null,
+                    "model": modelName.isEmpty ? .null : .string(modelName),
+                    "notes": notes.isEmpty ? .null : .string(notes),
+                ]))
             onSaved()
             dismiss()
         } catch {

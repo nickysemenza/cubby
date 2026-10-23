@@ -21,15 +21,15 @@ export const fact = (
 ): Fact => ({ label, value, tone });
 
 /**
- * `Product.manufacturer` is free text, so a fact rather than a link. Absent
+ * `Product.brandName` is free text, so a fact rather than a link. Absent
  * stays absent unless the card is about identity, where the gap is the defect.
  */
 export const manufacturerFact = (
-  manufacturer: string | null | undefined,
+  brandName: string | null | undefined,
   { missingIsDefect = false }: { missingIsDefect?: boolean } = {},
 ): Fact | null =>
-  manufacturer
-    ? fact("Manufacturer", manufacturer)
+  brandName
+    ? fact("Manufacturer", brandName)
     : missingIsDefect
       ? fact("Manufacturer", "—", "warning")
       : null;

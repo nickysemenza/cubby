@@ -21,6 +21,8 @@ import type { ProductPricing } from "./pricing";
 import type { QuantityLedger } from "./quantity-ledger";
 
 type ProductSelect = typeof product.$inferSelect & {
+  brandName: string | null;
+  brandCode: import("@cubby/schemas/identifiers").VendorShortcode | null;
   classificationEvidence: string;
   category: ProductCategorySummary | null;
   categoryStockTracking: CategoryStockTracking | null;

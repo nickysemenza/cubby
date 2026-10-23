@@ -63,7 +63,7 @@ export type InlineRefLinkProps = {
   | { entity: "ingredient"; data: MinimalEntityData }
   | {
       entity: "product";
-      data: MinimalEntityData & { manufacturer?: string };
+      data: MinimalEntityData & { brandName?: string | null };
     }
   | { entity: "recipe"; data: MinimalEntityData }
   | { entity: "cookbook"; data: MinimalEntityData & { authors?: string[] } }
@@ -186,7 +186,7 @@ const inlineSpec = (props: InlineRefLinkProps): InlineSpec =>
       return {
         id: data.id,
         name: isMisc ? getMiscDisplayName(data.name) : data.name,
-        metadata: isMisc ? "misc" : data.manufacturer,
+        metadata: isMisc ? "misc" : data.brandName,
       };
     })
     .with({ entity: "usda-food" }, ({ data }) => {

@@ -11,7 +11,7 @@ import { productShortcode } from "./identifier-fields";
 export const ingredientNutritionProductOut = z.object({
   productId: productShortcode,
   name: z.string(),
-  manufacturer: z.string(),
+  brandName: z.string().nullable(),
   display: productNutritionDisplay,
 });
 export type IngredientNutritionProductOut = z.infer<

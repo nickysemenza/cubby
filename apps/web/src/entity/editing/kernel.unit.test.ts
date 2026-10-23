@@ -206,7 +206,7 @@ describe("ordinary identifier submission", () => {
     expect(local.collectionEdit.rows).toHaveLength(2);
   });
 
-  it("preserves literal identity keys when replacing a manufacturer part", () => {
+  it("preserves literal identity keys when replacing a brandName part", () => {
     const requestWithLiteral = {
       ...request,
       record: {

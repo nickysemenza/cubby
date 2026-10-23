@@ -2,6 +2,7 @@ import { testEntityId, testShortcode } from "@cubby/schemas/testing";
 import type { drizzle } from "drizzle-orm/node-postgres";
 
 import {
+  vendor,
   automaticRule,
   entityIdentity,
   location,
@@ -66,6 +67,12 @@ export async function seedBaseWorld(db: InsertClient): Promise<void> {
       .insert(entityIdentity)
       .values([
         {
+          id: testEntityId("vendor", "f71dd50e-78f5-7661-8b15-6bd30011fcb0"),
+          kind: "vendor",
+          shortcode: testShortcode("vendor", "VEN-GNRKC"),
+          createdAt,
+        },
+        {
           id: BASE_HOME_ID,
           kind: "location",
           shortcode: BASE_HOME_SHORTCODE,
@@ -79,6 +86,15 @@ export async function seedBaseWorld(db: InsertClient): Promise<void> {
         })),
       ])
       .onConflictDoNothing({ target: entityIdentity.id });
+    await tx
+      .insert(vendor)
+      .values({
+        id: testEntityId("vendor", "f71dd50e-78f5-7661-8b15-6bd30011fcb0"),
+        shortcode: testShortcode("vendor", "VEN-GNRKC"),
+        name: "Generic / Unbranded",
+        systemKey: "generic-unbranded",
+      })
+      .onConflictDoNothing({ target: vendor.id });
     await tx
       .insert(location)
       .values({

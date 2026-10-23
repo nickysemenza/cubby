@@ -603,7 +603,7 @@ export function shirtGroup(
           kind: "create" as const,
           create: {
             name: names.productName,
-            manufacturer: names.name,
+            brandId: null,
             categoryId: owner.categoryId,
           },
         },

@@ -181,7 +181,8 @@ struct GenericEntityEditModelTests {
             .utf8)
 
     private static let productOriginal: JSONValue = [
-        "id": "PRD-2345", "name": "Skillet", "manufacturer": "Sample Co", "categoryId": "CAT-2224",
+        "id": "PRD-2345", "name": "Skillet", "brandId": "VEN-2345", "brandName": "Sample Co",
+        "categoryId": "CAT-2224",
         "attachments": [["id": "IMG-2345"], ["id": "IMG-3456"], ["id": "IMG-4567"]],
     ]
 
@@ -375,7 +376,7 @@ struct GenericEntityEditModelTests {
             descriptor: EntityCatalog[.product], mode: .update(id: "PRD-2345"), client: try makeClient(),
             original: Self.productOriginal)
         #expect(!model.canSave)
-        model.draft["manufacturer"] = "Lodge"
+        model.draft["brandId"] = "VEN-3456"
         model.draft["categoryId"] = .null
         #expect(model.canSave)
         let saved = await model.save()
@@ -388,7 +389,7 @@ struct GenericEntityEditModelTests {
         #expect(
             requests.first?.body == [
                 "action": "update", "entity": "product", "id": "PRD-2345",
-                "data": ["manufacturer": "Lodge", "categoryId": .null],
+                "data": ["brandId": "VEN-3456", "categoryId": .null],
             ])
     }
 
@@ -458,7 +459,7 @@ struct GenericEntityEditModelTests {
         await model.load()
         #expect(model.loadError != nil)
         #expect(model.bannerError == nil)
-        model.draft["manufacturer"] = "Lodge"
+        model.draft["brandId"] = "VEN-3456"
         #expect(!model.canSave)
     }
 

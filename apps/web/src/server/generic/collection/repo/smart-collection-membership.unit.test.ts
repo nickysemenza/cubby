@@ -13,12 +13,12 @@ import {
 
 const graph: SmartCollectionGraph = {
   products: [
-    { id: "brush", manufacturer: "  FESTOOL ", tags: ["collection:painting"] },
-    { id: "vessel", manufacturer: "Other", tags: [] },
-    { id: "measure", manufacturer: "Other", tags: [] },
+    { id: "brush", brandName: "  FESTOOL ", tags: ["collection:painting"] },
+    { id: "vessel", brandName: "Other", tags: [] },
+    { id: "measure", brandName: "Other", tags: [] },
     {
       id: "unplaced",
-      manufacturer: "Festoolish",
+      brandName: "Festoolish",
       tags: ["Collection:painting"],
     },
   ],

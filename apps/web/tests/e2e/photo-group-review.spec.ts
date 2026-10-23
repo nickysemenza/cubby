@@ -1045,9 +1045,12 @@ async function seedEvidenceReview(
   evidence = false,
 ) {
   const productName = `Synthetic shell jacket blue XL ${Date.now()}`;
-  const existing = await createEntityFixture(page, "product", {
+  const brand = await createEntityFixture(page, "vendor", {
+    name: "Synthetic Outfitters",
+  });
+  const existing = await seedProductPrerequisite(page, {
     name: productName,
-    manufacturer: "Synthetic Outfitters",
+    brandId: parseShortcodeFor("vendor", brand.id),
     model: "SJ-104",
     externalIds: evidence
       ? [{ source: "amazon", kind: "asin", externalId: "B0SYNTH123" }]
@@ -1114,7 +1117,7 @@ async function seedEvidenceReview(
         kind: "create" as const,
         create: {
           name: "Synthetic shell jacket",
-          manufacturer: "Synthetic Outfitters",
+          brandId: parseShortcodeFor("vendor", brand.id),
         },
       },
     },
@@ -1462,9 +1465,9 @@ test("keeps a noisy care label to meaningful checks and linked purchase evidence
 }) => {
   test.setTimeout(90_000);
   const productName = "Acme Harbor Penny Loafer, Black, Size 9";
-  const existing = await createEntityFixture(page, "product", {
+  const existing = await seedProductPrerequisite(page, {
     name: productName,
-    manufacturer: "Acme",
+    brandName: "Acme",
   });
   const runName = `Synthetic care label ${Date.now()}`;
   const seed = await seedPhotoGroupReviewRun(

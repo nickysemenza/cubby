@@ -68,7 +68,7 @@ interface TestEntry {
 interface ProductEntry {
   id: InventoryShortcode;
   amount: Amount;
-  product?: { id: ProductShortcode; name: string; manufacturer: string };
+  product?: { id: ProductShortcode; name: string; brandName: string };
 }
 
 interface TestRow {
@@ -109,7 +109,7 @@ describe("InventoryEntriesCell", () => {
     const product: ProductEntry["product"] = {
       id: testShortcode("product", "prd-1"),
       name: "Bread Flour",
-      manufacturer: "Mill House",
+      brandName: "Mill House",
     };
     const entry: ProductEntry = {
       id: testShortcode("inventory", "inv-product-1"),

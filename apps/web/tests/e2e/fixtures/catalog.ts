@@ -1,7 +1,6 @@
 import { publishEntityConnection } from "~/server/domains/connection/repo/entity-connections";
 import type { EntityOverrides } from "../../../tooling/factories/build";
 import { taxonomyShortcode } from "../../../tooling/product-category-fixtures";
-import { type ProductCreateInput } from "@cubby/schemas/product";
 import { type TaskStatus } from "@cubby/schemas/project";
 import type { Page } from "@playwright/test";
 import { and, eq, isNull } from "drizzle-orm";
@@ -74,22 +73,15 @@ export const seedPlantingPrerequisite = (
 
 export const seedProductPrerequisite = (
   page: Page,
-  opts: {
-    name: string;
-    manufacturer?: string;
-    categoryId?: string;
-    growsPlantId?: string;
-    externalIds?: ProductCreateInput["externalIds"];
-    tags?: string[];
-  },
+  opts: EntityOverrides<"product"> & { name: string; brandName?: string },
 ) =>
-  createEntityFixture(page, "product", {
-    name: opts.name,
-    manufacturer: opts.manufacturer ?? "E2E fixture",
-    categoryId: opts.categoryId,
-    growsPlantId: opts.growsPlantId,
-    externalIds: opts.externalIds,
-    tags: opts.tags ?? [],
+  createFixtureGraph(page, async (create) => {
+    const { brandName, brandId, ...product } = opts;
+    const reference =
+      brandId !== undefined
+        ? brandId
+        : (await create("vendor", { name: brandName ?? "E2E fixture" })).id;
+    return create("product", { ...product, brandId: reference });
   });
 
 export const seedProjectPrerequisite = (page: Page, name: string) =>
@@ -145,11 +137,12 @@ export const seedInventoryPrerequisites = (
       type: "room",
       parentId: null,
     });
+    const brand = await create("vendor", { name: "E2E fixture" });
     const products = [];
     for (const product of opts.products) {
       const created = await create("product", {
         name: product.name,
-        manufacturer: "E2E fixture",
+        brandId: brand.id,
         tags: [],
       });
       await create("inventory", {
@@ -170,6 +163,7 @@ export async function seedToolFlowPrerequisite(
   }>,
 ) {
   return createFixtureGraph(page, async (create) => {
+    const brand = await create("vendor", { name: "Flow fixture maker" });
     const located = [];
     for (const group of groups) {
       const location = await create("location", {
@@ -181,7 +175,7 @@ export async function seedToolFlowPrerequisite(
       for (const name of group.productNames) {
         const product = await create("product", {
           name,
-          manufacturer: "Flow fixture maker",
+          brandId: brand.id,
           categoryId: taxonomyShortcode("tools"),
         });
         await create("inventory", {
@@ -258,9 +252,10 @@ export async function seedWardrobePrerequisites(page: Page, name: string) {
     page,
     `${name} other drawer`,
   );
+  const brand = await createEntityFixture(page, "vendor", { name: "Fixture" });
   const product = await createEntityFixture(page, "product", {
     name: `${name} shirt`,
-    manufacturer: "Fixture",
+    brandId: brand.id,
     categoryId: taxonomyShortcode("apparel"),
   });
   const entry = await createEntityFixture(page, "inventory", {

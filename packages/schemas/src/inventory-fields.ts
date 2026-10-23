@@ -32,7 +32,7 @@ const productInventoryEmbedFields = {
   name: z.string(),
   primaryGtin: gtin.nullable(),
   fdc_id: fdcId.nullable(),
-  manufacturer: z.string(),
+  brandName: z.string().nullable(),
   model: z.string().nullable(),
   notes: z.string().nullable(),
   expectedQuantity: z.number().int().positive().nullable(),
@@ -48,7 +48,7 @@ export type ProductInventoryEmbedOut = z.infer<typeof productInventoryEmbedOut>;
 export const inventoryListProductOut = z.object({
   id: productShortcode,
   name: z.string(),
-  manufacturer: z.string(),
+  brandName: z.string().nullable(),
   primaryGtin: gtin.nullable(),
   fdc_id: fdcId.nullable(),
   category: productCategory.nullable(),

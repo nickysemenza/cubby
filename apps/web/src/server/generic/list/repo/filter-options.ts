@@ -25,6 +25,7 @@ import { z } from "zod";
 import { getR2PublicUrl } from "~/server/clients/r2-public-url";
 import type { Database } from "~/server/db";
 import { stockOnly } from "~/server/db/computed/inventory-placement";
+import { productBrandNameSql } from "~/server/db/computed/product-brand-sql";
 import { formatSearchTerm, getDb, notDeleted } from "~/server/db/helpers";
 import {
   entityAttachment,
@@ -72,7 +73,7 @@ type DecorableRow = OptionRow & { internalId: LocationId };
 type FilterOptionSelection = {
   id: PgColumn;
   label: PgColumn;
-  detail?: PgColumn;
+  detail?: PgColumn | SQL;
   internalId?: PgColumn;
 };
 
@@ -88,7 +89,7 @@ type FilterOptionSpec = {
   id: PgColumn;
   /** Searched, and the primary ordering column. */
   label: PgColumn;
-  detail?: PgColumn;
+  detail?: PgColumn | SQL;
   /** Set when a join can multiply rows, so the roster stays one row per option. */
   distinct?: boolean;
   joins?: readonly { table: PgTable; on: SQL | undefined }[];
@@ -105,7 +106,7 @@ const FILTER_OPTION_SPECS = {
     from: product,
     id: product.shortcode,
     label: product.name,
-    detail: product.manufacturer,
+    detail: productBrandNameSql(product.brandId),
   },
   task: { from: task, id: task.shortcode, label: task.name },
   project: { from: project, id: project.shortcode, label: project.name },

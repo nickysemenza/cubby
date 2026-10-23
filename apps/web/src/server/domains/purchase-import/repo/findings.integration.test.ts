@@ -449,14 +449,14 @@ describe("arrived finding follows stock tracking", () => {
       name: "Synthetic hand tools",
       stockTracked: true,
     });
-    const product = (
+    const product = async (
       name: string,
       categoryId: string,
       stockTracked: boolean | null = null,
     ) =>
       insertWithShortcode(ctx.db, "product", {
         name,
-        manufacturer: "Example maker",
+        brandId: await findOrCreateVendor(ctx.db, "Example maker"),
         categoryId: parseEntityId("productCategory", categoryId),
         stockTracked,
       });
@@ -541,10 +541,10 @@ describe("arrived finding follows stock tracking", () => {
   // member to receive food the household never stock-tracks; an explicitly
   // tracked Product on such an order stops asking.
   describe("undecided Products on a not-tracked spending context", () => {
-    const undecided = (name: string) =>
+    const undecided = async (name: string) =>
       insertWithShortcode(ctx.db, "product", {
         name,
-        manufacturer: "Example maker",
+        brandId: await findOrCreateVendor(ctx.db, "Example maker"),
       });
 
     it("does not ask on a food-retail Vendor's order", async () => {
@@ -575,7 +575,7 @@ describe("arrived finding follows stock tracking", () => {
       });
       const beans = await insertWithShortcode(ctx.db, "product", {
         name: "Synthetic dried beans",
-        manufacturer: "Example maker",
+        brandId: await findOrCreateVendor(ctx.db, "Example maker"),
         categoryId: mapped.id,
       });
       expect(
@@ -597,7 +597,7 @@ describe("arrived finding follows stock tracking", () => {
     it("still asks for an explicitly tracked Product on a food order", async () => {
       const kettle = await insertWithShortcode(ctx.db, "product", {
         name: "Synthetic stovetop kettle",
-        manufacturer: "Example maker",
+        brandId: await findOrCreateVendor(ctx.db, "Example maker"),
         stockTracked: true,
       });
       expect(

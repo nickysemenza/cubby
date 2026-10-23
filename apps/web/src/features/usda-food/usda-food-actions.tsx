@@ -1,4 +1,7 @@
-import type { IngredientShortcode } from "@cubby/schemas/identifiers";
+import type {
+  IngredientShortcode,
+  VendorShortcode,
+} from "@cubby/schemas/identifiers";
 import type { FoodSummaryWithLinkedProducts } from "@cubby/schemas/usda";
 import { LinkIcon } from "@phosphor-icons/react/dist/csr/Link";
 import { StackPlusIcon } from "@phosphor-icons/react/dist/csr/StackPlus";
@@ -8,91 +11,80 @@ import { useState } from "react";
 import { productCreateRequest } from "~/entity/editing/editor-requests";
 import { EntityEditDialog } from "~/entity/editing/entity-edit-dialog";
 import { EntityReferencePicker } from "~/entity/picker/entity-reference-picker";
+import { useProductBrandIngress } from "~/features/product/use-product-brand-ingress";
+import type { ComboboxItem } from "~/ui/combobox/combobox-types";
+import { showErrorToast } from "~/ui/feedback/error-details";
 import { Row } from "~/ui/layout";
 import { Overlay } from "~/ui/overlays/overlay";
 import { Button } from "~/ui/primitives/button";
 
-import type { ComboboxItem } from "../../ui/combobox/combobox-types";
-
-/**
- * USDA-food-derived prefill shared by both actions below: manufacturer/UPC/
- * fdc_id only. `category` is deliberately not prefilled — it self-corrects
- * server-side via `impliedProductFeature` once `fdc_id` is set.
- */
-function foodProductPrefill(food: FoodSummaryWithLinkedProducts) {
-  return {
-    name: food.foodInfo.description || undefined,
-    manufacturer:
-      food.brandedFoodInfo?.brand_owner ??
-      food.brandedFoodInfo?.brand_name ??
-      undefined,
-    barcode: food.brandedFoodInfo?.gtin_upc ?? null,
-    fdcId: food.fdc_id,
-  };
-}
-
-function CreateProductFromFoodButton({
+/** Both actions create a Product: USDA links belong to Products, not ingredients. */
+export function UsdaFoodActions({
   food,
 }: {
   food: FoodSummaryWithLinkedProducts;
 }) {
   const router = useRouter();
-  const [open, setOpen] = useState(false);
-
-  return (
-    <>
-      <Button variant="outline" size="sm" onClick={() => setOpen(true)}>
-        <StackPlusIcon />
-        Create product from this food
-      </Button>
-      <EntityEditDialog
-        open={open}
-        onOpenChange={setOpen}
-        request={productCreateRequest(foodProductPrefill(food))}
-        onSuccess={() => void router.invalidate()}
-      />
-    </>
-  );
-}
-
-/**
- * "Link to an ingredient" is a two-step flow, not a plain update: `fdc_id` is
- * product-only (Tenet 2), so there is no product to link an ingredient onto
- * until one exists. Step 1 picks (or creates) the ingredient; step 2 opens
- * the same USDA-prefilled product form as the create action above, pre-seeded
- * with that ingredient — closing the `ingredient → product → fdc_id` hop in
- * one save. Mirrors `EnrichIngredientDialog`, run in the opposite direction
- * (there the ingredient is already known; here the food is).
- */
-function LinkFoodToIngredientButton({
-  food,
-}: {
-  food: FoodSummaryWithLinkedProducts;
-}) {
-  const router = useRouter();
-  const [open, setOpen] = useState(false);
+  const brands = useProductBrandIngress();
+  const [flow, setFlow] = useState<"product" | "ingredient" | null>(null);
+  const [preparing, setPreparing] = useState(false);
+  const [brandId, setBrandId] = useState<VendorShortcode | null>(null);
   const [ingredient, setIngredient] =
     useState<ComboboxItem<IngredientShortcode> | null>(null);
   const foodName = food.foodInfo.description || "this food";
 
-  const handleOpenChange = (next: boolean) => {
-    if (!next) setIngredient(null);
-    setOpen(next);
+  const open = async (next: "product" | "ingredient") => {
+    if (preparing) return;
+    setPreparing(true);
+    try {
+      // The marketed brand is stronger identity evidence than its corporate owner.
+      const brand = await brands.resolve(
+        food.brandedFoodInfo?.brand_name || food.brandedFoodInfo?.brand_owner,
+      );
+      setBrandId(brand);
+      setFlow(next);
+    } catch (error) {
+      showErrorToast(error, "Could not prepare Product");
+    } finally {
+      setPreparing(false);
+    }
+  };
+  const onOpenChange = (next: boolean) => {
+    if (!next) {
+      setFlow(null);
+      setIngredient(null);
+    }
   };
 
   return (
     <>
-      <Button variant="outline" size="sm" onClick={() => setOpen(true)}>
-        <LinkIcon />
-        Link to an ingredient
-      </Button>
+      <Row gap="sm">
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={preparing}
+          onClick={() => void open("product")}
+        >
+          <StackPlusIcon />
+          Create product from this food
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={preparing}
+          onClick={() => void open("ingredient")}
+        >
+          <LinkIcon />
+          Link to an ingredient
+        </Button>
+      </Row>
       <Overlay
-        open={open && !ingredient}
-        onOpenChange={handleOpenChange}
+        open={flow === "ingredient" && !ingredient}
+        onOpenChange={onOpenChange}
         size="xl"
         title={`Link ${foodName} to an ingredient`}
         description="Choose the ingredient this food should back — a new product carrying the USDA link is created for it."
-        onCancel={() => handleOpenChange(false)}
+        onCancel={() => onOpenChange(false)}
       >
         <div className="mt-4">
           <EntityReferencePicker
@@ -106,40 +98,23 @@ function LinkFoodToIngredientButton({
           />
         </div>
       </Overlay>
-      {/* Step 2 — the generic create dialog, prefilled from the food and the
-          ingredient chosen above (closes the `ingredient → product → fdc_id`
-          hop in one save). */}
       <EntityEditDialog
-        open={open && ingredient !== null}
-        onOpenChange={handleOpenChange}
+        open={
+          flow === "product" || (flow === "ingredient" && ingredient !== null)
+        }
+        onOpenChange={onOpenChange}
         request={productCreateRequest({
-          ...foodProductPrefill(food),
+          name: food.foodInfo.description || undefined,
+          brandId,
+          barcode: food.brandedFoodInfo?.gtin_upc ?? null,
+          fdcId: food.fdc_id,
           ingredientId: ingredient?.id,
         })}
         onSuccess={() => {
           void router.invalidate();
-          handleOpenChange(false);
+          onOpenChange(false);
         }}
       />
     </>
-  );
-}
-
-/**
- * The USDA food detail page's two mutating actions. Both create a product
- * rather than writing anywhere else — `fdc_id` is product-only (Tenet 2), so
- * closing the `ingredient → product → fdc_id` hop from the food side always
- * means minting (or reusing) a product.
- */
-export function UsdaFoodActions({
-  food,
-}: {
-  food: FoodSummaryWithLinkedProducts;
-}) {
-  return (
-    <Row gap="sm">
-      <CreateProductFromFoodButton food={food} />
-      <LinkFoodToIngredientButton food={food} />
-    </Row>
   );
 }

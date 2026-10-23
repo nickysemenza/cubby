@@ -1,7 +1,7 @@
 import { externalIdSource } from "@cubby/schemas/external-id";
 import type { VendorId } from "@cubby/schemas/identifiers";
 import { getErrorMessage } from "@cubby/shared";
-import { and, eq, inArray, ne } from "drizzle-orm";
+import { and, eq, inArray, isNull, ne } from "drizzle-orm";
 
 import { type Database } from "~/server/db/database";
 import { notDeleted } from "~/server/db/helpers/predicates";
@@ -23,16 +23,6 @@ const canonicalHost = (url: string) => {
     .replace(/^www\./u, "")
     .replace(/\.$/u, "");
 };
-const domainHost = (domain: string) => canonicalHost(`https://${domain}`);
-const belongsTo = (host: string, domain: string) =>
-  host === domain || host.endsWith(`.${domain}`);
-const issuerDomains = (
-  issuer: Pick<typeof vendor.$inferSelect, "website" | "browserDomains">,
-) => [
-  ...(issuer.website ? [canonicalHost(issuer.website)] : []),
-  ...issuer.browserDomains.map(domainHost),
-];
-
 // Full-host bytes are reversible and preserve dots and hyphens, unlike a
 // name slug. Legacy prefix/name registrations never establish domain authority.
 const hostSource = (host: string) =>
@@ -85,19 +75,16 @@ async function productIdentifierSource(
     (await database
       .select(issuerFields)
       .from(vendor)
-      .where(notDeleted(vendor)));
-  const owners = pageHost
-    ? vendors.filter((row) =>
-        issuerDomains(row).some((domain) => belongsTo(pageHost, domain)),
-      )
-    : vendors.filter((row) => row.id === input.vendorId);
-  if (owners.length > 1)
+      .where(and(notDeleted(vendor), isNull(vendor.systemKey))));
+  // Discovery hints are not identifier namespace ownership. Explicit Vendor
+  // references use stable registered ownership; URL-only claims retain host identity.
+  const owner = input.vendorId
+    ? vendors.find((row) => row.id === input.vendorId)
+    : undefined;
+  if (input.vendorId && !owner)
     throw new Error(
-      `Identifier issuer is ambiguous across canonical Vendors: ${owners
-        .map((row) => row.shortcode)
-        .join(", ")} all claim host ${pageHost}.`,
+      "Identifier issuer requires a live ordinary Vendor; Generic / Unbranded cannot issue identifiers.",
     );
-  const owner = owners[0];
   if (!pageHost && !owner)
     throw new Error(
       "Identifier issuer requires a live canonical Vendor or page URL.",
@@ -120,10 +107,10 @@ async function productIdentifierSource(
         )[0];
     if (issuer) return issuer.slug;
   }
-  const issuerHost = owner ? (issuerDomains(owner)[0] ?? pageHost) : pageHost;
-  const slug = issuerHost
-    ? hostSource(issuerHost)
-    : externalIdSource.parse(`vendor-${owner!.id}`);
+  const issuerHost = owner ? null : pageHost;
+  const slug = owner
+    ? externalIdSource.parse(`vendor-${owner.id}`)
+    : hostSource(pageHost!);
   if (owner && register) {
     // A new issuer beside owned sources that already hold Product identifiers
     // would hide them from exact lookup and let an import fork a duplicate.
@@ -186,7 +173,7 @@ async function productIdentifierSource(
           .where(eq(externalSource.slug, slug))
       )[0];
   if (!registered && !register) return null;
-  if (!registered || registered.vendorId !== (owner?.id ?? null))
+  if (!registered || (owner && registered.vendorId !== owner.id))
     throw new Error(
       `Identifier issuer has incompatible source ownership: ${slug} is registered to ${
         registered?.vendorId
@@ -213,7 +200,10 @@ export const lookupProductIdentifierSources = async (
   if (!inputs.length) return [];
   const database = unwrapDb(db);
   const [vendors, sources] = await Promise.all([
-    database.select(issuerFields).from(vendor).where(notDeleted(vendor)),
+    database
+      .select(issuerFields)
+      .from(vendor)
+      .where(and(notDeleted(vendor), isNull(vendor.systemKey))),
     database.select(registeredFields).from(externalSource),
   ]);
   const registry: IssuerRegistry = {

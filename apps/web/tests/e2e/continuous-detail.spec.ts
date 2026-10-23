@@ -174,12 +174,15 @@ test("dense record header preserves identity, actions, and the editor", async ({
     await expect(editor).toBeHidden();
     await expectViewportBounded(page);
   }
+  const brand = await createEntityFixture(page, "vendor", {
+    name: "Example maker",
+  });
   await createEntityFixtures(
     page,
     "product",
     Array.from({ length: 18 }, (_, index) => ({
       name: `Example household item ${String(index + 1).padStart(2, "0")}`,
-      manufacturer: "Example maker",
+      brandId: brand.id,
       categoryId: category.id,
       tags: [],
     })),

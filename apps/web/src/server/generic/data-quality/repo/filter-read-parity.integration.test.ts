@@ -26,6 +26,7 @@ import {
 } from "~/server/db/schema";
 import { syntheticRetainedMail } from "~/server/domains/purchase-import/service/gmail/retained-mail.fixtures";
 import { buildPurchaseWhereClause } from "~/server/domains/purchase/repo/purchase";
+import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import {
   readRecordWorkQueue,
@@ -236,7 +237,7 @@ describe("bulk quality relations", () => {
     );
     const itemized = await insertWithShortcode(ctx.db, "product", {
       name: "Synthetic parity widget",
-      manufacturer: "Synthetic maker",
+      brandId: await findOrCreateVendor(ctx.db, "Synthetic maker"),
     });
     for (const itemization of [
       "listed",

@@ -11,10 +11,10 @@ import type {
   Trade,
 } from "@cubby/schemas/project";
 import { TRADE_LABELS, tradeValues } from "@cubby/schemas/project";
-import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
 import { and, asc, eq, sql } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
+import { productBrandNameSql } from "~/server/db/computed/product-brand-sql";
 import { getDb, notDeleted } from "~/server/db/helpers";
 import { inventoryEntry, location, product } from "~/server/db/schema";
 import { inventoryAmountSql } from "~/server/domains/inventory/repo/helpers";
@@ -42,7 +42,7 @@ type GalleryCandidate = {
   productName: string;
   aliases: string[];
   tags: string[];
-  manufacturer: string;
+  brandName: string | null;
   model: string | null;
   inventoryEntries: InventoryPlacementRow[];
 };
@@ -58,14 +58,6 @@ type GalleryGroupIdentity = {
   key: string;
   label: string;
 };
-
-function normalizedManufacturer(manufacturer: string): string | null {
-  const trimmed = manufacturer.trim();
-  return trimmed === "" ||
-    trimmed.toLocaleLowerCase() === UNSPECIFIED_MANUFACTURER.toLocaleLowerCase()
-    ? null
-    : trimmed;
-}
 
 function locationPath(entry: ToolGalleryInventoryEntryOut): string[] {
   return [
@@ -92,15 +84,15 @@ function locationGroup(
 export function toolGalleryGroup(
   candidate: Pick<
     EnrichedCandidate,
-    "inventoryEntries" | "manufacturer" | "trade"
+    "inventoryEntries" | "brandName" | "trade"
   >,
   groupBy: ToolGalleryGroupBy,
 ): GalleryGroupIdentity {
-  if (groupBy === "manufacturer") {
-    const manufacturer = normalizedManufacturer(candidate.manufacturer);
+  if (groupBy === "brandName") {
+    const brandName = candidate.brandName?.trim() || null;
     return {
-      key: manufacturer?.toLocaleLowerCase() ?? UNCLASSIFIED_KEY,
-      label: manufacturer ?? "Unspecified",
+      key: brandName?.toLocaleLowerCase() ?? UNCLASSIFIED_KEY,
+      label: brandName ?? "Unspecified",
     };
   }
   if (groupBy === "trade") {
@@ -142,11 +134,15 @@ function compareCandidates(
     sensitivity: "base",
   });
   if (name !== 0) return name;
-  const manufacturer = a.manufacturer.localeCompare(b.manufacturer, undefined, {
-    sensitivity: "base",
-  });
-  return manufacturer !== 0
-    ? manufacturer
+  const brandName = (a.brandName ?? "").localeCompare(
+    b.brandName ?? "",
+    undefined,
+    {
+      sensitivity: "base",
+    },
+  );
+  return brandName !== 0
+    ? brandName
     : a.productCode.localeCompare(b.productCode);
 }
 
@@ -156,7 +152,7 @@ export function toolGallerySearchText(
     | "productName"
     | "aliases"
     | "tags"
-    | "manufacturer"
+    | "brandName"
     | "model"
     | "inventoryEntries"
     | "groupLabel"
@@ -165,7 +161,7 @@ export function toolGallerySearchText(
   return [
     candidate.productName,
     ...candidate.aliases,
-    candidate.manufacturer,
+    candidate.brandName,
     candidate.model,
     ...candidate.tags,
     ...candidate.inventoryEntries.flatMap(locationPath),
@@ -189,7 +185,7 @@ export async function projectToolGallery(
       productName: product.name,
       aliases: product.aliases,
       tags: product.tags,
-      manufacturer: product.manufacturer,
+      brandName: productBrandNameSql(product.brandId),
       model: product.model,
       inventoryId: inventoryEntry.shortcode,
       amount: inventoryAmountSql,
@@ -242,7 +238,7 @@ export async function projectToolGallery(
       productName: row.productName,
       aliases: row.aliases,
       tags: row.tags,
-      manufacturer: row.manufacturer,
+      brandName: row.brandName,
       model: row.model,
       inventoryEntries: [entry],
     });
@@ -274,7 +270,7 @@ export async function projectToolGallery(
     );
     const trade = trades.get(candidate.productId) ?? null;
     const { key: groupKey, label: groupLabel } = toolGalleryGroup(
-      { inventoryEntries, manufacturer: candidate.manufacturer, trade },
+      { inventoryEntries, brandName: candidate.brandName, trade },
       filters.groupBy,
     );
     return {
@@ -323,7 +319,7 @@ export async function projectToolGallery(
     return {
       productId: candidate.productCode,
       productName: candidate.productName,
-      manufacturer: candidate.manufacturer,
+      brandName: candidate.brandName,
       model: candidate.model,
       coverImageUrl: images[0]?.url ?? null,
       extraImageCount: Math.max(0, images.length - 1),

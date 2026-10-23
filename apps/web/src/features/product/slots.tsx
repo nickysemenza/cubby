@@ -65,7 +65,7 @@ export const ProductNutrition: DetailSlotComponent<"product"> = ({
         mappingProduct={{
           id: product.id,
           name: product.name,
-          manufacturer: product.manufacturer,
+          brandName: product.brandName,
         }}
       />
       {usdaNutritionInfo && (

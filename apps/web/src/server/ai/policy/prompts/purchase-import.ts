@@ -34,7 +34,7 @@ export type PurchaseAuditRenderedBatch = readonly {
     product: {
       id: string;
       name: string | null;
-      manufacturer: string | null;
+      brandName: string | null;
       model: string | null;
     } | null;
   }[];

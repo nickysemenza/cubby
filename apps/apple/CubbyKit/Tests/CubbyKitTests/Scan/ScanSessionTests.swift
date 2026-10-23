@@ -41,7 +41,7 @@ final class StubScanService: ScanService, Sendable {
         ScanAtLocationOut(
             outcome: outcome,
             product: .init(
-                id: ProductCode(id), name: name, created: false, manufacturer: nil, hasPrice: true),
+                id: ProductCode(id), name: name, created: false, brandName: nil, hasPrice: true),
             strays: strays,
             sideEffects: .init()
         )

@@ -19,7 +19,6 @@ import type {
 import { humanize, parseShortcode } from "@cubby/shared";
 import { countLabel } from "@cubby/shared/pluralize";
 import { DownloadIcon } from "@phosphor-icons/react/dist/csr/Download";
-import { FunnelIcon } from "@phosphor-icons/react/dist/csr/Funnel";
 import { ImageBrokenIcon } from "@phosphor-icons/react/dist/csr/ImageBroken";
 import { LinkBreakIcon } from "@phosphor-icons/react/dist/csr/LinkBreak";
 import { NetworkIcon } from "@phosphor-icons/react/dist/csr/Network";
@@ -486,7 +485,7 @@ function freshnessWarning(
 
 /**
  * "Apply" action for the "Better UPC data available" cards — writes the
- * looked-up fields onto the product in place (manufacturer/price via update +
+ * looked-up fields onto the product in place (brandName/price via update +
  * recipe recompute, image via R2 import) without leaving the page. Lives in a
  * component (not `renderItem`) so it can own the mutation hook; the card drops
  * out of the list once the problems queries invalidate.
@@ -640,23 +639,9 @@ function OpenLocationLink({ shortcode }: { shortcode: string | undefined }) {
   );
 }
 
-function ManufacturerVariantLink({ manufacturer }: { manufacturer: string }) {
-  return (
-    <Button
-      size="sm"
-      variant="ghost"
-      render={<Link to="/products" search={{ manufacturer }} />}
-      nativeButton={false}
-    >
-      <FunnelIcon className="mr-1 size-3" />
-      Show products
-    </Button>
-  );
-}
-
 const variantFacts = (
   v: Pick<
-    ProblemItem<"manufacturerSpellingVariants">,
+    ProblemItem<"duplicateVendors">,
     "count" | "canonical" | "canonicalCount"
   >,
   noun: string,
@@ -687,7 +672,7 @@ function WorkbenchFixLink({ ingredientId }: { ingredientId: string | null }) {
 function renderUnitCoverageItem(item: UnitCoverageItem): RenderedProblemItem {
   const base = {
     title: item.name,
-    fields: facts(manufacturerFact(item.manufacturer)),
+    fields: facts(manufacturerFact(item.brandName)),
     route: entityDetailLink("product", item.id),
     editLabel: "Open product",
   };
@@ -821,7 +806,7 @@ function outsideOwnershipFacts(
   const boundary = `${formatCalendarDay(row.projectBoundary, "dateShort")} (incl. grace)`;
   const acquired = row.conflict === "acquired_after_end";
   return facts(
-    manufacturerFact(row.manufacturer),
+    manufacturerFact(row.brandName),
     recordFact("project", [{ id: row.projectId, name: row.projectName }]),
     fact(acquired ? "Acquired" : "Disposed of", tool, "warning"),
     fact(acquired ? "Project ended" : "Project started", boundary),
@@ -930,7 +915,7 @@ const DECLARED_SECTIONS = [
     entity: "product",
     renderItem: (dupe) => ({
       key: dupe.assessmentId,
-      title: `${dupe.manufacturer} ${dupe.model}`,
+      title: `${dupe.brandName} ${dupe.model}`,
       fields: facts(
         fact(
           "Evidence",
@@ -993,7 +978,7 @@ const DECLARED_SECTIONS = [
       ) : null,
     renderItem: (product) => ({
       title: product.name,
-      fields: facts(manufacturerFact(product.manufacturer)),
+      fields: facts(manufacturerFact(product.brandName)),
       details: [createdAgoDetail(product.createdAt)],
       route: entityDetailLink("product", product.id),
       inlineFix: {
@@ -1254,32 +1239,13 @@ const DECLARED_SECTIONS = [
     }),
   }),
   section({
-    id: "manufacturer-spellings",
-    label: "Manufacturer spellings",
-    select: (p) => p.manufacturerSpellingVariants,
-    problemKeys: ["manufacturerSpellingVariants"],
-    entity: "product",
-    renderItem: (v) => ({
-      key: v.value,
-      title: v.value,
-      fields: variantFacts(v, "product"),
-      // The route opens one product using this spelling, not the spelling itself.
-      shortcode: null,
-      route: entityDetailLink("product", v.sampleId),
-      editLabel: "Open product",
-      customActions: <ManufacturerVariantLink manufacturer={v.value} />,
-    }),
-  }),
-  section({
     id: "duplicate-vendors",
     label: "Duplicate vendors",
     select: (p) => p.duplicateVendors,
     problemKeys: ["duplicateVendors"],
     entity: "vendor",
     renderItem: (v) => ({
-      // Names are unique among live vendors, so the variant spelling is a stable
-      // per-card key.
-      key: v.value,
+      key: v.sampleId,
       title: v.value,
       // Weighed by purchases, not by roster rows — a duplicate is 1 row either way,
       // so the purchase count is what says which spelling is the real one.
@@ -1579,10 +1545,10 @@ const DECLARED_SECTIONS = [
         // Show the actual value a fresh lookup would write per field — not
         // just which fields are missing — so it's clear what "Apply" changes.
         fields: facts(
-          manufacturerFact(product.manufacturer),
+          manufacturerFact(product.brandName),
           fact("UPC", product.upc),
-          proposed.manufacturer != null &&
-            fact("New manufacturer", proposed.manufacturer, "positive"),
+          proposed.brandName != null &&
+            fact("New brandName", proposed.brandName, "positive"),
           proposed.price != null &&
             fact("New price", formatCurrency(proposed.price), "positive"),
         ),

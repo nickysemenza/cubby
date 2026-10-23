@@ -16,7 +16,10 @@ import {
 import { createUploadedImageRecord } from "~/server/domains/image/repo/image";
 import { memberImport } from "~/server/domains/purchase-import/operations/order-import.fixtures";
 import { mergePurchases } from "~/server/domains/purchase/repo/purchase";
-import { mergeVendors } from "~/server/domains/vendor/repo/vendor";
+import {
+  findOrCreateVendor,
+  mergeVendors,
+} from "~/server/domains/vendor/repo/vendor";
 import { ensureExternalSources } from "~/server/generic/entity-links/repo/entity-external-ids";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import {
@@ -76,7 +79,7 @@ describe("photo product candidates", () => {
         ctx.db,
         makeProductInput({
           name: `Synthetic Forge canvas boot blue ${index}`,
-          manufacturer: "Synthetic Forge",
+          brandId: await findOrCreateVendor(ctx.db, "Synthetic Forge"),
         }),
         ctx.actor,
       );
@@ -85,7 +88,7 @@ describe("photo product candidates", () => {
       ctx.db,
       {
         name: "Synthetic Forge canvas boot blue",
-        manufacturer: "Synthetic Forge",
+        brandName: "Synthetic Forge",
         evidenceTexts: [
           {
             source: "label_ocr",
@@ -259,7 +262,7 @@ describe("photo product candidates", () => {
       ctx.db,
       makeProductInput({
         name: "Synthetic Outfit canvas shirt blue medium",
-        manufacturer: "Synthetic Outfit",
+        brandId: await findOrCreateVendor(ctx.db, "Synthetic Outfit"),
       }),
       ctx.actor,
     );
@@ -305,7 +308,7 @@ describe("photo product candidates", () => {
     const line = await getDb(ctx.db).query.expense.findFirst();
     if (!association?.acceptedObservationId || !line)
       throw new Error("Known accepted fixture missing");
-    const input = { name: item.name, manufacturer: "Synthetic Outfit" };
+    const input = { name: item.name, brandName: "Synthetic Outfit" };
     const [known] = await findPhotoProductCandidates(ctx.db, input, ctx.actor);
     expect(known?.purchaseLines).toContainEqual(
       expect.objectContaining({
@@ -353,7 +356,7 @@ describe("photo product candidates", () => {
       ctx.db,
       makeProductInput({
         name: "Synthetic Outfit canvas shirt blue medium",
-        manufacturer: "Synthetic Outfit",
+        brandId: await findOrCreateVendor(ctx.db, "Synthetic Outfit"),
       }),
       ctx.actor,
     );
@@ -428,7 +431,7 @@ describe("photo product candidates", () => {
     );
     const [candidate] = await findPhotoProductCandidates(
       ctx.db,
-      { name: item.name, manufacturer: "Synthetic Outfit" },
+      { name: item.name, brandName: "Synthetic Outfit" },
       ctx.actor,
     );
     expect(candidate?.purchaseLines).toContainEqual(
@@ -460,7 +463,7 @@ describe("photo product candidates", () => {
       ctx.db,
       makeProductInput({
         name: "ForgeWear pocket tee black small",
-        manufacturer: "ForgeWear",
+        brandId: await findOrCreateVendor(ctx.db, "ForgeWear"),
       }),
       ctx.actor,
     );
@@ -468,7 +471,7 @@ describe("photo product candidates", () => {
       ctx.db,
       makeProductInput({
         name: "ForgeWear pocket tee black small duplicate",
-        manufacturer: "ForgeWear",
+        brandId: await findOrCreateVendor(ctx.db, "ForgeWear"),
       }),
       ctx.actor,
     );
@@ -488,7 +491,7 @@ describe("photo product candidates", () => {
       ctx.db,
       {
         name: "ForgeWear pocket tee black small",
-        manufacturer: "ForgeWear",
+        brandName: "ForgeWear",
       },
       ctx.actor,
     );
@@ -524,7 +527,7 @@ describe("photo product candidates", () => {
       ctx.db,
       makeProductInput({
         name: "ForgeWear Q7",
-        manufacturer: "ForgeWear",
+        brandId: await findOrCreateVendor(ctx.db, "ForgeWear"),
         aliases: ["work boots"],
       }),
       ctx.actor,
@@ -544,7 +547,7 @@ describe("photo product candidates", () => {
       ctx.db,
       {
         name: "ForgeWear work boots",
-        manufacturer: "ForgeWear",
+        brandName: "ForgeWear",
       },
       ctx.actor,
     );
@@ -570,7 +573,7 @@ describe("photo product candidates", () => {
       ctx.db,
       makeProductInput({
         name: "ForgeWear tan work boots",
-        manufacturer: "ForgeWear",
+        brandId: await findOrCreateVendor(ctx.db, "ForgeWear"),
       }),
       ctx.actor,
     );
@@ -596,7 +599,7 @@ describe("photo product candidates", () => {
       ctx.db,
       {
         name: "ForgeWear tan work boots",
-        manufacturer: "ForgeWear",
+        brandName: "ForgeWear",
       },
       ctx.actor,
     );

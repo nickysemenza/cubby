@@ -118,10 +118,6 @@ export const productContract = defineContract("product", {
     mcp: { omit: "client_view" },
     ...productWorkflowSchemas.categoryDistribution,
   }),
-  manufacturerOptions: query({
-    mcp: { omit: "client_view" },
-    ...productWorkflowSchemas.manufacturerOptions,
-  }),
   externalIdSourceOptions: query({
     mcp: { omit: "client_view" },
     ...productWorkflowSchemas.externalIdSourceOptions,

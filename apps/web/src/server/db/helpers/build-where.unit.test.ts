@@ -465,9 +465,9 @@ describe("buildProductWhere", () => {
       contains: '"categoryId"',
     },
     {
-      name: "manufacturerExact",
-      filters: { manufacturerExact: "DeWalt" },
-      contains: '"manufacturer"',
+      name: "brandId",
+      filters: { brandId: "DeWalt" },
+      contains: '"brandName"',
     },
   ])(
     "still narrows by $name (declared stored filter)",

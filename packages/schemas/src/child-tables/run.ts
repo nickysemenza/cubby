@@ -3,6 +3,36 @@ import { APPLE_APP_IDENTITIES } from "@cubby/shared/apple-app-identity";
 import { defineChildTable } from "../entity-definitions/child-definition.js";
 
 export const runChildren = [
+  /** Regrouping may delete a draft, but never its original descriptive evidence. */
+  defineChildTable({
+    name: "PhotoGroupSourceEvidence",
+    exportName: "photoGroupSourceEvidence",
+    columns: [
+      {
+        key: "id",
+        kind: "uuid",
+        primaryKey: true,
+        default: { sql: "gen_random_uuid()" },
+      },
+      {
+        key: "runId",
+        kind: "uuid",
+        notNull: true,
+        type: "RunId",
+        reference: { table: "run", column: "id" },
+      },
+      { key: "groupKey", kind: "text", notNull: true },
+      { key: "sourceManufacturer", kind: "text", notNull: true },
+      {
+        key: "createdAt",
+        kind: "timestamp",
+        notNull: true,
+        default: { now: true },
+      },
+    ],
+    types: [{ module: "@cubby/schemas/identifiers", exports: ["RunId"] }],
+    indexes: [{ name: "PhotoGroupSourceEvidence_runId_idx", on: ["runId"] }],
+  }),
   /** Photo membership and replay state belong to the Run, never to an Image singleton. */
   defineChildTable({
     name: "PhotoRunImage",
@@ -407,6 +437,15 @@ export const runChildren = [
         key: "productCreate",
         kind: "jsonb",
         type: "CommitPhotoGroupProductCreate",
+      },
+      /** Original manufacturer evidence survives every draft selection and edit. */
+      { key: "sourceManufacturer", kind: "text" },
+      /** Brand for a new draft or a proposed existing-Product Brand edit. */
+      {
+        key: "productCreateBrandId",
+        kind: "uuid",
+        type: "VendorId",
+        reference: { table: "vendor", column: "id" },
       },
       /** Category FK for a new draft or an existing Product's selected category edit. */
       {

@@ -213,10 +213,10 @@ export function composeLinkProductCandidates(
     .filter((item) => !attachedIds.has(item.id))
     .slice(0, limit)
     // Only what the picker shows: the search rows carry more than a client should receive here.
-    .map(({ id, name, manufacturer, price, coverImageUrl }) => ({
+    .map(({ id, name, brandName, price, coverImageUrl }) => ({
       id,
       name,
-      manufacturer,
+      brandName,
       price,
       coverImageUrl,
     }));

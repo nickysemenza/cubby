@@ -8,6 +8,10 @@ import { isCollectionTag } from "@cubby/shared/collection-tag";
 import { and, arrayOverlaps, eq, isNull, ne, type SQL, sql } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
+import {
+  productBrandNameSql,
+  productBrandCodeSql,
+} from "~/server/db/computed/product-brand-sql";
 import { categorySummarySql } from "~/server/db/computed/product-category-sql";
 import { getDb, notDeleted } from "~/server/db/helpers";
 import { entityExternalId, inventoryEntry, product } from "~/server/db/schema";
@@ -25,6 +29,8 @@ export const findDuplicateUniqueProducts = async (
   const duplicates = await getDb(db).query.product.findMany({
     where: and(eq(product.expectedQuantity, 1), notDeleted(product)),
     extras: {
+      brandName: productBrandNameSql(product.brandId).as("brandName"),
+      brandCode: productBrandCodeSql(product.brandId).as("brandCode"),
       category: categorySummarySql(sql`${product.categoryId}`).as("category"),
     },
     with: {
@@ -64,7 +70,7 @@ export const findProductsWithNoImages = async (
     id: ProductId;
     shortcode: string;
     name: string;
-    manufacturer: string;
+    brandName: string | null;
     primaryGtin: string | null;
   }>
 > => {
@@ -82,7 +88,7 @@ export const findProductsWithNoImages = async (
       id: product.id,
       shortcode: product.shortcode,
       name: product.name,
-      manufacturer: product.manufacturer,
+      brandName: productBrandNameSql(product.brandId),
     })
     .from(product)
     .where(
@@ -171,19 +177,6 @@ export const getProductExternalIdSourceOptions = async (
       entityExternalId.source,
     );
 
-export const getProductManufacturerOptions = async (
-  db: Database,
-): Promise<Array<{ manufacturer: string; count: number }>> =>
-  getDb(db)
-    .select({
-      manufacturer: product.manufacturer,
-      count: sql<number>`count(*)::int`,
-    })
-    .from(product)
-    .where(notDeleted(product))
-    .groupBy(product.manufacturer)
-    .orderBy(sql`count(*) DESC`, product.manufacturer);
-
 /**
  * Every other product sharing at least one tag with `id` — the "fits with this"
  * roster on the product detail page.
@@ -209,7 +202,7 @@ export const getProductsSharingTags = async (
     id: ProductId;
     shortcode: string;
     name: string;
-    manufacturer: string;
+    brandName: string | null;
     category: ProductCategory | null;
     tags: string[];
   }>
@@ -228,7 +221,7 @@ export const getProductsSharingTags = async (
       id: product.id,
       shortcode: product.shortcode,
       name: product.name,
-      manufacturer: product.manufacturer,
+      brandName: productBrandNameSql(product.brandId),
       category: categorySummarySql(sql`${product.categoryId}`),
       tags: product.tags,
     })
@@ -261,6 +254,8 @@ export const getCategoryDistribution = async (
       categoryId: true,
     },
     extras: {
+      brandName: productBrandNameSql(product.brandId).as("brandName"),
+      brandCode: productBrandCodeSql(product.brandId).as("brandCode"),
       category: categorySummarySql(sql`${product.categoryId}`).as("category"),
     },
     with: {

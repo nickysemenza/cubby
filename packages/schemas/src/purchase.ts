@@ -576,7 +576,7 @@ export const purchaseLinkProductsCandidatesInput = z.object({
 export const purchaseLinkProductCandidate = z.object({
   id: productShortcode,
   name: z.string(),
-  manufacturer: z.string(),
+  brandName: z.string().nullable(),
   price: z.number().nullable(),
   coverImageUrl: z.string().nullable(),
 });
@@ -665,7 +665,7 @@ const linkAttachedAt = z.date().nullable();
 export const purchaseProductOut = z.object({
   productId: productShortcode,
   productName: z.string(),
-  manufacturer: z.string(),
+  brandName: z.string().nullable(),
   price: moneyNullable.describe(
     "Effective valuation/costing price — display only, not spend.",
   ),

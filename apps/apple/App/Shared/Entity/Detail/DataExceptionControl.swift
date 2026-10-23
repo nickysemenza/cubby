@@ -98,7 +98,7 @@ struct DataExceptionControl: View {
 
 #Preview("Data exception") {
     DataExceptionControl(
-        draft: .init(entityID: "PRD-4K7M", check: "product_manufacturer"), isGap: true,
+        draft: .init(entityID: "PRD-4K7M", check: "product_brand"), isGap: true,
         options: [
             .init(reason: .notApplicable, label: "Not applicable"),
             .init(reason: .unavailable, label: "Unavailable"),

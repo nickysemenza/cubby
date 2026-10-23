@@ -550,7 +550,7 @@ export function ToolMatrixPage({
             onChange={(group) => onSearchChange({ group })}
             options={[
               { value: "trade" as const, label: "Trade" },
-              { value: "manufacturer" as const, label: "Manufacturer" },
+              { value: "brandName" as const, label: "Manufacturer" },
             ]}
           />
           <SegmentedControl
@@ -829,7 +829,7 @@ function MatrixTable({
                 <div className="w-64 min-w-0">
                   <ToolIdentityLink row={row} />
                   <div className="truncate text-2xs text-slate">
-                    {row.manufacturer}
+                    {row.brandName}
                     {!row.isInventoried && " · not in inventory"}
                   </div>
                 </div>

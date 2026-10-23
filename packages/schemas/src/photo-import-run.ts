@@ -69,7 +69,7 @@ const commitPhotoGroupSkip = z.object({
 const commitPhotoGroupProductCreate = z.object({
   name: z.string().trim().min(1).max(500),
   categoryId: productCategoryShortcode.nullable().optional(),
-  manufacturer: z.string().trim().max(300).optional(),
+  brandId: vendorShortcode.nullable().optional(),
   model: z.string().trim().max(200).nullable().optional(),
   notes: z.string().trim().max(4_000).nullable().optional(),
   tags: z.array(z.string().trim().min(1)).max(50).optional(),
@@ -332,14 +332,7 @@ export const photoFieldAgreement = z.enum([
 ]);
 
 export const photoFieldCrossCheck = z.object({
-  field: z.enum([
-    "name",
-    "manufacturer",
-    "model",
-    "identifiers",
-    "color",
-    "size",
-  ]),
+  field: z.enum(["name", "brandName", "model", "identifiers", "color", "size"]),
   mark: photoFieldAgreement,
   source: z.enum(["deterministic", "model"]),
   tokens: z.array(
@@ -623,7 +616,8 @@ export const photoProductEvidence = photoProductCandidate
     purchaseLineCount: true,
   })
   .extend({
-    manufacturer: z.string().nullable(),
+    brandId: vendorShortcode.nullable(),
+    brandName: z.string().nullable(),
     model: z.string().nullable(),
     identifiers: z.array(z.string()),
     notes: productWithFoodOut.shape.notes,
@@ -663,8 +657,9 @@ export const photoProductCandidatesResponse = z.object({
   error: z.string().nullable().optional(),
 });
 export const photoProductCandidateSearchInput = z.object({
+  brandId: vendorShortcode.nullable().optional(),
   name: z.string().trim().min(3).max(500),
-  manufacturer: z.string().trim().max(300).optional(),
+  brandName: z.string().trim().max(300).optional(),
 });
 
 export {

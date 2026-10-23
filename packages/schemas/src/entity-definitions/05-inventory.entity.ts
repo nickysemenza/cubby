@@ -529,7 +529,7 @@ export default defineEntity(
         product: { via: "product" },
         location: { via: "location" },
         category: { via: "product.category" },
-        manufacturer: { via: "product.manufacturer" },
+        brandName: { via: "product.brand.name" },
         valuation: { type: "number" },
         // The unit, then the size within it.
         amount: { type: "number" },
@@ -721,13 +721,13 @@ export default defineEntity(
           schemaDescription: "Filter by location name (substring)",
         },
         {
-          columnId: "manufacturer",
-          field: "manufacturerFilter",
+          columnId: "brandName",
+          field: "brandFilter",
           kind: "text",
-          placeholder: "Filter by manufacturer...",
+          placeholder: "Filter by brandName...",
           derived: true,
           deriveSchema: true,
-          schemaDescription: "Filter by product manufacturer (substring)",
+          schemaDescription: "Filter by product brandName (substring)",
         },
         {
           columnId: "category",

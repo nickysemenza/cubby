@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 
 import { getDb } from "~/server/db/helpers";
 import { runOperation } from "~/server/db/schema";
+import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 import { listProductRuns } from "../repo/run-target";
@@ -23,11 +24,11 @@ describe("retired Run target history", () => {
     });
     const product = await insertWithShortcode(ctx.db, "product", {
       name: "Synthetic receipt subject",
-      manufacturer: "Synthetic manufacturer",
+      brandId: await findOrCreateVendor(ctx.db, "Synthetic brandName"),
     });
     const other = await insertWithShortcode(ctx.db, "product", {
       name: "Synthetic unrelated subject",
-      manufacturer: "Synthetic manufacturer",
+      brandId: await findOrCreateVendor(ctx.db, "Synthetic brandName"),
     });
     await getDb(ctx.db)
       .insert(runOperation)

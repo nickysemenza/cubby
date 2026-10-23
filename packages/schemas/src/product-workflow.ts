@@ -22,7 +22,6 @@ import {
   productFindOrCreateByUPCOut,
   productInventoryEntriesBatchInput,
   productInventoryEntriesByIdOut,
-  productManufacturerOptionsOut,
   productPickerItemOut,
   productQuantitySummariesOut,
   productQuantitySummaryBatchInput,
@@ -132,10 +131,6 @@ export const productWorkflowSchemas = {
   categoryDistribution: {
     input: z.undefined(),
     output: productCategoryDistributionOut,
-  },
-  manufacturerOptions: {
-    input: z.undefined(),
-    output: productManufacturerOptionsOut,
   },
   externalIdSourceOptions: {
     input: z.undefined(),

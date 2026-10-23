@@ -58,7 +58,7 @@ const request: AiChatRequest = {
  * fields a given test actually varies carry meaning. */
 const PRODUCT_IDENTIFICATION_FIXTURE = {
   name: "n",
-  manufacturer: "m",
+  brandName: "m",
   model: null,
   confidence: "high",
   reasoning: "r",

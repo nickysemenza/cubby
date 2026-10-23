@@ -14,6 +14,7 @@ import {
 import { persistImageProcessingSubmission } from "~/server/domains/image-processing/repo/image-processing-submission";
 import { createUploadedImageRecord } from "~/server/domains/image/repo/image";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
+import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
 import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { insertEntityAttachments } from "~/server/testing/repo.fixtures";
@@ -25,7 +26,7 @@ describe("retained classification evidence", () => {
   it("schedules subject lift for item and label images and reuses shared jobs", async () => {
     const product = await insertWithShortcode(ctx.db, "product", {
       name: "Synthetic item",
-      manufacturer: "Example",
+      brandId: await findOrCreateVendor(ctx.db, "Example"),
     });
     const item = await createUploadedImageRecord(ctx.db, {
       key: "tests/cutout-item.jpg",
@@ -76,7 +77,7 @@ describe("retained classification evidence", () => {
     // use the same original as an item; that use still permits a rendition.
     const secondProduct = await insertWithShortcode(ctx.db, "product", {
       name: "Shared original item",
-      manufacturer: "Example",
+      brandId: await findOrCreateVendor(ctx.db, "Example"),
     });
     await insertEntityAttachments(ctx.db, {
       entityId: secondProduct.id,
@@ -95,7 +96,7 @@ describe("retained classification evidence", () => {
   it("uses original descriptions and confirmed label corrections, refreshes taxonomy evidence, and never schedules vision on read", async () => {
     const product = await insertWithShortcode(ctx.db, "product", {
       name: "Synthetic jacket",
-      manufacturer: "Example",
+      brandId: await findOrCreateVendor(ctx.db, "Example"),
       categoryId: taxonomyId("apparel"),
     });
     const photo = await createUploadedImageRecord(ctx.db, {

@@ -7,6 +7,7 @@ import { describe, expect, it } from "vitest";
 
 import { getDb } from "~/server/db/helpers";
 import { product } from "~/server/db/schema";
+import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
 import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
 import { requireActor } from "~/server/http/request-context";
 import {
@@ -26,7 +27,7 @@ describe("availability explanations through MCP", () => {
       ctx.db,
       makeProductInput({
         name: "Synthetic unbranded container",
-        manufacturer: "(unspecified)",
+        brandId: null,
       }),
       ctx.actor,
     );
@@ -44,7 +45,7 @@ describe("availability explanations through MCP", () => {
         {
           action,
           entityId: saved.id,
-          check: "product_manufacturer",
+          check: "product_brand",
           ...(action === "set" ? { reason: "unavailable", note } : {}),
         },
         {},
@@ -55,26 +56,26 @@ describe("availability explanations through MCP", () => {
     ).get(saved.entityId)!;
     expect((await call("set", " ")).isError).toBe(true);
     const note =
-      "Checked [synthetic catalog](https://example.test/catalog); no manufacturer is available.";
+      "Checked [synthetic catalog](https://example.test/catalog); no brandName is available.";
     const accepted = dataQuality.parse(
       (await call("set", note)).structuredContent,
     );
     expect(accepted.score).toBeGreaterThan(before.score!);
     expect(accepted.gaps.map((gap) => gap.check)).not.toContain(
-      "product_manufacturer",
+      "product_brand",
     );
     expect(accepted.exceptions).toContainEqual(
       expect.objectContaining({ note, state: "active" }),
     );
     const cleared = dataQuality.parse((await call("clear")).structuredContent);
     expect(cleared.score).toBe(before.score);
-    expect(cleared.gaps.map((gap) => gap.check)).toContain(
-      "product_manufacturer",
-    );
+    expect(cleared.gaps.map((gap) => gap.check)).toContain("product_brand");
     await call("set", note);
     await getDb(ctx.db)
       .update(product)
-      .set({ manufacturer: "Synthetic recorded maker" })
+      .set({
+        brandId: await findOrCreateVendor(ctx.db, "Synthetic recorded maker"),
+      })
       .where(eq(product.id, saved.entityId));
     const changed = (
       await loadDataQualities(ctx.db, "product", [saved.entityId])

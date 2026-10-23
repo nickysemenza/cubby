@@ -9,6 +9,7 @@ import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb, countTestDbQueries } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import {
   createInventoryFixture,
@@ -562,7 +563,7 @@ describe("entity report", () => {
     ).toContainEqual(["Committed, not yet paid", "$125.00", "1 expense"]);
   });
 
-  it("values a location's contents and breaks direct stock down by manufacturer", async () => {
+  it("values a location's contents and breaks direct stock down by brandName", async () => {
     const bin = await createLocationFixture(
       ctx.db,
       makeLocationInput({ name: "Valuation bin", type: "shelf" }),
@@ -573,7 +574,7 @@ describe("entity report", () => {
       makeProductInput({
         name: "Valuation widget",
         price: 10,
-        manufacturer: "Acme Synthetic",
+        brandId: await findOrCreateVendor(ctx.db, "Acme Synthetic"),
       }),
       ctx.actor,
     );
@@ -597,7 +598,7 @@ describe("entity report", () => {
     ]);
   });
 
-  it("groups direct stock by manufacturer in SQL, largest first, capped, ignoring unpriced and other places", async () => {
+  it("groups direct stock by brandName in SQL, largest first, capped, ignoring unpriced and other places", async () => {
     const bin = await createLocationFixture(
       ctx.db,
       makeLocationInput({ name: "Group bin", type: "shelf" }),
@@ -610,14 +611,14 @@ describe("entity report", () => {
     );
     const stock = async (
       name: string,
-      manufacturer: string | undefined,
+      brandId: Awaited<ReturnType<typeof findOrCreateVendor>> | null,
       price: number | undefined,
       quantity: number,
       where = bin,
     ) => {
       const sku = await createProductIdentityFixture(
         ctx.db,
-        makeProductInput({ name, price, manufacturer }),
+        makeProductInput({ name, price, brandId }),
         ctx.actor,
       );
       await createInventoryFixture(
@@ -631,10 +632,31 @@ describe("entity report", () => {
       );
     };
     for (let index = 1; index <= 7; index += 1)
-      await stock(`Group item ${index}`, `Maker ${index}`, 10 * index, 1);
-    await stock("Group second", "Maker 7", 5, 2);
-    await stock("Group unpriced", "Maker unpriced", undefined, 1);
-    await stock("Group other place", "Maker elsewhere", 999, 1, elsewhere);
+      await stock(
+        `Group item ${index}`,
+        await findOrCreateVendor(ctx.db, `Maker ${index}`),
+        10 * index,
+        1,
+      );
+    await stock(
+      "Group second",
+      await findOrCreateVendor(ctx.db, "Maker 7"),
+      5,
+      2,
+    );
+    await stock(
+      "Group unpriced",
+      await findOrCreateVendor(ctx.db, "Maker unpriced"),
+      undefined,
+      1,
+    );
+    await stock(
+      "Group other place",
+      await findOrCreateVendor(ctx.db, "Maker elsewhere"),
+      999,
+      1,
+      elsewhere,
+    );
 
     const [table] = blocksOf(
       await report("location.contents-valuation", bin.id),

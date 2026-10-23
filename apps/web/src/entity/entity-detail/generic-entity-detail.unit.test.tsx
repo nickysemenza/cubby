@@ -248,7 +248,7 @@ describe("GenericEntityDetail", () => {
     const record = recordFor("product");
     const product = {
       ...record,
-      manufacturer: "Milwaukee",
+      brandName: "Milwaukee",
       model: "2853-20",
       category: categorySummaryFixture("tools"),
       tags: [],
@@ -272,9 +272,9 @@ describe("GenericEntityDetail", () => {
     );
     expect(
       screen.getByRole("link", {
-        name: "Show all products with manufacturer Milwaukee",
+        name: "Show all products with brandName Milwaukee",
       }),
-    ).toHaveAttribute("href", "/products?manufacturer=Milwaukee");
+    ).toHaveAttribute("href", "/products?brandName=Milwaukee");
     expect(
       screen.getByRole("link", {
         name: "Show all products with category Tools",

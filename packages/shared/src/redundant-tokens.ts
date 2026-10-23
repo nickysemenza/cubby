@@ -1,7 +1,7 @@
 import { isCollectionTag, normalizeCollectionSlug } from "./collection-tag";
 
 /** One sibling field (or derived fact) a tag might restate, keyed by a reason
- * string the caller controls (e.g. `"manufacturer"`, `"classification"`). A
+ * string the caller controls (e.g. `"brandName"`, `"classification"`). A
  * value may be a single string (a name) or a list (a classification path, a
  * set of aliases); `null`/`undefined` means that reason has no signal. */
 export type RedundantTokensRestating = Readonly<
@@ -16,7 +16,7 @@ export interface RedundantTokensInput {
 export interface RedundantTokenMatch {
   /** The original tag value, unmodified. */
   readonly value: string;
-  /** The `restating` key it matched (e.g. `"manufacturer"`). */
+  /** The `restating` key it matched (e.g. `"brandName"`). */
   readonly reason: string;
   /** The specific restating value it matched, unmodified. */
   readonly matched: string;
@@ -76,7 +76,7 @@ const restatingCandidates = (
 /**
  * A tag restates a sibling field when it — after slug normalization and a
  * trivial singularizer — equals that field's own normalized value: a product
- * tagged "jacquemus" restates its manufacturer, "apparel" or "pants" restates
+ * tagged "jacquemus" restates its brandName, "apparel" or "pants" restates
  * a classification path segment "Apparel"/"Pant". `collection:*` entries
  * (Collections owns those) and any token carrying a digit or `/` (`M18`,
  * `grinder-4.5in`, `1/4-hex` — real compatibility shapes, not prose) are

@@ -569,25 +569,25 @@ async function runNativeScenario(productFixture: {
     [...snapshot.matchAll(/\[statictext\] "Synthetic Works"/g)].length;
   const hiddenManufacturerCount = manufacturerCount(await driver.snapshot());
   await driver.click('label="Show or hide table columns"');
-  await driver.click("id=browse.product.column.manufacturer");
+  await driver.click("id=browse.product.column.brandName");
   await driver.wait("role=button label=Manufacturer");
   await pollUntil(
     async () =>
       manufacturerCount(await driver.snapshot()) > hiddenManufacturerCount
         ? true
         : undefined,
-    { label: "native table manufacturer values rendered", timeoutMs: 30000 },
+    { label: "native table brandName values rendered", timeoutMs: 30000 },
   );
   await driver.screenshot("entity-table");
   await driver.click('label="Show or hide table columns"');
-  await driver.click("id=browse.product.column.manufacturer");
+  await driver.click("id=browse.product.column.brandName");
   await driver.waitAbsent("role=button label=Manufacturer");
   await pollUntil(
     async () =>
       manufacturerCount(await driver.snapshot()) === hiddenManufacturerCount
         ? true
         : undefined,
-    { label: "native table manufacturer values hidden", timeoutMs: 30000 },
+    { label: "native table brandName values hidden", timeoutMs: 30000 },
   );
   for (const field of ["dataQuality", "acquisitionOrigin"]) {
     await driver.click('label="Show or hide table columns"');

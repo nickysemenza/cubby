@@ -15,7 +15,7 @@ const timeline: ProductMovementTimeline = {
     {
       id: product,
       name: "Bench vise",
-      manufacturer: "Acme",
+      brandName: "Acme",
       category: null,
       coverImageUrl: null,
       usedOnProjects: [],

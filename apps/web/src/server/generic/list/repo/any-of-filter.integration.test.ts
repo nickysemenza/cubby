@@ -21,6 +21,7 @@ import { buildLocationWhere } from "~/server/domains/location/repo/crud";
 import { buildProjectWhere } from "~/server/domains/project/repo/lookup";
 import { buildRecipeWhere } from "~/server/domains/recipe/repo/crud";
 import { buildTaskWhere } from "~/server/domains/task/repo/lookup";
+import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
 import { buildWishWhere } from "~/server/domains/wish/repo";
 import { linkValues } from "~/server/generic/entity-links/repo/entity-links";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
@@ -147,12 +148,12 @@ describe("anyOf text filters", () => {
   it("matches a task by name or its inherited subject product's name", async () => {
     const widget = await insertWithShortcode(db(), "product", {
       name: "Zqwidget sander",
-      manufacturer: "",
+      brandId: null,
       model: "",
     });
     const gone = await insertWithShortcode(db(), "product", {
       name: "Zqgone drill",
-      manufacturer: "",
+      brandId: null,
       model: "",
     });
     await getDb(db())
@@ -216,16 +217,21 @@ describe("anyOf text filters", () => {
     expect(taskMatches.actual).toEqual(taskMatches.expected);
   });
 
-  it("matches a wish by name, notes, or any live candidate's name, manufacturer or model", async () => {
-    const candidate = (name: string, manufacturer = "", model = "") =>
+  it("matches a wish by name, notes, or any live candidate's name, brandName or model", async () => {
+    const knownBrandId = await findOrCreateVendor(db(), "Zqmaker");
+    const candidate = (
+      name: string,
+      brandId: typeof knownBrandId | null = null,
+      model = "",
+    ) =>
       insertWithShortcode(db(), "product", {
         name,
-        manufacturer,
+        brandId,
         model,
       });
     const byName = await candidate("Zqcandidate kettle");
-    const byMaker = await candidate("Kettle", "Zqmaker");
-    const byModel = await candidate("Kettle", "", "ZQ-900");
+    const byMaker = await candidate("Kettle", knownBrandId);
+    const byModel = await candidate("Kettle", null, "ZQ-900");
     const unlinked = await candidate("Zqunlinked kettle");
     const deleted = await candidate("Zqdeleted kettle");
     const insert = (name: string, notes: string | null = null) =>
@@ -270,7 +276,7 @@ describe("anyOf text filters", () => {
           JOIN "Product" p ON p."id" = wc."toEntityId" AND p."deletedAt" IS NULL
           WHERE wc."fromEntityId" = ${wish.id}
             AND wc."deletedAt" IS NULL AND wc."kind" = 'wishCandidate'
-            AND (p."name" ILIKE ${`%${term}%`} OR p."manufacturer" ILIKE ${`%${term}%`} OR p."model" ILIKE ${`%${term}%`})
+            AND (p."name" ILIKE ${`%${term}%`} OR p."brandName" ILIKE ${`%${term}%`} OR p."model" ILIKE ${`%${term}%`})
         )`,
       );
     const wishMatches = await equivalence(

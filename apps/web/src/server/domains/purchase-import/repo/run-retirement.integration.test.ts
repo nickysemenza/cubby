@@ -17,6 +17,7 @@ import {
   executeAtomicOperation,
   executeLeasedOperation,
 } from "~/server/domains/run/repo/operation";
+import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
 import { findOpenRunFindings } from "~/server/generic/problems/repo/detectors-import";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import {
@@ -118,7 +119,7 @@ describe("settled coordinator retirement", () => {
     }
     const product = await insertWithShortcode(ctx.db, "product", {
       name: "Synthetic retained review product",
-      manufacturer: "Synthetic maker",
+      brandId: await findOrCreateVendor(ctx.db, "Synthetic maker"),
     });
     await seedRunFindings(ctx.db, [
       ...findings,

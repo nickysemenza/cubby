@@ -43,7 +43,7 @@ export const IngredientNutritionProduct: DetailSlotComponent<"ingredient"> = ({
           ? "From package label, shown from "
           : "Shown from "}
         {product.name}
-        {product.manufacturer ? ` by ${product.manufacturer}` : ""}.
+        {product.brandName ? ` by ${product.brandName}` : ""}.
       </Description>
       <NutrientDensityStats
         nutrients={nutrients}
@@ -52,7 +52,7 @@ export const IngredientNutritionProduct: DetailSlotComponent<"ingredient"> = ({
         mappingProduct={{
           id: product.id,
           name: product.name,
-          manufacturer: product.manufacturer,
+          brandName: product.brandName,
         }}
       />
       {/* USDA-only: the full raw nutrient join behind a disclosure. A label

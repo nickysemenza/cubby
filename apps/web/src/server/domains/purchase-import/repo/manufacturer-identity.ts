@@ -29,18 +29,18 @@ export const modelStyleTokens = (title: string): string[] =>
 
 /**
  * Whether an order line names an existing Product's `model` AND its
- * manufacturer. A family/style number is shared by sibling sizes and colors, so
+ * brandName. A family/style number is shared by sibling sizes and colors, so
  * this is candidate-ranking evidence only, never identity: the caller must not
  * report it as an exact identifier match.
  */
 export function sharesModelWithinManufacturer(
   title: string,
-  candidate: { manufacturer: string; model: string | null },
+  candidate: { brandName: string | null; model: string | null },
 ): boolean {
   const model = comparableModel(candidate.model);
   if (!model) return false;
-  const maker = candidate.manufacturer
-    ? titleWords(candidate.manufacturer).map(comparableToken).filter(Boolean)
+  const maker = candidate.brandName
+    ? titleWords(candidate.brandName).map(comparableToken).filter(Boolean)
     : [];
   if (maker.length === 0) return false;
   const words = new Set(titleWords(title).map(comparableToken));
@@ -48,10 +48,10 @@ export function sharesModelWithinManufacturer(
 }
 
 /**
- * Exact-identity requests for a line SKU read as a manufacturer part number.
- * The order line does not name the manufacturer, so each leading run of title
+ * Exact-identity requests for a line SKU read as a brandName part number.
+ * The order line does not name the brandName, so each leading run of title
  * words is tried as the source slug; a hit still needs the stored
- * `(manufacturer slug, manufacturer_part, SKU)` triple to match exactly.
+ * `(brandName slug, manufacturer_part, SKU)` triple to match exactly.
  */
 export function manufacturerPartRequests(line: {
   title: string;

@@ -187,7 +187,7 @@ export const wishListOverride = defineListOverride<
             }),
           );
           place("acquired");
-          // The candidate's manufacturer/model, which tells two similarly
+          // The candidate's brandName/model, which tells two similarly
           // named alternatives apart. Blank on wish rows.
           add(
             columnHelper.display({
@@ -201,10 +201,10 @@ export const wishListOverride = defineListOverride<
               cell: (info) => {
                 const row = info.row.original;
                 if (row.kind !== "candidate") return null;
-                const { manufacturer, model } = row.candidate;
+                const { brandName, model } = row.candidate;
                 return (
                   <span className="block truncate text-muted-foreground">
-                    {manufacturer}
+                    {brandName}
                     {model ? ` · ${model}` : ""}
                   </span>
                 );

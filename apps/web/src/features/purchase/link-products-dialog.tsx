@@ -26,7 +26,7 @@ import {
   useBoundedListWorkbench,
 } from "~/entity/table/list-workbench";
 import { purchase as purchaseOperations } from "~/integrations/tanstack-query/generated/catalog/purchase.gen";
-import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";
+import { isUnknownBrandName } from "~/lib/brand-name-utils";
 import { purchaseLabel } from "~/lib/purchase-label";
 import { buildSelectColumn } from "~/ui/data-table/row-selection";
 import {
@@ -134,17 +134,15 @@ export function LinkProductsDialog({
         );
         add(createNameColumn(helper, "product", "name", { header: "Product" }));
         add(
-          helper.accessor((row) => row.manufacturer, {
-            id: "manufacturer",
+          helper.accessor((row) => row.brandName, {
+            id: "brandName",
             header: "Manufacturer",
             meta: {
               className: "w-40",
               mobile: { slot: "subtitle", label: "Maker" },
             },
             cell: (info) =>
-              isUnspecifiedManufacturer(info.getValue())
-                ? "—"
-                : info.getValue(),
+              isUnknownBrandName(info.getValue()) ? "—" : info.getValue(),
           }),
         );
         add(

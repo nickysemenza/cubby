@@ -195,7 +195,7 @@ export async function seedPerformanceCorpus(
       const row = {
         ...identity("product"),
         name: `${label} ${role}`,
-        manufacturer: "Synthetic Works",
+        brandId: supplier.id,
         price: index === 3 ? 5 : null,
         expectedQuantity: null,
         model: null,

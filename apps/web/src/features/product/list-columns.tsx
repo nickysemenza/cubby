@@ -92,20 +92,8 @@ function useProductFilterOptions() {
   const projectOptions = useDeferredFilterOptions("project");
   const locationOptions = useDeferredFilterOptions("locationWithInventory");
   const ingredientOptions = useDeferredFilterOptions("ingredientWithProduct");
-  const manufacturerOptionsQuery = useQuery(
-    productOperations.manufacturerOptions.queryOptions(),
-  );
   const externalIdSourceOptionsQuery = useQuery(
     productOperations.externalIdSourceOptions.queryOptions(),
-  );
-  const manufacturerOptions = useMemo<PickerOption[]>(
-    () =>
-      manufacturerOptionsQuery.data?.map(({ manufacturer, count }) => ({
-        value: manufacturer,
-        label: manufacturer,
-        hint: String(count),
-      })) ?? NO_FILTER_OPTIONS,
-    [manufacturerOptionsQuery.data],
   );
   const externalIdSourceOptions = useMemo<PickerOption[]>(
     () =>
@@ -176,7 +164,7 @@ function useProductFilterOptions() {
     project: projectOptions,
     productLocations: locationOptions,
     productIngredients: ingredientOptions,
-    manufacturers: manufacturerOptions,
+    vendor: useDeferredFilterOptions("vendor"),
     productPurchases: purchaseOptions,
     externalIdSources: externalIdSourceOptions,
   });
@@ -366,7 +354,7 @@ export const productListOverride = defineListOverride<
             ),
           );
           place("categoryFeature");
-          place("manufacturer");
+          place("brandName");
           place("primaryGtin");
           place("fdc_id");
           place("model");

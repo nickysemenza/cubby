@@ -13,7 +13,7 @@ type EvalPhoto = {
 type EvalCatalogProduct = {
   key: string;
   name: string;
-  manufacturer?: string;
+  brandName?: string;
 };
 
 export type ExpectedMatch =
@@ -180,12 +180,12 @@ export const agentModelEvalCases: EvalCase[] = [
       {
         key: "runner-black",
         name: "Trailmark Runner 2 Black/Orange US 9",
-        manufacturer: "Trailmark",
+        brandName: "Trailmark",
       },
       {
         key: "runner-blue",
         name: "Trailmark Runner 2 Blue/White US 9",
-        manufacturer: "Trailmark",
+        brandName: "Trailmark",
       },
     ],
     expected: [
@@ -212,7 +212,7 @@ export const agentModelEvalCases: EvalCase[] = [
       {
         key: "fleece-large",
         name: "Ridgeline Fleece Jacket Navy L",
-        manufacturer: "Ridgeline",
+        brandName: "Ridgeline",
       },
     ],
     expected: [
@@ -239,12 +239,12 @@ export const agentModelEvalCases: EvalCase[] = [
       {
         key: "vest-small",
         name: "Northwind Workwear Quilted Vest Olive S",
-        manufacturer: "Northwind Workwear",
+        brandName: "Northwind Workwear",
       },
       {
         key: "vest-large",
         name: "Northwind Workwear Quilted Vest Olive L",
-        manufacturer: "Northwind Workwear",
+        brandName: "Northwind Workwear",
       },
     ],
     expected: [

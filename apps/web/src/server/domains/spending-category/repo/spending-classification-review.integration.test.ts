@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 
 import { unwrapDb } from "~/server/db/helpers";
 import { effectiveExpenseSpendingCategorySql } from "~/server/domains/expense/repo/expense-category-resolution";
+import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
 import {
   entityKernelContextSchema,
   executeEntity,
@@ -52,7 +53,7 @@ describe("reviewed spending classification", () => {
     });
     const item = await insertWithShortcode(ctx.db, "product", {
       name: "Fixture tool box",
-      manufacturer: "Fixture",
+      brandId: await findOrCreateVendor(ctx.db, "Fixture"),
       categoryId: oldCategory.id,
     });
     const line = await insertWithShortcode(ctx.db, "expense", {
@@ -124,7 +125,7 @@ describe("reviewed spending classification", () => {
     });
     const item = await insertWithShortcode(ctx.db, "product", {
       name: "Fixture unbooked item",
-      manufacturer: "Fixture",
+      brandId: await findOrCreateVendor(ctx.db, "Fixture"),
       categoryId: source.id,
     });
     const request = {
@@ -161,7 +162,7 @@ describe("reviewed spending classification", () => {
     });
     const item = await insertWithShortcode(ctx.db, "product", {
       name: "Fixture food item",
-      manufacturer: "Fixture",
+      brandId: await findOrCreateVendor(ctx.db, "Fixture"),
       categoryId: food.id,
     });
     await expect(
@@ -189,7 +190,7 @@ describe("reviewed spending classification", () => {
       );
       const product = await insertWithShortcode(ctx.db, "product", {
         name: "Fixture item",
-        manufacturer: "Fixture",
+        brandId: await findOrCreateVendor(ctx.db, "Fixture"),
         categoryId: productCategory.id,
       });
       const vendor = await insertWithShortcode(ctx.db, "vendor", {

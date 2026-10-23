@@ -61,7 +61,7 @@ export async function listGmailSyncTargets(
         orderEmailSenders: vendor.orderEmailSenders,
       })
       .from(vendor)
-      .where(notDeleted(vendor)),
+      .where(and(notDeleted(vendor), isNull(vendor.systemKey))),
     getDb(db)
       .select({
         merchant: financialTransaction.merchant,

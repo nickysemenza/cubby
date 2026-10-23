@@ -72,7 +72,7 @@ const dummyProducts = (count: number): ProductTopLevelOut[] =>
       primaryGtin: null,
       fdc_id: null,
       growsPlantId: null,
-      manufacturer: "Test",
+      brandName: "Test",
       model: null,
       notes: null,
       labelNutrition: null,

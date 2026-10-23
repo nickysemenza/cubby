@@ -53,7 +53,7 @@ describe("not_allowed product expectation", () => {
       });
     const product = await insertWithShortcode(ctx.db, "product", {
       name: `Example chili crisp ${crypto.randomUUID()}`,
-      manufacturer: "",
+      brandId: null,
     });
     return { restaurants, groceries, purchaseIn, product };
   }
@@ -144,7 +144,7 @@ describe("not_allowed product expectation", () => {
     });
     const product = await insertWithShortcode(ctx.db, "product", {
       name: `Example noodles ${crypto.randomUUID()}`,
-      manufacturer: "",
+      brandId: null,
       categoryId: food.id,
     });
     const grocer = await insertWithShortcode(ctx.db, "vendor", {
@@ -288,7 +288,7 @@ describe("not_allowed product expectation", () => {
     });
     const meal = await insertWithShortcode(ctx.db, "product", {
       name: `Example meal kit ${crypto.randomUUID()}`,
-      manufacturer: "",
+      brandId: null,
       categoryId: prepared.id,
     });
     await expect(

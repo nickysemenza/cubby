@@ -101,7 +101,7 @@ export const productFixture = (
   ctx: Ctx,
   name: string,
   input: {
-    manufacturer?: string;
+    brandName?: string;
     model?: ReturnType<typeof makeProductInput>["model"];
     notes?: string;
     categoryId?: ReturnType<typeof taxonomyId>;
@@ -109,7 +109,7 @@ export const productFixture = (
 ) =>
   createProduct(
     ctx.db,
-    makeProductInput({ name, manufacturer: "Synthetic maker", ...input }),
+    makeProductInput({ name, brandName: "Synthetic maker", ...input }),
     ctx.actor,
   );
 

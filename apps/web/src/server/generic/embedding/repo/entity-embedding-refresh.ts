@@ -14,6 +14,10 @@ import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { effectiveFieldSql } from "~/server/db/computed/effective-field";
 import { locationAiDescriptionExtras } from "~/server/db/computed/location-ai-description";
+import {
+  productBrandNameSql,
+  productBrandCodeSql,
+} from "~/server/db/computed/product-brand-sql";
 import { categorySummarySql } from "~/server/db/computed/product-category-sql";
 import {
   notDeleted,
@@ -233,6 +237,8 @@ async function getProductEmbeddingTexts(
           : undefined,
       ),
       extras: {
+        brandName: productBrandNameSql(product.brandId).as("brandName"),
+        brandCode: productBrandCodeSql(product.brandId).as("brandCode"),
         category: sql<
           string | null
         >`${categorySummarySql(sql`${product.categoryId}`)}->>'name'`.as(
@@ -242,7 +248,7 @@ async function getProductEmbeddingTexts(
       columns: {
         id: true,
         name: true,
-        manufacturer: true,
+
         categoryId: true,
         model: true,
         notes: true,
@@ -321,7 +327,7 @@ async function getWishEmbeddingTexts(
           .select({
             wishId: entityLink.fromEntityId,
             name: product.name,
-            manufacturer: product.manufacturer,
+            brandName: productBrandNameSql(product.brandId),
             model: product.model,
           })
           .from(entityLink)
@@ -345,7 +351,7 @@ async function getWishEmbeddingTexts(
         .filter((candidate) => candidate.wishId === row.id)
         .flatMap((candidate) => [
           candidate.name,
-          candidate.manufacturer,
+          candidate.brandName,
           candidate.model,
         ]),
     }),
@@ -559,7 +565,7 @@ async function getInventoryEmbeddingTexts(
       amount: inventoryAmountSql,
       locationName: location.name,
       productName: product.name,
-      manufacturer: product.manufacturer,
+      brandName: productBrandNameSql(product.brandId),
       category: sql<
         string | null
       >`${categorySummarySql(sql`${product.categoryId}`)}->>'name'`,
@@ -597,7 +603,7 @@ async function getInventoryEmbeddingTexts(
     embeddingText: buildInventoryEmbeddingText({
       productText: buildProductEmbeddingText({
         name: row.productName,
-        manufacturer: row.manufacturer,
+        brandName: row.brandName,
         category: row.category,
         model: row.model,
         gtins: gtins.get(row.productId) ?? [],

@@ -52,7 +52,7 @@ const relevantFields = new Map<string, readonly string[]>(
     ],
     product: [
       "name",
-      "manufacturer",
+      "brandName",
       "model",
       "aliases",
       "categoryId",

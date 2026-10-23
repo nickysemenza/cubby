@@ -136,9 +136,9 @@ describe("data-quality registry", () => {
 });
 
 describe("calculateDataQualityScore", () => {
-  const gap = (
-    check: "product_image" | "product_manufacturer" | "product_name",
-  ) => ({ check });
+  const gap = (check: "product_image" | "product_brand" | "product_name") => ({
+    check,
+  });
 
   it("does not score a record with no expected checks", () => {
     expect(calculateDataQualityScore([], [])).toBeNull();
@@ -162,10 +162,7 @@ describe("calculateDataQualityScore", () => {
 
   it("ignores a gap on a check that is not expected", () => {
     expect(
-      calculateDataQualityScore(
-        ["product_manufacturer"],
-        [gap("product_image")],
-      ),
+      calculateDataQualityScore(["product_brand"], [gap("product_image")]),
     ).toBe(100);
   });
 });
@@ -210,11 +207,9 @@ describe("score and status evaluate each predicate once", () => {
 describe("aliased evaluation", () => {
   it("renders a related row's check against the alias, not the base table", () => {
     const related = alias(product, "dq_r");
-    const rendered = render(
-      gapCondition("product", "product_manufacturer", related),
-    );
-    expect(rendered).toContain('"dq_r"."manufacturer"');
-    expect(rendered).not.toContain('"Product"."manufacturer"');
+    const rendered = render(gapCondition("product", "product_brand", related));
+    expect(rendered).toContain('"dq_r"."brandName"');
+    expect(rendered).not.toContain('"Product"."brandName"');
     expect(getTableName(related)).toBe("dq_r");
   });
 
@@ -227,7 +222,7 @@ describe("aliased evaluation", () => {
 
 describe("purchase import expectations", () => {
   it("uses check inputs, not target timestamps, to keep an exception active", () => {
-    const productSql = render(gapCondition("product", "product_manufacturer"));
+    const productSql = render(gapCondition("product", "product_brand"));
     const purchaseSql = render(gapCondition("purchase", "paperwork_mismatch"));
     expect(productSql).toContain("to_jsonb");
     expect(purchaseSql).toContain("to_jsonb");

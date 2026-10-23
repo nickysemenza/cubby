@@ -128,7 +128,7 @@ Product or Inventory entry.
 **Create Product** saves the displayed draft and attaches its photos.
 **Attach photos** appends photos while preserving Product fields, gallery order,
 and cover. Select **Optional Product changes** to update specific name,
-category, manufacturer, model, notes, or tags in the same transaction; the
+category, Brand reference, model, notes, or tags in the same transaction; the
 review shows the old and proposed values. Review optional field changes on web;
 the native client blocks applying hidden field edits. Labels stay labels and never become
 covers. **Combine photo groups…** moves photos without changing their purposes;

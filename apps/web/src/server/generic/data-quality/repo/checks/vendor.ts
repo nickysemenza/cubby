@@ -48,11 +48,13 @@ export const vendorChecks = defineEntityChecks({
       ],
     },
     vendor_logo: {
+      expected: (t) => sql`${t.systemKey} IS NULL`,
       missing: (t) => sql`NOT ${hasDisplayableLogo(t)}`,
       // A new website is new evidence for a logo search.
       fingerprint: (t) => [sql`${t.website}`, hasDisplayableLogo(t)],
     },
     vendor_website: {
+      expected: (t) => sql`${t.systemKey} IS NULL`,
       missing: (t) => sql`(${t.website} IS NULL OR trim(${t.website}) = '')`,
       fingerprint: (t) => [sql`${t.name}`, sql`${t.website}`],
     },

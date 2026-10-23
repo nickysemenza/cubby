@@ -835,7 +835,7 @@ export type PreparePurchaseImportInput = z.infer<
 export const preparedProductCandidate = z.object({
   productId: productShortcode,
   name: z.string().trim().min(1).max(500),
-  manufacturer: z.string().max(300),
+  brandName: z.string().max(300).nullable(),
   model: z.string().max(300).nullable(),
   exactIdentifierMatch: z.boolean(),
   /** Name/alias equality at preparation; null means the historical snapshot did not record it. */

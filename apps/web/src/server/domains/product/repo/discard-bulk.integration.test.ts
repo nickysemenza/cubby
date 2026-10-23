@@ -25,7 +25,7 @@ import { discardFromInventoryEntries } from "./discard";
 describe("discardFromInventoryEntries", () => {
   const ctx = withTestDb();
 
-  // Location names and (name, manufacturer) product pairs are both globally
+  // Location names and (name, brandName) product pairs are both globally
   // unique, and the test DB persists across the `it` blocks in this file — so
   // every seed mints its own shelf and its own product.
   let seedCounter = 0;

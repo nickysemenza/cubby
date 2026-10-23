@@ -8,6 +8,7 @@ import {
   lookupProductIdentifierSources,
   resolveProductIdentifierSource,
 } from "~/server/domains/product/repo/product-identifier-source";
+import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
 import { findProductIdentifiersOutsideIssuer } from "~/server/generic/problems/repo/detectors-product";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
@@ -235,7 +236,7 @@ describe("Product identifier issuer registry", () => {
       ]);
     const owner = await insertWithShortcode(ctx.db, "product", {
       name: "Synthetic drifting product",
-      manufacturer: "Synthetic maker",
+      brandId: await findOrCreateVendor(ctx.db, "Synthetic maker"),
     });
     await getDb(ctx.db)
       .insert(entityExternalId)
@@ -277,7 +278,7 @@ describe("Product identifier issuer registry", () => {
       .values({ slug: "example-legacy", label: "Legacy", vendorId: issuer.id });
     const owner = await insertWithShortcode(ctx.db, "product", {
       name: "Synthetic legacy-sourced product",
-      manufacturer: "Synthetic maker",
+      brandId: await findOrCreateVendor(ctx.db, "Synthetic maker"),
     });
     await getDb(ctx.db).insert(entityExternalId).values({
       entityKind: "product",

@@ -188,7 +188,7 @@ export async function importedPurchaseFixture(
     db,
     makeProductInput({
       name: "Example ordered small device",
-      manufacturer: "Example Works",
+
       model: "Q-17",
     }),
     actor,

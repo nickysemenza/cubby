@@ -1,4 +1,3 @@
-import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
 import { fromPartial } from "@total-typescript/shoehorn";
 import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
@@ -10,6 +9,7 @@ import {
   discoverAcquisitionCandidates,
   discoverAcquisitionCandidateScan,
 } from "~/server/domains/connection/service/acquisition-discovery";
+import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
 import { seedEntityEmbedding } from "~/server/generic/embedding/repo/entity-embedding";
 import { getSemanticEmbeddingConfig } from "~/server/generic/embedding/service/semantic/config";
 import { semanticEmbeddingsConfigured } from "~/server/generic/embedding/service/semantic/embeddings";
@@ -101,7 +101,10 @@ describe("acquisition Expense discovery gating", () => {
     const index = semanticIndex();
     const runner = await createProductIdentityFixture(
       ctx.db,
-      makeProductInput({ name: "Synthetic Acme Runner", manufacturer: "Acme" }),
+      makeProductInput({
+        name: "Synthetic Acme Runner",
+        brandId: await findOrCreateVendor(ctx.db, "Acme"),
+      }),
       ctx.actor,
     );
     const lexical = await charge(index, "Synthetic Acme Runner purchase", 0.95);
@@ -144,7 +147,10 @@ describe("acquisition Expense discovery gating", () => {
     const index = semanticIndex();
     const runner = await createProductIdentityFixture(
       ctx.db,
-      makeProductInput({ name: "Acme Trail Runner", manufacturer: "Acme" }),
+      makeProductInput({
+        name: "Acme Trail Runner",
+        brandId: await findOrCreateVendor(ctx.db, "Acme"),
+      }),
       ctx.actor,
     );
     // Makes "Zenith" a known brand.
@@ -152,7 +158,7 @@ describe("acquisition Expense discovery gating", () => {
       ctx.db,
       makeProductInput({
         name: "Zenith Court Classic",
-        manufacturer: "Zenith",
+        brandId: await findOrCreateVendor(ctx.db, "Zenith"),
       }),
       ctx.actor,
     );
@@ -179,7 +185,7 @@ describe("acquisition Expense discovery gating", () => {
       ctx.db,
       makeProductInput({
         name: "Trail Runner",
-        manufacturer: UNSPECIFIED_MANUFACTURER,
+        brandId: null,
       }),
       ctx.actor,
     );

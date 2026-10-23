@@ -7,7 +7,6 @@ import {
   OWNER_FILTER_HOUSEHOLD,
   OWNER_FILTER_UNKNOWN,
 } from "@cubby/shared";
-import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared/constants";
 import { plainDate } from "@cubby/schemas/base-entity";
 import { valueCollectionPatch } from "@cubby/schemas/entity-collection";
 import {
@@ -22,6 +21,7 @@ import {
   plantShortcode,
   productShortcode,
   productCategoryShortcode,
+  vendorShortcode,
 } from "../identifier-fields.js";
 import { productAttachmentImageOut } from "./field-primitives.js";
 import { productImagePurpose } from "../image-summary.js";
@@ -218,7 +218,7 @@ export default defineEntity(
               {
                 id: "dataGaps",
                 value: [
-                  "product_manufacturer",
+                  "product_brand",
                   "product_external_id",
                   "product_category",
                   "product_image",
@@ -637,7 +637,7 @@ export default defineEntity(
             fields: [
               "name",
               "model",
-              "manufacturer",
+              "brandId",
               "commodity",
               "categoryId",
               "notes",
@@ -687,7 +687,7 @@ export default defineEntity(
     model: {
       research: {
         fillFields: [
-          "manufacturer",
+          "brandId",
           "model",
           "categoryId",
           "ingredientId",
@@ -794,7 +794,7 @@ export default defineEntity(
             kind: "specialized",
             renderer: "product-tags",
             suggest: {
-              basis: ["manufacturer", "categoryId", "aliases"],
+              basis: ["brandId", "categoryId", "aliases"],
               mode: "prune",
               rules: [
                 `You are auditing one household product's compatibility tags. The subject above lists the product's manufacturer, classification, feature, and aliases, plus one candidate tag. Decide whether that candidate tag only restates one of those already-recorded facts (the manufacturer's name, a classification path segment, or a generic category word) or whether it names a genuine compatibility or ecosystem detail — a battery platform, mount, thread, or size standard — worth keeping.
@@ -869,31 +869,42 @@ Rules:
           },
         },
         {
-          key: "manufacturer",
+          key: "brandId",
+          kind: "identifier",
+          nullable: true,
+          reference: { entity: "vendor" },
           explanation: {
-            ruleId: "product.manufacturer",
+            ruleId: "product.brand",
             description:
-              "The current manufacturer and retained evidence supporting this value.",
-            sourceDependencies: [
-              { path: "manufacturer", label: "Stored manufacturer" },
-            ],
+              "The marketed brand. Generic / Unbranded is an explicit brand; null means unknown. This does not identify the physical factory or imply a commodity.",
+            sourceDependencies: [{ path: "brandId", label: "Stored brand" }],
           },
-          kind: "text",
-          // The create schema defaults a missing maker, but the form still
-          // asks for one.
-          control: { kind: "text", width: "half", required: true },
+          control: {
+            kind: "specialized",
+            renderer: "entity-select",
+            width: "half",
+            suggest: { basis: ["name", "model", "notes"] },
+          },
           display: {
+            labelPath: "brandName",
             width: "md",
             mobile: { slot: "subtitle", priority: 20 },
             listHidden: true,
           },
           validation: {
-            read: z.string(),
-            // Defaults rather than requires: most generic groceries and
-            // receipt lines have no maker, and demanding an explicit
-            // "(unspecified)" from every MCP create only produced typos.
-            create: z.string().default(UNSPECIFIED_MANUFACTURER),
-            update: z.string().optional(),
+            read: vendorShortcode.nullable(),
+            create: vendorShortcode.nullable().default(null),
+            update: vendorShortcode.nullable().optional(),
+          },
+        },
+        {
+          key: "brandName",
+          kind: "text",
+          nullable: true,
+          validation: {
+            read: z.string().nullable(),
+            create: null,
+            update: null,
           },
         },
         {
@@ -961,7 +972,7 @@ Rules:
             suggest: {
               basis: [
                 "name",
-                "manufacturer",
+                "brandId",
                 "model",
                 "notes",
                 "classificationEvidence",
@@ -1041,7 +1052,7 @@ Rules:
             kind: "specialized",
             renderer: "entity-select",
             suggest: {
-              basis: ["name", "manufacturer", "categoryId", "notes"],
+              basis: ["name", "brandId", "categoryId", "notes"],
             },
           },
           display: {
@@ -1064,7 +1075,7 @@ Rules:
             kind: "specialized",
             renderer: "entity-select",
             suggest: {
-              basis: ["name", "manufacturer", "categoryId", "notes"],
+              basis: ["name", "brandId", "categoryId", "notes"],
             },
           },
           display: { list: false },
@@ -1958,7 +1969,7 @@ Rules:
           defaultValue: "'{}'::text[]",
           specialized: "text-array",
         },
-        "manufacturer",
+        { key: "brandId", reference: "vendor" },
         "fdc_id",
         "model",
         "expectedQuantity",
@@ -1988,7 +1999,7 @@ Rules:
         "tags",
         "barcode",
         "fdc_id",
-        "manufacturer",
+        "brandId",
         "model",
         "notes",
         "expectedQuantity",
@@ -2013,7 +2024,7 @@ Rules:
         "tags",
         "barcode",
         "fdc_id",
-        "manufacturer",
+        "brandId",
         "model",
         "notes",
         "expectedQuantity",
@@ -2038,7 +2049,7 @@ Rules:
         "name",
         "aliases",
         "tags",
-        "manufacturer",
+        "brandId",
         "commodity",
         "categoryId",
         "externalIds",
@@ -2064,6 +2075,8 @@ Rules:
         subjectTasks: { label: "Tasks", relation: "tasks" },
       },
       derived: {
+        brandId: { type: "text" },
+        brandName: { via: "brand.name" },
         // The first live stock location by name, across all inventory.
         location: { type: "text" },
         ingredient: { via: "ingredient" },
@@ -2124,7 +2137,7 @@ Rules:
           "createdAt",
           "updatedAt",
           "name",
-          "manufacturer",
+          "brandId",
           "model",
           "primaryGtin",
           "categoryId",
@@ -2144,7 +2157,7 @@ Rules:
           "related:product.purchases",
         ],
       },
-      grouping: ["categoryId", "manufacturer", "tags", "quantityVarianceState"],
+      grouping: ["categoryId", "brandId", "tags", "quantityVarianceState"],
       intents: {
         fields: {
           // The list's "New" dialog and the picker's "Create product" open
@@ -2155,7 +2168,7 @@ Rules:
             "name",
             "aliases",
             "tags",
-            "manufacturer",
+            "brandId",
             "model",
             "categoryId",
             "ingredientId",
@@ -2182,7 +2195,7 @@ Rules:
             "name",
             "aliases",
             "tags",
-            "manufacturer",
+            "brandId",
             "model",
             "categoryId",
             "ingredientId",
@@ -2218,7 +2231,7 @@ Rules:
             "ingredientId",
             "unitMappings",
           ],
-          identity: ["name", "aliases", "manufacturer", "model", "categoryId"],
+          identity: ["name", "aliases", "brandId", "model", "categoryId"],
           price: ["price"],
           stock: ["stockTracked"],
         },
@@ -2233,7 +2246,8 @@ Rules:
         "tags",
         "primaryGtin",
         "fdc_id",
-        "manufacturer",
+        "brandId",
+        "brandName",
         "model",
         "notes",
         "expectedQuantity",
@@ -2289,7 +2303,7 @@ Rules:
     storage: {
       indexes: [
         {
-          on: ["name", "manufacturer"],
+          on: ["name", "brandId"],
           unique: true,
           where: "{deletedAt} IS NULL",
         },
@@ -2299,16 +2313,15 @@ Rules:
         // index @>/&&/= ANY. EXPLAIN confirms a seq scan with a per-row SubPlan
         // either way, so the index was pure write cost.
         { trigram: "name" },
-        { trigram: "manufacturer" },
-        { on: ["name", "manufacturer"] },
+        { on: ["name", "brandId"] },
         {
           name: "Product_name_active_idx",
           on: ["name"],
           where: "{deletedAt} IS NULL",
         },
         {
-          name: "Product_manufacturer_active_idx",
-          on: ["manufacturer"],
+          name: "Product_brand_active_idx",
+          on: ["brandId"],
           where: "{deletedAt} IS NULL",
         },
       ],
@@ -2316,6 +2329,7 @@ Rules:
       // widens this CHECK: ship the migration before the code that writes it.
       checks: [{ column: "kind", nullClause: true }],
       relations: {
+        brand: "brandId",
         category: "categoryId",
         ingredient: {
           field: "ingredientId",
@@ -2358,22 +2372,23 @@ Rules:
           schemaDescription: "Filter by product name",
         },
         {
-          columnId: "manufacturer",
-          field: "manufacturerExact",
-          kind: "multiselect",
-          placeholder: "Filter by manufacturer...",
-          deriveSchema: true,
+          columnId: "brandId",
+          field: "brandId",
+          kind: "idMulti",
+          optionsKey: "vendor",
+          brandRef: { entity: "vendor" },
           stored: true,
-          optionsKey: "manufacturers",
+          placeholder: "Filter by brand...",
+          deriveSchema: true,
         },
         {
-          columnId: "manufacturerSearch",
-          field: "manufacturerFilter",
+          columnId: "brandSearch",
+          field: "brandFilter",
           kind: "text",
-          placeholder: "Search manufacturer...",
+          placeholder: "Search brand...",
           deriveSchema: true,
-          schemaDescription: "Filter by manufacturer",
-          anyOf: ["manufacturer"],
+          schemaDescription: "Filter by marketed brand name",
+          anyOf: ["brandName"],
         },
         {
           columnId: "primaryGtin",
@@ -3067,6 +3082,19 @@ Rules:
     },
     relations: [
       {
+        key: "brand",
+        label: "Brand",
+        target: "vendor",
+        cardinality: "one",
+        provenance: {
+          kind: "local-path",
+          steps: [{ edge: "Product.brandId", direction: "outgoing" }],
+        },
+        inverse: {
+          steps: [{ edge: "Product.brandId", direction: "incoming" }],
+        },
+      },
+      {
         key: "category",
         label: "Classification",
         target: "productCategory",
@@ -3496,13 +3524,13 @@ Rules:
             message: "Product name is blank.",
           },
           {
-            id: "product_manufacturer",
-            satisfiedLabel: "Manufacturer recorded",
-            placement: { field: "manufacturer" },
+            id: "product_brand",
+            satisfiedLabel: "Brand recorded",
+            placement: { field: "brandId" },
             facet: "identity",
             weight: 2,
-            label: "Manufacturer",
-            message: "Manufacturer is not recorded.",
+            label: "Brand",
+            message: "Brand is not recorded.",
           },
           {
             id: "product_external_id",
@@ -3567,11 +3595,11 @@ Rules:
         ],
         routing: {
           category: "home",
-          candidateFields: ["name", "manufacturer", "model"],
+          candidateFields: ["name", "brandName", "model"],
           temporalFields: [],
           lifecycleFilters: [],
           signals: {
-            ocrFields: ["name", "manufacturer", "model"],
+            ocrFields: ["name", "brandName", "model"],
             classifierLabels: ["container"],
           },
           abstention: { minimumScore: 0.72, minimumMargin: 0.12 },

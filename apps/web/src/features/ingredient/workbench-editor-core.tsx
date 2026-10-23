@@ -7,7 +7,6 @@ import {
   type UnitMapping,
 } from "@cubby/schemas/unitmapping";
 import type { UsdaFoodListRow } from "@cubby/schemas/usda";
-import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
 import type { FoodSummary } from "@cubby/usda";
 
 import { isDisplayMapping } from "~/features/units/unit-mapping-graph";
@@ -358,7 +357,7 @@ export const buildProductWrite = (
         name: row.name,
         aliases: [],
         tags: [],
-        manufacturer: UNSPECIFIED_MANUFACTURER,
+        brandId: null,
         barcode: null,
         expectedQuantity: null,
         ingredientId: row.id,

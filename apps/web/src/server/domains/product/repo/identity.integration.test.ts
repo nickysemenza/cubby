@@ -8,8 +8,9 @@ import {
 } from "~/server/domains/product/repo/crud";
 import {
   findProductByGtin,
-  findProductByNameFuzzyManufacturer,
+  findProductByNameWithBrandClaim,
 } from "~/server/domains/product/repo/lookup";
+import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
 import {
   createProductFixture as createProduct,
   makeProductInput,
@@ -90,7 +91,7 @@ describe("product identity constraints", () => {
       ctx.db,
       makeProductInput({
         name: "Identity Drill",
-        manufacturer: "Acme",
+        brandId: await findOrCreateVendor(ctx.db, "Acme"),
         model: "ID-100",
         barcode: "077089850017",
         externalIds: [
@@ -113,7 +114,7 @@ describe("product identity constraints", () => {
         ctx.db,
         makeProductInput({
           name: "Identity Drill",
-          manufacturer: "Acme",
+          brandId: await findOrCreateVendor(ctx.db, "Acme"),
           model: "ID-200",
           barcode: "123456789012",
         }),
@@ -126,7 +127,7 @@ describe("product identity constraints", () => {
         ctx.db,
         makeProductInput({
           name: "Encoded Identity Drill",
-          manufacturer: "Other",
+          brandId: await findOrCreateVendor(ctx.db, "Other"),
           barcode: "0077089850017",
         }),
         ctx.actor,
@@ -142,7 +143,7 @@ describe("product identity constraints", () => {
         ctx.db,
         makeProductInput({
           name: "External Identity Drill",
-          manufacturer: "Other",
+          brandId: await findOrCreateVendor(ctx.db, "Other"),
           externalIds: [
             {
               source: "amazon",
@@ -173,18 +174,10 @@ describe("product name lookup", () => {
     );
 
     expect(
-      await findProductByNameFuzzyManufacturer(
-        ctx.db,
-        "Shelf A_B bracket",
-        null,
-      ),
+      await findProductByNameWithBrandClaim(ctx.db, "Shelf A_B bracket", null),
     ).toBeNull();
     expect(
-      await findProductByNameFuzzyManufacturer(
-        ctx.db,
-        "shelf axb BRACKET",
-        null,
-      ),
+      await findProductByNameWithBrandClaim(ctx.db, "shelf axb BRACKET", null),
     ).toMatchObject({ name: "Shelf AxB bracket" });
   });
 });

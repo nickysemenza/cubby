@@ -56,6 +56,7 @@ import {
   productFixture,
   recordId,
 } from "~/server/domains/run/service/suggestion-sweep.fixtures";
+import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
 import { mergeReviewedProductPair } from "~/server/generic/assessment/repo/assessment-product";
 import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
 import { findDuplicateProductIdentities } from "~/server/generic/problems/repo/detectors-product";
@@ -115,6 +116,10 @@ describe("stored Product identity pairs", () => {
     "exposes open pairs beyond suppressed and weak rows: %j",
     async ({ suppressed, weak, actionable }) => {
       const count = suppressed + weak + actionable;
+      const queueBrandId = await findOrCreateVendor(
+        ctx.db,
+        "Synthetic queue maker",
+      );
       const products = Array.from({ length: count + 1 }, (_, index) => {
         let value = index;
         let body = "";
@@ -129,7 +134,7 @@ describe("stored Product identity pairs", () => {
           ),
           shortcode: parseShortcodeFor("product", `PRD-${body}`),
           name: `Synthetic queue item ${index}`,
-          manufacturer: "Synthetic queue maker",
+          brandId: queueBrandId,
         };
       });
       await insertEntityFixtures(ctx.db, product, "product", products);
@@ -217,10 +222,10 @@ describe("stored Product identity pairs", () => {
     sku?: string,
   ) => {
     const products = await Promise.all(
-      names.map((name) =>
+      names.map(async (name) =>
         productFixture(ctx, name, {
           model: "SYNTH-STYLE",
-          manufacturer: "Synthetic apparel maker",
+          brandId: await findOrCreateVendor(ctx.db, "Synthetic apparel maker"),
         }),
       ),
     );
@@ -923,11 +928,11 @@ describe("stored Product identity pairs", () => {
   });
   it("does not retrieve candidates from shared research URLs or claimed variants", async () => {
     const a = await productFixture(ctx, "Synthetic catalog alpha", {
-      manufacturer: "Synthetic Alpha",
+      brandId: await findOrCreateVendor(ctx.db, "Synthetic Alpha"),
       model: null,
     });
     const b = await productFixture(ctx, "Synthetic catalog omega", {
-      manufacturer: "Synthetic Omega",
+      brandId: await findOrCreateVendor(ctx.db, "Synthetic Omega"),
       model: null,
     });
     const ids = await Promise.all(

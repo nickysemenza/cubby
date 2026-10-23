@@ -1159,6 +1159,22 @@ export const ENTITY_EDGES = {
     ...externalIdEdgesFor("task"),
   },
   vendor: edges({
+    "PhotoGroupProposal.productCreateBrandId": {
+      column: photoGroupProposal.productCreateBrandId,
+      role: "metadata",
+      label: "photo Brand proposals",
+      description:
+        "The Brand selected for a proposed Product creation or Brand update.",
+      liveness: { kind: "must-target-live" },
+    },
+    "Product.brandId": {
+      column: product.brandId,
+      role: "reference",
+      label: "branded products",
+      description:
+        "The marketed brand identity, independently of purchased-from sellers and commodity status.",
+      liveness: { kind: "must-target-live" },
+    },
     "SourceOrderObservation.vendorId": {
       column: sourceOrderObservation.vendorId,
       role: "history",

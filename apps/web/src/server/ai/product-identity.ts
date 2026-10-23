@@ -85,7 +85,9 @@ export async function retrieveProductIdentityCandidates(
         or(
           exact,
           and(
-            eq(product.manufacturer, seed.manufacturer),
+            seed.brandId === null
+              ? sql`false`
+              : eq(product.brandId, seed.brandId),
             eq(product.model, seed.model ?? ""),
           ),
           sql`EXISTS (SELECT 1 FROM unnest(ARRAY[${product.name}] || ${product.aliases}) candidate(name) WHERE lower(candidate.name) IN (SELECT lower(value) FROM jsonb_array_elements_text(${JSON.stringify([seed.name, ...seed.aliases])}::jsonb)))`,

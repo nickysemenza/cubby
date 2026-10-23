@@ -19,6 +19,7 @@ import {
 } from "~/server/db/schema";
 import { applyFinanceCategorySuggestion } from "~/server/domains/financial-transaction/repo/finance-suggestion-context";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
+import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
 import { entityKernelContextSchema } from "~/server/entity-kernel";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import {
@@ -52,7 +53,7 @@ describe("reviewed linked finance category suggestions", () => {
       ctx.db,
       makeProductInput({
         name: "Fixture black crew shirt",
-        manufacturer: "Fixture apparel",
+        brandId: await findOrCreateVendor(ctx.db, "Fixture apparel"),
       }),
       ctx.actor,
     );

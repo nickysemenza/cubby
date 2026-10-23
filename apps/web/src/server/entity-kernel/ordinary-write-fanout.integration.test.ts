@@ -121,7 +121,7 @@ describe("ordinary scalar write fanout", () => {
       Array.from({ length: 1000 }, (_, index) => ({
         shortcode: `PRD-SYN-CANDIDATE-${index + 1}`,
         name: `Synthetic candidate ${index + 1}`,
-        manufacturer: "Synthetic maker",
+        brandId: original.brandId,
         categoryId: original.categoryId,
       })),
     );

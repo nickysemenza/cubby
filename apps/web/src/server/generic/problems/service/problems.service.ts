@@ -251,7 +251,7 @@ const findProductCoverageProblems = async (
     ingredientsWithPartialCoverage.push({
       id: parseShortcodeFor("product", p.shortcode),
       name: p.name,
-      manufacturer: p.manufacturer,
+      brandName: p.brandName,
       coverage: { covered: [...cov.covered], applicable: [...applicable] },
       hasPrice,
       hasUsdaLink: p.food != null || p.labelNutrition != null,
@@ -282,7 +282,7 @@ const findProductCoverageProblems = async (
       productsWithIslandedMappings.push({
         id: parseShortcodeFor("product", p.shortcode),
         name: p.name,
-        manufacturer: p.manufacturer,
+        brandName: p.brandName,
         islandCount: islands.length,
         islands: islands.map((units) => ({
           units: units.slice(0, 3), // Limit to first 3 units for display
@@ -587,7 +587,7 @@ const presentCoverageExactRows = async (
     return ingredientWithPartialCoverageSchema.parse({
       id: parseShortcodeFor("product", product.shortcode),
       name: product.name,
-      manufacturer: product.manufacturer,
+      brandName: product.brandName,
       coverage: {
         covered: coverage.coveredKinds,
         applicable: coverage.applicableKinds,
@@ -623,7 +623,7 @@ const presentCoverageExactRows = async (
     return productWithIslandedMappingsSchema.parse({
       id: parseShortcodeFor("product", product.shortcode),
       name: product.name,
-      manufacturer: product.manufacturer,
+      brandName: product.brandName,
       islandCount: coverage.islandCount,
       islands: islandUnits.map((units) => ({
         units: units.slice(0, 3),
@@ -646,7 +646,7 @@ const exactProblemPresentationRowSchema = z.object({
   name: z.string().nullish(),
   filename: z.string().nullish(),
   processingIssue: imageProcessingIssue.nullish(),
-  manufacturer: z.string().nullish(),
+  brandName: z.string().nullish(),
   expectedQuantity: z.number().nullish(),
   inventoryEntry: z
     .array(
@@ -791,7 +791,7 @@ const fastExactPresenters = {
       .pick({
         id: true,
         name: true,
-        manufacturer: true,
+        brandName: true,
         expectedQuantity: true,
         inventoryEntry: true,
       })
@@ -802,7 +802,7 @@ const fastExactPresenters = {
         "product",
         productRef(row),
         [
-          manufacturerField(row.manufacturer),
+          manufacturerField(row.brandName),
           field(
             "Entries",
             `${countLabel(locations.length, "entry")} across ${countLabel(uniqBy(locations, (l) => l.id).length, "location")}`,
@@ -821,7 +821,7 @@ const fastExactPresenters = {
       .pick({
         id: true,
         name: true,
-        manufacturer: true,
+        brandName: true,
         onHandUnits: true,
         inventoryEntry: true,
       })
@@ -837,7 +837,7 @@ const fastExactPresenters = {
         "product",
         productRef(row),
         [
-          manufacturerField(row.manufacturer),
+          manufacturerField(row.brandName),
           field("Sold", String(totals.soldQuantity)),
           field("On a shelf", String(Number(row.onHandUnits ?? 0)), "warning"),
           field("Recovered", formatCurrency(Math.abs(totals.proceeds))),
@@ -892,11 +892,11 @@ const fastExactPresenters = {
   ),
   productsWithNoImages: selectedFastCard(
     exactProblemPresentationRowSchema
-      .pick({ id: true, name: true, manufacturer: true, primaryGtin: true })
+      .pick({ id: true, name: true, brandName: true, primaryGtin: true })
       .required(),
     (row) =>
       problemRow("product", productRef(row), [
-        manufacturerField(row.manufacturer, { missingIsDefect: true }),
+        manufacturerField(row.brandName, { missingIsDefect: true }),
         row.primaryGtin ? field("GTIN", displayGtin(row.primaryGtin)) : null,
       ]),
   ),
@@ -920,14 +920,14 @@ const fastExactPresenters = {
       .pick({
         id: true,
         name: true,
-        manufacturer: true,
+        brandName: true,
         onHandUnits: true,
         quantityLedger: true,
       })
       .required(),
     (row) =>
       problemRow("product", productRef(row), [
-        manufacturerField(row.manufacturer),
+        manufacturerField(row.brandName),
         field(
           "Stocked",
           `${Number(row.onHandUnits ?? 0)} as itself, plus its parts`,
@@ -1247,12 +1247,6 @@ export const findFastProblems = async (db: Database): Promise<ProblemsFast> => {
             "weight-sold-products",
             allProblemsSchema.shape.weightSoldProducts,
           ),
-        manufacturerSpellingVariants: () =>
-          diagnosticItems(
-            db,
-            "manufacturer-spelling-variants",
-            allProblemsSchema.shape.manufacturerSpellingVariants,
-          ),
         duplicateVendors: () =>
           diagnosticItems(
             db,
@@ -1333,7 +1327,6 @@ export const findFastProblems = async (db: Database): Promise<ProblemsFast> => {
     toolsUsedOutsideOwnership: r.toolsUsedOutsideOwnership.items,
     imageMetadataOutcomes: r.imageMetadataOutcomes.items,
     weightSoldProducts: r.weightSoldProducts.items,
-    manufacturerSpellingVariants: r.manufacturerSpellingVariants.items,
     duplicateVendors: r.duplicateVendors.items,
     duplicateSpendCandidates: r.duplicateSpendCandidates.items,
     duplicateFinancialTransactionSourceRefs:

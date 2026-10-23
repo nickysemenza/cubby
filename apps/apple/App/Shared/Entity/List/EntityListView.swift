@@ -1541,7 +1541,8 @@ private struct RelativeDateDisplay: View {
                     raw: [
                         "id": "PRD-9999",
                         "name": "A very long product title that should expand without clipping",
-                        "manufacturer": "Sample Manufacturer", "updatedAt": "2026-09-12T10:00:00.000Z",
+                        "brandId": "VEN-2345", "brandName": "Sample Manufacturer",
+                        "updatedAt": "2026-09-12T10:00:00.000Z",
                     ]))
         }
         .listStyle(.plain)
@@ -1564,7 +1565,7 @@ private struct EntityTablePreviewHost: View {
                 id: "PRD-9999", title: "Carbon Steel Wok", subtitle: nil, imageURL: nil,
                 raw: [
                     "id": "PRD-9999", "name": "Carbon Steel Wok",
-                    "manufacturer": "Sample Maker", "categoryId": "CAT-4444",
+                    "brandId": "VEN-2345", "brandName": "Sample Maker", "categoryId": "CAT-4444",
                     "category": ["id": "CAT-4444", "name": "Cookware"],
                     "owners": [
                         [

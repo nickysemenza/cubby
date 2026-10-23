@@ -27,7 +27,6 @@
       "name": "Sample Product",
       "primaryGtin": "00012345678905",
       "fdc_id": null,
-      "manufacturer": "Sample Manufacturer",
       "model": null,
       "notes": null,
       "expectedQuantity": null,
@@ -104,7 +103,9 @@
           "updatedAt": "2026-01-01T00:00:00.000Z"
         }
       ],
-      "unitMappings": []
+      "unitMappings": [],
+      "brandId": "VEN-2345",
+      "brandName": "Sample Manufacturer"
     },
     "location": {
       "id": "LOC-5678",
@@ -168,7 +169,6 @@
       "name": "Other Product",
       "primaryGtin": null,
       "fdc_id": null,
-      "manufacturer": "Other Manufacturer",
       "model": null,
       "notes": null,
       "expectedQuantity": null,
@@ -179,7 +179,9 @@
       "updatedAt": "2026-01-01T00:00:00.000Z",
       "images": [],
       "externalIds": [],
-      "unitMappings": []
+      "unitMappings": [],
+      "brandId": "VEN-2345",
+      "brandName": "Other Manufacturer"
     },
     "location": {
       "id": "LOC-5678",

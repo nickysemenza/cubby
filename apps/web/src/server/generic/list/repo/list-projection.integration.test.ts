@@ -14,6 +14,7 @@ import {
   mealList,
   mealListRead,
 } from "~/server/domains/meal/repo/crud";
+import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import {
   createRecipeFixture,
@@ -32,7 +33,7 @@ describe("progressive list readers", () => {
     });
     const hardware = await insertWithShortcode(ctx.db, "product", {
       name: "Synthetic progressive hardware",
-      manufacturer: "Synthetic manufacturer",
+      brandId: await findOrCreateVendor(ctx.db, "Synthetic brandName"),
       stockTracked: false,
       usdaUnavailable: false,
     });

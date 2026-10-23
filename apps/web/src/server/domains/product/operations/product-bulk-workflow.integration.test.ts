@@ -3,6 +3,10 @@ import { productCreateManyEvent } from "@cubby/schemas/product-workflow";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import {
+  getVendorByID,
+  findOrCreateVendor,
+} from "~/server/domains/vendor/repo/vendor";
 import { requireActor } from "~/server/http/request-context";
 import { createTestRequestContext } from "~/server/testing/request-context";
 
@@ -13,10 +17,16 @@ describe("product bulk workflow", () => {
 
   it("streams validated progress and its final committed result", async () => {
     const prefix = `Bulk workflow ${Date.now()}`;
+    const fixtureBrandId = (
+      await getVendorByID(
+        ctx.db,
+        await findOrCreateVendor(ctx.db, "Fixture Brand"),
+      )
+    ).id;
     const input = productCreateManyInput.parse(
       ["One", "Two"].map((suffix) => ({
         name: `${prefix} ${suffix}`,
-        manufacturer: "Fixture manufacturer",
+        brandId: fixtureBrandId,
         aliases: [],
         tags: [],
         barcode: null,

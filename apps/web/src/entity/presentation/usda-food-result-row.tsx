@@ -2,7 +2,7 @@ import type { UsdaFoodListRow } from "@cubby/schemas/usda";
 import { dataTypeLabel } from "@cubby/usda";
 import { LinkIcon } from "@phosphor-icons/react/dist/csr/Link";
 
-import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";
+import { isUnknownBrandName } from "~/lib/brand-name-utils";
 import { servingBasisUnit } from "~/lib/unit-mapping-utils";
 import { UsdaDataTypeDot } from "~/lib/usda-data-type";
 import { nutrientCount } from "~/lib/usda-food-stats";
@@ -26,7 +26,7 @@ function MetaChip({ children }: { children: React.ReactNode }) {
 const foodBrand = (brandedFoodInfo: UsdaFoodListRow["brandedFoodInfo"]) => {
   if (!brandedFoodInfo) return null;
   const brand = brandedFoodInfo.brand_name ?? brandedFoodInfo.brand_owner;
-  return isUnspecifiedManufacturer(brand) ? null : brand;
+  return isUnknownBrandName(brand) ? null : brand;
 };
 
 const foodServingText = (

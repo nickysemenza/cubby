@@ -348,7 +348,10 @@ describe("purchase repository — splitExpense", () => {
     });
     const product = await createProduct(
       ctx.db,
-      makeProductInput({ name: "Combo Saw", manufacturer: "test" }),
+      makeProductInput({
+        name: "Combo Saw",
+        brandId: await findOrCreateVendor(ctx.db, "test"),
+      }),
       ctx.actor,
     );
 

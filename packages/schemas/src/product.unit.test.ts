@@ -11,7 +11,7 @@ describe("productMcpOut", () => {
     const parsed = productMcpOut.parse({
       id: "PRD-ABCD",
       name: "M18 framing nailer",
-      manufacturer: "Milwaukee",
+      brandName: "Milwaukee",
       model: "2744-20",
       notes: "Bare tool",
       primaryGtin: "00045242593057",

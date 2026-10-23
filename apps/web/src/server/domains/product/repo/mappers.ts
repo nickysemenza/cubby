@@ -124,6 +124,8 @@ export const splitProductImages = (
 };
 
 type ProductTopLevelDB = Omit<typeof product.$inferSelect, "growsPlantId"> & {
+  brandName: string | null;
+  brandCode: import("@cubby/schemas/identifiers").VendorShortcode | null;
   classificationEvidence: string;
   category: ProductCategorySummary | null;
   /** The category decision a Product without its own inherits (ADR 0013). */
@@ -229,7 +231,8 @@ export const mapDbProductToTopLevel = (
     tags: productData.tags,
     primaryGtin: primaryGtinOf(productData.externalIds),
     fdc_id: productData.fdc_id,
-    manufacturer: productData.manufacturer,
+    brandId: productData.brandCode,
+    brandName: productData.brandName,
     model: productData.model,
     notes: productData.notes,
     expectedQuantity: productData.expectedQuantity,
@@ -277,8 +280,10 @@ export const dbProductToTopLevelAPI = (
 const mapDbProductToPickerItem = (
   productData: Pick<
     typeof product.$inferSelect,
-    "id" | "shortcode" | "name" | "manufacturer" | "categoryId"
+    "id" | "shortcode" | "name" | "categoryId"
   > & {
+    brandCode: import("@cubby/schemas/identifiers").VendorShortcode | null;
+    brandName: string | null;
     category: ProductCategorySummary | null;
     coverImageUrl: ProductPickerItemOut["coverImageUrl"];
     price: ProductPickerItemOut["price"];
@@ -288,7 +293,8 @@ const mapDbProductToPickerItem = (
 ): ProductPickerItemOut => ({
   id: parseShortcodeFor("product", productData.shortcode),
   name: productData.name,
-  manufacturer: productData.manufacturer,
+  brandId: productData.brandCode,
+  brandName: productData.brandName,
   category: productData.category,
   price: productData.price,
   coverImageUrl: productData.coverImageUrl,
@@ -299,8 +305,10 @@ const mapDbProductToPickerItem = (
 export const dbProductToPickerItemAPI = (
   productData: Pick<
     typeof product.$inferSelect,
-    "id" | "shortcode" | "name" | "manufacturer" | "categoryId"
+    "id" | "shortcode" | "name" | "categoryId"
   > & {
+    brandCode: import("@cubby/schemas/identifiers").VendorShortcode | null;
+    brandName: string | null;
     category: ProductCategorySummary | null;
     coverImageUrl: ProductPickerItemOut["coverImageUrl"];
     price: ProductPickerItemOut["price"];
@@ -318,6 +326,7 @@ export const dbProductToPickerItemAPI = (
 
 export const mapDbProductToInventoryEmbed = (
   productData: typeof product.$inferSelect & {
+    brandName: string | null;
     category: ProductCategorySummary | null;
     pricing: ProductPricing;
     primaryGtin: string | null;
@@ -327,7 +336,7 @@ export const mapDbProductToInventoryEmbed = (
   name: productData.name,
   primaryGtin: productData.primaryGtin,
   fdc_id: productData.fdc_id,
-  manufacturer: productData.manufacturer,
+  brandName: productData.brandName,
   model: productData.model,
   notes: productData.notes,
   expectedQuantity: productData.expectedQuantity,
@@ -340,6 +349,7 @@ export const mapDbProductToInventoryEmbed = (
 
 export const mapDbProductToInventoryList = (
   productData: typeof product.$inferSelect & {
+    brandName: string | null;
     category: ProductCategorySummary | null;
     pricing?: ProductPricing;
     primaryGtin: string | null;
@@ -347,7 +357,7 @@ export const mapDbProductToInventoryList = (
 ): InventoryListProductOut => ({
   id: parseShortcodeFor("product", productData.shortcode),
   name: productData.name,
-  manufacturer: productData.manufacturer,
+  brandName: productData.brandName,
   primaryGtin: productData.primaryGtin,
   fdc_id: productData.fdc_id,
   category: productData.category,
@@ -526,7 +536,8 @@ export const dbProductToAPI = (
     tags: productData.tags,
     primaryGtin: primaryGtinOf(productData.externalIds),
     fdc_id: productData.fdc_id,
-    manufacturer: productData.manufacturer,
+    brandId: productData.brandCode,
+    brandName: productData.brandName,
     model: productData.model,
     notes: productData.notes,
     expectedQuantity: productData.expectedQuantity,

@@ -58,7 +58,7 @@ enum PreviewFixtures {
         raw: .object([
             "id": .string("PRD-2345"),
             "name": .string("Cast Iron Skillet"),
-            "manufacturer": .string("Lodge"),
+            "brandId": .string("VEN-2345"), "brandName": .string("Lodge"),
             "categoryId": .string("CAT-2224"),
             "category": .object([
                 "id": .string("CAT-2224"), "name": .string("Tools"),
@@ -130,7 +130,7 @@ enum PreviewFixtures {
             "candidateFields": ["name"], "temporalFields": ["plantedOn"], "ocrFields": []},
            {"entity": "product", "emoji": "📦", "classifierIdentifier": null, "classifierConfidence": null,
             "minimumScore": 0.72, "meetsMinimumScore": false, "wantedLabels": ["product"],
-            "candidateFields": ["name", "manufacturer"], "temporalFields": [], "ocrFields": ["name"]}],
+            "candidateFields": ["name", "brandName"], "temporalFields": [], "ocrFields": ["name"]}],
          "suggestedSource": "planting",
          "semanticModel": "available",
          "semantic": {"status": "used",

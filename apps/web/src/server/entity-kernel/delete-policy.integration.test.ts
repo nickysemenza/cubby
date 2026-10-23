@@ -113,6 +113,7 @@ import {
 } from "~/server/domains/purchase-import/operations/order-import.fixtures";
 import { writeOutcomeReceipts } from "~/server/domains/purchase-import/service/run-outcome.fixtures";
 import { recordSourceTransactionRecords } from "~/server/domains/transaction-import/repo/source-transaction-record";
+import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
 import { executeEntity } from "~/server/entity-kernel";
 import {
   ENTITY_KERNEL_ENTITIES,
@@ -872,7 +873,7 @@ async function seedProductMatchCandidate(db: Database, ids: StagingIds) {
   if (!ids.productId) return;
   const other = await insertWithShortcode(db, "product", {
     name: "Delete policy fixture product",
-    manufacturer: "Delete policy",
+    brandId: await findOrCreateVendor(db, "Delete policy"),
   }).catch(() => undefined);
   if (!other) return;
   await publishProductPair(db, {

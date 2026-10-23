@@ -47,6 +47,7 @@ import { setMailImport } from "~/server/domains/purchase-import/repo/mail-import
 import { inferFieldAssessments } from "~/server/domains/run/operations/ai.server";
 import { writeRunningAttemptProgress as writeRunningAttemptProgressImplementation } from "~/server/domains/run/repo/ai-work-state";
 import { ensureRun, systemActor } from "~/server/domains/run/repo/ensure-run";
+import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
 import { executeEntity } from "~/server/entity-kernel";
 import { entityCommandSchema } from "~/server/entity-kernel/contracts";
 import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
@@ -97,10 +98,16 @@ import {
 
 // Refresh scenarios consume identities; the refreshed fields are read back
 // through their owning queries after the mutation under test.
-const productFixture = (ctx: Parameters<typeof kernelCtx>[0], name: string) =>
+const productFixture = async (
+  ctx: Parameters<typeof kernelCtx>[0],
+  name: string,
+) =>
   createProductIdentityFixture(
     ctx.db,
-    makeProductInput({ name, manufacturer: "Synthetic maker" }),
+    makeProductInput({
+      name,
+      brandId: await findOrCreateVendor(ctx.db, "Synthetic maker"),
+    }),
     ctx.actor,
   );
 

@@ -1,47 +1,11 @@
-/**
- * Spelling-variant detectors for two name columns nothing normalizes on write:
- * the free-text `Product.manufacturer` and the `Vendor.name` roster.
- *
- * Neither column is an enum, and manufacturer shouldn't be: typing it would put
- * "create an entity first" in front of a one-off brand. `Vendor` IS an entity,
- * but `findOrCreateVendor` matches only its name or a Vendor alias, which has
- * the same effect for any other spelling —
- * the cost either way is that the same name can be entered two ways, which an
- * exact-match filter then splits into two picklist rows (or, for vendors, two
- * roster rows splitting one vendor's spend).
- *
- * Manufacturer creates now snap to the established spelling
- * (`resolveEstablishedManufacturer`, sharing this file's key), so these
- * detectors are the backstop rather than the only line of defence: they still
- * catch what a deliberate UI edit splits, what predates the snap, and — for
- * vendors, which have no snap — everything.
- *
- * **Why a canonical key and not fuzzy matching.** Trigram similarity is
- * unusable here: at `similarity > 0.3` it flags 13 pairs on the live ledger and
- * every one is a false positive — `Ace Hardware`/`DK Hardware`,
- * `Home Depot`/`Office Depot`, `Tool Nirvana`/`Tool Nut`, `Flow Form
- * Plumbing`/`Lutz Plumbing`. Brand names share industry nouns, so the score
- * measures the shared noun rather than the part that distinguishes them, and
- * the real drift (`Amazon.com` at 0.636) doesn't separate from the noise
- * (`Festool`/`Festool Recon` at 0.571). A detector that cries wolf on its first
- * run teaches you to ignore the page.
- *
- * `canonicalLabelKey` is exact instead: two spellings collide only if they are
- * the same name typed differently. It found 2 real manufacturer bugs
- * (`Ryobi`/`RYOBI`, `Bob's Red Mill`/`Bob s Red Mill`) on the live DB, and
- * later the 19-variant / 60-product casing split the snap now prevents. It
- * cannot catch a hand typo (`Harbor Frieght`) — that needs an edit distance,
- * which needs `fuzzystrmatch`.
- */
-
+/** Canonical-name collision candidates for explicit Vendor duplicate review. */
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { ProblemItem } from "@cubby/schemas/problems";
-import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
 import { type Column, type SQL, sql } from "drizzle-orm";
 
 import { type Database } from "~/server/db/database";
 import { repositoryQueries as getDb } from "~/server/db/repository-access.boundary";
-import { product, purchase, vendor } from "~/server/db/retained-tables";
+import { purchase, vendor } from "~/server/db/retained-tables";
 import { canonicalLabelKey } from "~/server/generic/list/repo/label-canonical";
 
 type SpellingVariantRow = {
@@ -64,7 +28,7 @@ type SpellingVariantRow = {
  * job.
  *
  * "Used most" needs a per-caller `weight`, because what backs a spelling isn't
- * the same thing in both tables. A manufacturer spelling is backed by the
+ * the same thing in both tables. A brandName spelling is backed by the
  * PRODUCTS carrying it, so `count(*)` over the group is the measure. A vendor
  * name is unique among live rows (`Vendor_name_key`), so counting rows there
  * would return 1 for every spelling — no majority ever, and the canonical pick
@@ -78,14 +42,12 @@ type SpellingVariantRow = {
  * different row each scan. `canonicalSampleId` is the same thing for the winning
  * spelling — selected unconditionally because it is one more `first_value` over
  * the window that is already there, and only a caller whose rows are real
- * entities (`findDuplicateVendors`) has any use for it. The manufacturer caller
- * narrows it away in its return type, and `problemsFastSchema` strips it from
- * that key's wire shape.
+ * entities (`findDuplicateVendors`) uses it for explicit survivor selection.
  */
 const findSpellingVariants = async (
   db: Database,
-  table: typeof product | typeof vendor,
-  column: Column,
+  table: typeof vendor,
+  column: Column | SQL,
   {
     extraWhere = sql`TRUE`,
     weight = sql`count(*)`,
@@ -102,7 +64,7 @@ const findSpellingVariants = async (
         AND ${column} IS NOT NULL
         AND btrim(${column}) <> ''
         AND ${extraWhere}
-      GROUP BY ${column}
+      GROUP BY ${table.id}, ${column}
     ),
     -- Only keys spelled more than one way are interesting; everything else is
     -- the overwhelming majority of rows and never reaches the window below.
@@ -116,44 +78,16 @@ const findSpellingVariants = async (
              first_value(s."sampleId") OVER w AS "canonicalSampleId"
       FROM spellings s
       INNER JOIN drifted d ON d.key = s.key
-      WINDOW w AS (PARTITION BY s.key ORDER BY s.count DESC, s.value ASC)
+      WINDOW w AS (PARTITION BY s.key ORDER BY s.count DESC, s.value ASC, s."sampleId" ASC)
     )
     SELECT value, count, "sampleId", canonical,
            "canonicalCount", "canonicalSampleId"
     FROM ranked
-    WHERE value <> canonical
+    WHERE "sampleId" <> "canonicalSampleId"
     ORDER BY "canonicalCount" DESC, count DESC, value ASC
   `);
   return res.rows;
 };
-
-/**
- * Product manufacturers spelled more than one way.
- *
- * `(unspecified)` is excluded: it's the deliberate not-a-brand sentinel
- * (`isUnspecifiedManufacturer` in ~/lib/manufacturer-utils) carried by 159 of
- * 381 products, and reporting it as a spelling would be noise.
- *
- * The comparison is on the CANONICAL key, not the raw string. A plain `<>` is
- * case-sensitive, so a `(Unspecified)` from a CSV import would survive the
- * exclusion — and then `canonicalLabelKey` would fold it onto the same `unspecified`
- * key as the 159 correctly-cased rows and report the sentinel as a spelling
- * variant. Comparing after normalization is immune to that by construction, and
- * covers spacing drift too; it's the same case-insensitive intent as
- * `isUnspecifiedManufacturer` and `ilike(product.manufacturer,
- * UNSPECIFIED_MANUFACTURER)` in product/lookup.ts.
- */
-export const findManufacturerSpellingVariants = (
-  db: Database,
-): Promise<ProblemItem<"manufacturerSpellingVariants">[]> =>
-  findSpellingVariants(db, product, product.manufacturer, {
-    extraWhere: sql`${canonicalLabelKey(product.manufacturer)} <> ${canonicalLabelKey(sql`${UNSPECIFIED_MANUFACTURER}`)}`,
-  }).then((rows) =>
-    rows.map(({ canonicalSampleId: _canonicalSampleId, ...row }) => ({
-      ...row,
-      sampleId: parseShortcodeFor("product", row.sampleId),
-    })),
-  );
 
 /**
  * Vendors on the roster whose names normalize to the same thing — `Amazon` /

@@ -20,6 +20,7 @@ import {
 } from "~/server/db/schema";
 import { loadFinanceSuggestionContext } from "~/server/domains/financial-transaction/repo/finance-suggestion-context";
 import { systemActor } from "~/server/domains/run/repo/ensure-run";
+import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
 import { declaredFilterPredicates } from "~/server/generic/list/repo/list";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
@@ -174,7 +175,7 @@ describe("persisted Suggestion sweeps", () => {
     const context = kernelCtx(ctx);
     const matching = await productFixture(ctx, "Synthetic selected product");
     await productFixture(ctx, "Synthetic unselected product", {
-      manufacturer: "Other maker",
+      brandId: await findOrCreateVendor(ctx.db, "Other maker"),
     });
     const processed: Array<{ id: string; field: string }> = [];
     const suggest = vi.fn(async (_db, _runId, input) => {
@@ -187,7 +188,7 @@ describe("persisted Suggestion sweeps", () => {
       {
         entity: "product",
         fields: ["categoryId", "tags"],
-        filters: { manufacturerFilter: "Synthetic maker" },
+        filters: { brandFilter: "Synthetic maker" },
       },
       { context, suggest, pauseAfter: 1 },
     );

@@ -125,7 +125,7 @@ describe("buildIngredientNutritionProduct", () => {
     expect(buildIngredientNutritionProduct([labelled])).toMatchObject({
       productId: labelled.id,
       name: labelled.name,
-      manufacturer: labelled.manufacturer,
+      brandName: labelled.brandName,
       display: {
         source: "label",
         basis: "Per serving · 44 g",

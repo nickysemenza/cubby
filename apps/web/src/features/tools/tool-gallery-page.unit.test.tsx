@@ -64,7 +64,7 @@ const entries = [
 const item: ToolGalleryItemOut = {
   productId: PRODUCT_ID,
   productName: "Cordless drill",
-  manufacturer: "Makita",
+  brandName: "Makita",
   model: "XFD10",
   coverImageUrl: null,
   extraImageCount: 2,
@@ -375,14 +375,14 @@ describe("Tools gallery", () => {
         items: [{ ...item, groupKey: "maker-0", groupLabel: "Maker 0" }],
         groups: manufacturerGroups,
       },
-      { groupBy: "manufacturer", onSectionChange },
+      { groupBy: "brandName", onSectionChange },
     );
 
     const picker = await screen.findByRole("combobox", {
-      name: "Jump to manufacturer",
+      name: "Jump to brandName",
     });
     fireEvent.click(
-      screen.getByRole("button", { name: "Show jump to manufacturer options" }),
+      screen.getByRole("button", { name: "Show jump to brandName options" }),
     );
     fireEvent.change(picker, { target: { value: "Maker 10" } });
     fireEvent.click(await screen.findByRole("option", { name: /maker 10/i }));

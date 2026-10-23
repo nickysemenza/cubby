@@ -22,7 +22,7 @@ describe("photo product candidate ranking", () => {
       id: parseEntityId("product", crypto.randomUUID()),
       shortcode: name.endsWith("7") ? "PRD-4K7M" : "PRD-8B2Q",
       name,
-      manufacturer: "ForgeWear",
+      brandName: "ForgeWear",
       hasOwnPhoto: true,
       hasPhotoImport: true,
       hasPurchase: false,
@@ -66,7 +66,7 @@ describe("photo product candidate ranking", () => {
     const products = forgeWearEvidence.products.map((product) => ({
       id: parseEntityId("product", crypto.randomUUID()),
       ...product,
-      manufacturer: forgeWearEvidence.brand,
+      brandName: forgeWearEvidence.brand,
     }));
     const comparisons = new Map(
       products.map((product) => [
@@ -100,7 +100,7 @@ describe("photo product candidate ranking", () => {
       id: parseEntityId("product", crypto.randomUUID()),
       shortcode,
       name,
-      manufacturer: "ForgeWear",
+      brandName: "ForgeWear",
       hasOwnPhoto: true,
       hasPhotoImport: true,
       hasPurchase: false,
@@ -143,7 +143,7 @@ describe("photo product candidate ranking", () => {
       id: parseEntityId("product", crypto.randomUUID()),
       shortcode,
       name,
-      manufacturer: "ForgeWear",
+      brandName: "ForgeWear",
       hasOwnPhoto,
       hasPhotoImport,
       hasPurchase: true,

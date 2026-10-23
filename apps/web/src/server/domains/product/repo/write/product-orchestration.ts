@@ -1,3 +1,4 @@
+import type { ActorContext } from "@cubby/schemas/context";
 /**
  * Product Orchestration Service
  *
@@ -5,8 +6,6 @@
  * - UPC cascade lookup (DB → USDA → UPC worker → create with defaults)
  * - Batch UPC image backfill
  */
-
-import type { ActorContext } from "@cubby/schemas/context";
 import { displayGtin } from "@cubby/schemas/external-id";
 import {
   type IngredientId,
@@ -34,8 +33,8 @@ import { createLogger } from "@cubby/worker-tracing";
 import { uniq } from "es-toolkit";
 
 import { barcodeForLookup } from "~/lib/barcode";
+import { isUnknownBrandName } from "~/lib/brand-name-utils";
 import { scrubErrorMessage } from "~/lib/error-diagnostics";
-import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";
 import { wasm } from "~/lib/wasm";
 import type { UpcLookupPort } from "~/server/clients/upc";
 import type { UsdaFoodLookupPort } from "~/server/clients/usda";
@@ -55,6 +54,7 @@ import {
   resolveProductScan,
 } from "~/server/domains/product/repo/write/scan-code";
 import type { RecipeCostingService } from "~/server/domains/recipe/repo/recipe-costing";
+import { resolveProductBrandName } from "~/server/domains/vendor/repo/product-brand";
 import { runMutationSideEffects } from "~/server/entity-kernel/repo/mutation-side-effects";
 import { AppError, createAppError } from "~/server/errors/app-error";
 import {
@@ -82,10 +82,7 @@ interface ProductWriteServices<
   recipeCosting: RecipeCostingService;
 }
 
-type UpcProductUpdate = Pick<
-  ProductUpdateInput["data"],
-  "manufacturer" | "price"
->;
+type UpcProductUpdate = Pick<ProductUpdateInput["data"], "brandId" | "price">;
 
 const resolveIngredientEntityId = async (
   db: Database,
@@ -249,13 +246,16 @@ export async function applyUpcDataWithSideEffects(
   const lookup = lookups.get(input.upc) ?? null;
 
   const data: UpcProductUpdate = {};
-  const lookupManufacturer = lookup?.manufacturer ?? lookup?.brand ?? null;
+  const lookupManufacturer = lookup?.brand ?? lookup?.manufacturer ?? null;
   if (
     lookupManufacturer != null &&
-    isUnspecifiedManufacturer(current.manufacturer) &&
-    !isUnspecifiedManufacturer(lookupManufacturer)
+    current.brandId === null &&
+    !isUnknownBrandName(lookupManufacturer)
   ) {
-    data.manufacturer = lookupManufacturer;
+    data.brandId = await resolveProductBrandName(
+      services.db,
+      lookupManufacturer,
+    );
   }
   // Product.price is an intentional replacement-price override. A known
   // Expense-derived price is the household's actual purchase history, so a
@@ -330,15 +330,16 @@ const matched = (product: ProductTopLevelOut): FindOrCreateByUPCResult => ({
  */
 const usdaIdentity = (food: NonNullable<UsdaFoodByUpc>) => ({
   name: food.foodInfo.description,
-  manufacturer:
-    food.brandedFoodInfo?.brand_owner ??
-    food.brandedFoodInfo?.brand_name ??
+  brandName:
+    food.brandedFoodInfo?.brand_name?.trim() ||
+    food.brandedFoodInfo?.brand_owner?.trim() ||
     UNSPECIFIED_MANUFACTURER,
 });
 
 const externalIdentity = (hit: UPCLookupHit) => ({
   name: hit.name,
-  manufacturer: hit.manufacturer ?? hit.brand ?? UNSPECIFIED_MANUFACTURER,
+  brandName:
+    hit.brand?.trim() || hit.manufacturer?.trim() || UNSPECIFIED_MANUFACTURER,
   price: hit.priceDollars ?? null,
 });
 
@@ -366,7 +367,7 @@ export interface LookupUPCResult {
  * `findOrCreateByUPC`'s short-circuiting cascade. The cascade exists to avoid
  * paying for network lookups it will not use once it has enough to create a
  * product; this question is the opposite — a local product that claims a
- * barcode is precisely when you most want to see what the manufacturer and the
+ * barcode is precisely when you most want to see what the brandName and the
  * UPC database say about it, because that is how a kit masquerading as a bare
  * tool gets caught. Both clients swallow their own errors and return null, so a
  * dead source degrades one field rather than the call.
@@ -437,7 +438,7 @@ export async function findOrCreateByUPC(
   // a single product INSERT, so a concurrent creator of the same UPC makes the
   // loser's INSERT throw a (raw) unique violation with nothing committed.
   // runWithConflictRecovery re-SELECTs the committed winner by UPC instead of
-  // 500ing; a non-UPC duplicate (e.g. name+manufacturer) finds no UPC row and
+  // 500ing; a non-UPC duplicate (e.g. name+brandName) finds no UPC row and
   // is re-thrown unchanged.
   return runWithConflictRecovery(
     async () => {
@@ -451,7 +452,11 @@ export async function findOrCreateByUPC(
           await quickCreateProductRecord(
             db,
             {
-              ...usdaIdentity(food),
+              name: usdaIdentity(food).name,
+              brandId: await resolveProductBrandName(
+                db,
+                usdaIdentity(food).brandName,
+              ),
               barcode: upc,
               expectedQuantity: null,
               model: null,
@@ -467,7 +472,12 @@ export async function findOrCreateByUPC(
         const newProduct = await quickCreateProductRecord(
           db,
           {
-            ...externalIdentity(upcLookup),
+            name: externalIdentity(upcLookup).name,
+            price: externalIdentity(upcLookup).price,
+            brandId: await resolveProductBrandName(
+              db,
+              externalIdentity(upcLookup).brandName,
+            ),
             barcode: upc,
             expectedQuantity: null,
             model: null,
@@ -494,7 +504,7 @@ export async function findOrCreateByUPC(
           db,
           {
             name: defaultName ?? `Product ${upc}`,
-            manufacturer: UNSPECIFIED_MANUFACTURER,
+            brandId: null,
             barcode: upc,
             expectedQuantity: null,
             model: null,
@@ -518,7 +528,7 @@ export async function findOrCreateByUPC(
  * ISBNs are EAN barcodes, but they are not food identities: skip USDA and
  * create through `barcode` so the repository both stores the canonical GTIN and
  * applies the `books` category invariant. The general UPC provider can still
- * supply the edition's title, publisher/manufacturer, price, and cover. When it
+ * supply the edition's title, publisher/brandName, price, and cover. When it
  * names a title that exactly matches one barcode-less book already on the
  * shelf, that Product gains the ISBN instead of a duplicate being created.
  */
@@ -578,14 +588,19 @@ async function findOrCreateByISBN(
         });
         return matched(attached);
       }
+      const identity = external ? externalIdentity(external) : null;
       const product = await quickCreateProductRecord(
         db,
         {
-          ...(external
-            ? externalIdentity(external)
+          ...(identity
+            ? {
+                name: identity.name,
+                price: identity.price,
+                brandId: await resolveProductBrandName(db, identity.brandName),
+              }
             : {
                 name: `Book ISBN ${normalized.isbn13}`,
-                manufacturer: UNSPECIFIED_MANUFACTURER,
+                brandId: null,
               }),
           barcode: canonicalGtin,
           expectedQuantity: null,

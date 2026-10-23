@@ -1,7 +1,7 @@
 # Household taxonomy
 
 Vocabulary for household categories and storage roles. Shared domain concepts,
-including Inventory and Tags, live in [Terminology](docs/guide/terminology.md).
+including Brand, Seller, Inventory and Tags, live in [Terminology](docs/guide/terminology.md).
 
 ## Storage locations
 

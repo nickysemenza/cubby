@@ -32,7 +32,7 @@ const matrixFields = {
 const toolMatrixSearchSchema = z
   .object({
     ...matrixFields,
-    group: z.enum(["trade", "manufacturer"]).optional().catch(undefined),
+    group: z.enum(["trade", "brandName"]).optional().catch(undefined),
   })
   .default({});
 
@@ -44,12 +44,12 @@ export const toolsSearchSchema = z
     view: z.enum(["gallery", "usage"]).optional().catch(undefined),
     q: urlStringParam,
     galleryGroup: z
-      .enum(["location", "manufacturer", "trade"])
+      .enum(["location", "brandName", "trade"])
       .optional()
       .catch(undefined),
     section: urlStringParam,
     ...matrixFields,
-    usageGroup: z.enum(["trade", "manufacturer"]).optional().catch(undefined),
+    usageGroup: z.enum(["trade", "brandName"]).optional().catch(undefined),
   })
   .default({});
 

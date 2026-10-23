@@ -56,6 +56,7 @@ import type {
 import type { SpecializedIntentRendererProps } from "../../entity/editing/entity-primitive-fields";
 import { mergeOwnedIds } from "../../entity/editing/shared-id-field";
 import type { EntityEditRecord } from "../../entity/editing/types";
+import { useProductBrandIngress } from "./use-product-brand-ingress";
 
 /**
  * `product.tags` split into two chip inputs — real compatibility tags and
@@ -70,9 +71,9 @@ export function ProductTagsField({
 }: SpecializedIntentRendererProps) {
   const tagsId = useId();
   const collectionsId = useId();
-  const [manufacturer, aliases, categoryId] = useWatch({
+  const [brandName, aliases, categoryId] = useWatch({
     control: form.control,
-    name: ["manufacturer", "aliases", "categoryId"],
+    name: ["brandName", "aliases", "categoryId"],
   });
   const { categories } = useProductCategories();
   const category = useMemo(
@@ -89,14 +90,14 @@ export function ProductTagsField({
         redundantTokens({
           values: tags,
           restating: {
-            manufacturer: basisValueOf(manufacturer),
+            brandName: basisValueOf(brandName),
             classification: category?.path.map((node) => node.name),
             feature: category?.feature ?? null,
             alias: z.array(z.string()).catch([]).parse(aliases),
           },
         }).map((match) => [match.value, match]),
       ),
-    [tags, manufacturer, category, aliases],
+    [tags, brandName, category, aliases],
   );
   const write = (nextTags: string[], nextCollections: string[]) =>
     form.setValue(field.key, mergeProductTags(nextTags, nextCollections), {
@@ -186,9 +187,9 @@ export function ProductExternalIdsField({
   entity,
   mode,
 }: SpecializedIntentRendererProps) {
-  const [productName, manufacturer] = useWatch({
+  const [productName, brandName] = useWatch({
     control: form.control,
-    name: ["name", "manufacturer"],
+    name: ["name", "brandName"],
   });
   const schema = structuredSchemaFor(entity, field.key);
   const collection = "collection" in field ? field.collection : undefined;
@@ -269,21 +270,20 @@ export function ProductExternalIdsField({
           externalIdPath={`${path}.externalId`}
           urlPath={`${path}.url`}
           productName={basisValueOf(productName)}
-          manufacturer={basisValueOf(manufacturer)}
+          brandName={basisValueOf(brandName)}
         />
       )}
     />
   );
 }
 
-/** The primary barcode shortcut plus a provider lookup that fills
- * name/manufacturer/price. Writes straight to the sibling `name`/`manufacturer`/
- * `price` fields, the same paths the generic editor already renders them at. */
+/** Provider lookup fills identity and price, resolving its Brand claim to a Vendor reference. */
 export function ProductBarcodeField({
   form,
   field,
   mode,
 }: SpecializedIntentRendererProps) {
+  const brands = useProductBrandIngress();
   const [lookupImageUrl, setLookupImageUrl] = useState<string | null>(null);
   const [isLookingUp, setIsLookingUp] = useState(false);
   const upcValue = z
@@ -305,13 +305,10 @@ export function ProductBarcodeField({
       if (result) {
         if (result.name)
           form.setValue("name", result.name, { shouldDirty: true });
-        if (result.manufacturer) {
-          form.setValue("manufacturer", result.manufacturer, {
-            shouldDirty: true,
-          });
-        } else if (result.brand) {
-          form.setValue("manufacturer", result.brand, { shouldDirty: true });
-        }
+        const brandId = await brands.resolve(
+          result.brand ?? result.manufacturer,
+        );
+        if (brandId) form.setValue("brandId", brandId, { shouldDirty: true });
         if (result.priceDollars) {
           form.setValue("price", result.priceDollars, { shouldDirty: true });
         }
@@ -551,13 +548,13 @@ export function ProductLabelNutritionField({
 /** The form port `IdentifyProductButton` accepts — see its own `form` prop. */
 interface ProductIdentityFormPort {
   setValue(update: {
-    field: "name" | "manufacturer" | "model";
+    field: "name" | "brandId" | "model";
     value: string;
   }): void;
 }
 
 /**
- * `IdentifyProductButton` reads name/manufacturer/model off the form through
+ * `IdentifyProductButton` reads name/brandName/model off the form through
  * a small port, the same shape the retired `product-form-fields.tsx` used.
  */
 function productIdentityFormPort(

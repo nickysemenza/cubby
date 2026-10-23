@@ -154,13 +154,16 @@ test.describe("split and attach, with the server's rules", () => {
       vendorId: vendor.id,
       date: "2026-09-01",
     });
+    const brand = await insertWithShortcode(db, "vendor", {
+      name: "Synthetic Maker",
+    });
     const chosen = await insertWithShortcode(db, "product", {
       name: `Synthetic chosen saw ${stamp}`,
-      manufacturer: "Synthetic Maker",
+      brandId: brand.id,
     });
     await insertWithShortcode(db, "product", {
       name: `Synthetic skipped saw ${stamp}`,
-      manufacturer: "Synthetic Maker",
+      brandId: brand.id,
     });
 
     await gotoDetailActions(

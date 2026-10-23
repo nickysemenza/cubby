@@ -13,7 +13,7 @@ const candidate = (
 ): WishCandidateOut => ({
   id: testShortcode("product", shortcode),
   name: `Product ${shortcode}`,
-  manufacturer: "Acme",
+  brandName: "Acme",
   model: null,
   price,
   inventoried: false,

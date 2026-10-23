@@ -211,7 +211,7 @@ describe("wishCandidateItems", () => {
         {
           id: skilletId,
           name: "Cast Iron Skillet",
-          manufacturer: "Acme",
+          brandName: "Acme",
           model: "CI-12",
           price: 34.5,
           inventoried: true,
@@ -221,7 +221,7 @@ describe("wishCandidateItems", () => {
         {
           id: panId,
           name: "Steel Pan",
-          manufacturer: "Acme",
+          brandName: "Acme",
           model: null,
           price: null,
           inventoried: false,

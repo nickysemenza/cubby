@@ -14,7 +14,7 @@ type Islanded = Parameters<typeof buildUnitCoverageItems>[2][number];
 const noMappingProduct = (over: Partial<NoMappings> = {}): NoMappings => ({
   id: testShortcode("product", "PRD-P111"),
   name: "Saffron",
-  manufacturer: "generic",
+  brandName: "generic",
   createdAt: new Date(0),
   isIngredient: true,
   usdaUnavailable: false,
@@ -25,7 +25,7 @@ const noMappingProduct = (over: Partial<NoMappings> = {}): NoMappings => ({
 const partialProduct = (over: Partial<Partial_> = {}): Partial_ => ({
   id: testShortcode("product", "PRD-P222"),
   name: "Aji amarillo",
-  manufacturer: "generic",
+  brandName: "generic",
   coverage: {
     covered: [],
     applicable: ["weight", "volume", "money", "calories"],
@@ -40,7 +40,7 @@ const partialProduct = (over: Partial<Partial_> = {}): Partial_ => ({
 const islandedProduct = (over: Partial<Islanded> = {}): Islanded => ({
   id: testShortcode("product", "PRD-P333"),
   name: "Brown sugar",
-  manufacturer: "Domino",
+  brandName: "Domino",
   islandCount: 2,
   islands: [
     { units: ["cup", "g"], exampleUnit: "cup" },

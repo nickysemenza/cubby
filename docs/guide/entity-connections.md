@@ -128,8 +128,8 @@ excluded from connection fingerprints.
   Expense writer. Neither operation invents an amount, quantity or stock row.
   Negative/exiting and `not_allowed` Expense evidence is excluded. A
   semantic-only hit must reach `SEMANTIC_MATCH_MIN_SIMILARITY`, and an Expense
-  line naming a known brand (a live Product `manufacturer`) other than the
-  Product's own is never proposed (`otherBrandNamed`); an unspecified or unknown brand
+  line naming a known Brand (a live Product's joined Vendor name) other than the
+  Product's own is never proposed (`otherBrandNamed`); an unknown Brand
   on either side does not reject.
 - Product identity and photo evidence use the existing identity detector,
   Product-pair Assessments and merge handler. Similarity is not merge authority.

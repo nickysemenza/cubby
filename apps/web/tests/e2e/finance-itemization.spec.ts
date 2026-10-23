@@ -13,7 +13,7 @@ test("filters transactions by how well their purchase is itemized", async ({
     const { id: vendorId } = await create("vendor", { name: `${tag} shop` });
     const { id: productId } = await create("product", {
       name: `${tag} good`,
-      manufacturer: "E2E fixture",
+      brandId: vendorId,
     });
     const purchase = async (orderId: string) =>
       (

@@ -66,7 +66,7 @@ it("keeps a short provenance caption inline and aligns fact actions", async () =
           {
             label: "Manufacturer",
             value: "Example Foods",
-            filterAction: action("Explain manufacturer"),
+            filterAction: action("Explain brandName"),
           },
           { label: "Model", value: "—", filterAction: action("Explain model") },
           {
@@ -103,10 +103,10 @@ it("wraps a long fact within a narrow dossier without covering its actions", asy
             label: "Manufacturer",
             value: (
               <span data-testid="value">
-                Example manufacturer with a long descriptive name
+                Example brandName with a long descriptive name
               </span>
             ),
-            filterAction: action("Explain manufacturer"),
+            filterAction: action("Explain brandName"),
           },
           {
             label: "Notes",

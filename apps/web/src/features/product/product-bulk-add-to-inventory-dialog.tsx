@@ -83,7 +83,7 @@ export interface BulkAddProduct {
    * and nothing else. It only disambiguates the label, so its absence costs a
    * suffix rather than blocking the add.
    */
-  manufacturer?: string | null;
+  brandName?: string | null;
   /**
    * The quantity to prefill, when the caller can say better than one unit —
    * the shelf triage proposes what the ledger says is outstanding.
@@ -102,8 +102,8 @@ interface ProductBulkAddToInventoryDialogProps {
 const rowsFor = (products: readonly BulkAddProduct[]) =>
   products.map((product) => ({
     productId: product.id,
-    label: product.manufacturer
-      ? `${product.name} (${product.manufacturer})`
+    label: product.brandName
+      ? `${product.name} (${product.brandName})`
       : product.name,
     amount: product.defaultAmount ?? {
       value: 1,

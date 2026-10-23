@@ -20,6 +20,7 @@ import { and, eq, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
+import { productBrandNameSql } from "~/server/db/computed/product-brand-sql";
 import {
   notDeleted,
   relations,
@@ -195,7 +196,7 @@ export const findOrCreateIngredient = async (
 export interface UnlinkedProductCandidate {
   id: ProductShortcode;
   name: string;
-  manufacturer: string;
+  brandName: string | null;
 }
 
 const PRODUCT_CANDIDATES_PER_INGREDIENT = 5;
@@ -206,7 +207,7 @@ const candidateRowSchema = z.object({
   key: z.string(),
   shortcode: z.string(),
   name: z.string(),
-  manufacturer: z.string(),
+  brandName: z.string().nullable(),
 });
 
 /**
@@ -233,7 +234,7 @@ export const findUnlinkedProductCandidates = async (
       if (!eligible) return [];
       return [
         sql`(
-          SELECT ${id}::text AS "key", ${product.shortcode} AS "shortcode", ${product.name} AS "name", ${product.manufacturer} AS "manufacturer",
+          SELECT ${id}::text AS "key", ${product.shortcode} AS "shortcode", ${product.name} AS "name", ${productBrandNameSql(product.brandId)} AS "brandName",
             row_number() OVER (ORDER BY ${lexicalRelevance("product", product.id, name)} ASC, ${product.name} ASC, ${product.shortcode} ASC) AS "rank"
           FROM ${product}
           WHERE ${and(notDeleted(product), isNull(product.ingredientId), eligible)}
@@ -257,7 +258,7 @@ export const findUnlinkedProductCandidates = async (
       {
         id: parseShortcodeFor("product", row.shortcode),
         name: row.name,
-        manufacturer: row.manufacturer,
+        brandName: row.brandName,
       },
     ]);
   }

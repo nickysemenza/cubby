@@ -1,10 +1,9 @@
+import type { RelationMutationOut } from "@cubby/schemas/common";
 /**
  * Purchase ↔ Product identity is the deduplicated union of live explicit links
  * and all live product-linked Expenses. Links carry provenance, never money or
  * quantity; recorded movement evidence and plans remain separate facts.
  */
-
-import type { RelationMutationOut } from "@cubby/schemas/common";
 import type { ActorContext } from "@cubby/schemas/context";
 import type {
   ProductId,
@@ -30,6 +29,7 @@ import {
   expenseAcquisitionSql,
   actualExpense,
 } from "~/server/db/computed/expense-aggregate-sql";
+import { productBrandNameSql } from "~/server/db/computed/product-brand-sql";
 import { getDb, notDeleted, withTransaction } from "~/server/db/helpers";
 import {
   entityLink,
@@ -215,7 +215,7 @@ export async function listPurchaseProducts(
     productId: product.id,
     productCode: product.shortcode,
     productName: product.name,
-    manufacturer: product.manufacturer,
+    brandName: productBrandNameSql(product.brandId),
   };
 
   const [linkRows, expenseRows] = await Promise.all([
@@ -292,7 +292,7 @@ export async function listPurchaseProducts(
   return rows.map((row) => ({
     productId: parseShortcodeFor("product", row.productCode),
     productName: row.productName,
-    manufacturer: row.manufacturer,
+    brandName: row.brandName,
     price: prices.get(row.productId) ?? null,
     coverImageUrl: coverImageUrls.get(row.productId) ?? null,
     source: row.source,

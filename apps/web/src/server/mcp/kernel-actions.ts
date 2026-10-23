@@ -313,7 +313,7 @@ const ingredientResolveWithProductsOut = z.array(
         z.object({
           id: productShortcode,
           name: z.string(),
-          manufacturer: z.string(),
+          brandName: z.string().nullable(),
         }),
       )
       .describe(

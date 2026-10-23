@@ -32,12 +32,16 @@ import {
 import { uniq } from "es-toolkit";
 import { z } from "zod";
 
+import { isUnknownBrandName } from "~/lib/brand-name-utils";
 import { householdLocalDate } from "~/lib/household-date";
-import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";
 import { toolTimelineConflict, UNKNOWN_OWNERSHIP } from "~/lib/tool-timeline";
 import { getAllUnitMappingsFromProduct } from "~/lib/unit-mapping-utils";
 import type { Database } from "~/server/db";
 import { actualExpense } from "~/server/db/computed/expense-aggregate-sql";
+import {
+  productBrandNameSql,
+  productBrandCodeSql,
+} from "~/server/db/computed/product-brand-sql";
 import { categorySummarySql } from "~/server/db/computed/product-category-sql";
 import { getDb, notDeleted } from "~/server/db/helpers";
 import {
@@ -78,7 +82,7 @@ type ProductWithUpcGapCandidate = {
   id: ProductId;
   shortcode: ProductShortcode;
   name: string;
-  manufacturer: string;
+  brandName: string | null;
   upc: string;
   effectivePrice: number | null;
   hasImage: boolean;
@@ -94,7 +98,7 @@ export const findOrphanedProducts = async (
     .select({
       id: product.id,
       name: product.name,
-      manufacturer: product.manufacturer,
+      brandName: productBrandNameSql(product.brandId),
       shortcode: product.shortcode,
       createdAt: product.createdAt,
     })
@@ -208,7 +212,7 @@ export const findToolsUsedOutsideOwnership = async (
       productId: entityLink.toEntityId,
       productShortcode: product.shortcode,
       productName: product.name,
-      manufacturer: product.manufacturer,
+      brandName: productBrandNameSql(product.brandId),
     })
     .from(entityLink)
     .innerJoin(
@@ -260,7 +264,7 @@ export const findToolsUsedOutsideOwnership = async (
     rows.push({
       id: parseShortcodeFor("product", edge.productShortcode),
       name: edge.productName,
-      manufacturer: edge.manufacturer,
+      brandName: edge.brandName,
       projectId: parseShortcodeFor("project", edge.projectShortcode),
       projectName: edge.projectName,
       conflict: conflict.kind,
@@ -292,7 +296,7 @@ export const findDuplicateProductIdentities = async (
       await getDb(db)
         .select({
           id: product.id,
-          manufacturer: product.manufacturer,
+          brandName: productBrandNameSql(product.brandId),
           model: product.model,
         })
         .from(product)
@@ -334,7 +338,7 @@ export const findDuplicateProductIdentities = async (
         assessmentId: first.id,
         fingerprint: first.fingerprint,
         identityConflict: group.some((row) => row.conflict),
-        manufacturer: headers.get(first.productAId)?.manufacturer ?? "",
+        brandName: headers.get(first.productAId)?.brandName ?? "",
         model: headers.get(first.productAId)?.model ?? "",
         products: members.map((side) => ({
           id: side.id,
@@ -381,7 +385,7 @@ export const synthesizeEffectiveMappings = (
 };
 
 // ProblemItem<"productsWithBetterUpcData"> (productWithBetterUpcDataSchema): a product whose
-// stored UPC-sourced fields have a gap (no manufacturer, price, or image) that
+// stored UPC-sourced fields have a gap (no brandName, price, or image) that
 // a *fresh* UPC lookup could fill. A purchase-derived price already closes the
 // price gap. `proposed` carries the value the live lookup would write per field
 // (null ⇒ no change), so the panel can show the actual before→after, not just
@@ -400,7 +404,7 @@ export const findProductsWithUpcGaps = async (
       id: product.id,
       shortcode: product.shortcode,
       name: product.name,
-      manufacturer: product.manufacturer,
+      brandName: productBrandNameSql(product.brandId),
       price: product.price,
       // The shared displayable-image definition: a PDF-only or label-only
       // product still needs the UPC lookup that would fetch a real photo.
@@ -433,7 +437,7 @@ export const findProductsWithUpcGaps = async (
       (r): r is typeof r & { upc: string } =>
         r.upc != null &&
         !isMiscProduct(r.name) &&
-        (isUnspecifiedManufacturer(r.manufacturer) ||
+        (isUnknownBrandName(r.brandName) ||
           r.effectivePrice == null ||
           !r.hasImage),
     );
@@ -518,7 +522,7 @@ export const loadProductsForCoverage = async (
     columns: {
       id: true,
       name: true,
-      manufacturer: true,
+
       shortcode: true,
       fdc_id: true,
       labelNutrition: true,
@@ -528,6 +532,8 @@ export const loadProductsForCoverage = async (
       categoryId: true,
     },
     extras: {
+      brandName: productBrandNameSql(product.brandId).as("brandName"),
+      brandCode: productBrandCodeSql(product.brandId).as("brandCode"),
       category: categorySummarySql(sql`${product.categoryId}`).as("category"),
     },
     with: {
@@ -571,7 +577,7 @@ export const findProductsWithoutUnitMappings = async (
   {
     shortcode: ProductShortcode;
     name: string;
-    manufacturer: string;
+    brandName: string | null;
     category: ProductCategorySummary | null;
   }[]
 > => {
@@ -580,7 +586,7 @@ export const findProductsWithoutUnitMappings = async (
     .select({
       shortcode: product.shortcode,
       name: product.name,
-      manufacturer: product.manufacturer,
+      brandName: productBrandNameSql(product.brandId),
       category: categorySummarySql(sql`${product.categoryId}`),
     })
     .from(product)
@@ -655,7 +661,7 @@ export const findWeightSoldProducts = async (
   const res = await getDb(db).execute<{
     id: string;
     name: string;
-    manufacturer: string;
+    brandName: string | null;
     lineCount: number;
     distinctPriceFraction: number;
     lowUnitCost: number;
@@ -692,7 +698,7 @@ export const findWeightSoldProducts = async (
     SELECT
       p."shortcode" AS id,
       p."name" AS name,
-      p."manufacturer" AS manufacturer,
+      ${productBrandNameSql(sql`p."brandId"`)} AS "brandName",
       s.line_count AS "lineCount",
       round(s.distinct_count::numeric / s.line_count, 2)::float8 AS "distinctPriceFraction",
       s.low_unit_cost::float8 AS "lowUnitCost",
@@ -716,7 +722,7 @@ export const findWeightSoldProducts = async (
   return res.rows.map((row) => ({
     id: parseShortcodeFor("product", row.id),
     name: row.name,
-    manufacturer: row.manufacturer,
+    brandName: row.brandName,
     lineCount: row.lineCount,
     distinctPriceFraction: row.distinctPriceFraction,
     lowUnitCost: row.lowUnitCost,

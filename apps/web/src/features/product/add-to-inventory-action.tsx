@@ -29,16 +29,16 @@ import { ProductBulkAddToInventoryDialog } from "./product-bulk-add-to-inventory
  */
 function hasStringManufacturer(
   row: EntityActionRow,
-): row is EntityActionRow & { manufacturer: string } {
-  return "manufacturer" in row && typeof row.manufacturer === "string";
+): row is EntityActionRow & { brandName: string } {
+  return "brandName" in row && typeof row.brandName === "string";
 }
 
 const asBulkAddProduct = (row: EntityActionRow): BulkAddProduct => {
-  const manufacturer = hasStringManufacturer(row) ? row.manufacturer : null;
+  const brandName = hasStringManufacturer(row) ? row.brandName : null;
   return {
     id: parseShortcodeFor("product", row.id),
     name: row.name || row.id,
-    manufacturer,
+    brandName,
   };
 };
 
@@ -98,7 +98,7 @@ function StagedAddToInventoryDialog({
   // the product page: invoked from a row menu or the palette, stocking a kit
   // whose parts are already on shelves used to over-account in silence.
   //
-  // It also supplies the name and manufacturer for rows that carry only an id
+  // It also supplies the name and brandName for rows that carry only an id
   // — an expense line names a `productId` and nothing else.
   const soleProduct = staged.length === 1 ? staged[0] : undefined;
   const { data: detail } = useQuery({
@@ -112,7 +112,7 @@ function StagedAddToInventoryDialog({
     return {
       id: soleProduct.id,
       name: detail.name,
-      manufacturer: detail.manufacturer,
+      brandName: detail.brandName,
     };
   }, [soleProduct, detail]);
 

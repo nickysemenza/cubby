@@ -64,8 +64,9 @@ export async function seedRecordListDisplayPrerequisite(
       orderUrlTemplate: "https://example.com/orders/{orderId}",
       notes: `${name} vendor notes`,
     });
+    const brand = await create("vendor", { name: "E2E fixture" });
     const product = await create("product", {
-      manufacturer: "E2E fixture",
+      brandId: brand.id,
       tags: [],
       name: `${name} product`,
     });
