@@ -5,7 +5,7 @@ import {
   type AiBudgetStatus,
 } from "@cubby/schemas/mail-import-settings";
 import { supportedChatModelSchema } from "@cubby/shared/ai/models";
-import { and, eq, gte, inArray, isNull, sql } from "drizzle-orm";
+import { and, gte, inArray, isNull, sql } from "drizzle-orm";
 
 import { roundTo } from "~/lib/round-to";
 import type { Database } from "~/server/db";
@@ -49,16 +49,6 @@ export class AiBudgetExhaustedError extends Error {
   }
 }
 
-async function readAiBudgetSettings(db: Database): Promise<AiBudgetSettings> {
-  const [row] = await getDb(db)
-    .select({ metadata: appSettings.metadata })
-    .from(appSettings)
-    .where(eq(appSettings.id, SETTINGS_ID));
-  return row
-    ? aiBudgetSettings.parse(row.metadata)
-    : aiBudgetSettings.parse({ creditLimitUsd: DEFAULT_CREDIT_BUDGET_USD });
-}
-
 export async function setCreditBudget(
   db: Database,
   settings: AiBudgetSettings,
@@ -87,23 +77,31 @@ export async function readAiBudget(
   now = new Date(),
 ): Promise<AiBudgetStatus> {
   const window = aiBudgetWindow(now);
-  const [[row], settings] = await Promise.all([
-    getDb(db)
-      .select({
-        credit: sql<number>`COALESCE(sum(${aiUsage.standardCost}) FILTER (WHERE ${creditUsageRow}), 0)::double precision`,
-        plan: sql<number>`COALESCE(sum(${aiUsage.standardCost}) FILTER (WHERE ${planUsageRow}), 0)::double precision`,
-        paid: sql<number>`COALESCE(sum(COALESCE(${aiUsage.chargedCost}, ${aiUsage.standardCost}, 0)) FILTER (WHERE (${creditUsageRow}) IS NOT TRUE), 0)::double precision`,
-      })
-      .from(aiUsage)
-      .where(
-        and(
-          gte(aiUsage.createdAt, window.start),
-          isNull(aiUsage.deletedAt),
-          inArray(aiUsage.model, [...FRONTIER_MODELS]),
-        ),
+  const [row] = await getDb(db)
+    .select({
+      settings: sql<unknown[] | null>`(
+          SELECT jsonb_build_array(${appSettings.metadata})
+          FROM ${appSettings} WHERE ${appSettings.id} = ${SETTINGS_ID}
+        )`,
+      credit: sql<number>`COALESCE(sum(${aiUsage.standardCost}) FILTER (WHERE ${creditUsageRow}), 0)::double precision`,
+      plan: sql<number>`COALESCE(sum(${aiUsage.standardCost}) FILTER (WHERE ${planUsageRow}), 0)::double precision`,
+      paid: sql<number>`COALESCE(sum(COALESCE(${aiUsage.chargedCost}, ${aiUsage.standardCost}, 0)) FILTER (WHERE (${creditUsageRow}) IS NOT TRUE), 0)::double precision`,
+    })
+    .from(aiUsage)
+    .where(
+      and(
+        gte(aiUsage.createdAt, window.start),
+        isNull(aiUsage.deletedAt),
+        inArray(aiUsage.model, [...FRONTIER_MODELS]),
       ),
-    readAiBudgetSettings(db),
-  ]);
+    );
+  // The aggregate returns a row even without usage. Wrapping metadata keeps
+  // an absent settings row distinct from malformed stored JSON null.
+  const settings = aiBudgetSettings.parse(
+    row?.settings
+      ? row.settings[0]
+      : { creditLimitUsd: DEFAULT_CREDIT_BUDGET_USD },
+  );
   return {
     windowStart: window.start.toISOString(),
     windowEnd: window.end.toISOString(),

@@ -147,6 +147,10 @@ retains only found roots. Missing roots and failed reads remain retryable.
 Funding windows, quota status, paid grants and budget admission are still read
 fresh for each call; origin reuse does not authorize spending.
 
+Each budget admission reads current settings and window usage in one SQL
+statement. Empty ledgers still load configured limits; absent settings retain
+the defaults. Budget values and paid grants are never cached.
+
 Amended 2026-10-19: both free sources are capped resources the household
 shares with its own use. The Claude credit is a $200 monthly allowance; $5
 per window allowed about $600 a month. The ChatGPT plan's quota is shared
