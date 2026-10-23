@@ -81,7 +81,11 @@ export default defineEntity({
         kind: "identifier",
         reference: { entity: "ledgerParty" },
         control: { kind: "specialized", renderer: "entity-select" },
-        display: { width: "md", mobile: { slot: "title", priority: 0 } },
+        display: {
+          columnGroup: "Transfer",
+          width: "md",
+          mobile: { slot: "title", priority: 0 },
+        },
         validation: {
           read: ledgerPartyShortcode,
           create: ledgerPartyShortcode,
@@ -93,7 +97,11 @@ export default defineEntity({
         kind: "identifier",
         reference: { entity: "ledgerParty" },
         control: { kind: "specialized", renderer: "entity-select" },
-        display: { width: "md", mobile: { slot: "subtitle", priority: 10 } },
+        display: {
+          columnGroup: "Transfer",
+          width: "md",
+          mobile: { slot: "subtitle", priority: 10 },
+        },
         validation: {
           read: ledgerPartyShortcode,
           create: ledgerPartyShortcode,
@@ -125,6 +133,8 @@ export default defineEntity({
         kind: "number",
         control: { kind: "number", renderer: "money" },
         display: {
+          columnGroup: "Transfer",
+          columnBar: true,
           width: "sm",
           format: "currency",
           mobile: { slot: "trailing", priority: 1 },
@@ -140,6 +150,7 @@ export default defineEntity({
         kind: "date",
         control: { kind: "date" },
         display: {
+          columnGroup: "Transfer",
           format: "plainDate",
           mobile: { slot: "meta", priority: 20 },
         },
@@ -154,7 +165,7 @@ export default defineEntity({
         kind: "text",
         nullable: true,
         control: { kind: "textarea" },
-        display: {},
+        display: { columnGroup: "Evidence" },
         validation: {
           read: z.string().nullable(),
           create: z.string().nullable().default(null),
@@ -186,6 +197,7 @@ export default defineEntity({
         reference: { entity: "financialTransaction", multiple: true },
         control: { kind: "specialized", renderer: "entity-multi-select" },
         display: {
+          columnGroup: "Evidence",
           columnLabel: "Evidence",
           width: "sm",
           mobile: { slot: "hidden", priority: 0 },

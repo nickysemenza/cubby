@@ -1204,6 +1204,14 @@ drives form fields); it must be a nonnegative integer differing from the default
 `display.columnIdOverride` keeps a stable column ID when the field key differs — ids are saved layouts, filter bindings, sort ids and
 saved-view keys, so a rename is never free.
 
+`display.columnGroup` declares the thematic header band for each list field;
+related-preview presentation and custom column helpers use the same label.
+Every entity list opts into meaningful bands in its declaration rather than a
+browser-side field-name heuristic. `display.columnBar` adds a supplementary
+loaded-row magnitude comparison to a numeric field without changing its value,
+sort, clipboard, or editor. Use it only for comparable units; the web table
+contract in `apps/web/docs/web-ui.md` owns rendering and scale scope.
+
 Task and Project assignees use the identifier field’s member-scoped LedgerParty
 picker and `assigneeId` / `assigneeMode` inheritance contract.
 Both references declare outgoing graph paths and incoming inverses for their

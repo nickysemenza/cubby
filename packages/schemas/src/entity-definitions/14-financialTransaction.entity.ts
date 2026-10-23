@@ -195,6 +195,7 @@ export default defineEntity(
             ],
           },
           display: {
+            columnGroup: "Evidence",
             columnLabel: "Booked",
             optionRole: "status",
             optionColor: "neutral-status",
@@ -247,6 +248,7 @@ export default defineEntity(
             ],
           },
           display: {
+            columnGroup: "Evidence",
             columnLabel: "Documented",
             optionRole: "status",
             optionColor: "neutral-status",
@@ -299,6 +301,7 @@ export default defineEntity(
             ],
           },
           display: {
+            columnGroup: "Evidence",
             columnLabel: "Itemized",
             optionRole: "status",
             optionColor: "neutral-status",
@@ -351,6 +354,7 @@ export default defineEntity(
             ],
           },
           display: {
+            columnGroup: "Evidence",
             columnLabel: "Products",
             optionRole: "status",
             optionColor: "neutral-status",
@@ -389,6 +393,7 @@ export default defineEntity(
             sources: [{ label: "Live Expense category allocations" }],
           },
           display: {
+            columnGroup: "Booking",
             columnLabel: "Categories",
             renderer: {
               detail: "spending-category-summary",
@@ -479,6 +484,7 @@ export default defineEntity(
             ],
           },
           display: {
+            columnGroup: "Evidence",
             columnLabel: "Evidence",
             optionRole: "status",
             optionColor: "neutral-status",
@@ -532,6 +538,7 @@ export default defineEntity(
           reference: { entity: "financialAccount" },
           control: { kind: "specialized", renderer: "entity-select" },
           display: {
+            columnGroup: "Transaction",
             width: "md",
             mobile: { slot: "subtitle", priority: 10, interactive: true },
           },
@@ -549,7 +556,7 @@ export default defineEntity(
           control: { kind: "specialized", renderer: "entity-select" },
           // Detail shows `allocations` instead: this mirror is NULL exactly
           // when a charge settles more than one purchase.
-          display: { detail: false, width: "sm" },
+          display: { columnGroup: "Booking", detail: false, width: "sm" },
           validation: {
             read: purchaseShortcode.nullable(),
             create: purchaseShortcode.nullable().default(null),
@@ -563,6 +570,7 @@ export default defineEntity(
           kind: "boolean",
           labelOverride: "Linked",
           display: {
+            columnGroup: "Booking",
             detail: false,
             listHidden: true,
             width: "xs",
@@ -643,6 +651,7 @@ export default defineEntity(
             ],
           },
           display: {
+            columnGroup: "Transaction",
             width: "sm",
             optionRole: "category",
             optionColor: "domain-finance",
@@ -688,6 +697,7 @@ export default defineEntity(
             ],
           },
           display: {
+            columnGroup: "Transaction",
             mobile: { slot: "meta", priority: 20 },
             optionRole: "status",
             optionColor: "neutral-status",
@@ -710,6 +720,8 @@ export default defineEntity(
             required: false,
           },
           display: {
+            columnGroup: "Transaction",
+            columnBar: true,
             width: "sm",
             format: "currency",
             mobile: { slot: "trailing", priority: 1 },
@@ -726,6 +738,7 @@ export default defineEntity(
           nullable: true,
           control: { kind: "date" },
           display: {
+            columnGroup: "Transaction",
             detail: false,
             columnLabel: "Date",
             format: "plainDate",
@@ -743,6 +756,7 @@ export default defineEntity(
           nullable: true,
           control: { kind: "date" },
           display: {
+            columnGroup: "Transaction",
             format: "plainDate",
             mobile: { slot: "meta", priority: 30 },
           },
@@ -757,7 +771,11 @@ export default defineEntity(
           kind: "text",
           nullable: true,
           control: { kind: "text" },
-          display: { width: "md", listHidden: true },
+          display: {
+            columnGroup: "Transaction",
+            width: "md",
+            listHidden: true,
+          },
           validation: {
             read: z.string().nullable(),
             create: z.string().nullable().default(null),
@@ -769,7 +787,11 @@ export default defineEntity(
           kind: "text",
           nullable: true,
           control: { kind: "textarea" },
-          display: { detail: false, listHidden: true },
+          display: {
+            columnGroup: "Transaction",
+            detail: false,
+            listHidden: true,
+          },
           validation: {
             read: z.string().nullable(),
             create: z.string().nullable().default(null),
@@ -781,7 +803,7 @@ export default defineEntity(
           kind: "text",
           nullable: true,
           control: { kind: "text" },
-          display: { detail: false, listHidden: true },
+          display: { columnGroup: "Evidence", detail: false, listHidden: true },
           validation: {
             read: z.string().nullable(),
             create: z.string().nullable().default(null),
@@ -805,6 +827,7 @@ export default defineEntity(
           // — same as accountId's "Account ID" -> "Account" ripple.
           control: { kind: "specialized", renderer: "source-refs" },
           display: {
+            columnGroup: "Evidence",
             detailLabelPath: "sourceRefsLabel",
             listHidden: true,
             readPath: "sourceRefs[].source",
@@ -821,7 +844,7 @@ export default defineEntity(
           kind: "text",
           nullable: true,
           control: { kind: "textarea" },
-          display: { detail: false, listHidden: true },
+          display: { columnGroup: "Evidence", detail: false, listHidden: true },
           validation: {
             read: z.string().nullable(),
             create: z.string().nullable().default(null),
@@ -861,6 +884,7 @@ export default defineEntity(
           key: "itemization",
           kind: "enum",
           display: {
+            columnGroup: "Booking",
             detail: false,
             width: "sm",
             valueOptions: [
@@ -961,6 +985,7 @@ export default defineEntity(
           kind: "json",
           nullable: true,
           display: {
+            columnGroup: "Evidence",
             labelPath: "vendorInference.candidates[].vendorName",
             detailLabelPath: "possibleVendorLabel",
             renderer: {

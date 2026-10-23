@@ -700,6 +700,7 @@ export function createEntityInlineLinkColumn<
   accessor: K,
   entity: TEntity,
   options?: {
+    columnGroup?: string;
     header?: string;
     className?: string;
     filterConfig?: FilterConfig;
@@ -714,6 +715,7 @@ export function createEntityInlineLinkColumn<
     header: options?.header ?? entityLabel(entity),
     enableSorting: options?.enableSorting ?? false,
     meta: attachCubbyColumnMeta<T>({
+      columnGroup: options?.columnGroup,
       className: options?.className
         ? `${options.className} overflow-hidden`
         : undefined,
@@ -1413,6 +1415,7 @@ export function createSingleEntityInlineLinkColumn<
   accessor: K,
   entity: TEntity,
   options?: {
+    columnGroup?: string;
     header?: string;
     className?: string;
     mobile?: MobileColumnMeta;
@@ -1451,6 +1454,7 @@ export function createSingleEntityInlineLinkColumn<
     header: options?.header ?? entityLabel(entity),
     enableSorting: options?.enableSorting ?? false,
     meta: attachCubbyColumnMeta({
+      columnGroup: options?.columnGroup,
       className: options?.className,
       mobile: options?.mobile,
       filterConfig: options?.filterConfig,

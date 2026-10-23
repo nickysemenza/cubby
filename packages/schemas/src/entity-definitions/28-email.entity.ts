@@ -174,7 +174,7 @@ export default defineEntity({
         key: "sender",
         kind: "text",
         nullable: true,
-        display: {},
+        display: { columnGroup: "Message" },
         validation: readOnly(z.string().nullable()),
       },
       {
@@ -189,7 +189,7 @@ export default defineEntity({
         kind: "timestamp",
         nullable: true,
         labelOverride: "Received",
-        display: { format: "timestamp" },
+        display: { columnGroup: "Message", format: "timestamp" },
         validation: readOnly(z.date().nullable()),
       },
       {
@@ -200,6 +200,7 @@ export default defineEntity({
         control: { kind: "select", options: relevanceOptions },
         // The list cell names the deciding stage, e.g. "Uncertain · Rule".
         display: {
+          columnGroup: "Review",
           labelPath: "relevanceLabel",
           optionRole: "category",
           optionColor: "domain-finance",
@@ -215,6 +216,7 @@ export default defineEntity({
         labelOverride: "Relevance stage",
         control: { kind: "select", options: stageOptions },
         display: {
+          columnGroup: "Review",
           listHidden: true,
           optionRole: "category",
           optionColor: "domain-finance",
@@ -227,7 +229,7 @@ export default defineEntity({
         kind: "text",
         nullable: true,
         labelOverride: "Relevance reason",
-        display: { listHidden: true },
+        display: { columnGroup: "Review", listHidden: true },
         validation: readOnly(z.string().nullable()),
       },
       {
@@ -237,6 +239,7 @@ export default defineEntity({
         labelOverride: "Reviewed relevance",
         control: { kind: "select", options: relevanceOptions },
         display: {
+          columnGroup: "Review",
           columnLabel: "Relevance",
           optionRole: "category",
           optionColor: "domain-finance",
@@ -260,7 +263,7 @@ export default defineEntity({
             },
           ],
         },
-        display: { listHidden: true },
+        display: { columnGroup: "Review", listHidden: true },
         validation: readOnly(z.boolean()),
       },
       {
@@ -280,6 +283,7 @@ export default defineEntity({
         kind: "enum",
         control: { kind: "select", options: statusOptions },
         display: {
+          columnGroup: "Import",
           optionRole: "category",
           optionColor: "domain-finance",
           optionGlyph: { phosphor: "Envelope", sfSymbol: "envelope" },
@@ -290,7 +294,7 @@ export default defineEntity({
         key: "mailboxId",
         kind: "text",
         labelOverride: "Mailbox",
-        display: { listHidden: true },
+        display: { columnGroup: "Message", listHidden: true },
         validation: readOnly(z.string()),
       },
       {
@@ -385,6 +389,7 @@ export default defineEntity({
           ],
         },
         display: {
+          columnGroup: "Import",
           detail: false,
           listHidden: true,
           width: "sm",
@@ -408,6 +413,7 @@ export default defineEntity({
         },
         // The Email page's Purchase links ledger shows these with actions.
         display: {
+          columnGroup: "Import",
           detail: false,
           listHidden: true,
           labelPath: "purchaseLinks[].label",
@@ -442,6 +448,7 @@ export default defineEntity({
           ],
         },
         display: {
+          columnGroup: "Import",
           listHidden: true,
           optionRole: "category",
           optionColor: "domain-finance",

@@ -164,6 +164,7 @@ export const inventoryListOverride = defineListOverride<
               header: "Product",
               enableSorting: false,
               meta: {
+                columnGroup: "Catalog",
                 provenance: relationshipFieldProvenance(
                   "inventory",
                   "product",
@@ -194,6 +195,7 @@ export const inventoryListOverride = defineListOverride<
               "location",
               "location",
               {
+                columnGroup: "Stock",
                 className: "min-w-0 w-40 max-w-56",
                 mobile: { slot: "subtitle", priority: 20 },
                 filterConfig: { placeholder: "Filter location..." },
@@ -221,6 +223,7 @@ export const inventoryListOverride = defineListOverride<
               header: "Manufacturer",
               enableSorting: false,
               meta: {
+                columnGroup: "Catalog",
                 provenance: relationshipFieldProvenance("inventory", "product"),
                 className: "min-w-0 w-40 truncate",
                 mobile: { slot: "meta", priority: 70 },
@@ -236,6 +239,7 @@ export const inventoryListOverride = defineListOverride<
               enableSorting: false,
               filterFn: multiSelectFilterFn,
               meta: {
+                columnGroup: "Catalog",
                 provenance: relationshipFieldProvenance("inventory", "product"),
                 className: "w-32",
                 mobile: { slot: "meta", priority: 75 },
@@ -298,6 +302,7 @@ export function createInventoryEntriesColumn<
     TEntity
   >["getRelatedEntity"],
   options?: {
+    columnGroup?: string;
     id?: string;
     header?: string;
     className?: string;
@@ -306,7 +311,7 @@ export function createInventoryEntriesColumn<
     mobile?: MobileColumnMeta;
     filterConfig?: FilterConfig;
     provenance?: EntityFieldProvenance;
-    context?: (row: T) => ReactNode;
+    context?: (row: T) => string | null | undefined;
     contextReadFields?: readonly string[];
     explanation?: ColumnExplanation;
     /**
@@ -345,6 +350,7 @@ export function createInventoryEntriesColumn<
       options?.header ?? (entity === "location" ? "Locations" : "Products"),
     enableSorting: options?.enableSorting ?? false,
     meta: attachCubbyColumnMeta<T>({
+      columnGroup: options?.columnGroup,
       className: options?.className ?? "min-w-0 w-40 max-w-56",
       mobile: options?.mobile,
       filterConfig: options?.filterConfig,

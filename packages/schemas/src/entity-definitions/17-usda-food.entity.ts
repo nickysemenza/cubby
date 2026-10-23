@@ -110,7 +110,7 @@ export default defineEntity(
         {
           key: "foodInfo",
           kind: "json",
-          display: {},
+          display: { columnGroup: "Food" },
           provenance: {
             kind: "derived",
             sources: [{ label: "USDA food record" }],
@@ -230,7 +230,7 @@ export default defineEntity(
           key: "linkedProducts",
           kind: "json",
           reference: { entity: "product", multiple: true },
-          display: { columnLabel: "Products" },
+          display: { columnGroup: "Catalog", columnLabel: "Products" },
           explanation: {
             ruleId: "usda-food.linked-products",
             description:

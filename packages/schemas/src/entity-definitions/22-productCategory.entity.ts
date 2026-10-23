@@ -100,7 +100,7 @@ export default defineEntity({
         kind: "identifier",
         nullable: true,
         reference: { entity: "spendingCategory" },
-        display: { columnLabel: "Spending" },
+        display: { columnGroup: "Spending policy", columnLabel: "Spending" },
         explanation: {
           ruleId: "productCategory.effective-spending-category",
           description:
@@ -182,6 +182,7 @@ export default defineEntity({
           ],
         },
         display: {
+          columnGroup: "Spending policy",
           columnLabel: "Spending mode",
           optionRole: "category",
           optionColor: "neutral-status",
@@ -199,7 +200,7 @@ export default defineEntity({
         nullable: true,
         reference: { entity: "spendingCategory" },
         control: { kind: "specialized", renderer: "entity-select" },
-        display: {},
+        display: { columnGroup: "Spending policy" },
         // `blocked` keeps the category unresolved: an explicit None.
         resolution: {
           inherit: {
@@ -268,7 +269,7 @@ export default defineEntity({
         nullable: true,
         reference: { entity: "productCategory" },
         control: { kind: "specialized", renderer: "entity-select" },
-        display: { listHidden: true },
+        display: { columnGroup: "Classification", listHidden: true },
         validation: {
           read: productCategoryShortcode.nullable(),
           create: productCategoryShortcode.nullable().default(null),
@@ -422,6 +423,7 @@ Rules:
           },
         },
         display: {
+          columnGroup: "Classification",
           width: "md",
           mobile: { slot: "meta", priority: 10 },
           optionRole: "category",
@@ -467,7 +469,7 @@ Rules:
         nullable: true,
         labelOverride: "Stock tracking",
         control: { kind: "checkbox" },
-        display: { listHidden: true },
+        display: { columnGroup: "Classification", listHidden: true },
         resolution: {
           reset: { stockTracked: null },
           redundancy: "eligible",
@@ -541,7 +543,12 @@ Rules:
       {
         key: "productCount",
         kind: "number",
-        display: { width: "sm", mobile: { slot: "meta", priority: 20 } },
+        display: {
+          columnGroup: "Catalog",
+          columnBar: true,
+          width: "sm",
+          mobile: { slot: "meta", priority: 20 },
+        },
         provenance: {
           kind: "derived",
           sources: [{ entity: "product", relation: "products" }],

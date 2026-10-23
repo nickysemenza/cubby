@@ -343,6 +343,7 @@ export default defineEntity({
           },
         },
         display: {
+          columnGroup: "Booking",
           columnLabel: "Category",
           renderer: { detail: "expense-spending-category" },
           mobile: { slot: "meta", priority: 19 },
@@ -405,6 +406,7 @@ export default defineEntity({
           ],
         },
         display: {
+          columnGroup: "Booking",
           columnLabel: "Role",
           optionRole: "category",
           optionColor: "domain-finance",
@@ -466,6 +468,8 @@ export default defineEntity({
           renderer: "money",
         },
         display: {
+          columnGroup: "Booking",
+          columnBar: true,
           format: "currency",
           mobile: { slot: "trailing", priority: 1 },
         },
@@ -487,6 +491,7 @@ export default defineEntity({
           required: false,
         },
         display: {
+          columnGroup: "Booking",
           format: "plainDate",
           mobile: { slot: "subtitle", priority: 15 },
         },
@@ -510,7 +515,11 @@ export default defineEntity({
             rules: [EXPENSE_LINE_ROLE_RULES],
           },
         },
-        display: { width: "md", mobile: { slot: "meta", priority: 18 } },
+        display: {
+          columnGroup: "Booking",
+          width: "md",
+          mobile: { slot: "meta", priority: 18 },
+        },
         validation: {
           read: expenseLineKindSchema.describe(
             "Receipt role. Principal lines are purchased items or services; unclassified means the evidence has not established a role.",
@@ -526,7 +535,7 @@ export default defineEntity({
           kind: "select",
           options: selectControlOptions.expenseLineBasis,
         },
-        display: { listHidden: true, width: "md" },
+        display: { columnGroup: "Booking", listHidden: true, width: "md" },
         validation: {
           read: expenseLineBasisSchema.describe(
             "Whether this row is a line item or a slice of a total that was never itemized. 'allocation' means the money was cut by payment schedule (a deposit and a balance on one order) or by an estimated materials/labor split of a lump-sum contract — such a row can never carry a productId, and its costType may be an estimate rather than a vendor-stated fact.",
@@ -553,7 +562,10 @@ Rules:
             ],
           },
         },
-        display: { mobile: { slot: "meta", priority: 20 } },
+        display: {
+          columnGroup: "Booking",
+          mobile: { slot: "meta", priority: 20 },
+        },
         explanation: {
           ruleId: "expense.effective-cost-type",
           description:
@@ -588,7 +600,11 @@ Rules:
             rules: [TRADE_SUGGEST_RULE],
           },
         },
-        display: { width: "sm", mobile: { slot: "meta", priority: 60 } },
+        display: {
+          columnGroup: "Booking",
+          width: "sm",
+          mobile: { slot: "meta", priority: 60 },
+        },
         resolution: {
           reset: { trade: null },
           redundancy: "eligible",
@@ -625,7 +641,7 @@ Rules:
         kind: "text",
         nullable: true,
         control: { kind: "text", renderer: "url" },
-        display: { width: "xs" },
+        display: { columnGroup: "Evidence", width: "xs" },
         validation: {
           read: z.string().nullable(),
           create: z.string().nullable().default(null),
@@ -637,7 +653,7 @@ Rules:
         kind: "text",
         nullable: true,
         control: { kind: "textarea" },
-        display: {},
+        display: { columnGroup: "Evidence" },
         validation: {
           read: z.string().nullable(),
           create: z.string().nullable().default(null),
@@ -648,7 +664,10 @@ Rules:
         key: "future",
         kind: "boolean",
         control: { kind: "checkbox" },
-        display: { mobile: { slot: "meta", priority: 50 } },
+        display: {
+          columnGroup: "Booking",
+          mobile: { slot: "meta", priority: 50 },
+        },
         validation: {
           read: z.boolean(),
           create: z.boolean().default(false),
@@ -666,6 +685,7 @@ Rules:
           suggest: { basis: ["name", "vendor", "productId", "date"] },
         },
         display: {
+          columnGroup: "Links",
           renderer: { detail: "expense-project" },
           width: "md",
           mobile: { slot: "meta", priority: 40, interactive: true },
@@ -715,6 +735,7 @@ Rules:
           suggest: { basis: ["name", "vendor"] },
         },
         display: {
+          columnGroup: "Links",
           width: "md",
           mobile: { slot: "meta", priority: 45, interactive: true },
         },
@@ -734,6 +755,7 @@ Rules:
         nullable: true,
         control: { kind: "number" },
         display: {
+          columnGroup: "Links",
           columnLabel: "Quantity",
           width: "sm",
           mobile: { slot: "meta", priority: 47, interactive: true },
@@ -791,7 +813,7 @@ Rules:
         kind: "text",
         nullable: true,
         control: { kind: "text" },
-        display: { listHidden: true },
+        display: { columnGroup: "Links", listHidden: true },
         provenance: {
           kind: "relation",
           sources: [{ entity: "purchase", relation: "purchase" }],
@@ -817,7 +839,7 @@ Rules:
         nullable: true,
         reference: { entity: "purchase" },
         control: { kind: "specialized", renderer: "entity-select" },
-        display: { labelPath: "purchaseDisplayLabel" },
+        display: { columnGroup: "Links", labelPath: "purchaseDisplayLabel" },
         validation: {
           read: purchaseShortcode.nullable(),
           create: purchaseShortcode.nullable().default(null),

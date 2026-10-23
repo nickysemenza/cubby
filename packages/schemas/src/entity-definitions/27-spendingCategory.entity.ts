@@ -58,7 +58,11 @@ export default defineEntity({
             { sourceField: "id", targetField: "effectiveSpendingCategoryId" },
           ],
         },
-        display: { width: "lg", referencePreviewLimit: 2 },
+        display: {
+          columnGroup: "Catalog",
+          width: "lg",
+          referencePreviewLimit: 2,
+        },
         validation: {
           read: z
             .array(
@@ -161,6 +165,7 @@ export default defineEntity({
           ],
         },
         display: {
+          columnGroup: "Policy",
           columnLabel: "Evidence",
           optionRole: "status",
           optionColor: "neutral-status",
@@ -218,6 +223,7 @@ export default defineEntity({
           ],
         },
         display: {
+          columnGroup: "Policy",
           columnLabel: "Products",
           optionRole: "status",
           optionColor: "neutral-status",

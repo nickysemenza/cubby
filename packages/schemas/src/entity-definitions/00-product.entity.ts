@@ -730,6 +730,7 @@ export default defineEntity(
             ],
           },
           display: {
+            columnGroup: "Purchasing",
             columnLabel: "Origin",
             optionRole: "category",
             optionColor: "domain-pantry",
@@ -809,6 +810,7 @@ Rules:
             },
           },
           display: {
+            columnGroup: "Catalog",
             listHidden: true,
             labelPath: "tags[]",
             renderer: { list: "tag-links", detail: "product-tags" },
@@ -859,6 +861,7 @@ Rules:
           nullable: true,
           control: { kind: "specialized", renderer: "usda-food" },
           display: {
+            columnGroup: "Food",
             width: "sm",
             renderer: { detail: "product-fdc-id" },
             format: "external-link",
@@ -888,6 +891,7 @@ Rules:
             suggest: { basis: ["name", "model", "notes"] },
           },
           display: {
+            columnGroup: "Catalog",
             labelPath: "brandName",
             width: "md",
             mobile: { slot: "subtitle", priority: 20 },
@@ -900,6 +904,7 @@ Rules:
           },
         },
         {
+          display: { columnGroup: "Catalog" },
           key: "brandName",
           kind: "text",
           nullable: true,
@@ -920,7 +925,7 @@ Rules:
           kind: "text",
           nullable: true,
           control: { kind: "text", width: "half" },
-          display: { width: "md", listHidden: true },
+          display: { columnGroup: "Catalog", width: "md", listHidden: true },
           validation: {
             read: z.string().nullable(),
             create: z.string().nullable().optional(),
@@ -932,7 +937,7 @@ Rules:
           kind: "text",
           nullable: true,
           control: { kind: "textarea" },
-          display: { width: "md", listHidden: true },
+          display: { columnGroup: "Catalog", width: "md", listHidden: true },
           validation: {
             read: z.string().nullable(),
             create: z.string().nullable().optional(),
@@ -982,6 +987,7 @@ Rules:
             },
           },
           display: {
+            columnGroup: "Catalog",
             width: "md",
             renderer: { detail: "product-category" },
             mobile: { slot: "subtitle", priority: 30 },
@@ -1010,6 +1016,7 @@ Rules:
           labelOverride: "Category family",
           // The first node of the category path: the family a product rolls up to.
           display: {
+            columnGroup: "Catalog",
             detail: false,
             listHidden: true,
             readPath: "category.path[0].name",
@@ -1094,7 +1101,11 @@ Rules:
           // The detail distinguishes effective valuation from an entered price.
           labelOverride: "Valuation price",
           control: { kind: "number", renderer: "money", width: "half" },
-          display: { columnLabel: "Price", format: "currency" },
+          display: {
+            columnGroup: "Purchasing",
+            columnLabel: "Price",
+            format: "currency",
+          },
           resolution: {
             reset: { price: null },
             redundancy: "eligible",
@@ -1193,6 +1204,7 @@ Rules:
             ],
           },
           display: {
+            columnGroup: "Catalog",
             renderer: { detail: "product-external-ids" },
             detailLabelPath: "externalIdsLabel",
             listHidden: true,
@@ -1213,7 +1225,7 @@ Rules:
           // Hidden by default via the page's `initialColumnVisibility` — this
           // was already declared `list: true` before this migration, but the
           // page never wired `createEntityDisplayColumns` up to render it.
-          display: { detail: false, listHidden: true },
+          display: { columnGroup: "Food", detail: false, listHidden: true },
           validation: {
             read: z.boolean().nullable(),
             create: z.boolean().nullable().optional(),
@@ -1225,7 +1237,7 @@ Rules:
           kind: "boolean",
           nullable: true,
           control: { kind: "checkbox" },
-          display: { listHidden: true },
+          display: { columnGroup: "Stock", listHidden: true },
           // "intentional": a Product's own decision that matches its category
           // is still a decision, so bulk "Use inherited values" never clears it.
           resolution: {
@@ -1276,7 +1288,7 @@ Rules:
             kind: "select",
             options: selectControlOptions.productKind,
           },
-          display: { listHidden: true },
+          display: { columnGroup: "Catalog", listHidden: true },
           validation: {
             read: productKindSchema.nullable(),
             create: productKindSchema.nullable().optional(),
@@ -1296,6 +1308,7 @@ Rules:
             "Interchangeable goods bought from any seller with no single listing that identifies them (loose produce, bulk meat, herb bunches). Not expected to carry a brand, identifier, or Amazon ASIN.",
           control: { kind: "checkbox" },
           display: {
+            columnGroup: "Catalog",
             columnLabel: "Commodity",
             listHidden: true,
           },
@@ -1369,6 +1382,7 @@ Rules:
           kind: "text",
           nullable: true,
           display: {
+            columnGroup: "Catalog",
             width: "sm",
             renderer: { detail: "product-primary-gtin" },
           },
@@ -1453,7 +1467,11 @@ Rules:
           kind: "json",
           nullable: true,
           // Display-only: the list query exposes no server sort for this value.
-          display: { labelPath: "unitPriceLabel", width: "sm" },
+          display: {
+            columnGroup: "Purchasing",
+            labelPath: "unitPriceLabel",
+            width: "sm",
+          },
           provenance: {
             kind: "derived",
             sources: [{ label: "Product price and unit mappings" }],
@@ -1482,6 +1500,7 @@ Rules:
           nullable: true,
           labelOverride: "USDA Food",
           display: {
+            columnGroup: "Food",
             detail: false,
             labelPath: "food.foodInfo.description",
             renderer: { list: "usda-food-link" },
@@ -1510,6 +1529,7 @@ Rules:
           key: "modelPresence",
           kind: "boolean",
           display: {
+            columnGroup: "Catalog",
             listHidden: true,
             readPath: "modelPresence",
             format: "presence",
@@ -1541,6 +1561,7 @@ Rules:
           key: "upcPresence",
           kind: "boolean",
           display: {
+            columnGroup: "Catalog",
             listHidden: true,
             readPath: "upcPresence",
             format: "presence",
@@ -1577,6 +1598,7 @@ Rules:
           key: "notesPresence",
           kind: "boolean",
           display: {
+            columnGroup: "Catalog",
             listHidden: true,
             readPath: "notesPresence",
             format: "presence",
@@ -1609,6 +1631,7 @@ Rules:
           kind: "json",
           labelOverride: "Owner",
           display: {
+            columnGroup: "Stock",
             columnLabel: "Owner",
             width: "md",
             format: "resolvedList",
@@ -1646,6 +1669,8 @@ Rules:
           key: "expenseTotal",
           kind: "number",
           display: {
+            columnGroup: "Purchasing",
+            columnBar: true,
             preview: true,
             listHidden: true,
             width: "sm",
@@ -1675,6 +1700,7 @@ Rules:
           key: "componentCount",
           kind: "number",
           display: {
+            columnGroup: "Stock",
             detail: false,
             width: "sm",
             mobile: { slot: "meta", priority: 44 },
@@ -1701,6 +1727,7 @@ Rules:
           // Nested under `quantityLedger.locationCount` on the list row — no
           // flat readKey reaches it, so it reads by path.
           display: {
+            columnGroup: "Stock",
             detail: false,
             columnLabel: "As location",
             width: "sm",
@@ -1736,6 +1763,7 @@ Rules:
           // server-composed label discloses the ledger's unquantified lines
           // beside the number.
           display: {
+            columnGroup: "Stock",
             detail: false,
             listHidden: true,
             readPath: "quantityLedger.expectedQuantity",
@@ -1765,7 +1793,7 @@ Rules:
           key: "stockStatus",
           kind: "text",
           labelOverride: "Inventory status",
-          display: { listHidden: true, width: "md" },
+          display: { columnGroup: "Stock", listHidden: true, width: "md" },
           provenance: {
             kind: "derived",
             sources: [{ entity: "inventory", relation: "inventory" }],
@@ -1811,6 +1839,7 @@ Rules:
           // Shelf minus ledger; the label is absent when the product isn't
           // stocked or its entries carry more than one unit.
           display: {
+            columnGroup: "Stock",
             detail: false,
             listHidden: true,
             labelPath: "quantityVarianceLabel",
@@ -1848,6 +1877,7 @@ Rules:
           // Default label would be "Purchase Date"; the list column has
           // always headed this "Purchase date".
           display: {
+            columnGroup: "Purchasing",
             columnLabel: "Purchased",
             format: "plainDate",
             mobile: { slot: "meta", priority: 55 },
@@ -1875,6 +1905,8 @@ Rules:
           key: "expenseCount",
           kind: "number",
           display: {
+            columnGroup: "Purchasing",
+            columnBar: true,
             width: "sm",
             mobile: { slot: "meta", priority: 50, interactive: true },
           },
@@ -1902,6 +1934,7 @@ Rules:
           kind: "number",
           nullable: true,
           display: {
+            columnGroup: "Stock",
             preview: true,
             detail: false,
             listHidden: true,

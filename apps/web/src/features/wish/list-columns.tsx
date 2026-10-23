@@ -194,6 +194,7 @@ export const wishListOverride = defineListOverride<
               id: "candidateSpec",
               header: "Make / model",
               meta: {
+                columnGroup: "Options",
                 provenance: relationshipFieldProvenance("wish", "candidates"),
                 className: "w-56",
                 mobile: { slot: "subtitle", priority: 15 },
@@ -218,6 +219,7 @@ export const wishListOverride = defineListOverride<
                 id: "candidateCount",
                 header: "Options",
                 meta: attachCubbyColumnMeta<WishRow>({
+                  columnGroup: "Options",
                   provenance: relationshipFieldProvenance("wish", "candidates"),
                   numeric: true,
                   className: "w-24",
@@ -256,6 +258,7 @@ export const wishListOverride = defineListOverride<
                 id: "priceRange",
                 header: "Price range",
                 meta: attachCubbyColumnMeta<WishRow>({
+                  columnGroup: "Options",
                   provenance: relationshipFieldProvenance("wish", "candidates"),
                   numeric: true,
                   // Wide enough for two five-figure amounts plus the en-dash.

@@ -136,7 +136,7 @@ export default defineEntity({
         kind: "identifier",
         reference: { entity: "plant" },
         control: { kind: "specialized", renderer: "entity-select" },
-        display: {},
+        display: { columnGroup: "Planting" },
         validation: {
           read: plantShortcode,
           create: plantShortcode,
@@ -162,7 +162,11 @@ export default defineEntity({
             },
           ],
         },
-        display: { optionRole: "status", optionColor: "neutral-status" },
+        display: {
+          columnGroup: "Planting",
+          optionRole: "status",
+          optionColor: "neutral-status",
+        },
         validation: {
           read: plantingOutcome.nullable(),
           create: plantingOutcome.nullable().default(null),
@@ -188,7 +192,10 @@ export default defineEntity({
         nullable: true,
         reference: { entity: "location" },
         control: { kind: "specialized", renderer: "entity-select" },
-        display: { mobile: { slot: "subtitle", priority: 10 } },
+        display: {
+          columnGroup: "Planting",
+          mobile: { slot: "subtitle", priority: 10 },
+        },
         validation: {
           read: locationShortcode.nullable(),
           create: locationShortcode.nullable().default(null),
@@ -242,6 +249,7 @@ export default defineEntity({
           ],
         },
         display: {
+          columnGroup: "Planting",
           mobile: { slot: "trailing", priority: 10 },
           optionRole: "status",
           optionColor: "neutral-status",
@@ -294,7 +302,7 @@ export default defineEntity({
         nullable: true,
         dateRange: { start: "sowedOn", end: "finishedOn", semantics: "period" },
         control: { kind: "dateRange" },
-        display: { columnIdOverride: "sowedOn" },
+        display: { columnGroup: "Schedule", columnIdOverride: "sowedOn" },
         validation: {
           read: storedDateRangeSchema.nullable(),
           create: dateRangeSchema.nullable().default(null),
@@ -307,7 +315,11 @@ export default defineEntity({
         kind: "date",
         nullable: true,
         control: { kind: "date" },
-        display: { columnLabel: "Transplanted", format: "plainDate" },
+        display: {
+          columnGroup: "Schedule",
+          columnLabel: "Transplanted",
+          format: "plainDate",
+        },
         validation: {
           read: plainDate.nullable(),
           create: plainDate.nullable().default(null),
@@ -388,7 +400,12 @@ export default defineEntity({
         key: "expectedHarvestStart",
         kind: "date",
         nullable: true,
-        display: { detail: false, columnLabel: "Harvest", format: "plainDate" },
+        display: {
+          columnGroup: "Schedule",
+          detail: false,
+          columnLabel: "Harvest",
+          format: "plainDate",
+        },
         provenance: {
           kind: "derived",
           sources: [{ entity: "plant", relation: "plant" }],

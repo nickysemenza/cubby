@@ -149,7 +149,11 @@ export default defineEntity(
           kind: "text-array",
           collection: { key: "value" },
           control: { kind: "specialized", renderer: "tag-list" },
-          display: { width: "md", mobile: { slot: "subtitle", priority: 20 } },
+          display: {
+            columnGroup: "Ingredient",
+            width: "md",
+            mobile: { slot: "subtitle", priority: 20 },
+          },
           validation: {
             read: z
               .array(z.string())
@@ -186,6 +190,7 @@ export default defineEntity(
             "Assume I have enough for recipe planning. Recorded inventory stays separate.",
           control: { kind: "checkbox" },
           display: {
+            columnGroup: "Ingredient",
             columnLabel: "On hand",
             mobile: { slot: "meta", priority: 25 },
           },

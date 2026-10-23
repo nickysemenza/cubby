@@ -99,7 +99,7 @@ export default defineEntity({
         kind: "identifier",
         labelOverride: "First import",
         reference: { entity: "transactionImport" },
-        display: {},
+        display: { columnGroup: "Source" },
         validation: {
           read: shortcodeSchema("transactionImport"),
           create: null,
@@ -109,14 +109,14 @@ export default defineEntity({
       {
         key: "source",
         kind: "text",
-        display: {},
+        display: { columnGroup: "Source" },
         validation: { read: z.string(), create: null, update: null },
       },
       {
         key: "externalId",
         kind: "text",
         labelOverride: "Source reference",
-        display: {},
+        display: { columnGroup: "Source" },
         validation: { read: z.string(), create: null, update: null },
       },
       {
@@ -159,14 +159,14 @@ export default defineEntity({
       {
         key: "current",
         kind: "boolean",
-        display: {},
+        display: { columnGroup: "Disposition" },
         validation: { read: z.boolean(), create: null, update: null },
       },
       {
         key: "withdrawnAt",
         kind: "timestamp",
         nullable: true,
-        display: { format: "timestamp" },
+        display: { columnGroup: "Disposition", format: "timestamp" },
         validation: { read: z.date().nullable(), create: null, update: null },
       },
       {
@@ -175,7 +175,7 @@ export default defineEntity({
         nullable: true,
         labelOverride: "Withdrawal proof",
         reference: { entity: "transactionImport" },
-        display: {},
+        display: { columnGroup: "Disposition" },
         validation: {
           read: shortcodeSchema("transactionImport").nullable(),
           create: null,
@@ -207,40 +207,40 @@ export default defineEntity({
       {
         key: "accountDescriptor",
         kind: "text",
-        display: {},
+        display: { columnGroup: "Source" },
         validation: { read: z.string(), create: null, update: null },
       },
       {
         key: "statementDate",
         kind: "date",
         labelOverride: "Source date",
-        display: {},
+        display: { columnGroup: "Source" },
         validation: { read: plainDate, create: null, update: null },
       },
       {
         key: "amount",
         kind: "number",
-        display: { format: "currency" },
+        display: { columnGroup: "Source", columnBar: true, format: "currency" },
         validation: { read: z.number(), create: null, update: null },
       },
       {
         key: "providerAmount",
         kind: "number",
         labelOverride: "Original signed amount",
-        display: { format: "currency" },
+        display: { columnGroup: "Source", format: "currency" },
         validation: { read: z.number(), create: null, update: null },
       },
       {
         key: "merchant",
         kind: "text",
         nullable: true,
-        display: {},
+        display: { columnGroup: "Source" },
         validation: { read: z.string().nullable(), create: null, update: null },
       },
       {
         key: "rawDescription",
         kind: "text",
-        display: {},
+        display: { columnGroup: "Source" },
         validation: { read: z.string(), create: null, update: null },
       },
       {
@@ -255,6 +255,7 @@ export default defineEntity({
         kind: "enum",
         nullable: true,
         display: {
+          columnGroup: "Source",
           optionRole: "status",
           optionColor: "neutral-status",
           optionGlyph: { phosphor: "Info", sfSymbol: "info.circle" },
@@ -288,7 +289,7 @@ export default defineEntity({
         kind: "identifier",
         nullable: true,
         reference: { entity: "financialAccount" },
-        display: {},
+        display: { columnGroup: "Reconciliation" },
         validation: {
           read: shortcodeSchema("financialAccount").nullable(),
           create: null,
@@ -299,6 +300,7 @@ export default defineEntity({
         key: "disposition",
         kind: "enum",
         display: {
+          columnGroup: "Disposition",
           optionRole: "status",
           optionColor: "neutral-status",
           optionGlyph: { phosphor: "Info", sfSymbol: "info.circle" },
@@ -323,6 +325,7 @@ export default defineEntity({
         kind: "enum",
         nullable: true,
         display: {
+          columnGroup: "Disposition",
           optionRole: "status",
           optionColor: "neutral-status",
           optionGlyph: { phosphor: "Info", sfSymbol: "info.circle" },
@@ -364,7 +367,7 @@ export default defineEntity({
         nullable: true,
         labelOverride: "Superseded by",
         reference: { entity: "sourceTransactionRecord" },
-        display: {},
+        display: { columnGroup: "Disposition" },
         validation: {
           read: shortcodeSchema("sourceTransactionRecord").nullable(),
           create: null,
@@ -426,7 +429,7 @@ export default defineEntity({
         },
         kind: "text",
         nullable: true,
-        display: {},
+        display: { columnGroup: "Reconciliation" },
         validation: { read: z.string().nullable(), create: null, update: null },
       },
       {
@@ -450,6 +453,7 @@ export default defineEntity({
         },
         kind: "enum",
         display: {
+          columnGroup: "Reconciliation",
           optionRole: "status",
           optionColor: "neutral-status",
           optionGlyph: { phosphor: "Info", sfSymbol: "info.circle" },
@@ -474,7 +478,7 @@ export default defineEntity({
         kind: "identifier",
         nullable: true,
         reference: { entity: "financialTransaction" },
-        display: {},
+        display: { columnGroup: "Reconciliation" },
         validation: {
           read: shortcodeSchema("financialTransaction").nullable(),
           create: null,
@@ -490,6 +494,7 @@ export default defineEntity({
         kind: "json",
         nullable: true,
         display: {
+          columnGroup: "Reconciliation",
           detailLabelPath: "vendorInference.candidates[].vendorName",
         },
         validation: {

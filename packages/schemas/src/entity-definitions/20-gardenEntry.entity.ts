@@ -57,7 +57,7 @@ export default defineEntity({
         kind: "identifier",
         reference: { entity: "location" },
         control: { kind: "specialized", renderer: "entity-select" },
-        display: {},
+        display: { columnGroup: "Observation" },
         validation: {
           read: locationShortcode,
           create: locationShortcode,
@@ -108,6 +108,7 @@ export default defineEntity({
           ],
         },
         display: {
+          columnGroup: "Observation",
           optionRole: "category",
           optionColor: "domain-house",
           optionGlyph: {
@@ -125,7 +126,7 @@ export default defineEntity({
         key: "observedOn",
         kind: "date",
         control: { kind: "date", initial: "today" },
-        display: { format: "plainDate" },
+        display: { columnGroup: "Observation", format: "plainDate" },
         validation: {
           read: plainDate,
           create: plainDate,
@@ -139,7 +140,7 @@ export default defineEntity({
         kind: "text",
         nullable: true,
         control: { kind: "textarea" },
-        display: {},
+        display: { columnGroup: "Observation" },
         validation: {
           read: optionalText,
           create: optionalText.default(null),
@@ -151,7 +152,7 @@ export default defineEntity({
         kind: "text",
         nullable: true,
         control: { kind: "text" },
-        display: { columnLabel: "Harvest" },
+        display: { columnGroup: "Plantings & harvest", columnLabel: "Harvest" },
         validation: {
           read: optionalText,
           create: optionalText.default(null),
@@ -221,7 +222,7 @@ export default defineEntity({
         key: "plantings",
         kind: "identifier",
         reference: { entity: "planting", multiple: true },
-        display: {},
+        display: { columnGroup: "Plantings & harvest" },
         validation: {
           read: z.array(z.object({ id: plantingShortcode, name: z.string() })),
           create: null,

@@ -113,6 +113,7 @@ export default defineEntity({
           })),
         },
         display: {
+          columnGroup: "Garden plan",
           columnLabel: "Guide",
           optionRole: "category",
           optionColor: "domain-house",
@@ -149,6 +150,7 @@ export default defineEntity({
           ],
         },
         display: {
+          columnGroup: "Garden plan",
           mobile: { slot: "trailing", priority: 10 },
           optionRole: "status",
           optionColor: "neutral-status",

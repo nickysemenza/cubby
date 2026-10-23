@@ -1,18 +1,62 @@
+import { testShortcode } from "@cubby/schemas/testing";
 import { act, render, renderHook, screen } from "@testing-library/react";
 import { expect, it } from "vitest";
 import { page } from "vitest/browser";
+
+import { createBrowserTestHarness } from "~/lib/test/browser-harness";
+import { DenseCellContext } from "~/ui/common/stacked-value";
 
 import {
   createCubbyColumnHelper,
   useCubbyTable,
 } from "../../ui/data-table/table-features";
 import { DesktopDataRow } from "./desktop-data-row";
+import { InventoryEntriesCell } from "./inventory-entries-cell";
 
 const helper = createCubbyColumnHelper<{ id: string; name: string }>();
 const columns = helper.columns([
   helper.accessor("name", { header: "Name", size: 140 }),
 ]);
 const data = [{ id: "synthetic-row", name: "Example record" }];
+
+it("keeps stock context available without adding a third dense row line", () => {
+  const harness = createBrowserTestHarness();
+  const context = "Inventory recorded; quantity history unknown";
+  try {
+    render(
+      <DenseCellContext.Provider value={{ linksTo: "location" }}>
+        <div data-testid="stock-cell" style={{ width: 180 }}>
+          <InventoryEntriesCell
+            entries={[
+              {
+                id: testShortcode("inventory", "INV-1234"),
+                amount: { value: 2, unit: "each" },
+                location: {
+                  id: testShortcode("location", "LOC-1234"),
+                  name: "Example shelf",
+                  type: "shelf",
+                },
+              },
+            ]}
+            context={context}
+            entity="location"
+            getRelatedEntity={(entry) => entry.location}
+            layout="inline"
+            row={{ id: "synthetic-row" }}
+          />
+        </div>
+      </DenseCellContext.Provider>,
+      { wrapper: harness.wrapper },
+    );
+    expect(screen.getByText(context)).toBeInTheDocument();
+    expect(screen.getByTitle(context)).toBeInTheDocument();
+    expect(
+      screen.getByTestId("stock-cell").getBoundingClientRect().height,
+    ).toBeLessThanOrEqual(32);
+  } finally {
+    harness.dispose();
+  }
+});
 
 it("draws a pinned boundary where interior columns have no rule", async () => {
   await page.viewport(1440, 900);

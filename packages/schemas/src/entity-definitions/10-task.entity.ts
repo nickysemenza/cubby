@@ -236,7 +236,10 @@ export default defineEntity({
         key: "status",
         kind: "enum",
         control: { kind: "select", options: selectControlOptions.taskStatus },
-        display: { mobile: { slot: "subtitle", priority: 10 } },
+        display: {
+          columnGroup: "Work",
+          mobile: { slot: "subtitle", priority: 10 },
+        },
         validation: {
           read: taskStatusSchema,
           create: taskStatusSchema.default("not_started"),
@@ -253,6 +256,7 @@ export default defineEntity({
         },
         control: { kind: "specialized", renderer: "entity-select" },
         display: {
+          columnGroup: "Assignment",
           columnLabel: "Assignee",
           width: "md",
           mobile: { slot: "meta", priority: 40, interactive: true },
@@ -334,6 +338,7 @@ export default defineEntity({
           suggest: { basis: ["name"] },
         },
         display: {
+          columnGroup: "Assignment",
           width: "md",
           mobile: { slot: "meta", priority: 30, interactive: true },
         },
@@ -412,6 +417,7 @@ export default defineEntity({
           suggest: { basis: ["name"] },
         },
         display: {
+          columnGroup: "Assignment",
           columnLabel: "Product",
           width: "md",
           mobile: { slot: "meta", priority: 35, interactive: true },
@@ -486,7 +492,7 @@ export default defineEntity({
         nullable: true,
         reference: { entity: "task" },
         control: { kind: "specialized", renderer: "entity-select" },
-        display: {},
+        display: { columnGroup: "Dependencies" },
         validation: {
           read: taskShortcode.nullable(),
           create: taskShortcode.nullable().default(null),
@@ -504,6 +510,7 @@ export default defineEntity({
         },
         control: { kind: "dateRange" },
         display: {
+          columnGroup: "Schedule",
           columnIdOverride: "dueDate",
           mobile: { slot: "meta", priority: 40, interactive: true },
         },
@@ -529,7 +536,11 @@ export default defineEntity({
             rules: [TRADE_SUGGEST_RULE],
           },
         },
-        display: { width: "sm", mobile: { slot: "meta", priority: 50 } },
+        display: {
+          columnGroup: "Work",
+          width: "sm",
+          mobile: { slot: "meta", priority: 50 },
+        },
         resolution: {
           reset: { trade: null },
           redundancy: "eligible",

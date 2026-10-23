@@ -98,6 +98,7 @@ export default defineEntity({
         kind: "json",
         control: { kind: "specialized", renderer: "structured-field" },
         display: {
+          columnGroup: "Account",
           readPath: "identity.kind",
           renderer: { detail: "financial-account-identity" },
           mobile: { slot: "subtitle", priority: 10 },
@@ -157,7 +158,10 @@ export default defineEntity({
             reviewRequired: true,
           },
         },
-        display: { mobile: { slot: "meta", priority: 20 } },
+        display: {
+          columnGroup: "Account",
+          mobile: { slot: "meta", priority: 20 },
+        },
         validation: {
           read: z.string().nullable(),
           create: z.string().nullable().optional(),
@@ -216,6 +220,7 @@ export default defineEntity({
           },
         },
         display: {
+          columnGroup: "Account",
           mobile: { slot: "trailing", priority: 10 },
           optionRole: "category",
           optionColor: "domain-finance",
@@ -233,7 +238,7 @@ export default defineEntity({
         description:
           "Imported or unconfirmed account identity. Clear only after a household member confirms this account's identity.",
         control: { kind: "checkbox" },
-        display: {},
+        display: { columnGroup: "Account" },
         validation: {
           read: z.boolean(),
           create: z.boolean().default(false),
@@ -246,6 +251,7 @@ export default defineEntity({
         kind: "json",
         control: { kind: "specialized", renderer: "source-aliases" },
         display: {
+          columnGroup: "Evidence",
           columnLabel: "Aliases",
           width: "xs",
           readPath: "sourceAliases",
@@ -280,7 +286,7 @@ export default defineEntity({
           "The vendor that owes a gift card or store-credit balance. Stored-value accounts only; one live account per provider and owner.",
         reference: { entity: "vendor" },
         control: { kind: "specialized", renderer: "entity-select" },
-        display: { columnLabel: "Provider" },
+        display: { columnGroup: "Account", columnLabel: "Provider" },
         validation: {
           read: vendorShortcode.nullable(),
           create: vendorShortcode.nullable().default(null),
@@ -309,7 +315,7 @@ export default defineEntity({
             reviewRequired: true,
           },
         },
-        display: {},
+        display: { columnGroup: "People" },
         validation: {
           read: ledgerPartyShortcode.nullable(),
           create: ledgerPartyShortcode.nullable().default(null),
@@ -350,7 +356,7 @@ export default defineEntity({
         nullable: true,
         reference: { entity: "ledgerParty" },
         control: { kind: "specialized", renderer: "entity-select" },
-        display: { width: "md" },
+        display: { columnGroup: "People", width: "md" },
         validation: {
           read: ledgerPartyShortcode.nullable(),
           create: ledgerPartyShortcode.nullable().default(null),
@@ -373,7 +379,7 @@ export default defineEntity({
         kind: "text",
         nullable: true,
         control: { kind: "textarea" },
-        display: {},
+        display: { columnGroup: "Evidence" },
         validation: {
           read: z.string().nullable(),
           create: z.string().nullable().default(null),
@@ -415,7 +421,7 @@ export default defineEntity({
       {
         key: "transactionCount",
         kind: "number",
-        display: {},
+        display: { columnGroup: "Activity", columnBar: true },
         provenance: {
           kind: "derived",
           sources: [
