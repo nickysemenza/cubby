@@ -17,6 +17,7 @@ import { isEqual } from "es-toolkit";
 import { z } from "zod";
 
 import { type Database } from "~/server/db/database";
+import { updateManyAndReturn } from "~/server/db/helpers/crud";
 import { repositoryChanged } from "~/server/db/repository-access.boundary";
 import {
   type RepositoryQueryInput,
@@ -190,22 +191,15 @@ export async function transitionAssessmentStates(
     changes.map(({ row, patch: changed }) => ({ id: row.id, patch: changed })),
     cause,
   );
-  const groups = new Map<string, { patch: ProjectionPatch; ids: string[] }>();
-  for (const { row, patch: changed } of changes) {
-    const key = canonicalJson(changed);
-    const group = groups.get(key) ?? { patch: changed, ids: [] };
-    group.ids.push(row.id);
-    groups.set(key, group);
-  }
-  const updated: StateRow[] = [];
-  for (const group of groups.values())
-    updated.push(
-      ...(await client
-        .update(assessmentState)
-        .set(columnWrites(group.patch))
-        .where(inArray(assessmentState.id, group.ids))
-        .returning()),
-    );
+  const updated = await updateManyAndReturn(db, assessmentState, {
+    key: "id",
+    changes: changes.map(({ row, patch: changed }) => ({
+      keyValue: row.id,
+      patch: columnWrites(changed),
+    })),
+  });
+  if (updated.length !== changes.length)
+    throw new Error("Locked AssessmentState disappeared during transition");
   if (updated.length)
     await repositoryChanged(db, [
       "ai",

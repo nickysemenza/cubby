@@ -20,6 +20,7 @@ import {
   rebuildAssessmentStates,
   retireAssessmentTargetsTx,
   transitionAssessmentState,
+  transitionAssessmentStates,
 } from "./assessment-state";
 
 type Ctx = ReturnType<typeof withTestDb>;
@@ -348,6 +349,96 @@ describe("AssessmentState rebuild", () => {
           event.intent === "projection",
       ),
     ).toBe(true);
+  });
+
+  it("batches distinct projection values while preserving replay, no-ops and rollback", async () => {
+    const product = await productFixture(
+      ctx,
+      "Synthetic heterogeneous transitions",
+    );
+    const productId = await recordId(ctx.db, product.id, "product");
+    const publications = await publishAssessments(
+      ctx.db,
+      Array.from({ length: 260 }, (_, index) => ({
+        input: recommendation(productId, `bulk-${index}`),
+        projection: {
+          data: { retained: index },
+          fingerprint: `before-${index}`,
+        },
+      })),
+    );
+    const ids = publications.map((row) => row.id);
+    await withTransaction(ctx.db, async (tx) => {
+      const changed = await transitionAssessmentStates(
+        tx,
+        inArray(assessmentState.id, ids),
+        (row) => ({
+          data: { retained: row.data, completed: row.id },
+          suggestedValue: null,
+          fingerprint: null,
+          confidence: undefined,
+        }),
+        { kind: "synthetic_bulk" },
+      );
+      expect(changed.map((row) => row.id)).toEqual([...ids].sort());
+      expect(
+        changed.every(
+          (row) =>
+            row.updatedAt instanceof Date &&
+            row.fingerprint === null &&
+            row.suggestedValue === null &&
+            row.confidence === 0,
+        ),
+      ).toBe(true);
+    });
+    const live = await liveRows(ctx, ids);
+    const events = await getDb(ctx.db)
+      .select()
+      .from(feedback)
+      .where(inArray(feedback.assessmentId, ids));
+    expect(events).toHaveLength(ids.length);
+    for (const event of events) {
+      expect(event.projection).toMatchObject({
+        fingerprint: null,
+        suggestedValue: null,
+      });
+      expect(event.projection).not.toHaveProperty("confidence");
+    }
+    await withTransaction(ctx.db, async (tx) => {
+      expect(
+        await transitionAssessmentStates(
+          tx,
+          inArray(assessmentState.id, ids),
+          (row) => ({ data: row.data }),
+          { kind: "synthetic_noop" },
+        ),
+      ).toEqual([]);
+    });
+    expect(
+      await getDb(ctx.db)
+        .select()
+        .from(feedback)
+        .where(inArray(feedback.assessmentId, ids)),
+    ).toEqual(events);
+    await expect(
+      withTransaction(ctx.db, async (tx) => {
+        await transitionAssessmentStates(
+          tx,
+          inArray(assessmentState.id, ids),
+          (row) => ({ data: { abandoned: row.id } }),
+          { kind: "synthetic_abandoned" },
+        );
+        throw new Error("synthetic rollback");
+      }),
+    ).rejects.toThrow("synthetic rollback");
+    expect(await liveRows(ctx, ids)).toEqual(live);
+    expect(
+      await getDb(ctx.db)
+        .select()
+        .from(feedback)
+        .where(inArray(feedback.assessmentId, ids)),
+    ).toEqual(events);
+    expect(await rebuiltRows(ctx, ids)).toEqual(live);
   });
 
   it("rebuilds a legacy row from its migration snapshot and ignores retired columns", async () => {
