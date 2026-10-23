@@ -196,14 +196,21 @@ export async function isBackgroundRun(
   runId: RunId,
 ): Promise<boolean> {
   const known = backgroundRuns.get(runId);
-  if (known !== undefined) return known;
-  const background = await readBackgroundRun(db, runId);
-  // A Run's lineage root never changes; only a found root is remembered.
-  if (background !== null) {
-    if (backgroundRuns.size >= 1000) backgroundRuns.clear();
-    backgroundRuns.set(runId, background);
+  if (known) return (await known) ?? false;
+  const lookup = readBackgroundRun(db, runId);
+  if (backgroundRuns.size >= 1000) backgroundRuns.clear();
+  // Publish before awaiting so a page's simultaneous calls share the cold read.
+  // Only immutable origin is retained; budgets and grants still read fresh.
+  backgroundRuns.set(runId, lookup);
+  try {
+    const background = await lookup;
+    if (background === null && backgroundRuns.get(runId) === lookup)
+      backgroundRuns.delete(runId);
+    return background ?? false;
+  } catch (error) {
+    if (backgroundRuns.get(runId) === lookup) backgroundRuns.delete(runId);
+    throw error;
   }
-  return background ?? false;
 }
 
 /**
@@ -211,7 +218,7 @@ export async function isBackgroundRun(
  * connection (pool-slot timeouts failed Runs on 2026-10-19), so an isolate
  * remembers it.
  */
-const backgroundRuns = new Map<RunId, boolean>();
+const backgroundRuns = new Map<RunId, Promise<boolean | null>>();
 
 async function readBackgroundRun(
   db: Database,

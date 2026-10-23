@@ -142,6 +142,11 @@ relevance fallback and the Mail import Runs it starts:
 3. Paid models within the paid budget ($1 per window).
 4. Otherwise the Run pauses and resumes when the next window starts.
 
+The isolate shares concurrent reads of a Run's immutable lineage origin and
+retains only found roots. Missing roots and failed reads remain retryable.
+Funding windows, quota status, paid grants and budget admission are still read
+fresh for each call; origin reuse does not authorize spending.
+
 Amended 2026-10-19: both free sources are capped resources the household
 shares with its own use. The Claude credit is a $200 monthly allowance; $5
 per window allowed about $600 a month. The ChatGPT plan's quota is shared
