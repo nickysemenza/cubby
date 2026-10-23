@@ -158,7 +158,7 @@ export const compileDataQuality = (
       ...check,
       kind: policyGapKinds[check.id] ?? check.kind,
     })),
-    displayImageQualityCheck(entityKey),
+    ...(raw.displayImage ? [displayImageQualityCheck(entityKey)] : []),
   ];
   const ids = checks.map((check) => check.id);
   if (new Set(ids).size !== ids.length)
@@ -276,6 +276,7 @@ export const compileDataQuality = (
   return {
     dataQuality: {
       checks: checks.map((check) => ({ ...check })),
+      displayImage: raw.displayImage,
       exceptions: raw.exceptions,
       related: [...raw.related],
     },

@@ -154,6 +154,21 @@ Date-only endpoints use whole household calendar days; two exact endpoints
 use elapsed hours. Unknown and unresolved local times do not establish endpoints.
 All four list columns sort across the full population before pagination.
 
+Shipment quality reads the same distinct, current event population. Its weighted
+checks are multiple events (10), carrier possession or movement evidence (30),
+explicit delivery evidence (30), event span strictly greater than one day (10),
+known shipment and delivery dates (10), and consistent chronology (10). Fewer
+than two distinct events caps the score at 25. Label creation and vendor-shipped
+notices do not prove carrier possession; in-transit, out-for-delivery and delivery
+attempts do. Superseded observations and capture/first-seen times never fill gaps.
+Date-only milestone evidence is sufficient. Delivery reports conflict when their
+known time ranges do not overlap, or delivery is earlier than the first known
+carrier movement. A date-only report covers its household calendar day, so an
+exact delivery time within that day agrees. In-progress, same-day, cancelled and
+returned records can remain incomplete under these evidence requirements.
+Images, notes, Purchase association and source count do not affect this score.
+Record quality, list quality sorts and filters share these checks.
+
 Source package identity is retained separately from event versions. Identical
 tracked packages across lifecycle Emails reuse the established Purchase,
 resolved carrier and tracking reference. Extraction leaves
