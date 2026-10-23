@@ -62,6 +62,11 @@ kernel also creates their SearchDocument. A raw row insert can appear in the
 initial picker list and disappear when typed search resolves. For typed search,
 use the picker helper's query/code option to wait for the actual search response
 before selecting the record.
+The all-matching bulk-edit browser owner uses a one-row page with two matching
+Tasks and one outside its filter. Hold the next-page response until admission;
+read back both matching writes and the untouched outside row. Filling the default
+hundred-row page adds setup work without strengthening that unloaded-row contract.
+
 For a same-kind fixture cohort without intermediate reads, use
 `createEntityFixtures`; it writes through the kernel in one transaction and
 settles the frontier after the cohort commits. This keeps background publication
