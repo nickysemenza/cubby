@@ -4,6 +4,7 @@ import type {
   ShipmentEvidence,
   ShipmentObservationInput,
 } from "@cubby/schemas/shipment-evidence";
+import { testUserId } from "@cubby/schemas/testing";
 import { eq } from "drizzle-orm";
 import { createRepoIdentity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
@@ -29,6 +30,7 @@ import {
   associateShipment,
   mergeShipment,
   reassignShipmentEvidence,
+  editShipmentObservation,
 } from "./evidence";
 import { readShipmentTimeline } from "./timeline";
 
@@ -73,6 +75,151 @@ const capture = (
 
 describe("Shipment retained evidence", () => {
   const ctx = withTestDb();
+
+  it("partially edits a keyless observation, retains originals and protects the reviewed revision from replay", async () => {
+    const parcel = packet();
+    const event = parcel.observations[0];
+    if (!event) throw new Error("Synthetic event missing");
+    parcel.observations = [
+      {
+        ...event,
+        sourceEventKey: null,
+        time: { kind: "local", value: "2026-06-03T09:00:00", timezone: null },
+      },
+    ];
+    const input = capture("member-edit", [parcel]);
+    const first = await recordShipmentEvidence(ctx.db, input, ctx.actor);
+    const code = first.shipmentIds[0];
+    if (!code) throw new Error("Synthetic Shipment missing");
+    const before = await readShipmentTimeline(ctx.db, code);
+    const original = before.observations[0];
+    if (!original) throw new Error("Synthetic observation missing");
+    const edit = {
+      shipmentId: code,
+      observationId: original.observationId,
+      patch: {
+        time: { kind: "instant", value: "2026-06-03T09:00:00-07:00" },
+        location: "Synthetic West Coast Facility",
+      },
+      reason:
+        "Verified local timezone and facility from retained source context",
+    };
+    await editShipmentObservation(ctx.db, edit, ctx.actor);
+    await editShipmentObservation(ctx.db, edit, ctx.actor);
+    await recordShipmentEvidence(
+      ctx.db,
+      {
+        ...input,
+        source: {
+          ...input.source,
+          kind: "tracking_page",
+          url: "https://tracking.example/package",
+          externalKey: "member-edit",
+          content: "Synthetic later capture with the original scan",
+          capturedAt: new Date().toISOString(),
+        },
+      },
+      ctx.actor,
+    );
+    const after = await readShipmentTimeline(ctx.db, code);
+    expect(after.timeline).toHaveLength(1);
+    expect(after.observations).toHaveLength(2);
+    expect(
+      after.observations.find(
+        (observation) => observation.observationId === original.observationId,
+      ),
+    ).toMatchObject({
+      time: original.time,
+      superseded: true,
+      correctionReason: null,
+    });
+    expect(after.timeline[0]?.event).toEqual({
+      ...event,
+      sourceEventKey: null,
+      ...edit.patch,
+      carrierId: original.carrierId,
+    });
+    expect(
+      after.observations.find((observation) => !observation.superseded),
+    ).toMatchObject({
+      correctionReason: edit.reason,
+      captureIds: original.captureIds,
+    });
+    expect(after.milestones.carrierPossessionAt).toBe(
+      "2026-06-03T16:00:00.000Z",
+    );
+    await expect(
+      editShipmentObservation(ctx.db, { ...edit, patch: {} }, ctx.actor),
+    ).rejects.toThrow(/changed field/);
+    const another = await recordShipmentEvidence(
+      ctx.db,
+      capture("another-shipment", [packet("EXAMPLE-OTHER")]),
+      ctx.actor,
+    );
+    await expect(
+      editShipmentObservation(
+        ctx.db,
+        { ...edit, shipmentId: another.shipmentIds[0] },
+        ctx.actor,
+      ),
+    ).rejects.toThrow(/does not belong/);
+    await expect(
+      editShipmentObservation(
+        ctx.db,
+        { ...edit, patch: { rawStatus: "Another edit" } },
+        ctx.actor,
+      ),
+    ).rejects.toThrow(/superseded/);
+    await expect(
+      editShipmentObservation(ctx.db, edit, {
+        ...ctx.actor,
+        userId: testUserId("foreign-observation-editor"),
+      }),
+    ).rejects.toThrow(/does not own/);
+    expect(await getDb(ctx.db).select().from(expense)).toEqual([]);
+    expect(await getDb(ctx.db).select().from(inventoryEntry)).toEqual([]);
+  });
+
+  it("keeps member edits active when a keyed source publishes another revision", async () => {
+    const input = capture("keyed-edit");
+    const first = await recordShipmentEvidence(ctx.db, input, ctx.actor);
+    const code = first.shipmentIds[0];
+    if (!code) throw new Error("Synthetic Shipment missing");
+    const original = (await readShipmentTimeline(ctx.db, code)).observations[0];
+    if (!original) throw new Error("Synthetic observation missing");
+    await editShipmentObservation(
+      ctx.db,
+      {
+        shipmentId: code,
+        observationId: original.observationId,
+        patch: { rawStatus: "Member verified pickup", location: null },
+        reason: "Reviewed source wording",
+      },
+      ctx.actor,
+    );
+    const revised = packet();
+    revised.observations = revised.observations.map((event) => ({
+      ...event,
+      rawStatus: "Later source revision",
+    }));
+    await recordShipmentEvidence(
+      ctx.db,
+      capture(
+        "keyed-edit",
+        [revised],
+        new Date().toISOString(),
+        "Synthetic later source revision",
+      ),
+      ctx.actor,
+    );
+    const report = await readShipmentTimeline(ctx.db, code);
+    expect(report.timeline).toHaveLength(1);
+    expect(report.timeline[0]?.event.rawStatus).toBe("Member verified pickup");
+    expect(report.observations).toHaveLength(3);
+    expect(
+      report.observations.filter((observation) => observation.superseded),
+    ).toHaveLength(2);
+  });
 
   it("replays a package without duplicate observations, financial writes or inventory receipts", async () => {
     const input = capture("replay");

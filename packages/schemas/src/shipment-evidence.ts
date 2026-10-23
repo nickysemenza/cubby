@@ -140,6 +140,18 @@ export const reassignShipmentEvidenceInput = z.strictObject({
   sourcePackageId: z.uuid(),
   targetShipmentId: shortcodeSchema("shipment"),
 });
+export const editShipmentObservationInput = z.strictObject({
+  shipmentId: shortcodeSchema("shipment"),
+  observationId: z.uuid(),
+  patch: shipmentObservationInput
+    .omit({ sourceEventKey: true })
+    .partial()
+    .refine(
+      (patch) => Object.values(patch).some((value) => value !== undefined),
+      "Supply a changed field.",
+    ),
+  reason: text.max(2000),
+});
 export const shipmentReferenceOut = z.object({
   shipmentId: shortcodeSchema("shipment"),
 });
@@ -158,6 +170,7 @@ export const shipmentTimelineObservation = shipmentObservationInput.extend({
   firstSeenAt: z.iso.datetime(),
   lastSeenAt: z.iso.datetime(),
   superseded: z.boolean(),
+  correctionReason: z.string().nullable(),
 });
 export const shipmentTimelineOut = z.object({
   shipmentId: shortcodeSchema("shipment"),

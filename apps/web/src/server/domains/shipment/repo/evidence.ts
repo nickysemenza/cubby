@@ -9,6 +9,8 @@ import {
   associateShipmentInput,
   mergeShipmentInput,
   reassignShipmentEvidenceInput,
+  editShipmentObservationInput,
+  shipmentObservationInput,
   type RecordShipmentEvidenceInput,
   type ShipmentEvidence,
 } from "@cubby/schemas/shipment-evidence";
@@ -284,6 +286,7 @@ export async function recordShipmentEvidence(
   actor: ActorContext,
 ) {
   const input = recordShipmentEvidenceInput.parse(raw);
+  // oxlint-disable-next-line complexity -- Source ownership, package identity and reviewed revisions commit under one shipment lock.
   return withTransactionDatabase(db, async (tdb) => {
     await lockShipmentWrites(tdb);
     const database = getDb(tdb);
@@ -491,10 +494,11 @@ export async function recordShipmentEvidence(
         const prior =
           versions.find((version) => version.firstSeenAt <= observedAt) ??
           versions.at(-1);
-        // A later A → B → A report is a new version, not a replay of the superseded A.
+        // Source revisions may restore A → B → A, but cannot replace a member-reviewed revision.
         const restored =
           prior?.supersededById &&
           current &&
+          !current.correctionReason &&
           observedAt >= current.lastSeenAt &&
           observedAt > prior.lastSeenAt;
         let retainedId: string;
@@ -513,6 +517,9 @@ export async function recordShipmentEvidence(
           repeatedObservations++;
           retainedId = prior.id;
         } else {
+          const canSupersede =
+            !current ||
+            (!current.correctionReason && current.lastSeenAt < observedAt);
           const [created] = await database
             .insert(shipmentObservation)
             .values({
@@ -526,13 +533,12 @@ export async function recordShipmentEvidence(
               event,
               firstSeenAt: observedAt,
               lastSeenAt: observedAt,
-              supersededById:
-                current && current.lastSeenAt > observedAt ? current.id : null,
+              supersededById: canSupersede ? null : (current?.id ?? null),
             })
             .returning();
           if (!created)
             throw new Error("Shipment observation was not retained.");
-          if (!current || current.lastSeenAt < observedAt)
+          if (canSupersede)
             await database
               .update(shipmentObservation)
               .set({ supersededById: created.id })
@@ -574,6 +580,139 @@ export async function recordShipmentEvidence(
       insertedObservations,
       repeatedObservations,
     };
+  });
+}
+
+export async function editShipmentObservation(
+  db: Database,
+  raw: unknown,
+  actor: ActorContext,
+) {
+  if (actor.runId)
+    return refuse("Observation edits require an interactive member decision.");
+  const input = editShipmentObservationInput.parse(raw);
+  return withTransactionDatabase(db, async (tdb) => {
+    await lockShipmentWrites(tdb);
+    const row = await canonicalShipment(tdb, input.shipmentId);
+    const database = getDb(tdb);
+    const [original] = await database
+      .select()
+      .from(shipmentObservation)
+      .where(
+        and(
+          eq(shipmentObservation.id, input.observationId),
+          eq(shipmentObservation.shipmentId, row.id),
+        ),
+      );
+    if (!original)
+      return refuse("The observation does not belong to this Shipment.");
+    const [capture] = await database
+      .select()
+      .from(shipmentSourceCapture)
+      .where(eq(shipmentSourceCapture.id, original.sourceCaptureId));
+    if (!capture) return refuse("The retained source capture is missing.");
+    if (capture.emailId) {
+      const [owner] = await database
+        .select({ id: email.id })
+        .from(email)
+        .innerJoin(ledgerParty, eq(ledgerParty.id, email.ledgerPartyId))
+        .where(
+          and(
+            eq(email.id, capture.emailId),
+            notDeleted(email),
+            notDeleted(ledgerParty),
+            eq(ledgerParty.userId, actor.userId),
+          ),
+        );
+      if (!owner)
+        return refuse(
+          "The member does not own this observation's Email source.",
+        );
+    } else if (capture.actorUserId !== actor.userId) {
+      return refuse(
+        "The member does not own this observation's tracking capture.",
+      );
+    }
+    const event = shipmentObservationInput.parse({
+      ...original.event,
+      ...input.patch,
+    });
+    const carrier = await carrierReference(
+      tdb,
+      event.carrierId,
+      event.carrierName,
+    );
+    event.carrierId = carrier.code;
+    const fingerprint = await sha256Hex(canonical(event));
+    const result = { shipmentId: parseShortcodeFor("shipment", row.shortcode) };
+    if (original.supersededById) {
+      const [successor] = await database
+        .select()
+        .from(shipmentObservation)
+        .where(eq(shipmentObservation.id, original.supersededById));
+      if (
+        successor &&
+        !successor.supersededById &&
+        successor.fingerprint === fingerprint &&
+        successor.correctionReason === input.reason
+      )
+        return result;
+      return refuse(
+        "The observation was superseded; read the current revision before editing.",
+      );
+    }
+    if (canonical(original.event) === canonical(event)) return result;
+    const now = new Date();
+    const [revision] = await database
+      .insert(shipmentObservation)
+      .values({
+        shipmentId: row.id,
+        sourceCaptureId: original.sourceCaptureId,
+        sourceKey: original.sourceKey,
+        sourcePackageId: original.sourcePackageId,
+        sourceEventKey: original.sourceEventKey,
+        occurrenceKey: original.occurrenceKey,
+        fingerprint,
+        event,
+        correctionReason: input.reason,
+        firstSeenAt: now,
+        lastSeenAt: now,
+      })
+      .returning();
+    if (!revision) throw new Error("Observation revision was not retained.");
+    await database
+      .update(shipmentObservation)
+      .set({ supersededById: revision.id })
+      .where(eq(shipmentObservation.id, original.id));
+    const memberships = await database
+      .select()
+      .from(shipmentObservationCapture)
+      .where(eq(shipmentObservationCapture.observationId, original.id));
+    if (memberships.length)
+      await database.insert(shipmentObservationCapture).values(
+        memberships.map((membership) => ({
+          observationId: revision.id,
+          captureId: membership.captureId,
+          firstSeenAt: membership.firstSeenAt,
+          lastSeenAt: membership.lastSeenAt,
+        })),
+      );
+    await logAuditEntries(tdb, actor, [
+      {
+        entityKind: "shipment",
+        entityId: row.id,
+        action: "update",
+        changes: {
+          observation: { from: original.event, to: event },
+          observationRevision: { from: original.id, to: revision.id },
+          correctionReason: { from: null, to: input.reason },
+        },
+      },
+    ]);
+    await recordDerivedRefreshRoots(tdb, [
+      { entityKind: "shipment", entityId: row.id },
+    ]);
+    return result;
   });
 }
 

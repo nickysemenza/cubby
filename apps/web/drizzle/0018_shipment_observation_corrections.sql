@@ -1,0 +1,1 @@
+ALTER TABLE "ShipmentObservation" ADD COLUMN "correctionReason" text;

@@ -119,6 +119,7 @@ export const shipmentChildren = [
       { key: "sourceEventKey", kind: "text" },
       { key: "occurrenceKey", kind: "text", notNull: true },
       { key: "fingerprint", kind: "text", notNull: true },
+      { key: "correctionReason", kind: "text" },
       {
         key: "event",
         kind: "jsonb",

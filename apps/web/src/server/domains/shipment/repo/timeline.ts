@@ -153,6 +153,7 @@ export async function readShipmentTimeline(db: Database, code: string) {
     firstSeenAt: observation.firstSeenAt.toISOString(),
     lastSeenAt: observation.lastSeenAt.toISOString(),
     superseded: observation.supersededById !== null,
+    correctionReason: observation.correctionReason,
   }));
   const timeline = reconcileShipmentTimeline(
     records.map(({ observation }) => ({

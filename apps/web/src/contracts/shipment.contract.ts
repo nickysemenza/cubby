@@ -4,6 +4,7 @@ import {
   associateShipmentInput,
   mergeShipmentInput,
   reassignShipmentEvidenceInput,
+  editShipmentObservationInput,
   shipmentReferenceOut,
   shipmentTimelineInput,
   shipmentTimelineOut,
@@ -12,6 +13,11 @@ import {
 import { defineContract, mutation, query } from "~/contracts/define";
 
 export const shipmentContract = defineContract("shipment", {
+  edit_observation: mutation({
+    input: editShipmentObservationInput,
+    output: shipmentReferenceOut,
+    invalidates: ["shipment", "purchase"],
+  }),
   reassign: mutation({
     input: reassignShipmentEvidenceInput,
     output: shipmentReferenceOut,
