@@ -21,6 +21,57 @@ export default defineEntity({
     },
     icons: { phosphor: "Users", sfSymbol: "person.2", emoji: "👤" },
     detail: {
+      summary: [
+        {
+          kind: "report",
+          id: "contribution",
+          title: "Contribution context",
+          slot: "ledgerParty.contribution-summary",
+        },
+        {
+          kind: "records",
+          id: "assigned-work",
+          title: "Assigned Tasks",
+          viewKey: "relation:tasks",
+        },
+        {
+          kind: "records",
+          id: "accounts",
+          title: "Financial accounts",
+          viewKey: "relation:financial-accounts",
+        },
+        {
+          kind: "report",
+          id: "owned-holdings",
+          title: "Owned holdings",
+          slot: "ledgerParty.owned-holdings",
+        },
+        {
+          kind: "records",
+          id: "recent-meals",
+          title: "Meals",
+          viewKey: "relation:meals",
+        },
+        {
+          kind: "records",
+          id: "outgoing-transfers",
+          title: "Outgoing transfers",
+          viewKey: "relation:outgoing-transfers",
+        },
+        {
+          kind: "records",
+          id: "incoming-transfers",
+          title: "Incoming transfers",
+          viewKey: "relation:incoming-transfers",
+        },
+        {
+          kind: "records",
+          id: "devices",
+          title: "Devices",
+          viewKey: "relation:devices",
+        },
+      ],
+
       activityRelations: [
         { relation: "expenses", dateField: "date" },
         { relation: "outgoing-transfers", dateField: "date" },
@@ -30,9 +81,7 @@ export default defineEntity({
         { relation: "images", dateField: "capturedAt" },
         { relation: "emails", dateField: "receivedAt" },
       ],
-      hero: {
-        chart: { kind: "monthlyExpenseSpend", viewKey: "relation:expenses" },
-      },
+
       omitRelations: {
         "recipes-eaten":
           "Reachable through the Meals table on this page; the recipe rollup is three joins deep.",

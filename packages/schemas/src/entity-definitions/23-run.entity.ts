@@ -57,6 +57,51 @@ export default defineEntity({
       emoji: "🤖",
     },
     detail: {
+      summary: [
+        {
+          kind: "fields",
+          id: "execution",
+          title: "Execution",
+          fields: ["status", "attempt", "startedAt", "endedAt"],
+        },
+        {
+          kind: "fields",
+          id: "purpose-scope",
+          title: "Purpose & scope",
+          fields: ["purpose", "vendorAccountLabel"],
+        },
+        {
+          kind: "fields",
+          id: "progress",
+          title: "Progress",
+          fields: ["workProgress"],
+        },
+        {
+          kind: "fields",
+          id: "failure",
+          title: "Failure",
+          fields: ["failureCode", "dispatchError"],
+        },
+        {
+          kind: "fields",
+          id: "results",
+          title: "Results",
+          fields: ["ordersSeen", "imported", "updated", "skipped"],
+        },
+        {
+          kind: "report",
+          id: "recent-decisions",
+          title: "Recent decisions",
+          slot: "run.decisions",
+        },
+        {
+          kind: "report",
+          id: "ai-usage",
+          title: "AI usage",
+          slot: "run.ai-usage",
+        },
+      ],
+
       activityRelations: [
         { relation: "purchases", dateField: "date" },
         { relation: "emails", dateField: "receivedAt" },
@@ -66,7 +111,6 @@ export default defineEntity({
           "The Changes slot's audit log lists every record the run wrote, purchases included; Purchase stores no run reference to filter by.",
       },
       hero: {
-        stats: ["attempt"],
         chip: "status",
         // Import-only order counts stay in the `import-stats` slot.
 

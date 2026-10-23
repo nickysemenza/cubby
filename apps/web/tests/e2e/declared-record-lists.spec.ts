@@ -427,8 +427,8 @@ test("record dates retain their calendar label with present and future context",
   // This journey owns the real list-to-record composition and live timestamp.
   // Full record details expose both date and timestamp without opening a tooltip.
   await gotoAuthenticatedPage(page, `/tasks/${futureTask.id}`);
-  await expect(page.getByTitle(futureLabel, { exact: true })).toBeVisible();
   const header = page.getByTestId("detail-spec-plate");
+  await expect(header.getByTitle(futureLabel, { exact: true })).toBeVisible();
   await expect(header).toContainText("Added");
   const timestamp = header.locator("time");
   await expect(timestamp).toBeVisible();

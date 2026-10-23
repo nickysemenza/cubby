@@ -89,8 +89,40 @@ export default defineEntity({
       emoji: "🖼️",
     },
     detail: {
+      summary: [
+        {
+          kind: "fields",
+          id: "state-reason",
+          title: "State & reason",
+          fields: ["state", "lastError"],
+        },
+        {
+          kind: "records",
+          id: "image",
+          title: "Image",
+          viewKey: "relation:image",
+        },
+        {
+          kind: "records",
+          id: "requesting-run",
+          title: "Requesting Run",
+          viewKey: "relation:run",
+        },
+        {
+          kind: "fields",
+          id: "attempts-duration",
+          title: "Attempts & duration",
+          fields: ["attempts", "durationMs"],
+        },
+        {
+          kind: "fields",
+          id: "latest-executor",
+          title: "Latest executor",
+          fields: ["lastExecutor", "completedAt"],
+        },
+      ],
+
       hero: {
-        stats: ["attempts", "durationMs"],
         chip: "state",
       },
       additionalSections: [

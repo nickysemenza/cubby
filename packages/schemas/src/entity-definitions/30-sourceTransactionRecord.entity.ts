@@ -54,7 +54,46 @@ export default defineEntity({
         },
       ],
     },
-    detail: { hero: { stats: ["amount"] } },
+    detail: {
+      summary: [
+        {
+          kind: "fields",
+          id: "observed-amount-date",
+          title: "Observed amount & date",
+          fields: ["amount", "statementDate"],
+        },
+        {
+          kind: "records",
+          id: "account",
+          title: "Account",
+          viewKey: "relation:account",
+        },
+        {
+          kind: "fields",
+          id: "match-disposition",
+          title: "Match & disposition",
+          fields: ["matchState", "disposition"],
+        },
+        {
+          kind: "fields",
+          id: "canonical-transaction",
+          title: "Canonical transaction",
+          fields: ["transactionId"],
+        },
+        {
+          kind: "records",
+          id: "revision-successor",
+          title: "Revision successor",
+          viewKey: "relation:supersededByRecord",
+        },
+        {
+          kind: "records",
+          id: "import-provenance",
+          title: "Import provenance",
+          viewKey: "relation:firstImport",
+        },
+      ],
+    },
     edit: {
       sections: [
         {

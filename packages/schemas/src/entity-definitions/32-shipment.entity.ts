@@ -31,6 +31,39 @@ export default defineEntity({
       },
     },
     detail: {
+      summary: [
+        {
+          kind: "records",
+          id: "purchase",
+          title: "Purchase",
+          viewKey: "relation:purchase",
+        },
+        {
+          kind: "fields",
+          id: "seller",
+          title: "Seller",
+          fields: ["vendorName"],
+        },
+        {
+          kind: "records",
+          id: "carrier",
+          title: "Carrier",
+          viewKey: "relation:carrier",
+        },
+        {
+          kind: "fields",
+          id: "tracking-references",
+          title: "Tracking references",
+          fields: ["trackingNumber", "extraTrackingNumbers"],
+        },
+        {
+          kind: "report",
+          id: "tracking-observation",
+          title: "Tracking observation",
+          slot: "shipment.tracking",
+        },
+      ],
+
       additionalSections: [
         { kind: "slot", id: "tracking", title: "Tracking evidence" },
       ],

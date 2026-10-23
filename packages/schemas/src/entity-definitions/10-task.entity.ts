@@ -60,6 +60,57 @@ export default defineEntity({
     },
     icons: { phosphor: "ListChecks", sfSymbol: "checklist", emoji: "✅" },
     detail: {
+      summary: [
+        {
+          kind: "fields",
+          id: "due-state",
+          title: "Due & state",
+          fields: ["due", "status"],
+        },
+        {
+          kind: "records",
+          id: "assignee",
+          title: "Assignee",
+          viewKey: "relation:assignee",
+        },
+        {
+          kind: "records",
+          id: "project",
+          title: "Project",
+          viewKey: "relation:project",
+        },
+        {
+          kind: "records",
+          id: "subject-product",
+          title: "Subject Product",
+          viewKey: "relation:subject",
+        },
+        {
+          kind: "records",
+          id: "blocked-by",
+          title: "Blocked by",
+          viewKey: "relation:blocked-by",
+        },
+        {
+          kind: "records",
+          id: "subtasks",
+          title: "Subtasks",
+          viewKey: "relation:subtasks",
+        },
+        {
+          kind: "records",
+          id: "parent-task",
+          title: "Parent task",
+          viewKey: "relation:parent",
+        },
+        {
+          kind: "records",
+          id: "supporting-evidence",
+          title: "Supporting evidence",
+          viewKey: "relation:images",
+        },
+      ],
+
       activityRelations: [
         { relation: "subtasks", dateField: "dueDate" },
         { relation: "blocked-by", dateField: "dueDate" },
@@ -74,7 +125,6 @@ export default defineEntity({
           "The Dependencies section edits Blocked by and Blocking in place.",
       },
       hero: {
-        stats: ["subtaskCount", "doneSubtaskCount"],
         chip: "status",
         extraActions: ["bulkEdit", "delete"],
       },

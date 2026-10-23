@@ -10,6 +10,7 @@ import {
   waitFor,
   within,
 } from "@testing-library/react";
+import { fromPartial } from "@total-typescript/shoehorn";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { installFeatures } from "~/features/registry";
@@ -17,6 +18,8 @@ import { overrideStartDispatch } from "~/integrations/tanstack-query/start-trans
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
 import { DetailActionProvider } from "./detail-action-bar";
+import type { DetailRecordOf } from "./detail-record";
+import { CompactSummaryReport, DetailSummary } from "./detail-summary";
 import { EntityReportSlot, ReportDetailActions } from "./report-slot";
 
 installFeatures();
@@ -91,7 +94,67 @@ async function choose(name: string, option: string) {
 }
 
 describe("EntityReportSlot records", () => {
+  it("renders summaries that declare no report slots", () => {
+    const record = fromPartial<DetailRecordOf<"task">>({
+      id: shortcode("TSK-4K7M"),
+    });
+    render(<DetailSummary entity="task" record={record} />, {
+      wrapper: harness.wrapper,
+    });
+    expect(screen.getByRole("heading", { name: "Due & state" })).toBeVisible();
+  });
+
   // A diagnostic link must stay navigable without sending a report command.
+  it("keeps compact report coverage notes and table labels while omitting workflow controls", () => {
+    render(
+      <CompactSummaryReport
+        blocks={[
+          {
+            kind: "stats",
+            figures: [{ label: "Recorded total", value: 40, format: "money" }],
+          },
+          {
+            kind: "note",
+            text: "Incomplete: one Expense is unpriced.",
+            tone: "warning",
+          },
+          {
+            kind: "table",
+            columns: ["Item", "Coverage"],
+            rows: [{ id: "fixture", cells: ["Fixture item", "Unpriced"] }],
+          },
+          {
+            kind: "records",
+            totalCount: 1,
+            empty: "No records",
+            actions: ["attachImage"],
+            rows: [
+              {
+                entity: null,
+                id: null,
+                title: "Last purchase",
+                trailing: "2 purchases",
+                time: { kind: "date", value: "2026-07-01" },
+              },
+            ],
+          },
+        ]}
+      />,
+      { wrapper: harness.wrapper },
+    );
+    expect(
+      screen.getByText("Incomplete: one Expense is unpriced."),
+    ).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "Show more" }));
+    expect(
+      screen.getByRole("columnheader", { name: "Coverage" }),
+    ).toBeVisible();
+    expect(screen.getByText("Fixture item")).toBeVisible();
+    expect(screen.getByText("1 total")).toBeVisible();
+    expect(screen.queryByRole("button", { name: /attach/i })).toBeNull();
+    expect(screen.queryByText("2026-07-01")).toBeNull();
+  });
+
   it("renders an external diagnostic link in a new tab", async () => {
     answer = () => ({
       live: false,

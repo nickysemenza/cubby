@@ -41,12 +41,12 @@ struct RunConsoleView: View {
 
     /// The fields the slot registry reads (purpose, status); the title is the purpose's label.
     private func row(_ snapshot: RunSnapshot) -> EntityRow {
-        let raw: JSONValue = .object([
-            "id": .string(runID),
-            "purpose": .string(snapshot.purpose.rawValue),
-            // The batch's poll is the live status; the snapshot only seeds it.
-            "status": .string(batch?.status ?? snapshot.status.rawValue),
-        ])
+        var values = snapshot.raw.objectValue ?? [:]
+        values["id"] = .string(runID)
+        values["purpose"] = .string(snapshot.purpose.rawValue)
+        // The batch's poll is the live status; the snapshot only seeds it.
+        values["status"] = .string(batch?.status ?? snapshot.status.rawValue)
+        let raw = JSONValue.object(values)
         let title = descriptor.field("purpose").flatMap {
             EntityFieldValue.text(in: raw, field: $0, surface: "detail")
         }
@@ -79,6 +79,9 @@ struct RunConsoleView: View {
                             .foregroundStyle(FieldGuideTokens.destructive)
                             .textSelection(.enabled)
                     }
+                }
+                if !descriptor.presentation.summarySlots.isEmpty {
+                    Section { DetailSummaryGrid(descriptor: descriptor, row: row) }
                 }
                 ForEach(sections) { section in
                     if let view = DetailSlotRegistry.view(slot: section.id, row: row) {
@@ -131,7 +134,7 @@ struct RunConsoleView: View {
         // Each poll of the batch also re-reads the photo review beside the reports: photo
         // processing and the agent's proposals change while the Run is live.
         .onChange(of: batch?.revision) { _, revision in
-            guard (revision ?? 0) > 1, session.snapshot?.purpose == .photoInventory else { return }
+            guard (revision ?? 0) > 1 else { return }
             Task { await refresh() }
         }
         // Ordinary session refreshes leave actionRevision unchanged, so the batch's photo

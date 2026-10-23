@@ -59,6 +59,24 @@ import {
 } from "./records";
 import type { RunReportSlot } from "./run";
 import { shipmentTrackingReport } from "./shipment";
+import {
+  productPricingSummary,
+  productSellersReport,
+  productStockSummary,
+  productContextSummary,
+  emailSummary,
+  transactionSourcesSummary,
+} from "./summary";
+import {
+  ingredientSellersSummary,
+  vendorFrequentProductsSummary,
+  cookbookRecentRecipesSummary,
+  partyContributionSummary,
+  importReconciliationSummary,
+  partyHoldingsSummary,
+  expenseAttributionSummary,
+  accountReviewSummary,
+} from "./summary-extensions";
 import { vendorMailSearchReport } from "./vendor";
 
 /** Run service imports remain outside every other report's closure. */
@@ -118,6 +136,42 @@ const reportBuilder = (build: ReportBuilder) =>
   });
 
 const REPORTS = {
+  "ingredient.sellers": reportBuilder(ingredientSellersSummary),
+  "vendor.frequent-products": reportBuilder(vendorFrequentProductsSummary),
+  "cookbook.recent-recipes": reportBuilder(cookbookRecentRecipesSummary),
+  "ledgerParty.contribution-summary": reportBuilder(partyContributionSummary),
+  "transactionImport.reconciliation-summary": reportBuilder(
+    importReconciliationSummary,
+  ),
+  "ledgerParty.owned-holdings": reportBuilder(partyHoldingsSummary),
+  "expense.attribution-summary": reportBuilder(expenseAttributionSummary),
+  "financialAccount.review-summary": reportBuilder(accountReviewSummary),
+  "product.sellers": reportDependency(async (execution) => ({
+    blocks: await productSellersReport(
+      execution.request.db,
+      await execution.read(productId),
+      execution.request.id,
+    ),
+  })),
+  "product.pricing-summary": reportBuilder(productPricingSummary),
+  "product.stock-summary": reportBuilder((db, code) =>
+    productStockSummary(db, code),
+  ),
+  "product.use-summary": reportBuilder((db, code) =>
+    productContextSummary(db, code, "uses"),
+  ),
+  "product.evidence-summary": reportBuilder((db, code) =>
+    productContextSummary(db, code, "evidence"),
+  ),
+  "vendor.email-summary": reportBuilder((db, code) =>
+    emailSummary(db, code, "vendor"),
+  ),
+  "vendorAccount.email-summary": reportBuilder((db, code) =>
+    emailSummary(db, code, "vendorAccount"),
+  ),
+  "financialTransaction.source-summary": reportBuilder(
+    transactionSourcesSummary,
+  ),
   "shipment.tracking": reportBuilder(shipmentTrackingReport),
   "email.review": reportBuilder(emailReviewReport),
   "project.budget": reportDependency(async (execution) => ({

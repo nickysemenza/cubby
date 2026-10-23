@@ -17,7 +17,6 @@ import {
   ListPageHeader,
 } from "~/entity/page/entity-page-header";
 import { cn } from "~/lib/utils";
-import type { KeyNumber } from "~/ui/common/key-numbers";
 import { ListLoadingSkeleton } from "~/ui/feedback/loading-skeletons";
 import { type PageLayout, PageWrapper } from "~/ui/layout/page-wrapper";
 
@@ -153,9 +152,7 @@ interface PageDetailProps extends PageBaseProps {
   entity: Entity;
   wayfinding?: DetailWayfinding | false;
   heroStamp?: { label: string; tone?: "ink" | "red" | "green" };
-  heroStats?: readonly KeyNumber[];
-  /** Declared chart closing the key-numbers strip. */
-  heroChart?: ReactNode;
+  summary?: ReactNode;
   heroNo?: string;
   heroImages?: Array<{ id: string; url: string; filename: string }>;
   /** Edit, the main workflow action, and overflow at every width. */
@@ -272,8 +269,7 @@ function DetailPageShell(props: PageDetailProps) {
           rawData={props.rawData}
           heroNo={props.heroNo}
           heroStamp={props.heroStamp}
-          heroStats={props.heroStats}
-          heroChart={props.heroChart}
+          summary={props.summary}
           heroActions={props.heroActions}
           heroImages={props.heroImages}
         />

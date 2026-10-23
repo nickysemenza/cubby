@@ -65,11 +65,56 @@ export default defineEntity(
       },
       icons: { phosphor: "ChefHat", sfSymbol: "fork.knife", emoji: "🍳" },
       detail: {
+        summary: [
+          {
+            kind: "fields",
+            id: "yield-time",
+            title: "Yield & time",
+            fields: ["servings", "yield", "activeMinutes", "totalMinutes"],
+          },
+          {
+            kind: "report",
+            id: "availability",
+            title: "Availability",
+            slot: "recipe.availability",
+          },
+          {
+            kind: "report",
+            id: "estimated-cost-coverage",
+            title: "Estimated cost & coverage",
+            slot: "recipe.costing-coverage",
+          },
+          {
+            kind: "fields",
+            id: "nutrition",
+            title: "Nutrition",
+            fields: ["calories", "protein", "carbs", "fat"],
+          },
+          {
+            kind: "records",
+            id: "ingredient-products",
+            title: "Ingredient Products",
+            viewKey: "products",
+          },
+          {
+            kind: "records",
+            id: "meals",
+            title: "Meals",
+            viewKey: "relation:meals",
+          },
+          {
+            kind: "fields",
+            id: "source",
+            title: "Source",
+            fields: ["source"],
+          },
+        ],
+
         activityRelations: [
           { relation: "images", dateField: "capturedAt" },
           { relation: "meals", dateField: "date" },
         ],
-        hero: { stats: ["servings", "cost", "calories"] },
+
         additionalSections: [
           {
             kind: "fields",
@@ -674,6 +719,7 @@ export default defineEntity(
           key: "activeMinutes",
           kind: "number",
           nullable: true,
+          display: { list: false, readPath: "meta.times.activeMinutes" },
         },
         {
           key: "totalMinutes",

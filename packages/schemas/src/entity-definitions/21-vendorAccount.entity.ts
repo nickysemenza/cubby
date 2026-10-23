@@ -39,11 +39,53 @@ export default defineEntity({
     },
     icons: { phosphor: "Key", sfSymbol: "person.badge.key", emoji: "🔑" },
     detail: {
+      summary: [
+        {
+          kind: "records",
+          id: "seller",
+          title: "Seller",
+          viewKey: "relation:vendor",
+        },
+        {
+          kind: "records",
+          id: "member",
+          title: "Member",
+          viewKey: "relation:ledger-party",
+        },
+        {
+          kind: "fields",
+          id: "purchase-count",
+          title: "Purchase count",
+          fields: ["purchaseCount"],
+        },
+        {
+          kind: "records",
+          id: "purchases",
+          title: "Purchases",
+          viewKey: "relation:purchases",
+        },
+        {
+          kind: "chart",
+          id: "monthly-spend",
+          title: "Spend over 12 months",
+          viewKey: "expenses",
+        },
+        {
+          kind: "fields",
+          id: "import-health",
+          title: "Import health",
+          fields: ["lastRunAt", "lastSuccessAt"],
+        },
+        {
+          kind: "report",
+          id: "emails",
+          title: "Emails",
+          slot: "vendorAccount.email-summary",
+        },
+      ],
+
       activityRelations: [{ relation: "purchases", dateField: "date" }],
-      hero: {
-        chart: { kind: "monthlyExpenseSpend", viewKey: "expenses" },
-        stats: ["purchaseCount"],
-      },
+
       additionalSections: [
         {
           kind: "relation",

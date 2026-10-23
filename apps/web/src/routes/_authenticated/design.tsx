@@ -43,6 +43,7 @@ import { RecordsSection } from "~/features/design/sections/records-section";
 import { RTableSection } from "~/features/design/sections/rtable-section";
 import { ValuesSection } from "~/features/design/sections/values-section";
 import { pageTitle } from "~/lib/page-title";
+import { KeyNumbers } from "~/ui/common/key-numbers";
 import {
   IndexedSections,
   type IndexedSectionGroup,
@@ -468,7 +469,9 @@ function DesignSystem() {
       heroNo="PRJ-4K7M"
       rawData={{ createdAt: "2026-01-15T12:00:00Z" }}
       heroStamp={{ label: "In progress" }}
-      heroStats={PROJECT_STATS}
+      summary={
+        <KeyNumbers layout="strip" label="Summary" items={PROJECT_STATS} />
+      }
       heroActions={{
         primary: (
           <Button variant="outline" size="sm">

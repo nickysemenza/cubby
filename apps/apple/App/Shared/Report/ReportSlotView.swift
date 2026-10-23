@@ -26,6 +26,7 @@ struct ReportDetailSlot: View {
     var host: ReportHost?
     /// The record's status as the screen shows it; a report that read another reloads the record.
     var shownStatus: String?
+    var compact = false
 
     @Environment(AppModel.self) private var appModel
     @Environment(\.reportBatchStore) private var batchStore
@@ -34,7 +35,7 @@ struct ReportDetailSlot: View {
     var body: some View {
         Group {
             if let model {
-                ReportSlotContent(model: model, host: host)
+                ReportSlotContent(model: model, host: host, compact: compact)
                     .id("\(slot.rawValue)|\(id)")
             } else {
                 LoadingIndicator(label: "Loading")
@@ -71,12 +72,20 @@ struct ReportDetailSlot: View {
 private struct ReportSlotContent: View {
     let model: ReportSlotModel
     let host: ReportHost?
+    var compact = false
     @Environment(AppModel.self) private var appModel
 
     var body: some View {
         Group {
             if let presentation = model.presentation {
-                ReportBlocksView(report: presentation, host: host, model: model)
+                if compact {
+                    if !presentation.summaryIsEmpty { CompactReportBlocksView(report: presentation) }
+                } else {
+                    ReportBlocksView(report: presentation, host: host, model: model)
+                }
+                if let failure = model.failure {
+                    InlineLoadFailure(message: failure) { await model.refresh() }
+                }
                 if model.canLoadMore {
                     Button("Load more") { Task { await model.loadMore() } }
                         .disabled(model.isLoading)
@@ -104,6 +113,18 @@ private struct ReportSlotContent: View {
                 LoadingIndicator(label: "Loading")
             }
         }
+        .preference(
+            key: SummaryCellEmpty.self,
+            value: compact && model.presentation?.summaryIsEmpty == true && model.failure == nil
+                && !model.canLoadMore
+        )
+        .onChange(of: model.failure) { _, failure in
+            if let failure {
+                Diagnostics.report(
+                    NSError(domain: "Cubby.Report", code: 0, userInfo: [NSLocalizedDescriptionKey: failure]),
+                    context: "detail.report")
+            }
+        }
         .onAppear { model.retain() }
         .onDisappear { model.release() }
         .onChange(of: model.actionNotice) { appModel.recordEntityMutation(keys: Self.written) }
@@ -115,6 +136,142 @@ private struct ReportSlotContent: View {
     private static let written: Set<EntityKey> = [
         .run, .purchase, .expense, .financialTransaction, .recipe, .ingredient, .meal,
     ]
+}
+
+/// Only informational projections belong in a summary. Commands and forms stay in full sections.
+private struct CompactReportBlocksView: View {
+    let report: ReportPresentation
+    @State private var expanded = false
+
+    // A summary leads with one useful block; caveats remain beside its figures.
+    // The disclosure retains the complete informational report without its workflow controls.
+    private var collapsedIndices: [Int] {
+        var primary: Int?
+        var notes: [Int] = []
+        for (index, block) in report.blocks.enumerated() {
+            switch block {
+            case .note, .unsupported:
+                notes.append(index)
+            case .stats(_, let figures):
+                if primary == nil, !figures.isEmpty { primary = index }
+            case .records(let records):
+                if primary == nil, !records.rows.isEmpty || (records.totalCount ?? 0) > 0 { primary = index }
+            case .table(let table):
+                if primary == nil, !table.rows.isEmpty { primary = index }
+            case .chart(let chart):
+                if primary == nil, !chart.bars.isEmpty { primary = index }
+            case .schedule(let schedule):
+                if primary == nil, !schedule.rows.isEmpty { primary = index }
+            case .progress:
+                if primary == nil { primary = index }
+            }
+        }
+        return ((primary.map { [$0] } ?? []) + notes).sorted()
+    }
+
+    private var hasMore: Bool {
+        collapsedIndices.count < report.blocks.count
+            || report.blocks.contains { block in
+                switch block {
+                case .stats(_, let figures): figures.count > 4
+                case .records(let records): records.rows.count > 3
+                case .table(let table): table.rows.count > 3
+                case .schedule(let schedule): schedule.rows.count > 3
+                default: false
+                }
+            }
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: FieldGuideTokens.Space.sm) {
+            ForEach(expanded ? Array(report.blocks.indices) : collapsedIndices, id: \.self) { index in
+                let block = report.blocks[index]
+                switch block {
+                case .stats(let title, let figures):
+                    ReportStatsView(title: title, figures: expanded ? figures : Array(figures.prefix(4)))
+                case .records(let records):
+                    if let title = records.title { Text(title).font(.caption.weight(.medium)) }
+                    if let count = records.totalCount {
+                        let shown = expanded ? records.rows.count : min(3, records.rows.count)
+                        Text(shown < count ? "\(shown) of \(count) records" : "\(count) total")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
+                    ForEach(
+                        Array(records.rows.prefix(expanded ? records.rows.count : 3).enumerated()),
+                        id: \.offset
+                    ) { _, row in
+                        RecordRowView(row: row, informational: true)
+                    }
+                    if let source = records.connectionSource, let key = records.connectionViewKey {
+                        NavigationLink("Related records", value: Route.connectedRecords(source, viewKey: key))
+                            .frame(minHeight: FieldGuideTokens.touchTarget)
+                    }
+                    if let link = records.listLink {
+                        NavigationLink(
+                            "View records", value: Route.entityList(link.entity, filters: link.filterState)
+                        )
+                        .frame(minHeight: FieldGuideTokens.touchTarget)
+                    }
+                    if let footer = records.footer { Text(footer).font(.caption).foregroundStyle(.secondary) }
+                case .chart(let chart):
+                    ReportChartView(chart: chart)
+                case .table(let table):
+                    if let title = table.title { Text(title).font(.caption).foregroundStyle(.secondary) }
+                    ForEach(
+                        Array(table.rows.prefix(expanded ? table.rows.count : 3).enumerated()), id: \.offset
+                    ) { _, row in
+                        if let route = routeTarget(row.ref) {
+                            NavigationLink(value: route) { tableRow(row, columns: table.columns) }
+                        } else {
+                            tableRow(row, columns: table.columns)
+                        }
+                    }
+                    if table.truncated {
+                        Text("Server returned a truncated table").font(.caption).foregroundStyle(.secondary)
+                    }
+                case .progress(let progress):
+                    Text(progress.label).font(.subheadline)
+                    Text(progress.summary).font(.caption).monospacedDigit()
+                    Text(progress.detail).font(.caption).foregroundStyle(.secondary)
+                case .note(let text, let tone, let strong):
+                    Text(text).font(strong ? .subheadline : .caption)
+                        .foregroundStyle(tone?.color ?? .secondary)
+                case .schedule(let schedule):
+                    ForEach(
+                        Array(schedule.rows.prefix(expanded ? schedule.rows.count : 3).enumerated()),
+                        id: \.offset
+                    ) { _, row in
+                        if let entity = EntityKey(rawValue: row.entity) {
+                            NavigationLink(value: Route.entityDetail(entity, id: row.id)) {
+                                LabeledContent(row.name, value: row.meta)
+                            }
+                        } else {
+                            LabeledContent(row.name, value: row.meta)
+                        }
+                    }
+                case .unsupported(let raw):
+                    Text(
+                        UnsupportedNativeResponse(context: "summary report block", raw: raw)
+                            .localizedDescription
+                    )
+                    .font(.caption).textSelection(.enabled)
+                }
+            }
+            if hasMore {
+                Button(expanded ? "Show less" : "Show more") { expanded.toggle() }
+                    .frame(minHeight: FieldGuideTokens.touchTarget)
+            }
+        }
+    }
+
+    private func tableRow(_ row: ReportPresentation.Table.Row, columns: [String]) -> some View {
+        VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
+            ForEach(Array(row.cells.enumerated()), id: \.offset) { index, value in
+                LabeledContent(index < columns.count ? columns[index] : "Value", value: value)
+            }
+        }
+        .font(.caption)
+    }
 }
 
 struct ReportBlocksView: View {

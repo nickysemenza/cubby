@@ -53,19 +53,56 @@ export default defineEntity({
     },
     icons: { phosphor: "Storefront", sfSymbol: "storefront", emoji: "🏪" },
     detail: {
+      summary: [
+        {
+          kind: "records",
+          id: "purchases",
+          title: "Purchases",
+          viewKey: "relation:purchases",
+        },
+        {
+          kind: "report",
+          id: "purchased-products",
+          title: "Frequently bought Products",
+          slot: "vendor.frequent-products",
+        },
+        {
+          kind: "records",
+          id: "branded-products",
+          title: "Branded Products",
+          viewKey: "relation:branded-products",
+        },
+        {
+          kind: "chart",
+          id: "monthly-spend",
+          title: "Spend over 12 months",
+          viewKey: "relation:expenses",
+        },
+        {
+          kind: "fields",
+          id: "needs-review",
+          title: "Needs review",
+          fields: ["unknownCategoryLineCount"],
+        },
+        {
+          kind: "report",
+          id: "relevant-mail",
+          title: "Relevant mail",
+          slot: "vendor.email-summary",
+        },
+        {
+          kind: "records",
+          id: "household-accounts",
+          title: "Household accounts",
+          viewKey: "relation:vendor-accounts",
+        },
+      ],
+
       activityRelations: [
         { relation: "expenses", dateField: "date" },
         { relation: "purchases", dateField: "date" },
       ],
-      hero: {
-        chart: { kind: "monthlyExpenseSpend", viewKey: "relation:expenses" },
-        stats: [
-          "spend",
-          "purchaseCount",
-          "latestPurchaseDate",
-          "unknownCategoryLineCount",
-        ],
-      },
+
       additionalSections: [
         {
           kind: "relation",

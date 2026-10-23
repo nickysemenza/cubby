@@ -32,9 +32,60 @@ export default defineEntity({
     },
     icons: { phosphor: "Plant", sfSymbol: "leaf", emoji: "🌱" },
     detail: {
+      summary: [
+        {
+          kind: "records",
+          id: "plant",
+          title: "Plant",
+          viewKey: "relation:plant",
+        },
+        {
+          kind: "fields",
+          id: "quantity",
+          title: "Quantity",
+          fields: ["quantity"],
+        },
+        {
+          kind: "fields",
+          id: "growing-state",
+          title: "Growing state",
+          fields: ["status", "season", "transplantedOn"],
+        },
+        {
+          kind: "records",
+          id: "location",
+          title: "Location",
+          viewKey: "relation:location",
+        },
+        {
+          kind: "fields",
+          id: "harvest-window",
+          title: "Harvest window",
+          fields: ["expectedHarvest"],
+        },
+        {
+          kind: "records",
+          id: "seed-source",
+          title: "Seed source",
+          viewKey: "relation:source-product",
+        },
+        {
+          kind: "records",
+          id: "task",
+          title: "Task",
+          viewKey: "relation:task",
+        },
+        {
+          kind: "records",
+          id: "observations",
+          title: "Observations",
+          viewKey: "relation:entries",
+        },
+      ],
+
       activityRelations: [{ relation: "entries", dateField: "observedOn" }],
       variantOverride: "journal",
-      hero: { stats: ["quantity"], chip: "status" },
+      hero: { chip: "status" },
       sectionOverrides: [
         {
           kind: "relation",

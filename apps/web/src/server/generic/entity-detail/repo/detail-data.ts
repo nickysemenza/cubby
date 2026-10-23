@@ -65,9 +65,21 @@ export async function getMonthlyExpenseSpend(
   today = householdLocalDate(),
 ): Promise<MonthlyExpenseSpend> {
   const { entityKind, entityId } = input.source;
-  const chart = entitySummary[entityKind].detail.hero.chart;
+  const charts = entitySummary[entityKind].detail.summary.filter(
+    (slot) => slot.kind === "chart",
+  );
+  if (input.viewKey === undefined && charts.length > 1)
+    throw new Error(
+      `Ambiguous monthly expense chart for ${entityKind}; provide viewKey`,
+    );
+  const chart =
+    input.viewKey === undefined
+      ? charts[0]
+      : charts.find((slot) => slot.viewKey === input.viewKey);
   if (!chart)
-    throw new Error(`No monthly expense chart declared for ${entityKind}`);
+    throw new Error(
+      `No monthly expense chart declared for ${entityKind}.${input.viewKey ?? ""}`,
+    );
   if (viewTarget(entityKind, chart.viewKey) !== "expense")
     throw new Error(
       `Monthly spend must target Expense: ${entityKind}.${chart.viewKey}`,

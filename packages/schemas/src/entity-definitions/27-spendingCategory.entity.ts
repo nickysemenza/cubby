@@ -27,13 +27,55 @@ export default defineEntity({
     },
     icons: { phosphor: "Tag", sfSymbol: "tag", emoji: "🏷️" },
     detail: {
+      summary: [
+        {
+          kind: "records",
+          id: "expenses",
+          title: "Expenses",
+          viewKey: "relation:expenses",
+        },
+        {
+          kind: "records",
+          id: "purchases",
+          title: "Purchases",
+          viewKey: "relation:purchases",
+        },
+        {
+          kind: "records",
+          id: "parent-category",
+          title: "Parent category",
+          viewKey: "relation:parent",
+        },
+        {
+          kind: "records",
+          id: "child-categories",
+          title: "Child categories",
+          viewKey: "relation:children",
+        },
+        {
+          kind: "chart",
+          id: "monthly-spend",
+          title: "Spend over 12 months",
+          viewKey: "relation:expenses",
+        },
+        {
+          kind: "fields",
+          id: "itemization-policy",
+          title: "Itemization policy",
+          fields: ["productExpectation", "itemizationExpectation"],
+        },
+        {
+          kind: "fields",
+          id: "mapped-product-categories",
+          title: "Mapped Product categories",
+          fields: ["productCategories"],
+        },
+      ],
+
       activityRelations: [
         { relation: "purchases", dateField: "date" },
         { relation: "expenses", dateField: "date" },
       ],
-      hero: {
-        chart: { kind: "monthlyExpenseSpend", viewKey: "relation:expenses" },
-      },
     },
     list: {
       read: {

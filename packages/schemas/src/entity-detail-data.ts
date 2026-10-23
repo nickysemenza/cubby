@@ -4,7 +4,10 @@ import { entitySchema } from "./entity-core";
 import { entityGraphRootSchema } from "./entity-graph";
 
 export const monthlyExpenseSpendInputSchema = z
-  .object({ source: entityGraphRootSchema })
+  .object({
+    source: entityGraphRootSchema,
+    viewKey: z.string().min(1).optional(),
+  })
   .strict();
 export const monthlyExpenseSpendOutputSchema = z.array(
   z.object({

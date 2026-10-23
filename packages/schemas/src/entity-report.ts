@@ -1,3 +1,5 @@
+import { connectedPathNodeSchema } from "./connected-records";
+import { entityGraphRootSchema } from "./entity-graph";
 import { z } from "zod";
 import { reportScope } from "./entity-report-scope";
 
@@ -20,56 +22,8 @@ import {
  * repeating across slots: `stats` (labelled figures), `chart` (labelled
  * values, bar/stack/line), `table`, `schedule` (dated spans) and `note`.
  */
-export const reportSlots = [
-  "task.briefing",
-  "shipment.tracking",
-  "email.review",
-  "recipe.availability",
-  "recipe.costing-coverage",
-  "recipe.walkthrough",
-  "project.budget",
-  "project.contribution",
-  "project.analytics",
-  "project.schedule",
-  "location.contents-valuation",
-  // Each of a Vendor's Mail searches in each connected mailbox.
-  "vendor.mail-search",
-  "meal.composition",
-  "product.labels",
-  "product.runs",
-  "product.cookbooks",
-  "product.recipe-appearances",
-  "ingredient.recipe-usages",
-  "cookbook.extraction-report",
-  "cookbook.import-progress",
-  "image.associations",
-  // An Image job's attempts with their diagnostics, then its events.
-  "imageJob.attempts",
-  "purchase.runs",
-  "location.ai-description",
-  "purchase.reconciliation",
-  "purchase.project-allocation",
-  "purchase.financial-settlement",
-  "expense.settlement",
-  // A Run's detail: steps, progress, findings, transcript, log, AI usage and changes.
-  "run.steps",
-  "run.live-progress",
-  "run.import-stats",
-  "run.import-progress-live",
-  "run.import-progress-stopped",
-  "run.import-purchases",
-  "run.import-findings",
-  "run.import-targets",
-  "run.import-prepared-orders",
-  "run.import-timeline",
-  "run.import-debug-log",
-  "run.ai-usage",
-  "run.suggestions",
-  "run.decisions",
-  "run.diagnostics",
-  "run.changes",
-] as const;
-export const reportSlot = z.enum(reportSlots);
+export { reportSlots, reportSlot } from "./entity-report-slots";
+import { reportSlot } from "./entity-report-slots";
 
 /**
  * The verbs on the record each `records` slot belongs to. The server puts them on the block, and
@@ -78,9 +32,7 @@ export const reportSlot = z.enum(reportSlots);
 export const reportSlotActions = {
   "image.associations": ["attachImage"],
   "location.ai-description": ["analyzeLocation"],
-} as const satisfies Partial<
-  Record<(typeof reportSlots)[number], readonly CollectionActionId[]>
->;
+} as const satisfies Partial<Record<ReportSlot, readonly CollectionActionId[]>>;
 
 /** The verbs a slot offers on its record (none for most slots). */
 export const slotActionsOf = (slot: string): readonly CollectionActionId[] =>
@@ -419,6 +371,8 @@ const reportRecordRow = z.object({
   at: z.string().optional(),
   /** Precision-aware time; when supplied, replaces the legacy instant presentation. */
   time: reportTime.optional(),
+  /** Witnessed source paths, identical to connected-record reads. */
+  paths: z.array(z.array(connectedPathNodeSchema).min(2)).optional(),
   /** The list of other records this row summarises, opened as the trailing link. */
   listLink: z
     .object({
@@ -492,6 +446,12 @@ export const reportRecordsBlock = z.object({
   /** Hide secondary evidence behind a labeled disclosure, initially collapsed. */
   disclosureLabel: z.string().optional(),
   rows: z.array(reportRecordRow),
+  /** Full count before a bounded compact projection. */
+  totalCount: z.number().int().nonnegative().optional(),
+  listLink: reportRecordRow.shape.listLink,
+  connection: z
+    .object({ source: entityGraphRootSchema, viewKey: z.string().min(1) })
+    .optional(),
   empty: z.string(),
   /** Verbs on the record the slot belongs to (`reportSlotActions`). */
   actions: z.array(z.enum(COLLECTION_ACTIONS)).optional(),

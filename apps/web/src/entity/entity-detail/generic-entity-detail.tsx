@@ -69,7 +69,6 @@ import {
 } from "../actions/action-verbs";
 import { EntityActionButtons } from "../actions/entity-actions";
 import EntityImageList from "../components/entity-image-list";
-import { EntityConnectionContext } from "../relationships/entity-connection-context";
 import { type DetailSection, DetailSections } from "../table/detail-page";
 import {
   EntityTimeline,
@@ -79,9 +78,9 @@ import { ConnectedRecordsSection } from "./connected-records-table";
 import { DetailActionProvider, DetailActionTarget } from "./detail-action-bar";
 import { DetailActivity } from "./detail-activity";
 import { detailEditOverrideFor } from "./detail-edit-overrides";
-import { detailHeroStats } from "./detail-hero-stats";
 import type { DetailRecordOf, GenericDetailEntity } from "./detail-record";
 import { detailSlotsFor } from "./detail-slots";
+import { DetailSummary } from "./detail-summary";
 import { EntityRecordFields } from "./entity-record-fields";
 import {
   EntityRelationTable,
@@ -91,7 +90,6 @@ import {
 } from "./entity-relation-table";
 import { NeedsYou, NeedsYouProvider, useNeedsYouTarget } from "./needs-you";
 import { RecordQualityProvider, QualitySectionChecks } from "./record-quality";
-import { MonthlySpendChart } from "./spend-chart";
 
 const RecordProposals = lazy(() =>
   import("~/entity/suggestions/queue/record-proposals").then((module) => ({
@@ -149,10 +147,9 @@ function heroOf<E extends GenericDetailEntity>(
   const chip = chipField ? heroChipLabel(entity, record, chipField) : null;
   const heroStamp =
     chip === null ? undefined : { label: chip, tone: "ink" as const };
-  const heroStats = detailHeroStats(entity, record);
   const breadcrumbField =
     hero.breadcrumb === null ? undefined : field(hero.breadcrumb);
-  return { heroStamp, heroStats, breadcrumbField };
+  return { heroStamp, breadcrumbField };
 }
 
 const ancestorSchema: z.ZodType<{
@@ -534,7 +531,7 @@ function FullEntityDetail<E extends GenericDetailEntity>({
   const bag = detailRecordSchema.parse(record);
   const title =
     readRecordField(record, titleField, z.string().catch("")) || bag.id;
-  const { heroStamp, heroStats, breadcrumbField } = heroOf(entity, record);
+  const { heroStamp, breadcrumbField } = heroOf(entity, record);
   const [editing, setEditing] = useState(false);
   const EditOverride = detailEditOverrideFor(entity);
   const heroActions: readonly string[] = detail.hero.actions;
@@ -691,12 +688,7 @@ function FullEntityDetail<E extends GenericDetailEntity>({
         heroImages={heroImages}
         heroNo={bag.id}
         heroStamp={heroStamp}
-        heroStats={heroStats.length > 0 ? heroStats : undefined}
-        heroChart={
-          detail.hero.chart ? (
-            <MonthlySpendChart entity={entity} id={bag.id} />
-          ) : undefined
-        }
+        summary={<DetailSummary entity={entity} record={record} />}
         heroActions={plateActions}
       >
         <AncestryBreadcrumb
@@ -704,7 +696,6 @@ function FullEntityDetail<E extends GenericDetailEntity>({
           chain={breadcrumbChain}
           current={title}
         />
-        <EntityConnectionContext entity={entity} id={bag.id} />
         <NeedsYouProvider>
           <FactsAddProvider onAdd={editable ? () => setEditing(true) : null}>
             <DetailSuggestions

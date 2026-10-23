@@ -30,7 +30,45 @@ export default defineEntity(
       },
       icons: { phosphor: "BookOpen", sfSymbol: "book.closed", emoji: "📖" },
       detail: {
-        hero: { stats: ["recipeCount", "sourceRecipeCount"] },
+        summary: [
+          {
+            kind: "fields",
+            id: "author-subjects",
+            title: "Author & subjects",
+            fields: ["author", "subjects"],
+          },
+          {
+            kind: "fields",
+            id: "recipe-coverage",
+            title: "Recipe coverage",
+            fields: ["recipeCount", "sourceRecipeCount"],
+          },
+          {
+            kind: "records",
+            id: "physical-copy",
+            title: "Physical copy",
+            viewKey: "relation:product",
+          },
+          {
+            kind: "report",
+            id: "meals",
+            title: "Recipes cooked recently",
+            slot: "cookbook.recent-recipes",
+          },
+          {
+            kind: "report",
+            id: "import-health",
+            title: "Import health",
+            slot: "cookbook.import-progress",
+          },
+          {
+            kind: "records",
+            id: "copy-locations",
+            title: "Physical copy locations",
+            viewKey: "copy-locations",
+          },
+        ],
+
         additionalSections: [
           {
             kind: "fields",

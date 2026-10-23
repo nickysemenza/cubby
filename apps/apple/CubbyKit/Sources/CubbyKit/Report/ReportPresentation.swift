@@ -135,6 +135,7 @@ public struct ReportPresentation: Hashable, Sendable {
         public let imageURL: URL?
         public let at: Date?
         public var time: RecordTime? = nil
+        public var paths: [[ConnectedPathNode]] = []
         /// The list of other records this row summarises, opened from the trailing figure.
         public let listLink: ListLink?
         /// Verbs offered on this row only; the server decides when one applies.
@@ -281,6 +282,10 @@ public struct ReportPresentation: Hashable, Sendable {
         public var timeline = false
         public var disclosureLabel: String? = nil
         public let title: String?
+        public var totalCount: Int? = nil
+        public var listLink: ListLink? = nil
+        public var connectionSource: EntityRef? = nil
+        public var connectionViewKey: String? = nil
         public let rows: [RecordRow]
         public let empty: String
         public let actions: [CollectionActionID]
@@ -312,8 +317,9 @@ public struct ReportPresentation: Hashable, Sendable {
         /// These rows with `more` stacked after them (a later page).
         public func adding(_ more: [RecordRow]) -> Records {
             Records(
-                filmstrip: filmstrip, timeline: timeline,
-                title: title,
+                filmstrip: filmstrip, timeline: timeline, disclosureLabel: disclosureLabel,
+                title: title, totalCount: totalCount,
+                listLink: listLink, connectionSource: connectionSource, connectionViewKey: connectionViewKey,
                 rows: rows
                     + more.enumerated().map { offset, row in
                         var next = row
@@ -464,7 +470,13 @@ public struct ReportPresentation: Hashable, Sendable {
             filmstrip: records.presentation == .filmstrip,
             timeline: records.presentation == .timeline,
             disclosureLabel: records.disclosureLabel,
-            title: records.title,
+            title: records.title, totalCount: records.totalCount,
+            listLink: records.listLink.flatMap { link in
+                EntityKey(rawValue: link.entity).map { ListLink(entity: $0, filters: link.filters) }
+            },
+            connectionSource: records.connection.map {
+                EntityRef(entity: $0.source.entityKind, id: $0.source.entityId)
+            }, connectionViewKey: records.connection?.viewKey,
             rows: records.rows.enumerated().map { index, row in
                 RecordRow(
                     id: index, entity: row.entity.flatMap(EntityKey.init(rawValue:)),
@@ -482,6 +494,7 @@ public struct ReportPresentation: Hashable, Sendable {
                         case .unrecognized(let raw): return .unsupported(raw)
                         }
                     },
+                    paths: row.paths ?? [],
                     listLink: row.listLink.flatMap { link in
                         EntityKey(rawValue: link.entity).map {
                             ListLink(entity: $0, filters: link.filters)
@@ -567,5 +580,23 @@ public struct ReportPresentation: Hashable, Sendable {
     /// A household calendar day (`yyyy-MM-dd`) as the start of that day in UTC.
     private static func day(_ string: String) -> Date? {
         PlainDate(rawValue: string).date(in: .gmt)
+    }
+}
+
+extension ReportPresentation {
+    /// Unknown values and unsupported blocks are informative; only witnessed emptiness collapses.
+    public var summaryIsEmpty: Bool {
+        blocks.allSatisfy { block in
+            switch block {
+            case .stats(_, let figures): figures.isEmpty
+            case .records(let records):
+                records.rows.isEmpty && (records.totalCount ?? 0) == 0 && records.footer == nil
+            case .table(let table): table.rows.isEmpty
+            case .chart(let chart): chart.bars.isEmpty
+            case .schedule(let schedule): schedule.rows.isEmpty
+            case .note(let text, _, _): text.isEmpty
+            case .progress, .unsupported: false
+            }
+        }
     }
 }

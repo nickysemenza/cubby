@@ -76,6 +76,57 @@ export default defineEntity({
     },
     icons: { phosphor: "Receipt", sfSymbol: "cart", emoji: "🧾" },
     detail: {
+      summary: [
+        {
+          kind: "records",
+          id: "seller",
+          title: "Seller",
+          viewKey: "relation:vendor",
+        },
+        {
+          kind: "fields",
+          id: "account-total",
+          title: "Account & total",
+          fields: ["vendorAccountId", "expenseTotal", "statedTotal"],
+        },
+        {
+          kind: "records",
+          id: "items",
+          title: "Items",
+          viewKey: "relation:products",
+        },
+        {
+          kind: "chart",
+          id: "monthly-spend",
+          title: "Spend over 12 months",
+          viewKey: "relation:expenses",
+        },
+        {
+          kind: "report",
+          id: "projects",
+          title: "Projects",
+          slot: "purchase.project-allocation",
+        },
+        {
+          kind: "report",
+          id: "settlement",
+          title: "Settlement",
+          slot: "purchase.financial-settlement",
+        },
+        {
+          kind: "records",
+          id: "receipts",
+          title: "Receipts",
+          viewKey: "relation:images",
+        },
+        {
+          kind: "records",
+          id: "shipping",
+          title: "Shipments",
+          viewKey: "relation:shipments",
+        },
+      ],
+
       activityRelations: [
         { relation: "images", dateField: "capturedAt" },
         { relation: "expenses", dateField: "date" },
@@ -87,14 +138,6 @@ export default defineEntity({
           "The financial-settlement slot renders the allocations with their amounts.",
       },
       hero: {
-        chart: { kind: "monthlyExpenseSpend", viewKey: "relation:expenses" },
-        stats: [
-          "expenseTotal",
-          "expenseCount",
-          "unpricedExpenseCount",
-          "documentCount",
-        ],
-
         when: { field: "date", label: "Ordered" },
       },
       additionalSections: [

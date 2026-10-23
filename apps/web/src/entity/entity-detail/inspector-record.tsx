@@ -28,13 +28,12 @@ import { readPathValue } from "~/entity/read-path";
 import { RecordSuggestionsProvider } from "~/entity/suggestions/record-suggestions";
 import { RecordWorkQueue } from "~/entity/work-queue/record-work-queue";
 import { FactsAddProvider, FactsDensityProvider } from "~/ui/common/facts";
-import { KeyNumbers } from "~/ui/common/key-numbers";
 import { Section, Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 
 import { detailEditOverrideFor } from "./detail-edit-overrides";
-import { detailHeroStats } from "./detail-hero-stats";
 import type { DetailRecordOf, GenericDetailEntity } from "./detail-record";
+import { DetailSummary } from "./detail-summary";
 import { EntityRecordFields } from "./entity-record-fields";
 import {
   fieldQualityChecks,
@@ -218,13 +217,6 @@ function ResolvedInspectorRecord<E extends GenericDetailEntity>({
     <>
       {/* Identity facts and the record's one edit verb share the first row. */}
       <div className="mb-3 flex min-w-0 items-start gap-2 empty:hidden">
-        <KeyNumbers
-          layout="inline"
-          label="Key numbers"
-          items={detailHeroStats(entity, record)}
-          className="flex-1"
-          data-testid="inspector-key-numbers"
-        />
         {editable ? (
           <Button
             variant="outline"
@@ -236,6 +228,7 @@ function ResolvedInspectorRecord<E extends GenericDetailEntity>({
           </Button>
         ) : null}
       </div>
+      <DetailSummary entity={entity} record={record} compact />
       <RecordSuggestionsProvider
         entity={entity}
         records={[record]}

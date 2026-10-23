@@ -44,6 +44,57 @@ export default defineEntity(
         emoji: "📍",
       },
       detail: {
+        summary: [
+          {
+            kind: "records",
+            id: "parent-location",
+            title: "Parent location",
+            viewKey: "relation:parent",
+          },
+          {
+            kind: "records",
+            id: "direct-holdings",
+            title: "Direct holdings",
+            viewKey: "relation:inventory",
+          },
+          {
+            kind: "fields",
+            id: "stock-check",
+            title: "Stock check",
+            fields: ["lastBulkInventory"],
+          },
+          {
+            kind: "report",
+            id: "contents-valuation",
+            title: "Contents valuation",
+            slot: "location.contents-valuation",
+          },
+          {
+            kind: "records",
+            id: "child-locations",
+            title: "Child locations",
+            viewKey: "relation:children",
+          },
+          {
+            kind: "records",
+            id: "plantings",
+            title: "Plantings",
+            viewKey: "relation:plantings",
+          },
+          {
+            kind: "records",
+            id: "garden-observations",
+            title: "Garden observations",
+            viewKey: "relation:garden-entries",
+          },
+          {
+            kind: "records",
+            id: "space-reference",
+            title: "Space reference",
+            viewKey: "relation:images",
+          },
+        ],
+
         activityRelations: [
           { relation: "images", dateField: "capturedAt" },
           { relation: "plantings", dateField: "sowedOn" },
@@ -56,8 +107,6 @@ export default defineEntity(
         // The generic "No locations yet." reads oddly under "Sub-locations" —
         // a self-relation whose target label doesn't match the section title.
         hero: {
-          chart: { kind: "monthlyExpenseSpend", viewKey: "expenses" },
-          stats: ["lastBulkInventory"],
           breadcrumb: "parentId",
         },
         additionalSections: [

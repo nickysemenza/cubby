@@ -81,7 +81,7 @@ struct EntityHeroView<Actions: View>: View {
     private var headerMetadata: some View {
         let fact =
             row.subtitle.flatMap { $0.isEmpty ? nil : $0 }
-            ?? presentation.heroStats.lazy.compactMap { key in
+            ?? presentation.summaryFieldKeys.lazy.compactMap { key in
                 descriptor.field(key).flatMap {
                     EntityFieldValue.text(in: row.raw, field: $0, surface: "detail")
                 }
@@ -143,6 +143,7 @@ struct FieldsSectionView: View {
     let row: EntityRow
     let keys: [String]
     var macGrid = false
+    var summary = false
     @Environment(AppModel.self) private var appModel
     @State private var resolutionReview: ResolutionActionRequest?
 
@@ -359,6 +360,11 @@ struct FieldsSectionView: View {
 
     private func displayText(_ field: FieldDescriptor) -> String? {
         let value = EntityFieldValue.text(in: row.raw, field: field, surface: "detail")
+        if summary, value == nil,
+            FieldResolutionPresentation.readValue(in: row.raw, field: field, surface: "detail") == .null
+        {
+            return "Unknown"
+        }
         guard let value else { return nil }
         return value.trimmingCharacters(in: .whitespacesAndNewlines)
             .localizedCaseInsensitiveCompare("Not recorded") == .orderedSame ? nil : value

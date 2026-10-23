@@ -115,3 +115,14 @@ public enum EntityCatalog {
         }
     }
 }
+
+// Summary fields also seed the inspector/header when a preview has no list subtitle.
+extension EntityPresentation {
+    public var summaryFieldKeys: [String] {
+        var seen = Set<String>()
+        return summarySlots.flatMap { slot -> [String] in
+            guard case .fields(let keys) = slot.kind else { return [] }
+            return keys.filter { seen.insert($0).inserted }
+        }
+    }
+}

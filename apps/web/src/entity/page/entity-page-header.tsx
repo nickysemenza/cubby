@@ -11,7 +11,6 @@ import { formatCount } from "~/lib/number-format";
 import { cn } from "~/lib/utils";
 import { CopyableShortcode } from "~/ui/common/copyable-shortcode";
 import { DateDisplay } from "~/ui/common/date-display";
-import { type KeyNumber, KeyNumbers } from "~/ui/common/key-numbers";
 import { PageHeader } from "~/ui/layout/page-header";
 import {
   domainForEntity,
@@ -116,10 +115,8 @@ interface DetailPageHeaderProps {
   heroNo?: string;
   /** Record status beside the title. */
   heroStamp?: { label: string; tone?: "ink" | "red" | "green" };
-  /** Declared key numbers under the header. */
-  heroStats?: readonly KeyNumber[];
-  /** Declared chart closing the key-numbers strip (monthly spend). */
-  heroChart?: ReactNode;
+  /** Ordered detail cells under the identity. */
+  summary?: ReactNode;
   heroActions?: DetailHeroActions;
   /** Identity thumbnail; the full gallery stays in the Images section. */
   heroImages?: Array<{ id: string; url: string; filename: string }>;
@@ -133,8 +130,7 @@ export function DetailPageHeader({
   rawData,
   heroNo,
   heroStamp,
-  heroStats,
-  heroChart,
+  summary,
   heroActions,
   heroImages,
 }: DetailPageHeaderProps) {
@@ -148,7 +144,6 @@ export function DetailPageHeader({
     ? entityHeroWhen(entity, parsedRawData.data)
     : null;
   const cover = heroImages?.[0];
-  const hasStrip = (heroStats?.length ?? 0) > 0 || heroChart != null;
   const facts = [
     heroNo && (
       <span key="code" className="md:hidden">
@@ -181,7 +176,7 @@ export function DetailPageHeader({
     <PageHeader
       layout="stacked"
       data-testid="detail-spec-plate"
-      className={cn(!hasStrip && "border-b border-border pb-3")}
+      className={cn(!summary && "border-b border-border pb-3")}
       breadcrumb={
         wayfinding !== false ? (
           <DetailBreadcrumb
@@ -218,16 +213,8 @@ export function DetailPageHeader({
       facts={facts}
       actions={actions}
       below={
-        hasStrip ? (
-          // Key numbers run edge to edge between hairlines.
-          <KeyNumbers
-            layout="strip"
-            label="Key numbers"
-            items={heroStats ?? []}
-            chart={heroChart}
-            className="-mx-2 mt-3 md:-mx-4"
-            data-testid="detail-key-numbers"
-          />
+        summary ? (
+          <div className="-mx-2 mt-3 md:-mx-4">{summary}</div>
         ) : undefined
       }
     />

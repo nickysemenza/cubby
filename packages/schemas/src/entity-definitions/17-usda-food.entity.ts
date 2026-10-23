@@ -34,7 +34,40 @@ export default defineEntity(
         description: "Search for a food to pull in its nutrition details.",
       },
       icons: { phosphor: "BowlFood", sfSymbol: "leaf.fill", emoji: "🍎" },
-      detail: {},
+      detail: {
+        summary: [
+          {
+            kind: "fields",
+            id: "reference",
+            title: "Reference",
+            fields: ["fdc_id", "foodInfo"],
+          },
+          {
+            kind: "fields",
+            id: "nutrition",
+            title: "Nutrition",
+            fields: ["nutritionInfo"],
+          },
+          {
+            kind: "fields",
+            id: "portions",
+            title: "Portions",
+            fields: ["portionInfoRaw"],
+          },
+          {
+            kind: "fields",
+            id: "brand-information",
+            title: "Brand information",
+            fields: ["brandedFoodInfo"],
+          },
+          {
+            kind: "fields",
+            id: "legacy-reference",
+            title: "Legacy reference",
+            fields: ["legacyFoodInfo"],
+          },
+        ],
+      },
       list: {
         primarySearch: {
           key: "nameFilter",

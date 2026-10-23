@@ -137,7 +137,15 @@ struct ConnectedRecordsListView: View {
     @State private var model: ConnectedSectionModel?
 
     private var spec: ConnectedViewSpec? {
-        EntityCatalog[source.entity].presentation.connectedViews.first { $0.key == viewKey }
+        let descriptor = EntityCatalog[source.entity]
+        if let declared = descriptor.presentation.connectedViews.first(where: { $0.key == viewKey }) {
+            return declared
+        }
+        if viewKey.hasPrefix("relation:"), let relation = descriptor.relation(String(viewKey.dropFirst(9))) {
+            return ConnectedViewSpec(
+                key: viewKey, title: relation.label, target: relation.target, evidence: true)
+        }
+        return nil
     }
 
     var body: some View {

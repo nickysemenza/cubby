@@ -111,9 +111,42 @@ export default defineEntity({
     },
     icons: { phosphor: "Envelope", sfSymbol: "envelope", emoji: "✉️" },
     detail: {
+      summary: [
+        {
+          kind: "fields",
+          id: "sender-received",
+          title: "Sender & received",
+          fields: ["sender", "receivedAt"],
+        },
+        {
+          kind: "fields",
+          id: "classification",
+          title: "Classification",
+          fields: ["classification"],
+        },
+        {
+          kind: "fields",
+          id: "review-import",
+          title: "Review & import",
+          fields: ["status", "importOutcome"],
+        },
+        {
+          kind: "fields",
+          id: "purchase-links",
+          title: "Purchase links",
+          fields: ["purchaseLinks"],
+        },
+        {
+          kind: "records",
+          id: "import-run",
+          title: "Import Run",
+          viewKey: "relation:run",
+        },
+      ],
+
       hero: {
         chip: "classification",
-        stats: [],
+
         when: { field: "receivedAt" },
       },
       additionalSections: [

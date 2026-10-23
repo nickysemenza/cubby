@@ -30,11 +30,38 @@ export default defineEntity({
     },
     icons: { phosphor: "Heart", sfSymbol: "star", emoji: "⭐" },
     detail: {
+      summary: [
+        {
+          kind: "fields",
+          id: "acquired",
+          title: "Acquired",
+          fields: ["acquiredAt"],
+        },
+        {
+          kind: "records",
+          id: "candidate-products",
+          title: "Candidate Products",
+          viewKey: "relation:candidates",
+        },
+        {
+          kind: "fields",
+          id: "candidate-price-range",
+          title: "Candidate price range",
+          fields: ["priceRange"],
+        },
+        {
+          kind: "fields",
+          id: "decision-notes",
+          title: "Decision notes",
+          fields: ["notes"],
+        },
+      ],
+
       omitRelations: {
         candidates:
           "The Candidate alternatives section edits candidates in place with its own renderer.",
       },
-      hero: { stats: ["candidateCount"], extraActions: ["markPurchased"] },
+      hero: { extraActions: ["markPurchased"] },
       additionalSections: [
         {
           kind: "fields",

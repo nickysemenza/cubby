@@ -1062,7 +1062,7 @@ const renderDateRangeValue = <TRecord extends object>(
 };
 
 /**
- * The compact facts a record's preview shows: its declared hero stats, then
+ * The compact facts a record's preview shows: its declared preview fields, or
  * the first detail `fields` section in order, skipping the title, the hero
  * chip and breadcrumb (the card header carries those), structured values,
  * and empty fields — a preview spends its few rows on what is known.

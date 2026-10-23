@@ -73,6 +73,57 @@ export default defineEntity(
       },
       icons: { phosphor: "Barcode", sfSymbol: "shippingbox", emoji: "📦" },
       detail: {
+        summary: [
+          {
+            kind: "fields",
+            id: "brand",
+            title: "Brand",
+            fields: ["brandId"],
+          },
+          {
+            kind: "report",
+            id: "bought-from",
+            title: "Bought from",
+            slot: "product.sellers",
+          },
+          {
+            kind: "report",
+            id: "stock",
+            title: "On hand & locations",
+            slot: "product.stock-summary",
+          },
+          {
+            kind: "chart",
+            id: "monthly-spend",
+            title: "Spend over 12 months",
+            viewKey: "relation:expenses",
+          },
+          {
+            kind: "report",
+            id: "purchase-pricing",
+            title: "Purchase & pricing",
+            slot: "product.pricing-summary",
+          },
+          {
+            kind: "records",
+            id: "purchase-projects",
+            title: "Purchase projects",
+            viewKey: "purchase-projects",
+          },
+          {
+            kind: "report",
+            id: "uses",
+            title: "Used in",
+            slot: "product.use-summary",
+          },
+          {
+            kind: "report",
+            id: "evidence",
+            title: "Supporting records",
+            slot: "product.evidence-summary",
+          },
+        ],
+
         activityRelations: [
           { relation: "plantings", dateField: "sowedOn" },
           { relation: "purchases", dateField: "date" },
@@ -109,8 +160,6 @@ export default defineEntity(
         // whose target happens to also be Product — say what's missing
         // instead of what type it is.
         hero: {
-          chart: { kind: "monthlyExpenseSpend", viewKey: "relation:expenses" },
-          stats: ["onHandUnits", "componentCount"],
           extraActions: ["addToInventory", "recordSale", "discard"],
         },
         additionalSections: [

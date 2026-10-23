@@ -66,8 +66,58 @@ export default defineEntity({
       emoji: "💸",
     },
     detail: {
+      summary: [
+        {
+          kind: "fields",
+          id: "cost-line",
+          title: "Cost & line",
+          fields: ["cost", "lineKind", "date"],
+        },
+        {
+          kind: "records",
+          id: "product",
+          title: "Product",
+          viewKey: "relation:product",
+        },
+        {
+          kind: "fields",
+          id: "quantity",
+          title: "Quantity",
+          fields: ["productQuantity"],
+        },
+        {
+          kind: "records",
+          id: "purchase",
+          title: "Purchase",
+          viewKey: "relation:purchase",
+        },
+        {
+          kind: "fields",
+          id: "spending-category",
+          title: "Spending category",
+          fields: ["spendingCategoryId"],
+        },
+        {
+          kind: "fields",
+          id: "project-allocation",
+          title: "Project allocation",
+          fields: ["projectAllocations"],
+        },
+        {
+          kind: "report",
+          id: "settlement",
+          title: "Settlement",
+          slot: "expense.settlement",
+        },
+        {
+          kind: "report",
+          id: "household-attribution",
+          title: "Household attribution",
+          slot: "expense.attribution-summary",
+        },
+      ],
+
       hero: {
-        stats: ["cost", "productQuantity"],
         when: { field: "date", label: "Paid" },
       },
       omitRelations: {

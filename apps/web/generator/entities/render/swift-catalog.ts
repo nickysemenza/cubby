@@ -586,13 +586,37 @@ const presentationJSON = (
   return {
     detailVariant: detail.variant,
     heroChip: detail.hero.chip ?? null,
-    heroStats: [...detail.hero.stats],
+    summarySlots: detail.summary.map((slot) => {
+      switch (slot.kind) {
+        case "fields":
+          return {
+            id: slot.id,
+            title: slot.title,
+            kind: { fields: { fields: [...slot.fields] } },
+          };
+        case "records":
+          return {
+            id: slot.id,
+            title: slot.title,
+            kind: { records: { viewKey: slot.viewKey } },
+          };
+        case "report":
+          return {
+            id: slot.id,
+            title: slot.title,
+            kind: { report: { slot: slot.slot } },
+          };
+        case "chart":
+          return {
+            id: slot.id,
+            title: slot.title,
+            kind: { chart: { viewKey: slot.viewKey } },
+          };
+      }
+    }),
     heroBreadcrumb: detail.hero.breadcrumb ?? null,
     heroWhen: detail.hero.when
       ? { field: detail.hero.when.field, label: detail.hero.when.label ?? null }
-      : null,
-    heroChart: detail.hero.chart
-      ? { kind: detail.hero.chart.kind, viewKey: detail.hero.chart.viewKey }
       : null,
     heroImages: detail.hero.images,
     heroActions: [...detail.hero.actions],

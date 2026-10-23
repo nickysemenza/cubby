@@ -25,17 +25,26 @@ const monthReadoutLabel = (month: string) =>
 export function MonthlySpendChart({
   entity,
   id,
+  viewKey,
 }: {
   entity: Entity;
   id: string;
+  viewKey?: string;
 }) {
   const spend = useMonthlyExpenseSpend({
     source: { entityKind: entity, entityId: id },
+    viewKey,
   });
   const [focusedMonth, setFocusedMonth] = useState(0);
   const monthElements = useRef<(HTMLElement | null)[]>([]);
   if (spend.isError)
-    return <ErrorDisplay error={spend.error} title="monthly spend" />;
+    return (
+      <ErrorDisplay
+        error={spend.error}
+        title="monthly spend"
+        onRetry={() => void spend.refetch()}
+      />
+    );
   const months = spend.data ?? [];
   const total = months.reduce((sum, month) => sum + month.cents, 0);
   const average = months.length > 0 ? total / months.length : undefined;
