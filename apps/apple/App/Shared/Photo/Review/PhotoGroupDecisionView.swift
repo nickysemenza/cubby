@@ -162,7 +162,7 @@ struct PhotoGroupDecisionView: View {
                 HStack(alignment: .top, spacing: FieldGuideTokens.Space.sm) {
                     Text(mark).fontWeight(.semibold)
                         .foregroundStyle(mark == "!" ? FieldGuideTokens.warning : .secondary)
-                    Text(check.field.rawValue.capitalized)
+                    Text(check.field.rawValue == "brandName" ? "Brand" : check.field.rawValue.capitalized)
                     Text(check.tokens.map(\.text).joined(separator: " · "))
                         .foregroundStyle(.secondary)
                 }
@@ -205,8 +205,10 @@ struct PhotoGroupDecisionView: View {
             Text("Pending Product edits").font(.subheadline.weight(.semibold))
             ForEach(productChanges.keys.sorted(), id: \.self) { field in
                 VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
-                    Text(field == "categoryId" ? "Category" : field.capitalized)
-                        .font(.caption.weight(.semibold))
+                    Text(
+                        field == "brandId" ? "Brand" : field == "categoryId" ? "Category" : field.capitalized
+                    )
+                    .font(.caption.weight(.semibold))
                     Text(
                         "Before: \(currentProduct.map { productValue(field: field, from: $0) } ?? (loadingEvidence ? "Loading current Product…" : "Current Product unavailable"))"
                     )
