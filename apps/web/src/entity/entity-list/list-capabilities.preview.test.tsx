@@ -7,12 +7,16 @@ import {
   within,
 } from "@testing-library/react";
 import { afterEach, expect, it } from "vitest";
-import { page } from "vitest/browser";
+import { page, userEvent } from "vitest/browser";
 
-import { productListItem } from "~/entity/generated/entity-lists.gen";
+import {
+  productListItem,
+  taskListItem,
+} from "~/entity/generated/entity-lists.gen";
 import { listOverrides } from "~/entity/list-columns/list-overrides.fixtures";
 import { listPage } from "~/entity/routing/list-page";
 import { installFeatures } from "~/features/registry";
+import { overrideStartDispatch } from "~/integrations/tanstack-query/start-transport";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 import { mock } from "~/lib/test/mock-schema";
 import type { ListQueryOptionsFn } from "~/ui/hooks/use-paginated-table-core";
@@ -216,4 +220,133 @@ it("keeps quality beside identity and emits its server sort", async () => {
       }),
     ),
   );
+});
+
+// The SQL identity and bulk-write owners retain filtering and persistence.
+// This native owner must admit an unloaded row without fetching every list page.
+it("bulk-edits all matching identities including an unloaded record", async () => {
+  await page.viewport(1440, 900);
+  const first = mock(taskListItem, {
+    overrides: {
+      id: testShortcode("task", "TSK-4K7M"),
+      name: "Example first task",
+      status: "in_progress",
+      trade: "other",
+    },
+  });
+  const second = {
+    ...first,
+    id: testShortcode("task", "TSK-4K7N"),
+    name: "Example second task",
+  };
+  const unloaded = {
+    ...first,
+    id: testShortcode("task", "TSK-4K7P"),
+    name: "Example unloaded task",
+  };
+  const selected = [first, second, unloaded];
+  const ids = selected.map(({ id }) => id);
+  const selections: unknown[] = [];
+  const mutations: unknown[] = [];
+  const reads: object[] = [];
+  let releaseNextPage = () => {};
+  const nextPage = new Promise<void>((resolve) => {
+    releaseNextPage = resolve;
+  });
+  let restore = () => {};
+  const operation: ListQueryOptionsFn<object, typeof first> = (params) => ({
+    queryKey: ["all-matching-capability", params],
+    execute: async () => {
+      reads.push(params);
+      if ("ids" in params.filters)
+        return {
+          items: [...selected].reverse(),
+          meta: { pageIndex: 0, pageSize: 100, totalCount: 3 },
+        };
+      if (params.pagination.pageIndex > 0) await nextPage;
+      return {
+        items: params.pagination.pageIndex > 0 ? [unloaded] : [first, second],
+        meta: {
+          pageIndex: params.pagination.pageIndex,
+          pageSize: 2,
+          totalCount: 3,
+        },
+      };
+    },
+  });
+  const Page = listPage({
+    entity: "task",
+    override: listOverrides.task,
+    operations: { list: operation },
+  });
+  try {
+    harness = createBrowserTestHarness({
+      initialPath: "/tasks?name=Example",
+      route: { path: "/tasks", component: Page },
+    });
+    restore = overrideStartDispatch(async (operation, input) => {
+      if (operation === "entity.selectionIds") {
+        selections.push(input);
+        return { ok: true, data: { ids, totalCount: 3, nextCursor: null } };
+      }
+      if (operation === "entity.mutate") {
+        mutations.push(input);
+        return {
+          ok: true,
+          data: {
+            action: "bulkUpdate",
+            entity: "task",
+            updatedReferences: ids.map((id) => ({ entity: "task", id })),
+            sideEffects: {},
+          },
+        };
+      }
+      throw new Error(`Unexpected selection operation ${operation}`);
+    });
+    await harness.loadRouter();
+    render(<div />, { wrapper: harness.routerWrapper });
+    await screen.findByRole("link", { name: first.name });
+    expect(screen.queryByRole("link", { name: unloaded.name })).toBeNull();
+    await userEvent.click(screen.getByRole("checkbox", { name: "Select all" }));
+    await userEvent.click(
+      await screen.findByRole("button", { name: "Select all 3" }),
+    );
+    await waitFor(() =>
+      expect(selections).toEqual([
+        expect.objectContaining({
+          entity: "task",
+          filters: expect.objectContaining({ search: "Example" }),
+        }),
+      ]),
+    );
+    await userEvent.click(screen.getByRole("button", { name: "Bulk edit..." }));
+    const dialog = await screen.findByRole("dialog");
+    expect(screen.queryByRole("link", { name: unloaded.name })).toBeNull();
+    expect(reads).toContainEqual(
+      expect.objectContaining({
+        filters: expect.objectContaining({ search: "Example", ids }),
+      }),
+    );
+    await userEvent.click(
+      within(dialog).getByRole("combobox", { name: "Status" }),
+    );
+    await userEvent.click(await screen.findByRole("option", { name: "Done" }));
+    const update = within(dialog).getByRole("button", { name: "Update" });
+    await waitFor(() => expect(update).toBeEnabled());
+    await userEvent.click(update);
+    await waitFor(() =>
+      expect(mutations).toEqual([
+        {
+          action: "bulkUpdate",
+          entity: "task",
+          ids,
+          data: { status: "done" },
+        },
+      ]),
+    );
+    await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
+  } finally {
+    releaseNextPage();
+    restore();
+  }
 });

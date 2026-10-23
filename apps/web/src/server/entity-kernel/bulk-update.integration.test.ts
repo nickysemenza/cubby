@@ -25,6 +25,7 @@ import {
   executeEntityAs,
 } from "~/server/entity-kernel";
 import { executeEntityMutationRead } from "~/server/entity-kernel/execute";
+import { executeEntitySelectionIds } from "~/server/entity-kernel/selection-ids";
 import {
   captureBackgroundQueue,
   drainDerivedRefreshFrontier,
@@ -325,6 +326,10 @@ describe("generic bulk updates", () => {
       name: "Synthetic guarded second",
       trade: "other",
     });
+    const outside = await createRepoEntity(ctx, "task", {
+      name: "Synthetic outside bulk scope",
+      trade: "other",
+    });
     const seen: string[] = [];
     const base = context();
     await expect(
@@ -354,6 +359,23 @@ describe("generic bulk updates", () => {
       status: "not_started",
     });
     expect(await read("task", second.output.id)).toMatchObject({
+      status: "not_started",
+    });
+    await drainDerivedRefreshFrontier(ctx.db);
+    const matching = await executeEntitySelectionIds(context(), {
+      entity: "task",
+      filters: { search: "Synthetic guarded" },
+      limit: 10,
+    });
+    expect(matching.ids.sort()).toEqual(
+      [first.output.id, second.output.id].sort(),
+    );
+    await bulk("task", matching.ids, { status: "done" });
+    for (const selected of [first, second])
+      expect(await read("task", selected.output.id)).toMatchObject({
+        status: "done",
+      });
+    expect(await read("task", outside.output.id)).toMatchObject({
       status: "not_started",
     });
   });

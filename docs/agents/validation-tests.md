@@ -36,6 +36,12 @@ The emoji/category browser journey retains actual editors and category navigatio
 This removes the dedicated HTTP Vendor-apply smoke; production serialization
 conflicts remain separately tracked rather than being claimed fixed by this move.
 
+MCP budget-policy unit coverage waits for the actual in-memory SDK handler to
+start, then advances a fake clock across the read/model thresholds. Do not use
+a short wall-clock sleep between those budgets: a busy CI event loop can turn
+an intended 45ms response into a false 60ms model timeout. Drain late work before
+restoring real time; production deadline values remain unchanged.
+
 Structured Account creation reads back its saved identity and card numbers after
 the real editor closes. Its contract is schema/editor persistence; a searched
 list’s post-create indexing and invalidation are separate outcomes. Do not make
@@ -121,10 +127,20 @@ They do not reload the document just to start another edit. The task-board
 cold-form journey batches its two fixtures and scopes the list to their shared
 name; keep its CPU-throttled initialization and dirty-field read-backs.
 
+The required `list-capabilities.preview.test.tsx` owns Select all matching through
+the real Task list, bulk dialog and outbound mutation: two loaded rows plus one
+unloaded identity, held next-page reads, retained filter scope and every selected
+ID in the write. `list-ids.integration.test.ts` owns canonical filtered cursor
+pages; the existing Task-guard case in `bulk-update.integration.test.ts` also
+selects matching Tasks, commits both and preserves an outside Task. Small real
+bulk-edit browser journeys retain native editing and database read-back. This
+replaces the 101-row all-matching E2E case; dedicated Worker HTTP composition of
+unloaded selection with its write is the deliberate remaining coverage gap.
+
 Infinite entity lists disable URL pagination synchronization; `pageSize` in a
-list URL does not shrink their loaded page. Unloaded-selection browser fixtures
+list URL does not shrink their loaded page. Real-server unloaded-selection fixtures
 must cross the actual default page boundary and hold the next-page response
-until admission. Do not shrink that cohort using an ignored URL parameter.
+until admission; the required capability owner uses controlled paged responses. Do not shrink that cohort using an ignored URL parameter.
 
 For a same-kind fixture cohort without intermediate reads, use
 `createEntityFixtures`; it writes through the kernel in one transaction and

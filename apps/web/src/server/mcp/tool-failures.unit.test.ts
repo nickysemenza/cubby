@@ -176,49 +176,67 @@ describe("MCP tool deadline", () => {
 
 describe("MCP tool deadline policy", () => {
   it("gives a declared model-backed read the model budget instead of the read budget", async () => {
-    const run = async () => {
-      await new Promise((resolve) => setTimeout(resolve, 45));
-      return { ok: true };
-    };
-    const modelServer = new McpServer({ name: "test", version: "1.0.0" });
-    registerTestTool(
-      modelServer,
-      {
-        name: "model_read",
-        kind: "query",
-        input: z.object({}),
-        output: z.object({ ok: z.boolean() }),
-        run,
-        spec: { modelBacked: true },
-      },
-      { markCalendarDirty: vi.fn(), toolDeadlineMs: deadlines },
-    );
-    const plainServer = new McpServer({ name: "test", version: "1.0.0" });
-    registerTestTool(
-      plainServer,
-      {
-        name: "plain_read",
-        kind: "query",
-        input: z.object({}),
-        output: z.object({ ok: z.boolean() }),
-        run,
-      },
-      { markCalendarDirty: vi.fn(), toolDeadlineMs: deadlines },
-    );
+    vi.useFakeTimers();
+    try {
+      let started = Promise.withResolvers<void>();
+      const run = async () => {
+        started.resolve();
+        await new Promise((resolve) => setTimeout(resolve, 45));
+        return { ok: true };
+      };
+      const modelServer = new McpServer({ name: "test", version: "1.0.0" });
+      registerTestTool(
+        modelServer,
+        {
+          name: "model_read",
+          kind: "query",
+          input: z.object({}),
+          output: z.object({ ok: z.boolean() }),
+          run,
+          spec: { modelBacked: true },
+        },
+        { markCalendarDirty: vi.fn(), toolDeadlineMs: deadlines },
+      );
+      const plainServer = new McpServer({ name: "test", version: "1.0.0" });
+      registerTestTool(
+        plainServer,
+        {
+          name: "plain_read",
+          kind: "query",
+          input: z.object({}),
+          output: z.object({ ok: z.boolean() }),
+          run,
+        },
+        { markCalendarDirty: vi.fn(), toolDeadlineMs: deadlines },
+      );
 
-    const modelResult = await callMcpTool(modelServer, "model_read", {
-      action: "run",
-    });
-    const plainResult = await withErrorReporting(
-      () => callMcpTool(plainServer, "plain_read", { action: "run" }),
-      rayHeaders(),
-      vi.fn(() => "sentry-event-4"),
-    );
+      // Advance only after the SDK enters the handler and installs its deadline.
+      const modelCall = callMcpTool(modelServer, "model_read", {
+        action: "run",
+      });
+      await started.promise;
+      await vi.advanceTimersByTimeAsync(45);
+      const modelResult = await modelCall;
 
-    expect(modelResult.isError).not.toBe(true);
-    expect(modelResult.structuredContent).toEqual({ ok: true });
-    expect(plainResult.isError).toBe(true);
-    expect(errorText(plainResult)).toContain("plain_read.run did not finish");
+      started = Promise.withResolvers<void>();
+      const plainCall = withErrorReporting(
+        () => callMcpTool(plainServer, "plain_read", { action: "run" }),
+        rayHeaders(),
+        vi.fn(() => "sentry-event-4"),
+      );
+      await started.promise;
+      await vi.advanceTimersByTimeAsync(deadlines.read);
+      const plainResult = await plainCall;
+      // Drain the late plain handler before returning to real time.
+      await vi.advanceTimersByTimeAsync(45 - deadlines.read);
+
+      expect(modelResult.isError).not.toBe(true);
+      expect(modelResult.structuredContent).toEqual({ ok: true });
+      expect(plainResult.isError).toBe(true);
+      expect(errorText(plainResult)).toContain("plain_read.run did not finish");
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 
