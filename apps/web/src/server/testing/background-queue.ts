@@ -17,33 +17,38 @@ import {
   createProductionRefreshFamilyHandler,
 } from "~/server/workflows/background-tasks/refresh-families";
 
-const searchDrains = new WeakMap<Database, Promise<void>>();
+const frontierDrains = new WeakMap<Database, Promise<void>>();
 
 /** Fixture seeding and the offline E2E pump share one real Job drain per handle. */
 export function drainDerivedRefreshFrontier(
   db: Database,
   maxPages = 10_000,
 ): Promise<void> {
-  const existing = searchDrains.get(db);
+  const existing = frontierDrains.get(db);
   if (existing) return existing;
-  const pending = drainSearchJobs(db, maxPages).finally(() =>
-    searchDrains.delete(db),
-  );
-  searchDrains.set(db, pending);
+  // Lists read published quality, so fixtures settle it alongside search.
+  const pending = drainFamilyJobs(db, "search", maxPages)
+    .then(() => drainFamilyJobs(db, "quality", maxPages))
+    .finally(() => frontierDrains.delete(db));
+  frontierDrains.set(db, pending);
   return pending;
 }
 
-async function drainSearchJobs(db: Database, maxPages: number): Promise<void> {
+async function drainFamilyJobs(
+  db: Database,
+  family: "search" | "quality",
+  maxPages: number,
+): Promise<void> {
   const deadline = performance.now() + 30_000;
   for (let page = 0; page < maxPages; page++) {
     const [pending] = await getDb(db)
       .select()
       .from(job)
-      .where(eq(job.key, "refresh:search"));
+      .where(eq(job.key, `refresh:${family}`));
     if (!pending || pending.state === "completed") return;
     if (["failed", "cancelled", "paused"].includes(pending.state))
       throw new Error(
-        `Synthetic search refresh stopped: ${pending.error ?? pending.state}`,
+        `Synthetic ${family} refresh stopped: ${pending.error ?? pending.state}`,
       );
     // Explicit fixture settlement does not wait for the scheduler's backoff clock.
     await getDb(db)
@@ -59,12 +64,12 @@ async function drainSearchJobs(db: Database, maxPages: number): Promise<void> {
       // Another runtime can already own the same durable Job; wait for its fenced publication.
       if (performance.now() >= deadline)
         throw new Error(
-          `Synthetic search Job did not settle: ${pending.state}`,
+          `Synthetic ${family} Job did not settle: ${pending.state}`,
         );
       await new Promise((resolve) => setTimeout(resolve, 25));
     }
   }
-  throw new Error(`Synthetic search refresh exceeded ${maxPages} pages`);
+  throw new Error(`Synthetic ${family} refresh exceeded ${maxPages} pages`);
 }
 
 /** Settle only recipe intent using real Job ownership and an optional USDA fixture seam. */
