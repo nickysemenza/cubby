@@ -1,5 +1,5 @@
 import { getWorkerAssetsDir } from "@cloudflare/build-output-utils";
-import { execFileSync, execSync } from "node:child_process";
+import { execFileSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { sentryTanstackStart } from "@sentry/tanstackstart-react/vite";
@@ -27,30 +27,36 @@ execFileSync(process.execPath, ["../../scripts/ensure.ts", "generate"], {
   stdio: "inherit",
 });
 
-const gitCommit = execSync("git rev-parse --short HEAD", {
-  encoding: "utf-8",
-}).trim();
 // Full SHA for the Sentry release's commit association (setCommits below) —
-// the short `gitCommit` above is what actually names the release, matching
+// the short `gitCommit` is what actually names the release, matching
 // the runtime `release` in router.tsx and cf-server.ts.
-const fullSha = execSync("git rev-parse HEAD", { encoding: "utf-8" }).trim();
+const [fullSha, gitCommit, headDate] = execFileSync(
+  "git",
+  ["show", "-s", "--format=%H%n%h%n%cI", "HEAD", "--"],
+  { encoding: "utf-8", cwd: __dirname },
+)
+  .trim()
+  .split("\n");
+if (!fullSha || !gitCommit || !headDate)
+  throw new Error(
+    "Git HEAD metadata must include full SHA, short SHA and date",
+  );
 const repoRoot = path.resolve(__dirname, "../..");
 const sourceCommit = process.env.CUBBY_SOURCE_COMMIT?.slice(0, 7) || gitCommit;
 // Source time keeps identical checkouts byte-stable across repeated builds.
-const sourceDate = execFileSync(
-  "git",
-  [
-    "show",
-    "-s",
-    "--format=%cI",
-    process.env.CUBBY_SOURCE_COMMIT || "HEAD",
-    "--",
-  ],
-  { encoding: "utf-8" },
-).trim();
+const sourceDate = process.env.CUBBY_SOURCE_COMMIT
+  ? execFileSync(
+      "git",
+      ["show", "-s", "--format=%cI", process.env.CUBBY_SOURCE_COMMIT, "--"],
+      { encoding: "utf-8", cwd: __dirname },
+    ).trim()
+  : headDate;
 const sourceBranch =
   process.env.CUBBY_SOURCE_BRANCH ||
-  execSync("git rev-parse --abbrev-ref HEAD", { encoding: "utf-8" }).trim();
+  execFileSync("git", ["rev-parse", "--abbrev-ref", "HEAD"], {
+    encoding: "utf-8",
+    cwd: __dirname,
+  }).trim();
 const productionR2PublicUrl = readR2PublicUrl();
 /**
  * The client's transform gate must name the host the SERVER stamps on image
@@ -315,6 +321,11 @@ export default defineConfig(async ({ command }) => {
         },
       },
       ssr: {
+        optimizeDeps: {
+          // Lazy route imports escape the entry scan. Discover their dependencies
+          // together instead of repeatedly rebuilding and reloading workerd.
+          entries: ["src/routes/**/*.tsx", "!src/**/*.test.*"],
+        },
         build: {
           // Sentry consumes these maps; build-cf excludes them from cf upload.
           sourcemap: true,

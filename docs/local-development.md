@@ -7,7 +7,15 @@ app. A shared IntegreSQL corpus template supplies the synthetic core household;
 the Worker restores its bundled photos into checkout-local R2 and reports
 readiness only after the database, fixtures, and Worker agree. Vite compiles
 application/auth routes on their first request; startup does not warm SSR with
-an otherwise unused auth-session request.
+an otherwise unused auth-session request. The SSR dependency scan includes route
+files, including lazy routes, so their package dependencies are pre-bundled
+together rather than discovered through repeated workerd reloads during login.
+Route scanning excludes tests and does not eagerly render the routes.
+Keep client warmup limited to measured wins in total startup through first-page
+use. Warming the router, root route and authenticated shell together competed
+with fixture preparation and did not establish a net improvement. For further
+profiling, start with `DEBUG=vite:transform pnpm dev`; transform durations can
+include overlapping waits and must not be added as elapsed-time savings.
 
 ## Start and discover
 
