@@ -12,6 +12,7 @@ import {
 import { testShortcode } from "@cubby/schemas/testing";
 import {
   fireEvent,
+  act,
   render,
   renderHook,
   screen,
@@ -22,6 +23,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { MobileCardView } from "~/entity/table/mobile-card-view";
 import { ai } from "~/integrations/tanstack-query/generated/catalog/ai.gen";
+import { suggestions } from "~/integrations/tanstack-query/generated/catalog/suggestions.gen";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 import {
   createCubbyColumnCollection,
@@ -31,6 +33,7 @@ import {
 } from "~/ui/data-table/table-features";
 
 import type { EntitySuggestionsOperations } from "./field-suggestion";
+import { ProposalCount, ProposalCountProvider } from "./proposal-counts";
 import {
   everyPendingSuggestion,
   RecordFieldSuggestion,
@@ -185,6 +188,56 @@ function setup(
 }
 
 describe("stored suggestions in generic list cells", () => {
+  it("updates proposal counts without subscribing unrelated fields", async () => {
+    const harness = createBrowserTestHarness();
+    const identityReads = vi.fn();
+    const unrelatedRecord = {
+      get id() {
+        identityReads();
+        return record.id;
+      },
+    };
+    const key = suggestions.recordCounts.queryOptions({
+      recordIds: [record.id],
+    }).queryKey;
+    harness.queryClient.setQueryData(key, {
+      records: [{ id: record.id, pending: 1 }],
+    });
+    const commits = vi.fn();
+    const view = render(
+      <ProposalCountProvider entity="product" records={[record]}>
+        <Profiler id="unrelated-count-field" onRender={commits}>
+          <ProposalCount record={unrelatedRecord} field="expenseCount">
+            <span>12 expenses</span>
+          </ProposalCount>
+        </Profiler>
+        <ProposalCount record={record} field="name">
+          <span>Product title</span>
+        </ProposalCount>
+        <ProposalCount record={record}>
+          <span>Mobile title</span>
+        </ProposalCount>
+      </ProposalCountProvider>,
+      { wrapper: harness.wrapper },
+    );
+    try {
+      await screen.findAllByRole("button", { name: "1 pending suggestion" });
+      const before = commits.mock.calls.length;
+      const readsBefore = identityReads.mock.calls.length;
+      await act(async () => {
+        harness.queryClient.setQueryData(key, {
+          records: [{ id: record.id, pending: 2 }],
+        });
+      });
+      await screen.findAllByRole("button", { name: "2 pending suggestions" });
+      expect(commits).toHaveBeenCalledTimes(before);
+      expect(identityReads).toHaveBeenCalledTimes(readsBefore);
+      expect(screen.getByText("12 expenses")).toBeVisible();
+    } finally {
+      view.unmount();
+      harness.dispose();
+    }
+  });
   it("does not update an unsuggestible field when another field's stored suggestion arrives", async () => {
     const harness = createBrowserTestHarness();
     const pending = Promise.withResolvers<SuggestionReviewRow[]>();
