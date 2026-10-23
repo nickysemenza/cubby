@@ -10,7 +10,7 @@ import { entityDisplayImagePresenceSql } from "~/server/entity-kernel/repo/entit
 import { qualityCheck } from "~/server/generic/data-quality/repo/builders";
 import { defineStoredEntityChecks } from "~/server/generic/data-quality/repo/stored-registry";
 
-export const LOCATION_QUALITY_RULES_VERSION = 1;
+const LOCATION_QUALITY_RULES_VERSION = 1;
 
 type LocationQualityRecord = Awaited<
   ReturnType<typeof loadLocationQualityRecords>

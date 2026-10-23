@@ -28,7 +28,7 @@ import {
   readRecordWorkQueue,
   readWorkQueue,
 } from "~/server/generic/work-queue/service/work-queue-read";
-import { publishQualityFixtures } from "~/server/testing/quality.fixtures";
+import { publishAllQualityFixtures } from "~/server/testing/quality.fixtures";
 import {
   createProductIdentityFixture,
   makeProductInput,
@@ -52,15 +52,13 @@ import { seedRunFinding } from "~/server/testing/run-finding.fixtures";
 describe("Work queue gaps, typed columns, and record rows", () => {
   const ctx = withTestDb();
   const publishedWorkQueue: typeof readWorkQueue = async (...args) => {
-    await publishQualityFixtures(ctx.db, "product");
-    await publishQualityFixtures(ctx.db, "expense");
+    await publishAllQualityFixtures(ctx.db);
     return readWorkQueue(...args);
   };
   const publishedRecordWorkQueue: typeof readRecordWorkQueue = async (
     ...args
   ) => {
-    await publishQualityFixtures(ctx.db, "product");
-    await publishQualityFixtures(ctx.db, "expense");
+    await publishAllQualityFixtures(ctx.db);
     return readRecordWorkQueue(...args);
   };
 

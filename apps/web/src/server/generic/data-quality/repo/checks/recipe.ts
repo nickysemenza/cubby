@@ -7,7 +7,7 @@ import { entityDisplayImagePresenceSql } from "~/server/entity-kernel/repo/entit
 import { qualityCheck } from "~/server/generic/data-quality/repo/builders";
 import { defineStoredEntityChecks } from "~/server/generic/data-quality/repo/stored-registry";
 
-export const RECIPE_QUALITY_RULES_VERSION = 1;
+const RECIPE_QUALITY_RULES_VERSION = 1;
 
 type RecipeQualityRecord = Awaited<
   ReturnType<typeof loadRecipeQualityRecords>

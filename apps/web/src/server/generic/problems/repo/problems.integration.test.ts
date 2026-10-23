@@ -20,8 +20,10 @@ import {
   findProblemByType,
 } from "~/server/generic/problems/service/problem-execution.service";
 import { captureBackgroundQueue } from "~/server/testing/background-queue";
-import { publishAllQualityFixtures } from "~/server/testing/quality.fixtures";
-import { publishQualityFixtures } from "~/server/testing/quality.fixtures";
+import {
+  publishAllQualityFixtures,
+  publishQualityFixtures,
+} from "~/server/testing/quality.fixtures";
 let backgroundQueue: ReturnType<typeof captureBackgroundQueue>;
 beforeEach(() => {
   backgroundQueue = captureBackgroundQueue();
@@ -636,6 +638,7 @@ describe("problems — understated meal cost", () => {
     );
     const meal = createdMeal.output;
 
+    await publishQualityFixtures(ctx.db, "meal");
     const row = (await findFastProblems(ctx.db)).understatedCostMeals.find(
       (candidate) => candidate.id === meal.id,
     );
@@ -742,6 +745,7 @@ describe("problems — understated meal cost", () => {
       )
     ).output;
 
+    await publishQualityFixtures(ctx.db, "meal");
     const row = (await findFastProblems(ctx.db)).understatedCostMeals.find(
       (candidate) => candidate.id === meal.id,
     );

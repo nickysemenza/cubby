@@ -8,7 +8,7 @@ import { entityDisplayImagePresenceSql } from "~/server/entity-kernel/repo/entit
 import { qualityCheck } from "~/server/generic/data-quality/repo/builders";
 import { defineStoredEntityChecks } from "~/server/generic/data-quality/repo/stored-registry";
 
-export const IMAGE_QUALITY_RULES_VERSION = 1;
+const IMAGE_QUALITY_RULES_VERSION = 1;
 
 type ImageQualityRecord = Awaited<
   ReturnType<typeof loadImageQualityRecords>

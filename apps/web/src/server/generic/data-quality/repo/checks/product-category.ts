@@ -8,7 +8,7 @@ import { entityDisplayImagePresenceSql } from "~/server/entity-kernel/repo/entit
 import { qualityCheck } from "~/server/generic/data-quality/repo/builders";
 import { defineStoredEntityChecks } from "~/server/generic/data-quality/repo/stored-registry";
 
-export const PRODUCT_CATEGORY_QUALITY_RULES_VERSION = 1;
+const PRODUCT_CATEGORY_QUALITY_RULES_VERSION = 1;
 
 type ProductCategoryQualityRecord = Awaited<
   ReturnType<typeof loadProductCategoryQualityRecords>

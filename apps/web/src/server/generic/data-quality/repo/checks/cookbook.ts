@@ -9,7 +9,7 @@ import { entityDisplayImagePresenceSql } from "~/server/entity-kernel/repo/entit
 import { qualityCheck } from "~/server/generic/data-quality/repo/builders";
 import { defineStoredEntityChecks } from "~/server/generic/data-quality/repo/stored-registry";
 
-export const COOKBOOK_QUALITY_RULES_VERSION = 1;
+const COOKBOOK_QUALITY_RULES_VERSION = 1;
 
 type CookbookQualityRecord = Awaited<
   ReturnType<typeof loadCookbookQualityRecords>

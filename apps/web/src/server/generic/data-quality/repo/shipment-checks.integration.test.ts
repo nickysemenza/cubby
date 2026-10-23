@@ -382,12 +382,19 @@ describe("Shipment evidence quality", () => {
     expect(await unwrapDb(ctx.db).select().from(entityQuality)).toEqual([]);
     await refresh();
     expect((await stored()).score).toBe(100);
-    const backfilled = await unwrapDb(ctx.db).select().from(entityQuality);
+    // Shipment fixtures also create other stored kinds, such as carrier Vendors.
+    const backfilled = await unwrapDb(ctx.db)
+      .select()
+      .from(entityQuality)
+      .where(eq(entityQuality.kind, "shipment"));
     expect(backfilled.map((row) => row.entityId).sort()).toEqual(
       [...historical.map((row) => row.id), parcel.row.id].sort(),
     );
     expect(
-      await unwrapDb(ctx.db).select().from(entityQualityCheck),
+      await unwrapDb(ctx.db)
+        .select()
+        .from(entityQualityCheck)
+        .where(eq(entityQualityCheck.kind, "shipment")),
     ).toHaveLength((historical.length + 1) * 6);
     const timeline = await readShipmentTimeline(ctx.db, parcel.code);
     await editShipmentObservation(
