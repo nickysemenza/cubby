@@ -21,6 +21,17 @@ import {
   type ImportImageRow,
 } from "~/server/domains/photo-import/repo/photo-import";
 import {
+  assertPhotoImportReplacementAllowed,
+  assertPhotoImportRouteEnabled,
+  assertPhotoImportSourceCardinality,
+  assertPhotoImportSourceContext,
+  materializePhotoImportCreateBody,
+  sourceEntityFor,
+  type CreateBody,
+  type SourceContext,
+  type SourceRecord,
+} from "~/server/domains/photo-import/service/photo-import-route-bindings";
+import {
   executeEntityAs,
   type EntityKernelContext,
 } from "~/server/entity-kernel";
@@ -37,17 +48,6 @@ import type {
   PhotoImportRouteAdapter,
   PhotoImportRouteCommitResult,
 } from "../repo/photo-import-commit";
-import {
-  assertPhotoImportReplacementAllowed,
-  assertPhotoImportRouteEnabled,
-  assertPhotoImportSourceCardinality,
-  assertPhotoImportSourceContext,
-  materializePhotoImportCreateBody,
-  sourceEntityFor,
-  type CreateBody,
-  type SourceContext,
-  type SourceRecord,
-} from "./photo-import-route-bindings";
 
 type Route = ImageIngressRoute;
 

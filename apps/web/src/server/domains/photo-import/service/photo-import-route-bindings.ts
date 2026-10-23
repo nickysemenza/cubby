@@ -8,8 +8,8 @@ import type { z } from "zod";
 import {
   photoImportContract,
   type PhotoImportCommitInput,
-} from "../../../../contracts/photo-import.contract";
-import { createAppError } from "../../../errors/app-error";
+} from "~/contracts/photo-import.contract";
+import { createAppError } from "~/server/errors/app-error";
 
 export type CreateBody = PhotoImportCommitInput["creates"][number]["body"];
 export type SourceContext = PhotoImportCommitInput["images"][number]["source"];
@@ -23,7 +23,7 @@ const createBodySchema =
 
 export const sourceEntityFor = (
   route: Pick<ImageIngressRoute, "sourceEntity">,
-) =>
+): NonNullable<SourceContext>["entity"] =>
   photoImportContract.ops.commit.input.shape.images.element.shape.source
     .unwrap()
     .shape.entity.parse(route.sourceEntity);

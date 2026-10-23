@@ -398,6 +398,12 @@ changes the affected layout.
 
 ## Required component-browser tests
 
+Photo-import route binding and source-admission unit cases import
+`photo-import-route-bindings.ts`, which evaluates contracts without loading
+repositories or the entity kernel. Runtime route creation, singular image owners
+and SQL relationship traversal stay in the existing photo-import transaction
+integration suite, which already imports those production bindings.
+
 The `capability` Vitest project runs the explicitly selected shared list/table/explanation
 coverage in `vitest.config.ts`. Production renderers run in headless Chromium
 with the real Tailwind CSS. It is part of `pnpm test` and the Vitest shards;
