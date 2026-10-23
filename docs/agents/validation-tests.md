@@ -19,6 +19,14 @@ repositories or the entity kernel. Runtime route creation, singular image owners
 and SQL relationship traversal stay in the existing photo-import transaction
 integration suite, which already imports those production bindings.
 
+The saved-photo evidence browser journey keeps attach/create distinctions, a real
+saved cover that decodes, native label-to-name editing and one phone overflow
+check. `photo-run-detail.preview.test.tsx` owns native review presentation and
+candidate comparisons; the separate saved-evidence failure/recovery and noisy
+care-label browser journeys retain field cross-checks against saved evidence.
+Exact thumbnail widths, 28px ledger rails and pseudo-element alignment are a
+deliberate presentation-verification gap, not repeated backend-connected checks.
+
 Vendor default freshness and successful apply/read-back belong in
 `finance-context.integration.test.ts`, beside the Expense review owner.
 `vendor-suggestion-context.integration.test.ts` owns independent evidence and
