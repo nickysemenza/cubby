@@ -140,7 +140,6 @@ export function ReportRefLink({
       entity={entity}
       id={reference.id}
       name={text}
-      displayImage={null}
     />
   );
 }
