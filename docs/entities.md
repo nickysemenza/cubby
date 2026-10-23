@@ -2570,6 +2570,27 @@ The broad quality pass recomputes affected Products, including kit descendants,
 without mutation-time dependent traversal. Reads leave old publications intact
 until the pass completes.
 
+Expense uses stored TypeScript checks at rules version 1. One page-scoped
+loader reads its scalar fields, shared allocation/category completeness,
+product-expectation policy and display-image presence. Existing SQL domain
+helpers inside that loader retain sibling allocation weights, inherited
+Purchase/Project/category precedence, liveness and rounding. The pure checks
+preserve incurred-only cost/category/quantity rules, known zero costs and
+product expectations on planned merchandise. Expense no longer has SQL quality
+bindings, derived-read hooks or fingerprint bindings.
+
+Expense list quality, filters, score sorting and Work queue research read
+published outcomes. Work queue branches bind the shared stored-quality relation;
+standalone Expense predicates use stored scalar reads without assuming a join.
+Problems detectors have no direct Expense quality predicate;
+their independent financial invariants retain their existing domain owners.
+Expense, Purchase, Project, vendor and category edits enroll broad quality intent
+through transactional audit registration; allocation/settlement links and
+attachments use their existing source-change registrations. The family scans
+current Expenses, including descendants affected by inherited inputs, without
+mutation-time dependent traversal. Reads never repair stale outcomes. Member
+waivers remain durable when these inputs change.
+
 A Product's `commodity` flag marks interchangeable goods with no single
 listing. It removes brand, Identifier and Amazon ASIN checks from applicability;
 it is a deliberate member decision, never inferred from an unknown or Generic

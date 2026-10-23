@@ -53,12 +53,14 @@ describe("Work queue gaps, typed columns, and record rows", () => {
   const ctx = withTestDb();
   const publishedWorkQueue: typeof readWorkQueue = async (...args) => {
     await publishQualityFixtures(ctx.db, "product");
+    await publishQualityFixtures(ctx.db, "expense");
     return readWorkQueue(...args);
   };
   const publishedRecordWorkQueue: typeof readRecordWorkQueue = async (
     ...args
   ) => {
     await publishQualityFixtures(ctx.db, "product");
+    await publishQualityFixtures(ctx.db, "expense");
     return readRecordWorkQueue(...args);
   };
 

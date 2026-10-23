@@ -874,7 +874,6 @@ describe("expense project allocation", () => {
       ["costs", projectsOnly, { projectIds: [first.id] }],
       ["categories", allDimensions, undefined],
       ["categoryNames", allDimensions, undefined],
-      ["categoryEvidence", allDimensions, undefined],
       [
         "costs",
         { categories: false, trades: true, projects: true },

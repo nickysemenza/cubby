@@ -1,83 +1,86 @@
-import { expenseLineKindSchema } from "@cubby/schemas/expense-line-kind";
-import { sql, type SQL } from "drizzle-orm";
+import { and, sql } from "drizzle-orm";
 
-import { actualExpense } from "~/server/db/computed/expense-aggregate-sql";
+import type { Database, DrizzleTransaction } from "~/server/db";
+import { notDeleted, unwrapDb, uuidArrayParam } from "~/server/db/helpers";
 import { expense } from "~/server/db/schema";
-import {
-  expenseDerivedValueSql,
-  expenseDerivedReadSql,
-} from "~/server/domains/expense/repo/expense-derived-read";
+import { expenseDerivedReadSql } from "~/server/domains/expense/repo/expense-derived-read";
 import { expenseProductExpectedSql } from "~/server/domains/purchase/repo/purchase-evidence-policy";
-import {
-  defineEntityChecks,
-  qualityReadColumn,
-  type QualityReadContext,
-} from "~/server/generic/data-quality/repo/registry";
+import { entityDisplayImagePresenceSql } from "~/server/entity-kernel/repo/entity-display-image";
+import { qualityCheck } from "~/server/generic/data-quality/repo/builders";
+import { defineStoredEntityChecks } from "~/server/generic/data-quality/repo/stored-registry";
 
-type Expense = typeof expense;
+/** Bump when the rules or their declared scoring metadata change. */
+export const EXPENSE_QUALITY_RULES_VERSION = 1;
 
-// Relational lists rename Expense to expense. Keep the outer reference as a
-// Drizzle column and evaluate policy under an alias local to this subquery.
-const policyProjection = (
-  t: Expense,
-  policy: (alias: string) => SQL,
-): SQL => sql`(
-  SELECT ${policy("dq_expense_policy")} FROM "Expense" dq_expense_policy
-  WHERE dq_expense_policy.id = ${t.id}
-)`;
+type ExpenseQualityRecord = Awaited<
+  ReturnType<typeof loadExpenseQualityRecords>
+>[number];
+const observed = qualityCheck.observed<ExpenseQualityRecord>;
+const when = qualityCheck.when<ExpenseQualityRecord>;
 
-const categoryEvidence = <K extends "missing" | "evidence">(
-  field: K,
-  t: Expense,
-  context?: QualityReadContext,
-): SQL =>
-  qualityReadColumn(context, field) ??
-  expenseDerivedValueSql(field, sql`${t.id}`);
-
-export const expenseChecks = defineEntityChecks({
+export const expenseChecks = defineStoredEntityChecks({
   entity: "expense",
   table: expense,
-  derivedRead: (ids) => sql`SELECT "expenseId" AS "entityId", missing, evidence
-    FROM (${expenseDerivedReadSql("categoryEvidence", { expenseIds: ids })}) evidence`,
+  rulesVersion: EXPENSE_QUALITY_RULES_VERSION,
+  load: loadExpenseQualityRecords,
   checks: {
-    expense_receipt_role: {
-      expected: (t: Expense) => actualExpense(t.future),
-      missing: (t: Expense) =>
-        sql`${t.lineKind} = ${expenseLineKindSchema.enum.unclassified}`,
-      fingerprint: (t: Expense) => [sql`${t.future}`, sql`${t.lineKind}`],
-    },
-    expense_cost: {
-      // A future (planned, not yet spent) line may be unpriced; once it is
-      // no longer future a cost is expected.
-      expected: (t: Expense) => actualExpense(t.future),
-      missing: (t: Expense) => sql`${t.cost} IS NULL`,
-      fingerprint: (t) => [sql`${t.future}`, sql`${t.cost}`],
-    },
-    expense_spending_category: {
-      expected: (t) => actualExpense(t.future),
-      missing: (t, context) =>
-        sql`coalesce(${categoryEvidence("missing", t, context)}, true)`,
-      fingerprint: (t, context) => [categoryEvidence("evidence", t, context)],
-    },
-    // Only a merchandise line (one whose Product identity is expected) feeds
-    // the quantity ledger; a fee, tax, or service line has no unit count.
-    expense_quantity: {
-      expected: (t) =>
-        sql`(${actualExpense(t.future)} AND ${policyProjection(t, expenseProductExpectedSql)})`,
-      missing: (t) => sql`${t.productQuantity} IS NULL`,
-      fingerprint: (t) => [
-        sql`${t.future}`,
-        policyProjection(t, expenseProductExpectedSql),
-        sql`${t.productQuantity}`,
-      ],
-    },
-    expense_product_resolution: {
-      expected: (t) => policyProjection(t, expenseProductExpectedSql),
-      missing: (t) => sql`${t.productId} IS NULL`,
-      fingerprint: (t) => [
-        policyProjection(t, expenseProductExpectedSql),
-        sql`${t.productId}`,
-      ],
-    },
+    expense_receipt_role: when(
+      (r) => !r.future,
+      observed((r) => r.lineKind !== "unclassified"),
+    ),
+    // Planned lines may be unpriced. Zero is a recorded cost.
+    expense_cost: when(
+      (r) => !r.future,
+      observed((r) => r.cost !== null),
+    ),
+    expense_spending_category: when(
+      (r) => !r.future,
+      observed((r) => !r.categoryMissing),
+    ),
+    // Only merchandise expected by the domain policy feeds the unit ledger.
+    expense_quantity: when(
+      (r) => !r.future && r.productExpected,
+      observed((r) => r.productQuantity !== null),
+    ),
+    expense_product_resolution: when(
+      (r) => r.productExpected,
+      observed((r) => r.productId !== null),
+    ),
+    expense_display_image: observed((r) => r.hasDisplayImage),
   },
 });
+
+async function loadExpenseQualityRecords(
+  db: Database | DrizzleTransaction,
+  ids: readonly string[],
+) {
+  if (!ids.length) return [];
+  // Resolve allocations and inherited category policy for this page only. The
+  // domain owners retain sibling weighting, rounding and ancestor precedence.
+  const categories = sql`(SELECT "expenseId",
+    bool_or("spendingCategoryId" IS NULL OR incomplete) AS missing
+    FROM (${expenseDerivedReadSql("categories", {
+      expenseIds: uuidArrayParam(ids),
+    })}) category_share GROUP BY "expenseId") quality_category`;
+  return unwrapDb(db)
+    .select({
+      id: expense.id,
+      shortcode: expense.shortcode,
+      future: expense.future,
+      lineKind: expense.lineKind,
+      cost: expense.cost,
+      productQuantity: expense.productQuantity,
+      productId: expense.productId,
+      categoryMissing: sql<boolean>`coalesce(quality_category.missing, true)`,
+      productExpected: sql<boolean>`${expenseProductExpectedSql("Expense")}`,
+      hasDisplayImage: sql<boolean>`${entityDisplayImagePresenceSql("expense", sql`${expense.id}`)}`,
+    })
+    .from(expense)
+    .leftJoin(categories, sql`quality_category."expenseId" = ${expense.id}`)
+    .where(
+      and(
+        notDeleted(expense),
+        sql`${expense.id} = ANY(${uuidArrayParam(ids)})`,
+      ),
+    );
+}

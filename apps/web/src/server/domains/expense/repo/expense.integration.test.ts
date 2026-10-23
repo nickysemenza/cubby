@@ -59,6 +59,7 @@ import { resolveShortcode } from "~/server/generic/shortcode/repo/shortcode-reso
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { requireActor } from "~/server/http/request-context";
 import { bulkUpdateFor } from "~/server/testing/entity-kernel";
+import { publishQualityFixtures } from "~/server/testing/quality.fixtures";
 import {
   makeExpenseInput,
   makeProductInput,
@@ -303,6 +304,7 @@ describe("expense repository — CRUD", () => {
       expenseLineRoleClassifier(decisionPort("none")),
     );
     expect(output.lineKind).toBe("unclassified");
+    await publishQualityFixtures(ctx.db, "expense");
     const quality = await loadDataQualities(ctx.db, "expense", [entityId]);
     expect(quality.get(entityId)?.gaps.map((gap) => gap.check)).toContain(
       "expense_receipt_role",

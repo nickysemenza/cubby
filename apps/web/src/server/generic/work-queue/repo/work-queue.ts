@@ -61,7 +61,6 @@ import type { Database } from "~/server/db";
 import { getDb, ilikeContains } from "~/server/db/helpers";
 import { actualExpenseSql } from "~/server/db/helpers/predicates";
 import {
-  expense,
   financialAccount,
   financialTransaction,
   vendor,
@@ -376,15 +375,16 @@ async function workQueueProjection(
     selections.push(
       ...workQueueCandidate(scope, {
         entity: "expense",
-        table: sql`${expense}`,
+        table: quality.source("expense"),
         id: sql`"Expense".shortcode`,
         name: sql`"Expense".name`,
         owners: workExpenseSourceOwners(sql`"Expense".id`),
         where: await buildExpenseWhereClause(
           db,
           expenseFiltersSchema.parse(expenseGaps),
+          { readContext: quality.context("expense") },
         ),
-        details: research("expense"),
+        details: research("expense", quality.context("expense")),
         key: "research:expense",
         carriesGaps: true,
       }),
@@ -534,13 +534,14 @@ async function workQueueProjection(
       selections.push(
         ...workQueueCandidate(scope, {
           entity: "expense",
-          table: sql`${expense}`,
+          table: quality.source("expense"),
           id: sql`"Expense".shortcode`,
           name: sql`"Expense".name`,
           owners: workExpenseOwners(sql`"Expense".id`),
           where: await buildExpenseWhereClause(
             db,
             expenseFiltersSchema.parse(filters),
+            { readContext: quality.context("expense") },
           ),
           details: settlementDetails,
           key: definition.key,
