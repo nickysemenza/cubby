@@ -2695,16 +2695,25 @@ export async function suggestionsNeedingLabels(
 ) {
   const positionAt = sql`coalesce((s.data->'applicationOrder'->>'createdAt')::timestamp, s."createdAt")`;
   const positionId = sql`coalesce((s.data->'applicationOrder'->>'id')::uuid, s.id)`;
-  // The materialized roster is narrow: payloads are fetched only after LIMIT.
-  // Retain the Assessment join here so orphan projections cannot consume slots.
+  const nativePosition = sql`(s.data->'applicationOrder'->>'createdAt' IS NULL AND s.data->'applicationOrder'->>'id' IS NULL)`;
+  const selectPositions = (position: "native" | "retained") => {
+    const at = position === "native" ? sql`s."createdAt"` : positionAt;
+    const id = position === "native" ? sql`s.id` : positionId;
+    return sql`SELECT s.id, ${at} AS "positionAt", ${id} AS "positionId"
+      FROM "AssessmentState" s JOIN "Assessment" a ON a.id=s.id
+      WHERE ${pendingSuggestion()} AND ((s.data->>'needsLabel')::boolean
+        OR coalesce((s.data->>'applicationPending')::boolean, false))
+        AND ${position === "native" ? nativePosition : sql`NOT ${nativePosition}`}
+        ${importScope(importId)}
+        ${after ? sql`AND (${at}, ${id}) ${after.inclusive ? sql`>=` : sql`>`} (${after.createdAt}::timestamp, ${after.id}::uuid)` : sql``}
+      ORDER BY ${at},${id} LIMIT ${limit}`;
+  };
+  // Disjoint positions preserve the global first K in their two first-K sets.
+  // Every eligibility check and the Assessment join precedes each branch limit;
+  // judgments are hydrated only after the merged limit.
   const query = sql`WITH selected AS MATERIALIZED (
-    SELECT s.id, ${positionAt} AS "positionAt", ${positionId} AS "positionId"
-    FROM "AssessmentState" s JOIN "Assessment" a ON a.id=s.id
-    WHERE ${pendingSuggestion()} AND ((${suggestionField("needsLabel")})::boolean
-      OR coalesce((s.data->>'applicationPending')::boolean, false))
-      ${importScope(importId)}
-      ${after ? sql`AND (${positionAt}, ${positionId}) ${after.inclusive ? sql`>=` : sql`>`} (${after.createdAt}::timestamp, ${after.id}::uuid)` : sql``}
-    ORDER BY ${positionAt},${positionId} LIMIT ${limit}
+    SELECT * FROM ((${selectPositions("native")}) UNION ALL (${selectPositions("retained")})) candidates
+    ORDER BY "positionAt","positionId" LIMIT ${limit}
   )
   SELECT s.id,to_char(selected."positionAt",'YYYY-MM-DD"T"HH24:MI:SS.US') AS "createdAt",selected."positionId" AS "cursorId",
     a.subject,a.judgment,s.data->'amount' AS amount,

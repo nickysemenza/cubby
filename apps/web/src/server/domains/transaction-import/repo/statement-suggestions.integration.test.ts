@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+
 import { assessmentSubjects } from "@cubby/schemas/assessment";
 import { financialSpendingAdvice } from "@cubby/schemas/financial-booking";
 import type { FinancialTransactionKind } from "@cubby/schemas/financial-transaction";
@@ -29,12 +31,24 @@ import { getDb, notDeleted } from "~/server/db/helpers";
 import * as databaseHelpers from "~/server/db/helpers";
 import {
   assessmentState,
+  assessment,
+  feedback,
+  run,
+  runStep,
+  job,
+  automaticRule,
+  appSettings,
+  transactionImport,
+  transactionImportRecord,
+  purchase,
   expense,
   financialTransaction,
   financialTransactionAllocation,
   spendingCategory,
+  sourceTransactionRecord,
 } from "~/server/db/schema";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
+import { ensureRunSteps } from "~/server/domains/run/repo/run-step";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
 import { answering } from "~/server/domains/transaction-import/repo/statement-decision-port.fixtures";
 import * as statementSuggestionsRepo from "~/server/domains/transaction-import/repo/statement-suggestions";
@@ -2736,6 +2750,207 @@ describe("statement Transaction suggestions", () => {
     expect((await suggestions(ctx)).map((row) => row.rawDescription)).toEqual([
       "EXAMPLE NEWER CHARGE",
     ]);
+  });
+
+  it("pages labels across original and receipt positions within exact import scope", async () => {
+    await card(ctx);
+    const description = (index: number) => `SYNTHETIC LABEL POSITION ${index}`;
+    const first = await record(
+      ctx,
+      Array.from({ length: 8 }, (_, index) =>
+        rowInput({
+          rawDescription: description(index),
+          providerAmount: -10 - index,
+        }),
+      ),
+    );
+    await record(
+      ctx,
+      [rowInput({ rawDescription: description(8), providerAmount: -18 })],
+      { fingerprint: "synthetic-label-outside" },
+    );
+    await generate(ctx);
+    const rows = await statementSuggestionsRepo.suggestionsNeedingLabels(
+      ctx.db,
+      20,
+    );
+    const byDescription = new Map(
+      rows.map((row) => [row.judgment.create?.rawDescription, row]),
+    );
+    const target = (index: number) => {
+      const found = byDescription.get(description(index));
+      if (!found) throw new Error("Synthetic label target missing");
+      return found;
+    };
+    const nativeSeconds = [2, 6, 7, 2, 8, 4, 0, 0.5, 0.25];
+    const overrides = new Map<number, Record<string, string>>([
+      [
+        1,
+        {
+          createdAt: "2026-01-01T00:00:01.000001",
+          id: "00000000-0000-0000-0000-000000000001",
+        },
+      ],
+      [
+        2,
+        {
+          createdAt: "2026-01-01T00:00:01.000000",
+          id: "00000000-0000-0000-0000-000000000003",
+        },
+      ],
+      [3, { id: "00000000-0000-0000-0000-000000000000" }],
+      [4, { createdAt: "2026-01-01T00:00:03.000000" }],
+    ]);
+    for (const [index, seconds] of nativeSeconds.entries()) {
+      const extra = {
+        ...(overrides.has(index) && { applicationOrder: overrides.get(index) }),
+        ...(index === 1 && { needsLabel: false, applicationPending: true }),
+        ...(index === 7 && { reviewReason: "Synthetic withdrawn review" }),
+      };
+      await getDb(ctx.db)
+        .update(assessmentState)
+        .set({
+          createdAt: new Date(Date.UTC(2026, 0, 1) + seconds * 1000),
+          data: sql`${assessmentState.data} || ${JSON.stringify(extra)}::jsonb`,
+        })
+        .where(eq(assessmentState.id, target(index).id));
+    }
+    // A withdrawn head is absent unless its retained correction review allows it.
+    for (const index of [6, 7])
+      await getDb(ctx.db)
+        .update(sourceTransactionRecord)
+        .set({ withdrawnAt: new Date() })
+        .where(
+          sql`${sourceTransactionRecord.source}='monarch' AND ${sourceTransactionRecord.externalId}=(SELECT data->>'headRef' FROM "AssessmentState" WHERE id=${target(index).id}::uuid)`,
+        );
+    const durableRun = await ensureRun(ctx.db, ctx.actor, {
+      purpose: "sweep",
+      trigger: "manual",
+      status: "running",
+    });
+    await ensureRunSteps(ctx.db, durableRun, [
+      { key: "statement_label", label: "Decision labels" },
+    ]);
+    await getDb(ctx.db)
+      .update(runStep)
+      .set({
+        state: "running",
+        found: 9,
+        done: 3,
+        pages: 1,
+        cursor: { createdAt: "2026-01-01T00:00:01.000001", id: target(1).id },
+      })
+      .where(eq(runStep.runId, durableRun));
+    await setAutomaticRule(ctx.db, ctx.actor, {
+      ruleKey: "statement_transaction.attach",
+      enabled: false,
+    });
+    // Reproduce the populated predecessor, then apply the exact migration.
+    // Index construction must preserve evidence, history, controls and durable work.
+    await databaseHelpers.withTransactionDatabase(ctx.db, async (tx) => {
+      await getDb(tx).execute(
+        sql`DROP INDEX "AssessmentState_statement_label_native_idx"`,
+      );
+      await getDb(tx).execute(
+        sql`DROP INDEX "AssessmentState_statement_label_receipt_idx"`,
+      );
+      const retained = async () => {
+        const snapshots: unknown[] = [];
+        for (const table of [
+          sourceTransactionRecord,
+          transactionImport,
+          transactionImportRecord,
+          assessment,
+          assessmentState,
+          feedback,
+          financialTransaction,
+          financialTransactionAllocation,
+          purchase,
+          expense,
+          run,
+          runStep,
+          job,
+          automaticRule,
+          appSettings,
+        ]) {
+          const { rows } = await getDb(tx).execute<{ records: unknown }>(
+            sql`SELECT coalesce(jsonb_agg(to_jsonb(retained) ORDER BY to_jsonb(retained)::text),'[]'::jsonb) AS records FROM ${table} retained`,
+          );
+          snapshots.push(rows[0]?.records);
+        }
+        return snapshots;
+      };
+      const before = await retained();
+      for (const statement of readFileSync(
+        new URL(
+          "../../../../../drizzle/0015_statement_label_cursor_work.sql",
+          import.meta.url,
+        ),
+        "utf8",
+      ).split("--> statement-breakpoint"))
+        await getDb(tx).execute(sql.raw(statement));
+      expect(await retained()).toEqual(before);
+    });
+    const expected = [8, 7, 2, 1, 3, 0, 4, 5].map((index) => target(index).id);
+    const actual: string[] = [];
+    let after: Parameters<
+      typeof statementSuggestionsRepo.suggestionsNeedingLabels
+    >[2] = null;
+    for (;;) {
+      const page = await statementSuggestionsRepo.suggestionsNeedingLabels(
+        ctx.db,
+        2,
+        after,
+      );
+      actual.push(...page.map((row) => row.id));
+      const last = page.at(-1);
+      if (!last) break;
+      after = { createdAt: last.createdAt, id: last.cursorId };
+    }
+    expect(actual).toEqual(expected);
+    const scoped = await statementSuggestionsRepo.suggestionsNeedingLabels(
+      ctx.db,
+      20,
+      null,
+      first.batchId,
+    );
+    expect(scoped.map((row) => row.id)).toEqual(expected.slice(1));
+    expect(
+      await statementSuggestionsRepo.countSuggestionsNeedingLabels(ctx.db),
+    ).toBe(expected.length);
+    expect(
+      await statementSuggestionsRepo.countSuggestionsNeedingLabels(
+        ctx.db,
+        first.batchId,
+      ),
+    ).toBe(expected.length - 1);
+    const boundary = scoped[1];
+    if (!boundary) throw new Error("Synthetic microsecond boundary missing");
+    expect(boundary.createdAt).toBe("2026-01-01T00:00:01.000000");
+    expect(
+      (
+        await statementSuggestionsRepo.suggestionsNeedingLabels(
+          ctx.db,
+          2,
+          {
+            createdAt: boundary.createdAt,
+            id: boundary.cursorId,
+            inclusive: true,
+          },
+          first.batchId,
+        )
+      ).map((row) => row.id),
+    ).toEqual([target(2).id, target(1).id]);
+    expect(
+      (
+        await statementSuggestionsRepo.suggestionsNeedingLabels(
+          ctx.db,
+          2,
+          { createdAt: boundary.createdAt, id: boundary.cursorId },
+          first.batchId,
+        )
+      ).map((row) => row.id),
+    ).toEqual([target(1).id, target(3).id]);
   });
 
   // Failure modes: a ref attached on another path (the import page, an
