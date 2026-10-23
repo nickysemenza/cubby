@@ -1,0 +1,35 @@
+apps/apple/CubbyKit/Sources/CubbyKit/ImageProcessing/CompanionImageWorker.swift
+  s_f1ac5eb353befe::t_58ec6afa7ae1ea 126-128,207-208,221,226-227,373-374,376,380,385,388-389,392,397-408,411,421-424,428-436
+apps/apple/CubbyKit/Sources/CubbyKit/ImageProcessing/ImageProcessingProtocol.swift
+  s_f1ac5eb353befe::t_c165a220814faf 8-9
+apps/apple/CubbyKit/Tests/CubbyKitTests/ImageProcessing/CompanionImageWorkerTests.swift
+  s_7b8700ee7a9c2b::t_b31297ce6979c0 23-24,35-74,273-275,279-280,283,285-288,291-292,299-301,306-309,313-315
+apps/web/src/server/operation-runtime/start-operation.server.ts
+  s_f1ac5eb353befe::t_af374819f68160 18,600-608
+packages/schemas/src/image-processing.ts
+  s_f1ac5eb353befe::t_5c34a2ac5e5350 428-432,435
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "76a91716f03a57b390f1c9baa907b5e5c496d5dc",
+  "prompts": {},
+  "sessions": {
+    "s_7b8700ee7a9c2b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a16aa3-b63d-7e70-8a12-2185f530da26",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    },
+    "s_f1ac5eb353befe": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a229dffd-cbfc-4ada-b803-ecb84a02290e",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}

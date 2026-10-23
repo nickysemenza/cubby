@@ -1,0 +1,143 @@
+apps/web/generator/start-operations/mcp-tools.ts
+  s_c8aa3bc2b247bc::t_787378d219b63a 28,159-162,201,248,259-260
+apps/web/src/contracts/mcp-tools.ts
+  s_c8aa3bc2b247bc::t_753d7505291428 58
+apps/web/src/integrations/tanstack-query/start-transport.ts
+  s_c8aa3bc2b247bc::t_8f16f8760814f3 135-139
+apps/web/src/server/db/read-policy.ts
+  s_c8aa3bc2b247bc::t_e271cf8de0fe4e 8,15
+apps/web/src/server/domains/purchase-agent/service/cubby-mcp.integration.test.ts
+  s_c8aa3bc2b247bc::t_d984b90a4a6e2b 11,53,59
+apps/web/src/server/domains/purchase-import/repo/gmail/reclassify-recovery.integration.test.ts
+  s_c8aa3bc2b247bc::t_f0035b0687eca2 100-103,109
+apps/web/src/server/domains/purchase-import/repo/run-target.integration.test.ts
+  s_c8aa3bc2b247bc::t_ab63b249107742 15,213-214,219,221-227,229-234
+apps/web/src/server/domains/purchase-import/service/gmail/full-preview.integration.test.ts
+  s_c8aa3bc2b247bc::t_7a190e36ebda36 115-119
+apps/web/src/server/domains/run/operations/run-mail-import.integration.test.ts
+  s_c8aa3bc2b247bc::t_f0b514a8d1fe42 15,17-18,29-48
+apps/web/src/server/domains/run/repo/connection-refresh.integration.test.ts
+  s_c8aa3bc2b247bc::t_e128a3b5208a5d 32,105-111,114-122
+apps/web/src/server/domains/run/repo/operation.integration.test.ts
+  s_c8aa3bc2b247bc::t_e9f671c25e73d5 18,249-250,255-257
+apps/web/src/server/errors/app-error.ts
+  s_c8aa3bc2b247bc::t_c86813c1b9e776 45
+apps/web/src/server/http/authenticate.ts
+  s_c8aa3bc2b247bc::t_e62cdca1c2855c 1-479
+apps/web/src/server/http/authenticate.unit.test.ts
+  s_c8aa3bc2b247bc::t_c7e9d97942f04e 1-212
+apps/web/src/server/http/http-api-handler.ts
+  s_c8aa3bc2b247bc::t_3fbf6bbfb9c2c9 19-24,37,41,197-204,228-231,242
+apps/web/src/server/http/http-api.ts
+  s_c8aa3bc2b247bc::t_b49b0016d9da33 1,7
+apps/web/src/server/http/http-api.unit.test.ts
+  s_c8aa3bc2b247bc::t_bbc36b78befddd 3,9,11,14-17,51,56-68,362
+apps/web/src/server/http/http-session-cache.ts
+  s_c8aa3bc2b247bc::t_7fbbb9d15bd64c 5,12,23-24,26-28,60-64,74
+apps/web/src/server/http/native-workspace-session.ts
+  s_8fd3a19aead36e::t_f90bf54511067c 2-6,12-21,26,30-31
+apps/web/src/server/http/request-context.ts
+  s_c8aa3bc2b247bc::t_2cf7036972b11e 196-197
+apps/web/src/server/http/routes/api/ai/chatgpt.ts
+  s_c8aa3bc2b247bc::t_57b7f6821edaec 3,9-12,23-24,26-27,29-31
+apps/web/src/server/http/routes/api/debug/usda-release.ts
+  s_c8aa3bc2b247bc::t_1baae54ccbfd25 9-12,26-31
+apps/web/src/server/mcp/availability-explanation.integration.test.ts
+  s_c8aa3bc2b247bc::t_05c6706a365266 33-36,48
+apps/web/src/server/mcp/batch.ts
+  s_c8aa3bc2b247bc::t_966ffa49e2c3b6 5-6,39,50,52,149,151,172-173,181-182,184,196,214
+apps/web/src/server/mcp/catalog-schema.unit.test.ts
+  s_c8aa3bc2b247bc::t_9d2f48a10be673 13-17,391,413,430,454,466
+apps/web/src/server/mcp/catalog.integration.test.ts
+  s_c8aa3bc2b247bc::t_5850a5b7145f61 562
+apps/web/src/server/mcp/entity-kernel.integration.test.ts
+  s_c8aa3bc2b247bc::t_528b6303e549e1 20-23,241-243,251-260
+apps/web/src/server/mcp/http-handler.ts
+  s_c8aa3bc2b247bc::t_846a5ec001e270 197-199,202-205,207-208,212,215,218-221,225
+apps/web/src/server/mcp/kernel-actions.ts
+  s_c8aa3bc2b247bc::t_c5bdc1e5dfa8b4 24-28,66,95-97,101,132,200,203,270,286-287,410,424,443-444,468,482,485,496-497
+apps/web/src/server/mcp/mcp-protocol.unit.test.ts
+  s_c8aa3bc2b247bc::t_9cf73874b8ad64 35-36,65,93,286-289,650-653,681
+apps/web/src/server/mcp/mcp-response-policies.unit.test.ts
+  s_c8aa3bc2b247bc::t_9c47958fa285a8 57-58,61-62
+apps/web/src/server/mcp/purchase-agent-protocol.integration.test.ts
+  s_c8aa3bc2b247bc::t_5b63aec3e1b5e9 16,18,47-48,64,91,101,134-135,140-142
+apps/web/src/server/mcp/purchase-agent-protocol.ts
+  s_c8aa3bc2b247bc::t_44bbf4f994dfd0 2,12,21-22,81-112,116-117,121,123,129,136,143,152-180,182-210,212-215
+apps/web/src/server/mcp/purchase-agent-transaction.integration.test.ts
+  s_c8aa3bc2b247bc::t_6c4f5cf38e1b1b 17,19,30-31,40,82-84,125,127,176-177
+apps/web/src/server/mcp/purchase-split-delta.integration.test.ts
+  s_c8aa3bc2b247bc::t_c79b62382ea229 28-31,35,37,42,58-60
+apps/web/src/server/mcp/run-discovery-read.integration.test.ts
+  s_c8aa3bc2b247bc::t_ac91befc618834 70-73,79,200-203,213
+apps/web/src/server/mcp/run-lifecycle.integration.test.ts
+  s_c8aa3bc2b247bc::t_da280a34024ef1 28,483-484,489-491
+apps/web/src/server/mcp/run-transcript.integration.test.ts
+  s_c8aa3bc2b247bc::t_ea4d1145143497 112-115,122
+apps/web/src/server/mcp/server.ts
+  s_c8aa3bc2b247bc::t_1a81c17c06b0a9 25,153-154,156-157
+apps/web/src/server/mcp/tool-failures.unit.test.ts
+  s_c8aa3bc2b247bc::t_01ec3dad72ea97 12,28-29,51,55-56,101,105-112,135,139-140,154,174,177-183,211,223,227-233,240-247,299,306,342-343
+apps/web/src/server/mcp/tools/tool-registration.ts
+  s_c8aa3bc2b247bc::t_3879789b55b4a7 13,18,23-26,38-47,52-53,69-75,86-87,97,112-120,122-123,125-129,131-134,136-144,146-155,199,202,204-206,217-218,220-221,247-252,282-285,287,291-296,300-302,356-362,377-380,382-385,388,391-392,396-406,458-459,464-488,492-493,504-522,549-550,557,559,568-569,576,598-600,603,791,830-832,834,837-851,853-872,874-890,893-955,957-958
+apps/web/src/server/mcp/work-queue.integration.test.ts
+  s_c8aa3bc2b247bc::t_19a0b1d7128226 580-584,786-790,897-901,1203-1207
+apps/web/src/server/observability/observed-request.ts
+  s_c8aa3bc2b247bc::t_9f58b830802234 106
+apps/web/src/server/operation-runtime/browser-operation-dispatch.ts
+  s_c8aa3bc2b247bc::t_aa68feeabee9a4 8-14,17,38-70,74,84-95,108-109,119,150-151,157-163
+apps/web/src/server/operation-runtime/middleware/native-workspace.ts
+  s_c8aa3bc2b247bc::t_3bc2c7b5bf150e 6,14-16,22-24
+apps/web/src/server/operation-runtime/operation-domain.server.ts
+  s_c8aa3bc2b247bc::t_18b5b7b0f05d87 11,149-150,158-159,200
+apps/web/src/server/operation-runtime/start-operation-dispatch.boundary.ts
+  s_c8aa3bc2b247bc::t_ca3958908cb359 1,8,10-16,18-23
+apps/web/src/server/operation-runtime/start-operation-dispatch.server.ts
+  s_c8aa3bc2b247bc::t_143a4eccd0bd69 16,22-26,41,48,52
+apps/web/src/server/operation-runtime/start-operation-dispatch.server.unit.test.ts
+  s_c8aa3bc2b247bc::t_b594ca7eeff0ac 5,12-19
+apps/web/src/server/operation-runtime/start-operation.server.ts
+  s_c8aa3bc2b247bc::t_ec8c8a9e636df0 13,25,27,36-42,45,48,68-70,73-74,77,98-104,205-219,321-354,356-394,396-421,424-435,438,442,444,463-472,477,488-489,493-502,504,511-514,517,520-654,656-664,666-674,676-694,696-699,709,717
+apps/web/src/server/operation-runtime/start-operation.server.unit.test.ts
+  s_c8aa3bc2b247bc::t_8c51aa84324e21 8,61-72,84,91-97,106,117-123,130,147,167,190,210,213,298-309,316,542-549,551-574,577-579,582-584
+apps/web/src/server/operation-runtime/workflow-stream.server.ts
+  s_c8aa3bc2b247bc::t_e9118a6f9ce212 7-13,25,48,54,100-104,107-110,114,117
+apps/web/src/server/operation-runtime/workflow-stream.server.unit.test.ts
+  s_c8aa3bc2b247bc::t_1897898672d6c7 7,92-94
+apps/web/src/server/testing/mcp-test-utils.ts
+  s_c8aa3bc2b247bc::t_076b06672cd853 1-2,17-24,29-33,42-43,78-97,100-103,127-138,148-149,159-163,179-181,202-237,261-262
+docs/agents/mcp.md
+  s_c8aa3bc2b247bc::t_b56648f5a426fc 127-137,142-143,145-146,151-155,157-158,160-161,164-167
+docs/development.md
+  s_c8aa3bc2b247bc::t_0b8532174e905e 592-616
+docs/entities.md
+  s_c8aa3bc2b247bc::t_7e5298fb671b60 1685-1686
+packages/shared/src/error-utils.ts
+  s_c8aa3bc2b247bc::t_3f6f732dd6a850 49-53
+apps/web/src/server/operation-runtime/operation-domain.server.unit.test.ts
+  s_c8aa3bc2b247bc::t_b1e4629cdf5b7a 2,7,17,29,33,35-37,50-54,59-63,65-66,69-72,79-83,88,90-99,102-103,110-118,137-140
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "c8ab591591269151e9906a578f9a64c1a8f2339f",
+  "prompts": {},
+  "sessions": {
+    "s_8fd3a19aead36e": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a16a6a-52a7-79f0-b86f-568877e9845d",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    },
+    "s_c8aa3bc2b247bc": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "0181e2f0-f185-4152-ba43-ee5218e4e423",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}

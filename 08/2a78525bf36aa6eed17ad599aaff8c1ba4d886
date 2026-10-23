@@ -1,0 +1,375 @@
+.agents/skills/cubby-meal-logging/SKILL.md
+  s_d3f1d8a072e731::t_4668f002fa2da1 15,18,41
+.agents/skills/cubby-meal-logging/references/nutrition-and-portions.md
+  s_d3f1d8a072e731::t_f620aae87af479 16,28
+.agents/skills/decision-grading/SKILL.md
+  s_d3f1d8a072e731::t_ea01c5810ee7f6 31,36,46,71,77,96,102,138
+.agents/skills/financial-evidence-import/SKILL.md
+  s_d3f1d8a072e731::t_ebef87b8636875 157-158
+.agents/skills/financial-evidence-import/scripts/parse_statement_csv.py
+  s_d3f1d8a072e731::t_62ec8f3006acd2 2
+.agents/skills/photo-inventory-import/SKILL.md
+  s_d3f1d8a072e731::t_120539b7bdb0c3 22,63,147,160
+.agents/skills/photo-inventory-import/references/run-workflow.md
+  s_d3f1d8a072e731::t_271b2131a66b7e 10,15,27
+.agents/skills/product-enrichment/SKILL.md
+  s_d3f1d8a072e731::t_239e12d02473e7 22,139,148,172
+.agents/skills/product-enrichment/references/product-identity.md
+  s_d3f1d8a072e731::t_64a445c8cc95ad 94,106,110,122,130
+.agents/skills/product-enrichment/references/resumption.md
+  s_d3f1d8a072e731::t_bb0baf1be10b3f 9
+.agents/skills/product-enrichment/references/sources.md
+  s_d3f1d8a072e731::t_1cb80fab6465c3 38,103
+.agents/skills/product-enrichment/references/writes-and-images.md
+  s_d3f1d8a072e731::t_1cb026d71ca47d 29,54
+.agents/skills/purchase-import/SKILL.md
+  s_d3f1d8a072e731::t_7390b3659defd9 24,38-39,50,60-61,83,100,192,233,244,274,291,303,336,349
+.agents/skills/purchase-import/references/financial-settlement.md
+  s_d3f1d8a072e731::t_cfe7838673aa7f 16,159,163,167,200
+.agents/skills/purchase-import/references/household-ledger.md
+  s_d3f1d8a072e731::t_59201d24226ee5 34
+.agents/skills/purchase-import/references/mail-import.md
+  s_d3f1d8a072e731::t_503842f7bcd062 155
+.agents/skills/purchase-import/references/order-mail.md
+  s_d3f1d8a072e731::t_cd228527d5a951 5,8,11,17,20,42,95,101,111,125,169
+apps/web/generator/start-operations/collect.ts
+  s_c8aa3bc2b247bc::t_37af554b50cb93 38-43,65-70
+apps/web/generator/start-operations/mcp-tools.ts
+  s_d3f1d8a072e731::t_27fb999021ad88 5-8,20-21,23,26-32,40-44,47-48,66,71-75,78,85-86,90,92-96,98,102,104,109,124-128,131-135,138-142,144,146-150,153-159,161-162,166-169,172-210,212-221,223-272,276,278,280,283-287,291,295-299,313-315,332-336,344-345,365-371,380,384-385,391
+apps/web/src/contracts/ai.contract.ts
+  s_d3f1d8a072e731::t_f36917902fc84d 77-106,108-157,159-167,169-177,179-256,270-297
+apps/web/src/contracts/assessment.contract.ts
+  s_d3f1d8a072e731::t_747703086d847a 10-66
+apps/web/src/contracts/audit-log.contract.ts
+  s_d3f1d8a072e731::t_c4686e44362b4d 5-19
+apps/web/src/contracts/calendar.contract.ts
+  s_d3f1d8a072e731::t_cfef6a786a5f22 18-22,24-86
+apps/web/src/contracts/chatgpt.contract.ts
+  s_d3f1d8a072e731::t_735e189321a83b 10-26
+apps/web/src/contracts/collection.contract.ts
+  s_d3f1d8a072e731::t_35cac32f9bcb53 20-84,86-102
+apps/web/src/contracts/connected-apps.contract.ts
+  s_d3f1d8a072e731::t_d2d36389162953 12-47
+apps/web/src/contracts/cookbook.contract.ts
+  s_d3f1d8a072e731::t_e981327eb45efd 8-22,24-30
+apps/web/src/contracts/dashboard.contract.ts
+  s_d3f1d8a072e731::t_9570ec0018b5ed 6-18
+apps/web/src/contracts/data-quality.contract.ts
+  s_d3f1d8a072e731::t_a2d393de3da628 14-47
+apps/web/src/contracts/define.ts
+  s_778d7cda70b989::t_b009b717097f75 35-44,64-65,84-89,114-119,157-158,177-178
+apps/web/src/contracts/entity-detail.contract.ts
+  s_d3f1d8a072e731::t_e7197c533f1ec0 12-15,17-38
+apps/web/src/contracts/entity-filter-options.contract.ts
+  s_d3f1d8a072e731::t_6ce51f1c0fd07a 8-17
+apps/web/src/contracts/entity-graph.contract.ts
+  s_d3f1d8a072e731::t_0a299a6f5e71c8 42-113,115-118,120-152
+apps/web/src/contracts/entity-inspector-health.contract.ts
+  s_d3f1d8a072e731::t_5682ca3b39938b 16-29
+apps/web/src/contracts/entity-integrity.contract.ts
+  s_d3f1d8a072e731::t_5f052fac25202e 15-27,29-32,34-42
+apps/web/src/contracts/entity-list.contract.ts
+  s_d3f1d8a072e731::t_709c41b0ea1323 96-104,106-112,114-121,123-139,141-150
+apps/web/src/contracts/entity-media.contract.ts
+  s_d3f1d8a072e731::t_4bf62bd89882ab 10-20
+apps/web/src/contracts/entity-mutation.contract.ts
+  s_d3f1d8a072e731::t_c2243fdabee7bc 11-14,16-32
+apps/web/src/contracts/entity-report.contract.ts
+  s_d3f1d8a072e731::t_1a837f107355d3 10-87
+apps/web/src/contracts/entity-timeline.contract.ts
+  s_d3f1d8a072e731::t_31c6fa10d36b0b 12-26
+apps/web/src/contracts/expense.contract.ts
+  s_d3f1d8a072e731::t_d4c19de82d599e 15-105
+apps/web/src/contracts/field-explanation.contract.ts
+  s_d3f1d8a072e731::t_becb147263c789 9-23
+apps/web/src/contracts/finance.contract.ts
+  s_d3f1d8a072e731::t_953997e22a604f 52-71,73-88,94-95,106-107,115-116,123-124,131-132,147-148,161-162,170-171,179-180,186,191-192,198
+apps/web/src/contracts/household-contribution.contract.ts
+  s_d3f1d8a072e731::t_5e7cecc0e46a54 16-17,22-23,29-30,35
+apps/web/src/contracts/image-processing.contract.ts
+  s_d3f1d8a072e731::t_278687e5dabcd6 29-92
+apps/web/src/contracts/image-upload.contract.ts
+  s_d3f1d8a072e731::t_da22cee2a03f1f 68-121
+apps/web/src/contracts/image.contract.ts
+  s_d3f1d8a072e731::t_63704d0cd7c216 26-35,37-57,59-72,74-99
+apps/web/src/contracts/ingredient.contract.ts
+  s_d3f1d8a072e731::t_6a858f8597595c 13-16,18-22,24-27,29-40,42-50,52-58
+apps/web/src/contracts/inventory.contract.ts
+  s_d3f1d8a072e731::t_1b5aaa1b9d11b0 33-52,54-136,138-155
+apps/web/src/contracts/job.contract.ts
+  s_d3f1d8a072e731::t_25953f7b1b1204 145-155,157-165
+apps/web/src/contracts/location.contract.ts
+  s_d3f1d8a072e731::t_1cdc875fcd81de 27-49,51-54,56-59,61-71
+apps/web/src/contracts/maintenance.contract.ts
+  s_d3f1d8a072e731::t_6ebcc91a3da49e 21-69
+apps/web/src/contracts/mcp-define.ts
+  s_d3f1d8a072e731::t_c7c1f9c4cf38bf 12-13,110-160
+apps/web/src/contracts/mcp-tools.ts
+  s_d3f1d8a072e731::t_80f8a5703ddd21 24,33-34,72-96,100-286,288-383,385-394,441,462
+apps/web/src/contracts/mcp.contract.ts
+  s_d3f1d8a072e731::t_2561e56f6a555e 12-16,18-37,46-53,55-59,61-77
+apps/web/src/contracts/meal.contract.ts
+  s_d3f1d8a072e731::t_fea904a17d680c 99-137,139-271
+apps/web/src/contracts/photo-import.contract.ts
+  s_d3f1d8a072e731::t_9ae0d6d34313a9 282-286,288-328,330-347,349-394,396-404,406-408,410-418,420-647
+apps/web/src/contracts/problems.contract.ts
+  s_d3f1d8a072e731::t_7c4bf989537a3f 40-131,133-137,139-172
+apps/web/src/contracts/product.contract.ts
+  s_d3f1d8a072e731::t_ec0dba4c31768a 34-45,47-49,51-54,56-62,64-66,68-99,101-153,155-214
+apps/web/src/contracts/project.contract.ts
+  s_d3f1d8a072e731::t_552c1ce7954700 2,92-111,113-155,157-189
+apps/web/src/contracts/purchase-import.contract.ts
+  s_d3f1d8a072e731::t_9fc741b85488bf 46-194
+apps/web/src/contracts/purchase.contract.ts
+  s_d3f1d8a072e731::t_5dcd3ca4a90928 55-72,74-84,86-150,152-180
+apps/web/src/contracts/recipe.contract.ts
+  s_d3f1d8a072e731::t_c055fd7a431ab6 178-181,183-187,189-327,329-336,338-355,357-362,364-386,388-393,395-405,407-412,414-420,422-441
+apps/web/src/contracts/recommendations.contract.ts
+  s_d3f1d8a072e731::t_91d6844850202e 16-25,27-65
+apps/web/src/contracts/related-data.contract.ts
+  s_d3f1d8a072e731::t_7efb1f4843c9da 14-35
+apps/web/src/contracts/run-detail.contract.ts
+  s_d3f1d8a072e731::t_22d0ad4706b34a 77-92
+apps/web/src/contracts/run.contract.ts
+  s_d3f1d8a072e731::t_76d7338325c0f2 265-275,277-283,285-292,294-298,300-365,367-372,374-392,394-429,431-435,437-444,446-454,456-457,459-460,462-496,498,500-508,510-515,517-560
+apps/web/src/contracts/search.contract.ts
+  s_d3f1d8a072e731::t_38f43c962c90b2 27-42,44-48,50-85
+apps/web/src/contracts/shipment.contract.ts
+  s_d3f1d8a072e731::t_4093c04d01f5dd 15-67
+apps/web/src/contracts/source-transaction-record.contract.ts
+  s_d3f1d8a072e731::t_657fb6c1cc5721 20-21,28-29,35-36,43-44,49
+apps/web/src/contracts/spending-classification.contract.ts
+  s_d3f1d8a072e731::t_0cedac05a3f66f 15-16,34-35,50
+apps/web/src/contracts/suggestions.contract.ts
+  s_d3f1d8a072e731::t_b15985fe10a1c8 25-38,40-62,64-114
+apps/web/src/contracts/task.contract.ts
+  s_d3f1d8a072e731::t_8d5d701cb30b4e 6-41
+apps/web/src/contracts/upc.contract.ts
+  s_d3f1d8a072e731::t_9f44d6271db453 38-48
+apps/web/src/contracts/usda.contract.ts
+  s_d3f1d8a072e731::t_11d17575bf6350 37-41,43-47,49-112
+apps/web/src/contracts/vendor.contract.ts
+  s_d3f1d8a072e731::t_d97c1644924773 12-16,18-22,24-47
+apps/web/src/contracts/work-queue.contract.ts
+  s_d3f1d8a072e731::t_71daddde3d62ea 22-25,27-32,34-49
+apps/web/src/features/purchase/agent-tool-names.ts
+  s_d3f1d8a072e731::t_45ecd68747afcf 12,14-15,18-20,25-30,32,35-36,38-41,43-44,47-48,50-51,53-61,64-67,70,72-76,80-82,84-87,89
+apps/web/src/features/purchase/agent-work-summary.ts
+  s_d3f1d8a072e731::t_79a9d366269736 54,56,59,67
+apps/web/src/server/db/helpers/crud.ts
+  s_d3f1d8a072e731::t_bdb55bee114aa9 336
+apps/web/src/server/domains/connection/repo/email-connections.integration.test.ts
+  s_d3f1d8a072e731::t_70292de1e7848d 26,365
+apps/web/src/server/domains/connection/repo/email-connections.ts
+  s_d3f1d8a072e731::t_b8e862b41b8eac 60
+apps/web/src/server/domains/email/repo/email-purchase-links.integration.test.ts
+  s_d3f1d8a072e731::t_dc7228393f49f3 962,964,1036,1038,1798,1804,1806
+apps/web/src/server/domains/image/repo/image-capture-derivation.ts
+  s_d3f1d8a072e731::t_a21a9a7d2d2fd6 216
+apps/web/src/server/domains/image/repo/image-import.ts
+  s_d3f1d8a072e731::t_8e1cbae4cf55a8 61
+apps/web/src/server/domains/image/repo/image-storage.ts
+  s_d3f1d8a072e731::t_b34fc5c69c7c1d 545-546,567,594
+apps/web/src/server/domains/image/repo/image-storage.unit.test.ts
+  s_d3f1d8a072e731::t_2cd8773db4155c 778,814
+apps/web/src/server/domains/product/repo/match/product-match.integration.test.ts
+  s_d3f1d8a072e731::t_c9397e371e3356 433,440
+apps/web/src/server/domains/purchase-agent/service/cubby-mcp.ts
+  s_d3f1d8a072e731::t_ef79b0224d0b5e 30,108
+apps/web/src/server/domains/purchase-import/operations/mail-import-claim.integration.test.ts
+  s_d3f1d8a072e731::t_d8528a5865bf44 4
+apps/web/src/server/domains/purchase-import/operations/mail-import-claim.ts
+  s_d3f1d8a072e731::t_60b5c732a5a545 3,5,10,139
+apps/web/src/server/domains/purchase-import/operations/mail-tool.ts
+  s_d3f1d8a072e731::t_06cc1d537e051b 517,1320,1373
+apps/web/src/server/domains/purchase-import/operations/prepare-commit.integration.test.ts
+  s_d3f1d8a072e731::t_8087710bb08fb4 89
+apps/web/src/server/domains/purchase-import/operations/run-review.ts
+  s_d3f1d8a072e731::t_906da2b0f4a9c7 597
+apps/web/src/server/domains/purchase-import/repo/capabilities.ts
+  s_f8222ceba4ac4a::t_31938adf110a0d 83-84,94-115,117,123,127-131,137-139,154,157-167,169-192,194-195
+apps/web/src/server/domains/purchase-import/repo/capabilities.unit.test.ts
+  s_d3f1d8a072e731::t_cdc4fde509a9d1 59
+apps/web/src/server/domains/purchase-import/repo/email-purchase-decision.ts
+  s_d3f1d8a072e731::t_e75954dcc415ae 89,205,232
+apps/web/src/server/domains/purchase-import/repo/gmail/reclassify-recovery.integration.test.ts
+  s_d3f1d8a072e731::t_38dd0680774896 110-111
+apps/web/src/server/domains/purchase-import/repo/mail-import-run.integration.test.ts
+  s_d3f1d8a072e731::t_4c7bf7ed7858bc 1151-1152
+apps/web/src/server/domains/purchase-import/repo/photo-inventory-run.integration.test.ts
+  s_d3f1d8a072e731::t_faee8e3e19efb4 81-82,139-140,155,198-199
+apps/web/src/server/domains/purchase-import/service/README.md
+  s_d3f1d8a072e731::t_7869637df09d1c 62,70,101,115,123,130
+apps/web/src/server/domains/purchase-import/service/agent-model-eval.fixtures.ts
+  s_d3f1d8a072e731::t_165b7785b702df 3
+apps/web/src/server/domains/purchase-import/service/gmail/full-preview.integration.test.ts
+  s_d3f1d8a072e731::t_68c861fab9e6f9 109
+apps/web/src/server/domains/purchase-import/service/mail-import-rule.unit.test.ts
+  s_d3f1d8a072e731::t_4ff60ab4eec9f5 8
+apps/web/src/server/domains/recipe/operations/recipe-line-patch.integration.test.ts
+  s_d3f1d8a072e731::t_ce7f17cd94c0ff 19,72,119,157
+apps/web/src/server/domains/recipe/repo/crud.ts
+  s_d3f1d8a072e731::t_829f35695cd70f 652
+apps/web/src/server/domains/recipe/service/availability.service.ts
+  s_d3f1d8a072e731::t_913ca56f012e7d 296
+apps/web/src/server/domains/task/repo/actionable.ts
+  s_d3f1d8a072e731::t_633fe95c1099a4 2
+apps/web/src/server/domains/transaction-import/repo/source-transaction-record-identity.unit.test.ts
+  s_d3f1d8a072e731::t_5519b2412a4871 19
+apps/web/src/server/mcp/agent-manifest-tools.unit.test.ts
+  s_778d7cda70b989::t_f08adceba896e4 33-42
+apps/web/src/server/mcp/agent-tool-catalog.ts
+  s_d3f1d8a072e731::t_7d2566fe9c1dde 9,26-37,41-46,49-50,55-59
+apps/web/src/server/mcp/batch.unit.test.ts
+  s_0cc53fa46ecbd7::t_db8b115104354e 6,86,153-156
+apps/web/src/server/mcp/catalog-schema.unit.test.ts
+  s_d3f1d8a072e731::t_96a2134ddd8d57 9,21,26,217-223,236-239,479,520,522,524,648-706,723-726,733,735-739,741-784,786-791,803-804,806,815-819,829,842,852-854,871-873,878
+apps/web/src/server/mcp/catalog.integration.test.ts
+  s_d3f1d8a072e731::t_0df4b0f1f44660 105-106,164,229,246,251-252,256,263,267,292,310,337,352-355,405,414-415,429,687,689
+apps/web/src/server/mcp/entity-kernel.integration.test.ts
+  s_d3f1d8a072e731::t_037b020c49a89a 101
+apps/web/src/server/mcp/mcp-output-uuid-boundary.unit.test.ts
+  s_778d7cda70b989::t_52d0addb6496fe 37,39-42,66,72-115
+apps/web/src/server/mcp/mcp-protocol.unit.test.ts
+  s_0cc53fa46ecbd7::t_945bd891c2cb25 25,62,136-139
+apps/web/src/server/mcp/mcp-response-policies.unit.test.ts
+  s_d3f1d8a072e731::t_853bcc5470b42f 4,8-9,14-17,24-31,33,41-44,46-47,64-67,101,136-140
+apps/web/src/server/mcp/mcp-workflow-tools.unit.test.ts
+  s_0cc53fa46ecbd7::t_ad254571f8d2f3 65,123,327,333-334,356,399-400,415,441
+apps/web/src/server/mcp/product-write-coverage.integration.test.ts
+  s_d3f1d8a072e731::t_006749db6f37d0 198-199
+apps/web/src/server/mcp/purchase-agent-protocol.ts
+  s_d3f1d8a072e731::t_8a6778c9bb66a7 30-31
+apps/web/src/server/mcp/purchase-split-delta.integration.test.ts
+  s_d3f1d8a072e731::t_707735bbcdf85a 2,93,112,158,209
+apps/web/src/server/mcp/run-discovery-read.integration.test.ts
+  s_d3f1d8a072e731::t_07d481aea112fb 80-81
+apps/web/src/server/mcp/run-lifecycle.integration.test.ts
+  s_d3f1d8a072e731::t_90abd30a93fd7f 303,365,378
+apps/web/src/server/mcp/run-transcript.integration.test.ts
+  s_d3f1d8a072e731::t_c421e1a55b5666 123-124
+apps/web/src/server/mcp/tools/progressive-disclosure.ts
+  s_d3f1d8a072e731::t_91000342f8384d 1-113
+apps/web/src/server/mcp/tools/tool-json-schema.ts
+  s_778d7cda70b989::t_1113a01f530b6d 63-65
+apps/web/src/server/mcp/tools/tool-json-schema.unit.test.ts
+  s_d3f1d8a072e731::t_56cf2fdd7c7b92 3,7,11-14,45,88-134,143-144,199,201-206,266-267
+apps/web/src/server/mcp/tools/tool-registration.ts
+  s_d3f1d8a072e731::t_db04e1cf07a845 56-59,67-68,603,623,631-633,640,642-674,725,745-747,765,768,772-778,1048-1054,1067
+apps/web/src/server/mcp/work-queue.integration.test.ts
+  s_d3f1d8a072e731::t_9f8479db0fbe07 580,790,900,1215
+apps/web/src/ui/hooks/use-image-state.ts
+  s_d3f1d8a072e731::t_fc3da3974c1d4f 47
+apps/web/tests/e2e/fixtures/mail.ts
+  s_d3f1d8a072e731::t_9cb870b4b4199a 90
+apps/web/tests/e2e/purchase-import-run.spec.ts
+  s_d3f1d8a072e731::t_b23a9cc1570977 38
+apps/web/tooling/convergence-harness.ts
+  s_d3f1d8a072e731::t_7376fb179176c7 205
+apps/web/tooling/mcp-tools-generator.unit.test.ts
+  s_d3f1d8a072e731::t_60d055ea58e900 9,11-12,16-18,22-23,25-31,33-37,39-41,45,47-52,54-55,57,61,63-66
+apps/web/tooling/scenarios/wardrobe-convergence.ts
+  s_d3f1d8a072e731::t_5d08f6fa555b7c 1219
+docs/adr/0010-mail-import-unattended-burn-down-interactive.md
+  s_d3f1d8a072e731::t_3633a18032f04b 26
+docs/adr/0011-email-as-a-first-class-entity.md
+  s_d3f1d8a072e731::t_bf48220d7b59e2 82
+docs/agents/mcp.md
+  s_778d7cda70b989::t_8c5c3835f390ee 15,17,25-32,45,52-53,57,66-68,88-89,95,97,107,139-141,162-186
+docs/agents/validation-tests.md
+  s_d3f1d8a072e731::t_c164f91070b841 749,751
+docs/development.md
+  s_c8aa3bc2b247bc::t_58ac7dfff61ea4 69-73,568
+docs/entities.md
+  s_f8222ceba4ac4a::t_6c0490fce4a750 515,1056,2389,2639,2809-2810,3028-3029,3069
+docs/guide/burn-down.md
+  s_d3f1d8a072e731::t_fee32b241ea11d 17
+docs/guide/entity-connections.md
+  s_d3f1d8a072e731::t_b8ef86c7e49b19 154
+docs/guide/terminology.md
+  s_d3f1d8a072e731::t_044c221900e5e8 444
+docs/household-finance-analytics.md
+  s_d3f1d8a072e731::t_038d5ee1451009 12,51
+docs/import-evidence-convergence.md
+  s_f8222ceba4ac4a::t_be2d0bc636a001 86,105,238,241,340,374,617
+docs/infrastructure.md
+  s_d3f1d8a072e731::t_3bf6677811091a 611,781-782
+packages/schemas/src/collection.ts
+  s_d3f1d8a072e731::t_cf3bb623045650 28-41,248-251,259-261
+packages/schemas/src/email-fields.ts
+  s_d3f1d8a072e731::t_13c45f25d45159 52
+packages/schemas/src/image.ts
+  s_d3f1d8a072e731::t_91399d9335aaf6 185,397,402,520,524,536,546
+packages/schemas/src/import-run-agent.ts
+  s_d3f1d8a072e731::t_7c1f46be281158 59-61,69,74-77
+packages/schemas/src/mailbox-research.ts
+  s_d3f1d8a072e731::t_ea67d8692de267 597,645,685
+packages/schemas/src/mcp.ts
+  s_d3f1d8a072e731::t_94f6645eb3c3f6 138,205
+packages/schemas/src/meal.ts
+  s_d3f1d8a072e731::t_97e4c8eba5dc18 283,345
+packages/schemas/src/photo-import-run.ts
+  s_d3f1d8a072e731::t_10b0f3376d1e43 508
+packages/schemas/src/problems.ts
+  s_d3f1d8a072e731::t_86210af47b6c1b 450,1250
+packages/schemas/src/project.ts
+  s_d3f1d8a072e731::t_b4bbb676354741 1517,1599
+packages/schemas/src/project.unit.test.ts
+  s_d3f1d8a072e731::t_34f73ef9f56c2d 284
+packages/schemas/src/purchase.unit.test.ts
+  s_d3f1d8a072e731::t_20d892fe2970af 223
+packages/schemas/src/recipe.ts
+  s_d3f1d8a072e731::t_a3de801779e612 268
+packages/shared/src/shortcode.ts
+  s_d3f1d8a072e731::t_3f3220b4307077 62
+apps/web/src/server/mcp/server.ts
+  s_d3f1d8a072e731::t_62ef6fae6c97fe 11,45,51,57-62,64-67,71,178
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "082a78525bf36aa6eed17ad599aaff8c1ba4d886",
+  "prompts": {},
+  "sessions": {
+    "s_0cc53fa46ecbd7": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2e7ff6fb-224e-42e0-a270-a92fc1131a0c",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    },
+    "s_778d7cda70b989": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a16a8b-f8eb-7851-9ace-3f155d2bf4ef",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    },
+    "s_c8aa3bc2b247bc": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "0181e2f0-f185-4152-ba43-ee5218e4e423",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    },
+    "s_d3f1d8a072e731": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a16a8b-d6dd-7fb2-9ed3-05233cbb4d46",
+        "model": "gpt-6-luna"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    },
+    "s_f8222ceba4ac4a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a16a9c-1cbd-7ae2-beda-2ce80e62e68c",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
