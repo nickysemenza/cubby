@@ -1,0 +1,19 @@
+docs/ci.md
+  s_7523c5f706d337::t_05c4148bd16ed7 55
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "641936d57de8f9c8ccdbf080ff9ccadd3e4557cb",
+  "prompts": {},
+  "sessions": {
+    "s_7523c5f706d337": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a16a4f-5cbc-7101-a438-b0084deab1e5",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
