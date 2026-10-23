@@ -2206,23 +2206,52 @@ describe("statement Transaction suggestions", () => {
   });
 
   // A member resolving listed work is a successful competing outcome, not a label failure.
-  it("skips a charge accepted by the member while its labels are in flight", async () => {
+  it("batches no-action receipts across a charge accepted while labels are in flight", async () => {
     await card(ctx);
-    await record(ctx, [rowInput()]);
-    await generate(ctx);
-    const [pending] = await suggestions(ctx);
-    const answer = answering({ kind: "purchase", counterparty: "business" });
+    for (const index of [0, 1, 2]) {
+      await record(
+        ctx,
+        [
+          rowInput({
+            providerTransactionId: `synthetic-accepted-gap-${index}`,
+            rawDescription: `SYNTHETIC ACCEPTED GAP ${index}`,
+            providerAmount: -20 - index,
+          }),
+        ],
+        { fingerprint: `synthetic-accepted-gap-${index}` },
+      );
+      await generate(ctx);
+    }
+    const pending = (await suggestions(ctx)).find(
+      (row) => row.rawDescription === "SYNTHETIC ACCEPTED GAP 1",
+    );
+    const answer = answering({ kind: "purchase", counterparty: "person" });
+    const prefix = vi.spyOn(
+      statementSuggestionsRepo,
+      "completeNoActionStatementPrefix",
+    );
     let accepted = false;
-    const result = await label(ctx, async (input) => {
-      if (!accepted) {
-        accepted = true;
-        await accept(ctx, pending!);
-      }
-      return answer(input);
-    });
-    expect(result.failed).toEqual([]);
-    expect(result.labelled).toBe(0);
-    expect(await suggestions(ctx)).toEqual([]);
+    try {
+      const result = await label(ctx, async (input) => {
+        if (!accepted) {
+          accepted = true;
+          await accept(ctx, pending!);
+        }
+        return answer(input);
+      });
+      expect(result).toMatchObject({ completed: 2, labelled: 2, failed: [] });
+      expect(prefix.mock.calls.map(([, entries]) => entries.length)).toEqual([
+        2,
+      ]);
+      expect(
+        await statementSuggestionsRepo.countSuggestionsNeedingLabels(ctx.db),
+      ).toBe(0);
+      expect(
+        await getDb(ctx.db).select().from(financialTransaction),
+      ).toHaveLength(1);
+    } finally {
+      prefix.mockRestore();
+    }
   });
 
   it.each([false, true])(
