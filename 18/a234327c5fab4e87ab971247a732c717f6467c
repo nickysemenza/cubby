@@ -1,0 +1,105 @@
+.agents/skills/cubby-meal-logging/SKILL.md
+  s_f1ac5eb353befe::t_8960784f022fa7 58
+.agents/skills/decision-grading/SKILL.md
+  s_f1ac5eb353befe::t_885a3486deb05a 77,102,138
+.agents/skills/purchase-import/SKILL.md
+  s_f1ac5eb353befe::t_c1a033addd953a 83
+.agents/skills/purchase-import/references/financial-settlement.md
+  s_f1ac5eb353befe::t_038d8cee9f80bd 167
+.agents/skills/purchase-import/references/mail-import.md
+  s_f1ac5eb353befe::t_35da9e66f0884e 16,18,25,72,82,88,96,103,106,108
+apps/web/src/contracts/ai.contract.ts
+  s_f1ac5eb353befe::t_8d22d037cec575 186,203,283,290
+apps/web/src/contracts/entity-graph.contract.ts
+  s_f1ac5eb353befe::t_e01ff8a485fd76 58
+apps/web/src/contracts/entity-timeline.contract.ts
+  s_f1ac5eb353befe::t_a01b1cd272e679 16
+apps/web/src/contracts/mcp-tools.ts
+  s_f1ac5eb353befe::t_2a6c0981b11d7d 73,414
+apps/web/src/contracts/meal.contract.ts
+  s_f1ac5eb353befe::t_4de08102b9b4c7 105,254
+apps/web/src/contracts/photo-import.contract.ts
+  s_f1ac5eb353befe::t_4b8ddab7bdd349 300,309,596
+apps/web/src/contracts/product.contract.ts
+  s_f1ac5eb353befe::t_0a17cffaeaee9a 72,79,106,126,185
+apps/web/src/contracts/purchase-import.contract.ts
+  s_f1ac5eb353befe::t_b54c1ef2cabfd7 44,68,82,128,155
+apps/web/src/contracts/recipe.contract.ts
+  s_f1ac5eb353befe::t_01ec3511eb73f8 299,317,427
+apps/web/src/contracts/run.contract.ts
+  s_f1ac5eb353befe::t_181b9dd82f993b 270,279,287,328
+apps/web/src/contracts/shipment.contract.ts
+  s_f1ac5eb353befe::t_85ff964483a806 20,29
+apps/web/src/features/purchase/agent-work-summary.ts
+  s_f1ac5eb353befe::t_57aa75c30b9919 54,56,59
+apps/web/src/server/domains/image/repo/image-import.ts
+  s_f1ac5eb353befe::t_07b65f3356da97 61
+apps/web/src/server/domains/project/repo/dashboard-shared.ts
+  s_f1ac5eb353befe::t_a80261ab96898e 6
+apps/web/src/server/domains/project/repo/project.integration.test.ts
+  s_f1ac5eb353befe::t_6150aec987853f 415
+apps/web/src/server/domains/purchase-agent/service/cubby-mcp.ts
+  s_f1ac5eb353befe::t_aa517211f50c0a 30,81,136
+apps/web/src/server/domains/purchase-agent/service/escalation.ts
+  s_f1ac5eb353befe::t_28f25af2e512e6 11,51-54,57-58,182,184-185,191,205,233
+apps/web/src/server/domains/purchase-agent/service/escalation.unit.test.ts
+  s_f1ac5eb353befe::t_6c3d9dd1b6e7e1 81,83-84
+apps/web/src/server/domains/purchase-import/operations/mail-tool.integration.test.ts
+  s_f1ac5eb353befe::t_29d1e00d0da7b1 11
+apps/web/src/server/domains/purchase-import/repo/mail-outcome/replay.live-eval.ts
+  s_f1ac5eb353befe::t_8b3bc16185ef2d 392-393
+apps/web/src/server/domains/purchase-import/repo/purchase-agent-scenarios.integration.test.ts
+  s_f1ac5eb353befe::t_84c5814a4844aa 541-542,847-848
+apps/web/src/server/domains/purchase-import/service/README.md
+  s_f1ac5eb353befe::t_ed081cae585fe8 70,123
+apps/web/src/server/domains/purchase-import/service/agent-model-eval.fixtures.ts
+  s_f1ac5eb353befe::t_3440b54bb3af1c 3
+apps/web/src/server/domains/transaction-import/repo/source-transaction-record-identity.unit.test.ts
+  s_f1ac5eb353befe::t_cef5b2f5f605b0 19
+apps/web/src/server/mcp/catalog.integration.test.ts
+  s_f1ac5eb353befe::t_3b55c2ffaca1ba 552-566
+apps/web/src/server/mcp/tools/progressive-disclosure.ts
+  s_f1ac5eb353befe::t_5ee442d4e3cee0 30,36-38,42,44,68-70,82-86
+apps/web/src/server/mcp/tools/tool-registration.ts
+  s_f1ac5eb353befe::t_c0370704409bb8 17-20,1024-1032
+docs/adr/0010-mail-import-unattended-burn-down-interactive.md
+  s_f1ac5eb353befe::t_42181d7e849cc4 26
+docs/entities.md
+  s_f1ac5eb353befe::t_a064a41e30f8ff 515,2389,2639,3069,3455
+docs/guide/burn-down.md
+  s_f1ac5eb353befe::t_543907201be6b9 17
+docs/household-finance-analytics.md
+  s_f1ac5eb353befe::t_d29ccda335a7ee 12,51
+docs/infrastructure.md
+  s_f1ac5eb353befe::t_193a526ccadd4c 611,781-782
+packages/schemas/src/mailbox-research.ts
+  s_f1ac5eb353befe::t_e9936cce18bf5b 597,610
+packages/schemas/src/mcp.ts
+  s_f1ac5eb353befe::t_69ecfdc9480d8b 205
+packages/schemas/src/meal.ts
+  s_f1ac5eb353befe::t_7a5ba7135af89a 283
+packages/schemas/src/photo-import-run.ts
+  s_f1ac5eb353befe::t_bc45c8f067061e 508
+packages/schemas/src/problems.ts
+  s_f1ac5eb353befe::t_2d6d910784978b 450,1250
+packages/schemas/src/project.ts
+  s_f1ac5eb353befe::t_dfe5e00491923a 1517,1599
+packages/schemas/src/project.unit.test.ts
+  s_f1ac5eb353befe::t_ebcd387c0304fa 283-284
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "18a234327c5fab4e87ab971247a732c717f6467c",
+  "prompts": {},
+  "sessions": {
+    "s_f1ac5eb353befe": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a229dffd-cbfc-4ada-b803-ecb84a02290e",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
