@@ -164,7 +164,9 @@ Historical unknown or unparseable times remain readable but cannot be written as
 new event times. One dated event establishes both First event and Last event.
 All four list columns sort across the full population before pagination.
 
-Shipment quality reads the same distinct, current event population. Its weighted
+Shipment quality reads the same distinct, current event population and treats
+valid local timestamps as calendar dates, matching first/last and span summaries.
+Historical unparseable local values remain unknown. Its weighted
 checks are multiple events (10), carrier possession or movement evidence (30),
 explicit delivery evidence (30), event span strictly greater than one day (10),
 known shipment and delivery dates (10), and consistent chronology (10). Fewer

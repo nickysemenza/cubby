@@ -7,6 +7,7 @@ import { sql, type SQL } from "drizzle-orm";
 
 const instant = shipmentEventTime.options[0].shape.kind.value;
 const date = shipmentEventTime.options[1].shape.kind.value;
+const local = shipmentEventTime.options[2].shape.kind.value;
 const kinds = shipmentEventKind.enum;
 const movement = sql.join(
   [
@@ -39,6 +40,15 @@ export const shipmentQualityFacts = (ids?: SQL): SQL => {
     FROM "ShipmentObservation" o
     INNER JOIN "Shipment" s ON s.id = o."shipmentId" AND s."deletedAt" IS NULL
     WHERE o."supersededById" IS NULL ${scope}
+  ), normalized_events AS (
+    SELECT "shipmentId", CASE
+      WHEN event->${"time"}->>${"kind"} = ${local}
+        AND event->${"time"}->>'value' ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}T([01][0-9]|2[0-3]):[0-5][0-9](:[0-5][0-9]([.][0-9]+)?)?Z?$'
+        AND pg_input_is_valid(event->${"time"}->>'value', 'timestamp without time zone')
+      THEN jsonb_set(event, '{time}', jsonb_build_object(${"kind"}::text, ${date}::text,
+        'value', left(event->${"time"}->>'value', 10)))
+      ELSE event END AS event
+    FROM current_events
   ), dated_events AS (
     SELECT *, event->>${"kind"} AS kind, event->${"time"}->>${"kind"} AS precision,
       CASE event->${"time"}->>${"kind"}
@@ -49,7 +59,7 @@ export const shipmentQualityFacts = (ids?: SQL): SQL => {
         WHEN ${instant} THEN ((event->${"time"}->>'value')::timestamptz AT TIME ZONE ${HOUSEHOLD_TIMEZONE})::date
         WHEN ${date} THEN (event->${"time"}->>'value')::date
       END AS day
-    FROM current_events
+    FROM normalized_events
   ), intervals AS (
     SELECT *,
       CASE WHEN precision = ${date} THEN day::timestamp AT TIME ZONE ${HOUSEHOLD_TIMEZONE} ELSE anchor END AS lower_bound,
