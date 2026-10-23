@@ -372,7 +372,7 @@ describe("reviewed booking category and refund capacity", () => {
     const converted = await transferReview(20);
     await commitFinancialBookingCorrection(ctx.db, converted.review, ctx.actor);
     expect(
-      await financialTransactionRepository.get(
+      await financialTransactionRepository.repository.get(
         kernelCtx(ctx),
         converted.source.output.id,
       ),
