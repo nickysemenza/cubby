@@ -220,6 +220,9 @@ including saved suggestion outcomes and review status. Batch server reads and
 share preparation across the bounded record set; HTTP batching alone still
 repeats work when each operation prepares and queries independently. Preserve
 per-record cache identity, errors, cancellation and progressive delivery.
+Progressive row views preserve the data array and unaffected record objects
+until their immutable base pages or enrichment patches change; loading and
+summary-only updates must not rebuild the table dataset.
 For automatic suggestion recomputation, prioritize visible rows plus a bounded
 prefetch buffer, reuse current saved answers, and batch only missing or
 invalidated decisions after checking their individual caches. Virtualized
