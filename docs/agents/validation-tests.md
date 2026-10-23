@@ -448,11 +448,6 @@ to assert header position costs a full browser journey for a presentation detail
 Shared responsive capabilities do not establish sticky behavior; verify that
 visual detail during relevant layout work instead.
 
-When a create-dialog journey already knows its synthetic record name, scope the
-background list with `searchQuery` while opening `?create=true`. Rendering the
-unrelated corpus behind the dialog is not part of form, upload or capture
-coverage. Keep filter and full-list composition checks in their owning journeys.
-
 ## Test and dev data factories
 
 One layer builds data for Vitest, E2E, and the dev corpus:
@@ -473,6 +468,11 @@ literals, never Faker. E2E records the seed as a `faker-seed` annotation, and
 `testFaker()` prints it when the test fails. Retailer corpora, statement CSVs,
 costing and nutrition numbers, and scenario states stay literal. `build:cf`
 fails if Faker reaches the Worker bundle.
+
+When a create-dialog journey already knows its synthetic record name, scope the
+background list with `searchQuery` while opening `?create=true`. Rendering the
+unrelated corpus behind the dialog is not part of form, upload or capture
+coverage. Keep filter and full-list composition checks in their owning journeys.
 
 Keep kernel fixtures declaration-backed. The Drizzle v1 RC spike
 (`git show fa514df72:docs/research/drizzle-v1-spike.md`) confirmed that
