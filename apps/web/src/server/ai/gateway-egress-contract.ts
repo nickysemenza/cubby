@@ -22,14 +22,9 @@ export const GATEWAY_EGRESS_LIMITS = {
   requestDeadlineMs: 10 * 60_000,
 } as const;
 
-/** Conservative initial TypeSafe BYOK admission; bytes bound input tokens above. */
-export const TYPESAFE_EGRESS_LIMITS = {
-  windowMs: 1_000,
-  requestsPerWindow: 20,
-  inputTokensPerWindow: 80_000,
-  maxInFlight: 16,
-} as const;
-
+// TypeSafe's organization-specific request/token rates are enforced upstream.
+// Share its 429 cooldown, not speculative concurrency or JSON-byte token caps.
+// https://docs.typesafe.ai/models#rate-limits
 export const isByokJevEndpoint = (provider: string, endpoint: string) =>
   provider === "workers-ai" && endpoint === "run/typesafe/jev";
 

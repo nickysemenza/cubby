@@ -14,7 +14,6 @@ import { DurableObject } from "cloudflare:workers";
 import { aiBudgetWindow } from "~/server/ai/budget-window";
 import {
   GATEWAY_EGRESS_LIMITS,
-  TYPESAFE_EGRESS_LIMITS,
   isByokJevEndpoint,
   gatewayEgressInput,
   type GatewayAdmission,
@@ -75,9 +74,6 @@ export class AiGatewayEgressDurableObject extends DurableObject<Env> {
     );
     ctx.storage.sql.exec(
       "CREATE TABLE IF NOT EXISTS cooldowns (bucket TEXT PRIMARY KEY, until_ms INTEGER NOT NULL)",
-    );
-    ctx.storage.sql.exec(
-      "CREATE TABLE IF NOT EXISTS typesafe_starts (started INTEGER NOT NULL, input_tokens INTEGER NOT NULL)",
     );
     // A provider credit refusal (ADR 0017) refuses credit admission until
     // `until_ms`, except one probe per six-hour window; `probe_window` is the
@@ -174,11 +170,7 @@ export class AiGatewayEgressDurableObject extends DurableObject<Env> {
     );
   }
 
-  async admit(
-    bucket: string,
-    now = Date.now(),
-    inputTokens = 0,
-  ): Promise<GatewayAdmission> {
+  async admit(bucket: string, now = Date.now()): Promise<GatewayAdmission> {
     const sql = this.ctx.storage.sql;
     sql.exec("DELETE FROM starts WHERE started <= ?", now - WINDOW_MS);
     sql.exec("DELETE FROM permits WHERE deadline <= ?", now);
@@ -193,30 +185,6 @@ export class AiGatewayEgressDurableObject extends DurableObject<Env> {
         until: refusal.until_ms,
         reason: refusal.reason,
       };
-    if (bucket === TYPESAFE_BUCKET) {
-      sql.exec(
-        "DELETE FROM typesafe_starts WHERE started <= ?",
-        now - TYPESAFE_EGRESS_LIMITS.windowMs,
-      );
-      const recent = sql
-        .exec<{ count: number; tokens: number; earliest: number | null }>(
-          "SELECT count(*) AS count, coalesce(sum(input_tokens), 0) AS tokens, min(started) AS earliest FROM typesafe_starts",
-        )
-        .one();
-      if (inputTokens > TYPESAFE_EGRESS_LIMITS.inputTokensPerWindow)
-        throw new Error(
-          "Jev request exceeds the TypeSafe BYOK admission token budget; reduce the batch size",
-        );
-      if (
-        recent.count >= TYPESAFE_EGRESS_LIMITS.requestsPerWindow ||
-        recent.tokens + inputTokens >
-          TYPESAFE_EGRESS_LIMITS.inputTokensPerWindow
-      )
-        return {
-          kind: "wait",
-          until: (recent.earliest ?? now) + TYPESAFE_EGRESS_LIMITS.windowMs,
-        };
-    }
     const cooldown =
       sql
         .exec<{ until_ms: number }>(
@@ -226,20 +194,15 @@ export class AiGatewayEgressDurableObject extends DurableObject<Env> {
         )
         .one().until_ms ?? 0;
     if (cooldown > now) return { kind: "wait", until: cooldown };
-    const active = sql
-      .exec<{ count: number; earliest: number }>(
-        "SELECT count(*) AS count, min(deadline) AS earliest FROM permits WHERE bucket = ?",
-        bucket,
-      )
-      .one();
-    if (
-      bucket === TYPESAFE_BUCKET &&
-      active.count >= TYPESAFE_EGRESS_LIMITS.maxInFlight
-    )
-      return { kind: "wait", until: Math.min(active.earliest, now + 1_000) };
-    if (bucket === "unified" && active.count >= UNIFIED_MAX_IN_FLIGHT)
-      return { kind: "wait", until: Math.min(active.earliest, now + 1_000) };
     if (bucket === "unified") {
+      const active = sql
+        .exec<{ count: number; earliest: number }>(
+          "SELECT count(*) AS count, min(deadline) AS earliest FROM permits WHERE bucket = ?",
+          bucket,
+        )
+        .one();
+      if (active.count >= UNIFIED_MAX_IN_FLIGHT)
+        return { kind: "wait", until: Math.min(active.earliest, now + 1_000) };
       const starts = sql
         .exec<{ count: number; earliest: number }>(
           "SELECT count(*) AS count, min(started) AS earliest FROM starts WHERE bucket = ?",
@@ -257,9 +220,8 @@ export class AiGatewayEgressDurableObject extends DurableObject<Env> {
         windowStart(now),
         CREDIT_BUCKET,
       );
-    if (bucket === TYPESAFE_BUCKET)
-      sql.exec("INSERT INTO typesafe_starts VALUES (?, ?)", now, inputTokens);
-    sql.exec("INSERT INTO starts VALUES (?, ?)", bucket, now);
+    if (bucket === "unified")
+      sql.exec("INSERT INTO starts VALUES (?, ?)", bucket, now);
     sql.exec(
       "INSERT INTO permits VALUES (?, ?, ?)",
       token,
@@ -309,9 +271,6 @@ export class AiGatewayEgressDurableObject extends DurableObject<Env> {
     const byokJev = isByokJevEndpoint(input.provider, input.endpoint);
     if (byokJev && !this.env.AI_GATEWAY_API_KEY)
       throw new Error("Jev BYOK requires the AI_GATEWAY_API_KEY Worker secret");
-    const directBody = byokJev ? JSON.stringify(input.query) : "";
-    // UTF-8 bytes plus framing conservatively overestimate textual input tokens.
-    const inputTokens = new TextEncoder().encode(directBody).length + 1024;
     // Stored-key traffic does not consume Unified Billing's capacity window.
     const credit =
       input.provider === "anthropic" &&
@@ -320,7 +279,6 @@ export class AiGatewayEgressDurableObject extends DurableObject<Env> {
     const admitted = await this.admit(
       byokJev ? TYPESAFE_BUCKET : credit ? CREDIT_BUCKET : "unified",
       Date.now(),
-      byokJev ? inputTokens : 0,
     );
     if (admitted.kind === "refused") return creditRefusedResponse(admitted);
     if (admitted.kind === "wait")
