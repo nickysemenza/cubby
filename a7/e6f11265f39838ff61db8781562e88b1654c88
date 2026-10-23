@@ -1,0 +1,27 @@
+apps/web/src/server/generic/data-quality/repo/refresh.ts
+  s_0cc53fa46ecbd7::t_4c9b66140737c0 18-19,53,72,76-82,87
+apps/web/src/server/generic/data-quality/repo/shipment-checks.integration.test.ts
+  s_0cc53fa46ecbd7::t_d7a8277168e65f 491,517-518
+apps/web/src/server/generic/derived-refresh/repo/broad-refresh.integration.test.ts
+  s_0cc53fa46ecbd7::t_b6e06081882611 1,5,26,116-164
+apps/web/src/server/generic/derived-refresh/repo/families.ts
+  s_0cc53fa46ecbd7::t_016f84ad4c257b 40-50
+docs/entities.md
+  s_0cc53fa46ecbd7::t_5b968d1ad67708 2351-2354
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "a7e6f11265f39838ff61db8781562e88b1654c88",
+  "prompts": {},
+  "sessions": {
+    "s_0cc53fa46ecbd7": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2e7ff6fb-224e-42e0-a270-a92fc1131a0c",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
