@@ -31,8 +31,6 @@ import { useRef, useState, type FC } from "react";
 import { FormProvider, useForm } from "react-hook-form";
 import { z } from "zod";
 
-import { entityDetailFor } from "~/entity/entity-detail";
-import type { DetailRecordOf } from "~/entity/entity-detail/detail-record";
 import { PickerField } from "~/entity/forms/picker-field";
 import { useActionMutation } from "~/entity/hooks/use-action-mutation";
 import { referenceEntitySearch } from "~/entity/picker/reference-entity-search";
@@ -69,16 +67,15 @@ interface ReceiveExpenseDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   productId: ProductShortcode;
+  productName: string;
   expenseName: string;
   expenseId: ExpenseShortcode;
 }
 
-type ProductDetail = DetailRecordOf<"product">;
-
 interface ReceiveBodyProps {
   productId: ProductShortcode;
   expenseId: ExpenseShortcode;
-  product: ProductDetail;
+  productName: string;
   context: InventoryReceivingContextOut;
   onDone: () => void;
 }
@@ -87,13 +84,10 @@ export const ReceiveExpenseDialog: FC<ReceiveExpenseDialogProps> = ({
   open,
   onOpenChange,
   productId,
+  productName,
   expenseName,
   expenseId,
 }) => {
-  const { data: product } = useQuery({
-    ...entityDetailFor("product").queryOptions(productId),
-    enabled: open,
-  });
   const { data: context } = useQuery({
     ...inventoryOperations.receivingContext.queryOptions({ productId }),
     enabled: open,
@@ -109,11 +103,11 @@ export const ReceiveExpenseDialog: FC<ReceiveExpenseDialogProps> = ({
       title="Receive into Inventory"
       description={`Put what "${expenseName}" bought onto a shelf.`}
     >
-      {product && context ? (
+      {context ? (
         <ReceiveBody
           productId={productId}
           expenseId={expenseId}
-          product={product}
+          productName={productName}
           context={context}
           onDone={() => onOpenChange(false)}
         />
@@ -127,7 +121,7 @@ export const ReceiveExpenseDialog: FC<ReceiveExpenseDialogProps> = ({
 const ReceiveBody: FC<ReceiveBodyProps> = ({
   productId,
   expenseId,
-  product,
+  productName,
   context,
   onDone,
 }) => {
@@ -215,7 +209,7 @@ const ReceiveBody: FC<ReceiveBodyProps> = ({
       ))}
       {context.stock.length > 0 ? (
         <Description>
-          {product.name} already has {ownUnits} on hand (
+          {productName} already has {ownUnits} on hand (
           {context.stock
             .map(
               (entry) =>
@@ -253,7 +247,7 @@ const ReceiveBody: FC<ReceiveBodyProps> = ({
       return (
         <Stack gap="md">
           <Description>
-            {product.name} is already stocked at {soleEntry?.locationName}. It's
+            {productName} is already stocked at {soleEntry?.locationName}. It's
             a one-of-a-kind item, so receiving it again moves it rather than
             adding a second entry.
           </Description>
@@ -342,7 +336,7 @@ const ReceiveBody: FC<ReceiveBodyProps> = ({
         ) : (
           <Stack gap="sm">
             <Description>
-              {product.name} is not stocked at this location.
+              {productName} is not stocked at this location.
             </Description>
             <AmountFieldGroup
               form={form}
