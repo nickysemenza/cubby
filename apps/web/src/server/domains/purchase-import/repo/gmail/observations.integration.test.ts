@@ -21,6 +21,7 @@ import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { publishAssessment } from "~/server/generic/assessment/repo/assessment";
 import { publishEmailLinkDecision } from "~/server/generic/assessment/repo/assessment-email-link";
 import { listAutomaticDecisions } from "~/server/generic/assessment/repo/automatic-decisions";
+import { listSuggestionPage } from "~/server/generic/assessment/repo/suggestion-list";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { runFinding } from "~/server/testing/run-finding.fixtures";
 
@@ -113,6 +114,38 @@ describe("immutable Email observations", () => {
       fingerprint: mail.checksum,
       evidence: null,
     });
+    const legacy = await publishAssessment(ctx.db, {
+      publicationKey: `synthetic-legacy:${mail.id}`,
+      family: "email_relevance",
+      subject: {
+        kind: "email_relevance",
+        entity: "email",
+        recordId: mail.id,
+        checksum: mail.checksum!,
+        observationId: crypto.randomUUID(),
+      },
+      judgment: { classification: "unrelated", stage: "decision" },
+      producer: null,
+      fingerprint: mail.checksum,
+      evidence: null,
+    });
+    const legacyHistory = await listAutomaticDecisions(ctx.db, {
+      family: "email_relevance",
+      recordIds: [mail.shortcode],
+    });
+    expect(
+      legacyHistory.items.find((row) => row.id === legacy.id),
+    ).toMatchObject({
+      applicationVerified: false,
+      decision: { classification: "unrelated", stage: "decision" },
+    });
+    const pending = await listSuggestionPage(ctx.db, {});
+    expect(pending.items.map((row) => row.assessmentId)).not.toContain(
+      outcome.id,
+    );
+    expect(pending.items.map((row) => row.assessmentId)).not.toContain(
+      legacy.id,
+    );
     for (const code of [mail.shortcode, fixture.order.shortcode]) {
       const audit = await listAutomaticDecisions(ctx.db, {
         family: "email_link",
