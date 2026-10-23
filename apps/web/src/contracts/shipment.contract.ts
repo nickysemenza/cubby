@@ -14,6 +14,8 @@ import { defineContract, mutation, query } from "~/contracts/define";
 
 export const shipmentContract = defineContract("shipment", {
   edit_observation: mutation({
+    native: "Correct retained shipment observations from the CLI",
+    nativeModels: { input: "json", output: "json" },
     input: editShipmentObservationInput,
     output: shipmentReferenceOut,
     invalidates: ["shipment", "purchase"],

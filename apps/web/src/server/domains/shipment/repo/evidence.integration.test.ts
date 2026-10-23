@@ -78,6 +78,37 @@ const capture = (
 describe("Shipment retained evidence", () => {
   const ctx = withTestDb();
 
+  it("requires a calendar date for new observations and reviewed time edits", async () => {
+    const undated = packet();
+    const scan = undated.observations[0];
+    if (!scan) throw new Error("Synthetic observation missing");
+    scan.time = { kind: "unknown" };
+    await expect(
+      recordShipmentEvidence(ctx.db, capture("undated", [undated]), ctx.actor),
+    ).rejects.toThrow("calendar date");
+    const first = await recordShipmentEvidence(
+      ctx.db,
+      capture("dated"),
+      ctx.actor,
+    );
+    const code = first.shipmentIds[0];
+    if (!code) throw new Error("Synthetic Shipment missing");
+    const timeline = await readShipmentTimeline(ctx.db, code);
+    const observation = timeline.observations[0];
+    if (!observation) throw new Error("Synthetic observation missing");
+    await expect(
+      editShipmentObservation(
+        ctx.db,
+        {
+          shipmentId: code,
+          observationId: observation.observationId,
+          patch: { time: { kind: "unknown" } },
+        },
+        ctx.actor,
+      ),
+    ).rejects.toThrow("calendar date");
+  });
+
   it("retains an exported SMS, replays without duplicates and refuses changed message evidence", async () => {
     const input: RecordShipmentEvidenceInput = {
       source: {
@@ -85,7 +116,11 @@ describe("Shipment retained evidence", () => {
         externalKey: "synthetic-thread:message-one",
         fileName: "synthetic-carrier.txt",
         sender: "Synthetic Parcel Carrier",
-        sentAt: { kind: "local", value: "2026-06-03T09:05:00", timezone: null },
+        sentAt: {
+          kind: "local",
+          value: "2026-06-03T09:05:00",
+          timezone: "America/Los_Angeles",
+        },
         capturedAt: "2026-06-06T09:00:00Z",
         content: "Synthetic Parcel Carrier: EXAMPLE-123 picked up.",
       },
@@ -112,6 +147,23 @@ describe("Shipment retained evidence", () => {
     expect(captures[0]?.source).toEqual(input.source);
     if (input.source.kind !== "sms_export")
       throw new Error("Synthetic SMS missing");
+    await expect(
+      recordShipmentEvidence(
+        ctx.db,
+        {
+          ...input,
+          source: {
+            ...input.source,
+            sentAt: {
+              kind: "local",
+              value: "2026-06-03T09:05:00",
+              timezone: null,
+            },
+          },
+        },
+        ctx.actor,
+      ),
+    ).rejects.toThrow("America/Los_Angeles");
     await expect(
       recordShipmentEvidence(
         ctx.db,

@@ -37,10 +37,20 @@ export const shipmentEventTime = z.union([
   }),
   z.strictObject({ kind: z.literal("unknown") }),
 ]);
+// Historical captures remain readable; new observations and reviewed edits require a date.
+export const datedShipmentEventTime = shipmentEventTime.refine(
+  (time) =>
+    time.kind !== "unknown" &&
+    (time.kind !== "local" ||
+      z.iso.datetime({ local: true }).safeParse(time.value).success),
+  "Every shipment event needs a calendar date. Use the source notification date when no separate event date is stated.",
+);
 export const shipmentObservationInput = z.strictObject({
   sourceEventKey: text.max(500).nullable(),
   kind: shipmentEventKind,
-  time: shipmentEventTime,
+  time: shipmentEventTime.describe(
+    "Every new observation requires a date. Use its stated event time, otherwise the source notification date at date-only precision; estimates remain estimates.",
+  ),
   rawStatus: text.max(4000),
   location: text.max(500).nullable(),
   carrierId: shortcodeSchema("vendor").nullable(),
@@ -132,11 +142,49 @@ export const shipmentEvidenceSource = z.union([
   }),
   smsExportSource,
 ]);
-export const recordShipmentEvidenceInput = z.strictObject({
-  source: shipmentEvidenceSource,
-  purchaseId: shortcodeSchema("purchase").nullable(),
-  shipments: z.array(shipmentEvidence).min(1).max(50),
-});
+export const recordShipmentEvidenceInput = z
+  .strictObject({
+    source: shipmentEvidenceSource,
+    purchaseId: shortcodeSchema("purchase").nullable(),
+    shipments: z.array(shipmentEvidence).min(1).max(50),
+  })
+  .superRefine((input, ctx) => {
+    if (input.source.kind === "sms_export") {
+      const sentAt = input.source.sentAt;
+      if (
+        !datedShipmentEventTime.safeParse(sentAt).success ||
+        (sentAt.kind === "local" && sentAt.timezone !== "America/Los_Angeles")
+      )
+        ctx.addIssue({
+          code: "custom",
+          path: ["source", "sentAt"],
+          message:
+            "SMS message timestamps require a date and America/Los_Angeles for local clocks.",
+        });
+    }
+    for (const [i, packet] of input.shipments.entries()) {
+      for (const [j, observation] of packet.observations.entries()) {
+        const result = datedShipmentEventTime.safeParse(observation.time);
+        if (!result.success)
+          ctx.addIssue({
+            code: "custom",
+            path: ["shipments", i, "observations", j, "time"],
+            message: result.error.issues[0]?.message ?? "Event date required.",
+          });
+        if (
+          input.source.kind === "sms_export" &&
+          observation.time.kind === "local" &&
+          observation.time.timezone !== "America/Los_Angeles"
+        )
+          ctx.addIssue({
+            code: "custom",
+            path: ["shipments", i, "observations", j, "time"],
+            message:
+              "Local SMS event clocks use America/Los_Angeles; use an instant for an explicitly stated offset.",
+          });
+      }
+    }
+  });
 export type ShipmentEvidenceSource = z.infer<typeof shipmentEvidenceSource>;
 export type RecordShipmentEvidenceInput = z.infer<
   typeof recordShipmentEvidenceInput
@@ -162,6 +210,7 @@ export const editShipmentObservationInput = z.strictObject({
   shipmentId: shortcodeSchema("shipment"),
   observationId: z.uuid(),
   patch: shipmentObservationInput
+    .extend({ time: datedShipmentEventTime })
     .omit({ sourceEventKey: true })
     .partial()
     .refine(
