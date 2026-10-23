@@ -161,8 +161,6 @@ jobs:
       - name: Formatting
         if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
         run: pnpm exec nx run cubby-checks:format --outputStyle=stream
-      # The field guide is generated and absent from a root-only checkout.
-      # Runtime validation still checks its links after generation.
       - name: Check relative Markdown links
         if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
         uses: lycheeverse/lychee-action@e7477775783ea5526144ba13e8db5eec57747ce8 # v2.9.0
@@ -171,7 +169,6 @@ jobs:
             --offline
             --no-progress
             --exclude-path '(^|/)node_modules/'
-            --exclude '${{ needs.plan.outputs.runtime == 'true' && '^$' || '(^|/)docs/guide/how-values-are-determined[.]md([#?].*)?$' }}'
             --root-dir "${{ github.workspace }}"
             './**/*.md'
             './**/*.mdx'
