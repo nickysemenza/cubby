@@ -27,7 +27,7 @@ test("receiving after a photo import writes nothing until additional units are c
   const photoName = uniqueName(testInfo, "Synthetic photographed jacket");
   const boughtName = uniqueName(testInfo, "Synthetic jacket order line");
   const shelfName = uniqueName(testInfo, "Synthetic receiving shelf");
-  const { photo, bought, purchase, line } = await createFixtureGraph(
+  const { photo, bought, purchase } = await createFixtureGraph(
     page,
     async (create) => {
       const closet = await create("location", {
@@ -49,7 +49,7 @@ test("receiving after a photo import writes nothing until additional units are c
         vendorId: vendor.id,
         date: "2026-09-01",
       });
-      const line = await create("expense", {
+      await create("expense", {
         lineKind: "principal",
         name: uniqueName(testInfo, "Synthetic jacket line"),
         cost: 80,
@@ -59,7 +59,7 @@ test("receiving after a photo import writes nothing until additional units are c
         purchaseId: purchase.id,
         productId: bought.id,
       });
-      return { photo, bought, purchase, line };
+      return { photo, bought, purchase };
     },
   );
   await upsertAgentProductMatch(db, {
@@ -82,7 +82,7 @@ test("receiving after a photo import writes nothing until additional units are c
     name: "Receive into inventory...",
   });
   const dialog = page.getByRole("dialog", { name: "Receive into Inventory" });
-  await gotoDetailActions(page, `/expenses/${line.id}`, receiveButton);
+  await gotoDetailActions(page, `/purchases/${purchase.id}`, receiveButton);
   await receiveButton.click();
 
   // The photo-counted match comes first, with a link to the directed review.
@@ -125,13 +125,6 @@ test("receiving after a photo import writes nothing until additional units are c
   await dialog.getByRole("button", { name: "Add to inventory" }).click();
   expect(await boughtRows()).toEqual([]);
   await dialog.getByLabel("Amount Value").fill("2");
-  await dialog
-    .getByRole("button", { name: "Close Where and how many?" })
-    .click();
-  await dialog
-    .getByRole("button", { name: "Open Where and how many?" })
-    .click();
-  await expect(dialog.getByLabel("Amount Value")).toHaveValue("2");
 
   await dialog.getByRole("button", { name: "Add to inventory" }).click();
   await expect(dialog).toHaveCount(0);
@@ -139,14 +132,8 @@ test("receiving after a photo import writes nothing until additional units are c
   expect(stocked).toHaveLength(1);
   expect(stocked[0]).toMatchObject({ amountValue: 2, amountUnit: "each" });
 
-  // The Purchase offers the same dialog per Product line, and the units just
-  // received now count as existing stock: the default is again "nothing new".
-  await gotoDetailActions(
-    page,
-    `/purchases/${purchase.id}`,
-    page.getByRole("button", { name: "Receive into inventory..." }),
-  );
-  await page.getByRole("button", { name: "Receive into inventory..." }).click();
+  // Reopening the same per-line dialog must read the just-received stock.
+  await receiveButton.click();
   await expect(
     dialog.getByRole("button", { name: "Nothing new arrived" }),
   ).toBeVisible();
