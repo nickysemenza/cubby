@@ -408,20 +408,28 @@ describe("Jev BYOK egress", () => {
     });
   });
 
-  it("shares the TypeSafe token budget across callers and reopens after its rolling window", async () => {
-    const stub = env.AI_GATEWAY_EGRESS.getByName(crypto.randomUUID());
-    await runInDurableObject(stub, async (instance) => {
-      const now = Date.now();
-      const first = await instance.admit("byok:typesafe", now, 50_000);
-      expect(first.kind).toBe("admitted");
-      expect(await instance.admit("byok:typesafe", now, 40_000)).toEqual({
-        kind: "wait",
-        until: now + 1_000,
-      });
-      expect(
-        (await instance.admit("byok:typesafe", now + 1_000, 40_000)).kind,
-      ).toBe("admitted");
-      expect((await instance.admit("unified", now)).kind).toBe("admitted");
+  it("admits Jev bursts without speculative caps and shares only its provider cooldown", async () => {
+    const name = crypto.randomUUID();
+    const first = env.AI_GATEWAY_EGRESS.getByName(name);
+    const second = env.AI_GATEWAY_EGRESS.getByName(name);
+    const now = Date.now();
+    const permits: string[] = [];
+    for (let index = 0; index < 80; index++) {
+      const admitted = await first.admit("byok:typesafe", now);
+      expect(admitted.kind).toBe("admitted");
+      if (admitted.kind === "admitted") permits.push(admitted.token);
+    }
+    await first.finish(permits[0]!, 429, "2", now);
+    expect(await second.admit("byok:typesafe", now + 1)).toEqual({
+      kind: "wait",
+      until: now + 2_000,
     });
+    expect((await second.admit("unified", now + 1)).kind).toBe("admitted");
+    // Finishing an older success must not erase a later provider cooldown.
+    await second.finish(permits[1]!, 200, null, now + 1);
+    expect((await first.admit("byok:typesafe", now + 1)).kind).toBe("wait");
+    expect((await first.admit("byok:typesafe", now + 2_000)).kind).toBe(
+      "admitted",
+    );
   });
 });

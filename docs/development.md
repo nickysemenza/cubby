@@ -133,10 +133,13 @@ Start streams   →  cancellable workflow streams
   provider key stored under the `default` alias on the production gateway.
   Requests use `AI_GATEWAY_API_KEY` for Gateway authentication and require BYOK
   with `cf-aig-no-wholesale: true`; no Unified Billing fallback is allowed.
-  The shared egress Durable Object admits at most 20 Jev requests and 80,000
-  conservatively estimated input tokens per rolling second, with 16 in flight.
-  UTF-8 request bytes plus 1,024 framing tokens bound admission; provider 429s
-  retain their own cooldown independently of Unified Billing traffic.
+  TypeSafe enforces its organization-specific request/token limits upstream;
+  Cubby imposes no speculative Jev concurrency or JSON-byte token cap. The
+  shared egress Durable Object honors TypeSafe's 429 cooldown independently of
+  Unified Billing traffic. Cooperative Run pages checkpoint and yield to the
+  admission retry deadline (minimum one second), without a 15-second floor or
+  polling inside the invocation. Provider cooldowns and request deadlines remain
+  enforced; increasing throughput does not change household funding budgets.
   Text decisions use a stable 90% Jev / 10% Clef split; vision stays on Clef.
   Existing response caching, paid admission, usage accounting, Gateway
   observability and Run checkpoints remain shared. Install the Gateway BYOK
