@@ -424,7 +424,9 @@ batches and each seed's exact competitor pool remain
 unchanged; broader preview batches can change duplicate admission. Retirement
 and acceptance rebuild current evidence.
 Within a preparation page, previews share raw observations for the exact same
-file-fingerprint scope; each call retains its own duplicate-admission input rows.
+file fingerprint and candidate settlement-reference scope, including known misses.
+Hydration follows candidate selection and retains historical observation positions;
+each call retains its own duplicate-admission input rows.
 Preview indexes retain source-scoped reference identity, provider account scope,
 file occurrence positions and the original ledger candidate order. Each row's
 nearby search still evaluates every transaction on its account in the read pool.
