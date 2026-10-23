@@ -237,7 +237,6 @@ jobs:
         if: ${{ matrix.vitest }}
         run: pnpm --filter @cubby/web run test:e2e:install-browser -- chromium
       - name: Restore or build web app
-        if: ${{ matrix.vitest }}
         run: pnpm exec nx run @cubby/web:build-cf --outputStyle=stream
       - name: Run Vitest shard
         if: ${{ matrix.vitest }}
@@ -254,7 +253,8 @@ jobs:
           include-hidden-files: true
           if-no-files-found: warn
           retention-days: 7
-      - if: ${{ matrix.browser }}
+      - name: Run Playwright shard
+        if: ${{ matrix.browser }}
         uses: ./.github/actions/playwright
         with:
           command: ${{ matrix.run }}
@@ -496,7 +496,10 @@ jobs:
       - uses: ./.github/actions/setup-node-with-deps
         with:
           wasm: restore
-      - uses: ./.github/actions/playwright
+      - name: Restore or build web app
+        run: pnpm exec nx run @cubby/web:build-cf --outputStyle=stream
+      - name: Run Playwright purchase import tests
+        uses: ./.github/actions/playwright
         with:
           command: pnpm exec nx run @cubby/web:e2e-purchase-import --outputStyle=stream
           artifact: purchase-import

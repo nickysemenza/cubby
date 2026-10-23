@@ -24,8 +24,8 @@ failures without paying a fresh install for every static check. One status
 context, `CI passed`, owns the merge gate. [Journeys](#journeys) live in their
 own workflow.
 
-Each Vitest shard has a named restore-or-build web step; Playwright exposes
-the same step inside its composite action before running tests. Shards remain
+Each Vitest and Playwright shard, including the optional purchase-import lane,
+has a top-level restore-or-build web step before running tests. Shards remain
 independent and use the existing Nx `build-cf` cache, including its source
 provenance. The test commands retain their build ensure for standalone use;
 after the explicit build it verifies the existing output. Build preparation

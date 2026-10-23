@@ -1,8 +1,7 @@
 name: "Run Playwright"
 description: >-
   Restores (or installs) the exact Chromium the installed @playwright/test
-  expects, restores or builds the web app, runs one browser lane, and uploads
-  its report and traces.
+  expects, runs one browser lane, and uploads its report and traces.
 
 inputs:
   command:
@@ -42,9 +41,6 @@ runs:
       with:
         path: ~/.cache/ms-playwright
         key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}-chromium
-    - name: Restore or build web app
-      shell: bash
-      run: pnpm exec nx run @cubby/web:build-cf --outputStyle=stream
     - name: Run Playwright tests
       shell: bash
       run: ${{ inputs.command }}
