@@ -854,8 +854,10 @@ duplicating that association on Shipment.
 List readers infer stored reference outputs from field references and label
 paths. To-one record-valued derived paths hydrate through compiled traversal in
 bounded page batches, using the canonical public-ID and label resolver. Explicit
-bindings and missing/deleted-reference policies override defaults. To-many,
-inherited and domain-enriched values retain their existing projection owners.
+bindings and missing/deleted-reference policies override defaults. Inherited
+references require an explicit lookup; admitted lookups still derive label
+outputs from the declaration. To-many, inherited and domain-enriched values
+retain their existing projection owners.
 Base, count and empty reads skip unrequested relation hydration.
 
 `extensions.ports` is the explicit seam map for entity-wide behavior the

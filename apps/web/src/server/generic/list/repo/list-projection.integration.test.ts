@@ -1,7 +1,10 @@
+import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { buildNutrition } from "@cubby/schemas/nutrition";
 import { eq } from "drizzle-orm";
+import { createEntity } from "tooling/factories/create";
 import { createRepoEntity } from "tooling/factories/repo";
 import { taxonomyShortcode } from "tooling/product-category-fixtures";
+import { buildKernelContext } from "tooling/scenarios/context";
 import { countTestDbQueries, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
@@ -25,6 +28,8 @@ import {
   createRecipeFixture,
   makeRecipeInput,
 } from "~/server/testing/repo.fixtures";
+
+import { selectedListProjection } from "./list-projection";
 
 describe("progressive list readers", () => {
   const ctx = withTestDb();
@@ -127,6 +132,18 @@ describe("progressive list readers", () => {
   });
 
   it("resolves category reference features without derived catalog, quality or media reads", async () => {
+    const spending = await createEntity(
+      buildKernelContext(ctx.db, ctx.actor.userId),
+      "spendingCategory",
+      { name: "Synthetic projection spending" },
+    );
+    const spendingId = parseShortcodeFor("spendingCategory", spending.id);
+    const categoryName = "Synthetic mapped projection category";
+    const mapped = await createRepoEntity(ctx, "productCategory", {
+      name: categoryName,
+      spendingCategoryMode: "mapped",
+      spendingCategoryId: spendingId,
+    });
     const pagination = { pageIndex: 0, pageSize: 500 };
     const core = await countTestDbQueries(() =>
       listProductCategoriesRead(ctx.db, {}, [], pagination, { kind: "base" }),
@@ -145,6 +162,24 @@ describe("progressive list readers", () => {
         (row) => row.id === taxonomyShortcode("tools"),
       ),
     ).toMatchObject({ effectiveFeature: "tools" });
+    expect(
+      references.result.data.find((row) => row.id === mapped.output.id),
+    ).toMatchObject({
+      spendingCategoryName: "Synthetic projection spending",
+    });
+    const selected = await listProductCategoriesRead(
+      ctx.db,
+      { search: categoryName },
+      [],
+      pagination,
+      selectedListProjection("productCategory", ["spendingCategoryName"]),
+    );
+    expect(selected.data).toEqual([
+      {
+        id: mapped.output.id,
+        spendingCategoryName: "Synthetic projection spending",
+      },
+    ]);
     expect(
       references.tables.filter(
         (table) =>
@@ -169,7 +204,8 @@ describe("progressive list readers", () => {
       ),
     );
     expect(empty.result.data).toEqual([]);
-    expect(empty.queryCount).toBe(core.queryCount);
+    expect(empty.queryCount).toBe(2);
+    expect(empty.tables).not.toContain("SpendingCategory");
   });
 
   // Reading core scalars must not resolve FKs, score quality, or resolve media;

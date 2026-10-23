@@ -304,11 +304,14 @@ export function listReadPlan<Row>(
     const key = field.readKey ?? field.key;
     const stored = storage.find((candidate) => candidate.key === field.key);
     const via = derived[field.key];
+    // Inherited references require explicit admission, then share label defaults.
     if (
       !field.reference ||
       field.reference.multiple ||
       written.has(key) ||
-      (stored && inheritedFieldOfColumn(entity, stored.column) !== null) ||
+      (stored &&
+        inheritedFieldOfColumn(entity, stored.column) !== null &&
+        options.references?.[key]?.kind !== "lookup") ||
       !Object.hasOwn(schema.shape, key) ||
       !(
         stored?.reference ||
