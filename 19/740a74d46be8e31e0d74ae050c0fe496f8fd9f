@@ -1,0 +1,253 @@
+apps/web/generator/http-api/native-contract.unit.test.ts
+  s_f1ac5eb353befe::t_9d153c7dfcedda 4-7,10-20,32,34-38,42,55-68,70-84,86,91,94-98,102-152
+apps/apple/CubbyKit/Tests/CubbyKitTests/Finance/FinanceActionSessionTests.swift
+  s_f1ac5eb353befe::t_8f9ba3615cfb25 57,115,121-122,127,130,139,148,155-157,169,171,177-179,189,194-196,213,218,227-228,235,240-242,256,337,345-347,353,356,366,372,375,384,389,392,398,401,427-428,440-442
+apps/apple/CubbyKit/Tests/CubbyKitTests/API/DebugClientTests.swift
+  s_f1ac5eb353befe::t_663e605835f090 65,70
+apps/web/tests/e2e/financial-booking-review.spec.ts
+  s_f1ac5eb353befe::t_3826c0fb632e27 138-142,145,150-157
+apps/web/src/server/http/apple-client-gate.ts
+  s_f1ac5eb353befe::t_52003ce0ddc560 3-4,45
+docs/local-development.md
+  s_f1ac5eb353befe::t_06b7c6e0bf8674 431
+apps/web/src/contracts/recipe.contract.ts
+  s_f1ac5eb353befe::t_c4eb5b94e92508 325,333
+apps/web/src/contracts/image-upload.contract.ts
+  s_f1ac5eb353befe::t_c8c54f68756293 72,77,82
+apps/web/src/contracts/mcp-define.ts
+  s_f1ac5eb353befe::t_392758c57c97a1 102-103
+apps/apple/CubbyKit/Tests/CubbyKitTests/Auth/CliAuthHandoffTests.swift
+  s_f1ac5eb353befe::t_8f5c1213519dc6 34
+apps/web/generator/http-api/schema-names.ts
+  s_f1ac5eb353befe::t_94f8f06c07a51e 5,11,22
+apps/web/src/server/http/maintenance.unit.test.ts
+  s_f1ac5eb353befe::t_d90d87dfa545e7 13-17
+docs/development.md
+  s_f1ac5eb353befe::t_97ff89ee2a61e9 75,533-537,543,546-547,563-577,581,587-635
+apps/web/tests/e2e/photo-group-review.spec.ts
+  s_f1ac5eb353befe::t_e7d836be96bd9d 464-471,474
+apps/apple/App/Shared/Search/CodeOutcomeViews.swift
+  s_f1ac5eb353befe::t_6534e6df570143 57,117
+apps/apple/CubbyKit/Tests/CubbyKitTests/Support/StubURLProtocol.swift
+  s_f1ac5eb353befe::t_2824ad059a021e 4-5,60-61,67,71-113
+apps/apple/CubbyKit/Tests/CubbyKitTests/Photo/PhotoImportRunUploaderTests.swift
+  s_f1ac5eb353befe::t_9466f5f44f4b02 17-20,64-68,92,96,106-107,119,131,148,154
+apps/apple/AGENTS.md
+  s_f1ac5eb353befe::t_b7147a08a770eb 20-25,55-59,66-77,142
+apps/apple/CubbyKit/Sources/CubbyKit/API/NativeHTTPTransport.swift
+  s_f1ac5eb353befe::t_d5f1048c750f16 14-16,19-20,22-23,25-28,30-32,34-40,56,71-86,106-107,109,112-113,115,119,121,124-125,133,138-139
+apps/web/src/server/mcp/availability-explanation.integration.test.ts
+  s_f1ac5eb353befe::t_4ea40c34eeae9f 38,46-48,55,59,68-70,73
+apps/web/src/server/domains/location/repo/location.integration.test.ts
+  s_f1ac5eb353befe::t_5a759efa985611 456
+apps/web/src/server/mcp/entity-kernel.integration.test.ts
+  s_f1ac5eb353befe::t_688f957f3212a9 20,23,238-245,249,252-257,290,293-298
+apps/web/generator/http-api/swift-models.ts
+  s_f1ac5eb353befe::t_d23e834fc0b44a 43-45,93,138,157-168,254-294,332,495,508
+apps/web/src/server/domains/purchase-import/repo/purchase-agent-scenarios.integration.test.ts
+  s_f1ac5eb353befe::t_2f77bf21b4cd6e 1096,1104
+apps/apple/CubbyKit/Tests/CubbyKitTests/API/EntityMutationWireTests.swift
+  s_f1ac5eb353befe::t_3f4e9c3c7e2c82 19-20,51-56,122,144,167
+apps/web/src/contracts/define.ts
+  s_f1ac5eb353befe::t_1f40d9e4f4fc8d 24-26,44-45,48,53-57,73-74,103
+apps/web/tests/e2e/chatgpt-settings.spec.ts
+  s_f1ac5eb353befe::t_f4207665e04448 17-18,20-28
+apps/web/src/contracts/run.contract.ts
+  s_f1ac5eb353befe::t_943e667e8e373c 534
+apps/web/src/contracts/chatgpt.contract.ts
+  s_f1ac5eb353befe::t_7527a9aa20edff 23
+apps/web/generator/http-api/native-operations.ts
+  s_f1ac5eb353befe::t_7d2056a5a385c6 22-27,41-42,45-48,57-58
+apps/web/tooling/mac-import-e2e.md
+  s_f1ac5eb353befe::t_b689b1151e9c21 3,23
+apps/apple/CubbyKit/Tests/CubbyKitTests/API/CatchUpRequestTests.swift
+  s_f1ac5eb353befe::t_c7e261a8dd2be1 20-22,47-50
+pnpm-lock.yaml
+  s_f1ac5eb353befe::t_0d0981409bf8a8 6912,6916-6917,12943,12971,16508-16509
+apps/web/generator/http-api/entity-kernel.ts
+  s_f1ac5eb353befe::t_e44ad36f72a7f8 6
+apps/apple/CubbyKit/Sources/CubbyKit/API/CubbyDebugClient.swift
+  s_f1ac5eb353befe::t_ac8606ff87ae6b 18,20-22,24
+apps/web/src/contracts/entity-detail.contract.ts
+  s_f1ac5eb353befe::t_07a852e315ac24 20
+apps/web/src/lib/operation-wire.unit.test.ts
+  s_f1ac5eb353befe::t_dfab6d75fa5917 12,21-22,28,30-45,48
+apps/apple/App/Tests/Search/SearchModelTests.swift
+  s_f1ac5eb353befe::t_a09651cce7c115 22-34,64,92-93,171-175
+knip.json
+  s_f1ac5eb353befe::t_8f33c89f39b617 60
+apps/web/src/contracts/entity-timeline.contract.ts
+  s_f1ac5eb353befe::t_40a27c4603e919 20
+apps/web/tooling/checks/read-performance.ts
+  s_f1ac5eb353befe::t_3dde3db8b34e85 161-162,164,170-175,179,182,186-200,230,237,266,271,286
+apps/web/tests/e2e/companion-analysis.spec.ts
+  s_f1ac5eb353befe::t_46ffe03217c554 25,76-77,79,82
+apps/apple/CubbyKit/Tests/CubbyKitTests/Finance/StatementMatchSessionTests.swift
+  s_f1ac5eb353befe::t_6c78dd08d7c0c2 36,56,133,155,172-175,180,193,204,218,224,256
+apps/web/src/contracts/image-processing.contract.ts
+  s_f1ac5eb353befe::t_6cc2d7f275e5f3 33,38,44
+apps/web/generator/start-operations/render.ts
+  s_f1ac5eb353befe::t_f4d1828f74a95e 4,20,22-24,78,81,101
+apps/apple/App/Shared/Photo/PhotoDiagnosticsView.swift
+  s_f1ac5eb353befe::t_beef5b5ed9380b 406,444,460
+apps/apple/CubbyKit/Tests/CubbyKitTests/List/GenericEntityListModelTests.swift
+  s_f1ac5eb353befe::t_affd8d6d62002e 580,723,726,729-730
+apps/apple/App/Tests/Today/TodayModelTests.swift
+  s_f1ac5eb353befe::t_c064578d3640e4 32-42,48,87,126
+apps/apple/CubbyKit/Tests/CubbyKitTests/Lookup/CodeLookupTests.swift
+  s_f1ac5eb353befe::t_ccde5c7e448422 11,14,24,26,36
+README.md
+  s_f1ac5eb353befe::t_3b903c3549ac9d 258-262,273
+apps/web/src/contracts/maintenance.contract.ts
+  s_f1ac5eb353befe::t_028adc92c23c77 25
+apps/web/generator/http-api/native-plan-validation.ts
+  s_f1ac5eb353befe::t_0dd1caf038f6e3 53,102-103
+docs/entities.md
+  s_f1ac5eb353befe::t_a44fbd4b017378 46,61,268,287,661,1302,1378,3016
+apps/apple/CubbyKit/Tests/CubbyKitTests/API/NativeListAdaptersTests.swift
+  s_f1ac5eb353befe::t_0e554ada30c86f 53,68-69,86-87,140,175,177,180-182,184-185,201-206,260,271-275
+apps/web/src/contracts/calendar.contract.ts
+  s_f1ac5eb353befe::t_e7663463557f60 24-26
+apps/apple/CubbyKit/Tests/CubbyKitTests/API/NativeHTTPTransportTests.swift
+  s_f1ac5eb353befe::t_9f41063f2a69aa 45-48,67,69,72-81,85,106,128,135,146,152,160,169,176,179,193,214,230,247,263,267
+packages/schemas/src/entity-collection.ts
+  s_f1ac5eb353befe::t_d3382c79778a7d 20,138
+apps/apple/CubbyKit/Sources/CubbyAPI/README.md
+  s_f1ac5eb353befe::t_3e026691275748 3-6,14-21
+apps/web/tests/e2e/support/import-order-convergence.helpers.ts
+  s_f1ac5eb353befe::t_eb75dba87bb134 135-137,141
+apps/web/src/server/operation-runtime/browser-operation-dispatch.unit.test.ts
+  s_f1ac5eb353befe::t_6062aee8cc01db 1-3,5-7,9,11-20,23-39,41-42,44-48,50,53-56,58-75,78-83,87-104,106,109-114,116-117,119-129,131,133,135-138
+apps/web/src/contracts/image.contract.ts
+  s_f1ac5eb353befe::t_6ab5be90a9ac70 30,43,80,87
+apps/apple/CubbyKit/Tests/CubbyKitTests/Actions/CollectionActionTests.swift
+  s_f1ac5eb353befe::t_dbd4baecb071c8 49,77,80,175,223
+apps/web/src/contracts/entity-kernel-wire.ts
+  s_f1ac5eb353befe::t_7e20f323bfacc5 4,7,20,25,31
+packages/schemas/src/spending-classification-review.test.ts
+  s_f1ac5eb353befe::t_7569df156005d4 6
+apps/apple/App/Shared/Recipe/RecipeSectionSlots.swift
+  s_f1ac5eb353befe::t_b69d16597bef38 97
+apps/web/tooling/dev/scenarios.ts
+  s_f1ac5eb353befe::t_187e134e3565f2 181,183-188,196,208-212
+apps/web/src/integrations/tanstack-query/browser-operation-transport.ts
+  s_f1ac5eb353befe::t_fe805659b0f90a 25,88,150-154
+apps/apple/CubbyKit/Sources/CubbyKit/Photo/PhotoImportRunUploader.swift
+  s_f1ac5eb353befe::t_3e03c81955f929 756-757
+apps/web/src/lib/operation-wire.ts
+  s_f1ac5eb353befe::t_9150cbd10de90f 19-20,284-285,305,319
+apps/apple/CubbyKit/Tests/CubbyKitTests/API/EntityFilterTests.swift
+  s_f1ac5eb353befe::t_89d5ed65191c91 19,39,58-60,196-198
+apps/apple/CubbyKit/Sources/cubby/CallCommand.swift
+  s_f1ac5eb353befe::t_40b922f6c01d45 5,23,28,42-45
+apps/web/src/contracts/photo-import.contract.ts
+  s_f1ac5eb353befe::t_427f710e4a548f 97-98,140,285,486,492,498,503,509,537,542,547,552,557,562
+apps/apple/App/Shared/Entity/Detail/ProductDetailSlots.swift
+  s_f1ac5eb353befe::t_a81c0a65cb6721 8-11
+apps/web/src/contracts/entity-list.contract.ts
+  s_f1ac5eb353befe::t_776a7051cdaabb 140
+apps/web/tests/e2e/dev-runtime.hmr.ts
+  s_f1ac5eb353befe::t_32e59760ce917c 95-105,109-112,114-115
+apps/apple/CubbyKit/Sources/CubbyKit/API/GeneratedTypeExtensions.swift
+  s_f1ac5eb353befe::t_903d41a1366618 146,302,329
+apps/apple/CubbyKit/Sources/CubbyKit/Lookup/CodeLookup.swift
+  s_f1ac5eb353befe::t_c994c5f57a015b 9,22
+apps/web/generator/main.ts
+  s_f1ac5eb353befe::t_92a99497a9c852 80-81,171
+apps/web/src/server/worker/worker.unit.test.ts
+  s_f1ac5eb353befe::t_09dfe5aaadf27b 52
+apps/apple/CubbyKit/Sources/CubbyKit/Actions/HeroActionRunner.swift
+  s_f1ac5eb353befe::t_effdde5c9de3d4 224-225,227-229,235-237
+apps/web/src/contracts/entity-mutation.contract.ts
+  s_f1ac5eb353befe::t_02b5f0cf4aac00 19
+apps/web/generator/http-api/swift-models.unit.test.ts
+  s_f1ac5eb353befe::t_87b9a8e8614944 4-7,11-23,25-29,82-101
+apps/apple/CubbyKit/Tests/CubbyKitTests/Photo/PhotoImportStagerTests.swift
+  s_f1ac5eb353befe::t_4bf019d35b1415 23-24,30,60,160,196-198
+apps/web/tooling/native-emoji-review-peer.ts
+  s_f1ac5eb353befe::t_4a64b21b4045f6 20,22-28,37-39,58
+apps/web/tests/e2e/support/entity-api.ts
+  s_f1ac5eb353befe::t_1f55d52cb9fe3c 5,31-32,35,37-47,49-50
+apps/web/tests/e2e/native-fieldwork-api.spec.ts
+  s_f1ac5eb353befe::t_1629e6392f05d3 13-14,23,40-41,43,49,187-189
+docs/import-evidence-convergence.md
+  s_f1ac5eb353befe::t_659a0eb99678be 132
+apps/apple/DESIGN.md
+  s_f1ac5eb353befe::t_dac440773072aa 29
+apps/apple/CubbyKit/Sources/CubbyKit/API/CubbyAPIError.swift
+  s_f1ac5eb353befe::t_28d92b961c38c9 5-6
+apps/apple/CubbyKit/Sources/CubbyKit/Manifest/EntityKernel.swift
+  s_f1ac5eb353befe::t_3195b503affe5c 131
+apps/web/generator/start-operations/collect.ts
+  s_f1ac5eb353befe::t_ab96dadd37f589 45-49,76,78,175,318,326,334,521-528,548-554,575-576,579-582
+apps/apple/CubbyKit/Tests/CubbyKitTests/Actions/HeroActionRunnerTests.swift
+  s_f1ac5eb353befe::t_00435d737abd50 51,81,84,99,150,213,307,320
+apps/apple/CubbyKit/Tests/CubbyKitTests/Actions/SectionActionRunnerTests.swift
+  s_f1ac5eb353befe::t_17d64eaa1c7046 49
+apps/web/generator/http-api/native-commands.ts
+  s_f1ac5eb353befe::t_78fc2724a1619d 25
+apps/apple/App/Shared/Search/ScanLookupSheet.swift
+  s_f1ac5eb353befe::t_db9ed177169ca3 210
+apps/web/src/contracts/inventory.contract.ts
+  s_f1ac5eb353befe::t_77963391b95425 101
+apps/apple/App/Shared/Entity/List/BrowseRootView.swift
+  s_f1ac5eb353befe::t_7d1ff2810f7277 137
+docs/ci.md
+  s_f1ac5eb353befe::t_c1b7c0ff050ef0 195-197
+apps/web/tests/e2e/browser-operation-dispatch.spec.ts
+  s_f1ac5eb353befe::t_6078da69fe94a0 1-2,4,7-8,11,15-18,20,22-27,29-30,32-36,39-49,54,59-62,68-72,75,77-78,80,82,86-91,93-119,122-123,125-126,128,130-158,160-176
+apps/apple/README.md
+  s_f1ac5eb353befe::t_7b8cb4ab2ed528 7-8
+apps/web/tooling/checks/check-server-closure.ts
+  s_f1ac5eb353befe::t_c568c6e683eebe 21
+apps/apple/CubbyKit/Sources/CubbyKit/API/CubbyClient+PhotoReview.swift
+  s_f1ac5eb353befe::t_9cea837f621453 11,17
+apps/web/generator/http-api/native-artifacts.ts
+  s_f1ac5eb353befe::t_d9fefb8b15fbc8 7,15,22,28,50-55,58-59,61,63-76,141
+apps/web/src/server/mcp/tools/tool-json-schema.unit.test.ts
+  s_f1ac5eb353befe::t_1cd68f07242aed 7
+apps/apple/CubbyKit/Tests/CubbyKitTests/API/OpenResponseDecodingTests.swift
+  s_f1ac5eb353befe::t_c398d1ae0c51e4 8-9
+apps/apple/CubbyKit/Sources/CubbyKit/API/CubbyClient.swift
+  s_f1ac5eb353befe::t_09e582bc7a7272 5,32-36,91,166-170,175-179,181-187,189-190,215,238,241,251,301,443,447-449,457,495-496,556,563,665,668-669,673,718,722-723
+apps/apple/CubbyKit/Tests/CubbyKitTests/API/ClientQueryTests.swift
+  s_f1ac5eb353befe::t_df98c3084717ba 21-23,49-52,62,85,103,110,120-127,131-133,139-142,153-155,177-178,184,194-195,198,204,211,230-231,243,254,258,261-265
+apps/apple/CubbyKit/Tests/CubbyKitTests/Edit/GenericEntityEditModelTests.swift
+  s_f1ac5eb353befe::t_f3822d26213877 148,371,394
+packages/shared/src/apple-client-version.ts
+  s_f1ac5eb353befe::t_fb672f17ed3e53 2-5,7
+packages/schemas/src/photo-import-run.ts
+  s_f1ac5eb353befe::t_17367cec0e3fde 729
+apps/apple/CubbyKit/Sources/CubbyKit/List/EntityFilterState.swift
+  s_f1ac5eb353befe::t_3233ca7d3f79f0 58
+docs/agents/domain-rules.md
+  s_f1ac5eb353befe::t_957d95e6690d96 9-16
+apps/web/src/server/operation-runtime/browser-operation-dispatch.ts
+  s_f1ac5eb353befe::t_20709802bc11d2 1,6,10,14-15,22-26,30-55,58-123,128,131,154-173,175-249,251,253-299,301-303,306,308,310-311
+apps/web/src/server/mcp/catalog.integration.test.ts
+  s_f1ac5eb353befe::t_47813518d702f3 622
+apps/web/src/server/mcp/tools/tool-json-schema.ts
+  s_f1ac5eb353befe::t_c7cadbfe4e790d 3
+apps/web/src/lib/start-operation-observability.ts
+  s_f1ac5eb353befe::t_9a9e987ee185f3 36,83
+apps/web/src/server/testing/mcp-test-utils.ts
+  s_f1ac5eb353befe::t_9060986e07f5e9 23,31,100-101,126-145,151,155,178
+apps/web/generator/http-api/native-contract.ts
+  s_f1ac5eb353befe::t_a0d01a29c52ed6 3,6,9,13,18,25-102,104-106,108-116,119-124,126-127,129-144,146-147,159-180,182,184-212,214,216-219,221-224,226-227,229,232,247-250
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "19740a74d46be8e31e0d74ae050c0fe496f8fd9f",
+  "prompts": {},
+  "sessions": {
+    "s_f1ac5eb353befe": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a229dffd-cbfc-4ada-b803-ecb84a02290e",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
