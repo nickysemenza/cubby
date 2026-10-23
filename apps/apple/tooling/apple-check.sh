@@ -2,8 +2,7 @@
 # Backs the `apple` Nx targets (apps/apple/project.json) that `pnpm apple
 # check` and CI run. Run from the workspace root.
 #
-#   host  CubbyKit's package tests on the macOS host, then the OpenAPI
-#         generator-warning gate
+#   host  CubbyKit's package tests on the macOS host
 #   app   generic-simulator build of Cubby-iOS
 #   lint  native formatting
 #
@@ -23,7 +22,7 @@ if [ "$mode" = lint ]; then
 # swift-format's --recursive can't exclude a subdirectory, and
 # CubbyKit/Sources/CubbyKit/Generated is emitter-owned (apps/apple/AGENTS.md)
 # and must never be reformatted or linted; Sources/CubbyAPI (the whole
-# swift-openapi-generator target) is a sibling of Sources/CubbyKit and is
+# generated native models target) is a sibling of Sources/CubbyKit and is
 # never enumerated either — it is generated end to end.
 kit_dir="apps/apple/CubbyKit/Sources/CubbyKit"
 targets=()
@@ -44,12 +43,8 @@ if ! xcode-select -p >/dev/null 2>&1; then
 fi
 
 if [ "$mode" = host ]; then
-  host_log="$(mktemp)"
-  trap 'rm -f "$host_log"' EXIT
-  host_status=0
-  node apps/apple/tooling/apple.ts build-check host 2>&1 | tee "$host_log" || host_status=$?
-  apps/apple/scripts/check-openapi-warnings.sh "$host_log" || host_status=1
-  exit "$host_status"
+  node apps/apple/tooling/apple.ts build-check host
+  exit 0
 fi
 
 

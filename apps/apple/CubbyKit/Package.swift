@@ -12,9 +12,7 @@ let package = Package(
         .executable(name: "cubby", targets: ["cubby"]),
     ],
     dependencies: [
-        .package(url: "https://github.com/apple/swift-openapi-generator", exact: "1.14.1"),
-        .package(url: "https://github.com/apple/swift-openapi-runtime", from: "1.13.0"),
-        .package(url: "https://github.com/apple/swift-openapi-urlsession", from: "1.3.2"),
+        .package(url: "https://github.com/apple/swift-http-types", from: "1.8.0"),
         .package(url: "https://github.com/apple/swift-argument-parser", from: "1.8.2"),
         .package(url: "https://github.com/apple/swift-async-algorithms", from: "1.1.7"),
         .package(url: "https://github.com/groue/GRDB.swift", from: "7.11.1"),
@@ -30,23 +28,14 @@ let package = Package(
             name: "CubbyFFI",
             dependencies: ["CubbyFFIBinary"]
         ),
-        // The hand-written types the generated client is configured to use instead of its own
-        // (`typeOverrides` in Sources/CubbyAPI/openapi-generator-config.yaml): branded shortcodes
-        // and PlainDate, plus the shared mutation-result codec. Kept apart from CubbyKit
-        // so CubbyAPI can depend on it.
+        // Shared codecs and branded identifiers used by the plain generated native models.
         .target(name: "CubbyAPISupport"),
-        // swift-openapi-generator's build plugin generates typed models and interfaces from the
-        // `openapi.json` and `openapi-generator-config.yaml` that `pnpm generate` writes into
-        // Sources/CubbyAPI (both gitignored); pnpm generate owns the compact Client.gen.swift.
-        // Isolated from the hand-written code so an edit to
-        // CubbyKit does not recompile the generated client. Generated symbols are
-        // `accessModifier: public`, named outside CubbyAPI only through the generated aliases in
-        // CubbyKit/Generated/APITypes.swift.
+        // `pnpm generate` emits Models/*.gen.swift. Keep them in their own module so
+        // handwritten CubbyKit edits do not recompile these model declarations.
         .target(
             name: "CubbyAPI",
             dependencies: [
-                "CubbyAPISupport",
-                .product(name: "OpenAPIRuntime", package: "swift-openapi-runtime"),
+                "CubbyAPISupport"
             ],
             // The provenance note beside the generated inputs is documentation, not a resource.
             exclude: ["README.md"],
@@ -55,11 +44,7 @@ let package = Package(
             // "Debugging on device"). `unsafeFlags` is safe because CubbyKit is only ever
             // consumed as a local path dependency, never as a versioned remote package.
             // Forward to the frontend so the driver's later default -g cannot override this.
-            // -suppress-warnings: the generator spells `package import struct Foundation.URL`
-            // for every file, and the compiler warns that no package-level declaration needs
-            // it; generated code is regenerated, never fixed by hand, so its warnings are noise.
-            swiftSettings: [.unsafeFlags(["-Xfrontend", "-gline-tables-only", "-suppress-warnings"])],
-            plugins: [.plugin(name: "OpenAPIGenerator", package: "swift-openapi-generator")]
+            swiftSettings: [.unsafeFlags(["-Xfrontend", "-gline-tables-only"])]
         ),
         .target(
             name: "CubbyKit",
@@ -67,8 +52,7 @@ let package = Package(
                 "CubbyAPI",
                 "CubbyAPISupport",
                 "CubbyFFI",
-                .product(name: "OpenAPIRuntime", package: "swift-openapi-runtime"),
-                .product(name: "OpenAPIURLSession", package: "swift-openapi-urlsession"),
+                .product(name: "HTTPTypes", package: "swift-http-types"),
                 .product(name: "AsyncAlgorithms", package: "swift-async-algorithms"),
                 .product(name: "GRDB", package: "GRDB.swift"),
             ],

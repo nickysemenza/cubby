@@ -12,7 +12,7 @@ public struct AuditEntryGroup: Identifiable, Sendable {
     /// Distinct changed fields across the group, in first-seen order.
     public var changedFields: [String] {
         var seen = Set<String>()
-        return entries.flatMap { ($0.changes?.additionalProperties.keys).map { $0.sorted() } ?? [] }
+        return entries.flatMap { ($0.changes?.keys).map { $0.sorted() } ?? [] }
             .filter { seen.insert($0).inserted }
     }
 
@@ -69,20 +69,20 @@ public struct AuditFieldChange: Sendable, Hashable {
 extension AuditLogEntryOut {
     /// Full identifier effects have their own feed rendering; they never take the compact scalar path.
     public var identifierEffects: [String] {
-        guard let change = changes?.additionalProperties["externalIds"] else { return [] }
-        let before = change.from.flatMap { try? JSONValue(encoding: $0) }
-        let after = change.to.flatMap { try? JSONValue(encoding: $0) }
+        guard let change = changes?["externalIds"] else { return [] }
+        let before = change.from.valueIfPresent
+        let after = change.to.valueIfPresent
         let effects = IdentifierPresentation.effects(before: before, after: after)
         if !effects.isEmpty { return effects }
         if before == nil || after == nil {
             return [
-                "Identifier changes: \(Self.text(change.from) ?? "(not recorded)") → \(Self.text(change.to) ?? "(not recorded)")"
+                "Identifier changes: \(Self.text(change.from.valueIfPresent) ?? "(not recorded)") → \(Self.text(change.to.valueIfPresent) ?? "(not recorded)")"
             ]
         }
         // Retain the actual diagnostic evidence when an audit row cannot be interpreted as identifiers.
         if let before, let after, before != after {
             return [
-                "Identifier changes: \(Self.text(change.from) ?? "(empty)") → \(Self.text(change.to) ?? "(empty)")"
+                "Identifier changes: \(Self.text(change.from.valueIfPresent) ?? "(empty)") → \(Self.text(change.to.valueIfPresent) ?? "(empty)")"
             ]
         }
         return []
@@ -92,20 +92,22 @@ extension AuditLogEntryOut {
     public var fieldChanges: [AuditFieldChange] { fieldChanges(prefix: .max) }
 
     /// The first `count` changed fields in `fieldChanges` order; a feed row words only the ones it
-    /// shows, since each value is a JSON round trip.
+    /// shows.
     public func fieldChanges(prefix count: Int) -> [AuditFieldChange] {
-        (changes?.additionalProperties ?? [:]).sorted { $0.key < $1.key }.prefix(count).map {
+        (changes ?? [:]).sorted { $0.key < $1.key }.prefix(count).map {
             field, diff in
-            AuditFieldChange(field: field, from: Self.text(diff.from), to: Self.text(diff.to))
+            AuditFieldChange(
+                field: field, from: Self.text(diff.from.valueIfPresent), to: Self.text(diff.to.valueIfPresent)
+            )
         }
     }
 
-    public var changedFieldCount: Int { changes?.additionalProperties.count ?? 0 }
+    public var changedFieldCount: Int { changes?.count ?? 0 }
 
-    private static func text(_ value: JsonValue?) -> String? {
+    private static func text(_ value: JSONValue?) -> String? {
         guard let value,
             let data = try? encoder.encode(value),
-            let json = try? decoder.decode(JSONValue.self, from: data)
+            case let json = value
         else { return nil }
         switch json {
         case .null: return nil
@@ -123,5 +125,4 @@ extension AuditLogEntryOut {
 
     // Plain coders, shared: an audit diff holds no dates, and a feed words every shown value.
     private static let encoder = JSONEncoder()
-    private static let decoder = JSONDecoder()
 }

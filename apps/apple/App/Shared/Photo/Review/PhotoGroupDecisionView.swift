@@ -23,8 +23,8 @@ struct PhotoGroupDecisionView: View {
     }
     private var candidateResult: PhotoCandidateGroupResult? { session.candidateGroups[group.groupKey] }
     private var checks: [PhotoFieldCrossCheck] {
-        if candidateResult?.selectedComparison?.id == selectedProductID {
-            return candidateResult?.selectedComparison?.crossCheck ?? group.crossCheck ?? []
+        if candidateResult?.selectedComparison.valueIfPresent??.id == selectedProductID {
+            return candidateResult?.selectedComparison.valueIfPresent??.crossCheck ?? group.crossCheck ?? []
         }
         return group.crossCheck ?? []
     }
@@ -151,8 +151,8 @@ struct PhotoGroupDecisionView: View {
             if let description = group.evidence {
                 Text(description).font(.caption).foregroundStyle(.secondary)
             }
-            if candidateResult?.selectedComparison?.id == selectedProductID,
-                let variant = candidateResult?.selectedComparison?.variant
+            if candidateResult?.selectedComparison.valueIfPresent??.id == selectedProductID,
+                let variant = candidateResult?.selectedComparison.valueIfPresent??.variant
             {
                 Text("Label evidence: \(variant.evidence.firstTitle)").font(.caption)
                 Text("Product evidence: \(variant.evidence.secondTitle)").font(.caption)
@@ -267,7 +267,8 @@ struct PhotoGroupDecisionView: View {
                         }
                         Text(
                             [
-                                line.vendor, line.cost.map { DisplayFormat.currency($0) },
+                                line.vendor.valueIfPresent.flatMap { $0 },
+                                line.cost.map { DisplayFormat.currency($0) },
                                 line.productQuantity.map { "+\(DisplayFormat.number($0))" },
                             ]
                             .compactMap { $0 }.joined(separator: " · "))
@@ -288,7 +289,7 @@ struct PhotoGroupDecisionView: View {
                         ForEach(evidence.ownPhotos ?? [], id: \.id) { photo in
                             VStack(alignment: .leading, spacing: 2) {
                                 Thumb(url: URL(string: photo.url), size: 72)
-                                if let date = photo.capturedAt {
+                                if case .value(.some(let date)) = photo.capturedAt {
                                     Text("Taken")
                                     DateDisplay(date)
                                 } else {
@@ -308,6 +309,7 @@ struct PhotoGroupDecisionView: View {
         switch group.product {
         case .create(let product): product.create.name
         case .existing(let product): product.existing?.name ?? "Missing Product"
+        case .unrecognized: "Unsupported Product proposal"
         }
     }
 

@@ -1,13 +1,5 @@
-/** These outputs share a carrier; its concrete arguments come from their schema references. */
-export const MUTATION_RESULT_SCHEMAS = [
-  "InventoryWithLocationAndProductListAndSideEffectsOut",
-  "TaskBulkMutationOut",
-] as const;
-
 /**
- * Generated schema types replaced by hand-written Swift types
- * (`typeOverrides.schemas` in swift-openapi-generator's config): component
- * name -> Swift type. The targets live in the `CubbyAPISupport` target
+ * Native schema names mapped to shared Swift codecs: schema name -> Swift type. The targets live in the `CubbyAPISupport` target
  * (`apps/apple/CubbyKit/Sources/CubbyAPISupport/`), each a single JSON
  * string on the wire, so every generated field typed by one of these
  * components is branded or calendar-typed at the boundary.
@@ -26,8 +18,6 @@ export const TYPE_OVERRIDES = {
    */
   SearchableEntity: "Swift.String",
 } as const satisfies Record<string, string>;
-/** Modules the generated client imports for the overrides above. */
-export const ADDITIONAL_IMPORTS: readonly string[] = ["CubbyAPISupport"];
 
 /**
  * Kernel responses are untyped JSON objects, so no route reaches these record

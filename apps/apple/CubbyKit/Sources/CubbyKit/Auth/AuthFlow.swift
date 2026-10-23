@@ -120,7 +120,7 @@ public actor AuthFlow {
         request.setValue("cubby-mobile://", forHTTPHeaderField: "Origin")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         var fields = HTTPFields()
-        CubbyAuthMiddleware.apply(authentication, identity: identity, to: &fields)
+        NativeRequestHeaders.apply(authentication, identity: identity, to: &fields)
         for field in fields {
             request.setValue(field.value, forHTTPHeaderField: field.name.rawName)
         }

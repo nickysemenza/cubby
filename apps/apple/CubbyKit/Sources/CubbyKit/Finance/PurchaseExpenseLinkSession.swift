@@ -58,10 +58,13 @@ public final class PurchaseExpenseLinkSession {
         loadGeneration += 1
         let generation = loadGeneration
         do {
+            guard let knownScope = LinkExpenseScope.allCases.first(where: { $0.rawValue == scope }) else {
+                throw UnsupportedNativeResponse(context: "Expense candidate scope", raw: .string(scope))
+            }
             let answer = try await client.purchaseLinkExpenseCandidates(
                 .init(
                     purchaseId: purchaseID,
-                    scope: CubbyClient.PurchaseLinkExpenseCandidatesQuery.ScopePayload(rawValue: scope),
+                    scope: knownScope,
                     search: search.isEmpty ? nil : search))
             if generation == loadGeneration { state = .loaded(answer) }
         } catch {

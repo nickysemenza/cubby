@@ -331,7 +331,10 @@ struct LibraryMetadataSyncTests {
             send: { input in sentInputs.withLock { $0.append(input) } })
         sync.reconcile()
         await sync.idle()
-        #expect(sentInputs.withLock { $0 }.map { $0.localIdentifier ?? "" } == ["asset-b"])
+        #expect(
+            sentInputs.withLock { $0 }.map { $0.localIdentifier.valueIfPresent.flatMap { $0 } ?? "" } == [
+                "asset-b"
+            ])
         #expect(sync.totalCount == 1)
     }
 
@@ -374,7 +377,10 @@ struct LibraryMetadataSyncTests {
             factsProvider: { localIdentifier in TestFacts(localIdentifier: localIdentifier) },
             deviceShortcodeProvider: { "DEV-0001" },
             sendPage: { inputs in
-                sentIdentifiers.withLock { $0.append(contentsOf: inputs.map { $0.localIdentifier ?? "" }) }
+                sentIdentifiers.withLock {
+                    $0.append(
+                        contentsOf: inputs.map { $0.localIdentifier.valueIfPresent.flatMap { $0 } ?? "" })
+                }
                 // Holds the first pass open while the test appends a candidate and calls
                 // `reconcile()` with `runTask` still in flight.
                 await pages.hold()

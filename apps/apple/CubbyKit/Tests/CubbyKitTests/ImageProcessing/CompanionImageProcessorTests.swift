@@ -50,7 +50,7 @@ struct CompanionImageProcessorTests {
         ])
         let command = try JSONDecoder.companionImageProcessing.decode(
             ImageProcessingCommand.self, from: commandBytes)
-        let result = await CompanionImageCommandExecutor(
+        let result = try await CompanionImageCommandExecutor(
             processor: processor, describer: UnavailableDescriber()
         ).execute(command)
         let encoded = try JSONEncoder.companionImageProcessing.encode(result)
@@ -86,7 +86,7 @@ struct CompanionImageProcessorTests {
         ])
         let command = try JSONDecoder.companionImageProcessing.decode(
             ImageProcessingCommand.self, from: commandBytes)
-        let result = await CompanionImageCommandExecutor(
+        let result = try await CompanionImageCommandExecutor(
             processor: processor,
             describer: FailingDescriber(
                 failure: .model(

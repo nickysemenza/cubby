@@ -16,14 +16,14 @@ extension ImageProcessingClientMessage {
         automaticWork: Bool
     ) -> Self {
         #if os(macOS)
-            let platform: ImageProcessingHello.PlatformPayload = .macos
+            let platform: ImageProcessingHelloPlatform = .macos
         #else
-            let platform: ImageProcessingHello.PlatformPayload = .ios
+            let platform: ImageProcessingHelloPlatform = .ios
         #endif
         return .hello(
             ImageProcessingHello(
                 protocolVersion: ._1,
-                _type: .hello,
+                type: .hello,
                 deviceId: deviceID.uuidString.lowercased(),
                 platform: platform,
                 appVersion: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString")
@@ -45,36 +45,51 @@ extension ImageProcessingClientMessage {
     }
 
     static func companionResult(_ result: ImageProcessingResult) -> Self {
-        .result(.init(protocolVersion: ._1, _type: .result, result: result))
+        .result(.init(protocolVersion: ._1, type: .result, result: result))
     }
 }
 
-extension ImageProcessingCommand {
-    var companionKind: String {
-        switch self {
-        case .describeImage: "describe_image"
-        case .subjectLift: "subject_lift"
-        }
-    }
+/// Execution metadata is available only after recognizing the command variant.
+struct CompanionImageCommandMetadata: Sendable {
+    let kind: String
+    let jobKind: ImageProcessingJobKind
+    let jobID: String
+    let attemptID: String
+    let deadline: Date
+    let processor: String
 
-    var companionJobID: String {
-        switch self {
-        case .describeImage(let value): value.jobId
-        case .subjectLift(let value): value.jobId
-        }
-    }
-
-    var companionAttemptID: String {
-        switch self {
-        case .describeImage(let value): value.attemptId
-        case .subjectLift(let value): value.attemptId
-        }
-    }
-
-    var companionDeadline: Date {
-        switch self {
-        case .describeImage(let value): value.deadline
-        case .subjectLift(let value): value.deadline
+    init(_ command: ImageProcessingCommand) throws {
+        switch command {
+        case .describeImage(let value):
+            guard value.kind == .describeImage, value.promptRevision == ._1,
+                value.resultSchemaRevision == ._1,
+                value.analysisOutput.map({ $0.contentType == .imageJpeg }) ?? true
+            else {
+                throw UnsupportedNativeResponse(
+                    context: "image-processing command revision or output",
+                    raw: try JSONValue(encoding: command))
+            }
+            kind = "describe_image"
+            jobKind = .describeImage
+            jobID = value.jobId
+            attemptID = value.attemptId
+            deadline = value.deadline
+            processor =
+                value.analysisOutput == nil
+                ? "FoundationModels.SystemLanguageModel" : "ImageIO.JPEGNormalization"
+        case .subjectLift(let value):
+            guard value.kind == .subjectLift, value.output.contentType == .imagePng else {
+                throw UnsupportedNativeResponse(
+                    context: "image-processing command output", raw: try JSONValue(encoding: command))
+            }
+            kind = "subject_lift"
+            jobKind = .subjectLift
+            jobID = value.jobId
+            attemptID = value.attemptId
+            deadline = value.deadline
+            processor = "Vision.SubjectLift"
+        case .unrecognized(let raw):
+            throw UnsupportedNativeResponse(context: "image-processing command", raw: raw)
         }
     }
 }

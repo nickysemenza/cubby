@@ -429,6 +429,7 @@ export const photoImportContract = defineContract("photoImport", {
     invalidates: ["runOnly"],
   }),
   updateDraft: mutation({
+    nativeModels: { input: "json" },
     native: "Correct proposed product identity before approving photos",
     input: z.object({
       runId: runShortcode,

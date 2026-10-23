@@ -35,6 +35,7 @@ public struct CompanionImageJobReport: Sendable, Equatable {
         case completed
         /// AVIF input prepared as JPEG for the server's cloud description.
         case normalized
+        case unsupported
         case skipped
         case failed
     }
@@ -52,14 +53,17 @@ public struct CompanionImageJobReport: Sendable, Equatable {
         self.kind = kind
         self.duration = duration
         let outcome = result.outcome
-        if let failure = outcome.value3 {
+        switch outcome {
+        case .failed(let failure):
             (status, reason, retryable) = (.failed, failure.reason, failure.retryable)
-        } else if let skipped = outcome.value2 {
+        case .skipped(let skipped):
             (status, reason, retryable) = (.skipped, skipped.reason.rawValue, nil)
-        } else if outcome.value4 != nil {
+        case .normalized:
             (status, reason, retryable) = (.normalized, nil, nil)
-        } else {
+        case .completed:
             (status, reason, retryable) = (.completed, nil, nil)
+        case .unrecognized(let raw):
+            (status, reason, retryable) = (.unsupported, String(reflecting: raw), nil)
         }
     }
 }
@@ -80,7 +84,7 @@ public actor CompanionImageWorker {
     private let baseURL: URL
     private let credentials: CredentialProvider
     private let session: URLSession
-    private let execute: @Sendable (ImageProcessingCommand) async -> ImageProcessingResult
+    private let execute: @Sendable (ImageProcessingCommand) async throws -> ImageProcessingResult
     private let outbox: CompanionResultOutbox<ImageProcessingResult>
     /// Durably records a finished command's result; tests hold this boundary open.
     private let recordResult: @Sendable (ImageProcessingResult, String) async throws -> Void
@@ -135,7 +139,7 @@ public actor CompanionImageWorker {
             baseURL: baseURL, credentials: credentials, deviceID: deviceID, deviceName: deviceName,
             foreground: foreground, isParticipating: isParticipating, outbox: outbox,
             session: session, failureObserver: failureObserver, activityObserver: activityObserver,
-            jobObserver: jobObserver, execute: { command in await executor.execute(command) })
+            jobObserver: jobObserver, execute: { command in try await executor.execute(command) })
     }
 
     init(
@@ -150,7 +154,7 @@ public actor CompanionImageWorker {
         failureObserver: FailureObserver? = nil,
         activityObserver: ActivityObserver? = nil,
         jobObserver: JobObserver? = nil,
-        execute: @escaping @Sendable (ImageProcessingCommand) async -> ImageProcessingResult,
+        execute: @escaping @Sendable (ImageProcessingCommand) async throws -> ImageProcessingResult,
         recordResult: (@Sendable (ImageProcessingResult, String) async throws -> Void)? = nil
     ) {
         self.baseURL = baseURL
@@ -364,25 +368,42 @@ public actor CompanionImageWorker {
     ) async throws {
         switch message {
         case .helloAck(let ack):
+            guard ack.protocolVersion == ._1 else {
+                throw UnsupportedNativeResponse(
+                    context: "image-processing protocol version", raw: .number(ack.protocolVersion.rawValue))
+            }
             // The web paused this device (`Device.remotePaused`): treat it like participation-off
             // for this connection — no work is accepted until a fresh hello reports otherwise.
             remotePaused = ack.remotePaused
             activityObserver?(.init(phase: .idle, remotePaused: ack.remotePaused))
         case .acknowledge(let envelope):
+            guard envelope.protocolVersion == ._1 else {
+                throw UnsupportedNativeResponse(
+                    context: "image-processing protocol version",
+                    raw: .number(envelope.protocolVersion.rawValue))
+            }
             try await outbox.acknowledge(
                 CompanionImageProcessingProtocol.attemptKey(
                     jobID: envelope.jobId, attemptID: envelope.attemptId))
         case .command(let envelope):
+            guard envelope.protocolVersion == ._1 else {
+                throw UnsupportedNativeResponse(
+                    context: "image-processing protocol version",
+                    raw: .number(envelope.protocolVersion.rawValue))
+            }
             guard shouldRun, self.socket === socket else { return }
             guard CompanionWorkAcceptance.acceptsCommand(remotePaused: remotePaused) else { return }
             let command = envelope.command
+            let metadata = try CompanionImageCommandMetadata(command)
             let key = CompanionImageProcessingProtocol.attemptKey(
-                jobID: command.companionJobID, attemptID: command.companionAttemptID)
+                jobID: metadata.jobID, attemptID: metadata.attemptID)
             if let completed = try await outbox.result(for: key) {
                 try await send(.companionResult(completed), on: socket)
                 return
             }
             startCommand(command, socket: socket)
+        case .unrecognized(let raw):
+            throw UnsupportedNativeResponse(context: "image-processing socket", raw: raw)
         }
     }
 
@@ -390,6 +411,8 @@ public actor CompanionImageWorker {
     /// which is what `drainState()` counts as outstanding. A `nil` socket (tests) records the
     /// result without sending it, exactly like a socket that dropped mid-command.
     func startCommand(_ command: ImageProcessingCommand, socket: URLSessionWebSocketTask?) {
+        let metadata: CompanionImageCommandMetadata
+        do { metadata = try CompanionImageCommandMetadata(command) } catch { failureObserver?(error); return }
         guard acceptance == .open else {
             // Held, not started: a paused check resumes it; a stopped worker drops it and the
             // server's lease expiry re-offers the job.
@@ -397,7 +420,7 @@ public actor CompanionImageWorker {
             return
         }
         let key = CompanionImageProcessingProtocol.attemptKey(
-            jobID: command.companionJobID, attemptID: command.companionAttemptID)
+            jobID: metadata.jobID, attemptID: metadata.attemptID)
         guard commandTasks[key] == nil else { return }
         commandTasks[key] = Task { [weak self] in
             await self?.run(command, key: key, socket: socket)
@@ -469,17 +492,19 @@ public actor CompanionImageWorker {
             commandTasks[key] = nil
         }
         guard !Task.isCancelled else { return }
-        running[key] = .init(
-            phase: .processing, jobID: command.companionJobID, kind: command.companionKind,
-            startedAt: .now)
-        reportActivity()
-        let started = ContinuousClock.now
-        let result = await execute(command)
-        running[key] = nil
-        reportActivity()
-        guard !Task.isCancelled else { return }
-        jobObserver?(.init(result, kind: command.companionKind, duration: started.duration(to: .now)))
+        defer { running[key] = nil; reportActivity() }
         do {
+            let metadata = try CompanionImageCommandMetadata(command)
+            running[key] = .init(
+                phase: .processing, jobID: metadata.jobID, kind: metadata.kind,
+                startedAt: .now)
+            reportActivity()
+            let started = ContinuousClock.now
+            let result = try await execute(command)
+            running[key] = nil
+            reportActivity()
+            guard !Task.isCancelled else { return }
+            jobObserver?(.init(result, kind: metadata.kind, duration: started.duration(to: .now)))
             try await recordResult(result, key)
             // A reconnect replays the outbox, so a result from a dropped socket is not lost.
             guard let socket, self.socket === socket else { return }

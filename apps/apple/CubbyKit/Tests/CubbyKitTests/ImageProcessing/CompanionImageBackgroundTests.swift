@@ -38,7 +38,7 @@ struct CompanionImageBackgroundTests {
         let runner = CompanionImageBackgroundRunner(
             outbox: outbox,
             execute: { command in
-                await executions.complete(command)
+                try await executions.complete(command)
             })
         await runner.run(transport: transport, hello: hello(), maximumJobs: 1)
         #expect(try await outbox.pending().count == 1)
@@ -46,7 +46,7 @@ struct CompanionImageBackgroundTests {
         let replayRunner = CompanionImageBackgroundRunner(
             outbox: restored,
             execute: { command in
-                await executions.complete(command)
+                try await executions.complete(command)
             })
         await replayRunner.run(transport: transport, hello: hello(), maximumJobs: 1)
         #expect(try await restored.pending().isEmpty)
@@ -65,7 +65,7 @@ struct CompanionImageBackgroundTests {
             execute: { command in
                 // Cancellation is the fixture's stop signal.
                 try? await execution.pass()
-                return await BackgroundExecutionFixture().complete(command)
+                return try await BackgroundExecutionFixture().complete(command)
             })
         let task = Task { await runner.run(transport: transport, hello: hello(), maximumJobs: 1) }
         await execution.arrivals(1)
@@ -80,7 +80,7 @@ struct CompanionImageBackgroundTests {
         let fileURL = try outboxFile()
         let outbox = CompanionResultOutbox<ImageProcessingResult>(fileURL: fileURL)
         defer { try? FileManager.default.removeItem(at: fileURL.deletingLastPathComponent()) }
-        let result = await BackgroundExecutionFixture().complete(command)
+        let result = try await BackgroundExecutionFixture().complete(command)
         try await outbox.record(result, for: "synthetic-pending")
         let credentials = CredentialProvider(host: "example.test", store: InMemorySessionTokenStore())
         let worker = CompanionImageWorker(
@@ -113,7 +113,7 @@ struct CompanionImageBackgroundTests {
         let outbox = CompanionResultOutbox<ImageProcessingResult>(fileURL: fileURL)
         defer { try? FileManager.default.removeItem(at: fileURL.deletingLastPathComponent()) }
         let runner = CompanionImageBackgroundRunner(
-            outbox: outbox, execute: { command in await BackgroundExecutionFixture().complete(command) })
+            outbox: outbox, execute: { command in try await BackgroundExecutionFixture().complete(command) })
         let task = Task { await runner.run(transport: transport, hello: hello(), maximumJobs: 1) }
         await transport.completion.arrivals(1)
         #expect(await transport.completionCount == 1)
@@ -181,13 +181,14 @@ private actor BackgroundTransportFixture: CompanionImageBackgroundTransport {
 
 private actor BackgroundExecutionFixture {
     private(set) var count = 0
-    func complete(_ command: ImageProcessingCommand) -> ImageProcessingResult {
+    func complete(_ command: ImageProcessingCommand) throws -> ImageProcessingResult {
         count += 1
         return .init(
-            jobId: command.companionJobID, attemptId: command.companionAttemptID,
+            jobId: try CompanionImageCommandMetadata(command).jobID,
+            attemptId: try CompanionImageCommandMetadata(command).attemptID,
             completedAt: .now,
-            outcome: .init(
-                value3: .init(
+            outcome: .failed(
+                .init(
                     kind: .describeImage,
                     status: .failed, retryable: true, reason: "Synthetic failure")))
     }

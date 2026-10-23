@@ -465,10 +465,11 @@ Better-Auth (`better-auth/tanstack-start`), with config in
   input or mutation) on `/api/v1/{domain}/{op}`. Success bodies are the output
   itself; errors are `ApiError`. Flat GET filters repeat the key
   (`tag=a&tag=b`) and nothing is JSON-encoded.
-- **Document.** The OpenAPI 3.1 document exists only for the Apple client
-  (`apps/apple/CubbyKit/Sources/CubbyAPI/openapi.json`, gitignored, written by
-  `pnpm generate`). Component names come from `@cubby/schemas` exports or an
-  explicit `.meta({ id })`.
+- **Native contract.** The Swift-only interface is derived directly from the declarations
+  and wire projections by `apps/web/generator/http-api/native-contract.ts`. `pnpm generate`
+  emits plain Swift models, payload-returning methods and one route table; URLSession
+  transport and representation rules are owned by the
+  [native pipeline](../apps/apple/CubbyKit/Sources/CubbyAPI/README.md).
 - **Test client.** `createCubbyClient({ baseUrl, apiKey? })` in
   `apps/web/tests/e2e/support/http-api-client.ts` wraps the generated ts-rest router
   `apps/web/src/lib/generated/http-contract.gen.ts`.

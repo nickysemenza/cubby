@@ -3,7 +3,7 @@ import Foundation
 public struct CompanionImageCommandExecutor: Sendable {
     private enum DeadlineFailure: Error { case exceeded }
     private struct Execution: Sendable {
-        let outcome: ImageProcessingResult.OutcomePayload
+        let outcome: ImageProcessingResultOutcome
         let diagnostics: CompanionImageDiagnostics
     }
 
@@ -18,45 +18,47 @@ public struct CompanionImageCommandExecutor: Sendable {
         self.describer = describer
     }
 
-    public func execute(_ command: ImageProcessingCommand) async -> ImageProcessingResult {
+    public func execute(_ command: ImageProcessingCommand) async throws -> ImageProcessingResult {
+        let metadata = try CompanionImageCommandMetadata(command)
         let execution: Execution
         let started = ContinuousClock.now
         do {
-            guard command.companionDeadline > .now else {
+            guard metadata.deadline > .now else {
                 return result(
-                    for: command,
-                    outcome: failed(kind(command), retryable: false, reason: "deadline_exceeded"),
+                    for: metadata,
+                    outcome: failed(metadata.jobKind, retryable: false, reason: "deadline_exceeded"),
                     diagnostics: .init(processingMilliseconds: 0))
             }
             execution = try await executeBeforeDeadline(command)
         } catch DeadlineFailure.exceeded {
-            execution = failureExecution(command, "deadline_exceeded", false, started)
+            execution = failureExecution(metadata, "deadline_exceeded", false, started)
         } catch is CancellationError {
-            execution = failureExecution(command, "cancelled", true, started)
+            execution = failureExecution(metadata, "cancelled", true, started)
         } catch let error as CompanionImageProcessor.Failure {
-            execution = failureExecution(command, reason(error), false, started)
+            execution = failureExecution(metadata, reason(error), false, started)
         } catch is PhotoFile.Failure {
             execution = .init(
-                outcome: skipped(kind(command), reason: .unsupportedFormat),
+                outcome: skipped(metadata.jobKind, reason: .unsupportedFormat),
                 diagnostics: .init(processingMilliseconds: milliseconds(since: started)))
         } catch CompanionImageDescriptionFailure.unavailable {
-            execution = failureExecution(command, "model_unavailable", true, started)
+            execution = failureExecution(metadata, "model_unavailable", true, started)
         } catch CompanionImageDescriptionFailure.model(let reason, let retryable) {
-            execution = failureExecution(command, reason, retryable, started)
+            execution = failureExecution(metadata, reason, retryable, started)
         } catch let error as URLError {
-            execution = failureExecution(command, "network_\(error.code.rawValue)", true, started)
+            execution = failureExecution(metadata, "network_\(error.code.rawValue)", true, started)
         } catch {
             execution = failureExecution(
-                command, "processing_failed: \(String(reflecting: error))", true, started)
+                metadata, "processing_failed: \(String(reflecting: error))", true, started)
         }
         return result(
-            for: command, outcome: execution.outcome, diagnostics: execution.diagnostics)
+            for: metadata, outcome: execution.outcome, diagnostics: execution.diagnostics)
     }
 
     private func executeBeforeDeadline(
         _ command: ImageProcessingCommand
     ) async throws -> Execution {
-        let interval = command.companionDeadline.timeIntervalSinceNow
+        let metadata = try CompanionImageCommandMetadata(command)
+        let interval = metadata.deadline.timeIntervalSinceNow
         guard interval > 0 else { throw DeadlineFailure.exceeded }
         return try await withThrowingTaskGroup(
             of: Execution.self
@@ -65,6 +67,8 @@ public struct CompanionImageCommandExecutor: Sendable {
                 switch command {
                 case .subjectLift(let value): try await executeSubjectLift(value)
                 case .describeImage(let value): try await executeDescription(value)
+                case .unrecognized(let raw):
+                    throw UnsupportedNativeResponse(context: "image-processing command", raw: raw)
                 }
             }
             group.addTask {
@@ -101,8 +105,8 @@ public struct CompanionImageCommandExecutor: Sendable {
         switch result {
         case .completed(let artifact):
             return .init(
-                outcome: .init(
-                    value1: .subjectLift(
+                outcome: .completed(
+                    .subjectLift(
                         .init(
                             kind: .subjectLift, status: .completed, sha256: artifact.sha256,
                             contentType: .imagePng, width: artifact.width, height: artifact.height))),
@@ -135,8 +139,8 @@ public struct CompanionImageCommandExecutor: Sendable {
                     diagnostics: artifact.diagnostics)
             }
             return .init(
-                outcome: .init(
-                    value4: .init(
+                outcome: .normalized(
+                    .init(
                         kind: .describeImage, status: .normalized,
                         key: output.key, sha256: artifact.sha256,
                         contentType: .imageJpeg, width: artifact.width, height: artifact.height)),
@@ -168,15 +172,15 @@ public struct CompanionImageCommandExecutor: Sendable {
             case .review: .review
             }
         #if os(macOS)
-            let platform: ImageProcessingCompletedOutcomeDescribeImage.RuntimePayload.PlatformPayload =
+            let platform: ImageProcessingCompletedOutcomeDescribeImageRuntimePlatform =
                 .macos
         #else
-            let platform: ImageProcessingCompletedOutcomeDescribeImage.RuntimePayload.PlatformPayload =
+            let platform: ImageProcessingCompletedOutcomeDescribeImageRuntimePlatform =
                 .ios
         #endif
         return .init(
-            outcome: .init(
-                value1: .describeImage(
+            outcome: .completed(
+                .describeImage(
                     .init(
                         kind: .describeImage,
                         status: .completed,
@@ -194,7 +198,7 @@ public struct CompanionImageCommandExecutor: Sendable {
     }
 
     private func result(
-        for command: ImageProcessingCommand, outcome: ImageProcessingResult.OutcomePayload,
+        for metadata: CompanionImageCommandMetadata, outcome: ImageProcessingResultOutcome,
         diagnostics: CompanionImageDiagnostics
     ) -> ImageProcessingResult {
         ImageProcessingResult(
@@ -202,32 +206,23 @@ public struct CompanionImageCommandExecutor: Sendable {
                 osVersion: ProcessInfo.processInfo.operatingSystemVersionString,
                 appVersion: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString")
                     as? String,
-                processor: processorName(command), decodeMs: diagnostics.decodeMilliseconds,
+                processor: metadata.processor, decodeMs: diagnostics.decodeMilliseconds,
                 processingMs: diagnostics.processingMilliseconds,
                 uploadMs: diagnostics.uploadMilliseconds, width: diagnostics.width,
                 height: diagnostics.height, orientation: diagnostics.orientation),
-            jobId: command.companionJobID,
-            attemptId: command.companionAttemptID,
+            jobId: metadata.jobID,
+            attemptId: metadata.attemptID,
             completedAt: .now,
             outcome: outcome)
     }
 
     private func failureExecution(
-        _ command: ImageProcessingCommand, _ reason: String, _ retryable: Bool,
+        _ metadata: CompanionImageCommandMetadata, _ reason: String, _ retryable: Bool,
         _ started: ContinuousClock.Instant
     ) -> Execution {
         .init(
-            outcome: failed(kind(command), retryable: retryable, reason: reason),
+            outcome: failed(metadata.jobKind, retryable: retryable, reason: reason),
             diagnostics: .init(processingMilliseconds: milliseconds(since: started)))
-    }
-
-    private func processorName(_ command: ImageProcessingCommand) -> String {
-        switch command {
-        case .subjectLift: "Vision.SubjectLift"
-        case .describeImage(let value):
-            value.analysisOutput == nil
-                ? "FoundationModels.SystemLanguageModel" : "ImageIO.JPEGNormalization"
-        }
     }
 
     private func milliseconds(since start: ContinuousClock.Instant) -> Double {
@@ -236,24 +231,17 @@ public struct CompanionImageCommandExecutor: Sendable {
             + Double(components.attoseconds) / 1_000_000_000_000_000
     }
 
-    private func kind(_ command: ImageProcessingCommand) -> ImageProcessingJobKind {
-        switch command {
-        case .subjectLift: .subjectLift
-        case .describeImage: .describeImage
-        }
-    }
-
     private func skipped(
-        _ kind: ImageProcessingJobKind, reason: ImageProcessingSkippedOutcome.ReasonPayload
-    ) -> ImageProcessingResult.OutcomePayload {
-        .init(value2: .init(kind: kind, status: .skipped, reason: reason))
+        _ kind: ImageProcessingJobKind, reason: ImageProcessingSkippedOutcomeReason
+    ) -> ImageProcessingResultOutcome {
+        .skipped(.init(kind: kind, status: .skipped, reason: reason))
     }
 
     private func failed(
         _ kind: ImageProcessingJobKind, retryable: Bool, reason: String
-    ) -> ImageProcessingResult.OutcomePayload {
-        .init(
-            value3: .init(
+    ) -> ImageProcessingResultOutcome {
+        .failed(
+            .init(
                 kind: kind, status: .failed, retryable: retryable,
                 reason: String(reason.prefix(240))))
     }

@@ -196,10 +196,17 @@ struct RunPhotoBatchSlot: View {
             let group = PhotoGroupProposal(
                 groupKey: "work-shirt",
                 steps: [
-                    .init(key: "product", label: "Product", status: .done, summary: "Canvas pocket T-shirt"),
-                    .init(key: "identity", label: "Details", status: .needsInput),
-                    .init(key: "ownership", label: "Own it now?", status: .done, summary: "Reference only"),
+                    .init(
+                        key: "product", label: "Product", status: .done, summary: "Canvas pocket T-shirt",
+                        action: nil, blockedReason: nil),
+                    .init(
+                        key: "identity", label: "Details", status: .needsInput, summary: nil, action: nil,
+                        blockedReason: nil),
+                    .init(
+                        key: "ownership", label: "Own it now?", status: .done, summary: "Reference only",
+                        action: nil, blockedReason: nil),
                 ],
+                blockedReason: nil,
                 review: .init(
                     observedName: "Canvas pocket T-shirt · navy", unresolvedReason: nil,
                     stockIntent: .evidence),
@@ -209,21 +216,31 @@ struct RunPhotoBatchSlot: View {
                 product: .create(
                     .init(
                         kind: .create,
-                        create: .init(name: "Canvas pocket T-shirt · navy", brandId: "VEN-2345"))),
+                        create: .init(name: "Canvas pocket T-shirt · navy", brandId: .value("VEN-2345")))),
+                committedProduct: nil, inventory: nil,
                 evidence: "The shirt and neck label show one garment with matching identity.",
-                missingImageCount: 0, updatedAt: "2026-09-24T12:00:00Z")
+                origin: nil, conflict: nil, lastError: nil, missingImageCount: 0, committedAt: nil,
+                updatedAt: "2026-09-24T12:00:00Z")
             let images: [PhotoRunImage] = [
                 .init(
-                    id: itemID, position: 0, targetState: .pending,
-                    originalUrl: "synthetic://shirt", cutout: .ready, describe: .ready,
+                    id: itemID, position: 0, capturedAt: nil, capturedAtOffsetMinutes: nil,
+                    targetState: .pending, skipReason: nil,
+                    originalUrl: "synthetic://shirt", cutoutUrl: nil, cutout: .ready, describe: .ready,
                     describeStartedAt: .now.addingTimeInterval(-1.3), describeCompletedAt: .now,
-                    localAnalysisReady: true, description: "Navy short-sleeve pocket shirt",
-                    deviceWorkAttempts: 1),
+                    describeAttemptMs: nil, describeWaitingMs: nil,
+                    localAnalysisReady: true, cutoutReason: nil, describeReason: nil,
+                    description: "Navy short-sleeve pocket shirt",
+                    recognizedText: nil, deviceWorkState: nil, deviceWorkError: nil, deviceWorkAttempts: 1),
                 .init(
-                    id: labelID, position: 1, targetState: .pending,
-                    originalUrl: "synthetic://label", cutout: .skipped, describe: .ready,
+                    id: labelID, position: 1, capturedAt: nil, capturedAtOffsetMinutes: nil,
+                    targetState: .pending, skipReason: nil,
+                    originalUrl: "synthetic://label", cutoutUrl: nil, cutout: .skipped, describe: .ready,
+                    describeStartedAt: nil, describeCompletedAt: nil, describeAttemptMs: nil,
+                    describeWaitingMs: nil,
                     localAnalysisReady: true, cutoutReason: "Label evidence does not need a cutout",
-                    description: "Neck label close-up", deviceWorkAttempts: 1),
+                    describeReason: nil,
+                    description: "Neck label close-up", recognizedText: nil, deviceWorkState: nil,
+                    deviceWorkError: nil, deviceWorkAttempts: 1),
             ]
             let review = PhotoRunReviewResponse(
                 review: PhotoGroupProposalList(

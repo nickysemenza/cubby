@@ -40,7 +40,8 @@ public enum DisplayFormat {
     /// decimal, both grouped; a range joins with an en dash, a partial estimate ends in `+`, and
     /// anything unavailable or pending is `—`.
     public static func compactEstimate(_ estimate: MeasureEstimate, unit: EstimateUnit) -> String {
-        ValueFormat.compactEstimate(figure(estimate), unit: unit.format)
+        guard let figure = figure(estimate) else { return "Unsupported estimate" }
+        return ValueFormat.compactEstimate(figure, unit: unit.format)
     }
 
     /// The long form for detail text and accessibility, the web's `formatEstimate`: the figure or
@@ -48,17 +49,19 @@ public enum DisplayFormat {
     public static func estimate(
         _ estimate: MeasureEstimate, measure: ValueFormat.EstimateMeasure, unit: String? = nil
     ) -> String {
-        ValueFormat.estimate(figure(estimate), measure: measure, unit: unit)
+        guard let figure = figure(estimate) else { return "Unsupported estimate" }
+        return ValueFormat.estimate(figure, measure: measure, unit: unit)
     }
 
-    private static func figure(_ estimate: MeasureEstimate) -> ValueFormat.Estimate {
+    private static func figure(_ estimate: MeasureEstimate) -> ValueFormat.Estimate? {
         switch estimate {
         case .complete(let known):
-            .complete(lower: known.lower, upper: known.upper, inferredZero: estimate.inferredZeroCount)
+            .complete(lower: known.lower, upper: known.upper, inferredZero: known.coverage.inferredZero ?? 0)
         case .partial(let known):
-            .partial(lower: known.lower, upper: known.upper, inferredZero: estimate.inferredZeroCount)
+            .partial(lower: known.lower, upper: known.upper, inferredZero: known.coverage.inferredZero ?? 0)
         case .unavailable: .unavailable(notApplicable: estimate.isNotApplicable)
         case .pending: .pending
+        case .unrecognized: nil
         }
     }
 }

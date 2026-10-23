@@ -29,6 +29,7 @@ public struct ReportCommandForm: Equatable, Sendable {
     }
 
     public let fields: [Field]
+    public private(set) var unsupportedInputs: [JSONValue] = []
     private var numbers: [String: Double] = [:]
     /// What was typed into a number field, kept as typed so "1." survives until "1.5".
     private var numberTexts: [String: String] = [:]
@@ -37,6 +38,7 @@ public struct ReportCommandForm: Equatable, Sendable {
 
     public init(command: ReportCommand) {
         var fields: [Field] = []
+        var unsupported: [JSONValue] = []
         var seeded = ReportCommandForm(fields: [])
         for input in command.inputs ?? [] {
             switch input {
@@ -52,12 +54,15 @@ public struct ReportCommandForm: Equatable, Sendable {
                         key: choice.key, label: choice.label,
                         kind: .choice(choice.options.map { Option(value: $0.value, label: $0.label) })))
                 if let initial = choice.initial { seeded.setChoice(choice.key, initial) }
+            case .unrecognized(let raw):
+                unsupported.append(raw)
             case .text(let text):
                 fields.append(Field(key: text.key, label: text.label, kind: .text))
                 if let initial = text.initial { seeded.setText(text.key, initial) }
             }
         }
         self = ReportCommandForm(fields: fields, seeding: seeded)
+        self.unsupportedInputs = unsupported
     }
 
     private init(fields: [Field], seeding: ReportCommandForm? = nil) {
@@ -99,7 +104,7 @@ public struct ReportCommandForm: Equatable, Sendable {
 
     /// The inputs still lacking a usable answer, by label.
     public var missing: [String] {
-        fields.compactMap { field in
+        let missing = fields.compactMap { field -> String? in
             switch field.kind {
             case .number(let min):
                 if let value = numbers[field.key], value.isFinite, value >= min { return nil }
@@ -114,6 +119,10 @@ public struct ReportCommandForm: Equatable, Sendable {
             }
             return field.label
         }
+        return missing
+            + unsupportedInputs.map {
+                UnsupportedNativeResponse(context: "report command input", raw: $0).localizedDescription
+            }
     }
 
     public var isComplete: Bool { missing.isEmpty }
@@ -122,6 +131,9 @@ public struct ReportCommandForm: Equatable, Sendable {
         booleanInputs: [String]
     ) throws -> JSONValue {
         guard let form else { return body }
+        if let raw = form.unsupportedInputs.first {
+            throw UnsupportedNativeResponse(context: "report command input", raw: raw)
+        }
         var result = body
         for field in form.fields {
             let value: JSONValue

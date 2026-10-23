@@ -117,9 +117,7 @@ apps/web/.e2e/
 /docs/guide/how-values-are-determined.md
 /apps/apple/CubbyKit/Sources/CubbyKit/Generated/
 /apps/apple/CubbyKit/Sources/CubbyAPISupport/Generated/
-/apps/apple/CubbyKit/Sources/CubbyAPI/openapi.json
-/apps/apple/CubbyKit/Sources/CubbyAPI/openapi-generator-config.yaml
-/apps/apple/CubbyKit/Sources/CubbyAPI/Client.gen.swift
+/apps/apple/CubbyKit/Sources/CubbyAPI/Models/
 /apps/apple/Generated/
 # UniFFI bindings, written by apps/apple/scripts/build-rust.sh.
 /apps/apple/CubbyKit/Sources/CubbyFFI/cubby_ffi.swift

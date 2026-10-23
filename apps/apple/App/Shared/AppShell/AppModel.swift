@@ -238,7 +238,7 @@ final class AppModel {
     }
 
     /// This install's identity, sent as `User-Agent`/`X-Cubby-Device` on every REST request
-    /// (`CubbyAuthMiddleware`).
+    /// (`NativeHTTPTransport`).
     private static var identity: ClientIdentity {
         ClientIdentity.currentApp(product: "cubby-apple", installationID: AppInstallationID.current)
     }

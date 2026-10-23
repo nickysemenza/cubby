@@ -710,9 +710,10 @@ struct TodayContent: View {
                 entries: [
                     AuditLogEntryOut(
                         entryKey: "synthetic-change", entityKind: .product,
-                        entityId: "PRD-2345", entityName: "Sample Product", action: .update,
-                        references: .init(additionalProperties: [:]), userId: "synthetic-user",
-                        channel: .web, createdAt: .now)
+                        entityId: "PRD-2345", canonicalEntityId: nil, entityName: "Sample Product",
+                        displayImage: nil, action: .update, changes: nil,
+                        references: [:], userId: "synthetic-user",
+                        channel: .web, oauthClient: nil, device: nil, runId: nil, createdAt: .now, user: nil)
                 ])
         )
         .navigationTitle("Today")

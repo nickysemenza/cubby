@@ -26,6 +26,7 @@ public struct FieldResolutionPresentation: Sendable {
         case .allocated: "Allocated · \(resolution.source)"
         case .explicit: "Set here"
         case .none: "None"
+        case .unrecognized(let raw): "Unsupported resolution: \(raw)"
         }
     }
 
@@ -44,6 +45,7 @@ public struct FieldResolutionPresentation: Sendable {
         case .inherit: return labels?.unresolved ?? "None"
         case .explicit, .none: return labels?.none ?? "None"
         case .allocated: return "None"
+        case .unrecognized(let raw): return "Unsupported resolution: \(raw)"
         }
     }
 
@@ -54,14 +56,17 @@ public struct FieldResolutionPresentation: Sendable {
     }
 
     public func resetPayload(field: FieldDescriptor) -> [String: JSONValue]? {
-        guard resolution.canReset else { return nil }
+        guard resolution.canReset, type(of: resolution.mode).allCases.contains(resolution.mode) else {
+            return nil
+        }
         return field.resolution?.reset
     }
 
     /// The declaration's resolution links in web order: Use inherited (reset), Confirm (pin the
     /// inherited value: `confirm` plus the field set to it), and Set to <none label>.
     public func actions(field: FieldDescriptor) -> [FieldResolutionAction] {
-        guard let policy = field.resolution else { return [] }
+        guard let policy = field.resolution, type(of: resolution.mode).allCases.contains(resolution.mode)
+        else { return [] }
         var actions: [FieldResolutionAction] = []
         if resolution.canReset {
             actions.append(
@@ -159,7 +164,9 @@ public struct FieldResolutionAction: Sendable, Hashable, Identifiable {
 /// field whose declaration pins a matching value on purpose (`redundancy: "intentional"`, the
 /// Confirm action) reads "Set here", never redundant.
 public struct FieldResolutionState: Sendable, Equatable {
-    public enum Tone: Sendable, Equatable { case set, override, redundant, none, inherit, allocated }
+    public enum Tone: Sendable, Equatable {
+        case set, override, redundant, none, inherit, allocated, unsupported
+    }
 
     /// The shared marker for a value inherited rather than set here (web `InheritedMarker`).
     public static let inheritedSymbol = "list.bullet.indent"
@@ -170,6 +177,10 @@ public struct FieldResolutionState: Sendable, Equatable {
 
     public init(_ resolution: FieldResolution, hasFallback: Bool, intentional: Bool = false) {
         switch resolution.mode {
+        case .unrecognized(let raw):
+            (tone, label, systemImage) = (
+                .unsupported, "Unsupported resolution: \(raw)", "exclamationmark.triangle"
+            )
         case .inherit:
             (tone, label, systemImage) = (.inherit, "Inherited", Self.inheritedSymbol)
         case .allocated:

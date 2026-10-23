@@ -92,6 +92,7 @@ export const projectContract = defineContract("project", {
   dashboardSummary: query({
     mcp: { omit: "agent_twin", twin: "project.houseStatus" },
     native: "Project analytics summary",
+    nativeModels: { output: "json" },
     input: schemas.projectDashboardFiltersSchema,
     output: schemas.projectDashboardSummaryOut,
     cache: { profile: "stable" },

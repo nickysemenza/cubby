@@ -36,7 +36,7 @@ struct EntityTimelineView: View {
         ForEach(timeline.groups, id: \.key) { group in
             Section {
                 ForEach(group.events) { event in
-                    if let link = event.link, let key = EntityKey(rawValue: link.entity) {
+                    if case .value(.some(let link)) = event.link, let key = EntityKey(rawValue: link.entity) {
                         NavigationLink(value: Route.entityDetail(key, id: link.id)) {
                             TimelineEventRow(event: event)
                         }
@@ -51,8 +51,10 @@ struct EntityTimelineView: View {
                     } else {
                         Text("Date unknown")
                     }
-                    if let label = group.label {
-                        if let link = group.link, let key = EntityKey(rawValue: link.entity) {
+                    if case .value(.some(let label)) = group.label {
+                        if case .value(.some(let link)) = group.link,
+                            let key = EntityKey(rawValue: link.entity)
+                        {
                             NavigationLink(value: Route.entityDetail(key, id: link.id)) {
                                 Text("· \(label)")
                             }
@@ -79,7 +81,8 @@ struct EntityTimelineView: View {
             return from...to
         }
         let days = (timeline.rows ?? []).flatMap { row in
-            row.intervals.flatMap { [$0.start.date(), $0.end?.date()] } + row.markers.map { $0.date.date() }
+            row.intervals.flatMap { [$0.start.date(), $0.end.valueIfPresent??.date()] }
+                + row.markers.map { $0.date.date() }
         }.compactMap { $0 }
         let from = days.min() ?? .now
         let to = max(days.max() ?? .now, .now)
@@ -95,12 +98,12 @@ private struct TimelineEventRow: View {
             StatusChip(text: event.kind.replacingOccurrences(of: "_", with: " ").capitalized)
             VStack(alignment: .leading, spacing: 2) {
                 Text(event.label).font(.fieldGuideBody)
-                if let detail = event.detail {
+                if case .value(.some(let detail)) = event.detail {
                     Text(detail).font(.caption).foregroundStyle(.secondary)
                 }
             }
             Spacer(minLength: FieldGuideTokens.Space.sm)
-            if let amount = event.amount {
+            if case .value(.some(let amount)) = event.amount {
                 Text(ValueFormat.amount(unit: nil, value: amount))
                     .font(.fieldGuideData)
                     .foregroundStyle(FieldGuideTokens.graphiteSecondary)
@@ -118,7 +121,7 @@ private struct LifecycleRowView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
             HStack(spacing: FieldGuideTokens.Space.sm) {
-                Thumb(url: row.imageUrl.flatMap(URL.init(string:)), size: 28)
+                Thumb(url: row.imageUrl.valueIfPresent.flatMap { $0 }.flatMap(URL.init(string:)), size: 28)
                 Text(row.name).font(.fieldGuideLabel).lineLimit(1)
                 Spacer()
                 Text(span).font(.caption).foregroundStyle(.secondary).monospacedDigit()
@@ -130,7 +133,7 @@ private struct LifecycleRowView: View {
                 context.fill(track, with: .color(FieldGuideTokens.hairline))
                 for interval in row.intervals {
                     guard let start = interval.start.date() else { continue }
-                    let end = interval.end?.date() ?? .now
+                    let end = interval.end.valueIfPresent??.date() ?? .now
                     let x0 = position(start, in: size.width)
                     let x1 = max(x0 + 3, position(end, in: size.width))
                     let bar = Path(
@@ -167,14 +170,15 @@ private struct LifecycleRowView: View {
     private var span: String {
         guard let first = row.intervals.first?.start.date() else { return "" }
         let start = first.formatted(date: .abbreviated, time: .omitted)
-        guard let end = row.intervals.last?.end?.date() else { return "\(start) →" }
+        guard let end = row.intervals.last?.end.valueIfPresent??.date() else { return "\(start) →" }
         return "\(start) – \(end.formatted(date: .abbreviated, time: .omitted))"
     }
 
     private var accessibilitySummary: String {
         row.intervals.map { interval in
             let confidence = interval.confident ? "" : ", unconfirmed"
-            return "\(interval.start.rawValue) to \(interval.end?.rawValue ?? "now")\(confidence)"
+            return
+                "\(interval.start.rawValue) to \(interval.end.valueIfPresent??.rawValue ?? "now")\(confidence)"
         }.joined(separator: "; ")
     }
 }

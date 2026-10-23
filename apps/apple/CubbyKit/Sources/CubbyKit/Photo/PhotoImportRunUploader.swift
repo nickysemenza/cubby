@@ -520,7 +520,9 @@ public actor PhotoImportRunUploader {
         uploadFailures.formUnion(failed)
         let items = try photos.filter { hashes[$0.id] != nil }.map { photo -> PhotoImportStageItem in
             guard
-                let contentType = PhotoImportStageItem.ContentTypePayload(rawValue: photo.file.contentType)
+                let contentType = PhotoImportContentType.allCases.first(where: {
+                    $0.rawValue == photo.file.contentType
+                })
             else { throw Failure.unsupportedContentType(photo.file.contentType) }
             return PhotoImportStageItem(
                 clientId: photo.id, filename: photo.file.filename, contentType: contentType,
@@ -541,19 +543,20 @@ public actor PhotoImportRunUploader {
             let response = try await client.stagePhotoImport(
                 PhotoImportStageInput(items: newItems, runId: runID))
             for result in response.items {
-                if let existing = result.value1 {
+                switch result {
+                case .existing(let existing):
                     staged[existing.clientId] = StagedUpload(
                         imageID: existing.imageId, sha256: hashes[existing.clientId] ?? "")
-                } else if let upload = result.value2 {
+                case .upload(let upload):
                     guard let file = filesByID[upload.clientId], let url = URL(string: upload.uploadUrl)
                     else { throw Failure.invalidStageResponse(upload.clientId) }
                     pendingUploads[upload.clientId] = PhotoImportRunCheckpoint.Pending(
                         imageID: upload.imageId, sha256: hashes[upload.clientId] ?? "", url: url)
                     uploads.append((upload.clientId, upload.imageId, url, file))
-                } else if let failure = result.value3 {
+                case .failed(let failure):
                     failed.append(failure.clientId)
-                } else {
-                    throw Failure.invalidStageResponse("unknown")
+                case .unrecognized(let raw):
+                    throw UnsupportedNativeResponse(context: "Photo staging", raw: raw)
                 }
             }
         }

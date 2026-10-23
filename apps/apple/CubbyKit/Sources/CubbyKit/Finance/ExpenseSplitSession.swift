@@ -190,9 +190,9 @@ public final class ExpenseSplitSession {
         guard let split = latest.split else {
             throw Failure.refused(latest.reason ?? "These parts cannot be saved.")
         }
-        // The check's body is the write's body; only the generated type differs.
-        let body: SplitExpenseInputRequest = try JSONValue(encoding: split).decoded()
-        return try await client.splitExpense(body).map(\.id)
+        // Submit the server-checked split without a second native representation.
+        let result: SplitExpenseOut = try await client.request("purchase.split", body: split)
+        return result.map(\.id)
     }
 
     private func askServer() async throws -> PurchaseSplitCheckOut {
@@ -201,6 +201,6 @@ public final class ExpenseSplitSession {
             "parts": .array(parts.map(\.json)),
         ]
         if let attributionPolicy { body["attributionPolicy"] = .string(attributionPolicy) }
-        return try await client.sending(.object(body), client.checkExpenseSplit)
+        return try await client.request("purchase.checkSplit", body: JSONValue.object(body))
     }
 }

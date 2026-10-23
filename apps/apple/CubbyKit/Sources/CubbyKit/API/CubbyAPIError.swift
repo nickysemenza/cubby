@@ -1,6 +1,4 @@
-import CubbyAPI
 import Foundation
-import OpenAPIRuntime
 
 /// The error CubbyKit throws for any HTTP response with status >= 400.
 ///
@@ -11,11 +9,13 @@ public struct CubbyAPIError: Error, LocalizedError, Sendable {
     public let status: Int
     public let operationID: String
     public let detail: ErrorDetail?
+    public let rawBody: Data
 
-    public init(status: Int, operationID: String, detail: ErrorDetail?) {
+    public init(status: Int, operationID: String, detail: ErrorDetail?, rawBody: Data = Data()) {
         self.status = status
         self.operationID = operationID
         self.detail = detail
+        self.rawBody = rawBody
     }
 
     /// `true` for a 401 response — callers use this to drop the stored credential and return to
@@ -46,7 +46,9 @@ public struct CubbyAPIError: Error, LocalizedError, Sendable {
     /// keeps SwiftUI from rendering the opaque `CubbyKit.CubbyAPIError error 1` description when
     /// an intermediary returned HTML or an empty body.
     public var errorDescription: String? {
-        detail?.message ?? "Cubby could not complete this request (HTTP \(status))."
+        if let message = detail?.message { return message }
+        if !rawBody.isEmpty { return "HTTP \(status): \(String(decoding: rawBody, as: UTF8.self))" }
+        return "Cubby could not complete this request (HTTP \(status))."
     }
 
     public var failureReason: String? {
@@ -172,24 +174,9 @@ public struct CubbyAPIError: Error, LocalizedError, Sendable {
     /// than throwing.
     public static func decode(status: Int, operationID: String, body: Data) -> CubbyAPIError {
         let detail = try? JSONDecoder().decode(ErrorDetail.self, from: body)
-        return CubbyAPIError(status: status, operationID: operationID, detail: detail)
+        return CubbyAPIError(status: status, operationID: operationID, detail: detail, rawBody: body)
     }
 
-    /// OpenAPIRuntime wraps everything thrown inside the transport or a middleware in a
-    /// `ClientError`, which would hide the `isUnauthorized`/`isStaleInventory` a caller switches
-    /// on. This unwraps ours; a transport failure that still carried a status becomes a bodyless
-    /// `CubbyAPIError`. Cancellations keep their identity for shared diagnostic filtering;
-    /// other transport failures retain their wrapper.
-    public static func unwrapping(_ error: any Error) -> any Error {
-        guard let client = error as? ClientError else { return error }
-        if let api = client.underlyingError as? CubbyAPIError { return api }
-        if client.underlyingError is CancellationError { return client.underlyingError }
-        if let urlError = client.underlyingError as? URLError, urlError.code == .cancelled {
-            return urlError
-        }
-        guard let status = client.response?.status.code, status >= 400 else { return error }
-        return CubbyAPIError(status: status, operationID: client.operationID, detail: nil)
-    }
 }
 
 extension Error {
@@ -199,7 +186,7 @@ extension Error {
     public var userMessage: String {
         if let api = self as? CubbyAPIError {
             let code = api.detail?.code ?? "HTTP_\(api.status)"
-            return "\(code): \(api.detail?.message ?? "Request failed")"
+            return "\(code): \(api.errorDescription ?? "Request failed")"
         }
         if let localized = (self as? LocalizedError)?.errorDescription { return localized }
         return String(describing: self)

@@ -124,8 +124,7 @@ jobs:
           path: |
             apps/apple/CubbyKit/Sources/CubbyKit/Generated
             apps/apple/CubbyKit/Sources/CubbyAPISupport/Generated
-            apps/apple/CubbyKit/Sources/CubbyAPI/openapi.json
-            apps/apple/CubbyKit/Sources/CubbyAPI/openapi-generator-config.yaml
+            apps/apple/CubbyKit/Sources/CubbyAPI/Models
             apps/apple/Generated
 
   # One leg per platform archives, verifies, and uploads its own build, so

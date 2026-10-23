@@ -173,12 +173,19 @@ public final class ScanSession {
     }
 
     private func apply(_ result: ScanAtLocationOut, to chipID: UUID) {
+        if case .unrecognized(let raw) = result.outcome {
+            fail(
+                chipID,
+                UnsupportedNativeResponse(context: "scan outcome", raw: .string(raw)).localizedDescription)
+            return
+        }
         patch(chipID) {
             $0.label = result.product.name
             switch result.outcome {
             case .added: $0.status = .added
             case .confirmed: $0.status = .confirmed
             case .queued: $0.status = .queued
+            case .unrecognized: break
             }
         }
         note(chipID) {
@@ -188,12 +195,13 @@ public final class ScanSession {
             case .added: $0.status = .added
             case .confirmed: $0.status = .confirmed
             case .queued: $0.status = .queued
+            case .unrecognized: break
             }
         }
         switch result.outcome {
         case .added: tally.added += 1
         case .confirmed: tally.confirmed += 1
-        case .queued: break
+        case .queued, .unrecognized: break
         }
         if !result.strays.isEmpty, !strays.contains(where: { $0.productID == result.product.id }) {
             strays.append(

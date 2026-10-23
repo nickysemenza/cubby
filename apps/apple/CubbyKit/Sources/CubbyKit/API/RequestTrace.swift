@@ -1,12 +1,12 @@
 import Observation
 
 /// Developer overlays' request-timing strip (PR C layer 6): the last 20 requests
-/// `CubbyAuthMiddleware` observed, and the most recent one. Lives in CubbyKit (not the App target)
+/// `NativeHTTPTransport` observed, and the most recent one. Lives in CubbyKit (not the App target)
 /// so a stub-client test can exercise it directly; `AppModel` owns one instance and passes it to
 /// `CubbyClient` as its `RequestObserver`.
 ///
 /// `@unchecked Sendable`: every stored property is `@MainActor`-isolated by the class annotation;
-/// `RequestObserver.record` is `async` and `nonisolated`, so a call from `CubbyAuthMiddleware`
+/// `RequestObserver.record` is `async` and `nonisolated`, so a call from `NativeHTTPTransport`
 /// (which runs off the main actor, inside `CubbyClient`'s actor) already hops back onto the main
 /// actor before touching `entries`.
 @MainActor

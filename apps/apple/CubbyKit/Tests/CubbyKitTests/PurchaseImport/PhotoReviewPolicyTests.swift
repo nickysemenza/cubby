@@ -10,11 +10,11 @@ struct PhotoReviewPolicyTests {
     @Test func serverProjectionOwnsReadinessAndDecodesCrossCheck() throws {
         let data = Data(
             """
-            {"groupKey":"shirt","steps":[
+            {"groupKey":"shirt","committedProduct":null,"origin":null,"conflict":null,"lastError":null,"committedAt":null,"steps":[
               {"key":"identity","label":"Right one?","status":"needs_input","summary":null,"action":"change","blockedReason":null}],
              "crossCheck":[{"field":"size","mark":"disagree-or-missing","source":"model","tokens":[{"text":"10","mark":"unknown"}]}],
              "blockedReason":null,"state":"proposed","images":[],"skip":[],
-             "product":{"kind":"create","create":{"name":"Synthetic shirt"}},
+             "product":{"kind":"create","create":{"name":"Synthetic shirt"}},"inventory":null,"evidence":null,
              "missingImageCount":0,"updatedAt":"2026-10-01T12:00:00Z"}
             """.utf8)
         var ready = try JSONDecoder().decode(PhotoGroupProposal.self, from: data)
@@ -23,8 +23,8 @@ struct PhotoReviewPolicyTests {
         #expect(ready.crossCheck?.first?.mark.rawValue == "disagree-or-missing")
         #expect(ready.blockedReason == nil)
         ready.review = .init(
-            observedName: "Synthetic shirt", stockIntent: .evidence,
-            productChanges: .init(notes: "Synthetic label notes"))
+            observedName: "Synthetic shirt", unresolvedReason: nil, stockIntent: .evidence,
+            productChanges: .init(notes: .value("Synthetic label notes")))
         var blocked = ready
         blocked.groupKey = "blocked"
         blocked.blockedReason = "Read the synthetic label"
@@ -43,7 +43,7 @@ struct PhotoReviewPolicyTests {
             PhotoGroupProposal.self,
             from: Data(
                 """
-                {"groupKey":"shirt","steps":[],"blockedReason":"Check label","state":"proposed",
+                {"groupKey":"shirt","committedProduct":null,"origin":null,"conflict":null,"lastError":null,"committedAt":null,"steps":[],"blockedReason":"Check label","state":"proposed",
                  "images":[{"id":"IMG-4K7M","purpose":"label"}],
                  "skip":[{"id":"IMG-7K4M","reason":"Blurred"}],
                  "product":{"kind":"existing","existing":{"id":"PRD-4K7M","name":"Synthetic shirt","coverUrl":null}},
@@ -112,14 +112,14 @@ struct PhotoReviewPolicyTests {
     @Test func evidenceRetainsHeroDateAndPhotoCapture() throws {
         let data = Data(
             """
-            {"id":"PRD-4K7M","name":"Synthetic shirt","coverUrl":null,"brandName":null,"model":null,"identifiers":[],"notes":null,"tags":[],"category":null,"externalIds":[],
+            {"id":"PRD-4K7M","name":"Synthetic shirt","coverUrl":null,"brandId":null,"brandName":null,"model":null,"identifiers":[],"notes":null,"tags":[],"category":null,"externalIds":[],
              "purchaseLines":[{"expenseId":"EXP-4K7M","purchaseId":null,"purchaseLabel":null,"name":"Synthetic shirt",
               "date":"2026-10-01","dateLabel":"Paid","vendor":"Example shop","cost":12,"productQuantity":2,"movement":"acquired"}],
              "ownPhotos":[{"id":"IMG-4K7M","url":"https://example.invalid/shirt.png","capturedAt":"2026-10-02T12:00:00Z"}]}
             """.utf8)
         let evidence = try JSONDecoder().decode(PhotoProductEvidence.self, from: data)
         #expect(evidence.purchaseLines?.first?.dateLabel?.rawValue == "Paid")
-        #expect(evidence.purchaseLines?.first?.vendor == "Example shop")
-        #expect(evidence.ownPhotos?.first?.capturedAt == "2026-10-02T12:00:00Z")
+        #expect(evidence.purchaseLines?.first?.vendor == .value("Example shop"))
+        #expect(evidence.ownPhotos?.first?.capturedAt == .value("2026-10-02T12:00:00Z"))
     }
 }

@@ -9,7 +9,7 @@ import Testing
 private final class FakeReports: ReportServing {
     struct Calls {
         var reads: [String] = []
-        var controls: [RunControlInput] = []
+        var controls: [JSONValue] = []
         var findings: [ResolveRunFindingInput] = []
         var reparses: [RecipeReparseLineInput] = []
         var flows: [RecipeFlowGenerateInput] = []
@@ -63,7 +63,7 @@ private final class FakeReports: ReportServing {
         switch operation {
         case "run.control":
             if let output = controlOutput.withLock({ $0 }) { return output }
-            let successor = try await controlRun(body.decoded())
+            let successor = try await controlRun(body)
             return successor.map { ["successor": ["publicId": .string($0)]] } ?? [:]
         case "run.retryStep": try await retryRunStep(body.decoded())
         case "problems.resolveRunFinding":
@@ -83,7 +83,7 @@ private final class FakeReports: ReportServing {
         }
         return [:]
     }
-    func controlRun(_ input: RunControlInput) async throws -> String? {
+    func controlRun(_ input: JSONValue) async throws -> String? {
         calls.withLock { $0.controls.append(input) }
         if controlFails.withLock({ $0 }) { throw URLError(.badServerResponse) }
         return nil
@@ -254,7 +254,7 @@ struct ReportSlotModelTests {
         _ service: FakeReports, shown: String? = nil, polls: Gate = Gate()
     ) -> ReportSlotModel {
         ReportSlotModel(
-            slot: .run_importFindings, id: "RUN-4K7M", shownStatus: shown, service: service,
+            slot: .runImportFindings, id: "RUN-4K7M", shownStatus: shown, service: service,
             waitForNextPoll: { try await polls.pass() })
     }
 
@@ -276,8 +276,8 @@ struct ReportSlotModelTests {
 
         #expect(await model.run(action, confirmed: true) != nil)
         let sent = try #require(service.calls.withLock { $0.controls.first })
-        #expect(sent.runId == "RUN-4K7M")
-        #expect(sent.action == .cancel)
+        #expect(sent["runId"] == "RUN-4K7M")
+        #expect(sent["action"] == "cancel")
         #expect(service.calls.withLock { $0.controls.count } == 1)
     }
 
@@ -311,7 +311,7 @@ struct ReportSlotModelTests {
         let sent = try #require(service.calls.withLock { $0.flows.first })
         #expect(sent.id == "RCP-4K7M")
         #expect(sent.force == false)
-        #expect(sent.guidance == nil)
+        #expect(sent.guidance == .absent)
     }
 
     @Test("A scale the person types goes out with the server's ids; an empty or too-small one sends nothing")
@@ -647,9 +647,9 @@ struct ReportSlotModelTests {
         let service = FakeReports([try report(live: false, status: "completed", rows: [row("a")])])
         let batch = ReportBatchModel(id: "RUN-4K7M", service: service)
         let first = ReportSlotModel(
-            slot: .run_importStats, id: "RUN-4K7M", batch: batch, service: service)
+            slot: .runImportStats, id: "RUN-4K7M", batch: batch, service: service)
         let second = ReportSlotModel(
-            slot: .run_importTimeline, id: "RUN-4K7M", batch: batch, service: service)
+            slot: .runImportTimeline, id: "RUN-4K7M", batch: batch, service: service)
         first.retain()
         second.retain()
         // The completed record is read once and never polled.

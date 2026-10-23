@@ -1,8 +1,5 @@
-/// One HTTP operation from the OpenAPI document: method, path template, and what it accepts.
-/// The table itself (`OperationRoute.all`) is generated into `Generated/OperationRoutes.swift`
-/// by `apps/web/generator/http-api/native.ts`, so every operation the server exposes is
-/// reachable from `CubbyDebugClient` and the CLI without a hand-kept list. The generated
-/// `Client` covers the same document but cannot be enumerated at runtime.
+/// One native HTTP operation derived from its declaration by `pnpm generate`.
+/// Typed calls and the CLI share this table rather than keeping route literals.
 public struct OperationRoute: Sendable, Hashable {
     public enum Method: String, Sendable {
         case get = "GET"
@@ -13,10 +10,8 @@ public struct OperationRoute: Sendable, Hashable {
 
     public let operationID: String
     public let method: Method
-    /// Path relative to the base URL. `{id}` is substituted by `CubbyDebugClient`.
+    /// Path relative to the base URL.
     public let path: String
-    /// Names of the `{…}` placeholders in `path` (only `id` today).
-    public let pathParameters: [String]
     /// Query parameter names the operation declares. Values travel literally; an array repeats
     /// its key.
     public let queryParameters: [String]
@@ -26,14 +21,12 @@ public struct OperationRoute: Sendable, Hashable {
         operationID: String,
         method: Method,
         path: String,
-        pathParameters: [String] = [],
         queryParameters: [String] = [],
         hasBody: Bool = false
     ) {
         self.operationID = operationID
         self.method = method
         self.path = path
-        self.pathParameters = pathParameters
         self.queryParameters = queryParameters
         self.hasBody = hasBody
     }

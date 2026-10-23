@@ -323,7 +323,7 @@ struct RecountSessionTests {
         session.submit("LOC-89AB")
         await session.commitBin()
         let body = try #require(service.state.withLock { $0.lastReconcile })
-        #expect(body.snapshotUpdatedAt == nil)
+        #expect(body.snapshotUpdatedAt == .absent)
         #expect(body.snapshotToken == "snapshot-LOC-5678")
         #expect(body.expectedInventoryEntryIds.map(\.rawValue) == ["INV-2345", "INV-3456"])
         #expect(
@@ -333,6 +333,7 @@ struct RecountSessionTests {
                 case .adjust: "adjust"
                 case .remove: "remove"
                 case .relocate: "relocate"
+                case .unrecognized: "unsupported"
                 }
             } == ["verify", "remove"]
         )
@@ -364,7 +365,7 @@ struct RecountSessionTests {
         await session.start(scope: bin2)
         await session.commitBin()
         let body = try #require(service.state.withLock { $0.lastReconcile })
-        #expect(body.snapshotUpdatedAt == nil)
+        #expect(body.snapshotUpdatedAt == .absent)
         #expect(body.snapshotToken == "snapshot-LOC-6789")
         #expect(body.expectedInventoryEntryIds.isEmpty)
         #expect(session.phase == .complete)

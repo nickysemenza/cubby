@@ -153,6 +153,9 @@ struct ReportBlocksView: View {
                 case .table(let table): ReportTableView(table: table)
                 case .schedule(let schedule): ReportScheduleView(schedule: schedule)
                 case .records(let records): RecordsBlockView(records: records, host: host, model: model)
+                case .unsupported(let raw):
+                    Text(UnsupportedNativeResponse(context: "report block", raw: raw).localizedDescription)
+                        .font(.footnote).textSelection(.enabled)
                 case .note(let text, let tone, let strong):
                     Text(text)
                         .font(strong ? .subheadline.weight(.medium) : .footnote)

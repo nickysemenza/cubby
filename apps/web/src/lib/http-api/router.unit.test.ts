@@ -6,7 +6,6 @@ import * as contracts from "~/contracts/index";
 import { httpContract } from "~/lib/generated/http-contract.gen";
 import { START_OPERATIONS } from "~/lib/generated/start-operation-registry.gen";
 
-import document from "../../../../apple/CubbyKit/Sources/CubbyAPI/openapi.json";
 import { httpMetadataSchema, rpcMutation, rpcQuery } from "./router";
 import { checkHttpRoutes, httpRoutes } from "./routes";
 import { toWire } from "./wire";
@@ -75,14 +74,6 @@ describe("HTTP contract", () => {
     );
     expect(flat).toMatchObject({ method: "GET" });
     expect(flat?.query instanceof z.ZodType).toBe(true);
-    expect(Object.keys(document.paths).sort()).toEqual(
-      [...new Set(routes.map((route) => route.path))].sort(),
-    );
-    expect(document.security).toEqual([
-      { apiKey: [] },
-      { sessionCookie: [] },
-      { bearerAuth: [] },
-    ]);
   });
 
   it("rejects route collisions", () => {
@@ -143,19 +134,5 @@ describe("HTTP contract", () => {
     });
     expect(none.query.safeParse({}).success).toBe(true);
     expect(none.query.safeParse({ input: 1 }).success).toBe(false);
-  });
-
-  it("emits ISO timestamps and a shared error body", () => {
-    expect(JSON.stringify(document)).toContain('"format":"date-time"');
-    expect(document.components.schemas.ApiError).toBeDefined();
-    const references = [
-      ...JSON.stringify(document).matchAll(
-        /"\$ref":"#\/components\/schemas\/([^"]+)"/gu,
-      ),
-    ].map((match) => match[1] ?? "");
-    expect(references.length).toBeGreaterThan(0);
-    for (const name of new Set(references))
-      expect(document.components.schemas).toHaveProperty(name);
-    expect(JSON.stringify(document)).not.toContain('"mock"');
   });
 });

@@ -339,6 +339,8 @@ public final class ReportSlotModel {
         progress: @MainActor (String) -> Void = { _ in }
     ) async throws -> ReportActionOutcome {
         switch request {
+        case .unrecognized(let raw):
+            throw UnsupportedNativeResponse(context: "report command", raw: raw)
         case .operation(let command):
             guard let presentation = WorkflowCommandCatalog.presentation(for: command.operation) else {
                 throw ReportActionError.unavailable("Undeclared user command: \(command.operation)")

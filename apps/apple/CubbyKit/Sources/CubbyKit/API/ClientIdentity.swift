@@ -1,7 +1,7 @@
 import Foundation
 
 /// Who is calling: a product name, its version, the platform it runs on, and (for an installed
-/// native app) this install's id. `CubbyAuthMiddleware` turns this into a `User-Agent` and
+/// native app) this install's id. `NativeRequestHeaders` turns this into a `User-Agent` and
 /// `X-Cubby-Device` header on every REST request; the two companion sockets fold the installation
 /// id into their own `User-Agent` strings directly.
 public struct ClientIdentity: Sendable, Hashable {

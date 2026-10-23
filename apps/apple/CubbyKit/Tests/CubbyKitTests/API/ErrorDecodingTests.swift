@@ -1,6 +1,4 @@
 import Foundation
-import HTTPTypes
-import OpenAPIRuntime
 import Testing
 
 @testable import CubbyKit
@@ -132,61 +130,4 @@ struct ErrorDecodingTests {
         #expect(error.recoverySuggestion == "Try again. If this continues, contact support.")
     }
 
-    /// OpenAPIRuntime wraps every middleware throw in a `ClientError`, which would otherwise hide
-    /// the `isUnauthorized`/`isStaleInventory` a caller switches on. `CubbyClient` always unwraps;
-    /// this pins the unwrap itself for a caller (`CubbyDebugClient`, the CLI) that talks to a raw
-    /// generated `Client` and middleware directly.
-    @Test func unwrappingPullsTheCubbyAPIErrorOutOfAClientError() throws {
-        let inner = CubbyAPIError(
-            status: 409, operationID: "inventory.reconcileSession",
-            detail: .init(code: "CONFLICT", message: "stale", reason: "INVENTORY_STALE")
-        )
-        let wrapped = ClientError(
-            operationID: "inventory.reconcileSession", operationInput: (),
-            causeDescription: "middleware threw", underlyingError: inner
-        )
-        let unwrapped = CubbyAPIError.unwrapping(wrapped)
-        let apiError = try #require(unwrapped as? CubbyAPIError)
-        #expect(apiError.isStaleInventory)
-    }
-
-    /// A transport failure that never reached `CubbyAuthMiddleware` (so never became a
-    /// `CubbyAPIError`) still carries a status when the response was received; unwrapping turns
-    /// that into a bodyless `CubbyAPIError` instead of leaking the raw `ClientError`.
-    @Test func unwrappingATransportFailureWithAStatusBecomesABodylessError() throws {
-        let wrapped = ClientError(
-            operationID: "entity.detail", operationInput: (),
-            response: HTTPResponse(status: 503),
-            causeDescription: "transport failure", underlyingError: URLError(.timedOut)
-        )
-        let unwrapped = CubbyAPIError.unwrapping(wrapped)
-        let apiError = try #require(unwrapped as? CubbyAPIError)
-        #expect(apiError.status == 503)
-        #expect(apiError.detail == nil)
-    }
-
-    // Superseded picker requests must reach Diagnostics as cancellations, while unrelated
-    // transport failures must retain their generated-client diagnostics.
-    @Test func unwrappingPreservesCancellationIdentity() {
-        let cancellations: [any Error] = [CancellationError(), URLError(.cancelled)]
-        for inner in cancellations {
-            let wrapped = ClientError(
-                operationID: "search.find", operationInput: (),
-                causeDescription: "transport failure", underlyingError: inner)
-            let unwrapped = CubbyAPIError.unwrapping(wrapped)
-            #expect(
-                unwrapped is CancellationError
-                    || (unwrapped as? URLError)?.code == .cancelled)
-        }
-        let timeout = ClientError(
-            operationID: "search.find", operationInput: (),
-            causeDescription: "transport failure", underlyingError: URLError(.timedOut))
-        #expect(CubbyAPIError.unwrapping(timeout) is ClientError)
-    }
-
-    @Test func unwrappingLeavesAnUnrelatedErrorUntouched() {
-        let error = URLError(.notConnectedToInternet)
-        let unwrapped = CubbyAPIError.unwrapping(error)
-        #expect((unwrapped as? URLError) == error)
-    }
 }

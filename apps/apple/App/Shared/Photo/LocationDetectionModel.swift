@@ -73,7 +73,7 @@ final class LocationDetectionModel {
                         estimatedQuantity: detected.estimatedQuantity, unit: detected.unit,
                         confidence: detected.confidence, evidence: detected.evidence,
                         isMisc: detected.isMisc),
-                    productId: detected.matchedProduct?.id))
+                    productId: .init(ifPresent: detected.matchedProduct?.id)))
             update(id, .approved(created: out.createdProduct))
         } catch {
             update(id, .failed(error.userMessage))

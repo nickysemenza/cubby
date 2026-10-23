@@ -20,7 +20,7 @@
   "nutritionDisplay": {
     "source": "label",
     "title": "From package label",
-    "basis": "Per serving · 30 g",
+    "basis": "Per serving \u00b7 30 g",
     "sourceNote": "Synthetic package label",
     "inferenceEvidence": null,
     "rows": [
@@ -95,5 +95,7 @@
   "classificationEvidence": "",
   "sources": [],
   "brandId": "VEN-2345",
-  "brandName": "Sample Manufacturer"
+  "brandName": "Sample Manufacturer",
+  "growsPlantId": null,
+  "labelNutrition": null
 }

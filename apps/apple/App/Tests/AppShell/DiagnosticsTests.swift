@@ -35,7 +35,13 @@ struct ImageDiagnosticsCancellationTests {
         let detail = ImageWithEntity(
             id: ImageCode("IMG-4K7M"), url: "", key: "synthetic-image",
             filename: "sample.jpg", size: 1, contentType: "image/jpeg", status: .uploaded,
-            source: .unknown, useOriginal: false, captureAttribution: .none,
+            width: nil, height: nil, detectedContentType: nil, sha256: nil, renderStatus: nil,
+            storageStatus: nil,
+            source: .unknown, sourcePageUrl: nil, sourceAssetUrl: nil, sourceName: nil, useOriginal: false,
+            verifiedAt: nil,
+            capturedAt: nil, capturedAtOffsetMinutes: nil, captureLocation: nil, capturePlaceName: nil,
+            captureDeviceLabel: nil, capturedByPartyId: nil, capturedByName: nil, captureAttribution: .none,
+            provenanceEvidence: nil, sourceEvidence: nil,
             createdAt: date, updatedAt: date, associations: [])
         let client = CubbyClient(
             baseURL: URL(string: "https://example.invalid")!,

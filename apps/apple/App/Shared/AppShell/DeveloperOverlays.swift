@@ -91,7 +91,7 @@ struct CopyDiagnosticsButton<Payload: Encodable>: View {
     }
 }
 
-/// Layer 6: `RootView`'s bottom strip, one line naming the last request `CubbyAuthMiddleware`
+/// Layer 6: `RootView`'s bottom strip, one line naming the last request `NativeHTTPTransport`
 /// observed through `AppModel.requestTrace`.
 #if DEBUG
     struct RequestTraceStrip: View {

@@ -40,7 +40,7 @@ struct RecipeWorkflowView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: FieldGuideTokens.Space.md) {
             if let recipeID {
-                ReportDetailSlot(slot: .recipe_availability, id: recipeID)
+                ReportDetailSlot(slot: .recipeAvailability, id: recipeID)
                     .transformPreference(DetailSectionEmpty.self) { $0 = false }
             }
             scaleControls
@@ -76,7 +76,7 @@ struct RecipeWorkflowView: View {
                     recipeID: recipeID, baseWeight: $baseWeight,
                     loaded: $coverageLoaded)
                 OpenDetailGroup(title: "AI walkthrough") {
-                    ReportDetailSlot(slot: .recipe_walkthrough, id: recipeID)
+                    ReportDetailSlot(slot: .recipeWalkthrough, id: recipeID)
                         .transformPreference(DetailSectionEmpty.self) { $0 = false }
                 }
                 .accessibilityIdentifier("recipe.walkthrough")
@@ -187,7 +187,7 @@ private struct RecipeCoverageSection: View {
         .task(id: recipeID) {
             let next =
                 model
-                ?? ReportSlotModel(slot: .recipe_costingCoverage, id: recipeID, service: appModel.client)
+                ?? ReportSlotModel(slot: .recipeCostingCoverage, id: recipeID, service: appModel.client)
             model = next
             await next.refresh()
             baseWeight = next.presentation?.figureValue("weightGrams")

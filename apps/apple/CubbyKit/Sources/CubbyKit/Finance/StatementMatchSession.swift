@@ -186,6 +186,8 @@ public final class StatementMatchSession {
         case .notAmbiguous(let result): result.note
         case .ranked(let result): result.note
         case .unavailable(let result): result.note
+        case .unrecognized(let raw):
+            UnsupportedNativeResponse(context: "Settlement suggestion", raw: raw).localizedDescription
         }
     }
 

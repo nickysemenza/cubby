@@ -11,6 +11,11 @@ public final class FinancialBookingReviewSession {
 
     public init(reviewed: FinancialBookingPreview? = nil) { preview = reviewed }
 
+    public var unsupportedAction: UnsupportedNativeResponse? {
+        guard let preview, case .unrecognized(let raw) = preview.action else { return nil }
+        return UnsupportedNativeResponse(context: "financial booking action", raw: .string(raw))
+    }
+
     public func invalidateReview(clearResult: Bool = false) {
         generation = UUID()
         preview = nil
@@ -32,6 +37,7 @@ public final class FinancialBookingReviewSession {
     @discardableResult
     public func commit(client: CubbyClient) async throws -> FinancialBookingResult {
         guard !isBusy, let reviewed = preview else { throw ReviewRequired() }
+        if let unsupportedAction { throw unsupportedAction }
         let requestGeneration = generation
         isBusy = true
         defer { if generation == requestGeneration { isBusy = false } }

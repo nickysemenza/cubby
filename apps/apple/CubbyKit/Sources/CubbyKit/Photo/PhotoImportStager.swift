@@ -201,8 +201,9 @@ public actor PhotoImportTransaction {
             let source: PhotoImportSourcePayload?
             if let sourceEntity = item.sourceEntity, let sourceID = item.sourceID {
                 guard
-                    let payloadEntity = PhotoImportSourcePayload.EntityPayload(
-                        rawValue: sourceEntity.rawValue)
+                    let payloadEntity = PhotoImportSourceEntity.allCases.first(where: {
+                        $0.rawValue == sourceEntity.rawValue
+                    })
                 else {
                     throw Failure.invalidStageResponse("unsupported source:\(sourceEntity.rawValue)")
                 }
@@ -213,12 +214,12 @@ public actor PhotoImportTransaction {
             }
             let destination: PhotoImportCommitDestination
             if let candidateID = item.candidateID {
-                destination = PhotoImportCommitDestination(
-                    value1: PhotoImportExistingDestination(
+                destination = PhotoImportCommitDestination.existing(
+                    PhotoImportExistingDestination(
                         kind: .existing, candidateId: candidateID))
             } else if let draftID = item.createDraftID {
-                destination = PhotoImportCommitDestination(
-                    value2: PhotoImportCreateDestination(kind: .create, draftId: draftID))
+                destination = PhotoImportCommitDestination.create(
+                    PhotoImportCreateDestination(kind: .create, draftId: draftID))
             } else {
                 throw Failure.invalidStageResponse("missing destination:\(item.clientID)")
             }
@@ -254,7 +255,7 @@ public actor PhotoImportTransaction {
                     draftId: draftID,
                     routeId: routeID,
                     capturedAt: item.createCapturedAt,
-                    body: PhotoImportCreateBody(additionalProperties: try body.mapValues(apiJSON))))
+                    body: body))
         }
         // The result is deliberately derived from the submitted batch rather than from a persisted
         // receipt; the server commit is a one-shot operation and callers must not auto-retry an
@@ -419,8 +420,9 @@ public actor PhotoImportTransaction {
         let input = try PhotoImportStageInput(
             items: items.map { item in
                 guard
-                    let contentType = PhotoImportStageItem.ContentTypePayload(
-                        rawValue: item.file.contentType)
+                    let contentType = PhotoImportContentType.allCases.first(where: {
+                        $0.rawValue == item.file.contentType
+                    })
                 else { throw Failure.unsupportedContentType(item.file.contentType) }
                 return PhotoImportStageItem(
                     clientId: item.clientID,
@@ -432,7 +434,7 @@ public actor PhotoImportTransaction {
                     sha256: item.analysis.sha256,
                     perceptualHash: item.analysis.perceptualHash?.hex,
                     sourceFingerprint: item.analysis.sourceFingerprint.map {
-                        PhotoImportStageItem.SourceFingerprintPayload(
+                        .init(
                             hash: $0.hash.hex, aspectRatio: $0.aspectRatio)
                     },
                     allowExactReuse: item.duplicateChoice != .keepBoth)
@@ -443,17 +445,18 @@ public actor PhotoImportTransaction {
         var failed: [String] = []
 
         for result in response.items {
-            if let existing = result.value1 {
+            switch result {
+            case .existing(let existing):
                 stagedByClientID[existing.clientId] = Staged(
                     imageID: existing.imageId, reusedExisting: true)
-            } else if let upload = result.value2 {
+            case .upload(let upload):
                 guard let file = files[upload.clientId], let uploadURL = URL(string: upload.uploadUrl)
                 else { throw Failure.invalidStageResponse(upload.clientId) }
                 uploads.append((upload.clientId, upload.imageId, uploadURL, file))
-            } else if let failure = result.value3 {
+            case .failed(let failure):
                 failed.append(failure.clientId)
-            } else {
-                throw Failure.invalidStageResponse("unknown")
+            case .unrecognized(let raw):
+                throw UnsupportedNativeResponse(context: "Photo staging", raw: raw)
             }
         }
 
@@ -530,14 +533,9 @@ public actor PhotoImportTransaction {
                 revision: analysis.featurePrint.revision,
                 data: analysis.featurePrint.data.base64EncodedString()),
             provenance: PhotoImportProvenancePayload(
-                source: .init(rawValue: analysis.provenance.source.rawValue)!,
+                source: .init(rawValue: analysis.provenance.source.rawValue),
                 localIdentifier: analysis.provenance.localIdentifier,
                 filename: analysis.provenance.filename))
     }
 
-    private func apiJSON(_ value: JSONValue) throws -> Components.Schemas.JsonValue {
-        try JSONDecoder().decode(
-            Components.Schemas.JsonValue.self,
-            from: JSONEncoder().encode(value))
-    }
 }

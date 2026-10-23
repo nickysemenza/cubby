@@ -176,7 +176,6 @@ export const appleBuildArguments = (
   derived,
   "-clonedSourcePackagesDirPath",
   join(apple, "SourcePackages"),
-  "-skipPackagePluginValidation",
   "-skipMacroValidation",
   "COMPILATION_CACHE_ENABLE_CACHING=YES",
   "COMPILATION_CACHE_ENABLE_DIAGNOSTIC_REMARKS=YES",

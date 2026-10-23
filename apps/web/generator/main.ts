@@ -77,7 +77,7 @@ const validateConnectedViews = (entities: readonly CompiledEntity[]) => {
  * `pnpm generate` writes every generated output; none is committed. The
  * stages run in order because each later stage imports the earlier stages'
  * files from disk (declarations import the shortcode registry; contracts
- * runtime-import `~/entity/generated/*.gen.ts`; the OpenAPI stage imports
+ * runtime-import `~/entity/generated/*.gen.ts`; the native contract stage imports
  * `http-contract.gen.ts`), so the later stages load only after the earlier
  * ones are written.
  */
@@ -157,7 +157,8 @@ const main = async () => {
   // after those are on disk: a fresh checkout has no generated files at all.
   const { renderStartOperationArtifacts } =
     await import("./start-operations/render.ts");
-  const { renderHttpApiArtifacts } = await import("./http-api/openapi.ts");
+  const { renderDirectNativeArtifacts } =
+    await import("./http-api/native-artifacts.ts");
   const { renderApplePreviewFixtures } =
     await import("../tooling/checks/apple-preview-fixtures.ts");
   const { renderMcpToolArtifacts } =
@@ -166,7 +167,7 @@ const main = async () => {
   await settle(startOperations.artifacts);
   await settle(await renderMcpToolArtifacts());
   await settle(
-    await renderHttpApiArtifacts(
+    await renderDirectNativeArtifacts(
       kernelHttpActionsFor(entities),
       startOperations.nativeOperations,
       entityOutputsFor(entities),

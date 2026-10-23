@@ -143,11 +143,12 @@ struct FinancialTransactionEvidenceView: View {
             .disabled(busy || (purchase == nil && vendor == nil))
             .accessibilityIdentifier("financial.booking.preview")
         if let preview {
+            let presentation = bookingPresentation(preview.action)
             LabeledContent("Name", value: preview.name)
             LabeledContent("Date", value: preview.date)
             LabeledContent(
                 "Action",
-                value: preview.action == .linkExisting ? "Link existing Expenses" : "Create aggregate Expense"
+                value: presentation.label
             )
             LabeledContent("Settlement", value: preview.amount.usd)
             LabeledContent("Account", value: preview.accountName)
@@ -162,19 +163,38 @@ struct FinancialTransactionEvidenceView: View {
             LabeledContent(
                 "Remaining booked amount",
                 value: preview.remainingBookedAmount.usd)
-            Text(
-                preview.action == .linkExisting
-                    ? "This links the existing Expenses to this settlement."
-                    : "This records the reviewed spending in the Expense ledger. Source rows stay as evidence."
-            )
-            .foregroundStyle(.secondary)
-            Button(preview.action == .linkExisting ? "Link reviewed settlement" : "Book reviewed Expense") {
+            Text(presentation.explanation).foregroundStyle(.secondary)
+            Button(presentation.confirmation) {
                 Task { await commitBooking() }
             }
-            .disabled(busy)
+            .disabled(busy || review.unsupportedAction != nil)
             .accessibilityIdentifier("financial.booking.commit")
         }
         if busy { ProgressView("Checking booking…") }
+    }
+
+    private func bookingPresentation(_ action: FinancialBookingPreviewAction) -> (
+        label: String, explanation: String, confirmation: String
+    ) {
+        switch action {
+        case .linkExisting:
+            (
+                "Link existing Expenses", "This links the existing Expenses to this settlement.",
+                "Link reviewed settlement"
+            )
+        case .createAggregate:
+            (
+                "Create aggregate Expense",
+                "This records the reviewed spending in the Expense ledger. Source rows stay as evidence.",
+                "Book reviewed Expense"
+            )
+        case .unrecognized(let raw):
+            (
+                "Unsupported action (\(raw))",
+                "This build cannot interpret the reviewed booking action: \(raw).",
+                "Unsupported booking action"
+            )
+        }
     }
 
     private func resetSelections() {
@@ -191,8 +211,9 @@ struct FinancialTransactionEvidenceView: View {
         do {
             try await review.prepare(
                 .init(
-                    transactionId: row.id, purchaseId: purchase?.id, vendorId: vendor?.id,
-                    spendingCategoryId: category?.id, trade: .other,
+                    transactionId: row.id, purchaseId: .init(ifPresent: purchase?.id),
+                    vendorId: .init(ifPresent: vendor?.id),
+                    spendingCategoryId: .init(ifPresent: category?.id), trade: .other,
                     economicRole: economicRole == "reimbursement" ? .reimbursement : .vendor),
                 client: appModel.client)
         } catch {

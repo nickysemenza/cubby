@@ -66,7 +66,7 @@ extension EntityGraphNode: Identifiable {
     public init(reference: EntityRef, label: String, metadata: [String: String] = [:], imageURL: URL? = nil) {
         self.init(
             entityKind: reference.entityKind, entityId: reference.entityId, label: label,
-            metadata: .init(additionalProperties: metadata),
+            metadata: metadata,
             image: imageURL.map { .init(url: $0.absoluteString) })
     }
 
@@ -99,19 +99,21 @@ extension ProductRelatedProposal: Identifiable {
 }
 
 extension EntityRecommendationGroup: Identifiable {
-    public var id: String {
+    public var id: JSONValue {
         switch self {
-        case .expenseProject: "expense-project"
-        case .inventoryPlacement: "inventory-placement"
-        case .productRelated: "product-related"
+        case .expenseProject: .string("expense-project")
+        case .inventoryPlacement: .string("inventory-placement")
+        case .productRelated: .string("product-related")
+        case .unrecognized(let raw): raw
         }
     }
 
-    public var status: EmbeddingReadiness {
+    public var status: EmbeddingReadiness? {
         switch self {
         case .expenseProject(let group): group.status
         case .inventoryPlacement(let group): group.status
         case .productRelated(let group): group.status
+        case .unrecognized: nil
         }
     }
 }
@@ -169,29 +171,31 @@ extension MealNutritionFood: Identifiable {
             meal: NutritionMeal, name: String, amount: MealFoodAmount?, grams: Double?,
             weight: MeasureEstimate,
             totals: MealTotals
-        )
+        )?
     {
         switch self {
         case .ingredient(let f): (f.meal, f.name, f.amount, f.grams, f.weight, f.totals)
         case .manual(let f): (f.meal, f.name, f.amount, f.grams, f.weight, f.totals)
         case .product(let f): (f.meal, f.name, f.amount, f.grams, f.weight, f.totals)
         case .recipe(let f): (f.meal, f.name, f.amount, f.grams, f.weight, f.totals)
+        case .unrecognized: nil
         }
     }
 
-    public var meal: NutritionMeal { common.meal }
-    public var name: String { common.name }
-    public var amount: MealFoodAmount? { common.amount }
-    public var grams: Double? { common.grams }
-    public var weight: MeasureEstimate { common.weight }
-    public var totals: MealTotals { common.totals }
+    public var meal: NutritionMeal? { common?.meal }
+    public var name: String { common?.name ?? "Unsupported food variant" }
+    public var amount: MealFoodAmount? { common?.amount }
+    public var grams: Double? { common?.grams }
+    public var weight: MeasureEstimate? { common?.weight }
+    public var totals: MealTotals? { common?.totals }
 
-    public var id: String {
+    public var id: JSONValue {
         switch self {
-        case .recipe(let food): "recipe:\(food.meal.id):\(food.mealRecipeId)"
-        case .product(let food): "product:\(food.id)"
-        case .ingredient(let food): "ingredient:\(food.id)"
-        case .manual(let food): "manual:\(food.id)"
+        case .recipe(let food): .string("recipe:\(food.meal.id):\(food.mealRecipeId)")
+        case .product(let food): .string("product:\(food.id)")
+        case .ingredient(let food): .string("ingredient:\(food.id)")
+        case .manual(let food): .string("manual:\(food.id)")
+        case .unrecognized(let raw): raw
         }
     }
 
@@ -201,6 +205,7 @@ extension MealNutritionFood: Identifiable {
         case .product: "Product"
         case .ingredient: "Ingredient"
         case .manual: "Manual"
+        case .unrecognized: "Unsupported"
         }
     }
 
@@ -214,11 +219,12 @@ extension MealNutritionFood: Identifiable {
 }
 
 extension MeasureEstimate {
-    public var inferredZeroCount: Int {
+    public var inferredZeroCount: Int? {
         switch self {
         case .complete(let value): value.coverage.inferredZero ?? 0
         case .partial(let value): value.coverage.inferredZero ?? 0
         case .unavailable, .pending: 0
+        case .unrecognized: nil
         }
     }
 

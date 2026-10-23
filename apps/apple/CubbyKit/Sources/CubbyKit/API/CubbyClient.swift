@@ -1,8 +1,6 @@
 import CubbyAPI
 import Foundation
 import HTTPTypes
-import OpenAPIRuntime
-import OpenAPIURLSession
 
 /// The single typed path into `/api/v1`. Every operation the app, the widgets, and the CLI use is
 /// a named method here; nothing loosely-typed survives (`CubbyDebugClient` exists only for the
@@ -14,8 +12,7 @@ import OpenAPIURLSession
 public actor CubbyClient {
     public let baseURL: URL
     public let credentials: CredentialProvider
-    /// Internal so `Generated/ClientOperations.swift` can extend the client.
-    let api: Client
+    let nativeTransport: NativeHTTPTransport
 
     public init(
         baseURL: URL, credentials: CredentialProvider, identity: ClientIdentity = .unknown,
@@ -24,36 +21,22 @@ public actor CubbyClient {
     ) {
         self.baseURL = baseURL
         self.credentials = credentials
-        let transport = URLSessionTransport(configuration: .init(session: session))
-        let auth = CubbyAuthMiddleware(
-            credentials: credentials, identity: identity, observer: requestObserver)
-        // The spec's `servers` entry is "/", so the base URL must always be supplied here.
-        // `JSONNullMiddleware` is inert unless `sending(_:_:)` scopes a composed body around a
-        // call, so every other request through `api` keeps the typed body exactly.
-        self.api = Client(
-            serverURL: baseURL,
-            configuration: .cubby,
-            transport: transport,
-            middlewares: [auth, JSONNullMiddleware()]
-        )
+        self.nativeTransport = NativeHTTPTransport(
+            baseURL: baseURL, credentials: credentials, identity: identity, session: session,
+            observer: requestObserver)
     }
 
     // MARK: - Products
 
     public func product(_ id: ProductCode) async throws -> ProductDetail {
-        try await perform {
-            try await EntityCatalog[.product].getRow(client: api, id: id.rawValue).decoded()
-        }
+        return try await EntityCatalog[.product].getRow(client: self, id: id.rawValue).decoded()
     }
 
     /// Find-or-create by a raw scanned code, resolved server-side: an ISBN becomes a book, a
     /// barcode a product, a product label the product itself; an unreadable code is the server's
     /// validation error.
     public func findOrCreateProduct(raw: String) async throws -> ProductFindOrCreateByUPCOut {
-        try await perform {
-            try await api.product_findOrCreateByCode(body: .json(.scan(.init(kind: .scan, value: raw))))
-                .ok.body.json
-        }
+        return try await native_product_findOrCreateByCode(body: .scan(.init(kind: .scan, value: raw)))
     }
 
     /// The photo backlog: products with no image, newest first. `location` narrows to one bin.
@@ -99,47 +82,12 @@ public actor CubbyClient {
     public func fieldExplanation(
         subject: EntityRef, field: String, surface: String = "detail"
     ) async throws -> FieldExplanationOutput {
-        let entityKind: Operations.FieldExplanation_explain.Input.Query.EntityKindPayload =
-            switch subject.entity {
-            case .product: .product
-            case .productCategory: .productCategory
-            case .spendingCategory: .spendingCategory
-            case .recipe: .recipe
-            case .ingredient: .ingredient
-            case .cookbook: .cookbook
-            case .location: .location
-            case .inventory: .inventory
-            case .meal: .meal
-            case .ledgerParty: .ledgerParty
-            case .ledgerTransfer: .ledgerTransfer
-            case .project: .project
-            case .task: .task
-            case .vendor: .vendor
-            case .purchase: .purchase
-            case .financialAccount: .financialAccount
-            case .financialTransaction: .financialTransaction
-            case .sourceTransactionRecord: .sourceTransactionRecord
-            case .transactionImport: .transactionImport
-            case .wish: .wish
-            case .expense: .expense
-            case .email: .email
-            case .imageJob: .imageJob
-            case .usdaFood: .usdaFood
-            case .image: .image
-            case .planting: .planting
-            case .gardenEntry: .gardenEntry
-            case .vendorAccount: .vendorAccount
-            case .run: .run
-            case .device: .device
-            case .plant: .plant
-            }
-        return try await perform {
-            try await api.fieldExplanation_explain(
-                query: .init(
-                    entityKind: entityKind, entityId: subject.id, field: field,
-                    surface: .init(rawValue: surface))
-            ).ok.body.json
-        }
+        let entityKind = subject.entity
+        return try await native_fieldExplanation_explain(
+            query: .init(
+                entityKind: entityKind, entityId: subject.id, field: field,
+                surface: .init(rawValue: surface))
+        )
     }
 
     /// One page of rows through the entity's generated native read kind. `filters` are keyed by
@@ -152,20 +100,18 @@ public actor CubbyClient {
         filters: EntityFilterState = EntityFilterState(),
         groupBy: [ListGroupDimension] = []
     ) async throws -> ListPage<EntityRow> {
-        try await perform {
-            switch descriptor.key.nativeReadKind {
-            case .usdaFood:
-                return try await usdaFoodPage(
-                    descriptor, page: page, pageSize: pageSize, sort: sort, filters: filters)
-            case .kernel:
-                let result = try await descriptor.listPage(
-                    client: api, page: page, pageSize: pageSize, sort: sort, filters: filters,
-                    groupBy: groupBy)
-                return ListPage(
-                    items: result.items.compactMap(descriptor.row(from:)), meta: result.meta)
-            case .unavailable:
-                throw EntityOperationError.unsupported(descriptor.key, .list)
-            }
+        switch descriptor.key.nativeReadKind {
+        case .usdaFood:
+            return try await usdaFoodPage(
+                descriptor, page: page, pageSize: pageSize, sort: sort, filters: filters)
+        case .kernel:
+            let result = try await descriptor.listPage(
+                client: self, page: page, pageSize: pageSize, sort: sort, filters: filters,
+                groupBy: groupBy)
+            return ListPage(
+                items: result.items.compactMap(descriptor.row(from:)), meta: result.meta)
+        case .unavailable:
+            throw EntityOperationError.unsupported(descriptor.key, .list)
         }
     }
 
@@ -174,13 +120,13 @@ public actor CubbyClient {
     public func timeline(
         _ descriptor: EntityDescriptor, filters: EntityFilterState = EntityFilterState()
     ) async throws -> EntityTimelineOut {
-        try await perform { try await descriptor.timeline(client: api, filters: filters) }
+        return try await descriptor.timeline(client: self, filters: filters)
     }
 
     /// `entity.mutate` create from an editor's draft; returns the new record's id. The server
     /// parses the body with the entity's create schema, so an unknown key is its 400.
     public func create(_ descriptor: EntityDescriptor, body: [String: JSONValue]) async throws -> String {
-        try await perform { try await descriptor.create(.object(body), client: api) }
+        return try await descriptor.create(.object(body), client: self)
     }
 
     /// `entity.mutate` update from an editor's patch: changed values and the cleared keys as
@@ -189,54 +135,31 @@ public actor CubbyClient {
         guard !patch.isEmpty else { return }
         var body = patch.values
         for key in patch.cleared { body[key] = .null }
-        try await perform { try await descriptor.update(.object(body), id: id, client: api) }
+        return try await descriptor.update(.object(body), id: id, client: self)
     }
 
     /// Applies one atomic catalog bulk update. Explicit nulls clear fields; omitted fields stay unchanged.
     public func bulkUpdate(
         _ descriptor: EntityDescriptor, ids: [String], data: [String: JSONValue]
     ) async throws -> Int {
-        try await perform {
-            try await descriptor.bulkUpdate(.object(data), ids: ids, client: api)
-        }
-    }
-
-    /// Runs one generated call whose typed body was decoded from `body`, restoring on the wire
-    /// every `null` the typed body cannot encode (`JSONNullMiddleware`). Any operation the app
-    /// feeds a composed JSON body goes through here.
-    func sending<T>(_ body: JSONValue, _ call: () async throws -> T) async throws -> T {
-        try await JSONNullMiddleware.$source.withValue(body) { try await call() }
-    }
-
-    /// `sending(_:_:)` for a call that takes the decoded typed body itself.
-    func sending<Input: Decodable, T>(
-        _ body: JSONValue, _ call: (Input) async throws -> T
-    ) async throws -> T {
-        let input: Input = try body.decoded()
-        return try await sending(body) { try await call(input) }
+        return try await descriptor.bulkUpdate(.object(data), ids: ids, client: self)
     }
 
     /// A cleared Brand is explicit null; omission would preserve the draft's previous reference.
     public func updatePhotoGroupDraft(_ body: JSONValue) async throws -> ReviewPhotoGroupsOutput {
-        try await perform {
-            try await sending(body) { input in
-                try await api.photoImport_updateDraft(body: .json(input)).ok.body.json
-            }
-        }
+        try await request("photoImport.updateDraft", body: body)
     }
 
     /// `entity.mutate` delete. Destructive: only `HeroActionRunner` calls it, and only after
     /// the person confirmed behind the connection-impact preview.
     public func delete(_ descriptor: EntityDescriptor, id: String) async throws {
-        try await perform { try await descriptor.delete(id: id, client: api) }
+        return try await descriptor.delete(id: id, client: self)
     }
 
     /// One image with its owning records through the kernel `get` every entity shares. The
     /// detail read is a superset of the photo views' `ImageWithEntity`, which it projects to.
     public func imageDetail(id: String) async throws -> ImageWithEntity {
-        try await perform {
-            try await EntityCatalog[.image].getRow(client: api, id: id).decoded()
-        }
+        return try await EntityCatalog[.image].getRow(client: self, id: id).decoded()
     }
 
     /// One row by id, or `nil` when the server does not have it.
@@ -250,15 +173,14 @@ public actor CubbyClient {
                         parameter: "id", value: id, expected: "a numeric FDC ID")
                 }
                 raw = try usdaFoodJSON(
-                    try await api.usdaFood_detail(query: .init(id: fdcID)).ok.body.json)
+                    try await native_usdaFood_detail(query: .init(id: fdcID)))
             case .kernel:
-                raw = try await descriptor.getRow(client: api, id: id)
+                raw = try await descriptor.getRow(client: self, id: id)
             case .unavailable:
                 throw EntityOperationError.unsupported(descriptor.key, .get)
             }
             return descriptor.row(from: raw)
         } catch {
-            let error = CubbyAPIError.unwrapping(error)
             if let error = error as? CubbyAPIError, error.status == 404 { return nil }
             throw error
         }
@@ -276,13 +198,7 @@ public actor CubbyClient {
     }
 
     public func storedConnections(_ input: EntityGraphRootInput) async throws -> ConnectionDiscoveryOut {
-        guard let kind = ReadConnectionsQuery.EntityKindPayload(rawValue: input.entityKind.rawValue) else {
-            throw DecodingError.dataCorrupted(
-                .init(
-                    codingPath: [],
-                    debugDescription:
-                        "connection.read does not support entityKind=\(input.entityKind.rawValue)"))
-        }
+        let kind = input.entityKind
         return try await readConnections(.init(entityKind: kind, entityId: input.entityId))
     }
 
@@ -290,26 +206,22 @@ public actor CubbyClient {
     public func physicalConnections(id: String, previewDelete: Bool = false) async throws
         -> EntityConnectionsOut
     {
-        try await perform {
-            try await api.entity_connections(
-                query: .init(id: id, operation: previewDelete ? .delete : nil)
-            ).ok.body.json
-        }
+        return try await native_entity_connections(
+            query: .init(id: id, operation: previewDelete ? .delete : nil)
+        )
     }
 
     public func connectedRecords(
         source: EntityRef, viewKey: String, offset: Int = 0, limit: Int = 20,
         targetIDs: [String]? = nil
     ) async throws -> ConnectedRecordsOutput {
-        try await perform {
-            try await api.entity_connectedRecords(
-                body: .json(
-                    .init(
-                        source: source.graphRootInput, viewKey: viewKey,
-                        targetIds: targetIDs, offset: offset, limit: limit
-                    ))
-            ).ok.body.json
-        }
+        return try await native_entity_connectedRecords(
+            body:
+                .init(
+                    source: source.graphRootInput, viewKey: viewKey,
+                    targetIds: targetIDs, offset: offset, limit: limit
+                )
+        )
     }
 
     /// Declared relation rows with server-owned provenance and explicit pagination.
@@ -317,9 +229,11 @@ public actor CubbyClient {
         source: EntityRef, relation: String, targetIDs: [String]? = nil,
         offset: Int = 0, limit: Int = 50
     ) async throws -> JSONValue {
-        typealias Query = Operations.Entity_relation.Input.Query
-        guard let entity = Query.EntityPayload(rawValue: source.entity.rawValue),
-            let relationKey = Query.RelationPayload(rawValue: relation)
+        guard
+            let entity = EntityRelationQueryEntity.allCases.first(where: {
+                $0.rawValue == source.entity.rawValue
+            }),
+            let relationKey = EntityRelationQueryRelation.allCases.first(where: { $0.rawValue == relation })
         else {
             throw DecodingError.dataCorrupted(
                 .init(
@@ -327,14 +241,12 @@ public actor CubbyClient {
                     debugDescription:
                         "entity.relation does not support \(source.entity.rawValue).\(relation)"))
         }
-        return try await perform {
-            try JSONValue(
-                encoding: try await api.entity_relation(
-                    query: .init(
-                        entity: entity, relation: relationKey, id: source.id,
-                        offset: offset, limit: limit, targetIds: targetIDs)
-                ).ok.body.json)
-        }
+        return try JSONValue(
+            encoding: try await native_entity_relation(
+                query: .init(
+                    entity: entity, relation: relationKey, id: source.id,
+                    offset: offset, limit: limit, targetIds: targetIDs)
+            ))
     }
 
     /// Every curated connected view of `source` in manifest order: each view's complete count and
@@ -342,26 +254,22 @@ public actor CubbyClient {
     public func connectedRecordsPreview(source: EntityRef, limit: Int = 3) async throws
         -> ConnectedRecordsPreviewOutput
     {
-        try await perform {
-            try await api.entity_connectedRecordsPreview(
-                body: .json(.init(source: source.graphRootInput, limit: limit))
-            ).ok.body.json
-        }
+        return try await native_entity_connectedRecordsPreview(
+            body: .init(source: source.graphRootInput, limit: limit)
+        )
     }
 
     public func exploreRelationships(root: EntityRef, depth: Int) async throws -> EntityGraph {
         let depth = min(3, max(1, depth))
-        return try await perform {
-            let output = try await api.entity_explore(
-                body: .json(
-                    .init(
-                        root: root.graphRootInput,
-                        depth: .init(value1: .init(rawValue: depth))
-                    )
+        let output = try await native_entity_explore(
+            body:
+                .init(
+                    root: root.graphRootInput,
+                    depth: .init(rawValue: Double(depth))
                 )
-            ).ok.body.json
-            return EntityGraph(root: root, output: output)
-        }
+
+        )
+        return EntityGraph(root: root, output: output)
     }
 
     public func relationshipPage(
@@ -370,50 +278,42 @@ public actor CubbyClient {
         offset: Int,
         limit: Int
     ) async throws -> EntityGraphOutput {
-        try await perform {
-            try await api.entity_graph(
-                body: .json(
-                    .init(
-                        roots: [root.graphRootInput],
-                        relationshipKeys: [relationshipKey],
-                        offset: offset,
-                        limit: min(25, max(1, limit))
-                    )
+        return try await native_entity_graph(
+            body:
+                .init(
+                    roots: [root.graphRootInput],
+                    relationshipKeys: [relationshipKey],
+                    offset: offset,
+                    limit: min(25, max(1, limit))
                 )
-            ).ok.body.json
-        }
+
+        )
     }
 
     public func recommendations(for source: EntityRef) async throws -> EntityRecommendationsOut {
-        try await perform {
-            // `recommendations.forEntity` declares its own copy of the entity enum; match by raw value.
-            try await api.recommendations_forEntity(
+        return  // `recommendations.forEntity` declares its own copy of the entity enum; match by raw value.
+            try await native_recommendations_forEntity(
                 query: .init(
                     entityKind: .init(rawValue: source.entityKind.rawValue)!, entityId: source.entityId)
-            ).ok.body.json
-        }
+            )
     }
 
     public func assignExpense(_ expenseID: String, toProject projectID: String) async throws {
-        try await perform {
-            try await EntityCatalog[.expense].update(
-                ["projectId": .string(projectID)], id: expenseID, client: api)
-        }
+        return try await EntityCatalog[.expense].update(
+            ["projectId": .string(projectID)], id: expenseID, client: self)
     }
 
     public func moveInventory(_ inventoryID: String, to locationID: String) async throws -> EntityRef {
-        try await perform {
-            let result = try await api.inventory_moveEntries(
-                body: .json(
-                    .init(items: [
-                        .init(
-                            inventoryEntryId: InventoryEntryCode(inventoryID),
-                            targetLocationId: LocationCode(locationID))
-                    ]))
-            ).ok.body.json
-            guard let survivor = result.items.first else { throw URLError(.cannotParseResponse) }
-            return EntityRef(entity: .inventory, id: survivor.id.rawValue)
-        }
+        let result = try await native_inventory_moveEntries(
+            body:
+                .init(items: [
+                    .init(
+                        inventoryEntryId: InventoryEntryCode(inventoryID),
+                        targetLocationId: LocationCode(locationID))
+                ])
+        )
+        guard let survivor = result.items.first else { throw URLError(.cannotParseResponse) }
+        return EntityRef(entity: .inventory, id: survivor.id.rawValue)
     }
 
     // MARK: - Images
@@ -422,22 +322,16 @@ public actor CubbyClient {
     /// upserts by image/owner/asset key, so a resent page changes nothing.
     public func recordImageSightings(_ items: [ImageSightingRecordItem]) async throws {
         guard !items.isEmpty else { return }
-        _ = try await perform {
-            try await api.image_recordSightings(.init(body: .json(.init(items: items)))).ok.body.json
-        }
+        _ = try await native_image_recordSightings(body: .init(items: items))
     }
 
     /// Attaches already-uploaded images to any entity whose update body takes `pendingImageIds`.
     public func attachImages(_ ids: [ImageCode], to descriptor: EntityDescriptor, id: String) async throws {
-        try await perform {
-            try await descriptor.attachImages(ids, to: id, client: api)
-        }
+        return try await descriptor.attachImages(ids, to: id, client: self)
     }
 
     public func setImageOrder(_ ids: [ImageCode], on descriptor: EntityDescriptor, id: String) async throws {
-        try await perform {
-            try await descriptor.setImageOrder(ids, on: id, client: api)
-        }
+        return try await descriptor.setImageOrder(ids, on: id, client: self)
     }
 
     public func uploadImage(
@@ -446,38 +340,38 @@ public actor CubbyClient {
         format: ImageEncoding.Format,
         entity: EntityKey
     ) async throws -> ImageUpload {
-        try await perform {
-            let output = try await api.image_uploadImage(
-                body: .json(.init(filename: filename, size: size, format: format, entity: entity))
-            )
-            return try ImageUpload(try output.ok.body.json)
-        }
+        let output = try await native_image_uploadImage(
+            body: .init(filename: filename, size: size, format: format, entity: entity)
+        )
+        return try ImageUpload(output)
     }
 
     public func uploadImage(_ request: ImageUploadRequest) async throws -> ImageUpload {
-        try await perform {
-            guard request.algorithmRevision == PerceptualHash64.algorithmRevision else {
-                throw HashIndex.Failure.unsupportedRevision(request.algorithmRevision)
-            }
-            var input = InitiateUploadWithoutEntity(
-                filename: request.filename, size: request.size, contentType: .imageJpeg)
-            guard let contentType = type(of: input.contentType).init(rawValue: request.contentType) else {
-                throw PhotoFile.Failure.unsupportedContentType(request.contentType)
-            }
-            input.contentType = contentType
-            if let entity = request.entity {
-                input.entityKind = EntityImage(rawValue: entity.rawValue.uppercased())
-            }
-            input.algorithmRevision = .init(rawValue: request.algorithmRevision)
-            input.perceptualHash = request.perceptualHash.hex
-            input.sourceFingerprint = .init(
-                hash: request.sourceFingerprint.hash.hex,
-                aspectRatio: request.sourceFingerprint.aspectRatio)
-            input.width = request.width
-            input.height = request.height
-            let output = try await api.image_uploadImage(body: .json(input))
-            return try ImageUpload(try output.ok.body.json)
+        guard request.algorithmRevision == PerceptualHash64.algorithmRevision else {
+            throw HashIndex.Failure.unsupportedRevision(request.algorithmRevision)
         }
+        var input = InitiateUploadWithoutEntity(
+            filename: request.filename, size: request.size, contentType: .imageJpeg)
+        guard
+            let contentType = type(of: input.contentType).allCases.first(where: {
+                $0.rawValue == request.contentType
+            })
+        else {
+            throw PhotoFile.Failure.unsupportedContentType(request.contentType)
+        }
+        input.contentType = contentType
+        if let entity = request.entity {
+            input.entityKind = EntityImage(rawValue: entity.rawValue.uppercased())
+        }
+        input.algorithmRevision = .init(rawValue: Double(request.algorithmRevision))
+        input.perceptualHash = request.perceptualHash.hex
+        input.sourceFingerprint = .init(
+            hash: request.sourceFingerprint.hash.hex,
+            aspectRatio: request.sourceFingerprint.aspectRatio)
+        input.width = request.width
+        input.height = request.height
+        let output = try await native_image_uploadImage(body: input)
+        return try ImageUpload(output)
     }
 
     /// Presigns a PDF evidence upload. The returned image id remains pending until
@@ -485,68 +379,63 @@ public actor CubbyClient {
     public func uploadDocument(filename: String, size: Int, folder: String? = nil) async throws
         -> ImageUpload
     {
-        try await perform {
-            let input = Components.Schemas.InitiateDocumentUpload(
-                filename: filename, size: size, contentType: .applicationPdf, folder: folder)
-            let output = try await api.image_uploadDocument(body: .json(input))
-            return try ImageUpload(try output.ok.body.json)
-        }
+        let input = InitiateDocumentUpload(
+            filename: filename, size: size, contentType: .applicationPdf, folder: folder)
+        let output = try await native_image_uploadDocument(body: input)
+        return try ImageUpload(output)
     }
 
     /// The server's hash index, or `HashIndex.Failure.unsupportedRevision` when it was computed
     /// with a different algorithm than this build carries.
     public func imageHashIndex() async throws -> ImageHashIndex {
-        try await perform {
-            let result = try await api.image_hashIndex().ok.body.json
-            guard result.algorithmRevision.rawValue == PerceptualHash64.algorithmRevision else {
-                throw HashIndex.Failure.unsupportedRevision(result.algorithmRevision.rawValue)
-            }
-            return result
+        let result = try await native_image_hashIndex()
+        guard let revision = Int(exactly: result.algorithmRevision.rawValue) else {
+            throw UnsupportedNativeResponse(
+                context: "image hash algorithm revision", raw: .number(result.algorithmRevision.rawValue))
         }
+        guard revision == PerceptualHash64.algorithmRevision else {
+            throw HashIndex.Failure.unsupportedRevision(revision)
+        }
+        return result
     }
 
     public func approvePhotoGroups(
         runID: RunShortcode, groups: [PhotoGroupProposal]
     ) async throws -> ReviewPhotoGroupsOutput {
-        try await perform {
-            let revisions = try groups.map { group in
-                (
-                    groupKey: group.groupKey,
-                    updatedAt: try LenientISO8601DateTranscoder().decode(group.updatedAt)
-                )
-            }
-            return try await api.photoImport_approveGroups(
-                body: .json(
-                    .init(
-                        runId: runID,
-                        groupKeys: groups.map(\.groupKey),
-                        expectedRevisions: revisions.map {
-                            .init(groupKey: $0.groupKey, updatedAt: $0.updatedAt)
-                        }
-                    ))
-            )
-            .ok.body.json
+        for group in groups {
+            if let unsupported = PhotoReviewPolicy.unsupportedAction(group: group) { throw unsupported }
         }
+        let revisions = try groups.map { group in
+            (
+                groupKey: group.groupKey,
+                updatedAt: try LenientISO8601DateTranscoder().decode(group.updatedAt)
+            )
+        }
+        return try await native_photoImport_approveGroups(
+            body:
+                .init(
+                    runId: runID,
+                    groupKeys: groups.map(\.groupKey),
+                    expectedRevisions: revisions.map {
+                        .init(groupKey: $0.groupKey, updatedAt: $0.updatedAt)
+                    }
+                )
+        )
     }
 
     public func setPerceptualHashes(_ items: [ImageHashUpdate]) async throws -> SetPerceptualHashesOutput {
-        try await perform {
-            try await api.image_setPerceptualHashes(
-                body: .json(
-                    .init(
-                        algorithmRevision: .init(rawValue: PerceptualHash64.algorithmRevision)!,
-                        items: items.map { .init(id: $0.id, perceptualHash: $0.perceptualHash.hex) })
-                )
-            ).ok.body.json
-        }
+        return try await native_image_setPerceptualHashes(
+            body:
+                .init(
+                    algorithmRevision: .init(rawValue: Double(PerceptualHash64.algorithmRevision)),
+                    items: items.map { .init(id: $0.id, perceptualHash: $0.perceptualHash.hex) })
+
+        )
     }
 
     /// Household-wide audit entries, newest first. The opaque cursor is passed back unchanged.
     public func auditHistory(cursor: String? = nil, limit: Int = 50) async throws -> AuditLogListOut {
-        try await perform {
-            try await api.auditLog_list(query: .init(limit: Double(limit), cursor: cursor))
-                .ok.body.json
-        }
+        return try await native_auditLog_list(query: .init(limit: Double(limit), cursor: cursor))
     }
 
     /// The device-run local analysis persisted at import time (`photo-local-analysis`), or `nil`
@@ -554,9 +443,8 @@ public actor CubbyClient {
     /// `router.ts`'s nullable-output convention — the same shape `row(_:id:)` above unwraps).
     public func imageAnalysis(_ id: ImageCode) async throws -> ImageAnalysisOutput? {
         do {
-            return try await api.image_analysis(query: .init(id: id.rawValue)).ok.body.json
+            return try await native_image_analysis(query: .init(id: id.rawValue))
         } catch {
-            let error = CubbyAPIError.unwrapping(error)
             if let error = error as? CubbyAPIError, error.status == 404 { return nil }
             throw error
         }
@@ -565,58 +453,51 @@ public actor CubbyClient {
     /// Backfills a device-run analysis onto an already-uploaded image. The server re-checks
     /// `status`/`sha256` transactionally and refuses with `IMAGE_PRECONDITION_FAILED` when the
     /// analysis does not describe the row's current bytes; this wrapper only marshals the value —
-    /// this `analysis` payload is a distinct generated type from `ImageAnalysisOutput` above (the
-    /// OpenAPI generator does not dedupe structurally-identical schemas across routes), so its
-    /// fields are read by property and its `.init(...)` types inferred from context, never spelled.
+    /// the request declaration owns its analysis input type; fields are projected explicitly from
+    /// the output so server-side enrichment cannot leak into the write.
     public func recordImageAnalysis(_ id: ImageCode, _ analysis: ImageAnalysisOutput) async throws
         -> Bool
     {
-        try await perform {
-            try await api.image_recordAnalysis(
-                body: .json(
-                    .init(
-                        id: id.rawValue,
-                        analysis: .init(
-                            analysisVersion: analysis.analysisVersion,
-                            analyzedAt: analysis.analyzedAt,
-                            sha256: analysis.sha256,
-                            capturedAt: analysis.capturedAt,
-                            contentType: analysis.contentType,
-                            width: analysis.width,
-                            height: analysis.height,
-                            classifications: analysis.classifications.map {
-                                .init(identifier: $0.identifier, confidence: $0.confidence)
-                            },
-                            recognizedText: analysis.recognizedText.map {
-                                .init(text: $0.text, confidence: $0.confidence)
-                            },
-                            featurePrint: .init(
-                                revision: analysis.featurePrint.revision,
-                                data: analysis.featurePrint.data),
-                            provenance: .init(
-                                source: .init(rawValue: analysis.provenance.source.rawValue)!,
-                                localIdentifier: analysis.provenance.localIdentifier,
-                                filename: analysis.provenance.filename)
-                        )
+        return try await native_image_recordAnalysis(
+            body:
+                .init(
+                    id: id.rawValue,
+                    analysis: .init(
+                        analysisVersion: analysis.analysisVersion,
+                        analyzedAt: analysis.analyzedAt,
+                        sha256: analysis.sha256,
+                        capturedAt: analysis.capturedAt,
+                        contentType: analysis.contentType,
+                        width: analysis.width,
+                        height: analysis.height,
+                        classifications: analysis.classifications.map {
+                            .init(identifier: $0.identifier, confidence: $0.confidence)
+                        },
+                        recognizedText: analysis.recognizedText.map {
+                            .init(text: $0.text, confidence: $0.confidence)
+                        },
+                        featurePrint: .init(
+                            revision: analysis.featurePrint.revision,
+                            data: analysis.featurePrint.data),
+                        provenance: .init(
+                            source: .init(rawValue: analysis.provenance.source.rawValue),
+                            localIdentifier: analysis.provenance.localIdentifier,
+                            filename: analysis.provenance.filename)
                     )
                 )
-            ).ok.body.json.saved
-        }
+
+        ).saved
     }
 
     /// The entity's image ids in display order — the order `setImageOrder` rewrites. The detail
     /// payload's `attachments` carry full bodies (URLs included); only the id is projected out
     /// here because that is all this call is for.
     public func imageIDs(_ descriptor: EntityDescriptor, id: String) async throws -> [ImageCode] {
-        try await perform {
-            descriptor.row(from: try await descriptor.getRow(client: api, id: id))?.imageIDs ?? []
-        }
+        return descriptor.row(from: try await descriptor.getRow(client: self, id: id))?.imageIDs ?? []
     }
 
     public func markUploaded(_ id: ImageCode) async throws {
-        try await perform {
-            _ = try await api.image_markUploaded(body: .json(.init(id: id))).ok
-        }
+        _ = try await native_image_markUploaded(body: .init(id: id))
     }
 
     /// Idempotent device-side status for one photo-run image target
@@ -626,11 +507,9 @@ public actor CubbyClient {
     public func reportRunDeviceWork(
         run: RunShortcode, image: ImageCode, state: RunTargetDeviceWorkState, error: String? = nil
     ) async throws -> Bool {
-        try await perform {
-            try await api.run_reportDeviceWork(
-                body: .json(.init(run: run, image: image, state: state, error: error))
-            ).ok.body.json.recorded
-        }
+        return try await native_run_reportDeviceWork(
+            body: .init(run: run, image: image, state: state, error: error)
+        ).recorded
     }
 
     // MARK: - Scanning and inventory
@@ -638,27 +517,23 @@ public actor CubbyClient {
     /// One raw scanner or keyboard value at a location, classified by the server: a barcode,
     /// an ISBN, a product label (legacy `P-` included), or a validation error naming why not.
     public func scan(raw: String, at location: LocationCode) async throws -> ScanAtLocationOut {
-        try await perform {
-            try await api.inventory_scanAtLocation(
-                body: .json(
-                    .init(locationId: location, code: .init(value1: .scan(.init(kind: .scan, value: raw)))))
-            ).ok.body.json
-        }
+        return try await native_inventory_scanAtLocation(
+            body:
+                .init(locationId: location, code: .value1(.scan(.init(kind: .scan, value: raw))))
+        )
     }
 
     public func resolveStrays(to target: LocationCode, moves: [StrayMove]) async throws
         -> ResolveScanStraysOut
     {
-        try await perform {
-            try await api.inventory_resolveScanStrays(
-                body: .json(
-                    .init(
-                        targetLocationId: target,
-                        moves: moves.map {
-                            .init(entryId: $0.entryId, quantity: $0.quantity.map { PositiveAmountInput($0) })
-                        }))
-            ).ok.body.json
-        }
+        return try await native_inventory_resolveScanStrays(
+            body:
+                .init(
+                    targetLocationId: target,
+                    moves: moves.map {
+                        .init(entryId: $0.entryId, quantity: $0.quantity.map { PositiveAmountInput($0) })
+                    })
+        )
     }
 
     /// Creates an inventory row counted in units ("each"). Returns the new entry's shortcode.
@@ -667,61 +542,49 @@ public actor CubbyClient {
         at location: LocationCode,
         count: Double
     ) async throws -> InventoryEntryCode {
-        try await perform {
-            let body: JSONValue = [
-                "productId": .string(product.rawValue), "locationId": .string(location.rawValue),
-                "amount": try JSONValue(encoding: PositiveAmountInput(count)),
-            ]
-            return InventoryEntryCode(try await EntityCatalog[.inventory].create(body, client: api))
-        }
+        let body: JSONValue = [
+            "productId": .string(product.rawValue), "locationId": .string(location.rawValue),
+            "amount": try JSONValue(encoding: PositiveAmountInput(count)),
+        ]
+        return InventoryEntryCode(try await EntityCatalog[.inventory].create(body, client: self))
     }
 
     /// An atomic view of one bin. The opaque token guards both row membership and ownership facts
     /// that a row timestamp cannot cover.
     public func inventorySnapshot(at location: LocationCode) async throws -> RecountSnapshot {
-        try await perform {
-            let output = try await api.inventory_locationSnapshot(
-                query: .init(locationId: location.rawValue, placement: .stock)
-            ).ok.body.json
-            return RecountSnapshot(rows: output.items.map(RecountRow.init), token: output.snapshotToken)
-        }
+        let output = try await native_inventory_locationSnapshot(
+            query: .init(locationId: location, placement: .stock)
+        )
+        return RecountSnapshot(rows: output.items.map(RecountRow.init), token: output.snapshotToken)
     }
 
     /// Products stocked in more than one location, for the Duplicate badge.
     public func findDuplicates() async throws -> Set<ProductCode> {
-        try await perform {
-            Set(try await api.inventory_findDuplicates(query: .init()).ok.body.json.map(\.id))
-        }
+        return Set(try await native_inventory_findDuplicates(query: .init()).map(\.id))
     }
 
     /// Commits one bin's recount. Throws a `CubbyAPIError` with `isStaleInventory` when the bin
     /// changed since it was read.
     public func reconcile(_ body: ReconcileSessionPayload) async throws -> [RecountRow] {
-        try await perform {
-            try await api.inventory_reconcileSession(body: .json(body)).ok.body.json.items.map(
-                RecountRow.init)
-        }
+        return try await native_inventory_reconcileSession(body: body).items.map(
+            RecountRow.init)
     }
 
     // MARK: - Locations
 
     public func locationTree() async throws -> LocationTree {
-        try await perform {
-            LocationTree(roots: try await api.location_makeTree().ok.body.json)
-        }
+        return LocationTree(roots: try await native_location_makeTree())
     }
 
     // MARK: - Specialist list presentations
 
     public func mealCalendar(from start: String, to end: String) async throws -> CalendarRangeOut {
-        try await perform {
-            try await api.calendar_range(
-                body: .json(
-                    .init(
-                        startDate: .init(rawValue: start),
-                        endDateExclusive: .init(rawValue: end), kinds: [.meal]))
-            ).ok.body.json
-        }
+        return try await native_calendar_range(
+            body:
+                .init(
+                    startDate: .init(rawValue: start),
+                    endDateExclusive: .init(rawValue: end), kinds: [.meal])
+        )
     }
 
     public func reorderTask(_ id: String, rank: Double) async throws {
@@ -731,9 +594,7 @@ public actor CubbyClient {
     public func reorderTasks(_ ranks: [(String, Double)]) async throws {
         let input = TaskBulkReorderInput(
             ranks: ranks.map { .init(id: .init($0.0), sortOrder: $0.1) })
-        _ = try await perform {
-            try await api.task_bulkReorder(body: .json(input)).ok.body.json
-        }
+        _ = try await native_task_bulkReorder(body: input)
     }
 
     public func projectAnalytics(filters: EntityFilterState) async throws -> EntityReportOut {
@@ -747,7 +608,7 @@ public actor CubbyClient {
             if let value = filters[key]?.first { values[key] = .string(value) }
         }
         return try await entityReport(
-            slot: .project_analytics,
+            slot: .projectAnalytics,
             scope: .object([
                 "kind": .string("list"), "entity": .string("project"), "filters": .object(values),
             ]))
@@ -755,15 +616,13 @@ public actor CubbyClient {
 
     public func todayBriefing() async throws -> EntityReportOut {
         try await entityReport(
-            slot: .task_briefing,
+            slot: .taskBriefing,
             scope: .object(["kind": .string("list"), "entity": .string("task"), "filters": .object([:])]))
     }
 
     public func expenseAnalytics(filters: EntityFilterState) async throws -> ExpenseAnalyticsOut {
         let input = try Self.decodeFilters(ExpenseFilters.self, entity: .expense, filters: filters)
-        return try await perform {
-            try await api.expense_analytics(body: .json(input)).ok.body.json
-        }
+        return try await native_expense_analytics(body: input)
     }
 
     /// The entity's list filters typed by its kernel parameters (`EntityKernel.swift`), so a
@@ -789,9 +648,7 @@ public actor CubbyClient {
 
     /// The global "Unknown" location, created on first use.
     public func ensureGlobalUnknownLocation() async throws -> LocationCode {
-        try await perform {
-            try await api.location_ensureGlobalUnknown(body: .json(.init())).ok.body.json.id
-        }
+        return try await native_location_ensureGlobalUnknown().id
     }
 
     // MARK: - Search, dashboards, and the assistant
@@ -802,24 +659,23 @@ public actor CubbyClient {
         let trimmed = String(
             text.trimmingCharacters(in: .whitespacesAndNewlines).prefix(SearchHit.maxQueryLength))
         guard !trimmed.isEmpty else { return [] }
-        var query = Operations.Search_find.Input.Query(
+        var query = SearchQueryInput(
             query: trimmed, limit: min(max(limit, 1), SearchHit.maxLimit)
         )
         // `search.find`'s query declares its own searchable-entity enum, so catalog keys are
         // matched into it by raw value; a key it has not heard of is dropped rather than sent. Hits
         // name their entity by raw string (`SearchHit.key` is nil for an undeclared kind).
         query.entityKinds = (kinds ?? EntityCatalog.intentExposed.map(\.key)).compactMap {
-            .init(rawValue: $0.rawValue)
+            let kind = $0.rawValue
+            return QuerySearchableEntity.allCases.first { $0.rawValue == kind }
         }
-        return try await perform {
-            try await api.search_find(query: query).ok.body.json
-        }
+        return try await native_search_find(query: query)
     }
 
     public func requestCatchUp() async throws {
         // The server's `z.undefined()` mutation input still rejects a missing body (400
         // "expected object"); the spec marks the body optional, so send an empty object.
-        _ = try await perform { try await api.maintenance_requestCatchUp(body: .json(.init())).ok.body.json }
+        _ = try await native_maintenance_requestCatchUp()
     }
 
     /// The meals planned for one household calendar day.
@@ -832,17 +688,13 @@ public actor CubbyClient {
     }
 
     public func mealNutrition(mealID: String) async throws -> MealNutritionOut {
-        let input = MealNutritionInput(value1: .init(mealId: mealID))
-        return try await perform {
-            try await api.meal_getNutrition(.init(body: .json(input))).ok.body.json
-        }
+        let input = MealNutritionInput.value1(.init(mealId: mealID))
+        return try await native_meal_getNutrition(body: input)
     }
 
     public func mealNutrition(on day: String) async throws -> MealNutritionOut {
-        let input = MealNutritionInput(value2: .init(date: day))
-        return try await perform {
-            try await api.meal_getNutrition(.init(body: .json(input))).ok.body.json
-        }
+        let input = MealNutritionInput.value2(.init(date: day))
+        return try await native_meal_getNutrition(body: input)
     }
 
     /// The server-composed blocks (stats, chart, table, schedule, note) behind a detail slot.
@@ -859,28 +711,20 @@ public actor CubbyClient {
     {
         var fields: [String: JSONValue] = ["slot": .string(slot.rawValue), "scope": scope]
         if let cursor { fields["cursor"] = .string(cursor) }
-        return try await perform {
-            try await sending(.object(fields)) { input in
-                try await api.entityReport_get(body: .json(input)).ok.body.json
-            }
-        }
+        return try await request("entityReport.get", body: JSONValue.object(fields))
     }
 
     /// Several slots of one record in one read; the server loads the record once for all of them.
     public func entityReports(slots: [ReportSlot], id: String) async throws
         -> [(ReportSlot, EntityReportOut)]
     {
-        let wanted = slots.compactMap {
-            Operations.EntityReport_getMany.Input.Query.SlotsPayloadPayload(rawValue: $0.rawValue)
-        }
-        let out = try await perform {
-            try await api.entityReport_getMany(query: .init(slots: wanted, id: id)).ok.body.json
-        }
+        let wanted = slots
+        let out = try await native_entityReport_getMany(query: .init(slots: wanted, id: id))
         return out.reports.map { ($0.slot, $0.report) }
     }
 
     public func lookupUPC(_ upc: String) async throws -> UpcLookupOutput {
-        try await perform { try await api.upc_lookup(query: .init(upc: upc)).ok.body.json }
+        return try await native_upc_lookup(query: .init(upc: upc))
     }
 
     // MARK: - Internals
@@ -896,12 +740,12 @@ public actor CubbyClient {
         sort: String?,
         filters: EntityFilterState
     ) async throws -> ListPage<EntityRow> {
-        var typedFilters = UsdaListInput.FiltersPayload(foodsOnly: true)
+        var typedFilters = UsdaListInputFilters(foodsOnly: true)
         for name in filters.names {
             guard let value = filters[name] else { continue }
             switch name {
             case "nameFilter": typedFilters.nameFilter = try value.string(name)
-            case "dataTypeFilter": typedFilters.dataTypeFilter = .init(value2: try value.enumCases(name))
+            case "dataTypeFilter": typedFilters.dataTypeFilter = .value2(try value.enumCases(name))
             case "dataTypes": typedFilters.dataTypes = try value.enumCases(name)
             case "foodsOnly": typedFilters.foodsOnly = try value.bool(name)
             case "linkedProductsOnly": typedFilters.linkedProductsOnly = try value.bool(name)
@@ -912,7 +756,7 @@ public actor CubbyClient {
         var input = UsdaListInput(filters: typedFilters)
         input.pagination = .init(pageIndex: max(0, page - 1), pageSize: max(1, pageSize))
         input.sort = try usdaFoodSort(sort)
-        let result = try await api.usdaFood_list(body: .json(input)).ok.body.json
+        let result = try await native_usdaFood_list(body: input)
         return ListPage(
             items: try result.items.compactMap { descriptor.row(from: try usdaFoodJSON($0)) },
             meta: result.meta
@@ -921,8 +765,8 @@ public actor CubbyClient {
 
     /// The sort payload is a named operation contract around an anonymous item schema; decode
     /// through it so handwritten code never depends on positional `InputSchemaNN` aliases.
-    private func usdaFoodSort(_ sort: String?) throws -> UsdaListInput.SortPayload? {
-        try decodedSort(sort, as: UsdaListInput.SortPayload.self)
+    private func usdaFoodSort(_ sort: String?) throws -> [UsdaListInputSortItem]? {
+        try decodedSort(sort, as: [UsdaListInputSortItem].self)
     }
 
     private func decodedSort<Sort: Decodable>(_ sort: String?, as _: Sort.Type) throws -> Sort? {
@@ -957,16 +801,6 @@ public actor CubbyClient {
         return .object(object)
     }
 
-    /// OpenAPIRuntime wraps whatever a middleware throws in a `ClientError`, which would hide the
-    /// `CubbyAPIError` every caller switches on. Every request goes through here so it does not.
-    func perform<T>(_ request: () async throws -> T) async throws -> T {
-        do {
-            return try await request()
-        } catch {
-            throw CubbyAPIError.unwrapping(error)
-        }
-    }
-
 }
 
 extension CubbyClient: EntityRelationshipsClient {}
@@ -977,8 +811,8 @@ protocol USDAFoodRow: Encodable {
     var foodInfo: FoodInfo { get }
 }
 
-extension FoodSummaryWithLinkedProducts: USDAFoodRow {}
-extension UsdaFoodListRow: USDAFoodRow {}
+extension FoodSummaryWithLinkedProducts: USDAFoodRow { var fdcId: FdcId { fdc_id } }
+extension UsdaFoodListRow: USDAFoodRow { var fdcId: FdcId { fdc_id } }
 
 /// One location as the bin pickers list it.
 public struct LocationChoice: Identifiable, Sendable, Hashable {

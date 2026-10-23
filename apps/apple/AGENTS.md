@@ -31,8 +31,8 @@ them `axiom:axiom-*`), plus the relevant platform skill.
   first one.
 - Hand-written Swift names generated types only through the aliases in
   `CubbyKit/Sources/CubbyKit/Generated/APITypes.swift` (`Product`, `ProductListItem`,
-  `PlantingOut`, `ScanAtLocationOut`, …), never as `Components.Schemas.*`, and never a
-  anonymous `…Payload`/`InputShared…`/`OutputShared…` name — structural names can
+  `PlantingOut`, `ScanAtLocationOut`, …), never as `Components.Schemas.*`, and never an
+  anonymous structural name — structural names can
   change when a schema changes (reach an anonymous value by property and let
   inference carry the type). The generator's output is its own SPM
   target, `CubbyAPI` (`CubbyKit/Sources/CubbyAPI/`), so editing hand-written CubbyKit code
@@ -48,30 +48,25 @@ them `axiom:axiom-*`), plus the relevant platform skill.
   (`apps/web/generator/http-api/`), not re-typed by hand. The
   branded codes (`ProductCode`, `LocationCode`, `InventoryEntryCode`, `ImageCode`), `PlainDate`,
   and `EntityKey` live in `CubbyKit/Sources/CubbyAPISupport/` and are the generated client's own
-  types for those schemas (`typeOverrides` in `Sources/CubbyAPI/openapi-generator-config.yaml`).
-- Response bodies are open: the OpenAPI emitter strips `additionalProperties: false` from
-  every output schema (`apps/web/generator/http-api/openapi.ts`, guarded by
-  `openapi-document.unit.test.ts`), so the generated `init(from:)` ignores a field it does
-  not know and an installed build survives a server deploy that adds one. Request bodies
-  stay closed. Never hand-add `additionalProperties: false` to an output, and never rely on
-  the client to reject an unknown response key.
+  types for those schemas (`apps/web/generator/http-api/type-overrides.ts`).
+- Generated response models ignore additional fields. Unknown enum values and union variants
+  retain raw values; surface unsupported diagnostics and disable interpretation-dependent
+  actions. Fix codecs in `apps/web/generator/http-api/swift-models.ts`, with executable
+  regressions in `NativeCodecTests.swift`.
 - The server answers an outdated `cubby-apple` build's writes (every non-query
   operation) with 426 and `reason: CLIENT_UPDATE_REQUIRED` and still serves its
   reads; `RequestTrace` latches it and `RootView` pins `UpdateAvailableBanner`
   above the app, which stays usable. Follow the shared
   [version rule](../../docs/agents/domain-rules.md#breaking-changes)
   and [release policy](../../docs/ci.md#apple-testflight-release).
-- The generated client encodes every optional with `encodeIfPresent`, so a typed request body
-  cannot carry `null`. A body the app composes as `JSONValue` (editor create/update, hero-action
-  and finance operations) goes through `CubbyClient.sending(_:_:)`, which decodes it into the
-  typed input and restores its `null`s on the wire (`JSONNullMiddleware`); a required nullable
-  key (`sourceId`, `externalAccountId`, a discard `date`) is otherwise rejected as absent. Use
-  `.null` only where the input takes `null`; omit a key that is optional but not nullable.
-- Always pass `serverURL` explicitly when constructing a generated `Client`. The spec's `servers`
-  entry is `"/"`, which is not a usable absolute URL on its own.
+- Manifest-driven bodies are composed JSON sent directly through `CubbyClient.request`;
+  server declarations validate them. Typed models preserve omitted/null/value states with
+  `NativeField` for optional nullable fields. Omit optional non-nullable fields; encode
+  explicit null only where the declaration permits it. The
+  [native model pipeline](CubbyKit/Sources/CubbyAPI/README.md) owns representation rules.
 
-- Never hand-write a `(method, path)` pair. `OperationRoute.all` is generated from the OpenAPI
-  document by `apps/web/generator/http-api/native.ts` into `Generated/OperationRoutes.swift`
+- Never hand-write a `(method, path)` pair. `OperationRoute.all` is generated from native declarations
+  by `apps/web/generator/http-api/native-operations.ts` into `Generated/OperationRoutes.swift`
   (`pnpm generate`). Look routes up
   by operation id; entity reads go through `CubbyClient.list`/`row`, never a path. Entity reads
   and writes go through generic kernel operations (`entity.detail`, `entity.list`,
@@ -89,15 +84,13 @@ them `axiom:axiom-*`), plus the relevant platform skill.
   confirmation behind the connection-impact preview. The HTTP API carries exactly the
   operations flagged `native: "<why>"` on their contract member
   (`apps/web/src/contracts/*.contract.ts`).
-  `Sources/CubbyAPI/openapi-generator-config.yaml` and `Generated/entity-kernel.json` are
-  emitter-owned, derived from those flags and the entity declarations — never edit them. Any
-  swift-openapi-generator warning (a silently dropped schema) fails
-  `apps/apple/scripts/check-openapi-warnings.sh`, which CI's `Apple host tests` job and
-  `pnpm apple check` run; the build plugin alone would let it through.
+  Generated models, operation methods, routes and `entity-kernel.json` are emitter-owned.
+  Generation rejects unsupported wire shapes; host tests exercise the actual generated codecs.
 - `App/<platform>/Info.plist` is generated by XcodeGen from `project.yml` `info.properties`;
   edit the YAML, never the plist (a regenerate silently reverts hand edits, including URL schemes).
 - Presigned image PUTs (`PresignedUpload`) send only `Content-Type` and no auth header; every
-  other request goes through `CubbyAuthMiddleware`.
+  native operation request goes through `NativeHTTPTransport`. Auth and socket handshakes
+  share `NativeRequestHeaders` and the same credential snapshot/rotation rules.
 - An error that reaches the UI also goes through `Diagnostics.report(error, context:)` (one line
   beside the existing string assignment; skip catches that already funnel into
   `AppModel.handle`, which reports once). Sentry is an app-target dependency only — CubbyKit
@@ -157,10 +150,10 @@ None is committed; edit the generator or its inputs, never the output. A missing
 | ------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------ |
 | `CubbyKit/Sources/CubbyKit/Generated/native-coverage.json`                                                               | `packages/schemas/src/native-coverage.ts`                                                                    |
 | `Generated/{entity-manifest.json,EntityDescriptors,EntityVocabulary}.swift`, `CubbyAPISupport/Generated/EntityKey.swift` | `apps/web/generator/entities/render/swift-catalog.ts`                                                        |
-| `Generated/{OperationRoutes,ClientOperations,APITypes}.swift`, `Sources/CubbyAPI/openapi-generator-config.yaml`          | `apps/web/generator/http-api/native.ts`, `swift-operations.ts`                                               |
+| `Generated/{OperationRoutes,NativeOperations,APITypes}.swift`                                                            | `apps/web/generator/http-api/native-artifacts.ts`, `native-operations.ts`                                    |
 | `Generated/entity-kernel.json`                                                                                           | `apps/web/generator/http-api/entity-kernel.ts`                                                               |
 | `Generated/SharedConstants.swift`                                                                                        | `packages/shared/src/client-constants.ts`, `apps/web/cloudflare.config.ts`, `WAYFINDING_DOMAIN_PRESENTATION` |
-| `CubbyAPI` target                                                                                                        | swift-openapi-generator plugin, from `Sources/CubbyAPI/openapi.json` (written by `pnpm generate`)            |
+| `CubbyAPI/Models/*.gen.swift`                                                                                            | `apps/web/generator/http-api/native-contract.ts`, `swift-models.ts`                                          |
 | `CubbyKit/Sources/CubbyFFI/cubby_ffi.swift`                                                                              | `uniffi-bindgen` via `scripts/ensure.ts apple-ffi`                                                           |
 | `Generated/PreviewFixtures/*.json`                                                                                       | `apps/web/tooling/checks/apple-preview-fixtures.ts` (edit its overrides)                                     |
 

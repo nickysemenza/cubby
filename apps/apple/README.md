@@ -29,14 +29,13 @@ prepares generated contracts, the cached Rust xcframework/UniFFI shim, and the
 Xcode project in dependency order. Outputs are gitignored. The
 [generated-file rules](AGENTS.md#generated-files-read-only) own their inputs.
 Direct `build-rust.sh --targets sim` is useful for a one-slice FFI iteration;
-restore all slices before a Mac/CLI build. The first GUI build asks to trust
-OpenAPIGenerator; command-line builds skip package-plugin validation.
+restore all slices before a Mac/CLI build.
 After adding or removing app/test Swift files, run `pnpm apple gen` before a
 direct Xcode build. Low-level Nx build targets expect artifacts prepared by
 `pnpm apple check` locally or the shared setup action in CI.
-The OpenAPI typed-record keep-list retains schemas decoded from generic kernel
-rows. Its reachability check allows those roots alongside HTTP paths, replacing
-Redocly's path-only unused-component rule.
+The native typed-record keep-list retains schemas still decoded from generic kernel
+rows. The [native model pipeline](CubbyKit/Sources/CubbyAPI/README.md) owns generation
+and codec rules.
 
 For archive symbolication, install `getsentry/tools/sentry-cli` and put the org
 auth token in `~/.sentryclirc`. Only the archive phase needs it; a missing CLI

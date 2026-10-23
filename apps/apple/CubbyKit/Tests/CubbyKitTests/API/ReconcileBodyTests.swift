@@ -26,7 +26,7 @@ struct ReconcileBodyTests {
         let body = ReconcileSessionPayload(
             locationId: LocationCode("LOC-5678"),
             expectedInventoryEntryIds: [InventoryEntryCode("INV-2345"), InventoryEntryCode("INV-3456")],
-            snapshotUpdatedAt: nil,
+            snapshotUpdatedAt: .absent,
             snapshotToken: "complete-server-snapshot",
             resolutions: [
                 RecountResolution.verify.resolution(for: InventoryEntryCode("INV-2345")),
@@ -41,9 +41,7 @@ struct ReconcileBodyTests {
         #expect(json["locationId"] == "LOC-5678")
         #expect(json["expectedInventoryEntryIds"]?.arrayValue?.count == 2)
         #expect(json["snapshotToken"] == "complete-server-snapshot")
-        // `packages/schemas/src/inventory.ts` documents this on purpose: the generated payload's
-        // synthesized encoder omits an Optional key instead of sending explicit `null`, so the
-        // server accepts the field `.nullish()`, not `.nullable()`, for an empty-bin commit.
+        // An absent snapshot stays omitted; explicit null remains a separate wire state.
         #expect(json.objectValue?.keys.contains("snapshotUpdatedAt") == false)
         let resolutions = try #require(json["resolutions"]?.arrayValue)
         #expect(resolutions[0].objectValue?.keys.sorted() == ["inventoryEntryId", "kind"])
@@ -63,7 +61,7 @@ struct ReconcileBodyTests {
         ] {
             let stamped = ReconcileSessionPayload(
                 locationId: LocationCode("LOC-5678"), expectedInventoryEntryIds: [],
-                snapshotUpdatedAt: try LenientISO8601DateTranscoder().decode(raw), resolutions: []
+                snapshotUpdatedAt: .value(try LenientISO8601DateTranscoder().decode(raw)), resolutions: []
             )
             let stampedJSON = try JSONDecoder().decode(
                 JSONValue.self, from: JSONEncoder.cubby().encode(stamped))

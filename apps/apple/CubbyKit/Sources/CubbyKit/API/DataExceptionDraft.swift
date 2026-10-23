@@ -14,7 +14,7 @@ public struct DataExceptionDraft: Equatable, Sendable {
     /// `nil` when `check` is not one this client knows (a newer server), so the action stays hidden.
     /// A finding requires an explanation of the evidence checked.
     public func setInput(reason: DataExceptionReason, note: String) -> SetDataExceptionInput? {
-        guard let check = DataCheck(rawValue: check) else { return nil }
+        guard let check = DataCheck.allCases.first(where: { $0.rawValue == check }) else { return nil }
         let trimmed = note.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return nil }
         return .init(
@@ -22,7 +22,7 @@ public struct DataExceptionDraft: Equatable, Sendable {
     }
 
     public func clearInput() -> ClearDataExceptionInput? {
-        guard let check = DataCheck(rawValue: check) else { return nil }
+        guard let check = DataCheck.allCases.first(where: { $0.rawValue == check }) else { return nil }
         return .init(entityId: entityID, check: check)
     }
 }

@@ -11,16 +11,21 @@ import Testing
 struct PhotoImportFlowTests {
     @Test func selectedApprovalExcludesSettledOrBlockedGroups() {
         let readyImage = PhotoRunImage(
-            id: ImageCode("IMG-2345"), targetState: .pending, originalUrl: "synthetic://shirt",
-            describe: .ready, localAnalysisReady: true, deviceWorkAttempts: 0)
+            id: ImageCode("IMG-2345"), position: nil, capturedAt: nil, capturedAtOffsetMinutes: nil,
+            targetState: .pending, skipReason: nil, originalUrl: "synthetic://shirt",
+            cutoutUrl: nil, cutout: nil, describe: .ready, describeStartedAt: nil, describeCompletedAt: nil,
+            describeAttemptMs: nil, describeWaitingMs: nil, localAnalysisReady: true, cutoutReason: nil,
+            describeReason: nil, description: nil, recognizedText: nil, deviceWorkState: nil,
+            deviceWorkError: nil, deviceWorkAttempts: 0)
         let ready = PhotoGroupProposal(
-            groupKey: "shirt", steps: [],
+            groupKey: "shirt", steps: [], blockedReason: nil,
             review: .init(observedName: "Canvas shirt", unresolvedReason: nil, stockIntent: .evidence),
             state: .proposed,
             images: [.init(id: readyImage.id, purpose: .item)], skip: [],
             product: .create(
-                .init(kind: .create, create: .init(name: "Canvas shirt", brandId: "VEN-2345"))),
-            missingImageCount: 0, updatedAt: "2026-09-25T12:00:00Z")
+                .init(kind: .create, create: .init(name: "Canvas shirt", brandId: .value("VEN-2345")))),
+            committedProduct: nil, inventory: nil, evidence: nil, origin: nil, conflict: nil, lastError: nil,
+            missingImageCount: 0, committedAt: nil, updatedAt: "2026-09-25T12:00:00Z")
         var blocked = ready
         blocked.groupKey = "blocked"
         blocked.blockedReason = "Some photos are missing"
@@ -45,11 +50,19 @@ struct PhotoImportFlowTests {
 
     @Test func groupingReadinessWaitsForDescriptionsToSettleBeforeOfferingToStart() {
         let pending = PhotoRunImage(
-            id: ImageCode("IMG-2345"), targetState: .pending, originalUrl: "synthetic://shirt",
-            describe: .pending, localAnalysisReady: false, deviceWorkAttempts: 0)
+            id: ImageCode("IMG-2345"), position: nil, capturedAt: nil, capturedAtOffsetMinutes: nil,
+            targetState: .pending, skipReason: nil, originalUrl: "synthetic://shirt",
+            cutoutUrl: nil, cutout: nil, describe: .pending, describeStartedAt: nil, describeCompletedAt: nil,
+            describeAttemptMs: nil, describeWaitingMs: nil, localAnalysisReady: false, cutoutReason: nil,
+            describeReason: nil, description: nil, recognizedText: nil, deviceWorkState: nil,
+            deviceWorkError: nil, deviceWorkAttempts: 0)
         let working = PhotoRunImage(
-            id: ImageCode("IMG-2346"), targetState: .pending, originalUrl: "synthetic://label",
-            describe: .leased, localAnalysisReady: false, deviceWorkAttempts: 0)
+            id: ImageCode("IMG-2346"), position: nil, capturedAt: nil, capturedAtOffsetMinutes: nil,
+            targetState: .pending, skipReason: nil, originalUrl: "synthetic://label",
+            cutoutUrl: nil, cutout: nil, describe: .leased, describeStartedAt: nil, describeCompletedAt: nil,
+            describeAttemptMs: nil, describeWaitingMs: nil, localAnalysisReady: false, cutoutReason: nil,
+            describeReason: nil, description: nil, recognizedText: nil, deviceWorkState: nil,
+            deviceWorkError: nil, deviceWorkAttempts: 0)
 
         #expect(
             PhotoReviewPolicy.groupingReadiness(
@@ -61,8 +74,12 @@ struct PhotoImportFlowTests {
 
     @Test func groupingReadinessKeepsQueuedDescriptionsProcessing() {
         let queued = PhotoRunImage(
-            id: ImageCode("IMG-2345"), targetState: .pending, originalUrl: "synthetic://shirt",
-            describe: .pending, localAnalysisReady: true, deviceWorkAttempts: 0)
+            id: ImageCode("IMG-2345"), position: nil, capturedAt: nil, capturedAtOffsetMinutes: nil,
+            targetState: .pending, skipReason: nil, originalUrl: "synthetic://shirt",
+            cutoutUrl: nil, cutout: nil, describe: .pending, describeStartedAt: nil, describeCompletedAt: nil,
+            describeAttemptMs: nil, describeWaitingMs: nil, localAnalysisReady: true, cutoutReason: nil,
+            describeReason: nil, description: nil, recognizedText: nil, deviceWorkState: nil,
+            deviceWorkError: nil, deviceWorkAttempts: 0)
 
         #expect(
             PhotoReviewPolicy.groupingReadiness(
@@ -71,11 +88,19 @@ struct PhotoImportFlowTests {
 
     @Test func groupingReadinessOffersStartOnceSettledAndRunning() {
         let ready = PhotoRunImage(
-            id: ImageCode("IMG-2345"), targetState: .pending, originalUrl: "synthetic://shirt",
-            describe: .ready, localAnalysisReady: true, deviceWorkAttempts: 0)
+            id: ImageCode("IMG-2345"), position: nil, capturedAt: nil, capturedAtOffsetMinutes: nil,
+            targetState: .pending, skipReason: nil, originalUrl: "synthetic://shirt",
+            cutoutUrl: nil, cutout: nil, describe: .ready, describeStartedAt: nil, describeCompletedAt: nil,
+            describeAttemptMs: nil, describeWaitingMs: nil, localAnalysisReady: true, cutoutReason: nil,
+            describeReason: nil, description: nil, recognizedText: nil, deviceWorkState: nil,
+            deviceWorkError: nil, deviceWorkAttempts: 0)
         let skipped = PhotoRunImage(
-            id: ImageCode("IMG-2346"), targetState: .pending, originalUrl: "synthetic://label",
-            describe: .skipped, localAnalysisReady: true, deviceWorkAttempts: 0)
+            id: ImageCode("IMG-2346"), position: nil, capturedAt: nil, capturedAtOffsetMinutes: nil,
+            targetState: .pending, skipReason: nil, originalUrl: "synthetic://label",
+            cutoutUrl: nil, cutout: nil, describe: .skipped, describeStartedAt: nil, describeCompletedAt: nil,
+            describeAttemptMs: nil, describeWaitingMs: nil, localAnalysisReady: true, cutoutReason: nil,
+            describeReason: nil, description: nil, recognizedText: nil, deviceWorkState: nil,
+            deviceWorkError: nil, deviceWorkAttempts: 0)
 
         #expect(
             PhotoReviewPolicy.groupingReadiness(
@@ -88,8 +113,12 @@ struct PhotoImportFlowTests {
 
     @Test func groupingReadinessSendsToWebWhenRunNeedsReviewAndPhotosExist() {
         let ready = PhotoRunImage(
-            id: ImageCode("IMG-2345"), targetState: .pending, originalUrl: "synthetic://shirt",
-            describe: .ready, localAnalysisReady: true, deviceWorkAttempts: 0)
+            id: ImageCode("IMG-2345"), position: nil, capturedAt: nil, capturedAtOffsetMinutes: nil,
+            targetState: .pending, skipReason: nil, originalUrl: "synthetic://shirt",
+            cutoutUrl: nil, cutout: nil, describe: .ready, describeStartedAt: nil, describeCompletedAt: nil,
+            describeAttemptMs: nil, describeWaitingMs: nil, localAnalysisReady: true, cutoutReason: nil,
+            describeReason: nil, description: nil, recognizedText: nil, deviceWorkState: nil,
+            deviceWorkError: nil, deviceWorkAttempts: 0)
 
         #expect(
             PhotoReviewPolicy.groupingReadiness(

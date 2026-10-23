@@ -86,9 +86,9 @@ every test entry point run `scripts/ensure.ts generate`, which runs the
 Nx-cached `cubby-checks:generate` target (a hit also restores missing output);
 `pnpm generate` forces a run. Cache restores are pruned against the artifact
 manifest, including wholly retired output directories, before consumers read
-generated sources. The
-Swift OpenAPI client is built by the swift-openapi-generator SwiftPM plugin
-and the UniFFI shim by `apps/apple/scripts/build-rust.sh`.
+generated sources. The same generation emits the direct native contract and
+plain Swift models; host codec tests validate their wire behavior. The UniFFI
+shim is built by `apps/apple/scripts/build-rust.sh`.
 
 When changing compiled entity declaration shapes, run the affected compiler
 contracts in `apps/web/tooling/entity-generator.unit.test.ts` as well as the

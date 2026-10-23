@@ -18,9 +18,6 @@ struct Call: AsyncParsableCommand {
     @Option(name: .customLong("json-body"), help: "JSON request body, e.g. '{\"upc\":\"012345678905\"}'.")
     var jsonBodyString: String?
 
-    @Option(name: .customLong("id"), help: "Path id, substituted for {id} in the route.")
-    var pathID: String?
-
     @Option(name: .customLong("query"), help: "A key=value query parameter. Repeatable.")
     var query: [String] = []
 
@@ -53,7 +50,7 @@ struct Call: AsyncParsableCommand {
             let parsedQuery = try Self.parseQuery(query)
             let body = try Self.parseBody(jsonBodyString)
 
-            let data = try await debugClient.call(route, pathID: pathID, query: parsedQuery, body: body)
+            let data = try await debugClient.call(route, query: parsedQuery, body: body)
             if let json = try? JSONDecoder().decode(JSONValue.self, from: data) {
                 print(try CLI.prettyJSON(json))
             } else {

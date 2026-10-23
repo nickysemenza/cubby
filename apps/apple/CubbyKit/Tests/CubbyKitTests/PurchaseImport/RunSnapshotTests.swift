@@ -68,9 +68,11 @@ struct RunSnapshotTests {
     @Test func photoApprovalKeepsOnlySelectedFrozenRevisions() throws {
         func group(_ key: String) -> PhotoGroupProposal {
             .init(
-                groupKey: key, steps: [], state: .proposed, images: [], skip: [],
+                groupKey: key, steps: [], blockedReason: nil, state: .proposed, images: [], skip: [],
                 product: .create(.init(kind: .create, create: .init(name: "Fixture garment"))),
-                evidence: "Synthetic review", missingImageCount: 0, updatedAt: "2026-10-01T12:00:00Z")
+                committedProduct: nil, inventory: nil, evidence: "Synthetic review", origin: nil,
+                conflict: nil, lastError: nil, missingImageCount: 0, committedAt: nil,
+                updatedAt: "2026-10-01T12:00:00Z")
         }
         var blocked = group("blocked")
         blocked.blockedReason = "Review the identity conflict"

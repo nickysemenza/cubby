@@ -46,18 +46,18 @@ export class QueryProjectionError extends WireSchemaError {
 }
 
 /**
- * Component names for OpenAPI. A domain schema carrying `.meta({ id })` gets
+ * Names for projected native schemas. A domain schema carrying `.meta({ id })` gets
  * `${io}_${id}` here; everything else is named by the emitter's fallback.
  */
 export const wireRegistry = z.registry<{ id: string }>();
 
 // One wire instance per (domain schema, io) so shared domain schemas become one
-// OpenAPI component and one identity in the contract. This is a cache keyed by
+// native model and one identity in the contract. This is a cache keyed by
 // identity, not a side channel: the wire schema is self-sufficient.
 const memo = new WeakMap<z.ZodType, Partial<Record<WireIo, z.ZodType>>>();
 
 /** Schema kinds whose JSON-body projection is the schema itself. */
-export const passThrough: ReadonlySet<string> = new Set<string>([
+const passThrough: ReadonlySet<string> = new Set<string>([
   "string",
   "number",
   "int",
@@ -558,7 +558,7 @@ export function toWire(schema: z.ZodType, io: WireIo): z.ZodType {
 
 /**
  * The wire projection `toWire` already built for a domain schema, if any.
- * Read by the OpenAPI emitter to name components after the exports the
+ * Read by the native contract collector to name components after the exports the
  * projections came from.
  */
 export const wireProjection = (
@@ -568,7 +568,7 @@ export const wireProjection = (
 
 /**
  * The direct child schemas of a node, by path segment, in walker order. Used
- * by the OpenAPI emitter to reach discriminated-union members without
+ * by the native contract collector to reach discriminated-union members without
  * re-implementing the def layout.
  */
 export const childSchemas = (

@@ -92,7 +92,8 @@
                       "exceptions": [],
                       "relatedGaps": [],
                       "relatedExceptions": []
-                    }
+                    },
+                    "notes": null
                   }
                 ],
                 "dataQuality": {
@@ -103,7 +104,8 @@
                   "exceptions": [],
                   "relatedGaps": [],
                   "relatedExceptions": []
-                }
+                },
+                "notes": null
               }
             ],
             "dataQuality": {
@@ -114,7 +116,8 @@
               "exceptions": [],
               "relatedGaps": [],
               "relatedExceptions": []
-            }
+            },
+            "notes": null
           }
         ],
         "dataQuality": {
@@ -125,7 +128,8 @@
           "exceptions": [],
           "relatedGaps": [],
           "relatedExceptions": []
-        }
+        },
+        "notes": null
       },
       {
         "id": "LOC-789A",
@@ -169,7 +173,8 @@
               "exceptions": [],
               "relatedGaps": [],
               "relatedExceptions": []
-            }
+            },
+            "notes": null
           }
         ],
         "dataQuality": {
@@ -180,7 +185,8 @@
           "exceptions": [],
           "relatedGaps": [],
           "relatedExceptions": []
-        }
+        },
+        "notes": null
       }
     ],
     "dataQuality": {
@@ -191,7 +197,8 @@
       "exceptions": [],
       "relatedGaps": [],
       "relatedExceptions": []
-    }
+    },
+    "notes": null
   },
   {
     "id": "LOC-9ABC",
@@ -218,6 +225,7 @@
       "exceptions": [],
       "relatedGaps": [],
       "relatedExceptions": []
-    }
+    },
+    "notes": null
   }
 ]

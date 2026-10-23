@@ -99,7 +99,7 @@ struct CompanionImageWorkerTests {
             outbox: store,
             execute: { command in
                 try? await execution.pass()
-                return Self.failedResult(command)
+                return try Self.failedResult(command)
             },
             recordResult: { result, key in
                 await recording.hold()
@@ -135,7 +135,7 @@ struct CompanionImageWorkerTests {
                 baseURL: URL(string: "http://localhost:3000")!,
                 credentials: try credentials(bearer: "tok"),
                 deviceID: UUID(), deviceName: "Test phone", foreground: true, isParticipating: false,
-                outbox: try outbox(), execute: { await executions.run($0) })
+                outbox: try outbox(), execute: { try await executions.run($0) })
             let command = try describeCommand()
             async let settled = worker.pauseAcceptingIfSettled()
             async let started: Void = worker.startCommand(command, socket: nil)
@@ -158,7 +158,7 @@ struct CompanionImageWorkerTests {
             outbox: try outbox(),
             execute: { command in
                 try? await gate.pass()
-                return Self.failedResult(command)
+                return try Self.failedResult(command)
             })
         await worker.startCommand(try describeCommand(), socket: nil)
         await gate.arrivals(1)
@@ -175,7 +175,7 @@ struct CompanionImageWorkerTests {
             baseURL: URL(string: "http://localhost:3000")!,
             credentials: try credentials(bearer: "tok"),
             deviceID: UUID(), deviceName: "Test phone", foreground: true, isParticipating: false,
-            outbox: try outbox(), execute: { await executions.run($0) })
+            outbox: try outbox(), execute: { try await executions.run($0) })
         await worker.stopAccepting()
         await worker.startCommand(try describeCommand(), socket: nil)
         #expect(try await worker.pauseAcceptingIfSettled())
@@ -183,11 +183,12 @@ struct CompanionImageWorkerTests {
         #expect(await executions.count == 0)
     }
 
-    fileprivate static func failedResult(_ command: ImageProcessingCommand) -> ImageProcessingResult {
+    fileprivate static func failedResult(_ command: ImageProcessingCommand) throws -> ImageProcessingResult {
         .init(
-            jobId: command.companionJobID, attemptId: command.companionAttemptID, completedAt: .now,
-            outcome: .init(
-                value3: .init(
+            jobId: try CompanionImageCommandMetadata(command).jobID,
+            attemptId: try CompanionImageCommandMetadata(command).attemptID, completedAt: .now,
+            outcome: .failed(
+                .init(
                     kind: .describeImage, status: .failed, retryable: true, reason: "Synthetic failure")))
     }
 
@@ -203,8 +204,8 @@ struct CompanionImageWorkerTests {
 private actor ExecutionCounter {
     private(set) var count = 0
 
-    func run(_ command: ImageProcessingCommand) -> ImageProcessingResult {
+    func run(_ command: ImageProcessingCommand) throws -> ImageProcessingResult {
         count += 1
-        return CompanionImageWorkerTests.failedResult(command)
+        return try CompanionImageWorkerTests.failedResult(command)
     }
 }

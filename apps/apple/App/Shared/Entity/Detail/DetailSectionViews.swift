@@ -693,7 +693,7 @@ struct FieldExplanationLabel: View {
                             explanationFact("Fallback") {
                                 Text(fallbackText).font(.fieldGuideData)
                                     .accessibilityIdentifier("field.explanation.fallback-value")
-                                if let source = resolved.resolutionEvidence?.fallbackSource,
+                                if let source = resolved.resolutionEvidence.valueIfPresent??.fallbackSource,
                                     let entity = EntityKey(rawValue: source.entityKind.rawValue)
                                 {
                                     NavigationLink(
@@ -753,7 +753,7 @@ struct FieldExplanationLabel: View {
                             }
                         }
                     }
-                    if let evidence = resolved.resolutionEvidence {
+                    if case .value(.some(let evidence)) = resolved.resolutionEvidence {
                         Divider()
                         explanationSectionLabel(evidence.chain.title ?? "Resolution order")
                         explanationCoverage(evidence.coverage, noun: "evaluation rows")
@@ -782,7 +782,7 @@ struct FieldExplanationLabel: View {
                             }
                         }
                     }
-                    if let steps = resolved.resolutionEvidence?.steps, !steps.isEmpty {
+                    if let steps = resolved.resolutionEvidence.valueIfPresent??.steps, !steps.isEmpty {
                         DisclosureGroup("Inputs and source settings") {
                             ForEach(Array(steps.enumerated()), id: \.offset) { _, step in
                                 ForEach(Array(step.observed.enumerated()), id: \.offset) { _, observation in
@@ -906,7 +906,7 @@ struct FieldExplanationLabel: View {
     }
 
     private func resolutionOutcomeLabel(_ explanation: FieldExplanationOutput) -> String? {
-        switch explanation.resolutionEvidence?.outcome?.rawValue {
+        switch explanation.resolutionEvidence.valueIfPresent??.outcome?.rawValue {
         case "mixed": "Mixed"
         case "unset": field.resolution?.labels?.unresolved ?? "Not set"
         case "blocked": "Blocked"
@@ -916,9 +916,9 @@ struct FieldExplanationLabel: View {
 
     private func resolutionValueLabel(_ explanation: FieldExplanationOutput) -> String {
         guard let resolution = explanation.resolution else { return "Not set" }
-        if explanation.resolutionEvidence?.outcome?.rawValue == "mixed" { return "Mixed" }
+        if explanation.resolutionEvidence.valueIfPresent??.outcome?.rawValue == "mixed" { return "Mixed" }
         if resolution.mode == .allocated, display(resolution.value) == nil,
-            explanation.resolutionEvidence?.outcome?.rawValue == "resolved"
+            explanation.resolutionEvidence.valueIfPresent??.outcome?.rawValue == "resolved"
         {
             return "Allocated"
         }
@@ -988,9 +988,8 @@ struct FieldExplanationLabel: View {
         }
     }
 
-    private func display(_ value: JsonValue) -> String? {
-        guard let value = try? JSONValue(encoding: value) else { return nil }
-        return displayJSON(value)
+    private func display(_ value: JSONValue) -> String? {
+        displayJSON(value)
     }
 
     private func displayJSON(_ value: JSONValue) -> String? {

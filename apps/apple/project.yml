@@ -326,7 +326,7 @@ targets:
 schemes:
   Cubby-iOS:
     build: &generatedBuild
-      # Generated Swift (CubbyKit/Generated, the CubbyAPI OpenAPI inputs) is gitignored and
+      # Generated Swift (CubbyKit/Generated, the CubbyAPI native models) is gitignored and
       # written by `pnpm generate`. A scheme pre-action, not a target script phase: CubbyKit is
       # a package dependency, so it compiles before any app-target phase would run. Xcode
       # ignores a pre-action's exit status, so a failure writes the marker that the app

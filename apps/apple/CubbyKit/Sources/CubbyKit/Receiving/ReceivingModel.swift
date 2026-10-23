@@ -240,7 +240,7 @@ public final class ReceivingModel {
 
 extension CubbyClient: ReceivingService {
     public func receivingSnapshot(productID: ProductCode) async throws -> ReceivingSnapshot {
-        async let context = inventoryReceivingContext(.init(productId: productID.rawValue))
+        async let context = inventoryReceivingContext(.init(productId: productID))
         async let product = row(EntityCatalog[.product], id: productID.rawValue)
         let (loaded, productRow) = try await (context, product)
         return ReceivingSnapshot(
@@ -257,9 +257,9 @@ extension CubbyClient: ReceivingService {
                     stockOnHand: $0.candidate.inventoryCount, evidence: $0.evidence, warnings: $0.warnings)
             },
             alreadyCounted: loaded.alreadyCounted, defaultQuantity: loaded.defaultQuantity,
-            defaultUnit: loaded.defaultUnit, suggestedPlan: ReceivingPlan(loaded.suggestedPlan),
+            defaultUnit: loaded.defaultUnit, suggestedPlan: try ReceivingPlan(loaded.suggestedPlan),
             locationPlans: Dictionary(
-                loaded.locationPlans.map { ($0.locationId, ReceivingPlan($0.plan)) },
+                try loaded.locationPlans.map { ($0.locationId, try ReceivingPlan($0.plan)) },
                 uniquingKeysWith: { first, _ in first }))
     }
 
@@ -272,7 +272,7 @@ extension CubbyClient: ReceivingService {
     public func receive(
         expenseID: String, productID: ProductCode, locationID: LocationCode, action: ReceivingAction
     ) async throws {
-        let wire: InventoryReceiveExpenseInput.ActionPayload
+        let wire: InventoryReceiveExpenseInputAction
         switch action {
         case .move(let entry):
             wire = .move(.init(kind: .move, entryId: entry))
@@ -288,11 +288,13 @@ extension CubbyClient: ReceivingService {
 }
 
 extension ReceivingPlan {
-    init(_ wire: InventoryReceivingPlan) {
+    init(_ wire: InventoryReceivingPlan) throws {
         switch wire {
         case .move(let move): self = .move(entry: move.entryId, from: move.fromLocationId)
         case .add(let add): self = .add(entry: add.entryId, unit: add.unit)
         case .create: self = .create
+        case .unrecognized(let raw):
+            throw UnsupportedNativeResponse(context: "inventory receiving plan", raw: raw)
         }
     }
 }

@@ -67,7 +67,8 @@ and retain their behavior checks; passing the helper's own tests proves only tha
   `operationCommandRequest` for server report construction, and generated
   `workflowCommandOptions` / `CubbyClient.executeCommand` for invocation. Keep
   domain validation in the existing operation handler and writer.
-- Swift: generated OpenAPI client, `entity-manifest.json`, the generated manifest
+- Swift: declaration-derived native operations and models, one shared URLSession
+  transport, `entity-manifest.json`, and the generated manifest
   vocabulary enums (`Generated/EntityVocabulary.swift`) and descriptor types
   (`Generated/EntityDescriptors.swift`, including `ValueSchema`). The typed description in
   `packages/schemas/src/manifest-wire.ts` drives descriptor JSON validation, Swift storage,

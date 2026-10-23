@@ -19,6 +19,12 @@ export const httpMetadataSchema = z.object({
   transport: z.enum(["get", "post"]).optional(),
   /** The operation answers `null` for "no such thing"; HTTP answers 404. */
   nullableOutput: z.boolean().optional(),
+  nativeModels: z
+    .object({
+      input: z.literal("json").optional(),
+      output: z.literal("json").optional(),
+    })
+    .optional(),
 });
 export type HttpMetadata = z.output<typeof httpMetadataSchema>;
 
@@ -131,6 +137,7 @@ export const rpcQuery = <I extends z.ZodTypeAny, O extends z.ZodTypeAny>(
       input: carrier,
       transport: "get",
       nullableOutput: nullable,
+      nativeModels: operation.nativeModels,
     } satisfies HttpMetadata,
   };
 };
@@ -166,6 +173,7 @@ export const rpcQueryPost = <I extends z.ZodTypeAny, O extends z.ZodTypeAny>(
       input: carrier,
       transport: "post",
       nullableOutput: nullable,
+      nativeModels: operation.nativeModels,
     } satisfies HttpMetadata,
   };
 };
@@ -190,6 +198,7 @@ export const rpcMutation = <I extends z.ZodTypeAny, O extends z.ZodTypeAny>(
     metadata: {
       operation: `${domain}.${member}`,
       input: carrier,
+      nativeModels: operation.nativeModels,
     } satisfies HttpMetadata,
   };
 };

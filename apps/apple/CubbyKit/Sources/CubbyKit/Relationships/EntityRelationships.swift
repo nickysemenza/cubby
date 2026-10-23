@@ -335,7 +335,7 @@ public final class EntityRelationshipsModel {
                 throw ConnectionReviewError.sourceMismatch
             }
             connectionDocument = document
-            if let runID = document.discoveryRunId {
+            if case .value(let runID?) = document.discoveryRunId {
                 discoveryRunID = runID
                 try await observeDiscoveryRun(runID: runID, source: source, generation: generation)
             }
@@ -429,9 +429,9 @@ public final class EntityRelationshipsModel {
         connectionError = nil
         var input = AssessmentReviewInput(
             operationId: UUID().uuidString, verdict: .dismissed,
-            correction: .AssessmentCorrectionFalse(.init(present: false)),
+            correction: .value1(.init(present: .falseValue)),
             intent: verdict == .correct ? .apply : .history,
-            assessmentId: proposal.review.assessmentId, expectedFingerprint: proposal.fingerprint)
+            assessmentId: proposal.review.assessmentId, expectedFingerprint: .value(proposal.fingerprint))
         switch verdict {
         case .correct: input.verdict = .correct
         case .wrong: input.verdict = .wrong
@@ -439,9 +439,10 @@ public final class EntityRelationshipsModel {
         case .dismissed: input.verdict = .dismissed
         }
         if persistent, let suppression = proposal.review.suppression {
-            input.suppression = .init(
-                scope: suppression.scope, candidateKey: suppression.candidateKey,
-                fingerprint: suppression.fingerprint)
+            input.suppression = .value(
+                .init(
+                    scope: suppression.scope, candidateKey: suppression.candidateKey,
+                    fingerprint: suppression.fingerprint))
         }
         let client = client
         let reviewInput = input

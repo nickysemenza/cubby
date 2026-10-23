@@ -20,6 +20,7 @@ export const entityTimelineContract = defineContract("entity", {
     // server handler; HTTP carries the loose kernel wire.
     input: z.custom<EntityTimelineInputByEntity[TimelineEntity]>(),
     output: z.custom<EntityTimelineOut>(),
+    nativeModels: { input: "json" },
     httpWire: kernelTimelineWire,
     native: "Entity timelines",
     observability: { entities: timelineEntities },

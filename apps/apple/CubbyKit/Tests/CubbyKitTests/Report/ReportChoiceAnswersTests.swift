@@ -328,7 +328,6 @@ private final class FakeCommit: ReportServing {
                 ? nil : "Prepared import approved and committed.")
     }
     func reports(slots: [ReportSlot], id: String) async throws -> [(ReportSlot, EntityReportOut)] { [] }
-    func controlRun(_ input: RunControlInput) async throws -> String? { nil }
     func retryRunStep(_ input: RunRetryStepInput) async throws {}
     func resolveFinding(_ input: ResolveRunFindingInput) async throws -> Bool { false }
     func commitPrepared(_ input: RunCommitPreparedInput) async throws {
@@ -354,7 +353,7 @@ struct ApprovePreparedOrdersTests {
     func confirmsThenSends() async throws {
         let (form, answers) = try ready()
         let service = FakeCommit()
-        let model = ReportSlotModel(slot: .run_importPreparedOrders, id: "RUN-4K7M", service: service)
+        let model = ReportSlotModel(slot: .runImportPreparedOrders, id: "RUN-4K7M", service: service)
 
         #expect(await model.approve(form, answers: answers, confirmed: false) == nil)
         #expect(service.committed.withLock { $0.isEmpty })
@@ -376,7 +375,7 @@ struct ApprovePreparedOrdersTests {
     func refusals() async throws {
         let (form, answers) = try ready()
         let service = FakeCommit()
-        let model = ReportSlotModel(slot: .run_importPreparedOrders, id: "RUN-4K7M", service: service)
+        let model = ReportSlotModel(slot: .runImportPreparedOrders, id: "RUN-4K7M", service: service)
 
         #expect(await model.approve(form, answers: ReportChoiceAnswers(), confirmed: true) == nil)
         #expect(model.actionError != nil)
@@ -393,7 +392,7 @@ struct ApprovePreparedOrdersTests {
     func failure() async throws {
         let (form, answers) = try ready()
         let service = FakeCommit(failure: URLError(.badServerResponse))
-        let model = ReportSlotModel(slot: .run_importPreparedOrders, id: "RUN-4K7M", service: service)
+        let model = ReportSlotModel(slot: .runImportPreparedOrders, id: "RUN-4K7M", service: service)
         #expect(await model.approve(form, answers: answers, confirmed: true) == nil)
         #expect(model.actionError != nil)
         #expect(model.actionNotice == nil)

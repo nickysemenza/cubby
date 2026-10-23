@@ -173,18 +173,18 @@ struct NativeListAdaptersTests {
     }
 
     nonisolated private static let usdaFood = FoodSummaryWithLinkedProducts(
-        fdcId: 12345,
-        description: "Numeric food",
-        foodInfo: FoodInfo(dataType: .brandedFood, description: "Numeric food"),
+        fdc_id: 12345,
+        description: "Numeric food", brandedFoodInfo: nil,
+        foodInfo: FoodInfo(data_type: .brandedFood, description: "Numeric food"), legacyFoodInfo: nil,
         nutritionInfo: NutritionInfo(
             nutrientSummary: [], nutrientsPer100: NutrientsPer100()),
         portionInfoRaw: [], inferredUnitMappings: [], linkedProducts: [])
 
     nonisolated private static let usdaPage: Data = pagePayload([
         UsdaFoodListRow(
-            fdcId: 12345,
-            description: "Numeric food",
-            foodInfo: FoodInfo(dataType: .brandedFood, description: "Numeric food"),
+            fdc_id: 12345,
+            description: "Numeric food", brandedFoodInfo: nil,
+            foodInfo: FoodInfo(data_type: .brandedFood, description: "Numeric food"), legacyFoodInfo: nil,
             nutritionInfo: .init(nutrientsPer100: NutrientsPer100()),
             portionInfoRaw: [], inferredUnitMappings: [], linkedProducts: [])
     ])

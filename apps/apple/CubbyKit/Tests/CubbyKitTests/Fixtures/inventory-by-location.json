@@ -56,7 +56,19 @@
           "source": "unknown",
           "sourcePageUrl": null,
           "sourceAssetUrl": null,
-          "sourceName": null
+          "sourceName": null,
+          "renderStatus": null,
+          "storageStatus": null,
+          "capturedAt": null,
+          "capturedAtOffsetMinutes": null,
+          "captureLocation": null,
+          "capturePlaceName": null,
+          "captureDeviceLabel": null,
+          "capturedByPartyId": null,
+          "capturedByName": null,
+          "provenanceEvidence": null,
+          "sourceEvidence": null,
+          "purpose": null
         },
         {
           "id": "IMG-3456",
@@ -78,7 +90,19 @@
           "source": "unknown",
           "sourcePageUrl": null,
           "sourceAssetUrl": null,
-          "sourceName": null
+          "sourceName": null,
+          "renderStatus": null,
+          "storageStatus": null,
+          "capturedAt": null,
+          "capturedAtOffsetMinutes": null,
+          "captureLocation": null,
+          "capturePlaceName": null,
+          "captureDeviceLabel": null,
+          "capturedByPartyId": null,
+          "capturedByName": null,
+          "provenanceEvidence": null,
+          "sourceEvidence": null,
+          "purpose": null
         }
       ],
       "externalIds": [

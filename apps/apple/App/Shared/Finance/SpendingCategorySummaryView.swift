@@ -15,6 +15,7 @@ extension SpendingCategorySummary {
         case .partial: "Partially classified"
         case .unclassified: "Unclassified"
         case .notApplicable: "Not applicable"
+        case .unrecognized(let raw): "Unsupported classification (\(raw))"
         }
     }
 

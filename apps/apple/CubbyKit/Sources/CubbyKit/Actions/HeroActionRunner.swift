@@ -221,13 +221,16 @@ public struct HeroActionRunner: Sendable {
                 return .discard(
                     try await client.discardPreview(
                         .init(
-                            productId: rowID, quantity: body["quantity"]?.doubleValue,
+                            productId: ProductCode(rawValue: rowID), quantity: body["quantity"]?.doubleValue,
                             adjustInventory: body["adjustInventory"]?.boolValue,
-                            inventoryEntryId: body["inventoryEntryId"]?.stringValue)))
+                            inventoryEntryId: body["inventoryEntryId"]?.stringValue.map(
+                                InventoryEntryCode.init(rawValue:)))))
             case "product.addToInventoryPreview":
                 return .addToInventory(
                     try await client.addToInventoryPreview(
-                        .init(productId: rowID, locationId: body["locationId"]?.stringValue)))
+                        .init(
+                            productId: ProductCode(rawValue: rowID),
+                            locationId: body["locationId"]?.stringValue.map(LocationCode.init(rawValue:)))))
             default: throw HeroActionError.unsupported(preview.operation)
             }
         case .create, .setField, .toggleField:
@@ -255,7 +258,8 @@ public struct HeroActionRunner: Sendable {
             let body = Self.fill(operation.body, rowID: row.id, itemID: itemID, values: resolved)
             switch operation.operation {
             case "ai.describeLocation":
-                let result = try await client.sending(body, client.describeLocation)
+                let result: AiDescribeLocationOutput = try await client.request(
+                    "ai.describeLocation", body: body)
                 return .review(
                     HeroActionReview(
                         label: "Analyzed contents", previous: result.previousDescription,
@@ -316,7 +320,8 @@ public struct HeroActionRunner: Sendable {
         if EntityCatalog.descriptor(forShortcode: target)?.key != .product {
             fields.removeValue(forKey: "purpose")
         }
-        let result = try await client.sending(.object(fields), client.attachExistingImage)
+        let result: ImageAttachExistingOutput = try await client.request(
+            "image.attachExisting", body: JSONValue.object(fields))
         let reused = try JSONValue(encoding: result)["reused"]?.boolValue == true
         var touched: Set<EntityKey> = [changed]
         if let key = EntityCatalog.descriptor(forShortcode: target)?.key { touched.insert(key) }

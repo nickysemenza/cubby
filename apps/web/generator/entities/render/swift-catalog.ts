@@ -988,7 +988,7 @@ export const renderSwiftEntityCatalog = (
         "// swift-format-ignore-file\n\n" +
         renderVocabularyEnum({
           name: "EntityKey",
-          doc: "Every declared entity, keyed as the manifest spells it. The generated client's\n`Entity` schema is this enum (`typeOverrides` in openapi-generator-config.yaml).",
+          doc: "Every declared entity, keyed as the manifest spells it. The generated client's\n`Entity` schema is this enum (the shared native codec mapping).",
           cases: vocabularyCases(entities.map(({ key }) => key)),
         }),
     },

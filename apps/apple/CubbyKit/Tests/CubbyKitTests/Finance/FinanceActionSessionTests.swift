@@ -116,7 +116,7 @@ struct FinanceActionSessionTests {
 
     nonisolated private static func refusedSplit(_ reason: String) -> String {
         """
-        {"partsTotal":0.31,"originalCost":0.3,"delta":0.01,"reason":"\(reason)",
+        {"split":null,"partsTotal":0.31,"originalCost":0.3,"delta":0.01,"reason":"\(reason)",
          "note":"Parts are $0.01 over the original.","needsAttributionPolicy":false}
         """
     }
@@ -308,10 +308,43 @@ struct FinanceActionSessionTests {
 
     /// A minimal Purchase the attach write answers with; the session reads none of it.
     nonisolated private static let purchaseOut = """
-        {"bookingCoverage":"missing","documentCoverage":"missing","itemizationCoverage":"missing","productsCoverage":"missing","coverage":{"expectation":"unknown","booking":"missing","document":"missing","itemization":"missing","products":"missing"},"spendingCategorySummary":{"state":"single","categories":[],"lineCount":0,"categorizedLineCount":0,"uncategorizedLineCount":0,"complete":false,"amountsKnown":false},"spendingCategoryOrigin":"legacy","id":"x","vendorId":"x","orderId":"x","displayLabel":"x","date":"x","notes":"x","vendorName":"x","orderUrl":"x","expenseCount":0,"unpricedExpenseCount":0,"expenseTotal":0,"reconciliation":"unknown","financialReconciliation":{"status":"unknown","transactionCount":0,"postedTransactionCount":0,"outstandingTransactionCount":0,"postedTotal":0,"projectedTotal":0,"postedRefundTotal":0},"documentCount":0,"images":[],"displayName":"x","createdAt":"2026-09-01T00:00:00Z","updatedAt":"2026-09-01T00:00:00Z","dataQuality":{"status":"complete","score":0,"facets":[],"gaps":[],"exceptions":[],"relatedGaps":[],"relatedExceptions":[]}}
+        {"bookingCoverage":"missing","documentCoverage":"missing","itemizationCoverage":"missing","productsCoverage":"missing","coverage":{"expectation":"unknown","booking":"missing","document":"missing","itemization":"missing","products":"missing"},"spendingCategorySummary":{"state":"single","categories":[],"lineCount":0,"categorizedLineCount":0,"uncategorizedLineCount":0,"complete":false,"amountsKnown":false},"spendingCategoryOrigin":"legacy","id":"x","vendorId":"x","orderId":"x","displayLabel":"x","date":"x","notes":"x","vendorName":"x","orderUrl":"x","expenseCount":0,"unpricedExpenseCount":0,"expenseTotal":0,"reconciliation":"unknown","financialReconciliation":{"status":"unknown","transactionCount":0,"postedTransactionCount":0,"outstandingTransactionCount":0,"postedTotal":0,"projectedTotal":0,"postedRefundTotal":0,"delta":null},"documentCount":0,"images":[],"displayName":"x","createdAt":"2026-09-01T00:00:00Z","updatedAt":"2026-09-01T00:00:00Z","dataQuality":{"status":"complete","score":0,"facets":[],"gaps":[],"exceptions":[],"relatedGaps":[],"relatedExceptions":[]},"purchaserId":null,"purchaserOverrideId":null,"spendingCategoryId":null,"spendingCategoryName":null,"itemizationExpectation":null,"vendorAccountId":null,"defaultProjectId":null,"defaultTrade":null,"statedTotal":null,"vendorLogo":null}
         """
 
     // MARK: - Attach expenses
+
+    @Test @MainActor func unsupportedFinancialBookingCannotBeCommitted() async throws {
+        let recorder = serve([:])
+        let raw: JSONValue = [
+            "transactionId": "FTX-4K7M", "purchaseId": .null, "vendorId": .null,
+            "spendingCategoryId": .null, "costType": "materials", "trade": "other", "economicRole": "vendor",
+            "purchaserId": .null, "categoryOverride": .null, "action": "future_action",
+            "accountName": "Synthetic account", "funderName": .null, "existingBookedAmount": 0,
+            "previouslySettledAmount": 0, "remainingBookedAmount": 15, "snapshot": "synthetic-reviewed",
+            "amount": 15, "date": "2026-10-01", "name": "Synthetic booking",
+        ]
+        let preview: FinancialBookingPreview = try raw.decoded()
+        let session = FinancialBookingReviewSession(reviewed: preview)
+        #expect(session.unsupportedAction?.localizedDescription.contains("future_action") == true)
+        await #expect(throws: UnsupportedNativeResponse.self) {
+            _ = try await session.commit(client: makeClient())
+        }
+        #expect(recorder.requests.isEmpty)
+        #expect(session.preview == preview)
+        #expect(session.result == nil)
+    }
+
+    @Test @MainActor func unsupportedCandidateScopeDoesNotFallBackToTheDefault() async throws {
+        let recorder = serve([:])
+        let session = PurchaseExpenseLinkSession(purchaseID: "PUR-4K7M", client: try makeClient())
+        await session.setScope("future-scope")
+        #expect(recorder.requests.isEmpty)
+        guard case .failed(let message) = session.state else {
+            Issue.record("Expected an unsupported scope diagnostic")
+            return
+        }
+        #expect(message.contains("future-scope"))
+    }
 
     @Test @MainActor func asksTheServerForTheScopeAndSearchChosen() async throws {
         let recorder = serve([

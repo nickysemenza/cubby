@@ -170,7 +170,7 @@ const renderHttpContract = async (): Promise<string> => {
  */
 export const renderStartOperationArtifacts = async (): Promise<{
   artifacts: EntityArtifacts[];
-  /** RPC ids flagged `native:`, for the OpenAPI stage's client filter. */
+  /** RPC ids flagged `native:`, for the native contract stage's client filter. */
   nativeOperations: string[];
 }> => {
   const catalog = await renderClientCatalog();

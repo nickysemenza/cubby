@@ -76,7 +76,7 @@ struct CookbookContentsSlot: View {
             }
             if hasReadableExtraction {
                 OpenDetailGroup(title: "Extraction report") {
-                    ReportDetailSlot(slot: .cookbook_extractionReport, id: cookbookID)
+                    ReportDetailSlot(slot: .cookbookExtractionReport, id: cookbookID)
                         .transformPreference(DetailSectionEmpty.self) { $0 = false }
                 }
                 .accessibilityIdentifier("cookbook.extractionReport")
@@ -164,7 +164,7 @@ struct CookbookImportProgressSlot: View {
             if !retired {
                 DisclosureGroup("Add or reprocess recipes", isExpanded: $open) {
                     if open {
-                        ReportDetailSlot(slot: .cookbook_importProgress, id: row.id)
+                        ReportDetailSlot(slot: .cookbookImportProgress, id: row.id)
                             .transformPreference(DetailSectionEmpty.self) { $0 = false }
                     }
                 }

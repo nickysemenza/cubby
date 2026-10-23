@@ -119,6 +119,8 @@ export interface QueryContract<
   readonly observability?: OperationObservability;
   readonly httpWire?: HttpWire;
   readonly native?: string;
+  /** Native consumers that render declarations carry JSON rather than per-operation models. */
+  readonly nativeModels?: { readonly input?: "json"; readonly output?: "json" };
   readonly mcp?: McpOmission;
   readonly readPolicy?: "strong";
   /** Browser cache tags and freshness profile; see `QueryCachePolicy`. */
@@ -143,6 +145,7 @@ export interface MutationContract<
   readonly observability?: OperationObservability;
   readonly httpWire?: HttpWire;
   readonly native?: string;
+  readonly nativeModels?: { readonly input?: "json"; readonly output?: "json" };
   readonly mcp?: McpOmission;
   /**
    * The browser fan-out rows a successful call invalidates. Absent or empty
