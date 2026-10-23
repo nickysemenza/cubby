@@ -131,31 +131,37 @@ test("input-first Google, statement then retailer, and reviewed Product merge", 
   const identifierSource = await resolveProductIdentifierSource(db, {
     vendorId,
   });
-  const product = await createEntityFixture(page, "product", {
-    name: names.productName,
-    categoryId: prerequisites.productCategory.id,
-    externalIds: [
-      {
-        source: identifierSource,
-        kind: "retailer_sku",
-        externalId: sku,
-        isPrimary: true,
-      },
-    ],
-  });
   const duplicateName = `${names.productName} alternate listing`;
-  const duplicate = await createEntityFixture(page, "product", {
-    name: duplicateName,
-    categoryId: prerequisites.productCategory.id,
-    externalIds: [
-      {
-        source: identifierSource,
-        kind: "asin",
-        externalId: asin,
-        isPrimary: true,
-      },
-    ],
-  });
+  const { product, duplicate } = await createFixtureGraph(
+    page,
+    async (create) => {
+      const product = await create("product", {
+        name: names.productName,
+        categoryId: prerequisites.productCategory.id,
+        externalIds: [
+          {
+            source: identifierSource,
+            kind: "retailer_sku",
+            externalId: sku,
+            isPrimary: true,
+          },
+        ],
+      });
+      const duplicate = await create("product", {
+        name: duplicateName,
+        categoryId: prerequisites.productCategory.id,
+        externalIds: [
+          {
+            source: identifierSource,
+            kind: "asin",
+            externalId: asin,
+            isPrimary: true,
+          },
+        ],
+      });
+      return { product, duplicate };
+    },
+  );
   const session = z
     .object({ user: z.object({ email: z.email() }) })
     .parse(await (await page.request.get("/api/auth/get-session")).json());
@@ -388,7 +394,10 @@ test("input-first Google, statement then retailer, and reviewed Product merge", 
     await expectNoInventory();
     const mergePage = await page.context().newPage();
     try {
-      await gotoAuthenticatedPage(mergePage, "/products");
+      await gotoAuthenticatedPage(
+        mergePage,
+        `/products?searchQuery=${encodeURIComponent(names.productName)}`,
+      );
       for (const name of [names.productName, duplicateName]) {
         const row = mergePage.getByRole("row").filter({
           has: mergePage.getByRole("link", { name, exact: true }),
