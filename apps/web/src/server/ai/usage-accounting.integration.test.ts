@@ -15,9 +15,11 @@ import {
   fauxToolCall,
   type ModelsApiStreamOptions,
 } from "@earendil-works/pi-ai";
+import { fromPartial } from "@total-typescript/shoehorn";
 import { withTestDb } from "tooling/test-setup";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { gatewayEgressInput } from "~/server/ai/gateway-egress-contract";
 import {
   ENTITY_EMBEDDING_FEATURE,
   LOCATION_DESCRIPTION_FEATURE,
@@ -39,6 +41,34 @@ import {
   createLocationFixture,
   makeLocationInput,
 } from "~/server/testing/repo.fixtures";
+
+// Accounting owns rows and cache charges; the Worker egress suite owns upstream auth.
+async function stubDecisionEgress() {
+  const { setCfEnv } = await import("~/server/cf-env");
+  const fetchEgress = vi.fn(async (request: Request) => {
+    const body = gatewayEgressInput.parse(await request.json());
+    return globalThis.fetch("https://synthetic.invalid/ai/run", {
+      method: "POST",
+      headers: body.headers,
+      signal: request.signal,
+      body: JSON.stringify({
+        model: body.endpoint.replace("run/", ""),
+        input: body.query,
+      }),
+    });
+  });
+  setCfEnv(
+    fromPartial<Env>({
+      AI_GATEWAY_EGRESS: {
+        getByName: () =>
+          fromPartial<ReturnType<Env["AI_GATEWAY_EGRESS"]["getByName"]>>({
+            fetch: fetchEgress,
+          }),
+      },
+    }),
+  );
+  return fetchEgress;
+}
 
 // The SDK reads global fetch at request time. Route the catalog separately
 // on every test, including when an inference socket is overridden.
@@ -66,7 +96,8 @@ function stubInferenceFetch(inference: typeof fetch) {
 }
 beforeEach(() => stubInferenceFetch(realFetch));
 
-afterEach(() => {
+afterEach(async () => {
+  (await import("~/server/cf-env")).setCfEnv(undefined);
   vi.restoreAllMocks();
   vi.unstubAllEnvs();
   vi.unstubAllGlobals();
@@ -88,6 +119,7 @@ describe("AiUsage accounting", () => {
     async ({ model, provider }) => {
       vi.stubEnv("AI_GATEWAY_API_KEY", "test-gateway-key");
       vi.resetModules();
+      const egress = await stubDecisionEgress();
       stubInferenceFetch(async () => {
         const answer = {
           answers: {
@@ -117,6 +149,7 @@ describe("AiUsage accounting", () => {
         usage: { db: ctx.db, runId, operation: "decision-model-trial" },
         decisionModel: model,
       });
+      expect(egress).toHaveBeenCalledOnce();
       const rows = await usageRows();
       expect(rows).toHaveLength(1);
       expect(rows[0]).toMatchObject({
@@ -136,8 +169,8 @@ describe("AiUsage accounting", () => {
   // billed; it still crossed the gateway, so it is no `cache` replay.
   it("books a decision the gateway served from its cache as a free gateway call", async () => {
     vi.stubEnv("AI_GATEWAY_API_KEY", "test-gateway-key");
-    vi.spyOn(Math, "random").mockReturnValue(0.25);
     vi.resetModules();
+    const egress = await stubDecisionEgress();
     stubInferenceFetch(async () =>
       Response.json(
         {
@@ -164,12 +197,14 @@ describe("AiUsage accounting", () => {
     const { runDecisionChoice } = await import("./decision-model");
     const runId = await ensureRun(ctx.db, ctx.actor, { purpose: "ai_suggest" });
     await runDecisionChoice({
+      decisionModel: "typesafe/jev",
       feature: { ...FIELD_SUGGESTION_FEATURE, cache: false },
       subject: "synthetic decision",
       rules: "Choose one.",
       choices: ["one"],
       usage: { db: ctx.db, runId, operation: "decision-model-trial" },
     });
+    expect(egress).toHaveBeenCalledOnce();
     const rows = await usageRows();
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({

@@ -127,3 +127,9 @@ amounts. Only exact zero is displayed as zero. Rounded currency cells and AI
 costs expose the full stored decimal amount on hover or keyboard focus. Table
 hover uses the shared full-value spill, while AI tooltips retain comparison
 coverage and price provenance.
+
+Accounting integration fixtures supply the shared egress binding for decision
+calls, including Jev BYOK. They keep real database accounting and stub the
+routed inference boundary; the Worker egress suite owns credential routing.
+Ordinary decisions retain exactly one usage row, while Gateway cache hits keep
+provider token usage and record zero incremental charge.
