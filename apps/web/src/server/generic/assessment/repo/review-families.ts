@@ -391,12 +391,15 @@ export async function touchingAssessmentIds(
         sql` OR `,
       )})`
     : sql``;
+  // Carry refs through the eligibility barrier: base-table rejoins can expand
+  // unrelated history before the planner intersects the eligible identities.
   const { rows } = await unwrapDb(db).execute<{
     id: string;
   }>(sql`WITH eligible AS MATERIALIZED (
-      SELECT a.id FROM "Assessment" a JOIN "AssessmentState" s ON s.id = a.id WHERE ${scope.eligibility}
-    ) SELECT a.id FROM eligible JOIN "Assessment" a ON a.id = eligible.id JOIN "AssessmentState" s ON s.id = a.id
-    WHERE EXISTS (SELECT 1 FROM jsonb_array_elements(${assessmentRecordsSql(scope.entity ? [scope.entity] : scope.records ? [...new Set(scope.records.map((r) => r.entity))] : undefined)}) r WHERE r->>'id' IS NOT NULL
+      SELECT a.id, ${assessmentRecordsSql(scope.entity ? [scope.entity] : scope.records ? [...new Set(scope.records.map((r) => r.entity))] : undefined)} AS refs
+      FROM "Assessment" a JOIN "AssessmentState" s ON s.id = a.id WHERE ${scope.eligibility}
+    ) SELECT id FROM eligible
+    WHERE EXISTS (SELECT 1 FROM jsonb_array_elements(refs) r WHERE r->>'id' IS NOT NULL
       ${scope.entity ? sql`AND r->>'entity' = ${scope.entity}` : sql``} ${recordMatch})`);
   return new Set(rows.map((row) => row.id));
 }
