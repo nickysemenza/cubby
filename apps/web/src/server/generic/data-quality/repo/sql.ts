@@ -65,8 +65,9 @@ export const entryFor = (
 /** Bulk predicates and their FROM must use the same declared derived relation. */
 export const qualityFilterContext = (
   entity: ScoredEntity,
-): QualityReadContext | undefined =>
-  entryFor(entity).filterRead ? { derivedAlias: "dq_filter" } : undefined;
+): QualityReadContext =>
+  // An unjoined catalog filter still needs bulk evidence; undefined denotes a scalar read.
+  entryFor(entity).filterRead ? { derivedAlias: "dq_filter" } : {};
 
 export const qualityFilterJoin = (entity: ScoredEntity, t: ScoredTable) => {
   const derived = entryFor(entity).filterRead?.();
