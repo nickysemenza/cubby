@@ -8,7 +8,7 @@ import { mailResearchRunInput } from "@cubby/schemas/run-fields";
  * Failures: search reaches a mailbox the member never connected, follows a
  * page into another mailbox, pages without Spam/Trash exclusion, or advances
  * mailbox coverage (also after an upstream 429); revoked Gmail authorization
- * surfaces as a crash instead of a reconnect result; `mail.read` returns
+ * surfaces as a crash instead of a reconnect result; `purchase_import_read.mail_read` returns
  * another message's attachment, loses the original once storage moves to its
  * Image, serves changed bytes, or truncates an oversized original; an
  * unrelated disposition deletes an original a Purchase still depends on, a

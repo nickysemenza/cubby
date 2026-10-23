@@ -21,7 +21,11 @@ import {
 import { resolveWithProductCandidatesWorkflow } from "~/server/domains/ingredient/operations.server";
 import { resolveOrCreatePlants } from "~/server/domains/plant/repo/plant";
 import { resolveProductNames } from "~/server/domains/product/repo/resolve-names";
-import { type EntityCommand, executeEntity } from "~/server/entity-kernel";
+import {
+  type EntityCommand,
+  type EntityKernelContext,
+  executeEntity,
+} from "~/server/entity-kernel";
 import {
   entityBulkUpdateResultSchema,
   entityCommandSchema,
@@ -59,6 +63,7 @@ import {
   generatedMcpEntityRelationPreviewInputSchema,
 } from "~/server/generated/entity-relation-contracts.gen";
 import { previewOperation } from "~/server/generic/integrity/operations/entity-integrity-preview.server";
+import type { Principal } from "~/server/http/authenticate";
 
 import {
   batchInputSchema,
@@ -73,8 +78,6 @@ import {
   type ReadSelection,
   selectionListFields,
 } from "./entity-field-selection";
-import { getEntityKernelContext } from "./kernel-context";
-import type { ToolExtra } from "./tools/tool-registration";
 
 /**
  * The entity-kernel verbs behind the `entity_read` / `entity` tools. Each verb
@@ -89,11 +92,13 @@ export interface KernelMcpAction {
   readonly output: z.ZodType;
   /**
    * `input` is what `input` above parsed; the result is parsed by `output`.
-   * `name` is the `${tool}.${action}` the call arrived as, for batch reports.
+   * `principal.context` is the runner-selected context the verb reads and
+   * writes through. `name` is the `${tool}.${action}` the call arrived as,
+   * for batch reports.
    */
   run(
     input: z.output<z.ZodType>,
-    extra: ToolExtra,
+    principal: Principal,
     name: string,
     execution: BatchExecution,
   ): Promise<z.output<z.ZodType>>;
@@ -124,7 +129,7 @@ const kernelCommand = (
  * exercise dispatch, projection, and batches over synthetic kernel results.
  */
 export type McpEntityExecutor = (
-  context: ReturnType<typeof getEntityKernelContext>,
+  context: EntityKernelContext,
   command: McpEntityCommand,
   detail?: ResultDetail | "reference",
   selection?: ReadSelection | null,
@@ -192,10 +197,10 @@ const commandAction = (
   verb,
   input,
   output,
-  run: async (raw, extra) => {
+  run: async (raw, principal) => {
     const command = commandWithDetail.parse(raw);
     const detail = command.resultDetail ?? "summary";
-    const context = getEntityKernelContext(extra);
+    const { context } = principal;
     const selection =
       command.action === "create" || command.action === "update"
         ? null
@@ -262,7 +267,7 @@ const commandsBatch = (
   reference: (item: z.output<typeof batchCommandItemOutput>) => item.item.id,
   mutation: true,
   telemetryEntity: (items: Array<{ entity: string }>) => items[0]?.entity,
-  run: async (item, extra) => execute(getEntityKernelContext(extra), item),
+  run: async (item, principal) => execute(principal.context, item),
 });
 
 const previewBatch: BatchSpec<
@@ -278,8 +283,8 @@ const previewBatch: BatchSpec<
   telemetryEntity: (items: Array<{ entity: string }>) => items[0]?.entity,
   run: async (
     item: z.output<typeof entityPreviewInputSchema>,
-    extra: ToolExtra,
-  ) => previewEntity(getEntityKernelContext(extra), item),
+    principal: Principal,
+  ) => previewEntity(principal.context, item),
 };
 
 const previewBatchInput = batchInputSchema(previewBatch);
@@ -402,7 +407,7 @@ export const createKernelMcpActions = (
     commands: {
       input: commandsInput,
       output: batchOutputSchema(batchCommandItemOutput),
-      run: (raw, extra, name, execution) => {
+      run: (raw, principal, name, execution) => {
         const input = z
           .object({
             commands: z.array(batchCommandItemInput),
@@ -416,7 +421,7 @@ export const createKernelMcpActions = (
             resultDetail: input.resultDetail,
             execution,
           },
-          extra,
+          principal,
         );
       },
     },
@@ -435,8 +440,8 @@ export const createKernelMcpActions = (
         batchOutputSchema(entityPreviewOutputSchema),
         previewOperationSchema,
       ]),
-      run: async (raw, extra, name) => {
-        const context = getEntityKernelContext(extra);
+      run: async (raw, principal, name) => {
+        const { context } = principal;
         const operation = previewOperationInput.safeParse(raw);
         if (operation.success)
           return previewOperation(
@@ -460,7 +465,7 @@ export const createKernelMcpActions = (
               resultDetail: batch.resultDetail,
               execution: undefined,
             },
-            extra,
+            principal,
           );
         }
         return previewEntity(context, entityPreviewInputSchema.parse(raw));
@@ -474,13 +479,10 @@ export const createKernelMcpActions = (
     resolve: {
       input: productResolveInput,
       output: mcpResultsEnvelope(productResolveNamesOut),
-      run: async (raw, extra) => {
+      run: async (raw, principal) => {
         const input = productResolveInput.parse(raw);
         return {
-          results: await resolveProductNames(
-            getEntityKernelContext(extra).db,
-            input,
-          ),
+          results: await resolveProductNames(principal.context.db, input),
         };
       },
     },
@@ -491,8 +493,8 @@ export const createKernelMcpActions = (
         mcpResultsEnvelope(ingredientResolveWithProductsOut),
         resolvePlantsOutput,
       ]),
-      run: async (raw, extra) => {
-        const context = getEntityKernelContext(extra);
+      run: async (raw, principal) => {
+        const { context } = principal;
         const input = resolveOrCreateInput.parse(raw);
         if (input.entity === "plant")
           return resolveOrCreatePlants(context.db, input, context.actorContext);

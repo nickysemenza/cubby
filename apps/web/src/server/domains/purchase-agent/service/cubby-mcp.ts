@@ -27,7 +27,7 @@ const MCP_TOOL_PREFIX = "mcp__cubby__";
 // Cubby's MCP handler serves only the modern era. A pin fails loudly instead
 // of falling back to the `initialize` handshake the handler rejects.
 const MCP_PROTOCOL_VERSION = "2026-07-28";
-// `imports_read.mail` sizes its compact text or raw HTML page under
+// `purchase_import_read.mail_read` sizes its compact text or raw HTML page under
 // MAIL_READ_RESPONSE_MAX_BYTES; pi's default 50 KB head cap would cut a long
 // order's last item lines and totals.
 const EMAIL_READ_OUTPUT_LIMITS = {
@@ -78,7 +78,7 @@ export function cubbyToolResult(raw: unknown): ToolExecutionResult {
     const image = imageBlock.safeParse(block);
     if (image.success) content.push(image.data);
   }
-  // `mail.read` returns an attachment's original bytes; the model receives
+  // `purchase_import_read.mail_read` returns an attachment's original bytes; the model receives
   // them as media rather than as base64 text.
   const original = attachmentResult.safeParse(parsed.structuredContent);
   if (original.success) {
@@ -105,7 +105,7 @@ export function cubbyToolResult(raw: unknown): ToolExecutionResult {
 /**
  * Cubby MCP tools as pi tools named `mcp__cubby__<tool>`. Replay is safe:
  * import writers carry the run's `_runExecution` operation id and replay an
- * identical effect; `mail.resolve` is idempotent by its Email and outcome.
+ * identical effect; `purchase_import.mail_resolve` is idempotent by its Email and outcome.
  */
 export function cubbyMcpExtension(
   tools: readonly McpToolDefinition[],
@@ -133,7 +133,7 @@ export function cubbyMcpExtension(
         // MCP tool input schemas are always JSON-Schema objects.
         parameters: Type.Unsafe<JsonObject>(tool.inputSchema),
         replay: "safe",
-        ...(tool.name === "imports_read"
+        ...(tool.name === "purchase_import_read"
           ? { outputLimits: EMAIL_READ_OUTPUT_LIMITS }
           : {}),
         execute: async (args, api, context) =>

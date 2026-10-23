@@ -451,7 +451,6 @@ export default defineEntity({
         brandRef: { entity: "ledgerParty" },
         currentMember: true,
         deriveSchema: true,
-        stored: true,
       },
       {
         columnId: "toPartyId",
@@ -460,7 +459,6 @@ export default defineEntity({
         brandRef: { entity: "ledgerParty" },
         currentMember: true,
         deriveSchema: true,
-        stored: true,
       },
       {
         columnId: "date",

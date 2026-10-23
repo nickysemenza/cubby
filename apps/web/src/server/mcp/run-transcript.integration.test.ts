@@ -9,7 +9,6 @@ import { getDb } from "~/server/db/helpers";
 import { run as runTable } from "~/server/db/schema";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { requireActor } from "~/server/http/request-context";
-import { McpOperationContext } from "~/server/mcp/operation-context";
 import { createMcpServer } from "~/server/mcp/server";
 import { callMcpTool } from "~/server/testing/mcp-test-utils";
 import { createTestRequestContext } from "~/server/testing/request-context";
@@ -110,20 +109,17 @@ describe("member Run transcript through MCP", () => {
         },
       }),
     );
-    const operationContext = new McpOperationContext(
-      requireActor(
-        createTestRequestContext(ctx.db, {
-          auth: { userId: ctx.actor.userId },
-        }),
-      ),
+    const mcpContext = requireActor(
+      createTestRequestContext(ctx.db, {
+        auth: { userId: ctx.actor.userId },
+      }),
     );
     const read = (runId: string, cursor?: number) =>
       callMcpTool(
         createMcpServer(),
-        "imports_read",
-        { action: "run_transcript", runId, limit: 1, cursor },
-        {},
-        { operationContext },
+        "run_read",
+        { action: "transcript", runId, limit: 1, cursor },
+        mcpContext,
       );
     const first = await read(owned.shortcode);
     expect(first.isError).not.toBe(true);

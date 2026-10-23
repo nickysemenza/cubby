@@ -8,10 +8,9 @@ import {
   type StartOperationId,
   startOperationDefinitionFor,
 } from "~/lib/start-operation-observability";
-import { type ReadPolicy, readPolicyFor } from "~/server/db/read-policy";
+import { readPolicyFor } from "~/server/db/read-policy";
 import { resolveFilterTokens } from "~/server/entity-kernel/filter-tokens";
 import type { StartOperationHandler } from "~/server/generated/start-operation-handlers.gen";
-import type { StartOperationResult } from "~/server/operation-runtime/start-operation.contract";
 import {
   type AuthenticatedStartOperationContext,
   runStartOperation,
@@ -83,31 +82,6 @@ function configuredOperationHandler<
   return isOperationRun(entry) ? { run: entry } : entry;
 }
 
-export type OperationExecutionOptions<Input, OutputSchema extends z.ZodType> = {
-  operation: StartOperationId;
-  type: OperationKind;
-  input: z.input<z.ZodUnknown>;
-  inputSchema: z.ZodType<Input>;
-  outputSchema: OutputSchema | ((input: Input) => OutputSchema);
-  request: Parameters<StartOperationHandler>[0]["request"];
-  readPolicy: ReadPolicy;
-  run: (
-    context: AuthenticatedStartOperationContext,
-    input: Input,
-  ) => Promise<z.input<OutputSchema>>;
-};
-
-/** Injectable execution seam; production delegates to runStartOperation. */
-export interface OperationExecutionAdapter {
-  execute<Input, OutputSchema extends z.ZodType>(
-    options: OperationExecutionOptions<Input, OutputSchema>,
-  ): Promise<StartOperationResult<z.output<OutputSchema>>>;
-}
-
-const startOperationExecutionAdapter = {
-  execute: runStartOperation,
-} satisfies OperationExecutionAdapter;
-
 type OperationDescriptorOf<
   Contract extends OperationContract,
   Member extends keyof Contract["ops"],
@@ -119,23 +93,8 @@ type OperationDescriptorOf<
   >;
 };
 
-/**
- * The handler as MCP calls it: the caller has already authenticated and
- * selected a read policy, and validates input and output itself.
- */
-export type DirectOperationRun = {
-  readonly id: StartOperationId;
-  readonly input: z.ZodType;
-  readonly output: z.ZodType;
-  readonly run: (
-    context: OperationHandlerContext,
-    input: z.output<z.ZodUnknown>,
-  ) => Promise<z.output<z.ZodUnknown>>;
-};
-
 type OperationImplementationMap<Contract extends OperationContract> = {
   contract: Contract;
-  runs: Readonly<Record<string, DirectOperationRun>>;
   operations: {
     readonly [
       Member in OperationMemberName<Contract["ops"]>
@@ -177,7 +136,6 @@ function resolvingCurrentMember<Descriptor extends OperationDomainDescriptor>(
 function operationHandlerFor<Descriptor extends OperationDomainDescriptor>(
   descriptor: Descriptor,
   entry: OperationHandlerEntry<Descriptor>,
-  adapter: OperationExecutionAdapter,
 ): StartOperationHandler<DeclaredOutput<Descriptor>> {
   const configured = configuredOperationHandler(entry);
   const inputSchema = configured.input ?? declaredInputSchema(descriptor);
@@ -188,11 +146,8 @@ function operationHandlerFor<Descriptor extends OperationDomainDescriptor>(
     configured.run,
   );
 
-  return (options) => {
-    const execution: OperationExecutionOptions<
-      DeclaredInput<Descriptor>,
-      RuntimeOutputSchema<Descriptor>
-    > = {
+  return (options) =>
+    runStartOperation({
       operation: descriptor.id,
       type: descriptor.definition.kind,
       input: options.data,
@@ -200,11 +155,8 @@ function operationHandlerFor<Descriptor extends OperationDomainDescriptor>(
       outputSchema,
       request: options.request,
       readPolicy: readPolicyFor(descriptor.id, descriptor.definition.kind),
-      run: (context, parsed) =>
-        run({ ...context, signal: options.request.signal }, parsed),
-    };
-    return adapter.execute(execution);
-  };
+      run: (context, parsed, signal) => run({ ...context, signal }, parsed),
+    });
 }
 
 /**
@@ -220,18 +172,15 @@ export function implementOperationDomain<Contract extends OperationContract>(
       OperationDescriptorOf<Contract, Member>
     >;
   },
-  adapter?: OperationExecutionAdapter,
 ): OperationImplementationMap<Contract>;
 export function implementOperationDomain(
   contract: OperationContract,
   handlers: Record<string, OperationHandlerEntry<OperationDomainDescriptor>>,
-  adapter: OperationExecutionAdapter = startOperationExecutionAdapter,
 ) {
   const operations: Record<
     string,
     StartOperationHandler<z.output<z.ZodUnknown>>
   > = {};
-  const runs: Record<string, DirectOperationRun> = {};
   for (const [member, definition] of Object.entries(contract.ops)) {
     if (definition.kind === "subscription") continue;
     const operation = startOperationDefinitionFor(
@@ -246,19 +195,7 @@ export function implementOperationDomain(
     operations[member] = operationHandlerFor(
       { id: operation.id, definition },
       entry,
-      adapter,
     );
-    const configured = configuredOperationHandler(entry);
-    const input = configured.input ?? definition.input;
-    runs[member] = {
-      id: operation.id,
-      input,
-      output:
-        configured.output instanceof z.ZodType
-          ? configured.output
-          : definition.output,
-      run: resolvingCurrentMember(definition.kind, input, configured.run),
-    };
   }
-  return { contract, runs, operations };
+  return { contract, operations };
 }

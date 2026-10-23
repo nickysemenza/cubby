@@ -724,6 +724,23 @@ const toggleDescriptor = (target: CompiledEntity): FilterDescriptor => {
 };
 
 /**
+ * An unbound value filter binds to the derived list field of its name,
+ * including entries synthesized after the declaration compiles.
+ */
+const withInferredDerived = (
+  descriptor: FilterDescriptor,
+  derived: Readonly<Record<string, CompiledListField>>,
+): FilterDescriptor =>
+  descriptor.derived === null &&
+  descriptor.stored === null &&
+  descriptor.anyOf === null &&
+  descriptor.kind !== "text" &&
+  descriptor.kind !== "range" &&
+  derived[descriptor.columnId] !== undefined
+    ? { ...descriptor, derived: descriptor.columnId }
+    : descriptor;
+
+/**
  * A value filter over a `via` path gets the generated keys a stored filter
  * gets in `compile.ts`: Any value / No value (a related record exists or not),
  * and Match all when the path holds several records per row.
@@ -1359,7 +1376,8 @@ export const compileListFields = (
     const subtree: Record<string, string> = {};
     const toggles: FilterDescriptor[] = [];
     const compiled: FilterDescriptor[] = [];
-    for (const declared of entity.filterDescriptors) {
+    for (const unbound of entity.filterDescriptors) {
+      const declared = withInferredDerived(unbound, derived);
       const bound =
         declared.derived === null ? undefined : derived[declared.derived];
       if (declared.derived !== null && bound === undefined)

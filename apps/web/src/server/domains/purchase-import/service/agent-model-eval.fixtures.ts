@@ -1,6 +1,6 @@
 /**
  * Synthetic photo-inventory cases for the live coordinator model eval. Each
- * photo carries the analysis summary the agent reads (`imports_read.photo_context`);
+ * photo carries the analysis summary the agent reads (`photo_run_read.run_context`);
  * `expected` is the reviewer's answer key. Names and brands are invented.
  */
 type EvalPhoto = {

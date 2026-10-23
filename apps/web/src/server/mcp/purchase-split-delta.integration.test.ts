@@ -1,5 +1,5 @@
 /**
- * `expenses.split`'s MCP result: `originalCost`/`partsSum`/`delta`.
+ * `expenses.split_with_delta`'s MCP result: `originalCost`/`partsSum`/`delta`.
  *
  * The delta arithmetic itself is pure and covered in
  * `packages/schemas/src/purchase.unit.test.ts` (`splitExpenseDelta`). What
@@ -25,20 +25,21 @@ import { describe, expect, it } from "vitest";
 import { splitExpenseWithDeltaOut } from "~/contracts/purchase.contract";
 import { getExpenseByShortcode } from "~/server/domains/expense/repo/crud";
 import type { EntityKernelContext } from "~/server/entity-kernel";
-import { requireActor } from "~/server/http/request-context";
+import {
+  type AuthenticatedRequestContext,
+  requireActor,
+} from "~/server/http/request-context";
 import { makeExpenseInput } from "~/server/testing/repo.fixtures";
 import { createTestRequestContext } from "~/server/testing/request-context";
 
+import { mcpTestPrincipal } from "../testing/mcp-test-utils";
 import { createMcpServer } from "./server";
-import type {
-  McpRequestContext,
-  ToolArguments,
-} from "./tools/tool-registration";
+import type { ToolArguments } from "./tools/tool-registration";
 
 async function callTool(
   name: string,
   args: ToolArguments,
-  requestContext: McpRequestContext,
+  requestContext: AuthenticatedRequestContext,
   entityKernel: EntityKernelContext,
 ): Promise<CallToolResult> {
   const server = createMcpServer();
@@ -54,7 +55,9 @@ async function callTool(
         token: "",
         clientId: "test",
         scopes: [],
-        extra: { requestContext, entityKernel },
+        extra: {
+          principal: mcpTestPrincipal(requestContext, { entityKernel }),
+        },
       },
     });
 
@@ -87,7 +90,7 @@ function workflowContext(
   return requireActor(createTestRequestContext(db, { auth: { userId } }));
 }
 
-describe("expenses.split MCP action — originalCost/partsSum/delta", () => {
+describe("expenses.split_with_delta MCP action — originalCost/partsSum/delta", () => {
   const ctx = withTestDb();
   const caller = () => workflowContext(ctx.db, ctx.actor.userId);
 
@@ -106,7 +109,7 @@ describe("expenses.split MCP action — originalCost/partsSum/delta", () => {
     const result = await callTool(
       "expenses",
       {
-        action: "split",
+        action: "split_with_delta",
         expenseId: original.id,
         parts: [
           {
@@ -152,7 +155,7 @@ describe("expenses.split MCP action — originalCost/partsSum/delta", () => {
     const result = await callTool(
       "expenses",
       {
-        action: "split",
+        action: "split_with_delta",
         expenseId: original.id,
         parts: [
           {
@@ -203,7 +206,7 @@ describe("expenses.split MCP action — originalCost/partsSum/delta", () => {
     const result = await callTool(
       "expenses",
       {
-        action: "split",
+        action: "split_with_delta",
         expenseId: original.id,
         parts: [
           {

@@ -181,8 +181,10 @@ Multi-field rows without a shared atomic row writer reject before dispatch.
 
 ## Change notifications
 
-The authenticated shell subscribes to the household freshness Durable Object
-over a same-origin WebSocket. Writers enroll changed cache categories in their
+The authenticated shell subscribes to the `household.changed` doorbell topic
+(`/api/doorbell`, owned by the household freshness Durable Object) over a
+same-origin WebSocket. A ring names the changed categories; a ring without them
+rereads every loaded view. Writers enroll changed cache categories in their
 transaction; successful savepoints merge them and rollback discards them.
 After the outer commit, one best-effort hint advances the strong-read window
 before broadcasting. Audit writes cover ordinary entity edits across transports;

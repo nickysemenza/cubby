@@ -27,8 +27,8 @@ const milestoneFields = [
 /** Preserve one record row while rendering each known lifecycle date. */
 export function calendarScheduleRows(data: CalendarScheduleOut): ScheduleRow[] {
   const tasks: ScheduleRow[] = data.tasks.map((task) => {
-    const first = task.due?.start ?? null ?? task.due?.end ?? null;
-    const last = task.due?.end ?? null ?? task.due?.start ?? null;
+    const first = task.due?.start ?? task.due?.end ?? null;
+    const last = task.due?.end ?? task.due?.start ?? null;
     const segments: ScheduleSegment[] =
       first && last
         ? [

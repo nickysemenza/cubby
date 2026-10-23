@@ -1209,7 +1209,6 @@ export default defineEntity({
         kind: "boolean",
         placeholder: "Needs classification",
         deriveSchema: true,
-        derived: true,
       },
       {
         columnId: "name",
@@ -1293,7 +1292,6 @@ export default defineEntity({
       {
         columnId: "mailSearch",
         kind: "multiselect",
-        derived: true,
         placeholder: "Filter mail search...",
         deriveSchema: true,
         options: [
@@ -1307,7 +1305,6 @@ export default defineEntity({
         kind: "multiselect",
         placeholder: "Filter evidence...",
         deriveSchema: true,
-        stored: true,
         options: [
           { value: "online_account", label: "Online account" },
           { value: "receipt_only", label: "Receipt only" },

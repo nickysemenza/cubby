@@ -9,20 +9,18 @@ import {
   timelineEntities,
 } from "~/entity/generated/entity-timelines.gen";
 
-export const entityTimelineContract = defineContract("entity", {
-  timeline: query({
-    mcp: {
-      omit: "client_view",
-      note: "Agents read change history through activity.recent",
-    },
-    // Type-only carriers: the per-entity runtime schemas live in the generated
-    // timeline bindings and are applied by the browser `parse` policy and the
-    // server handler; HTTP carries the loose kernel wire.
-    input: z.custom<EntityTimelineInputByEntity[TimelineEntity]>(),
-    output: z.custom<EntityTimelineOut>(),
-    nativeModels: { input: "json" },
-    httpWire: kernelTimelineWire,
-    native: "Entity timelines",
-    observability: { entities: timelineEntities },
-  }),
-});
+export const entityTimelineContract = defineContract(
+  "entity",
+  {
+    timeline: query({
+      note: "Agents read change history through activity_read.list",
+      input: z.custom<EntityTimelineInputByEntity[TimelineEntity]>(),
+      output: z.custom<EntityTimelineOut>(),
+      nativeModels: { input: "json" },
+      httpWire: kernelTimelineWire,
+      native: "Entity timelines",
+      observability: { entities: timelineEntities },
+    }),
+  },
+  { exposure: "view" },
+);

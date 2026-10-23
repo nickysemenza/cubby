@@ -649,7 +649,7 @@ const createRecipeReturningId = async (
     }
 
     // Associate images if provided. `pendingImageIds` arrives as public
-    // `IMG-` shortcodes (what `image.create_uploads`/`image.uploadImage` hand
+    // `IMG-` shortcodes (what `image.create_file_upload`/`image.uploadImage` hand
     // back), resolved to uuids here since `associatePendingImages` writes
     // straight into `RecipeImage.imageId`, an unbranded uuid FK. A code that
     // doesn't resolve is dropped rather than thrown on.

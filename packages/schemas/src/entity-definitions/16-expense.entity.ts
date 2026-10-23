@@ -1494,7 +1494,6 @@ Rules:
         kind: "multiselect",
         placeholder: "Filter by line kind...",
         deriveSchema: true,
-        stored: true,
         schemaRef: {
           module: "@cubby/schemas/expense-line-kind",
           export: "expenseLineKindSchema",
@@ -1531,7 +1530,6 @@ Rules:
         kind: "multiselect",
         placeholder: "Filter by itemization...",
         deriveSchema: true,
-        stored: true,
         schemaRef: {
           module: "@cubby/schemas/expense-line-kind",
           export: "expenseLineBasisSchema",
@@ -1566,7 +1564,6 @@ Rules:
         kind: "boolean",
         placeholder: "Filter by status...",
         deriveSchema: true,
-        stored: true,
         options: [
           { value: "true", label: "Planned" },
           { value: "false", label: "Already made" },
@@ -1623,7 +1620,6 @@ Rules:
       {
         columnId: "costSign",
         kind: "multiselect",
-        derived: true,
         placeholder: "Filter by cost direction...",
       },
       {
@@ -1753,7 +1749,6 @@ Rules:
         field: "productPresenceFilter",
         kind: "presence",
         deriveSchema: true,
-        stored: true,
         placeholder: "Filter by product...",
         options: [
           { value: "has", label: "Has product", meta: true },
@@ -1775,7 +1770,6 @@ Rules:
         columnId: "orderId",
         field: "orderIdPresenceFilter",
         kind: "presence",
-        derived: true,
         placeholder: "Filter by order id...",
         options: [
           { value: "has", label: "Has order id", meta: true },
@@ -1797,7 +1791,6 @@ Rules:
         placeholder: "Filter by attributed party...",
         brandRef: { entity: "ledgerParty" },
         currentMember: true,
-        derived: true,
       },
       {
         columnId: "purchaseIdFilter",

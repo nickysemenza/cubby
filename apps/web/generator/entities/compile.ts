@@ -1370,13 +1370,39 @@ const storedPresence = (
     : null;
 };
 
-const filterDescriptor = (
+/**
+ * A value filter that derives its schema binds to the stored field its
+ * `columnId` names (`stored` requires `deriveSchema`). Text filters declare
+ * `anyOf` and range filters resolve their own source. An unbound filter named
+ * after a `model.derived` entry binds to it in `compileListFields`, which also
+ * sees synthesized entries.
+ */
+const inferStoredBinding = (
   value: RawFilterDescriptor,
+  storage: readonly EntityStorageField[],
+): RawFilterDescriptor => {
+  if (
+    value.stored !== undefined ||
+    value.derived !== undefined ||
+    value.anyOf !== undefined ||
+    value.kind === "text" ||
+    value.kind === "range"
+  )
+    return value;
+  return (value.deriveSchema ?? false) &&
+    storage.some(({ key }) => key === value.columnId)
+    ? { ...value, stored: true }
+    : value;
+};
+
+const filterDescriptor = (
+  declared: RawFilterDescriptor,
   fields: readonly EntityField[],
   storage: readonly EntityStorageField[],
   derivedKeys: readonly string[],
   context: string,
 ): FilterDescriptor => {
+  const value = inferStoredBinding(declared, storage);
   const parsedKind = filterKinds.find((candidate) => candidate === value.kind);
   if (parsedKind === undefined) {
     throw new EntityDeclarationError(

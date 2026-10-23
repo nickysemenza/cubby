@@ -1,13 +1,13 @@
 /**
  * Pi's next admitted Email (`claim_next_import_work`), with its compact read.
- * Each Email stays the current item until `mail.resolve` or a mail-sourced
+ * Each Email stays the current item until `purchase_import.mail_resolve` or a mail-sourced
  * commit settles its target. Leading Emails a Mail import rule decides
- * (`service/mail-import-rule.ts`) are settled first, through `mail.resolve`'s
+ * (`service/mail-import-rule.ts`) are settled first, through `purchase_import.mail_resolve`'s
  * own writer, so the coordinator never spends a turn on them.
  *
  * Rules run inside the claim, not at admission or in the coordinator: the
  * claim is a leased Run operation whose replay returns its recorded result,
- * and each rule outcome is its own `mail.resolve` transaction, idempotent by
+ * and each rule outcome is its own `purchase_import.mail_resolve` transaction, idempotent by
  * Email and outcome, so an interrupted claim leaves only settled Emails
  * settled and the next claim continues from the roster.
  */
@@ -136,7 +136,7 @@ async function settleByRule(
       { revision: MAIL_IMPORT_RULE_REVISION },
     );
   } catch (error) {
-    // SILENT: a refusal `mail.resolve` would give the coordinator (a member's dismissal, another Purchase's link, changed evidence) hands it the Email instead.
+    // SILENT: a refusal `purchase_import.mail_resolve` would give the coordinator (a member's dismissal, another Purchase's link, changed evidence) hands it the Email instead.
     if (error instanceof AppError) return { known };
     throw error;
   }

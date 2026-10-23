@@ -151,7 +151,7 @@ excluded from connection fingerprints.
   authority write, retaining original/event/checksum dependencies privately.
   Acceptance calls `decideEmailPurchase` with that exact retained event under
   Purchase→original→Email locks; only the owning member can accept, and agents
-  use `mail.resolve`. Accepted import sources require reconciliation and are
+  use `purchase_import.mail_resolve`. Accepted import sources require reconciliation and are
   excluded. Discovery creates no retained originals/events and never publishes
   operational `email_link` decisions as pending suggestions. Twin-transaction
   merge remains unavailable here while its authoritative workflow is developed.

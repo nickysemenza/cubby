@@ -103,7 +103,7 @@ async function observeRequest<T>(options: {
 }
 
 export function observeOperation<T>(
-  definition: StartOperationDefinition,
+  definition: Pick<StartOperationDefinition, "kind"> & { readonly id: string },
   context: OperationObservation<T>,
   run: (span: AppSpan) => Promise<T>,
 ): Promise<T> {

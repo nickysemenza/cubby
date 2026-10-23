@@ -54,6 +54,19 @@ export const call = (
  */
 export const currentRunId: ScriptValue = { $runId: true };
 
+/**
+ * Generated capability tools publish {action, input}; the agent validates a
+ * call against that schema, so a script nests its fields the same way. The
+ * entity kernel tools keep their flat {action, ...fields} shape.
+ */
+const toolArguments = (
+  tool: string,
+  { action, ...fields }: Record<string, ScriptValue>,
+): Record<string, ScriptValue> =>
+  tool === "entity" || tool === "entity_read" || action === undefined
+    ? { ...(action === undefined ? {} : { action }), ...fields }
+    : { action, input: fields };
+
 /** An MCP mutation: Cubby's stable run envelope plus the tool's own fields. */
 export const mcp = (
   id: string,
@@ -64,7 +77,10 @@ export const mcp = (
 ): ScriptStep => ({
   call: id,
   tool: `mcp__cubby__${tool}`,
-  args: { ...args, _runExecution: { runId, operationId: id, ...envelope } },
+  args: {
+    ...toolArguments(tool, args),
+    _runExecution: { runId, operationId: id, ...envelope },
+  },
 });
 
 /** A read-only MCP call carries no run envelope. */
@@ -72,7 +88,11 @@ export const mcpRead = (
   id: string,
   tool: string,
   args: Record<string, ScriptValue>,
-): ScriptStep => ({ call: id, tool: `mcp__cubby__${tool}`, args });
+): ScriptStep => ({
+  call: id,
+  tool: `mcp__cubby__${tool}`,
+  args: toolArguments(tool, args),
+});
 
 export type AwaitMarker =
   | string

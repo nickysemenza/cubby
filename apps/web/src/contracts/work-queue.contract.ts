@@ -19,30 +19,31 @@ const WORK_QUEUE_TAGS: readonly CacheTag[] = [
   ["problems"],
 ];
 
-export const workQueueContract = defineContract("workQueue", {
-  list: query({
-    mcp: {
-      omit: "client_view",
+export const workQueueContract = defineContract(
+  "workQueue",
+  {
+    list: query({
       note: "Household routing overview; agents use the member-scoped queue",
-    },
-    input: workQueueHouseholdInput,
-    output: workQueueOutSchema,
-    readPolicy: "strong",
-    cache: { tags: WORK_QUEUE_TAGS },
-  }),
-  forRecord: query({
-    mcp: {
-      omit: "client_view",
+      input: workQueueHouseholdInput,
+      output: workQueueOutSchema,
+      readPolicy: "strong",
+      cache: { tags: WORK_QUEUE_TAGS },
+    }),
+    forRecord: query({
       note: "Household record-detail strip; agents use the member-scoped queue",
-    },
-    input: workQueueRecordInput,
-    output: workQueueOutSchema,
-    readPolicy: "strong",
-    cache: { tags: WORK_QUEUE_TAGS, profile: "live-status" },
-  }),
-  forMember: query({
-    input: workQueuePageInput,
-    output: workQueueOutSchema,
-    readPolicy: "strong",
-  }),
-});
+      input: workQueueRecordInput,
+      output: workQueueOutSchema,
+      readPolicy: "strong",
+      cache: { tags: WORK_QUEUE_TAGS, profile: "live-status" },
+    }),
+    forMember: query({
+      exposure: "capability",
+      description:
+        "Actionable research, review and repair work available to the connected member, including shared work. Private source and account work belonging only to another member is excluded before counts and pagination. Routing follows current evidence ownership; unresolved private ownership requires household review.",
+      input: workQueuePageInput,
+      output: workQueueOutSchema,
+      readPolicy: "strong",
+    }),
+  },
+  { exposure: "view", mcpToolGroup: "activity" },
+);

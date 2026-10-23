@@ -1,9 +1,6 @@
 import type { QueryClient } from "@tanstack/react-query";
 
-import {
-  DATABASE_CHANGES_SOCKET_PATH,
-  databaseChangeMessage,
-} from "~/lib/database-changes";
+import { doorbellRing, doorbellUrl } from "~/lib/doorbell";
 import { showErrorToast } from "~/ui/feedback/error-details";
 
 import { combineRippleTags, entityRipple } from "./cache-tags";
@@ -56,9 +53,9 @@ export function subscribeDatabaseChanges(client: QueryClient): () => void {
     if (stopped || socket || navigator.onLine === false) return;
     if (retry !== undefined) clearTimeout(retry);
     retry = undefined;
-    const url = new URL(DATABASE_CHANGES_SOCKET_PATH, window.location.origin);
-    url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
-    const current = new WebSocket(url);
+    const current = new WebSocket(
+      doorbellUrl("household.changed", window.location.origin),
+    );
     socket = current;
     current.addEventListener("open", () => {
       attempt = 0;
@@ -68,10 +65,9 @@ export function subscribeDatabaseChanges(client: QueryClient): () => void {
     });
     current.addEventListener("message", (event: MessageEvent<unknown>) => {
       try {
-        const message = databaseChangeMessage.parse(
-          JSON.parse(String(event.data)),
-        );
-        for (const category of message.categories) pending.add(category);
+        const ring = doorbellRing.parse(JSON.parse(String(event.data)));
+        if (ring.categories === undefined) resync = true;
+        else for (const category of ring.categories) pending.add(category);
         requestRefresh();
       } catch (error) {
         showErrorToast(error);

@@ -131,10 +131,10 @@ use the browser callback.
 ### Headless companion (`cubby companion`)
 
 `cubby companion` runs the same `CompanionImageWorker`, executor, and durable outbox as the app,
-using the session from `cubby auth login` (an API key cannot open the socket). It registers as
+using the session from `cubby auth login` (an API key cannot subscribe to the doorbell). It registers as
 its own device: the id lives in `~/Library/Application Support/Cubby/companion-device-id`,
 because the app's id is a data-protection Keychain item the ad-hoc-signed CLI cannot read, and
-sharing one id would merge two sockets into one device. Concurrent first starts all get the same
+sharing one id would merge two companions into one device. Concurrent first starts all get the same
 id, the id file is owner-only (0600), and a damaged id file is an error, not a new device. Its
 outbox is namespaced `cubby-cli-<host>`, apart from the app's. Only one `cubby companion` process
 can use an outbox file at a time, because two processes rewriting one outbox could erase each
@@ -156,8 +156,12 @@ only after a check that first closes command acceptance, so no job can start bet
 and stop. Results that are
 still unacknowledged stay in the outbox and replay on the next connection.
 
-On hello and after each result, the server hands the companion the next pending or
-`waiting_for_device` job it can run, so `--once` drains a backlog one job at a time. A job that
+The worker subscribes to the `imageProcessing.work` doorbell (`/api/doorbell`). The ring carries
+no job: on subscribe, on every ring and after each result the worker drains, calling
+`imageProcessing.pull` with its hello until nothing is claimable (at most four jobs run at once)
+and delivering each result through `imageProcessing.complete`. A missed ring costs latency, not
+work, because `pull` also claims `waiting_for_device` jobs. `--once` therefore drains a backlog
+before it goes idle. A job that
 just found no device backs off for a minute before it can be claimed again, so a quiet
 `--once` run right after such a miss does not prove the queue is empty.
 

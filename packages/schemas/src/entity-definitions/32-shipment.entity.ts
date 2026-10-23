@@ -399,7 +399,6 @@ export default defineEntity({
         kind: "idMulti",
         brandRef: { entity: "purchase" },
         deriveSchema: true,
-        stored: true,
         placeholder: "Filter purchases...",
       },
       {
@@ -415,14 +414,12 @@ export default defineEntity({
         kind: "idMulti",
         brandRef: { entity: "vendor" },
         deriveSchema: true,
-        stored: true,
         placeholder: "Filter carriers...",
       },
       {
         columnId: "purpose",
         kind: "multiselect",
         deriveSchema: true,
-        stored: true,
         schemaFromRead: true,
         options: shipmentPurpose.options.map((value) => ({
           value,
@@ -462,7 +459,6 @@ export default defineEntity({
   ],
   search: "lexical",
   capabilities: {
-    auditable: true,
     images: {
       storage: false,
       displaySourceOverrides: [
@@ -480,7 +476,6 @@ export default defineEntity({
         },
       ],
     },
-    softDelete: true,
     delete: null,
     merge: false,
     lifecycle: "mutable",

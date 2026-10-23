@@ -1,29 +1,27 @@
 import { fromPartial } from "@total-typescript/shoehorn";
 import { describe, expect, it, vi } from "vitest";
 
-import { MCP_TOOLS } from "~/contracts/mcp-tools";
-import { MCP_TOOL_BINDINGS } from "~/server/generated/mcp-tools.gen";
+import {
+  MCP_TOOL_BINDINGS,
+  MCP_TOOL_DECLARATIONS,
+} from "~/server/generated/mcp-tools.gen";
 
 import { callMcpTool } from "../testing/mcp-test-utils";
-import { createMcpServer, listMcpToolCatalog } from "./server";
+import { createMcpServer } from "./server";
+import { describeMcpActions } from "./tools/progressive-disclosure";
 import { compiledMcpTools } from "./tools/tool-registration";
 
 describe("MCP response policies", () => {
-  it("routes kernel reads authoritatively before selecting a request database", () => {
-    const entityRead = compiledMcpTools(MCP_TOOL_BINDINGS, MCP_TOOLS).find(
-      (tool) => tool.name === "entity_read",
-    )!;
-    for (const action of ["get", "list", "search", "preview", "resolve"]) {
+  it("publishes the same page and recipe defaults that handlers apply", () => {
+    const tools = compiledMcpTools(MCP_TOOL_BINDINGS, MCP_TOOL_DECLARATIONS);
+    for (const [toolName, actionName] of [
+      ["activity_read", "report"],
+      ["usda_food", "search"],
+    ] as const) {
+      const tool = tools.find((candidate) => candidate.name === toolName);
+      if (!tool) throw new Error(`Missing tool ${toolName}`);
       expect(
-        entityRead.actions.get(action)!.readPolicy({ entity: "product" }),
-      ).toBe("strong");
-    }
-  });
-  it("publishes the same page and recipe defaults that handlers apply", async () => {
-    const { tools } = await listMcpToolCatalog();
-    for (const name of ["activity", "usda_food"]) {
-      expect(
-        tools.find((tool) => tool.name === name)?.inputSchema,
+        describeMcpActions(tool, [actionName]).actions[0]?.inputSchema,
       ).toMatchObject({
         properties: {
           pageIndex: { default: 0, minimum: 0 },
@@ -31,8 +29,13 @@ describe("MCP response policies", () => {
         },
       });
     }
+    const recipeInsights = tools.find(
+      (candidate) => candidate.name === "recipe_insights_read",
+    );
+    if (!recipeInsights) throw new Error("Missing recipe_insights_read tool");
     expect(
-      tools.find((tool) => tool.name === "recipe_insights")?.inputSchema,
+      describeMcpActions(recipeInsights, ["costing_explanation"]).actions[0]
+        ?.inputSchema,
     ).toMatchObject({ properties: { detail: { default: "lines" } } });
   });
 
@@ -49,7 +52,10 @@ describe("MCP response policies", () => {
       const result = await callMcpTool(
         createMcpServer(),
         "usda_food",
-        { action: "search", query: "synthetic food", ...input },
+        {
+          action: "search",
+          input: { query: "synthetic food", ...input },
+        },
         { usdaService: fromPartial({ listFoods }) },
       );
       expect(result.isError).not.toBe(true);
@@ -68,8 +74,12 @@ describe("MCP response policies", () => {
   );
 
   it("projects compact USDA search rows, which carry no nutrient summary", async () => {
+    // A complete member row: the runner validates the member's own output
+    // before the MCP projection slims it.
     const row = {
       fdc_id: 9900001,
+      description: "Synthetic rolled oats",
+      inferredUnitMappings: [],
       foodInfo: {
         data_type: "foundation_food",
         description: "Synthetic rolled oats",
@@ -83,7 +93,7 @@ describe("MCP response policies", () => {
     const result = await callMcpTool(
       createMcpServer(),
       "usda_food",
-      { action: "search", query: "synthetic oats" },
+      { action: "search", input: { query: "synthetic oats" } },
       {
         usdaService: fromPartial({
           listFoods: async () => ({ data: [row], count: 1 }),
@@ -118,9 +128,11 @@ describe("MCP response policies", () => {
           tool,
           {
             action,
-            query: "synthetic food",
-            type: "orphanedProducts",
-            ...input,
+            input: {
+              query: "synthetic food",
+              type: "orphanedProducts",
+              ...input,
+            },
           },
           {},
         );

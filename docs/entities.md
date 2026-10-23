@@ -512,7 +512,7 @@ shows several slots of one record (a Run) polls one `entityReport.getMany`, so t
 record once per poll.
 
 **Run work progress.** The storage-only `getRunWorkProgress` projection supplies
-both `imports_read.run_status.workProgress` and the Run's shared `progress`
+both `run_read.work_snapshot.workProgress` and the Run's shared `progress`
 report block. Every Run purpose declares a count source: step receipts,
 target outcomes, operations, images, model calls, or its typed checkpoint.
 Exploratory populations have `total: null`, never an invented zero. Step drivers
@@ -1053,7 +1053,7 @@ object keys while preserving array order and JSON scalar encoding; it must not
 revalidate or clone each nested subtree. Normalize dates and optional values at
 the input boundary before serialization.
 
-All five review families use this storage: fields, Email relevance and event/Purchase links, image descriptions, Product pairs, and generic recommendations. `assessment.review` and `assessment.reviewBatch` (MCP `entity.review_assessment` and `entity.review_assessments`) settle immutable review independently of apply intent. Each batch item has its own outcome. Draft acceptance records history; saved application has a separate transaction-bound receipt. Current-evidence and domain-authority checks fence field writes, Email corrections and pair merges. Email link application revalidates its expected active Assessment and current target after Purchase, Original and Email locks, so a waiting review cannot replace newer authority. Relevance application requires an explicit domain-supported related or uncertain correction before recording Feedback; unrelated grading remains history-only. Unserved model trials stay outside member review.
+All five review families use this storage: fields, Email relevance and event/Purchase links, image descriptions, Product pairs, and generic recommendations. `assessment.review` and `assessment.reviewBatch` (MCP `suggestions.review` and `suggestions.review_batch`) settle immutable review independently of apply intent. Each batch item has its own outcome. Draft acceptance records history; saved application has a separate transaction-bound receipt. Current-evidence and domain-authority checks fence field writes, Email corrections and pair merges. Email link application revalidates its expected active Assessment and current target after Purchase, Original and Email locks, so a waiting review cannot replace newer authority. Relevance application requires an explicit domain-supported related or uncertain correction before recording Feedback; unrelated grading remains history-only. Unserved model trials stay outside member review.
 
 A new bare wrong verdict is a Miss, without suppressing future evidence. It resolves the current Problem, and canonical publication of the same pair evidence and decision policy preserves that review. Relevant evidence or policy revisions may publish a fresh Assessment. Publication identity excludes requesting Run and execution IDs; the first actual producer and evidence snapshot remain immutable. Exact command retries replay the same receipt; conflicting operation-ID reuse is refused. Legacy ambiguous reject/dismiss outcomes remain ungraded, retaining their original field-value, pair, recommendation-group, relatedness or tag-preference suppression. Existing corrected values and explicit labels retain their recorded semantics. Field applications keep existing AuditLog receipts and distinguish automatic acceptance from explicit member acceptance. New evaluation-only Email grades never change routing; frozen sample rosters retain original predictions, strata and inclusion probabilities.
 
@@ -1682,8 +1682,8 @@ independently. URLs contain registered operation names, never input values;
 the server rejects a path/body mismatch. The Worker routes these paths directly
 to the shared dispatcher without loading the React server handler. Operation
 and entity trace headers remain available; SSR invokes the dispatcher in-process.
-Direct browser requests enforce the same native hosted-workspace version gate
-as Start requests; an already-open outdated WebView cannot bypass it.
+Every operation runs the runner's Apple version gate on its principal, so an
+already-open outdated hosted WebView keeps its reads and cannot write.
 This transport retains query coalescing and independent settlement, which the
 framework server-function transport does not supply across operations. That
 capability comparison is not a measured production latency advantage.
@@ -1723,11 +1723,11 @@ hold no business logic; there is no per-transport `*-browser.server.ts` module.
 Removing an operation has no deployment shim: a tab loaded before that
 deployment must reload before calling the removed function.
 
-The MCP surface is declared once in `apps/web/src/contracts/mcp-tools.ts`: grouped
-tools, each a group of actions called as `{ action, ...fields }`, where an
-action is a contract member or an entity-kernel verb. `pnpm generate` binds
-every action to its `implementOperationDomain` handler and refuses a tool that
-mixes queries and mutations, so read-only tools stay auto-approvable. MCP
+The MCP surface is generated from `capability` contract members plus the
+entity-kernel verbs declared in `apps/web/src/contracts/mcp-tools.ts`
+([MCP exposure](agents/mcp.md#exposure)). `pnpm generate` requires every
+action's `implementOperationDomain` handler and splits a group that mixes
+queries and mutations, so read-only tools stay auto-approvable. MCP
 invokes `executeEntity` through the kernel verbs of the `entity` (writes) and
 `entity_read` (reads) tools and publishes their machine-readable contract at
 `entities://catalog`. MCP, jobs, repositories, entity modules, and kernel tests must
@@ -2095,10 +2095,12 @@ effective subject product's name) or a `type: "text"` value. A multi-field
 search is that declared list, never a predicate. `anyOf` does not sort or
 group, and a text filter never declares `stored`.
 
-A `stored` descriptor names the standard predicate over one stored column:
-`stored: true` reads the column named by `columnId`; `stored: { columns }`
-names it when the descriptor id is virtual; `stored: { array: true }` marks a
-multiselect over a `text[]` column as an overlap. Enum filters
+A `stored` descriptor names the standard predicate over one stored column.
+A non-text, non-range filter that sets `deriveSchema` and whose `columnId`
+names a stored field gets that binding by inference, so it declares nothing;
+`stored: { columns }` names the column when the descriptor id is virtual, and
+`stored: { array: true }` marks a multiselect over a `text[]` column as an
+overlap. Enum filters
 OR their declared `nullable` presence in, a boolean over a nullable
 non-boolean column reads as presence (`true` is NOT NULL), and ranges are
 inclusive bounds: a range reads its `wire` keys (`from`/`to`, and `presence`
@@ -2218,9 +2220,12 @@ link state). A `related:<view>` roster entry orders by the view's first chip
 release rather than a table, a declared exception whose service orders by its
 declared values.
 
-A filter descriptor reads a derived field with `derived: true` (the entry
-named by its `columnId`) or `derived: "<key>"` (another entry, so several
-filters share one value or a column filters by an effective value). A value
+A filter descriptor reads a derived field named by its `columnId` by
+inference when it has no other binding, including entries the compiler
+synthesizes. It declares `derived: true` only where a stored field shares that
+key (the inferred stored binding would otherwise win), or `derived: "<key>"`
+for another entry, so several filters share one value or a column filters by
+an effective value. A value
 entry filters by its type: `text` as a search term, any-of, or presence;
 `number`/`date` as a range or presence; `dateInterval` as a range (overlap)
 or one date (containment); `boolean` as a flag (UNKNOWN reads as
@@ -2381,7 +2386,7 @@ presence key it was already published under (expense
 `projectPresenceFilter`); others get the generated
 `<columnId>PresenceFilter`.
 
-A repository reference column may opt into `entity_read.connections` with
+A repository reference column may opt into `entity_graph_read.connections` with
 `{ reference: "financialTransaction", connection: true }`. Only mark the
 canonical direction: the row's `owner` is the source and the reference is the
 target; the reader exposes both outgoing and incoming groups under
@@ -2631,7 +2636,7 @@ Problems, Email attention, findings and account work. It derives a filterable
 Waiting for column from current source/account authority, with Either for
 shared research and unresolved for missing private ownership. Its filter is
 any-of: Me (mine or Either), Either, a member (routed to them only), and No
-value for Unresolved. This is a read projection, not a new entity or assignment ledger. MCP `activity.work_queue`
+value for Unresolved. This is a read projection, not a new entity or assignment ledger. MCP `activity_read.for_member`
 uses the connected member implicitly and filters eligibility before counts
 and paging; the household UI's routing filters do not grant private access.
 
@@ -2801,8 +2806,8 @@ an `EXISTS` against an aliased related table using that entity's own
 bindings; `generic/list/repo/list.ts` binds the resulting filters and sort for every
 scored entity's list in one place.
 
-Durable "not available" exceptions (`data_exception.set`/
-`data_exception.clear`) live in the `DataException` table, keyed by an
+Durable "not available" exceptions (`data_exception.set_exception`/
+`data_exception.clear_exception`) live in the `DataException` table, keyed by an
 `Entity(id, kind)` FK, for every entity whose declaration sets `exceptions`.
 Enabling it requires fingerprint inputs for every check and an allowed-reason
 list per check (`EXCEPTION_REASONS` in `generic/data-quality/repo/exception-reasons.ts`, exposed on each
@@ -3020,8 +3025,8 @@ Direct files are `EntityAttachment` rows: gallery photos and purchase documents
 attachments are detached and reaped, and an upload's idempotency key belongs to
 the attachment rather than the file.
 
-The shared image API (`image.attach_files`, `image.attach_existing`, and staged
-`image.create_uploads`) accepts every declared direct-image target. Galleries
+The shared image API (`image.attach_file`, `image.attach_existing`, and staged
+`image.create_file_upload`) accepts every declared direct-image target. Galleries
 use `role: "attachment"` by default; Cookbook covers require `role: "cover"`
 and Vendor logos require `role: "logo"`. Singular attachments replace the live
 slot only after image validation succeeds; PDFs cannot fill those slots. The
@@ -3061,7 +3066,7 @@ The physical graph is composed at read time from `ENTITY_EDGES` and
 `ENTITY_EDGE_OWNERS` (`generic/entity-links/repo/entity-edge-source.ts`): `(edgeKey, sourceKind,
 sourceId, targetKind, targetId)` with both ends live. It backs the Relations
 tab's Connections, the impact preview, the graph explorer's physical edges,
-the Problems orphan finder, and MCP `entity_read.connections`. Writes never go
+the Problems orphan finder, and MCP `entity_graph_read.connections`. Writes never go
 through it.
 
 The orphan finder restricts graph arms to edges touching its checked kinds
@@ -3447,7 +3452,7 @@ inline evidence, keyboard review (↑/↓, →, A, D), a confirmed "Accept N cle
 that re-lists before each chunk, bulk Dismiss and Never suggest (no bulk
 Wrong), and Find suggestions, which estimates and starts a Sweep. A
 collapsible Automatic rules section lists each rule's state, measured
-precision and member switch (`suggestions.rules`/`setRule`; On only when
+precision and member switch (`suggestions_read.rules`/`setRule`; On only when
 eligible, Off after a confirm). Its `family`, `record` (`<kind>:<CODE>`) and `runId` params scope it.
 Every entity list batches the same queue's pending counts and opens its shared
 inline review; detail pages show a scoped Suggestions section. Family declarations

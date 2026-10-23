@@ -1,4 +1,3 @@
-import { fromPartial } from "@total-typescript/shoehorn";
 import { eq } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
@@ -14,13 +13,13 @@ import {
 } from "~/server/db/schema";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import type { Principal } from "~/server/http/authenticate";
 import { requireActor } from "~/server/http/request-context";
+import { mcpTestPrincipal } from "~/server/testing/mcp-test-utils";
 import { createTestRequestContext } from "~/server/testing/request-context";
 
 import { runMcpBatch } from "./batch";
-import { McpOperationContext } from "./operation-context";
 import { executePurchaseAgentMutation } from "./purchase-agent-protocol";
-import type { ToolExtra } from "./tools/tool-registration";
 
 // Routine permitted writes execute immediately; stable operation IDs still
 // reject changed arguments and replay saved results without another write.
@@ -45,16 +44,8 @@ describe("purchase-agent automatic mutations", () => {
     const context = requireActor(
       createTestRequestContext(ctx.db, { auth: { userId: ctx.actor.userId } }),
     );
-    const extra = fromPartial<ToolExtra>({
-      http: {
-        authInfo: {
-          extra: {
-            entityKernel: context,
-            operationContext: new McpOperationContext(context),
-            purchaseAgent: { runId, grantId: "synthetic-summary-grant" },
-          },
-        },
-      },
+    const principal = mcpTestPrincipal(context, {
+      purchaseAgent: { runId, grantId: "synthetic-summary-grant" },
     });
     let writes = 0;
     let reads = 0;
@@ -70,7 +61,7 @@ describe("purchase-agent automatic mutations", () => {
       reference: (item: { id: string }) => item.id,
       run: async (
         _item: { label: string },
-        _extra: ToolExtra,
+        _principal: Principal,
         detail: "summary" | "full",
       ) => {
         expect(detail).toBe("summary");
@@ -97,7 +88,7 @@ describe("purchase-agent automatic mutations", () => {
     const summary = await runMcpBatch(
       config,
       { ...input, resultDetail: "summary" },
-      extra,
+      principal,
     );
     expect(summary.results).toEqual([
       { index: 0, status: "succeeded", reference: "synthetic-receipt" },
@@ -107,7 +98,7 @@ describe("purchase-agent automatic mutations", () => {
     const full = await runMcpBatch(
       config,
       { ...input, resultDetail: "full" },
-      extra,
+      principal,
     );
     expect(full.results).toEqual([
       {
@@ -140,16 +131,15 @@ describe("purchase-agent automatic mutations", () => {
     });
     let executions = 0;
     const input = {
-      db: ctx.db,
-      actor: ctx.actor,
-      operationContext: new McpOperationContext(
-        requireActor(
+      principal: mcpTestPrincipal({
+        ...requireActor(
           createTestRequestContext(ctx.db, {
             auth: { userId: ctx.actor.userId },
           }),
         ),
-      ),
-      trusted: { runId: run.id, grantId: "synthetic-grant" },
+        actorContext: ctx.actor,
+      }),
+      delegation: { runId: run.id, grantId: "synthetic-grant" },
       toolName: "entity.update",
       args: {
         entity: "sourceTransactionRecord",
@@ -161,7 +151,6 @@ describe("purchase-agent automatic mutations", () => {
         executions += 1;
         return { accepted: true };
       },
-      baseExtra: fromPartial<ToolExtra>({}),
     };
     await expect(executePurchaseAgentMutation(input)).resolves.toEqual({
       accepted: true,

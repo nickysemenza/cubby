@@ -39,8 +39,7 @@ import {
   listMcpTools,
   type McpTestRequestContext,
 } from "../testing/mcp-test-utils";
-import { McpOperationContext } from "./operation-context";
-import { createMcpServer, listMcpToolCatalog } from "./server";
+import { createMcpServer } from "./server";
 import type { ToolArguments } from "./tools/tool-registration";
 let backgroundQueue: ReturnType<typeof captureBackgroundQueue>;
 beforeEach(() => {
@@ -103,8 +102,8 @@ describe("MCP catalog", () => {
     expect(analysis).toBeDefined();
     const result = await callMcpTool(
       createMcpServer(),
-      "imports_read",
-      { action: "photo_context", runId: run.publicId },
+      "photo_run_read",
+      { action: "run_context", runId: run.publicId },
       kernelRequestContext(kernel),
       { entityKernel: kernel },
     );
@@ -162,7 +161,7 @@ describe("MCP catalog", () => {
     for (const dryRun of [true, false]) {
       const response = await callMcpTool(
         createMcpServer(),
-        "source_transaction_records",
+        "finance",
         { action: "record", ...input, dryRun },
         kernelRequestContext(kernel),
         { entityKernel: kernel },
@@ -221,30 +220,30 @@ describe("MCP catalog", () => {
       }),
     ).toMatchObject({ item: { id: ingredientId } });
     expect(
-      await call("search", { action: "global", query: "Catalog salt" }),
+      await call("search_read", { action: "global", query: "Catalog salt" }),
     ).toHaveProperty("results");
     // USDA is an external source; the lookup is stubbed at its service port.
     expect(
       await call(
         "usda_food",
-        { action: "get", fdcId: 1_234_567 },
+        { action: "by_fdc_id", fdcId: 1_234_567 },
         {
           usdaService: fromPartial({ getFoodSummaryByID: async () => null }),
         },
       ),
     ).toEqual({ food: null });
-    expect(await call("project_overview", { action: "budget" })).toHaveProperty(
-      "totals",
-    );
+    expect(
+      await call("project_overview_read", { action: "budget" }),
+    ).toHaveProperty("totals");
     expect(await call("tasks_overview", { action: "summary" })).toHaveProperty(
       "totalOpen",
     );
-    expect(await call("recipe_insights", { action: "tags" })).toEqual({
+    expect(await call("recipe_insights_read", { action: "tags" })).toEqual({
       items: [],
     });
     expect(
-      await call("nutrition", {
-        action: "shopping_list",
+      await call("nutrition_read", {
+        action: "get_shopping_list",
         from: "2026-01-05",
         to: "2026-01-11",
       }),
@@ -254,18 +253,18 @@ describe("MCP catalog", () => {
       credit: { state: "available" },
     });
     expect(
-      await call("imports_read", {
+      await call("product_enrichment_read", {
         action: "external_id_collisions",
         identifiers: [
           { source: "amazon", kind: "asin", externalId: "B0SYNTH001" },
         ],
       }),
     ).toBeDefined();
-    expect(await call("activity", { action: "recent" })).toHaveProperty(
+    expect(await call("activity_read", { action: "list" })).toHaveProperty(
       "entries",
     );
     expect(
-      await call("source_transaction_records", {
+      await call("finance", {
         action: "record",
         import: {
           source: "monarch",
@@ -290,7 +289,7 @@ describe("MCP catalog", () => {
     );
     expect(
       await call("purchase_import", {
-        action: "confirm_vendor",
+        action: "confirm_merchant_vendor",
         merchant: "SYNTHETIC SHOP",
         vendorId,
       }),
@@ -308,7 +307,7 @@ describe("MCP catalog", () => {
     );
     expect(
       await call("expenses", {
-        action: "split",
+        action: "split_with_delta",
         expenseId: expense.id,
         parts: [
           {
@@ -335,7 +334,10 @@ describe("MCP catalog", () => {
     });
     // Detector rows carry Date timestamps; the action publishes their JSON.
     expect(
-      await call("activity", { action: "problems", type: "orphanedProducts" }),
+      await call("activity_read", {
+        action: "report",
+        type: "orphanedProducts",
+      }),
     ).toMatchObject({
       type: "orphanedProducts",
       items: expect.arrayContaining([
@@ -350,7 +352,10 @@ describe("MCP catalog", () => {
     ).toMatchObject({ summary: { requested: 1, succeeded: 1, failed: 0 } });
     // The barcode is already claimed locally, so no lookup service is asked.
     expect(
-      await call("upc", { action: "find_or_create", upc: "012345678905" }),
+      await call("product_enrichment", {
+        action: "find_or_create_by_upc",
+        upc: "012345678905",
+      }),
     ).toMatchObject({ id: productId });
     // Exercise a known exception-eligible gap rather than whichever required
     // field happens to be first as the quality registry grows.
@@ -400,7 +405,7 @@ describe("MCP catalog", () => {
     expect(gap).toBeDefined();
     expect(
       await call("data_exception", {
-        action: "set",
+        action: "set_exception",
         entityId: purchaseId,
         check: gap!.check,
         reason: "unavailable",
@@ -409,8 +414,8 @@ describe("MCP catalog", () => {
     ).toHaveProperty("status");
 
     const recipeId = z.object({ id: z.string() }).parse(
-      await call("recipe_import", {
-        action: "from_text",
+      await call("recipe_insights", {
+        action: "create_from_text",
         name: "Catalog toast",
         sections: [
           { ingredients: ["1 slice bread"], instructions: ["Toast."] },
@@ -424,7 +429,7 @@ describe("MCP catalog", () => {
       }),
     );
     expect(
-      await call("meal_recipe", { action: "add", mealId, recipeId }),
+      await call("nutrition", { action: "plan_recipe", mealId, recipeId }),
     ).toMatchObject({ id: mealId });
 
     const photo = await createImageFixture(ctx.db, "catalog-photo", {
@@ -544,6 +549,21 @@ describe("MCP catalog", () => {
         })
         .parse(commit._meta)["cubby/error"].diagnostics.stage,
     ).toBe("context");
+    // describe hides unmounted actions too, including from the available list.
+    const described = await callMcpTool(
+      createMcpServer(),
+      "purchase_import",
+      { action: "describe", input: { actions: ["commit"] } },
+      kernelRequestContext(kernel),
+      {
+        entityKernel: kernel,
+        purchaseAgent: { runId: run.id, grantId: "catalog-grant" },
+      },
+    );
+    expect(described.isError).toBe(true);
+    const refusal = JSON.stringify(described.content);
+    expect(refusal).toContain("Unknown action");
+    expect(refusal).not.toContain("prepare");
   });
 
   it("shows a purchase agent only its run purpose's actions", async () => {
@@ -560,9 +580,8 @@ describe("MCP catalog", () => {
     });
     const { tools } = await listMcpTools(
       createMcpServer(),
-      {},
+      requireActor(requestContext),
       {
-        operationContext: new McpOperationContext(requireActor(requestContext)),
         purchaseAgent: { runId: run.id, grantId: "catalog-photo-grant" },
       },
     );
@@ -579,29 +598,47 @@ describe("MCP catalog", () => {
     expect(tools.map((tool) => tool.name).sort()).toEqual([
       "entity",
       "entity_read",
-      "imports_read",
+      "image_read",
       "photo_run",
-      "search",
+      "photo_run_read",
+      "search_read",
     ]);
     expect(actionsOf("entity")).toEqual(["update"]);
     expect(actionsOf("entity_read")).toEqual(["resolve"]);
-    expect(actionsOf("photo_run")).toEqual(["propose_groups"]);
-    expect(actionsOf("imports_read").sort()).toEqual([
-      "image_processing",
-      "photo_candidates",
-      "photo_context",
-      "photo_proposals",
+    expect(actionsOf("photo_run").sort()).toEqual([
+      "describe",
+      "propose_groups",
+    ]);
+    expect(actionsOf("image_read").sort()).toEqual(["describe", "status"]);
+    expect(actionsOf("photo_run_read").sort()).toEqual([
+      "describe",
+      "product_candidates",
+      "proposals",
+      "run_context",
     ]);
   });
 
   // Failure modes: the outer action hides the writer's choice; omission or
   // an unsupported choice must not resolve the retained finding.
   it("dismisses and applies retained findings through the published operation action", async () => {
-    const { tools } = await listMcpToolCatalog();
-    expect(
-      tools.find((tool) => tool.name === "run")?.inputSchema,
-    ).toMatchObject({
-      properties: { operationAction: { enum: ["apply", "dismiss"] } },
+    const kernel = entityKernelContextSchema.parse(
+      createTestRequestContext(ctx.db, { auth: { userId: ctx.actor.userId } }),
+    );
+    const described = await callMcpTool(
+      createMcpServer(),
+      "activity",
+      { action: "describe", input: { actions: ["resolve_run_finding"] } },
+      kernelRequestContext(kernel),
+      { entityKernel: kernel },
+    );
+    expect(described.structuredContent).toMatchObject({
+      actions: [
+        {
+          inputSchema: {
+            properties: { operationAction: { enum: ["apply", "dismiss"] } },
+          },
+        },
+      ],
     });
     const party = await insertWithShortcode(ctx.db, "ledgerParty", {
       name: "Synthetic finding member",
@@ -623,15 +660,15 @@ describe("MCP catalog", () => {
       evidenceFingerprint: "synthetic-review-fingerprint",
     });
     if (!finding) throw new Error("Synthetic finding missing");
-    const kernel = entityKernelContextSchema.parse(
-      createTestRequestContext(ctx.db, { auth: { userId: ctx.actor.userId } }),
-    );
     const call = (operationAction?: string) => {
-      const args: ToolArguments = { action: "resolve_finding", id: finding.id };
+      const args: ToolArguments = {
+        action: "resolve_run_finding",
+        id: finding.id,
+      };
       if (operationAction !== undefined) args.operationAction = operationAction;
       return callMcpTool(
         createMcpServer(),
-        "run",
+        "activity",
         args,
         kernelRequestContext(kernel),
         { entityKernel: kernel },
@@ -683,9 +720,9 @@ describe("MCP catalog", () => {
     if (!proposal) throw new Error("Synthetic proposal missing");
     const applied = await callMcpTool(
       createMcpServer(),
-      "run",
+      "activity",
       {
-        action: "resolve_finding",
+        action: "resolve_run_finding",
         operationAction: "apply",
         id: proposal.id,
       },
@@ -721,14 +758,6 @@ describe("MCP catalog", () => {
     const kernel = entityKernelContextSchema.parse(
       createTestRequestContext(ctx.db, { auth: { userId: ctx.actor.userId } }),
     );
-    const call = (args: ToolArguments) =>
-      callMcpTool(
-        createMcpServer(),
-        "entity_read",
-        args,
-        kernelRequestContext(kernel),
-        { entityKernel: kernel },
-      );
     const product = await insertWithShortcode(ctx.db, "product", {
       name: "Synthetic suggestion product",
       brandId: await findOrCreateVendor(ctx.db, "Synthetic maker"),
@@ -754,7 +783,13 @@ describe("MCP catalog", () => {
       },
       true,
     );
-    const queue = await call({ action: "suggestion_queue", entity: "product" });
+    const queue = await callMcpTool(
+      createMcpServer(),
+      "suggestions_read",
+      { action: "list", entity: "product" },
+      kernelRequestContext(kernel),
+      { entityKernel: kernel },
+    );
     expect(queue.isError).not.toBe(true);
     expect(queue.structuredContent).toMatchObject({
       items: [

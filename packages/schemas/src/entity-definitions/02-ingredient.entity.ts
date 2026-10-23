@@ -475,7 +475,6 @@ export default defineEntity(
           columnId: "mappingGap",
           field: "mappingGap",
           kind: "boolean",
-          derived: true,
           placeholder: "Filter product mapping...",
           options: [{ value: "true", label: "Needs product mapping" }],
         },
@@ -485,7 +484,6 @@ export default defineEntity(
           kind: "boolean",
           placeholder: "Filter pantry staples...",
           deriveSchema: true,
-          stored: true,
           schemaDescription: "Filter by ingredients usually kept on hand",
           options: [
             { value: "true", label: "Usually on hand" },
@@ -496,7 +494,6 @@ export default defineEntity(
           columnId: "ownRecipes",
           field: "ownRecipePresenceFilter",
           kind: "presence",
-          derived: true,
           placeholder: "Filter own recipes...",
           options: [
             { value: "has", label: "Has own recipes", meta: true },

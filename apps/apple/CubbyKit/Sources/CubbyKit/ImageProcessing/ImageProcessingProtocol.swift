@@ -2,14 +2,20 @@ import Foundation
 
 public enum CompanionImageProcessingProtocol {
     public static let version = 1
+    /// The doorbell topic that rings when image work may be claimable.
+    static let doorbellPath = "/api/doorbell"
+    static let doorbellTopic = URLQueryItem(name: "topic", value: "imageProcessing.work")
+    /// A resident worker's claim matches the server's companion window (`COMPANION_LEASE_MS`).
+    static let residentLeaseSeconds = 300
 
     public static func attemptKey(jobID: String, attemptID: String) -> String {
         "\(jobID):\(attemptID)"
     }
 }
 
-extension ImageProcessingClientMessage {
-    static func companionHello(
+extension ImageProcessingHello {
+    /// This device's capability report, sent with every `imageProcessing.pull`.
+    static func companion(
         deviceID: UUID, deviceName: String, foreground: Bool,
         subjectLiftAvailable: Bool = true,
         imageDescriptionAvailable: Bool,
@@ -20,32 +26,27 @@ extension ImageProcessingClientMessage {
         #else
             let platform: ImageProcessingHelloPlatform = .ios
         #endif
-        return .hello(
-            ImageProcessingHello(
-                protocolVersion: ._1,
-                type: .hello,
-                deviceId: deviceID.uuidString.lowercased(),
-                platform: platform,
-                appVersion: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString")
-                    as? String ?? "unknown",
-                deviceName: deviceName,
-                osVersion: ProcessInfo.processInfo.operatingSystemVersionString,
-                capabilities: ImageProcessingCapabilities(
-                    visionSubjectLift: .init(
-                        available: subjectLiftAvailable,
-                        revision: subjectLiftAvailable ? 1 : nil),
-                    actualImageDescription: .init(
-                        available: imageDescriptionAvailable,
-                        revision: imageDescriptionAvailable ? 1 : nil),
-                    jpegNormalization: .init(available: true, revision: ._1),
-                    foreground: foreground),
-                // The device owns this switch; the server mirrors it onto the
-                // `Device` row and refuses to dispatch when it is off.
-                participation: .init(automaticWork: automaticWork)))
-    }
-
-    static func companionResult(_ result: ImageProcessingResult) -> Self {
-        .result(.init(protocolVersion: ._1, type: .result, result: result))
+        return ImageProcessingHello(
+            protocolVersion: ._1,
+            type: .hello,
+            deviceId: deviceID.uuidString.lowercased(),
+            platform: platform,
+            appVersion: Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString")
+                as? String ?? "unknown",
+            deviceName: deviceName,
+            osVersion: ProcessInfo.processInfo.operatingSystemVersionString,
+            capabilities: ImageProcessingCapabilities(
+                visionSubjectLift: .init(
+                    available: subjectLiftAvailable,
+                    revision: subjectLiftAvailable ? 1 : nil),
+                actualImageDescription: .init(
+                    available: imageDescriptionAvailable,
+                    revision: imageDescriptionAvailable ? 1 : nil),
+                jpegNormalization: .init(available: true, revision: ._1),
+                foreground: foreground),
+            // The device owns this switch; the server mirrors it onto the
+            // `Device` row and refuses to assign work when it is off.
+            participation: .init(automaticWork: automaticWork))
     }
 }
 

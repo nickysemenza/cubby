@@ -11,7 +11,6 @@ import { aiEvaluationRequest, email, run, job } from "~/server/db/schema";
 import { loadMailReclassificationRead } from "~/server/domains/run/repo/run-reclassification-read";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { requireActor } from "~/server/http/request-context";
-import { McpOperationContext } from "~/server/mcp/operation-context";
 import { createMcpServer } from "~/server/mcp/server";
 import { callMcpTool } from "~/server/testing/mcp-test-utils";
 import { createTestRequestContext } from "~/server/testing/request-context";
@@ -98,19 +97,16 @@ describe("durable member reclassification recovery", () => {
     }
     const owner = { userId: ctx.actor.userId, ledgerPartyId: party.id };
     async function readStatus(runId: string) {
-      const operationContext = new McpOperationContext(
-        requireActor(
-          createTestRequestContext(ctx.db, {
-            auth: { userId: ctx.actor.userId },
-          }),
-        ),
+      const mcpContext = requireActor(
+        createTestRequestContext(ctx.db, {
+          auth: { userId: ctx.actor.userId },
+        }),
       );
       return callMcpTool(
         createMcpServer(),
-        "imports_read",
-        { action: "run_status", runId },
-        {},
-        { operationContext },
+        "run_read",
+        { action: "work_snapshot", runId },
+        mcpContext,
       );
     }
     return { party, owner, seed, getMessage, triage, relevance, readStatus };

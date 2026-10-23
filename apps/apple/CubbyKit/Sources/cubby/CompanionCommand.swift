@@ -101,7 +101,7 @@ struct CompanionCommand: AsyncParsableCommand {
         let (events, continuation) = AsyncStream<Event>.makeStream()
         let worker = CompanionImageWorker(
             baseURL: context.baseURL, credentials: context.credentials, deviceID: deviceID,
-            deviceName: deviceName, foreground: true, outbox: outbox,
+            deviceName: deviceName, foreground: true, outbox: outbox, identity: context.identity,
             failureObserver: { continuation.yield(.failure(String(describing: $0))) },
             activityObserver: { continuation.yield(.activity($0)) },
             jobObserver: { continuation.yield(.job($0)) })

@@ -83,7 +83,8 @@ test("Run evidence uses native bearer cookies and confines the hosted experiment
     outdatedHeaders,
   );
   expect(outdatedWrite.status()).toBe(426);
-  expect(await outdatedWrite.json()).toEqual(await outdated.json());
+  // The runner's refusal adds its diagnostics to the same update message.
+  expect(await outdatedWrite.json()).toMatchObject(await outdated.json());
   const productRow = await getDb(getFixtureDb()).query.product.findFirst({
     where: eq(productTable.shortcode, product.id),
   });

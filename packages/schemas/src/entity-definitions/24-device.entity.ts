@@ -414,7 +414,6 @@ export default defineEntity({
         kind: "multiselect",
         placeholder: "Filter by platform...",
         deriveSchema: true,
-        stored: true,
         schemaFromRead: true,
         options: [
           { value: "ios", label: "iOS" },
@@ -426,7 +425,6 @@ export default defineEntity({
         kind: "boolean",
         placeholder: "Filter by automatic work...",
         deriveSchema: true,
-        stored: true,
         options: [
           { value: "true", label: "Automatic work on" },
           { value: "false", label: "Automatic work off" },
@@ -437,7 +435,6 @@ export default defineEntity({
         kind: "boolean",
         placeholder: "Filter by paused state...",
         deriveSchema: true,
-        stored: true,
         options: [
           { value: "true", label: "Paused" },
           { value: "false", label: "Not paused" },
@@ -450,7 +447,6 @@ export default defineEntity({
         brandRef: { entity: "ledgerParty" },
         currentMember: true,
         deriveSchema: true,
-        stored: true,
       },
     ],
   },

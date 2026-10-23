@@ -66,6 +66,12 @@ Start streams   →  cancellable workflow streams
   (`src/server/domains/<domain>/operations.server.ts` or `operations/*.server.ts`).
   The browser, HTTP API and MCP are adapters over it. Generated browser module
   ownership and command loading live in [browser cache policy](entities.md#browser-cache-policy).
+  Every query and mutation contract member has an `exposure`, inherited from
+  its contract default or set on the member. `capability` members generate MCP
+  actions; `view` and `internal` members remain off MCP. A contract's optional
+  `mcpToolGroup` sets the generated tool name (split into a `_read` tool when
+  the group mixes reads and writes), while each action name comes from its
+  member in snake_case. See [MCP exposure](agents/mcp.md#exposure).
   HTTP `httpWire` projections can narrow unused optional native input fields
   without narrowing browser contracts. The calendar's typed window retains date
   limits and kinds; web queries additionally accept source filters. Use
@@ -560,7 +566,7 @@ CLI operation IDs and HTTP routes come from the generated `native:` catalog.
 MCP tool/action names can differ: `shipments.record` maps to `shipment.record`;
 omit the MCP `action` wrapper from the HTTP/CLI input. Check the catalog before
 choosing a transport. An absent CLI operation may require rebuilding after a
-contract change, or may be MCP-only. For example, Gmail `mail.search` currently
+contract change, or may be MCP-only. For example, Gmail `purchase_import.mail_search` currently
 uses MCP. Neither CLI nor curl exposes operations missing from the HTTP contract.
 
 Use curl when a script needs direct HTTP or a JSON body file. Supply an existing
@@ -588,6 +594,31 @@ not commit, so reconcile its result before retrying.
 Better-Auth (`better-auth/tanstack-start`), with config in
 `apps/web/src/lib/auth.ts` and `auth-client.ts`. In dev,
 `/api/auth/reference` documents every auth endpoint.
+
+Every client reaches an operation through one Auth step and one runner.
+`authenticate(request, policy)` (`apps/web/src/server/http/authenticate.ts`)
+reads exactly one credential (`x-api-key`, else `Authorization: Bearer`, else
+the session cookie), refuses one the endpoint's policy does not accept, and
+returns a `Principal` or a `Challenge` (401/403) the adapter renders in its own
+protocol. Browser dispatch, SSR, workflow streams, `/api/v1`, `/api/mcp`, the
+database-changes and image-companion sockets, `/api/ai/chatgpt` and the native
+workspace session exchange all call it; none reads credentials itself.
+
+- **Principal.** The verified request context (actor and Ledger Party), the
+  channel (`browser`, `native`, `cli`, `mcp`, `system`), the client build from
+  `User-Agent`, an optional Run delegation (purchase agent), and a deadline
+  budget (MCP only). The endpoint fixes the audit channel, so a hosted native
+  WebView on a browser endpoint still audits as `web`.
+- **Same-origin rule.** A cookie request other than a plain `GET`/`HEAD` (a
+  WebSocket upgrade included) must carry this server's `Origin`, or
+  `Sec-Fetch-Site: same-origin` without one; otherwise 403 before the session
+  is read. Bearer tokens and API keys are exempt.
+- **Apple gate.** The runner refuses a write or stream from an outdated
+  `cubby-apple` build with `UPGRADE_REQUIRED` (HTTP 426); its reads still run.
+- **Runner.** `runStartOperation` selects the context (strong reads), parses
+  input and output, applies the principal's budget, marks calendar state dirty
+  and records the freshness write once a household-changing mutation starts,
+  whatever its outcome.
 
 - **API keys.** Create a `cubby_` key at `/account/api-keys` and send it as
   `x-api-key`. A key grants its owner's full access.

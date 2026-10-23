@@ -12,6 +12,7 @@ import { aiUsage, auditLog, photoRunImage } from "~/server/db/schema";
 import { runHandlers } from "~/server/domains/run/operations/run.server";
 import { getRunWorkProgress } from "~/server/domains/run/repo/work-progress";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { systemPrincipal } from "~/server/http/authenticate";
 import { requireActor } from "~/server/http/request-context";
 import { createTestRequestContext } from "~/server/testing/request-context";
 
@@ -209,21 +210,28 @@ describe("run.reportDeviceWork", () => {
   });
 
   it("rejects a caller with no linked member ledger party", async () => {
-    const context = {
-      ...requireActor(
+    const principal = systemPrincipal(
+      requireActor(
         createTestRequestContext(ctx.db, {
           auth: { userId: ctx.actor.userId },
         }),
       ),
-      signal: new AbortController().signal,
-    };
+    );
     await expect(
-      runHandlers.runs.reportDeviceWork!.run(context, {
-        run: "RUN-0000",
-        image: "IMG-0000",
-        state: "queued",
+      runHandlers.operations.reportDeviceWork({
+        data: { run: "RUN-ABCD", image: "IMG-ABCD", state: "queued" },
+        request: {
+          principal,
+          headers: new Headers(),
+          signal: new AbortController().signal,
+        },
       }),
-    ).rejects.toThrow(/not linked to a member ledger party/);
+    ).resolves.toMatchObject({
+      ok: false,
+      error: {
+        message: expect.stringMatching(/not linked to a member ledger party/),
+      },
+    });
   });
 
   it("rejects an image that is not a target of the run", async () => {

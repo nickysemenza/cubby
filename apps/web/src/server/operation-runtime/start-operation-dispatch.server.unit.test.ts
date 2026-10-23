@@ -2,18 +2,21 @@ import { testUserId } from "@cubby/schemas/testing";
 import { describe, expect, it, vi } from "vitest";
 
 import { createDatabase } from "~/server/db/database-runtime";
+import { systemPrincipal } from "~/server/http/authenticate";
 import { requireActor } from "~/server/http/request-context";
 import { createTestRequestContext } from "~/server/testing/request-context";
 
 import { dispatchStartOperation } from "./start-operation-dispatch.server";
 
 const request = {
-  verifiedContext: requireActor(
-    createTestRequestContext(
-      createDatabase(() => {
-        throw new Error("No DB access expected");
-      }),
-      { auth: { userId: testUserId("dispatch-user") } },
+  principal: systemPrincipal(
+    requireActor(
+      createTestRequestContext(
+        createDatabase(() => {
+          throw new Error("No DB access expected");
+        }),
+        { auth: { userId: testUserId("dispatch-user") } },
+      ),
     ),
   ),
   headers: new Headers(),

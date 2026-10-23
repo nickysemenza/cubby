@@ -36,7 +36,6 @@ import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolv
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { readWorkQueue } from "~/server/generic/work-queue/service/work-queue-read";
 import { requireActor } from "~/server/http/request-context";
-import { McpOperationContext } from "~/server/mcp/operation-context";
 import { createMcpServer } from "~/server/mcp/server";
 import { callMcpTool } from "~/server/testing/mcp-test-utils";
 import {
@@ -576,18 +575,14 @@ describe("member actionable Work queue", () => {
     ) => {
       const response = await callMcpTool(
         createMcpServer(),
-        "activity",
-        { action: "work_queue", source, query, pageSize: 1 },
+        "activity_read",
+        { action: "for_member", source, query, pageSize: 1 },
+        requireActor(
+          createTestRequestContext(ctx.db, {
+            auth: { userId: actorUserId },
+          }),
+        ),
         {},
-        {
-          operationContext: new McpOperationContext(
-            requireActor(
-              createTestRequestContext(ctx.db, {
-                auth: { userId: actorUserId },
-              }),
-            ),
-          ),
-        },
       );
       expect(response.isError).not.toBe(true);
       return workQueueOutSchema.parse(response.structuredContent);
@@ -786,18 +781,14 @@ describe("member actionable Work queue", () => {
     ) => {
       const response = await callMcpTool(
         createMcpServer(),
-        "activity",
-        { action: "work_queue", source, query },
+        "activity_read",
+        { action: "for_member", source, query },
+        requireActor(
+          createTestRequestContext(ctx.db, {
+            auth: { userId: ctx.actor.userId },
+          }),
+        ),
         {},
-        {
-          operationContext: new McpOperationContext(
-            requireActor(
-              createTestRequestContext(ctx.db, {
-                auth: { userId: ctx.actor.userId },
-              }),
-            ),
-          ),
-        },
       );
       expect(response.isError).not.toBe(true);
       return workQueueOutSchema.parse(response.structuredContent);
@@ -895,24 +886,20 @@ describe("member actionable Work queue", () => {
     ) =>
       callMcpTool(
         createMcpServer(),
-        "activity",
+        "activity_read",
         {
-          action: "work_queue",
+          action: "for_member",
           source: "problem",
           query: account.shortcode,
           pageSize,
           pageIndex,
         },
+        requireActor(
+          createTestRequestContext(ctx.db, {
+            auth: { userId: actorUserId },
+          }),
+        ),
         {},
-        {
-          operationContext: new McpOperationContext(
-            requireActor(
-              createTestRequestContext(ctx.db, {
-                auth: { userId: actorUserId },
-              }),
-            ),
-          ),
-        },
       );
     const owned = await read(ctx.actor.userId, 0, 25);
     expect(owned.isError).not.toBe(true);
@@ -1211,18 +1198,14 @@ describe("member actionable Work queue", () => {
     const read = (actorUserId: typeof otherUserId, fields = {}) =>
       callMcpTool(
         createMcpServer(),
-        "activity",
-        { action: "work_queue", ...fields },
+        "activity_read",
+        { action: "for_member", ...fields },
+        requireActor(
+          createTestRequestContext(ctx.db, {
+            auth: { userId: actorUserId },
+          }),
+        ),
         {},
-        {
-          operationContext: new McpOperationContext(
-            requireActor(
-              createTestRequestContext(ctx.db, {
-                auth: { userId: actorUserId },
-              }),
-            ),
-          ),
-        },
       );
     const firstPage = await read(ctx.actor.userId);
     expect(firstPage.isError).not.toBe(true);

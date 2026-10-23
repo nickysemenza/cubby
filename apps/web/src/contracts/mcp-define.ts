@@ -9,9 +9,8 @@ import type { MutationContract, QueryContract } from "~/contracts/define";
  * `implementOperationDomain` handler (`server/generated/mcp-tools.gen.ts`) and
  * emits the `${tool}.${action}` name unions (`@cubby/schemas/mcp-tools`).
  *
- * A tool's actions are either all queries or all mutations — generation fails
- * otherwise — because MCP clients approve per TOOL: a read-only tool must stay
- * auto-approvable, and one write action inside it would make every read ask.
+ * Operation actions are generated from capability members. This file keeps
+ * entity-kernel verbs and MCP-specific projections or adapter policy.
  */
 
 type OperationMember = QueryContract | MutationContract;
@@ -95,13 +94,6 @@ export interface McpActionSpec<
    */
   readonly strict?: true;
   /**
-   * A query that must read the authoritative adapter. A function decides per
-   * input (e.g. a snapshot computation versus a paged detail read).
-   */
-  readonly readPolicy?:
-    | "strong"
-    | ((input: MemberInput<Op>) => "strong" | "context");
-  /**
    * A read that may wait on a model (the decision model or another AI call). Its MCP deadline
    * outlasts the model's retry budget instead of using the plain read budget.
    * Writes already have the longer write budget.
@@ -115,9 +107,52 @@ export interface McpActionSpec<
   readonly telemetryEntity?: (input: MemberInput<Op>) => string | undefined;
 }
 
+/** MCP-only shaping stays beside the adapter, keyed by operation id. */
+export type McpActionOverride<Op extends OperationMember = OperationMember> =
+  Partial<
+    Pick<
+      McpActionSpec<Op, ErasedMcpType>,
+      "project" | "output" | "strict" | "batch" | "telemetryEntity"
+    >
+  >;
+
+// SAFETY: per-member callbacks are checked by mcpActionOverride before the
+// heterogeneous generated catalog erases their operation and projection types.
+// oxlint-disable-next-line typescript/no-explicit-any -- this alias is the intentional registry erasure boundary.
+type ErasedMcpType = any;
+
+type McpActionOverrideInput<Op extends OperationMember, Projected> = Omit<
+  McpActionSpec<Op, Projected>,
+  "op" | "description" | "destructive" | "openWorld" | "modelBacked"
+>;
+
+/** Use the operation only to infer the adapter override's schema types. */
+export const mcpActionOverride = <
+  const Op extends OperationMember,
+  Projected = MemberOutput<Op>,
+>(
+  _op: Op,
+  override: McpActionOverrideInput<Op, Projected>,
+): McpActionOverride<Op> => override;
+
+/** Build an action's runtime adapter spec from its transport-neutral member. */
+export const mcpCapabilityAction = <const Op extends OperationMember>(
+  op: Op,
+  override?: McpActionOverride<ErasedMcpType>,
+): McpActionSpec<Op, ErasedMcpType> => {
+  if (!op.description?.trim())
+    throw new Error("MCP actions require a described capability operation");
+  return {
+    op,
+    description: op.description,
+    destructive: op.destructive,
+    openWorld: op.openWorld,
+    modelBacked: op.modelBacked,
+    ...override,
+  };
+};
+
 export interface McpToolDeclaration {
-  /** What the tool is for; each action's own description follows it. */
-  readonly description: string;
   readonly actions: Readonly<Record<string, McpActionSpec>>;
 }
 

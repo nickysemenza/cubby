@@ -448,7 +448,6 @@ export default defineEntity({
         kind: "multiselect",
         placeholder: "Filter by crop...",
         deriveSchema: true,
-        stored: true,
         schemaRef: {
           module: "@cubby/schemas/garden-practice",
           export: "gardenCropKey",
@@ -463,7 +462,6 @@ export default defineEntity({
         kind: "multiselect",
         placeholder: "Filter by verdict...",
         deriveSchema: true,
-        stored: true,
         schemaRef: {
           module: "@cubby/schemas/garden-fields",
           export: "plantVerdict",
@@ -480,7 +478,6 @@ export default defineEntity({
         placeholder: "Filter by ingredient...",
         brandRef: { entity: "ingredient" },
         deriveSchema: true,
-        stored: true,
       },
     ],
   },

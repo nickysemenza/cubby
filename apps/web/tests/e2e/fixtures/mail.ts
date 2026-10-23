@@ -87,7 +87,7 @@ export async function seedUnimportedOrderMail(
   const events: Array<{
     eventId: string;
     orderMailId: typeof schema.orderMail.$inferSelect.id;
-    /** The Email's EML- code, the identity mail.import selects by. */
+    /** The Email's EML- code, the identity purchase_import.email_import selects by. */
     emailId: string;
     checksum: string;
     orderId: string;

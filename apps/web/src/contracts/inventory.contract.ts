@@ -30,121 +30,126 @@ import {
 
 import { defineContract, mutation, query } from "~/contracts/define";
 
-export const inventoryContract = defineContract("inventory", {
-  receiveExpense: mutation({
-    command: { label: "Receive inventory", confirmation: null },
-    mcp: {
-      omit: "deferred_capability",
-    },
-    native: "Explicit Expense inventory receiving",
-    input: inventoryReceiveExpenseInput,
-    output: inventoryReceiveExpenseOut,
-    invalidates: ["inventory", "product", "purchase", "problems"],
-  }),
-  receivingContext: query({
-    mcp: {
-      omit: "deferred_capability",
-    },
-    native: "Expense receiving context",
-    input: inventoryReceivingContextInput,
-    output: inventoryReceivingContextOut,
-  }),
-  bulkAdd: mutation({
-    command: {
-      label: "Add inventory",
-      confirmation: null,
-      affectedEntities: ["inventory", "location", "product"],
-      resultFields: [
-        { label: "Created", path: "createdCount" },
-        { label: "Merged", path: "mergedCount" },
-      ],
-    },
-    mcp: {
-      omit: "deferred_capability",
+export const inventoryContract = defineContract(
+  "inventory",
+  {
+    receiveExpense: mutation({
+      description:
+        "Receive the selected Purchase Expense quantity into an inventory location. This records stock and may merge it into an existing entry; inspect receiving_context first when the target is unclear.",
+      command: { label: "Receive inventory", confirmation: null },
+      native: "Explicit Expense inventory receiving",
+      input: inventoryReceiveExpenseInput,
+      output: inventoryReceiveExpenseOut,
+      invalidates: ["inventory", "product", "purchase", "problems"],
+    }),
+    receivingContext: query({
+      description:
+        "Read the purchase and inventory context for a proposed receipt, including existing matching stock. This is a preview; use receive_expense only for items the member confirms arrived.",
+      native: "Expense receiving context",
+      input: inventoryReceivingContextInput,
+      output: inventoryReceivingContextOut,
+    }),
+    bulkAdd: mutation({
       note: "Atomic add-or-sum is distinct from strict entity.create; user commands call inventory.bulkAdd",
-    },
-    native: "Add to inventory from the hero action",
-    input: inventoryBulkAddPayload,
-    output: inventoryBulkAddOut,
-    invalidates: ["inventory"],
-  }),
-  bulkDiscard: mutation({
-    command: { label: "Discard inventory", confirmation: null },
-    mcp: {
-      omit: "deferred_capability",
-    },
-    input: inventoryBulkDiscardPayload,
-    output: inventoryBulkDiscardOut,
-    invalidates: ["expense"],
-  }),
-  bulkMove: mutation({
-    command: { label: "Move inventory", confirmation: null },
-    mcp: {
-      omit: "agent_twin",
-      twin: "inventory.moveEntries",
-      note: "The web multi-select move; entity.move_inventory moves entries per destination",
-    },
-    input: bulkMovePayload,
-    output: inventoryWithLocationAndProductListAndSideEffectsOut,
-    invalidates: ["inventory"],
-  }),
-  moveEntries: mutation({
-    command: { label: "Move inventory", confirmation: null },
-    native: "Accept inventory placement recommendation",
-    input: moveInventoryEntriesPayload,
-    output: inventoryWithLocationAndProductListAndSideEffectsOut,
-    invalidates: ["inventory"],
-  }),
-  reconcileSession: mutation({
-    native: "Audit reconcile",
-    input: reconcileSessionPayload,
-    output: inventoryWithLocationAndProductListAndSideEffectsOut,
-    invalidates: ["inventory"],
-  }),
-  scanAtLocation: mutation({
-    mcp: { omit: "device_protocol", note: "Native barcode capture" },
-    native: "Capture",
-    input: scanAtLocationInput,
-    output: scanAtLocationOut,
-    invalidates: ["inventory"],
-  }),
-  resolveScanStrays: mutation({
-    native: "Strays sheet",
-    input: resolveScanStraysInput,
-    output: resolveScanStraysOut,
-    invalidates: ["inventory"],
-  }),
-  // Interactive inventory work and integrity/repair diagnostics.
-  findDuplicates: query({
-    mcp: { omit: "client_view" },
-    readPolicy: "strong",
-    native: "Audit duplicate badge",
-    input: inventoryFindDuplicatesInput,
-    output: inventoryDuplicateUniqueProductsOut,
-  }),
-  locationSnapshot: query({
-    mcp: { omit: "client_view" },
-    native: "Ownership-aware inventory snapshot",
-    input: inventoryLocationSnapshotInput,
-    output: inventoryLocationSnapshotOut,
-  }),
-  setOwnership: mutation({
-    command: { label: "Set ownership", confirmation: null },
-    mcp: {
-      omit: "kernel_alternative",
-      kernel: ["update"],
+      description:
+        "Add or sum inventory entries atomically for a location. Existing matching Product entries increase rather than creating duplicates; use entity.create when an ordinary new entity is intended.",
+      command: {
+        label: "Add inventory",
+        confirmation: null,
+        affectedEntities: ["inventory", "location", "product"],
+        resultFields: [
+          { label: "Created", path: "createdCount" },
+          { label: "Merged", path: "mergedCount" },
+        ],
+      },
+      native: "Add to inventory from the hero action",
+      input: inventoryBulkAddPayload,
+      output: inventoryBulkAddOut,
+      invalidates: ["inventory"],
+    }),
+    bulkDiscard: mutation({
+      description:
+        "Discard the selected inventory quantities. This reduces recorded stock and cannot be inferred from cooking or ordinary use; call only for a member-confirmed recount or discard.",
+      destructive: true,
+      command: { label: "Discard inventory", confirmation: null },
+      input: inventoryBulkDiscardPayload,
+      output: inventoryBulkDiscardOut,
+      invalidates: ["expense"],
+    }),
+    bulkMove: mutation({
+      exposure: "view",
+      note: "The web multi-select move; inventory.move_entries moves entries per destination",
+      command: { label: "Move inventory", confirmation: null },
+      input: bulkMovePayload,
+      output: inventoryWithLocationAndProductListAndSideEffectsOut,
+      invalidates: ["inventory"],
+    }),
+    moveEntries: mutation({
+      description:
+        "Move inventory entries to per-item destination locations in one atomic call. Each item names an entry and where it should end up, so one call can fan a location out across many, consolidate many into one, or both. Omit an item's quantity to move the whole entry; include it for a partial move, and list one entry twice to split it across destinations. Entries merge into an existing entry for the same product at the destination. The source location is not asked for — an entry already knows where it is.",
+      destructive: true,
+      command: { label: "Move inventory", confirmation: null },
+      native: "Accept inventory placement recommendation",
+      input: moveInventoryEntriesPayload,
+      output: inventoryWithLocationAndProductListAndSideEffectsOut,
+      invalidates: ["inventory"],
+    }),
+    reconcileSession: mutation({
+      description:
+        "Commit a physical shelf audit of one location: the expected entry ids, the snapshot read before counting, and a resolution per entry. Only when the member counted that shelf.",
+      native: "Audit reconcile",
+      input: reconcileSessionPayload,
+      output: inventoryWithLocationAndProductListAndSideEffectsOut,
+      invalidates: ["inventory"],
+    }),
+    scanAtLocation: mutation({
+      exposure: "internal",
+      note: "Native barcode capture",
+      native: "Capture",
+      input: scanAtLocationInput,
+      output: scanAtLocationOut,
+      invalidates: ["inventory"],
+    }),
+    resolveScanStrays: mutation({
+      description:
+        "Move inventory entries a scan found out of place into targetLocationId (whole entries unless quantity is given).",
+      native: "Strays sheet",
+      input: resolveScanStraysInput,
+      output: resolveScanStraysOut,
+      invalidates: ["inventory"],
+    }),
+    // Interactive inventory work and integrity/repair diagnostics.
+    findDuplicates: query({
+      exposure: "view",
+      readPolicy: "strong",
+      native: "Audit duplicate badge",
+      input: inventoryFindDuplicatesInput,
+      output: inventoryDuplicateUniqueProductsOut,
+    }),
+    locationSnapshot: query({
+      exposure: "view",
+      native: "Ownership-aware inventory snapshot",
+      input: inventoryLocationSnapshotInput,
+      output: inventoryLocationSnapshotOut,
+    }),
+    setOwnership: mutation({
+      exposure: "view",
       note: "entity.update on inventory ownershipMode and ownerLedgerPartyId",
-    },
-    native: "Set inventory owner",
-    input: setInventoryOwnershipInput,
-    output: inventoryOwnershipMutationOut,
-    invalidates: ["inventory"],
-  }),
-  confirmOwnership: mutation({
-    command: { label: "Confirm ownership", confirmation: null },
-    native: "Confirm inherited inventory owner",
-    input: confirmInventoryOwnershipInput,
-    output: inventoryOwnershipMutationOut,
-    invalidates: ["inventory"],
-  }),
-});
+      command: { label: "Set ownership", confirmation: null },
+      native: "Set inventory owner",
+      input: setInventoryOwnershipInput,
+      output: inventoryOwnershipMutationOut,
+      invalidates: ["inventory"],
+    }),
+    confirmOwnership: mutation({
+      description:
+        "Confirm an inventory entry's inherited owner using the evidenceFingerprint its ownership context returned; quantity confirms part of the entry.",
+      command: { label: "Confirm ownership", confirmation: null },
+      native: "Confirm inherited inventory owner",
+      input: confirmInventoryOwnershipInput,
+      output: inventoryOwnershipMutationOut,
+      invalidates: ["inventory"],
+    }),
+  },
+  { exposure: "capability" },
+);

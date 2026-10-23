@@ -65,50 +65,57 @@ const attachFileItem = z
     }
   });
 
-export const imageUploadContract = defineContract("image", {
-  markUploaded: mutation({
-    mcp: { omit: "upload_transport" },
-    native: "PhotoService",
-    input: getImageByIdSchema,
-    output: imageWithEntitySchema,
-  }),
-  uploadImage: mutation({
-    mcp: { omit: "upload_transport" },
-    native: "PhotoService",
-    input: initiateUploadWithoutEntitySchema,
-    output: initiateUploadWithoutEntityResponseSchema,
-  }),
-  uploadDocument: mutation({
-    mcp: { omit: "upload_transport" },
-    native: "Purchase import receipt evidence",
-    input: initiateDocumentUploadSchema,
-    output: initiateUploadWithoutEntityResponseSchema,
-  }),
-  importFromUrl: mutation({
-    mcp: {
-      omit: "upload_transport",
-      note: "Agents attach by URL through image.attach_files",
-    },
-    input: importImageFromUrlSchema,
-    output: importImageFromUrlResponseSchema,
-    invalidates: ["image"],
-  }),
-  cullPendingImages: mutation({
-    mcp: { omit: "operator_maintenance" },
-    input: cullPendingImagesSchema,
-    output: cullPendingImagesResponseSchema,
-    invalidates: ["imageCull"],
-  }),
-  // Agent-facing (MCP `image`, batched per item).
-  /** Stage one local file and presign its PUT. */
-  createFileUpload: mutation({
-    input: createFileUploadInput,
-    output: createFileUploadResponse,
-  }),
-  /** Attach one file by URL or staged upload to the entity its shortcode names. */
-  attachFile: mutation({
-    input: attachFileItem,
-    output: attachFileResponse,
-    invalidates: ["image"],
-  }),
-});
+export const imageUploadContract = defineContract(
+  "image",
+  {
+    markUploaded: mutation({
+      native: "PhotoService",
+      input: getImageByIdSchema,
+      output: imageWithEntitySchema,
+    }),
+    uploadImage: mutation({
+      native: "PhotoService",
+      input: initiateUploadWithoutEntitySchema,
+      output: initiateUploadWithoutEntityResponseSchema,
+    }),
+    uploadDocument: mutation({
+      native: "Purchase import receipt evidence",
+      input: initiateDocumentUploadSchema,
+      output: initiateUploadWithoutEntityResponseSchema,
+    }),
+    importFromUrl: mutation({
+      note: "Agents attach by URL through image.attach_file",
+      input: importImageFromUrlSchema,
+      output: importImageFromUrlResponseSchema,
+      invalidates: ["image"],
+    }),
+    cullPendingImages: mutation({
+      exposure: "capability",
+      description:
+        "Remove pending uploaded images that are no longer attached to a live target. This deletes stored uploads; call only after confirming the pending records are abandoned.",
+      destructive: true,
+      input: cullPendingImagesSchema,
+      output: cullPendingImagesResponseSchema,
+      invalidates: ["imageCull"],
+    }),
+    // Agent-facing (MCP `image`, batched per item).
+    /** Stage one local file and presign its PUT. */
+    createFileUpload: mutation({
+      exposure: "capability",
+      description:
+        "Stage up to 50 LOCAL files (`items`) and get one presigned PUT URL per successful item — how files on disk reach Cubby, since the server is remote and `url` cannot name a local path. Three steps: call this, upload each successful item with `curl -X PUT -H 'Content-Type: <contentType>' --upload-file <path> '<uploadUrl>'`, then image.attach_file with the returned uploadIds. A failed item does not roll back successful presigns; results keep input indexes for retrying only failures. Each staged object is discarded once attached. Supported types: image/jpeg, image/png, image/gif, image/webp, image/avif, image/heic, image/heif, application/pdf.",
+      input: createFileUploadInput,
+      output: createFileUploadResponse,
+    }),
+    /** Attach one file by URL or staged upload to the entity its shortcode names. */
+    attachFile: mutation({
+      exposure: "capability",
+      description:
+        "Attach up to 50 files (`items`) in request order; each item carries its own entityId, so one call can cover many records — the cover-image pass of an enrichment sweep. Provide each file exactly one way: `url` (an http(s) link the server fetches) or `uploadId` (from image.create_file_upload — the route for a local file). A Purchase attachment requires documentKind. Provide a deterministic idempotencyKey per item so a retry of a partially-failed batch cannot double-attach, and the freshly read expectedImageCount for Product gallery writes (a mismatch is a precondition failure and attaches nothing). MIME/signature conflicts are rejected.",
+      input: attachFileItem,
+      output: attachFileResponse,
+      invalidates: ["image"],
+    }),
+  },
+  { exposure: "internal" },
+);

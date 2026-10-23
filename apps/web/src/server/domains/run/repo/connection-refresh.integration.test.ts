@@ -29,6 +29,7 @@ import {
 import { confirmPurchaseAcquisition } from "~/server/domains/purchase/repo/purchase-products";
 import { getEntityRecommendations } from "~/server/domains/recommendation/service/entity-recommendations.service";
 import { refreshSearchDocument } from "~/server/generic/search/repo/search-document";
+import { systemPrincipal } from "~/server/http/authenticate";
 import {
   reconcileDerivedRefreshInputs,
   withJobFixtureExecution,
@@ -101,14 +102,24 @@ describe("connection discovery source freshness", () => {
         ),
       });
       await expect(
-        connectionHandlers.runs.discover!.run(
-          {
-            ...buildKernelContext(ctx.db, ctx.actor.userId),
+        connectionHandlers.operations.discover({
+          data: ref,
+          request: {
+            principal: systemPrincipal(
+              buildKernelContext(ctx.db, ctx.actor.userId),
+            ),
+            headers: new Headers(),
             signal: new AbortController().signal,
           },
-          ref,
-        ),
-      ).rejects.toThrow("Synthetic retained Workflow diagnostic");
+        }),
+      ).resolves.toMatchObject({
+        ok: false,
+        error: {
+          message: expect.stringContaining(
+            "Synthetic retained Workflow diagnostic",
+          ),
+        },
+      });
       const [retained] = await getDb(ctx.db)
         .select()
         .from(run)

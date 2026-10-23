@@ -6,15 +6,71 @@ import Testing
 @Suite("CompanionImageWorker", .timeLimit(.minutes(1)))
 struct CompanionImageWorkerTests {
     @Test func helloUsesTheSuppliedCreationHint() {
-        let message = ImageProcessingClientMessage.companionHello(
+        let hello = ImageProcessingHello.companion(
             deviceID: UUID(), deviceName: "Kitchen phone", foreground: true,
             imageDescriptionAvailable: false, automaticWork: true)
-        guard case .hello(let hello) = message else {
-            Issue.record("Expected a companion hello")
-            return
-        }
         #expect(hello.deviceName == "Kitchen phone")
     }
+
+    /// A ring (or a new subscription) drains: pull until nothing is claimable, execute, record,
+    /// then deliver through `imageProcessing.complete` and clear the outbox.
+    @Test func aDrainPullsUntilEmptyAndDeliversEveryResult() async throws {
+        let store = try outbox()
+        let transport = QueuedCompanionTransport(commands: [
+            try describeCommand(), try describeCommand(attempt: "00000000-0000-4000-8000-000000000003"),
+        ])
+        let worker = CompanionImageWorker(
+            baseURL: Self.unreachable, credentials: try credentials(bearer: "tok"),
+            deviceID: UUID(), deviceName: "Test phone", foreground: true,
+            outbox: store, transport: transport, execute: { try Self.failedResult($0) })
+        await worker.start()
+        await worker.requestDrain()
+        await transport.completions.arrivals(2)
+        await worker.commandsIdle()
+        #expect(await transport.pulls >= 3)
+        #expect(try await store.pending().isEmpty)
+        await worker.stop()
+    }
+
+    /// Regression: a pull in flight when the subscription ended (iOS backgrounding, or here
+    /// participation turning off) still started its job outside the window that asked for it.
+    @Test func aCommandPulledAfterTheSubscriptionEndsIsReleased() async throws {
+        let pullGate = Gate()
+        let transport = QueuedCompanionTransport(commands: [try describeCommand()], pullGate: pullGate)
+        let executions = ExecutionCounter()
+        let worker = CompanionImageWorker(
+            baseURL: Self.unreachable, credentials: try credentials(bearer: "tok"),
+            deviceID: UUID(), deviceName: "Test phone", foreground: true,
+            outbox: try outbox(), transport: transport, execute: { try await executions.run($0) })
+        await worker.start()
+        await worker.requestDrain()
+        await pullGate.arrivals()
+        await worker.setParticipating(false)
+        pullGate.open()
+        await transport.releases.arrivals()
+        await worker.commandsIdle()
+        #expect(await executions.count == 0)
+        await worker.stop()
+    }
+
+    /// Regression: a drain whose delivery failed went idle, and with no more work no ring arrived,
+    /// so the recorded result stayed pending and `companion --once` never settled.
+    @Test func aFailedDeliveryIsRetriedWithoutAnotherRing() async throws {
+        let transport = QueuedCompanionTransport(commands: [try describeCommand()], failingCompletions: 2)
+        let worker = CompanionImageWorker(
+            baseURL: Self.unreachable, credentials: try credentials(bearer: "tok"),
+            deviceID: UUID(), deviceName: "Test phone", foreground: true,
+            outbox: try outbox(), transport: transport, execute: { try Self.failedResult($0) })
+        await worker.start()
+        await worker.requestDrain()
+        // Reaching the third `complete` is the assertion; the acknowledgement follows it.
+        await transport.completions.arrivals()
+        await worker.stop()
+    }
+
+    /// Refuses connections, so the subscription loop stays alive retrying while a test drives
+    /// drains directly.
+    private static let unreachable = URL(string: "http://127.0.0.1:9")!
 
     private func outbox() throws -> CompanionResultOutbox<ImageProcessingResult> {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(
@@ -96,7 +152,7 @@ struct CompanionImageWorkerTests {
             baseURL: URL(string: "http://localhost:3000")!,
             credentials: try credentials(bearer: "tok"),
             deviceID: UUID(), deviceName: "Test phone", foreground: true, isParticipating: false,
-            outbox: store,
+            outbox: store, transport: QueuedCompanionTransport(commands: [], delivers: false),
             execute: { command in
                 try? await execution.pass()
                 return try Self.failedResult(command)
@@ -105,7 +161,7 @@ struct CompanionImageWorkerTests {
                 await recording.hold()
                 try await store.record(result, for: key)
             })
-        await worker.startCommand(try describeCommand(), socket: nil)
+        await worker.startCommand(try describeCommand())
         await execution.arrivals(1)
         #expect(
             try await worker.drainState()
@@ -135,10 +191,11 @@ struct CompanionImageWorkerTests {
                 baseURL: URL(string: "http://localhost:3000")!,
                 credentials: try credentials(bearer: "tok"),
                 deviceID: UUID(), deviceName: "Test phone", foreground: true, isParticipating: false,
-                outbox: try outbox(), execute: { try await executions.run($0) })
+                outbox: try outbox(), transport: QueuedCompanionTransport(commands: [], delivers: false),
+                execute: { try await executions.run($0) })
             let command = try describeCommand()
             async let settled = worker.pauseAcceptingIfSettled()
-            async let started: Void = worker.startCommand(command, socket: nil)
+            async let started: Void = worker.startCommand(command)
             let wasSettled = try await settled
             await started
             await worker.commandsIdle()
@@ -155,12 +212,12 @@ struct CompanionImageWorkerTests {
             baseURL: URL(string: "http://localhost:3000")!,
             credentials: try credentials(bearer: "tok"),
             deviceID: UUID(), deviceName: "Test phone", foreground: true, isParticipating: false,
-            outbox: try outbox(),
+            outbox: try outbox(), transport: QueuedCompanionTransport(commands: [], delivers: false),
             execute: { command in
                 try? await gate.pass()
                 return try Self.failedResult(command)
             })
-        await worker.startCommand(try describeCommand(), socket: nil)
+        await worker.startCommand(try describeCommand())
         await gate.arrivals(1)
         #expect(try await worker.pauseAcceptingIfSettled() == false)
         gate.release()
@@ -175,9 +232,10 @@ struct CompanionImageWorkerTests {
             baseURL: URL(string: "http://localhost:3000")!,
             credentials: try credentials(bearer: "tok"),
             deviceID: UUID(), deviceName: "Test phone", foreground: true, isParticipating: false,
-            outbox: try outbox(), execute: { try await executions.run($0) })
+            outbox: try outbox(), transport: QueuedCompanionTransport(commands: [], delivers: false),
+            execute: { try await executions.run($0) })
         await worker.stopAccepting()
-        await worker.startCommand(try describeCommand(), socket: nil)
+        await worker.startCommand(try describeCommand())
         #expect(try await worker.pauseAcceptingIfSettled())
         await worker.commandsIdle()
         #expect(await executions.count == 0)
@@ -192,9 +250,11 @@ struct CompanionImageWorkerTests {
                     kind: .describeImage, status: .failed, retryable: true, reason: "Synthetic failure")))
     }
 
-    private func describeCommand() throws -> ImageProcessingCommand {
+    private func describeCommand(
+        attempt: String = "00000000-0000-4000-8000-000000000002"
+    ) throws -> ImageProcessingCommand {
         let value = """
-            {"kind":"describe_image","jobId":"00000000-0000-4000-8000-000000000001","attemptId":"00000000-0000-4000-8000-000000000002","deadline":"2099-01-01T00:00:00Z","source":{"url":"https://example.test/panel.jpg","sha256":"\(String(repeating: "a", count: 64))","contentType":"image/jpeg"},"promptRevision":1,"resultSchemaRevision":1}
+            {"kind":"describe_image","jobId":"00000000-0000-4000-8000-000000000001","attemptId":"\(attempt)","deadline":"2099-01-01T00:00:00Z","source":{"url":"https://example.test/panel.jpg","sha256":"\(String(repeating: "a", count: 64))","contentType":"image/jpeg"},"promptRevision":1,"resultSchemaRevision":1}
             """
         return try JSONDecoder.companionImageProcessing.decode(
             ImageProcessingCommand.self, from: Data(value.utf8))
@@ -207,5 +267,50 @@ private actor ExecutionCounter {
     func run(_ command: ImageProcessingCommand) throws -> ImageProcessingResult {
         count += 1
         return try CompanionImageWorkerTests.failedResult(command)
+    }
+}
+
+/// Serves queued commands to `pull`, then none. `delivers: false` fails every `complete` (and
+/// `failingCompletions` the first few), so a result stays in the outbox as it would after a
+/// dropped connection.
+private actor QueuedCompanionTransport: CompanionImageBackgroundTransport {
+    private var commands: [ImageProcessingCommand]
+    private let delivers: Bool
+    private var failingCompletions: Int
+    private let pullGate: Gate?
+    private(set) var pulls = 0
+    nonisolated let completions = Gate()
+    nonisolated let releases = Gate()
+
+    init(
+        commands: [ImageProcessingCommand], delivers: Bool = true, failingCompletions: Int = 0,
+        pullGate: Gate? = nil
+    ) {
+        self.commands = commands
+        self.delivers = delivers
+        self.failingCompletions = failingCompletions
+        self.pullGate = pullGate
+    }
+
+    func pull(hello: ImageProcessingHello, leaseSeconds: Int) async throws
+        -> PullCompanionImageProcessingOutput
+    {
+        pulls += 1
+        let next = commands.isEmpty ? nil : commands.removeFirst()
+        try await pullGate?.pass()
+        return .init(command: next, remotePaused: false)
+    }
+
+    func complete(deviceID: String, result: ImageProcessingResult) async throws {
+        guard delivers else { throw URLError(.networkConnectionLost) }
+        if failingCompletions > 0 {
+            failingCompletions -= 1
+            throw URLError(.networkConnectionLost)
+        }
+        completions.signal()
+    }
+
+    func release(deviceID: String, command: ImageProcessingCommand) async throws {
+        releases.signal()
     }
 }

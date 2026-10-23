@@ -35,6 +35,12 @@ export type HandlerDefinition = {
 /** The runtime shape of a `defineContract(...)` value, as the generator reads it. */
 export type ContractMember = {
   kind: Kind;
+  exposure?: "capability" | "view" | "internal";
+  note?: string;
+  description?: string;
+  destructive?: true;
+  openWorld?: true;
+  modelBacked?: true;
   command?: import("../../src/contracts/define").MutationContract["command"];
   observability?: {
     entities?: readonly string[];
@@ -44,8 +50,6 @@ export type ContractMember = {
   httpWire?: { input: z.ZodType; output: z.ZodType; nullable?: true };
   /** Why the Apple app calls this operation (see contracts/define.ts). */
   native?: string;
-  /** Why the operation is not an MCP tool action (see contracts/define.ts). */
-  mcp?: unknown;
   transport?: "post";
   /** Keeps a query on the authoritative adapter (see contracts/define.ts). */
   readPolicy?: "strong";
@@ -58,7 +62,12 @@ export type ContractMember = {
   invalidates?: readonly string[];
   input?: z.ZodType;
 };
-type Contract = { domain: string; ops: Record<string, ContractMember> };
+type Contract = {
+  domain: string;
+  ops: Record<string, ContractMember>;
+  exposure?: "capability" | "view" | "internal";
+  mcpToolGroup?: string;
+};
 export type LoadedContract = {
   exportName: string;
   /** Direct contract module resolved from the contracts index AST. */

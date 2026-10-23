@@ -6,7 +6,7 @@ separate from outcome counts. Queue reduction alone does not prove completion.
 Use Cubby MCP for household records; do not reconstruct them from database or
 application internals.
 
-Recover the requested history window through `activity.recent`, filtered to the
+Recover the requested history window through `activity_read.list`, filtered to the
 entity kind and channel. Follow the opaque `nextCursor` unchanged until the end
 of the window. Include touched Products whose identifier gap cleared but that
 still need metadata or useful images. Read their current full records; activity

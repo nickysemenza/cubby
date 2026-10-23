@@ -4,6 +4,7 @@ import { z } from "zod";
 
 import { createDatabase } from "~/server/db/database-runtime";
 import { withErrorReporting } from "~/server/errors/report-error";
+import { systemPrincipal } from "~/server/http/authenticate";
 import { requireActor } from "~/server/http/request-context";
 import type { AppSpan } from "~/server/observability/tracing";
 import { publicStartOperationErrorSchema } from "~/server/operation-runtime/start-operation.contract";
@@ -88,7 +89,9 @@ const streamFrameSchema = z.object({
 describe("workflow stream freshness notifications", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    authenticate.mockResolvedValue(context);
+    authenticate.mockResolvedValue(
+      systemPrincipal(context, { channel: "browser", credential: "cookie" }),
+    );
   });
 
   it("notifies before progress and again during mutation stream finalization", async () => {

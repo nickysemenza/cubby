@@ -1,6 +1,5 @@
 import { commitPurchaseImportInput } from "@cubby/schemas/purchase-import";
 import { sha256Hex, sha256Uuid } from "@cubby/shared/sha256";
-import { fromPartial } from "@total-typescript/shoehorn";
 import { and, eq, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
@@ -15,9 +14,8 @@ import { startAgentRunFixture } from "~/server/domains/purchase-import/service/i
 import { insertDebugEventOperations } from "~/server/domains/run/repo/run-operation";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { requireActor } from "~/server/http/request-context";
-import { McpOperationContext } from "~/server/mcp/operation-context";
 import { executePurchaseAgentMutation } from "~/server/mcp/purchase-agent-protocol";
-import type { ToolExtra } from "~/server/mcp/tools/tool-registration";
+import { mcpTestPrincipal } from "~/server/testing/mcp-test-utils";
 import { createTestRequestContext } from "~/server/testing/request-context";
 
 import { executeLeasedOperation } from "./operation";
@@ -248,16 +246,15 @@ describe("RunOperation rows written by earlier code", () => {
     let executions = 0;
     const execute = () =>
       executePurchaseAgentMutation({
-        db: ctx.db,
-        actor: ctx.actor,
-        operationContext: new McpOperationContext(
-          requireActor(
+        principal: mcpTestPrincipal({
+          ...requireActor(
             createTestRequestContext(ctx.db, {
               auth: { userId: ctx.actor.userId },
             }),
           ),
-        ),
-        trusted: { runId: run.id, grantId: "synthetic-grant" },
+          actorContext: ctx.actor,
+        }),
+        delegation: { runId: run.id, grantId: "synthetic-grant" },
         toolName,
         args: params,
         execution: { runId: run.id, operationId },
@@ -265,7 +262,6 @@ describe("RunOperation rows written by earlier code", () => {
           executions += 1;
           return { accepted: true };
         },
-        baseExtra: fromPartial<ToolExtra>({}),
       });
     return {
       run,

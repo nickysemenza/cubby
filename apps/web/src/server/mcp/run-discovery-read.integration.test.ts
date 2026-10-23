@@ -21,7 +21,6 @@ import { checkpointMailboxCoverage } from "~/server/domains/purchase-import/repo
 import { setMailImport } from "~/server/domains/purchase-import/repo/mail-import-settings";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { requireActor } from "~/server/http/request-context";
-import { McpOperationContext } from "~/server/mcp/operation-context";
 import { createMcpServer } from "~/server/mcp/server";
 import { callMcpTool } from "~/server/testing/mcp-test-utils";
 import { createTestRequestContext } from "~/server/testing/request-context";
@@ -68,19 +67,16 @@ describe("member discovery readiness through MCP", () => {
       await getDb(ctx.db).execute(sql`UPDATE "Run"
       SET input = ${JSON.stringify(input)}::jsonb WHERE id = ${discovery.id}`);
       const before = await getDb(ctx.db).select().from(run);
-      const operationContext = new McpOperationContext(
-        requireActor(
-          createTestRequestContext(ctx.db, {
-            auth: { userId: ctx.actor.userId },
-          }),
-        ),
+      const mcpContext = requireActor(
+        createTestRequestContext(ctx.db, {
+          auth: { userId: ctx.actor.userId },
+        }),
       );
       const result = await callMcpTool(
         createMcpServer(),
-        "imports_read",
-        { action: "run_status", runId: discovery.shortcode },
-        {},
-        { operationContext },
+        "run_read",
+        { action: "work_snapshot", runId: discovery.shortcode },
+        mcpContext,
       );
       expect(result.isError).not.toBe(true);
       expect(result.structuredContent).toMatchObject({
@@ -201,25 +197,17 @@ describe("member discovery readiness through MCP", () => {
     const beforeJobs = await getDb(ctx.db).select().from(job);
     const beforeReceipts = await getDb(ctx.db).select().from(runOperation);
     const beforeCursor = await getDb(ctx.db).select().from(mailboxCursor);
-    const operationContext = new McpOperationContext(
-      requireActor(
-        createTestRequestContext(ctx.db, {
-          auth: { userId: ctx.actor.userId },
-        }),
-      ),
+    const mcpContext = requireActor(
+      createTestRequestContext(ctx.db, {
+        auth: { userId: ctx.actor.userId },
+      }),
     );
     const read = (
-      action: "run_status" | "run_transcript",
+      action: "work_snapshot" | "transcript",
       runId = discovery.shortcode,
     ) =>
-      callMcpTool(
-        createMcpServer(),
-        "imports_read",
-        { action, runId },
-        {},
-        { operationContext },
-      );
-    const status = await read("run_status");
+      callMcpTool(createMcpServer(), "run_read", { action, runId }, mcpContext);
+    const status = await read("work_snapshot");
     expect(status.isError).not.toBe(true);
     expect(status.structuredContent).toMatchObject({
       workProgress: {
@@ -266,7 +254,7 @@ describe("member discovery readiness through MCP", () => {
         },
       },
     });
-    expect(await read("run_transcript")).toMatchObject({
+    expect(await read("transcript")).toMatchObject({
       structuredContent: {
         status: "absent",
         messages: [],
@@ -282,8 +270,8 @@ describe("member discovery readiness through MCP", () => {
       .update(run)
       .set({ ledgerPartyId: foreignParty.id })
       .where(eq(run.id, id));
-    expect((await read("run_status")).isError).toBe(true);
-    expect((await read("run_transcript")).isError).toBe(true);
+    expect((await read("work_snapshot")).isError).toBe(true);
+    expect((await read("transcript")).isError).toBe(true);
     await getDb(ctx.db)
       .update(run)
       .set({ ledgerPartyId: party.id })

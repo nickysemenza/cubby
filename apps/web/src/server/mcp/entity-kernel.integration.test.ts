@@ -17,6 +17,10 @@ import {
   executeEntity,
 } from "~/server/entity-kernel";
 import { refreshSearchDocument } from "~/server/generic/search/repo/search-document";
+import {
+  type AuthPorts,
+  createAuthenticator,
+} from "~/server/http/authenticate";
 import { createHttpApiHandler } from "~/server/http/http-api-handler";
 import { requireActor } from "~/server/http/request-context";
 import { createMcpServer, listMcpToolCatalog } from "~/server/mcp/server";
@@ -94,15 +98,15 @@ describe("MCP entity kernel boundary", () => {
 
   it("annotates read-only tools from the registry", async () => {
     // The registry's own annotations are the invariant, in both directions:
-    // no tool that writes (`upc.find_or_create` mints a Product) and no
-    // read-only tool left out (`recipe_insights`, whose costing reads).
+    // no tool that writes (`product_enrichment.find_or_create_by_upc` mints a Product) and no
+    // read-only tool left out (`recipe_insights_read`, whose costing reads).
     const catalog = await listMcpToolCatalog();
     const readOnlyNames = catalog.tools
       .filter((tool) => tool.annotations?.readOnlyHint === true)
       .map((tool) => tool.name)
       .sort();
     expect(readOnlyNames).toContain("entity_read");
-    expect(readOnlyNames).toContain("recipe_insights");
+    expect(readOnlyNames).toContain("recipe_insights_read");
     expect(readOnlyNames).not.toContain("entity");
     expect(readOnlyNames).not.toContain("upc");
   });
@@ -234,9 +238,9 @@ describe("MCP entity kernel boundary", () => {
     expect(JSON.stringify(viaMcp.content)).toContain(
       "Filter only: The effective owner is resolved",
     );
-    const http = createHttpApiHandler(
-      fromPartial<Parameters<typeof createHttpApiHandler>[0]>({
-        auth: {
+    const http = createHttpApiHandler({
+      authenticate: createAuthenticator(
+        fromPartial<AuthPorts>({
           getSession: async () => ({
             response: {
               user: { id: testUserId("test-user-id") },
@@ -244,16 +248,16 @@ describe("MCP entity kernel boundary", () => {
             },
             headers: new Headers(),
           }),
-        },
-        context: async () =>
-          requireActor(
-            createTestRequestContext(ctx.db, {
-              auth: { userId: testUserId("test-user-id") },
-            }),
-          ),
-        dispatch: dispatchStartOperation,
-      }),
-    );
+          context: async () =>
+            requireActor(
+              createTestRequestContext(ctx.db, {
+                auth: { userId: testUserId("test-user-id") },
+              }),
+            ),
+        }),
+      ),
+      dispatch: dispatchStartOperation,
+    });
     const viaHttp = await http(
       new Request("https://cubby.example/api/v1/entity/list", {
         method: "POST",

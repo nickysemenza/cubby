@@ -22,7 +22,7 @@ never the catalog's `Crop 'Variety'` form. Garlic bulbs and onion sets are not
 seeds and take no suffix.
 
 Match before create. Search existing Products (name, aliases, external ids,
-`entity_read.resolve`, `search.similar`) before writing a new one — a
+`entity_read.resolve`, `search_read.similar`) before writing a new one — a
 duplicate costs a merge later, a missed match costs nothing now.
 
 Product Brand is an optional Vendor reference (`brandId`); `brandName` is its
@@ -91,8 +91,8 @@ one of several variants. Record tentative disposal recollections in notes; a dis
 **Purchase first, photos later** — when photo-inventory-import runs after a
 purchase already exists, check for the existing purchase Product before
 creating: exact identifiers first, then the vendor's purchased Products
-(`entity_read.relations` on the purchase's `products`, `entity_read.resolve`,
-`search.similar`) for a descriptive candidate. Purchase-created
+(`entity_graph_read.relation` on the purchase's `products`, `entity_read.resolve`,
+`search_read.similar`) for a descriptive candidate. Purchase-created
 Products may have no category or Brand reference until enriched, so
 never filter candidates by either.
 Prioritize the exact variant with no own-item photo and no earlier photo-import
@@ -103,11 +103,11 @@ When brand, garment features, and variant evidence strongly favor one Product,
 propose `existingId` in the photo group with the evidence and uncertainty.
 The human approves that attachment. If two color or size variants remain
 plausible, leave the choice for review. Create a separate photo Product only
-when no existing variant fits; then use `product_enrichment.propose_match` if later
+when no existing variant fits; then use `product_enrichment.propose_product_match` if later
 evidence connects two already-created Products.
 
 A server detector also surfaces candidate pairs automatically from both
-sides. Agents call `product_enrichment.propose_match` themselves when they hold evidence
+sides. Agents call `product_enrichment.propose_product_match` themselves when they hold evidence
 the detector lacks — a vendor product page confirmed to match the photo, a
 label transcription, an exact identifier the detector hasn't indexed.
 
@@ -119,7 +119,7 @@ of these checks pass:
   or an original order line explicitly bridges the two identifiers (for example,
   Store SKU and Internet number). Size, color, pack count and recorded identity
   facts agree. Names or model confidence alone are insufficient.
-- Fresh full reads and `entity_read.connections` with `operation: "merge"`
+- Fresh full reads and `entity_graph_read.connections` with `operation: "merge"`
   show that the merge preserves distinct expenses, provenance and relationships.
   At most one record has inventory; two stocked records require review to
   distinguish separate copies from duplicate receiving.
@@ -127,7 +127,7 @@ of these checks pass:
   quantity or money remains. Record the evidence and verify the survivor,
   identifiers, links, images and unchanged spend/stock after the merge.
 
-Otherwise record the candidate with `product_enrichment.propose_match` and ask
+Otherwise record the candidate with `product_enrichment.propose_product_match` and ask
 for the unresolved decision. Descriptive-only matches still require human
 confirmation. Agent Runs retain their exact typed approval requirement; this
 interactive rule does not bypass a server refusal or authorize unattended merges.

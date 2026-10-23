@@ -78,10 +78,10 @@ function harness(
   const resolve = (id: string, kind: string) =>
     escalation.beforeTool({
       id,
-      name: "mcp__cubby__mail",
+      name: "mcp__cubby__purchase_import",
       arguments: {
-        action: "resolve",
-        disposition: { kind, reason: "Synthetic missing total." },
+        action: "mail_resolve",
+        input: { disposition: { kind, reason: "Synthetic missing total." } },
       },
     });
   return { escalation, configured, claim, prepare, resolve };

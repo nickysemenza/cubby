@@ -1019,7 +1019,6 @@ export default defineEntity({
         optionsKey: "ledgerParty",
         brandRef: { entity: "ledgerParty" },
         currentMember: true,
-        derived: true,
       },
 
       {
@@ -1035,7 +1034,6 @@ export default defineEntity({
         kind: "multiselect",
         placeholder: "Filter by status...",
         deriveSchema: true,
-        stored: true,
         schemaRef: {
           module: "@cubby/schemas/task-fields",
           export: "taskStatusSchema",
@@ -1101,7 +1099,6 @@ export default defineEntity({
       {
         columnId: "completion",
         kind: "multiselect",
-        derived: true,
         placeholder: "Filter task completion...",
         options: [
           { value: "open", label: "Open" },
@@ -1116,7 +1113,6 @@ export default defineEntity({
         placeholder: "Filter by project...",
         optionsKey: "project",
         brandRef: { entity: "project" },
-        derived: true,
       },
       {
         columnId: "productId",
@@ -1134,7 +1130,6 @@ export default defineEntity({
         placeholder: "Filter by product...",
         optionsKey: "taskProducts",
         brandRef: { entity: "product" },
-        derived: true,
       },
       {
         columnId: "parentTaskId",

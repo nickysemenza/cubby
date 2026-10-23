@@ -840,7 +840,6 @@ Rules:
         kind: "boolean",
         placeholder: "Needs classification",
         deriveSchema: true,
-        derived: true,
       },
       {
         columnId: "name",

@@ -594,7 +594,7 @@ export const mailResolveDisposition = z.discriminatedUnion("kind", [
 ]);
 export const mailResolveInput = mailMessageRef.extend({
   checksum: sha256.describe(
-    "The checksum imports_read.mail returned for this Email.",
+    "The checksum purchase_import_read.mail_read returned for this Email.",
   ),
   disposition: mailResolveDisposition,
 });
@@ -607,7 +607,7 @@ export const mailResolveOut = mailMessageRef.extend({
   financialAssociations: z.array(mailFinancialAssociation),
 });
 export const MAIL_ATTACHMENT_MAX_BYTES = 3 * 1024 * 1024;
-/** A retained attachment's original bytes, read through `mail.read`. */
+/** A retained attachment's original bytes, read through `purchase_import_read.mail_read`. */
 export const mailAttachmentOriginal = z.strictObject({
   attachmentId: z.string().min(1).max(200),
   filename: z.string().max(1_000),
@@ -642,7 +642,7 @@ export const mailPurchaseAssociation = z.object({
 });
 
 export const mailReadOut = mailMessageRef.extend({
-  /** The Email's EML- code: what mail.import and mail.decide_purchase take. */
+  /** The Email's EML- code: what purchase_import.email_import and purchase_import.email_purchase_decide take. */
   id: emailShortcode,
   threadId: z.string().nullable(),
   checksum: sha256,
@@ -682,7 +682,7 @@ export const mailSearchOut = z.object({
   mailboxes: z.array(z.string()),
   messages: z.array(
     mailMessageRef.extend({
-      /** With `checksum`, the exact selection mail.import takes. */
+      /** With `checksum`, the exact selection purchase_import.email_import takes. */
       id: emailShortcode,
       checksum: sha256,
       threadId: z.string().nullable(),

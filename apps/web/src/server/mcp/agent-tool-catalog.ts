@@ -6,8 +6,10 @@ import {
 } from "@cubby/schemas/import-run-agent";
 import type { JSONType } from "zod";
 
-import { MCP_TOOLS } from "~/contracts/mcp-tools";
-import { MCP_TOOL_BINDINGS } from "~/server/generated/mcp-tools.gen";
+import {
+  MCP_TOOL_BINDINGS,
+  MCP_TOOL_DECLARATIONS,
+} from "~/server/generated/mcp-tools.gen";
 
 import {
   compiledMcpTools,
@@ -23,36 +25,40 @@ export function purchaseAgentTools(
   allowed: ReadonlySet<string>,
   entityRead?: EntityReadView,
 ) {
-  return compiledMcpTools(MCP_TOOL_BINDINGS, MCP_TOOLS).flatMap((tool) => {
-    const narrowed = narrowedToolSchema(tool, allowed);
-    if (!narrowed) return [];
-    if (tool.name !== "entity_read" || !entityRead)
+  return compiledMcpTools(MCP_TOOL_BINDINGS, MCP_TOOL_DECLARATIONS).flatMap(
+    (tool) => {
+      const narrowed = narrowedToolSchema(tool, allowed);
+      if (!narrowed) return [];
+      if (tool.name !== "entity_read" || !entityRead)
+        return [
+          {
+            name: tool.name,
+            description: narrowed.description,
+            inputSchema: narrowed.inputJsonSchema,
+          },
+        ];
       return [
         {
           name: tool.name,
-          description: narrowed.description,
-          inputSchema: narrowed.inputJsonSchema,
+          description: withoutOtherKindNotes(
+            narrowed.description,
+            entityKindsOf(narrowed.inputJsonSchema),
+            new Set(Object.keys(entityRead.filters)),
+          ),
+          inputSchema: narrowedEntityRead(narrowed.inputJsonSchema, entityRead),
         },
       ];
-    return [
-      {
-        name: tool.name,
-        description: withoutOtherKindNotes(
-          narrowed.description,
-          entityKindsOf(narrowed.inputJsonSchema),
-          new Set(Object.keys(entityRead.filters)),
-        ),
-        inputSchema: narrowedEntityRead(narrowed.inputJsonSchema, entityRead),
-      },
-    ];
-  });
+    },
+  );
 }
 
 /** Every kind a tool schema's `entity` input names. */
 function entityKindsOf(schema: InputJsonSchema): Set<string> {
-  const entity = isJsonObject(schema.properties)
-    ? schema.properties.entity
-    : undefined;
+  const properties: JsonObject | undefined =
+    isJsonObject(schema) && isJsonObject(schema.properties)
+      ? schema.properties
+      : undefined;
+  const entity = properties?.entity;
   return new Set(
     isJsonObject(entity) && Array.isArray(entity.enum)
       ? entity.enum.map(String)

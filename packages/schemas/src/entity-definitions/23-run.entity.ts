@@ -1061,7 +1061,6 @@ export default defineEntity({
         kind: "multiselect",
         placeholder: "Filter by status...",
         deriveSchema: true,
-        stored: true,
         schemaFromRead: true,
         options: [
           { value: "running", label: "Running", color: "var(--info)" },
@@ -1095,7 +1094,6 @@ export default defineEntity({
         kind: "multiselect",
         placeholder: "Filter by purpose...",
         deriveSchema: true,
-        stored: true,
         schemaFromRead: true,
       },
       {
@@ -1103,7 +1101,6 @@ export default defineEntity({
         kind: "multiselect",
         placeholder: "Filter by trigger...",
         deriveSchema: true,
-        stored: true,
         schemaFromRead: true,
       },
       {
@@ -1112,7 +1109,6 @@ export default defineEntity({
         kind: "boolean",
         placeholder: "Filter routine runs...",
         deriveSchema: true,
-        stored: true,
         schemaDescription:
           "Filter scheduled runs that completed without finding anything",
         options: [
@@ -1126,7 +1122,6 @@ export default defineEntity({
         placeholder: "Filter by vendor account...",
         brandRef: { entity: "vendorAccount" },
         deriveSchema: true,
-        stored: true,
       },
       {
         columnId: "vendorId",
@@ -1134,7 +1129,6 @@ export default defineEntity({
         placeholder: "Filter by vendor...",
         brandRef: { entity: "vendor" },
         deriveSchema: true,
-        stored: true,
       },
       {
         columnId: "ledgerPartyId",
@@ -1143,7 +1137,6 @@ export default defineEntity({
         brandRef: { entity: "ledgerParty" },
         currentMember: true,
         deriveSchema: true,
-        stored: true,
       },
       {
         columnId: "parentRunId",
@@ -1151,7 +1144,6 @@ export default defineEntity({
         placeholder: "Filter by parent Run...",
         brandRef: { entity: "run" },
         deriveSchema: true,
-        stored: true,
       },
     ],
   },

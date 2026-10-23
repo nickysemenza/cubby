@@ -447,7 +447,7 @@ export const duplicateFinancialTransactionSourceRefSchema = z.object({
  *
  * This is deliberately the ONLY statement-ledger detector. "Every unmatched row"
  * is not a defect list: it is the drift worklist, 15k rows at its widest, and
- * putting it here would make `activity.problems` unusable. Unmatched rows are read
+ * putting it here would make `activity_read.report` unusable. Unmatched rows are read
  * through `finance_read.source_transaction_records({matchState:"unmatched"})` instead.
  */
 export const incompleteTransactionImportSchema = z.object({
@@ -1247,7 +1247,7 @@ export type ProblemsCount = z.infer<typeof problemsCountSchema>;
 
 // Assemble the cost-grouped detector results into the combined AllProblems
 // shape (with derived total). Shared so the merge + total live in one place —
-// the MCP activity.problems tool calls this directly over its own per-group
+// the MCP activity_read.report tool calls this directly over its own per-group
 // scans. (The Problems page merges client-side in useProblemsData, which is
 // loading-aware and defaults not-yet-loaded groups to empty.)
 export const assembleAllProblems = (groups: {

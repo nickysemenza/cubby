@@ -1,7 +1,7 @@
 /**
  * Failures: a lifecycle notice bypasses package extraction merely because
  * its Purchase is imported; a confident
- * unrelated classification is not disposed of exactly as `mail.resolve`
+ * unrelated classification is not disposed of exactly as `purchase_import.mail_resolve`
  * `unrelated` would; a refund notice is settled without the coordinator; the
  * claimed Email arrives without its compact read; a repeated claim duplicates
  * a rule outcome; a first-page order match hides a cancellation on a later

@@ -9,36 +9,27 @@ import { getRequestId, withTrace } from "~/server/observability/tracing";
 import type { StartOperationDispatchInput } from "~/server/operation-runtime/start-operation-dispatch.contract";
 import {
   type StartOperationRequest,
-  type OperationStage,
-  authenticateStartOperation,
   normalizeStartOperationError,
 } from "~/server/operation-runtime/start-operation.server";
 
 type BrowserStartOperationId = StartOperationIdOfKind<"query" | "mutation">;
-type StartOperationHandlerLoaders = Partial<{
+export type StartOperationHandlerLoaders = Partial<{
   [Operation in BrowserStartOperationId]: () => Promise<
     LoadedStartOperationHandler<Operation>
   >;
 }>;
 
+/**
+ * The one entry from every adapter (browser, native HTTP, MCP) to a query or
+ * mutation: load its handler by id and run it through `runStartOperation`
+ * under the principal the adapter authenticated.
+ */
 export async function dispatchStartOperation(
   options: StartOperationDispatchInput & { request: StartOperationRequest },
   loaders: StartOperationHandlerLoaders = START_OPERATION_HANDLER_LOADERS,
 ): Promise<StartOperationDispatchResult<BrowserStartOperationId>> {
   return withErrorReporting(async () => {
-    let stage: OperationStage = "context";
-    let actorVerified = Boolean(
-      options.request.apiContext ?? options.request.verifiedContext,
-    );
     try {
-      const verifiedContext =
-        options.request.apiContext ??
-        options.request.verifiedContext ??
-        (await withTrace("start.dispatch.authenticate", (span) =>
-          authenticateStartOperation(options.request.headers, span),
-        ));
-      actorVerified = true;
-      stage = "dispatch";
       const loader = loaders[options.operation];
       if (!loader)
         throw new Error(
@@ -47,21 +38,18 @@ export async function dispatchStartOperation(
       const handler = await withTrace<
         LoadedStartOperationHandler<BrowserStartOperationId>
       >(`start.dispatch.load.${options.operation}`, () => loader());
-      return await handler({
-        data: options.input,
-        request: { ...options.request, verifiedContext },
-      });
+      return await handler({ data: options.input, request: options.request });
     } catch (error) {
       if (options.request.signal.aborted) throw error;
       return {
         ok: false,
         error: normalizeStartOperationError(
           error,
-          stage,
+          "dispatch",
           getRequestId(options.request.headers),
           {
             operation: options.operation,
-            authenticated: actorVerified,
+            authenticated: true,
             headers: options.request.headers,
           },
         ).publicError,

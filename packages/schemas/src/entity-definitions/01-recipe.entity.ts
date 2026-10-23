@@ -999,13 +999,11 @@ export default defineEntity(
           kind: "boolean",
           placeholder: "Filter sub-recipes...",
           deriveSchema: true,
-          derived: true,
         },
         {
           columnId: "meals",
           field: "mealPresenceFilter",
           kind: "presence",
-          derived: true,
           placeholder: "Filter meals...",
           options: [
             { value: "has", label: "Has meals", meta: true },
@@ -1016,7 +1014,6 @@ export default defineEntity(
           columnId: "image",
           field: "imagePresenceFilter",
           kind: "presence",
-          derived: true,
           placeholder: "Filter images...",
           options: [
             { value: "has", label: "Has image", meta: true },
@@ -1027,7 +1024,6 @@ export default defineEntity(
           columnId: "instructions",
           field: "instructionsPresenceFilter",
           kind: "presence",
-          derived: true,
           placeholder: "Filter instructions...",
           options: [
             { value: "has", label: "Has instructions", meta: true },
@@ -1046,7 +1042,6 @@ export default defineEntity(
             { value: "Notion", label: "Notion" },
           ],
           deriveSchema: true,
-          stored: true,
         },
         {
           columnId: "costTotal",

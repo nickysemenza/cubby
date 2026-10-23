@@ -12,9 +12,9 @@ are resolved. Its results are ordered and independent: inspect every result,
 keep successful writes, and retry only corrected failed indices. Verification
 is likewise batched by known ids or shared filters.
 
-For files, `image.create_uploads({items})` accepts up to 50 existing upload
+For files, `image.create_file_upload({items})` accepts up to 50 existing upload
 inputs and returns results in item order. Upload local bytes to each returned
-presigned URL, then call `image.attach_files({items})` with each target `entityId`
+presigned URL, then call `image.attach_file({items})` with each target `entityId`
 and exactly one `url` or the uploadId from that successful indexed result. Do
 not send bytes or base64 through MCP. For a Product gallery write, read the
 target immediately before the write and provide its `expectedImageCount` and a
@@ -22,11 +22,14 @@ deterministic idempotency key. Multiple attachments to one Product are
 dependent count changes; prefer independent target batches and retry only
 failed items after a fresh read.
 
-A tool’s `action` selects the mounted operation. When that operation also
-accepts an `action`, MCP publishes it as `operationAction` and maps it back
-before validation; for example, `run.resolve_finding` requires
-`operationAction: "apply" | "dismiss"`. Batched items retain their own nested
-`action` field. HTTP and native operation inputs keep their original shape.
+A generated tool takes `{action, input}`. When that operation also accepts an
+`action`, MCP publishes it as `operationAction` inside `input` and maps it back
+before validation; for example, `activity.resolve_run_finding` requires
+`input.operationAction: "apply" | "dismiss"`. Batched items retain their own
+nested `action` field. HTTP and native operation inputs keep their original
+shape. The `entity` and `entity_read` kernel tools keep their current
+`{action, ...fields}` form; their full schemas are available from
+`entities://catalog`.
 
 ## Runs and Burn-down
 
@@ -39,19 +42,19 @@ Runs are started by Mail discovery (scheduled, or `run.discover_mail` on the
 member's instruction), photo uploads and a member's own
 `purchase_import.prepare`; nothing else on MCP starts research
 ([ADR 0010](../adr/0010-mail-import-unattended-burn-down-interactive.md)).
-`imports_read.run_status` reads one Run. An owned `mail_discovery` Run includes
+`run_read.work_snapshot` reads one Run. An owned `mail_discovery` Run includes
 `mailDiscovery`: its frozen mailbox scope, persisted Workflow checkpoint,
 current mailbox coverage, recorded AI-call usage/retries and failure diagnostics.
 Current mailbox coverage can advance after that Run; the Workflow checkpoint
 belongs to that Run. Unpriced calls remain counted. Missing checkpoint/coverage
 stays null. Query lists are summarized (counts plus the first or next pending
 queries) and an in-flight page reads as message/event counts, so a status read
-stays bounded however many searches a mailbox has. `imports_read.mail_import` reads each connected mailbox's Mail import
+stays bounded however many searches a mailbox has. `run_read.mail_import` reads each connected mailbox's Mail import
 switch and search progress; `ai_funding_read.status` reads household-wide
 frontier AI funding (the window's Claude credit, including a recorded
 Anthropic refusal, paid budget and ChatGPT plan). These reads never
 load or resume a Workflow. Discovery has no coordinator conversation, so its owned
-`imports_read.run_transcript` returns `absent`; that is not evidence it never ran.
+`run_read.transcript` returns `absent`; that is not evidence it never ran.
 `run.lifecycle` runs every Run control
 (cancel, retry, restart, approve, reject and the rest). File-import cancellation
 does not require an agent session and retains already committed imports.
@@ -60,9 +63,9 @@ activity prevents expiry and late writes cannot revive terminal Runs. Review and
 decisions are reachable on MCP too
 (`run.set_mail_import`, `run.discover_mail`, `run.commit_prepared`,
 `ai_funding.set_credit_budget`, `ai_funding.reset_credit_refusal`,
-`run.resolve_finding`, `photo_run.approve_groups`,
-`product_enrichment.merge_match`, suggestion review: `entity.review_assessment`,
-`entity.review_assessments`, each batch returning a per-id `ok`/`error`
+`activity.resolve_run_finding`, `photo_run.approve_groups`,
+`product_enrichment.merge_product_match`, suggestion review: `suggestions.review`,
+`suggestions.review_batch`, each batch returning a per-id `ok`/`error`
 result). An agent calls one only
 on the member's explicit instruction. An exact-checksum member-selected Email
 import using the declared coordinator models or its member-controlled retry is
@@ -82,16 +85,16 @@ entity mutation `data`: preserve existing text, useful URLs or record shortcodes
 excerpts, dates and selected-variant context. There is no separate citation input
 on entity writes or image attachment, and notes do not certify current values.
 Read and resolve retained
-Email with `imports_read.mail` and `mail.resolve`; recover a missing original
-with `mail.search`. The retained read's `acceptedSourceOrders` provides owned
+Email with `purchase_import_read.mail_read` and `purchase_import.mail_resolve`; recover a missing original
+with `purchase_import.mail_search`. The retained read's `acceptedSourceOrders` provides owned
 source-order handles, exact source identities and deleted-target status for
 reviewed reconciliation. Lifecycle-only links supply no accepted-order handle;
 reading one neither promotes an unknown original nor authorizes its repair.
 A member's search runs no paid classification: past Spam
 and Trash every match is retained as `uncertain`, and the caller settles each
-with `mail.resolve` (`unrelated` disposes of it). Change identifier slots with `entity.update` collection
+with `purchase_import.mail_resolve` (`unrelated` disposes of it). Change identifier slots with `entity.update` collection
 patches on `externalIds` (`{op: "add"|"replace"|"remove", key, value?, expect?}`).
-Record "searched, not available" with `data_exception.set`.
+Record "searched, not available" with `data_exception.set_exception`.
 
 Photo MCP identifiers follow the same entity boundary: `runId`, `productId`
 and photo `id` values are canonical shortcodes. The one
@@ -101,7 +104,7 @@ an entity reference. Its owning `rejectCandidate` declaration in
 `rejectPhotoProductCandidate` scopes it to each photo's Assessment review.
 Reuse the key only for the identical rejection, not a different decision.
 
-`imports_read.photo_context` serves the bounded per-photo text assembled by
+`photo_run_read.run_context` serves the bounded per-photo text assembled by
 `photo-import/operations/photo-import.server.ts:runContext`. Its
 `photoRunContextImage` schema must match that summary: it does not expose the
 richer web/native `photoRunImage.descriptionEvidence`. The Image shortcode
@@ -124,26 +127,47 @@ Source-order reconciliation preparation belongs to the mutating `purchase_import
 tool because it persists the reviewed fingerprint and may promote a validated
 historical observation; it changes no ledger or stock.
 
+Every action runs through the shared Start operation runner
+(`runStartOperation`), like a browser or native call: an operation action is
+dispatched by its id (`dispatchStartOperation`), and an entity-kernel verb
+runs as an ad hoc runner operation named by its tool action (`entity.create`).
+The runner owns read policy (strong), the per-principal deadline, the Apple
+write gate, calendar dirty marks and the freshness write. The adapter
+(`apps/web/src/server/mcp/tools/tool-registration.ts`) owns tool grouping,
+published schemas, output projections, the error shape and the purchase-agent
+protocol. The runner validates a member's own output before a projection slims
+it.
+
 A tool failure comes back as an `isError` result whose text names the cause
 and whose `_meta["cubby/error"]` carries `code`, `reason`, `requestId`, and
 `diagnostics` (operation, stage, causes, `cfRayId`, Sentry link). An output
 that fails its own schema is `INVALID_OUTPUT` and names each failing path.
+A runner failure is rendered as the runner settled it; it is not normalized or
+reported a second time.
 
-Every call has a wall-clock budget (`MCP_TOOL_DEADLINE_MS` in
-`apps/web/src/server/mcp/tools/tool-registration.ts`): 18 s for reads, 45 s
+Every MCP principal carries a wall-clock budget (`MCP_TOOL_DEADLINE_MS` in
+`apps/web/src/server/http/authenticate.ts`): 18 s for reads, 45 s
 for reads that declare `modelBacked` (the decision model's 30 s retry budget plus database
 work), and 230 s for writes. An action that can wait on the decision model or another model
-declares `modelBacked: true` in `apps/web/src/contracts/mcp-tools.ts`; today
-those are `entity_read.preview`, `entity_read.suggest_fields`,
-`entity.discover_connections` and `imports_read.mail_triage_preview`. Past its budget the call answers
+declares `modelBacked: true` on its contract member; today
+those are `entity_read.preview`, `ai_read.suggest_fields`,
+`entity_graph.discover` and `purchase_import_read.mail_triage_preview`. The
+runner applies the budget to one call. A composite unit (an operation batch,
+or a delegated write's transaction) spends one budget around all its inner
+calls (`withinCompositeBudget`), which run unbudgeted: a deadline never answers
+from inside a transaction. Past its budget the call answers
 `MCP_TOOL_DEADLINE_EXCEEDED` with the elapsed time, request id, and Sentry event id, logs a
-warning, and reports to Sentry. The deadline aborts the call's `signal`, which
+warning, reports to Sentry, and records a possible write for a mutation. The
+deadline aborts the call's `signal`, which
 stops AI and upstream fetches but not Postgres queries or kernel verbs. Work
-that settles after the answer is dropped. Narrow a timed-out read. A timed-out
+that settles after the answer is not reported again; a write records freshness
+again when it ends. Narrow a timed-out read. A timed-out
 write may still have committed: re-read the affected records before retrying.
 
-The HTTP ingress (`apps/web/src/server/mcp/http-handler.ts`) authenticates from
-headers before it reads any body, then reads the body once under the SDK's
+The HTTP ingress (`apps/web/src/server/mcp/http-handler.ts`) authenticates
+through `authenticate(request, MCP_AUTH)` from headers before it reads any
+body, and hands the resulting principal (actor, delegation, budget) to every
+tool call. It then reads the body once under the SDK's
 4 MiB limit; a larger body is refused with JSON-RPC `-32600` (HTTP 413) without
 being buffered. A throw that escapes the SDK, including a failed body read,
 answers a JSON-RPC `-32603` error that echoes the request id and names the tool
@@ -156,30 +180,36 @@ then narrow or speed up the call.
 
 ## Exposure
 
-Every `query()` and `mutation()` contract member is either named by an action
-in `apps/web/src/contracts/mcp-tools.ts` or declares why not with
-`mcp: { omit }` (`mcpOmission` in `apps/web/src/contracts/define.ts`), never
-both; `pnpm generate` fails otherwise. Subscriptions are exempt. Declare the
-reason on the member itself — there is no contract-level default — and add a
-`note` when the reason alone does not say why.
+Every query and mutation resolves one `exposure`, either from its member or the
+contract default. `capability` means supported household work and is available
+to MCP; `view` means a client-facing read model/helper and stays off MCP;
+`internal` means transport, auth, or protocol plumbing and stays off MCP.
+Subscriptions are exempt. `pnpm generate` fails if an operation has no exposure
+or a capability lacks its agent-facing `description`.
 
-- `agent_twin` names the exposed operation (`twin`) agents call instead.
-- `kernel_alternative` names the entity-kernel verbs (`kernel`) that can do the
-  work, with a `note` on how. It records an omission, not proven parity.
-- `deferred_capability` is real agent work not yet exposed. Its optional
-  `note` explains the missing contract; the operation declaration is authoritative.
-- `client_view`, `model_assist`, `upload_transport`, `device_protocol`,
-  `auth_connection`, and `operator_maintenance` are the closed reasons agents
-  do without it. A person's review or approval is not one: expose it and gate
-  it with the `member_decision` capability.
+Capability actions and their snake_case member names are generated into MCP
+tools. A contract's `mcpToolGroup` groups its actions; otherwise its domain name
+is converted to snake_case. MCP clients approve per tool, so a tool never mixes
+queries and mutations: a group with both splits into `<base>_read` for its
+reads and the group name (or `<base>` for a `<base>_read` group) for its
+writes, and the split tool inherits the group's description. Every action runs
+through the shared runner by operation id. `contracts/mcp-tools.ts` contains
+only entity-kernel actions, optional per-operation MCP shaping, and tool
+descriptions. Destructive,
+open-world and model-backed behavior hints live on the contract member.
 
-Exposing an operation means adding its action and deleting its `mcp`
-declaration. Update any active backlog item when its remaining work changes. A write's review handle
-(suggestion id, fingerprint, event id, finding id) must be produced by an
-exposed read; when the producer cannot be exposed, defer the write too. A member input publishes as an
-object, an optional object, a union of objects, or no input; a tool's
-actions are all queries or all mutations, so an operation's reads and writes
-land in different tools.
+Generated tools use progressive disclosure: their published schema names the
+available action and accepts a compact `input` object. Call `describe` with
+`input.actions` to retrieve selected actions' full input/output JSON Schema and
+description. The server validates each request against the action's full Zod
+schema. The entity-kernel tools keep their detailed schemas because
+`entities://catalog` already publishes the precise action schemas.
+
+A write's review handle (suggestion id, fingerprint, event id, finding id) must
+be produced by a capability read; when the producer cannot be exposed, defer
+the write too. A person's review or approval remains a member decision and must
+be gated by the `member_decision` capability. Update any active backlog item
+when its remaining work changes.
 
 ## Playbooks
 

@@ -19,7 +19,7 @@ party. Free-text `notes` gives context such as a location by time window
 
 ## Read the run
 
-Call `imports_read.photo_context { runId }` for `ledgerPartyId`, `notes`, and the
+Call `photo_run_read.run_context { runId }` for `ledgerPartyId`, `notes`, and the
 run's photos, one page at a time: pass `nextCursor` back as `cursor` until it
 is null. Filter its images to `targetState: "pending"`; the pages are in
 capture order (`capturedAt`, undated photos last), even across batches
@@ -60,11 +60,11 @@ one as imported.
 Name and match per [product identity](../product-enrichment/references/product-identity.md)
 — its either-side-first contract governs every photo Product: `Brand Model —
 Color, Size`, one Product per exact variant. Before creating, check for an
-existing match — call `imports_read.photo_candidates` once per distinct
+existing match — call `photo_run_read.product_candidates` once per distinct
 item with its observed name and brand text (`brandName`). Its results include purchase,
 own-photo, earlier photo-import, and inventory evidence. Compare exact variant
 facts yourself; rank and absence of an own photo are useful leads, not proof.
-Use `entity_read.resolve` or `search.similar` only
+Use `entity_read.resolve` or `search_read.similar` only
 when the candidate response leaves a concrete identity question unanswered;
 avoid repeating broad catalog reads for every photo of the same item. A
 purchase-created Product without an own photo deserves close inspection even
@@ -144,7 +144,7 @@ Use a stable `groupKey` per physical item. Re-proposing a groupKey replaces
 it while it is still `proposed`; `committed`/`discarded` groups are frozen and
 come back in `frozenGroupKeys`; `removeGroupKeys` drops a proposed group.
 Then stop and tell the user the groups are ready to review on the run page.
-Read the outcome with `imports_read.photo_proposals`: a group left `proposed`
+Read the outcome with `photo_run_read.proposals`: a group left `proposed`
 with `conflict` hit an exact case-insensitive name/alias collision (re-propose
 with that `existingId` or a distinctly different name); `lastError` is a
 failed approval to fix and re-propose.
@@ -157,7 +157,7 @@ group with only its own photos needs no reordering.
 
 ## Finish
 
-The run is done once `imports_read.photo_context` has no pending images — the
+The run is done once `photo_run_read.run_context` has no pending images — the
 approval (or discard) that settles the last pending image marks the run
 `completed` automatically. Report items
 committed, images skipped (with reasons), Products matched vs. created,

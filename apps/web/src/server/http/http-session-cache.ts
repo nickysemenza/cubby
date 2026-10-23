@@ -2,14 +2,14 @@
 interface HttpSessionResult {
   response: {
     user: { id: string };
-    session: { id: string; token: string };
+    session: { id: string; token: string; expiresAt?: Date };
   } | null;
   headers: Headers;
 }
 
 export type HttpSessionReader = (options: {
   headers: Headers;
-  query?: { disableCookieCache: true };
+  query?: { disableCookieCache: true; disableRefresh?: true };
   returnHeaders: true;
 }) => Promise<HttpSessionResult>;
 
@@ -20,7 +20,12 @@ const sessionTokenCookie =
 export async function authenticateHttpSession(options: {
   headers: Headers;
   getSession: HttpSessionReader;
+  /** Read the stored session, never the cookie cache, and leave its expiry alone. */
+  fresh?: boolean;
 }): Promise<HttpSessionResult> {
+  const fresh = options.fresh
+    ? { disableCookieCache: true as const, disableRefresh: true as const }
+    : undefined;
   const headers = new Headers(options.headers);
   const authorization = headers.get("authorization");
   let bearerToken: string | undefined;
@@ -52,7 +57,11 @@ export async function authenticateHttpSession(options: {
     else headers.delete("cookie");
   }
 
-  let result = await options.getSession({ headers, returnHeaders: true });
+  let result = await options.getSession(
+    fresh
+      ? { headers, query: fresh, returnHeaders: true }
+      : { headers, returnHeaders: true },
+  );
   if (
     bearerToken &&
     result.response &&
@@ -62,7 +71,7 @@ export async function authenticateHttpSession(options: {
     // not bind its cached session to the bearer token injected by the plugin.
     result = await options.getSession({
       headers,
-      query: { disableCookieCache: true },
+      query: fresh ?? { disableCookieCache: true },
       returnHeaders: true,
     });
     if (result.response && result.response.session.token !== bearerToken) {

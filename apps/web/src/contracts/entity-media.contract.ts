@@ -7,11 +7,14 @@ import { ENTITY_ROOT_TAGS } from "~/contracts/cache-policy";
 import { defineContract, query } from "~/contracts/define";
 
 /** Browser-only canonical media lookup for compact entity references. */
-export const entityMediaContract = defineContract("entityMedia", {
-  displayImages: query({
-    mcp: { omit: "client_view" },
-    input: entityDisplayImagesInput,
-    output: entityDisplayImagesOutput,
-    cache: { tags: [["relatedData"], ...ENTITY_ROOT_TAGS] },
-  }),
-});
+export const entityMediaContract = defineContract(
+  "entityMedia",
+  {
+    displayImages: query({
+      input: entityDisplayImagesInput,
+      output: entityDisplayImagesOutput,
+      cache: { tags: [["relatedData"], ...ENTITY_ROOT_TAGS] },
+    }),
+  },
+  { exposure: "view" },
+);

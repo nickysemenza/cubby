@@ -959,9 +959,9 @@ describe("Email Purchase links", () => {
     const prediction = await ensureEmailAssessment(ctx.db, observation.id);
     const result = await callMcpTool(
       createMcpServer(),
-      "entity",
+      "suggestions",
       {
-        action: "review_assessment",
+        action: "review",
         assessmentId: prediction.id,
         operationId: "synthetic-relevance-review",
         verdict: "wrong",
@@ -1033,9 +1033,9 @@ describe("Email Purchase links", () => {
     ].entries()) {
       const result = await callMcpTool(
         createMcpServer(),
-        "entity",
+        "suggestions",
         {
-          action: "review_assessment",
+          action: "review",
           assessmentId: prediction.id,
           operationId: `synthetic-invalid-relevance-${index}`,
           verdict: "correct",
@@ -1795,15 +1795,15 @@ describe("Email Purchase links", () => {
       .update(orderMailEvent)
       .set({ supersededAt: new Date() })
       .where(eq(orderMailEvent.id, f.event.id));
-    const message = `This Email has no order events and none matches ${f.purchase.shortcode}; link it with mail.resolve, which names the event.`;
+    const message = `This Email has no order events and none matches ${f.purchase.shortcode}; link it with purchase_import.mail_resolve, which names the event.`;
     await expect(
       decide(f.email, f.purchase, f.checksum, "linked"),
     ).rejects.toMatchObject({ code: "BAD_REQUEST", message });
     const viaMcp = await callMcpTool(
       createMcpServer(),
-      "mail",
+      "purchase_import",
       {
-        action: "decide_purchase",
+        action: "email_purchase_decide",
         id: f.email,
         expectedChecksum: f.checksum,
         purchaseId: f.purchase.shortcode,

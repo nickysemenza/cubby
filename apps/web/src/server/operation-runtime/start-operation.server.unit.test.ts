@@ -5,6 +5,7 @@ import { z } from "zod";
 
 import { createDatabase } from "~/server/db/database-runtime";
 import { createAppError } from "~/server/errors/app-error";
+import { type Principal, systemPrincipal } from "~/server/http/authenticate";
 import { requireActor } from "~/server/http/request-context";
 import type { ObservedResult } from "~/server/observability/observed-request";
 import type { AppSpan } from "~/server/observability/tracing";
@@ -40,13 +41,11 @@ const span: AppSpan = {
   setError: () => undefined,
   recordException: () => undefined,
 };
-const authenticate = vi.fn<StartOperationRuntime["authenticate"]>();
 const markCalendarDirty = vi.fn<StartOperationRuntime["markCalendarDirty"]>();
 const recordDatabaseWrite = vi.fn(async () => undefined);
 const observedOperations: string[] = [];
 const inspections: ObservedResult[] = [];
 const runtime: StartOperationRuntime = {
-  authenticate,
   markCalendarDirty,
   recordDatabaseWrite,
   observe: async (definition, observation, run) => {
@@ -59,7 +58,18 @@ const runtime: StartOperationRuntime = {
 };
 const runStartOperation = createStartOperationRunner(runtime);
 
-const request = (signal = new AbortController().signal) => ({
+const browserPrincipal = (overrides: Partial<Principal> = {}): Principal => ({
+  ...systemPrincipal(context),
+  channel: "browser",
+  credential: "cookie",
+  ...overrides,
+});
+
+const request = (
+  signal = new AbortController().signal,
+  principal = browserPrincipal(),
+) => ({
+  principal,
   headers: new Headers(),
   signal,
 });
@@ -69,20 +79,22 @@ describe("runStartOperation", () => {
     vi.clearAllMocks();
     observedOperations.length = 0;
     inspections.length = 0;
-    authenticate.mockResolvedValue(context);
   });
 
-  it("uses a trusted API context once and fails closed without freshness", async () => {
+  it("runs on the principal's context and fails closed without freshness", async () => {
     const result = await runStartOperation({
       operation: "dashboard.counts",
       type: "query",
       input: undefined,
       inputSchema: z.undefined(),
       outputSchema: z.literal(true),
-      request: {
-        ...request(),
-        apiContext: { ...context, requestOrigin: "api" },
-      },
+      request: request(
+        undefined,
+        browserPrincipal({
+          channel: "cli",
+          context: { ...context, requestOrigin: "api" },
+        }),
+      ),
       readPolicy: "context",
       run: async (actor) => {
         expect(actor.auth.userId).toBe(context.auth.userId);
@@ -91,7 +103,7 @@ describe("runStartOperation", () => {
       },
     });
     expect(result).toEqual({ ok: true, data: true });
-    expect(authenticate).not.toHaveBeenCalled();
+    expect(inspections).toMatchObject([{ workload: "other" }]);
   });
 
   it("resolves server policy for HTTP list reads", async () => {
@@ -102,16 +114,20 @@ describe("runStartOperation", () => {
       input: {},
       inputSchema: z.object({}),
       outputSchema: z.literal(true),
-      request: {
-        ...request(),
-        apiContext: { ...context, requestOrigin: "api" },
-      },
+      request: request(
+        undefined,
+        browserPrincipal({
+          channel: "cli",
+          context: { ...context, requestOrigin: "api" },
+        }),
+      ),
       run,
     });
 
     expect(run).toHaveBeenCalledWith(
       expect.objectContaining({ db: database }),
       {},
+      expect.any(AbortSignal),
     );
   });
 
@@ -128,7 +144,7 @@ describe("runStartOperation", () => {
     });
   });
 
-  it("authenticates and parses both sides of the operation", async () => {
+  it("parses both sides of the operation", async () => {
     const run = vi.fn(async (_context, input: { count: number }) => ({
       doubled: input.count * 2,
     }));
@@ -145,10 +161,10 @@ describe("runStartOperation", () => {
       }),
     ).resolves.toEqual({ ok: true, data: { doubled: 6 } });
 
-    expect(authenticate).toHaveBeenCalledOnce();
     expect(run).toHaveBeenCalledWith(
       expect.objectContaining({ db: database }),
       { count: 3 },
+      expect.any(AbortSignal),
     );
     expect(observedOperations).toEqual(["entity.detail"]);
     expect(inspections).toMatchObject([{ workload: "ui" }]);
@@ -171,6 +187,7 @@ describe("runStartOperation", () => {
     expect(run).toHaveBeenCalledWith(
       expect.objectContaining({ db: database }),
       {},
+      expect.any(AbortSignal),
     );
   });
 
@@ -190,11 +207,11 @@ describe("runStartOperation", () => {
     expect(run).toHaveBeenCalledWith(
       expect.objectContaining({ db: database }),
       {},
+      expect.any(AbortSignal),
     );
     expect(markCalendarDirty).toHaveBeenCalledWith(
-      expect.objectContaining({ db: database }),
+      "browser.entity.mutate",
       expect.any(Headers),
-      "entity.mutate",
     );
     expect(recordDatabaseWrite).toHaveBeenCalledWith("entity.mutate");
   });
@@ -270,13 +287,6 @@ describe("runStartOperation", () => {
   });
 
   it("keeps a default query strong when request context carries the fresh marker decision", async () => {
-    authenticate.mockResolvedValue({
-      ...context,
-      readConsistency: {
-        consistency: "strong",
-        reason: "fresh-after-write",
-      },
-    });
     const run = vi.fn(async () => ({ ok: true }));
 
     await runStartOperation({
@@ -285,13 +295,25 @@ describe("runStartOperation", () => {
       input: {},
       inputSchema: z.object({}),
       outputSchema: z.object({ ok: z.boolean() }),
-      request: request(),
+      request: request(
+        undefined,
+        browserPrincipal({
+          context: {
+            ...context,
+            readConsistency: {
+              consistency: "strong",
+              reason: "fresh-after-write",
+            },
+          },
+        }),
+      ),
       run,
     });
 
     expect(run).toHaveBeenCalledWith(
       expect.objectContaining({ db: database }),
       {},
+      expect.any(AbortSignal),
     );
   });
 
@@ -517,27 +539,49 @@ describe("runStartOperation", () => {
     });
   });
 
-  it("keeps authentication-provider failures private", async () => {
-    authenticate.mockRejectedValueOnce(
-      new Error("Authentication backend password=fixture-secret"),
-    );
-    const result = await runStartOperation({
-      operation: "entity.detail",
-      type: "query",
-      input: {},
-      inputSchema: z.object({}),
-      outputSchema: z.object({}),
-      request: request(),
-      run: async () => ({}),
-    });
-    expect(result).toMatchObject({
-      ok: false,
-      error: {
-        message: "The operation could not be completed",
-        diagnostics: { causes: [], stage: "context" },
+  it("keeps an outdated Apple build's reads and refuses its writes", async () => {
+    const outdated = browserPrincipal({
+      channel: "native",
+      client: {
+        product: "cubby-apple",
+        version: "0.1",
+        updateRequired: { current: "0.1", minimum: "9.9" },
       },
     });
-    expect(JSON.stringify(result)).not.toContain("fixture-secret");
+    const run = vi.fn(async () => ({ ok: true }));
+
+    await expect(
+      runStartOperation({
+        operation: "entity.detail",
+        type: "query",
+        input: {},
+        inputSchema: z.object({}),
+        outputSchema: z.object({ ok: z.boolean() }),
+        request: request(undefined, outdated),
+        run,
+      }),
+    ).resolves.toEqual({ ok: true, data: { ok: true } });
+    await expect(
+      runStartOperation({
+        operation: "entity.mutate",
+        type: "mutation",
+        input: {},
+        inputSchema: z.object({}),
+        outputSchema: z.object({ ok: z.boolean() }),
+        request: request(undefined, outdated),
+        run,
+      }),
+    ).resolves.toMatchObject({
+      ok: false,
+      error: {
+        code: "UPGRADE_REQUIRED",
+        reason: "CLIENT_UPDATE_REQUIRED",
+        message: expect.stringContaining("Cubby 0.1 is too old"),
+      },
+    });
+
+    expect(run).toHaveBeenCalledOnce();
+    expect(recordDatabaseWrite).not.toHaveBeenCalled();
   });
 
   it("throws cancellation before and after execution", async () => {

@@ -2401,11 +2401,12 @@ const buildMetadataSchemas = () => {
       schemaRef: sourceRefMetadataSchema.nullable().optional(),
       /**
        * The filter is the standard predicate over a stored column, so the
-       * repository composes it from the declaration. `true` reads the column
-       * named by `columnId`; `columns` names the stored field when the
-       * descriptor id is virtual; `array` marks a multiselect over a
-       * `text-array` column (overlap, not membership). A text filter
-       * declares `anyOf` instead.
+       * repository composes it from the declaration. A value filter that
+       * derives its schema and whose `columnId` names a stored field gets
+       * this binding without declaring it; declare it only for the object
+       * form: `columns` names the stored field when the descriptor id is
+       * virtual, `array` marks a multiselect over a `text-array` column
+       * (overlap, not membership). A text filter declares `anyOf` instead.
        */
       stored: z
         .union([
@@ -2435,9 +2436,11 @@ const buildMetadataSchemas = () => {
         .optional(),
       /**
        * The filter compiles through a `model.derived` entry (a related path, a
-       * repository value, or a declared predicate): `true` names the entry
-       * keyed by `columnId`, a string names another entry when the column's
-       * own key already orders by a different value or is a stored field.
+       * repository value, or a declared predicate). An unbound value filter
+       * binds to the entry keyed by its `columnId` without declaring it.
+       * `true` names that entry where the inferred stored binding would win
+       * (a stored field shares the key); a string names another entry when
+       * the column's own key already orders by a different value.
        */
       derived: z
         .union([

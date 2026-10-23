@@ -35,7 +35,7 @@ import { gotoAuthenticatedPage } from "./support/e2e-helpers";
 import { expect, test } from "./support/e2e-test";
 
 // Only external model judgment is scripted. Admission, Pi's tools, in-process
-// MCP (imports_read.mail, purchase_import, mail.resolve), the report commands
+// MCP (purchase_import.mail_read, purchase_import, purchase_import.mail_resolve), the report commands
 // and the writer run in the Worker.
 test.use({ workerdProfile: "purchase-agent" });
 
@@ -54,8 +54,8 @@ function importOrder(
   return [
     call(`${prefix}-claim`, "claim_next_import_work"),
     { check: `${prefix}-claim`, includes: source.messageId },
-    mcpRead(`${prefix}-read`, "imports_read", {
-      action: "mail",
+    mcpRead(`${prefix}-read`, "purchase_import_read", {
+      action: "mail_read",
       mailboxId: source.mailboxId,
       messageId: source.messageId,
     }),

@@ -252,7 +252,6 @@ describe("image execution history conservation", () => {
       jobId,
       attemptId: lease.attemptId,
       userId: "test-user",
-      connectionId: crypto.randomUUID(),
       executor: {
         kind: "device" as const,
         deviceId,
@@ -271,7 +270,7 @@ describe("image execution history conservation", () => {
         userId: "another-user",
         deviceId,
       }),
-    ).toBeNull();
+    ).toBe(false);
     await getDb(ctx.db)
       .update(durableJob)
       .set({ leaseExpiresAt: new Date(0) })
@@ -327,7 +326,6 @@ describe("image execution history conservation", () => {
       jobId,
       attemptId: lease.attemptId,
       userId: "test-user",
-      connectionId: crypto.randomUUID(),
       executor: {
         kind: "device" as const,
         deviceId: installationId,
@@ -366,7 +364,6 @@ describe("image execution history conservation", () => {
       jobId,
       attemptId: lease.attemptId,
       userId: "test-user",
-      connectionId: crypto.randomUUID(),
       executor: {
         kind: "device" as const,
         deviceId: installationId,

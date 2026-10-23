@@ -627,8 +627,9 @@ final class AppModel {
                 foreground: companionSceneActive,
                 isParticipating: participation.automaticWork,
                 outbox: outbox,
+                identity: Self.identity,
                 failureObserver: { error in
-                    Diagnostics.report(error, context: "imageProcessing.socket")
+                    Diagnostics.report(error, context: "imageProcessing.companion")
                 },
                 activityObserver: { [weak self] activity in
                     Task { @MainActor [weak self] in

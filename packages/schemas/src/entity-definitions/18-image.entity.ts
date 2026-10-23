@@ -870,7 +870,6 @@ export default defineEntity(
           kind: "multiselect",
           placeholder: "Filter by upload status...",
           deriveSchema: true,
-          stored: true,
           schemaFromRead: true,
           schemaDescription: "Filter by upload status",
           options: [
@@ -883,7 +882,6 @@ export default defineEntity(
           columnId: "processingIssue",
           field: "processingIssue",
           kind: "multiselect",
-          derived: true,
           placeholder: "Filter processing issues...",
           options: [
             { value: "failed", label: "Failed", color: "var(--destructive)" },
@@ -940,14 +938,12 @@ export default defineEntity(
         {
           columnId: "runId",
           kind: "idMulti",
-          derived: true,
           placeholder: "Filter by import run...",
           brandRef: { entity: "run" },
         },
         {
           columnId: "targetState",
           kind: "multiselect",
-          derived: true,
           placeholder: "Filter by import-run target state...",
           options: [
             { value: "pending", label: "Pending", color: "var(--slate)" },
@@ -980,7 +976,6 @@ export default defineEntity(
           kind: "multiselect",
           placeholder: "Filter by source...",
           deriveSchema: true,
-          stored: true,
           schemaFromRead: true,
           options: [
             { value: "own", label: "Own" },
@@ -994,7 +989,6 @@ export default defineEntity(
           kind: "multiselect",
           placeholder: "Filter by capture attribution...",
           deriveSchema: true,
-          stored: true,
           schemaFromRead: true,
           options: [
             { value: "none", label: "None" },
@@ -1024,7 +1018,6 @@ export default defineEntity(
           brandRef: { entity: "ledgerParty" },
           currentMember: true,
           deriveSchema: true,
-          stored: true,
         },
         {
           columnId: "uploadedAgeHours",

@@ -3,7 +3,7 @@ import { McpServer } from "@modelcontextprotocol/server";
 import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
-import { MCP_TOOLS } from "~/contracts/mcp-tools";
+import { MCP_ACTION_OVERRIDES } from "~/contracts/mcp-tools";
 import { withErrorReporting } from "~/server/errors/report-error";
 
 import { callMcpTool, registerTestTool } from "../testing/mcp-test-utils";
@@ -83,7 +83,7 @@ describe("MCP batch actions", () => {
 
   it("refuses retired research on an attachment instead of silently discarding it", async () => {
     const result = await callMcpTool(createMcpServer(), "image", {
-      action: "attach_files",
+      action: "attach_file",
       items: [
         {
           entityId: "PRD-4K7M",
@@ -150,7 +150,10 @@ describe("MCP batch actions", () => {
       output: itemOutputSchema,
       spec: {
         batch: { reference: (item) => itemOutputSchema.parse(item).id },
-        telemetryEntity: MCP_TOOLS.image.actions.attach_files.telemetryEntity,
+        telemetryEntity: (item) =>
+          MCP_ACTION_OVERRIDES["image.attachFile"].telemetryEntity!(
+            input.parse(item),
+          ),
       },
       run,
     });

@@ -17,7 +17,6 @@ import {
 import { createTestRequestContext } from "~/server/testing/request-context";
 
 import { callMcpTool } from "../testing/mcp-test-utils";
-import { McpOperationContext } from "./operation-context";
 import { createMcpServer } from "./server";
 
 describe("availability explanations through MCP", () => {
@@ -31,25 +30,22 @@ describe("availability explanations through MCP", () => {
       }),
       ctx.actor,
     );
-    const operationContext = new McpOperationContext(
-      requireActor(
-        createTestRequestContext(ctx.db, {
-          auth: { userId: ctx.actor.userId },
-        }),
-      ),
+    const mcpContext = requireActor(
+      createTestRequestContext(ctx.db, {
+        auth: { userId: ctx.actor.userId },
+      }),
     );
     const call = (action: "set" | "clear", note?: string) =>
       callMcpTool(
         createMcpServer(),
         "data_exception",
         {
-          action,
+          action: `${action}_exception`,
           entityId: saved.id,
           check: "product_brand",
           ...(action === "set" ? { reason: "unavailable", note } : {}),
         },
-        {},
-        { operationContext },
+        mcpContext,
       );
     const before = (
       await loadDataQualities(ctx.db, "product", [saved.entityId])

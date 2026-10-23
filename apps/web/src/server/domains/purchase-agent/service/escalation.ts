@@ -8,8 +8,7 @@ import type { ToolExecutionResult } from "@earendil-works/pi-durable";
 import { z } from "zod";
 
 const CLAIM_TOOL = "claim_next_import_work";
-const PREPARE_TOOL = "mcp__cubby__purchase_import";
-const MAIL_TOOL = "mcp__cubby__mail";
+const PURCHASE_IMPORT_TOOL = "mcp__cubby__purchase_import";
 /** The refusal of one Email's `prepare` that escalates it. */
 const PREPARE_REFUSAL_LIMIT = 2;
 
@@ -49,11 +48,14 @@ const refusedCalls = z.array(z.string());
 const claimedEmail = z.looseObject({
   email: z.looseObject({ mailboxId: z.string(), messageId: z.string() }),
 });
+const disposition = z
+  .looseObject({ kind: z.string(), reason: z.string().optional() })
+  .optional();
+// Generated tools take {action, input}; flat arguments remain accepted.
 const toolArguments = z.looseObject({
   action: z.string().optional(),
-  disposition: z
-    .looseObject({ kind: z.string(), reason: z.string().optional() })
-    .optional(),
+  disposition,
+  input: z.looseObject({ disposition }).optional(),
 });
 
 const KEYS = {
@@ -177,15 +179,16 @@ export function coordinatorEscalation(input: {
     escalate,
     /** Hold a primary model's `unresolved` resolution for one escalated try. */
     async beforeTool(call: ToolCall): Promise<{ block: string } | undefined> {
-      if (!active || call.name !== MAIL_TOOL) return undefined;
+      if (!active || call.name !== PURCHASE_IMPORT_TOOL) return undefined;
       const args = toolArguments.safeParse(call.arguments).data;
-      if (args?.action !== "resolve" || args.disposition?.kind !== "unresolved")
+      const resolution = args?.input?.disposition ?? args?.disposition;
+      if (args?.action !== "mail_resolve" || resolution?.kind !== "unresolved")
         return undefined;
       const blocked = store.read(KEYS.blocked(call.id));
       if (blocked) {
         await escalate({
           reason: "unresolved",
-          detail: args.disposition.reason ?? "unresolved",
+          detail: resolution.reason ?? "unresolved",
           callId: call.id,
         });
         return { block: blocked };
@@ -199,7 +202,7 @@ export function coordinatorEscalation(input: {
       store.write(KEYS.blocked(call.id), block);
       await escalate({
         reason: "unresolved",
-        detail: args.disposition.reason ?? "unresolved",
+        detail: resolution.reason ?? "unresolved",
         callId: call.id,
       });
       return { block };
@@ -227,7 +230,7 @@ export function coordinatorEscalation(input: {
         return undefined;
       }
       if (
-        call.name !== PREPARE_TOOL ||
+        call.name !== PURCHASE_IMPORT_TOOL ||
         toolArguments.safeParse(call.arguments).data?.action !== "prepare" ||
         result.isError !== true ||
         heldByAnotherRun(result)

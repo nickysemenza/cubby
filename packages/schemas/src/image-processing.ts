@@ -262,42 +262,6 @@ export type ImageProcessingTerminalResult = z.infer<
   typeof imageProcessingTerminalResult
 >;
 
-export const imageProcessingClientMessage = z.discriminatedUnion("type", [
-  imageProcessingHello,
-  z.object({
-    protocolVersion: z.literal(IMAGE_PROCESSING_PROTOCOL_VERSION),
-    type: z.literal("result"),
-    result: imageProcessingResult,
-  }),
-]);
-
-export const imageProcessingServerMessage = z.discriminatedUnion("type", [
-  z.object({
-    protocolVersion: z.literal(IMAGE_PROCESSING_PROTOCOL_VERSION),
-    type: z.literal("command"),
-    command: imageProcessingCommand,
-  }),
-  z.object({
-    protocolVersion: z.literal(IMAGE_PROCESSING_PROTOCOL_VERSION),
-    type: z.literal("acknowledge"),
-    jobId: z.uuid(),
-    attemptId: z.uuid(),
-  }),
-  z.object({
-    protocolVersion: z.literal(IMAGE_PROCESSING_PROTOCOL_VERSION),
-    type: z.literal("helloAck"),
-    remotePaused: z.boolean(),
-  }),
-]);
-
-// Named wrappers keep the wire unions addressable for OpenAPI/Swift generation.
-export const validateImageProcessingCompanionMessageInput = z.object({
-  message: imageProcessingClientMessage,
-});
-export const validateImageProcessingCompanionMessageOutput = z.object({
-  message: imageProcessingServerMessage.nullable(),
-});
-
 /** Read projection shared by galleries, covers, logos, summaries, and MCP. */
 export {
   imageRepresentations,
@@ -461,10 +425,14 @@ export const evaluateAppleImageDescriptionOutput = z.object({
   jobId: z.uuid().nullable(),
 });
 
-/** A finite background window pulls the same capabilities as a socket hello. */
+/**
+ * The companion claims work with its capabilities. A resident (foreground or
+ * macOS) worker leases for the full companion window; a finite background
+ * window leases only what it has left.
+ */
 export const pullCompanionImageProcessingInput = z.object({
   hello: imageProcessingHello,
-  leaseSeconds: z.int().min(20).max(120).default(90),
+  leaseSeconds: z.int().min(20).max(300).default(90),
 });
 export const pullCompanionImageProcessingOutput = z.object({
   command: imageProcessingCommand.nullable(),
