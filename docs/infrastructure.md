@@ -901,6 +901,10 @@ Step pages record their own sample through `measurePage`
 - **Queries.** The page runs inside `withDatabaseOperationMetrics`, so
   `queries` counts the traced pool's statements. Zero counted means the page ran
   outside the traced pool and stores null ("not measured").
+  `phaseQueries` attributes statements to phases measured with `work.time`;
+  repeated phases accumulate and nested phases overlap, so their counts must not
+  be summed as a page total. Timings supplied through `work.add` have no inferred
+  query count. A phase with no traced statements stores null.
 - **Database waits.** Measured pages retain total wall time plus query, pool
   acquisition and client-queue durations from the traced pool. Summed durations
   can overlap across concurrent work; they are not additive phase timings.

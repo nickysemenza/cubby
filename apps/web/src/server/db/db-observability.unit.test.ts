@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 
+import { measurePage } from "~/server/generic/jobs/page-work";
+
 import {
   beginDatabaseAcquire,
   beginDatabaseQuery,
@@ -10,6 +12,27 @@ import {
 // Failures: a request collector may omit auth/setup SQL, count nested phase
 // totals twice, or lose summaries when the request throws.
 describe("database operation metrics", () => {
+  it("attributes repeated and nested page queries without inflating the page total", async () => {
+    const { sample } = await measurePage(async (work) => {
+      await work.time("preparation", async () => {
+        beginDatabaseQuery(0)(1);
+        await work.time("discovery", async () => {
+          beginDatabaseQuery(2)(3);
+        });
+      });
+      await work.time("preparation", async () => {
+        beginDatabaseQuery(4)(5);
+      });
+      await work.time("model", async () => {});
+      work.add({ timings: { externally_measured: 1 } });
+    });
+    expect(sample).toMatchObject({
+      queries: 3,
+      phaseQueries: { preparation: 3, discovery: 1, model: null },
+    });
+    expect(sample?.phaseQueries).not.toHaveProperty("externally_measured");
+  });
+
   it("summarizes nested operation work once even when a request fails", async () => {
     const attributes: Record<string, string | number | boolean | undefined> =
       {};
