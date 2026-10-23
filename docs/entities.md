@@ -122,6 +122,9 @@ inheritance, or would need more than a small step kind (#2616):
   classification policy, the designated household Project chosen by
   shortcode when the Product's category feature is food. The allocation
   join form (`principalExpenseInheritanceSql`) must equal the scalar one.
+  Drafts without Project, Product or Purchase references resolve without a
+  database read: no ancestor can supply a fallback or food classification.
+  Referenced drafts retain live database resolution.
   Declaring them needs a row gate, per-step conditions and a fixed-record
   step.
 - Expense `spendingCategoryId`: a ladder of override, vendor food context,
