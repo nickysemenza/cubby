@@ -823,6 +823,9 @@ displayable images before related images, filters unavailable files, and
 deduplicates by image ID. Web and native clients render the first result and do
 not derive their own cover.
 
+Shipment reads use this same resolver and defer `displayImages` in the list
+media group, including when the Shipment has no eligible related image.
+
 `extensions.ports` is the explicit seam map for entity-wide behavior the
 compiler must not infer: the kernel repository binding, entity label and
 shortcode resolver, filter declaration, and search-document

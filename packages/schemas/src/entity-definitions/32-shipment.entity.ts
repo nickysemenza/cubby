@@ -24,7 +24,12 @@ export default defineEntity({
       description: "Record packages through the shipping evidence workflow.",
     },
     icons: { phosphor: "Package", sfSymbol: "shippingbox", emoji: "📦" },
-    list: { read: { relations: ["purchaseName", "carrierName"] } },
+    list: {
+      read: {
+        media: ["displayImages"],
+        relations: ["purchaseName", "carrierName"],
+      },
+    },
     detail: {
       additionalSections: [
         { kind: "slot", id: "tracking", title: "Tracking evidence" },
