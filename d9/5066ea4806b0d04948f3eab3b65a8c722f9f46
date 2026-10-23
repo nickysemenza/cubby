@@ -1,0 +1,41 @@
+apps/web/src/server/domains/connection/repo/connection-evidence.ts
+  s_fd4d40efbd4909::t_f9e52aaedae9c0 260-261,265-268,271,343,458
+apps/web/src/server/domains/connection/repo/discovery-fingerprint.ts
+  s_ac53497fa5527a::t_34ad07b57305c5 6-10,22,25-28,37-51
+apps/web/src/server/domains/run/repo/connection-refresh.integration.test.ts
+  s_0cc53fa46ecbd7::t_35cadc15c1b47e 133,161
+docs/guide/entity-connections.md
+  s_0cc53fa46ecbd7::t_e9b9f9b6c67ffa 68-72
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "d95066ea4806b0d04948f3eab3b65a8c722f9f46",
+  "prompts": {},
+  "sessions": {
+    "s_0cc53fa46ecbd7": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2e7ff6fb-224e-42e0-a270-a92fc1131a0c",
+        "model": "unknown"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    },
+    "s_ac53497fa5527a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a16afa-a25a-79f2-b36f-a10e302719c1",
+        "model": "unknown"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    },
+    "s_fd4d40efbd4909": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a16b13-8122-70c2-8e02-6d95345e04bf",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
