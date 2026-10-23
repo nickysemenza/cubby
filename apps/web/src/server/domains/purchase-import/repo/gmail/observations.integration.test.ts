@@ -146,10 +146,14 @@ describe("immutable Email observations", () => {
     expect(pending.items.map((row) => row.assessmentId)).not.toContain(
       legacy.id,
     );
-    for (const code of [mail.shortcode, fixture.order.shortcode]) {
+    for (const codes of [
+      [mail.shortcode],
+      [fixture.order.shortcode],
+      [mail.shortcode, fixture.order.shortcode],
+    ]) {
       const audit = await listAutomaticDecisions(ctx.db, {
         family: "email_link",
-        recordIds: [code],
+        recordIds: codes,
       });
       expect(
         audit.items.find((row) => row.id === prediction.id)?.records,
@@ -161,8 +165,11 @@ describe("immutable Email observations", () => {
       );
       const outcomes = await listAutomaticDecisions(ctx.db, {
         family: "mail_import_outcome",
-        recordIds: [code],
+        recordIds: codes,
       });
+      expect(
+        outcomes.items.filter((row) => row.id === outcome.id),
+      ).toHaveLength(1);
       expect(
         outcomes.items.find((row) => row.id === outcome.id)?.records,
       ).toEqual(
@@ -171,6 +178,16 @@ describe("immutable Email observations", () => {
           { entity: "purchase", id: fixture.order.shortcode },
         ]),
       );
+    }
+    for (const family of ["email_link", "mail_import_outcome"] as const) {
+      expect(
+        (
+          await listAutomaticDecisions(ctx.db, {
+            family,
+            recordIds: [fixture.party.shortcode],
+          })
+        ).items,
+      ).toEqual([]);
     }
   });
   it("persists prediction before a label and keeps raw retrieval failures separate", async () => {

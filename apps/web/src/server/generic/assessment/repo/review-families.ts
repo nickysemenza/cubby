@@ -41,22 +41,47 @@ const emailApplication = sql`EXISTS (SELECT 1 FROM "Feedback" receipt WHERE rece
   AND (receipt.metadata->>${assessmentProducer.keyof().enum.kind} = ${EMAIL_APPLICATION_RECEIPT} OR receipt."operationId" = ${mailboxClassificationStage.enum.resolution}))`;
 const emailAudit = sql`NOT EXISTS (SELECT 1 FROM "Feedback" member_resolution WHERE member_resolution."assessmentId" = a.id AND member_resolution."operationId" = ${mailboxClassificationStage.enum.resolution} AND member_resolution.authority = ${feedbackAuthority.enum.member})
   AND (${emailApplication} OR NOT EXISTS (SELECT 1 FROM "Feedback" observed WHERE observed."assessmentId" = a.id AND observed.metadata->>${assessmentProducer.keyof().enum.kind} = ${EMAIL_OBSERVATION_RECEIPT}))`;
-const referenceFields = Object.entries(entityFieldModels).flatMap(
-  ([entity, model]) =>
-    model.fields.flatMap((field) => {
-      const target = z
-        .enum(shortcodeEntities)
-        .safeParse(field.reference?.entity);
-      if (!target.success) return [];
-      const values = (value: SQL) =>
-        sql`CASE WHEN jsonb_typeof(${value}) = 'array' THEN ${value} ELSE jsonb_build_array(${value}) END`;
-      return [
-        sql`WHEN s.entity = ${entity} AND s.field = ${field.key} THEN COALESCE((SELECT jsonb_agg(${ref(sql`${target.data}`, sql`COALESCE(v->>'id', v #>> '{}')`)})
+const fieldReferencesFor = (requested?: readonly string[]) => {
+  const referenceFields = Object.entries(entityFieldModels).flatMap(
+    ([entity, model]) =>
+      model.fields.flatMap((field) => {
+        const target = z
+          .enum(shortcodeEntities)
+          .safeParse(field.reference?.entity);
+        if (!target.success || (requested && !requested.includes(target.data)))
+          return [];
+        const values = (value: SQL) =>
+          sql`CASE WHEN jsonb_typeof(${value}) = 'array' THEN ${value} ELSE jsonb_build_array(${value}) END`;
+        return [
+          sql`WHEN s.entity = ${entity} AND s.field = ${field.key} THEN COALESCE((SELECT jsonb_agg(${ref(sql`${target.data}`, sql`COALESCE(v->>'id', v #>> '{}')`)})
     FROM jsonb_array_elements(${values(sql`s."suggestedValue"`)} || ${values(sql`s."currentValue"`)}) v), '[]'::jsonb)`,
-      ];
-    }),
-);
-const fieldReferences = sql`CASE ${sql.join(referenceFields, sql` `)} ELSE '[]'::jsonb END`;
+        ];
+      }),
+  );
+  return referenceFields.length
+    ? sql`CASE ${sql.join(referenceFields, sql` `)} ELSE '[]'::jsonb END`
+    : sql`'[]'::jsonb`;
+};
+const fieldRecords = (requested?: readonly string[]) =>
+  sql`${one} || ${fieldReferencesFor(requested)}`;
+
+const emailLinkRecords = (requested?: readonly string[]) => {
+  const parts: SQL[] = [];
+  if (!requested || requested.includes(entities.email))
+    parts.push(
+      sql`jsonb_build_array(${ref(sql`${entities.email}`, sql`COALESCE(a.subject->>'recordId', (SELECT mail.id::text FROM "Email" mail WHERE mail."orderMailId"::text = a.subject->>'originalId' AND mail."deletedAt" IS NULL))`)})`,
+    );
+  if (!requested || requested.includes(entities.purchase))
+    parts.push(
+      sql`jsonb_build_array(${ref(sql`${entities.purchase}`, sql`s.data->>'purchaseId'`)})`,
+    );
+  return parts.length ? sql.join(parts, sql` || `) : sql`'[]'::jsonb`;
+};
+const mailImportOutcomeRecords = (requested?: readonly string[]) =>
+  // Linked Purchase expansion cannot match another requested entity kind.
+  !requested || requested.includes(entities.purchase)
+    ? sql`${one} || ${linkedPurchases}`
+    : one;
 const endpoint = (end: "source" | "target") =>
   ref(
     sql`a.evidence->'candidate'->${end}->>'entityKind'`,
@@ -143,7 +168,8 @@ export const isReviewFamily = (
 export const reviewFamilyDeclarations = {
   field: {
     ...assessmentReviewFamilies.field,
-    records: sql`${one} || ${fieldReferences}`,
+    records: fieldRecords(),
+    recordsFor: fieldRecords,
     actionable: sql`true`,
     summarize: (value: unknown) =>
       `Set field to ${JSON.stringify(assessmentJudgments.field.parse(value).value)}`,
@@ -200,7 +226,8 @@ export const reviewFamilyDeclarations = {
   },
   email_link: {
     ...assessmentReviewFamilies.email_link,
-    records: sql`jsonb_build_array(${ref(sql`${entities.email}`, sql`COALESCE(a.subject->>'recordId', (SELECT mail.id::text FROM "Email" mail WHERE mail."orderMailId"::text = a.subject->>'originalId' AND mail."deletedAt" IS NULL))`)}, ${ref(sql`${entities.purchase}`, sql`s.data->>'purchaseId'`)})`,
+    records: emailLinkRecords(),
+    recordsFor: emailLinkRecords,
     actionable: sql`false`,
     audit: sql`EXISTS (SELECT 1 FROM "Feedback" original WHERE original."assessmentId" = a.id AND original."operationId" = ${mailboxClassificationStage.enum.decision} AND original.authority = ${feedbackAuthority.enum.automatic})`,
     summarize: (value: unknown) =>
@@ -215,7 +242,8 @@ export const reviewFamilyDeclarations = {
   },
   mail_import_outcome: {
     ...assessmentReviewFamilies.mail_import_outcome,
-    records: sql`${one} || ${linkedPurchases}`,
+    records: mailImportOutcomeRecords(),
+    recordsFor: mailImportOutcomeRecords,
     actionable: sql`false`,
     audit: sql`true`,
     summarize: (value: unknown) => {
