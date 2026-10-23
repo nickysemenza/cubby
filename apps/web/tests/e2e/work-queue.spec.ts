@@ -14,6 +14,7 @@ import {
 import { expect, test } from "./support/e2e-test";
 import { seedProductPrerequisite } from "./fixtures/catalog";
 import {
+  createFixtureGraph,
   ensureMemberParty,
   fixtureUserId,
   getFixtureDb,
@@ -167,12 +168,21 @@ test("Work queue scrolls, sorts, copies source codes and inspects independently"
   const prefix = uniqueName(testInfo, "Queue table parity");
   const names = ["Alpha", "Bravo", "Charlie", "Delta", "Echo", "Foxtrot"];
   names.push(...Array.from({ length: 24 }, (_, i) => `Between ${i}`));
-  const records = [];
-  for (const suffix of names) {
-    records.push(
-      await seedProductPrerequisite(page, { name: `${prefix} ${suffix}` }),
-    );
-  }
+  // One committed graph crosses the real scroll boundary without settling
+  // derived work once per Product or creating thirty unrelated brands.
+  const records = await createFixtureGraph(page, async (create) => {
+    const brand = await create("vendor", { name: `${prefix} brand` });
+    const products = [];
+    for (const suffix of names) {
+      products.push(
+        await create("product", {
+          name: `${prefix} ${suffix}`,
+          brandId: brand.id,
+        }),
+      );
+    }
+    return products;
+  });
   await gotoAuthenticatedPage(
     page,
     `/work-queue?query=${encodeURIComponent(prefix)}&source=research&sort=-name`,
@@ -214,7 +224,7 @@ test("Work queue scrolls, sorts, copies source codes and inspects independently"
   await expect(
     list.getByRole("link", { name: `${prefix} Foxtrot`, exact: true }),
   ).toBeVisible();
-  await page.reload();
+  // Routing persistence is covered by the preceding filter journey.
   await expect(list.getByRole("link").first()).toHaveText(`${prefix} Foxtrot`);
   await page.getByRole("button", { name: /^Sort: Record/ }).click();
   await page.getByRole("menuitem", { name: "Ascending", exact: true }).click();

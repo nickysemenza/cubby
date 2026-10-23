@@ -8,7 +8,7 @@ import {
   selectComboboxItem,
 } from "./support/e2e-helpers";
 import { expect, test } from "./support/e2e-test";
-import { createEntityFixture, createEntityFixtures } from "./fixtures/core";
+import { createEntityFixture, createFixtureGraph } from "./fixtures/core";
 import {
   dispatchesOperation,
   performOperation,
@@ -22,56 +22,48 @@ test("linked Expense categories display their readable label and transaction exp
   test.setTimeout(60_000);
   const tag = `Synthetic category display ${Date.now()}`;
   const categoryName = `${tag} dining`;
-  const { id: categoryId } = await createEntityFixture(
+  const { categoryId, purchaseId, transactionId } = await createFixtureGraph(
     page,
-    "spendingCategory",
-    {
-      name: categoryName,
-      itemizationExpectation: "not_expected",
-      productExpectation: "not_expected",
-    },
-  );
-  const { id: accountId } = await createEntityFixture(
-    page,
-    "financialAccount",
-    {
-      name: tag,
-      identity: { kind: "credit_card", issuer: null, network: "visa" },
-    },
-  );
-  const { id: vendorId } = await createEntityFixture(page, "vendor", {
-    name: tag,
-  });
-  const { id: purchaseId } = await createEntityFixture(page, "purchase", {
-    vendorId,
-    date: "2026-09-10",
-    itemizationExpectation: "not_expected",
-  });
-  // Category coverage counts Expense lines independently of Product links.
-  await createEntityFixtures(
-    page,
-    "expense",
-    Array.from({ length: 28 }, () => ({
-      name: `${tag} meal`,
-      purchaseId,
-      cost: -2,
-      date: "2026-09-10",
-      costType: "materials",
-      trade: "other",
-      spendingCategoryId: categoryId,
-    })),
-  );
-  const { id: transactionId } = await createEntityFixture(
-    page,
-    "financialTransaction",
-    {
-      accountId,
-      amount: -56,
-      merchant: tag,
-      kind: "refund",
-      status: "posted",
-      postedDate: "2026-09-10",
-      purchaseId,
+    async (create) => {
+      const { id: categoryId } = await create("spendingCategory", {
+        name: categoryName,
+        itemizationExpectation: "not_expected",
+        productExpectation: "not_expected",
+      });
+      const { id: accountId } = await create("financialAccount", {
+        name: tag,
+        identity: { kind: "credit_card", issuer: null, network: "visa" },
+      });
+      const { id: vendorId } = await create("vendor", {
+        name: tag,
+      });
+      const { id: purchaseId } = await create("purchase", {
+        vendorId,
+        date: "2026-09-10",
+        itemizationExpectation: "not_expected",
+      });
+      // Category coverage counts Expense lines independently of Product links.
+      for (let index = 0; index < 28; index++) {
+        await create("expense", {
+          name: `${tag} meal`,
+          purchaseId,
+          cost: -2,
+          date: "2026-09-10",
+          costType: "materials",
+          trade: "other",
+          spendingCategoryId: categoryId,
+        });
+      }
+      const { id: transactionId } = await create("financialTransaction", {
+        accountId,
+        amount: -56,
+        merchant: tag,
+        kind: "refund",
+        status: "posted",
+        postedDate: "2026-09-10",
+        purchaseId,
+      });
+      return { categoryId, purchaseId, transactionId };
     },
   );
   const saved = await entityApi(page.request).get(
@@ -511,10 +503,7 @@ test("expense category pills agree with quality for direct, allocated, and missi
     name: `1 more: ${hiddenName}`,
     exact: true,
   });
-  await overflow.hover();
-  await expect(
-    page.locator('[data-slot="tooltip-content"]').filter({ visible: true }),
-  ).toHaveText(hiddenName);
+  await expect(overflow).toBeVisible();
   const row = page.getByRole("row").filter({ hasText: `${tag} unclassified` });
   await expect(row).not.toContainText("100/100");
 

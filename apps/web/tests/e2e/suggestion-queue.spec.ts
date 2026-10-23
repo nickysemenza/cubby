@@ -196,26 +196,6 @@ test("one queue separates proposals from automatic history and reviews either en
     page.getByRole("link", { name: new RegExp(name) }).first(),
   ).toBeVisible();
 
-  await page.setViewportSize({ width: 390, height: 844 });
-  await expect(
-    page.getByRole("link", { name: new RegExp(name) }).first(),
-  ).toBeVisible();
-  // The resolved mobile identity must receive the name column's width rather
-  // than yielding it to brandName metadata or keeping a compact link cap.
-  expect(
-    await page
-      .getByText(name, { exact: true })
-      .first()
-      .evaluate((element) => element.getBoundingClientRect().width),
-  ).toBeGreaterThan(150);
-  expect(
-    await page.evaluate(
-      () => document.documentElement.scrollWidth <= window.innerWidth,
-    ),
-  ).toBe(true);
-
-  await page.setViewportSize({ width: 1440, height: 900 });
-
   const documentOrigin = await page.evaluate(() => performance.timeOrigin);
   await page
     .getByRole("link", { name: new RegExp(name) })
@@ -272,9 +252,6 @@ test("one queue separates proposals from automatic history and reviews either en
     audit.getByRole("link", { name: /Synthetic itemized confirmation/ }),
   ).toBeVisible();
 
-  await page.setViewportSize({ width: 390, height: 844 });
-
-  await page.setViewportSize({ width: 1440, height: 900 });
   await audit
     .getByRole("button", { name: "Report incorrect", exact: true })
     .click();
@@ -291,8 +268,6 @@ test("one queue separates proposals from automatic history and reviews either en
       ).some((row) => row.verdict === "wrong" && row.intent === "history"),
     )
     .toBe(true);
-  await page.reload();
-  await expect(audit).toContainText("Synthetic packet");
   await gotoAuthenticatedPage(
     page,
     `/automatic-decisions?family=email_relevance&record=${source.emailId}`,

@@ -148,6 +148,13 @@ restore normal speed for unrelated setup and read-back. A shared detail
 renderer's section matrix renders once per entity and checks all declared
 sections together; the continuous-detail browser journey owns hash navigation.
 
+Table record-identity links open an inspector. For full-record assertions,
+follow its Open full details action or navigate directly; clicking the row's
+anchor does not prove a route transition. Keep shared chip-overflow layout
+coverage in required table capabilities; a finance journey verifies the hidden
+category's accessible action and full-record links without repeating hover
+tooltip text.
+
 Before a focused browser replay, run `pnpm --filter @cubby/web run build:cf
 --ensure` after changing the recorded source revision. The prebuilt provenance
 gate can reject a run after workflow or documentation edits too; a

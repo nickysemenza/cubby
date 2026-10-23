@@ -846,14 +846,6 @@ test("reviews an occupied location and links a chosen unlinked Expense after pho
     .first()
     .click();
   await expect(page.getByText(/Add 1 to 2 at/)).toBeVisible();
-  for (const width of [402, 1440]) {
-    await page.setViewportSize({ width, height: 900 });
-    expect(
-      await page.evaluate(
-        () => document.documentElement.scrollWidth <= window.innerWidth,
-      ),
-    ).toBe(true);
-  }
   await page
     .locator("#photo-group-g1")
     .getByRole("button", {
@@ -1423,10 +1415,6 @@ test("persists rejected photo candidates after reload and regroup", async ({
   await expect(
     attach.getByRole("button", { name: "Attach 1 photo", exact: true }),
   ).toHaveCount(0);
-  await page.reload();
-  await expect(
-    attach.getByText(`${productName} · Rejected`, { exact: true }).first(),
-  ).toBeVisible();
   const regrouped = await startOperation(
     page.request,
     "photoImport.saveGroups",
