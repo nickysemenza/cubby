@@ -1,4 +1,4 @@
-import { parseShortcodeFor } from "@cubby/schemas/identifiers";
+import { type VendorId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
@@ -22,6 +22,7 @@ describe("ingredient mappingGap filter", () => {
   const ingredientWith = async (
     name: string,
     products: readonly ("complete" | "partial" | "none-yet")[],
+    brandId: VendorId,
   ) => {
     const ingredient = await findOrCreateIngredient(ctx.db, name);
     for (const [index, tier] of products.entries()) {
@@ -29,7 +30,7 @@ describe("ingredient mappingGap filter", () => {
         ctx.db,
         makeProductInput({
           name: `${name} product ${index}`,
-          brandId: await findOrCreateVendor(ctx.db, "test"),
+          brandId,
           ingredientId: parseShortcodeFor("ingredient", ingredient.shortcode),
         }),
         ctx.actor,
@@ -50,15 +51,19 @@ describe("ingredient mappingGap filter", () => {
   };
 
   it("lists ingredients a live recipe needs that no complete product covers", async () => {
+    const brandId = await findOrCreateVendor(
+      ctx.db,
+      "Synthetic mapping-gap brand",
+    );
     const [unmapped, covered, partial, mixed, unused] = await Promise.all([
-      ingredientWith("Gap unmapped", []),
-      ingredientWith("Gap covered", ["complete"]),
-      ingredientWith("Gap partial", ["partial"]),
-      ingredientWith("Gap mixed", ["partial", "complete"]),
-      ingredientWith("Gap unused", []),
+      ingredientWith("Gap unmapped", [], brandId),
+      ingredientWith("Gap covered", ["complete"], brandId),
+      ingredientWith("Gap partial", ["partial"], brandId),
+      ingredientWith("Gap mixed", ["partial", "complete"], brandId),
+      ingredientWith("Gap unused", [], brandId),
     ]);
     // A product whose coverage was never computed is unknown, not complete.
-    const unknown = await ingredientWith("Gap unknown", ["none-yet"]);
+    const unknown = await ingredientWith("Gap unknown", ["none-yet"], brandId);
     await createRecipeFixture(
       ctx.db,
       makeRecipeInput({
