@@ -63,6 +63,7 @@ import {
 import { mergeEntityActionDefinitions } from "./merge-entity-actions";
 import { productRosterEntityActionDefinitions } from "./product-roster-entity-actions";
 import { specialistLifecycleEntityActionDefinitions } from "./specialist-lifecycle-entity-actions";
+import { vendorLogoEntityActionDefinitions } from "./vendor-logo-entity-action";
 
 /**
  * Entity action implementations own their dialog state and mutation;
@@ -104,7 +105,11 @@ const isEntityActionRow = (row: {
   id: string | number;
 }): row is EntityActionRow => typeof row.id === "string";
 
-type EntityActionAvailability = BulkActionAvailability;
+type EntityActionAvailability =
+  | Exclude<BulkActionAvailability, { status: "disabled" }>
+  | (Extract<BulkActionAvailability, { status: "disabled" }> & {
+      recovery?: ReactNode;
+    });
 
 export interface EntityActionResolutionContext {
   entity: Entity;
@@ -325,6 +330,7 @@ const buildEntityActions = (): readonly EntityActionDefinition[] => {
     ...features.inventoryLocation,
     ...mergeEntityActionDefinitions,
     ...productRosterEntityActionDefinitions,
+    ...vendorLogoEntityActionDefinitions,
     ...specialistLifecycleEntityActionDefinitions,
     ...declaredEntityActionDefinitions,
     deleteEntityActionDefinition,
@@ -843,15 +849,21 @@ function InlineActionButtons({
   record: EntityActionRow;
 }) {
   return visible.map(({ action, availability }) => (
-    <VerbButton
-      key={action.id}
-      verb={action.verb}
-      disabled={availability.status === "disabled"}
-      disabledReason={
-        availability.status === "disabled" ? availability.reason : undefined
-      }
-      onClick={() => action.run(record)}
-    />
+    <div key={action.id} className="flex flex-col items-start gap-1">
+      <VerbButton
+        verb={action.verb}
+        disabled={availability.status === "disabled"}
+        disabledReason={
+          availability.status === "disabled" ? availability.reason : undefined
+        }
+        onClick={() => action.run(record)}
+      />
+      {availability.status === "disabled" && (
+        <p className="text-xs text-muted-foreground">
+          {availability.reason} {availability.recovery}
+        </p>
+      )}
+    </div>
   ));
 }
 
@@ -934,7 +946,7 @@ function PanelActionButtons({
                   />
                   {availability.status === "disabled" && (
                     <p className="px-2 text-xs text-muted-foreground">
-                      {availability.reason}
+                      {availability.reason} {availability.recovery}
                     </p>
                   )}
                 </div>
@@ -994,6 +1006,12 @@ function MenuActionButtons({
                   }
                   onSelect={() => action.run(record)}
                 />
+                {availability.status === "disabled" &&
+                  availability.recovery && (
+                    <div className="px-2 py-1 text-xs">
+                      {availability.recovery}
+                    </div>
+                  )}
               </Fragment>
             ))}
           </DropdownMenuContent>

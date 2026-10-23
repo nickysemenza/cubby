@@ -143,7 +143,7 @@ describe("MCP tool JSON Schema — toWire parity", () => {
     expect(hits).toEqual([]);
   });
 
-  it("advertises every gallery entity and rejects non-gallery attachment targets", () => {
+  it("advertises gallery and singular attachments with explicit replacement roles", () => {
     const attachFiles = requireAction("image.attach_files").input;
     const attachExisting = requireAction("image.attach_existing").input;
     const description =
@@ -167,6 +167,33 @@ describe("MCP tool JSON Schema — toWire parity", () => {
       ).toBe(true);
     }
 
+    for (const [entity, role] of [
+      ["vendor", "logo"],
+      ["cookbook", "cover"],
+    ] as const) {
+      const targetId = testShortcode(entity, "ABC1");
+      expect(
+        attachFiles.safeParse({
+          items: [
+            { entityId: targetId, role, url: "https://example.test/file.jpg" },
+          ],
+        }).success,
+      ).toBe(true);
+      expect(
+        attachExisting.safeParse({
+          imageId: testShortcode("image", "IMG1"),
+          targetId,
+          role,
+        }).success,
+      ).toBe(true);
+      expect(
+        attachExisting.safeParse({
+          imageId: testShortcode("image", "IMG1"),
+          targetId,
+          role: "attachment",
+        }).success,
+      ).toBe(false);
+    }
     const vendorId = testShortcode("vendor", "ABC1");
     expect(
       attachFiles.safeParse({

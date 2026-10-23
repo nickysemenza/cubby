@@ -53,6 +53,7 @@ export default defineEntity({
     },
     icons: { phosphor: "Storefront", sfSymbol: "storefront", emoji: "🏪" },
     detail: {
+      hero: { extraActions: ["fetchLogo", "refreshLogo"] },
       summary: [
         {
           kind: "records",
@@ -143,6 +144,7 @@ export default defineEntity({
       ],
     },
     list: {
+      extraActions: ["fetchLogo", "refreshLogo"],
       titleSubtitle: true,
       shelfSubtitleOverride: ["defaultSpendingCategoryId"],
       savedViews: [

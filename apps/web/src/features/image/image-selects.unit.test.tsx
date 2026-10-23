@@ -12,6 +12,7 @@ import { ImageEditDialog } from "./image-edit-dialog";
 const image = fromPartial<ImageWithEntity>({
   id: "IMG-4K7M",
   filename: "illustrative.png",
+  contentType: "image/png",
   source: "unknown",
   sourceName: null,
   sourcePageUrl: null,

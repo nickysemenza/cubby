@@ -1150,7 +1150,7 @@ export const MCP_TOOLS = defineMcpTools({
 
   image: {
     description:
-      "Files and images on gallery records (every entity in the attach schemas, including Garden Entries, meals, and tasks). Covers and vendor logos have their own replacement fields, not gallery targets.",
+      "Files and images on declared image-bearing records. Galleries append; role cover replaces a Cookbook cover and role logo replaces a Vendor logo after image validation succeeds.",
     actions: {
       create_uploads: mcpAction({
         op: imageUploadContract.ops.createFileUpload,
@@ -1174,7 +1174,7 @@ export const MCP_TOOLS = defineMcpTools({
         op: imageContract.ops.attachExisting,
         telemetryEntity: (input) => parseShortcode(input.targetId)?.type,
         description:
-          "Attach an existing uploaded image to a live gallery record without re-uploading it; the target shortcode's prefix names the record. Repeated requests are idempotent and restore a previously soft-deleted link.",
+          "Attach an existing uploaded image without re-uploading it. Galleries append and restore detached links; specify role cover for a Cookbook or logo for a Vendor to replace the current singular image. Repeating the current attachment is idempotent.",
       }),
 
       schedule_processing: mcpAction({

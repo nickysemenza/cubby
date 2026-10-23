@@ -253,7 +253,7 @@ export const imageHandlers = implementOperationDomain(imageContract, {
     const parsed = parseShortcode(input.targetId);
     if (!attachableImageEntity.safeParse(parsed?.type).success)
       throw new Error(
-        `${input.targetId} is not a gallery attachment target; expected ${attachableImageEntity.options.join(", ")}.`,
+        `${input.targetId} is not an image attachment target; expected ${attachableImageEntity.options.join(", ")}.`,
       );
     return attachExistingImageWorkflow(context.db, context.actorContext, input);
   },
