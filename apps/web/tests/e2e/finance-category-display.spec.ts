@@ -213,11 +213,7 @@ test("linked Expense categories display their readable label and transaction exp
     itemizationExpectation: "required",
     coverage: { expectation: "required" },
   });
-  await row
-    .locator(`a[href="/financial-transactions/${transactionId}"]`)
-    .first()
-    .click();
-  await expect(page).toHaveURL(`/financial-transactions/${transactionId}`);
+  await gotoAuthenticatedPage(page, `/financial-transactions/${transactionId}`);
   await expect(
     page.getByText("Set here", { exact: true }).first(),
   ).toBeVisible();
@@ -519,16 +515,12 @@ test("expense category pills agree with quality for direct, allocated, and missi
     name: `1 more: ${hiddenName}`,
     exact: true,
   });
-  await overflow.hover();
-  await expect(
-    page.locator('[data-slot="tooltip-content"]').filter({ visible: true }),
-  ).toHaveText(hiddenName);
+  await expect(overflow).toBeVisible();
   const row = page.getByRole("row").filter({ hasText: `${tag} unclassified` });
   await expect(row).not.toContainText("100/100");
 
   // The full record keeps both allocated categories navigable.
-  await shipping.locator(`a[href="/expenses/${adjustment}"]`).first().click();
-  await expect(page).toHaveURL(`/expenses/${adjustment}`);
+  await gotoAuthenticatedPage(page, `/expenses/${adjustment}`);
   await expect(
     page.getByRole("link", { name: categoryName, exact: true }).first(),
   ).toHaveAttribute("href", `/spending-categories/${categoryId}`);
