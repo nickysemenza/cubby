@@ -18,6 +18,11 @@ baseline can make an untouched form appear changed. Run the web `typecheck`
 command after the final test fixture or query edit, even when its runtime test
 passes; an earlier check does not cover later test repairs. `typecheck:app`
 excludes all test files, including browser previews, and cannot verify them.
+Primary entity-list search uses the generated `searchQuery` URL key. Use
+`entityListHref` for declared column filters, and verify the visible search
+value when narrowing a fixture cohort. Obsolete `q` or view aliases can be
+discarded by route validation and leave a large unfiltered virtualized list.
+Routes with their own explicit `q` schema, such as combined records, retain it.
 Browser grouping journeys use the visible list Group control. Header-menu
 dispatch remains in `table-header-layout.unit.test.tsx`; do not duplicate its
 hover/focus disclosure in a backend-connected grouping journey.

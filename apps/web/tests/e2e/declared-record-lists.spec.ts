@@ -399,8 +399,11 @@ test("record dates retain their calendar label with present and future context",
   });
   await gotoAuthenticatedPage(
     page,
-    `/tasks?view=next&q=${encodeURIComponent(prefix)}`,
+    `/tasks?searchQuery=${encodeURIComponent(prefix)}`,
   );
+  await expect(
+    page.getByRole("textbox", { name: "Search tasks or shortcode" }),
+  ).toHaveValue(prefix);
   await assertDate(
     page
       .getByRole("row")
