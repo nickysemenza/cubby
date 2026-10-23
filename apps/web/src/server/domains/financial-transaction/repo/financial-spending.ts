@@ -129,6 +129,20 @@ const resolveSpendingVendors = (db: Database, names: readonly string[]) =>
     { create: false },
   );
 
+type SpendingCandidate = {
+  id: string;
+  shortcode: string;
+  displayLabel: string | null;
+  date: string | null;
+};
+type PaymentCandidate = SpendingCandidate & {
+  amountKey: string;
+  chargedDate: string;
+};
+const calendarGap = (left: string, right: string) =>
+  Math.abs(Date.parse(`${left}T00:00:00Z`) - Date.parse(`${right}T00:00:00Z`)) /
+  86_400_000;
+
 /** Read-only metadata for one synchronous proposal page; never reuse at commit or across model work. */
 export async function prepareFinancialSpendingPage(
   db: Database,
@@ -137,6 +151,11 @@ export async function prepareFinancialSpendingPage(
     transactionIds: ReadonlyArray<
       (typeof financialTransaction.$inferSelect)["id"]
     >;
+    sources?: readonly {
+      amount: number;
+      transactionDate?: string | null;
+      postedDate?: string | null;
+    }[];
   },
 ) {
   const transactions = input.transactionIds.length
@@ -171,12 +190,71 @@ export async function prepareFinancialSpendingPage(
   );
   for (const transaction of transactions)
     transactionsById.set(transaction.shortcode, transaction);
+  const transactionIds = transactions.map((row) => row.id);
+  const references = await settlementRefsFor(db, transactionIds);
+  const allocations = transactionIds.length
+    ? await getDb(db).query.financialTransactionAllocation.findMany({
+        where: and(
+          inArray(financialTransactionAllocation.transactionId, transactionIds),
+          notDeleted(financialTransactionAllocation),
+        ),
+        orderBy: financialTransactionAllocation.purchaseId,
+      })
+    : [];
+  const allocationsByTransaction = new Map<string, typeof allocations>();
+  for (const allocation of allocations) {
+    const existing =
+      allocationsByTransaction.get(allocation.transactionId) ?? [];
+    existing.push(allocation);
+    allocationsByTransaction.set(allocation.transactionId, existing);
+  }
+  const sources = [...(input.sources ?? []), ...transactions];
+  const dates = sources
+    .flatMap((source) => source.transactionDate ?? source.postedDate ?? [])
+    .sort();
+  const candidateBounds =
+    input.sources && dates.length
+      ? { first: dates[0]!, last: dates.at(-1)! }
+      : null;
+  const amounts = [...new Set(sources.map((source) => cents(source.amount)))];
+  const paymentCandidates =
+    candidateBounds && amounts.length
+      ? (
+          await getDb(db).execute<PaymentCandidate>(sql`
+        SELECT p.id,p.shortcode,p."displayLabel",p.date,
+          round(payment.amount * 100)::text AS "amountKey", payment."chargedAt"::date::text AS "chargedDate"
+        FROM "PurchasePaymentEvidence" payment JOIN "Purchase" p ON p.id=payment."purchaseId" AND p."deletedAt" IS NULL
+        WHERE round(payment.amount * 100) IN (${sql.join(
+          amounts.map((amount) => sql`${amount}`),
+          sql`, `,
+        )})
+          AND payment."chargedAt"::date BETWEEN ${candidateBounds.first}::date-3 AND ${candidateBounds.last}::date+3
+        ORDER BY p.id
+      `)
+        ).rows
+      : [];
   return {
+    candidateBounds,
+    candidateAmounts: new Set(amounts),
+    paymentCandidates,
+    vendorCandidates: new Map<string, Promise<SpendingCandidate[]>>(),
+    explicitCandidates: new Map<string, Promise<SpendingCandidate[]>>(),
+    references,
+    allocations: allocationsByTransaction,
     accounts: accountsById,
     transactions: transactionsById,
     // Promise caching coalesces concurrent identical reads without extending
     // their lifetime beyond this advisory page. Commit rebuilds without it.
     vendors: new Map<string, ReturnType<typeof resolveSpendingVendors>>(),
+    graphs: new Map<
+      Parameters<typeof bookingGraph>[1],
+      ReturnType<typeof loadSpendingGraph>
+    >(),
+    categoryHistory: new Map<
+      string,
+      ReturnType<typeof financialSpendingCategoryHistory>
+    >(),
+    payments: new Map<string, ReturnType<typeof purchasePayments>>(),
   };
 }
 export type FinancialSpendingPage = Awaited<
@@ -219,7 +297,9 @@ async function spendingFacts(
     ? financialSpendingSource.parse({
         ...row,
         accountId: account.shortcode,
-        sourceRefs: (await settlementRefsFor(db, [row.id])).get(row.id) ?? [],
+        sourceRefs: page
+          ? [...(page.references.get(row.id) ?? [])]
+          : ((await settlementRefsFor(db, [row.id])).get(row.id) ?? []),
       })
     : financialSpendingSource.parse(request.source);
   source.sourceRefs.sort(
@@ -228,22 +308,36 @@ async function spendingFacts(
       a.externalId.localeCompare(b.externalId),
   );
   const allocations = row
-    ? await getDb(db).query.financialTransactionAllocation.findMany({
-        where: and(
-          eq(financialTransactionAllocation.transactionId, row.id),
-          notDeleted(financialTransactionAllocation),
-        ),
-        orderBy: financialTransactionAllocation.purchaseId,
-      })
+    ? page
+      ? (page.allocations.get(row.id) ?? [])
+      : await getDb(db).query.financialTransactionAllocation.findMany({
+          where: and(
+            eq(financialTransactionAllocation.transactionId, row.id),
+            notDeleted(financialTransactionAllocation),
+          ),
+          orderBy: financialTransactionAllocation.purchaseId,
+        })
     : [];
   const graphs = [];
   for (const allocation of allocations)
-    graphs.push(await spendingGraph(db, allocation.purchaseId));
+    graphs.push(await spendingGraph(db, allocation.purchaseId, page));
   return { row, source, account, allocations, graphs };
 }
 
 /** Capacity includes other settlements and effective categories, not just a signed line. */
-async function spendingGraph(
+function spendingGraph(
+  db: Database,
+  purchaseId: Parameters<typeof bookingGraph>[1],
+  page?: FinancialSpendingPage,
+) {
+  const cached = page?.graphs.get(purchaseId);
+  if (cached) return cached;
+  const graph = loadSpendingGraph(db, purchaseId);
+  page?.graphs.set(purchaseId, graph);
+  return graph;
+}
+
+async function loadSpendingGraph(
   db: Database,
   purchaseId: Parameters<typeof bookingGraph>[1],
 ) {
@@ -386,6 +480,101 @@ function spendingVendors(
   return lookup;
 }
 
+async function purchasePayments(db: Database, purchaseId: string) {
+  return (
+    await getDb(db).execute(
+      sql`SELECT * FROM "PurchasePaymentEvidence" WHERE "purchaseId" = ${purchaseId} ORDER BY id`,
+    )
+  ).rows;
+}
+
+function spendingPayments(
+  db: Database,
+  purchaseId: string,
+  page?: FinancialSpendingPage,
+) {
+  const cached = page?.payments.get(purchaseId);
+  if (cached) return cached;
+  const payments = purchasePayments(db, purchaseId);
+  page?.payments.set(purchaseId, payments);
+  return payments;
+}
+
+type CandidateInput = {
+  date: string;
+  amount: number;
+  refund: boolean;
+  vendorId?: string;
+  purchaseId?: string | null;
+};
+async function spendingCandidates(
+  db: Database,
+  input: CandidateInput,
+  page?: FinancialSpendingPage,
+): Promise<SpendingCandidate[]> {
+  const bounds = page?.candidateBounds;
+  // The page pool is a superset only for the source dates admitted at construction.
+  // Other callers keep the exact fresh selector, including all commit previews.
+  if (
+    !page ||
+    !bounds ||
+    !page.candidateAmounts.has(input.amount) ||
+    input.date < bounds.first ||
+    input.date > bounds.last
+  ) {
+    return (
+      await getDb(db)
+        .execute<SpendingCandidate>(sql`SELECT p.id, p.shortcode, p."displayLabel", p.date FROM "Purchase" p
+    WHERE p."deletedAt" IS NULL
+      AND (p.shortcode = ${input.purchaseId ?? null} OR (p."vendorId" = ${input.vendorId ?? null}::uuid AND ${!input.refund} AND abs(p.date - ${input.date}::date) <= 14) OR EXISTS (
+        SELECT 1 FROM "PurchasePaymentEvidence" payment WHERE payment."purchaseId" = p.id
+          AND round(payment.amount * 100) = ${input.amount}
+          AND abs(payment."chargedAt"::date - ${input.date}::date) <= 3))
+    ORDER BY p.id`)
+    ).rows;
+  }
+  const candidates = new Map<string, SpendingCandidate>();
+  for (const candidate of page.paymentCandidates) {
+    if (
+      candidate.amountKey === String(input.amount) &&
+      calendarGap(candidate.chargedDate, input.date) <= 3
+    )
+      candidates.set(candidate.id, {
+        id: candidate.id,
+        shortcode: candidate.shortcode,
+        displayLabel: candidate.displayLabel,
+        date: candidate.date,
+      });
+  }
+  if (input.vendorId && !input.refund) {
+    let lookup = page.vendorCandidates.get(input.vendorId);
+    if (!lookup) {
+      lookup = getDb(db)
+        .execute<SpendingCandidate>(sql`SELECT p.id,p.shortcode,p."displayLabel",p.date FROM "Purchase" p
+        WHERE p."deletedAt" IS NULL AND p."vendorId"=${input.vendorId}::uuid
+          AND p.date BETWEEN ${bounds.first}::date-14 AND ${bounds.last}::date+14 ORDER BY p.id`)
+        .then((result) => result.rows);
+      page.vendorCandidates.set(input.vendorId, lookup);
+    }
+    for (const candidate of await lookup)
+      if (candidate.date && calendarGap(candidate.date, input.date) <= 14)
+        candidates.set(candidate.id, candidate);
+  }
+  if (input.purchaseId) {
+    let lookup = page.explicitCandidates.get(input.purchaseId);
+    if (!lookup) {
+      lookup = getDb(db)
+        .execute<SpendingCandidate>(sql`SELECT p.id,p.shortcode,p."displayLabel",p.date FROM "Purchase" p
+        WHERE p."deletedAt" IS NULL AND p.shortcode=${input.purchaseId} ORDER BY p.id`)
+        .then((result) => result.rows);
+      page.explicitCandidates.set(input.purchaseId, lookup);
+    }
+    for (const candidate of await lookup)
+      candidates.set(candidate.id, candidate);
+  }
+  return [...candidates.values()].sort((a, b) => a.id.localeCompare(b.id));
+}
+
 /** Discovery does not authorize a write; the same retained evidence is rebuilt at commit. */
 async function discoverSpendingEvidence(
   db: Database,
@@ -436,20 +625,17 @@ async function discoverSpendingEvidence(
   const date = source.transactionDate ?? source.postedDate;
   // Retained payment dates use UTC calendar days, matching the shared matcher.
   const candidates = date
-    ? (
-        await getDb(db).execute<{
-          id: string;
-          shortcode: string;
-          displayLabel: string | null;
-          date: string | null;
-        }>(sql`SELECT p.id, p.shortcode, p."displayLabel", p.date FROM "Purchase" p
-    WHERE p."deletedAt" IS NULL
-      AND (p.shortcode = ${request.purchaseId ?? null} OR (p."vendorId" = ${vendor?.id ?? null}::uuid AND ${source.kind !== "refund"} AND abs(p.date - ${date}::date) <= 14) OR EXISTS (
-        SELECT 1 FROM "PurchasePaymentEvidence" payment WHERE payment."purchaseId" = p.id
-          AND round(payment.amount * 100) = ${cents(source.amount)}
-          AND abs(payment."chargedAt"::date - ${date}::date) <= 3))
-    ORDER BY p.id`)
-      ).rows
+    ? await spendingCandidates(
+        db,
+        {
+          date,
+          amount: cents(source.amount),
+          refund: source.kind === "refund",
+          vendorId: vendor?.id,
+          purchaseId: request.purchaseId,
+        },
+        page,
+      )
     : [];
   const rejected = new Set(request.rejectedPurchaseIds);
   const liveCandidates = candidates.filter(
@@ -490,19 +676,25 @@ async function discoverSpendingEvidence(
         strong.set(candidate.shortcode, plan);
     }
   }
-  const history = vendor
-    ? await financialSpendingCategoryHistory(db, vendor.id)
-    : [];
+  let history: Awaited<ReturnType<typeof financialSpendingCategoryHistory>> =
+    [];
+  if (vendor) {
+    const lookup =
+      page?.categoryHistory.get(vendor.id) ??
+      financialSpendingCategoryHistory(db, vendor.id);
+    page?.categoryHistory.set(vendor.id, lookup);
+    history = await lookup;
+  }
   const candidateEvidence = [];
   for (const candidate of liveCandidates)
     candidateEvidence.push({
       ...candidate,
-      graph: await spendingGraph(db, parseEntityId("purchase", candidate.id)),
-      payments: (
-        await getDb(db).execute(
-          sql`SELECT * FROM "PurchasePaymentEvidence" WHERE "purchaseId" = ${candidate.id} ORDER BY id`,
-        )
-      ).rows,
+      graph: await spendingGraph(
+        db,
+        parseEntityId("purchase", candidate.id),
+        page,
+      ),
+      payments: await spendingPayments(db, candidate.id, page),
       plan: strong.get(candidate.shortcode) ?? null,
     });
   let categoryFromPurchase = false;

@@ -24,6 +24,7 @@ export type PageWork = {
 export async function measurePage<T>(
   page: (work: PageWork) => Promise<T>,
 ): Promise<{ result: T; sample: RunStepPageSample | null }> {
+  const startedAt = performance.now();
   const timings: Record<string, number> = {};
   const concurrency: Record<string, number> = {};
   const add = (sample: PageWorkSample) => {
@@ -49,6 +50,26 @@ export async function measurePage<T>(
     return {
       result,
       sample: {
+        wallMs: Math.round(performance.now() - startedAt),
+        ...(metrics.queryCount ||
+        metrics.acquireCount ||
+        metrics.clientQueueCount
+          ? {
+              database: {
+                queryTotalMs: Math.round(metrics.queryDurationSumMs),
+                queryActiveWallMs: Math.round(metrics.queryActiveWallMs),
+                queryMaxMs: Math.round(metrics.queryMaxDurationMs),
+                poolWaitTotalMs: Math.round(metrics.acquireDurationSumMs),
+                poolWaitActiveWallMs: Math.round(metrics.acquireActiveWallMs),
+                clientQueueTotalMs: Math.round(
+                  metrics.clientQueueDurationSumMs,
+                ),
+                clientQueueActiveWallMs: Math.round(
+                  metrics.clientQueueActiveWallMs,
+                ),
+              },
+            }
+          : {}),
         timings,
         queries: metrics.queryCount || null,
         ...(Object.keys(concurrency).length && { concurrency }),

@@ -448,20 +448,11 @@ async function runStatementLabelBatch(
     after?: LabelCursor | null;
     /** Label only this import's charges (an import-scoped Sweep). */
     importId?: string | null;
-    /** Precompute may overlap generation's model-free work, but must await its write lane here. */
-    beforeCheckpoint?: () => Promise<void>;
   } = {},
-  mode:
-    | { kind: "publish" }
-    | { kind: "precompute"; maxBytes: number; maxMs: number } = {
-    kind: "publish",
-  },
 ): Promise<{
   labelled: number;
   /** Label/application stages settled, including recovered publication receipts. */
   completed: number;
-  computed: number;
-  preparedBytes: number;
   labels: { reused: number; generated: number };
   /** Suggestions whose evidence moved since publication; regeneration relabels them. */
   stale: number;
@@ -478,8 +469,6 @@ async function runStatementLabelBatch(
   const empty = {
     labelled: 0,
     completed: 0,
-    computed: 0,
-    preparedBytes: 0,
     labels: { reused: 0, generated: 0 },
     stale: 0,
     skippedIds,
@@ -495,15 +484,6 @@ async function runStatementLabelBatch(
     input.limit ?? STATEMENT_LABEL_BATCH,
     STATEMENT_LABEL_BATCH,
   );
-  const deadline =
-    mode.kind === "precompute"
-      ? Date.now() + Math.max(0, mode.maxMs)
-      : Infinity;
-  const byteLimit =
-    mode.kind === "precompute" ? Math.max(0, mode.maxBytes) : Infinity;
-  const encoder = new TextEncoder();
-  let preparedBytes = 0;
-  let admissionStopped = false;
   const rows = await suggestionsNeedingLabels(
     db,
     limit + 1,
@@ -542,34 +522,16 @@ async function runStatementLabelBatch(
     questions: readonly DecisionChoiceArgs[],
     additional = 0,
   ) => {
-    const admitted = questions.map((question) => {
-      const bytes = encoder.encode(
-        JSON.stringify({
-          subject: question.subject,
-          rules: question.rules,
-          choices: question.choices,
-          allowNone: question.allowNone,
-          images: question.images,
-        }),
-      ).byteLength;
-      if (
-        admissionStopped ||
-        decisionsLeft <= 0 ||
-        Date.now() >= deadline ||
-        preparedBytes + bytes > byteLimit
-      ) {
-        if (mode.kind === "precompute") admissionStopped = true;
+    const admitted = questions.map(() => {
+      if (decisionsLeft <= 0) {
         return false;
       }
       decisionsLeft--;
-      preparedBytes += bytes;
       return true;
     });
     for (let index = 0; index < additional; index++) {
-      const allowed =
-        !admissionStopped && decisionsLeft > 0 && Date.now() < deadline;
+      const allowed = decisionsLeft > 0;
       if (allowed) decisionsLeft--;
-      else if (mode.kind === "precompute") admissionStopped = true;
       admitted.push(allowed);
     }
     let index = 0;
@@ -599,48 +561,29 @@ async function runStatementLabelBatch(
   const skipped = new Set<string>();
   const labelled = new Set<string>();
   const completed = new Set<string>();
-  const computedCharges = new Set<string>();
   const labels = { reused: 0, generated: 0 };
   const pauses: AiBudgetExhaustedError[] = [];
-  type ReadyLabels = { target: (typeof targets)[number]; moved: boolean } & (
-    | { kind: "precompute"; current: LabelPreparation }
-    | { kind: "publish"; current: ChargeProposal & { amount: number } }
-  );
+  type ReadyLabels = {
+    target: (typeof targets)[number];
+    moved: boolean;
+    current: ChargeProposal & { amount: number };
+  };
   for (let round = 0; round < MAX_LABEL_ROUNDS && targets.length; round++) {
-    // Speculation uses generation's immutable judgment. Only the later normal
-    // pass rebuilds current ledger evidence before publication/application.
-    const proposals =
-      mode.kind === "precompute"
-        ? null
-        : await buildPage(
-            db,
-            targets
-              .filter(
-                (target) =>
-                  !target.row.applicationPending &&
-                  !failedCharges.has(chargeId(target.charge)),
-              )
-              .map((target) => target.charge),
-            fail,
-          );
+    const proposals = await buildPage(
+      db,
+      targets
+        .filter(
+          (target) =>
+            !target.row.applicationPending &&
+            !failedCharges.has(chargeId(target.charge)),
+        )
+        .map((target) => target.charge),
+      fail,
+    );
     const ready = targets.flatMap<ReadyLabels>((target) => {
       if (target.row.applicationPending) return [];
       const key = chargeId(target.charge);
       if (failedCharges.has(key)) return [];
-      if (mode.kind === "precompute")
-        return [
-          {
-            kind: "precompute",
-            target,
-            current: {
-              charge: target.charge,
-              judgment: target.row.judgment,
-              evidenceFingerprint: target.expected,
-              amount: target.row.amount,
-            },
-            moved: false,
-          },
-        ];
       const current = proposals?.get(key);
       const moved = !current || current.evidenceFingerprint !== target.expected;
       // Stale evidence waits for the next generation pass to republish it.
@@ -654,7 +597,6 @@ async function runStatementLabelBatch(
       return current && (round === 0 || moved)
         ? [
             {
-              kind: "publish",
               target,
               current: { ...current, amount: current.canonical.amount },
               moved,
@@ -690,24 +632,6 @@ async function runStatementLabelBatch(
     // before checkpoint/publication, whose separate DB fan-out stays at four.
     const prepared = ready.map(({ current, target }) => {
       try {
-        if (mode.kind === "precompute") {
-          const bytes = encoder.encode(
-            JSON.stringify({
-              judgment: current.judgment,
-              checkpoint: target.row.checkpoint,
-            }),
-          ).byteLength;
-          if (
-            admissionStopped ||
-            Date.now() >= deadline ||
-            preparedBytes + bytes > byteLimit
-          ) {
-            admissionStopped = true;
-            retainUnfinished(target.row);
-            return { status: "skipped" as const };
-          }
-          preparedBytes += bytes;
-        }
         return {
           status: "fulfilled" as const,
           value: prepareLabelledJudgment(db, current, {
@@ -756,7 +680,6 @@ async function runStatementLabelBatch(
     const computed = await (input.cooperative
       ? withCooperativeAiWork(finish)
       : finish());
-    if (mode.kind === "precompute") await input.beforeCheckpoint?.();
     await forEachConcurrently(
       ready.map((entry, index) => ({
         ...entry,
@@ -766,7 +689,6 @@ async function runStatementLabelBatch(
       async (entry) => {
         const { current, target, computed } = entry;
         try {
-          if (computed.status === "skipped") return;
           if (computed.status === "rejected") throw computed.reason;
           const result = computed.value;
           labels.reused += result.labels.reused;
@@ -795,11 +717,7 @@ async function runStatementLabelBatch(
               );
             return true;
           };
-          if (
-            mode.kind === "precompute" ||
-            !result.complete ||
-            result.errors.length
-          ) {
+          if (!result.complete || result.errors.length) {
             if (!(await retainProgress())) return;
           }
           if (!result.complete || result.errors.length) {
@@ -833,8 +751,6 @@ async function runStatementLabelBatch(
               );
             return;
           }
-          computedCharges.add(chargeId(current.charge));
-          if (entry.kind === "precompute") return;
           const outcome = await publishStatementLabels(db, {
             proposal: entry.current,
             checkpoint: checkpointInput,
@@ -862,7 +778,6 @@ async function runStatementLabelBatch(
         }
       },
     );
-    if (mode.kind === "precompute") break;
     // Model work may finish out of order; effects admit only the original
     // ready prefix. Later publications keep their receipts for durable resume.
     const applied = new Set<string>();
@@ -971,8 +886,6 @@ async function runStatementLabelBatch(
   return {
     labelled: labelled.size,
     completed: completed.size,
-    computed: computedCharges.size,
-    preparedBytes,
     labels,
     stale,
     skippedIds,
@@ -991,33 +904,4 @@ export function labelStatementSuggestions(
   input: Parameters<typeof runStatementLabelBatch>[1] = {},
 ) {
   return runStatementLabelBatch(db, input);
-}
-
-/** Bounds admission by charges, questions, serialized evidence/context bytes and elapsed preparation time.
- * Started model calls settle and checkpoint even after the admission deadline. No conclusions publish here.
- */
-export async function precomputeStatementSuggestionLabels(
-  db: Database,
-  input: Parameters<typeof runStatementLabelBatch>[1] & {
-    maxBytes: number;
-    maxMs: number;
-  },
-) {
-  const result = await runStatementLabelBatch(db, input, {
-    kind: "precompute",
-    maxBytes: input.maxBytes,
-    maxMs: input.maxMs,
-  });
-  return {
-    computed: result.computed,
-    labels: result.labels,
-    preparedBytes: result.preparedBytes,
-    failed: result.failed,
-    skippedIds: result.skippedIds,
-    next: result.next,
-    through: result.through,
-    active: result.active,
-    waitingUntil: result.waitingUntil,
-    paused: result.paused,
-  };
 }

@@ -309,12 +309,25 @@ charge, so interruption preserves reusable labels and completed publications.
 Acceptance always validates the current broader evidence fingerprint.
 
 Within one read-only proposal page, spending preparation loads shared account
-and transaction metadata once and prepares at most four independent charges
+and transaction metadata, settlement references and allocations once and prepares at most four independent charges
 concurrently. The metadata is discarded after that build; label work and
-financial application rebuild current facts. Publication retains its own
+financial application rebuild current facts. Purchase-payment candidates are
+selected once for the page's admitted amounts and date envelope. Vendor
+Purchase pools, booking graphs, payment rows and category history are shared
+only inside that page; per-charge date, amount, refund and explicit-target rules
+still select candidates. Requests outside the admitted bounds use the original
+fresh SQL selector. Publication retains its own
 four-transaction limit and per-charge locks, suppression checks and settlement
 rechecks. Generation logs separate selection, preparation, publication and
 import-application durations with aggregate counts, without source records.
+Generation checkpoints depend only on model-free generation and publication;
+optional model preparation cannot delay them. The later label step retains
+ownership of model decisions and reuses compatible durable label checkpoints.
+Charge pagination applies the whole-charge cursor before aggregating retained
+observations, while preserving every observation within each selected identity.
+Label selection limits candidate identities before hydrating immutable judgments.
+Record-reference inspection expands only requested entity kinds; unscoped audit
+reads retain the complete reference set.
 
 Provider account masks retain all supplied digits, including non-card masks
 longer than four digits. An account name already containing that mask does not

@@ -72,6 +72,66 @@ const recommendationScopes = {
   tagPropagation: sql`a.subject->>'scope' = 'product.tag-propagation'`,
 };
 
+/** Narrow requested reference kinds before expanding candidate and settlement graphs. */
+function statementRecords(requested?: readonly string[]) {
+  const includes = (entity: string) => !requested || requested.includes(entity);
+  const parts: SQL[] = [];
+  const add = (entity: string, id: SQL) => {
+    if (includes(entity))
+      parts.push(sql`jsonb_build_array(${ref(sql`${entity}`, id)})`);
+  };
+  add(entities.financialAccount, sql`s.data->>'accountId'`);
+  add(
+    entities.financialTransaction,
+    sql`a.judgment->${statementTransactionAction.enum.supersede}->>'pendingTransactionId'`,
+  );
+  add(
+    entities.financialTransaction,
+    sql`a.judgment->${statementTransactionAction.enum.void}->>'transactionId'`,
+  );
+  add(entities.financialTransaction, sql`a.judgment->>'matchedTransactionId'`);
+  add(
+    entities.vendor,
+    sql`(SELECT v.id::text FROM "Vendor" v WHERE v.shortcode=a.judgment->'spending'->>'vendorId' AND v."deletedAt" IS NULL)`,
+  );
+  add(
+    entities.spendingCategory,
+    sql`(SELECT category.id::text FROM "SpendingCategory" category WHERE category.shortcode=a.judgment->'spending'->>'spendingCategoryId' AND category."deletedAt" IS NULL)`,
+  );
+  const related = [
+    { entity: entities.financialTransaction, id: sql`settled.id::text` },
+    { entity: entities.purchase, id: sql`booked.id::text` },
+    { entity: entities.expense, id: sql`line.id::text` },
+    { entity: entities.vendor, id: sql`booked."vendorId"::text` },
+    { entity: entities.ledgerParty, id: sql`account."ledgerPartyId"::text` },
+  ].filter(({ entity }) => includes(entity));
+  if (related.length)
+    parts.push(sql`COALESCE((SELECT jsonb_agg(${ref(sql`related.kind`, sql`related.id`)})
+        FROM "EntityExternalId" evidence
+        JOIN "FinancialTransaction" settled ON settled.id=evidence."entityId" AND settled."deletedAt" IS NULL
+        JOIN "FinancialAccount" account ON account.id=settled."accountId"
+        LEFT JOIN "FinancialTransactionAllocation" allocation ON allocation."transactionId"=settled.id AND allocation."deletedAt" IS NULL
+        LEFT JOIN "Purchase" booked ON booked.id=allocation."purchaseId" AND booked."deletedAt" IS NULL
+        LEFT JOIN "Expense" line ON line."purchaseId"=booked.id AND line."deletedAt" IS NULL
+        CROSS JOIN LATERAL (VALUES ${sql.join(
+          related.map(({ entity, id }) => sql`(${entity},${id})`),
+          sql`, `,
+        )}) related(kind,id)
+        WHERE evidence.kind=${entityExternalIdKind.enum.settlement_ref} AND evidence."deletedAt" IS NULL
+          AND evidence.source=a.judgment->${statementTransactionAction.enum.create}->'sourceRef'->>${financialTransactionSourceRef.keyof().enum.source}
+          AND evidence."externalId"=a.judgment->${statementTransactionAction.enum.create}->'sourceRef'->>'externalId'
+          AND related.id IS NOT NULL), '[]'::jsonb)`);
+  if (includes(entities.purchase))
+    parts.push(sql`COALESCE((SELECT jsonb_agg(${ref(sql`${entities.purchase}`, sql`p.id::text`)})
+        FROM jsonb_array_elements(COALESCE(a.judgment->'spending'->'candidates','[]'::jsonb)) candidate
+        JOIN "Purchase" p ON p.shortcode=candidate->>'purchaseId' AND p."deletedAt" IS NULL), '[]'::jsonb)`);
+  if (includes(entities.financialTransaction))
+    parts.push(
+      sql`COALESCE((SELECT jsonb_agg(${ref(sql`${entities.financialTransaction}`, sql`c->>'transactionId'`)}) FROM jsonb_array_elements(a.judgment->'candidates') c), '[]'::jsonb)`,
+    );
+  return parts.length ? sql.join(parts, sql` || `) : sql`'[]'::jsonb`;
+}
+
 /** Families reviewed as Suggestions; Problems findings and grading rosters have their own reads. */
 export type ReviewFamily = keyof typeof assessmentReviewFamilies;
 
@@ -108,32 +168,8 @@ export const reviewFamilyDeclarations = {
   },
   statement_transaction: {
     ...assessmentReviewFamilies.statement_transaction,
-    records: sql`jsonb_build_array(${ref(sql`${entities.financialAccount}`, sql`s.data->>'accountId'`)},
-      ${ref(sql`${entities.financialTransaction}`, sql`a.judgment->${statementTransactionAction.enum.supersede}->>'pendingTransactionId'`)},
-      ${ref(sql`${entities.financialTransaction}`, sql`a.judgment->${statementTransactionAction.enum.void}->>'transactionId'`)}) ||
-      jsonb_build_array(${ref(sql`${entities.financialTransaction}`, sql`a.judgment->>'matchedTransactionId'`)}) ||
-      jsonb_build_array(
-        ${ref(sql`${entities.vendor}`, sql`(SELECT v.id::text FROM "Vendor" v WHERE v.shortcode = a.judgment->'spending'->>'vendorId' AND v."deletedAt" IS NULL)`)},
-        ${ref(sql`${entities.spendingCategory}`, sql`(SELECT category.id::text FROM "SpendingCategory" category WHERE category.shortcode = a.judgment->'spending'->>'spendingCategoryId' AND category."deletedAt" IS NULL)`)}) ||
-      COALESCE((SELECT jsonb_agg(${ref(sql`related.kind`, sql`related.id`)})
-        FROM "EntityExternalId" evidence
-        JOIN "FinancialTransaction" settled ON settled.id=evidence."entityId" AND settled."deletedAt" IS NULL
-        JOIN "FinancialAccount" account ON account.id=settled."accountId"
-        LEFT JOIN "FinancialTransactionAllocation" allocation ON allocation."transactionId"=settled.id AND allocation."deletedAt" IS NULL
-        LEFT JOIN "Purchase" booked ON booked.id=allocation."purchaseId" AND booked."deletedAt" IS NULL
-        LEFT JOIN "Expense" line ON line."purchaseId"=booked.id AND line."deletedAt" IS NULL
-        CROSS JOIN LATERAL (VALUES
-          (${entities.financialTransaction},settled.id::text), (${entities.purchase},booked.id::text),
-          (${entities.expense},line.id::text), (${entities.vendor},booked."vendorId"::text),
-          (${entities.ledgerParty},account."ledgerPartyId"::text)) related(kind,id)
-        WHERE evidence.kind=${entityExternalIdKind.enum.settlement_ref} AND evidence."deletedAt" IS NULL
-          AND evidence.source=a.judgment->${statementTransactionAction.enum.create}->'sourceRef'->>${financialTransactionSourceRef.keyof().enum.source}
-          AND evidence."externalId"=a.judgment->${statementTransactionAction.enum.create}->'sourceRef'->>'externalId'
-          AND related.id IS NOT NULL), '[]'::jsonb) ||
-      COALESCE((SELECT jsonb_agg(${ref(sql`${entities.purchase}`, sql`p.id::text`)})
-        FROM jsonb_array_elements(COALESCE(a.judgment->'spending'->'candidates', '[]'::jsonb)) candidate
-        JOIN "Purchase" p ON p.shortcode = candidate->>'purchaseId' AND p."deletedAt" IS NULL), '[]'::jsonb) ||
-      COALESCE((SELECT jsonb_agg(${ref(sql`${entities.financialTransaction}`, sql`c->>'transactionId'`)}) FROM jsonb_array_elements(a.judgment->'candidates') c), '[]'::jsonb)`,
+    records: statementRecords(),
+    recordsFor: statementRecords,
     actionable: sql`true`,
     summarize: (value: unknown) => {
       const decision = assessmentJudgments.statement_transaction.parse(value);
@@ -197,6 +233,7 @@ export const reviewFamilyDeclarations = {
     kind: "proposal" | "automatic_decision";
     label: string;
     records: SQL;
+    recordsFor?: (entities: readonly string[]) => SQL;
     actionable: SQL;
     scopes?: typeof recommendationScopes;
     audit?: SQL;
@@ -237,12 +274,14 @@ export const automaticApplicationVerified = sql`CASE ${sql.join(
   sql` `,
 )} ELSE true END`;
 
-const assessmentRecordsSql = sql`CASE ${sql.join(
-  Object.entries(reviewFamilyDeclarations).map(
-    ([family, spec]) => sql`WHEN a.family = ${family} THEN ${spec.records}`,
-  ),
-  sql` `,
-)} ELSE '[]'::jsonb END`;
+const assessmentRecordsSql = (entities?: readonly string[]) =>
+  sql`CASE ${sql.join(
+    Object.entries(reviewFamilyDeclarations).map(
+      ([family, spec]) =>
+        sql`WHEN a.family = ${family} THEN ${entities && "recordsFor" in spec ? spec.recordsFor(entities) : spec.records}`,
+    ),
+    sql` `,
+  )} ELSE '[]'::jsonb END`;
 
 /** A typed entity plus UUID or shortcode; stored families predate a shared reference representation. */
 const storedRef = z.object({
@@ -259,7 +298,7 @@ export async function readAssessmentRecordRefs(
     id: string;
     refs: unknown;
   }>(sql`
-    SELECT a.id, ${assessmentRecordsSql} AS refs FROM "Assessment" a JOIN "AssessmentState" s ON s.id = a.id
+    SELECT a.id, ${assessmentRecordsSql()} AS refs FROM "Assessment" a JOIN "AssessmentState" s ON s.id = a.id
     WHERE a.id = ANY(${uuidArrayParam(ids)})`);
   const parsed = rows.map((row) => ({
     id: row.id,
@@ -329,7 +368,7 @@ export async function touchingAssessmentIds(
   }>(sql`WITH eligible AS MATERIALIZED (
       SELECT a.id FROM "Assessment" a JOIN "AssessmentState" s ON s.id = a.id WHERE ${scope.eligibility}
     ) SELECT a.id FROM eligible JOIN "Assessment" a ON a.id = eligible.id JOIN "AssessmentState" s ON s.id = a.id
-    WHERE EXISTS (SELECT 1 FROM jsonb_array_elements(${assessmentRecordsSql}) r WHERE r->>'id' IS NOT NULL
+    WHERE EXISTS (SELECT 1 FROM jsonb_array_elements(${assessmentRecordsSql(scope.entity ? [scope.entity] : scope.records ? [...new Set(scope.records.map((r) => r.entity))] : undefined)}) r WHERE r->>'id' IS NOT NULL
       ${scope.entity ? sql`AND r->>'entity' = ${scope.entity}` : sql``} ${recordMatch})`);
   return new Set(rows.map((row) => row.id));
 }

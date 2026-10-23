@@ -59,6 +59,19 @@ export type RunStepInput = z.infer<typeof runStepInput>;
  * readers say "not measured", never estimate.
  */
 export const runStepPageSample = z.object({
+  /** Entire page wall time; database activity overlaps these phases. */
+  wallMs: z.number().nonnegative().optional(),
+  database: z
+    .object({
+      queryTotalMs: z.number().nonnegative(),
+      queryActiveWallMs: z.number().nonnegative(),
+      queryMaxMs: z.number().nonnegative(),
+      poolWaitTotalMs: z.number().nonnegative(),
+      poolWaitActiveWallMs: z.number().nonnegative(),
+      clientQueueTotalMs: z.number().nonnegative(),
+      clientQueueActiveWallMs: z.number().nonnegative(),
+    })
+    .optional(),
   timings: z.record(z.string(), z.number().nonnegative()),
   queries: z.number().int().nonnegative().nullable(),
   concurrency: z.record(z.string(), z.number().int().nonnegative()).optional(),

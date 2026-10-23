@@ -36,10 +36,7 @@ import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
 import { answering } from "~/server/domains/transaction-import/repo/statement-decision-port.fixtures";
 import * as statementSuggestionsRepo from "~/server/domains/transaction-import/repo/statement-suggestions";
-import {
-  labelStatementSuggestions as runStatementLabels,
-  precomputeStatementSuggestionLabels as runStatementPrecompute,
-} from "~/server/domains/transaction-import/service/statement-suggestion-labels";
+import { labelStatementSuggestions as runStatementLabels } from "~/server/domains/transaction-import/service/statement-suggestion-labels";
 import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
 import { setAutomaticRule } from "~/server/generic/assessment/repo/automatic-rule-runtime";
 import {
@@ -104,13 +101,6 @@ const labelStatementSuggestions: typeof runStatementLabels = async (
     spendingAdvice: await statementSpendingAdvice(db),
   });
 };
-
-const precomputeStatementSuggestionLabels: typeof runStatementPrecompute =
-  async (db, input) =>
-    runStatementPrecompute(db, {
-      ...input,
-      spendingAdvice: await statementSpendingAdvice(db),
-    });
 
 async function statementSpendingAdvice(
   db: Parameters<typeof runStatementLabels>[0],
@@ -332,6 +322,19 @@ describe("statement Transaction suggestions", () => {
   // makes every bulk-built suggestion fail as stale.
   it("builds a page of charges exactly as it builds each one alone", async () => {
     const account = (await card(ctx)).output;
+    const vendor = await createRepoIdentity(ctx, "vendor", {
+      name: "Example Grocer",
+    });
+    const receipt = await createRepoIdentity(ctx, "purchase", {
+      vendorId: vendor.output.id,
+      date: "2026-05-04",
+    });
+    await createRepoIdentity(ctx, "expense", {
+      purchaseId: receipt.output.id,
+      name: "Synthetic nearby receipt",
+      cost: 42.5,
+      trade: "other",
+    });
     await createRepoIdentity(ctx, "financialAccount", {
       name: "Synthetic Debit",
       identity: {
@@ -416,6 +419,14 @@ describe("statement Transaction suggestions", () => {
         ]),
       );
     expect(batch).toHaveLength(4);
+    expect(
+      batch.flatMap(
+        (proposal) =>
+          proposal.judgment.spending?.candidates.map(
+            (candidate) => candidate.purchaseId,
+          ) ?? [],
+      ),
+    ).toContain(receipt.output.id);
     expect(view(batch)).toEqual(view(single));
     const generated = await generateStatementSuggestionPage(ctx.db, {
       after: null,
@@ -535,6 +546,76 @@ describe("statement Transaction suggestions", () => {
       status: "pending",
       active: true,
     });
+  });
+
+  // A bounded key batch can contain only ignored identities; that must not
+  // terminate discovery before later eligible charges or rewind its cursor.
+  it("pages past ineligible charge identities and finishes after the last eligible charge", async () => {
+    await card(ctx);
+    await record(
+      ctx,
+      Array.from({ length: 6 }, (_, index) =>
+        rowInput({
+          providerTransactionId: `synthetic-bounded-charge-${index}`,
+          providerAmount: -(20 + index),
+        }),
+      ),
+    );
+    const { rows } = await getDb(ctx.db).execute<{
+      source: string;
+      externalId: string;
+      chargeKey: string;
+    }>(sql`
+      SELECT source,"externalId","chargeKey" FROM "SourceTransactionRecord"
+      WHERE "deletedAt" IS NULL ORDER BY source,"chargeKey"`);
+    await updateSourceTransactionRecords(
+      ctx.db,
+      {
+        selector: {
+          source: rows[0]!.source,
+          externalIds: [0, 1, 3, 5].map((index) => rows[index]!.externalId),
+        },
+        data: {
+          disposition: "ignored",
+          dispositionReason: "not_modeled",
+          dispositionNote: "Synthetic bounded selection.",
+        },
+      },
+      ctx.actor,
+    );
+    expect(
+      await statementSuggestionsRepo.countUnmatchedCharges(ctx.db, {}),
+    ).toBe(2);
+    const first = await generateStatementSuggestionPage(ctx.db, {
+      runId: null,
+      after: null,
+      limit: 1,
+    });
+    expect(first).toMatchObject({
+      processed: 1,
+      failed: [],
+      next: { source: rows[2]!.source, chargeKey: rows[2]!.chargeKey },
+    });
+    const second = await generateStatementSuggestionPage(ctx.db, {
+      runId: null,
+      after: first.next,
+      limit: 1,
+    });
+    expect(second).toMatchObject({
+      processed: 1,
+      failed: [],
+      next: { source: rows[4]!.source, chargeKey: rows[4]!.chargeKey },
+    });
+    expect(
+      await generateStatementSuggestionPage(ctx.db, {
+        runId: null,
+        after: second.next,
+        limit: 1,
+      }),
+    ).toMatchObject({ processed: 0, failed: [], next: null });
+    expect((await suggestions(ctx)).map((row) => row.chargeKey).sort()).toEqual(
+      [rows[2]!.chargeKey, rows[4]!.chargeKey].sort(),
+    );
   });
 
   // Equal content in independent delta collections cannot inherit another
@@ -1896,88 +1977,6 @@ describe("statement Transaction suggestions", () => {
     ).toBe(0);
   });
 
-  it("precomputes labels without publishing conclusions or applying rules", async () => {
-    await card(ctx);
-    await record(ctx, [rowInput()]);
-    await generate(ctx);
-    const [before] = await suggestions(ctx);
-    const bounded = await precomputeStatementSuggestionLabels(ctx.db, {
-      limit: 1,
-      maxBytes: 1,
-      maxMs: 30_000,
-      port: async () => {
-        throw new Error("Byte-exhausted preparation must not ask a question");
-      },
-      runId: await ensureRun(ctx.db, ctx.actor, { purpose: "background" }),
-    });
-    expect(bounded.labels.generated).toBe(0);
-    expect(bounded.next).toMatchObject({ inclusive: true });
-    const computed = await precomputeStatementSuggestionLabels(ctx.db, {
-      limit: 1,
-      maxBytes: 64_000,
-      maxMs: 30_000,
-      after: bounded.next,
-      port: answering({ kind: "purchase", counterparty: "business" }),
-      runId: await ensureRun(ctx.db, ctx.actor, { purpose: "background" }),
-    });
-    expect(computed.labels.generated).toBe(3);
-    expect(computed.next).toBeNull();
-    expect(computed.through).not.toBeNull();
-    const caughtUp = await precomputeStatementSuggestionLabels(ctx.db, {
-      limit: 1,
-      maxBytes: 64_000,
-      maxMs: 30_000,
-      after: computed.through,
-      port: async () => {
-        throw new Error(
-          "Caught-up speculation must not repeat model admission",
-        );
-      },
-      runId: await ensureRun(ctx.db, ctx.actor, { purpose: "background" }),
-    });
-    expect(caughtUp).toMatchObject({
-      computed: 0,
-      next: null,
-      through: null,
-      labels: { generated: 0 },
-    });
-    expect(await suggestions(ctx)).toEqual([before]);
-    expect(
-      await statementSuggestionsRepo.countSuggestionsNeedingLabels(ctx.db),
-    ).toBe(1);
-    await record(
-      ctx,
-      [
-        rowInput({
-          rawDescription: "EXAMPLE PIPELINED CHARGE",
-          providerAmount: -10,
-        }),
-      ],
-      { fingerprint: "synthetic-pipelined-page" },
-    );
-    await generate(ctx);
-    const added = await precomputeStatementSuggestionLabels(ctx.db, {
-      limit: 1,
-      maxBytes: 64_000,
-      maxMs: 30_000,
-      after: computed.through,
-      port: answering({ kind: "purchase", counterparty: "business" }),
-      runId: await ensureRun(ctx.db, ctx.actor, { purpose: "background" }),
-    });
-    expect(added).toMatchObject({
-      computed: 1,
-      labels: { generated: 3, reused: 0 },
-    });
-    const published = await label(ctx, async () => {
-      throw new Error("Precomputed labels must be retained");
-    });
-    expect(published).toMatchObject({
-      labelled: 2,
-      failed: [],
-      labels: { generated: 0, reused: 6 },
-    });
-  });
-
   it("skips superseded evidence and publishes fresh labels for the revised charge", async () => {
     await card(ctx);
     const original = rowInput({
@@ -1998,24 +1997,6 @@ describe("statement Transaction suggestions", () => {
       ],
       { fingerprint: "synthetic-speculation-mutation" },
     );
-    const answer = answering({ kind: "purchase", counterparty: "business" });
-    let speculativeQuestions = 0;
-    const computed = await precomputeStatementSuggestionLabels(ctx.db, {
-      limit: 1,
-      maxBytes: 64_000,
-      maxMs: 30_000,
-      runId: await ensureRun(ctx.db, ctx.actor, { purpose: "background" }),
-      port: async (request) => {
-        speculativeQuestions++;
-        return answer(request);
-      },
-    });
-    expect(computed).toMatchObject({
-      computed: 0,
-      failed: [],
-      labels: { generated: 0 },
-    });
-    expect(speculativeQuestions).toBe(0);
     expect(await suggestions(ctx)).toEqual([]);
     expect(
       await statementSuggestionsRepo.suggestionsNeedingLabels(ctx.db, 1),
@@ -2045,6 +2026,7 @@ describe("statement Transaction suggestions", () => {
     });
     expect(await suggestions(ctx)).toEqual([]);
     await generate(ctx);
+    const answer = answering({ kind: "purchase", counterparty: "business" });
     let freshQuestions = 0;
     const published = await label(ctx, async (request) => {
       freshQuestions++;
@@ -2207,23 +2189,6 @@ describe("statement Transaction suggestions", () => {
       labels: { generated: 0 },
     });
     expect(normal.next).toMatchObject({ inclusive: true });
-    expect(
-      (await statementSuggestionsRepo.suggestionsNeedingLabels(ctx.db, 1))[0]!
-        .checkpoint,
-    ).toBeNull();
-    const speculative = await precomputeStatementSuggestionLabels(ctx.db, {
-      runId,
-      port,
-      decisionLimit: 0,
-      maxBytes: 64_000,
-      maxMs: 30_000,
-    });
-    expect(speculative).toMatchObject({
-      computed: 0,
-      failed: [],
-      labels: { generated: 0 },
-    });
-    expect(speculative.next).toMatchObject({ inclusive: true });
     expect(
       (await statementSuggestionsRepo.suggestionsNeedingLabels(ctx.db, 1))[0]!
         .checkpoint,

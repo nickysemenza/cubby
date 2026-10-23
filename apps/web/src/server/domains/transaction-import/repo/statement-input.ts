@@ -28,8 +28,7 @@ export type StatementSuggestionScope = {
   since?: string | null;
 };
 
-/** Current generation inputs; scope selects charge keys before aggregating all live observations. */
-export const statementInputCharges = (scope: StatementSuggestionScope) => {
+const scopedChargeKeys = (scope: StatementSuggestionScope) => {
   const { importId, since } = scope;
   // A scope selects whole charges, so the charge's state still reads every
   // live observation of it.
@@ -41,11 +40,45 @@ export const statementInputCharges = (scope: StatementSuggestionScope) => {
       : []),
     ...(since ? [sql`seen."statementDate" >= ${since}::date`] : []),
   ];
-  const state = filters.length
-    ? chargeStateOf(sql`(r.source, ${chargeKeyOf("r")}) IN (
-        SELECT seen.source, ${chargeKeyOf("seen")} FROM "SourceTransactionRecord" seen
-        WHERE seen."deletedAt" IS NULL AND ${sql.join(filters, sql` AND `)}
-      )`)
+
+  return sql`SELECT seen.source, ${chargeKeyOf("seen")} AS "chargeKey" FROM "SourceTransactionRecord" seen
+    WHERE seen."deletedAt" IS NULL ${filters.length ? sql`AND ${sql.join(filters, sql` AND `)}` : sql``}`;
+};
+
+/** Bounded identities first; eligibility still aggregates every live observation of each key. */
+export const statementInputChargeKeys = (
+  scope: StatementSuggestionScope,
+  after: { source: string; chargeKey: string } | null,
+  limit: number,
+) => sql`
+  SELECT DISTINCT keys.source, keys."chargeKey" FROM (${scopedChargeKeys(scope)}) keys
+  ${after ? sql`WHERE (keys.source,keys."chargeKey") > (${after.source},${after.chargeKey})` : sql``}
+  ORDER BY keys.source,keys."chargeKey" LIMIT ${limit}`;
+
+/** Current generation inputs; scope selects charge keys before aggregating all live observations. */
+export const statementInputCharges = (
+  scope: StatementSuggestionScope,
+  keys?: readonly { source: string; chargeKey: string }[],
+) => {
+  // Cursor admission selects whole charge identities before aggregation; every
+  // retained observation of each admitted identity still participates.
+  const chargeFilters = [
+    ...(scope.importId || scope.since
+      ? [sql`(r.source, ${chargeKeyOf("r")}) IN (${scopedChargeKeys(scope)})`]
+      : []),
+    ...(keys
+      ? [
+          keys.length
+            ? sql`(r.source,${chargeKeyOf("r")}) IN (${sql.join(
+                keys.map((key) => sql`(${key.source},${key.chargeKey})`),
+                sql`, `,
+              )})`
+            : sql`false`,
+        ]
+      : []),
+  ];
+  const state = chargeFilters.length
+    ? chargeStateOf(sql.join(chargeFilters, sql` AND `))
     : CHARGE_STATE;
   return sql`
     SELECT cs.source, cs."chargeKey" FROM ${state} cs
