@@ -67,21 +67,25 @@ list’s post-create indexing and invalidation are separate outcomes. Do not mak
 this editor regression depend on the newly created row entering that list.
 
 Connected-record Plant/Project/Task and both purchase paths use one fixture
-graph with one shared brand. Booking-review prerequisites, including the independent
-reimbursement source, settle once before the first browser action. Its native
-Purchase choice still happens after booking creates that Purchase. Keep the stale
-approval, replay and signed-money assertions. The final reimbursement detail
-read-back owns its stored override and resolved policy; do not repeat that same
-value with a third page visit just to render a shared list cell. Dedicated
-post-booking reimbursement list-cell composition is no longer sampled there;
-real transaction detail review and exact resolved-policy read-back remain.
+graph with one shared brand. Booking-review prerequisites settle once before
+the real spending journey. Keep its stale-screen rejection/recovery, chosen
+Trade/Cost type, replay/altered-approval guards and exact positive money.
+`financial-booking-review.preview.test.tsx` is explicitly required native coverage
+for the real credit-purpose/Purchase pickers, no commit before review, reimbursement
+preview input and forwarding the exact accepted snapshot to commit. The existing
+`financial-booking-category.integration.test.ts` MCP reimbursement case owns the
+negative Expense, exact net total, Purchase allocation, retained explicit policy
+and effective reviewed-reimbursement policy. The second full browser credit
+journey is removed; dedicated Worker HTTP composition of that credit form and its
+post-credit detail read-back is the explicit gap, while real spending remains E2E.
 
 Reviewed booking corrections belong in the existing PostgreSQL category/refund
 owner: reimbursement reattachment preserves category and net money, transfer
 conversion retires its generated Expense and exposes non-booking coverage, and
 an edited Expense prevents conversion without changing its money or transfer.
 The removed API-only browser case exercised no UI. The financial-booking-review
-browser journey retains stale approval, replay and reimbursement interactions;
+browser journey retains stale approval and replay; required native capability and
+PostgreSQL/MCP retain reimbursement interaction and stored outcomes;
 finance-evidence-journey retains source-record navigation and provider immutability.
 Dedicated HTTP routing for the two correction operations is no longer sampled
 by that case; generic operation transport and direct correction outcomes remain.
@@ -610,9 +614,10 @@ with the real Tailwind CSS. It is part of `pnpm test` and the Vitest shards;
 those runners install Chromium before running the tests. No additional runner
 is allocated. Other `**/*.preview.test.tsx` files remain opt-in through
 `pnpm --dir apps/web test:preview`; they are not retained merge-gate coverage
-until migrated into the required roster. A direct preview-file run selects
-required files through `capability` once; explicit `--project preview` retains
-the full optional preview command. Each Vitest shard uploads its blob and browser
+until migrated into the required roster. Select a required owner with
+`pnpm test:file <path> --project capability`; otherwise a workspace link can also
+match the optional preview project. Explicit `--project preview` retains the full
+optional preview command. Each Vitest shard uploads its blob and browser
 failure attachments (`.vitest/attachments/`) for the merged CI report.
 
 `spend-chart.preview.test.tsx` owns the real detail chart's roving keyboard focus,
