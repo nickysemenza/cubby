@@ -304,3 +304,10 @@ invalidation and toast semantics. A raw mutation remains correct for shared
 multi-mutation invalidation, conditional query keys, caller-owned error UI, or
 variables-driven local state. `noUncheckedIndexedAccess` is on: guard a
 possibly absent array, record, or map entry instead of asserting it away.
+
+## Documentation diagrams
+
+The Documentation route renders Mermaid code fences with Pele, loaded only in
+the browser so the renderer stays out of Worker uploads. Give each SVG a unique
+ID prefix to keep accessibility references and SVG markers local to its diagram.
+Diagram sources remain Mermaid syntax in `docs/guide/`.

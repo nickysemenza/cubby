@@ -14,11 +14,10 @@ export function MermaidDiagram({ source }: { source: string }) {
     if (import.meta.env.SSR) return;
     let active = true;
 
-    void import("mermaid")
-      .then(async ({ default: mermaid }) => {
-        mermaid.initialize({ startOnLoad: false, securityLevel: "strict" });
-        return mermaid.render(`docs-mermaid-${++nextDiagramId}`, source);
-      })
+    void import("pele")
+      .then(({ render }) =>
+        render(source, { idPrefix: `docs-mermaid-${++nextDiagramId}` }),
+      )
       .then(({ svg: renderedSvg }) => {
         if (active) setSvg(renderedSvg);
       })
@@ -44,13 +43,12 @@ export function MermaidDiagram({ source }: { source: string }) {
 
   if (!svg) return <output>Rendering diagram…</output>;
 
-  // Prose paragraph styles otherwise outgrow Mermaid's measured label boxes.
   return (
     <Panel
       tone="muted"
       render={<figure />}
       aria-label="Mermaid diagram"
-      className="my-4 overflow-x-auto [&_p]:!m-0 [&_p]:!leading-normal [&_p]:!text-inherit"
+      className="my-4 overflow-x-auto"
       dangerouslySetInnerHTML={{ __html: svg }}
     />
   );
