@@ -17,7 +17,6 @@ import { updateProduct } from "~/server/domains/product/repo/crud";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { publishAssessment } from "~/server/generic/assessment/repo/assessment";
 import { assessRecommendation } from "~/server/generic/assessment/repo/assessment-recommendation";
-import { listSuggestionPage } from "~/server/generic/assessment/repo/suggestion-list";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 import {
@@ -26,10 +25,7 @@ import {
   createEvidenceHarnessContext,
 } from "./fixtures/core";
 import { seedUnimportedOrderMail } from "./fixtures/mail";
-import {
-  seedImagePrerequisite,
-  attachProductImagePrerequisite,
-} from "./fixtures/photos";
+import { seedImagePrerequisite } from "./fixtures/photos";
 import { gotoAuthenticatedPage, uniqueName } from "./support/e2e-helpers";
 import { expect, test } from "./support/e2e-test";
 
@@ -86,35 +82,24 @@ async function seedTagProposal(page: Page, sourceId: string, tag: string) {
   return { prediction, supports };
 }
 
-// Failure modes: already-acted pending rows bury real proposals; non-actionable
-// pairs become proposals; only the source endpoint exposes review; Wrong removes
-// an automatic decision from its audit or silently changes imported data.
-test("one queue separates proposals from automatic history and reviews either endpoint", async ({
+// Failure modes: Confirm fails to apply the proposed connection or changes money;
+// Report incorrect fails to retain the member's history feedback.
+test("one queue confirms proposals and records automatic-history feedback", async ({
   page,
-  e2eRuntime,
 }, testInfo) => {
   test.slow();
   const { db, actor } = await createEvidenceHarnessContext(page);
   const name = uniqueName(testInfo, "Synthetic queue drill");
-  const { item, other, charge } = await createFixtureGraph(
-    page,
-    async (create) => {
-      const brand = await create("vendor", { name: "Example Tools" });
-      const item = await create("product", { name, brandId: brand.id });
-      const other = await create("product", { name: `${name} neighbour` });
-      const charge = await create("expense", {
-        name: `${name} receipt`,
-        cost: 24,
-        trade: "electrical",
-      });
-      return { item, other, charge };
-    },
-  );
-  const cover = await seedImagePrerequisite(
-    "synthetic-queue-cover",
-    e2eRuntime.objectStorageUrl,
-  );
-  await attachProductImagePrerequisite(page, cover.id, item.id, "item");
+  const { item, charge } = await createFixtureGraph(page, async (create) => {
+    const brand = await create("vendor", { name: "Example Tools" });
+    const item = await create("product", { name, brandId: brand.id });
+    const charge = await create("expense", {
+      name: `${name} receipt`,
+      cost: 24,
+      trade: "electrical",
+    });
+    return { item, charge };
+  });
   const connection = await publishEntityConnection(db, {
     relation: "product-expense",
     source: { entityKind: "product", entityId: item.id },
@@ -125,16 +110,6 @@ test("one queue separates proposals from automatic history and reviews either en
       contradictions: [],
       unknowns: [],
     },
-  });
-  const pair = await publishProductPair(db, {
-    productIds: [
-      await resolveOrThrow(db, "product", item.id),
-      await resolveOrThrow(db, "product", other.id),
-    ],
-    source: "agent",
-    evidence: "Synthetic similarity without identity proof",
-    sourceUrls: [],
-    actionable: false,
   });
   const mail = await seedUnimportedOrderMail(
     page,
@@ -168,72 +143,13 @@ test("one queue separates proposals from automatic history and reviews either en
     fingerprint: source.checksum,
     evidence: null,
   });
-  // Legacy predictions without application receipts remain visible as unverified,
-  // even when they disagree with the Email's current classification.
-  await publishAssessment(db, {
-    publicationKey: `synthetic-legacy:${source.emailId}`,
-    family: "email_relevance",
-    subject: {
-      kind: "email_relevance",
-      entity: "email",
-      recordId: await resolveOrThrow(db, "email", source.emailId),
-      checksum: source.checksum,
-      observationId: crypto.randomUUID(),
-    },
-    judgment: { classification: "unrelated", stage: "decision" },
-    producer: null,
-    fingerprint: source.checksum,
-    evidence: null,
-  });
-
   await gotoAuthenticatedPage(page, "/suggestions");
   const queue = page.getByRole("table", { name: "Suggestions", exact: true });
-  await expect(
-    queue
-      .getByRole("row")
-      .filter({ hasText: "Synthetic acquisition connection" }),
-  ).toHaveCount(1);
-  const pending = await listSuggestionPage(db, {});
-  expect(pending.items.map((row) => row.assessmentId)).not.toContain(pair.id);
-  expect(pending.items.map((row) => row.assessmentId)).not.toContain(
-    decision.id,
-  );
-  await expect(
-    page.getByRole("link", { name: new RegExp(name) }).first(),
-  ).toBeVisible();
-
-  const documentOrigin = await page.evaluate(() => performance.timeOrigin);
-  await page
-    .getByRole("link", { name: new RegExp(name) })
-    .and(page.locator(`a[href="/products/${item.id}"]`))
-    .first()
-    .click();
-  await expect(page).toHaveURL(new RegExp(`/products/${item.id}$`));
-  expect(await page.evaluate(() => performance.timeOrigin)).toBe(
-    documentOrigin,
-  );
-  await expect(
-    page.getByRole("region", { name: "Pending suggestions", exact: true }),
-  ).toContainText("Synthetic acquisition connection");
-
-  // Source detail and target list exercise both endpoints through the shared
-  // review surface; repeating both presentations for each endpoint adds no write coverage.
-  await gotoAuthenticatedPage(
-    page,
-    `/expenses?searchQuery=${encodeURIComponent(`${name} receipt`)}`,
-  );
-  const row = page.getByRole("row").filter({
-    has: page.getByRole("link", { name: `${name} receipt`, exact: true }),
-  });
-  await row
-    .getByRole("button", { name: "1 pending suggestion", exact: true })
-    .click();
-  const review = page.getByRole("region", {
-    name: "Pending suggestions",
-    exact: true,
-  });
-  await expect(review).toContainText("Synthetic acquisition connection");
-  await review.getByRole("button", { name: "Confirm", exact: true }).click();
+  const proposal = queue
+    .getByRole("row")
+    .filter({ hasText: "Synthetic acquisition connection" });
+  await expect(proposal).toHaveCount(1);
+  await proposal.getByRole("button", { name: "Confirm", exact: true }).click();
   await expect
     .poll(async () =>
       (
@@ -244,6 +160,15 @@ test("one queue separates proposals from automatic history and reviews either en
       ).some((row) => row.verdict === "correct" && row.intent === "apply"),
     )
     .toBe(true);
+
+  const chargeId = await resolveOrThrow(db, "expense", charge.id);
+  const productId = await resolveOrThrow(db, "product", item.id);
+  expect(
+    await getDb(db)
+      .select({ productId: expenseTable.productId, cost: expenseTable.cost })
+      .from(expenseTable)
+      .where(eq(expenseTable.id, chargeId)),
+  ).toEqual([{ productId, cost: 24 }]);
 
   await gotoAuthenticatedPage(
     page,
@@ -274,12 +199,6 @@ test("one queue separates proposals from automatic history and reviews either en
       ).some((row) => row.verdict === "wrong" && row.intent === "history"),
     )
     .toBe(true);
-  await gotoAuthenticatedPage(
-    page,
-    `/automatic-decisions?family=email_relevance&record=${source.emailId}`,
-  );
-  await expect(audit).toContainText("Unverified application");
-  await expect(audit).toContainText("unrelated");
 });
 
 // Replaces the transient project/placement reviewers: mounting is passive,

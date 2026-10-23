@@ -169,7 +169,21 @@ publishing its proposals: Product/brand/Expense, Project/placement stock, matchi
 Products/tag target, and each tag's supporting Products. Preserve entity writer
 defaults, identities, cardinalities and stock quantities. Proposal publication and
 revision reads stay after commit/frontier settlement; do not batch across a real
-review or stale-support edit. All native review and stored-outcome assertions stay.
+review or stale-support edit.
+
+The queue/history journey confirms a connection in the global Suggestions table,
+reads back its Expense Product link and unchanged cost, then records incorrect
+feedback in automatic history. Global and record review use the same
+`SuggestionActions` renderer. Do not repeat Product-detail and Expense-list visits
+for that write. `suggestion-list.integration.test.ts` owns both-endpoint filtering;
+the current-policy research recommendation in `assessment-product.integration.test.ts`
+owns non-actionable exclusion, and the event-only link case in
+`observations.integration.test.ts` owns unverified legacy history and automatic
+history exclusion from pending suggestions. Project/placement browser coverage
+retains record-level Pending suggestions interaction. Dedicated Product-detail and
+Expense-list pending-popover composition, their SPA navigation sample, and legacy
+audit-row wording are no longer sampled by this journey. Unasserted cover-image
+setup and a second Product fixture are removed; no browser scenario is deleted.
 
 Dense-header browser coverage resizes one populated detail page across desktop,
 constrained desktop and phone widths, then drives the shared action/editor dialogs

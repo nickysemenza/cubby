@@ -59,6 +59,7 @@ import {
 import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
 import { mergeReviewedProductPair } from "~/server/generic/assessment/repo/assessment-product";
 import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
+import { listSuggestionPage } from "~/server/generic/assessment/repo/suggestion-list";
 import { findDuplicateProductIdentities } from "~/server/generic/problems/repo/detectors-product";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { withJobFixtureExecution } from "~/server/testing/background-queue";
@@ -1067,5 +1068,14 @@ describe("stored Product identity pairs", () => {
       actionable: false,
       conflict: false,
     });
+    await publishProductIdentity(ctx.db, result);
+    const stored = await listProductMatchRows(ctx.db);
+    expect(stored).toHaveLength(1);
+    expect(stored[0]).toMatchObject({ actionable: false, conflict: false });
+    expect(
+      (await listSuggestionPage(ctx.db, {})).items.map(
+        (row) => row.assessmentId,
+      ),
+    ).not.toContain(stored[0]!.id);
   });
 });
