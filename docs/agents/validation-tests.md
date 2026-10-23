@@ -353,10 +353,13 @@ the same `entity.mutate` endpoint before committing the prepared import. Native
 merge confirmation remains in `suggestion-queue.spec.ts`; the real imported money,
 single Product, both identifiers, exact Email–Purchase link and no-stock outcomes
 remain in Gmail read-back.
-The retained Email opens directly for its actual Gmail-original link;
-`purchase-emails.spec.ts` owns related Email navigation. Dedicated Product-list
-multi-select merge launch and the Gmail Vendor→Purchase→Email SPA chain are
-intentional UI-composition gaps, rather than another full browser page/round trip.
+`purchase-emails.spec.ts` owns related Email navigation and the Gmail-original URL.
+The existing processing/accepted-source case in `email-purchase-links.integration.test.ts`
+checks the exact original URL in the real Email report. Gmail convergence keeps
+its credential-backed original acquisition and exact Email–Purchase read-back
+without another Email page visit. Dedicated original-link composition on that
+OAuth-ingested Email, Product-list multi-select merge launch and the
+Vendor→Purchase→Email SPA chain are intentional UI-composition gaps.
 
 Allocation explanation browser coverage keeps mixed-trade contributor expansion,
 phone bounds and allocated Project evidence on one detail document. The existing
@@ -390,8 +393,20 @@ Allocation contributor interactions belong in `resolution-evidence.spec.ts`;
 and list explanations and absence of a stored override. Do not add tax fixtures,
 extra detail visits or Purchase-cell overflow checks to the reset journey.
 
-The import-convergence browser journey covers statement-first reviewed booking
-and navigation; the PostgreSQL suite owns arrival-order permutations. Socket
+The Gmail import-convergence journey prepares its statement-first aggregate with
+`previewFinancialBooking` and `commitFinancialBooking`, preserving selected
+Vendor/category and allocation/Purchase read-back before the real retailer review.
+An explicitly selected booking category belongs to its new aggregate Expense;
+do not assert a stored Purchase category override for that choice.
+Include the booked Purchase identity explicitly in final convergence reads so
+an uncategorized aggregate left behind cannot evade duplicate detection.
+`financial-booking-review.spec.ts` owns the native booking form, stale preview,
+fresh approval and replay guards; `import-order-convergence.integration.test.ts`
+owns source-arrival permutations and conserved money. Do not repeat the booking
+form inside Gmail's OAuth/MIME, conflicting Product choice, prepared import and
+reconciliation journey. Dedicated booking HTTP composition with that same Gmail
+household is the deliberate gap; final single Purchase/Product/Expense, Email
+link, both identifiers and no-stock assertions remain. Socket
 lifecycle checks use a warm baseline and two read/write rounds with real idle
 expiry, without a request-load population. Coordinator retirement authorization,
 acknowledgement and operation fences run in PostgreSQL; the cold-host disposal
