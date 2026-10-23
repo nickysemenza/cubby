@@ -95,9 +95,12 @@ carrier/tracking wording. Use the literal supported event kind: label creation
 and vendor-reported shipping do not establish carrier possession. A handoff to
 another carrier is transit, not successful delivery to the recipient. For event
 `time`, preserve an offset ISO timestamp as `instant`, a calendar day as `date`,
-a local timestamp as `local` with its stated timezone or null, or `unknown`.
-Email receipt time and page capture time are observation provenance, never
-invented event times. Preserve conflicting observations and distinct sources.
+a local ISO timestamp as `local` with its stated timezone or null. Every event
+requires a date. When no separate event date is stated, use the source
+notification's calendar date at date-only precision. Preserve its wording as a
+notification or forecast rather than claiming a completed carrier scan. Page
+capture time alone does not establish a historical event date; obtain dated
+evidence before recording the event. Preserve conflicting observations and distinct sources.
 One package delivered never establishes whole-order delivery or receives stock.
 
 `allShipmentsDelivered` is retained only when decoding old saved extractions.

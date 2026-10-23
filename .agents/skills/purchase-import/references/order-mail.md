@@ -23,6 +23,10 @@ interrupted searches before repeating them.
 
 ## Record shipment evidence
 
+Every observation needs a calendar date. Prefer the stated event time; when
+none is stated, use the source notification's calendar date at date-only precision.
+Retain whether the wording is an estimate, notification or completed scan.
+
 For vendor, carrier or Shop package observations, read the complete retained
 Email, then call `shipments.record` with `source: {kind: "email", emailId:
 <the read's EML-code>, checksum: <the read's checksum>}`, the evidence-backed
@@ -50,10 +54,13 @@ research is interactive; package evidence does not schedule future visits.
 
 Exported SMS uses `source: {kind: "sms_export", externalKey, fileName, sender,
 sentAt, capturedAt, content}` with literal message content and a stable
-per-message key independent of filename. Preserve unknown message timezone.
+per-message key independent of filename. Interpret this household's exported SMS
+timestamps in `America/Los_Angeles`, applying the event date's PST/PDT offset.
+Every observation requires a date. Use the stated event date/time when present;
+otherwise use the SMS notification's calendar date, retaining date-only precision.
 Only attach observations to explicit tracking identifiers; nearby messages or
 grouped delivery counts cannot prove package identity. Estimates are not scans,
-and message receipt time is not an unstated event time. Changed content or
+and notification dates do not turn forecasts into completed carrier scans. Changed content or
 metadata under the same source key requires review, rather than replacement.
 
 For tracking enrichment, choose an accessible source with useful scan history:
