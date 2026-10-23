@@ -1,82 +1,100 @@
-import { getTableName, sql } from "drizzle-orm";
+import { and, sql } from "drizzle-orm";
 
+import type { Database, DrizzleTransaction } from "~/server/db";
+import { notDeleted, unwrapDb, uuidArrayParam } from "~/server/db/helpers";
 import { financialTransaction } from "~/server/db/schema";
 import { allocationIntegrityDefectSql } from "~/server/domains/financial-transaction/repo/financial-allocation-integrity";
 import {
   financialTransactionBookingSql,
   financialTransactionCoverageAxisSql,
-  financialTransactionEvidenceFingerprintSql,
   financialTransactionItemizationExpectationSql,
   financialTransactionRequiresBookingSql,
 } from "~/server/domains/purchase/repo/purchase-evidence-policy";
-import { defineEntityChecks } from "~/server/generic/data-quality/repo/registry";
+import { entityDisplayImagePresenceSql } from "~/server/entity-kernel/repo/entity-display-image";
+import { qualityCheck } from "~/server/generic/data-quality/repo/builders";
+import { defineStoredEntityChecks } from "~/server/generic/data-quality/repo/stored-registry";
 
-type FinancialTransaction = typeof financialTransaction;
+/** Bump when the rules or their declared scoring metadata change. */
+const FINANCIAL_TRANSACTION_QUALITY_RULES_VERSION = 1;
+type FinancialTransactionQualityRecord = Awaited<
+  ReturnType<typeof loadFinancialTransactionQualityRecords>
+>[number];
+const observed = qualityCheck.observed<FinancialTransactionQualityRecord>;
+const when = qualityCheck.when<FinancialTransactionQualityRecord>;
+const incomplete = (value: string) =>
+  value === "missing" || value === "partial";
 
-const requiresEvidence = (t: FinancialTransaction) =>
-  sql`(${financialTransactionRequiresBookingSql(getTableName(t))} AND ${financialTransactionItemizationExpectationSql(getTableName(t))} = 'required')`;
-const axis = (t: FinancialTransaction, name: "itemization" | "products") =>
-  financialTransactionCoverageAxisSql(getTableName(t), name);
-const evidenceFingerprint = (t: FinancialTransaction) => [
-  financialTransactionRequiresBookingSql(getTableName(t)),
-  financialTransactionItemizationExpectationSql(getTableName(t)),
-  financialTransactionEvidenceFingerprintSql(getTableName(t)),
-];
-
-const hasLiveAllocation = (t: FinancialTransaction) => sql`EXISTS (
-  SELECT 1 FROM "FinancialTransactionAllocation" dq_fta
-  WHERE dq_fta."transactionId" = ${t.id} AND dq_fta."deletedAt" IS NULL
-)`;
-
-export const financialTransactionChecks = defineEntityChecks({
+export const financialTransactionChecks = defineStoredEntityChecks({
   entity: "financialTransaction",
   table: financialTransaction,
+  rulesVersion: FINANCIAL_TRANSACTION_QUALITY_RULES_VERSION,
+  load: loadFinancialTransactionQualityRecords,
   checks: {
-    financial_transaction_allocation_integrity: {
-      missing: (t) => allocationIntegrityDefectSql(`"${getTableName(t)}"`),
-    },
-    financial_transaction_classification: {
-      expected: (t) => sql`${t.status} <> 'void'`,
-      missing: (t) => sql`${t.kind} = 'other'`,
-      fingerprint: (t) => [sql`${t.kind}`, sql`${t.status}`],
-    },
-    financial_transaction_allocation: {
-      expected: (t) => financialTransactionRequiresBookingSql(getTableName(t)),
-      missing: (t) => sql`NOT ${hasLiveAllocation(t)}`,
-      fingerprint: (t) => [
-        financialTransactionRequiresBookingSql(getTableName(t)),
-        hasLiveAllocation(t),
-      ],
-    },
-    financial_transaction_merchant: {
-      expected: (t) => financialTransactionRequiresBookingSql(getTableName(t)),
-      missing: (t) => sql`(${t.merchant} IS NULL OR trim(${t.merchant}) = '')`,
-      fingerprint: (t) => [sql`${t.merchant}`],
-    },
-    financial_transaction_itemization_expectation: {
-      expected: (t) => financialTransactionRequiresBookingSql(getTableName(t)),
-      missing: (t) =>
-        sql`${financialTransactionItemizationExpectationSql(getTableName(t))} = 'unknown'`,
-      fingerprint: (t) => [
-        financialTransactionItemizationExpectationSql(getTableName(t)),
-      ],
-    },
-    financial_transaction_booking: {
-      expected: (t) => financialTransactionRequiresBookingSql(getTableName(t)),
-      missing: (t) =>
-        sql`${financialTransactionBookingSql(getTableName(t))} IN ('missing', 'partial')`,
-      fingerprint: (t) => [financialTransactionBookingSql(getTableName(t))],
-    },
-    financial_transaction_itemization: {
-      expected: requiresEvidence,
-      missing: (t) => sql`${axis(t, "itemization")} IN ('missing', 'partial')`,
-      fingerprint: (t) => [...evidenceFingerprint(t), axis(t, "itemization")],
-    },
-    financial_transaction_products: {
-      expected: (t) =>
-        sql`(${financialTransactionRequiresBookingSql(getTableName(t))} AND ${axis(t, "products")} IN ('missing', 'partial', 'present'))`,
-      missing: (t) => sql`${axis(t, "products")} IN ('missing', 'partial')`,
-      fingerprint: (t) => [...evidenceFingerprint(t), axis(t, "products")],
-    },
+    financialtransaction_display_image: qualityCheck.hasImage,
+    financial_transaction_allocation_integrity: observed(
+      (r) => !r.allocationDefect,
+    ),
+    financial_transaction_classification: when(
+      (r) => r.status !== "void",
+      observed((r) => r.kind !== "other"),
+    ),
+    financial_transaction_allocation: when(
+      (r) => r.requiresBooking,
+      observed((r) => r.hasAllocation),
+    ),
+    financial_transaction_merchant: when(
+      (r) => r.requiresBooking,
+      qualityCheck.required("merchant"),
+    ),
+    financial_transaction_itemization_expectation: when(
+      (r) => r.requiresBooking,
+      observed((r) => r.expectation !== "unknown"),
+    ),
+    financial_transaction_booking: when(
+      (r) => r.requiresBooking,
+      observed((r) => !incomplete(r.booking)),
+    ),
+    financial_transaction_itemization: when(
+      (r) => r.requiresBooking && r.expectation === "required",
+      observed((r) => !incomplete(r.itemization)),
+    ),
+    financial_transaction_products: when(
+      (r) =>
+        r.requiresBooking &&
+        (incomplete(r.products) || r.products === "present"),
+      observed((r) => !incomplete(r.products)),
+    ),
   },
 });
+
+async function loadFinancialTransactionQualityRecords(
+  db: Database | DrizzleTransaction,
+  ids: readonly string[],
+) {
+  if (!ids.length) return [];
+  // The domain owners retain signed allocation and mixed Purchase policy semantics.
+  // These inputs are read for this ID page only; list and queue reads use stored rows.
+  return unwrapDb(db)
+    .select({
+      id: financialTransaction.id,
+      shortcode: financialTransaction.shortcode,
+      hasDisplayImage: sql<boolean>`${entityDisplayImagePresenceSql("financialTransaction", sql`${sql.identifier("FinancialTransaction")}.${sql.identifier("id")}`)}`,
+      status: financialTransaction.status,
+      kind: financialTransaction.kind,
+      merchant: financialTransaction.merchant,
+      allocationDefect: sql<boolean>`${allocationIntegrityDefectSql('"FinancialTransaction"')}`,
+      hasAllocation: sql<boolean>`EXISTS (SELECT 1 FROM "FinancialTransactionAllocation" a WHERE a."transactionId" = "FinancialTransaction"."id" AND a."deletedAt" IS NULL)`,
+      requiresBooking: sql<boolean>`${financialTransactionRequiresBookingSql("FinancialTransaction")}`,
+      expectation: sql<string>`${financialTransactionItemizationExpectationSql("FinancialTransaction")}`,
+      booking: sql<string>`${financialTransactionBookingSql("FinancialTransaction")}`,
+      itemization: sql<string>`${financialTransactionCoverageAxisSql("FinancialTransaction", "itemization")}`,
+      products: sql<string>`${financialTransactionCoverageAxisSql("FinancialTransaction", "products")}`,
+    })
+    .from(financialTransaction)
+    .where(
+      and(
+        notDeleted(financialTransaction),
+        sql`${financialTransaction.id} = ANY(${uuidArrayParam(ids)})`,
+      ),
+    );
+}

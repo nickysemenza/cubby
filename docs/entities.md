@@ -2652,6 +2652,23 @@ inputs without mutation-time dependent traversal; reads never repair outcomes.
 All Purchase waivers, including paperwork, settlement amount, party and tender
 comparisons, remain durable across input changes until explicitly cleared.
 
+FinancialAccount, FinancialTransaction, Run and Task use stored TypeScript
+checks at rules version 1. Each loader scopes its reads to one ID page. The
+FinancialTransaction loader reuses the signed allocation and Purchase evidence
+policy owners; Task reuses declared trade inheritance and checks its own date
+window. Run batches immutable generic target receipts and live photo membership,
+including required skip reasons. FinancialAccount retains cash self-evidence,
+source aliases and live settlement references as claim evidence. These checks
+have no SQL bindings or fingerprints. Published rows own list filters and score
+sorts; record reads evaluate live without publishing. FinancialTransaction
+waivers remain accepted across changed input until explicitly cleared.
+
+Audited financial/account/task writes and source-record import changes enroll
+quality transactionally. Run creation, terminal step transitions and photo
+completion register source changes; step progress remains projection metadata.
+Derived-refresh Run telemetry registers projection changes so a quality pass
+cannot invalidate itself while recording its own progress.
+
 An Email's completed-import check matches a live, completed Mail import Run
 owned by the same member with the original in its source list. Bulk filtering,
 score sorting, and bounded hydration join a shared, deduplicated Email quality

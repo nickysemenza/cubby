@@ -53,6 +53,7 @@ import { createProductWriteActions } from "~/server/domains/product/repo/write/p
 import { assertRunCapability } from "~/server/domains/purchase-import/repo/capabilities";
 import { loadRunScopeByShortcode } from "~/server/domains/purchase-import/repo/run-service";
 import { executeLeasedOperation } from "~/server/domains/run/repo/operation";
+import { recordChange } from "~/server/generic/changes/repo/change";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { buildCrudServices } from "~/server/http/request-context";
 
@@ -578,6 +579,7 @@ async function completeRunIfDone(
       .where(eq(runTable.id, scope.public.runId));
   }
 
+  await recordChange(txDb, { kind: "source", categories: ["run"] });
   return runCompletes;
 }
 

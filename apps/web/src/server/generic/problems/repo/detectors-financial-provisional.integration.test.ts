@@ -7,6 +7,7 @@ import { getDb, withTransaction } from "~/server/db/helpers";
 import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
 import { replaceSettlementRefs } from "~/server/generic/entity-links/repo/entity-external-ids";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { publishQualityFixtures } from "~/server/testing/quality.fixtures";
 
 import { findProvisionalFinancialAccounts } from "./detectors-financial";
 
@@ -83,6 +84,7 @@ describe("provisional financial accounts", () => {
       sql`UPDATE "FinancialAccount" SET "deletedAt" = now() WHERE "id" = ${retired.id}`,
     );
 
+    await publishQualityFixtures(ctx.db, "financialAccount");
     const found = await findProvisionalFinancialAccounts(ctx.db);
     const byId = new Map(found.map((row) => [row.id, row]));
 

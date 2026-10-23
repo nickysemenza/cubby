@@ -1,51 +1,123 @@
-import { photoRunImageState } from "@cubby/schemas/photo-import-run";
-import {
-  importOperationStatusOut,
-  runTargetState,
-} from "@cubby/schemas/purchase-import";
-import { runPurpose, runStatus } from "@cubby/schemas/run-fields";
-import { sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
+import { groupBy } from "es-toolkit";
 
-import { run } from "~/server/db/retained-tables";
+import type { Database, DrizzleTransaction } from "~/server/db";
+import { notDeleted, unwrapDb, uuidArrayParam } from "~/server/db/helpers";
+import { photoRunImage, run, runOperation } from "~/server/db/retained-tables";
+import { entityDisplayImagePresenceSql } from "~/server/entity-kernel/repo/entity-display-image";
+import { qualityCheck } from "~/server/generic/data-quality/repo/builders";
+import { defineStoredEntityChecks } from "~/server/generic/data-quality/repo/stored-registry";
 
-import { defineEntityChecks } from "../registry";
+/** Bump when the rules or their declared scoring metadata change. */
+const RUN_QUALITY_RULES_VERSION = 1;
+type RunQualityRecord = Awaited<
+  ReturnType<typeof loadRunQualityRecords>
+>[number];
+const observed = qualityCheck.observed<RunQualityRecord>;
 
-type Run = typeof run;
-
-export const runChecks = defineEntityChecks({
+export const runChecks = defineStoredEntityChecks({
   entity: "run",
   table: run,
+  rulesVersion: RUN_QUALITY_RULES_VERSION,
+  load: loadRunQualityRecords,
   checks: {
-    run_attribution: {
-      missing: (t: Run) => sql`NULLIF(btrim(${t.actorName}), '') IS NULL`,
-    },
-    run_timeline: {
-      missing: (t: Run) => sql`${t.endedAt} < ${t.startedAt} OR (
-        ${t.status} IN (${runStatus.enum.completed}, ${runStatus.enum.failed}, ${runStatus.enum.dispatch_failed}) AND ${t.endedAt} IS NULL
-      )`,
-    },
-    run_target_outcomes: {
-      expected: (t: Run) => sql`${t.status} = ${runStatus.enum.completed} AND
-        ${t.purpose} IN (${runPurpose.enum.purchase_validation}, ${runPurpose.enum.product_enrichment}, ${runPurpose.enum.photo_inventory})`,
-      // Historical generic outcomes are immutable receipts; only photo membership
-      // is a live work roster. Neither is an admission queue for generic research.
-      missing: (
-        t: Run,
-      ) => sql`CASE WHEN ${t.purpose} = ${runPurpose.enum.photo_inventory} THEN
-        NOT EXISTS (SELECT 1 FROM "PhotoRunImage" p WHERE p."runId" = ${t.id}) OR EXISTS (
-          SELECT 1 FROM "PhotoRunImage" p WHERE p."runId" = ${t.id} AND (
-            p.state NOT IN (${photoRunImageState.enum.completed}, ${photoRunImageState.enum.skipped}, ${photoRunImageState.enum.unavailable})
-            OR p.outcome IS NULL OR p."completedAt" IS NULL
-            OR (p.state IN (${photoRunImageState.enum.skipped}, ${photoRunImageState.enum.unavailable}) AND NULLIF(btrim(p."skipReason"), '') IS NULL)
-          )
-        ) ELSE
-        NOT EXISTS (SELECT 1 FROM "RunOperation" o WHERE o."runId" = ${t.id} AND o.kind = ${"target_outcome"} AND o.state = ${importOperationStatusOut.shape.state.enum.completed}) OR EXISTS (
-          SELECT 1 FROM "RunOperation" o WHERE o."runId" = ${t.id} AND o.kind = ${"target_outcome"} AND o.state = ${importOperationStatusOut.shape.state.enum.completed} AND (
-            coalesce(o.result->${"target"}->>${"state"}, '') NOT IN (${runStatus.enum.completed}, ${runTargetState.enum.skipped}, ${runTargetState.enum.unavailable})
-            OR o.result->${"target"}->>${"outcome"} IS NULL OR o.result->${"target"}->>${"completedAt"} IS NULL
-            OR (o.result->${"target"}->>${"state"} IN (${runTargetState.enum.skipped}, ${runTargetState.enum.unavailable}) AND NULLIF(btrim(o.result->${"target"}->>${"warning"}), '') IS NULL)
-          )
-        ) END`,
-    },
+    run_display_image: qualityCheck.hasImage,
+    run_attribution: qualityCheck.required("actorName"),
+    run_timeline: observed((r) =>
+      r.endedAt === null
+        ? r.status !== "completed" &&
+          r.status !== "failed" &&
+          r.status !== "dispatch_failed"
+        : r.endedAt >= r.startedAt,
+    ),
+    run_target_outcomes: qualityCheck.when(
+      (r: RunQualityRecord) =>
+        r.status === "completed" &&
+        (r.purpose === "purchase_validation" ||
+          r.purpose === "product_enrichment" ||
+          r.purpose === "photo_inventory"),
+      // Generic receipts are immutable history; only photo membership is a live roster.
+      observed(
+        (r) =>
+          r.outcomes.length > 0 &&
+          r.outcomes.every(
+            (target) =>
+              (target.state === "completed" ||
+                target.state === "skipped" ||
+                target.state === "unavailable") &&
+              target.outcome !== null &&
+              target.completedAt !== null &&
+              (target.state === "completed" || !!target.warning?.trim()),
+          ),
+      ),
+    ),
   },
 });
+
+async function loadRunQualityRecords(
+  db: Database | DrizzleTransaction,
+  ids: readonly string[],
+) {
+  if (!ids.length) return [];
+  const database = unwrapDb(db);
+  const [runs, receipts, photos] = await Promise.all([
+    database
+      .select({
+        id: run.id,
+        shortcode: run.shortcode,
+        hasDisplayImage: sql<boolean>`${entityDisplayImagePresenceSql("run", sql`${sql.identifier("Run")}.${sql.identifier("id")}`)}`,
+        actorName: run.actorName,
+        status: run.status,
+        purpose: run.purpose,
+        startedAt: run.startedAt,
+        endedAt: run.endedAt,
+      })
+      .from(run)
+      .where(
+        and(notDeleted(run), sql`${run.id} = ANY(${uuidArrayParam(ids)})`),
+      ),
+    database
+      .select({
+        runId: runOperation.runId,
+        state: sql<
+          string | null
+        >`${runOperation.result}->${"target"}->>${"state"}`,
+        outcome: sql<
+          string | null
+        >`${runOperation.result}->${"target"}->>${"outcome"}`,
+        completedAt: sql<
+          string | null
+        >`${runOperation.result}->${"target"}->>${"completedAt"}`,
+        warning: sql<
+          string | null
+        >`${runOperation.result}->${"target"}->>${"warning"}`,
+      })
+      .from(runOperation)
+      .where(
+        and(
+          sql`${runOperation.runId} = ANY(${uuidArrayParam(ids)})`,
+          eq(runOperation.kind, "target_outcome"),
+          eq(runOperation.state, "completed"),
+        ),
+      ),
+    database
+      .select({
+        runId: photoRunImage.runId,
+        state: photoRunImage.state,
+        outcome: photoRunImage.outcome,
+        completedAt: sql<string | null>`${photoRunImage.completedAt}::text`,
+        warning: photoRunImage.skipReason,
+      })
+      .from(photoRunImage)
+      .where(sql`${photoRunImage.runId} = ANY(${uuidArrayParam(ids)})`),
+  ]);
+  const genericByRun = groupBy(receipts, (row) => row.runId);
+  const photoByRun = groupBy(photos, (row) => row.runId);
+  return runs.map((row) => ({
+    ...row,
+    outcomes:
+      (row.purpose === "photo_inventory"
+        ? photoByRun[row.id]
+        : genericByRun[row.id]) ?? [],
+  }));
+}

@@ -87,6 +87,7 @@ import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { executeAtomicOperation } from "~/server/domains/run/repo/operation";
 import { readOperation } from "~/server/domains/run/repo/run-operation";
 import { createAppError } from "~/server/errors/app-error";
+import { recordChange } from "~/server/generic/changes/repo/change";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 import { ensureMailVendorAccount } from "../repo/gmail/mail-account";
@@ -1362,6 +1363,10 @@ export async function commitPurchaseImport(
             updatedAt: new Date(),
           })
           .where(eq(runTable.id, scope.runId));
+        await recordChange(transactionDb, {
+          kind: "source",
+          categories: ["run"],
+        });
         return {
           result: publicResult,
           requiresReview,

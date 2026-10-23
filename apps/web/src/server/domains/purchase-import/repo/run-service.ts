@@ -140,6 +140,7 @@ import {
   failOperationsForRun,
 } from "~/server/domains/run/repo/run-operation";
 import { recordRunProgress } from "~/server/domains/run/repo/run-progress";
+import { recordChange } from "~/server/generic/changes/repo/change";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 import { dispatchStartedRun } from "./dispatch";
@@ -1174,6 +1175,7 @@ export async function markRunFailed(
         ),
       )
       .returning({ purpose: runTable.purpose });
+    if (failed) await recordChange(tx, { kind: "source", categories: ["run"] });
     if (failed?.purpose === "mail_import")
       await releaseUnsettledMailRunSources(tx, runId);
     return failed;
@@ -2006,6 +2008,7 @@ export async function controlRun(
       controllerLedgerPartyKind: controller.ledgerPartyKind,
       paidOverBudgetUsd: input.paidOverBudgetUsd ?? null,
     });
+    await recordChange(tx, { kind: "source", categories: ["run"] });
     if (input.action === "retry_dispatch") {
       if (
         !new Set(["running", "dispatch_failed"]).has(locked.status) ||

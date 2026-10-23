@@ -693,6 +693,8 @@ async function stopRunForReviewOnce(
         ),
       )
       .returning({ purpose: runTable.purpose, input: runTable.input });
+    if (stopped)
+      await recordChange(tx, { kind: "source", categories: ["run"] });
     // A Run without a roster (erased, or a legacy/manual Mail import) has no
     // Email to return, and stopping it for review must never fail on parsing one.
     if (stopped?.purpose === "mail_import" && stopped.input !== null)

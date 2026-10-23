@@ -23,6 +23,7 @@ import { createWish } from "~/server/domains/wish/repo";
 import { advanceJob } from "~/server/generic/jobs/service/jobs";
 import { resolveLiveShortcode } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { publishQualityFixtures } from "~/server/testing/quality.fixtures";
 import {
   createImageFixture,
   createPlantFixture,
@@ -123,10 +124,13 @@ describe("data quality: finance and project entities", () => {
       sql`UPDATE "Task" SET "dueEndDate" = '2026-09-10' WHERE "id" = ${gap.entityId}`,
     );
 
-    const hydrated = await loadDataQualities(ctx.db, "task", [
-      gap.entityId,
-      complete.entityId,
-    ]);
+    await publishQualityFixtures(ctx.db, "task");
+    const hydrated = await loadDataQualities(
+      ctx.db,
+      "task",
+      [gap.entityId, complete.entityId],
+      "stored",
+    );
     const gapChecks = hydrated.get(gap.entityId)?.gaps.map((g) => g.check);
     expect(gapChecks).not.toContain("task_due_range");
     expect(hydrated.get(gap.entityId)?.status).toBe("needs_data");
@@ -136,6 +140,23 @@ describe("data quality: finance and project entities", () => {
       status: "needs_data",
       gaps: [{ check: "task_display_image" }],
     });
+    // Record reads see current facts without repairing the last publication.
+    await unwrapDb(ctx.db).execute(
+      sql`UPDATE "Task" SET "dueDate" = '2026-09-11' WHERE id = ${gap.entityId}`,
+    );
+    const live = (await loadDataQualities(ctx.db, "task", [gap.entityId])).get(
+      gap.entityId,
+    );
+    expect(live?.gaps.map((g) => g.check)).toContain("task_due_range");
+    const published = (
+      await loadDataQualities(ctx.db, "task", [gap.entityId], "stored")
+    ).get(gap.entityId);
+    expect(published?.gaps.map((g) => g.check)).not.toContain("task_due_range");
+    await publishQualityFixtures(ctx.db, "task");
+    const refreshed = (
+      await loadDataQualities(ctx.db, "task", [gap.entityId], "stored")
+    ).get(gap.entityId);
+    expect(refreshed?.gaps.map((g) => g.check)).toContain("task_due_range");
   });
 
   it("vendor: website and logo expected before purchase; order evidence after purchase", async () => {
@@ -340,10 +361,13 @@ describe("data quality: finance and project entities", () => {
       ledgerPartyId: member.output.id,
     });
 
-    const hydrated = await loadDataQualities(ctx.db, "financialAccount", [
-      gap.entityId,
-      complete.entityId,
-    ]);
+    await publishQualityFixtures(ctx.db, "financialAccount");
+    const hydrated = await loadDataQualities(
+      ctx.db,
+      "financialAccount",
+      [gap.entityId, complete.entityId],
+      "stored",
+    );
     const gapChecks = hydrated.get(gap.entityId)?.gaps.map((g) => g.check);
     expect(gapChecks).toContain("financial_account_ledger_party");
     expect(gapChecks).toContain("financial_account_confirmed");
@@ -382,10 +406,13 @@ describe("data quality: finance and project entities", () => {
       merchant: "DQ settlement vendor",
     });
 
-    const hydrated = await loadDataQualities(ctx.db, "financialTransaction", [
-      gap.entityId,
-      complete.entityId,
-    ]);
+    await publishQualityFixtures(ctx.db, "financialTransaction");
+    const hydrated = await loadDataQualities(
+      ctx.db,
+      "financialTransaction",
+      [gap.entityId, complete.entityId],
+      "stored",
+    );
     const gapChecks = hydrated.get(gap.entityId)?.gaps.map((g) => g.check);
     expect(gapChecks).toContain("financial_transaction_allocation");
     expect(gapChecks).toContain("financial_transaction_merchant");
@@ -394,6 +421,40 @@ describe("data quality: finance and project entities", () => {
       ?.gaps.map((g) => g.check);
     expect(linkedChecks).not.toContain("financial_transaction_allocation");
     expect(linkedChecks).not.toContain("financial_transaction_merchant");
+    await setDataException(
+      ctx.db,
+      {
+        entityId: gap.output.id,
+        check: "financial_transaction_merchant",
+        reason: "unavailable",
+        note: "Synthetic statement does not retain a merchant.",
+      },
+      ctx.actor,
+    );
+    // A changed input keeps the member's waiver even when the gap persists.
+    await unwrapDb(ctx.db).execute(
+      sql`UPDATE "FinancialTransaction" SET merchant = ' ' WHERE id = ${gap.entityId}`,
+    );
+    await publishQualityFixtures(ctx.db, "financialTransaction");
+    const waived = (
+      await loadDataQualities(
+        ctx.db,
+        "financialTransaction",
+        [gap.entityId],
+        "stored",
+      )
+    ).get(gap.entityId);
+    expect(waived?.gaps.map((g) => g.check)).not.toContain(
+      "financial_transaction_merchant",
+    );
+    expect(waived?.exceptions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          check: "financial_transaction_merchant",
+          state: "active",
+        }),
+      ]),
+    );
   });
 
   it("wish: candidate (only while not yet acquired)", async () => {

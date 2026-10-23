@@ -86,14 +86,28 @@ export async function ensureRun(
   // its `decisionPort:` key), so touch-and-return it in one statement. The actor
   // snapshot and insert below cost three more round trips per call, which a
   // table's per-row suggestions multiplied into Hyperdrive pool starvation.
-  if (input.clientKey) {
-    const [existing] = await database
-      .update(runTable)
-      .set({
-        endedAt: sql`CASE WHEN ${runTable.status} = 'completed' THEN ${now}::timestamptz ELSE ${runTable.endedAt} END`,
-      })
-      .where(eq(runTable.clientKey, input.clientKey))
-      .returning({ id: runTable.id });
+  const clientKey = input.clientKey;
+  if (clientKey) {
+    const existing = await withTransactionDatabase(db, async (tx) => {
+      const [existing] = await getDb(tx)
+        .update(runTable)
+        .set({
+          endedAt: sql`CASE WHEN ${runTable.status} = 'completed' THEN ${now}::timestamptz ELSE ${runTable.endedAt} END`,
+        })
+        .where(eq(runTable.clientKey, clientKey))
+        .returning({
+          id: runTable.id,
+          purpose: runTable.purpose,
+          status: runTable.status,
+        });
+      if (existing?.status === "completed")
+        await recordChange(tx, {
+          kind:
+            existing.purpose === "derived_refresh" ? "projection" : "source",
+          categories: ["run"],
+        });
+      return existing;
+    });
     if (existing) return existing.id;
   }
   const trigger = input.trigger ?? "ephemeral";
@@ -161,6 +175,11 @@ export async function ensureRun(
         input: { runId: row.id, purpose: input.purpose },
         runId: row.id,
       });
+    // Refresh telemetry must not invalidate the family that is publishing it.
+    await recordChange(tx, {
+      kind: row.purpose === "derived_refresh" ? "projection" : "source",
+      categories: ["run"],
+    });
     if (row.purpose === "mail_import")
       await recordChange(tx, { kind: "source", categories: ["email"] });
     return row.id;

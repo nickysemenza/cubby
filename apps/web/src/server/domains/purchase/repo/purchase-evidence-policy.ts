@@ -207,34 +207,6 @@ export const purchaseHasItemizationSql = (alias: string): SQL => {
 )`;
 };
 
-/** An accepted missing-evidence gap reopens when new documents or ledger lines
- * arrive, even when the new material still needs extraction or review. The
- * line hash is the whole Expense row, so a column added later (here
- * `productNotExpected`) is subtracted: otherwise its migration alone would
- * change every stored fingerprint and reopen every accepted gap. For the same
- * reason the retired `itemizationEvidence` flag keeps its key as the `false`
- * every accepted itemization gap was recorded with, and linked Products add
- * their key only when one exists, so a Purchase without links keeps the
- * fingerprint its exception was accepted with. */
-const purchaseEvidenceFingerprintSql = (
-  alias: string,
-): SQL => sql`jsonb_build_object(
-  'expectation', ${purchaseItemizationExpectationSql(alias)},
-  'itemizationEvidence', false,
-  'primaryDocument', ${purchaseHasPrimaryDocumentSql(alias)},
-  'documents', (SELECT jsonb_agg(jsonb_build_array(ep_changed_document.id, ep_changed_document."imageId", ep_changed_document."documentKind") ORDER BY ep_changed_document.id)
-    FROM "EntityAttachment" ep_changed_document
-    WHERE ep_changed_document."entityId" = ${column(alias, "id")} AND ep_changed_document."deletedAt" IS NULL),
-  'lines', (SELECT jsonb_agg(to_jsonb(ep_changed_line) - 'productNotExpected' ORDER BY ep_changed_line.id)
-    FROM "Expense" ep_changed_line WHERE ep_changed_line."purchaseId" = ${column(alias, "id")}
-      AND ep_changed_line."deletedAt" IS NULL AND ep_changed_line."economicRole" = 'vendor')
-) || COALESCE((SELECT jsonb_build_object('linkedProducts', jsonb_agg(ep_changed_link."toEntityId" ORDER BY ep_changed_link."toEntityId"))
-    FROM "EntityLink" ep_changed_link
-    JOIN "Product" ep_changed_product ON ep_changed_product.id = ep_changed_link."toEntityId" AND ep_changed_product."deletedAt" IS NULL
-    WHERE ep_changed_link."fromEntityId" = ${column(alias, "id")} AND ep_changed_link."deletedAt" IS NULL
-      AND ep_changed_link.kind = 'purchaseProduct'
-    HAVING count(*) > 0), '{}'::jsonb)`;
-
 // Services are labor and carry no Product by design, whatever their category;
 // a service line that does link one (a software subscription) keeps it.
 const expenseProductExpectationSql = (alias: string): SQL => sql`(CASE
@@ -470,16 +442,6 @@ export const financialTransactionCoverageAxisSql = (
   ) ep_axis
 )`;
 };
-
-export const financialTransactionEvidenceFingerprintSql = (
-  alias: string,
-): SQL => sql`(
-  SELECT jsonb_agg(jsonb_build_object('purchaseId', ep_fingerprint_purchase.id, 'amount', ep_fingerprint_allocation.amount,
-    ${"evidence"}::text, ${purchaseEvidenceFingerprintSql("ep_fingerprint_purchase")}) ORDER BY ep_fingerprint_purchase.id)
-  FROM "FinancialTransactionAllocation" ep_fingerprint_allocation
-  JOIN "Purchase" ep_fingerprint_purchase ON ep_fingerprint_purchase.id = ep_fingerprint_allocation."purchaseId" AND ep_fingerprint_purchase."deletedAt" IS NULL
-  WHERE ep_fingerprint_allocation."transactionId" = ${column(alias, "id")} AND ep_fingerprint_allocation."deletedAt" IS NULL
-)`;
 
 export const financialTransactionCoverageSql = (
   alias: string,

@@ -96,6 +96,20 @@ describe("broad refresh jobs", () => {
       .from(job)
       .where(eq(job.id, pending.id));
     expect(advanced?.result).toMatchObject({ runId: pass!.id });
+    // Recording the quality family's own Run must not restart its generation.
+    const [qualityJob] = await getDb(ctx.db)
+      .select()
+      .from(job)
+      .where(eq(job.key, "refresh:quality"));
+    if (!qualityJob) throw new Error("Expected quality intent");
+    await advanceJob(ctx.db, qualityJob.id, {
+      "refresh.family": refreshFamilyHandler,
+    });
+    const [qualityPass] = await getDb(ctx.db)
+      .select()
+      .from(job)
+      .where(eq(job.id, qualityJob.id));
+    expect(qualityPass?.state).toBe("completed");
   });
 
   it("leaves no Run for a pass with nothing to change", async () => {
