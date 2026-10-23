@@ -33,8 +33,7 @@ interface OperationObservability {
 }
 
 /** Which clients may invoke a query or mutation. Contracts own this decision. */
-export const operationExposure = z.enum(["capability", "view", "internal"]);
-export type OperationExposure = z.infer<typeof operationExposure>;
+type OperationExposure = "capability" | "view" | "internal";
 
 export interface OperationContractDefaults {
   /** Default audience for query and mutation members in this contract. */
