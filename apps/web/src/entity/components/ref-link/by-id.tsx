@@ -44,14 +44,11 @@ type FetchableEntity = (typeof FETCHABLE)[number];
 const isFetchableEntity = (entity: Entity): entity is FetchableEntity =>
   FETCHABLE.some((candidate) => candidate === entity);
 
-export type ByIdRefLinkProps = {
-  variant: "byId";
+type ByIdRefLinkProps = {
   entityKind: Entity;
   entityId: string;
   name?: string | null;
-  /** Compact mode: truncates long names with max-width */
-  compact?: boolean;
-  wrap?: boolean;
+  bare?: boolean;
 };
 
 /**
@@ -63,9 +60,8 @@ export function ByIdRefLink({
   entityKind,
   entityId,
   name,
-  compact,
-  wrap,
-}: Omit<ByIdRefLinkProps, "variant"> & { variant?: "byId" }) {
+  bare,
+}: ByIdRefLinkProps) {
   const hydrated = useHydrated();
   // Legacy audit references carried UUIDs for these kinds; only public record
   // shortcodes may enter the detail transport or a record URL.
@@ -99,13 +95,7 @@ export function ByIdRefLink({
 
   if (name && isNamedEntity(entityKind)) {
     return (
-      <ChipRefLink
-        entity={entityKind}
-        id={entityId}
-        name={name}
-        wrap={wrap}
-        compact={compact}
-      />
+      <ChipRefLink entity={entityKind} id={entityId} name={name} bare={bare} />
     );
   }
 
@@ -129,8 +119,7 @@ export function ByIdRefLink({
       <ChipRefLink
         entity={entityKind}
         id={entityId}
-        wrap={wrap}
-        compact={compact}
+        bare={bare}
         emoji={record.success ? record.data.emoji : undefined}
         name={
           record.success
@@ -161,10 +150,7 @@ export function ByIdRefLink({
         // SAFETY: the preview query options and this discriminant are selected
         // by the same fetchable entity guard above.
         data={data as never}
-        compact={wrap ? false : compact}
-        stacked={wrap ? true : undefined}
-        wrap={wrap}
-        className={wrap ? "max-w-full min-w-0 [&>span]:break-words" : undefined}
+        bare={bare}
       />
     );
   }

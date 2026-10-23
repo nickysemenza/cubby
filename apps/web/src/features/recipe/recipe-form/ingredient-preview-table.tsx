@@ -303,7 +303,6 @@ function IngredientNameCell({
               id: item.match.id,
               name: item.match.name,
             }}
-            truncate
           />
         ) : (
           <>

@@ -3,11 +3,7 @@ import type { WorkQueueRow } from "@cubby/schemas/work-queue";
 import { Link } from "@tanstack/react-router";
 
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
-import {
-  entities,
-  entityDetailParams,
-  isBrowserRoutedEntity,
-} from "~/entity/entities";
+import { entities, isBrowserRoutedEntity } from "~/entity/entities";
 import { cn } from "~/lib/utils";
 
 type WorkRowSource = Pick<
@@ -80,16 +76,7 @@ export function WorkRowLink({
       </Link>
     );
   return isBrowserRoutedEntity(row.entity) ? (
-    <EntityRefLink
-      variant="table"
-      tone="identity"
-      to={entities[row.entity].routes.detail}
-      params={entityDetailParams(row.id)}
-      title={row.name}
-      className={cn("truncate", className)}
-    >
-      {row.name}
-    </EntityRefLink>
+    <EntityRefLink entity={row.entity} id={row.id} name={row.name} bare />
   ) : (
     <span className={cn("truncate font-medium", className)}>{row.name}</span>
   );

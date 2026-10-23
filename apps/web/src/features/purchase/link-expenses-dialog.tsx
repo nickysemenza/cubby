@@ -267,7 +267,6 @@ export function LinkExpensesDialog({
                   }
                   entity="project"
                   data={{ id: row.projectId, name: row.projectName }}
-                  truncate
                 />
               ) : (
                 <NoneValue />

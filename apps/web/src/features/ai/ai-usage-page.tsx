@@ -224,12 +224,7 @@ export function UsageEntityLink({
 
   return (
     categoryReference(row.entityKind, row.entityId) ?? (
-      <EntityRefLink
-        variant="byId"
-        entityKind={row.entityKind}
-        entityId={row.entityId}
-        compact
-      />
+      <EntityRefLink entity={row.entityKind} id={row.entityId} />
     )
   );
 }

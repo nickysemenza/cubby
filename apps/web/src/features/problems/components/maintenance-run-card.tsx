@@ -167,9 +167,7 @@ export function MaintenanceRunCard({
 
 /** The pass's Run, named and linked like every other record. */
 function RunLink({ runId }: { runId: string }) {
-  return (
-    <EntityRefLink variant="byId" entityKind="run" entityId={runId} compact />
-  );
+  return <EntityRefLink entity="run" id={runId} />;
 }
 
 function ActivePass({ run }: { run: MaintenanceRunSummary }) {

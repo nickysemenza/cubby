@@ -119,9 +119,6 @@ describe("ExpensePurchaseSection", () => {
 
     const chargeLink = await screen.findByRole("link", { name: /#11325/ });
     expect(chargeLink).toHaveAttribute("href", "/purchases/PUR-2345");
-    expect(within(chargeLink).getByText("#11325")).toHaveClass(
-      "decoration-dotted",
-    );
     expect(within(chargeLink).getByText(/Tool Nirvana/)).toBeInTheDocument();
     // The old layout rendered the same order id again as an inert badge.
     expect(screen.getAllByText("#11325")).toHaveLength(1);

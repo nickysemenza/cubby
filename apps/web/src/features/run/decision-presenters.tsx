@@ -540,9 +540,9 @@ function TransferEvidence({ row }: { row: RunDecision }) {
             leg.transactionId ? (
               <EntityRefLink
                 key={leg.key}
-                variant="byId"
-                entityKind="financialTransaction"
-                entityId={leg.transactionId}
+
+                entity="financialTransaction"
+                id={leg.transactionId}
               />
             ) : (
               <span key={leg.key} className="text-muted-foreground">
@@ -550,16 +550,8 @@ function TransferEvidence({ row }: { row: RunDecision }) {
               </span>
             ),
           )}
-          <EntityRefLink
-            variant="byId"
-            entityKind="financialAccount"
-            entityId={outflow.accountId}
-          />
-          <EntityRefLink
-            variant="byId"
-            entityKind="financialAccount"
-            entityId={inflow.accountId}
-          />
+          <EntityRefLink entity="financialAccount" id={outflow.accountId} />
+          <EntityRefLink entity="financialAccount" id={inflow.accountId} />
         </div>
       </SidePanelSection>
       <Attribution row={row} />

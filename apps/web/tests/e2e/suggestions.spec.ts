@@ -383,12 +383,9 @@ test("Suggestions lists every family with named records and category pills, and 
   await expect(connection).toHaveCount(1);
   const recordLink = field.getByRole("link", { name: productName });
   await expect(recordLink).toBeVisible();
-  await expect(recordLink.locator("svg, img").first()).toBeVisible();
-  // The category is its full-path CategoryLabel pill, not a reference chip.
+  // The category retains its full-path record label.
   await expect(
-    field.locator(
-      `a[href="/product-categories/${category.id}"] [data-slot="pill"]`,
-    ),
+    field.locator(`a[href="/product-categories/${category.id}"]`),
   ).toContainText(categoryName);
 
   // The shared workbench must clear selected actions when server sort swaps

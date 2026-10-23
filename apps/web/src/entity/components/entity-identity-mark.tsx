@@ -4,13 +4,15 @@ import type { ReactNode } from "react";
 
 import { EntityCover } from "~/entity/components/entity-cover";
 import { cn } from "~/lib/utils";
+import { PersonAvatar } from "~/ui/common/person-avatar";
 
 import { RecordEmoji } from "./record-emoji";
 
-export type EntityIdentityMarkSize = "inline" | "row" | "card";
+export type EntityIdentityMarkSize = "inline" | "pill" | "row" | "card";
 
 const MARK_SIZE = {
   inline: 16,
+  pill: 18,
   row: 24,
   card: 40,
 } as const satisfies Record<EntityIdentityMarkSize, number>;
@@ -29,9 +31,13 @@ export function EntityIdentityMark({
   emoji,
   size = "inline",
   fallback,
+  id,
+  name,
   className,
 }: {
   entity: Entity;
+  id?: string;
+  name?: string;
   displayImage: ImageUrlSummary | null;
   emoji?: string | null;
   size?: EntityIdentityMarkSize;
@@ -39,13 +45,18 @@ export function EntityIdentityMark({
   className?: string;
 }) {
   const pixels = MARK_SIZE[size];
-  const fallbackMark = fallback ?? (
-    <RecordEmoji
-      entity={entity}
-      emoji={emoji}
-      size={size === "inline" ? 12 : 16}
-    />
-  );
+  const fallbackMark =
+    entity === "ledgerParty" && id && name ? (
+      <PersonAvatar id={id} name={name} />
+    ) : (
+      (fallback ?? (
+        <RecordEmoji
+          entity={entity}
+          emoji={emoji}
+          size={size === "inline" ? 12 : 16}
+        />
+      ))
+    );
 
   if (!displayImage) {
     return (

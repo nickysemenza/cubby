@@ -22,6 +22,7 @@ import {
   relativeDateToken,
   UNRESOLVABLE_ENTITY_FILTER,
 } from "@cubby/shared";
+import { ArrowLeftIcon } from "@phosphor-icons/react/dist/csr/ArrowLeft";
 import { CalendarBlankIcon } from "@phosphor-icons/react/dist/csr/CalendarBlank";
 import { FunnelIcon } from "@phosphor-icons/react/dist/csr/Funnel";
 import { GearSixIcon } from "@phosphor-icons/react/dist/csr/GearSix";
@@ -51,7 +52,7 @@ import { cn } from "~/lib/utils";
 import { Picker } from "~/ui/combobox/picker";
 import { pickerOptionItem } from "~/ui/combobox/picker-option";
 import { PickerVisual } from "~/ui/combobox/picker-visual";
-import { PersonAvatar } from "~/ui/common/person-avatar";
+import { RecordPill } from "~/ui/common/record-pill";
 import { focusOnMount } from "~/ui/hooks/focus-on-mount";
 import { Overlay } from "~/ui/overlays/overlay";
 import { Button } from "~/ui/primitives/button";
@@ -61,7 +62,6 @@ import { Pill } from "~/ui/primitives/pill";
 import {
   Popover,
   PopoverContent,
-  PopoverTitle,
   PopoverTrigger,
 } from "~/ui/primitives/popover";
 import { Switch } from "~/ui/primitives/switch";
@@ -712,14 +712,30 @@ function ChecklistEditor({
       records={field.records}
       header={header}
       renderItem={
-        roster.some((option) => option.glyph)
+        field.referenceEntity || roster.some((option) => option.glyph)
           ? (item) => {
               const option = roster.find(
                 (candidate) => candidate.value === item.id,
               );
               return (
                 <span className="flex min-w-0 items-center justify-between gap-2">
-                  {option?.glyph ? (
+                  {field.referenceEntity &&
+                  !option?.meta &&
+                  !item.presentation?.meta ? (
+                    <span className="flex min-w-0 flex-1 flex-col gap-1">
+                      <RecordPill
+                        name={item.presentation?.rowLabel ?? item.name}
+                        mark={<PickerVisual item={item} size={18} />}
+                      />
+                      {(item.detail || item.secondary) && (
+                        <span className="text-xs text-muted-foreground">
+                          {[item.detail, item.secondary]
+                            .filter(Boolean)
+                            .join(" · ")}
+                        </span>
+                      )}
+                    </span>
+                  ) : option?.glyph ? (
                     <EnumPill
                       optionRole={option.role}
                       value={option.value}
@@ -849,7 +865,7 @@ function FieldValueEditor(props: FieldEditorProps) {
   return <SingleValueEditor {...props} />;
 }
 
-export function FilterFieldEditor(props: FieldEditorProps) {
+function FilterFieldEditor(props: FieldEditorProps) {
   if (props.field.unsupportedReason)
     return (
       <p className="text-xs text-muted-foreground">
@@ -934,7 +950,6 @@ function PanelSection({
  * active. Clicking expands its editor in place, one row at a time.
  */
 function filterTypeLabel(field: FilterBarField): string {
-  if (field.referenceEntity === "ledgerParty") return "person";
   if (field.dateRange) return "date range";
   if (field.numberRange) return "number range";
   return {
@@ -961,8 +976,6 @@ function FilterMark({
   const option = field.options?.find(
     (candidate) => picked.includes(candidate.value) && !candidate.meta,
   );
-  if (option && field.referenceEntity === "ledgerParty")
-    return <PersonAvatar id={option.value} name={option.label} />;
   if (option?.color)
     return (
       <span
@@ -1061,11 +1074,13 @@ function FiltersPanel({
   onChange,
   searchKey,
   initialKey = null,
+  initialSide = "is",
   onEditorChange,
   resultCount,
 }: FilterEditsArgs & {
   /** A field whose editor starts open (a header's Filter). */
   initialKey?: string | null;
+  initialSide?: FilterSide;
   /** Which editor is open, so its owner can load that field's facets. */
   onEditorChange?: (key: string | null) => void;
   resultCount?: FilterResultCount;
@@ -1085,6 +1100,7 @@ function FiltersPanel({
   const openKey = open?.key ?? null;
   useEffect(() => {
     onEditorChange?.(openKey);
+    return () => onEditorChange?.(null);
   }, [onEditorChange, openKey]);
   const needle = query.trim().toLocaleLowerCase();
   const matches = chipFields.filter((field) =>
@@ -1105,11 +1121,13 @@ function FiltersPanel({
       <FilterFieldEditor
         field={field}
         filter={filtersByField.get(field.key)}
+        side={field.key === initialKey ? initialSide : "is"}
         setValues={(values) => setValues(field, values)}
         clear={() => clear(field)}
       />
     </PanelRow>
   );
+  const focusedField = chipFields.find((field) => field.key === openKey);
   const counted = resultCount ? resultLine(resultCount) : null;
   return (
     <div className="flex max-h-[min(36rem,var(--available-height,36rem))] min-h-0 flex-col">
@@ -1123,7 +1141,10 @@ function FiltersPanel({
           <Input
             ref={focusOnMount}
             value={query}
-            onChange={(event) => setQuery(event.target.value)}
+            onChange={(event) => {
+              setQuery(event.target.value);
+              setOpen(null);
+            }}
             placeholder="Find a filter"
             aria-label="Find a filter"
             className="h-6 pl-7 text-xs"
@@ -1140,20 +1161,58 @@ function FiltersPanel({
         )}
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-1 py-0.5">
-        {active.length > 0 && (
-          <PanelSection title={`Active · ${active.length}`}>
-            {active.map(row)}
-          </PanelSection>
-        )}
-        {groups.map(([group, members]) => (
-          <PanelSection key={group} title={group}>
-            {members.map(row)}
-          </PanelSection>
-        ))}
-        {matches.length === 0 && (
-          <p className="px-2 py-3 text-xs text-muted-foreground">
-            No filter matches “{query.trim()}”.
-          </p>
+        {focusedField ? (
+          <section
+            aria-label={`Filter ${labelOf(focusedField)}`}
+            className="px-2 py-2"
+          >
+            <button
+              type="button"
+              className="mb-2 inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+              onClick={() => setOpen(null)}
+            >
+              <ArrowLeftIcon aria-hidden className="size-3" />
+              All filters
+            </button>
+            <div className="mb-3 flex items-center justify-between gap-2">
+              <h3 className="text-sm font-semibold">{labelOf(focusedField)}</h3>
+              {isFieldActive(filtersByField.get(focusedField.key)) && (
+                <button
+                  type="button"
+                  className="text-xs text-info hover:underline"
+                  onClick={() => clear(focusedField)}
+                >
+                  Clear
+                </button>
+              )}
+            </div>
+            <FilterFieldEditor
+              key={focusedField.key}
+              field={focusedField}
+              filter={filtersByField.get(focusedField.key)}
+              side={focusedField.key === initialKey ? initialSide : "is"}
+              setValues={(values) => setValues(focusedField, values)}
+              clear={() => clear(focusedField)}
+            />
+          </section>
+        ) : (
+          <>
+            {active.length > 0 && (
+              <PanelSection title={`Active · ${active.length}`}>
+                {active.map(row)}
+              </PanelSection>
+            )}
+            {groups.map(([group, members]) => (
+              <PanelSection key={group} title={group}>
+                {members.map(row)}
+              </PanelSection>
+            ))}
+            {matches.length === 0 && (
+              <p className="px-2 py-3 text-xs text-muted-foreground">
+                No filter matches “{query.trim()}”.
+              </p>
+            )}
+          </>
         )}
       </div>
       <div className="flex shrink-0 items-center justify-between gap-2 border-t border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
@@ -1181,7 +1240,9 @@ function FilterChip({
   onOpenChange,
   setValues,
   clear,
+  editor,
 }: {
+  editor: ReactNode;
   field: FilterBarField;
   /** Absent while its open editor has emptied it; the chip stays until closed. */
   filter: Filter | undefined;
@@ -1224,16 +1285,9 @@ function FilterChip({
         </PopoverTrigger>
         <PopoverContent
           align="start"
-          className="max-h-(--available-height) w-72 overflow-y-auto"
+          className="max-h-(--available-height) w-[28rem] max-w-[calc(100vw-1rem)] p-0"
         >
-          <PopoverTitle className="text-sm font-semibold">{label}</PopoverTitle>
-          <FilterFieldEditor
-            field={field}
-            filter={filter}
-            side={side}
-            setValues={setValues}
-            clear={clear}
-          />
+          {editor}
         </PopoverContent>
       </Popover>
       <button
@@ -1316,6 +1370,18 @@ function ActiveFilterChips({
           return (
             <FilterChip
               key={key}
+              editor={
+                <FiltersPanel
+                  filters={filters}
+                  fields={fields}
+                  onChange={onChange}
+                  searchKey={searchKey}
+                  initialKey={field.key}
+                  initialSide={side}
+                  onEditorChange={onEditorChange}
+                  resultCount={resultCount}
+                />
+              }
               field={field}
               filter={filter}
               side={side}
@@ -1799,6 +1865,7 @@ export function MobileFilterTier<TData extends RowData>({
                   onClick={() => openSheet(field.key)}
                   className="flex items-center gap-1"
                 >
+                  <FilterMark field={field} filter={filter} />
                   <b className="font-medium">{label}</b>
                   {filterSummary(field, filter)}
                 </button>

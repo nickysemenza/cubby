@@ -1,4 +1,4 @@
-import { EntityRefLink } from "~/entity/components/entity-ref-link";
+import { VendorOrderLink } from "~/entity/components/entity-ref-link";
 import { VendorCell } from "~/entity/components/vendor-cell";
 import { createTextColumn } from "~/entity/table/column-helpers";
 import { FinancialSettlementCell } from "~/features/purchase/financial-settlement";
@@ -27,7 +27,6 @@ const vendor: ListRenderer<"purchase"> = (helper) =>
               vendor={row.vendorName}
               vendorId={row.vendorId}
               logo={row.vendorLogo}
-              compactOnMobile
             />
           ) : (
             <NoneValue />
@@ -52,8 +51,7 @@ const orderLink: ListRenderer<"purchase"> = (helper) =>
           value ? (
             <Row align="center" gap="xs">
               <MiddleTruncate code text={value} className="min-w-0" />
-              <EntityRefLink
-                variant="order"
+              <VendorOrderLink
                 orderUrl={purchase.orderUrl}
                 orderId={value}
                 vendorName={purchase.vendorName}

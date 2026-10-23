@@ -248,7 +248,6 @@ function BodyBlockView({ block }: { block: BodyBlock }) {
               key={p.id}
               entity="product"
               data={p}
-              compact
             />
           ))}
           {b.products.length > 4 && (

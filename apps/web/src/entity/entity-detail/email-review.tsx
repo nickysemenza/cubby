@@ -145,7 +145,6 @@ export function EmailReview({ record }: { record: DetailRecordOf<"email"> }) {
                         label: "Diagnostic Run",
                         value: (
                           <EntityRefLink
-                            variant="chip"
                             entity="run"
                             id={result.runId}
                             name={result.runId}

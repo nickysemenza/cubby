@@ -502,9 +502,8 @@ export function FieldResolutionStatus({
         // before it truncates.
         <span className="flex max-w-full min-w-0">
           <EntityRefLink
-            variant="byId"
-            entityKind={sourceEntity.data}
-            entityId={resolution.sourceEntity.entityId}
+            entity={sourceEntity.data}
+            id={resolution.sourceEntity.entityId}
             name={resolution.sourceEntity.name}
           />
         </span>

@@ -475,15 +475,11 @@ function RowTitle({ refTo, title }: { refTo: RowRef; title: string }) {
   const entity = refTo.entity;
   return isHoverPreviewEntity(entity) ? (
     <EntityRefLink
-      variant="preview"
       entity={entity}
       id={refTo.id}
       displayImage={image}
-      showIdentityMark={false}
-      className="min-w-0 underline-offset-2 hover:underline"
-    >
-      {text}
-    </EntityRefLink>
+      name={title}
+    />
   ) : (
     <Link
       {...entityDetailLink(entity, refTo.id)}

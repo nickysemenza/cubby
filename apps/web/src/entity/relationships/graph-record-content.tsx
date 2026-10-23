@@ -13,15 +13,12 @@ import { Image } from "~/ui/primitives/image";
 /** All graph links use already hydrated identity and cover; hover resolves detail on demand. */
 export function GraphRecordLink({
   node,
-  compact = false,
 }: {
   node: EntityGraphNode;
   compact?: boolean;
 }) {
   return isBrowserRoutedEntity(node.entityKind) ? (
     <EntityRefLink
-      variant="chip"
-      compact={compact}
       entity={node.entityKind}
       id={node.entityId}
       name={node.label}

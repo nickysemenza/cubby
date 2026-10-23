@@ -77,7 +77,7 @@ export function SweepStatusLine({
       aria-label="Sweep status"
     >
       <span className="font-medium">Sweep</span>
-      <EntityRefLink variant="byId" entityKind="run" entityId={runId} compact />
+      <EntityRefLink entity="run" id={runId} />
       {report.error ? (
         <ErrorDisplay error={report.error} title="Sweep steps" />
       ) : !report.data ? (

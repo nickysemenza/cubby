@@ -1,4 +1,4 @@
-import { EntityRefLink } from "~/entity/components/entity-ref-link";
+import { EntityRefList } from "~/entity/components/entity-ref-link";
 import { createCubbyColumnCollection } from "~/ui/data-table/table-features";
 import { attachCubbyColumnMeta } from "~/ui/data-table/table-meta";
 
@@ -27,8 +27,7 @@ const recipeLinks: ListRenderer<"meal"> = (helper) =>
               })),
           }),
           cell: (info) => (
-            <EntityRefLink
-              variant="list"
+            <EntityRefList
               entity="recipe"
               items={info.getValue()}
               compact

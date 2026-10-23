@@ -14,7 +14,7 @@ export function PickerVisual({
   size = 20,
 }: {
   item: Pick<ComboboxItem, "thumb" | "icon" | "color">;
-  size?: 16 | 20 | 24;
+  size?: 16 | 18 | 20 | 24;
 }) {
   const { thumb } = item;
   if (thumb) {

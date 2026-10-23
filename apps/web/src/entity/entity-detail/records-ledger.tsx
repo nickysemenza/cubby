@@ -135,12 +135,7 @@ export function ReportRefLink({
   return entity === null ? (
     <span>{text}</span>
   ) : (
-    <EntityRefLink
-      variant="chip"
-      entity={entity}
-      id={reference.id}
-      name={text}
-    />
+    <EntityRefLink entity={entity} id={reference.id} name={text} />
   );
 }
 
@@ -184,15 +179,7 @@ export function ReportRowText({ row }: { row: ReportRecordRow }) {
 function RowTitle({ row }: { row: ReportRecordRow }) {
   const entity = routedEntity(row.entity);
   if (entity !== null && row.id !== null)
-    return (
-      <EntityRefLink
-        variant="chip"
-        entity={entity}
-        id={row.id}
-        name={row.title}
-        displayImage={null}
-      />
-    );
+    return <EntityRefLink entity={entity} id={row.id} name={row.title} />;
   if (row.title === "") return null;
   return (
     <span className="font-medium whitespace-pre-line">
@@ -246,7 +233,6 @@ function RowTrailing({
     <>
       {row.trailing && row.listLink && listEntity ? (
         <FilterRefLink
-          variant="filter"
           display="value"
           to={entities[listEntity].routes.list}
           // SAFETY: the server names the list's own URL keys.

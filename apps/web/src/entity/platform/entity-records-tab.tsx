@@ -20,7 +20,6 @@ import { DataQualityValue } from "~/entity/display/data-quality-value";
 import {
   entities,
   EntityIcon,
-  entityDetailParams,
   entityLabel,
   isBrowserRoutedEntity,
 } from "~/entity/entities";
@@ -86,14 +85,11 @@ const columns = createCubbyColumnCollection<EntityRecord>((add) => {
       cell: ({ row }) =>
         isBrowserRoutedEntity(row.original.kind) ? (
           <EntityRefLink
-            variant="table"
-            tone="identity"
-            to={entities[row.original.kind].routes.detail}
-            params={entityDetailParams(row.original.id)}
-            title={row.original.name}
-          >
-            {row.original.name}
-          </EntityRefLink>
+            entity={row.original.kind}
+            id={row.original.id}
+            name={row.original.name}
+            bare
+          />
         ) : (
           row.original.name
         ),

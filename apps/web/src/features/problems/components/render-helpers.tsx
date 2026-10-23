@@ -54,7 +54,7 @@ export function recordFact(
           isBrowserRoutedEntity(entity) ? (
             <EntityRefLink
               key={ref.id}
-              variant="chip"
+
               entity={entity}
               id={ref.id}
               name={ref.name}

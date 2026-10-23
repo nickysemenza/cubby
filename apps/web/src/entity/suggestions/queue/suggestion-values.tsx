@@ -20,7 +20,6 @@ import { renderSuggestedListFieldValue } from "~/entity/display/entity-display";
 import { formatCurrency } from "~/lib/number-format";
 import { cn } from "~/lib/utils";
 import { ChipCluster } from "~/ui/common/chip-cluster";
-import { useIsMobile } from "~/ui/hooks/use-mobile";
 import { Badge } from "~/ui/primitives/badge";
 import { NoneValue } from "~/ui/primitives/none-value";
 
@@ -155,25 +154,13 @@ export function ImpactLabels({ impact }: { impact: SuggestionImpact[] }) {
 /** A record by shortcode, always as its named link with the entity's mark. */
 export function RecordLink({
   record,
-  wrap,
   name,
 }: {
   record: SuggestionRecordRef;
   wrap?: boolean;
   name?: string | null;
 }) {
-  const mobile = useIsMobile();
-  const wraps = wrap ?? mobile;
-  return (
-    <EntityRefLink
-      variant="byId"
-      entityKind={record.entity}
-      entityId={record.id}
-      name={name}
-      compact={!wraps}
-      wrap={wraps}
-    />
-  );
+  return <EntityRefLink entity={record.entity} id={record.id} name={name} />;
 }
 
 export const fieldLabel = (entity: ShortcodeEntity, field: string) =>

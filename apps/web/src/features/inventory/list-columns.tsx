@@ -73,7 +73,6 @@ function InventoryProductLink({
       displayImage={displayImage}
       entity="product"
       data={product}
-      compact
     />
   );
 }

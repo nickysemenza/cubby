@@ -27,7 +27,10 @@ import prettyBytes from "pretty-bytes";
 import { Fragment, type ReactNode } from "react";
 import { z } from "zod";
 
-import { EntityRefLink } from "~/entity/components/entity-ref-link";
+import {
+  EntityRefLink,
+  EntityFilterLink,
+} from "~/entity/components/entity-ref-link";
 import { ReferencePreview } from "~/entity/components/reference-preview";
 import {
   fieldQualityChecks,
@@ -624,12 +627,10 @@ function referenceLink(
     );
   return (
     <EntityRefLink
-      variant="chip"
       entity={routed}
       id={item.id}
       name={item.name}
       emoji={item.emoji}
-      compact={compact}
     />
   );
 }
@@ -663,13 +664,7 @@ export function renderSuggestedListFieldValue<TRecord extends { id: string }>(
     // manifest entry and is a member of the audit entity-kind roster.
     const entityKind = field.reference.entity as AuditEntityKind;
     return (
-      <EntityRefLink
-        variant="byId"
-        entityKind={entityKind}
-        entityId={referenceId.data}
-        name={label}
-        compact
-      />
+      <EntityRefLink entity={entityKind} id={referenceId.data} name={label} />
     );
   }
   if (label) return <span className="min-w-0 truncate">{label}</span>;
@@ -926,8 +921,7 @@ function cohortFilterAction<TRecord extends object>(
   const recordId = explainedRecordSchema.safeParse(record);
   if (countFilter !== null && recordId.success) {
     return (
-      <EntityRefLink
-        variant="filter"
+      <EntityFilterLink
         to={countFilter.to}
         search={countFilter.search(recordId.data.id)}
         label={`Show all ${countFilter.plural}`}
@@ -942,8 +936,7 @@ function cohortFilterAction<TRecord extends object>(
   const plural = entityPluralLabel(entity).toLocaleLowerCase();
   const label = field.label.toLocaleLowerCase();
   const linkTo = (value: string, text: string) => (
-    <EntityRefLink
-      variant="filter"
+    <EntityFilterLink
       key={value}
       to={entities[entity].routes.list}
       search={{ [urlKey]: value }}
@@ -2351,8 +2344,7 @@ export function createEntityDisplayColumns<TRecord extends object>(
               )
                 return rendered;
               return (
-                <EntityRefLink
-                  variant="filter"
+                <EntityFilterLink
                   display="value"
                   to={countFilter.to}
                   search={countFilter.search(recordId.data.id)}
@@ -2360,7 +2352,7 @@ export function createEntityDisplayColumns<TRecord extends object>(
                   className="tabular-nums"
                 >
                   {rendered}
-                </EntityRefLink>
+                </EntityFilterLink>
               );
             },
           },

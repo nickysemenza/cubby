@@ -221,7 +221,6 @@ function RecipeImportCardImpl({
                 id: existingId,
                 name: recipe.meta.title,
               }}
-              compact
             />
           )}
         </Row>

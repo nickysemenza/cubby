@@ -22,6 +22,8 @@ import {
 import type { PgColumn, PgTable } from "drizzle-orm/pg-core";
 import { z } from "zod";
 
+import { formatCalendarDay } from "~/lib/date-format";
+import { purchaseLabel } from "~/lib/purchase-label";
 import { getR2PublicUrl } from "~/server/clients/r2-public-url";
 import type { Database } from "~/server/db";
 import { stockOnly } from "~/server/db/computed/inventory-placement";
@@ -35,6 +37,7 @@ import {
   ledgerParty,
   location,
   product,
+  purchase,
   project,
   task,
   vendor,
@@ -285,7 +288,11 @@ async function loadEntityRows(
   const entity: ShortcodeEntity = input.entity;
   const table: ShortcodeTable = SHORTCODE_TABLE[entity];
   const labelColumn = DISPLAY_NAME_COLUMN[entity] ?? table.shortcode;
-  const label = sql<string>`coalesce(${labelColumn}, ${table.shortcode})`;
+  // Purchase identity is computed from receipt facts, rather than a name column.
+  const label =
+    entity === "purchase"
+      ? sql<string>`concat_ws(' ', ${purchase.displayLabel}, ${purchase.orderId}, ${vendor.name}, ${purchase.date})`
+      : sql<string>`coalesce(${labelColumn}, ${table.shortcode})`;
   const count = input.include.includes("count") ? optionCountFor(entity) : null;
   const withLogo = input.include.includes("logo");
   const kindColumn = input.include.includes("kind")
@@ -300,6 +307,12 @@ async function loadEntityRows(
     .select({
       id: table.shortcode,
       label,
+      orderId: entity === "purchase" ? purchase.orderId : sql<null>`NULL::text`,
+      displayLabel:
+        entity === "purchase" ? purchase.displayLabel : sql<null>`NULL::text`,
+      vendorName: entity === "purchase" ? vendor.name : sql<null>`NULL::text`,
+      purchaseDate:
+        entity === "purchase" ? purchase.date : sql<null>`NULL::text`,
       count: count ?? sql<null>`NULL::int`,
       logoKey: withLogo ? image.key : sql<null>`NULL::text`,
       kind: kindColumn ?? sql<null>`NULL::text`,
@@ -307,6 +320,11 @@ async function loadEntityRows(
     })
     .from(table)
     .$dynamic();
+  if (entity === "purchase")
+    query = query.leftJoin(
+      vendor,
+      and(eq(vendor.id, purchase.vendorId), notDeleted(vendor)),
+    );
   if (withLogo)
     query = query
       .leftJoin(
@@ -343,6 +361,22 @@ async function loadEntityRows(
     const option: EntityOptionRow = toOptionRow(
       parseOptionQueryRow({ id: row.id, label: row.label }),
     );
+    if (entity === "purchase") {
+      option.label = purchaseLabel({
+        orderId: row.orderId,
+        displayLabel: row.displayLabel,
+        vendorName: row.vendorName,
+        date: row.purchaseDate,
+      });
+      option.detail = [
+        row.vendorName,
+        row.purchaseDate
+          ? formatCalendarDay(row.purchaseDate, "dateShort")
+          : null,
+      ]
+        .filter(Boolean)
+        .join(" · ");
+    }
     if (count) option.count = Number(row.count);
     if (withLogo)
       option.logo = row.logoKey ? { url: getR2PublicUrl(row.logoKey) } : null;
@@ -494,7 +528,9 @@ export async function getFilterOptions(
     );
     for (const row of selectedRows) byId.set(row.id, row);
     return {
-      items: [...byId.values()].map(({ detail: _detail, ...row }) => row),
+      items: [...byId.values()].map(({ detail, ...row }) =>
+        detail ? { ...row, detail } : row,
+      ),
       nextCursor: hasNextPage
         ? String(Number(input.cursor ?? "0") + input.limit)
         : null,

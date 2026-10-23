@@ -58,7 +58,7 @@ describe("VendorCell", () => {
 
     const link = screen.getByRole("link", { name: RENAMED_VENDOR });
     expect(link).toHaveAttribute("href", `/vendors/${SEEDED_ID}`);
-    expect(screen.getByText(RENAMED_VENDOR)).toHaveClass("decoration-dotted");
+    expect(link.querySelector("[data-entity-pill]")).toBeTruthy();
     // Linking the cell must not trade away its rename-safe branded mark.
     expect(document.querySelector("img")).toBeTruthy();
   });
@@ -76,7 +76,7 @@ describe("VendorCell", () => {
     render(<VendorMark vendor="eBay" />);
 
     expect(document.querySelector("img")).toBeNull();
-    expect(screen.getByText("EB")).toBeTruthy();
+    expect(document.querySelector("svg")).toBeTruthy();
   });
 
   it("re-attempts the logo after a failure when the vendor changes", () => {
@@ -88,7 +88,7 @@ describe("VendorCell", () => {
     // eBay's logo 404s (dead bucket entry, manifest drift, dropped connection).
     fireEvent.error(logoImage());
     expect(document.querySelector("img")).toBeNull();
-    expect(screen.getByText("EB")).toBeTruthy();
+    expect(document.querySelector("svg")).toBeTruthy();
 
     // Correcting the vendor must not inherit the previous one's failure — a
     // bare `failed` boolean pinned every subsequent vendor to its monogram.
@@ -119,23 +119,13 @@ describe("VendorCell", () => {
     rerender(
       <VendorCell vendor="eBay" vendorId={SEEDED_ID} logo={EBAY_LOGO} />,
     );
-    expect(screen.getByText("EB")).toBeTruthy();
+    expect(document.querySelector("svg")).toBeTruthy();
   });
 
   it("keeps the vendor name reachable when the mark carries the cell", () => {
-    // `compactOnMobile` hides the name below `sm`, where the only other element
-    // is a decorative image with empty alternative text. Hiding the name would leave
-    // the cell with no accessible name at all, so it must stay in the tree.
-    render(
-      <VendorCell
-        vendor="eBay"
-        vendorId={SEEDED_ID}
-        logo={EBAY_LOGO}
-        compactOnMobile
-      />,
-    );
+    render(<VendorCell vendor="eBay" vendorId={SEEDED_ID} logo={EBAY_LOGO} />);
     const name = screen.getByText("eBay");
-    expect(name.className).toContain("sr-only");
+    expect(name).toBeVisible();
     expect(name.className).not.toContain("max-sm:hidden");
   });
 });
@@ -146,23 +136,6 @@ describe("VendorCell", () => {
  * the stored asset slug.
  */
 describe("VendorCell / VendorMark with a resolved logo", () => {
-  it("puts every stored logo on the same neutral, ruled 16px plate", () => {
-    const { container } = render(
-      <VendorMark vendor="eBay" vendorId={SEEDED_ID} logo={EBAY_LOGO} />,
-    );
-
-    const plate = container.querySelector("span[aria-hidden='true']");
-    const logo = container.querySelector("img");
-    expect(plate).toHaveClass("size-4", "border", "border-border", "bg-muted");
-    expect(logo).toHaveClass(
-      "size-full",
-      "object-contain",
-      "grayscale",
-      "group-hover/row:grayscale-0",
-      "max-sm:grayscale-0",
-    );
-  });
-
   it("keeps the logo when a vendor is renamed", () => {
     render(
       <VendorMark
@@ -198,23 +171,16 @@ describe("VendorCell / VendorMark with a resolved logo", () => {
     expect(document.querySelector("img")).toBeNull();
   });
 
-  it("keeps compactOnMobile consistent with the mark under an id-resolved logo", () => {
-    // The name alone has no logo (`RENAMED_VENDOR` slugs to nothing), but the
-    // id resolves one. `compactOnMobile`'s own presence check must agree with
-    // what `VendorMark` actually renders — forwarding `vendorId` to only one
-    // of the two would either hide the name behind a mark that isn't really
-    // there, or show a bare unlabeled mark with no name, the "anonymous rows"
-    // failure `VendorCell`'s doc comment warns about.
+  it("keeps a renamed vendor readable beside its resolved logo", () => {
     render(
       <VendorCell
         vendor={RENAMED_VENDOR}
         vendorId={SEEDED_ID}
         logo={EBAY_LOGO}
-        compactOnMobile
       />,
     );
     expect(document.querySelector("img")).toBeTruthy();
     const name = screen.getByText(RENAMED_VENDOR);
-    expect(name.className).toContain("max-sm:sr-only");
+    expect(name).toBeVisible();
   });
 });

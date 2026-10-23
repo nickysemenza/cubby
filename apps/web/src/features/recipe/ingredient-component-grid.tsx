@@ -2,7 +2,6 @@ import { sumBy } from "es-toolkit";
 import { useMemo } from "react";
 
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
-import { dottedEntityLink } from "~/entity/components/ref-link/leaf";
 import { formatCurrencyRange } from "~/lib/number-format";
 import {
   type CrossTabFooterRow,
@@ -128,14 +127,11 @@ export function IngredientComponentGrid({
           <>
             <div>
               <EntityRefLink
-                variant="preview"
                 displayImage={recipeTreeDisplayImage(node.recipe)}
                 entity="recipe"
                 id={node.recipe.id}
-                className={dottedEntityLink}
-              >
-                {node.recipe.name}
-              </EntityRefLink>
+                name={node.recipe.name}
+              />
             </div>
             {makes && (
               <div className="text-2xs font-normal tracking-normal text-muted-foreground normal-case">
@@ -147,14 +143,10 @@ export function IngredientComponentGrid({
       }}
       renderRowHeader={({ data: row }) => (
         <EntityRefLink
-          variant="preview"
-          displayImage={null}
           entity="ingredient"
           id={row.ingredientShortcode}
-          className={dottedEntityLink}
-        >
-          {row.name}
-        </EntityRefLink>
+          name={row.name}
+        />
       )}
       renderCell={({ data: row }, column) => {
         const grams = row.byComponent.get(column.key);

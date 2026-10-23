@@ -11,7 +11,6 @@ import { sumBy } from "es-toolkit";
 import { useMemo, useState } from "react";
 
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
-import { dottedEntityLink } from "~/entity/components/ref-link/leaf";
 import { MarkdownText } from "~/entity/prose/markdown";
 import { formatCurrency } from "~/lib/number-format";
 import { scaleEstimate } from "~/lib/nutrition-estimates";
@@ -279,14 +278,10 @@ function IngredientLedger({
                   >
                     {ref ? (
                       <EntityRefLink
-                        variant="preview"
-                        displayImage={null}
                         entity={ref.entity}
                         id={ref.id}
-                        className={dottedEntityLink}
-                      >
-                        {name}
-                      </EntityRefLink>
+                        name={name}
+                      />
                     ) : (
                       name
                     )}

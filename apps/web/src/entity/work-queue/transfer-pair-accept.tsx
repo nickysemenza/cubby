@@ -79,9 +79,8 @@ function CandidateRow({ candidate }: { candidate: Candidate }) {
     <RecordRow
       primary={
         <EntityRefLink
-          variant="byId"
-          entityKind="financialTransaction"
-          entityId={candidate.transactionId}
+          entity="financialTransaction"
+          id={candidate.transactionId}
         />
       }
       secondary={`${partyName(candidate.from)} → ${partyName(candidate.to)}${internal ? " · internal move" : ""}`}
