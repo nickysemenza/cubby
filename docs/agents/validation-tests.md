@@ -911,6 +911,28 @@ Email original navigation and failed-preview evidence preservation. Vendor Email
 link composition stays in `purchase-import-run.spec.ts`; the review journey
 opens the Email directly from its Purchase row.
 
+The structured identifier browser journey applies Add, explicit primary choice
+and Replace in one draft, checks the exact saved secondary/primary values, then
+removes the saved secondary and checks the survivor. It avoids two intermediate
+save/reopen cycles. The existing `collection-patch.integration.test.ts` case
+"adding identifiers preserves existing values and primary, and explicit promotion
+retains both" owns add-only preservation and promotion without deletion;
+`collection-edit.unit.test.ts` owns baseline-preserving Add, atomic identity
+Replace, explicit promotion and removal requests. `structured-value-field.unit.test.tsx`
+owns removal surviving a same-record refresh. The add-only and promotion-only
+browser save states are deliberate gaps.
+
+Work queue routing keeps real Either → member filtering, deduplicated copied
+source codes, cleared selection, scoped source href, routing URL and actual
+Email navigation. It omits the reload, No value → Either permutations and mobile
+resize from this journey. Shared queue SQL owns filtering before counts/paging
+and retained Run authority; unresolved-account No value picker composition,
+member-filter reload persistence and Work queue mobile width are deliberate gaps.
+The separate queue scroll/sort/inspector journey remains. List delete creates
+both Tasks in one committed fixture graph; its held delete, six-times CPU
+throttle, pending disablement, precommit existence, row removal and final 404
+read-back remain unchanged.
+
 ## Test and dev data factories
 
 One layer builds data for Vitest, E2E, and the dev corpus:

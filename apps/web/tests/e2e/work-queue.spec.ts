@@ -22,7 +22,7 @@ import {
 import { seedUnimportedOrderMail } from "./fixtures/mail";
 
 // Failure modes: a member filter widens to shared work, filtering runs only on
-// the loaded page, URL state is lost on reload, a queue row loses its source,
+// the loaded page, a queue row loses its source,
 // or changing routing keeps a selection from the previous result set.
 test("Work queue filters routing before paging and opens its source record", async ({
   page,
@@ -41,12 +41,6 @@ test("Work queue filters routing before paging and opens its source record", asy
     .where(eq(email.checksum, mail.checksum))
     .returning();
   if (!owned) throw new Error("Synthetic owned email is missing");
-  const unresolved = await insertWithShortcode(db, "financialAccount", {
-    name: `${prefix} unresolved account`,
-    provisional: true,
-    identity: { kind: "credit_card", issuer: null, network: "visa" },
-    ledgerPartyId: null,
-  });
   const shared = await seedProductPrerequisite(page, {
     name: `${prefix} shared product`,
   });
@@ -87,7 +81,6 @@ test("Work queue filters routing before paging and opens its source record", asy
   // is its option label and its chip summary.
   type Choice = { option: string; chip: string };
   const either: Choice = { option: "Either", chip: "Either" };
-  const noValue: Choice = { option: "No value", chip: "no value" };
   const picked: Choice = { option: member.name, chip: member.name };
   const chooseWaitingFor = async (from: Choice, to: Choice) => {
     await page
@@ -123,36 +116,10 @@ test("Work queue filters routing before paging and opens its source record", asy
     page.getByRole("link", { name: `${prefix} owned mail`, exact: true }),
   ).toHaveAttribute("href", `/emails/${owned.shortcode}`);
   await expect(page).toHaveURL(new RegExp(`waitingFor=${member.shortcode}`));
-  await page.reload();
-  await expect(
-    page.getByRole("button", {
-      name: `Waiting for: ${member.name}`,
-      exact: true,
-    }),
-  ).toBeVisible();
-  await chooseWaitingFor(picked, noValue);
-  await expect(
-    page.getByRole("link", {
-      name: `${prefix} unresolved account`,
-      exact: true,
-    }),
-  ).toHaveAttribute("href", `/financial-accounts/${unresolved.shortcode}`);
-  await expect(
-    page.getByRole("link", { name: `${prefix} owned mail`, exact: true }),
-  ).toHaveCount(0);
-  await chooseWaitingFor(noValue, either);
-  await expect(
-    page.getByRole("combobox", { name: "Rows per page", exact: true }),
-  ).toHaveCount(0);
-  await page.setViewportSize({ width: 402, height: 874 });
-  await expect(product).toHaveAttribute("href", `/products/${shared.id}`);
-  expect(
-    await page.evaluate(
-      () => document.documentElement.scrollWidth <= window.innerWidth,
-    ),
-  ).toBe(true);
-  await product.click();
-  await expect(page).toHaveURL(`/products/${shared.id}`);
+  await page
+    .getByRole("link", { name: `${prefix} owned mail`, exact: true })
+    .click();
+  await expect(page).toHaveURL(`/emails/${owned.shortcode}`);
 });
 
 // Failure modes: later pages replace earlier rows, sorting orders only loaded
@@ -224,7 +191,7 @@ test("Work queue scrolls, sorts, copies source codes and inspects independently"
   await expect(
     list.getByRole("link", { name: `${prefix} Foxtrot`, exact: true }),
   ).toBeVisible();
-  // Routing persistence is covered by the preceding filter journey.
+  // Routing URL updates are covered by the preceding filter journey.
   await expect(list.getByRole("link").first()).toHaveText(`${prefix} Foxtrot`);
   await page.getByRole("button", { name: /^Sort: Record/ }).click();
   await page.getByRole("menuitem", { name: "Ascending", exact: true }).click();

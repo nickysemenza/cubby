@@ -4,7 +4,7 @@ import { z } from "zod";
 
 import { BROWSER_OPERATION_PATH } from "~/lib/browser-operation-path";
 import { dispatchesOperation } from "./support/dispatch-wire";
-import { seedTaskPrerequisite } from "./fixtures/catalog";
+import { createFixtureGraph } from "./fixtures/core";
 import { gotoAuthenticatedPage } from "./support/e2e-helpers";
 import { expect, test } from "./support/e2e-test";
 
@@ -22,10 +22,13 @@ test("task list selection delete shows the impact preview, then removes the rows
     `e2e delete task one ${suffix}`,
     `e2e delete task two ${suffix}`,
   ];
-  const tasks = [
-    await seedTaskPrerequisite(page, { name: names[0]! }),
-    await seedTaskPrerequisite(page, { name: names[1]! }),
-  ];
+  const tasks = await createFixtureGraph(page, async (create) => {
+    const tasks = [];
+    for (const name of names) {
+      tasks.push(await create("task", { name, trade: "other" }));
+    }
+    return tasks;
+  });
 
   const cdp = await page.context().newCDPSession(page);
   await gotoAuthenticatedPage(page, "/tasks");
