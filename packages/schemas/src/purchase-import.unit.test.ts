@@ -24,7 +24,7 @@ describe("purchase import contracts", () => {
     carrierName: "Synthetic Courier",
     trackingNumber: "SYN-TRACK-101",
     extraTrackingNumbers: [],
-    purpose: "outbound",
+    purpose: "incoming",
     observations: [
       {
         sourceEventKey: null,
@@ -53,6 +53,17 @@ describe("purchase import contracts", () => {
     expect(extractedOrderCandidate.parse(legacy)).toEqual(legacy);
     expect(extractedOrderCandidate.parse(legacy)).not.toHaveProperty(
       "shipments",
+    );
+  });
+
+  it("preserves historical purpose text in retained extraction but refuses it as a live direction", () => {
+    const retained = {
+      ...order,
+      shipments: [{ ...packet, purpose: "replacement" }],
+    };
+    expect(extractedOrderCandidate.parse(retained)).toEqual(retained);
+    expect(shipmentEvidence.safeParse(retained.shipments[0]).success).toBe(
+      false,
     );
   });
 

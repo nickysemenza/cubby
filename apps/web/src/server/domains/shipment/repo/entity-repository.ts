@@ -1,13 +1,22 @@
+import type { ActorContext } from "@cubby/schemas/context";
+import { entityFieldModels } from "@cubby/schemas/entity-fields";
+import type { ShortcodeFor } from "@cubby/schemas/identifiers";
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
 import {
   shipmentOut,
   type ShipmentFilters,
   type ShipmentOut,
+  type ShipmentUpdateData,
 } from "@cubby/schemas/shipment";
 import { and, eq } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
-import { notDeleted, unwrapDb } from "~/server/db/helpers";
+import {
+  buildPartialUpdateValues,
+  notDeleted,
+  unwrapDb,
+  withTransactionDatabase,
+} from "~/server/db/helpers";
 import type { ListReadIntent } from "~/server/db/helpers/query";
 import { shipment } from "~/server/db/schema";
 import {
@@ -18,8 +27,11 @@ import {
 import { shipmentEventSummary } from "~/server/domains/shipment/repo/timeline";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import {
-  createEntityReader,
+  createEntityCrud,
   defineRepository,
+  defineMutationWriter,
+  asActor,
+  type MutationReceipt,
 } from "~/server/entity-kernel/repo/repository";
 import { listScaffold } from "~/server/generic/list/repo/list";
 import type { ListProjection } from "~/server/generic/list/repo/list-contracts";
@@ -28,6 +40,7 @@ import {
   type ListReadOptions,
 } from "~/server/generic/list/repo/list-projection";
 import { completeListReader } from "~/server/generic/list/repo/list-read-adapters";
+import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 type ReaderDb = Database | DrizzleTransaction;
 type ShipmentRow = typeof shipment.$inferSelect;
@@ -96,12 +109,14 @@ export const listShipmentsRead = (
   );
 
 const listShipments = completeListReader(shipmentOut, listShipmentsRead);
-const reader = createEntityReader<
+const reader = createEntityCrud<
+  typeof shipment,
   ShipmentRow,
   ShipmentOut,
-  "shipment",
-  ReaderDb
+  ShipmentUpdateData,
+  "shipment"
 >({
+  table: shipment,
   entity: "shipment",
   fetchById: async (db, id) =>
     (
@@ -113,9 +128,42 @@ const reader = createEntityReader<
     )[0],
   fromDB: async (db, row) =>
     shipmentOut.parse((await plan.read(db, [row], { kind: "full" }))[0]),
+  toUpdate: (data) => buildPartialUpdateValues(data),
+  auditUpdateFields: [...entityFieldModels.shipment.audit],
+});
+
+const update = defineMutationWriter({
+  entity: "shipment",
+  read: async (
+    receipt: MutationReceipt<"shipment">,
+    db: Database,
+    _code: ShortcodeFor<"shipment">,
+    _data: ShipmentUpdateData,
+    _actor: ActorContext,
+  ) => ({
+    output: await reader.getByID(db, receipt.entityId),
+    entityId: receipt.entityId,
+  }),
+  write: (
+    readOutput,
+    db: Database,
+    code: ShortcodeFor<"shipment">,
+    data: ShipmentUpdateData,
+    actor: ActorContext,
+  ) =>
+    withTransactionDatabase(db, async (tx) => {
+      const id = await resolveOrThrow(tx, "shipment", code);
+      return reader.update(tx, id, data, actor, (db, receipt) =>
+        readOutput(receipt, async () => ({
+          output: await reader.getByID(db, id),
+          entityId: id,
+        })),
+      );
+    }),
 });
 
 export const shipmentRepository = defineRepository("shipment", {
+  update: asActor(update),
   get: (ctx: EntityKernelContext, code: string) =>
     reader.getByShortcode(ctx.db, code),
   list: (

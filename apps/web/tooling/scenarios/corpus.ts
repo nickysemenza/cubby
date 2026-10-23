@@ -819,7 +819,7 @@ async function seedConnectedHousehold(
           carrierName: "Cedar Example Parcel",
           trackingNumber: "CEDAR-DEMO-PARCEL",
           extraTrackingNumbers: [],
-          purpose: "outbound",
+          purpose: "incoming",
           observations: [
             {
               sourceEventKey: "pickup",

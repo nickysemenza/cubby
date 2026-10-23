@@ -1,12 +1,7 @@
 import { z } from "zod";
 import { shortcodeSchema } from "./identifier-fields";
 
-export const shipmentPurpose = z.enum([
-  "outbound",
-  "replacement",
-  "return",
-  "unknown",
-]);
+export const shipmentPurpose = z.enum(["incoming", "outgoing", "unknown"]);
 export type ShipmentPurpose = z.infer<typeof shipmentPurpose>;
 
 export const shipmentExtraTrackingNumber = z.object({

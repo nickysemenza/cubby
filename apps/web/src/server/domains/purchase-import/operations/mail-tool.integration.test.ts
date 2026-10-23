@@ -126,7 +126,7 @@ describe("public mail tool", () => {
         carrierName: null,
         trackingNumber: number,
         extraTrackingNumbers: [],
-        purpose: "outbound",
+        purpose: "incoming",
         observations: [
           {
             sourceEventKey: null,

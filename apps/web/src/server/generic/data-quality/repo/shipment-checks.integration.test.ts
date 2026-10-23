@@ -69,7 +69,7 @@ describe("Shipment evidence quality", () => {
             carrierName: null,
             trackingNumber: key,
             extraTrackingNumbers: [],
-            purpose: "outbound",
+            purpose: "incoming",
             observations: observations.map((observation, index) => ({
               ...observation,
               time: datedShipmentEventTime.safeParse(observation.time).success

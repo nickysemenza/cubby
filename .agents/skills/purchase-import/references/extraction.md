@@ -88,7 +88,12 @@ Retain the primary `carrierName` and `trackingNumber` verbatim, and explicit
 handoff pairs in `extraTrackingNumbers`. Carrier IDs, when supplied by verified
 lookups, are Vendor `VEN-` codes; otherwise leave `carrierId` null and let the
 writer resolve the literal name using existing Vendor name resolution. Set
-`purpose` to outbound, replacement, return or unknown from the evidence.
+`purpose` means direction relative to the household: incoming, outgoing or
+unknown. Received carrier SMS defaults to incoming. Member eBay sales and
+purchased shipping/postage labels (including Shippo) are outgoing. An eBay
+purchase is incoming; the vendor name alone does not establish a sale. Keep
+replacement and return details in the source observations rather than separate
+purpose choices. Preserve explicit member corrections on replay.
 
 Each observation retains `rawStatus`, source event key, location and any
 carrier/tracking wording. Use the literal supported event kind: label creation

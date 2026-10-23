@@ -8,9 +8,11 @@ import {
   type LedgerPartyId,
 } from "@cubby/schemas/identifiers";
 import type { ImportWriterInput } from "@cubby/schemas/purchase-import";
-import type { ShipmentEvidence } from "@cubby/schemas/shipment-evidence";
+import type { RetainedShipmentEvidence } from "@cubby/schemas/shipment-evidence";
+import { shipmentPurpose } from "@cubby/schemas/shipment-fields";
 import { and, eq } from "drizzle-orm";
 
+import { householdLocalDate } from "~/lib/household-date";
 import type { Database } from "~/server/db";
 import { getDb, notDeleted } from "~/server/db/helpers";
 import { email } from "~/server/db/schema";
@@ -32,7 +34,7 @@ export async function recordImportedShipmentEvidence(
     runId: RunId | null;
     ledgerPartyId: LedgerPartyId;
     purchaseId: PurchaseId;
-    shipments: readonly ShipmentEvidence[];
+    shipments: readonly RetainedShipmentEvidence[];
   },
   actor: ActorContext,
 ) {
@@ -103,7 +105,23 @@ export async function recordImportedShipmentEvidence(
         checksum: original.rawChecksum,
       },
       purchaseId: parseShortcodeFor("purchase", purchaseCode),
-      shipments: [...input.shipments],
+      shipments: input.shipments.map((packet) => {
+        const purpose = shipmentPurpose.safeParse(packet.purpose);
+        return {
+          ...packet,
+          purpose: purpose.success ? purpose.data : "unknown",
+          observations: packet.observations.map((observation) => ({
+            ...observation,
+            time:
+              observation.time.kind === "unknown" && original.receivedAt
+                ? {
+                    kind: "date",
+                    value: householdLocalDate(original.receivedAt),
+                  }
+                : observation.time,
+          })),
+        };
+      }),
     },
     actor,
   );

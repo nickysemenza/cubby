@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { shortcodeSchema } from "./identifier-fields";
 import { plainDate } from "./base-entity";
+import { shipmentPurpose } from "./shipment-fields";
 
 const text = z.string().trim().min(1);
 export const shipmentEventKind = z.enum([
@@ -59,47 +60,69 @@ export const shipmentObservationInput = z.strictObject({
 });
 export type ShipmentObservationInput = z.infer<typeof shipmentObservationInput>;
 
-export const shipmentEvidence = z
-  .strictObject({
-    shipmentId: shortcodeSchema("shipment").nullable(),
-    sourceShipmentKey: text
-      .max(500)
-      .nullable()
-      .describe(
-        "Stable package identifier within this source; not a global Shipment identity. Repeated lifecycle Emails may identify the same package.",
-      ),
-    distinctPackageEvidence: text
-      .max(2000)
-      .nullable()
-      .describe(
-        "Null for ordinary tracked-package updates. Non-null forces a separate package instead of reusing a matching tracking reference: quote explicit evidence of a distinct package (such as package 2 of 2 under a shared master number). A new trackingless package also requires this evidence and a stable sourceShipmentKey. A tracking number, item list, new Email, or changed shipping status alone is not distinct-package evidence.",
-      ),
-    carrierId: shortcodeSchema("vendor").nullable(),
-    carrierName: text.max(300).nullable(),
-    trackingNumber: text.max(300).nullable(),
-    extraTrackingNumbers: z
-      .array(
-        z.strictObject({
-          carrierId: shortcodeSchema("vendor").nullable(),
-          carrierName: text.max(300).nullable(),
-          trackingNumber: text.max(300),
-        }),
-      )
-      .max(20),
-    purpose: z.enum(["outbound", "replacement", "return", "unknown"]),
-    observations: z.array(shipmentObservationInput).min(1).max(500),
-  })
-  .refine(
-    (value) =>
-      value.shipmentId ||
-      value.trackingNumber ||
-      (value.sourceShipmentKey && value.distinctPackageEvidence),
-    {
-      message:
-        "A new trackingless Shipment needs a stable source shipment key and distinct-package evidence.",
-    },
+const shipmentEvidenceFields = z.strictObject({
+  shipmentId: shortcodeSchema("shipment").nullable(),
+  sourceShipmentKey: text
+    .max(500)
+    .nullable()
+    .describe(
+      "Stable package identifier within this source; not a global Shipment identity. Repeated lifecycle Emails may identify the same package.",
+    ),
+  distinctPackageEvidence: text
+    .max(2000)
+    .nullable()
+    .describe(
+      "Null for ordinary tracked-package updates. Non-null forces a separate package instead of reusing a matching tracking reference: quote explicit evidence of a distinct package (such as package 2 of 2 under a shared master number). A new trackingless package also requires this evidence and a stable sourceShipmentKey. A tracking number, item list, new Email, or changed shipping status alone is not distinct-package evidence.",
+    ),
+  carrierId: shortcodeSchema("vendor").nullable(),
+  carrierName: text.max(300).nullable(),
+  trackingNumber: text.max(300).nullable(),
+  extraTrackingNumbers: z
+    .array(
+      z.strictObject({
+        carrierId: shortcodeSchema("vendor").nullable(),
+        carrierName: text.max(300).nullable(),
+        trackingNumber: text.max(300),
+      }),
+    )
+    .max(20),
+  purpose: shipmentPurpose.describe(
+    "Incoming or outgoing relative to the household. Received carrier SMS implies incoming; eBay sales and purchased postage labels are outgoing. Replacement and return details remain in the evidence.",
+  ),
+  observations: z.array(shipmentObservationInput).min(1).max(500),
+});
+const hasPackageIdentity = (
+  value: Pick<
+    z.infer<typeof shipmentEvidenceFields>,
+    | "shipmentId"
+    | "trackingNumber"
+    | "sourceShipmentKey"
+    | "distinctPackageEvidence"
+  >,
+) =>
+  Boolean(
+    value.shipmentId ||
+    value.trackingNumber ||
+    (value.sourceShipmentKey && value.distinctPackageEvidence),
   );
+const packageIdentityIssue = {
+  message:
+    "A new trackingless Shipment needs a stable source shipment key and distinct-package evidence.",
+};
+export const shipmentEvidence = shipmentEvidenceFields.refine(
+  hasPackageIdentity,
+  packageIdentityIssue,
+);
 export type ShipmentEvidence = z.infer<typeof shipmentEvidence>;
+
+// Retained extraction text is immutable evidence, not authority to set a live direction.
+// Keeping its literal wording preserves accepted-source and preparation fingerprints.
+export const retainedShipmentEvidence = shipmentEvidenceFields
+  .extend({
+    purpose: z.string().min(1),
+  })
+  .refine(hasPackageIdentity, packageIdentityIssue);
+export type RetainedShipmentEvidence = z.infer<typeof retainedShipmentEvidence>;
 
 const smsExportSource = z.strictObject({
   kind: z.literal("sms_export"),

@@ -1,5 +1,8 @@
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
-import { shipmentEvidence } from "@cubby/schemas/shipment-evidence";
+import {
+  shipmentEvidence,
+  retainedShipmentEvidence,
+} from "@cubby/schemas/shipment-evidence";
 import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
@@ -125,7 +128,7 @@ describe("imported shipment source identity", () => {
         .from(email)
         .where(eq(email.orderMailId, original.id));
       if (!message) throw new Error("Synthetic Email missing");
-      const packet = shipmentEvidence.parse({
+      const packet = retainedShipmentEvidence.parse({
         shipmentId: null,
         sourceShipmentKey: "parcel-1",
         distinctPackageEvidence:
@@ -139,7 +142,7 @@ describe("imported shipment source identity", () => {
           {
             sourceEventKey: null,
             kind: "label_created",
-            time: { kind: "date", value: "2026-06-03" },
+            time: { kind: "unknown" },
             rawStatus: "Replacement package label created",
             location: null,
             carrierId: null,
@@ -161,6 +164,11 @@ describe("imported shipment source identity", () => {
         );
       await record();
       await record();
+      expect(packet.purpose).toBe("replacement");
+      expect(packet.observations[0]?.time).toEqual({ kind: "unknown" });
+      expect((await getDb(ctx.db).select().from(shipment))[0]?.purpose).toBe(
+        "unknown",
+      );
       expect(await getDb(ctx.db).select().from(shipment)).toHaveLength(1);
       const [capture] = await getDb(ctx.db)
         .select()

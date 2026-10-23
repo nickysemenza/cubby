@@ -429,7 +429,10 @@ export async function recordShipmentEvidence(
           carrierId: carrier.id,
           trackingNumber: number,
           extraTrackingNumbers,
-          purpose: packet.purpose,
+          purpose:
+            packet.purpose === "unknown" && input.source.kind === "sms_export"
+              ? "incoming"
+              : packet.purpose,
         });
         await logAuditEntries(tdb, actor, [
           {

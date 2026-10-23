@@ -135,7 +135,7 @@ same outcome without prescribing an agent runtime.
   never proves whole-order delivery. Inventory changes only by a deliberate
   member action; imports and shipment events never receive stock.
   For tracking enrichment, load that reference's carrier and third-party
-  tracker guidance; outgoing postage is a service purchase, with outbound
+  tracker guidance; outgoing postage is a service purchase, with outgoing
   Shipments linked to it and its Expenses assigned to the member's Project.
 - Use source totals and itemization exactly as printed. Never scale lines to
   `statedTotal`, infer tax, or fabricate a transaction to close a gap.
