@@ -226,6 +226,8 @@ async function mkShipmentObservation(db: Database, targetId: string) {
     sourceKey,
     occurrenceKey: sourceKey,
     fingerprint: sourceKey,
+    firstSeenAt: new Date(),
+    lastSeenAt: new Date(),
     event: {
       sourceEventKey: null,
       kind: "unknown",
