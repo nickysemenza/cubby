@@ -217,14 +217,12 @@ export async function countUnmatchedCharges(
   db: Database,
   scope: StatementSuggestionScope,
 ) {
-  let total = 0;
-  let after: ChargeRef | null = null;
-  for (;;) {
-    const page = await nextUnmatchedCharges(db, { after, limit: 5_000, scope });
-    total += page.length;
-    if (page.length < 5_000) return total;
-    after = page.at(-1)!;
-  }
+  // Counting has no cursor: aggregate eligibility once rather than rebuilding
+  // its joins for every raw identity chunk. Generation still bounds each page.
+  const { rows } = await unwrapDb(db).execute<{ count: number }>(sql`
+    SELECT count(*)::int AS count FROM (${statementInputCharges(scope)}) inputs
+  `);
+  return rows[0]?.count ?? 0;
 }
 
 async function loadObservations(
@@ -716,6 +714,7 @@ export async function buildChargeProposals(
     },
     {
       candidatePolicy: "suggestion",
+      includeVendorInference: false,
       preparation,
       retainedRefs: new Map(
         grouped.map(({ charge, canonical }) => [
@@ -1317,6 +1316,31 @@ type ReusablePublication = Pick<
   judgment: unknown;
 };
 
+/** Paid labels survive only while the actual model inputs and policy still agree. */
+function reusableRuleLabels<
+  Row extends ReusablePublication & {
+    needsLabel: string | null;
+    status: string;
+  },
+>(prior: readonly Row[], proposal: ChargeProposal) {
+  if (!proposal.judgment.create || proposal.judgment.reviewReason)
+    return undefined;
+  const inputs = canonicalJson(statementLabelInputs(proposal.judgment));
+  return prior.find((row) => {
+    if (
+      row.needsLabel !== "false" ||
+      row.producer?.kind !== "model" ||
+      row.producer.revision !== STATEMENT_LABEL_REVISION ||
+      !["pending", "superseded"].includes(row.status)
+    )
+      return false;
+    const previous = assessmentJudgments.statement_transaction.parse(
+      row.judgment,
+    );
+    return canonicalJson(statementLabelInputs(previous)) === inputs;
+  });
+}
+
 const countLabels = (value: StatementTransactionJudgment) =>
   value.candidates.filter((entry) => entry.label !== null).length +
   (value.create
@@ -1525,21 +1549,7 @@ export async function publishChargeProposal(
     if (producer.kind === "rule" && proposal.judgment.create) {
       // Retain the paid votes, not their old rule/history conclusions. Evidence
       // still gets a fresh fingerprint and current apply-time validation.
-      const inputs = canonicalJson(statementLabelInputs(proposal.judgment));
-      const reusable = prior.find((row) => {
-        if (proposal.judgment.reviewReason) return false;
-        if (
-          row.needsLabel !== "false" ||
-          row.producer?.kind !== "model" ||
-          row.producer.revision !== STATEMENT_LABEL_REVISION ||
-          !["pending", "superseded"].includes(row.status)
-        )
-          return false;
-        const previous = assessmentJudgments.statement_transaction.parse(
-          row.judgment,
-        );
-        return canonicalJson(statementLabelInputs(previous)) === inputs;
-      });
+      const reusable = reusableRuleLabels(prior, proposal);
       if (reusable) {
         const previous = assessmentJudgments.statement_transaction.parse(
           reusable.judgment,
@@ -1676,7 +1686,7 @@ export async function publishChargeProposal(
   });
 }
 
-/** Share admission for first/unchanged rules; changed retained decisions use the ordinary writer. */
+/** Share rule admission and replacements; retained model decisions use the ordinary writer. */
 async function publishRuleBatch(
   db: Database,
   proposals: readonly ChargeProposal[],
@@ -1711,11 +1721,15 @@ async function publishRuleBatch(
     const { rows: stored } = await client.execute<
       ChargeRef &
         ReusablePublication & {
+          id: string;
+          status: string;
+          needsLabel: string | null;
           suppression: unknown;
+          checkpoint: unknown;
         }
     >(sql`
       SELECT ${suggestionField("source")} AS source, ${suggestionField("chargeKey")} AS "chargeKey",
-        s.active, s.fingerprint, s.suppression,
+        s.id, s.status, s.active, s.fingerprint, s.suppression, s.data->'labelCheckpoint' AS checkpoint, ${suggestionField("needsLabel")} AS "needsLabel",
         ${suggestionField("evidenceFingerprint")} AS "evidenceFingerprint", a.producer, a.judgment
       FROM "AssessmentState" s JOIN "Assessment" a ON a.id=s.id
       WHERE s.family=${assessmentFamily.enum.statement_transaction}
@@ -1747,7 +1761,10 @@ async function publishRuleBatch(
       string,
       { outcome: PublishOutcome; labelsReused: number }
     >();
-    const first: ChargeProposal[] = [];
+    const publications: Array<{
+      proposal: ChargeProposal;
+      history: typeof stored;
+    }> = [];
     for (const proposal of eligible) {
       const id = chargeId(proposal.charge);
       const history = prior.get(id) ?? [];
@@ -1765,12 +1782,47 @@ async function publishRuleBatch(
         continue;
       const unchanged = unchangedPublication(history, proposal, producer);
       if (unchanged) outcomes.set(id, unchanged);
-      else if (!history.length) first.push(proposal);
+      else if (!reusableRuleLabels(history, proposal))
+        publications.push({ proposal, history });
     }
-    if (!first.length) return outcomes;
+    if (!publications.length) return outcomes;
+    const retire = publications.flatMap(({ history }) =>
+      history.filter((row) => row.active).map((row) => row.id),
+    );
+    if (retire.length)
+      await transitionAssessmentStates(
+        tx,
+        inArray(assessmentState.id, retire),
+        (row) => ({
+          active: false,
+          ...(row.status === "pending" && { status: "superseded" }),
+        }),
+        { kind: "superseded_by_publication" },
+      );
     const published = await publishAssessments(
       tx,
-      first.map((proposal) => chargePublication(proposal, producer, 0)),
+      publications.map(({ proposal, history }) => {
+        const checkpoint = history
+          .flatMap((row) => {
+            const saved = statementLabelCheckpoint
+              .nullable()
+              .parse(row.checkpoint);
+            return saved ? [saved] : [];
+          })
+          .find(
+            (saved) =>
+              saved.revision === STATEMENT_LABEL_REVISION &&
+              canonicalJson(statementLabelSubject(saved.judgment)) ===
+                canonicalJson(statementLabelSubject(proposal.judgment)),
+          );
+        return chargePublication(
+          proposal,
+          producer,
+          history.length,
+          null,
+          checkpoint,
+        );
+      }),
     );
     // Reference writers use evidence-key locks. Their transaction may commit
     // after our admission read but before these new states become visible.
@@ -1797,8 +1849,11 @@ async function publishRuleBatch(
         );
       }),
     );
-    for (const { charge } of first)
-      outcomes.set(chargeId(charge), { outcome: "published", labelsReused: 0 });
+    for (const { proposal } of publications)
+      outcomes.set(chargeId(proposal.charge), {
+        outcome: "published",
+        labelsReused: 0,
+      });
     return outcomes;
   });
 }
@@ -1945,6 +2000,7 @@ async function admitRetriedCharge(
       {
         preparation,
         candidatePolicy: "suggestion",
+        includeVendorInference: false,
         accountHints: new Map(stored ? [[chargeId(charge), stored]] : []),
       },
     );

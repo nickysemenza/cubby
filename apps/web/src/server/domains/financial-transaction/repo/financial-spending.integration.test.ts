@@ -6,7 +6,7 @@ import { eq, sql } from "drizzle-orm";
 import { createEntity } from "tooling/factories/create";
 import { createRepoIdentity } from "tooling/factories/repo";
 import { buildKernelContext } from "tooling/scenarios/context";
-import { withTestDb } from "tooling/test-setup";
+import { countTestDbQueries, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -27,6 +27,9 @@ import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolv
 import {
   previewFinancialSpending,
   commitFinancialSpending,
+  prepareFinancialSpendingPage,
+  prepareFinancialSpendingCandidates,
+  financialSpendingCategoryHistory,
 } from "./financial-spending";
 import { updateFinancialTransaction } from "./financial-transaction";
 
@@ -77,6 +80,142 @@ describe("shared spending booking", () => {
     });
     return { owner, account, vendor, category, transaction, advice };
   }
+  it("keeps complete spending previews identical with page-loaded receipt graphs", async () => {
+    const { account, vendor, transaction, advice, category } = await fixture();
+    for (const [date, cost] of [
+      ["2026-05-04", 42.5],
+      ["2026-05-06", 19],
+    ] as const) {
+      const receipt = await createRepoIdentity(ctx, "purchase", {
+        vendorId: vendor.output.id,
+        date,
+        statedTotal: cost,
+      });
+      await createRepoIdentity(ctx, "expense", {
+        purchaseId: receipt.output.id,
+        name: "Synthetic receipt line",
+        cost,
+        date,
+        trade: "other",
+        spendingCategoryId: category.id,
+      });
+    }
+    const page = await prepareFinancialSpendingPage(ctx.db, {
+      accountIds: [
+        await resolveOrThrow(ctx.db, "financialAccount", account.output.id),
+      ],
+      transactionIds: [
+        await resolveOrThrow(
+          ctx.db,
+          "financialTransaction",
+          transaction.output.id,
+        ),
+      ],
+      sources: [
+        {
+          amount: 42.5,
+          transactionDate: "2026-05-04",
+          merchant: "Synthetic Orchard",
+          kind: "purchase",
+        },
+      ],
+    });
+    await prepareFinancialSpendingCandidates(ctx.db, page);
+    const blocked = await countTestDbQueries(() =>
+      previewFinancialSpending(ctx.db, {
+        transactionId: transaction.output.id,
+      }),
+    );
+    expect(blocked.result).toMatchObject({ status: "review_required" });
+    expect(blocked.result.candidates).toHaveLength(2);
+    expect(blocked.tables).not.toContain("ExpenseAttribution");
+    expect(blocked.tables).not.toContain("Expense");
+    const requests = [
+      { transactionId: transaction.output.id, advice },
+      {
+        source: financialSpendingSource.parse({
+          accountId: account.output.id,
+          kind: "refund",
+          status: "observed",
+          amount: -19,
+          transactionDate: "2026-05-06",
+          postedDate: null,
+          rawDescription: null,
+          merchant: "Synthetic Orchard",
+          sourceRefs: [
+            { source: "synthetic-bank", externalId: "synthetic-refund" },
+          ],
+        }),
+        advice,
+      },
+    ];
+    for (const request of requests)
+      expect(
+        await previewFinancialSpending(ctx.db, request, undefined, page),
+      ).toEqual(await previewFinancialSpending(ctx.db, request));
+  });
+  it("counts effective Vendor history without future or deleted spending", async () => {
+    const { vendor, category } = await fixture();
+    const receipt = await createRepoIdentity(ctx, "purchase", {
+      vendorId: vendor.output.id,
+      date: "2026-05-04",
+      spendingCategoryId: category.id,
+    });
+    for (const future of [false, false, true])
+      await createRepoIdentity(ctx, "expense", {
+        purchaseId: receipt.output.id,
+        name: "Synthetic inherited history",
+        cost: 10,
+        trade: "other",
+        future,
+      });
+    const deleted = await createRepoIdentity(ctx, "expense", {
+      purchaseId: receipt.output.id,
+      name: "Synthetic deleted history",
+      cost: 10,
+      trade: "other",
+    });
+    await getDb(ctx.db)
+      .update(expense)
+      .set({ deletedAt: new Date() })
+      .where(
+        eq(
+          expense.id,
+          await resolveOrThrow(ctx.db, "expense", deleted.output.id),
+        ),
+      );
+    const uncategorized = await createRepoIdentity(ctx, "purchase", {
+      vendorId: vendor.output.id,
+      date: "2026-05-04",
+    });
+    for (const lineKind of ["tax", "discount", "unclassified"] as const)
+      await createRepoIdentity(ctx, "expense", {
+        purchaseId: receipt.output.id,
+        name: "Synthetic nonprincipal history",
+        cost: lineKind === "discount" ? -1 : 0,
+        lineKind,
+        trade: "other",
+      });
+    await createRepoIdentity(ctx, "expense", {
+      purchaseId: uncategorized.output.id,
+      name: "Synthetic uncategorized history",
+      cost: 7,
+      trade: "other",
+    });
+    expect(
+      await financialSpendingCategoryHistory(
+        ctx.db,
+        await resolveOrThrow(ctx.db, "vendor", vendor.output.id),
+      ),
+    ).toEqual([
+      { category: null, name: null, lines: 4 },
+      {
+        category: await resolveOrThrow(ctx.db, "spendingCategory", category.id),
+        name: "Synthetic groceries",
+        lines: 2,
+      },
+    ]);
+  });
   // Held identity and category conflicts need an explicit reviewed resolution;
   // ordinary high-confidence advice must never silently override either.
   it("requires review to choose an ambiguous Vendor and override conflicting category history", async () => {

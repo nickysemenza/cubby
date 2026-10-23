@@ -27,6 +27,7 @@ import {
   type DecisionChoiceArgs,
 } from "~/server/ai/decision-model";
 import { withAiInputs } from "~/server/ai/evaluation-inputs";
+import { withFieldSuggestionBatch } from "~/server/ai/field-suggest/suggest-fields";
 import {
   STATEMENT_CHARGE_IDENTITY_FEATURE,
   STATEMENT_COUNTERPARTY_FEATURE,
@@ -34,6 +35,7 @@ import {
 } from "~/server/ai/policy/features";
 import { readAiRefreshActivation } from "~/server/ai/repo/ai-refresh";
 import type { Database } from "~/server/db";
+import type { FinancialSpendingPage } from "~/server/domains/financial-transaction/repo/financial-spending";
 import {
   adviseSpending,
   needsSpendingAdvice,
@@ -44,7 +46,10 @@ import {
   statementLabelSubject,
   statementCandidateSubject,
 } from "~/server/domains/transaction-import/repo/statement-label-input";
-import { prepareStatementSpending } from "~/server/domains/transaction-import/repo/statement-spending";
+import {
+  prepareStatementSpending,
+  prepareStatementSpendingFacts,
+} from "~/server/domains/transaction-import/repo/statement-spending";
 import {
   buildChargeProposals,
   chargeId,
@@ -291,7 +296,8 @@ function prepareLabelledJudgment(
   return {
     decisions: decisions.filter(() => reserved()),
     retainError,
-    async finish() {
+    judgment,
+    classify() {
       if (judgment.create)
         Object.assign(
           judgment.create,
@@ -302,14 +308,22 @@ function prepareLabelledJudgment(
             transfer: judgment.transfer,
           }),
         );
+    },
+    async finish(page?: FinancialSpendingPage) {
       if (checkpoint.spending && previous)
         judgment.spending = await prepareStatementSpending(
           db,
           judgment,
           previous.judgment.spending?.request.advice ?? null,
+          page,
         );
       if (!checkpoint.spending && !needsSpendingAdvice(judgment)) {
-        judgment.spending = await prepareStatementSpending(db, judgment, null);
+        judgment.spending = await prepareStatementSpending(
+          db,
+          judgment,
+          null,
+          page,
+        );
         checkpoint.spending = true;
       }
       if (
@@ -325,6 +339,7 @@ function prepareLabelledJudgment(
               runId: input.usage!.runId,
               port: input.port,
               spendingAdvice: input.spendingAdvice,
+              preparation: page,
             }),
           );
           for (const call of spending.inputs) recordModel(call.model);
@@ -333,6 +348,7 @@ function prepareLabelledJudgment(
             db,
             judgment,
             advice,
+            page,
           );
           checkpoint.spending = true;
         } catch (error) {
@@ -663,19 +679,42 @@ async function runStatementLabelBatch(
       if (answer.status === "fulfilled") answer.item.apply(answer.value);
       else answer.item.reject(answer.reason);
     }
+    const classified = prepared.map((result) => {
+      if (result.status !== "fulfilled") return result;
+      try {
+        result.value.classify();
+        return result;
+      } catch (reason) {
+        return { status: "rejected" as const, reason };
+      }
+    });
+    let spendingPage: FinancialSpendingPage | undefined;
+    try {
+      spendingPage = await prepareStatementSpendingFacts(
+        db,
+        classified.flatMap((result) =>
+          result.status === "fulfilled" ? [result.value.judgment] : [],
+        ),
+      );
+    } catch (error) {
+      if (isWorkflowInterrupted(error)) throw error;
+      // Shared discovery is advisory; isolate failures through the existing per-charge path.
+    }
     const finish = () =>
-      Promise.all(
-        prepared.map(async (result) => {
-          if (result.status !== "fulfilled") return result;
-          try {
-            return {
-              status: "fulfilled" as const,
-              value: await result.value.finish(),
-            };
-          } catch (reason) {
-            return { status: "rejected" as const, reason };
-          }
-        }),
+      withFieldSuggestionBatch(() =>
+        Promise.all(
+          classified.map(async (result) => {
+            if (result.status !== "fulfilled") return result;
+            try {
+              return {
+                status: "fulfilled" as const,
+                value: await result.value.finish(spendingPage),
+              };
+            } catch (reason) {
+              return { status: "rejected" as const, reason };
+            }
+          }),
+        ),
       );
     const computed = await (input.cooperative
       ? withCooperativeAiWork(finish)

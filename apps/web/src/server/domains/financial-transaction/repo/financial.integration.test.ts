@@ -1,4 +1,5 @@
 import { type FinancialAccountSourceAlias } from "@cubby/schemas/financial-account";
+import { financialTransactionImportPreviewInput } from "@cubby/schemas/financial-transaction";
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import { recordSourceTransactionRecordsInput } from "@cubby/schemas/source-transaction-record";
 import { testShortcode } from "@cubby/schemas/testing";
@@ -38,7 +39,10 @@ import { findFinancialTransactionAllocationDefects } from "~/server/generic/prob
 import { resolveLiveShortcode } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { deleteThroughKernel } from "~/server/testing/entity-kernel";
 
-import { previewFinancialTransactionImport } from "./financial-statement-preview";
+import {
+  prepareFinancialStatementPreview,
+  previewFinancialTransactionImport,
+} from "./financial-statement-preview";
 import {
   createFinancialTransaction,
   financialTransactionSourceOptions,
@@ -647,6 +651,33 @@ describe("financial repositories — critical invariants", () => {
     expect(positioned.rows[0]!.proposed.sourceRef.externalId).not.toBe(
       positioned.rows[1]!.proposed.sourceRef.externalId,
     );
+    const preparation = await prepareFinancialStatementPreview(ctx.db);
+    await previewFinancialTransactionImport(
+      ctx.db,
+      { rows: [fingerprinted] },
+      { preparation },
+    );
+    expect(
+      await previewFinancialTransactionImport(
+        ctx.db,
+        {
+          rows: [fingerprinted, { ...fingerprinted, key: "row-2" }],
+        },
+        { preparation },
+      ),
+    ).toEqual(fingerprintedDuplicates);
+    expect(
+      await previewFinancialTransactionImport(
+        ctx.db,
+        {
+          rows: [
+            { ...fingerprinted, rowPosition: 0 },
+            { ...fingerprinted, key: "row-2", rowPosition: 1 },
+          ],
+        },
+        { preparation },
+      ),
+    ).toEqual(positioned);
 
     const unresolved = await previewFinancialTransactionImport(ctx.db, {
       rows: [
@@ -718,6 +749,64 @@ describe("financial repositories — critical invariants", () => {
     expect(bothRecorded.rows[0]?.existingTransactionIds).toEqual([
       createdEvidence.output.id,
     ]);
+  });
+
+  it("shares retained file observations without mixing fingerprint scopes", async () => {
+    const fingerprints = ["fixture-cache-first", "fixture-cache-second"];
+    for (const fingerprint of fingerprints)
+      await recordSourceTransactionRecords(
+        ctx.db,
+        recordSourceTransactionRecordsInput.parse({
+          import: {
+            source: "monarch",
+            label: `${fingerprint}.csv`,
+            fingerprint,
+            dateKind: "transaction",
+            rowCountDeclared: 1,
+          },
+          rows: [
+            {
+              accountDescriptor: "Fixture Cached Visa",
+              statementDate: "2026-05-04",
+              providerAmount: -10,
+              merchant: "Fixture Shop",
+              rawDescription: "FIXTURE SHOP",
+            },
+          ],
+          dryRun: false,
+        }),
+        ctx.actor,
+      );
+    const input = financialTransactionImportPreviewInput.parse({
+      rows: fingerprints.map((fingerprint, index) => ({
+        key: `cached-${index}`,
+        source: "monarch",
+        account: "Fixture Cached Visa",
+        date: "2026-05-04",
+        amount: -10,
+        merchant: "Fixture Shop",
+        originalStatement: "FIXTURE SHOP",
+        importFingerprint: fingerprint,
+        rowPosition: 1,
+      })),
+    });
+    const preparation = await prepareFinancialStatementPreview(ctx.db);
+    await previewFinancialTransactionImport(
+      ctx.db,
+      { rows: input.rows.slice(0, 1) },
+      { preparation },
+    );
+    expect(preparation.sameFiles.size).toBe(1);
+    expect(
+      await previewFinancialTransactionImport(ctx.db, input, { preparation }),
+    ).toEqual(await previewFinancialTransactionImport(ctx.db, input));
+    expect(preparation.sameFiles.size).toBe(2);
+    for (const fingerprint of fingerprints)
+      expect((await preparation.sameFiles.get(fingerprint))?.size).toBe(1);
+    const [first, second] = await Promise.all(
+      fingerprints.map((fingerprint) => preparation.sameFiles.get(fingerprint)),
+    );
+    expect([...(first?.keys() ?? [])]).not.toEqual([...(second?.keys() ?? [])]);
   });
 
   it("batches distinct purchase previews and filters linked finance data", async () => {
