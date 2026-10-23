@@ -123,6 +123,9 @@ public actor CompanionImageWorker {
     private var running: [String: CompanionImageWorkerActivity] = [:]
     private var isDraining = false
     private var drainRequested = false
+    private var drainTask: Task<Void, Never>?
+    private var drainFailures = 0
+    private var drainRetry: Task<Void, Never>?
 
     public init(
         baseURL: URL,
@@ -201,6 +204,8 @@ public actor CompanionImageWorker {
         connectionGeneration += 1
         connectionTask?.cancel()
         connectionTask = nil
+        drainRetry?.cancel()
+        drainRetry = nil
         cancelCommands()
         deferredCommands.removeAll()
         socket?.cancel(with: .goingAway, reason: nil)
@@ -213,10 +218,13 @@ public actor CompanionImageWorker {
     public func stopAndDiscardPendingResults() async throws {
         let background = backgroundTask
         let connection = connectionTask
+        let drain = drainTask
         let commands = Array(commandTasks.values)
         stop()
         _ = await background?.value
         await connection?.value
+        // A pull in flight at stop() releases its claim rather than starting it (see drainOnce).
+        await drain?.value
         for command in commands { await command.value }
         try await outbox.removeAll()
     }
@@ -362,30 +370,45 @@ public actor CompanionImageWorker {
         }
     }
 
-    /// Coalesces rings: one drain runs at a time, and a ring during it runs one more pass.
+    /// Coalesces rings: one drain runs at a time, and a ring during it runs one more pass. Only a
+    /// live subscription drains; backgrounded iOS work belongs to the bounded background runner.
     func requestDrain() {
-        guard shouldRun else { return }
+        guard shouldRun, platformAllowsConnection, connectionTask != nil else { return }
         drainRequested = true
         guard !isDraining else { return }
         isDraining = true
-        Task { await self.drainWhileRequested() }
+        drainTask = Task { await self.drainWhileRequested() }
     }
 
     private func drainWhileRequested() async {
         defer { isDraining = false }
-        while drainRequested, shouldRun {
+        while drainRequested, shouldRun, platformAllowsConnection {
             drainRequested = false
             do {
-                try await drainOnce()
+                try await drainOnce(generation: connectionGeneration)
+                drainFailures = 0
             } catch {
                 failureObserver?(error)
+                scheduleDrainRetry()
             }
+        }
+    }
+
+    /// A failed drain may leave a delivered-but-unacknowledged result, or claimable work, that no
+    /// later ring will announce; retry with the socket's backoff while the subscription lives.
+    private func scheduleDrainRetry() {
+        drainFailures += 1
+        drainRetry?.cancel()
+        let delay = AuthenticatedSocketSupport.reconnectDelay(attempt: drainFailures)
+        drainRetry = Task { [weak self] in
+            do { try await Task.sleep(for: delay) } catch { return }
+            await self?.requestDrain()
         }
     }
 
     /// Delivers recorded results, then pulls until no work is claimable or every slot is busy. A
     /// finished command requests another drain to refill its slot.
-    private func drainOnce() async throws {
+    private func drainOnce(generation: Int) async throws {
         for entry in try await outbox.pending() {
             try await transport.complete(deviceID: deviceID.uuidString.lowercased(), result: entry.result)
             try await outbox.acknowledge(entry.key)
@@ -395,11 +418,22 @@ public actor CompanionImageWorker {
         #else
             let advertisedForeground = foreground
         #endif
-        while shouldRun, acceptance == .open,
+        func isCurrent() -> Bool {
+            shouldRun && platformAllowsConnection && generation == connectionGeneration
+        }
+        while isCurrent(), acceptance == .open,
             commandTasks.count < Self.maximumConcurrentCommands
         {
             let pulled = try await transport.pull(
-                hello: hello(foreground: advertisedForeground), leaseSeconds: 90)
+                hello: hello(foreground: advertisedForeground),
+                leaseSeconds: CompanionImageProcessingProtocol.residentLeaseSeconds)
+            // The subscription ended during the pull (background, participation off, stop): hand
+            // the claim back instead of running it outside the window that asked for it.
+            if let command = pulled.command, !isCurrent() {
+                try await transport.release(
+                    deviceID: deviceID.uuidString.lowercased(), command: command)
+                return
+            }
             if pulled.remotePaused != remotePaused {
                 remotePaused = pulled.remotePaused
                 reportActivity()

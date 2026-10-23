@@ -5,6 +5,8 @@ public enum CompanionImageProcessingProtocol {
     /// The doorbell topic that rings when image work may be claimable.
     static let doorbellPath = "/api/doorbell"
     static let doorbellTopic = URLQueryItem(name: "topic", value: "imageProcessing.work")
+    /// A resident worker's claim matches the server's companion window (`COMPANION_LEASE_MS`).
+    static let residentLeaseSeconds = 300
 
     public static func attemptKey(jobID: String, attemptID: String) -> String {
         "\(jobID):\(attemptID)"

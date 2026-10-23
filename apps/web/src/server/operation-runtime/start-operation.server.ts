@@ -15,6 +15,7 @@ import {
 } from "~/lib/start-operation-observability";
 import { noteRequestOperation } from "~/server/db/db-observability";
 import { recordDatabaseWrite } from "~/server/db/freshness/client";
+import { runAfterCommit } from "~/server/db/helpers";
 import {
   type ReadPolicy,
   mutationChangesHouseholdData,
@@ -596,10 +597,15 @@ export function createStartOperationRunner(runtime: StartOperationRuntime) {
         const data = outputSchema.parse(rawOutput);
         throwIfStartOperationAborted(options.request.signal);
         if (state.mutationStarted) {
-          runtime.markCalendarDirty(
-            `${channel.source}.${definition.id}`,
-            options.request.headers,
-          );
+          // Inside a delegated transaction the mark waits for the outer
+          // commit; marked earlier, the calendar alarm could publish and clear
+          // a snapshot that lacks this write.
+          await runAfterCommit(context.db, async () => {
+            runtime.markCalendarDirty(
+              `${channel.source}.${definition.id}`,
+              options.request.headers,
+            );
+          });
         }
         const result: StartOperationResult<z.output<OutputSchema>> = {
           ok: true,
