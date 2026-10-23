@@ -602,6 +602,18 @@ of a shard. Record video for a
 run with `CUBBY_E2E_VIDEO=1`. RTable's placeholder transition can eat clicks;
 cell-edit tests retry opening and filling as one action.
 
+Temporary CI startup profiling accompanies existing navigation annotations during
+#3025's shared-cost investigation; `CUBBY_E2E_STARTUP_PROFILE=1` enables it locally.
+It records the shell marker's mutation time, the helper's observed-ready time,
+same-origin static script counts/bytes/latest responses and Chromium thread CPU
+counter deltas. It captures no application URLs, request bodies or record data.
+Task CPU includes script/layout/style work: do not add those categories or
+concurrent resource durations, or interpret across-case sums as lane wall time.
+Missing/reset CPU counters are null; diagnostic errors are annotated rather than
+replacing the correctness result. Keep the actual hydration wait unchanged.
+Use the measurements to choose one shared fix, then remove this temporary probe
+once attribution and that fix's hosted comparison are established.
+
 Responsive table toolbars mount both desktop and phone branches during SSR.
 After navigation, use a retrying `toHaveCount(1)` assertion on the role locator
 and `toBeEnabled()` before a strict search action. Playwright resolves strict

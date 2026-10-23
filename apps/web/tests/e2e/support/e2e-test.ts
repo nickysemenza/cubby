@@ -9,6 +9,10 @@ import {
 } from "#web/tooling/e2e-workerd-logs.ts";
 import type { WorkerdProfile } from "#web/tooling/workerd-harness.ts";
 import {
+  installStartupProfiling,
+  SHELL_HYDRATED_MARK,
+} from "./navigation-timing";
+import {
   createE2EWorkerRuntime,
   type E2EWorkerRuntime,
 } from "./e2e-worker-runtime";
@@ -70,6 +74,12 @@ const test = base.extend<TestFixtures, WorkerFixtures>({
         value: true,
       });
     });
+    if (
+      Boolean(process.env.CI) ||
+      process.env.CUBBY_E2E_STARTUP_PROFILE === "1"
+    ) {
+      await context.addInitScript(installStartupProfiling, SHELL_HYDRATED_MARK);
+    }
     // `page.request` is this context's request client.
     retryStaleKeepAlive(context.request);
     await provide(context);
