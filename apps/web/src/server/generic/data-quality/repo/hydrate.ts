@@ -34,6 +34,7 @@ import { unwrapDb, uuidArrayParam } from "~/server/db/helpers";
 import { exceptionReasonsFor } from "~/server/generic/data-quality/repo/exception-reasons";
 import { liveQualityRow } from "~/server/generic/data-quality/repo/registry";
 
+import { storedEntryFor } from "./entries";
 import {
   checkMissingCondition,
   checksOf,
@@ -41,6 +42,7 @@ import {
   expectedCondition,
   fingerprintSql,
 } from "./sql";
+import { evaluateLiveQuality, loadPublishedQuality } from "./stored";
 
 type CheckState = QualityTerm["state"];
 
@@ -219,7 +221,7 @@ export const loadQualityBreakdown = async (
   const target = selected[0];
   if (!target)
     throw new Error(`No live ${entity} record for quality explanation`);
-  const [row] = await loadEvaluations(db, entity, [target.id]);
+  const [row] = await loadEvaluations(db, entity, [target.id], "live");
   if (!row) throw new Error("Quality evaluation was not loaded");
   const evaluation = evaluateRow(entity, row);
   const expected = checksOf(entity).filter(
@@ -229,7 +231,13 @@ export const loadQualityBreakdown = async (
     expected,
     evaluation.gaps.map((gap) => dataCheck.parse(gap.check)),
     evaluation.exceptions
-      .filter((exception) => exception.state === "active")
+      .filter(
+        (exception) =>
+          exception.state === "active" &&
+          row[
+            gapKey(checksOf(entity).indexOf(dataCheck.parse(exception.check)))
+          ] === true,
+      )
       .map((exception) => dataCheck.parse(exception.check)),
     evaluation.exceptions,
   );
@@ -240,8 +248,9 @@ const hydrationRow = z
     id: z.string(),
     shortcode: z.string(),
     exceptions: z.array(dataException),
+    storedScore: z.number().nullable().optional(),
   })
-  .catchall(z.union([z.boolean(), z.string(), z.null()]));
+  .catchall(z.union([z.boolean(), z.string(), z.number(), z.null()]));
 const fingerprintColumn = z
   .string()
   .nullish()
@@ -267,7 +276,41 @@ const loadEvaluations = async (
   db: Database | DrizzleTransaction,
   entity: ScoredEntity,
   ids: readonly string[],
+  source: "stored" | "live" = "stored",
 ) => {
+  const stored = storedEntryFor(entity);
+  if (stored) {
+    const rows =
+      source === "live"
+        ? await evaluateLiveQuality(db, stored, ids)
+        : await loadPublishedQuality(db, entity, ids);
+    return rows.map((row) =>
+      hydrationRow.parse({
+        id: row.id,
+        shortcode: row.shortcode,
+        exceptions: row.exceptions,
+        ...("score" in row ? { storedScore: row.score } : {}),
+        ...Object.fromEntries(
+          checksOf(entity).flatMap((check, index) => {
+            const state = row.checks[check] ?? "not_applicable";
+            // The legacy evaluator's exception comparison receives its own retained
+            // spelling only for an already-waived gap; no fingerprint is computed.
+            return [
+              [expectedKey(index), state !== "not_applicable"],
+              [gapKey(index), state === "gap" || state === "waived"],
+              [
+                fingerprintKey(index),
+                state === "waived"
+                  ? (row.exceptions.find((e) => e.check === check)
+                      ?.fingerprint ?? null)
+                  : null,
+              ],
+            ];
+          }),
+        ),
+      }),
+    );
+  }
   const entry = entryFor(entity);
   const t = entry.table;
   const checks = checksOf(entity);
@@ -392,13 +435,18 @@ const evaluateRow = (
         targetId,
         state:
           dataCheckExemptible[exception.check] &&
-          rawByCheck.get(exception.check)?.fingerprint === fingerprint
+          (storedEntryFor(entity) ||
+            rawByCheck.get(exception.check)?.fingerprint === fingerprint)
             ? "active"
             : "stale",
       }));
   const activeChecks = new Set(
     exceptions
-      .filter((exception) => exception.state === "active")
+      .filter(
+        (exception) =>
+          exception.state === "active" &&
+          rawByCheck.has(dataCheck.parse(exception.check)),
+      )
       .map((exception) => exception.check),
   );
   const gaps = rawGaps
@@ -416,8 +464,10 @@ const evaluateRow = (
     ).status,
     gaps: gaps.filter((gap) => gap.facet === name),
   }));
-  const { score, status } = scoreQualityTerms(terms);
-  return { status, score, facets, gaps, exceptions };
+  const calculated = scoreQualityTerms(terms);
+  const score =
+    row.storedScore === undefined ? calculated.score : row.storedScore;
+  return { status: calculated.status, score, facets, gaps, exceptions };
 };
 
 /** `(ownerId, relatedId)` pairs for every declared roll-up relation. */
@@ -460,12 +510,13 @@ export const loadDataQualities = async <E extends ScoredEntity>(
   db: Database | DrizzleTransaction,
   entity: E,
   ids: readonly EntityId<E>[],
+  source: "stored" | "live" = "stored",
 ): Promise<Map<EntityId<E>, DataQuality>> => {
   const uniqueIds = uniq(ids);
   const result = new Map<EntityId<E>, DataQuality>();
   if (uniqueIds.length === 0) return result;
   const [rows, relatedIds] = await Promise.all([
-    loadEvaluations(db, entity, uniqueIds),
+    loadEvaluations(db, entity, uniqueIds, source),
     loadRelatedIds(db, entity, uniqueIds),
   ]);
   // Roll-ups are one hop (the generator rejects chains): a related row

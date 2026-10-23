@@ -56,7 +56,6 @@
   "apps/web/src/server/db/computed/location-ai-description.ts": 1,
   "apps/web/src/server/generic/data-quality/repo/checks/product-category.ts": 1,
   "apps/web/src/server/generic/data-quality/repo/checks/planting.ts": 5,
-  "apps/web/src/server/generic/data-quality/repo/sql.ts": 5,
   "apps/web/src/server/domains/product-category/repo/product-category.ts": 2,
   "apps/web/src/server/generic/entity-links/repo/connected-records.ts": 1,
   "apps/web/src/server/generic/data-quality/repo/checks/product.ts": 1,

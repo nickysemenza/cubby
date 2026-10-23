@@ -155,6 +155,13 @@
       "when": 1792794214486,
       "tag": "0021_shipment_purpose_direction",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1792795000000,
+      "tag": "0022_entity_quality",
+      "breakpoints": true
     }
   ]
 }

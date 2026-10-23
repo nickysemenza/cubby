@@ -15,10 +15,12 @@ import {
   relatedDataQualityEntities,
   type ScoredEntity,
 } from "@cubby/schemas/data-quality";
+import { entityQualityCheckState } from "@cubby/schemas/data-quality-shape";
 import { getTableName, type SQL, sql } from "drizzle-orm";
 import { alias, type PgTable } from "drizzle-orm/pg-core";
 import { z } from "zod";
 
+import { sqlEnumConstant } from "~/server/db/sql-enum";
 import { entityDisplayImagePresenceSql } from "~/server/entity-kernel/repo/entity-display-image";
 import {
   liveQualityRow,
@@ -28,7 +30,12 @@ import {
   type ScoredTable,
 } from "~/server/generic/data-quality/repo/registry";
 
-import { type DataQualityEntries, dataQualityEntries } from "./entries";
+import { dataQualityEntries, qualityEntryFor, storedEntryFor } from "./entries";
+import {
+  storedQualityRelation,
+  storedCheckStateSql,
+  storedScoreSql,
+} from "./stored-sql";
 
 /**
  * Every builder here returns ONE parenthesized group. Callers embed these
@@ -38,15 +45,37 @@ import { type DataQualityEntries, dataQualityEntries } from "./entries";
  */
 const group = (inner: SQL): SQL => sql`(${inner})`;
 
-const entries: DataQualityEntries = dataQualityEntries;
-
 /** One registry entry, read through the erased-table contract. */
 export const entryFor = (
   entity: ScoredEntity,
 ): Omit<EntityChecks<ScoredEntity, ScoredTable>, "checks"> & {
   checks: Readonly<Partial<Record<DataCheck, CheckBinding<ScoredTable>>>>;
 } => {
-  const entry = entries[entity];
+  const registered = qualityEntryFor(entity);
+  // The legacy SQL surface stays isolated from versioned TypeScript checks.
+  const entry: Omit<EntityChecks<ScoredEntity, ScoredTable>, "checks"> & {
+    checks: Readonly<Partial<Record<DataCheck, CheckBinding<ScoredTable>>>>;
+  } =
+    registered.storage === "stored"
+      ? {
+          entity,
+          table: registered.table,
+          related: registered.related,
+          filterRead: () => storedQualityRelation(entity),
+          checks: Object.fromEntries(
+            dataChecksByEntity[entity].options.map((check) => [
+              check,
+              {
+                expected: (t: ScoredTable, context?: QualityReadContext) =>
+                  sql`coalesce(${storedCheckStateSql(entity, check, t, context)}, ${sqlEnumConstant(entityQualityCheckState, "not_applicable")}) <> ${sqlEnumConstant(entityQualityCheckState, "not_applicable")}`,
+                missing: (t: ScoredTable, context?: QualityReadContext) =>
+                  sql`coalesce(${storedCheckStateSql(entity, check, t, context)} IN (${sqlEnumConstant(entityQualityCheckState, "gap")}, ${sqlEnumConstant(entityQualityCheckState, "waived")}), false)`,
+              },
+            ]),
+          ),
+        }
+      : registered;
+  if (registered.storage === "stored") return entry;
   const imageCheck = displayImageQualityCheck(entity).id;
   if (!dataChecksByEntity[entity].options.some((check) => check === imageCheck))
     return entry;
@@ -162,6 +191,7 @@ export const fingerprintSql = (
   t: ScoredTable = entryFor(entity).table,
   context?: QualityReadContext,
 ): SQL => {
+  if (storedEntryFor(entity)) return sql`''::text`;
   const binding = bindingFor(entity, check);
   if (!dataCheckExemptible[check]) return sql`NULL::text`;
   if (!binding.fingerprint)
@@ -189,6 +219,8 @@ export const activeExceptionSql = (
   t: ScoredTable,
 ): SQL | null => {
   if (!hasExceptions(entity) || !dataCheckExemptible[check]) return null;
+  if (storedEntryFor(entity))
+    return sql`(${storedCheckStateSql(entity, check, t)} = ${sqlEnumConstant(entityQualityCheckState, "waived")})`;
   const table = dataQualityEntries[entity].table;
   const excepted = alias(table, EXCEPTED_ALIAS);
   // A raw `${excepted}` renders only the alias; the FROM needs both names.
@@ -241,6 +273,10 @@ export const gapCondition = (
   t: ScoredTable = entryFor(entity).table,
   context?: QualityReadContext,
 ): SQL => {
+  if (storedEntryFor(entity))
+    return group(
+      sql`coalesce(${storedCheckStateSql(entity, check, t, context)} = ${sqlEnumConstant(entityQualityCheckState, "gap")}, false)`,
+    );
   const active = activeExceptionSql(entity, check, t);
   const raw = rawGapCondition(entity, check, t, context);
   return active === null ? raw : group(sql`${raw} AND NOT ${active}`);
@@ -308,11 +344,11 @@ export const statusFromStates = (terms: readonly StateTerm[]): SQL => {
       .map((term) => sql`${term.state} <> ${code("not_applicable")}`),
   );
   return group(sql`CASE
-  WHEN ${any((term) => term.defect, "gap")} THEN 'defect'
-  WHEN ${any(() => true, "gap")} THEN 'needs_data'
-  WHEN NOT ${weighted} THEN 'not_assessed'
-  WHEN ${any(() => true, "excepted")} THEN 'complete_with_exceptions'
-  ELSE 'complete' END`);
+  WHEN ${any((term) => term.defect, "gap")} THEN ${sqlEnumConstant(dataQualityStatus, "defect")}
+  WHEN ${any(() => true, "gap")} THEN ${sqlEnumConstant(dataQualityStatus, "needs_data")}
+  WHEN NOT ${weighted} THEN ${sqlEnumConstant(dataQualityStatus, "not_assessed")}
+  WHEN ${any(() => true, "excepted")} THEN ${sqlEnumConstant(dataQualityStatus, "complete_with_exceptions")}
+  ELSE ${sqlEnumConstant(dataQualityStatus, "complete")} END`);
 };
 
 /**
@@ -362,14 +398,30 @@ export const scoreSql = (
   entity: ScoredEntity,
   t: ScoredTable = entryFor(entity).table,
   context?: QualityReadContext,
-): SQL => fromCheckStates(entity, t, scoreFromStates, context);
+): SQL =>
+  storedEntryFor(entity)
+    ? storedScoreSql(entity, t, context)
+    : fromCheckStates(entity, t, scoreFromStates, context);
 
 /** Authoritative pill tone; a defect cannot be inferred from the numeric score. */
 export const statusSql = (
   entity: ScoredEntity,
   t: ScoredTable = entryFor(entity).table,
   context?: QualityReadContext,
-): SQL => fromCheckStates(entity, t, statusFromStates, context);
+): SQL => {
+  if (!storedEntryFor(entity))
+    return fromCheckStates(entity, t, statusFromStates, context);
+  return statusFromStates(
+    checksOf(entity).map((check) => ({
+      weight: dataCheckWeight[check],
+      scoreCap: dataCheckScoreCap[check],
+      defect: isDefectDataCheck(check),
+      state: sql`CASE ${storedCheckStateSql(entity, check, t, context)}
+      WHEN ${sqlEnumConstant(entityQualityCheckState, "pass")} THEN ${code("satisfied")} WHEN ${sqlEnumConstant(entityQualityCheckState, "gap")} THEN ${code("gap")}
+      WHEN ${sqlEnumConstant(entityQualityCheckState, "waived")} THEN ${code("excepted")} ELSE ${code("not_applicable")} END`,
+    })),
+  );
+};
 
 /** The `dataStatus` filter: the same status expression the row displays. */
 export const statusCondition = (

@@ -33,10 +33,13 @@ import { financialTransactionChecks } from "./checks/financial-transaction";
 import { productChecks } from "./checks/product";
 import { purchaseChecks } from "./checks/purchase";
 import { taskChecks } from "./checks/task";
+import type { StoredEntityChecks } from "./stored-registry";
 
 /** The registry's owner contract: one entry per scored entity. */
 export type DataQualityEntries = {
-  readonly [E in ScoredEntity]: EntityChecks<E, ScoredTable>;
+  readonly [E in ScoredEntity]:
+    | EntityChecks<E, ScoredTable>
+    | StoredEntityChecks<E, ScoredTable>;
 };
 
 /**
@@ -78,3 +81,17 @@ export const dataQualityEntries = {
   imageJob: imageJobChecks,
   image: imageChecks,
 } satisfies DataQualityEntries;
+
+export function qualityEntryFor(
+  entity: ScoredEntity,
+): DataQualityEntries[ScoredEntity] {
+  return dataQualityEntries[entity];
+}
+
+/** New ports opt in here by returning defineStoredEntityChecks from their registry module. */
+export const storedEntryFor = (
+  entity: ScoredEntity,
+): StoredEntityChecks<ScoredEntity, ScoredTable> | undefined => {
+  const entry = qualityEntryFor(entity);
+  return entry.storage === "stored" ? entry : undefined;
+};

@@ -2270,7 +2270,7 @@ transaction as the save. A best-effort queue wake is sent after commit; a lost
 wake leaves the intent available to app-open and cron. Those signals wake the shared
 Job drain. Reads serve persisted projections and never initiate repairs.
 
-The five `refresh.family` Jobs cover search, recipes, conversions, embeddings
+The six `refresh.family` Jobs cover quality, search, recipes, conversions, embeddings
 and direct orphan cleanup. Each family scans current sources with a resumable
 cursor. Search, conversion and embedding-admission pages contain at most 25
 sources; recipe preparation processes one recipe and its authoritative closure.
@@ -2499,6 +2499,33 @@ Moving existing storage into declarations must preserve the Drizzle catalog
 and emit no migration.
 
 ## Data quality
+
+Stored quality is being ported one entity at a time. `defineStoredEntityChecks`
+(`generic/data-quality/repo/stored-registry.ts`) is the registry switch: a
+versioned TypeScript evaluator replaces that kind's SQL bindings. Its single
+batch loader produces the records consumed by pure shared check builders
+(`required`, `observed`, `hasRelated`, `hasImage`, `when`). Declarations in
+`packages/schemas` continue to own check identity, weight, caps and placement.
+The shared `data-quality-score.ts` formula owns stored scores too.
+
+`EntityQuality` stores a nullable score, rules version and computation time;
+`EntityQualityCheck` stores pass, gap, waived or not_applicable for each check.
+Both have kind-checked composite FKs to `Entity`; they are derived identity
+metadata, not graph relationships. Entity itself has no quality columns.
+Lists, filters, score sorts and related rollups consume published outcomes for
+ported kinds. A missing publication is unassessed. Lazy explanations and detail
+reads evaluate the same TypeScript functions live without publishing repairs.
+Unported kinds retain their existing SQL evaluator until their port removes it.
+
+The `quality` refresh family is enrolled by the existing `recordChange` owner.
+Its identity pages contain at most 25 records and share the routine Job's
+cutoff, token and generation validation. Every pass evaluates current inputs,
+backfills missing rows and replaces outcomes when they or the entity's
+`rulesVersion` change. Publication rechecks the prepared verdicts in its
+transaction. Tombstones are scanned for cleanup; authoritative removal also
+retires both tables in its transaction under the quality Job lock. Reads never
+repair stored quality. Stored-mode waivers ignore legacy fingerprints: a
+retained member decision changes a gap to waived even after inputs change.
 
 Compact entity facts, including board cards, use the shared quality value and lazy field explanation; they never summarize the quality object as a field count.
 

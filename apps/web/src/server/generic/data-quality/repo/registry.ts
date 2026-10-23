@@ -63,6 +63,7 @@ export interface CheckBinding<T extends ScoredTable> {
 }
 
 export interface EntityChecks<E extends ScoredEntity, T extends ScoredTable> {
+  storage?: "sql";
   entity: E;
   table: T;
   /** One row per entityId; all checks share it for the selected ID batch. */

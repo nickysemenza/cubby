@@ -391,6 +391,7 @@ export function listReadPlan<Row>(
       rows: readonly Row[],
       projection: ListProjection,
       context = ListContext.empty,
+      qualitySource: "stored" | "live" = "stored",
     ): Promise<ListReadRow[]> {
       validate(projection);
       if (!rows.length) return [];
@@ -459,6 +460,7 @@ export function listReadPlan<Row>(
               db,
               entity,
               sources.map(({ identity }) => parseEntityId(entity, identity.id)),
+              qualitySource,
             )
           : undefined,
         options.media && wantsListGroup(projection, "media")
