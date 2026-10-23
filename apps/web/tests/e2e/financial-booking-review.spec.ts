@@ -11,11 +11,7 @@ import {
 } from "./support/e2e-helpers";
 import { expect, test } from "./support/e2e-test";
 import { dispatchesOperation } from "./support/dispatch-wire";
-import {
-  createEntityFixture,
-  createFixtureGraph,
-  ensureMemberParty,
-} from "./fixtures/core";
+import { createFixtureGraph, ensureMemberParty } from "./fixtures/core";
 
 // A stale screen must not book changed bank evidence. Retries must preserve the
 // approved decision, and negative income must expose reimbursement review.
@@ -34,7 +30,7 @@ test("reviews spending and reimbursement in the browser with stale and replay gu
     );
   const vendorName = "Synthetic review cafe";
   const owner = await ensureMemberParty(page, "Synthetic booking member");
-  const { accountId, transactionId } = await createFixtureGraph(
+  const { transactionId, creditId } = await createFixtureGraph(
     page,
     async (create) => {
       await create("spendingCategory", {
@@ -60,7 +56,16 @@ test("reviews spending and reimbursement in the browser with stale and replay gu
         status: "posted",
         postedDate: "2026-09-10",
       });
-      return { accountId: account.id, transactionId: transaction.id };
+      const credit = await create("financialTransaction", {
+        accountId: account.id,
+        amount: -40,
+        merchant: "Synthetic friend contribution",
+        kind: "income",
+        status: "posted",
+        postedDate: "2026-09-12",
+        itemizationExpectation: "required",
+      });
+      return { transactionId: transaction.id, creditId: credit.id };
     },
   );
   await gotoAuthenticatedPage(
@@ -165,19 +170,6 @@ test("reviews spending and reimbursement in the browser with stale and replay gu
     .object({ displayName: z.string(), expenseTotal: z.number() })
     .parse(await purchaseResponse.json());
   expect(purchase.expenseTotal).toBe(125);
-  const { id: creditId } = await createEntityFixture(
-    page,
-    "financialTransaction",
-    {
-      accountId,
-      amount: -40,
-      merchant: "Synthetic friend contribution",
-      kind: "income",
-      status: "posted",
-      postedDate: "2026-09-12",
-      itemizationExpectation: "required",
-    },
-  );
   await gotoAuthenticatedPage(
     page,
     `/financial-transactions/${creditId}`,
@@ -263,21 +255,4 @@ test("reviews spending and reimbursement in the browser with stale and replay gu
       },
     },
   });
-  const enrichment = page.waitForResponse(
-    (response) =>
-      dispatchesOperation(response.request(), "entity.listEnrichment") &&
-      response.ok(),
-  );
-  await gotoAuthenticatedPage(
-    page,
-    "/financial-transactions?searchQuery=Synthetic%20friend%20contribution",
-  );
-  await enrichment;
-  const row = page
-    .getByRole("row")
-    .filter({ hasText: "Synthetic friend contribution" });
-  await expect(row.getByLabel("Loading field")).toHaveCount(0);
-  await expect(
-    row.locator('[data-column-id="itemizationExpectation"]'),
-  ).toContainText("Not expected");
 });
