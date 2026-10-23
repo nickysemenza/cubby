@@ -29,29 +29,27 @@ it("renders the journey diagrams without clipping node labels", async () => {
   expect(diagrams).toHaveLength(3);
   expect(diagrams.every((diagram) => diagram.querySelector("svg"))).toBe(true);
   expect(screen.queryByRole("alert")).toBeNull();
+  for (const diagram of diagrams) {
+    expect(diagram.querySelectorAll("svg text").length).toBeGreaterThan(0);
+  }
 
   for (const width of [1440, 402]) {
     await page.viewport(width, 900);
     const clippedLabels = diagrams.flatMap((diagram) =>
-      Array.from(diagram.querySelectorAll("foreignObject")).flatMap((label) => {
-        const paragraph = label.querySelector("p");
-        if (!paragraph) return [];
-        const box = label.getBoundingClientRect();
-        const text = paragraph.getBoundingClientRect();
+      Array.from(diagram.querySelectorAll("svg text")).flatMap((label) => {
+        const svg = label.ownerSVGElement;
+        if (!svg) return [];
+        const box = svg.getBoundingClientRect();
+        const text = label.getBoundingClientRect();
         if (
           text.top >= box.top - 1 &&
           text.bottom <= box.bottom + 1 &&
-          text.height <= box.height * 1.05
+          text.left >= box.left - 1 &&
+          text.right <= box.right + 1
         ) {
           return [];
         }
-        return [
-          {
-            label: paragraph.textContent,
-            boxHeight: box.height,
-            textHeight: text.height,
-          },
-        ];
+        return [{ label: label.textContent }];
       }),
     );
     expect(clippedLabels, `clipped labels at ${width}px`).toEqual([]);
