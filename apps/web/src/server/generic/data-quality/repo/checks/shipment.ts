@@ -6,7 +6,7 @@ import { and, eq, sql } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { notDeleted, unwrapDb, uuidArrayParam } from "~/server/db/helpers";
-import { shipment, shipmentObservation } from "~/server/db/schema";
+import { purchase, shipment, shipmentObservation } from "~/server/db/schema";
 import {
   reconcileShipmentTimeline,
   shipmentEventSummary,
@@ -16,7 +16,7 @@ import { qualityCheck } from "~/server/generic/data-quality/repo/builders";
 import { defineStoredEntityChecks } from "~/server/generic/data-quality/repo/stored-registry";
 
 /** Bump when the rules or their declared scoring metadata change. */
-export const SHIPMENT_QUALITY_RULES_VERSION = 1;
+export const SHIPMENT_QUALITY_RULES_VERSION = 2;
 
 type ShipmentQualityRecord = Awaited<
   ReturnType<typeof loadShipmentQualityRecords>
@@ -29,6 +29,13 @@ export const shipmentChecks = defineStoredEntityChecks({
   rulesVersion: SHIPMENT_QUALITY_RULES_VERSION,
   load: loadShipmentQualityRecords,
   checks: {
+    shipment_purpose: observed((r) => r.purpose !== "unknown"),
+    // Reviewed null is a deliberate non-purchase decision; a deleted link is not.
+    shipment_purchase_association: observed((r) =>
+      r.purchaseId !== null
+        ? r.livePurchaseId !== null
+        : r.purchaseAssociationReviewed,
+    ),
     shipment_events: observed((r) => r.summary.eventCount >= 2),
     shipment_shipped: observed((r) => r.events.some(movement)),
     shipment_delivered: observed((r) =>
@@ -67,9 +74,17 @@ async function loadShipmentQualityRecords(
     .select({
       id: shipment.id,
       shortcode: shipment.shortcode,
+      purpose: shipment.purpose,
+      purchaseId: shipment.purchaseId,
+      purchaseAssociationReviewed: shipment.purchaseAssociationReviewed,
+      livePurchaseId: purchase.id,
       observation: shipmentObservation,
     })
     .from(shipment)
+    .leftJoin(
+      purchase,
+      and(eq(purchase.id, shipment.purchaseId), notDeleted(purchase)),
+    )
     .leftJoin(
       shipmentObservation,
       eq(shipmentObservation.shipmentId, shipment.id),
@@ -105,6 +120,10 @@ async function loadShipmentQualityRecords(
     return {
       id: row.id,
       shortcode: row.shortcode,
+      purpose: row.purpose,
+      purchaseId: row.purchaseId,
+      purchaseAssociationReviewed: row.purchaseAssociationReviewed,
+      livePurchaseId: row.livePurchaseId,
       events,
       summary: shipmentEventSummary(timeline),
       // The Purchase has a calendar date, not an observed order instant.

@@ -501,6 +501,29 @@ export default defineEntity({
       displayImage: false,
       checks: [
         {
+          id: "shipment_purpose",
+          facet: "identity",
+          scoring: "unscored",
+          scoreCap: 69,
+          exceptions: "forbidden",
+          label: "Unknown shipment purpose",
+          satisfiedLabel: "Shipment purpose known",
+          message: "Classify the shipment as incoming or outgoing.",
+          placement: { field: "purpose" },
+        },
+        {
+          id: "shipment_purchase_association",
+          facet: "provenance",
+          scoring: "unscored",
+          scoreCap: 49,
+          exceptions: "forbidden",
+          label: "Unresolved purchase association",
+          satisfiedLabel: "Purchase association resolved",
+          message:
+            "Link a live Purchase or explicitly review the shipment as having no Purchase. A deleted Purchase does not resolve the association.",
+          placement: { field: "purchaseId" },
+        },
+        {
           id: "shipment_events",
           facet: "provenance",
           weight: 10,

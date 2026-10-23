@@ -1,8 +1,11 @@
 import { dataQuality } from "@cubby/schemas/data-quality";
 import type { ShipmentObservationInput } from "@cubby/schemas/shipment-evidence";
 import { datedShipmentEventTime } from "@cubby/schemas/shipment-evidence";
+import type { ShipmentPurpose } from "@cubby/schemas/shipment-fields";
 import { generateShortcode } from "@cubby/shared";
 import { and, eq } from "drizzle-orm";
+import { createRepoEntity } from "tooling/factories/repo";
+import { buildKernelContext } from "tooling/scenarios/context";
 import { countTestDbQueries, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
@@ -12,11 +15,13 @@ import {
   entityQuality,
   entityQualityCheck,
   job,
+  purchase,
   shipment,
   shipmentObservation,
 } from "~/server/db/schema";
 import { listShipmentsRead } from "~/server/domains/shipment/repo/entity-repository";
 import {
+  associateShipment,
   canonicalShipment,
   editShipmentObservation,
   recordShipmentEvidence,
@@ -25,6 +30,7 @@ import {
   readShipmentTimeline,
   shipmentEventSummary,
 } from "~/server/domains/shipment/repo/timeline";
+import { executeEntity } from "~/server/entity-kernel";
 import { tombstoneEntityIdentities } from "~/server/entity-kernel/repo/entity-identity-writer";
 import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
 import { scoreSql } from "~/server/generic/data-quality/repo/sql";
@@ -66,7 +72,10 @@ const delivered = event("delivered", instant("2026-06-03T09:00:00Z"));
 
 describe("Shipment evidence quality", () => {
   const ctx = withTestDb();
-  const seed = async (observations: ShipmentObservationInput[]) => {
+  const seed = async (
+    observations: ShipmentObservationInput[],
+    options: { reviewed?: boolean; purpose?: ShipmentPurpose } = {},
+  ) => {
     const key = `synthetic-quality-${crypto.randomUUID()}`;
     const result = await recordShipmentEvidence(
       ctx.db,
@@ -88,7 +97,7 @@ describe("Shipment evidence quality", () => {
             carrierName: null,
             trackingNumber: key,
             extraTrackingNumbers: [],
-            purpose: "incoming",
+            purpose: options.purpose ?? "incoming",
             observations: observations.map((observation, index) => ({
               ...observation,
               time: datedShipmentEventTime.safeParse(observation.time).success
@@ -118,6 +127,12 @@ describe("Shipment evidence quality", () => {
             ),
           );
     }
+    if (options.reviewed !== false)
+      await associateShipment(
+        ctx.db,
+        { shipmentId: code, purchaseId: null },
+        ctx.actor,
+      );
     return { code, row };
   };
 
@@ -142,6 +157,86 @@ describe("Shipment evidence quality", () => {
     }
     throw new Error("Synthetic quality pass exceeded its expected page budget");
   };
+
+  it("requires known purpose and a live purchase or a reviewed non-purchase association", async () => {
+    const parcel = await seed([shipped, delivered], {
+      reviewed: false,
+      purpose: "unknown",
+    });
+    const quality = async () =>
+      (
+        await loadDataQualities(ctx.db, "shipment", [parcel.row.id], "live")
+      ).get(parcel.row.id)!;
+    expect((await quality()).score).toBe(49);
+    expect((await quality()).gaps.map((gap) => gap.check)).toEqual(
+      expect.arrayContaining([
+        "shipment_purpose",
+        "shipment_purchase_association",
+      ]),
+    );
+    await associateShipment(
+      ctx.db,
+      { shipmentId: parcel.code, purchaseId: null },
+      ctx.actor,
+    );
+    expect((await quality()).score).toBe(69);
+    const kernel = buildKernelContext(ctx.db, ctx.actor.userId);
+    await executeEntity(kernel, {
+      action: "bulkUpdate",
+      entity: "shipment",
+      ids: [parcel.code],
+      data: { purpose: "outgoing" },
+    });
+    expect((await quality()).score).toBe(100);
+    await refresh();
+    expect(
+      (
+        await loadDataQualities(ctx.db, "shipment", [parcel.row.id], "stored")
+      ).get(parcel.row.id)?.score,
+    ).toBe(100);
+
+    const seller = await createRepoEntity(ctx, "vendor", {
+      name: "Synthetic parcel seller",
+    });
+    const order = await createRepoEntity(ctx, "purchase", {
+      vendorId: seller.output.id,
+      displayLabel: "Synthetic parcel order",
+    });
+    await associateShipment(
+      ctx.db,
+      { shipmentId: parcel.code, purchaseId: order.output.id },
+      ctx.actor,
+    );
+    // Imported live associations need no separate member review.
+    await unwrapDb(ctx.db)
+      .update(shipment)
+      .set({ purchaseAssociationReviewed: false })
+      .where(eq(shipment.id, parcel.row.id));
+    expect((await quality()).score).toBe(100);
+    await unwrapDb(ctx.db)
+      .update(purchase)
+      .set({ deletedAt: new Date() })
+      .where(eq(purchase.id, order.entityId));
+    expect((await quality()).gaps.map((gap) => gap.check)).toContain(
+      "shipment_purchase_association",
+    );
+    expect((await quality()).score).toBeLessThan(100);
+    // Reviewing an existing link does not make a deleted Purchase valid.
+    await unwrapDb(ctx.db)
+      .update(shipment)
+      .set({ purchaseAssociationReviewed: true })
+      .where(eq(shipment.id, parcel.row.id));
+    expect((await quality()).score).toBeLessThan(100);
+    await invalidateRefreshFamily(ctx.db, "quality");
+    await refresh();
+    const filtered = await listShipmentsRead(
+      ctx.db,
+      { dataGap: ["shipment_purchase_association"] },
+      [],
+      { pageIndex: 0, pageSize: 100 },
+    );
+    expect(filtered.data.map((row) => row.id)).toContain(parcel.code);
+  });
 
   it("requires shipped, delivered, dated, consistent evidence spanning strictly over one day", async () => {
     const cases = [
@@ -395,7 +490,20 @@ describe("Shipment evidence quality", () => {
         .select()
         .from(entityQualityCheck)
         .where(eq(entityQualityCheck.kind, "shipment")),
-    ).toHaveLength((historical.length + 1) * 6);
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          entityId: historical[0]!.id,
+          checkKey: "shipment_purchase_association",
+          state: "gap",
+        }),
+        expect.objectContaining({
+          entityId: historical[0]!.id,
+          checkKey: "shipment_purpose",
+          state: "gap",
+        }),
+      ]),
+    );
     const timeline = await readShipmentTimeline(ctx.db, parcel.code);
     await editShipmentObservation(
       ctx.db,

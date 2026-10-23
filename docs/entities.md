@@ -2525,6 +2525,14 @@ a zero-width space is content. Rule versions invalidate affected published quali
 The generic SQL helper also owns trimming for grouping keys, graph label fallbacks
 and Brand matching; domain-specific merchant/title canonicalization is separate.
 
+Shipment quality requires a known incoming/outgoing purpose and a resolved
+Purchase association: a live Purchase link, or a member-reviewed null association
+for a non-purchase shipment. A reviewed link to a deleted Purchase still fails.
+Unknown purpose caps the score at 69; unresolved association caps it at 49.
+These unscored prerequisites cap the existing tracking-evidence score rather
+than changing its weights. Purchase/Expense quality owns itemization and Product
+completeness; optional parcel contents are not a universal prerequisite.
+
 Shipment is the first stored-quality kind. Its batch loader reconciles current
 observations once, then shares `reconcileShipmentTimeline`,
 `shipmentEventSummary` and `shipmentMilestones` with the tracking report.
