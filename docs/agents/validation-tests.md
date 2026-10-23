@@ -177,7 +177,7 @@ validated-save seam. A second full refund browser journey repeats that mechanism
 and is removed. Negative-form presentation and refund-specific HTTP composition
 are deliberate gaps. Source-record SQL owns immutable intake/replay, financial
 convergence SQL owns accepted-identity replay/attachment without another Expense,
-and Gmail import retains real captured-import review.
+and saved-mail import retains real Run and Purchase read-back.
 
 Split-settlement browser coverage keeps the residual proposal's accepted edge,
 no allocation or Expense before approval, real split editing, and exact saved
@@ -394,19 +394,31 @@ real source-list/detail navigation and immutable provider facts. The removed
 unlabeled-state visit and final source-status visit no longer sample those
 specific UI states; no review/write outcome or money assertion is removed.
 
-The Gmail convergence journey creates both exact-identifier conflicts in one
-fixture graph, retains the explicit import choice, then merges identities through
-the same `entity.mutate` endpoint before committing the prepared import. Native
-merge confirmation remains in `suggestion-queue.spec.ts`; the real imported money,
-single Product, both identifiers, exact Email–Purchase link and no-stock outcomes
-remain in Gmail read-back.
+The Gmail browser journey owns Connect, synthetic consent through the real OAuth
+callback, persisted read-only credentials, Gmail API discovery and exact retained
+MIME identity/content. It asserts that original acquisition writes no Purchase,
+Expense or stock. It no longer creates retailer/statement/Product prerequisites
+or opens a prepared Run. `report-slot.unit.test.tsx` drives the actual prepared
+form with two exact Product suggestions: approval stays disabled until trade and
+an explicit choice, choosing the second candidate sends that Product ID, and
+commit waits for confirmation. This renderer owner uses injected transport;
+it does not prove prepared-choice HTTP composition or native-browser interaction.
+`prepare-commit.integration.test.ts` owns exact-ASIN reuse, committed Product
+binding and replay. `import-order-convergence.integration.test.ts` owns sampled
+arrival orders, conserved money, source links and photo stock; Product merge
+integration owns retained identifiers and shared-location stock. The removed
+joined OAuth → statement → retailer → merge → approval → reconciliation browser
+composition is a deliberate gap, including conflicting-choice server projection
+and a merge between preparation and commit. The deleted retailer capture helper
+only constructed text from synthetic HTML and called a synthetic extraction port;
+it did not exercise an authenticated production browser peer.
+`purchase-import-run.spec.ts` retains real saved-mail import, Run navigation and
+committed Purchase/Email read-back; it does not drive prepared-choice approval.
 `purchase-emails.spec.ts` owns related Email navigation and the Gmail-original URL.
-The existing processing/accepted-source case in `email-purchase-links.integration.test.ts`
-checks the exact original URL in the real Email report. Gmail convergence keeps
-its credential-backed original acquisition and exact Email–Purchase read-back
-without another Email page visit. Dedicated original-link composition on that
-OAuth-ingested Email, Product-list multi-select merge launch and the
-Vendor→Purchase→Email SPA chain are intentional UI-composition gaps.
+The processing/accepted-source case in `email-purchase-links.integration.test.ts`
+checks the exact original URL in the real Email report. Dedicated original-link
+composition on the OAuth-ingested Email and Product-list multi-select merge launch
+remain deliberate gaps.
 
 Allocation explanation browser coverage keeps mixed-trade contributor expansion,
 phone bounds and allocated Project evidence on one detail document. The existing
@@ -445,20 +457,13 @@ Allocation contributor interactions belong in `resolution-evidence.spec.ts`;
 and list explanations and absence of a stored override. Do not add tax fixtures,
 extra detail visits or Purchase-cell overflow checks to the reset journey.
 
-The Gmail import-convergence journey prepares its statement-first aggregate with
-`previewFinancialBooking` and `commitFinancialBooking`, preserving selected
-Vendor/category and allocation/Purchase read-back before the real retailer review.
-An explicitly selected booking category belongs to its new aggregate Expense;
-do not assert a stored Purchase category override for that choice.
-Include the booked Purchase identity explicitly in final convergence reads so
-an uncategorized aggregate left behind cannot evade duplicate detection.
 `financial-booking-review.spec.ts` owns the native booking form, stale preview,
-fresh approval and replay guards; `import-order-convergence.integration.test.ts`
-owns source-arrival permutations and conserved money. Do not repeat the booking
-form inside Gmail's OAuth/MIME, conflicting Product choice, prepared import and
-reconciliation journey. Dedicated booking HTTP composition with that same Gmail
-household is the deliberate gap; final single Purchase/Product/Expense, Email
-link, both identifiers and no-stock assertions remain. Socket
+fresh approval and replay guards. `import-order-convergence.integration.test.ts`
+owns statement-first source arrival and conserved money. Booking category belongs
+to its aggregate Expense, not a stored Purchase category override. The dedicated
+booking and reconciliation browser forms are not repeated in Gmail's OAuth/MIME
+journey; their composition with that same OAuth household is a deliberate gap.
+Socket
 lifecycle checks use a warm baseline and two read/write rounds with real idle
 expiry, without a request-load population. Coordinator retirement authorization,
 acknowledgement and operation fences run in PostgreSQL; the cold-host disposal
@@ -903,7 +908,7 @@ The removed pinned-order round trip no longer has a dedicated browser regression
 
 Purchase Email review retains dismissal across reload, replacement with a link,
 Email original navigation and failed-preview evidence preservation. Vendor Email
-link composition stays in `gmail.input-first-import.spec.ts`; the review journey
+link composition stays in `purchase-import-run.spec.ts`; the review journey
 opens the Email directly from its Purchase row.
 
 ## Test and dev data factories

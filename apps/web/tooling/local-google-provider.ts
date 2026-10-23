@@ -1,11 +1,7 @@
 import { createHash, generateKeyPairSync, randomUUID, sign } from "node:crypto";
 import { createServer, type ServerResponse } from "node:http";
 import { z } from "zod";
-import {
-  browserCapture,
-  importExtractionModelOutput,
-  orderMailMessageClassification,
-} from "@cubby/schemas/purchase-import";
+import { orderMailMessageClassification } from "@cubby/schemas/purchase-import";
 import { GMAIL_READONLY_SCOPE } from "../src/lib/google-auth-constants";
 
 const configuration = z.object({
@@ -21,9 +17,6 @@ const configuration = z.object({
       /** The one listing query whose pages this mailbox serves. */
       query: z.string().default("-in:spam -in:trash"),
     })
-    .optional(),
-  extraction: z
-    .object({ url: z.url(), output: importExtractionModelOutput })
     .optional(),
 });
 type ProviderJson = z.infer<typeof configuration>["message"];
@@ -133,29 +126,6 @@ export async function createLocalGoogleProvider() {
       expires_in: 3600,
       scope: grant.scope,
     });
-    return;
-  };
-  const extract = (body: string, response: ServerResponse) => {
-    const send = (status: number, value: ProviderJson) =>
-      sendJson(response, status, value);
-    const capture = browserCapture.parse(JSON.parse(body));
-    const extraction = configuration.parse(fixture).extraction;
-    if (
-      !extraction ||
-      capture.url !== extraction.url ||
-      !extraction.output.candidate ||
-      !capture.text.includes(
-        extraction.output.candidate.lines[0]?.title ?? "",
-      ) ||
-      !capture.text.includes("42.50")
-    ) {
-      send(400, {
-        message:
-          "Extraction did not receive the configured captured retailer evidence",
-      });
-      return;
-    }
-    send(200, extraction.output);
     return;
   };
   const serveGmail = (url: URL, response: ServerResponse): boolean => {
@@ -296,10 +266,6 @@ export async function createLocalGoogleProvider() {
           return;
         }
         send(200, fixture.classification);
-        return;
-      }
-      if (url.pathname === "/model/extract-capture") {
-        extract(body, response);
         return;
       }
       if (
