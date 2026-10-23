@@ -3,8 +3,9 @@ import { testShortcode } from "@cubby/schemas/testing";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
+import { loadDataQualities as readDataQualities } from "~/server/generic/data-quality/repo/hydrate";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { publishQualityFixtures } from "~/server/testing/quality.fixtures";
 
 import { getPurchaseByID, purchaseList, splitExpense } from "./purchase";
 
@@ -12,6 +13,10 @@ import { getPurchaseByID, purchaseList, splitExpense } from "./purchase";
 // This boundary guards hydration/filter disagreement and accidental money loss.
 describe("vendor paperwork and household reimbursements", () => {
   const ctx = withTestDb();
+  const loadDataQualities: typeof readDataQualities = async (...args) => {
+    await publishQualityFixtures(ctx.db, "purchase");
+    return readDataQualities(...args);
+  };
   it("keeps the receipt at 120 and net spending at 80 across reads and filters", async () => {
     const vendor = await insertWithShortcode(ctx.db, "vendor", {
       name: "Paperwork fixture restaurant",

@@ -133,10 +133,7 @@ import {
   logAuditEntry,
 } from "~/server/generic/audit-log/repo/audit-log";
 import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
-import {
-  qualityReadColumn,
-  type QualityReadContext,
-} from "~/server/generic/data-quality/repo/registry";
+import { type QualityReadContext } from "~/server/generic/data-quality/repo/registry";
 import {
   gapCondition,
   qualityFilterSource,
@@ -609,23 +606,18 @@ const syncPurchaseImages = async (
  */
 const reconciliationSql = (read?: QualityReadContext): SQL => {
   const tolerance = cents(RECONCILIATION_TOLERANCE);
-  // A bulk read binds the precomputed vendor aggregate and refund total.
-  const vendorTotal = qualityReadColumn(read, "vendorTotal");
-  const aggregate = vendorTotal
-    ? sql`SELECT ${vendorTotal} AS total, ${qualityReadColumn(read, "vendorCount")} AS "expenseCount", ${qualityReadColumn(read, "vendorUnpricedCount")} AS "unpricedCount"`
-    : sql.raw(vendorExpenseAggregateSql('"Purchase"'));
-  const refund =
-    qualityReadColumn(read, "postedRefundTotal") ?? purchasePostedRefundTotal;
+  const aggregate = sql.raw(vendorExpenseAggregateSql('"Purchase"'));
+  const refund = purchasePostedRefundTotal;
   // One vendor-expense scan feeds every verdict; the delta and refund are
   // whole cents, as `reconcilePurchase` compares them. Mirrors its
   // zero-expense guard: once the totals fail to match, a purchase with no
   // lines is `unknown` rather than a mismatch.
   return sql`(SELECT CASE
+    WHEN ${gapCondition("purchase", "paperwork_mismatch", purchase, read)} THEN ${purchaseReconciliation.enum.mismatch}::text
     WHEN verdict.stated IS NULL OR NOT (abs(verdict.delta) <= ${tolerance} OR verdict."expenseCount" > 0) THEN ${purchaseReconciliation.enum.unknown}::text
     WHEN abs(verdict.delta) <= ${tolerance} THEN ${purchaseReconciliation.enum.match}::text
     WHEN verdict."unpricedCount" = 0 AND verdict.delta < ${-tolerance}
       AND verdict.refund = verdict.delta THEN ${purchaseReconciliation.enum.refund_adjusted}::text
-    WHEN ${gapCondition("purchase", "paperwork_mismatch", purchase, read)} THEN ${purchaseReconciliation.enum.mismatch}::text
   END FROM (
     SELECT ${purchase.statedTotal} AS stated,
       floor((agg.total * 100)::numeric + 0.5) - floor((${purchase.statedTotal} * 100)::numeric + 0.5) AS delta,
@@ -2422,13 +2414,9 @@ export const foldChargeInto = async (
     },
   });
 
-  // Evidence-changing invariant: this fold re-points Expenses,
-  // FinancialTransactions, and documents onto the survivor. The next quality
-  // read recomputes each affected check's input fingerprint, so its exception
-  // becomes stale even though the survivor's own scalar fields may not change.
-  // Retain this touch for cache freshness and the existing mutation contract;
-  // it is no longer the invalidation mechanism. The linked Products also need
-  // the touch because their quality evidence can read through moved Expenses.
+  // Moved Expenses and documents change current quality inputs. The source
+  // registration below enrolls the broad family; retained waivers stay durable.
+  // Touch affected records for cache freshness, not quality invalidation.
   const movedExpenseProducts =
     moved.length > 0
       ? await tx.query.expense.findMany({

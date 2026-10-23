@@ -998,49 +998,6 @@ describe("data quality: list filters, sort and hydration agree", () => {
     );
   });
 
-  // Failure mode: a planned (future) line, which may be unpriced by policy,
-  // still flagging its Purchase as having an unpriced line.
-  it("purchase: an unpriced future line is not an unpriced expense", async () => {
-    const line = await createExpense(
-      ctx.db,
-      buildEntity(
-        "expense",
-        makeExpenseInput({
-          name: "DQ planned line",
-          cost: undefined,
-          future: true,
-          vendor: "DQ planned vendor",
-          orderId: "DQ-PLAN-1",
-        }),
-      ),
-      TEST_ACTOR,
-    );
-    const purchaseId = line.output.purchaseId;
-    if (!purchaseId) throw new Error("Fixture has no Purchase");
-    const planned = (
-      await purchaseList(ctx.db, { dataGap: ["unpriced_expense"] }, [], page)
-    ).data.map((row) => row.id);
-    expect(planned).not.toContain(purchaseId);
-
-    await createExpense(
-      ctx.db,
-      buildEntity(
-        "expense",
-        makeExpenseInput({
-          name: "DQ spent unpriced line",
-          cost: undefined,
-          future: false,
-          purchaseId,
-        }),
-      ),
-      TEST_ACTOR,
-    );
-    const spent = (
-      await purchaseList(ctx.db, { dataGap: ["unpriced_expense"] }, [], page)
-    ).data.map((row) => row.id);
-    expect(spent).toContain(purchaseId);
-  });
-
   it("rolls a linked product's gap up onto the purchase's dataGap filter", async () => {
     const { weak } = await seedProducts();
     const line = await createExpense(

@@ -182,11 +182,11 @@ describe("score and status evaluate each predicate once", () => {
     ["statusSql", statusSql],
     [
       "statusCondition",
-      (entity: "purchase") => statusCondition(entity, "complete"),
+      (entity: "vendor") => statusCondition(entity, "complete"),
     ],
   ] as const)("%s", (_, build) => {
-    const rendered = render(build("purchase"));
-    const exemptible = checksOf("purchase").filter(
+    const rendered = render(build("vendor"));
+    const exemptible = checksOf("vendor").filter(
       (check) => dataCheckExemptible[check],
     ).length;
     expect(rendered.split('FROM "DataException"').length - 1).toBe(exemptible);
@@ -230,7 +230,8 @@ describe("purchase import expectations", () => {
     const purchaseSql = render(gapCondition("purchase", "paperwork_mismatch"));
     expect(productSql).toContain('"EntityQualityCheck"');
     expect(productSql).not.toContain("to_jsonb");
-    expect(purchaseSql).toContain("to_jsonb");
+    expect(purchaseSql).toContain('"EntityQualityCheck"');
+    expect(purchaseSql).not.toContain("to_jsonb");
     expect(productSql).not.toContain('"updatedAt"');
     expect(purchaseSql).not.toContain('"updatedAt"');
   });
@@ -252,7 +253,8 @@ describe("dataQualityFilterPredicates", () => {
     });
     expect(predicates).toHaveLength(2);
     const gaps = render(predicates[1]!);
-    expect(gaps).toContain('"Purchase"."orderId" IS NULL');
+    expect(gaps).toContain('"EntityQualityCheck"');
+    expect(gaps).not.toContain('"Purchase"."orderId" IS NULL');
     expect(gaps).toContain('FROM "Product" "dq_r"');
     expect(gaps).not.toContain("not_a_check");
   });

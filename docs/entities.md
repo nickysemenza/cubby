@@ -2626,23 +2626,24 @@ Standalone Product predicates use closed stored-row lookups unless their caller
 explicitly supplies the matching quality relation context, so footer sums and
 custom FROM clauses cannot accidentally reference an unbound join alias.
 
-Purchase paperwork-mismatch predicates share one vendor-Expense aggregate for
-the total, line count and unpriced count. The reconciliation module owns their
-common live vendor-line scope and numeric sum. Bulk reads (list quality
-filters and score sorts, Work queue branches) join one Purchase quality
-relation that groups Expense and settlement-allocation inputs once per
-statement instead of a correlated scalar per row and check; the reconciliation
-verdict filters read it through the same context when a caller binds it.
-Exception fingerprints retain the same scalar evidence and rounding, so the
-optimized verdict does not reopen an accepted mismatch. Custom list row
-selects apply the scaffold's quality join from the page clauses. A Work queue
-statement shares each relation as one MATERIALIZED CTE; a record-scoped read
-keeps the record-level predicates, since a whole-entity relation cannot be
-narrowed to the one requested record.
-Checks read a bound relation's column through `qualityReadColumn`
-(`data-quality/repo/registry.ts`) and fall back to their record-level SQL.
-`filter-read-parity.integration.test.ts` pins every bulk relation's checks,
-statuses and read-aware verdicts to the record-level SQL.
+Purchase uses stored TypeScript checks at rules version 1. One batch loader
+scopes Expense and settlement-allocation aggregates to the current ID page,
+reusing the existing evidence and settlement policy owners. Paperwork compares
+vendor lines only, including planned vendor lines; settlement compares every
+incurred Expense, including reimbursements, with posted or outstanding evidence.
+Known zero costs, cent tolerance and posted-refund explanations are preserved.
+The checks perform no I/O. Purchase has no SQL check or fingerprint bindings,
+quality derived-read hook, or shared live Expense/settlement quality relation.
+
+Purchase lists, quality filters, score sorts, Research and reconciliation Work
+queue branches, Problems membership and related Product rollups read published
+quality rows. Independent detail reconciliation continues to show current money
+and evidence. Purchase, Expense, settlement allocation, FinancialTransaction,
+attachment and vendor writers enroll the quality family through transactional
+`recordChange` (including audit registration). The broad pass evaluates changed
+inputs without mutation-time dependent traversal; reads never repair outcomes.
+All Purchase waivers, including paperwork, settlement amount, party and tender
+comparisons, remain durable across input changes until explicitly cleared.
 
 An Email's completed-import check matches a live, completed Mail import Run
 owned by the same member with the original in its source list. Bulk filtering,

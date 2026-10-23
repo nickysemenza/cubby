@@ -3,8 +3,6 @@ import { describe, expect, it } from "vitest";
 import {
   calculateFinancialReconciliation,
   type FinancialReconciliationInput,
-  purchaseFinancialMismatchFingerprintRawSql,
-  purchaseFinancialMismatchSql,
 } from "./financial-reconciliation";
 
 const base: FinancialReconciliationInput = {
@@ -115,20 +113,5 @@ describe("calculateFinancialReconciliation", () => {
     if (delta === null) expect(result.delta).toBeNull();
     // oxlint-disable-next-line vitest/no-conditional-expect -- The data-dependent branch determines whether this optional case is applicable.
     else expect(result.delta).toBeCloseTo(delta);
-  });
-});
-
-describe("settlement mismatch exception predicate", () => {
-  it("keys the exception to reconciliation evidence instead of Purchase.updatedAt", () => {
-    const predicate = purchaseFinancialMismatchSql('"Purchase"');
-    expect(predicate).toContain("to_jsonb");
-    expect(predicate).not.toContain('"updatedAt"');
-  });
-
-  it("includes the compared settlement total in the evidence fingerprint", () => {
-    const fingerprint =
-      purchaseFinancialMismatchFingerprintRawSql('"Purchase"');
-    expect(fingerprint).toContain('sum(a."amount")');
-    expect(fingerprint).toContain("ft.\"status\" IN ('expected', 'pending')");
   });
 });

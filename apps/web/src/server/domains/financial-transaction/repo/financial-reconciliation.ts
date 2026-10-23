@@ -115,82 +115,12 @@ export const vendorExpenseAggregateSql = (purchaseAlias: string) =>
     count(*) FILTER (WHERE vp_e."cost" IS NULL)::int AS "unpricedCount"
     ${vendorExpenseRowsSql(purchaseAlias)}`;
 
-/**
- * The settlement total compared with incurred expenses. Outstanding expected
- * or pending rows make the projected total authoritative; otherwise only
- * posted rows count. Keep this fragment shared by the verdict and exception
- * fingerprint so a changed charge amount cannot inherit an exception for a
- * different financial delta.
- */
-export const purchaseFinancialComparisonTotalSql = (purchaseAlias: string) =>
-  `(CASE WHEN EXISTS (
-    SELECT 1
-    FROM "FinancialTransactionAllocation" a
-    JOIN "FinancialTransaction" ft ON ft."id" = a."transactionId"
-    WHERE a."purchaseId" = ${purchaseAlias}."id" AND a."deletedAt" IS NULL
-      AND ft."deletedAt" IS NULL AND ft."kind" IN (${purchaseSettlementKinds.map((kind) => `'${kind}'`).join(", ")})
-      AND ft."status" IN ('expected', 'pending')
-  ) THEN (
-    SELECT COALESCE(sum(a."amount"), 0)::double precision FROM "FinancialTransactionAllocation" a
-    JOIN "FinancialTransaction" ft ON ft."id" = a."transactionId"
-    WHERE a."purchaseId" = ${purchaseAlias}."id" AND a."deletedAt" IS NULL
-      AND ft."deletedAt" IS NULL AND ft."kind" IN (${purchaseSettlementKinds.map((kind) => `'${kind}'`).join(", ")})
-      AND ft."status" <> 'void'
-  ) ELSE (
-    SELECT COALESCE(sum(a."amount"), 0)::double precision FROM "FinancialTransactionAllocation" a
-    JOIN "FinancialTransaction" ft ON ft."id" = a."transactionId"
-    WHERE a."purchaseId" = ${purchaseAlias}."id" AND a."deletedAt" IS NULL
-      AND ft."deletedAt" IS NULL AND ft."kind" IN (${purchaseSettlementKinds.map((kind) => `'${kind}'`).join(", ")})
-      AND ft."status" = 'posted'
-  ) END)`;
-
-/**
- * Correlated SQL form of `calculateFinancialReconciliation(...).status ===
- * "mismatch"`, before a reasoned `settlement_mismatch` exception is applied.
- * The raw verdict remains available to data quality and detail reads: accepting
- * a documented discrepancy must not falsify the actual bank/ledger delta.
- */
-export const purchaseFinancialMismatchRawSql = (purchaseAlias: string) => `
-  ${settleableUnpricedExpenseCountSql(purchaseAlias)} = 0
-  AND EXISTS (
-    SELECT 1
-    FROM "FinancialTransactionAllocation" a
-    JOIN "FinancialTransaction" ft ON ft."id" = a."transactionId"
-    WHERE a."purchaseId" = ${purchaseAlias}."id"
-      AND a."deletedAt" IS NULL
-      AND ft."deletedAt" IS NULL
-      AND ft."kind" IN (${purchaseSettlementKinds.map((kind) => `'${kind}'`).join(", ")})
-      AND ft."status" <> 'void'
-  )
-  AND floor(${purchaseFinancialComparisonTotalSql(purchaseAlias)} * 100 + 0.5)
-    IS DISTINCT FROM floor((${settleableExpenseTotalSql(purchaseAlias)}) * 100 + 0.5)`;
-
-/** Input-scoped snapshot for a settlement-mismatch exception. */
-export const purchaseFinancialMismatchFingerprintRawSql = (
-  purchaseAlias: string,
-) =>
-  `'settlement_mismatch:' || concat_ws('|',
-    COALESCE(to_jsonb(${purchaseFinancialMismatchRawSql(purchaseAlias)})::text, 'null'),
-    COALESCE(to_jsonb(${purchaseFinancialComparisonTotalSql(purchaseAlias)})::text, 'null'),
-    COALESCE(to_jsonb(${settleableExpenseTotalSql(purchaseAlias)})::text, 'null'),
-    COALESCE(to_jsonb(${settleableUnpricedExpenseCountSql(purchaseAlias)})::text, 'null')
-  )`;
-
-/**
- * The canonical worklist predicate. A settlement mismatch stays a raw financial
- * fact, but an active, evidence-bound exception removes it from the actionable
- * Problems list. This deliberately names one check rather than adding a cents
- * tolerance: every accepted difference remains explicit and goes stale when
- * the Purchase's evidence clock advances.
- */
-export const purchaseFinancialMismatchSql = (purchaseAlias: string) => `
-  (${purchaseFinancialMismatchRawSql(purchaseAlias)})
-  AND NOT EXISTS (
-    SELECT 1 FROM "DataException" exception
-    WHERE exception."entityId" = ${purchaseAlias}."id"
-      AND exception."check" = 'settlement_mismatch'
-      AND exception."fingerprint" = ${purchaseFinancialMismatchFingerprintRawSql(purchaseAlias)}
-  )`;
+/** Published actionable mismatch; waivers remain durable across evidence changes. */
+const purchaseFinancialMismatchSql = (purchaseAlias: string) => `EXISTS (
+  SELECT 1 FROM "EntityQualityCheck" quality
+  WHERE quality."entityId" = ${purchaseAlias}."id" AND quality.kind = 'purchase'
+    AND quality."checkKey" = 'settlement_mismatch' AND quality.state = 'gap'
+)`;
 
 /**
  * The itemization verdict for one charge, as a correlated scalar over
@@ -288,14 +218,11 @@ export const postedRefundTotalSql = (purchaseAlias: string) =>
  * live account row. Carrying it in the predicate (rather than on each caller's
  * join) is what lets the grouped scan LEFT JOIN — it needs unfiltered rows for
  * its refund sum — while still applying the liveness rule to coverage alone.
- *
- * `settlementReferenceAbsentSql` repeats the same condition on its JOIN. That
- * redundancy is deliberate: the `cubby/require-soft-delete-filter` oxlint
- * rule scans raw SQL text and cannot see through this function call, so
- * without the visible predicate it fails the build — correctly, since it has
- * no way to prove the filter exists. Keep both.
  */
-const settlementReferencePredicate = (ftxAlias: string, accountAlias: string) =>
+export const settlementReferencePredicate = (
+  ftxAlias: string,
+  accountAlias: string,
+) =>
   `${ftxAlias}."status" = 'posted'
      AND ${ftxAlias}."kind" IN (${purchaseSettlementKinds
        .map((kind) => `'${kind}'`)
@@ -310,83 +237,6 @@ const settlementReferencePredicate = (ftxAlias: string, accountAlias: string) =>
        )
        OR ${accountAlias}."identity"->>'kind' = 'cash'
      )`;
-
-/**
- * "This Purchase has no qualifying settlement evidence" — the `NOT EXISTS` half
- * of the `settlement_reference` gap, shared by the badge and the list filter so
- * the two cannot disagree about the same row.
- */
-export const settlementReferenceAbsentSql = (purchaseAlias: string) =>
-  `NOT EXISTS (
-    SELECT 1 FROM "FinancialTransactionAllocation" sr_a
-    JOIN "FinancialTransaction" sr_ft
-      ON sr_ft."id" = sr_a."transactionId" AND sr_ft."deletedAt" IS NULL
-    JOIN "FinancialAccount" sr_fa
-      ON sr_fa."id" = sr_ft."accountId" AND sr_fa."deletedAt" IS NULL
-    WHERE sr_a."purchaseId" = ${purchaseAlias}."id"
-      AND sr_a."deletedAt" IS NULL
-      AND ${settlementReferencePredicate("sr_ft", "sr_fa")}
-  )`;
-
-const settlementKindList = purchaseSettlementKinds
-  .map((kind) => `'${kind}'`)
-  .join(", ");
-
-/**
- * One row per Purchase with every input the bulk data-quality predicates read,
- * from one grouped Expense scan and one grouped settlement scan, instead of a
- * correlated scalar per candidate row and check. Each column mirrors the
- * correlated helper of the same meaning above (liveness, incurred-only rule,
- * COALESCE default, cast); `purchase-checks-bulk.integration.test.ts` pins
- * that parity. Only live Purchases have a row; bulk readers already own
- * liveness. Exception fingerprints keep the correlated helpers: a double
- * `sum` can round differently in another scan order, and stored fingerprints
- * must keep matching.
- */
-export const purchaseQualityFilterReadSql = () =>
-  sql.raw(`SELECT p."id" AS "entityId",
-    COALESCE(e."expenseCount", 0)::int AS "expenseCount",
-    COALESCE(e."settleableUnpricedCount", 0)::int AS "settleableUnpricedCount",
-    COALESCE(e."settleableTotal", 0)::double precision AS "settleableTotal",
-    COALESCE(e."vendorTotal", 0)::double precision AS "vendorTotal",
-    COALESCE(e."vendorCount", 0)::int AS "vendorCount",
-    COALESCE(e."vendorUnpricedCount", 0)::int AS "vendorUnpricedCount",
-    COALESCE(s."hasSettlement", false) AS "hasSettlement",
-    (CASE WHEN COALESCE(s."hasOutstanding", false) THEN COALESCE(s."projectedTotal", 0)
-      ELSE COALESCE(s."postedTotal", 0) END)::double precision AS "comparisonTotal",
-    COALESCE(s."postedRefundTotal", 0)::double precision AS "postedRefundTotal",
-    COALESCE(s."hasSettlementReference", false) AS "hasSettlementReference"
-  FROM "Purchase" p
-  LEFT JOIN (
-    SELECT qe."purchaseId",
-      count(*) AS "expenseCount",
-      count(*) FILTER (WHERE qe."cost" IS NULL AND ${actualExpenseSql("qe")}) AS "settleableUnpricedCount",
-      sum(qe."cost") FILTER (WHERE ${actualExpenseSql("qe")}) AS "settleableTotal",
-      sum(qe."cost"::numeric) FILTER (WHERE qe."economicRole" = 'vendor') AS "vendorTotal",
-      count(*) FILTER (WHERE qe."economicRole" = 'vendor') AS "vendorCount",
-      count(*) FILTER (WHERE qe."economicRole" = 'vendor' AND qe."cost" IS NULL) AS "vendorUnpricedCount"
-    FROM "Expense" qe
-    WHERE qe."deletedAt" IS NULL AND qe."purchaseId" IS NOT NULL
-    GROUP BY qe."purchaseId"
-  ) e ON e."purchaseId" = p."id"
-  LEFT JOIN (
-    SELECT qa."purchaseId",
-      bool_or(qft."kind" IN (${settlementKindList}) AND qft."status" <> 'void') AS "hasSettlement",
-      bool_or(qft."kind" IN (${settlementKindList}) AND qft."status" IN ('expected', 'pending')) AS "hasOutstanding",
-      sum(qa."amount") FILTER (WHERE qft."kind" IN (${settlementKindList}) AND qft."status" <> 'void') AS "projectedTotal",
-      sum(qa."amount") FILTER (WHERE qft."kind" IN (${settlementKindList}) AND qft."status" = 'posted') AS "postedTotal",
-      sum(qa."amount") FILTER (WHERE ${postedRefundPredicate("qft")}) AS "postedRefundTotal",
-      -- The correlated form inner-joins a live account; a missing one is no evidence.
-      bool_or(qfa."id" IS NOT NULL AND ${settlementReferencePredicate("qft", "qfa")}) AS "hasSettlementReference"
-    FROM "FinancialTransactionAllocation" qa
-    JOIN "FinancialTransaction" qft
-      ON qft."id" = qa."transactionId" AND qft."deletedAt" IS NULL
-    LEFT JOIN "FinancialAccount" qfa
-      ON qfa."id" = qft."accountId" AND qfa."deletedAt" IS NULL
-    WHERE qa."deletedAt" IS NULL
-    GROUP BY qa."purchaseId"
-  ) s ON s."purchaseId" = p."id"
-  WHERE p."deletedAt" IS NULL`);
 
 /**
  * Compute settlement status from already-aggregated live, non-void rows.
