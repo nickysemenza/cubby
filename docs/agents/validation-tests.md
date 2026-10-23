@@ -119,9 +119,11 @@ use `performOperation` from `tests/e2e/support/dispatch-wire.ts` when direct
 read-back needs the commit: it observes the named operation and decodes success
 for singleton and batched responses. Poll only genuinely eventual work.
 Filter/sort SQL-plan matrices use production progressive core reads when
-available, retaining full kernel baselines and unmatched-identity checks.
+available, including their baseline counts and unmatched-identity checks.
 `list-read.integration.test.ts` owns complete-row/enrichment equivalence;
-plan probes do not need unrelated media or quality hydration.
+plan probes do not need unrelated media or quality hydration. The MCP all-kind
+selection matrix keeps each entity’s four reads together and overlaps at most
+two entities against its read-only seeded world, below the file’s pool size.
 Filter-oracle tests that compare only row identities likewise use core reads;
 retain their real PostgreSQL predicates and expected-ID assertions.
 Mutation fanout probes request identity receipts when measuring bounded write
@@ -525,6 +527,10 @@ check is deliberately omitted: creating a scrolling inventory population solely
 to assert header position costs a full browser journey for a presentation detail.
 Shared responsive capabilities do not establish sticky behavior; verify that
 visual detail during relevant layout work instead.
+
+Fast header pointer probes wait for the intended dnd-kit target announcement
+before release; completion of mouse input alone does not establish that React
+has processed drag-over. Keep the actual final header-order assertion.
 
 The column-layout browser journey owns native header pointer/keyboard ordering,
 locked edges, pointer pin transfer, downward customizer drag placement and

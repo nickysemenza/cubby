@@ -10,9 +10,9 @@ import { generatedEntityListFields } from "@cubby/schemas/entity-list-fields";
  * This file drives EVERY declared filter (one at a time) and EVERY declared
  * sort field, for EVERY kernel entity with a list operation, through the real
  * production list readers against real Postgres. Plan probes use progressive
- * core reads, avoiding unrelated media/quality hydration. Full kernel reads
- * still establish each entity's baseline and unmatched-ID behavior; complete
- * output/enrichment compatibility belongs to list-read.integration.test.ts.
+ * core reads, avoiding unrelated media/quality hydration. Baselines and
+ * unmatched-ID checks use the same core reader; complete kernel output and
+ * enrichment compatibility belongs to list-read.integration.test.ts.
  * Postgres raises an alias mismatch at PLAN
  * time, so even a query matching zero rows exercises the SQL — the one
  * exception is a filter that must RESOLVE a shortcode to a real row (e.g.
@@ -272,9 +272,7 @@ describe("entity list smoke — shared selection/count FROM context", () => {
         return executeEntity(kernelCtx, { action: "list", entity, ...input });
       };
       const filterFields = filterFieldsOf(entity);
-      const unfiltered = await executeEntity(kernelCtx, {
-        action: "list",
-        entity,
+      const unfiltered = await readPlan({
         filters: {},
         pagination: { pageIndex: 0, pageSize: 1 },
       }).catch(() => null);
@@ -333,9 +331,7 @@ describe("entity list smoke — shared selection/count FROM context", () => {
         listCases.push(async () => {
           caseCount += 1;
           try {
-            const result = await executeEntity(kernelCtx, {
-              action: "list",
-              entity,
+            const result = await readPlan({
               filters: { [key]: unmatched },
               pagination: { pageIndex: 0, pageSize: 1 },
             });

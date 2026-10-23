@@ -40,6 +40,7 @@ async function pointerDrag(
   handle: Locator,
   dragged: Locator,
   target: Locator,
+  dropTargetAnnouncement?: Locator,
 ) {
   await handle.hover();
   // Rest past the 250ms cell spill-over delay, as a user does before
@@ -61,6 +62,9 @@ async function pointerDrag(
   await page.mouse.move(to.x, to.y, { steps: 2 });
   // Settle over the target so collision detection resolves it before drop.
   await page.mouse.move(to.x + 1, to.y);
+  // Fast input can finish before React processes the intended drag-over target.
+  if (dropTargetAnnouncement)
+    await expect(dropTargetAnnouncement).toBeAttached();
   await page.mouse.up();
 }
 
@@ -115,6 +119,9 @@ test("column layout changes by pointer and keyboard, keeps locked edges, and res
     grip("spendingProfile"),
     header("spendingProfile"),
     header("defaultSpendingCategoryId"),
+    page.getByText("Move target: defaultSpendingCategoryId column position.", {
+      exact: true,
+    }),
   );
   await expect.poll(() => headerIds(page)).toEqual(expected);
 
