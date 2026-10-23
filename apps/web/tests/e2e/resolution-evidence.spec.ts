@@ -1,4 +1,3 @@
-import { entityApi } from "./support/entity-api";
 import {
   expectViewportBounded,
   gotoAuthenticatedPage,
@@ -14,9 +13,8 @@ test.setTimeout(60_000);
 // override/fallback order. A null mixed result must never read as an unset trade.
 test("explains allocated trades with expandable contributor precedence", async ({
   page,
-  baseURL,
 }) => {
-  const { cable, fee } = await createFixtureGraph(page, async (create) => {
+  const { fee } = await createFixtureGraph(page, async (create) => {
     const { id: project } = await create("project", {
       name: "Synthetic evidence renovation",
       defaultTrade: "building",
@@ -30,7 +28,7 @@ test("explains allocated trades with expandable contributor precedence", async (
       defaultProjectId: project,
       defaultTrade: "plumbing",
     });
-    const { id: cable } = await create("expense", {
+    await create("expense", {
       name: "Synthetic evidence cable",
       purchaseId: purchase,
       date: "2026-09-01",
@@ -55,7 +53,7 @@ test("explains allocated trades with expandable contributor precedence", async (
       lineKind: "fee",
       trade: null,
     });
-    return { cable, fee };
+    return { fee };
   });
 
   await gotoAuthenticatedPage(page, `/expenses/${fee}`);
@@ -91,23 +89,6 @@ test("explains allocated trades with expandable contributor precedence", async (
   ).toBeVisible();
   await page.setViewportSize({ width: 390, height: 844 });
   await expectViewportBounded(page);
-  await page.keyboard.press("Escape");
-  // Changing one principal makes the allocation single-valued; the explanation
-  // must refresh its outcome without materializing the inherited trade.
-  const response = await entityApi(page.request).update(
-    "expense",
-    cable,
-    { trade: null },
-    { headers: { Origin: baseURL! } },
-  );
-  expect(response.ok(), await response.text()).toBeTruthy();
-  await gotoAuthenticatedPage(page, `/expenses/${fee}`);
-  await trigger.click();
-  const refreshed = await inlineExplanation(page, trigger);
-  await expect(refreshed.getByText("Mixed", { exact: true })).toHaveCount(0);
-  await expect(
-    refreshed.getByText("Plumbing", { exact: true }).first(),
-  ).toBeVisible();
   await page.keyboard.press("Escape");
   const projectTrigger = page.getByRole("button", {
     name: "How project is determined",

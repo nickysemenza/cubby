@@ -167,6 +167,16 @@ The Gmail Product-merge browser setup creates both conflicting identities in one
 fixture graph and scopes the merge list by their shared synthetic Product name.
 Keep both exact-identifier conflicts, explicit choice and native merge readback;
 loading unrelated Products does not strengthen those boundaries.
+Allocation explanation browser coverage keeps mixed-trade contributor expansion,
+phone bounds and allocated Project evidence on one detail document. The existing
+`field-explanation.integration.test.ts` mixed-adjustment case owns clearing a
+principal trade, recomputing the adjustment to its Purchase fallback and preserving
+stored null. Do not repeat that API-only update with a second browser document;
+this removes dedicated HTTP sampling of that explanation refresh, while the
+native contributor interaction remains. Location explanation fixtures commit
+Product, Location, acquisition and Inventory together; list/detail links, partial
+quantity discrepancy and nested beneficiary evidence remain native assertions.
+
 Inheritance browser coverage owns the real reset from a matching explicit Project
 into live Purchase inheritance, with stored-mode readback and visible provenance.
 Allocation contributor interactions belong in `resolution-evidence.spec.ts`;

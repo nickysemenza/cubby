@@ -1,5 +1,4 @@
-import { createEntityFixture } from "./fixtures/core";
-import { seedLocationPrerequisite } from "./fixtures/catalog";
+import { createFixtureGraph } from "./fixtures/core";
 import {
   openCellExplanation,
   gotoAuthenticatedPage,
@@ -15,25 +14,35 @@ test("product location context preserves links and explains the same partial gap
   page,
 }) => {
   const name = `Synthetic location context ${Date.now()}`;
-  const product = await createEntityFixture(page, "product", {
-    name,
-    stockTracked: false,
-  });
-  const location = await seedLocationPrerequisite(page, `${name} shelf`);
-  await createEntityFixture(page, "expense", {
-    name: `${name} acquisition`,
-    productId: product.id,
-    cost: 12,
-    productQuantity: 3,
-    future: false,
-    trade: "other",
-    costType: "materials",
-  });
-  await createEntityFixture(page, "inventory", {
-    productId: product.id,
-    locationId: location.id,
-    amount: { value: 2, unit: "each" },
-  });
+  const { product, location } = await createFixtureGraph(
+    page,
+    async (create) => {
+      const product = await create("product", {
+        name,
+        stockTracked: false,
+      });
+      const location = await create("location", {
+        name: `${name} shelf`,
+        type: "room",
+        parentId: null,
+      });
+      await create("expense", {
+        name: `${name} acquisition`,
+        productId: product.id,
+        cost: 12,
+        productQuantity: 3,
+        future: false,
+        trade: "other",
+        costType: "materials",
+      });
+      await create("inventory", {
+        productId: product.id,
+        locationId: location.id,
+        amount: { value: 2, unit: "each" },
+      });
+      return { product, location };
+    },
+  );
   await gotoAuthenticatedPage(
     page,
     `/products?searchQuery=${encodeURIComponent(name)}`,

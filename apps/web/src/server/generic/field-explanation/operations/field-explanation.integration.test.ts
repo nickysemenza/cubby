@@ -17,7 +17,10 @@ import {
   externalSource,
   financialTransactionAllocation,
 } from "~/server/db/schema";
-import { createExpense } from "~/server/domains/expense/repo/crud";
+import {
+  createExpense,
+  updateExpense,
+} from "~/server/domains/expense/repo/crud";
 import { expenseSpendingCategoryResolutionSql } from "~/server/domains/expense/repo/expense-category-resolution";
 import { createInventoryEntry } from "~/server/domains/inventory/repo/crud";
 import { createLedgerParty } from "~/server/domains/ledger-party/repo/ledger-party";
@@ -561,6 +564,7 @@ describe("derived field explanations against canonical records", () => {
       orderId: "SYNTHETIC-SHARES",
       vendorId: vendor.id,
       defaultProjectId: project.id,
+      defaultTrade: "plumbing",
     });
     const first = await insertWithShortcode(ctx.db, "expense", {
       name: "Fixture first principal",
@@ -625,6 +629,22 @@ describe("derived field explanations against canonical records", () => {
         (block) => block.chain.rows[0]?.trailing,
       ),
     ).toEqual(["Synthetic shared project", "Synthetic shared project"]);
+
+    await updateExpense(ctx.db, first.shortcode, { trade: null }, ctx.actor);
+    const refreshed = await explainField(context(), {
+      entityKind: "expense",
+      entityId: parseShortcodeFor("expense", adjustment.shortcode),
+      field: "trade",
+      surface: "list",
+    });
+    expect(refreshed.resolution?.value).toBe("plumbing");
+    expect(refreshed.resolutionEvidence?.outcome).toBe("resolved");
+    expect(
+      await getDb(ctx.db).query.expense.findFirst({
+        where: (expense, { eq }) => eq(expense.id, first.id),
+        columns: { trade: true },
+      }),
+    ).toEqual({ trade: null });
   });
 
   it("keeps a known allocated trade resolved beside an unknown contributor", async () => {
