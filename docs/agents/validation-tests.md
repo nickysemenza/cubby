@@ -584,6 +584,11 @@ the next reset. Reset diagnostics include backend state, wait type and backend/s
 SQL text or connection credentials, so recurring foreign-session failures can be
 attributed before weakening the ownership guard. Suite-level reuse leaves unowned Worker database sessions and
 causes reset to fail; `afterAll` cleanup is too late.
+Instrumented repository reads that need a separate pg pool use
+`tooling/postgres-pool.ts`'s `createPostgresPool` and await `pool.end()` in `finally`.
+It registers clients with the reset owner and drains evicted clients' sockets;
+bare pg Pool.end can resolve before those sockets close. Keep the same connection
+limit and query instrumentation when switching a test to this existing owner.
 Purchase-agent scenarios capture source/build provenance at suite boundaries and
 write one checksummed bundle with separate per-case reports. Their Workers still
 close after each case; Mail-only scenarios omit object storage. Socket-lifecycle
