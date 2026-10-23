@@ -1,7 +1,6 @@
 import type { Page } from "@playwright/test";
 
-import { seedProductPrerequisite } from "./catalog";
-import { createEntityFixture } from "./core";
+import { createFixtureGraph } from "./core";
 
 /**
  * A product the ledger says was bought `bought` times, optionally with stock on
@@ -19,25 +18,29 @@ export async function seedLedgerProduct(
     stocked?: { locationId: string; quantity: number };
   },
 ) {
-  const product = await seedProductPrerequisite(page, {
-    name: opts.name,
-    categoryId: opts.categoryId,
-  });
-  await createEntityFixture(page, "expense", {
-    name: `${opts.name} line`,
-    cost: opts.cost ?? 10,
-    date: "2026-01-05",
-    costType: "materials",
-    trade: "other",
-    productId: product.id,
-    productQuantity: opts.bought,
-  });
-  if (opts.stocked) {
-    await createEntityFixture(page, "inventory", {
-      productId: product.id,
-      locationId: opts.stocked.locationId,
-      amount: { value: opts.stocked.quantity, unit: "each" },
+  return createFixtureGraph(page, async (create) => {
+    const brand = await create("vendor", { name: "E2E fixture" });
+    const product = await create("product", {
+      brandId: brand.id,
+      name: opts.name,
+      categoryId: opts.categoryId,
     });
-  }
-  return product;
+    await create("expense", {
+      name: `${opts.name} line`,
+      cost: opts.cost ?? 10,
+      date: "2026-01-05",
+      costType: "materials",
+      trade: "other",
+      productId: product.id,
+      productQuantity: opts.bought,
+    });
+    if (opts.stocked) {
+      await create("inventory", {
+        productId: product.id,
+        locationId: opts.stocked.locationId,
+        amount: { value: opts.stocked.quantity, unit: "each" },
+      });
+    }
+    return product;
+  });
 }

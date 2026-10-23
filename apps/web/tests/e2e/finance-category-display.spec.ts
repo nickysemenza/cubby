@@ -112,7 +112,7 @@ test("linked Expense categories display their readable label and transaction exp
   );
   await gotoAuthenticatedPage(
     page,
-    `/financial-transactions?search=${encodeURIComponent(tag)}`,
+    `/financial-transactions?searchQuery=${encodeURIComponent(tag)}`,
   );
   const row = page.getByRole("row").filter({ hasText: tag });
   await enrichment;

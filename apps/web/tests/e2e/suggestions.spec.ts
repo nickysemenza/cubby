@@ -968,7 +968,10 @@ test("prunes real Product tags and records saved Feedback and its receipt", asyn
       ),
     });
   });
-  await gotoAuthenticatedPage(page, `/products?q=${encodeURIComponent(name)}`);
+  await gotoAuthenticatedPage(
+    page,
+    `/products?searchQuery=${encodeURIComponent(name)}`,
+  );
   await page.getByRole("button", { name: "Actions", exact: true }).click();
   await page.getByRole("menuitem", { name: "Columns…", exact: true }).click();
   await page.getByRole("button", { name: "Show Tags", exact: true }).click();

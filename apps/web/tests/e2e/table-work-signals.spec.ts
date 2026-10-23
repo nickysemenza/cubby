@@ -85,7 +85,10 @@ test("task deadlines distinguish overdue, future and completed work", async ({
 }, testInfo) => {
   await page.setViewportSize({ width: 1440, height: 1000 });
   const { prefix, project } = await seedWorkGrid(page);
-  await gotoAuthenticatedPage(page, `/tasks?q=${encodeURIComponent(prefix)}`);
+  await gotoAuthenticatedPage(
+    page,
+    `/tasks?searchQuery=${encodeURIComponent(prefix)}`,
+  );
   const tasks = page.getByRole("table");
   const overdue = tasks
     .getByRole("row", { name: new RegExp(`${prefix} overdue`) })

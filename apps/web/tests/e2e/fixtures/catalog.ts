@@ -102,26 +102,30 @@ export async function seedPlantPurchasePrerequisite(
   page: Page,
   opts: { plantId: string; vendorId: string; name: string },
 ) {
-  const product = await seedProductPrerequisite(page, {
-    name: `${opts.name} product`,
-    growsPlantId: opts.plantId,
+  return createFixtureGraph(page, async (create) => {
+    const brand = await create("vendor", { name: "E2E fixture" });
+    const product = await create("product", {
+      brandId: brand.id,
+      name: `${opts.name} product`,
+      growsPlantId: opts.plantId,
+    });
+    const purchase = await create("purchase", {
+      vendorId: opts.vendorId,
+      orderId: `${opts.name} order`,
+      date: "2026-09-09",
+    });
+    await create("expense", {
+      name: `${opts.name} expense`,
+      cost: 7,
+      date: "2026-09-09",
+      costType: "materials",
+      trade: "other",
+      productId: product.id,
+      productQuantity: 1,
+      purchaseId: purchase.id,
+    });
+    return { product, purchase };
   });
-  const purchase = await createEntityFixture(page, "purchase", {
-    vendorId: opts.vendorId,
-    orderId: `${opts.name} order`,
-    date: "2026-09-09",
-  });
-  await createEntityFixture(page, "expense", {
-    name: `${opts.name} expense`,
-    cost: 7,
-    date: "2026-09-09",
-    costType: "materials",
-    trade: "other",
-    productId: product.id,
-    productQuantity: 1,
-    purchaseId: purchase.id,
-  });
-  return { product, purchase };
 }
 
 export const seedInventoryPrerequisites = (
@@ -239,40 +243,47 @@ export async function seedPlacementReviewPrerequisite(
 
 /** One catalog garment, two independently owned quantities in different places. */
 export async function seedWardrobePrerequisites(page: Page, name: string) {
-  const owner = await createEntityFixture(page, "ledgerParty", {
-    name: `${name} owner`,
-    kind: "member",
+  return createFixtureGraph(page, async (create) => {
+    const owner = await create("ledgerParty", {
+      name: `${name} owner`,
+      kind: "member",
+    });
+    const other = await create("ledgerParty", {
+      name: `${name} other`,
+      kind: "guest",
+    });
+    const location = await create("location", {
+      name: `${name} drawer`,
+      type: "room",
+      parentId: null,
+    });
+    const otherLocation = await create("location", {
+      name: `${name} other drawer`,
+      type: "room",
+      parentId: null,
+    });
+    const brand = await create("vendor", { name: "Fixture" });
+    const product = await create("product", {
+      name: `${name} shirt`,
+      brandId: brand.id,
+      categoryId: taxonomyShortcode("apparel"),
+    });
+    const entry = await create("inventory", {
+      productId: product.id,
+      locationId: location.id,
+      amount: { value: 3, unit: "each" },
+      ownershipMode: "explicit",
+      ownerLedgerPartyId: owner.id,
+    });
+    await create("inventory", {
+      productId: product.id,
+      locationId: otherLocation.id,
+      amount: { value: 7, unit: "each" },
+      ownershipMode: "explicit",
+      ownerLedgerPartyId: other.id,
+    });
+    return { owner, other, location, otherLocation, product, entry };
   });
-  const other = await createEntityFixture(page, "ledgerParty", {
-    name: `${name} other`,
-    kind: "guest",
-  });
-  const location = await seedLocationPrerequisite(page, `${name} drawer`);
-  const otherLocation = await seedLocationPrerequisite(
-    page,
-    `${name} other drawer`,
-  );
-  const brand = await createEntityFixture(page, "vendor", { name: "Fixture" });
-  const product = await createEntityFixture(page, "product", {
-    name: `${name} shirt`,
-    brandId: brand.id,
-    categoryId: taxonomyShortcode("apparel"),
-  });
-  const entry = await createEntityFixture(page, "inventory", {
-    productId: product.id,
-    locationId: location.id,
-    amount: { value: 3, unit: "each" },
-    ownershipMode: "explicit",
-    ownerLedgerPartyId: owner.id,
-  });
-  await createEntityFixture(page, "inventory", {
-    productId: product.id,
-    locationId: otherLocation.id,
-    amount: { value: 7, unit: "each" },
-    ownershipMode: "explicit",
-    ownerLedgerPartyId: other.id,
-  });
-  return { owner, other, location, otherLocation, product, entry };
 }
 
 export const seedVendorDisplayPrerequisite = (page: Page, name: string) =>

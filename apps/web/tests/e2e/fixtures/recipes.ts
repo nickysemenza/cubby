@@ -1,4 +1,3 @@
-import { seedProductPrerequisite } from "./catalog";
 import { upsertCookbook } from "~/server/domains/cookbook/repo/cookbook";
 import {
   makeCookbookExtraction,
@@ -15,7 +14,12 @@ import { runMutationSideEffects } from "~/server/entity-kernel/repo/mutation-sid
 import { createTestRequestContext } from "~/server/testing/request-context";
 import { drainRecipeRefreshJobs } from "~/server/testing/background-queue";
 import { householdDaysFromNow, householdLocalDate } from "~/lib/household-date";
-import { getFixtureDb, fixtureUserId, createEntityFixture } from "./core";
+import {
+  getFixtureDb,
+  fixtureUserId,
+  createEntityFixture,
+  createFixtureGraph,
+} from "./core";
 
 export async function seedCookbookSourcePrerequisite(page: Page, name: string) {
   const db = getFixtureDb();
@@ -55,30 +59,32 @@ export async function seedCookbookSourcePrerequisite(page: Page, name: string) {
 }
 
 export async function seedStaplePlanningPrerequisite(page: Page, name: string) {
-  const ingredient = await createEntityFixture(page, "ingredient", { name });
-  const recipe = await createEntityFixture(page, "recipe", {
-    name: `${name} recipe`,
-    meta: null,
-    sections: [
-      {
-        ingredients: [
-          {
-            type: "ingredient",
-            ingredientId: ingredient.id,
-            recipeId: null,
-            amounts: [{ value: 10, unit: "g" }],
-          },
-        ],
-        instructions: [{ instruction: "Mix." }],
-      },
-    ],
+  return createFixtureGraph(page, async (create) => {
+    const ingredient = await create("ingredient", { name });
+    const recipe = await create("recipe", {
+      name: `${name} recipe`,
+      meta: null,
+      sections: [
+        {
+          ingredients: [
+            {
+              type: "ingredient",
+              ingredientId: ingredient.id,
+              recipeId: null,
+              amounts: [{ value: 10, unit: "g" }],
+            },
+          ],
+          instructions: [{ instruction: "Mix." }],
+        },
+      ],
+    });
+    await create("meal", {
+      date: "2026-09-09",
+      name: `${name} meal`,
+      recipes: [{ recipeId: recipe.id, scale: 1 }],
+    });
+    return { ingredient, recipe };
   });
-  await createEntityFixture(page, "meal", {
-    date: "2026-09-09",
-    name: `${name} meal`,
-    recipes: [{ recipeId: recipe.id, scale: 1 }],
-  });
-  return { ingredient, recipe };
 }
 
 /**
@@ -90,25 +96,28 @@ export async function seedCostedIngredientPrerequisite(
   page: Page,
   name: string,
 ) {
-  const ingredient = await createEntityFixture(page, "ingredient", { name });
-  const product = await seedProductPrerequisite(page, {
-    name: `${name} Brand Product`,
-    brandName: "E2E fixture",
-    ingredientId: ingredient.id,
-    unitMappings: [
-      {
-        a: { value: 1, unit: "cup" },
-        b: { value: 2.5, unit: "dollar" },
-        source: "E2E fixture",
-      },
-      {
-        a: { value: 100, unit: "grams" },
-        b: { value: 1.5, unit: "dollar" },
-        source: "E2E fixture",
-      },
-    ],
+  return createFixtureGraph(page, async (create) => {
+    const ingredient = await create("ingredient", { name });
+    const brand = await create("vendor", { name: "E2E fixture" });
+    const product = await create("product", {
+      brandId: brand.id,
+      name: `${name} Brand Product`,
+      ingredientId: ingredient.id,
+      unitMappings: [
+        {
+          a: { value: 1, unit: "cup" },
+          b: { value: 2.5, unit: "dollar" },
+          source: "E2E fixture",
+        },
+        {
+          a: { value: 100, unit: "grams" },
+          b: { value: 1.5, unit: "dollar" },
+          source: "E2E fixture",
+        },
+      ],
+    });
+    return { ingredient, product };
   });
-  return { ingredient, product };
 }
 
 export async function seedNutritionPrerequisite(
@@ -116,60 +125,70 @@ export async function seedNutritionPrerequisite(
   name: string,
   options: { missingCalories?: boolean } = {},
 ) {
-  const measured = await createEntityFixture(page, "ingredient", {
-    name: `${name} measured`,
-  });
-  const incomplete = await createEntityFixture(page, "ingredient", {
-    name: `${name} incomplete`,
-  });
-  for (const [ingredient, mappings] of [
-    [
-      measured,
-      [
-        { value: 100, unit: "kcal" },
-        { value: 10, unit: "g protein" },
-        { value: 0, unit: "mg sodium" },
-        { value: 50, unit: "mg calcium" },
-      ],
-    ],
-    [incomplete, options.missingCalories ? [] : [{ value: 50, unit: "kcal" }]],
-  ] as const) {
-    await seedProductPrerequisite(page, {
-      name: `${ingredient.id} nutrition source`,
-      brandName: "E2E fixture",
-      ingredientId: ingredient.id,
-      unitMappings: mappings.map((b) => ({
-        a: { value: 100, unit: "g" },
-        b,
-        source: "E2E fixture",
-      })),
-    });
-  }
-  const recipe = await createEntityFixture(page, "recipe", {
-    name,
-    servings: 2,
-    yield: { value: 300, unit: "g" },
-    meta: null,
-    sections: [
-      {
-        ingredients: [
+  const { measured, incomplete, recipe } = await createFixtureGraph(
+    page,
+    async (create) => {
+      const measured = await create("ingredient", {
+        name: `${name} measured`,
+      });
+      const incomplete = await create("ingredient", {
+        name: `${name} incomplete`,
+      });
+      for (const [ingredient, mappings] of [
+        [
+          measured,
+          [
+            { value: 100, unit: "kcal" },
+            { value: 10, unit: "g protein" },
+            { value: 0, unit: "mg sodium" },
+            { value: 50, unit: "mg calcium" },
+          ],
+        ],
+        [
+          incomplete,
+          options.missingCalories ? [] : [{ value: 50, unit: "kcal" }],
+        ],
+      ] as const) {
+        const brand = await create("vendor", { name: "E2E fixture" });
+        await create("product", {
+          brandId: brand.id,
+          name: `${ingredient.id} nutrition source`,
+          ingredientId: ingredient.id,
+          unitMappings: mappings.map((b) => ({
+            a: { value: 100, unit: "g" },
+            b,
+            source: "E2E fixture",
+          })),
+        });
+      }
+      const recipe = await create("recipe", {
+        name,
+        servings: 2,
+        yield: { value: 300, unit: "g" },
+        meta: null,
+        sections: [
           {
-            type: "ingredient",
-            ingredientId: measured.id,
-            recipeId: null,
-            amounts: [{ value: 100, upperValue: 200, unit: "g" }],
-          },
-          {
-            type: "ingredient",
-            ingredientId: incomplete.id,
-            recipeId: null,
-            amounts: [{ value: 100, unit: "g" }],
+            ingredients: [
+              {
+                type: "ingredient",
+                ingredientId: measured.id,
+                recipeId: null,
+                amounts: [{ value: 100, upperValue: 200, unit: "g" }],
+              },
+              {
+                type: "ingredient",
+                ingredientId: incomplete.id,
+                recipeId: null,
+                amounts: [{ value: 100, unit: "g" }],
+              },
+            ],
+            instructions: [{ instruction: "Combine." }],
           },
         ],
-        instructions: [{ instruction: "Combine." }],
-      },
-    ],
-  });
+      });
+      return { measured, incomplete, recipe };
+    },
+  );
   const db = getFixtureDb();
   const row = await getDb(db).query.recipe.findFirst({
     where: eq(schema.recipe.shortcode, recipe.id),
@@ -193,43 +212,67 @@ export async function seedMealNutritionPrerequisite(
   name: string,
   options: { seedProductPortion?: boolean } = {},
 ) {
-  const member = await createEntityFixture(page, "ledgerParty", {
-    name: `${name} member`,
-    kind: "member",
-  });
-  const guest = await createEntityFixture(page, "ledgerParty", {
-    name: `${name} guest`,
-    kind: "guest",
-  });
-  const ingredient = await createEntityFixture(page, "ingredient", {
-    name: `${name} snack ingredient`,
-  });
-  const product = await seedProductPrerequisite(page, {
-    name: `${name} snack`,
-    brandName: "E2E fixture",
-    ingredientId: ingredient.id,
-    labelNutrition: {
-      servingGrams: 30,
-      nutrients: { kcal: 120, protein: 3, carbs: 20, fat: 4 },
-      source: "E2E package label",
-    },
-  });
-  const today = householdLocalDate();
-  const futureDate = householdDaysFromNow(2);
-  const inlineDate = householdDaysFromNow(3);
-  const meal = await createEntityFixture(page, "meal", {
-    date: today,
-    name: `${name} meal`,
-    mealType: "snack",
-    mealKind: "other",
-    recipes: [],
-  });
-  const futureMeal = await createEntityFixture(page, "meal", {
-    date: futureDate,
-    name: `${name} future meal`,
-    mealType: "snack",
-    mealKind: "other",
-    recipes: [],
+  const {
+    member,
+    guest,
+    ingredient,
+    product,
+    today,
+    futureDate,
+    inlineDate,
+    meal,
+    futureMeal,
+  } = await createFixtureGraph(page, async (create) => {
+    const member = await create("ledgerParty", {
+      name: `${name} member`,
+      kind: "member",
+    });
+    const guest = await create("ledgerParty", {
+      name: `${name} guest`,
+      kind: "guest",
+    });
+    const ingredient = await create("ingredient", {
+      name: `${name} snack ingredient`,
+    });
+    const brand = await create("vendor", { name: "E2E fixture" });
+    const product = await create("product", {
+      brandId: brand.id,
+      name: `${name} snack`,
+      ingredientId: ingredient.id,
+      labelNutrition: {
+        servingGrams: 30,
+        nutrients: { kcal: 120, protein: 3, carbs: 20, fat: 4 },
+        source: "E2E package label",
+      },
+    });
+    const today = householdLocalDate();
+    const futureDate = householdDaysFromNow(2);
+    const inlineDate = householdDaysFromNow(3);
+    const meal = await create("meal", {
+      date: today,
+      name: `${name} meal`,
+      mealType: "snack",
+      mealKind: "other",
+      recipes: [],
+    });
+    const futureMeal = await create("meal", {
+      date: futureDate,
+      name: `${name} future meal`,
+      mealType: "snack",
+      mealKind: "other",
+      recipes: [],
+    });
+    return {
+      member,
+      guest,
+      ingredient,
+      product,
+      today,
+      futureDate,
+      inlineDate,
+      meal,
+      futureMeal,
+    };
   });
   const db = getFixtureDb();
   const context = requireActor(
