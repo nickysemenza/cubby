@@ -122,6 +122,20 @@ and refusal of mixed signs. Combined statement intake/retailer import/refund
 HTTP composition and reopening an accepted split are deliberate coverage gaps
 in this smaller browser journey. No scenario is added, deleted or split.
 
+Split-settlement browser coverage keeps the residual proposal's accepted edge,
+no allocation or Expense before approval, real split editing, and exact saved
+42.50/48.50 allocations without booking Expenses. Read stored outcomes after the
+dialog closes instead of opening a second Purchase merely to sample its amount
+row. `purchase-settlement-candidates.integration.test.ts` owns the 208-row ranking
+population, result cap, fully allocated exclusion, and transfer/distant/void/deleted
+exclusions. The batch ranking case retains exact-amount and merchant ordering.
+`allocation-detail-display.integration.test.ts` owns formatted allocation rows;
+`financial-transaction-allocations.integration.test.ts` retains stored signed
+splits and mixed-sign refusal.
+The full capped HTTP response, pending-date fallback button and post-save
+Purchase amount-row invalidation are deliberate composition gaps in the smaller
+split journey. No scenario is split or deleted.
+
 Run-progress browser coverage loads one target-free Run and retains phase counts,
 paused-rate context, completed work, expandable Workflow handoffs, readable errors
 and phone visibility. The required `run-detail.preview.test.tsx` owns shared step

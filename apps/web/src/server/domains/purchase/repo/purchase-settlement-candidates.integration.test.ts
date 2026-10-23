@@ -1,11 +1,14 @@
 import { SETTLEMENT_CANDIDATE_LIMIT } from "@cubby/schemas/financial-transaction";
 import { and, eq } from "drizzle-orm";
-import { createRepoEntity } from "tooling/factories/repo";
+import { createRepoEntity, createRepoIdentity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { getDb, notDeleted } from "~/server/db/helpers";
-import { financialTransactionAllocation } from "~/server/db/schema";
+import {
+  financialTransaction,
+  financialTransactionAllocation,
+} from "~/server/db/schema";
 import { applyFinancialSettlementAllocation } from "~/server/domains/financial-transaction/repo/financial-settlement-allocation";
 
 import { proposeSettlementAllocations } from "./purchase-settlement-allocation";
@@ -78,7 +81,7 @@ describe("settlement candidate graph preservation", () => {
       { purchaseId: target.output.id, amount: "30.00" },
     ]);
   });
-  it("returns different-amount split alternatives but excludes transfer and distant evidence", async () => {
+  it("returns split alternatives but excludes transfer, distant, void and deleted evidence", async () => {
     const account = await createRepoEntity(ctx, "financialAccount", {
       name: "Synthetic card",
       identity: { kind: "cash" },
@@ -95,12 +98,13 @@ describe("settlement candidate graph preservation", () => {
       amount: number,
       date: string,
       kind: "purchase" | "account_transfer",
+      status: "posted" | "void" = "posted",
     ) =>
       createRepoEntity(ctx, "financialTransaction", {
         accountId: account.output.id,
         amount,
         kind,
-        status: "posted",
+        status,
         postedDate: date,
         merchant: "Synthetic processor",
       });
@@ -108,6 +112,12 @@ describe("settlement candidate graph preservation", () => {
     const second = await make(60, "2026-09-03", "purchase");
     await make(100, "2026-09-02", "account_transfer");
     await make(100, "2026-12-01", "purchase");
+    await make(100, "2026-09-02", "purchase", "void");
+    const deleted = await make(100, "2026-09-02", "purchase");
+    await getDb(ctx.db)
+      .update(financialTransaction)
+      .set({ deletedAt: new Date() })
+      .where(eq(financialTransaction.id, deleted.entityId));
     const candidates = await listPurchaseSettlementCandidates(
       ctx.db,
       target.output.id,
@@ -142,6 +152,21 @@ describe("settlement candidate graph preservation", () => {
       postedDate: "2026-09-01",
       allocations: [{ purchaseId: prior.output.id, amount: 30 }],
     });
+    // More than a generic transaction page must not hide the later exact
+    // residual. Keep this ranking population at the SQL boundary.
+    for (let offset = 0; offset < 208; offset += 8)
+      await Promise.all(
+        Array.from({ length: 8 }, (_, index) =>
+          createRepoIdentity(ctx, "financialTransaction", {
+            accountId: account.output.id,
+            amount: 1,
+            kind: "purchase",
+            status: "posted",
+            postedDate: "2026-09-02",
+            merchant: `Synthetic unrelated merchant ${offset + index}`,
+          }),
+        ),
+      );
     const partial = await createRepoEntity(ctx, "financialTransaction", {
       accountId: account.output.id,
       amount: 100,
@@ -162,6 +187,7 @@ describe("settlement candidate graph preservation", () => {
     expect(candidates.map((row) => row.transactionId)).not.toContain(
       full.output.id,
     );
+    expect(candidates).toHaveLength(SETTLEMENT_CANDIDATE_LIMIT);
     expect(candidates[0]).toMatchObject({
       transactionId: partial.output.id,
       exactAmount: true,
