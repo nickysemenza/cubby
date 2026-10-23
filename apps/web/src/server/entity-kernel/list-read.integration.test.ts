@@ -181,6 +181,22 @@ describe("standard progressive list composition", () => {
         );
       }
     }
+    const productOperation = ENTITY_LIST_READ_OPERATIONS.product;
+    const expected = await productOperation.base(context, { filters: {} });
+    // A count must not select row columns and discard them afterward.
+    await getDb(ctx.db).execute(
+      sql`ALTER TABLE "Product" RENAME COLUMN name TO "UnavailableName"`,
+    );
+    try {
+      const countOnly = await productOperation.viewCounts(context, {
+        views: [],
+      });
+      expect(countOnly.total).toBe(expected.meta.totalCount);
+    } finally {
+      await getDb(ctx.db).execute(
+        sql`ALTER TABLE "Product" RENAME COLUMN "UnavailableName" TO name`,
+      );
+    }
   });
   it("composes core and every advertised group to the complete public contract", async () => {
     await seedReferenceUniverse(ctx.db);

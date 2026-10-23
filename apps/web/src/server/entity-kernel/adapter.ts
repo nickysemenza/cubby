@@ -168,7 +168,7 @@ export type EntityRepository<
     sorts: SortParams[],
     pagination: PaginationParams,
     projection: ListProjection,
-    readIntent?: ListReadIntent,
+    readIntent?: Extract<ListReadIntent, "page" | "count">,
   ): Promise<ListReadPage<ListReadRow>>;
   listSummary?(
     ctx: EntityKernelContext,

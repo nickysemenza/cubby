@@ -405,7 +405,7 @@ export const listReadOn =
       sorts: SortParams[],
       pagination: PaginationParams,
       projection: ListProjection,
-      readIntent?: ListReadIntent,
+      readIntent?: Extract<ListReadIntent, "page" | "count">,
     ) => TResult,
   ) =>
   (
@@ -414,7 +414,7 @@ export const listReadOn =
     sorts: SortParams[],
     pagination: PaginationParams,
     projection: ListProjection,
-    readIntent: ListReadIntent = "page",
+    readIntent: Extract<ListReadIntent, "page" | "count"> = "page",
   ): TResult =>
     fn(ctx.db, filters, sorts, pagination, projection, readIntent);
 
