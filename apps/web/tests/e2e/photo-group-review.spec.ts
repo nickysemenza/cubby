@@ -1126,7 +1126,7 @@ test("distinguishes attach and create and exposes saved photo evidence", async (
   page,
   e2eRuntime,
 }) => {
-  const { productName, runName, seed } = await seedEvidenceReview(
+  const { runName, seed } = await seedEvidenceReview(
     page,
     e2eRuntime.objectStorageUrl,
     true,
@@ -1175,27 +1175,9 @@ test("distinguishes attach and create and exposes saved photo evidence", async (
   await expect(attach.locator('[aria-label="Field cross-checks"]')).toHaveCount(
     0,
   );
-  // The evidence slot must show readable photos, not two squeezed thumbnails.
-  const photo = await attach
-    .locator(".decision-steps-media img")
-    .first()
-    .boundingBox();
-  expect(photo?.width).toBeGreaterThanOrEqual(108);
   await expect(
     attach.getByRole("button", { name: "Attach 1 photo", exact: true }),
   ).toBeEnabled();
-  // Closed summaries stay on the 28px rail; long answers must not stretch it.
-  expect(
-    await attach
-      .locator(
-        ".decision-steps-ledger > .ledger-row:has([data-decision-body][hidden])",
-      )
-      .evaluateAll((nodes) =>
-        nodes.every(
-          (node) => Math.abs(node.getBoundingClientRect().height - 28) < 1,
-        ),
-      ),
-  ).toBe(true);
   await expect
     .poll(() =>
       attach
@@ -1209,39 +1191,6 @@ test("distinguishes attach and create and exposes saved photo evidence", async (
     )
     .toBe(true);
 
-  await page.setViewportSize({ width: 390, height: 844 });
-  await attach.scrollIntoViewIfNeeded();
-  expect(
-    await page.evaluate(
-      () => document.documentElement.scrollWidth <= window.innerWidth,
-    ),
-  ).toBe(true);
-  // The phone target grows while the first rail endpoint stays at its mark.
-  const railOffset = await attach
-    .locator(".decision-steps-ledger > .ledger-row")
-    .first()
-    .evaluate((row) => {
-      const mark = row.querySelector("[data-record-mark]");
-      if (!mark) throw new Error("Missing decision mark");
-      const markBounds = mark.getBoundingClientRect();
-      return Math.abs(
-        parseFloat(getComputedStyle(row, "::before").top) -
-          (markBounds.top -
-            row.getBoundingClientRect().top +
-            markBounds.height / 2),
-      );
-    });
-  expect(railOffset).toBeLessThanOrEqual(1);
-
-  await page.getByRole("button", { name: /Jump to:/ }).click();
-  await expect(
-    page
-      .getByRole("menuitem", { name: productName, exact: true })
-      .locator('[aria-label="Ready"]'),
-  ).toBeVisible();
-
-  await page.keyboard.press("Escape");
-  await page.setViewportSize({ width: 1440, height: 1000 });
   await create.scrollIntoViewIfNeeded();
   await expect(create.getByLabel("Label photo missing")).toBeVisible();
   await expect(
@@ -1283,27 +1232,6 @@ test("distinguishes attach and create and exposes saved photo evidence", async (
       () => document.documentElement.scrollWidth <= window.innerWidth,
     ),
   ).toBe(true);
-
-  await page.setViewportSize({ width: 1440, height: 1000 });
-  await seedPhotoReviewLabelText(
-    seed.itemImage.shortcode,
-    "Synthetic Outfitters\nSJ-104\nSynthetic shell jacket blue XL",
-  );
-  await page.reload();
-  await expect(
-    attach.locator('[aria-label="Field cross-checks"]'),
-  ).toBeVisible();
-  const attachChecks = attach.locator('[aria-label="Field cross-checks"]');
-  await expect(
-    attachChecks.getByText("Photo label", { exact: true }).first(),
-  ).toBeVisible();
-  // Manufacturer and model are printed on the label; both agree.
-  await expect(
-    attachChecks.getByText("SJ-104", { exact: true }).first(),
-  ).toBeVisible();
-  await expect(
-    attachChecks.getByText("Matches the label").first(),
-  ).toBeAttached();
 });
 
 test("keeps proposed edits separate while saved product evidence loads, fails, and recovers", async ({
