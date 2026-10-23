@@ -234,6 +234,13 @@ missing IDs and failed reads; cached matches remain visible during refresh error
 Progressive row views preserve the data array and unaffected record objects
 until their immutable base pages or enrichment patches change; loading and
 summary-only updates must not rebuild the table dataset.
+Column read demand includes the top-level roots of declared explanation source
+dependencies, so explanation evidence remains available when reads are narrowed.
+Reference demand includes canonical labels, allocations and assignment
+resolutions. Visible suggestion targets add their basis and context inputs
+through the same target declarations used by request construction. Progressive
+tables admit automatic suggestions only after those inputs are ready; an
+explicit null target remains eligible.
 Saved-view counts forward count intent through the canonical repository reader.
 They retain the same filters, prepared membership facts and custom counts as the
 list, while skipping row selection, presentation bindings, ordering and group

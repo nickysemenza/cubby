@@ -29,6 +29,7 @@ import {
   summarizeListState,
 } from "~/entity/filters";
 import { listEntities } from "~/entity/generated/entity-lists.gen";
+import { generatedBrowserCrudEntities } from "~/entity/generated/entity-routes.gen";
 import type { ListGroupState } from "~/entity/hooks/progressive-list";
 import { loadSelectionRecords } from "~/entity/hooks/selection-records";
 import { useDeferredReferenceFilterOptions } from "~/entity/hooks/use-deferred-reference-filter-options";
@@ -73,6 +74,10 @@ import {
 } from "../actions/entity-actions";
 import { DeferredListValue } from "../entity-list/deferred-list-value";
 import { listColumnReadFields } from "../entity-list/list-column-read-fields";
+import {
+  suggestionReadFields,
+  visibleSuggestTargets,
+} from "../suggestions/suggestion-targets";
 import {
   type DeletableConfig,
   useContractDeletable,
@@ -355,6 +360,27 @@ function listReadColumnFields(
   ];
 }
 
+/** AI basis joins loading demand without delaying the cell's own display. */
+function listReadColumnDemand(
+  entity: BrowserRoutedEntity,
+  column: { id?: string; meta?: unknown },
+): string[] {
+  const suggestionEntity = generatedBrowserCrudEntities.find(
+    (candidate) => candidate === entity,
+  );
+  return [
+    ...new Set([
+      ...listReadColumnFields(entity, column),
+      ...(suggestionEntity
+        ? suggestionReadFields(
+            suggestionEntity,
+            visibleSuggestTargets(suggestionEntity, [listReadColumnId(column)]),
+          )
+        : []),
+    ]),
+  ];
+}
+
 export function useEntityList<
   TData extends BaseListRow,
   TFilters extends object,
@@ -529,7 +555,7 @@ export function useEntityList<
       .visit((column) =>
         initialColumnVisibility?.[listReadColumnId(column)] === false
           ? []
-          : listReadColumnFields(entity, column),
+          : listReadColumnDemand(entity, column),
       )
       .flat(),
   );
@@ -845,7 +871,7 @@ export function useEntityList<
       .visit((column) =>
         columnVisibility[listReadColumnId(column)] === false
           ? []
-          : listReadColumnFields(entity, column),
+          : listReadColumnDemand(entity, column),
       )
       .flat();
     setVisibleReadFields((current) =>
@@ -1160,6 +1186,10 @@ export function useEntityList<
   return {
     workbench: {
       entity,
+      isFieldReady: (id: string, field: string) => {
+        const state = enrichmentState(id, field);
+        return state === undefined || state.state === "ready";
+      },
       table,
       isLoading,
       error,

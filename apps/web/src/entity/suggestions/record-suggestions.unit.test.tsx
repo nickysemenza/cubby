@@ -34,7 +34,6 @@ import type { EntityBrowserMutationInput } from "~/server/entity-kernel/contract
 
 import {
   fieldSuggestionBasisFromRecord,
-  suggestTargetsFor,
   type EntitySuggestionsOperations,
 } from "./field-suggestion";
 import { FieldSuggestionApply } from "./field-suggestion-apply";
@@ -46,6 +45,7 @@ import {
   RecordSuggestionScope,
   type StoredSuggestionOperations,
 } from "./record-suggestions";
+import { suggestTargetsFor } from "./suggestion-targets";
 
 installFeatures();
 

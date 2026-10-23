@@ -1,6 +1,9 @@
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
 
+import { referenceFieldReadFields } from "../entity-references";
+import { readPathRoot } from "../read-path";
+
 export function listColumnReadFields(
   entity: BrowserRoutedEntity,
   columnId: string,
@@ -22,8 +25,20 @@ export function listColumnReadFields(
   return [
     ...new Set([
       field.key,
-      read.split(".")[0]!,
-      ...(projection ? [projection.split(".")[0]!] : []),
+      ...referenceFieldReadFields(field),
+      ...(field.resolution
+        ? ["fieldResolutions", ...Object.keys(field.resolution.reset)]
+        : []),
+      ...[
+        read,
+        ...(projection ? [projection] : []),
+        ...(explanation && "sourceDependencies" in explanation
+          ? explanation.sourceDependencies.map((source) => source.path)
+          : []),
+      ].flatMap((path) => {
+        const root = readPathRoot(path);
+        return root ? [root] : [];
+      }),
     ]),
   ];
 }
