@@ -521,18 +521,18 @@ Use `openCellExplanation` when the runtime explanation rail’s host column has
 not been established. A declaration’s assessment placement does not identify
 every derived-value explanation control.
 
-Product ownership overviews keep the three movement states, ownership guidance
-and their supporting sections. Build each acquired/exited state in one fixture
-graph; uncertain ownership keeps its explicit Product link before the future
-Expense. The visible Runs section covers composition without repeating an empty
-report query and matching its copy for every ownership state.
-
 The Wardrobe browser journeys retain ownership edits, grouped category navigation,
 subtype inclusion and section exclusion. The mobile sticky-header coordinate
 check is deliberately omitted: creating a scrolling inventory population solely
 to assert header position costs a full browser journey for a presentation detail.
 Shared responsive capabilities do not establish sticky behavior; verify that
 visual detail during relevant layout work instead.
+
+Product ownership overviews keep the three movement states, ownership guidance
+and their supporting sections. Build each acquired/exited state in one fixture
+graph; uncertain ownership keeps its explicit Product link before the future
+Expense. The visible Runs section covers composition without repeating an empty
+report query and matching its copy for every ownership state.
 
 Fast header pointer probes wait for the intended dnd-kit target announcement
 before release; completion of mouse input alone does not establish that React
