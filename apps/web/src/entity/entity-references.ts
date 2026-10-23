@@ -2,12 +2,35 @@ import type { EntityFieldModel } from "@cubby/schemas/entity-fields";
 import { fieldResolutionsSchema } from "@cubby/schemas/field-resolution";
 import { z } from "zod";
 
-import { readPathValue } from "./read-path";
+import { readPathRoot, readPathValue } from "./read-path";
 
 type ReferenceField = Pick<
   EntityFieldModel["fields"][number],
   "key" | "readKey" | "reference" | "display"
 >;
+
+/** Potential canonical inputs; list ownership filters out unsupported fallbacks. */
+export function referenceFieldReadFields(field: ReferenceField): string[] {
+  if (!field.reference) return [];
+  const stem = field.key.replace(/Ids?$/u, "");
+  return [
+    ...new Set(
+      [
+        field.key,
+        field.readKey ?? field.key,
+        stem,
+        `${stem}Name`,
+        `${stem}Emoji`,
+        `${stem}Allocations`,
+        "fieldResolutions",
+        ...(field.display.labelPath ? [field.display.labelPath] : []),
+      ].flatMap((path) => {
+        const root = readPathRoot(path);
+        return root ? [root] : [];
+      }),
+    ),
+  ];
+}
 
 const referenceObject = z.object({
   id: z.string(),

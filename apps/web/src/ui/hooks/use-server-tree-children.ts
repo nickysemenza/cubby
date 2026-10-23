@@ -5,6 +5,7 @@ import { useCallback, useMemo, useState } from "react";
 import { z } from "zod";
 
 import { StartOperationError } from "~/integrations/tanstack-query/start-transport";
+import { readListEnrichmentGroup } from "~/ui/hooks/list-enrichment";
 
 import type {
   ListQueryPlan,
@@ -66,28 +67,42 @@ async function completeChildPage<TData extends { id: string }>(
   signal: AbortSignal,
 ): Promise<ChildPage<TData>> {
   const page = await plan.execute(signal);
-  const groups = (page.deferredGroups ?? []).map((group) => group.id);
+  const groups = page.deferredGroups ?? [];
   if (!plan.progressive || groups.length === 0 || page.items.length === 0)
     return page;
   const enrichment = await plan.progressive.enrich(
     page.items.map((row) => row.id),
-    groups,
+    groups.flatMap((group) => group.fields),
     signal,
   );
   const patches = new Map<string, object>();
   let enrichmentError: Error | undefined;
-  for (const id of groups) {
-    const group = enrichment.groups.find((entry) => entry.id === id);
+  for (const requested of groups) {
+    const group = enrichment.groups.find((entry) => entry.id === requested.id);
     if (group?.state !== "ready") {
       enrichmentError ??=
         group?.state === "error"
           ? new StartOperationError(group.error)
-          : new Error(`No ${id} enrichment returned`);
+          : new Error(`No ${requested.id} enrichment returned`);
       continue;
     }
-    for (const patch of group.data)
-      patches.set(patch.id, { ...patches.get(patch.id), ...patch });
+    try {
+      for (const patch of readListEnrichmentGroup({
+        ids: page.items.map((row) => row.id),
+        requested,
+        result: group,
+        missingIds: enrichment.missingIds,
+      }).values())
+        patches.set(patch.id, { ...patches.get(patch.id), ...patch });
+    } catch (error) {
+      enrichmentError ??=
+        error instanceof Error ? error : new Error(String(error));
+    }
   }
+  if (enrichment.missingIds.length)
+    enrichmentError ??= new Error(
+      "Child records disappeared during enrichment",
+    );
   return {
     ...page,
     items: page.items.map((row) => ({ ...row, ...patches.get(row.id) })),

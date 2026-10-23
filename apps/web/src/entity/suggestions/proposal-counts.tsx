@@ -83,8 +83,6 @@ export function ProposalCount({
   field?: string;
   children?: ReactNode;
 }) {
-  const context = useContext(Context);
-  const [open, setOpen] = useState(false);
   const row = identity.safeParse(record);
   const code = row.success ? parseShortcode(row.data.id) : null;
   if (
@@ -92,7 +90,23 @@ export function ProposalCount({
     (field !== undefined && field !== entitySummary[code.type].titleField)
   )
     return children;
-  const count = context?.counts.get(code.shortcode) ?? 0;
+  return (
+    <EligibleProposalCount recordId={code.shortcode}>
+      {children}
+    </EligibleProposalCount>
+  );
+}
+
+function EligibleProposalCount({
+  recordId,
+  children,
+}: {
+  recordId: NonNullable<ReturnType<typeof parseShortcode>>["shortcode"];
+  children: ReactNode;
+}) {
+  const context = useContext(Context);
+  const [open, setOpen] = useState(false);
+  const count = context?.counts.get(recordId) ?? 0;
   return (
     <span className="inline-flex min-w-0 items-center gap-1">
       <span className="min-w-0">{children}</span>
@@ -118,7 +132,7 @@ export function ProposalCount({
             className="max-h-[70vh] w-[min(56rem,calc(100vw-2rem))] overflow-y-auto"
             onClick={(event) => event.stopPropagation()}
           >
-            {open ? <RecordProposals id={code.shortcode} /> : null}
+            {open ? <RecordProposals id={recordId} /> : null}
           </PopoverContent>
         </Popover>
       ) : null}

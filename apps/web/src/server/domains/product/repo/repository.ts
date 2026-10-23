@@ -74,6 +74,7 @@ export const productRepository = defineRepository("product", {
     pagination,
     projection,
     readIntent = "page",
+    preparation,
   ) =>
     listProductsRead(
       ctx.db,
@@ -83,6 +84,7 @@ export const productRepository = defineRepository("product", {
       readIntent,
       ctx.usdaClient,
       projection,
+      preparation,
     ),
   listSummary: (ctx, filters) => productListSummary(ctx.db, filters),
   create: async (ctx, data) => {

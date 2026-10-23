@@ -133,6 +133,7 @@ import {
   listFilterValues,
   type ListFilterValues,
   ListContext,
+  type ListPreparationScope,
   type ListPrepare,
   relatedExistsSql,
   type AnyRowsSql,
@@ -1381,6 +1382,7 @@ interface ListRequest<Filters extends object> {
 
 /** What a list request reads, so `scaffold.context` prepares only that. */
 export interface ListContextRequest<Filters extends object> {
+  preparation?: ListPreparationScope;
   filters: Filters;
   sorts?: readonly SortParams[];
   readIntent?: ListReadIntent;
@@ -1830,7 +1832,9 @@ export function listScaffold<
             prepare,
             seeds.has(prepare)
               ? seeds.get(prepare)
-              : await prepare.load(db, values),
+              : await (request.preparation
+                  ? request.preparation.load(prepare, db, values)
+                  : prepare.load(db, values)),
           ],
         ),
       );
@@ -1838,7 +1842,11 @@ export function listScaffold<
       // sets that scope.
       const nested = await Promise.all(
         scopes.map(({ nested, value }) =>
-          nested.context(db, { filters: value, readIntent: "count" }),
+          nested.context(db, {
+            filters: value,
+            readIntent: "count",
+            preparation: request.preparation,
+          }),
         ),
       );
       return nested.reduce(

@@ -5,7 +5,10 @@ import {
   entityListInputSchema,
   listEntities,
 } from "~/entity/generated/entity-lists.gen";
-import { listReadFields } from "~/entity/model/list-read-schema";
+import {
+  listReadFields,
+  listGroupsForFields,
+} from "~/entity/model/list-read-schema";
 import { listEnrichmentGroups } from "~/entity/model/list-read-fields";
 
 /** Operator assertions, not inferred deployment facts. No free-form labels. */
@@ -74,9 +77,24 @@ export function requestedReadMetadata(
         : operation === "entity.listSummary"
           ? "summary"
           : "full";
+  const requestedFields = z.array(z.string()).max(500).safeParse(input.fields);
+  if (
+    projection === "enrichment" &&
+    (!requestedFields.success ||
+      requestedFields.data.some(
+        (field) =>
+          !listEnrichmentGroups.some((group) =>
+            declared[group].includes(field),
+          ),
+      ))
+  )
+    return null;
   const groups =
-    projection === "enrichment"
-      ? z.array(z.enum(listEnrichmentGroups)).max(4).safeParse(input.groups)
+    projection === "enrichment" && requestedFields.success
+      ? {
+          success: true as const,
+          data: listGroupsForFields(entity.data, requestedFields.data),
+        }
       : {
           success: true as const,
           data:
@@ -106,7 +124,9 @@ export function requestedReadMetadata(
     declaredFields:
       projection === "summary"
         ? null
-        : groups.data.flatMap((group) => declared[group]),
+        : projection === "enrichment" && requestedFields.success
+          ? [...new Set(requestedFields.data)]
+          : groups.data.flatMap((group) => declared[group]),
     requestedSort: null,
     requestedGrouping: null,
     declaredGroupDependencies:

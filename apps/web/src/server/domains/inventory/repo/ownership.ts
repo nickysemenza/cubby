@@ -1201,17 +1201,10 @@ export async function loadProductOwners(
   return result;
 }
 
-/**
- * Products whose Owner rollup includes any filter value (see
- * `loadProductOwners`), or, with `presence`, whose rollup is (non-)empty.
- * Values and presence OR together, as nullable filters compose.
- */
-export async function productIdsByOwner(
+/** Filter-independent membership inputs for one bounded read operation. */
+export async function loadProductOwnerMembership(
   db: Database | DrizzleTransaction,
-  values: readonly string[],
-  presence?: "has" | "none",
-): Promise<ProductId[]> {
-  const wanted = new Set(values);
+) {
   const [liveEntries, unstocked] = await Promise.all([
     liveOwnershipEntries(db),
     unwrapDb(db)
@@ -1247,6 +1240,18 @@ export async function productIdsByOwner(
   const inherited = unstockedIds.map(
     (id) => [id, candidates.get(id)?.owner ?? null] as const,
   );
+  return {
+    states: states.map(({ productId, state }) => ({ productId, state })),
+    inherited,
+  };
+}
+
+export function selectProductIdsByOwner(
+  { states, inherited }: Awaited<ReturnType<typeof loadProductOwnerMembership>>,
+  values: readonly string[],
+  presence?: "has" | "none",
+): ProductId[] {
+  const wanted = new Set(values);
   const matches = new Set<ProductId>();
   for (const { productId, state } of states)
     if (wanted.has(ownerFilterValue(state)) || presence === "has")
@@ -1259,4 +1264,16 @@ export async function productIdsByOwner(
     )
       matches.add(id);
   return [...matches];
+}
+
+export async function productIdsByOwner(
+  db: Database | DrizzleTransaction,
+  values: readonly string[],
+  presence?: "has" | "none",
+): Promise<ProductId[]> {
+  return selectProductIdsByOwner(
+    await loadProductOwnerMembership(db),
+    values,
+    presence,
+  );
 }

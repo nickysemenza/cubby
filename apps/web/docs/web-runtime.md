@@ -90,7 +90,11 @@ is Rolldown `codeSplitting.groups` in `vite.config.ts`; never group `@base-ui`
 or do a naive vendor split — it drags lazy-route code into first paint. Detail
 and list slot fills stay `lazy` in their registries (`detail-slots.tsx`,
 `list-slots.ts`): every generic list route shares one closure, so one static
-slot import ships to every list.
+slot import ships to every list. Keep schema modules on the default graph:
+bounded entry-aware schema grouping read an undefined `schema.shape` during
+Product startup in a paired probe. A successful bundle build does not
+establish client initialization; verify real authenticated navigation when
+changing chunk boundaries.
 Specialist list columns are declared as `route.listColumns` source references.
 The account menu loads after hydration behind its existing SSR placeholder;
 its session-dependent controls do not belong in the Worker render closure.
@@ -234,10 +238,28 @@ missing IDs and failed reads; cached matches remain visible during refresh error
 Progressive row views preserve the data array and unaffected record objects
 until their immutable base pages or enrichment patches change; loading and
 summary-only updates must not rebuild the table dataset.
+Custom renderers declare additional row reads in column metadata; Project task
+progress requests its rollup alongside its textual value. Action admission parses
+only the identity and fields consumed by the action, so deferred list fields
+cannot hide actions on a selected base row.
+Column read demand includes the top-level roots of declared explanation source
+dependencies, so explanation evidence remains available when reads are narrowed.
+Reference demand includes canonical labels, allocations and assignment
+resolutions. Visible suggestion targets add their basis and context inputs
+through the same target declarations used by request construction. Progressive
+tables admit automatic suggestions only after those inputs are ready; an
+explicit null target remains eligible.
 Saved-view counts forward count intent through the canonical repository reader.
 They retain the same filters, prepared membership facts and custom counts as the
 list, while skipping row selection, presentation bindings, ordering and group
 summaries. Filter-dependent preparation remains necessary for exact totals.
+Sibling saved-view counts may share explicitly filter-independent preparation
+through one database-bound operation scope. Each view still selects its own
+membership and applies its complete filters. Ordinary filter-dependent prepares
+and seeded contexts remain local; the scope ends with the count operation.
+Proposal-count badges subscribe to shared counts only for eligible title cells
+and fieldless mobile titles. Other cells return their existing content before
+joining that context.
 For automatic suggestion recomputation, prioritize visible rows plus a bounded
 prefetch buffer, reuse current saved answers, and batch only missing or
 invalidated decisions after checking their individual caches. Virtualized
@@ -253,6 +275,11 @@ preparation, then individually cached decision waves and existing assessment
 publication. Ordinary `entity.listEnrichment` reads remain provider-free.
 Queued batches discard cancelled members after shared admission; started work
 retains normal publication and freshness checks.
+Field renderers subscribe to mutable page review state only for fields in
+current suggestion admission or retained live, stored or accepted state.
+Retained proposals remain visible even after automatic admission for their
+field is removed. Other columns consume a stable eligibility scope and retain
+their ordinary content when another field's review state changes.
 
 Canonical repository lists use `listScaffold.read` with schema-picked output
 bindings in `list-projection.ts`. The assembler selects and validates present

@@ -1,5 +1,5 @@
 import type { RowData } from "@tanstack/react-table";
-import { type RefObject, useEffect, useState } from "react";
+import { type RefObject, useEffect, useEffectEvent, useState } from "react";
 
 import { isLockedColumn, MIN_COLUMN_WIDTH } from "./column-layout";
 import type { CubbyTable } from "./table-features";
@@ -127,17 +127,20 @@ export function useRenderedColumnWidths<TData extends RowData>(
     .getVisibleLeafColumns()
     .map((column) => column.id)
     .join(",");
+  const currentColumn = useEffectEvent((id: string) => table.getColumn(id));
 
   useEffect(() => {
     const pane = container.current;
     if (!enabled || !pane) return;
     let frame = 0;
     let stopped = false;
+    // Fits only grow within this scope. Unchanged cells have already
+    // contributed their width; streamed enrichment invalidates only its cell.
+    let measured = new WeakMap<HTMLElement, string>();
     const measure = () => {
       frame = 0;
       const sourceTable = pane.querySelector("table");
-      if (!sourceTable || sourceTable.getBoundingClientRect().width === 0)
-        return;
+      if (!sourceTable) return;
       const headers = [
         ...sourceTable.querySelectorAll<HTMLElement>(
           "thead th[data-column-id]",
@@ -155,22 +158,37 @@ export function useRenderedColumnWidths<TData extends RowData>(
           ...row.querySelectorAll<HTMLElement>("td[data-column-id]"),
         ]),
       ];
+      const pending: Array<{ id: string; cell: HTMLElement }> = [];
+      for (const cell of cells) {
+        const id = cell.dataset.columnId;
+        const column = id ? currentColumn(id) : undefined;
+        if (!id || !column || isLockedColumn(column)) continue;
+        if (measured.get(cell) === id) continue;
+        if (cell.querySelector("input,textarea,[contenteditable=true]"))
+          continue;
+        pending.push({ id, cell });
+      }
+      // Unrelated mutations (including rows outside the sample) must not
+      // force layout just to discover that every contribution is cached.
+      if (
+        pending.length === 0 ||
+        sourceTable.getBoundingClientRect().width === 0
+      )
+        return;
       const host = document.createElement("div");
       host.className = sourceTable.className;
       host.setAttribute("aria-hidden", "true");
       host.inert = true;
       host.style.cssText =
         "position:fixed;left:-100000px;top:0;width:max-content;visibility:hidden;pointer-events:none;";
-      const samples: FitSample[] = [];
-      for (const cell of cells) {
-        const id = cell.dataset.columnId;
-        const column = id ? table.getColumn(id) : undefined;
-        if (!id || !column || isLockedColumn(column)) continue;
+      const samples: Array<FitSample & { cell: HTMLElement }> = [];
+      for (const { id, cell } of pending) {
         const sample = fitSample(id, cell);
         if (!sample) continue;
         host.append(sample.clone);
-        samples.push(sample);
+        samples.push({ ...sample, cell });
       }
+      if (samples.length === 0) return;
       // All writes precede all layout reads; remove the inert batch only after
       // the reads finish. No React components or network requests are mounted.
       document.body.append(host);
@@ -178,11 +196,12 @@ export function useRenderedColumnWidths<TData extends RowData>(
       for (const sample of samples) {
         const natural = sampleWidth(sample);
         if (natural === 0) continue;
+        measured.set(sample.cell, sample.id);
         widths[sample.id] = Math.max(widths[sample.id] ?? 0, natural);
       }
       host.remove();
       for (const [id, width] of Object.entries(widths)) {
-        const column = table.getColumn(id);
+        const column = currentColumn(id);
         if (!column) continue;
         widths[id] = Math.max(
           column.columnDef.minSize ?? MIN_COLUMN_WIDTH,
@@ -205,7 +224,17 @@ export function useRenderedColumnWidths<TData extends RowData>(
     const schedule = () => {
       if (!frame) frame = requestAnimationFrame(measure);
     };
-    const observer = new MutationObserver(schedule);
+    const observer = new MutationObserver((mutations) => {
+      for (const mutation of mutations) {
+        const element =
+          mutation.target instanceof Element
+            ? mutation.target
+            : mutation.target.parentElement;
+        const cell = element?.closest("th[data-column-id],td[data-column-id]");
+        if (cell instanceof HTMLElement) measured.delete(cell);
+      }
+      schedule();
+    });
     // Attribute changes include hover, focus, fitted CSS variables and live
     // editing state. Only changed content needs a fresh natural-width read.
     observer.observe(pane, {
@@ -215,14 +244,17 @@ export function useRenderedColumnWidths<TData extends RowData>(
     });
     schedule();
     void document.fonts?.ready.then(() => {
-      if (!stopped) schedule();
+      if (!stopped) {
+        measured = new WeakMap();
+        schedule();
+      }
     });
     return () => {
       stopped = true;
       observer.disconnect();
       cancelAnimationFrame(frame);
     };
-  }, [table, container, scope, enabled, columnsKey]);
+  }, [container, scope, enabled, columnsKey]);
 
   return fit.scope === scope ? fit.widths : {};
 }

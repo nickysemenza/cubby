@@ -20,11 +20,9 @@ import {
   type PendingImage,
 } from "~/entity/entity-media/pending-image-upload";
 import { readRecordField } from "~/entity/entity-references";
-import {
-  fieldSuggestionBasisFromRecord,
-  suggestTargetsFor,
-} from "~/entity/suggestions/field-suggestion";
+import { fieldSuggestionBasisFromRecord } from "~/entity/suggestions/field-suggestion";
 import { FieldSuggestionProvider } from "~/entity/suggestions/field-suggestion-provider";
+import { suggestTargetsFor } from "~/entity/suggestions/suggestion-targets";
 import type { UnparsedError } from "~/lib/error-utils";
 import { toastMutationWarnings } from "~/lib/recompute-summary";
 import { showErrorToast } from "~/ui/feedback/error-details";

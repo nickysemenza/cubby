@@ -29,6 +29,11 @@ function parseSteps(path: string): readonly Step[] {
   return steps;
 }
 
+export function readPathRoot(path: string): string | undefined {
+  const first = parseSteps(path)[0];
+  return first?.kind === "key" ? first.key : undefined;
+}
+
 // oxlint-disable-next-line anti-slop/no-unknown-returns -- A row path is untyped by construction; the caller parses the projected value.
 function walk(value: unknown, steps: readonly Step[]): unknown {
   let current = value;

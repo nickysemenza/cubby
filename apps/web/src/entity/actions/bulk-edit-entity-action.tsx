@@ -31,11 +31,9 @@ import { entityLabel } from "~/entity/entities";
 import { bulkUpdateMutationOptionsFactory } from "~/entity/entity-contracts";
 import { PickerField } from "~/entity/forms/picker-field";
 import { requireReferenceEntitySearch } from "~/entity/picker/reference-entity-search";
-import {
-  fieldSuggestionBasisFromRecord,
-  suggestTargetsFor,
-} from "~/entity/suggestions/field-suggestion";
+import { fieldSuggestionBasisFromRecord } from "~/entity/suggestions/field-suggestion";
 import { FieldSuggestionProvider } from "~/entity/suggestions/field-suggestion-provider";
+import { suggestTargetsFor } from "~/entity/suggestions/suggestion-targets";
 import { BulkActionDialog } from "~/ui/dialogs/bulk-action-dialog";
 import { showErrorToast } from "~/ui/feedback/error-details";
 import { AliasesField } from "~/ui/forms/aliases-field";

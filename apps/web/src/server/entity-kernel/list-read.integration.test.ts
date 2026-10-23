@@ -1,5 +1,6 @@
+import { type LedgerPartyShortcode } from "@cubby/schemas/identifiers";
 import { sql } from "drizzle-orm";
-import { withTestDb } from "tooling/test-setup";
+import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -23,10 +24,20 @@ import {
 import { viewsForEntity } from "~/entity/model/view-manifest";
 import { getDb } from "~/server/db/helpers";
 import { findOrCreateIngredient } from "~/server/domains/ingredient/repo/crud";
+import { createInventoryEntry } from "~/server/domains/inventory/repo/crud";
+import { setInventoryOwnership } from "~/server/domains/inventory/repo/ownership-mutations";
+import { createLedgerParty } from "~/server/domains/ledger-party/repo/ledger-party";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { executeEntity } from "~/server/entity-kernel";
 import { ENTITY_KERNEL_BINDINGS } from "~/server/generated/entity-kernel-bindings.gen";
 import { ENTITY_LIST_READ_OPERATIONS } from "~/server/generated/entity-list-read-bindings.gen";
+import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
+import {
+  createLocationFixture,
+  createProductIdentityFixture,
+  makeLocationInput,
+  makeProductInput,
+} from "~/server/testing/repo.fixtures";
 
 import {
   buildKernelContext,
@@ -57,6 +68,52 @@ describe("standard progressive list composition", () => {
       expect.objectContaining({ path: ["false"], count: 1 }),
     ]);
   });
+  it("acknowledges only selected deferred fields and rejects unknown or core demand before empty reads", async () => {
+    await seedReferenceUniverse(ctx.db);
+    const context = buildKernelContext(ctx.db);
+    const operation = ENTITY_LIST_READ_OPERATIONS.product;
+    const full = await executeEntity(context, {
+      action: "list",
+      entity: "product",
+      filters: {},
+      pagination: { pageIndex: 0, pageSize: 25 },
+    });
+    if (full.action !== "list") throw new Error("Wrong list action");
+    const result = await operation.enrich(context, {
+      ids: full.items.map((row) => String(row.id)),
+      fields: ["unitPrice", "unitPrice"],
+    });
+    expect(result.groups).toHaveLength(1);
+    expect(result.groups[0]).toMatchObject({
+      id: "derived",
+      fields: ["unitPrice"],
+      state: "ready",
+    });
+    const ready = result.groups[0];
+    if (ready?.state !== "ready")
+      throw new Error("Expected selected enrichment");
+    expect(new Map(ready.data.map((row) => [row.id, row]))).toEqual(
+      new Map(
+        full.items.map((row) => [
+          row.id,
+          { id: row.id, unitPrice: row.unitPrice },
+        ]),
+      ),
+    );
+    await expect(
+      operation.enrich(context, { ids: [], fields: ["unknownField"] }),
+    ).rejects.toThrow("Unknown list field");
+    await expect(
+      operation.enrich(context, { ids: [], fields: ["id"] }),
+    ).rejects.toThrow("requires a deferred field");
+    expect(
+      await operation.enrich(context, { ids: [], fields: ["unitPrice"] }),
+    ).toMatchObject({
+      groups: [{ fields: ["unitPrice"], data: [] }],
+      missingIds: [],
+    });
+  });
+
   // Core reads must survive an unavailable deferred inheritance dependency.
   it("reads expense core without evaluating deferred inheritance", async () => {
     await seedReferenceUniverse(ctx.db);
@@ -74,7 +131,7 @@ describe("standard progressive list composition", () => {
       expect(base.meta.totalCount).toBeGreaterThan(0);
       const enrichment = await operation.enrich(context, {
         ids: base.data.map((row) => String(row.id)),
-        groups: ["derived"],
+        fields: listReadFields("expense").derived,
       });
       expect(
         enrichment.groups.find((group) => group.id === "derived")?.state,
@@ -100,7 +157,10 @@ describe("standard progressive list composition", () => {
     try {
       const result = await operation.enrich(context, {
         ids: base.data.map((row) => String(row.id)),
-        groups: ["media", "quality"],
+        fields: [
+          ...listReadFields("product").media,
+          ...listReadFields("product").quality,
+        ],
       });
       expect(result.groups.find((group) => group.id === "quality")?.state).toBe(
         "error",
@@ -132,7 +192,10 @@ describe("standard progressive list composition", () => {
       expect(base.data.length).toBeGreaterThan(0);
       const result = await operation.enrich(context, {
         ids: base.data.map((row) => String(row.id)),
-        groups: ["media", "quality"],
+        fields: [
+          ...listReadFields("image").media,
+          ...listReadFields("image").quality,
+        ],
       });
       expect(result.groups.find((group) => group.id === "quality")?.state).toBe(
         "error",
@@ -198,6 +261,96 @@ describe("standard progressive list composition", () => {
       );
     }
   });
+  it("counts distinct ownership views independently and reloads after a write", async () => {
+    const first = await createLedgerParty(
+      ctx.db,
+      { name: "Synthetic first owner", kind: "member", notes: null },
+      TEST_ACTOR,
+    );
+    const second = await createLedgerParty(
+      ctx.db,
+      { name: "Synthetic second owner", kind: "guest", notes: null },
+      TEST_ACTOR,
+    );
+    const location = await createLocationFixture(
+      ctx.db,
+      makeLocationInput({ name: "Synthetic owner count shelf" }),
+      TEST_ACTOR,
+    );
+    const stocked = async (
+      name: string,
+      owner: LedgerPartyShortcode | null | undefined,
+      price: number | null = null,
+    ) => {
+      const product = await createProductIdentityFixture(
+        ctx.db,
+        makeProductInput({ name, price }),
+        TEST_ACTOR,
+      );
+      const entry = await createInventoryEntry(
+        ctx.db,
+        {
+          productId: product.entityId,
+          locationId: location.entityId,
+          amount: { value: 1, unit: "each" },
+        },
+        TEST_ACTOR,
+      );
+      const id = await resolveOrThrow(ctx.db, "inventory", entry.id);
+      if (owner !== undefined)
+        await setInventoryOwnership(
+          ctx.db,
+          id,
+          { mode: "explicit", ownerId: owner },
+          undefined,
+          TEST_ACTOR,
+        );
+      return id;
+    };
+    await stocked("Synthetic first priced", first.output.id, 10);
+    await stocked("Synthetic first ordinary", first.output.id);
+    await stocked("Synthetic second ordinary", second.output.id);
+    const household = await stocked("Synthetic household ordinary", null);
+    await stocked("Synthetic unresolved ordinary", undefined);
+    await createProductIdentityFixture(
+      ctx.db,
+      makeProductInput({ name: "Synthetic unstocked ordinary" }),
+      TEST_ACTOR,
+    );
+    const views = [
+      { id: "first", filters: { ownerLedgerPartyId: [first.output.id] } },
+      { id: "second", filters: { ownerLedgerPartyId: [second.output.id] } },
+      { id: "household", filters: { ownerLedgerPartyId: ["@household"] } },
+      { id: "unknown", filters: { ownerLedgerPartyId: ["@unknown"] } },
+      { id: "has", filters: { ownerPresenceFilter: "has" } },
+      { id: "none", filters: { ownerPresenceFilter: "none" } },
+      {
+        id: "secondary",
+        filters: {
+          ownerLedgerPartyId: [first.output.id],
+          pricePresenceFilter: "has",
+        },
+      },
+    ];
+    const operation = ENTITY_LIST_READ_OPERATIONS.product;
+    const context = buildKernelContext(ctx.db);
+    const counts = await operation.viewCounts(context, { views });
+    expect(counts.total).toBe(6);
+    expect(counts.views.map((view) => view.count)).toEqual([
+      2, 1, 1, 1, 5, 1, 1,
+    ]);
+    await setInventoryOwnership(
+      ctx.db,
+      household,
+      { mode: "explicit", ownerId: second.output.id },
+      undefined,
+      TEST_ACTOR,
+    );
+    const refreshed = await operation.viewCounts(context, { views });
+    expect(refreshed.views.map((view) => view.count)).toEqual([
+      2, 2, 0, 1, 5, 1, 1,
+    ]);
+  });
   it("composes core and every advertised group to the complete public contract", async () => {
     await seedReferenceUniverse(ctx.db);
     const context = buildKernelContext(ctx.db);
@@ -230,7 +383,7 @@ describe("standard progressive list composition", () => {
       );
       const enrichment = await operation.enrich(context, {
         ids: base.data.map((row) => String(row.id)),
-        groups: base.groups.map((group) => group.id),
+        fields: base.groups.flatMap((group) => group.fields),
       });
       const patches = new Map(
         base.data.map((row) => [String(row.id), { ...row }]),

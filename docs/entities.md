@@ -659,6 +659,11 @@ stored `idMulti` back-filter on its target when none names this entity, so
 the generated predicate serves it without repository code. Every
 idMulti filter declares a `brandRef`, so its URL values stay shortcode-native
 and related-view filters stay usable as back-filters.
+Broad related-view filters over product-linked principal Expenses resolve
+effective Project assignments once per statement through the existing bulk
+inheritance owner. Bounded related-record reads retain scalar resolution.
+Both preserve explicit/default/household precedence and live-record guards;
+ID/presence alternatives remain separate from name-search witnesses.
 A relation section's create button seeds the descriptor's field on the new
 record: the descriptor key itself when it is a create field there, otherwise
 the one reference field on the target whose `reference.entity` equals the
@@ -1723,7 +1728,9 @@ reject dependency cycles, and supply browser and native metadata.
 Base reads perform authoritative filtering, ordering, grouping, pagination, and
 exact counts; expensive expressions that select or order rows still run before
 base results return. Enrichment reads accept public IDs, resolve declared
-dependencies, and return canonical patches for requested groups. Summaries apply
+dependencies, and return canonical patches for requested top-level fields. Each
+group result acknowledges exactly its requested fields; dependency outputs stay
+private unless requested. Core fields come from the base read. Summaries apply
 the complete filter population, including ID restrictions, independently of the
 visible page. Complete readers call the same selectors and loaders and validate
 the composed canonical result. Specialist workflows keep their own readers.
@@ -1731,11 +1738,16 @@ the composed canonical result. Specialist workflows keep their own readers.
 The browser list session and native enrichment model track field readiness
 separately: a pending value is not zero, a missing image, or healthy quality.
 Visible columns and structural/provider dependencies determine requested
-groups. Superseded work is cancelled, responses from earlier generations are
+fields. Groups retain loader and error ownership. The browser tracks completion
+per record and field, fetching only unfinished demand when columns change.
+Native group consumers request all advertised fields of their selected groups.
+Superseded work is cancelled, responses from earlier generations are
 discarded, and ready patches preserve row identity and order. A failed combined
 enrichment read falls back to the same reader per group so independent fields
 stay available; healthy batches select their page once. Failed groups can be
-retried.
+retried for their failed fields. Successful optional omissions remove retained
+values, and a missing successful patch never marks a record ready. Same-scope
+refreshes retain display values while fresh field completion is revalidated.
 
 MCP `entity_read.list` at the default summary detail publishes only
 `entitySummaryFields` (`contracts/mcp-projections.ts`), so it runs `listFields`:
@@ -1887,8 +1899,8 @@ pagination and input equality fingerprints retain their existing meanings.
 
 ## Filters and search
 
-Product expected-quantity range filters share a catalog kit walk and grouped
-Expense ledger before applying their bounds. They use the same signed unit
+Product expected-quantity range and unknown-quantity filters share catalog kit
+walks and grouped Expense ledgers before testing their values. They use the same signed unit
 contributions, live-ancestor rules, weights, and depth cap as the scalar and
 page-sized quantity reads; missing history still yields a known balance of zero.
 

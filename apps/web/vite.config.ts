@@ -305,6 +305,8 @@ export default defineConfig(async ({ command }) => {
     // Base UI timeout singleton into a cyclic chunk, crashing hydration.
     // Grouping UI primitives alongside icons with strictExecutionOrder also
     // stalled /products hydration (no uncaught exception); discard that combination.
+    // Bounded entry-aware packages/schemas grouping also read an undefined
+    // schema.shape during Product startup. Keep its default initialization graph.
     //   - @base-ui was tried and reverted: its grouped chunk is 243KB (80KB gzip)
     //     but the landing page only uses ~7KB of it, so grouping would drag
     //     lazy-route dialog/sheet code into first paint. Lazy-only deps (@nivo,

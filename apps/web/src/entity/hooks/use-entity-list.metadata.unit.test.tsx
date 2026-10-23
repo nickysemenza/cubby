@@ -64,6 +64,7 @@ const queryOptions = () => ({
       groups: [
         {
           id: "derived" as const,
+          fields: ["notes"],
           state: "ready" as const,
           data: [{ id: "PRD-TEST", notes: "Example note" }],
         },

@@ -1,6 +1,7 @@
 import type { Entity } from "@cubby/schemas/entity";
 import type { RelationshipPathStep } from "@cubby/schemas/entity-integrity";
 import { allEntities, entityManifest } from "@cubby/schemas/entity-manifest";
+import { expenseLineKindSchema } from "@cubby/schemas/expense-line-kind";
 import { is, type SQL, sql } from "drizzle-orm";
 import { getTableConfig, PgTable } from "drizzle-orm/pg-core";
 
@@ -11,7 +12,10 @@ import {
 import { INCOMING_EDGES } from "~/server/db/entity-incoming-edges";
 import * as schema from "~/server/db/schema";
 import { expenseDerivedReadSql } from "~/server/domains/expense/repo/expense-derived-read";
-import { effectiveExpenseProjectSql } from "~/server/domains/expense/repo/expense-inheritance";
+import {
+  effectiveExpenseProjectSql,
+  principalExpenseInheritanceSql,
+} from "~/server/domains/expense/repo/expense-inheritance";
 
 interface EdgeSpec {
   edgeKey: string;
@@ -230,6 +234,7 @@ function edgeCondition(
   sourceAlias: string,
   targetAlias: string,
   productScopedExpense: boolean,
+  materializePrincipalProjects: boolean,
 ): SQL {
   const target = sql.raw(`${targetAlias}."id"`);
   const inherited = inheritedEdge(edge);
@@ -237,11 +242,33 @@ function edgeCondition(
     return sql`${effectiveFieldSql(inherited.entity, inherited.field, sourceAlias)} = ${target}`;
   // The database requires a product-linked Expense to be principal. For a
   // product-scoped path, allocation is therefore the scalar effective project.
-  if (edge.edgeKey === "Expense.projectId" && productScopedExpense)
-    return sql`${effectiveExpenseProjectSql(
-      sourceAlias,
-      sql`${sql.raw(`${targetAlias}."shortcode"`)} = 'PRJ-HSHD'`,
-    )} = ${target}`;
+  if (edge.edgeKey === "Expense.projectId" && productScopedExpense) {
+    if (!materializePrincipalProjects)
+      return sql`${effectiveExpenseProjectSql(
+        sourceAlias,
+        sql`${sql.raw(`${targetAlias}."shortcode"`)} = 'PRJ-HSHD'`,
+      )} = ${target}`;
+    const inherited = principalExpenseInheritanceSql(
+      "related_expense",
+      "related_purchase",
+    );
+    // The uncorrelated relation avoids resolving Purchase defaults for each
+    // Expense/Project candidate pair while retaining the canonical precedence.
+    return sql`(${sql.raw(`${sourceAlias}."id"`)}, ${target}) IN (
+      WITH related_expense_projects AS MATERIALIZED (
+        SELECT related_expense."id", ${inherited.projectId} AS "projectId"
+        FROM "Expense" related_expense
+        LEFT JOIN "Purchase" related_purchase
+          ON related_purchase."id" = related_expense."purchaseId"
+          AND related_purchase."deletedAt" IS NULL
+        ${inherited.joins}
+        WHERE related_expense."deletedAt" IS NULL
+          AND related_expense."lineKind" = ${expenseLineKindSchema.enum.principal}
+          AND related_expense."productId" IS NOT NULL
+      )
+      SELECT "id", "projectId" FROM related_expense_projects
+    )`;
+  }
   if (edge.edgeKey === "Expense.projectId")
     return sql`(${sql.raw(`${sourceAlias}."id"`)}, ${target}) IN (
       SELECT attributed."expenseId", attributed."projectId"
@@ -292,6 +319,7 @@ const traversalEdgeCondition = (
   outgoing: boolean,
   productScopedExpense: boolean,
   mappedExpenseProject: boolean,
+  materializePrincipalProjects: boolean,
 ): SQL =>
   mappedExpenseProject
     ? sql`${sql.raw(`${alias}."effectiveProjectId"`)} = ${sql.raw(`${currentAlias}."id"`)}`
@@ -300,6 +328,7 @@ const traversalEdgeCondition = (
         outgoing ? currentAlias : alias,
         outgoing ? alias : currentAlias,
         productScopedExpense,
+        materializePrincipalProjects,
       );
 
 /**
@@ -320,6 +349,8 @@ export const compileTraversal = (
     to?: Entity;
     /** A page-wide effective Expense assignment relation supplied by the caller. */
     expenseProjectRelation?: string;
+    /** Broad filters resolve each principal assignment once; narrow reads stay scalar. */
+    materializePrincipalProjects?: boolean;
     /**
      * Names a caller-registered `InheritedRelation` for an incoming inherited
      * edge. Matching a target against each source row's effective value inline
@@ -408,6 +439,7 @@ export const compileTraversal = (
         outgoing,
         productScopedExpenseAt(steps, index),
         mappedExpenseProject,
+        aliases?.materializePrincipalProjects ?? false,
       ),
     });
     currentTable = nextTable;

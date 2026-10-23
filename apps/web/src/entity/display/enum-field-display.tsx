@@ -8,9 +8,9 @@ import { z } from "zod";
 
 import {
   fieldSuggestionBasisFromRecord,
-  suggestTargetsFor,
   type FieldSuggestionSource,
 } from "~/entity/suggestions/field-suggestion";
+import { suggestTargetsFor } from "~/entity/suggestions/suggestion-targets";
 import type { ScalarDisplayValue } from "~/ui/common/scalar-value";
 
 import {

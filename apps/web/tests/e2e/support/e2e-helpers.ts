@@ -1,5 +1,5 @@
 import { entityApi } from "./entity-api";
-import { SHORTCODE_BODY_PATTERN } from "@cubby/shared";
+import { getErrorMessage, SHORTCODE_BODY_PATTERN } from "@cubby/shared";
 import {
   expect,
   type Locator,
@@ -22,6 +22,8 @@ import {
 import {
   NAVIGATION_ANNOTATION,
   NAVIGATION_PHASES_ANNOTATION,
+  startStartupProfile,
+  STARTUP_PROFILE_ANNOTATION,
 } from "./navigation-timing";
 import { dispatchesOperation, operationResult } from "./dispatch-wire";
 
@@ -212,27 +214,55 @@ export async function gotoAuthenticatedPage(
 }
 
 async function timedNavigation(page: Page, step: () => Promise<void>) {
-  const started = performance.now();
-  await step();
-  test.info().annotations.push({
-    type: NAVIGATION_ANNOTATION,
-    description: String(Math.round(performance.now() - started)),
-  });
-  const phases = await page.evaluate(() => {
-    const [entry] = performance.getEntriesByType("navigation");
-    if (!(entry instanceof PerformanceNavigationTiming)) return null;
-    return [
-      entry.responseStart,
-      entry.responseEnd,
-      entry.domContentLoadedEventEnd,
-      performance.now(),
-    ].map(Math.round);
-  });
-  if (phases)
+  const recordUnavailable = (error: unknown) => {
     test.info().annotations.push({
-      type: NAVIGATION_PHASES_ANNOTATION,
-      description: phases.join(","),
+      type: STARTUP_PROFILE_ANNOTATION,
+      description: JSON.stringify({
+        unavailable: scrubErrorMessage(getErrorMessage(error)),
+      }),
     });
+  };
+  const profiler =
+    Boolean(process.env.CI) || process.env.CUBBY_E2E_STARTUP_PROFILE === "1"
+      ? await startStartupProfile(page).catch(recordUnavailable)
+      : undefined;
+  try {
+    const started = performance.now();
+    await step();
+    test.info().annotations.push({
+      type: NAVIGATION_ANNOTATION,
+      description: String(Math.round(performance.now() - started)),
+    });
+    const phases = await page.evaluate(() => {
+      const [entry] = performance.getEntriesByType("navigation");
+      if (!(entry instanceof PerformanceNavigationTiming)) return null;
+      return [
+        entry.responseStart,
+        entry.responseEnd,
+        entry.domContentLoadedEventEnd,
+        performance.now(),
+      ].map(Math.round);
+    });
+    if (phases)
+      test.info().annotations.push({
+        type: NAVIGATION_PHASES_ANNOTATION,
+        description: phases.join(","),
+      });
+    if (profiler) {
+      await profiler
+        .collect(phases?.[3] ?? null)
+        .then((profile) => {
+          test.info().annotations.push({
+            type: STARTUP_PROFILE_ANNOTATION,
+            description: JSON.stringify(profile),
+          });
+        })
+        .catch(recordUnavailable);
+    }
+  } finally {
+    // Profiling failures must not replace the correctness journey's result.
+    await profiler?.close().catch(recordUnavailable);
+  }
 }
 
 /**

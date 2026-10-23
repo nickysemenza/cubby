@@ -1,3 +1,4 @@
+import { flexRender } from "@tanstack/react-table";
 import {
   act,
   fireEvent,
@@ -11,8 +12,12 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { installFeatures } from "~/features/registry";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 import type { BulkActionsConfig } from "~/ui/data-table/bulk-actions.types";
-import { createCubbyColumnCollection } from "~/ui/data-table/table-features";
+import {
+  createCubbyColumnCollection,
+  createCubbyColumnHelper,
+} from "~/ui/data-table/table-features";
 
+import type { ListEnrichmentResponse } from "./progressive-list";
 import { useEntityList } from "./use-entity-list";
 
 installFeatures();
@@ -58,6 +63,116 @@ afterEach(() => {
 });
 
 describe("useEntityList", () => {
+  it("keeps a saved category usable while hidden AI evidence loads or fails", async () => {
+    const gate = Promise.withResolvers<ListEnrichmentResponse>();
+    const helper = createCubbyColumnHelper<TestRow>();
+    const columns = createCubbyColumnCollection<TestRow>((add) => {
+      add(
+        helper.display({
+          id: "categoryId",
+          cell: () => <a href="/categories/synthetic">Saved category</a>,
+        }),
+      );
+    });
+    let attempted = false;
+    const queryOptions = () => ({
+      queryKey: ["test", "category-basis-readiness"],
+      execute: async () => ({
+        items: [TEST_ROWS[0]!],
+        meta: { pageIndex: 0, pageSize: 25, totalCount: 1 },
+        deferredGroups: [
+          { id: "quality" as const, fields: ["classificationEvidence"] },
+        ],
+      }),
+      progressive: {
+        enrich: async (): Promise<ListEnrichmentResponse> => {
+          if (!attempted) {
+            attempted = true;
+            return gate.promise;
+          }
+          return {
+            groups: [
+              {
+                id: "quality",
+                fields: ["classificationEvidence"],
+                state: "ready",
+                data: [{ id: TEST_ROWS[0]!.id, classificationEvidence: null }],
+              },
+            ],
+            missingIds: [],
+          };
+        },
+        summary: async () => ({}),
+      },
+    });
+    function CategoryTable() {
+      const list = useEntityList<TestRow, Record<string, never>>({
+        entity: "product",
+        queryOptions,
+        buildFilters: () => ({}),
+        columns,
+      });
+      const cell = list.workbench.table
+        .getRowModel()
+        .rows[0]?.getVisibleCells()
+        .find((entry) => entry.column.id === "categoryId");
+      return (
+        <>
+          {cell && flexRender(cell.column.columnDef.cell, cell.getContext())}
+          <output aria-label="AI basis readiness">
+            {String(
+              list.workbench.isFieldReady?.(
+                TEST_ROWS[0]!.id,
+                "classificationEvidence",
+              ),
+            )}
+          </output>
+          <button onClick={() => void list.retryEnrichment?.(0, "quality")}>
+            Retry evidence
+          </button>
+        </>
+      );
+    }
+    render(<CategoryTable />, { wrapper: harness.routerWrapper });
+    await waitFor(() =>
+      expect(
+        screen.getByRole("link", { name: "Saved category" }),
+      ).toBeVisible(),
+    );
+    expect(screen.getByLabelText("AI basis readiness")).toHaveTextContent(
+      "false",
+    );
+    await act(async () =>
+      gate.resolve({
+        groups: [
+          {
+            id: "quality",
+            fields: ["classificationEvidence"],
+            state: "error",
+            error: {
+              code: "INTERNAL_SERVER_ERROR",
+              message: "Synthetic evidence failure",
+            },
+          },
+        ],
+        missingIds: [],
+      }),
+    );
+    expect(
+      screen.getByRole("link", { name: "Saved category" }),
+    ).toHaveAttribute("href", "/categories/synthetic");
+    expect(screen.getByLabelText("AI basis readiness")).toHaveTextContent(
+      "false",
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Retry evidence" }));
+    await waitFor(() =>
+      expect(screen.getByLabelText("AI basis readiness")).toHaveTextContent(
+        "true",
+      ),
+    );
+    expect(screen.getByRole("link", { name: "Saved category" })).toBeVisible();
+  });
+
   it("accepts typed dialog and pagination search alongside list filters", async () => {
     harness.dispose();
     harness = createBrowserTestHarness({

@@ -602,6 +602,18 @@ of a shard. Record video for a
 run with `CUBBY_E2E_VIDEO=1`. RTable's placeholder transition can eat clicks;
 cell-edit tests retry opening and filling as one action.
 
+Temporary CI startup profiling accompanies existing navigation annotations during
+#3025's shared-cost investigation; `CUBBY_E2E_STARTUP_PROFILE=1` enables it locally.
+It records the shell marker's mutation time, the helper's observed-ready time,
+same-origin static script counts/bytes/latest responses and Chromium thread CPU
+counter deltas. It captures no application URLs, request bodies or record data.
+Task CPU includes script/layout/style work: do not add those categories or
+concurrent resource durations, or interpret across-case sums as lane wall time.
+Missing/reset CPU counters are null; diagnostic errors are annotated rather than
+replacing the correctness result. Keep the actual hydration wait unchanged.
+Use the measurements to choose one shared fix, then remove this temporary probe
+once attribution and that fix's hosted comparison are established.
+
 Responsive table toolbars mount both desktop and phone branches during SSR.
 After navigation, use a retrying `toHaveCount(1)` assertion on the role locator
 and `toBeEnabled()` before a strict search action. Playwright resolves strict
@@ -910,6 +922,30 @@ Purchase Email review retains dismissal across reload, replacement with a link,
 Email original navigation and failed-preview evidence preservation. Vendor Email
 link composition stays in `purchase-import-run.spec.ts`; the review journey
 opens the Email directly from its Purchase row.
+
+The structured identifier browser journey applies Add, explicit primary choice
+and Replace in one draft, checks the exact saved secondary/primary values, then
+removes the saved secondary and checks the survivor. It avoids two intermediate
+save/reopen cycles. Locate saved collection rows by their value: a combined
+Add/Replace can reorder them, so a positional Remove label is not stable identity.
+The existing `collection-patch.integration.test.ts` case
+"adding identifiers preserves existing values and primary, and explicit promotion
+retains both" owns add-only preservation and promotion without deletion;
+`collection-edit.unit.test.ts` owns baseline-preserving Add, atomic identity
+Replace, explicit promotion and removal requests. `structured-value-field.unit.test.tsx`
+owns removal surviving a same-record refresh. The add-only and promotion-only
+browser save states are deliberate gaps.
+
+Work queue routing keeps real Either → member filtering, deduplicated copied
+source codes, cleared selection, scoped source href, routing URL and actual
+Email navigation. It omits the reload, No value → Either permutations and mobile
+resize from this journey. Shared queue SQL owns filtering before counts/paging
+and retained Run authority; unresolved-account No value picker composition,
+member-filter reload persistence and Work queue mobile width are deliberate gaps.
+The separate queue scroll/sort/inspector journey remains. List delete creates
+both Tasks in one committed fixture graph; its held delete, six-times CPU
+throttle, pending disablement, precommit existence, row removal and final 404
+read-back remain unchanged.
 
 ## Test and dev data factories
 

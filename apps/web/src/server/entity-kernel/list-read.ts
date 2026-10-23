@@ -12,20 +12,18 @@ import {
 } from "~/entity/model/list-read-fields";
 import {
   listReadFields,
-  projectListRows,
+  listGroupsForFields,
   selectListReadRows,
 } from "~/entity/model/list-read-schema";
 import { withListEntityMedia } from "~/server/entity-kernel/repo/entity-display-image";
 import { withRecordEmoji } from "~/server/entity-kernel/repo/entity-emoji";
+import { ListPreparationScope } from "~/server/generic/list/repo/field-compiler";
 import {
   listFacetCounter,
   withListGroupBy,
 } from "~/server/generic/list/repo/list";
 import { listTotalLabels } from "~/server/generic/list/repo/list-display-labels";
-import {
-  expandListGroups,
-  selectedListProjection,
-} from "~/server/generic/list/repo/list-projection";
+import { selectedListProjection } from "~/server/generic/list/repo/list-projection";
 import { withListReadTracing } from "~/server/observability/list-read-tracing";
 import { withTrace } from "~/server/observability/tracing";
 import { normalizeStartOperationError } from "~/server/operation-runtime/start-operation.server";
@@ -109,9 +107,9 @@ export function defineProgressiveListOperations<
   const readEnrichment = async (
     context: EntityKernelContext,
     ids: string[],
-    requested: readonly ListEnrichmentGroup[],
+    requested: readonly string[],
   ) => {
-    const fields = listReadFields(binding.entity);
+    const projection = selectedListProjection(binding.entity, requested);
     const filters = await filtersFor(context, { ids });
     const page = await withTrace(
       "entity.list.enrichment",
@@ -128,19 +126,16 @@ export function defineProgressiveListOperations<
               filters,
               [],
               { pageIndex: 0, pageSize: 500 },
-              {
-                kind: "enrichment",
-                groups: expandListGroups(requested, fields.dependencies),
-              },
+              projection,
             ),
         ),
       {
         "entity.kind": binding.entity,
-        "list.groups": requested.join(","),
+        "list.fields": requested.join(","),
         "list.rows": ids.length,
       },
     );
-    if (!requested.includes("media")) return page;
+    if (!projection.groups.includes("media")) return page;
     return {
       ...page,
       data: z
@@ -266,38 +261,49 @@ export function defineProgressiveListOperations<
       context: EntityKernelContext,
       value: {
         ids: string[];
-        groups: ("media" | "quality" | "relations" | "derived")[];
+        fields: string[];
       },
     ) {
       const ids = [...new Set(value.ids)];
       for (const id of ids) binding.schemas.id.parse(id);
-      const groups = [...new Set(value.groups)];
+      const requestedFields = selectedListProjection(
+        binding.entity,
+        value.fields,
+      ).fields;
       const fields = listReadFields(binding.entity);
-      for (const group of groups)
-        if (!fields[group].length)
-          throw new Error(`Unsupported list group: ${binding.entity}.${group}`);
-      if (!ids.length)
+      for (const field of requestedFields)
+        if (fields.core.includes(field))
+          throw new Error(
+            `List enrichment requires a deferred field: ${binding.entity}.${field}`,
+          );
+      const groups = listGroupsForFields(binding.entity, requestedFields);
+      const fieldsFor = (group: ListEnrichmentGroup) =>
+        requestedFields.filter((field) => fields[group].includes(field));
+      if (!ids.length || !groups.length)
         return {
           entity: binding.entity,
           groups: groups.map((id) => ({
             id,
+            fields: fieldsFor(id),
             state: "ready" as const,
             data: [],
           })),
           missingIds: [],
         };
       const readGroups = async (requested: typeof groups) => {
-        const page = await readEnrichment(context, ids, requested);
+        const page = await readEnrichment(
+          context,
+          ids,
+          requested.flatMap(fieldsFor),
+        );
         const found = new Set(page.data.map((row) => row.id));
         return {
           entity: binding.entity,
           groups: requested.map((id) => ({
             id,
+            fields: fieldsFor(id),
             state: "ready" as const,
-            data: projectListRows(binding.entity, page.data, {
-              kind: "enrichment",
-              groups: [id],
-            }),
+            data: selectListReadRows(binding.entity, page.data, fieldsFor(id)),
           })),
           missingIds: ids.filter((id) => !found.has(id)),
         };
@@ -320,6 +326,7 @@ export function defineProgressiveListOperations<
           entity: binding.entity,
           groups: requested.map((id) => ({
             id,
+            fields: fieldsFor(id),
             state: "error" as const,
             error: normalized.publicError,
           })),
@@ -381,6 +388,7 @@ export function defineProgressiveListOperations<
      */
     async viewCounts(context: EntityKernelContext, value: unknown) {
       const { views } = viewCountsInputSchema.parse(value);
+      const preparation = new ListPreparationScope(context.db);
       const countOf = async (raw: z.output<typeof inputSchema>["filters"]) =>
         (
           await reader()(
@@ -390,6 +398,7 @@ export function defineProgressiveListOperations<
             { pageIndex: 0, pageSize: 1 },
             { kind: "base" },
             "count",
+            preparation,
           )
         ).count;
       const [total, ...counts] = await withTrace(

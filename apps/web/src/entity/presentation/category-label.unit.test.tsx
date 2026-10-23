@@ -98,7 +98,14 @@ describe("CategoryLabelById", () => {
           ok: true,
           data: {
             entity: "productCategory",
-            groups: [{ id: "relations", state: "ready", data: [root] }],
+            groups: [
+              {
+                id: "relations",
+                fields: ["parentId", "path", "effectiveFeature"],
+                state: "ready",
+                data: [root],
+              },
+            ],
             missingIds: [],
           },
         };
@@ -152,7 +159,14 @@ describe("CategoryLabelById", () => {
           ok: true,
           data: {
             entity: "productCategory",
-            groups: [{ id: "relations", state: "ready", data: firstPage }],
+            groups: [
+              {
+                id: "relations",
+                fields: ["parentId", "path", "effectiveFeature"],
+                state: "ready",
+                data: firstPage,
+              },
+            ],
             missingIds: [],
           },
         };
@@ -205,7 +219,9 @@ describe("CategoryLabelById", () => {
     const restore = overrideStartDispatch(async (operation, input) => {
       operations.push(operation);
       if (operation === "entity.listEnrichment") {
-        const { ids } = z.object({ ids: z.array(z.string()) }).parse(input);
+        const { ids, fields } = z
+          .object({ ids: z.array(z.string()), fields: z.array(z.string()) })
+          .parse(input);
         return {
           ok: true,
           data: {
@@ -213,6 +229,7 @@ describe("CategoryLabelById", () => {
             groups: [
               {
                 id: "relations",
+                fields,
                 state: "ready",
                 data: [...firstPage, child].filter((row) =>
                   ids.includes(row.id),
@@ -236,7 +253,12 @@ describe("CategoryLabelById", () => {
         data: {
           entity: "productCategory",
           data: pagination.pageIndex === 0 ? firstPage : [child],
-          groups: [{ id: "relations", fields: ["parentId", "path"] }],
+          groups: [
+            {
+              id: "relations",
+              fields: ["parentId", "path", "effectiveFeature"],
+            },
+          ],
           meta: {
             pageIndex: pagination.pageIndex,
             pageSize: 500,

@@ -30,7 +30,6 @@ import { preferredImageUrl } from "@cubby/schemas/image-summary";
 import {
   type PaginationParams,
   type ListGroupSummary,
-  presenceFilter,
   type SortParams,
 } from "@cubby/schemas/pagination";
 import type {
@@ -59,7 +58,6 @@ import {
 } from "drizzle-orm";
 import { QueryBuilder } from "drizzle-orm/pg-core";
 import { groupBy, uniq } from "es-toolkit";
-import { z } from "zod";
 
 import { projectListRows } from "~/entity/model/list-read-schema";
 import { startOperationDefinition } from "~/lib/start-operation-observability";
@@ -120,7 +118,8 @@ import { productHasDisplayableImageSql } from "~/server/domains/image/repo/image
 import { hydrateImageReadProjection } from "~/server/domains/image/repo/image-read-projection";
 import {
   loadProductOwners,
-  productIdsByOwner,
+  loadProductOwnerMembership,
+  selectProductIdsByOwner,
 } from "~/server/domains/inventory/repo/ownership";
 import { loadCategoryStockTracking } from "~/server/domains/inventory/repo/stock-tracking";
 import {
@@ -161,7 +160,9 @@ import {
 import { liveLinks } from "~/server/generic/entity-links/repo/entity-links";
 import { validateLiveInheritedPolicies } from "~/server/generic/inheritance/repo/inheritance-validation";
 import {
-  listPrepare,
+  sharedListPrepare,
+  type AnyOfValue,
+  type ListPreparationScope,
   listReadValue,
 } from "~/server/generic/list/repo/field-compiler";
 import { hierarchyDescendantsSql } from "~/server/generic/list/repo/hierarchy";
@@ -227,6 +228,7 @@ import {
   expectedQuantitySql,
   hasUnknownAcquisitionLinesSql,
   hasUnknownQuantityLinesSql,
+  unknownQuantityLinesReadSql,
   loadProductPickerQuantities,
   onHandUnitsFilterSql,
   onHandUnitsSql,
@@ -252,19 +254,8 @@ import {
 
 const qb = new QueryBuilder();
 
-const ownerFilterCodes = z
-  .union([z.string(), z.array(z.string())])
-  .optional()
-  .transform((value) => (value === undefined ? [] : [value].flat()));
-
 // The ownership resolver runs once per request, only when it filters by owner.
-const ownedProducts = listPrepare((db, filters) =>
-  productIdsByOwner(
-    db,
-    ownerFilterCodes.parse(filters.ownerLedgerPartyId),
-    presenceFilter.parse(filters.ownerPresenceFilter),
-  ),
-);
+const ownedProducts = sharedListPrepare(loadProductOwnerMembership);
 
 // Cross-entity filters stay uncorrelated id-set subqueries.
 const productIdsWithLiveInventory = qb
@@ -437,14 +428,22 @@ const productScaffold = listScaffold("product", product, {
     // category default takes its members out of it.
     stockTrackedDecided: sql`${effectiveFieldSql("product", "stockTracked")} IS NOT NULL`,
     miscBucket: sql`lower(${product.name}) LIKE 'misc:%'`,
-    unknownQuantityLines: hasUnknownQuantityLinesSql(product.id),
+    unknownQuantityLines: {
+      value: hasUnknownQuantityLinesSql(product.id),
+      set: unknownQuantityLinesReadSql(),
+    },
     priced: listReadValue(
       (read) =>
         sql`(${product.price} IS NOT NULL OR ${hasDerivedProductPriceSql(product.id, read)})`,
     ),
-    effectiveOwner: ownedProducts.predicate((ids) =>
-      ids.length === 0 ? sql`false` : inArray(product.id, ids),
-    ),
+    effectiveOwner: ownedProducts.predicate<AnyOfValue>((prepared, value) => {
+      const ids = selectProductIdsByOwner(
+        prepared,
+        value.values,
+        value.presence,
+      );
+      return ids.length === 0 ? sql`false` : inArray(product.id, ids);
+    }),
   },
 });
 
@@ -689,11 +688,13 @@ const productWhere = async (
   db: Database,
   filters: ProductListFilters,
   readContext?: QualityReadContext,
+  preparation?: ListPreparationScope,
 ) => {
   // Filter-only: owners resolve only when a filter asks.
   const context = await productScaffold.context(db, {
     filters,
     readIntent: "count",
+    preparation,
   });
   return {
     where: productScaffold.where(filters, { context, readContext }),
@@ -887,6 +888,7 @@ export const listProductsRead = async (
   readIntent: ListReadIntent = "page",
   usdaClient?: Pick<USDAClient, "findFoodsBatch">,
   projection: ListProjection = { kind: "full" },
+  preparation?: ListPreparationScope,
 ): Promise<ProductListReadResult> => {
   const foodFields = productListItemOut.pick({
     food: true,
@@ -1169,7 +1171,7 @@ export const listProductsRead = async (
       ];
     },
   });
-  const filtered = await productWhere(db, filters);
+  const filtered = await productWhere(db, filters, undefined, preparation);
   const [{ results, totalCount, groups, memberships, membershipCount }, sums] =
     await Promise.all([
       readProductListPage(

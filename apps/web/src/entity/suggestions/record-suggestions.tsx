@@ -38,6 +38,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useMemo,
   useRef,
   useState,
   type ContextType,
@@ -88,15 +89,12 @@ import { Spinner } from "~/ui/primitives/spinner";
 
 import {
   fieldSuggestionBasisFromRecord,
-  suggestTargetsFor,
-  suggestionContextKeys,
   isBasisSufficient,
   basisValueOf,
   savedSuggestionEntityId,
   productionEntitySuggestionsOperations,
   type EntitySuggestionsOperations,
   type FieldSuggestionSource,
-  type SuggestTargets,
 } from "./field-suggestion";
 import {
   SuggestionBody,
@@ -116,6 +114,13 @@ import {
   SuggestionStatus,
   type SuggestionStatusField,
 } from "./suggestion-status";
+import {
+  suggestTargetsFor,
+  suggestionContextKeys,
+  visibleSuggestTargets,
+  suggestionReadFields,
+  type SuggestTargets,
+} from "./suggestion-targets";
 import { useFinanceCategoryApply } from "./use-finance-category-apply";
 
 const SuggestionSchedulerContext = createContext<ReturnType<
@@ -124,6 +129,10 @@ const SuggestionSchedulerContext = createContext<ReturnType<
 const ActiveSuggestionRecordsContext = createContext<
   ((id: string) => () => void) | null
 >(null);
+const RecordSuggestionFieldsContext = createContext<{
+  entity: StandardEntity;
+  fields: ReadonlySet<string>;
+} | null>(null);
 
 const recordSchema = z.looseObject({ id: z.string() });
 const mutationPatchSchema = z.record(z.string(), z.json());
@@ -521,6 +530,7 @@ function suggestionRequestsForRecord(
   record: SuggestionRecord,
   plans: ReturnType<typeof suggestionTargetPlans>,
   runKey: string,
+  isFieldReady?: (id: string, field: string) => boolean,
 ) {
   const resolutions = recordFieldResolutions(record);
   return plans.flatMap(({ target, ownTargets, basisTargets, field }) => {
@@ -534,6 +544,10 @@ function suggestionRequestsForRecord(
       currentValue !== null;
     if (
       !loaded ||
+      (isFieldReady &&
+        !suggestionReadFields(entity, basisTargets).every((key) =>
+          isFieldReady(record.id, key),
+        )) ||
       !isBasisSufficient(entity, ownTargets, basis) ||
       (entity === "expense" &&
         target.key === "projectId" &&
@@ -647,6 +661,7 @@ export function RecordSuggestionsProvider({
   mutationPort,
   readRecord,
   storedSuggestionOperations,
+  isFieldReady,
 }: {
   entity: Entity | undefined;
   records: readonly unknown[];
@@ -661,6 +676,7 @@ export function RecordSuggestionsProvider({
     id: string,
   ) => Promise<SuggestionRecord | null>;
   storedSuggestionOperations?: StoredSuggestionOperations;
+  isFieldReady?: (id: string, field: string) => boolean;
 }) {
   const crud = generatedBrowserCrudEntities.find(
     (candidate) => candidate === entity,
@@ -678,34 +694,11 @@ export function RecordSuggestionsProvider({
         mutationPort={mutationPort}
         readRecord={readRecord}
         storedSuggestionOperations={storedSuggestionOperations}
+        isFieldReady={isFieldReady}
       >
         {children}
       </BoundRecordSuggestions>
     </SuggestionVisitProvider>
-  );
-}
-
-/** The suggest targets a roster of visible field keys makes reachable —
- * shared by request-building and the "never asked" status line, so both
- * agree on what "this entity's suggestable fields" means for a given view. */
-function visibleSuggestTargets(
-  entity: StandardEntity,
-  fieldKeys: readonly string[],
-) {
-  const visible = new Set(fieldKeys);
-  const updateFields: readonly string[] = entityFieldModels[entity].update;
-  return suggestTargetsFor(
-    entity,
-    entityFieldModels[entity].fields
-      .filter(
-        (field) =>
-          visible.has(field.key) ||
-          (field.reference != null &&
-            visible.has(field.key.replace(/Id$/u, ""))) ||
-          visible.has(field.display.columnId ?? field.key),
-      )
-      .map((field) => field.key)
-      .filter((key) => updateFields.includes(key)),
   );
 }
 
@@ -731,6 +724,7 @@ function requestsForRecords(
   records: readonly unknown[],
   targets: SuggestTargets,
   runKey: string,
+  isFieldReady?: (id: string, field: string) => boolean,
 ) {
   if (targets.targets.length === 0) return [];
   const plans = suggestionTargetPlans(entity, targets);
@@ -738,7 +732,13 @@ function requestsForRecords(
     const parsed = recordSchema.safeParse(raw);
     if (!parsed.success || parseShortcode(parsed.data.id)?.type !== entity)
       return [];
-    return suggestionRequestsForRecord(entity, parsed.data, plans, runKey);
+    return suggestionRequestsForRecord(
+      entity,
+      parsed.data,
+      plans,
+      runKey,
+      isFieldReady,
+    );
   });
 }
 
@@ -1135,6 +1135,7 @@ function BoundRecordSuggestions({
   readRecord = async (currentEntity, id) =>
     recordSchema.parse(await entityDetailFor(currentEntity).readFresh(id)),
   storedSuggestionOperations = productionStoredSuggestionOperations,
+  isFieldReady,
 }: {
   entity: StandardEntity;
   records: readonly unknown[];
@@ -1149,6 +1150,7 @@ function BoundRecordSuggestions({
     id: string,
   ) => Promise<SuggestionRecord | null>;
   storedSuggestionOperations?: StoredSuggestionOperations;
+  isFieldReady?: (id: string, field: string) => boolean;
 }) {
   const visit = useSuggestionVisit();
   const [activeRecordIds, setActiveRecordIds] = useState<ReadonlySet<string>>(
@@ -1305,7 +1307,13 @@ function BoundRecordSuggestions({
   for (const key of accepted.keys()) stored.delete(key);
   // Every target is its own request; settled questions are read only for
   // requests the stored read leaves uncovered.
-  const pageRequests = requestsForRecords(entity, records, targets, runKey);
+  const pageRequests = requestsForRecords(
+    entity,
+    records,
+    targets,
+    runKey,
+    isFieldReady,
+  );
   const recordReady = (id: string) =>
     pageFields.length === 0 || knownRecordIds.has(id);
   const readyRecords = records.filter((record) =>
@@ -1404,6 +1412,25 @@ function BoundRecordSuggestions({
       ),
     );
   }
+  const participatingFieldsKey = JSON.stringify(
+    [
+      ...new Set([
+        ...pageFields,
+        ...[...stored.values()].map((proposal) => proposal.field),
+        ...[...accepted.values()].map((value) => value.field),
+        ...[...rows.values()].flatMap((row) => [...row.sourceByField.keys()]),
+      ]),
+    ].sort(),
+  );
+  const fieldScope = useMemo(
+    () => ({
+      entity,
+      fields: new Set(
+        textArraySchema.parse(JSON.parse(participatingFieldsKey)),
+      ),
+    }),
+    [entity, participatingFieldsKey],
+  );
   const context = {
     entity,
     runKey,
@@ -1674,29 +1701,31 @@ function BoundRecordSuggestions({
       value={viewportOnly ? activateRecord : null}
     >
       <SuggestionSchedulerContext value={scheduler}>
-        <RecordSuggestionsContext value={context}>
-          <SuggestionStatusPlacement target={statusTarget}>
-            {status}
-          </SuggestionStatusPlacement>
-          {children}
-          {correctionRecord ? (
-            <EntityEditDialog<EditableEntity>
-              open
-              onOpenChange={(open) => {
-                if (!open) setCorrectionRecord(null);
-              }}
-              request={
-                // SAFETY: StandardEntity is the generated browser-editable
-                // roster, and correctionRecord is its freshly read projection.
-                detailEditRequest(
-                  entity,
-                  correctionRecord as never,
-                ) as EntityEditDialogRequest<EditableEntity>
-              }
-              mutationPort={mutationPort}
-            />
-          ) : null}
-        </RecordSuggestionsContext>
+        <RecordSuggestionFieldsContext value={fieldScope}>
+          <RecordSuggestionsContext value={context}>
+            <SuggestionStatusPlacement target={statusTarget}>
+              {status}
+            </SuggestionStatusPlacement>
+            {children}
+            {correctionRecord ? (
+              <EntityEditDialog<EditableEntity>
+                open
+                onOpenChange={(open) => {
+                  if (!open) setCorrectionRecord(null);
+                }}
+                request={
+                  // SAFETY: StandardEntity is the generated browser-editable
+                  // roster, and correctionRecord is its freshly read projection.
+                  detailEditRequest(
+                    entity,
+                    correctionRecord as never,
+                  ) as EntityEditDialogRequest<EditableEntity>
+                }
+                mutationPort={mutationPort}
+              />
+            ) : null}
+          </RecordSuggestionsContext>
+        </RecordSuggestionFieldsContext>
       </SuggestionSchedulerContext>
     </ActiveSuggestionRecordsContext>
   );
@@ -1932,13 +1961,7 @@ function ResolvedFieldSuggestion({
   );
 }
 
-export function RecordFieldSuggestion({
-  record,
-  field: column,
-  children,
-  surface = "inline",
-  renderValue,
-}: {
+type RecordFieldSuggestionProps = {
   record: unknown;
   field: string;
   children: ReactNode;
@@ -1946,7 +1969,26 @@ export function RecordFieldSuggestion({
    * 32px table row; `"inline"` (detail facts, phone cards) renders it directly. */
   surface?: "inline" | "cell";
   renderValue?: (value: JsonValue) => ReactNode;
-}) {
+};
+
+export function RecordFieldSuggestion(props: RecordFieldSuggestionProps) {
+  const scope = useContext(RecordSuggestionFieldsContext);
+  const field = scope
+    ? findEntityField(scope.entity, props.field)?.key
+    : undefined;
+  // Retained proposals may outlive automatic admission for their field.
+  // Only cells outside both current admission and retained state can opt out.
+  if (!field || !scope?.fields.has(field)) return props.children;
+  return <BoundRecordFieldSuggestion {...props} />;
+}
+
+function BoundRecordFieldSuggestion({
+  record,
+  field: column,
+  children,
+  surface = "inline",
+  renderValue,
+}: RecordFieldSuggestionProps) {
   const context = useContext(RecordSuggestionsContext);
   const parsed = recordSchema.safeParse(record);
   const row = parsed.success ? context?.rows.get(parsed.data.id) : undefined;

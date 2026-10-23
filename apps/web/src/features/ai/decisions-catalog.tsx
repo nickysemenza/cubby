@@ -32,10 +32,8 @@ import { Description } from "~/ui/primitives/description";
 import { Input } from "~/ui/primitives/input";
 import { NoneValue } from "~/ui/primitives/none-value";
 
-import {
-  fieldSuggestionBasisFromRecord,
-  suggestTargetsFor,
-} from "../../entity/suggestions/field-suggestion";
+import { fieldSuggestionBasisFromRecord } from "../../entity/suggestions/field-suggestion";
+import { suggestTargetsFor } from "../../entity/suggestions/suggestion-targets";
 
 const helper = createCubbyColumnHelper<DecisionCatalogRow>();
 const TRIAL_MODELS = ["typesafe/jev", "@cf/cloudflare/clef"] as const;

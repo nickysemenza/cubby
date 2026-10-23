@@ -2,8 +2,39 @@ import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
 import { compileListReadSchema } from "~/entity/model/list-read-fields";
+import { readListEnrichmentGroup } from "~/ui/hooks/list-enrichment";
 
 import { entityListEnrichmentOutputSchema } from "../generated/entity-lists.gen";
+
+it("refuses incomplete or mismatched complete-page enrichment acknowledgements", () => {
+  const requested = { id: "derived" as const, fields: ["unitPrice"] };
+  const result = {
+    id: "derived" as const,
+    state: "ready" as const,
+    fields: ["unitPrice"],
+    data: [{ id: "synthetic", unitPrice: null, unwanted: 3 }],
+  };
+  const read = (value: typeof result) =>
+    readListEnrichmentGroup({
+      ids: ["synthetic"],
+      requested,
+      result: value,
+      missingIds: [],
+    });
+  expect([...read(result).values()]).toEqual([
+    { id: "synthetic", unitPrice: null },
+  ]);
+  expect(() => read({ ...result, fields: [] })).toThrow("acknowledgement");
+  expect(() => read({ ...result, fields: ["unitPrice", "unitPrice"] })).toThrow(
+    "acknowledgement",
+  );
+  expect(() => read({ ...result, data: [] })).toThrow(
+    "Missing derived enrichment row",
+  );
+  expect(() =>
+    read({ ...result, data: [...result.data, ...result.data] }),
+  ).toThrow("Unexpected derived enrichment row");
+});
 
 describe("list field ownership", () => {
   const schema = z.object({
@@ -55,14 +86,16 @@ it("enrichment wire parsing keeps group ownership and explicit nullable values",
     entity: "financialTransaction",
     missingIds: [],
     groups: [
-      { id: "media", state: "ready", data: [{ id: "FTX-4K7M" }] },
+      { id: "media", fields: [], state: "ready", data: [{ id: "FTX-4K7M" }] },
       {
         id: "relations",
+        fields: ["ledgerTransferId"],
         state: "ready",
         data: [{ id: "FTX-4K7M", ledgerTransferId: null }],
       },
       {
         id: "derived",
+        fields: ["itemization"],
         state: "ready",
         data: [{ id: "FTX-4K7M", itemization: "bare" }],
       },
@@ -85,6 +118,7 @@ it("enrichment wire parsing keeps group ownership and explicit nullable values",
       groups: [
         {
           id: "relations",
+          fields: ["ledgerTransferId"],
           state: "ready",
           data: [{ id: "FTX-4K7M", ledgerTransferId: 7 }],
         },

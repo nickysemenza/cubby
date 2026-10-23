@@ -19,6 +19,7 @@ import {
   type EntitySchemaBindingEntity,
   type EntitySchemaBindingMap,
 } from "~/server/generated/entity-bindings.gen";
+import type { ListPreparationScope } from "~/server/generic/list/repo/field-compiler";
 import type {
   ListProjection,
   ListReadPage,
@@ -169,6 +170,7 @@ export type EntityRepository<
     pagination: PaginationParams,
     projection: ListProjection,
     readIntent?: Extract<ListReadIntent, "page" | "count">,
+    preparation?: ListPreparationScope,
   ): Promise<ListReadPage<ListReadRow>>;
   listSummary?(
     ctx: EntityKernelContext,

@@ -11,6 +11,7 @@ import type {
   RelatedSummaryOutput,
   RelatedSummaryRelationKey,
   RelatedViewKey,
+  RelatedViewDefinition,
 } from "@cubby/schemas/related-view";
 import {
   relatedFilterPrefix,
@@ -223,16 +224,16 @@ const sqlRelatedView = (key: RelatedViewKey) => {
  * Most curated views compile their primary graph path. Purchase ↔ Product
  * identity unions both evidence sources, matching the detail cards and graph.
  */
-const COMPILED_RELATED_JOINS = new Map<RelatedViewKey, SQL>(
-  relatedViewRegistry.map((view) => {
-    if (view.key === "product.purchases" || view.key === "purchase.products") {
-      const fromProduct = view.key === "product.purchases";
-      const sourceColumn = fromProduct ? "productId" : "purchaseId";
-      const targetColumn = fromProduct ? "purchaseId" : "productId";
-      const targetTable = entityManifest[view.target].dbTable;
-      return [
-        view.key,
-        sql`INNER JOIN (
+const compileRelatedJoins = (
+  view: RelatedViewDefinition,
+  materializePrincipalProjects = false,
+): SQL => {
+  if (view.key === "product.purchases" || view.key === "purchase.products") {
+    const fromProduct = view.key === "product.purchases";
+    const sourceColumn = fromProduct ? "productId" : "purchaseId";
+    const targetColumn = fromProduct ? "purchaseId" : "productId";
+    const targetTable = entityManifest[view.target].dbTable;
+    return sql`INNER JOIN (
         SELECT "purchaseId", "productId" FROM "Expense"
           WHERE "deletedAt" IS NULL AND "productId" IS NOT NULL
         UNION
@@ -240,21 +241,34 @@ const COMPILED_RELATED_JOINS = new Map<RelatedViewKey, SQL>(
           FROM "EntityLink" WHERE "kind" = 'purchaseProduct' AND "deletedAt" IS NULL
       ) related_pairs ON ${sql.raw(`related_pairs."${sourceColumn}"`)} = s."id"
       INNER JOIN ${sql.raw(`"${targetTable}"`)} t
-        ON t."id" = ${sql.raw(`related_pairs."${targetColumn}"`)} AND t."deletedAt" IS NULL`,
-      ];
-    }
-    return [
-      view.key,
-      compileTraversal(view.source, relatedViewPath(view), "related", {
-        root: "s",
-        leaf: "t",
-        to: view.target,
-      }).joins,
-    ];
-  }),
+        ON t."id" = ${sql.raw(`related_pairs."${targetColumn}"`)} AND t."deletedAt" IS NULL`;
+  }
+  return compileTraversal(view.source, relatedViewPath(view), "related", {
+    root: "s",
+    leaf: "t",
+    to: view.target,
+    materializePrincipalProjects,
+  }).joins;
+};
+const COMPILED_RELATED_JOINS = new Map<RelatedViewKey, SQL>(
+  relatedViewRegistry.map((view) => [view.key, compileRelatedJoins(view)]),
 );
+// Cache SQL templates only; assignments are resolved afresh in each statement.
+const COMPILED_FILTER_JOINS = new Map<RelatedViewKey, SQL>();
 
-const compiledRelatedJoins = (key: RelatedViewKey): SQL => {
+const compiledRelatedJoins = (
+  key: RelatedViewKey,
+  scope: "row" | "filter" = "row",
+): SQL => {
+  if (scope === "filter") {
+    const cached = COMPILED_FILTER_JOINS.get(key);
+    if (cached) return cached;
+    const definition = relatedViewsByKey.get(key);
+    if (!definition) throw new Error(`Unknown related view: ${key}`);
+    const joins = compileRelatedJoins(definition, true);
+    COMPILED_FILTER_JOINS.set(key, joins);
+    return joins;
+  }
   const joins = COMPILED_RELATED_JOINS.get(key);
   if (!joins) throw new Error(`Missing compiled traversal for ${key}`);
   return joins;
@@ -928,7 +942,7 @@ export function relatedWhereConditions<TFilters extends object>(
       const exists = (extra?: SQL) => sql`EXISTS (
         SELECT 1
         FROM ${sql.raw(`"${view.sourceTable}"`)} s
-        ${compiledRelatedJoins(definition.key)}
+        ${compiledRelatedJoins(definition.key, "filter")}
         WHERE s."id" = ${sourceId}
           AND s."deletedAt" IS NULL
           ${viewWhere(view)}

@@ -58,28 +58,17 @@ test("Product identifier edits preserve additions and apply explicit identity ac
   await dialog
     .getByRole("textbox", { name: "External id", exact: true })
     .fill("B");
-  await save();
-  expect(await stored()).toEqual([
-    { code: "A", primary: true },
-    { code: "B", primary: false },
-  ]);
-
-  await edit.click();
+  // One draft can add a secondary, select it as primary and replace the saved
+  // identifier. SQL owns the intermediate add-preserves-primary state.
   await dialog
     .getByRole("button", { name: "Make External IDs 2 primary", exact: true })
     .click();
-  await save();
-  expect(await stored()).toEqual([
-    { code: "A", primary: false },
-    { code: "B", primary: true },
-  ]);
-
-  await edit.click();
   await dialog
     .getByRole("button", { name: "Replace External IDs 1", exact: true })
     .click();
   await dialog
     .getByRole("textbox", { name: "External id", exact: true })
+    .first()
     .fill("C");
   await save();
   expect(await stored()).toEqual([
@@ -88,8 +77,14 @@ test("Product identifier edits preserve additions and apply explicit identity ac
   ]);
 
   await edit.click();
-  await dialog
-    .getByRole("button", { name: "Remove External IDs 2", exact: true })
+  // A combined Add/Replace need not preserve saved-row order.
+  await identifiers
+    .locator("div")
+    .filter({ has: page.getByText("C", { exact: true }) })
+    .filter({
+      has: page.getByRole("button", { name: /^Remove External IDs \d+$/ }),
+    })
+    .getByRole("button", { name: /^Remove External IDs \d+$/ })
     .click();
   await save();
   expect(await stored()).toEqual([{ code: "B", primary: true }]);

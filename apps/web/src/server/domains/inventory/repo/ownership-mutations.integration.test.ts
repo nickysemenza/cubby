@@ -42,6 +42,8 @@ import * as ownershipReads from "~/server/domains/inventory/repo/ownership";
 import {
   loadEffectiveInventoryOwnershipById,
   loadProductOwners,
+  loadProductOwnerMembership,
+  selectProductIdsByOwner,
   productIdsByOwner,
 } from "~/server/domains/inventory/repo/ownership";
 import {
@@ -970,5 +972,31 @@ describe("inventory ownership mutations", () => {
       expect.arrayContaining([inherited.product.entityId, unstocked.entityId]),
     );
     expect(owned).not.toContain(unassigned.product.entityId);
+    const prepared = await loadProductOwnerMembership(ctx.db);
+    expect(selectProductIdsByOwner(prepared, [buyer.output.id]).sort()).toEqual(
+      [...owned].sort(),
+    );
+    expect(
+      selectProductIdsByOwner(prepared, [OWNER_FILTER_HOUSEHOLD]).sort(),
+    ).toEqual(
+      (await productIdsByOwner(ctx.db, [OWNER_FILTER_HOUSEHOLD])).sort(),
+    );
+    for (const presence of ["has", "none"] as const)
+      expect(selectProductIdsByOwner(prepared, [], presence).sort()).toEqual(
+        (await productIdsByOwner(ctx.db, [], presence)).sort(),
+      );
+    await setInventoryOwnership(
+      ctx.db,
+      unassigned.entryId,
+      { mode: "explicit", ownerId: buyer.output.id },
+      undefined,
+      TEST_ACTOR,
+    );
+    expect(await productIdsByOwner(ctx.db, [buyer.output.id])).toContain(
+      unassigned.product.entityId,
+    );
+    expect(selectProductIdsByOwner(prepared, [buyer.output.id])).not.toContain(
+      unassigned.product.entityId,
+    );
   });
 });

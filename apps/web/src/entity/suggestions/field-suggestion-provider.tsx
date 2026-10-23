@@ -38,9 +38,6 @@ import {
   FIELD_SUGGEST_DEBOUNCE_MS,
   financeSuggestionEntityId,
   isBasisSufficient,
-  type SuggestTargets,
-  suggestionContextKeys,
-  suggestTargetsFor,
   useEntitySuggestionsQuery,
 } from "./field-suggestion";
 import {
@@ -49,6 +46,11 @@ import {
   useSuggestionVisit,
 } from "./suggestion-review";
 import { SuggestionStatus } from "./suggestion-status";
+import {
+  type SuggestTargets,
+  suggestionContextKeys,
+  suggestTargetsFor,
+} from "./suggestion-targets";
 import { useFinanceCategoryApply } from "./use-finance-category-apply";
 
 export interface FieldSuggestionContextValue {
