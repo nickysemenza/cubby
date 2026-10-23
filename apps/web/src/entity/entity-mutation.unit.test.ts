@@ -12,9 +12,9 @@ const hasTag = (tags: readonly (readonly string[])[], tag: readonly string[]) =>
  * food to an ingredient (via a product create) never refreshed usda-food
  * queries, and the ingredient-enrichment create paths never refreshed the
  * ingredient list. Both call sites create a Product through
- * `entityMutationOptionsFactory`, whose invalidation is `entityRipple("product")`
- * — correct for a plain product write, too narrow once the payload names an
- * ingredient/usda-food link.
+ * `entityMutationOptionsFactory`. Ordinary Product writes now include declared
+ * read consumers, including Ingredient's borrowed Product imagery. Explicit
+ * ingredient/usda-food links still select the wider business ripple below.
  */
 describe("entityMutation.mutate invalidates", () => {
   it("widens to ripple.ingredientProduct when a product create names an ingredient link", () => {
@@ -59,7 +59,7 @@ describe("entityMutation.mutate invalidates", () => {
     expect(tags).toEqual(ripple.ingredientProductUsdaFood);
   });
 
-  it("does not widen a product create carrying no ingredient link", () => {
+  it("refreshes Ingredient imagery on a plain Product create", () => {
     const tags = entityMutation.mutate.invalidates({
       action: "create",
       entity: "product",
@@ -75,7 +75,7 @@ describe("entityMutation.mutate invalidates", () => {
     });
 
     expect(tags).toEqual(entityRipple("product"));
-    expect(hasTag(tags, ["ingredient"])).toBe(false);
+    expect(hasTag(tags, ["ingredient"])).toBe(true);
     expect(hasTag(tags, ["usda-food"])).toBe(false);
   });
 
