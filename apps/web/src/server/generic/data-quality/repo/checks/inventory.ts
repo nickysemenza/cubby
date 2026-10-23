@@ -1,28 +1,61 @@
-import { eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 
-import { inventoryEntry } from "~/server/db/retained-tables";
+import type { Database, DrizzleTransaction } from "~/server/db";
+import { notDeleted, unwrapDb, uuidArrayParam } from "~/server/db/helpers";
+import { inventoryEntry, location } from "~/server/db/retained-tables";
+import { entityDisplayImagePresenceSql } from "~/server/entity-kernel/repo/entity-display-image";
+import { qualityCheck } from "~/server/generic/data-quality/repo/builders";
+import { defineStoredEntityChecks } from "~/server/generic/data-quality/repo/stored-registry";
 
-import { defineEntityChecks } from "../registry";
+/** Bump when the rules or their declared scoring metadata change. */
+export const INVENTORY_QUALITY_RULES_VERSION = 1;
 
-type InventoryEntry = typeof inventoryEntry;
+type InventoryQualityRecord = Awaited<
+  ReturnType<typeof loadInventoryQualityRecords>
+>[number];
 
-export const inventoryChecks = defineEntityChecks({
+export const inventoryChecks = defineStoredEntityChecks({
   entity: "inventory",
   table: inventoryEntry,
+  rulesVersion: INVENTORY_QUALITY_RULES_VERSION,
+  load: loadInventoryQualityRecords,
   checks: {
-    inventory_unknown_location: {
-      missing: (t) => sql`EXISTS (
-        SELECT 1 FROM "Location" dq_unknown_location
-        WHERE dq_unknown_location."id" = ${t.locationId}
-          AND dq_unknown_location."deletedAt" IS NULL AND dq_unknown_location."name" = 'Unknown'
-      )`,
-    },
-    inventory_verified: {
-      // Installed fixtures are excluded from counting/audits entirely (see
-      // the `InventoryPlacement` doc comment in schema.ts) — only movable
-      // stock is ever expected to carry a verification date.
-      expected: (t: InventoryEntry) => eq(t.placement, "stock"),
-      missing: (t: InventoryEntry) => sql`${t.verifiedAt} IS NULL`,
-    },
+    inventory_display_image: qualityCheck.hasImage,
+    inventory_unknown_location: qualityCheck.observed<InventoryQualityRecord>(
+      (record) => record.locationName !== "Unknown",
+    ),
+    // Installed fixtures are excluded from audits; only movable stock needs a
+    // verification date.
+    inventory_verified: qualityCheck.when(
+      (record: InventoryQualityRecord) => record.placement === "stock",
+      qualityCheck.required("verifiedAt"),
+    ),
   },
 });
+
+async function loadInventoryQualityRecords(
+  db: Database | DrizzleTransaction,
+  ids: readonly string[],
+) {
+  if (!ids.length) return [];
+  return unwrapDb(db)
+    .select({
+      id: inventoryEntry.id,
+      shortcode: inventoryEntry.shortcode,
+      placement: inventoryEntry.placement,
+      verifiedAt: inventoryEntry.verifiedAt,
+      locationName: location.name,
+      hasDisplayImage: sql<boolean>`${entityDisplayImagePresenceSql("inventory", sql`${inventoryEntry.id}`)}`,
+    })
+    .from(inventoryEntry)
+    .leftJoin(
+      location,
+      and(eq(location.id, inventoryEntry.locationId), notDeleted(location)),
+    )
+    .where(
+      and(
+        notDeleted(inventoryEntry),
+        sql`${inventoryEntry.id} = ANY(${uuidArrayParam(ids)})`,
+      ),
+    );
+}

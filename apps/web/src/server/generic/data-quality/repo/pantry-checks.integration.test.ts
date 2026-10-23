@@ -40,10 +40,8 @@ import { loadDataQualities } from "./hydrate";
 
 /**
  * For each pantry/garden scored entity, one row that trips a real check and
- * one that satisfies it, asserted through `loadDataQualities` — the same
- * evaluation the list `dataStatus`/`dataGap` filters and the list's
- * `dataQuality` column read from (see `data-quality.integration.test.ts` for
- * the product/purchase equivalent).
+ * one that satisfies it. Ported entries pass `source: "live"` to exercise the
+ * batch TypeScript evaluator; unported entries still exercise their SQL path.
  */
 describe("data quality: pantry and garden entities", () => {
   const ctx = withTestDb();
@@ -284,10 +282,12 @@ describe("data quality: pantry and garden entities", () => {
       TEST_ACTOR,
     );
 
-    const hydrated = await loadDataQualities(ctx.db, "inventory", [
-      gap.entityId,
-      complete.entityId,
-    ]);
+    const hydrated = await loadDataQualities(
+      ctx.db,
+      "inventory",
+      [gap.entityId, complete.entityId],
+      "live",
+    );
     expect(hydrated.get(gap.entityId)?.gaps.map((g) => g.check)).toContain(
       "inventory_verified",
     );

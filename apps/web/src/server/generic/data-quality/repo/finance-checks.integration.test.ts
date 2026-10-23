@@ -455,7 +455,7 @@ describe("data quality: finance and project entities", () => {
       (await resolveLiveShortcode(ctx.db, contradictory.id, "planting"))!,
     );
     const quality = (
-      await loadDataQualities(ctx.db, "planting", [contradictoryId])
+      await loadDataQualities(ctx.db, "planting", [contradictoryId], "live")
     ).get(contradictoryId);
     expect(quality?.gaps.map((gap) => gap.check)).toContain(
       "planting_lifecycle",
@@ -470,10 +470,12 @@ describe("data quality: finance and project entities", () => {
       "planting",
       (await resolveLiveShortcode(ctx.db, complete.id, "planting"))!,
     );
-    const hydrated = await loadDataQualities(ctx.db, "planting", [
-      gapId,
-      completeId,
-    ]);
+    const hydrated = await loadDataQualities(
+      ctx.db,
+      "planting",
+      [gapId, completeId],
+      "live",
+    );
     const gapChecks = hydrated.get(gapId)?.gaps.map((g) => g.check);
     expect(gapChecks).toEqual(["planting_location", "planting_display_image"]);
     expect(hydrated.get(completeId)).toMatchObject({
