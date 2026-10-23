@@ -1,12 +1,17 @@
 import { z } from "zod";
+import { assessmentReviewBatchOut } from "@cubby/schemas/assessment";
+import { and, eq } from "drizzle-orm";
 
+import { getDb, notDeleted } from "~/server/db/helpers";
+import { entityLink, expense } from "~/server/db/schema";
 import {
   publishEntityConnection,
   readEntityConnections,
 } from "~/server/domains/connection/repo/entity-connections";
+import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 import {
-  createEntityFixture,
+  createFixtureGraph,
   createEvidenceHarnessContext,
 } from "./fixtures/core";
 import {
@@ -15,23 +20,26 @@ import {
   uniqueName,
 } from "./support/e2e-helpers";
 import { expect, test } from "./support/e2e-test";
-import { dispatchesOperation } from "./support/dispatch-wire";
+import { dispatchesOperation, operationResult } from "./support/dispatch-wire";
 
-// Failure modes: a list connection silently applies on discovery; review writes
-// another row; accepting from one endpoint leaves a second pending review.
-test("RTable connection review binds the chosen Expense and settles both endpoints", async ({
+// List discovery is advisory. Confirmation must commit the chosen relation
+// without changing its money; SQL owns retirement at both endpoints and replay.
+test("RTable connection review commits the chosen Expense", async ({
   page,
 }, testInfo) => {
   const { db } = await createEvidenceHarnessContext(page);
   const name = uniqueName(testInfo, "Connection drill");
-  const item = await createEntityFixture(page, "product", { name });
-  const line = await createEntityFixture(page, "expense", {
-    name,
-    cost: 24,
-    productId: null,
-    trade: "electrical",
+  const { item, line } = await createFixtureGraph(page, async (create) => {
+    const item = await create("product", { name });
+    const line = await create("expense", {
+      name,
+      cost: 24,
+      productId: null,
+      trade: "electrical",
+    });
+    return { item, line };
   });
-  await publishEntityConnection(db, {
+  const proposal = await publishEntityConnection(db, {
     relation: "product-expense",
     source: { entityKind: "product", entityId: item.id },
     target: { entityKind: "expense", entityId: line.id },
@@ -43,7 +51,11 @@ test("RTable connection review binds the chosen Expense and settles both endpoin
     },
   });
   const saved = () =>
-    readExpense(page, line.id, z.object({ productId: z.string().nullable() }));
+    readExpense(
+      page,
+      line.id,
+      z.object({ productId: z.string().nullable(), cost: z.number() }),
+    );
   expect((await saved()).productId).toBeNull();
   await gotoAuthenticatedPage(
     page,
@@ -59,22 +71,22 @@ test("RTable connection review binds the chosen Expense and settles both endpoin
   });
   expect((await saved()).productId).toBeNull();
   await expect(review).toContainText("This Expense acquired this Product");
-  await Promise.all([
+  const [application] = await Promise.all([
     page.waitForResponse((response) =>
       dispatchesOperation(response.request(), "assessment.reviewBatch"),
     ),
     review.getByRole("button", { name: "Confirm", exact: true }).click(),
   ]);
-  await expect.poll(async () => (await saved()).productId).toBe(item.id);
-  await gotoAuthenticatedPage(page, `/expenses/${line.id}#relationships`);
-  const settled = page.getByRole("region", {
-    name: "Pending suggestions",
-    exact: true,
-  });
-  await expect(settled).toContainText("No pending suggestions.");
-  await expect(
-    settled.getByRole("button", { name: "Confirm", exact: true }),
-  ).toHaveCount(0);
+  expect(
+    await operationResult(
+      application,
+      "assessment.reviewBatch",
+      assessmentReviewBatchOut,
+    ),
+  ).toMatchObject([
+    { ok: true, assessmentId: proposal.review.assessmentId, applied: true },
+  ]);
+  await expect.poll(saved).toMatchObject({ productId: item.id, cost: 24 });
 });
 
 test("Purchase title column exposes inverse acquisition review", async ({
@@ -82,19 +94,30 @@ test("Purchase title column exposes inverse acquisition review", async ({
 }, testInfo) => {
   const { db } = await createEvidenceHarnessContext(page);
   const name = uniqueName(testInfo, "Connection order");
-  const item = await createEntityFixture(page, "product", {
-    name: `${name} drill`,
+  const { item, order } = await createFixtureGraph(page, async (create) => {
+    const item = await create("product", { name: `${name} drill` });
+    const vendor = await create("vendor", { name: `${name} shop` });
+    const order = await create("purchase", {
+      vendorId: vendor.id,
+      orderId: name,
+      date: "2026-09-01",
+    });
+    return { item, order };
   });
-  const vendor = await createEntityFixture(page, "vendor", {
-    name: `${name} shop`,
-  });
-  const order = await createEntityFixture(page, "purchase", {
-    vendorId: vendor.id,
-    orderId: name,
-    date: "2026-09-01",
-  });
+  const purchaseId = await resolveOrThrow(db, "purchase", order.id);
+  const productId = await resolveOrThrow(db, "product", item.id);
+  const acquisition = () =>
+    getDb(db).query.entityLink.findFirst({
+      where: and(
+        eq(entityLink.kind, "purchaseProduct"),
+        eq(entityLink.fromEntityId, purchaseId),
+        eq(entityLink.toEntityId, productId),
+        notDeleted(entityLink),
+      ),
+    });
+  expect(await acquisition()).toBeUndefined();
   const source = { entityKind: "product" as const, entityId: item.id };
-  await publishEntityConnection(db, {
+  const proposal = await publishEntityConnection(db, {
     relation: "product-purchase",
     source,
     target: { entityKind: "purchase", entityId: order.id },
@@ -119,20 +142,26 @@ test("Purchase title column exposes inverse acquisition review", async ({
   });
   await expect(review).toContainText("Review retrospective acquisition");
   await expect.poll(() => readEntityConnections(db, source)).not.toEqual([]);
-  await Promise.all([
+  const [application] = await Promise.all([
     page.waitForResponse((response) =>
       dispatchesOperation(response.request(), "assessment.reviewBatch"),
     ),
     review.getByRole("button", { name: "Confirm", exact: true }).click(),
   ]);
+  expect(
+    await operationResult(
+      application,
+      "assessment.reviewBatch",
+      assessmentReviewBatchOut,
+    ),
+  ).toMatchObject([
+    { ok: true, assessmentId: proposal.review.assessmentId, applied: true },
+  ]);
   await expect.poll(() => readEntityConnections(db, source)).toEqual([]);
-  await gotoAuthenticatedPage(page, `/products/${item.id}#relationships`);
-  const settled = page.getByRole("region", {
-    name: "Pending suggestions",
-    exact: true,
-  });
-  await expect(settled).toContainText("No pending suggestions.");
-  await expect(
-    settled.getByRole("button", { name: "Confirm", exact: true }),
-  ).toHaveCount(0);
+  expect(await acquisition()).toMatchObject({ acquisitionConfirmed: true });
+  expect(
+    await getDb(db).query.expense.findMany({
+      where: and(eq(expense.purchaseId, purchaseId), notDeleted(expense)),
+    }),
+  ).toHaveLength(0);
 });
