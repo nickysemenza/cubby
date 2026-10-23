@@ -11,7 +11,10 @@ import {
   type DecisionPort,
   runDecisionChoice,
 } from "~/server/ai/decision-model";
-import { suggestFields } from "~/server/ai/field-suggest/suggest-fields";
+import {
+  suggestFields,
+  type SuggestFieldsPorts,
+} from "~/server/ai/field-suggest/suggest-fields";
 import {
   MERCHANT_IDENTITY_FEATURE,
   MERCHANT_IDENTITY_SUPPORT_FEATURE,
@@ -46,6 +49,7 @@ export async function adviseSpending(
     model?: SupportedDecisionModel;
     port?: DecisionPort;
     spendingAdvice?: SpendingAdvicePort;
+    usageFor?: SuggestFieldsPorts["usageFor"];
     preparation?: Pick<FinancialSpendingPage, "categoryHistory" | "vendors">;
   },
 ) {
@@ -130,7 +134,11 @@ export async function adviseSpending(
         }),
       },
     },
-    { decisionPort: input.port, decisionModel: input.model },
+    {
+      decisionPort: input.port,
+      decisionModel: input.model,
+      usageFor: input.usageFor,
+    },
   );
   const category = result.suggestions.spendingCategoryId;
   return financialSpendingAdvice.parse({

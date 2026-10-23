@@ -24,6 +24,7 @@ import {
   decisionModelFor,
   type DecisionPort,
   settleDecisionChoices,
+  settleDecisionWorkItems,
   type DecisionChoiceResult,
   type DecisionChoiceArgs,
 } from "~/server/ai/decision-model";
@@ -326,7 +327,10 @@ function prepareLabelledJudgment(
           }),
         );
     },
-    async finish(page?: FinancialSpendingPage) {
+    async finish(
+      page?: FinancialSpendingPage,
+      usageFor?: Parameters<typeof adviseSpending>[1]["usageFor"],
+    ) {
       if (checkpoint.spending && previous)
         judgment.spending = await prepareStatementSpending(
           db,
@@ -357,6 +361,7 @@ function prepareLabelledJudgment(
               port: input.port,
               spendingAdvice: input.spendingAdvice,
               preparation: page,
+              usageFor,
             }),
           );
           for (const call of spending.inputs) recordModel(call.model);
@@ -905,10 +910,20 @@ async function runStatementLabelBatch(
       // Shared discovery is advisory; isolate failures through the existing per-charge path.
     }
     const finish = async () => {
+      const usages = new Map<string, DecisionChoiceArgs["usage"]>();
+      const usageFor = (operation: string) => {
+        let current = usages.get(operation);
+        if (!current) {
+          current = { db, runId, operation, cacheStatus: "none" };
+          usages.set(operation, current);
+        }
+        return current;
+      };
       const finishWave = (wave: typeof classified) =>
-        withFieldSuggestionBatch(() =>
-          Promise.all(
-            wave.map(async (result) => {
+        withFieldSuggestionBatch(async () => {
+          const settled = await settleDecisionWorkItems(
+            wave,
+            async (result) => {
               if (result.status !== "fulfilled") return result;
               try {
                 if (input.cooperative && Date.now() >= prepareDeadline)
@@ -917,14 +932,18 @@ async function runStatementLabelBatch(
                   );
                 return {
                   status: "fulfilled" as const,
-                  value: await result.value.finish(spendingPage),
+                  value: await result.value.finish(spendingPage, usageFor),
                 };
               } catch (reason) {
                 return { status: "rejected" as const, reason };
               }
-            }),
-          ),
-        );
+            },
+            STATEMENT_SPENDING_CONCURRENCY,
+          );
+          return settled.map((result) =>
+            result.status === "fulfilled" ? result.value : result,
+          );
+        });
       const computed: Awaited<ReturnType<typeof finishWave>> = [];
       // Batch related field questions within each wave; all started work settles
       // before another wave or publication, so no work outlives this DB scope.

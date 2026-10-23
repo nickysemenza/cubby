@@ -545,7 +545,11 @@ Generation checkpoints depend only on model-free generation and publication;
 optional model preparation cannot delay them. Label rounds apply the settled
 kind votes before preparing shared spending facts; each charge then uses those
 read-only facts with its own advice. The existing field-suggestion batch scope
-shares classification catalogs within the round without sharing model answers.
+shares classification catalogs within the round. Each bounded spending wave
+uses the existing finite-work decision scheduler and one usage group per
+operation to batch category questions after merchant preparation. Each question
+keeps its own evidence, cache entry, model routing and checkpoint; all started
+work settles before publication.
 The spending roster requests only identity, name and parent fields, leaving
 unrelated category connections and stock tracking unloaded. Advice and its
 spending preview share the same read-only vendor resolution and history.

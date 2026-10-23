@@ -1980,6 +1980,93 @@ describe("statement Transaction suggestions", () => {
     }
   });
 
+  it("batches spending-category decisions after statement classification", async () => {
+    await card(ctx);
+    await createRepoIdentity(ctx, "vendor", {
+      name: "Synthetic Category Merchant",
+    });
+    await record(
+      ctx,
+      Array.from({ length: 8 }, (_, index) =>
+        rowInput({
+          merchant: "Synthetic Category Merchant",
+          rawDescription: `SYNTHETIC CATEGORY ${index}`,
+          providerAmount: -300 - index,
+        }),
+      ),
+    );
+    await generate(ctx);
+    await activateAiRefresh(ctx.db, "synthetic-spending-category-batch", {
+      enabled: true,
+      manifest: {},
+      startDiscovery: false,
+    });
+    const requests: number[] = [];
+    const peer = vi.spyOn(cfEnv, "getTestAiGateway").mockReturnValue({
+      fetch: async (url, init) => {
+        if (String(url).includes("models.dev")) return Response.json({});
+        const input: {
+          questions: Record<string, { criteria: Record<string, string> }>;
+        } = JSON.parse(String(init?.body));
+        const metadata = JSON.parse(
+          new Headers(init?.headers).get("cf-aig-metadata") ?? "{}",
+        );
+        if (metadata.feature === "field-suggestion")
+          requests.push(Object.keys(input.questions).length);
+        return Response.json({
+          result: {
+            answers: Object.fromEntries(
+              Object.entries(input.questions).map(([id, question]) => {
+                const entries = Object.entries(question.criteria);
+                const choice =
+                  entries.find(
+                    ([, label]) => label === "purchase" || label === "business",
+                  )?.[0] ?? entries[0]![0];
+                return [
+                  id,
+                  {
+                    type: "choice",
+                    choice,
+                    confidence: 1,
+                    probabilities: Object.fromEntries(
+                      entries.map(([key]) => [key, key === choice ? 1 : 0]),
+                    ),
+                  },
+                ];
+              }),
+            ),
+          },
+        });
+      },
+    });
+    try {
+      const outcome = await runStatementLabels(ctx.db, {
+        runId: await ensureRun(ctx.db, ctx.actor, { purpose: "background" }),
+      });
+      expect(outcome).toMatchObject({ labelled: 8, failed: [] });
+      expect(requests.reduce((total, count) => total + count, 0)).toBe(8);
+      expect(Math.max(...requests)).toBeGreaterThan(1);
+      expect(requests.length).toBeLessThan(8);
+      const category = await getDb(ctx.db).query.spendingCategory.findFirst({
+        where: eq(spendingCategory.name, "Synthetic statement spending"),
+      });
+      if (!category) throw new Error("Synthetic spending category is missing");
+      const labelled = await suggestions(ctx);
+      expect(labelled).toHaveLength(8);
+      expect(
+        labelled.every(
+          (row) =>
+            row.create?.votes.label === "purchase" &&
+            row.create.counterparty.label === "business" &&
+            row.spending?.request.advice?.spendingCategoryId ===
+              category.shortcode,
+        ),
+      ).toBe(true);
+    } finally {
+      peer.mockRestore();
+    }
+  });
+
   // A single charge's identity shortlist must not keep its own four-call cap.
   it("fans out every candidate identity decision in one charge", async () => {
     const account = (await card(ctx)).output;
