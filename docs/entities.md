@@ -2527,8 +2527,10 @@ FinancialAccounts and non-void FinancialTransactions with each ID page.
 Both have kind-checked composite FKs to `Entity`; they are derived identity
 metadata, not graph relationships. Entity itself has no quality columns.
 Lists, filters, score sorts and related rollups consume published outcomes for
-ported kinds. A missing publication is unassessed. Lazy explanations and detail
-reads evaluate the same TypeScript functions live without publishing repairs.
+ported kinds. A missing publication is unassessed. `loadDataQualities`
+defaults to live evaluation for record and detail reads; list pages and the Work
+queue pass `"stored"`. Lazy explanations evaluate the same TypeScript functions
+live without publishing repairs.
 Unported kinds retain their existing SQL evaluator until their port removes it.
 
 The `quality` refresh family is enrolled by the existing `recordChange` owner.
@@ -2582,7 +2584,7 @@ import membership. The checks retain current-checksum review and preview rules,
 settled automated negatives, live Purchase/account ownership fences, and JSON
 source containment (including explicit null). Bodies are never selected for
 quality evaluation. List quality facets/counts, score sorts and the Email Work
-queue branch join stored outcomes; no mailbox-wide acceptance or review relation
+queue branch read stored outcomes; no mailbox-wide acceptance or review relation
 runs on those reads. Missing publications stay unassessed until refresh.
 
 Email metadata, original/attachment persistence, candidate/classification
@@ -2602,8 +2604,8 @@ product expectations on planned merchandise. Expense no longer has SQL quality
 bindings, derived-read hooks or fingerprint bindings.
 
 Expense list quality, filters, score sorting and Work queue research read
-published outcomes. Work queue branches bind the shared stored-quality relation;
-standalone Expense predicates use stored scalar reads without assuming a join.
+published outcomes through indexed per-row stored lookups, which stay valid
+under any FROM clause, including Work queue branches.
 Problems detectors have no direct Expense quality predicate;
 their independent financial invariants retain their existing domain owners.
 Expense, Purchase, Project, vendor and category edits enroll broad quality intent
@@ -2622,9 +2624,9 @@ retained decisions remain active across input changes, passing checks and
 commodity toggles until explicitly cleared. The legacy signature field accepts
 an empty string for stored-mode decisions; it is never evaluated. Exception
 mutation responses evaluate the saved decision live without publishing a repair.
-Standalone Product predicates use closed stored-row lookups unless their caller
-explicitly supplies the matching quality relation context, so footer sums and
-custom FROM clauses cannot accidentally reference an unbound join alias.
+Stored predicates are closed per-row lookups on the
+`EntityQualityCheck`/`EntityQuality` primary keys, so footer sums and custom FROM
+clauses never reference an unbound join alias.
 
 Purchase uses stored TypeScript checks at rules version 1. One batch loader
 scopes Expense and settlement-allocation aggregates to the current ID page,
