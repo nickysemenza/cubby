@@ -6,8 +6,16 @@ The UI project shares module state between files. Its shared teardown clears
 Sonner notifications as well as React trees: unmounting a Toaster leaves its
 notifications available to the next test.
 
-Keep pure logic imported by Node tests in alias-free `.ts` files. Temporary
-subprocess workspaces declare their module type explicitly, matching the consumer.
+Keep pure logic imported directly by standalone Node subprocesses in alias-free
+`.ts` files. Vitest uses the application's configured aliases; server composition
+keeps the declared `~/server/` boundary. Temporary subprocess workspaces declare
+their module type explicitly, matching the consumer.
+
+Photo-import route binding and source-admission unit cases import
+`photo-import-route-bindings.ts`, which evaluates contracts without loading
+repositories or the entity kernel. Runtime route creation, singular image owners
+and SQL relationship traversal stay in the existing photo-import transaction
+integration suite, which already imports those production bindings.
 
 Detail renderer and browser tests assert the continuous page: every section is
 accessible without a view switch. Select a section hash to verify scrolling,
@@ -397,12 +405,6 @@ second matching record. Replay against the final rebased source when main
 changes the affected layout.
 
 ## Required component-browser tests
-
-Photo-import route binding and source-admission unit cases import
-`photo-import-route-bindings.ts`, which evaluates contracts without loading
-repositories or the entity kernel. Runtime route creation, singular image owners
-and SQL relationship traversal stay in the existing photo-import transaction
-integration suite, which already imports those production bindings.
 
 The `capability` Vitest project runs the explicitly selected shared list/table/explanation
 coverage in `vitest.config.ts`. Production renderers run in headless Chromium

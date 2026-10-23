@@ -179,7 +179,6 @@ const mcpContractTests = [
   "src/server/mcp/mcp-workflow-tools.unit.test.ts",
   "src/server/mcp/tools/tool-json-schema.unit.test.ts",
 ];
-const workerSafetyTests = ["src/server/mcp/worker-validation.unit.test.ts"];
 // PostgreSQL files that start the built Worker (`tooling/workerd-harness.ts`,
 // directly or through `workerd-runtime.ts`). CI runs them in the Worker build
 // step against its verified bundle. Keep consumers in this list explicitly:
@@ -307,11 +306,7 @@ export default defineConfig({
             // exactly as safe as their old dedicated one, without a second
             // isolation startup tax.
             include: ["**/*.unit.test.ts"],
-            exclude: [
-              "**/node_modules/**",
-              ...mcpContractTests,
-              ...workerSafetyTests,
-            ],
+            exclude: ["**/node_modules/**", ...mcpContractTests],
             // Unit files are order-independent and clean up their mutable state.
             // Sharing the module graph removes the dominant per-file startup cost.
             pool: "threads",
@@ -335,20 +330,6 @@ export default defineConfig({
             // worker receives more than one file; server instances remain
             // test-owned and are still constructed as needed.
             isolate: false,
-            maxWorkers: groupZeroMaxWorkers,
-            sequence: { groupOrder: 0 },
-          },
-        },
-        {
-          extends: true,
-          test: {
-            name: "worker-safety",
-            include: workerSafetyTests,
-            pool: "threads",
-            // This contract temporarily replaces Zod and Function globals.
-            // A dedicated isolated project keeps that mutation out of the
-            // shared unit and MCP module graphs.
-            isolate: true,
             maxWorkers: groupZeroMaxWorkers,
             sequence: { groupOrder: 0 },
           },

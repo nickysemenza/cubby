@@ -392,7 +392,7 @@ cache key.
 Each entry uses one standard runner with PostgreSQL and IntegreSQL service
 containers.
 `Vitest (n/2)` runs the `vitest-ci` target: one Vitest run of every merge-gate
-project (`unit`, `mcp-contract`, `worker-safety`, `ui`, `capability`, `scripts`,
+project (`unit`, `mcp-contract`, `ui`, `capability`, `scripts`,
 `packages`, `integration`, `integration-workerd` and `workers`), split by file
 with `CUBBY_VITEST_SHARD`. Vitest assigns files to shards by path hash, so the
 split does not follow duration. Project groups run in order within a shard,
@@ -611,7 +611,10 @@ links remain in Git history.
   and `node_modules` caching lost to registry installation.
 - `vitest doctor` (local, non-PostgreSQL projects, one run each) favoured
   `isolate: false` (−14%) and more workers. The worker gain needs more cores
-  than a hosted runner has; `worker-safety` must stay isolated. Only the
+  than a hosted runner has. The former isolated `worker-safety` catalog smoke
+  check is removed: `mcp-worklist.spec.ts` exercises the same catalog
+  introspection inside the real built Worker, whose runtime itself forbids
+  dynamic code generation. Only the
   `workers` project measured a reliable per-project gain (21 s to 9 s), and
   `scripts`/`packages` stayed within noise. `vmThreads`/`vmForks` fail the
   process and file-system tooling tests.
