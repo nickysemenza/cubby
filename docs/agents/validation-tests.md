@@ -141,6 +141,17 @@ A row filter’s `has` locator is relative to that row; do not repeat an ancesto
 region in the inner locator.
 Connection-path assertions choose a visible matching link rather than the first
 DOM match, because collapsed/responsive branches can retain hidden duplicates.
+The two RTable connection-review journeys retain the Product and inverse
+Purchase list entry points, no early write, real confirmation and decoded
+`assessment.reviewBatch` application success. Verify the selected Expense link
+with unchanged cost, or the confirmed Purchase/Product link without inventing an
+Expense. Batch each prerequisite graph and finish at its committed read-back.
+`connection-review.integration.test.ts`'s Work/retry case owns endpoint retirement
+and the one application receipt; `purchase-products.integration.test.ts` owns
+bidirectional relation reads and deduplication. The removed visits to the other
+endpoint's detail page only sampled an empty Pending suggestions region; that
+cross-page empty-state composition is a deliberate gap. No scenario is deleted
+or split.
 Native-workspace session bootstrap assertions include the response body on a
 status mismatch so a server failure can be attributed without another replay.
 
