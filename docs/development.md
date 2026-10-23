@@ -496,7 +496,10 @@ native PostgreSQL installation remain owned by their existing runners.
 `build:cf` runs the Cloudflare Vite plugin v2 build. The native
 `cloudflare.config.ts` supplies typed bindings, exports and triggers; the plugin
 emits deployable Build Output under `apps/web/.cloudflare/output/v0/`, including
-the Worker bundle and copied static assets. Deployment reuses this output with
+the Worker bundle and copied static assets. Worker JavaScript uses ASCII
+source escapes while retaining Unicode runtime values and diagnostic names;
+this reduces resident script-string memory in the constrained Worker isolate.
+Deployment reuses this output with
 `cf deploy --prebuilt --mode production`. The plugin writes directly into this
 output tree; there is no separate `dist` bundle.
 
