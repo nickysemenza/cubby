@@ -208,6 +208,11 @@ owned by its workflow and is not a guarantee that every derived value is current
 
 ## List loading and enrichment
 
+First-page list compilation uses the entity's declared opening sort and direction
+when neither the URL nor a caller supplies an override. SSR preloads, secondary
+lists and mounted table state share the same lightweight sort-roster owner.
+Lexical search still omits the ordinary default sort so relevance remains authoritative.
+
 Extend the generic list enrichment pipeline for data shared across rows,
 including saved suggestion outcomes and review status. Batch server reads and
 share preparation across the bounded record set; HTTP batching alone still

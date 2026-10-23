@@ -6,11 +6,11 @@ import {
   entityListFor,
   entityListBaseFor,
 } from "~/entity/entity-list";
+import { entityListDefaultSort } from "~/entity/sortable-fields";
 import { infiniteOperationQueryKey } from "~/integrations/tanstack-query/operation-catalog";
 
 import {
   ensureEntityListSsr,
-  entityListDefaultSort,
   searchWithInitialFilter,
 } from "./entity-list-ssr";
 
@@ -76,6 +76,19 @@ describe("ensureEntityListSsr", () => {
     });
 
     expect(ensure).toHaveBeenCalledOnce();
+  });
+
+  it("uses declared sort defaults for secondary lists without route options", () => {
+    expect(
+      compileEntityListInput(
+        "run",
+        { purpose: "sweep", status: "running" },
+        { pageSize: 1 },
+      ).sort,
+    ).toEqual([{ orderBy: "startedAt", direction: "desc" }]);
+    expect(compileEntityListInput("financialAccount", {}).sort).toEqual([
+      { orderBy: "name", direction: "asc" },
+    ]);
   });
 
   it("compiles a route renderer's explicit opening sort", () => {
