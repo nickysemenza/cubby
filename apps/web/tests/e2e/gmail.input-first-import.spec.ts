@@ -1,167 +1,46 @@
-import { performOperation } from "./support/dispatch-wire";
-import { startOperation } from "./support/start-operation";
-import { entityApi } from "./support/entity-api";
-import { prepareCapturedRetailerOrder } from "./support/prepare-retailer-source";
 import { z } from "zod";
-import { and, eq, inArray, or } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
-import { financialBookingInput } from "@cubby/schemas/financial-booking";
 
 import * as schema from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/db/helpers";
-import {
-  previewFinancialBooking,
-  commitFinancialBooking,
-} from "~/server/domains/financial-transaction/repo/financial-booking";
-import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
-import { resolveProductIdentifierSource } from "~/server/domains/product/repo/product-identifier-source";
 import { setMemberLoginParty } from "~/server/http/member-login";
 import { account as googleAccount } from "~/server/db/auth.schema";
+import { GMAIL_READONLY_SCOPE } from "~/lib/google-auth-constants";
 import { createGmailApiClient } from "~/server/domains/purchase-import/repo/gmail/client";
+import { ingestGmailMessages } from "~/server/domains/purchase-import/service/gmail/ingest";
+import { readRetainedMail } from "~/server/domains/mail/repo/retained-mail";
 import {
-  convergenceNames,
-  createConvergenceFixtures,
-  ingestGmailEvidence,
-  sha256Hex,
-} from "../../tooling/convergence-harness";
-import {
-  createEntityFixture,
-  createFixtureGraph,
   createEvidenceHarnessContext,
   ensureMemberParty,
 } from "./fixtures/core";
-import { chooseOption, gotoAuthenticatedPage } from "./support/e2e-helpers";
+import { gotoAuthenticatedPage } from "./support/e2e-helpers";
 import { expect, test } from "./support/e2e-test";
-import {
-  applyReviewedSourceReconciliation,
-  recordReviewedConvergenceStatement,
-} from "./support/import-order-convergence.helpers";
 
-// Failure boundaries: OAuth callback must persist its real account, mailbox
-// original acquisition must use its stored credentials and actual MIME evidence, conflicting identities must
-// require an explicit Product decision, and sources must converge after
-// reviewed booking/reconciliation without another Product or economic line.
-test("input-first Google, statement then retailer, and Product identity convergence", async ({
+// This journey owns real OAuth persistence and credential-backed MIME retention.
+// Prepared choices and source convergence have renderer and PostgreSQL owners.
+test("connects Google and retains Gmail MIME evidence without economic writes", async ({
   page,
   e2eRuntime,
 }) => {
-  test.setTimeout(180_000);
   const provider = e2eRuntime.googleProvider;
   if (!provider) throw new Error("Gmail journey requires its local provider");
-  const token = `joined-${Date.now()}`;
-  const names = convergenceNames(token);
+  const token = `gmail-${Date.now()}`;
+  const messageId = `synthetic-message-${token}`;
+  const sender = "orders@synthetic-retailer.example.test";
+  const subject = `Order SYN-${token}`;
+  const bodyText = `Order SYN-${token} placed. Total USD 42.50.`;
   const { db, actor } = await createEvidenceHarnessContext(page);
   const database = getDb(db);
-  const member = await ensureMemberParty(page, names.name);
+  const member = await ensureMemberParty(
+    page,
+    `Synthetic Gmail member ${token}`,
+  );
   await setMemberLoginParty(
     db,
     actor.userId,
     parseShortcodeFor("ledgerParty", member.shortcode),
     actor,
-  );
-  const canonicalWebsite = "https://www.amazon.com";
-  const existingVendor = await database.query.vendor.findFirst({
-    where: and(
-      eq(schema.vendor.website, canonicalWebsite),
-      notDeleted(schema.vendor),
-    ),
-  });
-  const vendorName = existingVendor?.name ?? "Synthetic Amazon retailer";
-  const browserDomains = [
-    ...new Set([
-      ...(existingVendor?.browserDomains ?? []),
-      "www.amazon.com",
-      names.host,
-    ]),
-  ];
-  const orderEmailSenders = [
-    ...new Set([...(existingVendor?.orderEmailSenders ?? []), names.sender]),
-  ];
-  // Both cases share Amazon's canonical issuer while their order evidence stays distinct.
-  const canonicalVendor = existingVendor
-    ? { id: existingVendor.shortcode }
-    : await createEntityFixture(page, "vendor", {
-        name: vendorName,
-        website: canonicalWebsite,
-        browserDomains,
-        orderEmailSenders,
-        orderEvidence: "online_account",
-      });
-  const vendorId = await resolveOrThrow(db, "vendor", canonicalVendor.id);
-  const existingAccount = await database.query.vendorAccount.findFirst({
-    where: and(
-      eq(schema.vendorAccount.vendorId, vendorId),
-      eq(schema.vendorAccount.ledgerPartyId, member.id),
-      notDeleted(schema.vendorAccount),
-    ),
-  });
-  const prerequisites = await createFixtureGraph(page, (create) =>
-    createConvergenceFixtures(
-      (entity, overrides) => {
-        if (entity === "vendor") return Promise.resolve(canonicalVendor);
-        if (entity === "vendorAccount" && existingAccount)
-          return Promise.resolve({ id: existingAccount.shortcode });
-        return create(entity, overrides);
-      },
-      member.shortcode,
-      names,
-    ),
-  );
-  if (existingVendor) {
-    const allowed = await entityApi(page.request).update(
-      "vendor",
-      canonicalVendor.id,
-      { browserDomains, orderEmailSenders },
-      { headers: { Origin: e2eRuntime.baseURL } },
-    );
-    expect(allowed.ok(), await allowed.text()).toBe(true);
-  }
-  const cardId = await resolveOrThrow(
-    db,
-    "financialAccount",
-    prerequisites.card.id,
-  );
-  const categoryId = await resolveOrThrow(
-    db,
-    "spendingCategory",
-    prerequisites.category.id,
-  );
-  const asin = `B0${sha256Hex(`${token}:gmail-merge`).slice(0, 8).toUpperCase()}`;
-  const sku = `SYN-SKU-${token}`;
-  // Exact identifiers use the canonical Vendor's issuer, not a legacy name slug.
-  const identifierSource = await resolveProductIdentifierSource(db, {
-    vendorId,
-  });
-  const duplicateName = `${names.productName} alternate listing`;
-  const { product, duplicate } = await createFixtureGraph(
-    page,
-    async (create) => {
-      const product = await create("product", {
-        name: names.productName,
-        categoryId: prerequisites.productCategory.id,
-        externalIds: [
-          {
-            source: identifierSource,
-            kind: "retailer_sku",
-            externalId: sku,
-            isPrimary: true,
-          },
-        ],
-      });
-      const duplicate = await create("product", {
-        name: duplicateName,
-        categoryId: prerequisites.productCategory.id,
-        externalIds: [
-          {
-            source: identifierSource,
-            kind: "asin",
-            externalId: asin,
-            isPrimary: true,
-          },
-        ],
-      });
-      return { product, duplicate };
-    },
   );
   const session = z
     .object({ user: z.object({ email: z.email() }) })
@@ -169,53 +48,24 @@ test("input-first Google, statement then retailer, and Product identity converge
   provider.configure({
     email: session.user.email,
     message: {
-      id: names.messageId,
+      id: messageId,
       threadId: `synthetic-thread-${token}`,
       historyId: "1",
       internalDate: String(Date.parse("2026-09-10T12:30:00Z")),
       payload: {
         mimeType: "text/plain",
         headers: [
-          { name: "From", value: names.sender },
-          { name: "Subject", value: `Order ${names.orderId}` },
+          { name: "From", value: sender },
+          { name: "Subject", value: subject },
         ],
-        body: {
-          data: Buffer.from(
-            `Order ${names.orderId} placed. Total USD 42.50.`,
-          ).toString("base64url"),
-        },
-      },
-    },
-    extraction: {
-      url: `https://${names.host}/orders/${names.orderId}`,
-      output: {
-        status: "ready",
-        reason: null,
-        detail: null,
-        candidate: {
-          ...names.retailerCandidate,
-          shipments: [],
-          lines: [
-            {
-              title: names.productName,
-              amount: 42.5,
-              lineKind: "principal",
-              costType: null,
-              sku,
-              quantity: 1,
-              productUrl: `https://www.amazon.com/dp/${asin}`,
-              imageUrl: null,
-              seller: null,
-            },
-          ],
-        },
+        body: { data: Buffer.from(bodyText).toString("base64url") },
       },
     },
     classification: {
       events: [
         {
           event: "placed",
-          orderId: names.orderId,
+          orderId: `SYN-${token}`,
           amount: 42.5,
           currency: "USD",
           occurredAt: "2026-09-10T12:00:00.000Z",
@@ -279,258 +129,58 @@ test("input-first Google, statement then retailer, and Product identity converge
     query: "-in:spam -in:trash",
   });
   expect(discovered.messages?.map((message) => message.id)).toContain(
-    names.messageId,
+    messageId,
   );
-  const researchMail = await ingestGmailEvidence(db, member.id, names, {
-    client,
+  expect(connected.scope?.split(",")).toContain(GMAIL_READONLY_SCOPE);
+  const ingested = await ingestGmailMessages(db, client, {
+    ledgerPartyId: member.id,
     mailboxId: connected.accountId,
+    messageIds: [messageId],
+    triage: async () => "related",
   });
+  const retained = await readRetainedMail(db, {
+    ledgerPartyIds: [member.id],
+    mailboxId: connected.accountId,
+    messageId,
+  });
+  expect(retained).toMatchObject([
+    {
+      id: ingested.orderMailIds[0],
+      ledgerPartyId: member.id,
+      mailboxId: connected.accountId,
+      messageId,
+      sender,
+      subject,
+      content: { bodyText },
+    },
+  ]);
+  expect(retained).toHaveLength(1);
+  // Acquiring an original must not book spend or claim household ownership.
   expect(
     await database.query.purchase.findMany({
-      where: and(
-        eq(schema.purchase.vendorId, vendorId),
-        eq(schema.purchase.spendingCategoryId, categoryId),
-        notDeleted(schema.purchase),
-      ),
+      where: notDeleted(schema.purchase),
+      columns: { id: true },
     }),
-  ).toHaveLength(0);
-
-  let purchaseCode: string | undefined;
-  async function statement() {
-    await recordReviewedConvergenceStatement(
-      page,
-      db,
-      names,
-      prerequisites.card.id,
-    );
-    const transaction = await database.query.financialTransaction.findFirst({
-      where: and(
-        eq(schema.financialTransaction.accountId, cardId),
-        notDeleted(schema.financialTransaction),
-      ),
-    });
-    if (!transaction)
-      throw new Error("Reviewed statement created no transaction");
-    // The dedicated booking browser owner drives this form. Here its committed
-    // aggregate is the prerequisite for the retailer's later reviewed itemization.
-    const review = await previewFinancialBooking(
-      db,
-      financialBookingInput.parse({
-        transactionId: transaction.shortcode,
-        vendorId: canonicalVendor.id,
-        spendingCategoryId: prerequisites.category.id,
-        trade: "other",
-      }),
-    );
-    expect(review).toMatchObject({ action: "create_aggregate", amount: 42.5 });
-    const booked = await commitFinancialBooking(db, review, actor);
-    if (!booked.expenseId)
-      throw new Error("Statement booking created no Expense");
-    const allocation =
-      await database.query.financialTransactionAllocation.findFirst({
-        where: and(
-          eq(
-            schema.financialTransactionAllocation.transactionId,
-            transaction.id,
-          ),
-          notDeleted(schema.financialTransactionAllocation),
-        ),
-      });
-    if (!allocation) throw new Error("Statement booking created no allocation");
-    const purchase = await database.query.purchase.findFirst({
-      where: and(
-        eq(schema.purchase.id, allocation.purchaseId),
-        eq(schema.purchase.vendorId, vendorId),
-        notDeleted(schema.purchase),
-      ),
-    });
-    const aggregate = await database.query.expense.findFirst({
-      where: eq(schema.expense.shortcode, booked.expenseId),
-    });
-    expect(aggregate).toMatchObject({
-      purchaseId: allocation.purchaseId,
-      spendingCategoryId: categoryId,
-      cost: 42.5,
-    });
-    purchaseCode = purchase?.shortcode;
-    expect(purchaseCode).toBe(booked.purchaseId);
-    return booked.purchaseId;
-  }
-  const productId = await resolveOrThrow(db, "product", product.id);
-  const aliasId = await resolveOrThrow(db, "product", duplicate.id);
-  async function expectNoInventory() {
-    expect(
-      await database.query.inventoryEntry.findMany({
-        where: notDeleted(schema.inventoryEntry),
-      }),
-    ).toHaveLength(0);
-  }
-  async function mergeProductIdentities() {
-    await expectNoInventory();
-    const merged = await startOperation(page.request, "entity.mutate", {
-      action: "merge",
-      entity: "product",
-      data: { keepId: product.id, mergeIds: [duplicate.id] },
-    });
-    expect(merged.ok(), await merged.text()).toBe(true);
-    await expectNoInventory();
-  }
-  async function retailer() {
-    const url = `https://${names.host}/orders/${names.orderId}`;
-    const productUrl = `https://www.amazon.com/dp/${asin}`;
-    const html = `<title>Synthetic order detail</title><main><h1>${names.orderId}</h1><p>Ordered September 10, 2026. Delivered.</p><p>USD 42.50</p><p>${names.productName} SKU ${sku} quantity 1</p><a href="${productUrl}">Product page</a></main>`;
-    const run = await prepareCapturedRetailerOrder({
-      db,
-      actor,
-      runtime: e2eRuntime,
-      vendorId: canonicalVendor.id,
-      targetPurchaseId: purchaseCode,
-      token,
-      url,
-      productUrl,
-      expectedProductText: asin,
-      retailerPages: {
-        [url]: html,
-        [productUrl]: `<title>${names.productName}</title><main>${names.productName} SKU ${sku} ASIN ${asin} USD 42.50</main>`,
-      },
-    });
-    await gotoAuthenticatedPage(page, `/runs/${run.publicId}#work`);
-    const approve = page.getByRole("button", {
-      name: "Approve and import",
-      exact: true,
-    });
-    await expect(
-      page.locator("#import-prepared-orders").getByText("Exact identifier", {
-        exact: true,
-      }),
-    ).toHaveCount(2);
-    await expect(
-      page.getByText("Conflicting exact matches. Choose the Product to use.", {
-        exact: true,
-      }),
-    ).toBeVisible();
-    await expect(approve).toBeDisabled();
-    await chooseOption(
-      page,
-      page.getByLabel("Trade for imported expenses", { exact: true }),
-      "Other",
-    );
-    await expect(approve).toBeDisabled();
-    await page
-      .getByRole("button", { name: `Use ${names.productName}`, exact: true })
-      .click();
-    await expect(approve).toBeEnabled();
-    await mergeProductIdentities();
-    await approve.click();
-    const confirmation = page.getByRole("dialog", {
-      name: "Approve and import",
-      exact: true,
-    });
-    await performOperation(page, "run.commitPrepared", () =>
-      confirmation
-        .getByRole("button", { name: "Approve and import", exact: true })
-        .click(),
-    );
-    await expect(confirmation).toHaveCount(0);
-    if (purchaseCode) {
-      await applyReviewedSourceReconciliation(page, {
-        db,
-        baseURL: e2eRuntime.baseURL,
-        purchaseCode,
-        productCode: product.id,
-      });
-    }
-    const purchase = await database.query.purchase.findFirst({
-      where: and(
-        eq(schema.purchase.vendorId, vendorId),
-        eq(schema.purchase.orderId, names.orderId),
-        notDeleted(schema.purchase),
-      ),
-    });
-    purchaseCode = purchase?.shortcode;
-    expect(purchaseCode).toBeTruthy();
-  }
-  const statementPurchaseCode = await statement();
-  await retailer();
-  if (!purchaseCode) throw new Error("Supported imports created no Purchase");
-  await researchMail(purchaseCode);
-
-  const retainedEmail = await database.query.email.findFirst({
-    where: and(
-      eq(schema.email.mailboxId, connected.accountId),
-      eq(schema.email.messageId, names.messageId),
-    ),
-  });
-  if (!retainedEmail?.orderMailId)
-    throw new Error("Gmail original has no retained Email evidence");
-  const purchases = await database.query.purchase.findMany({
-    where: and(
-      eq(schema.purchase.vendorId, vendorId),
-      // Include a statement aggregate left behind without the retailer order ID.
-      or(
-        eq(schema.purchase.shortcode, statementPurchaseCode),
-        eq(schema.purchase.spendingCategoryId, categoryId),
-        eq(schema.purchase.orderId, names.orderId),
-      ),
-      notDeleted(schema.purchase),
-    ),
-  });
-  expect(purchases).toHaveLength(1);
-  const emailLinks = await database
-    .selectDistinct({
-      purchaseId: schema.assessmentEmailLink.purchaseId,
-      decision: schema.assessmentEmailLink.decision,
-    })
-    .from(schema.assessmentEmailLink)
-    .innerJoin(
-      schema.orderMailEvent,
-      eq(schema.orderMailEvent.id, schema.assessmentEmailLink.eventId),
-    )
-    .where(
-      and(
-        eq(schema.orderMailEvent.orderMailId, retainedEmail.orderMailId),
-        eq(schema.assessmentEmailLink.decision, "linked"),
-      ),
-    );
-  expect(emailLinks).toEqual([
-    { purchaseId: purchases[0]!.id, decision: "linked" },
-  ]);
-
-  const expenses = await database.query.expense.findMany({
-    where: and(
-      eq(schema.expense.purchaseId, purchases[0]!.id),
-      notDeleted(schema.expense),
-    ),
-  });
-  expect(expenses).toMatchObject([{ productId, cost: 42.5 }]);
-  await expectNoInventory();
+  ).toEqual([]);
   expect(
-    await database.query.product.findMany({
-      where: and(
-        inArray(schema.product.id, [productId, aliasId]),
-        notDeleted(schema.product),
-      ),
+    await database.query.expense.findMany({
+      where: notDeleted(schema.expense),
+      columns: { id: true },
     }),
-  ).toHaveLength(1);
-  const ids = await database.query.entityExternalId.findMany({
-    where: and(
-      eq(schema.entityExternalId.entityId, productId),
-      notDeleted(schema.entityExternalId),
-    ),
-  });
-  expect(ids.map((item) => item.kind).sort()).toEqual(["asin", "retailer_sku"]);
-  expect(ids.map((item) => item.source)).toEqual([
-    identifierSource,
-    identifierSource,
-  ]);
+  ).toEqual([]);
+  expect(
+    await database.query.inventoryEntry.findMany({
+      where: notDeleted(schema.inventoryEntry),
+      columns: { id: true },
+    }),
+  ).toEqual([]);
   expect(provider.events()).toEqual(
     expect.arrayContaining([
       "GET /authorize",
       "POST /token",
       "GET /jwks",
       "GET /gmail/v1/users/me/messages",
-      `GET /gmail/v1/users/me/messages/${names.messageId}`,
-      "POST /model/extract-capture",
+      `GET /gmail/v1/users/me/messages/${messageId}`,
     ]),
   );
 });

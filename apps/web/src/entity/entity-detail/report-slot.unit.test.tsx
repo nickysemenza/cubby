@@ -481,6 +481,14 @@ describe("EntityReportSlot records", () => {
           label: "Use Exact thing",
           badges: ["Exact identifier"],
         },
+        {
+          optionId: "existing",
+          entity: "product",
+          id: "PRD-8N2R",
+          name: "Other exact thing",
+          label: "Use Other exact thing",
+          badges: ["Exact identifier"],
+        },
       ],
     };
     const prepared = (disabledReason: string | null): EntityReportOut => ({
@@ -547,8 +555,10 @@ describe("EntityReportSlot records", () => {
       ).toBeInTheDocument();
       await choose("Trade for imported expenses", "Plumbing");
       expect(approve).toBeDisabled();
-      // A suggestion answers only on a tap; the exact match was not preselected.
-      fireEvent.click(screen.getByRole("button", { name: "Use Exact thing" }));
+      // Conflicting exact matches require an explicit choice, including the second candidate.
+      fireEvent.click(
+        screen.getByRole("button", { name: "Use Other exact thing" }),
+      );
       expect(approve).toBeEnabled();
       expect(
         screen.getByText(/All Product decisions reviewed\./),
@@ -577,7 +587,7 @@ describe("EntityReportSlot records", () => {
             {
               stableOrderId: "o1",
               stableLineId: "l1",
-              resolution: { kind: "existing", productId: "PRD-4K7M" },
+              resolution: { kind: "existing", productId: "PRD-8N2R" },
             },
           ],
         }),
