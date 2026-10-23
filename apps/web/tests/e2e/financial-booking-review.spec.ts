@@ -4,10 +4,6 @@ import {
   financialBookingResult,
 } from "@cubby/schemas/financial-booking";
 import { z } from "zod";
-import { financialAccountCreateInput } from "@cubby/schemas/financial-account";
-import { financialTransactionCreateInput } from "@cubby/schemas/financial-transaction";
-import { spendingCategoryCreateInput } from "@cubby/schemas/spending-category";
-import { vendorCreateInput } from "@cubby/schemas/vendor";
 import {
   chooseOption,
   gotoAuthenticatedPage,
@@ -15,7 +11,11 @@ import {
 } from "./support/e2e-helpers";
 import { expect, test } from "./support/e2e-test";
 import { dispatchesOperation } from "./support/dispatch-wire";
-import { ensureMemberParty } from "./fixtures/core";
+import {
+  createEntityFixture,
+  createFixtureGraph,
+  ensureMemberParty,
+} from "./fixtures/core";
 
 // A stale screen must not book changed bank evidence. Retries must preserve the
 // approved decision, and negative income must expose reimbursement review.
@@ -32,47 +32,37 @@ test("reviews spending and reimbursement in the browser with stale and replay gu
         `financialTransaction.${operation}`,
       ),
     );
-  const create = async (
-    path: string,
-    data:
-      | z.input<typeof financialAccountCreateInput>
-      | z.input<typeof financialTransactionCreateInput>
-      | z.input<typeof spendingCategoryCreateInput>
-      | z.input<typeof vendorCreateInput>,
-  ) => {
-    const response = await entityApi(page.request).create(path, data, {
-      headers,
-    });
-    expect(response.status(), await response.text()).toBe(200);
-    return z
-      .object({ item: z.object({ id: z.string() }) })
-      .parse(await response.json()).item.id;
-  };
-  await create("spendingCategory", {
-    name: "Synthetic reviewed dining",
-    itemizationExpectation: "not_expected",
-    productExpectation: "not_expected",
-  });
   const vendorName = "Synthetic review cafe";
-  await create("vendor", {
-    name: vendorName,
-    itemizationExpectation: "not_expected",
-  });
   const owner = await ensureMemberParty(page, "Synthetic booking member");
-  const accountId = await create("financialAccount", {
-    name: "Synthetic review card",
-    identity: { kind: "credit_card", issuer: null, network: "visa" },
-    ledgerPartyId: owner.shortcode,
-    provisional: false,
-  });
-  const transactionId = await create("financialTransaction", {
-    accountId,
-    amount: 120,
-    merchant: vendorName,
-    kind: "purchase",
-    status: "posted",
-    postedDate: "2026-09-10",
-  });
+  const { accountId, transactionId } = await createFixtureGraph(
+    page,
+    async (create) => {
+      await create("spendingCategory", {
+        name: "Synthetic reviewed dining",
+        itemizationExpectation: "not_expected",
+        productExpectation: "not_expected",
+      });
+      await create("vendor", {
+        name: vendorName,
+        itemizationExpectation: "not_expected",
+      });
+      const account = await create("financialAccount", {
+        name: "Synthetic review card",
+        identity: { kind: "credit_card", issuer: null, network: "visa" },
+        ledgerPartyId: owner.shortcode,
+        provisional: false,
+      });
+      const transaction = await create("financialTransaction", {
+        accountId: account.id,
+        amount: 120,
+        merchant: vendorName,
+        kind: "purchase",
+        status: "posted",
+        postedDate: "2026-09-10",
+      });
+      return { accountId: account.id, transactionId: transaction.id };
+    },
+  );
   await gotoAuthenticatedPage(
     page,
     `/financial-transactions/${transactionId}`,
@@ -175,15 +165,19 @@ test("reviews spending and reimbursement in the browser with stale and replay gu
     .object({ displayName: z.string(), expenseTotal: z.number() })
     .parse(await purchaseResponse.json());
   expect(purchase.expenseTotal).toBe(125);
-  const creditId = await create("financialTransaction", {
-    accountId,
-    amount: -40,
-    merchant: "Synthetic friend contribution",
-    kind: "income",
-    status: "posted",
-    postedDate: "2026-09-12",
-    itemizationExpectation: "required",
-  });
+  const { id: creditId } = await createEntityFixture(
+    page,
+    "financialTransaction",
+    {
+      accountId,
+      amount: -40,
+      merchant: "Synthetic friend contribution",
+      kind: "income",
+      status: "posted",
+      postedDate: "2026-09-12",
+      itemizationExpectation: "required",
+    },
+  );
   await gotoAuthenticatedPage(
     page,
     `/financial-transactions/${creditId}`,

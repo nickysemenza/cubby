@@ -98,36 +98,6 @@ export const seedUnlinkedExpensePrerequisite = (page: Page, name: string) =>
     lineBasis: "item_line",
   });
 
-export async function seedPlantPurchasePrerequisite(
-  page: Page,
-  opts: { plantId: string; vendorId: string; name: string },
-) {
-  return createFixtureGraph(page, async (create) => {
-    const brand = await create("vendor", { name: "E2E fixture" });
-    const product = await create("product", {
-      brandId: brand.id,
-      name: `${opts.name} product`,
-      growsPlantId: opts.plantId,
-    });
-    const purchase = await create("purchase", {
-      vendorId: opts.vendorId,
-      orderId: `${opts.name} order`,
-      date: "2026-09-09",
-    });
-    await create("expense", {
-      name: `${opts.name} expense`,
-      cost: 7,
-      date: "2026-09-09",
-      costType: "materials",
-      trade: "other",
-      productId: product.id,
-      productQuantity: 1,
-      purchaseId: purchase.id,
-    });
-    return { product, purchase };
-  });
-}
-
 export const seedInventoryPrerequisites = (
   page: Page,
   opts: {
