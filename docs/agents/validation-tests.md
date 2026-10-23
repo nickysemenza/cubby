@@ -501,6 +501,10 @@ to assert header position costs a full browser journey for a presentation detail
 Shared responsive capabilities do not establish sticky behavior; verify that
 visual detail during relevant layout work instead.
 
+Fast header pointer probes wait for the intended dnd-kit target announcement
+before release; completion of mouse input alone does not establish that React
+has processed drag-over. Keep the actual final header-order assertion.
+
 The column-layout browser journey owns native header pointer/keyboard ordering,
 locked edges, pointer pin transfer, downward customizer drag placement and
 session reset. `table-layout-customizer.unit.test.tsx` and
