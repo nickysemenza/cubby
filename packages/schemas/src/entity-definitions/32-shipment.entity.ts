@@ -261,6 +261,7 @@ export default defineEntity({
       },
       {
         columnId: "vendorId",
+        derived: "vendorId",
         kind: "idMulti",
         brandRef: { entity: "vendor" },
         deriveSchema: true,

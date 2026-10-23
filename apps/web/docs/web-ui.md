@@ -9,7 +9,9 @@ through UTC; their distance compares household calendar days, including DST.
 Today, yesterday, tomorrow, and ongoing ranges retain those labels. Fully ended
 ranges use their end for relative context; future ranges use their start.
 
-Inside desktop tables, the same component stacks the month/day over a muted
+Shared report record rows can opt into inline relative age
+with `showRelativeTime`; Shipment tracking timelines use this full date display.
+Inside desktop tables, the component stacks the month/day over a muted
 compact distance ("Oct 13" / "3 min ago"). Minutes use `min`, months use `mo`,
 with a space before both, so neither can read as the other. Another year leads
 the compact distance line ("’25 · 1y ago"). Timestamp tooltips on hover and

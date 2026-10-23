@@ -102,6 +102,7 @@ export async function shipmentTrackingReport(
             title: row.event.rawStatus,
             trailing: at ? null : timeLabel(row.event),
             ...(at ? { at } : {}),
+            showRelativeTime: true,
             state: {
               kind: row.event.kind === "exception" ? "warning" : "done",
               label: eventLabels[row.event.kind],
@@ -137,12 +138,13 @@ export async function shipmentTrackingReport(
     {
       kind: "table",
       title: "Retained observations",
-      columns: ["When", "Report", "Source", "History"],
+      columns: ["When", "Status", "Report", "Source", "History"],
       empty: "No source evidence recorded.",
       rows: report.observations.map((row) => ({
         id: row.observationId,
         cells: [
           timeLabel(row, reportingTime(row)),
+          eventLabels[row.kind],
           row.rawStatus,
           row.source.kind === "email" ? row.source.emailId : row.source.url,
           `${row.superseded ? "Superseded · " : ""}First seen ${formatTimestamp(row.firstSeenAt)} · Last seen ${formatTimestamp(row.lastSeenAt)}`,
@@ -150,7 +152,7 @@ export async function shipmentTrackingReport(
         ...(row.source.kind === "email"
           ? {
               presentation: {
-                "2": {
+                "3": {
                   kind: "links",
                   links: [
                     {
