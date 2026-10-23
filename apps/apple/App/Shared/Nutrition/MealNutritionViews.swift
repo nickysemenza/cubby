@@ -42,12 +42,12 @@ struct MealNutritionPeopleView: View {
                         .font(.callout)
                         .foregroundStyle(.secondary)
                 } else {
-                    ForEach(Array(person.foods.enumerated()), id: \.element.id) { index, food in
+                    ForEach(Array(person.foods.enumerated()), id: \.offset) { index, food in
                         if index > 0 { Divider() }
-                        if showMealHeadings
-                            && (index == 0 || person.foods[index - 1].meal.id != food.meal.id)
+                        if showMealHeadings, let meal = food.meal,
+                            index == 0 || person.foods[index - 1].meal?.id != meal.id
                         {
-                            mealHeading(food.meal, for: person)
+                            mealHeading(meal, for: person)
                         }
                         foodRow(food)
                     }
@@ -71,12 +71,17 @@ struct MealNutritionPeopleView: View {
                     .font(.fieldGuideLabel.monospacedDigit())
                     .foregroundStyle(.secondary)
             }
-            if let amount = food.amount, amount.unit != "g" {
-                Text("Weight: \(food.weight.formatted(calories: false)) g")
+            if let amount = food.amount, amount.unit != "g", let weight = food.weight {
+                Text("Weight: \(weight.formatted(calories: false)) g")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
-            MacroGrid(totals: food.totals.macros)
+            if let totals = food.totals {
+                MacroGrid(totals: totals.macros)
+            } else if case .unrecognized(let raw) = food {
+                Text("Unsupported food response: \(String(describing: raw))")
+                    .font(.caption).textSelection(.enabled)
+            }
         }
         .padding(.vertical, FieldGuideTokens.Space.xs)
     }
@@ -93,7 +98,7 @@ struct MealNutritionPeopleView: View {
             NavigationLink(value: Route.entityDetail(.ingredient, id: ingredient.ingredientId)) {
                 Text(food.name)
             }
-        case .manual:
+        case .manual, .unrecognized:
             Text(food.name)
         }
     }
@@ -174,15 +179,15 @@ private struct MacroGrid: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
-            if amount.inferredZeroCount > 0 {
-                Text("\(amount.inferredZeroCount) inferred from label")
+            if let count = amount.inferredZeroCount, count > 0 {
+                Text("\(count) inferred from label")
                     .font(.caption2)
                     .foregroundStyle(.secondary)
             }
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(
-            "\(label): \(amount.accessibilityValue(calories: calories, unit: unit))\(amount.inferredZeroCount > 0 ? ", \(amount.inferredZeroCount) contributors inferred from label" : "")"
+            "\(label): \(amount.accessibilityValue(calories: calories, unit: unit))\(amount.inferredZeroCount.map { $0 > 0 ? ", \($0) contributors inferred from label" : "" } ?? "")"
         )
     }
 }

@@ -46,7 +46,8 @@
         func reauthorization() throws {
             let attempt = ChatGptAuthorizationAttempt(
                 host: .init(
-                    hostId: "urn:uuid:example", clientId: "oaiapp_existing", loginHint: "user@example.com"))
+                    hostId: "urn:uuid:example", clientId: "oaiapp_existing",
+                    loginHint: .value("user@example.com")))
             let redirect = URL(string: "http://127.0.0.1:12345/auth/callback")!
             let url = try attempt.authorizationURL(redirect: redirect)
             let query = URLComponents(url: url, resolvingAgainstBaseURL: false)!.queryItems!

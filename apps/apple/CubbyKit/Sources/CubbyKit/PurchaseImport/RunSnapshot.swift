@@ -13,11 +13,13 @@ public struct RunSnapshot: Codable, Sendable {
     public init(_ raw: JSONValue) throws {
         let reader = JSONRead(value: raw, context: "Run snapshot")
         runID = try reader.string("runId")
-        guard let purpose = RunPurpose(rawValue: try reader.string("purpose")) else {
+        let purpose = RunPurpose(rawValue: try reader.string("purpose"))
+        guard RunPurpose.allCases.contains(purpose) else {
             throw reader.malformed("purpose", expected: "a Run purpose")
         }
         self.purpose = purpose
-        guard let status = RunStatus(rawValue: try reader.string("status")) else {
+        let status = RunStatus(rawValue: try reader.string("status"))
+        guard RunStatus.allCases.contains(status) else {
             throw reader.malformed("status", expected: "a Run status")
         }
         self.status = status

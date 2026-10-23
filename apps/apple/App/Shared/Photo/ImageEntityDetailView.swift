@@ -221,7 +221,7 @@ private struct PhotoTab: View {
         }.detailContentsAnchor("in-libraries")
         ContinuousDetailSection(title: "Used in") {
             ReportDetailSlot(
-                slot: .image_associations, id: detail.id.rawValue,
+                slot: .imageAssociations, id: detail.id.rawValue,
                 host: EntityCatalog[.image].row(from: (try? JSONValue(encoding: detail)) ?? .null)
                     .map { ReportHost(entity: .image, row: $0, onChanged: onChanged) })
         }.detailContentsAnchor("used-in")
@@ -261,10 +261,10 @@ private final class ImageProcessingHistoryModel {
         defer { loading = false }
         do {
             let page = try await client.imageAnalyses(
-                .init(id: id.rawValue, cursor: reset ? nil : nextCursor, limit: reset ? 10 : 20))
+                .init(id: id, cursor: reset ? nil : nextCursor, limit: reset ? 10 : 20))
             if reset {
                 do {
-                    currentAnalyses = try await client.imageProcessingStatus(.init(id: id.rawValue)).analyses
+                    currentAnalyses = try await client.imageProcessingStatus(.init(id: id)).analyses
                 } catch {
                     Diagnostics.report(error, context: "photos.imageProcessingStatus")
                 }
@@ -279,7 +279,7 @@ private final class ImageProcessingHistoryModel {
     }
 }
 
-private typealias UnparsedImageAnalysis = ImageAnalysisHistoryOutput.UnparsedPayloadPayload
+private typealias UnparsedImageAnalysis = ImageAnalysisHistoryOutputUnparsedItem
 
 private enum ImageAnalysisHistoryEntry {
     case parsed(ImageDescriptionAnalysis)
@@ -443,12 +443,12 @@ private struct ProvenanceRows: View {
         }
         LabeledContent("Source") {
             HStack(spacing: FieldGuideTokens.Space.xs) {
-                ProvenanceBadge(text: Self.sourceLabel(detail.source))
+                ProvenanceBadge(text: Self.sourceLabel(detail.source.rawValue))
                 ProvenanceBadge(text: Self.attributionLabel(detail.captureAttribution))
             }
         }
         // The server words the evidence (`display.detailLabelPath`); nothing here re-joins it.
-        if let evidence = detail.provenanceEvidenceLabel {
+        if case .value(.some(let evidence)) = detail.provenanceEvidenceLabel {
             LabeledContent("Evidence", value: evidence)
         }
         if let location = detail.captureLocation {
@@ -457,12 +457,13 @@ private struct ProvenanceRows: View {
         }
     }
 
-    private static func sourceLabel(_ source: ImageWithEntity.SourcePayload) -> String {
+    private static func sourceLabel(_ source: String) -> String {
         switch source {
-        case .own: "Own"
-        case .catalog: "Catalog"
-        case .unknown: "Unknown"
-        case .screenshot: "Screenshot"
+        case "own": "Own"
+        case "catalog": "Catalog"
+        case "unknown": "Unknown"
+        case "screenshot": "Screenshot"
+        default: "Unsupported source (\(source))"
         }
     }
 
@@ -472,6 +473,7 @@ private struct ProvenanceRows: View {
         case .derived: "Derived"
         case .ambiguous: "Ambiguous"
         case .confirmed: "Confirmed"
+        case .unrecognized(let raw): "Unsupported attribution (\(raw))"
         }
     }
 }

@@ -146,6 +146,7 @@ struct PhotoCandidateSelectionView: View {
         switch group.product {
         case .create(let proposal): proposal.create.name
         case .existing: "Existing Product"
+        case .unrecognized: "Unsupported Product proposal"
         }
     }
 

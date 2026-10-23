@@ -383,7 +383,7 @@ struct GenericEntityListModelTests {
         let model = GenericEntityListModel(
             descriptor: EntityCatalog[.product], client: try makeClient(), progressive: false)
         await model.loadInitial()
-        #expect(model.meta?.sums?.additionalProperties["price"] == 25)
+        #expect(model.meta?.sums?["price"] == 25)
 
         let search = try #require(EntityCatalog[.product].primarySearch)
         await model.apply(filters: EntityFilterState([search.key: ["new"]]))

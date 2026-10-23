@@ -63,7 +63,7 @@ struct RunPhotoReviewSections: View {
                         }
                         Button {
                             workspace.approve(
-                                proposed.filter { $0.blockedReason == nil }.map(\.groupKey),
+                                proposed.filter { $0.approvalBlockedReason == nil }.map(\.groupKey),
                                 session: session, runID: runID, client: appModel.client)
                         } label: {
                             Text("Apply ready groups")
@@ -71,7 +71,7 @@ struct RunPhotoReviewSections: View {
                                 .contentShape(Rectangle())
                         }
                         .disabled(
-                            session.busy || !proposed.contains { $0.blockedReason == nil })
+                            session.busy || !proposed.contains { $0.approvalBlockedReason == nil })
                     }
                     .buttonStyle(.borderless)
                     .detailContentsHeader().detailContentsAnchor(
@@ -228,7 +228,8 @@ struct RunPhotoReviewSections: View {
                         .foregroundStyle(
                             PhotoReviewPolicy.isCreate(group: group) ? Color("ActionCreate") : Color("Slate"))
                         Circle().fill(
-                            group.blockedReason == nil ? FieldGuideTokens.positive : FieldGuideTokens.signal
+                            group.approvalBlockedReason == nil
+                                ? FieldGuideTokens.positive : FieldGuideTokens.signal
                         )
                         .frame(width: 6, height: 6).accessibilityHidden(true)
                         Text(groupName(group)).lineLimit(2)
@@ -244,7 +245,7 @@ struct RunPhotoReviewSections: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityAddTraits(selectedProposal?.groupKey == group.groupKey ? .isSelected : [])
-                .accessibilityValue(group.blockedReason ?? "Ready")
+                .accessibilityValue(group.approvalBlockedReason ?? "Ready")
             }
         }
         .accessibilityIdentifier("review.groups")
@@ -342,12 +343,13 @@ struct RunPhotoReviewSections: View {
                     )
                     .touchTargetLabel()
                 }
-                .disabled(session.busy || group.blockedReason != nil)
-                .accessibilityHint(group.blockedReason ?? "Include this ready group in batch approval")
+                .disabled(session.busy || group.approvalBlockedReason != nil)
+                .accessibilityHint(
+                    group.approvalBlockedReason ?? "Include this ready group in batch approval")
             }
             PhotoGroupDecisionView(runID: runID, group: group, images: images, session: session)
                 .id(group.groupKey)
-            if let blocker = group.blockedReason {
+            if let blocker = group.approvalBlockedReason {
                 Text(blocker).font(.caption).foregroundStyle(FieldGuideTokens.warning)
             }
             if let error = group.lastError {
@@ -363,7 +365,7 @@ struct RunPhotoReviewSections: View {
                     Text(PhotoReviewPolicy.primaryVerb(group: group)).touchTargetLabel()
                 }
                 .buttonStyle(.borderedProminent)
-                .disabled(session.busy || group.blockedReason != nil)
+                .disabled(session.busy || group.approvalBlockedReason != nil)
                 Button(role: .destructive) {
                     workspace.discardingGroup = group.groupKey
                 } label: {
@@ -383,6 +385,7 @@ struct RunPhotoReviewSections: View {
         switch group.product {
         case .create(let product): product.create.name
         case .existing(let product): product.existing?.name ?? "Existing product"
+        case .unrecognized: "Unsupported Product proposal"
         }
     }
 
@@ -399,6 +402,7 @@ struct RunPhotoReviewSections: View {
         case .leased: (title, symbol) = ("Working", "hourglass")
         case .pending: (title, symbol) = ("Queued", "clock")
         case nil: (title, symbol) = ("Not queued", "clock")
+        case .unrecognized(let raw): (title, symbol) = ("Unsupported state (\(raw))", "questionmark.circle")
         }
         return VStack(alignment: .leading, spacing: 2) {
             Label("\(name): \(title)", systemImage: symbol)

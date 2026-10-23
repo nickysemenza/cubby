@@ -314,14 +314,13 @@ jobs:
           ffi-targets: mac
           xcodegen: "false"
       # Build products are disposable; unchanged compiler inputs replay through
-      # Xcode's compilation cache without forging checkout timestamps. Keep
-      # SwiftPM's warning-generator products.
+      # Xcode's compilation cache without forging checkout timestamps.
       - name: Restore cached host compilation
         id: host-build
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: ${{ env.HOST_BUILD_CACHE_PATHS }}
-          key: xcode-host-v1-${{ runner.os }}-${{ steps.apple.outputs.toolchain-hash }}-${{ hashFiles('apps/apple/CubbyKit/Package.resolved') }}-${{ hashFiles('apps/apple/CubbyKit/**', '!apps/apple/CubbyKit/.build/**') }}-${{ hashFiles('apps/apple/scripts/check-openapi-warnings.sh') }}
+          key: xcode-host-v1-${{ runner.os }}-${{ steps.apple.outputs.toolchain-hash }}-${{ hashFiles('apps/apple/CubbyKit/Package.resolved') }}-${{ hashFiles('apps/apple/CubbyKit/**', '!apps/apple/CubbyKit/.build/**') }}
           restore-keys: |
             xcode-host-v1-${{ runner.os }}-${{ steps.apple.outputs.toolchain-hash }}-${{ hashFiles('apps/apple/CubbyKit/Package.resolved') }}-
             xcode-host-v1-${{ runner.os }}-${{ steps.apple.outputs.toolchain-hash }}-

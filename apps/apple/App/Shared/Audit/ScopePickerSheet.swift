@@ -88,7 +88,7 @@ struct ScopePickerSheet: View {
                         .font(.fieldGuideBody)
                         .foregroundStyle(FieldGuideTokens.graphite)
                         .lineLimit(1)
-                    Eyebrow(node._type.rawValue)
+                    Eyebrow(node.type.rawValue)
                 }
                 Spacer(minLength: FieldGuideTokens.Space.sm)
                 Text("\(node.totalItems)")

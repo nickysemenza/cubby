@@ -331,6 +331,7 @@ public struct ReportPresentation: Hashable, Sendable {
         case table(Table)
         case schedule(Schedule)
         case note(String, tone: Tone?, strong: Bool)
+        case unsupported(JSONValue)
     }
 
     public private(set) var blocks: [Block]
@@ -380,8 +381,9 @@ public struct ReportPresentation: Hashable, Sendable {
             blocks: merged, live: page.live, status: page.status, nextCursor: page.nextCursor)
     }
 
-    private static func block(_ block: Components.Schemas.ReportBlock) -> Block {
+    private static func block(_ block: ReportBlock) -> Block {
         switch block {
+        case .unrecognized(let raw): return .unsupported(raw)
         case .progress(let progress):
             return .progress(
                 Progress(
@@ -459,13 +461,13 @@ public struct ReportPresentation: Hashable, Sendable {
                     at: row.at.flatMap(DatePresentation.parse),
                     listLink: row.listLink.flatMap { link in
                         EntityKey(rawValue: link.entity).map {
-                            ListLink(entity: $0, filters: link.filters.additionalProperties)
+                            ListLink(entity: $0, filters: link.filters)
                         }
                     },
                     actions: (row.actions ?? []).compactMap {
                         CollectionActionID(rawValue: $0.rawValue)
                     },
-                    key: row.key, disabledReason: row.disabledReason,
+                    key: row.key, disabledReason: row.disabledReason.valueIfPresent ?? nil,
                     stateKind: records.presentation == .timeline ? row.state?.kind.rawValue : nil,
                     badges: stateChip(label: row.state?.label, kind: row.state?.kind.rawValue)
                         + (row.badges ?? []).map {
@@ -512,7 +514,7 @@ public struct ReportPresentation: Hashable, Sendable {
             })
     }
 
-    private static func choice(_ choice: Components.Schemas.ReportChoice) -> Choice {
+    private static func choice(_ choice: ReportChoice) -> Choice {
         Choice(
             id: choice.id, label: choice.label, required: choice.required,
             options: choice.options.map {

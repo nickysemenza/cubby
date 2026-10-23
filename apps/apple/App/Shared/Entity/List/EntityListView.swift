@@ -539,7 +539,7 @@ struct EntityListView: View {
         let meta = model.isSearching ? model.searchModel?.summaryMeta : model.summaryMeta
         guard let meta else { return "" }
         let totals = descriptor.presentation.listTotals.map { total in
-            meta.totalLabels?.additionalProperties[total.id] ?? "Unavailable"
+            meta.totalLabels?[total.id] ?? "Unavailable"
         }
         return ([meta.totalCount.formatted()] + totals).joined(separator: " · ")
     }
@@ -1249,7 +1249,7 @@ struct EntityListView: View {
 
     private func listSummary(meta: ListPageMeta, filtered: Bool) -> some View {
         let totals = descriptor.presentation.listTotals.compactMap {
-            meta.totalLabels?.additionalProperties[$0.id]
+            meta.totalLabels?[$0.id]
         }.filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
         let summary = ([meta.totalCount.formatted()] + totals + (filtered ? ["filtered"] : []))
             .joined(separator: " · ")

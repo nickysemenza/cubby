@@ -109,6 +109,7 @@ export const entityListContract = defineContract("entity", {
     input: entityListInputSchema,
     output: entityListBaseOutputSchema,
     native: "Progressive standard entity lists",
+    nativeModels: { input: "json", output: "json" },
     observability: { entities: listEntities },
   }),
   listEnrichment: query({
@@ -121,6 +122,7 @@ export const entityListContract = defineContract("entity", {
     output: entityListEnrichmentOutputSchema,
     transport: "post",
     native: "Deferred list fields",
+    nativeModels: { input: "json", output: "json" },
     observability: { entities: listEntities },
   }),
   listSummary: query({
@@ -132,6 +134,7 @@ export const entityListContract = defineContract("entity", {
     input: entityListInputSchema,
     output: entityListSummaryOutputSchema,
     native: "Full-filter list totals",
+    nativeModels: { input: "json", output: "json" },
     observability: { entities: listEntities },
   }),
   facetCounts: query({
@@ -157,6 +160,7 @@ export const entityListContract = defineContract("entity", {
     // server handler; HTTP carries the loose kernel wire.
     input: z.custom<EntityListInputByEntity[ListEntity]>(),
     output: z.custom<EntityListResultByEntity[ListEntity]>(),
+    nativeModels: { input: "json", output: "json" },
     httpWire: kernelRecordWire,
     native: "Full-row entity lists (pickers, Spotlight, sheets)",
     observability: { entities: listEntities },

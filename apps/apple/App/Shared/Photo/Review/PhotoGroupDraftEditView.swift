@@ -81,11 +81,11 @@ struct PhotoGroupDraftEditView: View {
         .task(id: group.groupKey) {
             guard case .create(let product) = group.product else { return }
             name = product.create.name
-            brandID = product.create.brandId
+            brandID = product.create.brandId.valueIfPresent.flatMap { $0 }
             brandName = nil
-            modelName = product.create.model ?? ""
-            notes = product.create.notes ?? ""
-            categoryID = product.create.categoryId
+            modelName = product.create.model.valueIfPresent.flatMap { $0 } ?? ""
+            notes = product.create.notes.valueIfPresent.flatMap { $0 } ?? ""
+            categoryID = product.create.categoryId.valueIfPresent.flatMap { $0 }
             if let selectedBrandID = brandID {
                 do {
                     let brand = try await appModel.client.row(EntityCatalog[.vendor], id: selectedBrandID)

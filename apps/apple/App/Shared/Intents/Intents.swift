@@ -156,6 +156,8 @@ struct ScanCodeIntent: AppIntent {
         case .added: dialog = "Added \(result.product.name) to \(location.title)."
         case .confirmed: dialog = "\(result.product.name) is already in \(location.title)."
         case .queued: dialog = "\(result.product.name) is stocked elsewhere; open Cubby to move it."
+        case .unrecognized(let raw):
+            throw UnsupportedNativeResponse(context: "Scan outcome", raw: .string(raw))
         }
         return .result(dialog: dialog)
     }

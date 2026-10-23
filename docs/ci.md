@@ -264,22 +264,14 @@ simulator. The aggregate package scheme includes all CubbyKit tests and the CLI
 product; the library-only `CubbyKit` scheme has no test action. The command uses
 `-onlyUsePackageVersionsFromResolvedFile` to keep the committed package pins.
 Its `xcode-host-v1` cache stores `apps/apple/CubbyKit/.build`, including the
-Xcode compilation cache under `.build/xcode` and the SwiftPM
-warning-generator products. Package checkouts use the shared
-`apps/apple/SourcePackages` clone cache that the simulator job saves. Xcode's `Build` and `Logs` directories are
-excluded: tests rebuild products from cached compiler results rather than
-restoring timestamp-sensitive objects and test bundles. Keys include the Xcode
-toolchain, package pins, CubbyKit sources, and warning-check script. It then
-runs `apps/apple/scripts/check-openapi-warnings.sh`, which fails on any
-swift-openapi-generator warning (a schema the `CubbyAPI` build plugin would
-silently drop). It reads the diagnostics the plugin printed into the test
-build's log, which every hosted host build contains because Xcode's `Build`
-directory is never restored; a build that skipped the plugin, typically a warm
-local one, generates again with the pinned generator. A successful warning check records its content key inside
-the cached `.build` directory; unchanged document, config, generator pin,
-toolchain, and check script reuse that pass without rebuilding or regenerating.
-Changed inputs run the full check, and warnings or generator failures never
-record a pass. The simulator job restores its simulator-only FFI framework and
+Xcode compilation cache under `.build/xcode`. Package checkouts use the shared
+`apps/apple/SourcePackages` clone cache that the simulator job saves. Xcode's
+`Build` and `Logs` directories are excluded: tests rebuild products from cached
+compiler results rather than restoring timestamp-sensitive objects and test
+bundles. Keys include the Xcode toolchain, package pins and CubbyKit sources.
+Native models are produced by `pnpm generate`, which rejects unsupported wire
+shapes. Host tests exercise their actual encoding and decoding, including
+omitted/null/value and unknown variants. The simulator job restores its simulator-only FFI framework and
 runs the generic-simulator build with no tests or simulator boot. Both jobs
 use `!cancelled()` so whole-workflow cancellation can stop them.
 
@@ -318,7 +310,7 @@ optional simulator DerivedData restoration.
 E2E jobs' PostgreSQL, which cannot run service containers.
 `setup-apple` installs XcodeGen and restores
 `apps/apple/SourcePackages`, the `xcodebuild`-resolved SPM clones for Sentry,
-GRDB, Nuke and swift-openapi-generator (previously an uncached "Resolve Package
+GRDB, Nuke and HTTPTypes (previously an uncached "Resolve Package
 Graph" on every run), used by both native jobs; `Apple host tests` skips
 XcodeGen. The clone cache is separate from the target-specific FFI output cache and the
 host job's build cache described above. DerivedData keys explicitly exclude
@@ -389,8 +381,8 @@ with the runner's Rust only on a miss. Compiler and SwiftPM caches are separate.
 
 Generated output is never committed; web and Apple jobs generate it during
 `postinstall`. The Rust job's root-only install skips web generation, and
-`Validation`'s `generate` gate checks that it generates cleanly and that the
-OpenAPI document lints.
+`Validation`'s `generate` gate checks that declarations generate cleanly,
+including the direct native contract and Swift codecs.
 
 The `lanes` job is one static matrix: four E2E shards and two Vitest shards.
 Browser shards run alone, so no companion check waits behind one. Every

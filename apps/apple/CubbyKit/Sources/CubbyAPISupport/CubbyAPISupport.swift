@@ -1,9 +1,7 @@
 import Foundation
 
-/// Hand-written types the generated `CubbyAPI` client uses in place of its own: the branded
-/// shortcodes and the `YYYY-MM-DD` plain date (`typeOverrides.schemas` in
-/// `Sources/CubbyAPI/openapi-generator-config.yaml`, written by `apps/web/generator/http-api/native.ts`).
-/// Each is a single JSON string on the wire, so `RawRepresentable` supplies `Codable`.
+/// Shared codecs and identifiers used by the plain generated native models.
+/// Kept separate so model declarations do not depend on CubbyKit’s runtime.
 
 /// A calendar day with no time or zone, as the API spells `PlainDate`. The zone defaults to the
 /// device's current one, which is what a garden log or a meal plan means by "that day";

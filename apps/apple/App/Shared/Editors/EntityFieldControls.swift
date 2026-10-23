@@ -123,6 +123,8 @@ struct EntityFieldControl: View {
                 return hasActions ? "Nothing to inherit" : nil
             }
             return "\(value), inherited from \(resolved.sourceEntity?.name ?? resolved.resolution.source)"
+        case .unrecognized(let raw):
+            return "Unsupported resolution (\(raw))"
         case .allocated:
             return resolved.sourceText
         case .none:

@@ -170,7 +170,7 @@ export const extractedPaymentEvidence = z.object({
 });
 export type ExtractedPaymentEvidence = z.infer<typeof extractedPaymentEvidence>;
 
-const extractedOrderDate = z
+export const extractedOrderDate = z
   .union([
     // A refinement, not `.pipe(z.iso.date())`: a pipe advertises its output
     // side's bare `format: date`, which the MCP catalog forbids.

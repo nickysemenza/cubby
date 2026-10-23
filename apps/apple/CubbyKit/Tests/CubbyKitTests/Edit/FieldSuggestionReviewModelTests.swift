@@ -138,10 +138,10 @@ struct FieldSuggestionReviewModelTests {
             let review = FieldSuggestionReviewModel(
                 editor: editor,
                 fetch: { input in
-                    let encoded = try #require(input.basis.additionalProperties["__draftFields"] ?? nil)
+                    let encoded = try #require(input.basis["__draftFields"] ?? nil)
                     masks.append(try JSONDecoder().decode([String].self, from: Data(encoded.utf8)))
-                    #expect(input.basis.additionalProperties.keys.contains("purchaseId"))
-                    let basisPurchase = input.basis.additionalProperties["purchaseId"] ?? nil
+                    #expect(input.basis.keys.contains("purchaseId"))
+                    let basisPurchase = input.basis["purchaseId"] ?? nil
                     #expect(basisPurchase == purchase.draft.stringValue)
                     return response
                 },

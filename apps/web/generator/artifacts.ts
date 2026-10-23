@@ -54,8 +54,8 @@ const carriesGeneratedHeader = async (absolutePath: string) => {
 
 /**
  * Deletes files carrying the generated header in an artifact directory that
- * no artifact claims, including wholly retired web output directories restored
- * by Nx's generated-file glob. A stale local output must never shadow the current
+ * no artifact claims, including wholly retired web and native output directories restored
+ * by Nx's generated-file globs. A stale local output must never shadow the current
  * ones. Run once over the union of every
  * stage's artifacts: the stages share output directories.
  */
@@ -68,6 +68,11 @@ export const removeExtraArtifacts = async (
     artifacts.map(({ relativePath }) => dirname(relativePath)),
   );
   for await (const path of glob("apps/web/src/**/*.gen.ts", { cwd: root })) {
+    directories.add(dirname(path));
+  }
+  for await (const path of glob("apps/apple/CubbyKit/Sources/**/*.gen.swift", {
+    cwd: root,
+  })) {
     directories.add(dirname(path));
   }
   const removed: string[] = [];

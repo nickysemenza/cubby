@@ -503,12 +503,19 @@ public final class RecountSession {
             patch(token) { $0.status = .failed(message) }
             lastError = message
         case .scanned(let result):
+            if case .unrecognized(let raw) = result.outcome {
+                let message = "Unsupported recount outcome: \(raw)"
+                patch(token) { $0.status = .failed(message) }
+                lastError = message
+                return
+            }
             patch(token) {
                 $0.label = result.product.name
                 switch result.outcome {
                 case .added: $0.status = .added
                 case .confirmed: $0.status = .confirmed
                 case .queued: $0.status = .queued
+                case .unrecognized: break
                 }
             }
             switch result.outcome {
@@ -525,6 +532,7 @@ public final class RecountSession {
                 if case .added = result.outcome { summary.added += 1 }
                 pendingVerify.insert(result.product.id)
                 requestRefetch(keepingResolutions: true)
+            case .unrecognized: break
             }
         }
     }

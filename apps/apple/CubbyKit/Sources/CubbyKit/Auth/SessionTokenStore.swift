@@ -17,7 +17,7 @@ public struct CubbyAuthState: Sendable, Equatable, Codable {
     }
 }
 
-/// Persists the credential CubbyAuthMiddleware injects on outgoing requests, keyed by host so a
+/// Persists the credential NativeRequestHeaders injects on outgoing requests, keyed by host so a
 /// dev token (`localhost:3000`) and a prod token (`cubby.example`) can coexist without
 /// clobbering each other.
 public protocol SessionTokenStore: Sendable {

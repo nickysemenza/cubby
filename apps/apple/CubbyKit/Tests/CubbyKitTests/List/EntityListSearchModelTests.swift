@@ -155,12 +155,12 @@ struct EntityListSearchModelTests {
                     items: [Self.row("old")],
                     meta: ListPageMeta(
                         pageIndex: 1, pageSize: 25, totalCount: 1,
-                        sums: .init(additionalProperties: ["price": 25])))
+                        sums: ["price": 25]))
             })
         model.setQuery("sample")
         await model.settled()
         #expect(model.phase == .loaded)
-        #expect(model.meta?.sums?.additionalProperties["price"] == 25)
+        #expect(model.meta?.sums?["price"] == 25)
 
         model.setLoader { _, _ in throw TestFailure.failed }
         await model.settled()

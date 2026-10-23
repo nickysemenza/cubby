@@ -5,7 +5,7 @@ import { z } from "zod";
 import { childSchemas, discriminatorOf } from "../../src/lib/http-api/wire.ts";
 
 /**
- * OpenAPI components are named after the Zod schemas the packages export:
+ * Native models are named after the Zod schemas the packages export:
  * `productTopLevelOut` becomes `ProductTopLevelOut`. Every exported schema
  * of these modules is registered in `z.globalRegistry` under that name
  * BEFORE the HTTP contract is imported, so the wire projections built from
@@ -82,7 +82,7 @@ const schemaModules = (srcUrl: URL): SchemaModule[] => [
   ...packageModules(
     "@cubby/usda",
     new URL("../../../packages/usda/package.json", srcUrl),
-    // Pinned: renaming it would requalify colliding OpenAPI component names.
+    // Pinned: renaming it would requalify colliding Native model names.
     "usda-schemas",
   ),
   ...WEB_SCHEMA_MODULES.map((path) => ({
@@ -104,7 +104,7 @@ export async function registerSchemaNames(
     const clash = named.get(id);
     if (clash !== undefined && clash !== schema)
       throw new Error(
-        `OpenAPI component name collision on ${id}: ${source} and ${owners.get(clash) ?? "an explicit .meta({ id })"} name different schemas. Give one of them an explicit .meta({ id }).`,
+        `Native model name collision on ${id}: ${source} and ${owners.get(clash) ?? "an explicit .meta({ id })"} name different schemas. Give one of them an explicit .meta({ id }).`,
       );
     named.set(id, schema);
     owners.set(schema, source);

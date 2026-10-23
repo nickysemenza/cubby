@@ -303,6 +303,7 @@ export const runContract = defineContract("run", {
   }),
   workSnapshot: query({
     native: "Show durable live import progress in Apple apps",
+    nativeModels: { output: "json" },
     input: z.object({
       runId: runShortcode,
       emailCursor: z.number().int().nonnegative().default(0),
@@ -403,6 +404,7 @@ export const runContract = defineContract("run", {
   work: query({
     mcp: { omit: "client_view" },
     native: "Show one Run's targets, findings, operations and prepared orders",
+    nativeModels: { output: "json" },
     input: z.object({ runId: runShortcode }),
     output: runDetail,
     cache: { tags: [["run"]] },
@@ -430,6 +432,7 @@ export const runContract = defineContract("run", {
       note: "MCP reserves `action`, so agents name it controlAction",
     },
     native: "Stop, resume or retry a Run from its detail sections",
+    nativeModels: { input: "json", output: "json" },
     input: runControlInput,
     output: runControlOutput,
     invalidates: ["runOnly"],

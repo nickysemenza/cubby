@@ -18,7 +18,7 @@ enum DetailSlotRegistry {
         case .productFitsWith:
             return AnyView(ProductSimilarityDetailSlot(productID: row.id))
         case .productRuns:
-            return reportSlot(.product_runs, row)
+            return reportSlot(.productRuns, row)
         case .productOwnership:
             guard let detail = try? row.decode(ProductDetail.self) else { return nil }
             return AnyView(ProductJourneySummaryView(product: detail))
@@ -29,7 +29,7 @@ enum DetailSlotRegistry {
         case .ingredientNutritionProduct:
             return AnyView(IngredientNutritionProductSlot(row: row))
         case .ingredientRecipeUsages:
-            return reportSlot(.ingredient_recipeUsages, row)
+            return reportSlot(.ingredientRecipeUsages, row)
         case .cookbookToc:
             return AnyView(
                 CookbookContentsSlot(
@@ -38,43 +38,43 @@ enum DetailSlotRegistry {
         case .cookbookImportProgress:
             return AnyView(CookbookImportProgressSlot(row: row))
         case .mealComposition:
-            return reportSlot(.meal_composition, row)
+            return reportSlot(.mealComposition, row)
         case .projectBudget:
-            return reportSlot(.project_budget, row)
+            return reportSlot(.projectBudget, row)
         case .projectContribution:
-            return reportSlot(.project_contribution, row)
+            return reportSlot(.projectContribution, row)
         case .projectAnalytics:
-            return reportSlot(.project_analytics, row)
+            return reportSlot(.projectAnalytics, row)
         case .projectSchedule:
-            return reportSlot(.project_schedule, row)
+            return reportSlot(.projectSchedule, row)
         case .locationContentsValuation:
-            return reportSlot(.location_contentsValuation, row)
+            return reportSlot(.locationContentsValuation, row)
         case .vendorMailSearch:
-            return reportSlot(.vendor_mailSearch, row)
+            return reportSlot(.vendorMailSearch, row)
         case .emailReview:
-            return reportSlot(.email_review, row)
+            return reportSlot(.emailReview, row)
         case .productLabels:
-            return reportSlot(.product_labels, row)
+            return reportSlot(.productLabels, row)
         case .productCookbooks:
-            return reportSlot(.product_cookbooks, row)
+            return reportSlot(.productCookbooks, row)
         case .productRecipeAppearances:
-            return reportSlot(.product_recipeAppearances, row)
+            return reportSlot(.productRecipeAppearances, row)
         case .imageAssociations:
-            return reportSlot(.image_associations, row)
+            return reportSlot(.imageAssociations, row)
         case .imageJobAttempts:
-            return reportSlot(.imageJob_attempts, row)
+            return reportSlot(.imageJobAttempts, row)
         case .purchaseRuns:
-            return reportSlot(.purchase_runs, row)
+            return reportSlot(.purchaseRuns, row)
         case .locationAiDescription:
-            return reportSlot(.location_aiDescription, row)
+            return reportSlot(.locationAiDescription, row)
         case .purchaseReconciliation:
-            return reportSlot(.purchase_reconciliation, row)
+            return reportSlot(.purchaseReconciliation, row)
         case .purchaseProjectAllocation:
-            return reportSlot(.purchase_projectAllocation, row)
+            return reportSlot(.purchaseProjectAllocation, row)
         case .purchaseFinancialSettlement:
-            return reportSlot(.purchase_financialSettlement, row)
+            return reportSlot(.purchaseFinancialSettlement, row)
         case .expenseSettlement:
-            return reportSlot(.expense_settlement, row)
+            return reportSlot(.expenseSettlement, row)
         case .vendorSpendingClassification:
             return AnyView(SpendingClassificationView(key: .vendor, row: row))
         case .productCategorySpendingClassification:
@@ -82,37 +82,37 @@ enum DetailSlotRegistry {
         case .purchaseReceiving:
             return AnyView(PurchaseReceivingSlot(purchaseID: row.id))
         case .runSteps:
-            return runReportSlot(.run_steps, row, imports: false)
+            return runReportSlot(.runSteps, row, imports: false)
         case .runLiveProgress:
-            return runReportSlot(.run_liveProgress, row, imports: false)
+            return runReportSlot(.runLiveProgress, row, imports: false)
         case .runImportStats:
-            return runReportSlot(.run_importStats, row)
+            return runReportSlot(.runImportStats, row)
         case .runImportProgressLive:
-            return runReportSlot(.run_importProgressLive, row, liveness: true)
+            return runReportSlot(.runImportProgressLive, row, liveness: true)
         case .runImportProgressStopped:
-            return runReportSlot(.run_importProgressStopped, row, liveness: false)
+            return runReportSlot(.runImportProgressStopped, row, liveness: false)
         case .runImportPurchases:
-            return runReportSlot(.run_importPurchases, row)
+            return runReportSlot(.runImportPurchases, row)
         case .runImportFindings:
-            return runReportSlot(.run_importFindings, row)
+            return runReportSlot(.runImportFindings, row)
         case .runImportTargets:
-            return runReportSlot(.run_importTargets, row)
+            return runReportSlot(.runImportTargets, row)
         case .runImportPreparedOrders:
-            return runReportSlot(.run_importPreparedOrders, row)
+            return runReportSlot(.runImportPreparedOrders, row)
         case .runImportTimeline:
-            return runReportSlot(.run_importTimeline, row)
+            return runReportSlot(.runImportTimeline, row)
         case .runImportDebugLog:
-            return runReportSlot(.run_importDebugLog, row)
+            return runReportSlot(.runImportDebugLog, row)
         case .runAiUsage:
-            return runReportSlot(.run_aiUsage, row, imports: false)
+            return runReportSlot(.runAiUsage, row, imports: false)
         case .runSuggestions:
-            return runReportSlot(.run_suggestions, row, imports: false)
+            return runReportSlot(.runSuggestions, row, imports: false)
         case .runDecisions:
-            return runReportSlot(.run_decisions, row, imports: false)
+            return runReportSlot(.runDecisions, row, imports: false)
         case .runDiagnostics:
-            return runReportSlot(.run_diagnostics, row, imports: false)
+            return runReportSlot(.runDiagnostics, row, imports: false)
         case .runChanges:
-            return runReportSlot(.run_changes, row, imports: false)
+            return runReportSlot(.runChanges, row, imports: false)
         // Native has no control command (resume and stop are web's), so a paused import says so
         // and hands off to web; other states have nothing to show.
         case .runImportControls:

@@ -103,21 +103,20 @@ extension EntityDescriptor {
 
     /// One page of rows as the dynamic projection `EntityRow` reads.
     func listPage(
-        client: Client, page: Int, pageSize: Int, sort: String?, filters: EntityFilterState,
+        client: CubbyClient, page: Int, pageSize: Int, sort: String?, filters: EntityFilterState,
         groupBy: [ListGroupDimension] = []
     ) async throws -> ListPage<JSONValue> {
         try require(.list)
         let body = try listInput(
             page: page, pageSize: pageSize, sort: sort, filters: filters, groupBy: groupBy)
-        let response = try JSONValue(
-            encoding: try await client.entity_list(body: .json(body.decoded())).ok.body.json)
+        let response = try await client.native_entity_list(body: body)
         guard let meta = response["meta"] else { throw EntityOperationError.unsupported(key, .list) }
         return ListPage(items: response["items"]?.arrayValue ?? [], meta: try meta.decoded())
     }
 
     /// `entity.timeline` over the same filter state as `listPage`, plus `ids`, `from`, `to` and
     /// `order` under their own names.
-    func timeline(client: Client, filters: EntityFilterState) async throws -> EntityTimelineOut {
+    func timeline(client: CubbyClient, filters: EntityFilterState) async throws -> EntityTimelineOut {
         try require(.timeline)
         var body = try filterBody(filters, includeWindow: true)
         let window = body.removeValue(forKey: "window") ?? .object([:])
@@ -125,20 +124,19 @@ extension EntityDescriptor {
             "entity": .string(key.rawValue), "filters": .object(body), "window": window,
             "pagination": .object([:]),
         ])
-        return try await client.entity_timeline(body: .json(input.decoded())).ok.body.json
+        return try await client.native_entity_timeline(body: input)
     }
 
     /// One row by shortcode, as the dynamic projection `EntityRow` reads.
-    func getRow(client: Client, id: String) async throws -> JSONValue {
+    func getRow(client: CubbyClient, id: String) async throws -> JSONValue {
         try require(.get)
         let input: JSONValue = ["entity": .string(key.rawValue), "shortcode": .string(id)]
-        return try JSONValue(
-            encoding: try await client.entity_detail(body: .json(input.decoded())).ok.body.json)
+        return try await client.native_entity_detail(body: input)
     }
 
     /// `entity.mutate` create; returns the new record's id. The server parses `body` with the
     /// entity's create schema, so an unknown key is its 400.
-    func create(_ body: JSONValue, client: Client) async throws -> String {
+    func create(_ body: JSONValue, client: CubbyClient) async throws -> String {
         try require(.create)
         let result = try await mutate(
             ["action": "create", "entity": .string(key.rawValue), "data": body], client)
@@ -149,14 +147,14 @@ extension EntityDescriptor {
     }
 
     /// `entity.mutate` update with a partial body; `null` clears a field.
-    func update(_ body: JSONValue, id: String, client: Client) async throws {
+    func update(_ body: JSONValue, id: String, client: CubbyClient) async throws {
         try require(.update)
         _ = try await mutate(
             ["action": "update", "entity": .string(key.rawValue), "id": .string(id), "data": body], client)
     }
 
     /// One server transaction for the selection, including normal entity invariants and side effects.
-    func bulkUpdate(_ body: JSONValue, ids: [String], client: Client) async throws -> Int {
+    func bulkUpdate(_ body: JSONValue, ids: [String], client: CubbyClient) async throws -> Int {
         try require(.bulkUpdate)
         var seen = Set<String>()
         let uniqueIDs = ids.filter { seen.insert($0).inserted }
@@ -174,21 +172,21 @@ extension EntityDescriptor {
 
     /// `entity.mutate` delete. Destructive: only the hero-action runner calls it, behind an
     /// explicit confirmation.
-    func delete(id: String, client: Client) async throws {
+    func delete(id: String, client: CubbyClient) async throws {
         try require(.delete)
         _ = try await mutate(
             ["action": "delete", "entity": .string(key.rawValue), "ids": .array([.string(id)])], client)
     }
 
     /// An update carrying only `pendingImageIds`, for entities whose update declares it.
-    func attachImages(_ imageIds: [ImageCode], to id: String, client: Client) async throws {
+    func attachImages(_ imageIds: [ImageCode], to id: String, client: CubbyClient) async throws {
         guard key.kernel?.imageAttach == true else { throw EntityOperationError.unsupported(key, .update) }
         try await update(
             ["pendingImageIds": .array(imageIds.map { .string($0.rawValue) })], id: id, client: client)
     }
 
     /// An update carrying only `imageOrder`.
-    func setImageOrder(_ imageIds: [ImageCode], on id: String, client: Client) async throws {
+    func setImageOrder(_ imageIds: [ImageCode], on id: String, client: CubbyClient) async throws {
         guard key.kernel?.imageOrder == true else { throw EntityOperationError.unsupported(key, .update) }
         try await update(
             ["imageOrder": .array(imageIds.map { .string($0.rawValue) })], id: id, client: client)
@@ -198,8 +196,8 @@ extension EntityDescriptor {
         guard key.httpActions.contains(action) else { throw EntityOperationError.unsupported(key, action) }
     }
 
-    private func mutate(_ command: JSONValue, _ client: Client) async throws -> JSONValue {
-        try JSONValue(encoding: try await client.entity_mutate(body: .json(command.decoded())).ok.body.json)
+    private func mutate(_ command: JSONValue, _ client: CubbyClient) async throws -> JSONValue {
+        try await client.native_entity_mutate(body: command)
     }
 
     /// Flat filter names as the kernel's nested, typed `filters` object. A timeline's window

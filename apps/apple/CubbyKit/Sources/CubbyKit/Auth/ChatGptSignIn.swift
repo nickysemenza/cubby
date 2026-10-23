@@ -69,7 +69,7 @@
                 "code_challenge": Data(SHA256.hash(data: Data(verifier.utf8))).chatGptBase64URL,
             ]
             if host.clientId == nil { values["agent_name_hint"] = "Cubby" }
-            if let email = host.loginHint { values["login_hint"] = email }
+            if case .value(.some(let email)) = host.loginHint { values["login_hint"] = email }
             if host.permissionRecovery == true { values["prompt"] = "consent" }
             components.queryItems = values.sorted { $0.key < $1.key }.map {
                 .init(name: $0.key, value: $0.value)

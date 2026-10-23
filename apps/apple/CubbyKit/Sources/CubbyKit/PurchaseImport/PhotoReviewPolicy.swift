@@ -27,6 +27,26 @@ public enum PhotoGroupingReadiness: Equatable, Sendable {
 }
 
 public enum PhotoReviewPolicy {
+    /// Approval and edits require interpreting the proposed product and stock semantics.
+    public static func unsupportedAction(group: PhotoGroupProposal) -> UnsupportedNativeResponse? {
+        if case .unrecognized(let raw) = group.product {
+            return UnsupportedNativeResponse(context: "photo product review", raw: raw)
+        }
+        if case .unrecognized(let raw) = group.state {
+            return UnsupportedNativeResponse(context: "photo review state", raw: .string(raw))
+        }
+        if case .unrecognized(let raw) = group.inventory?.mode {
+            return UnsupportedNativeResponse(context: "photo inventory mode", raw: .string(raw))
+        }
+        if case .unrecognized(let raw) = group.inventory?.ownershipMode {
+            return UnsupportedNativeResponse(context: "photo ownership mode", raw: .string(raw))
+        }
+        if case .unrecognized(let raw) = group.review?.stockIntent {
+            return UnsupportedNativeResponse(context: "photo stock intent", raw: .string(raw))
+        }
+        return nil
+    }
+
     /// Model judgments never establish deterministic correctness.
     public static func crossCheckMark(_ check: PhotoFieldCrossCheck) -> String {
         if check.mark.rawValue == "agree", check.source.rawValue == "deterministic" { return "✓" }
@@ -42,6 +62,7 @@ public enum PhotoReviewPolicy {
         if group.images.isEmpty, !group.skip.isEmpty { return "Skip \(group.skip.count) photos" }
         return switch group.product {
         case .create: "Create product"
+        case .unrecognized: "Unsupported product response"
         case .existing: "Attach \(group.images.count) \(group.images.count == 1 ? "photo" : "photos")"
         }
     }
@@ -50,8 +71,13 @@ public enum PhotoReviewPolicy {
         if group.images.isEmpty, !group.skip.isEmpty {
             return "Skip \(group.skip.count) photos. No Product or stock change."
         }
+        if case .unrecognized(let raw) = group.product {
+            return UnsupportedNativeResponse(context: "photo product review", raw: raw).localizedDescription
+        }
         let productEffect: String
         switch group.product {
+        case .unrecognized(let raw):
+            return UnsupportedNativeResponse(context: "photo product review", raw: raw).localizedDescription
         case .create(let product):
             productEffect = "Create \(product.create.name) and attach \(group.images.count) photos."
         case .existing(let product):
@@ -84,7 +110,7 @@ public enum PhotoReviewPolicy {
         selected: Set<String>, groups: [PhotoGroupProposal]
     ) -> [String] {
         groups.filter {
-            selected.contains($0.groupKey) && $0.state == .proposed && $0.blockedReason == nil
+            selected.contains($0.groupKey) && $0.state == .proposed && $0.approvalBlockedReason == nil
         }.map(\.groupKey)
     }
 
@@ -103,4 +129,10 @@ public enum PhotoReviewPolicy {
         return runStatus == .running ? .readyToStart : .working
     }
 
+}
+
+extension PhotoGroupProposal {
+    public var approvalBlockedReason: String? {
+        PhotoReviewPolicy.unsupportedAction(group: self)?.localizedDescription ?? blockedReason
+    }
 }

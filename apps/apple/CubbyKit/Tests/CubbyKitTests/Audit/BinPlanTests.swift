@@ -98,7 +98,7 @@ struct BinPlanTests {
         func json(_ node: Node) -> [String: Any] {
             [
                 "id": node.code, "name": node.name, "aliases": [String](), "tags": [String](),
-                "type": node.parent == nil ? "house" : "box", "product": NSNull(),
+                "type": node.parent == nil ? "house" : "box", "notes": NSNull(), "product": NSNull(),
                 "lastBulkInventory": NSNull(), "aiDescription": NSNull(), "images": [String](),
                 "valuation": NSNull(), "createdAt": "2026-01-01T00:00:00.000Z",
                 "updatedAt": "2026-01-01T00:00:00.000Z", "childCount": 0, "directItemCount": 0,

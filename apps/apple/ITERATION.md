@@ -17,7 +17,7 @@ booted and the relevant build artifacts warm while working on one feature.
 | Device-only behavior (camera, permissions, performance, installed app) | `pnpm apple ios` on a paired iPhone                                                                | Real device behavior; use Xcode/agent-device for interaction and diagnostics.                                             |
 | Mac-specific UI                                                        | `pnpm apple mac` and Mac previews/tests                                                            | The native macOS shell and window behavior.                                                                               |
 
-Run `pnpm test:e2e:sim -- --headless` for generated OpenAPI client writes
+Run `pnpm test:e2e:sim -- --headless` for native JSON client writes
 against the disposable Worker. Use
 `pnpm test:e2e:sim -- --headless --photo --purchase` or
 `pnpm test:e2e:local -- headless:wardrobe` for the composed photo, retailer,

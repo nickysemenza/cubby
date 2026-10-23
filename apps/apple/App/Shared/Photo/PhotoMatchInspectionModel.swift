@@ -109,10 +109,15 @@ final class PhotoMatchInspectionModel {
                 do {
                     let document = try await readIndex()
                     try check(token)
-                    _ = try HashIndex(entries: [], algorithmRevision: document.algorithmRevision.rawValue)
+                    guard let checkedRevision = Int(exactly: document.algorithmRevision.rawValue) else {
+                        throw UnsupportedNativeResponse(
+                            context: "image hash algorithm revision",
+                            raw: .number(document.algorithmRevision.rawValue))
+                    }
+                    _ = try HashIndex(entries: [], algorithmRevision: checkedRevision)
                     report?.freshServerIndex = .init(
                         status: document.repair.isEmpty ? .success : .partial,
-                        algorithmRevision: document.algorithmRevision.rawValue,
+                        algorithmRevision: checkedRevision,
                         entries: try document.items.map(ImageHashEntry.init),
                         message: document.repair.isEmpty
                             ? nil : "\(document.repair.count) images are not indexed; no repair was attempted"

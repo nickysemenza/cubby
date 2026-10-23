@@ -111,11 +111,11 @@ struct SpendingClassificationView: View {
                     .init(
                         action: .productCategory, productCategoryId: row.id,
                         spendingCategoryMode: mappingMode,
-                        spendingCategoryId: mappingMode == .mapped ? category?.id : nil))
+                        spendingCategoryId: .value(mappingMode == .mapped ? category?.id : nil)))
                 : .vendor(
                     .init(
                         action: .vendor, vendorId: row.id, spendingProfile: profile,
-                        defaultSpendingCategoryId: category?.id))
+                        defaultSpendingCategoryId: .value(category?.id)))
             try await review.prepare(input, client: appModel.client)
         } catch {
             Diagnostics.report(error, context: "Spending classification preview")

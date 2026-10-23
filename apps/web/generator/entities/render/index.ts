@@ -370,7 +370,7 @@ export type KernelActions = Readonly<
 /**
  * The entity-kernel actions the HTTP API serves per entity, as data: the
  * native client's capability table (`entity-kernel.json`) and the web
- * inspector's native coverage are derived from it in the OpenAPI stage.
+ * inspector's native coverage are derived from it in the native contract stage.
  */
 export const kernelHttpActionsFor = (
   entities: readonly CompiledEntity[],
@@ -402,7 +402,7 @@ export const kernelHttpActionsFor = (
   );
 };
 
-/** Entity key -> output schema export name, for the OpenAPI stage's Swift aliases. */
+/** Entity key -> output schema export name, for the native contract stage's Swift aliases. */
 export const entityOutputsFor = (
   entities: readonly CompiledEntity[],
 ): ReadonlyMap<string, string | null> =>
@@ -596,7 +596,7 @@ export const renderEntityArtifacts = (
   const listFilterSchemaBindings = listEntitySpecs
     .map(({ key }) => `  ${JSON.stringify(key)}: ${key}ListFiltersSchema,`)
     .join("\n");
-  // One named export per list row so the OpenAPI stage names the component
+  // One named export per list row so the native contract stage names the component
   // `<Entity>ListItem` (the export walk in `http-api/schema-names.ts` names
   // exported instances only); an inline `withEntityListMedia(...)` call would
   // surface in Swift as a positional `ItemsPayloadPayload`.
@@ -1560,7 +1560,7 @@ export const entityListSummaryOutputSchema = z.object({entity:z.enum(listEntitie
         'const entityListSortSchema = z.object({ orderBy: z.string().min(1), direction: z.enum(["asc", "desc"]) });\n' +
         "const entityListSortsSchema = z.array(entityListSortSchema).min(1).max(MAX_SORTS);\n" +
         "const entityListPaginationSchema = z.object({ pageIndex: z.number().int().min(0), pageSize: z.number().int().min(1).max(MAX_PAGE_SIZE) });\n" +
-        "// The one page-metadata schema every list shares (one OpenAPI component).\nconst entityListMetaSchema = paginatedMetaSchema;\n\n" +
+        "// The one page-metadata schema every list shares (one native model).\nconst entityListMetaSchema = paginatedMetaSchema;\n\n" +
         `${listFilterSchemas}\n\n` +
         "// One generated filter schema per list entity.\n// oxfmt-ignore\n" +
         `const ENTITY_LIST_FILTER_SCHEMAS = {\n${listFilterSchemaBindings}\n} as const;\n\n` +

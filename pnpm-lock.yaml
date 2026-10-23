@@ -204,15 +204,9 @@ importers:
       '@oxlint/plugins':
         specifier: 1.88.0
         version: 1.88.0
-      '@redocly/cli':
-        specifier: ^2.64.0
-        version: 2.64.0
       '@tanstack/router-generator':
         specifier: 1.167.45
         version: 1.167.45(@types/babel__core@7.20.5)(@types/picomatch@4.0.3)(supports-color@7.2.0)
-      '@ts-rest/open-api':
-        specifier: 3.53.0-rc.1
-        version: 3.53.0-rc.1(@ts-rest/core@3.53.0-rc.1(@types/node@26.6.5))(zod@4.6.7)
       '@types/node':
         specifier: ^26.6.5
         version: 26.6.5
@@ -829,19 +823,6 @@ packages:
   '@ai-sdk/provider@4.0.28':
     resolution: {integrity: sha512-6ThcmkJQXSMlBrf6mirIjUUS04Q5/kApbYTOzd5lZfYXLa1XPpnDLxP/G96/DKc00fDIUOW9S2ls0mSzb0+l9w==}
     engines: {node: '>=22'}
-
-  '@anatine/zod-openapi@1.14.2':
-    resolution: {integrity: sha512-q0qHfnuNYVKu0Swrnnvfj9971AEyW7c8v9jCOZGCl5ZbyGMNG4RPyJkRcMi/JC8CRfdOe0IDfNm1nNsi2avprg==}
-    peerDependencies:
-      '@types/openapi3-ts': '*'
-      '@types/zod': '*'
-      openapi3-ts: ^2.0.0 || ^3.0.0
-      zod: 4.6.7
-    peerDependenciesMeta:
-      '@types/openapi3-ts':
-        optional: true
-      '@types/zod':
-        optional: true
 
   '@antfu/install-pkg@2.1.0':
     resolution: {integrity: sha512-sdg9NxU3zR4Mnawfbc/x6GB5Wf17WYud5qOuEuxXjaKpYpMkISSJEjItGebXJ2bQ4DIcly4NYH23mtkGJjvKUw==}
@@ -4939,11 +4920,6 @@ packages:
       '@types/react-dom':
         optional: true
 
-  '@redocly/cli@2.64.0':
-    resolution: {integrity: sha512-8VADrYioOlHCPSeww4s+DuHENqx1i/4sBVr0cxF/vxgoVuA9kmRcftzGZJXEJoqcp2EQK5ZLwvA0eyNEQP1AYQ==}
-    engines: {node: '>=22.12.0 || >=20.19.0 <21.0.0', npm: '>=10'}
-    hasBin: true
-
   '@rolldown/binding-android-arm-eabi@1.2.14':
     resolution: {integrity: sha512-aWR+XKH9+rW7m5fWq/5360J3mHycrx/o6xZM2DQFdJnTMdyP7/WzxPjhtLbVWdKo2y612/4U1bWqb3HQhiF7vg==}
     engines: {node: ^20.19.0 || >=22.12.0}
@@ -6294,19 +6270,6 @@ packages:
       '@types/node': ^18.18.7 || >=20.8.4
     peerDependenciesMeta:
       '@types/node':
-        optional: true
-
-  '@ts-rest/open-api@3.53.0-rc.1':
-    resolution: {integrity: sha512-JqmmdwFP2AHlyK9T4dwgsFL3QGNRppV9JIBh0G9mbJE7m7Kj403VsxJZ5X128E3XqwH7JIgJ4wsyGRX4Zbtqvw==}
-    peerDependencies:
-      '@ts-rest/core': 3.53.0-rc.1
-      '@types/ts-rest__core': '*'
-      '@types/zod': '*'
-      zod: 4.6.7
-    peerDependenciesMeta:
-      '@types/ts-rest__core':
-        optional: true
-      '@types/zod':
         optional: true
 
   '@ts-rest/serverless@3.53.0-rc.1':
@@ -9627,9 +9590,6 @@ packages:
       zod:
         optional: true
 
-  openapi3-ts@2.0.2:
-    resolution: {integrity: sha512-TxhYBMoqx9frXyOgnRHufjQfPXomTIHYKhSKJ6jHfj13kS8OEIhvmE8CTuQyKtjjWttAjX5DPxM1vmalEpo8Qw==}
-
   ora@5.4.1:
     resolution: {integrity: sha512-5b6Y85tPxZZ7QytO+BQzysW31HJku27cRIlkbAXaNx+BdcVi+LlRFmVXzeF6a7JCwJpyw5c4b+YSVImQIrBpuQ==}
     engines: {node: '>=10'}
@@ -10766,10 +10726,6 @@ packages:
     resolution: {integrity: sha512-JfJeIHke7y2egdGGgRAvpCwYFUsHlM2gPcrVOxFkznt/4uzQ7HFmvE63iFHVLBJNDuyDOQgijDK/tXH/f6Msjg==}
     engines: {node: '>=6.10'}
 
-  ts-deepmerge@6.2.1:
-    resolution: {integrity: sha512-8CYSLazCyj0DJDpPIxOFzJG46r93uh6EynYjuey+bxcLltBeqZL7DMfaE5ZPzZNFlav7wx+2TDa/mBl8gkTYzw==}
-    engines: {node: '>=14.13.1'}
-
   ts-morph@26.0.0:
     resolution: {integrity: sha512-ztMO++owQnz8c/gIENcM9XfCEzgoGphTv+nKpYNM1bgsdOVC/jRZuEBf6N+mLLDNg68Kl+GgUZfOySaRiG1/Ug==}
 
@@ -11546,12 +11502,6 @@ snapshots:
     dependencies:
       '@types/json-schema': 7.0.15
       json-schema: 0.4.0
-
-  '@anatine/zod-openapi@1.14.2(openapi3-ts@2.0.2)(zod@4.6.7)':
-    dependencies:
-      openapi3-ts: 2.0.2
-      ts-deepmerge: 6.2.1
-      zod: 4.6.7
 
   '@antfu/install-pkg@2.1.0':
     dependencies:
@@ -15048,8 +14998,6 @@ snapshots:
       '@types/react': 19.3.0
       '@types/react-dom': 19.3.0(@types/react@19.3.0)
 
-  '@redocly/cli@2.64.0': {}
-
   '@rolldown/binding-android-arm-eabi@1.2.14':
     optional: true
 
@@ -16307,15 +16255,6 @@ snapshots:
   '@ts-rest/core@3.53.0-rc.1(@types/node@26.6.5)':
     optionalDependencies:
       '@types/node': 26.6.5
-
-  '@ts-rest/open-api@3.53.0-rc.1(@ts-rest/core@3.53.0-rc.1(@types/node@26.6.5))(zod@4.6.7)':
-    dependencies:
-      '@anatine/zod-openapi': 1.14.2(openapi3-ts@2.0.2)(zod@4.6.7)
-      '@ts-rest/core': 3.53.0-rc.1(@types/node@26.6.5)
-      openapi3-ts: 2.0.2
-      zod: 4.6.7
-    transitivePeerDependencies:
-      - '@types/openapi3-ts'
 
   '@ts-rest/serverless@3.53.0-rc.1(@ts-rest/core@3.53.0-rc.1(@types/node@26.6.5))':
     dependencies:
@@ -19687,10 +19626,6 @@ snapshots:
       ws: 8.22.0
       zod: 4.6.7
 
-  openapi3-ts@2.0.2:
-    dependencies:
-      yaml: 1.10.3
-
   ora@5.4.1:
     dependencies:
       bl: 4.1.0
@@ -21011,8 +20946,6 @@ snapshots:
   ts-algebra@2.0.0: {}
 
   ts-dedent@2.3.0: {}
-
-  ts-deepmerge@6.2.1: {}
 
   ts-morph@26.0.0:
     dependencies:

@@ -107,6 +107,7 @@ struct ReportPresentationTests {
             case .schedule: "schedule"
             case .note: "note"
             case .records: "records"
+            case .unsupported: "unsupported"
             }
         }
         #expect(kinds == ["stats", "chart", "chart", "table", "schedule", "note"])

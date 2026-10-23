@@ -131,9 +131,10 @@ extension [String] {
         }
     }
 
-    func enumCases<Case: RawRepresentable>(_ name: String) throws -> [Case] where Case.RawValue == String {
+    func enumCases<Case: RawRepresentable & CaseIterable>(_ name: String) throws -> [Case]
+    where Case.RawValue == String {
         try map { raw in
-            guard let value = Case(rawValue: raw) else {
+            guard let value = Case.allCases.first(where: { $0.rawValue == raw }) else {
                 throw EntityFilterError.invalidValue(
                     parameter: name, value: raw, expected: "one of the enum's cases")
             }

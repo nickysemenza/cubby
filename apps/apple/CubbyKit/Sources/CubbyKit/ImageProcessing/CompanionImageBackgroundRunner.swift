@@ -19,9 +19,10 @@ extension CubbyClient: CompanionImageBackgroundTransport {
     }
 
     func release(deviceID: String, command: ImageProcessingCommand) async throws {
+        let metadata = try CompanionImageCommandMetadata(command)
         _ = try await releaseCompanionImageProcessing(
             .init(
-                deviceId: deviceID, jobId: command.companionJobID, attemptId: command.companionAttemptID))
+                deviceId: deviceID, jobId: metadata.jobID, attemptId: metadata.attemptID))
     }
 }
 
@@ -29,13 +30,13 @@ extension CubbyClient: CompanionImageBackgroundTransport {
 /// foreground socket, so results are durable before either transport tries to send them.
 actor CompanionImageBackgroundRunner {
     private let outbox: CompanionResultOutbox<ImageProcessingResult>
-    private let execute: @Sendable (ImageProcessingCommand) async -> ImageProcessingResult
+    private let execute: @Sendable (ImageProcessingCommand) async throws -> ImageProcessingResult
     private let failureObserver: CompanionImageWorker.FailureObserver?
     private var isRunning = false
 
     init(
         outbox: CompanionResultOutbox<ImageProcessingResult>,
-        execute: @escaping @Sendable (ImageProcessingCommand) async -> ImageProcessingResult,
+        execute: @escaping @Sendable (ImageProcessingCommand) async throws -> ImageProcessingResult,
         failureObserver: CompanionImageWorker.FailureObserver? = nil
     ) {
         self.outbox = outbox
@@ -68,14 +69,15 @@ actor CompanionImageBackgroundRunner {
                 guard remaining >= 20 else { return true }
                 let pulled = try await transport.pull(hello: hello, leaseSeconds: min(90, remaining))
                 guard let command = pulled.command, !pulled.remotePaused else { return false }
+                let metadata = try CompanionImageCommandMetadata(command)
                 activeCommand = command
-                let result = await execute(command)
+                let result = try await execute(command)
                 if Task.isCancelled {
                     await releaseAfterCancellation(transport: transport, hello: hello, command: command)
                     return true
                 }
                 let key = CompanionImageProcessingProtocol.attemptKey(
-                    jobID: command.companionJobID, attemptID: command.companionAttemptID)
+                    jobID: metadata.jobID, attemptID: metadata.attemptID)
                 try await outbox.record(result, for: key)
                 try await transport.complete(deviceID: hello.deviceId, result: result)
                 try await outbox.acknowledge(key)

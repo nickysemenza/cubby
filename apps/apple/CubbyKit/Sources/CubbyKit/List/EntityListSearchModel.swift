@@ -47,7 +47,7 @@ public final class EntityListSearchModel {
             return meta
         }
         guard let labels = enrichment?.totalLabels else { return meta }
-        meta.totalLabels = .init(additionalProperties: labels)
+        meta.totalLabels = .init(labels)
         return meta
     }
 

@@ -123,14 +123,20 @@ struct EntityFieldSuggestionSection: View {
     }
 
     private func outcomeText(_ key: String) -> String {
-        switch review.response?.outcomes?.additionalProperties[key] {
+        switch review.response?.outcomes?[key] {
         case .skipped(let outcome):
             switch outcome.reason {
             case .noSignal: return "Available evidence does not support a suggestion."
             case .noCandidates: return "No choices are available."
             case .resolved: return "The current inherited policy already resolves this field."
+            case .unrecognized(let raw): return "Unsupported suggestion reason (\(raw))"
             }
+        case .unrecognized(let raw):
+            return "Unsupported suggestion outcome: \(raw)"
         case .evaluated(let outcome):
+            if case .unrecognized(let raw) = outcome.answer {
+                return "Unsupported suggestion answer (\(raw))"
+            }
             return outcome.answer == .none
                 ? "No suggested change from the available evidence."
                 : "Review dismissed or draft changed. Request fresh suggestions."

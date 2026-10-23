@@ -347,7 +347,8 @@ private struct SearchHitRow: View {
     var body: some View {
         RecordListRow(
             title: hit.title, imageURL: hit.imageURL,
-            symbol: hit.key.map(entitySymbol(for:)) ?? "questionmark.square", emoji: hit.emoji
+            symbol: hit.key.map(entitySymbol(for:)) ?? "questionmark.square",
+            emoji: hit.emoji.valueIfPresent.flatMap { $0 }
         ) {
             if let context { Text(context) }
         } rail: {

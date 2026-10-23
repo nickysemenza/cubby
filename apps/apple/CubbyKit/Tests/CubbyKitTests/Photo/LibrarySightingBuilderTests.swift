@@ -48,30 +48,30 @@ struct LibrarySightingBuilderTests {
             observedAt: Date(timeIntervalSince1970: 1_700_000_300))
 
         #expect(fields.assetKey == "cloud-1")
-        #expect(fields.cloudIdentifier == "cloud-1")
-        #expect(fields.localIdentifier == facts.localIdentifier)
+        #expect(fields.cloudIdentifier == .value("cloud-1"))
+        #expect(fields.localIdentifier == .value(facts.localIdentifier))
         #expect(fields.sourceType == .userLibrary)
         #expect(fields.mediaSubtypes == ["screenshot", "hdr"])
-        #expect(fields.pixelWidth == 3024)
-        #expect(fields.pixelHeight == 4032)
-        #expect(fields.capturedAt == facts.creationDate)
-        #expect(fields.capturedAtOffsetMinutes == 120)
-        #expect(fields.addedAt == facts.addedDate)
-        #expect(fields.location?.lat == 1)
-        #expect(fields.location?.lng == 2)
-        #expect(fields.camera?.make == "Apple")
-        #expect(fields.camera?.model == "iPhone 17 Pro")
+        #expect(fields.pixelWidth == .value(3024))
+        #expect(fields.pixelHeight == .value(4032))
+        #expect(fields.capturedAt == .value(facts.creationDate))
+        #expect(fields.capturedAtOffsetMinutes == .value(120))
+        #expect(fields.addedAt == .value(facts.addedDate))
+        #expect(fields.location.valueIfPresent??.lat == 1)
+        #expect(fields.location.valueIfPresent??.lng == 2)
+        #expect(fields.camera.valueIfPresent??.make == "Apple")
+        #expect(fields.camera.valueIfPresent??.model == "iPhone 17 Pro")
         // The commit path never carries match evidence — that only exists for a library-scan
         // match built via `recordItem`.
-        #expect(fields.hashDistance == nil)
-        #expect(fields.aspectGate == nil)
+        #expect(fields.hashDistance == .absent)
+        #expect(fields.aspectGate == .absent)
     }
 
     @Test func reportFieldsOmitLocationAndCameraWhenNeitherIsKnown() {
         let metadata = LibrarySightingBuilder.metadata(from: FixtureFacts(), cloudIdentifier: nil)
         let fields = LibrarySightingBuilder.reportFields(for: metadata, installationID: "device-1")
-        #expect(fields.location == nil)
-        #expect(fields.camera == nil)
+        #expect(fields.location == .absent)
+        #expect(fields.camera == .absent)
     }
 
     @Test func recordItemSetsMatchKindToLibraryMatchWithItsEvidence() {
@@ -84,8 +84,8 @@ struct LibrarySightingBuilderTests {
         #expect(input.deviceId == "DEV-0001")
         #expect(input.ledgerPartyId == nil)
         #expect(input.matchKind == .libraryMatch)
-        #expect(input.hashDistance == 4)
-        #expect(input.aspectGate == true)
+        #expect(input.hashDistance == .value(4))
+        #expect(input.aspectGate == .value(true))
         #expect(input.assetKey == "cloud-1")
     }
 

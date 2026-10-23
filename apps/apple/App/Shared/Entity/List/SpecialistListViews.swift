@@ -272,11 +272,11 @@ struct LocationGalleryListView: View {
             List {
                 Picker("Type", selection: $type) {
                     Text("All").tag("all")
-                    ForEach(Array(Set(locations.map { $0._type.rawValue })).sorted(), id: \.self) {
+                    ForEach(Array(Set(locations.map { $0.type.rawValue })).sorted(), id: \.self) {
                         Text($0.capitalized).tag($0)
                     }
                 }
-                ForEach(locations.filter { type == "all" || $0._type.rawValue == type }, id: \.id) { node in
+                ForEach(locations.filter { type == "all" || $0.type.rawValue == type }, id: \.id) { node in
                     NavigationLink(value: Route.entityDetail(.location, id: node.id.rawValue)) {
                         HStack {
                             let url = node.images.first.flatMap {

@@ -197,10 +197,10 @@ struct ConnectionReviewTests {
         #expect(await model.reviewConnection(proposal, verdict: .correct))
         let input = try #require(await client.reviews.first)
         #expect(input.assessmentId == proposal.review.assessmentId)
-        #expect(input.expectedFingerprint == proposal.fingerprint)
+        #expect(input.expectedFingerprint == .value(proposal.fingerprint))
         #expect(input.intent == .apply)
         #expect(UUID(uuidString: input.operationId) != nil)
-        #expect(input.suppression == nil)
+        #expect(input.suppression == .absent)
         #expect(await client.reads == 2)
         #expect(await client.graphReads == 2)
     }
@@ -215,7 +215,7 @@ struct ConnectionReviewTests {
         }
         for input in await client.reviews {
             #expect(input.intent == .history)
-            #expect(input.suppression == nil)
+            #expect(input.suppression == .absent)
         }
         #expect(!(await model.reviewConnection(proposal, verdict: .dismissed, persistent: true)))
         #expect(await client.reviews.count == 3)
@@ -263,9 +263,9 @@ struct ConnectionReviewTests {
         #expect(await model.reviewConnection(proposal, verdict: .dismissed, persistent: true))
         let input = try #require(await client.reviews.first)
         #expect(input.intent == .history)
-        #expect(input.suppression?.scope == "connection")
-        #expect(input.suppression?.candidateKey == "synthetic-pair")
-        #expect(input.suppression?.fingerprint == "current-evidence")
+        #expect(input.suppression.valueIfPresent??.scope == "connection")
+        #expect(input.suppression.valueIfPresent??.candidateKey == "synthetic-pair")
+        #expect(input.suppression.valueIfPresent??.fingerprint == "current-evidence")
     }
 
     @Test @MainActor func lateReviewDoesNotRefreshOrReplaceANewSource() async throws {
@@ -383,7 +383,7 @@ private actor ConnectionClient: EntityRelationshipsClient {
         if failDiscovery { throw FixtureError() }
         var result = try document(input)
         if !discoveryRunStatuses.isEmpty {
-            result.discoveryRunId = "RUN-2345"
+            result.discoveryRunId = .value("RUN-2345")
             result.proposals = []
         }
         return result

@@ -93,8 +93,8 @@ public final class FieldSuggestionReviewModel {
                 .init(
                     // Suggestible catalog entities and this generated enum share the shortcode entity roster.
                     entityId: editor.recordID, basisMode: .provided,
-                    entity: .init(rawValue: editor.descriptor.key.rawValue)!,
-                    targets: fields.map(\.key), basis: .init(additionalProperties: basis), runKey: runKey))
+                    entity: .init(rawValue: editor.descriptor.key.rawValue),
+                    targets: fields.map(\.key), basis: basis, runKey: runKey))
             if scope.accepts(next) { response = result }
         } catch {
             if scope.accepts(next) { response = nil }
@@ -119,7 +119,7 @@ public final class FieldSuggestionReviewModel {
                 let saved = try await saveCategory(
                     .init(
                         // Both generated enums come from financeCategoryReviewSchema.
-                        entity: .init(rawValue: review.entity.rawValue)!, entityId: review.entityId,
+                        entity: .init(rawValue: review.entity.rawValue), entityId: review.entityId,
                         fingerprint: review.fingerprint, field: .init(rawValue: key),
                         spendingCategoryId: key == "spendingCategoryId" ? value : nil,
                         defaultSpendingCategoryId: key == "defaultSpendingCategoryId" ? value : nil,
@@ -176,7 +176,7 @@ public final class FieldSuggestionReviewModel {
         }
         let saved = try await saveCategory(
             .init(
-                entity: .init(rawValue: review.entity.rawValue)!, entityId: review.entityId,
+                entity: .init(rawValue: review.entity.rawValue), entityId: review.entityId,
                 fingerprint: review.fingerprint, spendingCategoryId: values["spendingCategoryId"],
                 defaultSpendingCategoryId: values["defaultSpendingCategoryId"],
                 spendingProfile: values["spendingProfile"].flatMap { .init(rawValue: $0) }))
@@ -207,7 +207,7 @@ public final class FieldSuggestionReviewModel {
         _ = try await reviewAssessment(
             .init(
                 operationId: UUID().uuidString, verdict: .wrong,
-                correction: .AssessmentCorrectionFalse(.init(present: false)),
+                correction: .value1(.init(present: .falseValue)),
                 intent: .history, assessmentId: assessmentId))
         dismissed.insert(key)
     }
@@ -234,7 +234,7 @@ public final class FieldSuggestionReviewModel {
             let receipt = try await reviewAssessment(
                 .init(
                     operationId: UUID().uuidString, verdict: .correct,
-                    correction: .AssessmentCorrectionFalse(.init(present: false)),
+                    correction: .value1(.init(present: .falseValue)),
                     intent: .apply, assessmentId: assessmentId,
                     application: .savedField(.init(kind: .savedField, recordId: recordId))))
             guard receipt.applied else { throw ReviewError.unexpectedAcceptance }
@@ -244,7 +244,7 @@ public final class FieldSuggestionReviewModel {
         let receipt = try await reviewAssessment(
             .init(
                 operationId: UUID().uuidString, verdict: .correct,
-                correction: .AssessmentCorrectionFalse(.init(present: false)),
+                correction: .value1(.init(present: .falseValue)),
                 intent: .apply, assessmentId: accepted.id,
                 application: .savedField(.init(kind: .savedField, recordId: recordId))))
         guard receipt.applied else { throw ReviewError.unexpectedAcceptance }
@@ -258,7 +258,7 @@ public final class FieldSuggestionReviewModel {
         _ = try await reviewAssessment(
             .init(
                 operationId: UUID().uuidString, verdict: .correct,
-                correction: .AssessmentCorrectionFalse(.init(present: false)),
+                correction: .value1(.init(present: .falseValue)),
                 intent: .draft, assessmentId: assessmentId))
     }
 

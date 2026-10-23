@@ -78,7 +78,7 @@ nonisolated enum Diagnostics {
             // and cover-image fetches leave the trace domain and must not carry them.
             options.tracePropagationTargets = [CubbyBaseURL.host(of: baseURL)]
             // No `beforeSend` scrubber: unlike the web's MCP `?key=` history, the app carries no
-            // credential in a URL — bearer auth rides in a header (`CubbyAuthMiddleware`), and
+            // credential in a URL — bearer auth rides in a header (`NativeHTTPTransport`), and
             // `sendDefaultPii = false` keeps headers out of events.
         }
     }

@@ -167,10 +167,18 @@ struct DecisionSteps<Media: View, StepBody: View>: View {
     #Preview("Decision steps") {
         DecisionSteps(
             steps: [
-                .init(key: "product", label: "Product", status: .done, summary: "Synthetic shirt"),
-                .init(key: "identity", label: "Right one?", status: .needsInput),
-                .init(key: "ownership", label: "Whose is it?", status: .notNeeded),
-                .init(key: "inventory", label: "Where is it?", status: .blocked),
+                .init(
+                    key: "product", label: "Product", status: .done, summary: "Synthetic shirt", action: nil,
+                    blockedReason: nil),
+                .init(
+                    key: "identity", label: "Right one?", status: .needsInput, summary: nil, action: nil,
+                    blockedReason: nil),
+                .init(
+                    key: "ownership", label: "Whose is it?", status: .notNeeded, summary: nil, action: nil,
+                    blockedReason: nil),
+                .init(
+                    key: "inventory", label: "Where is it?", status: .blocked, summary: nil, action: nil,
+                    blockedReason: nil),
             ],
             media: { Image(systemName: "tshirt").font(.largeTitle) },
             stepBody: { _, next in Button("Yes, this is it", action: next) }

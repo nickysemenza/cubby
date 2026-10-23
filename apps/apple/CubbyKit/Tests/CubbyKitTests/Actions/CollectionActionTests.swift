@@ -123,7 +123,7 @@ struct CollectionActionTests {
             EntityReportOut.self,
             from: Data(
                 #"""
-                {"blocks":[{"kind":"records","title":null,"empty":"None.","actions":["attachImage"],"rows":[
+                {"blocks":[{"kind":"records","empty":"None.","actions":["attachImage"],"rows":[
                   {"entity":"run","id":"RUN-4K7M","title":"Sample Vendor","lines":[{"text":"line one"}],"trailing":"failed",
                    "imageUrl":"https://media.example.test/a.jpg","badges":[{"label":"login_expired","tone":"warning"}],"at":"2026-03-04T10:15:00.000Z",
                    "listLink":{"entity":"recipe","filters":{"source":"CKB-4K7M"}},"actions":["reviewLabelNutrition"]},

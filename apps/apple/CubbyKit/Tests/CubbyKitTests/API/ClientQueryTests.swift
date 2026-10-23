@@ -160,7 +160,7 @@ struct ClientQueryTests {
         }
         #expect(request.url?.path == "/api/v1/auditLog/list")
         #expect(queryItems(of: request).contains(URLQueryItem(name: "cursor", value: "page-2")))
-        #expect(queryItems(of: request).contains(URLQueryItem(name: "limit", value: "7.0")))
+        #expect(queryItems(of: request).contains(URLQueryItem(name: "limit", value: "7")))
     }
 
     /// An attach patch's `data` carries only `pendingImageIds`: an omitted field means "leave as

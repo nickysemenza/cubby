@@ -59,9 +59,9 @@ struct AuditEntryFoldingTests {
         let time = String(format: "2026-10-11T%02d:%02d:%02dZ", second / 3600, second / 60 % 60, second % 60)
         let json = """
             {"entryKey":"\(key)","entityKind":"product","entityId":"\(id)","canonicalEntityId":null,
-             "entityName":"Synthetic oat milk","action":"\(action)",
+             "entityName":"Synthetic oat milk","displayImage":null,"action":"\(action)",
              "changes":{"\(field)":{"from":"a","to":"b"}},"references":{},"userId":"\(user)","channel":"\(channel)",
-             "oauthClient":null,"device":null,"createdAt":"\(time)","user":null}
+             "oauthClient":null,"device":null,"runId":null,"createdAt":"\(time)","user":null}
             """
         return try JSONDecoder.cubby().decode(AuditLogEntryOut.self, from: Data(json.utf8))
     }

@@ -15,7 +15,7 @@ extension NativeWorkspaceSession {
         }
         guard case .bearer = state.credential else { throw URLError(.userAuthenticationRequired) }
         var fields = HTTPFields()
-        CubbyAuthMiddleware.apply(state.credential, identity: identity, to: &fields)
+        NativeRequestHeaders.apply(state.credential, identity: identity, to: &fields)
         var request = URLRequest(url: baseURL.appending(path: "api/native-workspace/session"))
         request.httpMethod = "POST"
         request.timeoutInterval = 20

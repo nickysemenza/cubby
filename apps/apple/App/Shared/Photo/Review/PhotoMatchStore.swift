@@ -312,7 +312,12 @@ final class PhotoMatchStore {
             do {
                 let document = try await client.imageHashIndex()
                 guard generation == token, !Task.isCancelled else { return }
-                _ = try HashIndex(entries: [], algorithmRevision: document.algorithmRevision.rawValue)
+                guard let checkedRevision = Int(exactly: document.algorithmRevision.rawValue) else {
+                    throw UnsupportedNativeResponse(
+                        context: "image hash algorithm revision",
+                        raw: .number(document.algorithmRevision.rawValue))
+                }
+                _ = try HashIndex(entries: [], algorithmRevision: checkedRevision)
                 let items = try document.items.map(ImageHashEntry.init)
                 // What the queries already holding a server result were matched against.
                 let previousDigests = entries.mapValues(\.matchDigest)

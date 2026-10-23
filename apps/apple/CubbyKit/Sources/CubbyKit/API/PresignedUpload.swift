@@ -1,6 +1,6 @@
 import Foundation
 
-/// The one request in the app that does not go through `CubbyAuthMiddleware`: a PUT to the
+/// The one request in the app that does not go through `NativeHTTPTransport`: a PUT to the
 /// presigned R2 URL from `image.uploadImage`. The signature covers exactly the content type
 /// and length, so this sends only `Content-Type` — an `Authorization` header or a cookie would
 /// break the signature, and the bytes must be exactly the size that was presigned.

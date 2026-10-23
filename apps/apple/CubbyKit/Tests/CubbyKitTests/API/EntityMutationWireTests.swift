@@ -17,11 +17,10 @@ private final class JSONNullStub: URLProtocol, @unchecked Sendable {
 }
 
 /// A save is one `entity.mutate` POST whose `data` is the composed body itself: a cleared key is
-/// an explicit `null` and an omitted key means "leave as is". (Typed RPC bodies, which cannot
-/// say `null`, still restore theirs through `JSONNullMiddleware`; kernel bodies carry nulls
-/// natively.) These pin the exact bytes a real save puts on the wire.
+/// an explicit `null` and an omitted key means "leave as is". These pin the exact bytes a real
+/// save puts on the wire through the shared URLSession transport.
 @Suite("Entity mutate wire shape", .serialized)
-struct JSONNullMiddlewareTests {
+struct EntityMutationWireTests {
     private struct Seen: Sendable {
         let method: String?
         let path: String
@@ -148,7 +147,7 @@ struct JSONNullMiddlewareTests {
         #expect(request.contentLength == String(request.byteCount))
     }
 
-    @Test func photoDraftBrandClearSurvivesTypedRPCEncoding() async throws {
+    @Test func photoDraftBrandClearReachesServer() async throws {
         let body: JSONValue = [
             "runId": "RUN-4K7M", "groupKey": "synthetic-shirt", "name": "Canvas shirt",
             "brandId": .null,

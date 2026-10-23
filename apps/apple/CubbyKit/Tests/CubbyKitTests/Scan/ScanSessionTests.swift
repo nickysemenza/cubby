@@ -35,7 +35,7 @@ final class StubScanService: ScanService, Sendable {
     }
 
     static func result(
-        _ outcome: ScanAtLocationOut.OutcomePayload, id: String = "PRD-2345", name: String = "Sample",
+        _ outcome: ScanAtLocationOutOutcome, id: String = "PRD-2345", name: String = "Sample",
         strays: [ScanStrayOut] = []
     ) -> ScanAtLocationOut {
         ScanAtLocationOut(

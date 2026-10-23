@@ -5,6 +5,7 @@ public enum PhotoReviewEdits {
     public static func ownership(
         group: PhotoGroupProposal, locationID: String?, quantity: Int, stockIntent: String? = nil
     ) throws -> JSONValue {
+        if let unsupported = PhotoReviewPolicy.unsupportedAction(group: group) { throw unsupported }
         var body: [String: JSONValue] = [
             "groupKey": .string(group.groupKey),
             "images": try JSONValue(encoding: group.images),
@@ -13,6 +14,8 @@ public enum PhotoReviewEdits {
         switch group.product {
         case .create(let product):
             body["product"] = ["kind": "create", "create": try JSONValue(encoding: product.create)]
+        case .unrecognized(let raw):
+            throw UnsupportedNativeResponse(context: "photo product review", raw: raw)
         case .existing(let product):
             guard let selected = product.existing else { throw EditError.missingProduct }
             body["product"] = ["kind": "existing", "existingId": .string(selected.id.rawValue)]
@@ -20,17 +23,8 @@ public enum PhotoReviewEdits {
         if let evidence = group.evidence { body["evidence"] = .string(evidence) }
         var review =
             try group.review.flatMap { try JSONValue(encoding: $0).objectValue } ?? [
-                "observedName": .string(productName(group)), "unresolvedReason": .null,
+                "observedName": .string(try productName(group)), "unresolvedReason": .null,
             ]
-        review["unresolvedReason"] = group.review?.unresolvedReason.map(JSONValue.string) ?? .null
-        if let concerns = group.review?.resolvedConcerns {
-            review["resolvedConcerns"] = .array(
-                try concerns.map { concern in
-                    var item = try JSONValue(encoding: concern).objectValue ?? [:]
-                    item["reply"] = concern.reply.map(JSONValue.string) ?? .null
-                    return .object(item)
-                })
-        }
         review["stockIntent"] = .string(stockIntent ?? (locationID == nil ? "evidence" : "receive"))
         body["review"] = .object(review)
         if let locationID {
@@ -41,10 +35,6 @@ public enum PhotoReviewEdits {
             if group.inventory?.locationId?.rawValue != locationID {
                 inventory["existingEntryId"] = nil
                 inventory["mode"] = "create"
-            }
-            if group.inventory?.ownershipMode == .explicit {
-                inventory["ownerPartyId"] =
-                    group.inventory?.ownerPartyId.map(JSONValue.string) ?? .null
             }
             body["inventory"] = .object(inventory)
         }
@@ -63,7 +53,7 @@ public enum PhotoReviewEdits {
 
     public static func createAfterRejection(group: PhotoGroupProposal) throws -> JSONValue {
         var body = try retainedGroup(group)
-        let name = group.review?.observedName ?? productName(group)
+        let name = try group.review?.observedName ?? productName(group)
         body["product"] = ["kind": "create", "create": ["name": .string(name)]]
         var review = body["review"]?.objectValue ?? [:]
         review["observedName"] = .string(name)
@@ -87,18 +77,17 @@ public enum PhotoReviewEdits {
         if let inventory = group.inventory {
             var retained = try JSONValue(encoding: inventory).objectValue ?? [:]
             retained["locationName"] = nil
-            if inventory.ownershipMode == .explicit {
-                retained["ownerPartyId"] = inventory.ownerPartyId.map(JSONValue.string) ?? .null
-            }
             body["inventory"] = .object(retained)
         }
         return body
     }
 
-    private static func productName(_ group: PhotoGroupProposal) -> String {
+    private static func productName(_ group: PhotoGroupProposal) throws -> String {
         switch group.product {
         case .create(let product): product.create.name
         case .existing(let product): product.existing?.name ?? "Product"
+        case .unrecognized(let raw):
+            throw UnsupportedNativeResponse(context: "photo product review", raw: raw)
         }
     }
 

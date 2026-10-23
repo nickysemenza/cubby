@@ -224,7 +224,8 @@ public struct ReportChoiceAnswers: Equatable, Sendable {
         let command = form.command
         var trade: Trade?
         if let tradeID = command.tradeChoiceID {
-            guard let optionID = answers[tradeID]?.optionID, let value = Trade(rawValue: optionID)
+            guard let optionID = answers[tradeID]?.optionID,
+                let value = Trade.allCases.first(where: { $0.rawValue == optionID })
             else { return nil }
             trade = value
         }
