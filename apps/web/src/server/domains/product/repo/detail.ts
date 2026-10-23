@@ -87,7 +87,11 @@ export async function readProductDetail(
         : Promise.resolve(null);
     },
   );
-  const ownershipPromise = loadProductOwnershipEvidence(context.db, row.id);
+  const ownershipPromise = loadProductOwnershipEvidence(
+    context.db,
+    row.id,
+    row.category,
+  );
   const ownersPromise = loadProductOwners(context.db, [row.id]);
   const pricingPromise = observeOperationPhase(
     PRODUCT_DETAIL_OPERATION,

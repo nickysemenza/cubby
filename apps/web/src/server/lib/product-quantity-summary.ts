@@ -15,10 +15,13 @@ export const hasComparableQuantityHistory = (
 export function deriveProductQuantitySummary(
   entries: readonly { amount: { value: number; unit: string } }[],
   quantityLedger: ProductQuantityLedgerOut,
+  service = false,
 ): Pick<
   ProductQuantitySummaryOut,
   "quantityLedger" | "onHandUnits" | "quantityVariance"
 > {
+  if (service)
+    return { quantityLedger, onHandUnits: null, quantityVariance: null };
   const countable = entries.every((entry) => entry.amount.unit === "each");
   const onHandUnits =
     countable && (entries.length > 0 || quantityLedger.locationCount > 0)

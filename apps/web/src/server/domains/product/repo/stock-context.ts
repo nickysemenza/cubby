@@ -1,5 +1,9 @@
 import type { DisplayItem } from "@cubby/schemas/entity-definitions/label-field";
 import type { ProductListItem } from "@cubby/schemas/product";
+import {
+  isServiceProductCategory,
+  type ProductCategorySummary,
+} from "@cubby/schemas/product-category-fields";
 
 import {
   deriveProductQuantitySummary,
@@ -12,6 +16,7 @@ type StockContextInput = Pick<ProductListItem, "quantityLedger"> & {
     "amount"
   >[];
   stockTracked?: boolean | null;
+  category?: ProductCategorySummary | null;
 };
 
 /** Recorded quantities describe evidence, never automatic consumption or disposal. */
@@ -19,7 +24,10 @@ export function productStockContext({
   quantityLedger: ledger,
   inventoryEntry,
   stockTracked,
+  category,
 }: StockContextInput) {
+  if (isServiceProductCategory(category))
+    return { stockStatus: null, stockStatusItems: [] };
   const details: DisplayItem[] = [];
   const fact = (title: string, subtitle: string | null = null) =>
     details.push({ entity: null, id: null, title, subtitle, trailing: null });

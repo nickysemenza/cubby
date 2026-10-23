@@ -250,6 +250,18 @@ describe("product stock picker evidence", () => {
     expect(item.thumb?.imageUrl).toBe(photographed.coverImageUrl);
   });
 
+  it("omits inventory chips for service categories even with retained stock evidence", () => {
+    const item = buildProductComboboxItem(
+      {
+        ...base,
+        category: categorySummaryFixture("software"),
+        onHand: { state: "counted", units: 2 },
+      },
+      "stock",
+    );
+    expect(item.presentation).toBeUndefined();
+  });
+
   it("keeps a fully returned product visible below likely choices", () => {
     expect(
       buildProductComboboxItem(

@@ -21,6 +21,7 @@ import {
   productTopLevelOut,
   productWithIngredientAndInventoryAndMappingsOut,
 } from "@cubby/schemas/product";
+import { isServiceProductCategory } from "@cubby/schemas/product-category-fields";
 import type { ProductCategorySummary } from "@cubby/schemas/product-category-fields";
 import type { z } from "zod";
 
@@ -206,11 +207,15 @@ export const mapProductUnitMappings = (
 export const productFieldResolutions = (
   productData: Pick<
     ProductTopLevelDB,
-    "price" | "stockTracked" | "categoryStockTracking"
+    "price" | "stockTracked" | "categoryStockTracking" | "category"
   >,
   pricing: ProductPricing,
 ): FieldResolutions => ({
-  price: resolveProductPriceField(productData.price, pricing),
+  price: resolveProductPriceField(
+    productData.price,
+    pricing,
+    isServiceProductCategory(productData.category),
+  ),
   stockTracked: resolveStockTrackingField(
     productData.stockTracked,
     productData.categoryStockTracking,
@@ -222,8 +227,9 @@ export const mapDbProductToTopLevel = (
   productData: ProductTopLevelDB,
 ): ProductTopLevelOut => {
   const imageGroups = splitProductImages(productData.images);
-  const pricing =
-    productData.pricing ?? resolveProductPricing(productData.price);
+  const pricing = isServiceProductCategory(productData.category)
+    ? resolveProductPricing(null)
+    : (productData.pricing ?? resolveProductPricing(productData.price));
   return {
     id: parseShortcodeFor("product", productData.shortcode),
     name: productData.name,
@@ -446,7 +452,11 @@ export const dbProductToListAPI = (
     expenseTotal: Number(productData.expenseTotal),
     purchaseDate: productData.purchaseDate,
     owners: productData.owners ?? [],
-    ...deriveProductQuantitySummary(inventoryEntry, productData.quantityLedger),
+    ...deriveProductQuantitySummary(
+      inventoryEntry,
+      productData.quantityLedger,
+      isServiceProductCategory(productData.category),
+    ),
   };
 
   return parseWithContext(
@@ -527,8 +537,9 @@ export const dbProductToAPI = (
     }),
   );
 
-  const pricing =
-    productData.pricing ?? resolveProductPricing(productData.price);
+  const pricing = isServiceProductCategory(productData.category)
+    ? resolveProductPricing(null)
+    : (productData.pricing ?? resolveProductPricing(productData.price));
   const result = {
     id: parseShortcodeFor("product", productData.shortcode),
     name: productData.name,
@@ -602,6 +613,7 @@ export const dbProductToAPI = (
     ...deriveProductQuantitySummary(
       mappedInventoryEntry,
       productData.quantityLedger,
+      isServiceProductCategory(productData.category),
     ),
   };
 

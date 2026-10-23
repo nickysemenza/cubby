@@ -15,6 +15,7 @@ import {
 } from "@cubby/schemas/image";
 import type { InfLocation, LocationType } from "@cubby/schemas/location";
 import { locationType } from "@cubby/schemas/location";
+import { isServiceProductCategory } from "@cubby/schemas/product-category-fields";
 import type { SearchableEntity, SearchHit } from "@cubby/schemas/search";
 import {
   formatCategoryLabel,
@@ -271,7 +272,7 @@ export const buildProductComboboxItem = (
     product.images?.find(isDisplayableImageFile)?.url ??
     null;
   const base = productPickerBase(product, coverImageUrl);
-  return !ledger || !onHand
+  return isServiceProductCategory(product.category) || !ledger || !onHand
     ? base
     : withProductInventoryPresentation(base, ledger, onHand, intent);
 };

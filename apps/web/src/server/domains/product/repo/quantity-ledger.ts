@@ -12,7 +12,7 @@ import type { Database, DrizzleTransaction } from "~/server/db";
 import { notDeleted, unwrapDb, uuidArrayParam } from "~/server/db/helpers";
 /** Canonical read-time quantity ledger: known balance is acquired minus exited; unknown quantities stay explicit. */
 import { actualExpenseSql } from "~/server/db/helpers/predicates";
-import { inventoryEntry, location } from "~/server/db/schema";
+import { inventoryEntry, location, product } from "~/server/db/schema";
 import { inventoryAmountSql } from "~/server/domains/inventory/repo/helpers";
 import {
   kitAncestorCteSql,
@@ -29,6 +29,8 @@ import {
   deriveProductQuantitySummary,
   hasComparableQuantityHistory,
 } from "~/server/lib/product-quantity-summary";
+
+import { serviceProductIdSql, serviceProductSqlText } from "./service-category";
 
 export type QuantityLedger = ProductQuantityLedgerOut;
 
@@ -63,15 +65,15 @@ const QUANTITY_OWN_MEASURES = `COALESCE(sum(GREATEST(${expenseSignedUnitsSql("kq
          count(*) FILTER (WHERE kqe."productQuantity" IS NULL AND (kqe."cost" IS NULL OR kqe."cost" >= 0)) AS "unknownAcquisitionLines",
          count(*) FILTER (WHERE kqe."productQuantity" IS NULL AND kqe."cost" < 0) AS "unknownExitLines",
          count(*) AS "ledgerLines"`;
-const QUANTITY_OWN_PREDICATES = `kqe."deletedAt" IS NULL AND ${actualExpenseSql("kqe")}`;
+const QUANTITY_OWN_PREDICATES = `NOT ${serviceProductSqlText('kqe."productId"')} AND kqe."deletedAt" IS NULL AND ${actualExpenseSql("kqe")}`;
 const QUANTITY_OWN_AGGREGATE = `SELECT ${QUANTITY_OWN_MEASURES}
     FROM "Expense" kqe
    WHERE kqe."productId" = ka."productId" AND ${QUANTITY_OWN_PREDICATES}`;
 
 const QUANTITY_PROJECTION_FROM = kitProjectionFrom(QUANTITY_OWN_AGGREGATE);
 
-const PROJECTED_ACQUIRED = unitWeighted(`"acquiredUnits"`);
-const PROJECTED_EXITED = unitWeighted(`"exitedUnits"`);
+const PROJECTED_ACQUIRED = `CASE WHEN bool_or(${serviceProductSqlText("ka.target")}) THEN 0 ELSE ${unitWeighted('"acquiredUnits"')} END`;
+const PROJECTED_EXITED = `CASE WHEN bool_or(${serviceProductSqlText("ka.target")}) THEN 0 ELSE ${unitWeighted('"exitedUnits"')} END`;
 const PROJECTED_EXPECTED = `COALESCE(${PROJECTED_ACQUIRED} - ${PROJECTED_EXITED}, 0)::double precision`;
 const PROJECTED_UNKNOWN_QUANTITY = `COALESCE(sum(ko."unknownAcquisitionLines") + sum(ko."unknownExitLines"), 0) > 0`;
 
@@ -143,7 +145,7 @@ const ON_HAND_LOCATIONS = `count(*) AS n
 
 /** On-hand filters are null wherever the UI shows an unavailable value; include shelf and installed placements consistently. */
 export const onHandUnitsSql = (productAlias = '"product"') =>
-  `(SELECT ${onHandUnitsProjection()}
+  `(SELECT CASE WHEN ${serviceProductSqlText(`${productAlias}."id"`)} THEN NULL ELSE ${onHandUnitsProjection()} END
       FROM (SELECT ${ON_HAND_INVENTORY}
                AND ohu_i."productId" = ${productAlias}."id") ohu_inv,
            (SELECT ${ON_HAND_LOCATIONS}
@@ -152,7 +154,7 @@ export const onHandUnitsSql = (productAlias = '"product"') =>
 /** Broad callers opt into one stock relation; missing rows retain unavailable stock. */
 export const onHandUnitsReadSql = () => sql`
   SELECT COALESCE(ohu_inv."productId", ohu_loc."productId") AS "productId",
-    ${sql.raw(onHandUnitsProjection("COALESCE(ohu_inv.n, 0)", "COALESCE(ohu_loc.n, 0)"))} AS "onHandUnits"
+    CASE WHEN ${sql.raw(serviceProductSqlText('COALESCE(ohu_inv."productId", ohu_loc."productId")'))} THEN NULL ELSE ${sql.raw(onHandUnitsProjection("COALESCE(ohu_inv.n, 0)", "COALESCE(ohu_loc.n, 0)"))} END AS "onHandUnits"
   FROM (
     SELECT ohu_i."productId", ${sql.raw(ON_HAND_INVENTORY)}
     GROUP BY ohu_i."productId"
@@ -185,7 +187,7 @@ export const onHandUnitsFilterSql = (
   context?: QualityReadContext,
 ) =>
   context?.derivedValue?.("onHandUnits", productId) ??
-  sql`(SELECT ${sql.raw(onHandUnitsProjection())}
+  sql`(SELECT CASE WHEN ${serviceProductIdSql(sql`${productId}`)} THEN NULL ELSE ${sql.raw(onHandUnitsProjection())} END
          FROM (SELECT ${sql.raw(ON_HAND_INVENTORY)}
                   AND ohu_i."productId" = ${productId}) ohu_inv,
               (SELECT ${sql.raw(ON_HAND_LOCATIONS)}
@@ -443,6 +445,20 @@ export const loadProductPickerQuantities = async (
   // which cannot safely execute two queries concurrently (and pg@9 removes
   // the old implicit queuing behavior).
   const ledgers = await loadProductQuantityLedgers(db, ids);
+  const services = new Set(
+    (
+      await unwrapDb(db)
+        .select({ id: product.id })
+        .from(product)
+        .where(
+          and(
+            inArray(product.id, [...ids]),
+            notDeleted(product),
+            serviceProductIdSql(sql`${product.id}`),
+          ),
+        )
+    ).map((row) => row.id),
+  );
   const inventoryRows = await unwrapDb(db)
     .select({
       productId: inventoryEntry.productId,
@@ -472,6 +488,13 @@ export const loadProductPickerQuantities = async (
 
   const quantities = new Map<ProductId, ProductPickerQuantity>();
   for (const id of ids) {
+    if (services.has(id)) {
+      quantities.set(id, {
+        quantityLedger: ledgers.get(id) ?? EMPTY_QUANTITY_LEDGER,
+        onHand: { state: "none" },
+      });
+      continue;
+    }
     const quantityLedger = ledgers.get(id) ?? EMPTY_QUANTITY_LEDGER;
     const amounts = amountsByProduct.get(id) ?? [];
     const summary = deriveProductQuantitySummary(
