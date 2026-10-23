@@ -5,10 +5,7 @@ import * as schema from "~/server/db/schema";
 import { createUploadedImageRecord } from "~/server/domains/image/repo/image";
 import { getDb } from "~/server/db/helpers";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
-import {
-  seedProductPrerequisite,
-  seedVendorDisplayPrerequisite,
-} from "./catalog";
+import { seedVendorDisplayPrerequisite } from "./catalog";
 import {
   getFixtureDb,
   createEntityFixture,
@@ -117,35 +114,43 @@ export async function seedRelationshipReviewPrerequisite(
     .select({ value: count() })
     .from(schema.project);
   const year = 2100 + (projectCount?.value ?? 0);
-  const current = await createEntityFixture(page, "project", {
-    name: `${name} current`,
-    dates: { start: `${year}-05-01`, end: `${year}-05-31` },
-  });
-  const target = await createEntityFixture(page, "project", {
-    name: `${name} suggested`,
-    dates: { start: `${year}-05-01`, end: `${year}-05-31` },
-  });
-  const product = await seedProductPrerequisite(page, {
-    name: `${name} switch`,
-  });
-  await createEntityFixture(page, "expense", {
-    name: `${name} supporting expense`,
-    projectId: target.id,
-    productId: product.id,
-    date: `${year}-05-02`,
-    cost: 10,
-    trade: "electrical",
-    costType: "materials",
-  });
-  const expense = await createEntityFixture(page, "expense", {
-    name: `${name} reviewed expense`,
-    projectId: current.id,
-    productId: product.id,
-    date: `${year}-05-10`,
-    cost: 20,
-    trade: "electrical",
-    costType: "materials",
-  });
+  const { current, target, product, expense } = await createFixtureGraph(
+    page,
+    async (create) => {
+      const current = await create("project", {
+        name: `${name} current`,
+        dates: { start: `${year}-05-01`, end: `${year}-05-31` },
+      });
+      const target = await create("project", {
+        name: `${name} suggested`,
+        dates: { start: `${year}-05-01`, end: `${year}-05-31` },
+      });
+      const brand = await create("vendor", { name: "E2E fixture" });
+      const product = await create("product", {
+        brandId: brand.id,
+        name: `${name} switch`,
+      });
+      await create("expense", {
+        name: `${name} supporting expense`,
+        projectId: target.id,
+        productId: product.id,
+        date: `${year}-05-02`,
+        cost: 10,
+        trade: "electrical",
+        costType: "materials",
+      });
+      const expense = await create("expense", {
+        name: `${name} reviewed expense`,
+        projectId: current.id,
+        productId: product.id,
+        date: `${year}-05-10`,
+        cost: 20,
+        trade: "electrical",
+        costType: "materials",
+      });
+      return { current, target, product, expense };
+    },
+  );
   // Passive record reads expose only proposals already published by a Sweep.
   await publishEntityConnection(getFixtureDb(), {
     relation: "expense-project",
@@ -236,27 +241,29 @@ export async function seedProjectContributionPrerequisite(
   name: string,
 ) {
   const member = await ensureMemberParty(page, name);
-  const guest = await createEntityFixture(page, "ledgerParty", {
-    name: `${name} guest`,
-    kind: "guest",
-  });
-  const project = await createEntityFixture(page, "project", { name });
-  const expense = (label: string, cost: number, funded: boolean) =>
-    createEntityFixture(page, "expense", {
-      name: `${name} ${label}`,
-      projectId: project.id,
-      date: "2026-09-01",
-      cost,
-      trade: "other",
-      costType: "materials",
-      beneficiaries: [
-        { partyId: member.shortcode, weight: 3 },
-        { partyId: guest.id, weight: 1 },
-      ],
-      funders: funded ? [{ partyId: member.shortcode, weight: 1 }] : [],
+  return createFixtureGraph(page, async (create) => {
+    const guest = await create("ledgerParty", {
+      name: `${name} guest`,
+      kind: "guest",
     });
-  await expense("lumber", 100.49, true);
-  await expense("returned lumber", -20.13, true);
-  const unfunded = await expense("paint", 40.08, false);
-  return { project, member, guestName: `${name} guest`, unfunded };
+    const project = await create("project", { name });
+    const expense = (label: string, cost: number, funded: boolean) =>
+      create("expense", {
+        name: `${name} ${label}`,
+        projectId: project.id,
+        date: "2026-09-01",
+        cost,
+        trade: "other",
+        costType: "materials",
+        beneficiaries: [
+          { partyId: member.shortcode, weight: 3 },
+          { partyId: guest.id, weight: 1 },
+        ],
+        funders: funded ? [{ partyId: member.shortcode, weight: 1 }] : [],
+      });
+    await expense("lumber", 100.49, true);
+    await expense("returned lumber", -20.13, true);
+    const unfunded = await expense("paint", 40.08, false);
+    return { project, member, guestName: `${name} guest`, unfunded };
+  });
 }
