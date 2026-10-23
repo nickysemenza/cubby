@@ -6,21 +6,14 @@ import type {
 import { groupBy, sumBy } from "es-toolkit";
 
 import type { Database } from "~/server/db";
-import {
-  getMcpUsageAggregateData,
-  mcpUsageSince,
-} from "~/server/mcp/mcp-usage";
-import { listMcpToolCatalog } from "~/server/mcp/server";
+import { mcpUsageSince } from "~/server/mcp/mcp-usage";
+import type { getMcpUsageAggregateData } from "~/server/mcp/mcp-usage";
+import type { listMcpToolCatalog } from "~/server/mcp/server";
 
 export interface McpUsageDashboardPort {
   listCatalog: typeof listMcpToolCatalog;
   loadAggregate: typeof getMcpUsageAggregateData;
 }
-
-const productionMcpUsageDashboardPort: McpUsageDashboardPort = {
-  listCatalog: listMcpToolCatalog,
-  loadAggregate: getMcpUsageAggregateData,
-};
 
 type McpToolCatalog = Awaited<ReturnType<typeof listMcpToolCatalog>>;
 type McpUsageAggregate = Awaited<ReturnType<typeof getMcpUsageAggregateData>>;
@@ -123,7 +116,7 @@ function buildToolUsageRows(
 export async function getMcpUsageDashboard(
   db: Database,
   window: McpUsageWindow,
-  port: McpUsageDashboardPort = productionMcpUsageDashboardPort,
+  port: McpUsageDashboardPort,
 ): Promise<McpUsageDashboardOut> {
   const [catalog, usage] = await Promise.all([
     port.listCatalog(),

@@ -503,3 +503,7 @@ The MCP endpoint `/api/mcp` is an OAuth 2.1 resource server; clients enrol
 through dynamic client registration. Tools return structured data only; the
 calling agent presents choices such as `usda_food.search` candidates in its own
 conversation. MCP operating patterns are in [MCP](agents/mcp.md).
+
+The MCP usage dashboard service receives its catalog and aggregate ports from
+the browser operation adapter. Only the adapter loads the production MCP server;
+unit checks of usage aggregation do not initialize the complete tool runtime.
