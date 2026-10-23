@@ -1,4 +1,3 @@
-import { seedProductPrerequisite } from "./fixtures/catalog";
 import { eq, inArray } from "drizzle-orm";
 import type { Page } from "@playwright/test";
 import { productShortcode } from "@cubby/schemas/identifiers";
@@ -23,6 +22,7 @@ import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolv
 
 import {
   createEntityFixture,
+  createFixtureGraph,
   createEvidenceHarnessContext,
 } from "./fixtures/core";
 import { seedUnimportedOrderMail } from "./fixtures/mail";
@@ -35,14 +35,18 @@ import { expect, test } from "./support/e2e-test";
 
 async function seedTagProposal(page: Page, sourceId: string, tag: string) {
   const { db } = await createEvidenceHarnessContext(page);
-  const donors = await Promise.all(
-    [1, 2, 3].map((index) =>
-      createEntityFixture(page, "product", {
-        name: `Synthetic tag support ${index} ${crypto.randomUUID()}`,
-        tags: [tag],
-      }),
-    ),
-  );
+  const donors = await createFixtureGraph(page, async (create) => {
+    const donors = [];
+    for (const index of [1, 2, 3]) {
+      donors.push(
+        await create("product", {
+          name: `Synthetic tag support ${index} ${crypto.randomUUID()}`,
+          tags: [tag],
+        }),
+      );
+    }
+    return donors;
+  });
   const records = await getDb(db)
     .select({
       id: productTable.id,
@@ -92,23 +96,25 @@ test("one queue separates proposals from automatic history and reviews either en
   test.slow();
   const { db, actor } = await createEvidenceHarnessContext(page);
   const name = uniqueName(testInfo, "Synthetic queue drill");
-  const item = await seedProductPrerequisite(page, {
-    name,
-    brandName: "Example Tools",
-  });
+  const { item, other, charge } = await createFixtureGraph(
+    page,
+    async (create) => {
+      const brand = await create("vendor", { name: "Example Tools" });
+      const item = await create("product", { name, brandId: brand.id });
+      const other = await create("product", { name: `${name} neighbour` });
+      const charge = await create("expense", {
+        name: `${name} receipt`,
+        cost: 24,
+        trade: "electrical",
+      });
+      return { item, other, charge };
+    },
+  );
   const cover = await seedImagePrerequisite(
     "synthetic-queue-cover",
     e2eRuntime.objectStorageUrl,
   );
   await attachProductImagePrerequisite(page, cover.id, item.id, "item");
-  const other = await createEntityFixture(page, "product", {
-    name: `${name} neighbour`,
-  });
-  const charge = await createEntityFixture(page, "expense", {
-    name: `${name} receipt`,
-    cost: 24,
-    trade: "electrical",
-  });
   const connection = await publishEntityConnection(db, {
     relation: "product-expense",
     source: { entityKind: "product", entityId: item.id },
@@ -283,33 +289,39 @@ test("project assignments and placement moves use the shared queue", async ({
 }, testInfo) => {
   test.slow();
   const { db } = await createEvidenceHarnessContext(page);
-  const project = await createEntityFixture(page, "project", {
-    name: uniqueName(testInfo, "Synthetic workshop refresh"),
-  });
-  const expense = await createEntityFixture(page, "expense", {
-    name: uniqueName(testInfo, "Synthetic supplies"),
-    cost: 15,
-    trade: "building",
-  });
-  const item = await createEntityFixture(page, "product", {
-    name: uniqueName(testInfo, "Synthetic placement tool"),
-  });
-  const from = await createEntityFixture(page, "location", {
-    name: uniqueName(testInfo, "Synthetic unplaced shelf"),
-  });
-  const to = await createEntityFixture(page, "location", {
-    name: uniqueName(testInfo, "Synthetic target shelf"),
-  });
-  const source = await createEntityFixture(page, "inventory", {
-    productId: item.id,
-    locationId: from.id,
-    amount: { value: 1, unit: "each" },
-  });
-  const target = await createEntityFixture(page, "inventory", {
-    productId: item.id,
-    locationId: to.id,
-    amount: { value: 2, unit: "each" },
-  });
+  const { project, expense, source, target, to } = await createFixtureGraph(
+    page,
+    async (create) => {
+      const project = await create("project", {
+        name: uniqueName(testInfo, "Synthetic workshop refresh"),
+      });
+      const expense = await create("expense", {
+        name: uniqueName(testInfo, "Synthetic supplies"),
+        cost: 15,
+        trade: "building",
+      });
+      const item = await create("product", {
+        name: uniqueName(testInfo, "Synthetic placement tool"),
+      });
+      const from = await create("location", {
+        name: uniqueName(testInfo, "Synthetic unplaced shelf"),
+      });
+      const to = await create("location", {
+        name: uniqueName(testInfo, "Synthetic target shelf"),
+      });
+      const source = await create("inventory", {
+        productId: item.id,
+        locationId: from.id,
+        amount: { value: 1, unit: "each" },
+      });
+      const target = await create("inventory", {
+        productId: item.id,
+        locationId: to.id,
+        amount: { value: 2, unit: "each" },
+      });
+      return { project, expense, source, target, to };
+    },
+  );
   await publishEntityConnection(db, {
     relation: "expense-project",
     source: { entityKind: "expense", entityId: expense.id },
@@ -388,24 +400,34 @@ test("new proposal families require explicit review and preserve merge confirmat
 }, testInfo) => {
   test.slow();
   const { db } = await createEvidenceHarnessContext(page);
-  const brand = await createEntityFixture(page, "vendor", {
-    name: "Example Tools",
-  });
-  const first = await seedProductPrerequisite(page, {
-    name: uniqueName(testInfo, "Synthetic matching drill"),
-    brandId: brand.id,
-    model: "SYN-DRILL-17",
-  });
-  const second = await seedProductPrerequisite(page, {
-    name: uniqueName(testInfo, "Synthetic matching drill duplicate"),
-    brandId: brand.id,
-    model: "SYN-DRILL-17",
-  });
-  const conflicted = await seedProductPrerequisite(page, {
-    name: uniqueName(testInfo, "Synthetic conflicting drill"),
-    brandId: brand.id,
-    model: "SYN-DRILL-29",
-  });
+  const { first, second, conflicted, tagged } = await createFixtureGraph(
+    page,
+    async (create) => {
+      const brand = await create("vendor", {
+        name: "Example Tools",
+      });
+      const first = await create("product", {
+        name: uniqueName(testInfo, "Synthetic matching drill"),
+        brandId: brand.id,
+        model: "SYN-DRILL-17",
+      });
+      const second = await create("product", {
+        name: uniqueName(testInfo, "Synthetic matching drill duplicate"),
+        brandId: brand.id,
+        model: "SYN-DRILL-17",
+      });
+      const conflicted = await create("product", {
+        name: uniqueName(testInfo, "Synthetic conflicting drill"),
+        brandId: brand.id,
+        model: "SYN-DRILL-29",
+      });
+      const tagged = await create("product", {
+        name: uniqueName(testInfo, "Synthetic tag target"),
+        tags: ["synthetic-existing"],
+      });
+      return { first, second, conflicted, tagged };
+    },
+  );
   const firstId = await resolveOrThrow(db, "product", first.id);
   const secondId = await resolveOrThrow(db, "product", second.id);
   await publishProductPair(db, {
@@ -422,10 +444,6 @@ test("new proposal families require explicit review and preserve merge confirmat
     sourceUrls: [],
     actionable: true,
     conflict: true,
-  });
-  const tagged = await createEntityFixture(page, "product", {
-    name: uniqueName(testInfo, "Synthetic tag target"),
-    tags: ["synthetic-existing"],
   });
   const taggedId = await resolveOrThrow(db, "product", tagged.id);
   const { prediction: tag } = await seedTagProposal(

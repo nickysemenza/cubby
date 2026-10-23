@@ -149,6 +149,13 @@ restoration; `availability-explanation.integration.test.ts` owns MCP set/clear,
 blank-note refusal and stale evidence. Dedicated native active-exception clearing
 is no longer sampled; native stale clearing and server active clearing remain.
 
+Suggestion queue fixtures batch each independent prerequisite graph before
+publishing its proposals: Product/brand/Expense, Project/placement stock, matching
+Products/tag target, and each tag's supporting Products. Preserve entity writer
+defaults, identities, cardinalities and stock quantities. Proposal publication and
+revision reads stay after commit/frontier settlement; do not batch across a real
+review or stale-support edit. All native review and stored-outcome assertions stay.
+
 Dense-header browser coverage resizes one populated detail page across desktop,
 constrained desktop and phone widths, then drives the shared action/editor dialogs
 once on the phone. Do not repeat full navigation or seed an unrelated Product list
