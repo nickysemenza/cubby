@@ -1,5 +1,6 @@
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { buildNutrition } from "@cubby/schemas/nutrition";
+import type { ShipmentObservationInput } from "@cubby/schemas/shipment-evidence";
 import { eq } from "drizzle-orm";
 import { createEntity } from "tooling/factories/create";
 import { createRepoEntity } from "tooling/factories/repo";
@@ -72,6 +73,20 @@ describe("progressive list readers", () => {
               carrierName: null,
               trackingNumber: key,
             },
+            ...(key === "projection-two"
+              ? [
+                  {
+                    sourceEventKey: `${key}-delivery`,
+                    kind: "delivered",
+                    time: { kind: "instant", value: "2026-06-05T12:00:00Z" },
+                    rawStatus: "Synthetic delivery",
+                    location: null,
+                    carrierId: null,
+                    carrierName: null,
+                    trackingNumber: key,
+                  } satisfies ShipmentObservationInput,
+                ]
+              : []),
           ],
         })),
       },
@@ -92,6 +107,39 @@ describe("progressive list readers", () => {
     expect(count.tables).not.toContain("Purchase");
     expect(count.tables).not.toContain("Vendor");
     const full = await read({ kind: "full" });
+    expect(full.data.find((row) => row.id === parcelCode)).toMatchObject({
+      firstEventDate: "2026-06-03",
+      lastEventDate: "2026-06-03",
+      eventSpanHours: null,
+      eventSpanLabel: null,
+      eventCount: 1,
+    });
+    const secondCode = evidence.shipmentIds[1];
+    expect(full.data.find((row) => row.id === secondCode)).toMatchObject({
+      eventSpanHours: 51,
+      eventSpanLabel: "51h",
+      eventCount: 2,
+    });
+    for (const orderBy of ["eventCount", "eventSpanHours", "lastEventDate"]) {
+      const sorted = await listShipmentsRead(
+        ctx.db,
+        { purchaseId: [order.output.id] },
+        [{ orderBy, direction: "desc" }],
+        { pageIndex: 0, pageSize: 1 },
+        { kind: "full" },
+      );
+      expect(sorted.data.map((row) => row.id)).toEqual([secondCode]);
+    }
+    const summaryOnly = await read({
+      kind: "selected",
+      fields: ["eventCount"],
+      groups: ["derived"],
+    });
+    expect(summaryOnly.data.find((row) => row.id === secondCode)).toEqual({
+      id: secondCode,
+      eventCount: 2,
+    });
+
     const selected = await countTestDbQueries(() =>
       read({
         kind: "selected",

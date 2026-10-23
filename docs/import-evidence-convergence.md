@@ -138,6 +138,16 @@ supplies a missing shipment event time. Label creation and vendor-shipped
 reports do not establish carrier possession. Repeated source observations use
 the shared writer's idempotent path; conflicts remain evidence.
 
+Shipment lists and details show First event, Last event, Event span and Events.
+These read the reconciled, non-superseded tracking timeline; distinct retained
+occurrences count even when their time is unknown, while clear duplicate reports
+count once. Observation first/last-seen and capture times are never endpoints.
+The span stops at the latest dated event, not the current time. One dated event
+has no span. Dates display in the household timezone for exact events and retain the stated day for date-only events.
+Date-only endpoints use whole household calendar days; two exact endpoints
+use elapsed hours. Unknown and unresolved local times do not establish endpoints.
+All four list columns sort across the full population before pagination.
+
 Source package identity is retained separately from event versions. Identical
 tracked packages across lifecycle Emails reuse the established Purchase,
 resolved carrier and tracking reference. Extraction leaves
