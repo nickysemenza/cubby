@@ -43,7 +43,7 @@ test("linked Expense categories display their readable label and transaction exp
         itemizationExpectation: "not_expected",
       });
       // Category coverage counts Expense lines independently of Product links.
-      for (let index = 0; index < 28; index++) {
+      for (let index = 0; index < 2; index++) {
         await create("expense", {
           name: `${tag} meal`,
           purchaseId,
@@ -56,7 +56,7 @@ test("linked Expense categories display their readable label and transaction exp
       }
       const { id: transactionId } = await create("financialTransaction", {
         accountId,
-        amount: -56,
+        amount: -4,
         merchant: tag,
         kind: "refund",
         status: "posted",
@@ -128,10 +128,10 @@ test("linked Expense categories display their readable label and transaction exp
   const popover = page.locator('[data-slot="popover-content"]');
   await expect(popover).toContainText("Single category");
   await expect(popover).toContainText(
-    "28 of 28 linked expense lines are classified",
+    "2 of 2 linked expense lines are classified",
   );
   await expect(popover).toContainText("Technical details");
-  await expect(popover).toContainText("28 of 28 linked expense lines");
+  await expect(popover).toContainText("2 of 2 linked expense lines");
   await expect(popover).toContainText(
     "Settlement allocations do not attribute",
   );
@@ -150,7 +150,7 @@ test("linked Expense categories display their readable label and transaction exp
     .click();
   await expect(popover).toContainText("Itemization compares the purchase");
   await expect(popover).toContainText("Itemized, matches");
-  await expect(popover).toContainText("-$56.00");
+  await expect(popover).toContainText("-$4.00");
 
   await page.keyboard.press("Escape");
   const unchanged = await entityApi(page.request).get(
@@ -173,18 +173,6 @@ test("linked Expense categories display their readable label and transaction exp
     { headers: { Origin: baseURL! } },
   );
   expect(updated.ok(), await updated.text()).toBeTruthy();
-  const reloaded = page.waitForResponse(
-    (response) =>
-      dispatchesOperation(response.request(), "entity.listEnrichment") &&
-      response.ok(),
-  );
-  await page.reload();
-  await reloaded;
-  await expect(row.getByLabel("Loading field")).toHaveCount(0);
-  await expect(category).toHaveText(categoryName);
-  await expect(
-    row.locator('[data-column-id="itemizationExpectation"]'),
-  ).toContainText("Expected");
   const explicit = await entityApi(page.request).get(
     "financialTransaction",
     transactionId,
@@ -204,6 +192,9 @@ test("linked Expense categories display their readable label and transaction exp
   await gotoAuthenticatedPage(page, `/financial-transactions/${transactionId}`);
   await expect(
     page.getByText("Set here", { exact: true }).first(),
+  ).toBeVisible();
+  await expect(
+    page.getByText("Expected", { exact: true }).first(),
   ).toBeVisible();
   await performOperation(page, "entity.mutate", () =>
     page

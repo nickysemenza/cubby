@@ -473,6 +473,12 @@ coverage tradeoff in the deleting commit. Use the `ui` jsdom tier for a distinct
 failure that does not need native browser behavior; avoid duplicating the same
 shared capability in both tiers.
 
+`expense-category-summary.integration.test.ts` owns category summaries beyond
+25 linked lines, including full money and transaction read-back. The finance
+category browser journey uses two refund lines for readable labels, explanations,
+explicit policy and reset-to-inherited behavior. Avoid a second full list reload
+merely to repeat the explicit value already read back and shown on detail.
+
 The Wardrobe browser journeys retain ownership edits, grouped category navigation,
 subtype inclusion and section exclusion. The mobile sticky-header coordinate
 check is deliberately omitted: creating a scrolling inventory population solely
