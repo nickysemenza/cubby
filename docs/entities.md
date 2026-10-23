@@ -3292,6 +3292,29 @@ merge/delete; unresolved non-null references fail rather than becoming unknown.
 
 ## Product classification and photos
 
+ProductCategory's inherited `feature` also distinguishes service accounting:
+`services` and `software` Products represent ongoing access, usage or obligations.
+Bind Services on a category ancestor to cover utilities, insurance and similar
+categories; there is no per-Product service switch and category names do not
+control behavior. A child with its own different feature overrides the ancestor.
+
+Actual Expenses retain their amounts and quantities (usage, seats or other
+source units). Service quantities do not accumulate acquired stock, establish
+physical ownership, or derive a valuation/unit price. A stored Product price is
+preserved as assignment intent but supplies no effective service valuation.
+List prices, price filters, footer totals and exact valuation reads share this
+rule. Physical untracked Products keep their existing quantity and price rules.
+
+The shared Product charge report shows positive actual Expense-line counts,
+credits, refund-inclusive spending, the latest dated positive charge and a
+bounded history linked to the full Expense list. Unknown amounts and dates stay
+explicit; planned and deleted Expenses are excluded. It does not turn a bill
+average into a fixed price or infer an active subscription, coverage window or
+renewal. Web and native omit physical ownership/inventory guidance for services.
+Service identity does not require a model or external identifier; live Expenses
+already retain any Product against the orphan check. No agreement records or
+automatic bill links are introduced.
+
 `ProductCategory` is an editable, at-most-three-level tree. `Product.categoryId`
 references the most specific known node; its read-only `category` projection
 contains the complete root-first path and inherited behavior binding. Products

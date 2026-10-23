@@ -30,7 +30,7 @@ import type {
   KitMembershipPurchaseOut,
   ProductComponentOut,
 } from "@cubby/schemas/product-components";
-import { and, asc, desc, eq, inArray } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { uniq, uniqBy } from "es-toolkit";
 
@@ -59,6 +59,7 @@ import {
 import { findMergeComponentCycle } from "~/server/domains/product/repo/merge";
 import { loadEffectiveProductPricesById } from "~/server/domains/product/repo/pricing";
 import { loadProductPickerQuantities } from "~/server/domains/product/repo/quantity-ledger";
+import { serviceCategorySql } from "~/server/domains/product/repo/service-category";
 // A kit's most recent acquisition remains narrower than identity relations,
 // which also include exits and planned Expenses.
 import { expenseAcquisitionPairPredicate } from "~/server/domains/purchase/repo/purchase-products";
@@ -176,6 +177,7 @@ export async function listProductComponents(
       brandName: productBrandNameSql(product.brandId),
       quantity: entityLink.quantity,
       attachedAt: entityLink.createdAt,
+      service: serviceCategorySql(sql`${product.categoryId}`),
     })
     .from(entityLink)
     .innerJoin(
@@ -211,8 +213,9 @@ export async function listProductComponents(
       quantity: linkQuantity(row.quantity),
       price: prices.get(row.productId) ?? null,
       coverImageUrl: coverImageUrls.get(row.productId) ?? null,
-      onHandUnits:
-        onHand?.state === "counted"
+      onHandUnits: row.service
+        ? null
+        : onHand?.state === "counted"
           ? onHand.units
           : onHand?.state === "none"
             ? 0

@@ -26,6 +26,7 @@ import type { DrizzleClient } from "~/server/db";
 import { actualExpense } from "~/server/db/computed/expense-aggregate-sql";
 import { notDeleted } from "~/server/db/helpers";
 import { expense, purchase } from "~/server/db/schema";
+import { serviceProductIdSql } from "~/server/domains/product/repo/service-category";
 import {
   buildConfidentOwnershipIntervals,
   classifyProductMovement,
@@ -110,6 +111,7 @@ export async function loadProductOwnershipTimelines(
         inArray(expense.productId, productIds),
         actualExpense(),
         notDeleted(expense),
+        sql`NOT ${serviceProductIdSql(sql`${expense.productId}`)}`,
       ),
     );
 

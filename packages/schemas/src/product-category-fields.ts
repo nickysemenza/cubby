@@ -1,4 +1,5 @@
 import { z } from "zod";
+import type { ProductCategory } from "@cubby/shared";
 
 import { productCategoryShortcode } from "./identifier-fields";
 
@@ -17,6 +18,7 @@ export const productCategoryFeatureValues = [
   "hardware",
   "electronics",
   "software",
+  "services",
   "household",
   "supplies",
   "apparel",
@@ -27,6 +29,18 @@ export const PRODUCT_CATEGORY_MAX_DEPTH = 3;
 
 export const productCategoryFeature = z.enum(productCategoryFeatureValues);
 export type ProductCategoryFeature = z.infer<typeof productCategoryFeature>;
+
+/** Service charges buy access or usage; their quantities never accumulate stock. */
+export const SERVICE_PRODUCT_FEATURES: readonly ProductCategoryFeature[] = [
+  "software",
+  "services",
+];
+
+export const isServiceProductCategory = (
+  category: Pick<ProductCategory, "feature"> | null | undefined,
+): boolean =>
+  category?.feature != null &&
+  SERVICE_PRODUCT_FEATURES.some((feature) => feature === category.feature);
 
 export const productCategoryPathNode = z.object({
   id: productCategoryShortcode,

@@ -101,7 +101,7 @@ export default defineEntity(
           {
             kind: "report",
             id: "purchase-pricing",
-            title: "Purchase & pricing",
+            title: "Purchases & charges",
             slot: "product.pricing-summary",
           },
           {

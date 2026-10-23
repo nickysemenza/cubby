@@ -156,7 +156,7 @@ export const getProductWithFood = async (
           )
         : { recipeUsages: [], appearsInRecipes: [] };
     }),
-    loadProductOwnershipEvidence(db, id),
+    loadProductOwnershipEvidence(db, id, product.category),
     loadProductOwners(db, [id]),
   ]);
 

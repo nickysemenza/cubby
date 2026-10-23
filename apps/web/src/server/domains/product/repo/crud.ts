@@ -43,6 +43,7 @@ import {
   type ProductTopLevelOut,
   type ProductUpdateInput,
 } from "@cubby/schemas/product";
+import { isServiceProductCategory } from "@cubby/schemas/product-category-fields";
 import { type ProductCategorySummary } from "@cubby/schemas/product-category-fields";
 import { productQuantityVarianceState } from "@cubby/schemas/product-fields";
 import {
@@ -141,6 +142,7 @@ import {
   productHasGtin,
   productMatchesGtinTerm,
 } from "~/server/domains/product/repo/gtin";
+import { serviceCategorySql } from "~/server/domains/product/repo/service-category";
 import { resolveProductBrand } from "~/server/domains/vendor/repo/product-brand";
 import { resolveEntityDisplayImages } from "~/server/entity-kernel/repo/entity-display-image";
 import { insertPayloadWithIdentity } from "~/server/entity-kernel/repo/entity-identity-writer";
@@ -435,7 +437,7 @@ const productScaffold = listScaffold("product", product, {
     },
     priced: listReadValue(
       (read) =>
-        sql`(${product.price} IS NOT NULL OR ${hasDerivedProductPriceSql(product.id, read)})`,
+        sql`NOT ${serviceCategorySql(sql`${product.categoryId}`)} AND (${product.price} IS NOT NULL OR ${hasDerivedProductPriceSql(product.id, read)})`,
     ),
     effectiveOwner: ownedProducts.predicate<AnyOfValue>((prepared, value) => {
       const ids = selectProductIdsByOwner(
@@ -777,7 +779,8 @@ const readProductListPage = async (
     -readonly [K in keyof typeof extras]?: (typeof extras)[K];
   };
   const selectedExtras: ProductListExtras = {};
-  if (relationFields) selectedExtras.category = extras.category;
+  if (relationFields || derivedFields)
+    selectedExtras.category = extras.category;
   if (wantsListGroup(projection, "quality"))
     selectedExtras.classificationEvidence = extras.classificationEvidence;
   if (derivedFields)
@@ -1100,11 +1103,13 @@ export const listProductsRead = async (
             const quantity = deriveProductQuantitySummary(
               inventoryEntry,
               ledger,
+              isServiceProductCategory(row.category),
             );
             const fieldResolutions = productFieldResolutions(
               {
                 ...row,
                 categoryStockTracking: row.categoryStockTracking ?? null,
+                category: row.category ?? null,
               },
               pricing,
             );
@@ -1114,14 +1119,17 @@ export const listProductsRead = async (
               fieldResolutions,
               ...quantity,
               ...productStockContext({
+                category: row.category,
                 quantityLedger: ledger,
                 inventoryEntry,
                 stockTracked:
                   tracking === true ? true : tracking === false ? false : null,
               }),
-              ledgerExpectedQuantityLabel: expectedQuantityLabel(
-                quantity.quantityLedger,
-              ),
+              ledgerExpectedQuantityLabel: isServiceProductCategory(
+                row.category,
+              )
+                ? null
+                : expectedQuantityLabel(quantity.quantityLedger),
               quantityVarianceLabel: quantityVarianceLabel(
                 quantity.quantityVariance,
               ),

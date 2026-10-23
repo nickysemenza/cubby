@@ -1,4 +1,5 @@
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
+import { isServiceProductCategory } from "@cubby/schemas/product-category-fields";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 
@@ -45,6 +46,7 @@ export const ProductOwnershipEvidence: DetailSlotComponent<"product"> = ({
       pagination: { pageIndex: 0, pageSize: 12 },
     }),
   );
+  const service = isServiceProductCategory(product.category);
   const evidence = product.ownershipEvidence;
   const ownPhotos = product.attachments.filter(
     (image) => image.source === "own",
@@ -53,13 +55,15 @@ export const ProductOwnershipEvidence: DetailSlotComponent<"product"> = ({
   return (
     <Stack gap="sm">
       <p className="text-sm">
-        {evidence.state === "exited"
-          ? `Recorded ownership ended${evidence.exitedAt ? ` on ${evidence.exitedAt}` : ""}.`
-          : evidence.state === "owned"
-            ? "Recorded movements establish ownership."
-            : "Ownership is uncertain: recorded movements do not establish the current quantity."}
+        {service
+          ? "Actual Expenses record charge history; bill amounts may vary."
+          : evidence.state === "exited"
+            ? `Recorded ownership ended${evidence.exitedAt ? ` on ${evidence.exitedAt}` : ""}.`
+            : evidence.state === "owned"
+              ? "Recorded movements establish ownership."
+              : "Ownership is uncertain: recorded movements do not establish the current quantity."}
       </p>
-      {evidence.state !== "exited" ? (
+      {!service && evidence.state !== "exited" ? (
         <RecordList>
           <JourneyStep
             label="Your photos"
@@ -121,7 +125,7 @@ export const ProductOwnershipEvidence: DetailSlotComponent<"product"> = ({
           })}
         </RecordList>
       ) : null}
-      {evidence.state !== "exited" ? (
+      {service || evidence.state !== "exited" ? (
         <Link
           to="/purchases"
           className="w-fit text-sm font-medium text-primary hover:underline"

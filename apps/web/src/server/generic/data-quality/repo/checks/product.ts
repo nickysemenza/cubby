@@ -11,6 +11,7 @@ import {
   hasDerivedProductPriceSql,
   productPriceEvidenceSql,
 } from "~/server/domains/product/repo/pricing";
+import { serviceCategorySql } from "~/server/domains/product/repo/service-category";
 import {
   defineEntityChecks,
   qualityReadColumn,
@@ -124,7 +125,8 @@ export const productChecks = defineEntityChecks({
       fingerprint: (t) => [sql`${t.brandId}`],
     },
     product_external_id: {
-      expected: isBranded,
+      expected: (t) =>
+        sql`${isBranded(t)} AND NOT ${serviceCategorySql(sql`${t.categoryId}`)}`,
       missing: (t) => sql`NOT ${hasIdentifier(t)}`,
       fingerprint: (t) => [hasIdentifier(t)],
     },
@@ -139,7 +141,7 @@ export const productChecks = defineEntityChecks({
       // unstocked Product earns credit for a known price (zero included) but
       // is never charged a gap: its historical price may be unknowable.
       expected: (t, context) =>
-        sql`(${hasStock(t)} OR ${t.price} IS NOT NULL OR (${hasDerivedPrice(t, context)})) AND lower(${t.name}) NOT LIKE 'misc:%'`,
+        sql`NOT ${serviceCategorySql(sql`${t.categoryId}`)} AND (${hasStock(t)} OR ${t.price} IS NOT NULL OR (${hasDerivedPrice(t, context)})) AND lower(${t.name}) NOT LIKE 'misc:%'`,
       missing: (t, context) =>
         sql`(${t.price} IS NULL AND NOT (${hasDerivedPrice(t, context)}))`,
       fingerprint: (t, context) => [sql`${t.price}`, derivedPrice(t, context)],

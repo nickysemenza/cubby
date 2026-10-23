@@ -1,6 +1,6 @@
 {
-  "id": "90056813-c4ac-4308-b424-c77b7624d842",
-  "prevId": "e53645f2-b1b4-4c23-87b0-efa05ef65598",
+  "id": "9cc65378-8677-4a9a-a94d-73c8ca114757",
+  "prevId": "90056813-c4ac-4308-b424-c77b7624d842",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -15795,7 +15795,7 @@
         },
         "ProductCategory_feature_check": {
           "name": "ProductCategory_feature_check",
-          "value": "\"ProductCategory\".\"feature\" IS NULL OR \"ProductCategory\".\"feature\" IN ('food', 'books', 'tools', 'tool-consumables', 'tool-accessories', 'storage', 'hardware', 'electronics', 'software', 'household', 'supplies', 'apparel')"
+          "value": "\"ProductCategory\".\"feature\" IS NULL OR \"ProductCategory\".\"feature\" IN ('food', 'books', 'tools', 'tool-consumables', 'tool-accessories', 'storage', 'hardware', 'electronics', 'software', 'services', 'household', 'supplies', 'apparel')"
         }
       },
       "isRLSEnabled": false
