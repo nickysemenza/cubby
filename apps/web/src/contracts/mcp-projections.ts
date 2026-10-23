@@ -66,7 +66,8 @@ export function slimProduct<TInput>(row: TInput) {
   return productMcpOut.parse({
     id: product.id,
     name: product.name,
-    manufacturer: product.manufacturer,
+    brandId: product.brandId,
+    brandName: product.brandName,
     model: product.model,
     kind: product.kind ?? null,
     notes: product.notes,

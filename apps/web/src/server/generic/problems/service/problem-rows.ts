@@ -50,16 +50,16 @@ export const problemRow = (
 });
 
 /**
- * `Product.manufacturer` is free text, so it is a fact rather than a link.
+ * `Product.brandName` is free text, so it is a fact rather than a link.
  * Absent stays absent unless the card is about identity, where the gap is the
  * defect and reads as a warning dash.
  */
 export const manufacturerField = (
-  manufacturer: string | null | undefined,
+  brandName: string | null | undefined,
   { missingIsDefect = false }: { missingIsDefect?: boolean } = {},
 ) =>
-  manufacturer
-    ? field("Manufacturer", manufacturer)
+  brandName
+    ? field("Manufacturer", brandName)
     : missingIsDefect
       ? field("Manufacturer", "—", "warning")
       : null;

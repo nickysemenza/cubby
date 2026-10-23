@@ -139,7 +139,7 @@ export const MAX_DETECTED_INVENTORY_ITEMS = 20;
 export const detectedProductMatchSchema = z.object({
   id: productShortcode,
   name: z.string(),
-  manufacturer: z.string(),
+  brandName: z.string().nullable(),
   category: productCategory.nullable(),
 });
 export type DetectedProductMatch = z.infer<typeof detectedProductMatchSchema>;
@@ -807,7 +807,7 @@ export const externalIdKindSuggestionInput = z.object({
   identifier: z.string().trim().min(2),
   url: z.string().nullable().default(null),
   productName: z.string().nullable().default(null),
-  manufacturer: z.string().nullable().default(null),
+  brandName: z.string().nullable().default(null),
   /** Same page-mount id `ai.suggestFields` groups under; see there. */
   runKey: z.string().uuid().optional(),
 });

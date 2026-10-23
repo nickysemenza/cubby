@@ -6,6 +6,10 @@ import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
 import {
+  getVendorByID,
+  findOrCreateVendor,
+} from "~/server/domains/vendor/repo/vendor";
+import {
   entityKernelContextSchema,
   executeEntity,
   executeEntityAs,
@@ -68,7 +72,12 @@ describe("collection patches through entity.update", () => {
         entity: "product",
         data: buildEntity("product", {
           name,
-          manufacturer: "Synthetic Works",
+          brandId: (
+            await getVendorByID(
+              ctx.db,
+              await findOrCreateVendor(ctx.db, "Synthetic Works"),
+            )
+          ).id,
           ...data,
         }),
       })

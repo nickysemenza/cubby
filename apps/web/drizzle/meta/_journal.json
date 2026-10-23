@@ -71,6 +71,34 @@
       "when": 1792717270456,
       "tag": "0009_mighty_human_torch",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1792718288175,
+      "tag": "0010_unified_product_brands",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1792718288176,
+      "tag": "0011_photo_proposal_brand_reference",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1792718288177,
+      "tag": "0012_photo_manufacturer_evidence",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1792718288178,
+      "tag": "0013_photo_regroup_source_evidence",
+      "breakpoints": true
     }
   ]
 }

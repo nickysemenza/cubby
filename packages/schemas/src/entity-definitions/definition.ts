@@ -347,7 +347,7 @@ const buildMetadataSchemas = () => {
       /**
        * Whether the editor refuses a blank value. `null` derives it from the
        * create schema (required there means required here); `true` requires
-       * a value the schema merely allows (a manufacturer); `false` exempts a
+       * a value the schema merely allows (a brandName); `false` exempts a
        * value the schema requires but a more specific validator reports.
        */
       required: z

@@ -37,9 +37,13 @@ export async function discoverAcquisitionCandidateScan(
   const record = z
     .record(z.string(), z.json())
     .parse((await connectionRecord(db, source)).row);
+  const productBrandName =
+    source.entityKind === "product"
+      ? await acquisitionBrandText(db, source)
+      : null;
   const identity = [
     record.name,
-    record.manufacturer,
+    productBrandName,
     record.model,
     record.displayLabel,
   ]
@@ -68,11 +72,11 @@ export async function discoverAcquisitionCandidateScan(
     name: basisValueOf(record.name) ?? identity,
     notes: description,
   });
-  // Resolved once per call: the source's own brand text (Product manufacturer
+  // Resolved once per call: the source's own brand text (Product brandName
   // or Expense line) and, on first Expense pairing, the known-brand slugs.
   const sourceBrandText =
     source.entityKind === "product"
-      ? basisValueOf(record.manufacturer)
+      ? productBrandName
       : basisValueOf(record.name);
   let brands: Set<string> | undefined;
   for (const kind of kinds)
@@ -106,7 +110,7 @@ export async function discoverAcquisitionCandidateScan(
         if (to.entityKind === "expense") {
           if (!(await expenseConnectionEligible(db, to.entityId))) continue;
           brands ??= await knownBrandSlugs(db);
-          const manufacturer =
+          const brandName =
             source.entityKind === "product"
               ? sourceBrandText
               : await acquisitionBrandText(db, from);
@@ -114,7 +118,7 @@ export async function discoverAcquisitionCandidateScan(
             source.entityKind === "expense"
               ? sourceBrandText
               : await acquisitionBrandText(db, to);
-          if (line && otherBrandNamed(line, manufacturer, brands)) continue;
+          if (line && otherBrandNamed(line, brandName, brands)) continue;
         }
         if (
           to.entityKind === "purchase" &&

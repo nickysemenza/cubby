@@ -28,7 +28,7 @@ type CollectionsIndexOperations = Pick<
 
 const SMART_SOURCE_LABELS = {
   productTagEquals: "tag",
-  manufacturerEquals: "manufacturer",
+  manufacturerEquals: "brandName",
   locationNameContains: "location",
   historicalExpenseTrade: "Trade",
 } as const;

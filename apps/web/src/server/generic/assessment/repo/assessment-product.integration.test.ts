@@ -56,6 +56,7 @@ import {
   productFixture,
   recordId,
 } from "~/server/domains/run/service/suggestion-sweep.fixtures";
+import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
 import { mergeReviewedProductPair } from "~/server/generic/assessment/repo/assessment-product";
 import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
 import { findDuplicateProductIdentities } from "~/server/generic/problems/repo/detectors-product";
@@ -115,6 +116,10 @@ describe("stored Product identity pairs", () => {
     "exposes open pairs beyond suppressed and weak rows: %j",
     async ({ suppressed, weak, actionable }) => {
       const count = suppressed + weak + actionable;
+      const queueBrandId = await findOrCreateVendor(
+        ctx.db,
+        "Synthetic queue maker",
+      );
       const products = Array.from({ length: count + 1 }, (_, index) => {
         let value = index;
         let body = "";
@@ -129,7 +134,7 @@ describe("stored Product identity pairs", () => {
           ),
           shortcode: parseShortcodeFor("product", `PRD-${body}`),
           name: `Synthetic queue item ${index}`,
-          manufacturer: "Synthetic queue maker",
+          brandId: queueBrandId,
         };
       });
       await insertEntityFixtures(ctx.db, product, "product", products);
@@ -217,10 +222,10 @@ describe("stored Product identity pairs", () => {
     sku?: string,
   ) => {
     const products = await Promise.all(
-      names.map((name) =>
+      names.map(async (name) =>
         productFixture(ctx, name, {
           model: "SYNTH-STYLE",
-          manufacturer: "Synthetic apparel maker",
+          brandId: await findOrCreateVendor(ctx.db, "Synthetic apparel maker"),
         }),
       ),
     );
@@ -241,12 +246,14 @@ describe("stored Product identity pairs", () => {
       name: "Synthetic variant retailer",
       website: sku ? "https://catalog.example.test" : "https://www.amazon.com",
     });
-    await getDb(ctx.db).insert(externalSource).values({
-      slug: "synthetic-variant",
-      label: "Synthetic variant issuer",
-      vendorId: vendor.id,
-      issuer: true,
-    });
+    await getDb(ctx.db)
+      .insert(externalSource)
+      .values({
+        slug: sku ? "synthetic-variant" : "amazon",
+        label: "Synthetic variant issuer",
+        vendorId: vendor.id,
+        issuer: true,
+      });
     const purchase = await insertWithShortcode(ctx.db, "purchase", {
       vendorId: vendor.id,
       date: "2026-01-01",
@@ -364,9 +371,9 @@ describe("stored Product identity pairs", () => {
       })),
     ).toEqual(
       expect.arrayContaining(
-        ids.map((productId, index) => ({
+        ids.map((productId) => ({
           productId,
-          source: index ? "synthetic-second-issuer" : "synthetic-variant",
+          source: "synthetic-variant",
           value: "SYNTHETIC-SHARED-SKU",
         })),
       ),
@@ -385,9 +392,8 @@ describe("stored Product identity pairs", () => {
     expect(await loadProductIdentifierClaims(ctx.db)).toEqual([]);
   });
 
-  // Regression: one unresolvable issuer threw inside the catalog-wide claim
-  // load and failed the duplicate detector for every Product.
-  it("drops only the claim whose issuer cannot resolve and reports it raw", async () => {
+  // Descriptive website overlap cannot override the retained Purchase issuer.
+  it("retains the canonical issuer when other Vendors share a descriptive domain", async () => {
     const { ids } = await acceptedIdentityPair(
       ["Synthetic dropped claim alpha", "Synthetic dropped claim beta"],
       "SYNTHETIC-DROPPED-SKU",
@@ -411,16 +417,15 @@ describe("stored Product identity pairs", () => {
     const claims = await loadProductIdentifierClaims(ctx.db, undefined, {
       onDropped: (claim) => dropped.push(claim),
     });
-    expect(claims.map((claim) => claim.productId)).toEqual([ids[0]]);
-    expect(dropped).toEqual([
-      expect.objectContaining({
-        productId: ids[1],
-        productUrl: "https://contested.example.test/p/1",
-        error: expect.stringContaining("ambiguous"),
-      }),
-    ]);
+    expect(claims.map((claim) => claim.productId).sort()).toEqual(
+      [...ids].sort(),
+    );
+    expect(claims.every((claim) => claim.source === "synthetic-variant")).toBe(
+      true,
+    );
+    expect(dropped).toEqual([]);
     const retrieval = await retrieveProductIdentityCandidates(ctx.db, ids[0]!);
-    expect(retrieval.coverage.droppedClaims).toHaveLength(1);
+    expect(retrieval.coverage.droppedClaims).toEqual([]);
     expect(retrieval.coverage.semanticNeighbours).toEqual({
       status: "unconfigured",
     });
@@ -687,9 +692,22 @@ describe("stored Product identity pairs", () => {
     );
   });
   it("keeps exact rule evidence available during model failure and fences a later identity edit", async () => {
-    const a = await productFixture(ctx, "Synthetic catalog item A");
-    const b = await productFixture(ctx, "Synthetic catalog item B");
-    await productFixture(ctx, "Synthetic catalog item C");
+    const brandId = await findOrCreateVendor(
+      ctx.db,
+      "Synthetic model identity brand",
+    );
+    const a = await productFixture(ctx, "Synthetic catalog item A", {
+      brandId,
+      model: "SYNTH-MODEL",
+    });
+    const b = await productFixture(ctx, "Synthetic catalog item B", {
+      brandId,
+      model: "SYNTH-MODEL",
+    });
+    await productFixture(ctx, "Synthetic catalog item C", {
+      brandId,
+      model: "SYNTH-MODEL",
+    });
     const aId = await recordId(ctx.db, a.id, "product"),
       bId = await recordId(ctx.db, b.id, "product");
     const runId = await ensureRun(ctx.db, ctx.actor, {
@@ -923,11 +941,11 @@ describe("stored Product identity pairs", () => {
   });
   it("does not retrieve candidates from shared research URLs or claimed variants", async () => {
     const a = await productFixture(ctx, "Synthetic catalog alpha", {
-      manufacturer: "Synthetic Alpha",
+      brandId: await findOrCreateVendor(ctx.db, "Synthetic Alpha"),
       model: null,
     });
     const b = await productFixture(ctx, "Synthetic catalog omega", {
-      manufacturer: "Synthetic Omega",
+      brandId: await findOrCreateVendor(ctx.db, "Synthetic Omega"),
       model: null,
     });
     const ids = await Promise.all(
@@ -1012,8 +1030,12 @@ describe("stored Product identity pairs", () => {
     expect(await listProductMatchRows(ctx.db)).toHaveLength(1);
   });
   it("keeps research notes and a positive model verdict as a recommendation", async () => {
-    const a = await productFixture(ctx, "Synthetic partial A"),
-      b = await productFixture(ctx, "Synthetic partial B");
+    const brandId = await findOrCreateVendor(
+      ctx.db,
+      "Synthetic model identity brand",
+    );
+    const a = await productFixture(ctx, "Synthetic partial A", { brandId }),
+      b = await productFixture(ctx, "Synthetic partial B", { brandId });
     const ids = await Promise.all(
       [a, b].map((row) => recordId(ctx.db, row.id, "product")),
     );

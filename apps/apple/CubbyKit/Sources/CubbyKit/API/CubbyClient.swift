@@ -216,6 +216,15 @@ public actor CubbyClient {
         return try await sending(body) { try await call(input) }
     }
 
+    /// A cleared Brand is explicit null; omission would preserve the draft's previous reference.
+    public func updatePhotoGroupDraft(_ body: JSONValue) async throws -> ReviewPhotoGroupsOutput {
+        try await perform {
+            try await sending(body) { input in
+                try await api.photoImport_updateDraft(body: .json(input)).ok.body.json
+            }
+        }
+    }
+
     /// `entity.mutate` delete. Destructive: only `HeroActionRunner` calls it, and only after
     /// the person confirmed behind the connection-impact preview.
     public func delete(_ descriptor: EntityDescriptor, id: String) async throws {

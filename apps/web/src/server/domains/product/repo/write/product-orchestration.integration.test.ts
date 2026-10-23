@@ -1,5 +1,4 @@
 import { ingredientShortcode } from "@cubby/schemas/identifiers";
-import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
 import type { FoodSummary } from "@cubby/usda";
 import { fromPartial } from "@total-typescript/shoehorn";
 import { createRepoEntity } from "tooling/factories/repo";
@@ -20,6 +19,10 @@ import {
 } from "~/server/domains/product/repo/write/product-writes";
 import { RecipeCostingService } from "~/server/domains/recipe/repo/recipe-costing";
 import type { UsdaFoodBatchPort } from "~/server/domains/usda-food/repo/usda-helpers";
+import {
+  getVendorByID,
+  findOrCreateVendor,
+} from "~/server/domains/vendor/repo/vendor";
 import { executeEntity } from "~/server/entity-kernel";
 import { runDiagnostic } from "~/server/generic/problems/service/problem-diagnostics.service";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
@@ -95,7 +98,7 @@ const usdaFood = (overrides: Partial<FoodSummary> = {}): FoodSummary => ({
   foodInfo: { data_type: "branded_food", description: "Store Brand Salt" },
   brandedFoodInfo: {
     brand_owner: "Acme",
-    brand_name: null,
+    brand_name: "Market Salt",
     branded_food_category: null,
     gtin_upc: "022222222220",
     ingredients: null,
@@ -174,7 +177,7 @@ describe("findOrCreateByUPC", () => {
 
     expect(result.created).toBe(true);
     expect(result.product.name).toBe("Store Brand Salt");
-    expect(result.product.manufacturer).toBe("Acme");
+    expect(result.product.brandName).toBe("Market Salt");
     expect(result.product.primaryGtin).toBe(upc.padStart(14, "0"));
   });
 
@@ -198,7 +201,7 @@ describe("findOrCreateByUPC", () => {
 
     expect(result.created).toBe(true);
     expect(result.product.name).toBe("Widget Deluxe");
-    expect(result.product.manufacturer).toBe("Widget Co");
+    expect(result.product.brandName).toBe("Widget Co");
     expect(result.product.price).toBe(4.99);
   });
 
@@ -235,7 +238,8 @@ describe("findOrCreateByUPC", () => {
 
     expect(result.created).toBe(true);
     expect(result.product.name).toBe("Fallback Name");
-    expect(result.product.manufacturer).toBe(UNSPECIFIED_MANUFACTURER);
+    expect(result.product.brandName).toBeNull();
+    expect(result.product.brandId).toBeNull();
     expect(result.product.primaryGtin).toBe(upc.padStart(14, "0"));
   });
 
@@ -284,7 +288,12 @@ describe("findOrCreateByCode", () => {
 
   it("resolves concurrent ISBN creation to one Product", async () => {
     const canonical = "09780132350884";
-    const services = [unexpectedUsdaClient(), upcLookupClient()] as const;
+    const services = [
+      unexpectedUsdaClient(),
+      upcLookupClient(async () =>
+        upcResponse({ brand: "Synthetic Book Press" }),
+      ),
+    ] as const;
     const [a, b] = await Promise.all([
       findOrCreateByCode(
         ctx.db,
@@ -304,6 +313,8 @@ describe("findOrCreateByCode", () => {
 
     expect([a.created, b.created].sort()).toEqual([false, true]);
     expect(a.product.id).toBe(b.product.id);
+    expect(a.product.brandId).not.toBeNull();
+    expect(a.product.brandName).toBe("Synthetic Book Press");
   });
 
   describe("ISBN title fallback", () => {
@@ -354,7 +365,15 @@ describe("findOrCreateByCode", () => {
 
       await quickCreateProduct(
         ctx.db,
-        { name: "Hammer Guide", manufacturer: "Other Press" },
+        {
+          name: "Hammer Guide",
+          brandId: (
+            await getVendorByID(
+              ctx.db,
+              await findOrCreateVendor(ctx.db, "Other Press"),
+            )
+          ).id,
+        },
         ctx.actor,
       );
       const other = await scanIsbn("09780262033848", "Hammer Guide");

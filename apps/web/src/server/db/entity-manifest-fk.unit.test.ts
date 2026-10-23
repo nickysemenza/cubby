@@ -261,6 +261,16 @@ const NON_GRAPH_ENTITY_FK_EXEMPTIONS = {
     classification: "ownership",
     reason: "a photo-inventory run's proposed item groupings",
   },
+  "PhotoGroupSourceEvidence.runId": {
+    classification: "ownership",
+    reason:
+      "original photo manufacturer evidence retained by its Run after regrouping",
+  },
+  "PhotoGroupProposal.productCreateBrandId": {
+    classification: "metadata",
+    reason:
+      "the canonical Brand selected for a pending photo Product creation or edit",
+  },
   "PhotoGroupProposal.productId": {
     classification: "metadata",
     reason: "the Product a proposed photo group chose or committed to",

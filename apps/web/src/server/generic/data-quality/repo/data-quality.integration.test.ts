@@ -122,13 +122,13 @@ describe("data quality: list filters, sort and hydration agree", () => {
       makeLocationInput({ name: "DQ shelf" }),
       TEST_ACTOR,
     );
-    // Stocked, unnamed maker: manufacturer + external id + category + image
+    // Stocked, unnamed maker: brandName + external id + category + image
     // + price all missing, so the weakest score.
     const weak = await createProductFixture(
       ctx.db,
       makeProductInput({
         name: "DQ weak",
-        manufacturer: "(unspecified)",
+        brandId: null,
         model: null,
       }),
       TEST_ACTOR,
@@ -139,7 +139,7 @@ describe("data quality: list filters, sort and hydration agree", () => {
       ctx.db,
       makeProductInput({
         name: "DQ middling",
-        manufacturer: "Acme",
+        brandId: await findOrCreateVendor(ctx.db, "Acme"),
         price: 4,
         model: null,
       }),
@@ -152,7 +152,7 @@ describe("data quality: list filters, sort and hydration agree", () => {
       makeProductInput({
         name: "DQ catalog unbranded",
         model: null,
-        manufacturer: "(unspecified)",
+        brandId: null,
       }),
       TEST_ACTOR,
     );
@@ -290,17 +290,17 @@ describe("data quality: list filters, sort and hydration agree", () => {
       hydrated.get(catalogOnly.entityId)?.gaps.map((gap) => gap.check),
     ).toEqual([
       "product_orphaned",
-      "product_manufacturer",
+      "product_brand",
       "product_external_id",
       "product_category",
       "product_display_image",
     ]);
     expect(hydrated.get(weak.entityId)?.gaps.map((gap) => gap.check)).toContain(
-      "product_manufacturer",
+      "product_brand",
     );
     expect(
       hydrated.get(middling.entityId)?.gaps.map((gap) => gap.check),
-    ).not.toContain("product_manufacturer");
+    ).not.toContain("product_brand");
 
     const listed = async (filters: Parameters<typeof productList>[1]) =>
       new Set(
@@ -325,7 +325,7 @@ describe("data quality: list filters, sort and hydration agree", () => {
     expect(either.has(middling.id)).toBe(true);
     expect(either.has(catalogOnly.id)).toBe(true);
 
-    const noMaker = await listed({ dataGap: ["product_manufacturer"] });
+    const noMaker = await listed({ dataGap: ["product_brand"] });
     expect(noMaker.has(weak.id)).toBe(true);
     expect(noMaker.has(middling.id)).toBe(false);
     expect(noMaker.has(catalogOnly.id)).toBe(true);
@@ -365,7 +365,7 @@ describe("data quality: list filters, sort and hydration agree", () => {
       ctx.db,
       {
         entityId: weak.id,
-        check: "product_manufacturer",
+        check: "product_brand",
         reason: "not_applicable",
         note: "An unbranded bag; the maker never catalogued it.",
       },
@@ -373,29 +373,24 @@ describe("data quality: list filters, sort and hydration agree", () => {
     );
     expect(excepted.exceptions).toContainEqual(
       expect.objectContaining({
-        check: "product_manufacturer",
+        check: "product_brand",
         state: "active",
       }),
     );
     expect(excepted.gaps.map((gap) => gap.check)).not.toContain(
-      "product_manufacturer",
+      "product_brand",
     );
     expect(excepted.score).toBeGreaterThan(before.score!);
     const noMaker = new Set(
       (
-        await productList(
-          ctx.db,
-          { dataGap: ["product_manufacturer"] },
-          [],
-          page,
-        )
+        await productList(ctx.db, { dataGap: ["product_brand"] }, [], page)
       ).data.map((row) => row.id),
     );
     expect(noMaker.has(weak.id)).toBe(false);
 
     const cleared = await clearDataException(
       ctx.db,
-      { entityId: weak.id, check: "product_manufacturer" },
+      { entityId: weak.id, check: "product_brand" },
       TEST_ACTOR,
     );
     expect(cleared.exceptions).toEqual([]);
@@ -421,14 +416,17 @@ describe("data quality: list filters, sort and hydration agree", () => {
       makeProductInput({
         name: "DQ sold only",
         model: null,
-        manufacturer: "Acme",
+        brandId: await findOrCreateVendor(ctx.db, "Acme"),
         categoryId: category.output.id,
       }),
       TEST_ACTOR,
     );
     const bought = await createProductFixture(
       ctx.db,
-      makeProductInput({ name: "DQ bought", manufacturer: "Acme" }),
+      makeProductInput({
+        name: "DQ bought",
+        brandId: await findOrCreateVendor(ctx.db, "Acme"),
+      }),
       TEST_ACTOR,
     );
     for (const item of [sold, bought])
@@ -509,13 +507,18 @@ describe("data quality: list filters, sort and hydration agree", () => {
       TEST_ACTOR,
     );
     const categoryId = category.output.id;
-    const make = (
+    const make = async (
       name: string,
       input: { categoryId?: typeof categoryId; price?: number },
     ) =>
       createProductFixture(
         ctx.db,
-        makeProductInput({ name, manufacturer: "Acme", model: null, ...input }),
+        makeProductInput({
+          name,
+          brandId: await findOrCreateVendor(ctx.db, "Acme"),
+          model: null,
+          ...input,
+        }),
         TEST_ACTOR,
       );
     const catalog = await make("DQ catalog only", { categoryId });
@@ -582,7 +585,7 @@ describe("data quality: list filters, sort and hydration agree", () => {
     const gaps = (row: (typeof rows)[number]) =>
       quality(row).gaps.map((gap) => gap.check);
 
-    // Weights: name 3, manufacturer 2, external id 2, category 3, price 3.
+    // Weights: name 3, brandName 2, external id 2, category 3, price 3.
     // Name + maker + category of name + maker + external id + category.
     expect(quality(catalog).score).toBe(80);
     expect(gaps(catalog)).not.toContain("product_price");
@@ -615,12 +618,12 @@ describe("data quality: list filters, sort and hydration agree", () => {
   // category policy still demands a second identifier, or SQL filtering and
   // scoring disagree with hydration. Blank/deleted evidence must not qualify.
   it("product: either model or a live external identifier satisfies identity", async () => {
-    const make = (name: string, model: string | null) =>
+    const make = async (name: string, model: string | null) =>
       createProductFixture(
         ctx.db,
         makeProductInput({
           name: `DQ identifier ${name}`,
-          manufacturer: "Acme",
+          brandId: await findOrCreateVendor(ctx.db, "Acme"),
           categoryId: taxonomyShortcode("tools"),
           model,
         }),
@@ -722,7 +725,7 @@ describe("data quality: list filters, sort and hydration agree", () => {
         ctx.db,
         makeProductInput({
           name: `DQ commodity ${name}`,
-          manufacturer: "(unspecified)",
+          brandId: null,
           categoryId: taxonomyShortcode("food"),
           model: null,
           commodity,
@@ -757,7 +760,7 @@ describe("data quality: list filters, sort and hydration agree", () => {
     }
     const identityChecks = [
       "amazon_asin",
-      "product_manufacturer",
+      "product_brand",
       "product_external_id",
     ];
     const gapsOf = async (row: typeof flagged) =>
@@ -827,7 +830,7 @@ describe("data quality: list filters, sort and hydration agree", () => {
       ctx.db,
       makeProductInput({
         name: "DQ identifier exception",
-        manufacturer: "Acme",
+        brandId: await findOrCreateVendor(ctx.db, "Acme"),
         categoryId: taxonomyShortcode("tools"),
         model: null,
       }),
@@ -869,12 +872,16 @@ describe("data quality: list filters, sort and hydration agree", () => {
   // A batch mixing those rows with exception-free and stale ones must keep
   // each state, and exception-free rows must not evaluate fingerprints.
   it("product: compares fingerprints only for rows with an exception on a live gap", async () => {
-    const make = (name: string, manufacturer = "Acme") =>
+    const knownBrandId = await findOrCreateVendor(ctx.db, "Acme");
+    const make = (
+      name: string,
+      brandId: typeof knownBrandId | null = knownBrandId,
+    ) =>
       createProductFixture(
         ctx.db,
         makeProductInput({
           name,
-          manufacturer,
+          brandId,
           categoryId: taxonomyShortcode("tools"),
           model: null,
         }),
@@ -884,12 +891,12 @@ describe("data quality: list filters, sort and hydration agree", () => {
       await make("DQ batch accepted"),
       await make("DQ batch open"),
       await make("DQ batch mismatched"),
-      await make("DQ batch both", "(unspecified)"),
+      await make("DQ batch both", null),
     ];
     // Two checks on one row, and a check no other row in the batch compares.
     for (const [check, reason] of [
       ["product_external_id", "not_issued"],
-      ["product_manufacturer", "unavailable"],
+      ["product_brand", "unavailable"],
     ] as const)
       await setDataException(
         ctx.db,
@@ -924,7 +931,7 @@ describe("data quality: list filters, sort and hydration agree", () => {
     ]);
     const state = (
       id: typeof accepted.entityId,
-      check: "product_external_id" | "product_manufacturer",
+      check: "product_external_id" | "product_brand",
     ) => ({
       gap: qualities.get(id)?.gaps.some((gap) => gap.check === check),
       exception: qualities
@@ -936,8 +943,8 @@ describe("data quality: list filters, sort and hydration agree", () => {
       state(open.entityId, "product_external_id"),
       state(mismatched.entityId, "product_external_id"),
       state(both.entityId, "product_external_id"),
-      state(both.entityId, "product_manufacturer"),
-      state(accepted.entityId, "product_manufacturer"),
+      state(both.entityId, "product_brand"),
+      state(accepted.entityId, "product_brand"),
     ]).toEqual([
       { gap: false, exception: "active" },
       { gap: true, exception: undefined },

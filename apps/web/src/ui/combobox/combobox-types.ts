@@ -79,7 +79,7 @@ export type ComboboxItem<TId extends string = string> = {
   /** Alternate searchable names. */
   aliases?: string[];
   /** Secondary column (beneath identity on phones) — the manifest's card
-   * subtitle, such as manufacturer or location type. */
+   * subtitle, such as brandName or location type. */
   secondary?: string;
   /**
    * Second-line context under the name — a location's ancestor breadcrumb, a

@@ -90,7 +90,7 @@ const isLocationRelatedEntity = (
 
 const isProductRelatedEntity = (
   related: InventoryRelatedEntity["data"],
-): related is ProductRelatedEntity => "manufacturer" in related;
+): related is ProductRelatedEntity => "brandName" in related;
 
 /**
  * Cell body for `createInventoryEntriesColumn` (extracted so the

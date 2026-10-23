@@ -459,7 +459,7 @@ describe("EntityPrimitiveFields", () => {
               "upc",
               "isbn",
               "fdc_id",
-              "manufacturer",
+              "brandName",
               "model",
               "notes",
               "category",

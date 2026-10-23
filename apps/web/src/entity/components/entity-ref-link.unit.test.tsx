@@ -49,7 +49,7 @@ describe("EntityRefLink inline variant", () => {
       <DenseCellContext value={{ linksTo: null, identity: true }}>
         <EntityRefLink
           entity="product"
-          data={{ ...product, manufacturer: "Synthetic manufacturer" }}
+          data={{ ...product, brandName: "Synthetic brandName" }}
           displayImage={null}
           stacked
           wrap
@@ -59,7 +59,7 @@ describe("EntityRefLink inline variant", () => {
     );
     expect(screen.getByRole("link", { name: "Test product" })).toBeVisible();
     expect(
-      screen.queryByText(/Synthetic manufacturer|Synthetic context/),
+      screen.queryByText(/Synthetic brandName|Synthetic context/),
     ).not.toBeInTheDocument();
   });
 
@@ -240,7 +240,7 @@ describe("EntityRefLink list variant", () => {
     const linkedProduct = {
       id: "PRD-TEST",
       name: "Fairlife 2% milk",
-      manufacturer: "Fairlife",
+      brandName: "Fairlife",
       fdc_id: 2670155,
     };
     renderLink(
@@ -271,7 +271,7 @@ describe("EntityRefLink list variant", () => {
     const product = {
       id: "PRD-TABLE",
       name: "Table-owned image",
-      manufacturer: "Cubby",
+      brandName: "Cubby",
     };
     renderLink(
       <EntityDisplayImagesProvider
@@ -478,7 +478,7 @@ describe("EntityRefLink filter variant", () => {
         variant="filter"
         display="value"
         to="/products"
-        search={{ manufacturer: "Acme" }}
+        search={{ brandName: "Acme" }}
         label="Show all products by Acme"
       >
         Acme
@@ -488,7 +488,7 @@ describe("EntityRefLink filter variant", () => {
     const link = screen.getByRole("link", {
       name: "Show all products by Acme",
     });
-    expect(link).toHaveAttribute("href", "/products?manufacturer=Acme");
+    expect(link).toHaveAttribute("href", "/products?brandName=Acme");
     link.focus();
     expect(link).toHaveFocus();
   });

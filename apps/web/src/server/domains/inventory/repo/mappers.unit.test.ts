@@ -270,7 +270,7 @@ describe("inventory mappers", () => {
         name: "Flour",
         primaryGtin: null,
         fdc_id: null,
-        manufacturer: "Generic",
+        brandName: null,
         model: "5lb",
         notes: "Keep dry",
         expectedQuantity: null,

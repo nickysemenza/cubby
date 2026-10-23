@@ -58,7 +58,8 @@ enrichment, and logged-in retailer investigation in the member's browser.
 These gaps enter the shared Work queue for the member's session to pick up;
 queue membership does not launch a session. Follow [Burn-down](burn-down.md)
 for that workflow. The Vendor Research queue selects missing websites and
-logos, including Vendors discovered before any Purchase. A supported website
+logos, including ordinary Vendors created only as Brands before any Purchase.
+Generic / Unbranded is exempt from both checks and does not enter that queue. A supported website
 exception closes that gap without suppressing independent logo research.
 
 People resolve material ambiguity and conflicting accepted facts. Supported

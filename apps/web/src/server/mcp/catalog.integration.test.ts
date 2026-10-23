@@ -16,6 +16,7 @@ import { startPhotoInventoryRun } from "~/server/domains/purchase-import/repo/ru
 import { syntheticMailImportRun } from "~/server/domains/purchase-import/service/gmail/execution.fixtures";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { recordSourceTransactionRecords } from "~/server/domains/transaction-import/repo/source-transaction-record";
+import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
 import { entityKernelContextSchema } from "~/server/entity-kernel";
 import { publishFieldAssessment } from "~/server/generic/assessment/repo/assessment";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
@@ -654,7 +655,7 @@ describe("MCP catalog", () => {
     ]);
     const product = await insertWithShortcode(ctx.db, "product", {
       name: "Synthetic finding Product",
-      manufacturer: "Synthetic maker",
+      brandId: await findOrCreateVendor(ctx.db, "Synthetic maker"),
     });
     const { output: expense } = await createRepoEntity(
       ctx,
@@ -730,7 +731,7 @@ describe("MCP catalog", () => {
       );
     const product = await insertWithShortcode(ctx.db, "product", {
       name: "Synthetic suggestion product",
-      manufacturer: "Synthetic maker",
+      brandId: await findOrCreateVendor(ctx.db, "Synthetic maker"),
     });
     const runId = await ensureRun(ctx.db, ctx.actor, {
       purpose: "ai_suggest",

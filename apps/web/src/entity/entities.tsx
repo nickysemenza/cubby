@@ -327,7 +327,7 @@ const entityDefinitions = withEntityNames({
       copy: {
         title: "Merge products?",
         description:
-          "These rows share the same manufacturer part number, split across retailers. Pick which one to keep — the rest merge into it.",
+          "These rows share the same brandName part number, split across retailers. Pick which one to keep — the rest merge into it.",
       },
     }),
   },

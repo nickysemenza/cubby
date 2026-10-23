@@ -6,6 +6,7 @@ import { z } from "zod";
 
 import { unwrapDb } from "~/server/db/helpers";
 import { effectiveExpenseSpendingCategorySql } from "~/server/domains/purchase/repo/purchase-evidence-policy";
+import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 import { expenseSpendingCategoryResolutionSql } from "./expense-category-resolution";
@@ -47,7 +48,7 @@ describe("Expense category resolution", () => {
     });
     const product = await insertWithShortcode(ctx.db, "product", {
       name: "Fixture shoes",
-      manufacturer: "Fixture",
+      brandId: await findOrCreateVendor(ctx.db, "Fixture"),
       categoryId: child.id,
     });
     const vendor = await insertWithShortcode(ctx.db, "vendor", {
@@ -147,7 +148,7 @@ describe("Expense category resolution", () => {
     });
     const otherProduct = await insertWithShortcode(ctx.db, "product", {
       name: "Shared taxonomy radio",
-      manufacturer: "Fixture",
+      brandId: await findOrCreateVendor(ctx.db, "Fixture"),
       categoryId: otherRoot.id,
     });
     const otherLine = await insertWithShortcode(ctx.db, "expense", {

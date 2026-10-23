@@ -24,13 +24,13 @@ export const externalIdKind = z.enum([
   "internet_number",
   "item_number",
   "catalog_number",
-  // A manufacturer's part/MPN that names ONE exact variant (a size/color), with
-  // `source` = `manufacturerSource(Product.manufacturer)`. Distinct from
+  // A brand's part/MPN that names ONE exact variant (a size/color), with
+  // `source` is the stable registered issuer namespace. Brand renames never change it. Distinct from
   // `item_number`'s vendor-scoped meaning and from `Product.model`: a shared
   // family/style number stays descriptive in `model` and only ranks candidates.
   "manufacturer_part",
   // Barcodes. They live here rather than in a scalar column because a product
-  // routinely carries more than one — a manufacturer reissues a SKU, a retailer
+  // routinely carries more than one — a brandName reissues a SKU, a retailer
   // relabels, two listings of one item disagree — and `Product.upc` could hold
   // exactly one, so every merge of two barcoded products destroyed a real
   // identifier.
@@ -145,12 +145,12 @@ export function identifierEffects(
 }
 
 /**
- * The `source` slug for a manufacturer-scoped identifier. Mirrors the vendor
+ * The `source` slug for a brandName-scoped identifier. Mirrors the vendor
  * slug rule (lowercase kebab) so one function names both sides of a comparison.
  * Null when the name has no letters or digits.
  */
-export const manufacturerSource = (manufacturer: string): string | null =>
-  manufacturer
+export const manufacturerSource = (brandName: string): string | null =>
+  brandName
     .normalize("NFKD")
     .replace(/\p{M}/gu, "")
     .toLowerCase()

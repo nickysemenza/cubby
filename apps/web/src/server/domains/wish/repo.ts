@@ -22,6 +22,7 @@ import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { uniq } from "es-toolkit";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
+import { productBrandNameSql } from "~/server/db/computed/product-brand-sql";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import {
   getDb,
@@ -78,15 +79,9 @@ const WISH_DELETE_EDGE_POLICY = {
 } as const satisfies IncomingEdgePolicy<"wish", OperationDisposition>;
 type CandidateRow = Pick<
   typeof product.$inferSelect,
-  | "id"
-  | "shortcode"
-  | "name"
-  | "manufacturer"
-  | "model"
-  | "price"
-  | "createdAt"
-  | "updatedAt"
+  "id" | "shortcode" | "name" | "model" | "price" | "createdAt" | "updatedAt"
 > & {
+  brandName: string | null;
   wishId: WishId;
   inventoried: boolean;
 };
@@ -102,7 +97,7 @@ const candidateRowsForWishes = async (
       id: product.id,
       shortcode: product.shortcode,
       name: product.name,
-      manufacturer: product.manufacturer,
+      brandName: productBrandNameSql(product.brandId),
       model: product.model,
       price: product.price,
       createdAt: product.createdAt,
@@ -123,7 +118,11 @@ const candidateRowsForWishes = async (
         notDeleted(product),
       ),
     )
-    .orderBy(asc(product.manufacturer), asc(product.name), asc(product.model));
+    .orderBy(
+      asc(productBrandNameSql(product.brandId)),
+      asc(product.name),
+      asc(product.model),
+    );
   const pricing = await loadProductPricing(db, rows);
   const byWish = new Map<WishId, CandidateRow[]>();
   for (const row of rows) {
@@ -145,7 +144,7 @@ const publicWishCandidates = (candidates: CandidateRow[]) =>
   candidates.map((candidate) => ({
     id: parseShortcodeFor("product", candidate.shortcode),
     name: candidate.name,
-    manufacturer: candidate.manufacturer,
+    brandName: candidate.brandName,
     model: candidate.model,
     price: candidate.price,
     inventoried: candidate.inventoried,

@@ -49,7 +49,7 @@ export const derivedProblemQueries = [
     title: "Duplicate product identities",
     description:
       "Products whose normalized identity values resolve to the same cluster.",
-    emptyMessage: "Each manufacturer part number belongs to one product.",
+    emptyMessage: "Each brandName part number belongs to one product.",
     source: {
       kind: "derived",
       diagnostic: "duplicate-product-identities",
@@ -213,31 +213,7 @@ export const derivedProblemQueries = [
       ],
     },
   }),
-  defineProblem({
-    key: "manufacturerSpellingVariants",
-    problemClass: PROBLEM_CLASS.manufacturerSpellingVariants,
-    executionLane: "fast",
-    continuation: {
-      kind: "none",
-      reason: "Each result is a normalized manufacturer-name group.",
-    },
-    freshness: { kind: "live" },
-    title: "Manufacturer spelling variants",
-    description:
-      "The same manufacturer spelled more than one way — different capitalisation, punctuation or spacing on what is one brand.",
-    emptyMessage: "Each manufacturer is spelled one way.",
-    source: {
-      kind: "derived",
-      diagnostic: "manufacturer-spelling-variants",
-      grain: "group",
-      inputs: [{ entity: "product", filters: [] }],
-      operations: [
-        { label: "Normalize manufacturer labels" },
-        { label: "Group equal normalized values" },
-        { label: "Keep groups of 2+ spellings" },
-      ],
-    },
-  }),
+
   defineProblem({
     key: "duplicateVendors",
     problemClass: PROBLEM_CLASS.duplicateVendors,

@@ -8,20 +8,28 @@ import type {
   ProductListInventoryEntryOut,
   ProductTopLevelOut,
 } from "@cubby/schemas/product";
-import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
 import { type FoodLookupParam, foodLookupParam } from "@cubby/usda";
 import { and, eq, ilike, inArray, or, type SQL, sql } from "drizzle-orm";
 import { match } from "ts-pattern";
 
-import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";
 import type { Database } from "~/server/db";
+import { trimBrandNameSql } from "~/server/db/computed/brand-name-sql";
+import {
+  productBrandNameSql,
+  productBrandCodeSql,
+} from "~/server/db/computed/product-brand-sql";
 import {
   categoryStockTrackingSql,
   categorySummarySql,
 } from "~/server/db/computed/product-category-sql";
 import { productClassificationEvidenceSql } from "~/server/db/computed/product-classification-evidence";
 import { escapeLike, getDb, imageOrder, notDeleted } from "~/server/db/helpers";
-import { entityExternalId, inventoryEntry, product } from "~/server/db/schema";
+import {
+  entityExternalId,
+  inventoryEntry,
+  product,
+  vendor,
+} from "~/server/db/schema";
 import {
   attachInventoryValuations,
   loadInventoryValuations,
@@ -110,6 +118,8 @@ export const findProductsByFoodIdentifiers = async (
   const res = await getDb(db).query.product.findMany({
     where: and(linkCondition, notDeleted(product)),
     extras: {
+      brandName: productBrandNameSql(product.brandId).as("brandName"),
+      brandCode: productBrandCodeSql(product.brandId).as("brandCode"),
       category: categorySummarySql(sql`${product.categoryId}`).as("category"),
       categoryStockTracking: categoryStockTrackingSql(
         sql`${product.categoryId}`,
@@ -215,6 +225,8 @@ const findProductToAPI = async (
   const res = await getDb(db).query.product.findFirst({
     where,
     extras: {
+      brandName: productBrandNameSql(product.brandId).as("brandName"),
+      brandCode: productBrandCodeSql(product.brandId).as("brandCode"),
       category: categorySummarySql(sql`${product.categoryId}`).as("category"),
       categoryStockTracking: categoryStockTrackingSql(
         sql`${product.categoryId}`,
@@ -264,65 +276,47 @@ export const findProductByGtin = (
 ): Promise<ProductTopLevelOut | null> =>
   findProductToAPI(db, and(productHasGtin(barcode), notDeleted(product)));
 
-// Find a product by name and manufacturer (internal helper, excludes soft-deleted)
-const findProductByNameAndManufacturer = (
+/** External text can retrieve a candidate, but duplicate names never establish Brand identity. */
+export const findProductByNameWithBrandClaim = async (
   db: Database,
   name: string,
-  manufacturer: string,
-): Promise<ProductTopLevelOut | null> =>
-  findProductToAPI(
-    db,
-    and(
-      ilike(product.name, escapeLike(name)),
-      ilike(product.manufacturer, escapeLike(manufacturer)),
-      notDeleted(product),
-    ),
-  );
-
-/**
- * Find a product by name with fuzzy manufacturer matching
- *
- * Matching logic:
- * - If incoming manufacturer is unspecified → match by name only (any manufacturer)
- * - If incoming manufacturer is specific → try exact match first, then fallback
- *   to matching a product with "(unspecified)" manufacturer in DB
- *
- * This allows sheet rows with empty manufacturer to match existing products
- * regardless of their manufacturer, while specific manufacturers require
- * exact match or fallback to unspecified.
- */
-export const findProductByNameFuzzyManufacturer = async (
-  db: Database,
-  name: string,
-  manufacturer: string | null | undefined,
+  brandClaim: string | null | undefined,
 ): Promise<ProductTopLevelOut | null> => {
-  // If incoming manufacturer is unspecified, match by name only (excludes soft-deleted)
-  if (isUnspecifiedManufacturer(manufacturer)) {
-    return findProductToAPI(
-      db,
-      and(ilike(product.name, escapeLike(name)), notDeleted(product)),
+  const claim = brandClaim?.trim();
+  let brandId: import("@cubby/schemas/identifiers").VendorId | undefined;
+  if (claim && claim.toLowerCase() !== "(unspecified)") {
+    const generic = ["generic", "unbranded", "generic / unbranded"].includes(
+      claim.toLowerCase(),
     );
+    const brands = await getDb(db)
+      .select({ id: vendor.id })
+      .from(vendor)
+      .where(
+        and(
+          notDeleted(vendor),
+          generic
+            ? eq(vendor.systemKey, "generic-unbranded")
+            : sql`(lower(${trimBrandNameSql(vendor.name)})=lower(${claim}) OR EXISTS (SELECT 1 FROM unnest(${vendor.aliases}) alias WHERE lower(${trimBrandNameSql(sql`alias`)})=lower(${claim})))`,
+        ),
+      )
+      .limit(2);
+    if (brands.length !== 1) return null;
+    brandId = brands[0]!.id;
   }
-
-  const exactMatch = await findProductByNameAndManufacturer(
-    db,
-    name,
-    manufacturer!,
-  );
-
-  if (exactMatch) {
-    return exactMatch;
-  }
-
-  // Fallback: try to match a product with "(unspecified)" manufacturer (excludes soft-deleted)
-  return findProductToAPI(
-    db,
-    and(
-      ilike(product.name, escapeLike(name)),
-      ilike(product.manufacturer, escapeLike(UNSPECIFIED_MANUFACTURER)),
-      notDeleted(product),
-    ),
-  );
+  const matches = await getDb(db)
+    .select({ id: product.id })
+    .from(product)
+    .where(
+      and(
+        notDeleted(product),
+        ilike(product.name, escapeLike(name)),
+        brandId ? eq(product.brandId, brandId) : undefined,
+      ),
+    )
+    .limit(2);
+  return matches.length === 1
+    ? findProductToAPI(db, eq(product.id, matches[0]!.id))
+    : null;
 };
 
 /**

@@ -19,10 +19,11 @@ export function productIdentityWords(value: string): Set<string> {
 }
 
 export function productIdentityOverlap(
-  wanted: { name: string; manufacturer: string | null },
+  wanted: { name: string; brandName: string | null; brandId?: string | null },
   candidate: {
     name: string;
-    manufacturer?: string | null;
+    brandName?: string | null;
+    brandId?: string | null;
     model?: string | null;
     aliases?: readonly string[];
     exactIdentifier?: boolean;
@@ -33,18 +34,16 @@ export function productIdentityOverlap(
       .filter(Boolean)
       .join(" "),
   );
-  const brand = wanted.manufacturer?.toLowerCase().trim() || null;
-  const brandWords = wanted.manufacturer
-    ? productIdentityWords(wanted.manufacturer)
+  const brandWords = wanted.brandName
+    ? productIdentityWords(wanted.brandName)
     : new Set<string>();
   const shared = [...productIdentityWords(wanted.name)].filter((word) =>
     words.has(word),
   );
   const sharedIdentity = shared.filter((word) => !brandWords.has(word));
+  // Display-name equality retrieves candidates but cannot establish identity.
   const brandMatch =
-    !!brand &&
-    (candidate.manufacturer?.toLowerCase() === brand ||
-      candidate.name.toLowerCase().includes(brand));
+    wanted.brandId != null && candidate.brandId === wanted.brandId;
   return {
     shared,
     sharedIdentity,

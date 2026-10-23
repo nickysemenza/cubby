@@ -78,7 +78,7 @@ describe("resolveLocationVisual", () => {
         product: {
           id: testShortcode("product", "PRD-AAAA"),
           name: "Two drawer box",
-          manufacturer: "Example",
+          brandName: "Example",
           model: null,
           category: categorySummaryFixture("storage"),
           coverImage: product,
@@ -101,7 +101,7 @@ describe("resolveLocationVisual", () => {
       product: {
         id: testShortcode("product", "PRD-AAAA"),
         name: "Two drawer box",
-        manufacturer: "Example",
+        brandName: "Example",
         model: null,
         category: categorySummaryFixture("storage"),
         coverImage: product,

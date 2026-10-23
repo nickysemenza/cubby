@@ -73,7 +73,7 @@ export const scanAtLocationOut = z.object({
      * placeholder name, no price, and no ingredient link — the last of which
      * makes it invisible to recipe costing.
      */
-    manufacturer: z.string().nullable(),
+    brandName: z.string().nullable(),
     hasPrice: z.boolean(),
   }),
   strays: z.array(scanStrayOut),

@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 
 import { getDb } from "~/server/db/helpers";
 import { inventoryEntry, location } from "~/server/db/schema";
+import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
 import {
   createInventoryFixture,
   createLocationFixture,
@@ -68,7 +69,7 @@ describe("inventory list declared filters", () => {
       ctx.db,
       makeProductInput({
         name: "Parity drill",
-        manufacturer: "Acme Tools",
+        brandId: await findOrCreateVendor(ctx.db, "Acme Tools"),
         categoryId: taxonomyShortcode("tools"),
       }),
       ctx.actor,
@@ -77,7 +78,7 @@ describe("inventory list declared filters", () => {
       ctx.db,
       makeProductInput({
         name: "Parity flour",
-        manufacturer: "Mill Co",
+        brandId: await findOrCreateVendor(ctx.db, "Mill Co"),
         categoryId: taxonomyShortcode("food"),
       }),
       ctx.actor,
@@ -136,7 +137,7 @@ describe("inventory list declared filters", () => {
     const cases: Array<[Filters, Array<{ id: string }>]> = [
       [{ productNameFilter: "parity drill" }, [w.drillOnRack, w.drillInGarage]],
       [{ locationNameFilter: "parity rack" }, [w.drillOnRack]],
-      [{ manufacturerFilter: "mill" }, [w.flourInstalled, w.flourUnknown]],
+      [{ brandFilter: "mill" }, [w.flourInstalled, w.flourUnknown]],
       [{ categoryFeatureFilter: ["food"] }, [w.flourInstalled, w.flourUnknown]],
       [
         { productNameFilter: "parity", placementFilter: ["installed"] },

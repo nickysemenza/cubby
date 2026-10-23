@@ -626,7 +626,7 @@ const ingredientInlineSchema = z.object({ id: z.string(), name: z.string() });
 const productInlineSchema = z.object({
   id: z.string(),
   name: z.string(),
-  manufacturer: z.string(),
+  brandName: z.string().nullable(),
 });
 const recipeInlineSchema = z.object({ id: z.string(), name: z.string() });
 const locationInlineSchema = z.object({
@@ -643,7 +643,7 @@ type EntityColumnData =
   | { entity: "ingredient"; items: { name: string; id: string }[] }
   | {
       entity: "product";
-      items: { name: string; id: string; manufacturer: string }[];
+      items: { name: string; id: string; brandName: string | null }[];
     }
   | { entity: "recipe"; items: { name: string; id: string }[] }
   | {
@@ -1146,7 +1146,7 @@ type SingleEntityColumnData =
       data: {
         name: string;
         id: string;
-        manufacturer: string;
+        brandName: string | null;
       } | null;
     }
   | { entity: "recipe"; data: { name: string; id: string } | null }

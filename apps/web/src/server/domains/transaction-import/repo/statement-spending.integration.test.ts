@@ -2,7 +2,7 @@ import { financialBookingInput } from "@cubby/schemas/financial-booking";
 import { financialSpendingAdvice } from "@cubby/schemas/financial-booking";
 import { recordSourceTransactionRecordsInput } from "@cubby/schemas/source-transaction-record";
 import { statementTransactionApplication } from "@cubby/schemas/statement-suggestion";
-import { sql } from "drizzle-orm";
+import { isNull, sql } from "drizzle-orm";
 import { createEntity } from "tooling/factories/create";
 import { createRepoEntity } from "tooling/factories/repo";
 import { buildKernelContext } from "tooling/scenarios/context";
@@ -10,6 +10,7 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { getDb } from "~/server/db/helpers";
+import { vendor as vendorTable } from "~/server/db/schema";
 import { bookFinancialTransaction } from "~/server/domains/financial-transaction/repo/financial-booking";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
 import { labelStatementSuggestions } from "~/server/domains/transaction-import/service/statement-suggestion-labels";
@@ -224,7 +225,9 @@ describe("statement spending review and re-import", () => {
       });
     const first = await makeTransaction();
     const second = await makeTransaction();
-    const vendor = await getDb(ctx.db).query.vendor.findFirst();
+    const vendor = await getDb(ctx.db).query.vendor.findFirst({
+      where: isNull(vendorTable.systemKey),
+    });
     const purchase = await createRepoEntity(ctx, "purchase", {
       vendorId: vendor!.shortcode,
       date: "2026-05-04",
@@ -305,7 +308,9 @@ describe("statement spending review and re-import", () => {
         { source: "synthetic-bank", externalId: "synthetic-already-booked" },
       ],
     });
-    const vendor = await getDb(ctx.db).query.vendor.findFirst();
+    const vendor = await getDb(ctx.db).query.vendor.findFirst({
+      where: isNull(vendorTable.systemKey),
+    });
     await bookFinancialTransaction(
       ctx.db,
       financialBookingInput.parse({
@@ -537,7 +542,9 @@ describe("statement spending review and re-import", () => {
         limit: 20,
       })
     ).items[0]!;
-    const vendor = await getDb(ctx.db).query.vendor.findFirst();
+    const vendor = await getDb(ctx.db).query.vendor.findFirst({
+      where: isNull(vendorTable.systemKey),
+    });
     const application = statementTransactionApplication.parse({
       kind: "statement_transaction",
       action: "create",
@@ -574,7 +581,9 @@ describe("statement spending review and re-import", () => {
         })
       ).items,
     ).toHaveLength(1);
-    const vendor = await getDb(ctx.db).query.vendor.findFirst();
+    const vendor = await getDb(ctx.db).query.vendor.findFirst({
+      where: isNull(vendorTable.systemKey),
+    });
     await bookFinancialTransaction(
       ctx.db,
       financialBookingInput.parse({

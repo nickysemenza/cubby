@@ -49,8 +49,8 @@ the whole file.
   move to the survivor; a conflicting source/kind primary is retained as a
   secondary and named in the response and audit trail. Check every intended
   identifier after merging.
-- **Scan-created Products copy the UPC provider's name, manufacturer and price
-  verbatim**, and that price is often the multipack/case listing (5.7× on a foam
+- **Scan-created Products take the UPC provider's name and price, and resolve
+  its brand/manufacturer claim to a Vendor reference.** That price is often the multipack/case listing (5.7× on a foam
   brush, 2.6× on a spray can); it is not uniformly high, so verify per item
   rather than blanket-clearing. The name is often a retailer SEO title too.
 - Only a stocked Product raises the `product_image` gap, so an unstocked

@@ -136,7 +136,7 @@ export { tradeSchema, tradeValues } from "./task-fields";
 export type { Trade } from "./task-fields";
 
 export const UNASSIGNED_TRADE_LABEL = "No trade signal";
-export const UNKNOWN_MANUFACTURER_LABEL = "Unknown manufacturer";
+export const UNKNOWN_MANUFACTURER_LABEL = "Unknown brandName";
 
 export { MAX_PROJECT_TREE_DEPTH } from "./project-fields";
 
@@ -1054,7 +1054,7 @@ const projectToolEconomicsFields = {
 const projectResourceIdentity = z.object({
   productId: productShortcode,
   productName: z.string(),
-  manufacturer: z.string(),
+  brandName: z.string().nullable(),
 });
 
 export const projectResourceOut = projectResourceIdentity.extend({
@@ -1223,7 +1223,7 @@ export type ProjectDashboardSummaryInput = ProjectDashboardFilters;
 
 export type ProjectPortfolioAnalyticsInput = ProjectDashboardFilters;
 
-export const toolGalleryGroupBy = z.enum(["location", "manufacturer", "trade"]);
+export const toolGalleryGroupBy = z.enum(["location", "brandName", "trade"]);
 export type ToolGalleryGroupBy = z.infer<typeof toolGalleryGroupBy>;
 
 export const toolGalleryInput = z.object({
@@ -1262,7 +1262,7 @@ export type ToolGalleryInventoryEntryOut = z.infer<
 export const toolGalleryItemOut = z.object({
   productId: productShortcode,
   productName: z.string(),
-  manufacturer: z.string(),
+  brandName: z.string().nullable(),
   model: z.string().nullable(),
   coverImageUrl: z.url().nullable(),
   extraImageCount: z.number().int().nonnegative(),
@@ -1293,7 +1293,7 @@ export const toolGalleryOut = createPaginatedResponseSchema(
 });
 export type ToolGalleryOut = z.infer<typeof toolGalleryOut>;
 
-export const projectToolMatrixGroupBy = z.enum(["trade", "manufacturer"]);
+export const projectToolMatrixGroupBy = z.enum(["trade", "brandName"]);
 export type ProjectToolMatrixGroupBy = z.infer<typeof projectToolMatrixGroupBy>;
 
 export const DEFAULT_TOOL_MATRIX_COST_FLOOR = 100;

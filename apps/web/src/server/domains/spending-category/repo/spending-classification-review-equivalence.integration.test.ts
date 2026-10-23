@@ -34,6 +34,7 @@ import {
   loadExpenseJointAllocations,
   type ExpenseJointAllocationRow,
 } from "~/server/domains/expense/repo/expense-project-allocation";
+import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
 import type { EntityPayloadValues } from "~/server/entity-kernel/repo/entity-identity-writer";
 import { insertEntityFixtures } from "~/server/testing/repo.fixtures";
 
@@ -275,10 +276,11 @@ async function seedReviewGraph(db: Database) {
   const generator = random(20261006);
   const taxonomy = await seedTaxonomy(db, generator);
   const { spend, leaves, nonFoodLeaves } = taxonomy;
+  const fixtureBrandId = await findOrCreateVendor(db, "Synthetic");
   const products = Array.from({ length: 20 }, (_, index) => ({
     ...identity("product", index),
     name: `Synthetic product ${index}`,
-    manufacturer: "Synthetic",
+    brandId: fixtureBrandId,
     categoryId: index < 4 ? at(leaves, index) : at(nonFoodLeaves, index - 4),
   }));
   await insertRows(db, productTable, "product", products);
@@ -317,7 +319,7 @@ async function seedReviewGraph(db: Database) {
   const mappedProduct = {
     ...identity("product", products.length),
     name: "Synthetic merge mapped product",
-    manufacturer: "Synthetic",
+    brandId: fixtureBrandId,
     categoryId: mappedCategory.id,
   };
   await insertRows(db, productTable, "product", [mappedProduct]);

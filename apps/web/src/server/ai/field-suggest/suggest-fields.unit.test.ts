@@ -408,7 +408,7 @@ describe("suggestFields", () => {
       entity: "product",
       targets: ["tags"],
       basis: {
-        manufacturer: "Acme",
+        brandName: "Acme",
         tags: JSON.stringify(["acme"]),
       },
       decisionPort: decisionPortPicking("restates"),
@@ -418,7 +418,7 @@ describe("suggestFields", () => {
             .filter((value) => value === "acme")
             .map((value) => ({
               value,
-              reason: "manufacturer",
+              reason: "brandName",
               matched: "Acme",
             })),
         ),
@@ -427,14 +427,14 @@ describe("suggestFields", () => {
         expect(out.suggestions.tags).toEqual({
           value: "acme",
           label: "Remove acme",
-          detail: "restates manufacturer",
+          detail: "restates brandName",
           confidence: "high",
           probability: 1,
           reasoning: "",
           alternatives: [],
           operation: "remove",
           removals: [
-            { value: "acme", probability: 1, reason: "restates manufacturer" },
+            { value: "acme", probability: 1, reason: "restates brandName" },
           ],
         });
         // (f) deterministic-only removals stay a pick, probability 1.
@@ -452,7 +452,7 @@ describe("suggestFields", () => {
       name: "a prune target's decision survivor below the 0.85 include floor is excluded",
       entity: "product",
       targets: ["tags"],
-      basis: { manufacturer: "Acme", tags: JSON.stringify(["battery"]) },
+      basis: { brandName: "Acme", tags: JSON.stringify(["battery"]) },
       decisionPort: decisionPortAt(0, 0.6),
       registry: { "product.tags": fakeTagPruneSpec() },
       assert: (out, decisionPort) => {
@@ -468,7 +468,7 @@ describe("suggestFields", () => {
       entity: "product",
       targets: ["tags"],
       basis: {
-        manufacturer: "Acme",
+        brandName: "Acme",
         tags: JSON.stringify(["battery", "waterproof"]),
       },
       decisionPort: decisionPortForTags({
@@ -504,7 +504,7 @@ describe("suggestFields", () => {
       name: "a prune target with no current entries resolves to null",
       entity: "product",
       targets: ["tags"],
-      basis: { manufacturer: "Acme", tags: JSON.stringify([]) },
+      basis: { brandName: "Acme", tags: JSON.stringify([]) },
       decisionPort: decisionPortPicking("restates"),
       registry: { "product.tags": fakeTagPruneSpec() },
       assert: (out, decisionPort) => {

@@ -63,6 +63,7 @@ import { toolTimelineConflict, UNKNOWN_OWNERSHIP } from "~/lib/tool-timeline";
 import type { Database } from "~/server/db";
 import { effectiveFieldSql } from "~/server/db/computed/effective-field";
 import { actualExpense } from "~/server/db/computed/expense-aggregate-sql";
+import { productBrandNameSql } from "~/server/db/computed/product-brand-sql";
 import {
   buildSearchConditions,
   formatSearchTerm,
@@ -128,22 +129,22 @@ type TradeSignal = {
 };
 
 /** Group ordering: declaration order for trades, alphabetical for makers. */
-function groupSortKey(groupBy: "trade" | "manufacturer", key: string): number {
+function groupSortKey(groupBy: "trade" | "brandName", key: string): number {
   if (key === "") return Number.MAX_SAFE_INTEGER; // unassigned always last
-  if (groupBy === "manufacturer") return 0;
+  if (groupBy === "brandName") return 0;
   const parsedTrade = tradeSchema.safeParse(key);
   if (!parsedTrade.success) return Number.MAX_SAFE_INTEGER - 1;
   const index = tradeValues.indexOf(parsedTrade.data);
   return index === -1 ? Number.MAX_SAFE_INTEGER - 1 : index;
 }
 
-function groupLabel(groupBy: "trade" | "manufacturer", key: string): string {
+function groupLabel(groupBy: "trade" | "brandName", key: string): string {
   if (key === "") {
     return groupBy === "trade"
       ? UNASSIGNED_TRADE_LABEL
       : UNKNOWN_MANUFACTURER_LABEL;
   }
-  if (groupBy === "manufacturer") return key;
+  if (groupBy === "brandName") return key;
   const parsedTrade = tradeSchema.safeParse(key);
   return parsedTrade.success ? TRADE_LABELS[parsedTrade.data] : key;
 }
@@ -152,7 +153,7 @@ const toolNameSearchCondition = (search: string | undefined) =>
   search
     ? or(
         formatSearchTerm(product.name, search),
-        formatSearchTerm(product.manufacturer, search),
+        formatSearchTerm(productBrandNameSql(product.brandId), search),
       )
     : undefined;
 
@@ -193,7 +194,7 @@ export async function projectToolMatrix(
         productId: product.id,
         shortcode: product.shortcode,
         name: product.name,
-        manufacturer: product.manufacturer,
+        brandName: productBrandNameSql(product.brandId),
         netLifetimeCost: sql<number>`coalesce(sum(${expense.cost}), 0)`.mapWith(
           Number,
         ),
@@ -229,7 +230,7 @@ export async function projectToolMatrix(
         product.id,
         product.shortcode,
         product.name,
-        product.manufacturer,
+        productBrandNameSql(product.brandId),
       )
       .having(
         sql`coalesce(sum(${expense.cost}), 0) >= ${filters.minNetLifetimeCost}`,
@@ -734,11 +735,13 @@ export async function projectToolMatrix(
   const rows: ProjectToolMatrixRowOut[] = rowRecords.map((record) => {
     const trade = tradeByProduct.get(record.productId) ?? null;
     const groupKey =
-      filters.groupBy === "trade" ? (trade ?? "") : record.manufacturer.trim();
+      filters.groupBy === "trade"
+        ? (trade ?? "")
+        : (record.brandName?.trim() ?? "");
     return {
       productId: parseShortcodeFor("product", record.shortcode),
       productName: record.name,
-      manufacturer: record.manufacturer,
+      brandName: record.brandName,
       groupKey,
       trade,
       isInventoried: inventoried.has(record.productId),

@@ -339,7 +339,7 @@ async function resolveProduct(
     productCreateInput.parse({
       name: input.product.create.name,
       categoryId: input.product.create.categoryId ?? null,
-      manufacturer: input.product.create.manufacturer,
+      brandId: input.product.create.brandId,
       model: input.product.create.model ?? null,
       notes: input.product.create.notes ?? null,
       tags: input.product.create.tags ?? [],

@@ -30,7 +30,7 @@ export function buildIngredientNutritionProduct(
   return {
     productId: product.id,
     name: product.name,
-    manufacturer: product.manufacturer,
+    brandName: product.brandName,
     display: buildNutritionDisplay({
       labelNutrition: product.labelNutrition,
       food: product.food,

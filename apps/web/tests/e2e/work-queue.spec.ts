@@ -385,13 +385,13 @@ test("Record Work queue strip drops a gap as soon as it is accepted", async ({
   const name = uniqueName(testInfo, "Queue strip refresh");
   const product = await seedProductPrerequisite(page, {
     name,
-    manufacturer: "(unspecified)",
+    brandId: null,
   });
   await gotoAuthenticatedPage(page, `/products/${product.id}`);
   const strip = page.getByRole("region", { name: "Work queue", exact: true });
-  await expect(strip).toContainText("Manufacturer is not recorded.");
+  await expect(strip).toContainText("Brand is not recorded.");
   const explanation = page.getByRole("button", {
-    name: /How manufacturer is determined/,
+    name: /How brand is determined/,
   });
   await explanation.click();
   const inline = await inlineExplanation(page, explanation);
@@ -399,9 +399,9 @@ test("Record Work queue strip drops a gap as soon as it is accepted", async ({
   await chooseOption(page, inline.getByLabel("Reason"), "Not applicable");
   await inline
     .getByLabel("Note")
-    .fill("Synthetic item has no manufacturer on its packaging.");
+    .fill("Synthetic item has no brand on its packaging.");
   await inline.getByRole("button", { name: "Accept exception" }).click();
-  await expect(strip).not.toContainText("Manufacturer is not recorded.");
+  await expect(strip).not.toContainText("Brand is not recorded.");
   await expect(strip).toContainText(
     "No model or external identifier is recorded.",
   );

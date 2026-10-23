@@ -254,7 +254,7 @@ describe("custom list readers", () => {
     ]);
     expect(pages.map((result) => result.count)).toEqual([3, 3]);
 
-    // Five rows tie on manufacturer and model, so the name decides.
+    // Five rows tie on brandName and model, so the name decides.
     for (const suffix of ["e", "c", "a", "d", "b"])
       await createProductIdentityFixture(
         ctx.db,
@@ -268,7 +268,7 @@ describe("custom list readers", () => {
             ctx.db,
             { nameFilter: "Tiepick" },
             [
-              { orderBy: "manufacturer", direction: "asc" },
+              { orderBy: "brandName", direction: "asc" },
               { orderBy: "model", direction: "asc" },
             ],
             page(index),

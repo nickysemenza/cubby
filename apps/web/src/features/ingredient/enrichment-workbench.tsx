@@ -3,7 +3,7 @@ import type {
   productCreateManyInput,
   productMarkUsdaUnavailableManyInput,
 } from "@cubby/schemas/product";
-import { UNSPECIFIED_MANUFACTURER, getErrorMessage } from "@cubby/shared";
+import { getErrorMessage } from "@cubby/shared";
 import { countLabel } from "@cubby/shared/pluralize";
 import { SparkleIcon } from "@phosphor-icons/react/dist/csr/Sparkle";
 import { useMutation, useQuery } from "@tanstack/react-query";
@@ -783,7 +783,7 @@ export function EnrichmentWorkbench({
           : { eachPrice: null, mapping: null };
         return {
           name: row.name,
-          manufacturer: UNSPECIFIED_MANUFACTURER,
+          brandId: null,
           barcode: null,
           expectedQuantity: null,
           ingredientId: row.id,

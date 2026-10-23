@@ -23,7 +23,7 @@ import {
   productSearchInput,
 } from "@cubby/schemas/product-workflow";
 import type { productProjectUsesSetInput } from "@cubby/schemas/project";
-import { UNSPECIFIED_MANUFACTURER, getErrorMessage } from "@cubby/shared";
+import { getErrorMessage } from "@cubby/shared";
 import type { z } from "zod";
 
 import {
@@ -36,7 +36,6 @@ import { previewProductAddToInventory } from "~/server/domains/product/repo/add-
 import {
   getCategoryDistribution,
   getProductExternalIdSourceOptions,
-  getProductManufacturerOptions,
 } from "~/server/domains/product/repo/analytics";
 import { createProductWithInventory } from "~/server/domains/product/repo/capture";
 import {
@@ -119,7 +118,7 @@ export async function searchProducts(
     context.db,
     {
       nameFilter: filters.nameFilter,
-      manufacturerFilter: filters.manufacturerFilter,
+      brandFilter: filters.brandFilter,
       upcFilter: filters.upcFilter,
       categoryFilter: filters.categoryFilter,
     },
@@ -132,9 +131,7 @@ export async function searchProducts(
       lexicalCount: lexical.data.length,
       query: nameQuery,
       hasStructuredFilters: Boolean(
-        filters.manufacturerFilter ||
-        filters.upcFilter ||
-        filters.categoryFilter,
+        filters.brandFilter || filters.upcFilter || filters.categoryFilter,
       ),
     })
   ) {
@@ -218,7 +215,7 @@ export async function quickCreateProductWorkflow(
     context.db,
     {
       name: input.name,
-      manufacturer: input.manufacturer ?? UNSPECIFIED_MANUFACTURER,
+      brandId: input.brandId ?? null,
       barcode: input.barcode,
       expectedQuantity: input.expectedQuantity ?? null,
       model: input.model ?? null,
@@ -527,7 +524,6 @@ export const productHandlers = implementOperationDomain(productContract, {
       context.actorContext,
     ),
   categoryDistribution: (context) => getCategoryDistribution(context.db),
-  manufacturerOptions: (context) => getProductManufacturerOptions(context.db),
   externalIdSourceOptions: (context) =>
     getProductExternalIdSourceOptions(context.db),
   getByShortcodes: (context, input) =>

@@ -6,6 +6,7 @@ import { describe, expect, it } from "vitest";
 import { getDb, notDeleted } from "~/server/db/helpers";
 import { expense } from "~/server/db/schema";
 import { splitExpense } from "~/server/domains/purchase/repo/purchase";
+import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 describe("atomic split classification intent", () => {
@@ -120,7 +121,7 @@ describe("atomic split classification intent", () => {
     const { original, purchase } = await fixture();
     const product = await insertWithShortcode(ctx.db, "product", {
       name: "Synthetic split product",
-      manufacturer: "Synthetic fixture",
+      brandId: await findOrCreateVendor(ctx.db, "Synthetic fixture"),
     });
     await expect(
       splitExpense(

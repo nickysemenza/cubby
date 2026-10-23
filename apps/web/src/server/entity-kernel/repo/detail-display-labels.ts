@@ -194,7 +194,7 @@ export const wishCandidateItems = (
     entity: "product",
     id: candidate.id,
     title: candidate.name,
-    subtitle: [candidate.manufacturer, candidate.model]
+    subtitle: [candidate.brandName, candidate.model]
       .filter(Boolean)
       .join(" · "),
     trailing:

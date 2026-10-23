@@ -529,7 +529,7 @@ describe("MCP entity kernel boundary", () => {
             z.object({
               id: z.string(),
               name: z.string(),
-              manufacturer: z.string().nullable(),
+              brandName: z.string().nullable(),
             }),
           ),
           linkedProduct: z.object({ id: z.string() }).optional(),

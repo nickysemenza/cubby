@@ -13,6 +13,7 @@ import {
   withTransactionDatabase,
 } from "~/server/db/helpers";
 import {
+  photoGroupSourceEvidence,
   image,
   imageProcessingJob,
   imageProcessingAttempt,
@@ -21,6 +22,7 @@ import {
   inventoryEntry,
   photoGroupProposal,
   product,
+  vendor,
 } from "~/server/db/schema";
 import {
   IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION,
@@ -36,6 +38,7 @@ import {
 import { loadRunDetail } from "~/server/domains/purchase-import/repo/run-service";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
+import { mergeVendors } from "~/server/domains/vendor/repo/vendor";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { deleteThroughKernel } from "~/server/testing/entity-kernel";
 import {
@@ -147,6 +150,317 @@ describe("photo group proposals", () => {
       );
     return row;
   };
+
+  it("preserves legacy manufacturer evidence through draft edits and choosing an existing Product", async () => {
+    const { run, codes } = await seedRun(1);
+    const brand = await insertWithShortcode(ctx.db, "vendor", {
+      name: "Synthetic reviewed Brand",
+    });
+    const destination = await createProductFixture(
+      ctx.db,
+      makeProductInput({ name: "Synthetic existing destination" }),
+      ctx.actor,
+    );
+    await proposePhotoGroups(ctx.db, {
+      runId: run.shortcode,
+      groups: [createGroup("retained-source", codes)],
+    });
+    // This readonly column is populated by migration, never by editable input.
+    const sourceManufacturer = "\t Synthetic RAW manufacturer \uFEFF\n";
+    await getDb(ctx.db)
+      .update(photoGroupProposal)
+      .set({ sourceManufacturer })
+      .where(eq(photoGroupProposal.runId, run.id));
+    await updatePhotoGroupProductDraft(ctx.db, {
+      runId: run.shortcode,
+      groupKey: "retained-source",
+      name: "Synthetic corrected draft",
+      brandId: brand.shortcode,
+      notes: "Synthetic member correction",
+    });
+    expect(await readRow(run.id, "retained-source")).toMatchObject({
+      sourceManufacturer,
+      productCreateBrandId: brand.id,
+      productCreate: { name: "Synthetic corrected draft" },
+    });
+    await updatePhotoGroupProductDraft(ctx.db, {
+      runId: run.shortcode,
+      groupKey: "retained-source",
+      name: "Synthetic corrected draft",
+      brandId: null,
+    });
+    expect(await readRow(run.id, "retained-source")).toMatchObject({
+      sourceManufacturer,
+      productCreateBrandId: null,
+    });
+    await chooseExistingProductForPhotoGroup(ctx.db, {
+      runId: run.shortcode,
+      groupKey: "retained-source",
+      productId: destination.id,
+    });
+    expect(await readRow(run.id, "retained-source")).toMatchObject({
+      sourceManufacturer,
+      productKind: "existing",
+      productId: destination.entityId,
+      productCreate: null,
+    });
+    await proposePhotoGroups(ctx.db, {
+      runId: run.shortcode,
+      groups: [
+        {
+          ...createGroup("retained-source", codes),
+          product: {
+            kind: "existing",
+            existingId: parseShortcodeFor("product", destination.id),
+          },
+          review: {
+            observedName: "Synthetic reviewed destination",
+            unresolvedReason: null,
+            stockIntent: "evidence",
+            productChanges: { brandId: brand.shortcode },
+          },
+        },
+      ],
+    });
+    expect(await readRow(run.id, "retained-source")).toMatchObject({
+      sourceManufacturer,
+      productCreateBrandId: brand.id,
+      productCreate: null,
+    });
+  });
+
+  it("archives exact manufacturer evidence in Run history when splitting a predecessor proposal", async () => {
+    const { run, codes } = await seedRun(2);
+    const sourceManufacturer = "\t Synthetic split ORIGINAL \uFEFF\n";
+    await proposePhotoGroups(ctx.db, {
+      runId: run.shortcode,
+      groups: [createGroup("split-source", codes)],
+    });
+    await getDb(ctx.db)
+      .update(photoGroupProposal)
+      .set({ sourceManufacturer })
+      .where(eq(photoGroupProposal.runId, run.id));
+    const split = await proposePhotoGroups(ctx.db, {
+      runId: run.shortcode,
+      removeGroupKeys: ["split-source"],
+      groups: [
+        createGroup("split-a", [codes[0]!]),
+        createGroup("split-b", [codes[1]!]),
+      ],
+    });
+    expect(split.proposals.map((group) => group.groupKey)).toEqual([
+      "split-a",
+      "split-b",
+    ]);
+    expect(await readRow(run.id, "split-source")).toBeUndefined();
+    for (const key of ["split-a", "split-b"])
+      expect(await readRow(run.id, key)).toMatchObject({
+        state: "proposed",
+        sourceManufacturer: null,
+      });
+    const archived = await getDb(ctx.db)
+      .select({
+        groupKey: photoGroupSourceEvidence.groupKey,
+        sourceManufacturer: photoGroupSourceEvidence.sourceManufacturer,
+      })
+      .from(photoGroupSourceEvidence)
+      .where(eq(photoGroupSourceEvidence.runId, run.id))
+      .orderBy(photoGroupSourceEvidence.groupKey);
+    expect(archived).toEqual([
+      { groupKey: "split-source", sourceManufacturer },
+    ]);
+  });
+
+  it("archives every original manufacturer value in Run history when merging predecessor proposals", async () => {
+    const { run, codes } = await seedRun(4);
+    const originals = [
+      { groupKey: "merge-a", sourceManufacturer: " Synthetic ORIGINAL A " },
+      { groupKey: "merge-b", sourceManufacturer: "Synthetic ORIGINAL B" },
+      { groupKey: "merge-empty", sourceManufacturer: "" },
+      { groupKey: "merge-whitespace", sourceManufacturer: "\t \r\n\u00a0" },
+    ];
+    await proposePhotoGroups(ctx.db, {
+      runId: run.shortcode,
+      groups: originals.map((original, index) =>
+        createGroup(original.groupKey, [codes[index]!]),
+      ),
+    });
+    for (const original of originals)
+      await getDb(ctx.db)
+        .update(photoGroupProposal)
+        .set({ sourceManufacturer: original.sourceManufacturer })
+        .where(
+          and(
+            eq(photoGroupProposal.runId, run.id),
+            eq(photoGroupProposal.groupKey, original.groupKey),
+          ),
+        );
+    const merged = await proposePhotoGroups(ctx.db, {
+      runId: run.shortcode,
+      removeGroupKeys: originals.map((original) => original.groupKey),
+      groups: [createGroup("merged-replacement", codes)],
+    });
+    expect(merged.proposals).toHaveLength(1);
+    expect(merged.proposals[0]).toMatchObject({
+      groupKey: "merged-replacement",
+      state: "proposed",
+    });
+    expect(merged.proposals[0]?.images.map((image) => image.id)).toEqual(codes);
+    for (const original of originals)
+      expect(await readRow(run.id, original.groupKey)).toBeUndefined();
+    expect(await readRow(run.id, "merged-replacement")).toMatchObject({
+      sourceManufacturer: null,
+    });
+    const archived = await getDb(ctx.db)
+      .select({
+        groupKey: photoGroupSourceEvidence.groupKey,
+        sourceManufacturer: photoGroupSourceEvidence.sourceManufacturer,
+      })
+      .from(photoGroupSourceEvidence)
+      .where(eq(photoGroupSourceEvidence.runId, run.id))
+      .orderBy(photoGroupSourceEvidence.groupKey);
+    expect(archived).toEqual(originals);
+  });
+
+  it.each(["create", "update"])(
+    "refuses to hydrate a stale %s proposal Brand instead of treating it as a clear",
+    async (kind) => {
+      const { run, codes } = await seedRun(1);
+      const brand = await insertWithShortcode(ctx.db, "vendor", {
+        name: "Synthetic stale proposal Brand",
+      });
+      const destination = await createProductFixture(
+        ctx.db,
+        makeProductInput({ name: "Synthetic stale Brand destination" }),
+        ctx.actor,
+      );
+      const group = createGroup("stale-brand", codes);
+      if (kind === "create") {
+        group.product = {
+          kind: "create",
+          create: {
+            name: "Synthetic stale Brand draft",
+            brandId: brand.shortcode,
+          },
+        };
+      } else {
+        group.product = {
+          kind: "existing",
+          existingId: parseShortcodeFor("product", destination.id),
+        };
+        group.review = {
+          observedName: "Synthetic stale Brand item",
+          unresolvedReason: null,
+          stockIntent: "evidence",
+          productChanges: { brandId: brand.shortcode },
+        };
+      }
+      await proposePhotoGroups(ctx.db, {
+        runId: run.shortcode,
+        groups: [group],
+      });
+      // Simulate retained invalid state without asking the lifecycle writer to bypass its policy.
+      await getDb(ctx.db)
+        .update(vendor)
+        .set({ deletedAt: new Date() })
+        .where(eq(vendor.id, brand.id));
+      await expect(
+        listPhotoGroupProposals(ctx.db, run.shortcode),
+      ).rejects.toThrow("refers to a Brand that is no longer available");
+      expect((await readRow(run.id, "stale-brand"))?.productCreateBrandId).toBe(
+        brand.id,
+      );
+    },
+  );
+
+  it.each(["create", "update"])(
+    "refuses a %s proposal Brand merged while its save waits for the Vendor lock",
+    async (kind) => {
+      const { run, codes } = await seedRun(1);
+      const keeper = await insertWithShortcode(ctx.db, "vendor", {
+        name: "Synthetic Brand keeper",
+      });
+      const donor = await insertWithShortcode(ctx.db, "vendor", {
+        name: "Synthetic Brand donor",
+      });
+      const destination = await createProductFixture(
+        ctx.db,
+        makeProductInput({ name: "Synthetic concurrent Brand destination" }),
+        ctx.actor,
+      );
+      const group = createGroup("concurrent-brand", codes);
+      if (kind === "create") {
+        group.product = {
+          kind: "create",
+          create: {
+            name: "Synthetic concurrent Brand draft",
+            brandId: donor.shortcode,
+          },
+        };
+      } else {
+        group.product = {
+          kind: "existing",
+          existingId: parseShortcodeFor("product", destination.id),
+        };
+        group.review = {
+          observedName: "Synthetic concurrent Brand item",
+          unresolvedReason: null,
+          stockIntent: "evidence",
+          productChanges: { brandId: donor.shortcode },
+        };
+      }
+      let saveOutcome: Promise<unknown> | undefined;
+      try {
+        await withTransactionDatabase(ctx.db, async (holder) => {
+          await getDb(holder)
+            .select({ id: vendor.id })
+            .from(vendor)
+            .where(eq(vendor.id, donor.id))
+            .for("update");
+          const connection = await getDb(holder).execute<{ pid: number }>(
+            sql`SELECT pg_backend_pid() AS pid`,
+          );
+          const pid = connection.rows[0]!.pid;
+          saveOutcome = proposePhotoGroups(ctx.db, {
+            runId: run.shortcode,
+            groups: [group],
+          }).catch((error: unknown) => error);
+          // Observe actual lock contention; no timer or production test hook controls the race.
+          await expect
+            .poll(
+              async () => {
+                const waiting = await getDb(ctx.db).execute<{
+                  waiting: boolean;
+                }>(sql`
+            SELECT EXISTS(SELECT 1 FROM pg_stat_activity
+              WHERE datname=current_database() AND ${pid}::int = ANY(pg_blocking_pids(pid))) AS waiting`);
+                return waiting.rows[0]?.waiting;
+              },
+              { timeout: 5_000, interval: 20 },
+            )
+            .toBe(true);
+          await mergeVendors(
+            holder,
+            { keepId: keeper.shortcode, mergeIds: [donor.shortcode] },
+            ctx.actor,
+          );
+        });
+      } finally {
+        if (saveOutcome) await saveOutcome;
+      }
+      const outcome = await saveOutcome;
+      expect(outcome).toBeInstanceOf(Error);
+      expect(outcome).toMatchObject({
+        message: expect.stringContaining(
+          "selected photo Brand is no longer available",
+        ),
+      });
+      expect(await readRow(run.id, "concurrent-brand")).toBeUndefined();
+      expect(
+        (await listPhotoGroupProposals(ctx.db, run.shortcode)).proposals,
+      ).toEqual([]);
+    },
+  );
 
   // Rejections belong to the photographed item, including after group keys change.
   it("suppresses wrong candidate Feedback through combine and split and isolates inference failure", async () => {
@@ -275,7 +589,7 @@ describe("photo group proposals", () => {
           ? `Check the printed size ${"s".repeat(470)}`
           : "Check the printed size";
       const destination = createGroup("destination", [codes[2]!]);
-      destination.review!.unresolvedReason = "Check the manufacturer";
+      destination.review!.unresolvedReason = "Check the brandName";
       await proposePhotoGroups(ctx.db, {
         runId: run.shortcode,
         groups: [source, destination],
@@ -302,7 +616,7 @@ describe("photo group proposals", () => {
         expect(group.review?.unresolvedReason?.split("\n")).toEqual(
           expect.arrayContaining([
             source.review!.unresolvedReason,
-            ...(operation === "merge" ? ["Check the manufacturer"] : []),
+            ...(operation === "merge" ? ["Check the brandName"] : []),
           ]),
         );
         expect(group.blockedReason).toContain("Check the printed size");
@@ -1112,12 +1426,15 @@ describe("photo group proposals", () => {
       ],
     });
 
+    const brand = await insertWithShortcode(ctx.db, "vendor", {
+      name: "ForgeWear",
+    });
     const changed = await updatePhotoGroupProductDraft(ctx.db, {
       runId: run.shortcode,
       groupKey: "shirt",
       name: "Synthetic Canvas Shirt, Medium",
       categoryId: null,
-      manufacturer: "ForgeWear",
+      brandId: parseShortcodeFor("vendor", brand.shortcode),
       model: null,
       notes: "Size confirmed from tag",
     });
@@ -1126,7 +1443,7 @@ describe("photo group proposals", () => {
       kind: "create",
       create: {
         name: "Synthetic Canvas Shirt, Medium",
-        manufacturer: "ForgeWear",
+        brandId: brand.shortcode,
         notes: "Size confirmed from tag",
       },
     });

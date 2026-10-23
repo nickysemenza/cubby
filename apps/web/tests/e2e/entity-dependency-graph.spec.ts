@@ -402,7 +402,7 @@ test("graph workspace keeps its map while selecting, expanding, and opening reco
   await expect(page).toHaveURL((url) => url.pathname === "/graph");
   const graph = page.getByLabel("Relationship graph", { exact: true });
   const nodes = graph.locator(".react-flow__node:has(.graph-map-record)");
-  await expect(nodes).toHaveCount(2);
+  await expect(nodes).toHaveCount(3);
   await page.getByRole("button", { name: "Inspector", exact: true }).click();
   const inventoryBranch = page
     .getByRole("heading", { name: "Inventory", exact: true })
@@ -410,11 +410,11 @@ test("graph workspace keeps its map while selecting, expanding, and opening reco
   await inventoryBranch
     .getByRole("button", { name: "Collapse", exact: true })
     .click();
-  await expect(nodes).toHaveCount(1);
+  await expect(nodes).toHaveCount(2);
   await inventoryBranch
     .getByRole("button", { name: "Expand", exact: true })
     .click();
-  await expect(nodes).toHaveCount(2);
+  await expect(nodes).toHaveCount(3);
   const connection = graph.locator(".react-flow__edge").first();
   await connection.press("Enter");
   await expect(page.getByLabel("Connection evidence")).toBeVisible();
@@ -424,7 +424,8 @@ test("graph workspace keeps its map while selecting, expanding, and opening reco
   await page.getByRole("button", { name: "Paths list", exact: true }).click();
   const records = page.getByLabel("Map records", { exact: true });
   await records.getByRole("button", { name: /Inventory Item$/ }).click();
-  await expect(nodes).toHaveCount(2);
+  // The Paths panel narrows the virtualized canvas; loaded records remain in the map.
+  await expect(page.getByText(/3 loaded/)).toBeVisible();
   const before = await nodes.evaluateAll((items) =>
     Object.fromEntries(
       items.map((item) => [
@@ -438,7 +439,7 @@ test("graph workspace keeps its map while selecting, expanding, and opening reco
   await page
     .getByRole("button", { name: "Expand connections", exact: true })
     .click();
-  await expect(nodes).toHaveCount(3);
+  await expect(page.getByText(/4 loaded/)).toBeVisible();
   expect(await viewport.getAttribute("style")).toBe(camera);
   const after = await nodes.evaluateAll((items) =>
     Object.fromEntries(
@@ -453,9 +454,9 @@ test("graph workspace keeps its map while selecting, expanding, and opening reco
   await page
     .getByRole("button", { name: "Previous record", exact: true })
     .click();
-  await expect(page.getByText(/3 loaded/)).toBeVisible();
+  await expect(page.getByText(/4 loaded/)).toBeVisible();
   await page.getByRole("button", { name: "Next record", exact: true }).click();
-  await expect(page.getByText(/3 loaded/)).toBeVisible();
+  await expect(page.getByText(/4 loaded/)).toBeVisible();
   await page.getByLabel("Find explored records").fill(locationName);
   await records
     .getByRole("button", {
@@ -466,7 +467,7 @@ test("graph workspace keeps its map while selecting, expanding, and opening reco
   await page.getByRole("link", { name: "Open record", exact: true }).click();
   await expect(page).toHaveURL(new RegExp(`/locations/${location.id}$`));
   await page.goBack();
-  await expect(page.getByText(/3 loaded/)).toBeVisible();
+  await expect(page.getByText(/4 loaded/)).toBeVisible();
   await page
     .getByRole("button", { name: "Previous record", exact: true })
     .click();

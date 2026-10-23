@@ -44,7 +44,7 @@ describe("entity kernel bindings", () => {
       tags: [],
       barcode: null,
       fdc_id: null,
-      manufacturer: "Example maker",
+      brandName: "Example maker",
       model: null,
       notes: null,
       expectedQuantity: null,

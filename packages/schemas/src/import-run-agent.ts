@@ -162,7 +162,7 @@ const MAIL_IMPORT_ENTITY_READ = {
       "searchQuery",
       "nameFilter",
       "vendorId",
-      "manufacturerFilter",
+      "brandId",
       "modelFilter",
     ],
   },

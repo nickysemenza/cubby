@@ -147,7 +147,7 @@ Construct synthetic domain fixtures through the supported `createRepoEntity`
 writer roster. For other entities, use the owning `create…Fixture` and
 `make…Input` helpers so required defaults survive.
 Do not substitute `insertWithShortcode` for those fixture writers: it omits
-required schema/writer defaults such as Product manufacturer and Purchase vendor.
+required schema/writer defaults and reference resolution, such as Purchase Vendor.
 Create a valid record first, then update storage only when the tested historical
 or invalid state cannot be expressed through its supported writer.
 Create Runs with `ensureRun` and an actor. For member-scoped import purposes, create a member LedgerParty

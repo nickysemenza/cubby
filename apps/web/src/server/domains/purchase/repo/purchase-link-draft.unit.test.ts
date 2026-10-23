@@ -196,7 +196,7 @@ describe("composeLinkProductCandidates", () => {
   const product = (id: string) => ({
     id: prd(id),
     name: id,
-    manufacturer: "Sample",
+    brandName: "Sample",
     price: null,
     coverImageUrl: null,
   });

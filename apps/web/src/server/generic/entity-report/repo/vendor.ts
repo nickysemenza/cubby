@@ -30,6 +30,7 @@ export async function vendorMailSearchReport(
   const [[row], mailboxes] = await Promise.all([
     getDb(db)
       .select({
+        systemKey: vendor.systemKey,
         website: vendor.website,
         orderEmailSenders: vendor.orderEmailSenders,
       })
@@ -38,6 +39,13 @@ export async function vendorMailSearchReport(
       .limit(1),
     listMemberMailboxes(db),
   ]);
+  if (row?.systemKey === "generic-unbranded")
+    return [
+      {
+        kind: "note",
+        text: "Generic / Unbranded is a Brand only and has no order-mail searches.",
+      },
+    ];
   const queries = row
     ? vendorMailQueries(vendorId, vendorSearchTerms(row))
     : [];

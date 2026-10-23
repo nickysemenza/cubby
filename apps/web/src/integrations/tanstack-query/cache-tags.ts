@@ -33,7 +33,7 @@ export type InvalidationTagSet = readonly OperationCacheTag[] & {
  * produced one-segment roots like `["product"]`, and `["product"]` does not
  * prefix-match `["entity","filterOptions"]`. Filter bars therefore went stale
  * after a mutation and stayed stale until a hard reload. Any write can change a
- * facet roster — a rename moves a manufacturer option, a delete empties a
+ * facet roster — a rename moves a brandName option, a delete empties a
  * bucket — so the rule is uniform rather than a per-row judgement call.
  */
 const ENTITY_FILTER_OPTIONS: OperationCacheTag = ["entity", "filterOptions"];

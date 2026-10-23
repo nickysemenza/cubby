@@ -8,6 +8,7 @@ import {
   updateProject,
   getProjectByID,
 } from "~/server/domains/project/repo/crud";
+import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
 import { loadRelatedPreviews } from "~/server/generic/entity-links/repo/related-view";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
@@ -101,7 +102,7 @@ describe("task inheritance", () => {
     });
     const product = await insertWithShortcode(ctx.db, "product", {
       name: "Task fixture product",
-      manufacturer: "Fixture manufacturer",
+      brandId: await findOrCreateVendor(ctx.db, "Fixture brandName"),
     });
     const parent = await createRepoEntity(ctx, "task", {
       name: "Parent",

@@ -110,7 +110,7 @@ describe("settled suggestion questions", () => {
   const gadget = (name: string): Question => ({
     entity: "product",
     field: "categoryId",
-    basis: { name, manufacturer: null },
+    basis: { name, brandName: null },
   });
 
   // A deferred list decision must retain its own captured evidence so a
@@ -121,7 +121,7 @@ describe("settled suggestion questions", () => {
         entity: "product" as const,
         basisMode: "suggested" as const,
         targets: ["categoryId"],
-        basis: { name, manufacturer: null },
+        basis: { name, brandName: null },
         runKey: crypto.randomUUID(),
       }),
     );

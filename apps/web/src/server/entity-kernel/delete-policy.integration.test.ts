@@ -113,6 +113,7 @@ import {
 } from "~/server/domains/purchase-import/operations/order-import.fixtures";
 import { writeOutcomeReceipts } from "~/server/domains/purchase-import/service/run-outcome.fixtures";
 import { recordSourceTransactionRecords } from "~/server/domains/transaction-import/repo/source-transaction-record";
+import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
 import { executeEntity } from "~/server/entity-kernel";
 import {
   ENTITY_KERNEL_ENTITIES,
@@ -312,7 +313,7 @@ const referencedTargets = async (
         SELECT DISTINCT t."id"::text AS id, t."shortcode" AS shortcode
         FROM ${sql.identifier(tableName)} s
         JOIN ${sql.identifier(target)} t ON t."id"::text = s.${sql.identifier(columnName)}::text
-        WHERE t."deletedAt" IS NULL ${liveRow(softDeletable)} ${scopeSql}
+        WHERE t."deletedAt" IS NULL ${entity === "vendor" ? sql`AND t."systemKey" IS NULL` : sql``} ${liveRow(softDeletable)} ${scopeSql}
         ORDER BY 2
       `)
     ).rows,
@@ -419,7 +420,7 @@ const liveTargets = async (db: Database, entity: EntityKernelEntity) =>
       await getDb(db).execute(sql`
         SELECT t."id"::text AS id, t."shortcode" AS shortcode
         FROM ${sql.identifier(getTableConfig(SHORTCODE_TABLE[entity]).name)} t
-        WHERE t."deletedAt" IS NULL ORDER BY 2
+        WHERE t."deletedAt" IS NULL ${entity === "vendor" ? sql`AND t."systemKey" IS NULL` : sql``} ORDER BY 2
       `)
     ).rows,
   );
@@ -482,6 +483,7 @@ const pointEdgeAt = async (
     WHERE ctid = (
       SELECT s.ctid FROM ${table} s
       WHERE s.${column} IS DISTINCT FROM ${targetId}
+        ${tableName === "Vendor" ? sql`AND s."systemKey" IS NULL` : sql``}
         ${primary.includes("id") ? sql`AND s."id"::text <> ${targetId}` : sql``}
         ${liveRow(softDeletable)} ${scopeSql}
       LIMIT 1
@@ -872,7 +874,7 @@ async function seedProductMatchCandidate(db: Database, ids: StagingIds) {
   if (!ids.productId) return;
   const other = await insertWithShortcode(db, "product", {
     name: "Delete policy fixture product",
-    manufacturer: "Delete policy",
+    brandId: await findOrCreateVendor(db, "Delete policy"),
   }).catch(() => undefined);
   if (!other) return;
   await publishProductPair(db, {

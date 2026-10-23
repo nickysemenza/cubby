@@ -1,3 +1,4 @@
+import { seedProductPrerequisite } from "./fixtures/catalog";
 import { entityApi } from "./support/entity-api";
 import { spendingClassificationReviewPreview } from "@cubby/schemas/spending-classification-review";
 import { z } from "zod";
@@ -36,7 +37,7 @@ test("reviews historical item classification and preserves explicit purpose", as
       });
       const { id: product } = await create("product", {
         name: "Synthetic classification boots",
-        manufacturer: "Synthetic",
+        brandId: vendor,
         categoryId: productCategory,
       });
       const { id: purchase } = await create("purchase", {
@@ -151,9 +152,9 @@ test("reviews historical item classification and preserves explicit purpose", as
     name: "Synthetic classification tool storage",
     parentId: toolsCategory,
   });
-  const { id: unbooked } = await createEntityFixture(page, "product", {
+  const { id: unbooked } = await seedProductPrerequisite(page, {
     name: "Synthetic unbooked toolbox",
-    manufacturer: "Synthetic",
+    brandName: "Synthetic",
     categoryId: productCategory,
   });
   const { id: refund } = await createEntityFixture(page, "expense", {

@@ -1,14 +1,13 @@
-/**
- * Location lookup and search operations.
- * Find locations by various identifiers (name, shortcode).
- */
-
 import {
   type LocationShortcode,
   type ProductId,
   parseEntityId,
   parseShortcodeFor,
 } from "@cubby/schemas/identifiers";
+/**
+ * Location lookup and search operations.
+ * Find locations by various identifiers (name, shortcode).
+ */
 import type {
   InfLocation,
   LocationAncestorOut,
@@ -29,6 +28,7 @@ import {
 
 import type { Database } from "~/server/db";
 import { stockOnly } from "~/server/db/computed/inventory-placement";
+import { productBrandNameSql } from "~/server/db/computed/product-brand-sql";
 import { categorySummarySql } from "~/server/db/computed/product-category-sql";
 import { getDb, notDeleted, relations } from "~/server/db/helpers";
 import { inventoryEntry, location, product } from "~/server/db/schema";
@@ -118,7 +118,7 @@ export interface LocationPutAwayCandidate {
   itemCount: number;
   /** Distinct other products here sharing at least one tag with the source. */
   tagSiblings: number;
-  /** Distinct other products here from the same manufacturer. */
+  /** Distinct other products here from the same brandName. */
   manufacturerSiblings: number;
   /** Distinct other products here in the same category. */
   categorySiblings: number;
@@ -135,7 +135,7 @@ export const getLocationPutAwayCandidates = async (
   const [source] = await dbClient
     .select({
       tags: product.tags,
-      manufacturer: product.manufacturer,
+      brandName: productBrandNameSql(product.brandId),
       categoryId: product.categoryId,
       category: categorySummarySql(sql`${product.categoryId}`),
     })
@@ -147,15 +147,15 @@ export const getLocationPutAwayCandidates = async (
   const otherProduct = ne(product.id, productId);
   // An empty tag array would render as `tags && '{}'`, which matches nothing
   // but still costs a parameter; say `false` outright instead. Same for the
-  // placeholder manufacturer, which is not a shared identity, and a null
+  // placeholder brandName, which is not a shared identity, and a null
   // category, which is not a group.
   const sharesTag =
     source.tags && source.tags.length > 0
       ? arrayOverlaps(product.tags, source.tags)
       : sql`false`;
   const sharesManufacturer =
-    source.manufacturer && source.manufacturer !== UNSPECIFIED_MANUFACTURER
-      ? eq(product.manufacturer, source.manufacturer)
+    source.brandName && source.brandName !== UNSPECIFIED_MANUFACTURER
+      ? eq(productBrandNameSql(product.brandId), source.brandName)
       : sql`false`;
   const sharesCategory = source.categoryId
     ? eq(product.categoryId, source.categoryId)

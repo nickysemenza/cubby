@@ -380,7 +380,7 @@ describe("product list staged projections", () => {
     expect(base.data[0]).toMatchObject({
       id: first.id,
       name: "Staged A",
-      manufacturer: full.data[0]!.manufacturer,
+      brandName: full.data[0]!.brandName,
     });
     expect(queryCount).toBe(2);
     const idOnly = await listProductsRead(

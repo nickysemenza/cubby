@@ -28,6 +28,10 @@ import {
 import { stockOnly } from "~/server/db/computed/inventory-placement";
 import { locationAiDescriptionExtras } from "~/server/db/computed/location-ai-description";
 import {
+  productBrandNameSql,
+  productBrandCodeSql,
+} from "~/server/db/computed/product-brand-sql";
+import {
   categoryStockTrackingSql,
   categorySummarySql,
 } from "~/server/db/computed/product-category-sql";
@@ -227,6 +231,8 @@ const withProjectAndParentTaskNameOnly = {
  * the cover image because a linked location renders from its SKU's photo.
  */
 const productCategoryProjection = {
+  brandName: productBrandNameSql(product.brandId).as("brandName"),
+  brandCode: productBrandCodeSql(product.brandId).as("brandCode"),
   classificationEvidence: productClassificationEvidenceSql(
     sql`${product.id}`,
   ).as("classificationEvidence"),

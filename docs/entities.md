@@ -959,7 +959,7 @@ labels are positional; an unshown candidate id resolves to null.
 
 `mode: "prune"` targets a `text-array` field instead (the compiler rejects any
 other kind) and proposes _removals_ rather than a value: entries whose value
-restates one of the named `basis` fields (a manufacturer name, a classification
+restates one of the named `basis` fields (a Brand name, a classification
 path segment) are candidates to drop, never to add. A prune target judges its
 own current entries, so it is an implicit self-basis — naming it explicitly in
 `basis` is still an error, but the client and server both fold the target's own
@@ -2011,7 +2011,7 @@ them. A member is a stored `text` or `text[]` field (matched by element, and
 read as its effective value when it declares `resolution.inherit`, so project
 search finds an inherited location) or a `model.derived` key: a `via` path to
 a text field or a titled record (to-many as `EXISTS`, so wish search matches
-any live candidate's name, manufacturer or model, and task search the
+any live candidate's name, joined Brand name or model, and task search the
 effective subject product's name) or a `type: "text"` value. A multi-field
 search is that declared list, never a predicate. `anyOf` does not sort or
 group, and a text filter never declares `stored`.
@@ -2435,7 +2435,7 @@ does not change exception identity.
 A Product's `commodity` flag marks interchangeable goods with no single
 listing. It removes the brand, Identifier and Amazon ASIN checks from the
 Product's applicable set rather than recording an exception, and it is a
-deliberate member decision, never inferred from a placeholder manufacturer.
+deliberate member decision, never inferred from an unknown or Generic Brand.
 Only applicability reads it; those checks' fingerprints are unchanged, so
 clearing the flag reopens the gaps while existing exceptions keep their
 evidence.
@@ -2683,9 +2683,10 @@ optional planning fields and operational inactivity are not universal
 completeness requirements. Actual zero or negative costs remain valid.
 
 Product core identity checks apply to every catalog record, including products
-without stock or expenses. Name and known price carry weight 3, manufacturer and
+without stock or expenses. Name and known price carry weight 3, Brand and
 identifier evidence weight 2, and category weight 3 with an unresolved cap of 69.
-One nonblank manufacturer model or live nonblank external identifier satisfies
+A non-null Brand reference, including Generic / Unbranded, satisfies Brand
+presence. One nonblank model or live nonblank external identifier satisfies
 identifier evidence for every Product, regardless of category. Missing both
 produces one Identifier gap, rather than research work to collect every possible
 identifier. Any external-ID source and kind can qualify; blank values and deleted
@@ -3113,6 +3114,53 @@ Food Product as a Planting source. Relation entries never imply a
 classification. Category change, Planting writes, project-tool attach and
 Product merge read them through `@cubby/schemas/product-category-relations`,
 which entity declarations must not import.
+
+## Product Brand and Purchase Seller
+
+`Vendor` is the canonical identity for both roles. A Product's optional
+`brandId` names its marketed **Brand**; a Purchase's required `vendorId` names
+its **Seller**. Product create/update inputs accept the Vendor reference,
+and reads expose the joined nullable `brandName` through the declared
+reference's label path. A physical factory or a descriptive manufacturer claim
+is source evidence, not a second Product identity field. Duplicate display
+names remain possible, so strong same-Brand comparisons use the reference;
+name and alias text can retrieve candidates but cannot prove identity. Product manufacturer-spelling diagnostics are retired; duplicate identity review belongs to the shared Vendor roster.
+
+Null Brand means unknown. The system-designated **Generic / Unbranded** Vendor
+is an explicit Brand and satisfies Brand presence. Neither null nor Generic
+sets `Product.commodity`: that independent member decision controls the existing
+commodity checks. Generic can only be assigned as a Product Brand, including a
+pending photo proposal. It cannot be a Purchase Seller, VendorAccount target,
+or identifier issuer, and its identity cannot be deleted, merged, or converted
+to an ordinary Vendor. It has no fabricated website or logo and is excluded
+from Vendor website/logo quality, the Vendor Research queue, and Gmail order
+discovery.
+
+Ordinary Vendors remain eligible for scheduled Gmail discovery even when they
+were created only as Brands and have no Purchase or VendorAccount. The next
+pass recomputes targets from verified receipt senders and website hints; the
+existing immediate mail-search action remains available for an explicit search.
+A shared website is a discovery hint and never confers identifier namespace
+ownership across distinct Brands. Existing registered issuer sources and every
+`(source, kind, externalId)` tuple, including `manufacturer_part`, retain their
+identity when a Vendor is renamed. New explicit Vendor claims use its registered
+issuer; URL-only claims need a registered host source to reuse that authority.
+
+The Product's `brand` relation and the Vendor's `branded-products` relation are
+separate from the Product's purchased-from `vendors` relation and the Vendor's
+`products` purchase evidence. Vendor merge repoints Product Brand references
+and pending photo Brand references; deleting an in-use Brand blocks until those
+references are reassigned. Pending photo create drafts and existing-Product
+Brand edits store their executable selection in the proposal's Brand FK,
+following Vendor merge and delete policy. A null edit placeholder preserves an
+explicit clear; an omitted Brand edit remains no change. Original descriptive
+manufacturer evidence remains in the proposal’s read-only `sourceManufacturer`
+column, independent of draft edits or switching between create and existing
+Product choices. Splitting or merging groups archives each removed proposal's
+exact manufacturer text in Run-owned `PhotoGroupSourceEvidence` rows in the
+same transaction, before deleting the predecessor proposals.
+Proposal persistence locks selected live Brands against concurrent Vendor
+merge/delete; unresolved non-null references fail rather than becoming unknown.
 
 ## Product classification and photos
 

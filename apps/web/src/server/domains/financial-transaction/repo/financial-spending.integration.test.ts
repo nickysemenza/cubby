@@ -414,7 +414,10 @@ describe("shared spending booking", () => {
     expect(plan.status).toBe("ready");
     await commitFinancialSpending(ctx.db, plan, ctx.actor);
     expect(
-      await getDb(ctx.db).select({ name: vendorTable.name }).from(vendorTable),
+      await getDb(ctx.db)
+        .select({ name: vendorTable.name })
+        .from(vendorTable)
+        .where(sql`${vendorTable.systemKey} IS NULL`),
     ).toEqual([{ name: "Synthetic Orchard" }]);
     const stored = await getDb(ctx.db).query.purchase.findFirst();
     expect(stored?.vendorId).toBe(

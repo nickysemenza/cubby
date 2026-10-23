@@ -1,7 +1,4 @@
-import {
-  type InventoryPlacement,
-  UNSPECIFIED_MANUFACTURER,
-} from "@cubby/shared";
+import { type InventoryPlacement } from "@cubby/shared";
 import { sql } from "drizzle-orm";
 
 import { expenseAcquisitionSql } from "~/server/db/computed/expense-aggregate-sql";
@@ -121,11 +118,10 @@ export const productChecks = defineEntityChecks({
       missing: (t) => sql`trim(${t.name}) = ''`,
       fingerprint: (t) => [sql`${t.name}`],
     },
-    product_manufacturer: {
+    product_brand: {
       expected: isBranded,
-      missing: (t) =>
-        sql`(trim(${t.manufacturer}) = '' OR lower(trim(${t.manufacturer})) = lower(${UNSPECIFIED_MANUFACTURER}))`,
-      fingerprint: (t) => [sql`${t.manufacturer}`],
+      missing: (t) => sql`${t.brandId} IS NULL`,
+      fingerprint: (t) => [sql`${t.brandId}`],
     },
     product_external_id: {
       expected: isBranded,

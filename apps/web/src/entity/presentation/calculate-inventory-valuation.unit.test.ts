@@ -15,7 +15,7 @@ function makeInventoryItem(params: {
   product: {
     id: string;
     name: string;
-    manufacturer?: string;
+    brandName?: string;
   };
   valuation: number | null;
 }): InventoryItem {
@@ -50,7 +50,7 @@ function makeInventoryItem(params: {
     product: {
       id: testShortcode("product", params.product.id),
       name: params.product.name,
-      manufacturer: params.product.manufacturer ?? "Generic",
+      brandName: params.product.brandName ?? "Generic",
       category: null,
       model: null,
       primaryGtin: null,
@@ -68,12 +68,12 @@ describe("calculateInventoryValuation", () => {
       makeInventoryItem({
         id: "i1",
         valuation: 10,
-        product: { id: "p1", name: "Flour", manufacturer: "BrandA" },
+        product: { id: "p1", name: "Flour", brandName: "BrandA" },
       }),
       makeInventoryItem({
         id: "i2",
         valuation: 9,
-        product: { id: "p2", name: "Eggs", manufacturer: "BrandB" },
+        product: { id: "p2", name: "Eggs", brandName: "BrandB" },
       }),
     ];
 
@@ -90,7 +90,7 @@ describe("calculateInventoryValuation", () => {
       makeInventoryItem({
         id: "i3",
         valuation: null,
-        product: { id: "p3", name: "Sugar", manufacturer: "BrandC" },
+        product: { id: "p3", name: "Sugar", brandName: "BrandC" },
       }),
     ];
 
@@ -110,7 +110,7 @@ describe("calculateInventoryValuation", () => {
       makeInventoryItem({
         id: "i4",
         valuation: 0,
-        product: { id: "p4", name: "Rice", manufacturer: "BrandD" },
+        product: { id: "p4", name: "Rice", brandName: "BrandD" },
       }),
     ];
 
@@ -129,7 +129,7 @@ describe("calculateInventoryValuation", () => {
         product: {
           id: "p5",
           name: "misc: random screws", // misc: prefix
-          manufacturer: "Unknown",
+          brandName: "Unknown",
         },
       }),
       makeInventoryItem({
@@ -138,7 +138,7 @@ describe("calculateInventoryValuation", () => {
         product: {
           id: "p6",
           name: "Regular Product", // No misc: prefix
-          manufacturer: "Unknown",
+          brandName: "Unknown",
         },
       }),
     ];
@@ -157,17 +157,17 @@ describe("calculateInventoryValuation", () => {
     );
   });
 
-  it("groups breakdown by manufacturer", () => {
+  it("groups breakdown by brandName", () => {
     const items: InventoryItem[] = [
       makeInventoryItem({
         id: "i7",
         valuation: 5,
-        product: { id: "p7", name: "Item A", manufacturer: "Same" },
+        product: { id: "p7", name: "Item A", brandName: "Same" },
       }),
       makeInventoryItem({
         id: "i8",
         valuation: 3,
-        product: { id: "p8", name: "Item B", manufacturer: "Same" },
+        product: { id: "p8", name: "Item B", brandName: "Same" },
       }),
     ];
 
@@ -178,12 +178,12 @@ describe("calculateInventoryValuation", () => {
     expect(res.breakdown[0]?.valuation).toBe(8);
   });
 
-  it("uses 'Unknown' for products without manufacturer", () => {
+  it("uses 'Unknown' for products without brandName", () => {
     const items: InventoryItem[] = [
       makeInventoryItem({
         id: "i9",
         valuation: 7,
-        product: { id: "p9", name: "Mystery", manufacturer: "" },
+        product: { id: "p9", name: "Mystery", brandName: "" },
       }),
     ];
 

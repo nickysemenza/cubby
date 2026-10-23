@@ -660,7 +660,7 @@ describe("Picker stored codes", () => {
     const detail = {
       id: CODE,
       name: "Rolled Oats",
-      manufacturer: "Harvest Mill",
+      brandName: "Harvest Mill",
       coverImageUrl: "https://images.example.test/oats.jpg",
     } as never;
     client.setQueryData(

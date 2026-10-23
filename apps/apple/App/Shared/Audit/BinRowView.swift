@@ -64,8 +64,8 @@ struct BinRowView: View {
                         Eyebrow("Duplicate")
                     }
                 }
-                if let manufacturer = row.product.manufacturer {
-                    Text(manufacturer)
+                if let brandName = row.product.brandName {
+                    Text(brandName)
                         .font(.fieldGuideLabel)
                         .foregroundStyle(FieldGuideTokens.graphiteSecondary)
                         .lineLimit(1)

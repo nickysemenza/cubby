@@ -397,8 +397,8 @@ struct FinanceActionSessionTests {
 
     nonisolated private static let productCandidates = """
         {"candidates":[
-           {"id":"PRD-AAAA","name":"Sample saw","manufacturer":"Sample Maker","price":19.5,"coverImageUrl":null},
-           {"id":"PRD-BBBB","name":"Sample blade","manufacturer":"Sample Maker","price":null,"coverImageUrl":null}],
+           {"id":"PRD-AAAA","name":"Sample saw","brandName":"Sample Maker","price":19.5,"coverImageUrl":null},
+           {"id":"PRD-BBBB","name":"Sample blade","brandName":"Sample Maker","price":null,"coverImageUrl":null}],
          "message":null,
          "note":"The link carries no money or quantity."}
         """

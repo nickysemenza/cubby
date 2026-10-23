@@ -25,6 +25,7 @@ import {
   mergeProducts,
   previewMergeProducts,
 } from "~/server/domains/product/repo/merge";
+import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
 import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
 import { findOrphanedProducts } from "~/server/generic/problems/repo/detectors-product";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
@@ -36,10 +37,10 @@ describe("meal food entry lifecycle", () => {
     insertWithShortcode(ctx.db, "meal", { date: "2026-09-14" });
   const seedParty = (name: string) =>
     insertWithShortcode(ctx.db, "ledgerParty", { name, kind: "member" });
-  const seedProduct = (name: string) =>
+  const seedProduct = async (name: string) =>
     insertWithShortcode(ctx.db, "product", {
       name,
-      manufacturer: "Lifecycle fixture",
+      brandId: await findOrCreateVendor(ctx.db, "Lifecycle fixture"),
     });
   const seedIngredient = (name: string) =>
     insertWithShortcode(ctx.db, "ingredient", { name });

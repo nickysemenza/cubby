@@ -62,11 +62,16 @@ import { z } from "zod";
 
 import type { Database } from "~/server/db";
 import {
+  productBrandNameSql,
+  productBrandCodeSql,
+} from "~/server/db/computed/product-brand-sql";
+import {
   getDb,
   notDeleted,
   withTransactionDatabase,
 } from "~/server/db/helpers";
 import {
+  vendor,
   aiAnalysis,
   image,
   imageProcessingJob,
@@ -76,6 +81,7 @@ import {
   ledgerParty,
   location,
   photoGroupProposal,
+  photoGroupSourceEvidence,
   product,
   productCategory,
   entityExternalId,
@@ -246,7 +252,7 @@ async function productSummaries(
 ): Promise<
   (PhotoGroupProposalProductSummary & {
     uuid: ProductId;
-    manufacturer: string | null;
+    brandName: string | null;
     model: string | null;
   })[]
 > {
@@ -258,7 +264,8 @@ async function productSummaries(
       id: product.id,
       shortcode: product.shortcode,
       name: product.name,
-      manufacturer: product.manufacturer,
+      brandCode: productBrandCodeSql(product.brandId),
+      brandName: productBrandNameSql(product.brandId),
       model: product.model,
     })
     .from(product)
@@ -279,7 +286,8 @@ async function productSummaries(
     name: row.name,
     coverUrl: covers.get(row.id) ?? null,
     uuid: row.id,
-    manufacturer: row.manufacturer,
+    brandId: row.brandCode,
+    brandName: row.brandName,
     model: row.model,
   }));
 }
@@ -292,6 +300,27 @@ async function linkedCodes(db: Database, rows: readonly ProposalRow[]) {
   const ownerIds = [
     ...new Set(rows.flatMap((row) => row.inventoryOwnerPartyId ?? [])),
   ];
+  const brandIds = [
+    ...new Set(rows.flatMap((row) => row.productCreateBrandId ?? [])),
+  ];
+  const brands = brandIds.length
+    ? await getDb(db)
+        .select({ id: vendor.id, shortcode: vendor.shortcode })
+        .from(vendor)
+        .where(and(inArray(vendor.id, brandIds), notDeleted(vendor)))
+    : [];
+  const brandById = new Map(
+    brands.map((row) => [row.id, parseShortcodeFor("vendor", row.shortcode)]),
+  );
+  const brandCodeOf = (row: ProposalRow) => {
+    if (!row.productCreateBrandId) return null;
+    const code = brandById.get(row.productCreateBrandId);
+    if (!code)
+      throw new Error(
+        `Photo proposal ${row.groupKey} refers to a Brand that is no longer available.`,
+      );
+    return code;
+  };
   const [categories, owners] = await Promise.all([
     categoryIds.length
       ? getDb(db)
@@ -329,8 +358,10 @@ async function linkedCodes(db: Database, rows: readonly ProposalRow[]) {
     ]),
   );
   return {
+    createBrandId: brandCodeOf,
     create: (row: ProposalRow) => ({
-      ...storedCreate.parse(row.productCreate),
+      brandId: brandCodeOf(row),
+      ...storedCreate.omit({ brandId: true }).parse(row.productCreate),
       categoryId: row.productCreateCategoryId
         ? (categoryById.get(row.productCreateCategoryId) ?? null)
         : null,
@@ -353,7 +384,7 @@ function comparisonIdentityFields(
   selected:
     | Pick<
         Awaited<ReturnType<typeof productSummaries>>[number],
-        "name" | "manufacturer" | "model"
+        "name" | "brandName" | "model"
       >
     | undefined,
   identifiers: string[],
@@ -361,7 +392,7 @@ function comparisonIdentityFields(
   const draft = row.productKind === "create" ? row.productCreate : null;
   return {
     name: draft?.name ?? selected?.name ?? "",
-    manufacturer: draft ? draft.manufacturer : selected?.manufacturer,
+    brandName: draft ? null : selected?.brandName,
     model: draft ? draft.model : selected?.model,
     identifiers,
   };
@@ -511,9 +542,18 @@ async function toViews(
               "categoryId" in row.review.productChanges
                 ? {
                     ...row.review.productChanges,
+                    ...("brandId" in row.review.productChanges
+                      ? { brandId: linked.createBrandId(row) }
+                      : {}),
                     categoryId: linked.createCategoryId(row),
                   }
-                : row.review.productChanges,
+                : row.review.productChanges &&
+                    "brandId" in row.review.productChanges
+                  ? {
+                      ...row.review.productChanges,
+                      brandId: linked.createBrandId(row),
+                    }
+                  : row.review.productChanges,
           }
         : undefined,
       state: row.state,
@@ -637,6 +677,7 @@ type ResolvedGroup = {
   skip: { imageId: ImageId; reason: string }[];
   productId: ProductId | null;
   locationId: LocationId | null;
+  brandId: import("@cubby/schemas/identifiers").VendorId | null;
   categoryId: ProductCategoryId | null;
   ownerPartyId: LedgerPartyId | null;
 };
@@ -677,6 +718,13 @@ async function resolveGroup(
     group.product.kind === "existing"
       ? await resolveOrThrow(db, "product", group.product.existingId)
       : null;
+  const brandCode =
+    group.product.kind === "create"
+      ? group.product.create.brandId
+      : group.review?.productChanges?.brandId;
+  const brandId = brandCode
+    ? await resolveOrThrow(db, "vendor", brandCode)
+    : null;
   const categoryCode =
     group.product.kind === "create"
       ? group.product.create.categoryId
@@ -698,6 +746,7 @@ async function resolveGroup(
     productId,
     locationId,
     categoryId,
+    brandId,
     ownerPartyId,
   };
 }
@@ -747,9 +796,10 @@ async function upsertProposal(
     // or delete before approval is followed rather than breaking it.
     productCreate:
       group.product.kind === "create"
-        ? { ...group.product.create, categoryId: undefined }
+        ? { ...group.product.create, categoryId: undefined, brandId: undefined }
         : null,
     productCreateCategoryId: entry.categoryId,
+    productCreateBrandId: entry.brandId,
     inventoryLocationId: entry.locationId,
     inventory: group.inventory
       ? {
@@ -779,6 +829,11 @@ async function upsertProposal(
     lastError: null,
     updatedAt: new Date(),
   };
+  if (
+    values.review?.productChanges &&
+    "brandId" in values.review.productChanges
+  )
+    values.review.productChanges.brandId = null;
   await getDb(txDb)
     .insert(photoGroupProposal)
     .values({ runId, groupKey: group.groupKey, ...values })
@@ -806,6 +861,31 @@ export async function proposePhotoGroups(
   const input = proposePhotoGroupsInput.parse(rawInput);
   const run = await loadRun(db, input.runId);
   const frozenGroupKeys = await withTransactionDatabase(db, async (txDb) => {
+    // Vendor merge/delete locks the same rows exclusively. Take shared locks
+    // in its canonical order before touching proposal rows, through persistence.
+    const brandCodes = [
+      ...new Set(
+        input.groups.flatMap((group) => {
+          const code =
+            group.product.kind === "create"
+              ? group.product.create.brandId
+              : group.review?.productChanges?.brandId;
+          return code ? [code] : [];
+        }),
+      ),
+    ];
+    if (brandCodes.length) {
+      const brands = await getDb(txDb)
+        .select({ id: vendor.id })
+        .from(vendor)
+        .where(and(inArray(vendor.shortcode, brandCodes), notDeleted(vendor)))
+        .orderBy(vendor.id)
+        .for("share");
+      if (brands.length !== brandCodes.length)
+        throw new Error(
+          "A selected photo Brand is no longer available. Reload the proposal before saving.",
+        );
+    }
     const [locked] = await getDb(txDb)
       .select({ dispatchEventId: runTable.dispatchEventId })
       .from(runTable)
@@ -938,6 +1018,25 @@ export async function proposePhotoGroups(
     );
 
     if (input.removeGroupKeys?.length) {
+      const removedKeys = new Set(input.removeGroupKeys);
+      const sourceEvidence = existing.flatMap((row) =>
+        row.state === "proposed" &&
+        removedKeys.has(row.groupKey) &&
+        row.sourceManufacturer !== null
+          ? [
+              {
+                groupKey: row.groupKey,
+                sourceManufacturer: row.sourceManufacturer,
+              },
+            ]
+          : [],
+      );
+      // Regrouping replaces child rows. Archive each original in the owning
+      // Run's durable evidence before deletion, atomically with its replacement.
+      if (sourceEvidence.length)
+        await getDb(txDb)
+          .insert(photoGroupSourceEvidence)
+          .values(sourceEvidence.map((entry) => ({ runId: run.id, ...entry })));
       await getDb(txDb)
         .delete(photoGroupProposal)
         .where(
@@ -1086,7 +1185,7 @@ export async function updatePhotoGroupProductDraft(
     groupKey: string;
     name: string;
     categoryId?: string | null;
-    manufacturer?: string | null;
+    brandId?: import("@cubby/schemas/identifiers").VendorShortcode | null;
     model?: string | null;
     notes?: string | null;
   },
@@ -1122,7 +1221,10 @@ export async function updatePhotoGroupProductDraft(
               ...group.product.create,
               name: input.name,
               categoryId: input.categoryId ?? undefined,
-              manufacturer: input.manufacturer ?? undefined,
+              brandId:
+                input.brandId === undefined
+                  ? group.product.create.brandId
+                  : input.brandId,
               model: input.model ?? undefined,
               notes: input.notes ?? undefined,
             },
@@ -1216,11 +1318,24 @@ async function commitInputFor(
             "categoryId" in row.review.productChanges
               ? {
                   ...row.review.productChanges,
+                  ...("brandId" in row.review.productChanges
+                    ? {
+                        brandId: (await linkedCodes(db, [row])).createBrandId(
+                          row,
+                        ),
+                      }
+                    : {}),
                   categoryId: (await linkedCodes(db, [row])).createCategoryId(
                     row,
                   ),
                 }
-              : row.review.productChanges,
+              : row.review.productChanges &&
+                  "brandId" in row.review.productChanges
+                ? {
+                    ...row.review.productChanges,
+                    brandId: (await linkedCodes(db, [row])).createBrandId(row),
+                  }
+                : row.review.productChanges,
         }
       : undefined,
     inventory,
@@ -1254,6 +1369,7 @@ async function persistSettled(
     productId,
     productCreate: row.productCreate,
     productCreateCategoryId: row.productCreateCategoryId,
+    productCreateBrandId: row.productCreateBrandId,
     inventoryLocationId: row.inventoryLocationId,
     inventory: row.inventory,
     inventoryOwnerPartyId: row.inventoryOwnerPartyId,

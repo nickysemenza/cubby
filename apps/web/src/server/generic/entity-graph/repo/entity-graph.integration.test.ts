@@ -452,6 +452,7 @@ describe("entity graph repository", () => {
   it("batches a capped 25-root graph without per-record queries", async () => {
     // Graph batching is measured below; seed the population in batches so
     // fixture hydration does not consume the query contract's time budget.
+    const fixtureBrandId = await findOrCreateVendor(ctx.db, "Fixture Brand");
     const products = (
       await insertEntityFixtures(
         ctx.db,
@@ -460,7 +461,7 @@ describe("entity graph repository", () => {
         Array.from({ length: 25 }, (_, index) => ({
           shortcode: testShortcode("product", `graph-${index}`),
           name: `Batched graph product ${index}`,
-          manufacturer: "Fixture manufacturer",
+          brandId: fixtureBrandId,
         })),
       )
     ).map((row) => ({ entityId: row.id, id: row.shortcode }));

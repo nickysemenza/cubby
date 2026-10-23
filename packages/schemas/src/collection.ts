@@ -127,7 +127,7 @@ export type SmartCollectionMatch = z.infer<typeof smartCollectionMatch>;
 export const collectionProductOut = z.object({
   id: productShortcode,
   name: z.string(),
-  manufacturer: z.string(),
+  brandName: z.string().nullable(),
   imageUrl: z.string().nullable(),
   direct: z.boolean(),
   inherited: z.boolean(),

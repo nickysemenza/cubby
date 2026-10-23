@@ -9,6 +9,7 @@ import { z } from "zod";
 import { PRODUCT_IDENTITY_FEATURE } from "~/server/ai/policy/feature-identity";
 import { enqueueAiEvaluation } from "~/server/ai/repo/ai-evaluation-requests";
 import type { Database } from "~/server/db";
+import { productBrandNameSql } from "~/server/db/computed/product-brand-sql";
 import {
   getDb,
   isTransaction,
@@ -63,7 +64,8 @@ export async function productIdentitySnapshots(
     .select({
       id: product.id,
       name: product.name,
-      manufacturer: product.manufacturer,
+      brandId: product.brandId,
+      brandName: productBrandNameSql(product.brandId),
       model: product.model,
       aliases: product.aliases,
     })

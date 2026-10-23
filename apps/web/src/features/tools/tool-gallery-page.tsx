@@ -63,13 +63,13 @@ const GROUP_OPTIONS: ReadonlyArray<
   PickerOption & { value: ToolGalleryGroupBy }
 > = [
   { value: "location", label: "Location" },
-  { value: "manufacturer", label: "Manufacturer" },
+  { value: "brandName", label: "Manufacturer" },
   { value: "trade", label: "Trade" },
 ];
 
 const GROUP_NOUN = {
   location: "location",
-  manufacturer: "manufacturer",
+  brandName: "brand",
   trade: "trade",
 } as const satisfies Record<ToolGalleryGroupBy, string>;
 
@@ -141,10 +141,7 @@ export function ToolCard({
   onHoverEnd: () => void;
 }) {
   const placements = toolPlacementSummary(item.inventoryEntries);
-  const maker = item.manufacturer.trim();
-  const identity = [maker === "(unspecified)" ? null : maker, item.model]
-    .filter(Boolean)
-    .join(" · ");
+  const identity = [item.brandName, item.model].filter(Boolean).join(" · ");
   const shownEntries = item.inventoryEntries.slice(0, 2);
 
   return (

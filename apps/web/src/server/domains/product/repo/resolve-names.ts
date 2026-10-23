@@ -9,6 +9,10 @@ import type {
 import { and, inArray, sql } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
+import {
+  productBrandNameSql,
+  productBrandCodeSql,
+} from "~/server/db/computed/product-brand-sql";
 import { getDb, notDeleted, unwrapDb } from "~/server/db/helpers";
 import { product } from "~/server/db/schema";
 import {
@@ -27,7 +31,8 @@ const toCandidate = (
 ): ProductResolveCandidateOut => ({
   id: item.id,
   name: item.name,
-  manufacturer: item.manufacturer,
+  brandId: item.brandId,
+  brandName: item.brandName,
   category: item.category,
   price: item.price,
   coverImageUrl: item.coverImageUrl,
@@ -146,7 +151,8 @@ export const findProductNameCandidates = async (db: Database, name: string) => {
       id: product.id,
       shortcode: product.shortcode,
       name: product.name,
-      manufacturer: product.manufacturer,
+      brandCode: productBrandCodeSql(product.brandId),
+      brandName: productBrandNameSql(product.brandId),
       model: product.model,
     })
     .from(product)
@@ -176,7 +182,8 @@ export const findExactProductNameMatches = async (
       id: product.id,
       shortcode: product.shortcode,
       name: product.name,
-      manufacturer: product.manufacturer,
+      brandCode: productBrandCodeSql(product.brandId),
+      brandName: productBrandNameSql(product.brandId),
     })
     .from(product)
     .where(and(notDeleted(product), inArray(product.id, ids)));
@@ -200,7 +207,8 @@ export async function findProductIdentityReviewCandidates(
       id: product.id,
       shortcode: product.shortcode,
       name: product.name,
-      manufacturer: product.manufacturer,
+      brandCode: productBrandCodeSql(product.brandId),
+      brandName: productBrandNameSql(product.brandId),
       model: product.model,
       aliases: product.aliases,
     })
@@ -208,13 +216,13 @@ export async function findProductIdentityReviewCandidates(
     .where(
       and(
         notDeleted(product),
-        sql`length(trim(${product.manufacturer})) > 0`,
-        sql`strpos(${" " + title + " "}, ' ' || trim(regexp_replace(lower(${product.manufacturer}), '[^a-z0-9]+', ' ', 'g')) || ' ') > 0`,
+        sql`length(trim(${productBrandNameSql(product.brandId)})) > 0`,
+        sql`strpos(${" " + title + " "}, ' ' || trim(regexp_replace(lower(${productBrandNameSql(product.brandId)}), '[^a-z0-9]+', ' ', 'g')) || ' ') > 0`,
       ),
     );
   return rows
     .filter((row) => {
-      const brand = new Set(normalize(row.manufacturer).split(" "));
+      const brand = new Set(normalize(row.brandName ?? "").split(" "));
       const words = (value: string) =>
         new Set(
           normalize(value)

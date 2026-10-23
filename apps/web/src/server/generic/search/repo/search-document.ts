@@ -14,6 +14,7 @@ import { z } from "zod";
 import { wasm } from "~/lib/wasm";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { effectiveFieldSql } from "~/server/db/computed/effective-field";
+import { productBrandNameSql } from "~/server/db/computed/product-brand-sql";
 import { categorySummarySql } from "~/server/db/computed/product-category-sql";
 import {
   unwrapDb,
@@ -268,11 +269,11 @@ function searchDocumentSourceSql(
       FROM "Image" i WHERE i."deletedAt" IS NULL AND 'image' IN (${types}) AND ${requested(sql`i."id"`)} AND ${bounded(sql`i."createdAt"`)}`,
     product: () => sql`
       SELECT 'product'::text AS "entityKind", p."id"::text AS "entityId", p."shortcode",
-        p."name" AS title, p."manufacturer" AS subtitle, ${categorySummarySql(sql`p."categoryId"`)}->>'name' AS "typeHint",
+        p."name" AS title, ${productBrandNameSql(sql`p."brandId"`)} AS subtitle, ${categorySummarySql(sql`p."categoryId"`)}->>'name' AS "typeHint",
         p."aliases" AS aliases,
         COALESCE((SELECT array_agg(pei."externalId") FROM "EntityExternalId" pei
                   WHERE pei."entityId" = p."id" AND pei."source" = 'gtin' AND pei."deletedAt" IS NULL),
-                 ARRAY[]::text[]) || ARRAY[p."model", p."manufacturer"]::text[] AS keywords
+                 ARRAY[]::text[]) || ARRAY[p."model", ${productBrandNameSql(sql`p."brandId"`)}]::text[] AS keywords
       FROM "Product" p WHERE p."deletedAt" IS NULL AND 'product' IN (${types}) AND ${requested(sql`p."id"`)} AND ${bounded(sql`p."createdAt"`)}`,
     recipe: () => sql`
       SELECT 'recipe', r."id"::text, r."shortcode", r."name", NULL, NULL, ARRAY[]::text[], ARRAY[]::text[]
@@ -290,7 +291,7 @@ function searchDocumentSourceSql(
       FROM "Location" l WHERE l."deletedAt" IS NULL AND 'location' IN (${types}) AND ${requested(sql`l."id"`)} AND ${bounded(sql`l."createdAt"`)}`,
     inventory: () => sql`
       SELECT 'inventory', ie."id"::text, ie."shortcode", p."name", l."name", ${categorySummarySql(sql`p."categoryId"`)}->>'name', p."aliases",
-        ARRAY[l."name", l."type", p."manufacturer"]::text[] ||
+        ARRAY[l."name", l."type", ${productBrandNameSql(sql`p."brandId"`)}]::text[] ||
         COALESCE((SELECT array_agg(pei."externalId") FROM "EntityExternalId" pei
                   WHERE pei."entityId" = p."id" AND pei."source" = 'gtin' AND pei."deletedAt" IS NULL),
                  ARRAY[]::text[])

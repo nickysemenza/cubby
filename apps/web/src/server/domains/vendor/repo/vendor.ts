@@ -123,6 +123,16 @@ import {
 import { loadVendorCategoryEvidence } from "./vendor-suggestion-context";
 
 export const VENDOR_DELETE_EDGE_POLICY = {
+  "PhotoGroupProposal.productCreateBrandId": {
+    code: "block-photo-brand-proposals",
+    effect: "block",
+    description: "Pending photo proposals retain their selected Brand.",
+  },
+  "Product.brandId": {
+    code: "block-branded-products",
+    effect: "block",
+    description: "Products retain their Brand until explicitly reassigned.",
+  },
   "SourceOrderObservation.vendorId": {
     code: "preserve-source-observation",
     effect: "preserve",
@@ -182,6 +192,16 @@ export const VENDOR_DELETE_EDGE_POLICY = {
 } as const satisfies IncomingEdgePolicy<"vendor", OperationDisposition>;
 
 export const VENDOR_MERGE_EDGE_POLICY = {
+  "PhotoGroupProposal.productCreateBrandId": {
+    code: "repoint-photo-brand-proposals",
+    effect: "repoint",
+    description: "Pending photo proposals follow the surviving Brand.",
+  },
+  "Product.brandId": {
+    code: "repoint-product-brands",
+    effect: "repoint",
+    description: "Products name the surviving Brand identity.",
+  },
   "SourceOrderObservation.vendorId": {
     code: "preserve-source-observation",
     effect: "preserve",
@@ -1150,6 +1170,20 @@ export const mergeVendors = async (
 
   const detachedImageKeys = await withTransaction(db, async (tx) => {
     await lockAndValidateForDelete(tx, vendor, [keepId, ...losers], "Vendor");
+    const designated = await tx
+      .select({ id: vendor.id })
+      .from(vendor)
+      .where(
+        and(
+          inArray(vendor.id, [keepId, ...losers]),
+          isNotNull(vendor.systemKey),
+        ),
+      );
+    if (designated.length)
+      throw createAppError(
+        "CONSTRAINT_VIOLATION",
+        "System Generic / Unbranded Brand cannot be merged.",
+      );
 
     // The fold plan replaces notes; lock their rows before taking that snapshot.
     await tx

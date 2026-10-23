@@ -29,7 +29,7 @@ export function ExternalIdKindSuggestion<TFieldValues extends FieldValues>({
   externalIdPath,
   urlPath,
   productName,
-  manufacturer,
+  brandName,
 }: {
   form: UseFormReturn<TFieldValues>;
   kindPath: Path<TFieldValues>;
@@ -37,7 +37,7 @@ export function ExternalIdKindSuggestion<TFieldValues extends FieldValues>({
   externalIdPath: Path<TFieldValues>;
   urlPath: Path<TFieldValues>;
   productName?: string | null;
-  manufacturer?: string | null;
+  brandName?: string | null;
 }) {
   // Watched together (not just source/identifier/url) so this re-renders on
   // its own suggestion write or a manual pick, the way a `Controller`-nested
@@ -63,7 +63,7 @@ export function ExternalIdKindSuggestion<TFieldValues extends FieldValues>({
     identifier: identifier ?? "",
     url,
     productName: basisValueOf(productName),
-    manufacturer: basisValueOf(manufacturer),
+    brandName: basisValueOf(brandName),
     runKey,
   };
 

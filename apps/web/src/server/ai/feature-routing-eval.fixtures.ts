@@ -35,9 +35,9 @@ type AuditProduct = NonNullable<AuditExpense["product"]>;
 const product = (
   id: number,
   name: string,
-  manufacturer: string | null = null,
+  brandName: string | null = null,
   model: string | null = null,
-): AuditProduct => ({ id: uuid(id), name, manufacturer, model });
+): AuditProduct => ({ id: uuid(id), name, brandName, model });
 
 const shellM = product(
   0xb1,

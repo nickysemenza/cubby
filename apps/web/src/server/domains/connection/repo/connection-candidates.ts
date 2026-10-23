@@ -4,9 +4,10 @@ import { manufacturerSource } from "@cubby/schemas/external-id";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { and, eq, isNull, sql } from "drizzle-orm";
 
-import { isUnspecifiedManufacturer } from "~/lib/manufacturer-utils";
+import { isUnknownBrandName } from "~/lib/brand-name-utils";
 import type { Database } from "~/server/db";
 import { actualExpense } from "~/server/db/computed/expense-aggregate-sql";
+import { productBrandNameSql } from "~/server/db/computed/product-brand-sql";
 import { getDb, notDeleted } from "~/server/db/helpers";
 import {
   entityLink,
@@ -294,29 +295,29 @@ export async function expenseConnectionEligible(db: Database, code: string) {
   return row !== undefined;
 }
 
-/** Shorter manufacturer values match too many ordinary line words. */
+/** Shorter brandName values match too many ordinary line words. */
 const MIN_KNOWN_BRAND_LENGTH = 3;
 
-/** A Product's brand slug; null when its manufacturer is unspecified. */
-const brandSlug = (manufacturer: string | null): string | null =>
-  !manufacturer || isUnspecifiedManufacturer(manufacturer)
+/** A Product's brand slug; null when its brandName is unspecified. */
+const brandSlug = (brandName: string | null): string | null =>
+  !brandName || isUnknownBrandName(brandName)
     ? null
-    : manufacturerSource(manufacturer);
+    : manufacturerSource(brandName);
 
 /**
- * Known brands: live Products' specified `manufacturer` values as
+ * Known brands: live Products' specified `brandName` values as
  * `manufacturerSource` slugs. Matching happens on the slugs in
  * `otherBrandNamed` (NFKD-folded, so "Nestlé" and "Nestle" agree); there is
  * no SQL prefilter that could disagree with them.
  */
 export async function knownBrandSlugs(db: Database): Promise<Set<string>> {
   const rows = await getDb(db)
-    .selectDistinct({ manufacturer: product.manufacturer })
+    .selectDistinct({ brandName: productBrandNameSql(product.brandId) })
     .from(product)
     .where(notDeleted(product));
   const brands = new Set<string>();
-  for (const { manufacturer } of rows) {
-    const slug = brandSlug(manufacturer);
+  for (const { brandName } of rows) {
+    const slug = brandSlug(brandName);
     if (slug && slug.length >= MIN_KNOWN_BRAND_LENGTH) brands.add(slug);
   }
   return brands;
@@ -342,14 +343,14 @@ export function otherBrandNamed(
   return null;
 }
 
-/** The brand-bearing text of an acquisition endpoint: Product manufacturer or Expense line. */
+/** The brand-bearing text of an acquisition endpoint: Product brandName or Expense line. */
 export async function acquisitionBrandText(
   db: Database,
   ref: EntityRef,
 ): Promise<string | null> {
   if (ref.entityKind === "product") {
     const [row] = await getDb(db)
-      .select({ text: product.manufacturer })
+      .select({ text: productBrandNameSql(product.brandId) })
       .from(product)
       .where(eq(product.shortcode, ref.entityId))
       .limit(1);

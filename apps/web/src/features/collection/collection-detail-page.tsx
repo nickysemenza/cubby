@@ -176,7 +176,7 @@ export function CollectionProductsTable({
           }),
         );
         add(
-          productColumnHelper.accessor("manufacturer", {
+          productColumnHelper.accessor("brandName", {
             header: "Manufacturer",
             enableSorting: false,
             meta: {
@@ -329,7 +329,7 @@ export function CollectionProductsTable({
           onChange={(event) =>
             onSearchChange({ q: event.target.value || undefined, page: 1 })
           }
-          placeholder="Search name or manufacturer"
+          placeholder="Search name or brandName"
           aria-label="Search products"
         />
       </div>
@@ -355,7 +355,7 @@ export function CollectionProductsTable({
           />
           <p className="mt-2 font-medium">No matching products</p>
           <p className="mt-1 text-xs text-muted-foreground">
-            Try a product name or manufacturer.
+            Try a product name or brandName.
           </p>
         </div>
       }

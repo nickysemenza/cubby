@@ -39,7 +39,7 @@ function WishCandidateRow({ candidate }: { candidate: WishCandidateOut }) {
               name={candidate.name}
             />
             <span className="block truncate text-muted-foreground">
-              {candidate.manufacturer}
+              {candidate.brandName}
               {candidate.model ? ` · ${candidate.model}` : ""}
             </span>
           </span>

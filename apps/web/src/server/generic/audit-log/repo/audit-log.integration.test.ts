@@ -10,6 +10,7 @@ import { describe, expect, it } from "vitest";
 import { insertAndReturn, withTransaction } from "~/server/db/helpers";
 import { auditLog, product } from "~/server/db/schema";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
+import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
 import { listAuditLog } from "~/server/generic/audit-log/operations/audit-log";
 import { getAuditLog } from "~/server/generic/audit-log/repo/audit-log";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
@@ -65,7 +66,7 @@ describe("getAuditLog — channel + time window", () => {
   }) => {
     const subject = await insertWithShortcode(ctx.db, "product", {
       name: `Audit subject ${randomUUID()}`,
-      manufacturer: "Test Mfr",
+      brandId: await findOrCreateVendor(ctx.db, "Test Mfr"),
     });
     return insertAndReturn(ctx.db, auditLog, {
       entityKind: "product",
@@ -167,7 +168,7 @@ describe("getAuditLog — entityName", () => {
   it("still names a row that was soft-deleted after the entry was written", async () => {
     const row = await insertWithShortcode(ctx.db, "product", {
       name: "Retired Blade",
-      manufacturer: "ACME",
+      brandId: await findOrCreateVendor(ctx.db, "ACME"),
     });
     await auditRowFor("product", row.id);
     await withTransaction(ctx.db, (tx) =>

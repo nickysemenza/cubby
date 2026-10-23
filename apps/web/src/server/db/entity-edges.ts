@@ -136,6 +136,7 @@ import {
   orderMail,
   orderMailAttachment,
   photoGroupProposal,
+  photoGroupSourceEvidence,
   photoRunImage,
   runPushRegistration,
   runStep,
@@ -1159,6 +1160,22 @@ export const ENTITY_EDGES = {
     ...externalIdEdgesFor("task"),
   },
   vendor: edges({
+    "PhotoGroupProposal.productCreateBrandId": {
+      column: photoGroupProposal.productCreateBrandId,
+      role: "metadata",
+      label: "photo Brand proposals",
+      description:
+        "The Brand selected for a proposed Product creation or Brand update.",
+      liveness: { kind: "must-target-live" },
+    },
+    "Product.brandId": {
+      column: product.brandId,
+      role: "reference",
+      label: "branded products",
+      description:
+        "The marketed brand identity, independently of purchased-from sellers and commodity status.",
+      liveness: { kind: "must-target-live" },
+    },
     "SourceOrderObservation.vendorId": {
       column: sourceOrderObservation.vendorId,
       role: "history",
@@ -1698,6 +1715,14 @@ export const ENTITY_EDGES = {
       role: "owned-child",
       label: "prepared orders",
       description: "Immutable prepared order evidence captured by this run.",
+      liveness: { kind: "must-target-live" },
+    },
+    "PhotoGroupSourceEvidence.runId": {
+      column: photoGroupSourceEvidence.runId,
+      role: "owned-child",
+      label: "retained photo source evidence",
+      description:
+        "Original manufacturer evidence retained when this run's photo groups are replaced.",
       liveness: { kind: "must-target-live" },
     },
     "PhotoGroupProposal.runId": {

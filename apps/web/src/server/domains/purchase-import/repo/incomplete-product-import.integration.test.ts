@@ -24,6 +24,7 @@ import {
   listProductPurchases,
 } from "~/server/domains/purchase/repo/purchase-products";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
+import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
 import { findOrphanedProducts } from "~/server/generic/problems/repo/detectors-product";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { runFinding } from "~/server/testing/run-finding.fixtures";
@@ -174,7 +175,7 @@ describe("incomplete itemized purchase identity", () => {
         kind === "existing"
           ? await insertWithShortcode(ctx.db, "product", {
               name: "Member label for Q-17",
-              manufacturer: "Example maker",
+              brandId: await findOrCreateVendor(ctx.db, "Example maker"),
             })
           : null;
       if (existing) {
@@ -281,7 +282,7 @@ describe("incomplete itemized purchase identity", () => {
     if (!orderedProduct) throw new Error("Synthetic ordered Product missing");
     const keeper = await insertWithShortcode(ctx.db, "product", {
       name: "Member's current device label",
-      manufacturer: "Example maker",
+      brandId: await findOrCreateVendor(ctx.db, "Example maker"),
     });
     await mergeProducts(
       ctx.db,

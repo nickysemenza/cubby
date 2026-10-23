@@ -43,7 +43,7 @@ struct IngredientNutritionProductSlot: View {
 
     static func caption(_ chosen: JSONValue) -> String {
         let name = chosen["name"]?.stringValue ?? "Product"
-        guard let maker = chosen["manufacturer"]?.stringValue, !maker.isEmpty else { return name }
+        guard let maker = chosen["brandName"]?.stringValue, !maker.isEmpty else { return name }
         return "\(name) by \(maker)"
     }
 
@@ -195,7 +195,7 @@ struct CookbookImportProgressSlot: View {
                 raw: .object([
                     "nutritionProduct": .object([
                         "productId": .string("PRD-4K7M"), "name": .string("Synthetic Flour"),
-                        "manufacturer": .string("Example Mill"),
+                        "brandName": .string("Example Mill"),
                         "display": .object([
                             "title": .string("From package label"), "basis": .string("Per serving · 30 g"),
                             "rows": .array([

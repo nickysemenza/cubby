@@ -35,6 +35,10 @@ import { sumBy, uniq } from "es-toolkit";
 
 import { wasm } from "~/lib/wasm";
 import type { Database, DrizzleClient, DrizzleTransaction } from "~/server/db";
+import {
+  productBrandNameSql,
+  productBrandCodeSql,
+} from "~/server/db/computed/product-brand-sql";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import {
   amountToColumns,
@@ -233,8 +237,8 @@ export const PRODUCT_MERGE_EDGE_POLICY = {
  */
 const CARRIED_COLUMNS = [
   // NOT NULL with "" as its empty value: a purchase-created Product starts
-  // with no manufacturer, so a photo-created loser's brand must fill it.
-  "manufacturer",
+  // with no brandName, so a photo-created loser's brand must fill it.
+  "brandId",
   "fdc_id",
   "model",
   "price",
@@ -253,7 +257,7 @@ const CARRIED_COLUMNS = [
 type CarriedColumn = (typeof CARRIED_COLUMNS)[number];
 
 const CARRIED_FIELD_LABELS = {
-  manufacturer: "manufacturer",
+  brandId: "Brand",
   fdc_id: "USDA food identity",
   model: "model",
   price: "price",
@@ -781,14 +785,19 @@ async function buildProductMergePlan(
   // already executing one.
   const productRows = (
     await db.query.product.findMany({
+      extras: {
+        brandName: productBrandNameSql(product.brandId).as("brandName"),
+        brandCode: productBrandCodeSql(product.brandId).as("brandCode"),
+      },
       where: and(inArray(product.id, requestedIds), notDeleted(product)),
       columns: {
         id: true,
         shortcode: true,
         name: true,
         aliases: true,
+        brandId: true,
         tags: true,
-        manufacturer: true,
+
         fdc_id: true,
         model: true,
         price: true,
@@ -2464,7 +2473,7 @@ export async function previewProductMergeDecisions(
     decisions.push({ field, keeper, incoming: incomingValue, result, action });
   add("Name", plan.keeper.name, incoming.name, plan.keeper.name, "keep");
   for (const [field, column] of [
-    ["Manufacturer", "manufacturer"],
+    ["Brand", "brandId"],
     ["Model", "model"],
     ["Price", "price"],
     ["Notes", "notes"],

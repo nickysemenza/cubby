@@ -6,7 +6,7 @@ import { z } from "zod";
 export const wishCandidateOut = z.object({
   id: productShortcode,
   name: z.string(),
-  manufacturer: z.string(),
+  brandName: z.string().nullable(),
   model: z.string().nullable(),
   price: moneyNullable,
   inventoried: z.boolean(),

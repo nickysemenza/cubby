@@ -13,6 +13,7 @@ import { and, eq, isNull } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
+import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
 import { captureBackgroundQueue } from "~/server/testing/background-queue";
 let backgroundQueue: ReturnType<typeof captureBackgroundQueue>;
 beforeEach(() => {
@@ -92,13 +93,13 @@ describe("meal nutrition service", () => {
     insertWithShortcode(ctx.db, "meal", { date, name });
   const seedParty = (name: string) =>
     insertWithShortcode(ctx.db, "ledgerParty", { name, kind: "member" });
-  const seedProduct = (
+  const seedProduct = async (
     name: string,
     nutrients: { kcal: number; protein?: number; carbs?: number; fat?: number },
   ) =>
     insertWithShortcode(ctx.db, "product", {
       name,
-      manufacturer: "Nutrition fixture",
+      brandId: await findOrCreateVendor(ctx.db, "Nutrition fixture"),
       labelNutrition: {
         servingGrams: 50,
         nutrients,

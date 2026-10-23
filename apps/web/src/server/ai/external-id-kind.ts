@@ -3,7 +3,7 @@
  * its shape and source. Three shapes are unambiguous — an ASIN's `B0`
  * prefix, a barcode's digit count, Home Depot's 9-digit internet number —
  * and resolve at `probability: 1` with no model call. Everything else (a
- * manufacturer's own item number, a distributor's catalog number, a
+ * brandName's own item number, a distributor's catalog number, a
  * retailer's SKU) is genuine judgment and goes to the decision model, same as every other
  * enum `control.suggest` target (`field-suggest/registry.ts`), except this
  * one has no manifest field behind it — `externalIds[]` is a repeatable
@@ -56,7 +56,7 @@ export function externalIdKindSubject(
     `Identifier: "${input.identifier}"`,
     input.url ? `URL: "${input.url}"` : null,
     input.productName ? `Product name: "${input.productName}"` : null,
-    input.manufacturer ? `Manufacturer: "${input.manufacturer}"` : null,
+    input.brandName ? `Manufacturer: "${input.brandName}"` : null,
   ]
     .filter((line): line is string => line != null)
     .join("\n");

@@ -630,7 +630,7 @@ describe("declared entity displays", () => {
     // `ledgerExpectedQuantity` come from their manifest-declared renderers.
     interface ProductRow {
       fdc_id: number | null;
-      manufacturer: string;
+      brandName: string;
       model: string | null;
       notes: string | null;
       expectedQuantity: number | null;
@@ -642,7 +642,7 @@ describe("declared entity displays", () => {
     }
     const PRODUCT_ROW: ProductRow = {
       fdc_id: 173944,
-      manufacturer: "Acme",
+      brandName: "Acme",
       model: "X-100",
       notes: "Fixture notes",
       expectedQuantity: 3,
@@ -722,7 +722,7 @@ describe("declared entity displays", () => {
       // width: "sm" -> "w-28", width: "md" -> "w-40"
       expect(byId.fdc_id?.className).toBe("w-28");
       expect(byId.categoryId?.className).toBe("w-40");
-      expect(byId.manufacturer?.className).toBe("w-40");
+      expect(byId.brandId?.className).toBe("w-40");
       expect(byId.model?.className).toBe("w-40");
       expect(byId.notes?.className).toBe("w-40");
       // No declared width (e.g. usdaUnavailable) stays unset.
@@ -734,7 +734,7 @@ describe("declared entity displays", () => {
       const byId = Object.fromEntries(
         buildProductColumnMeta().map((d) => [d.id, d]),
       );
-      expect(byId.manufacturer?.mobile).toEqual({
+      expect(byId.brandId?.mobile).toEqual({
         slot: "subtitle",
         priority: 20,
         interactive: undefined,
@@ -768,7 +768,7 @@ describe("declared entity displays", () => {
         buildProductColumnMeta().map((d) => [d.id, d]),
       );
       // In `generatedEntitySort.product.fields`.
-      expect(byId.manufacturer?.enableSorting).toBe(true);
+      expect(byId.brandId?.enableSorting).toBe(true);
       expect(byId.fdc_id?.enableSorting).toBe(true);
       expect(byId.notes?.enableSorting).toBe(true);
       // Not in the roster.

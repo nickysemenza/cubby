@@ -6,6 +6,7 @@ import { run as runTable } from "~/server/db/schema";
 import { loadRunDetail } from "~/server/domains/purchase-import/repo/run-service";
 import { writeOutcomeReceipts } from "~/server/domains/purchase-import/service/run-outcome.fixtures";
 import { listRunsRead } from "~/server/domains/run/repo/run";
+import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 import { loadDataQualities } from "./hydrate";
@@ -45,7 +46,7 @@ describe("Run data quality", () => {
   it("scores complete and honestly skipped targets without requiring a browser capture", async () => {
     const product = await insertWithShortcode(ctx.db, "product", {
       name: "Fixture packet",
-      manufacturer: "Fixture Seeds",
+      brandId: await findOrCreateVendor(ctx.db, "Fixture Seeds"),
     });
     const completed = await makeRun("completed");
     const skipped = await makeRun("completed");
@@ -94,7 +95,7 @@ describe("Run data quality", () => {
   it("exposes invalid completion records through hydration and shared SQL filters", async () => {
     const product = await insertWithShortcode(ctx.db, "product", {
       name: "Fixture packet",
-      manufacturer: "Fixture Seeds",
+      brandId: await findOrCreateVendor(ctx.db, "Fixture Seeds"),
     });
     const unfinished = await makeRun("completed");
     const unexplained = await makeRun("completed");
@@ -152,7 +153,7 @@ describe("Run data quality", () => {
   it("projects the target account's human label rather than its identifier", async () => {
     const product = await insertWithShortcode(ctx.db, "product", {
       name: "Fixture packet",
-      manufacturer: "Fixture Seeds",
+      brandId: await findOrCreateVendor(ctx.db, "Fixture Seeds"),
     });
     const vendor = await insertWithShortcode(ctx.db, "vendor", {
       name: "Fixture vendor",

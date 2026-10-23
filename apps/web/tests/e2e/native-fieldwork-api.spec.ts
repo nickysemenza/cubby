@@ -7,7 +7,6 @@ import { inventoryWithLocationAndProductOut } from "@cubby/schemas/inventory";
 import { productWithFoodOut } from "@cubby/schemas/product";
 import { productCreateWithInventoryOut } from "@cubby/schemas/product-capture";
 import { scanAtLocationOut } from "@cubby/schemas/scan";
-import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared/constants";
 import type { APIResponse, Page } from "@playwright/test";
 import { z } from "zod";
 
@@ -83,7 +82,7 @@ test("a staged photo and reviewed placement commit one Product with one each", a
       await post(page, baseURL, "product/createWithInventory", {
         product: {
           name: `misc: ${name}`,
-          manufacturer: UNSPECIFIED_MANUFACTURER,
+          brandId: null,
           pendingImageIds: [staged.imageId],
         },
         inventory: {

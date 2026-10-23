@@ -3,7 +3,6 @@ import {
   parseShortcodeFor,
 } from "@cubby/schemas/identifiers";
 import { testUserId } from "@cubby/schemas/testing";
-import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
 import { eq } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
 import { TEST_USER_ID, withTestDb } from "tooling/test-setup";
@@ -717,8 +716,14 @@ describe("product match review surfaces", () => {
     // Row order would keep the lower id; quality must override it.
     await getDb(ctx.db)
       .update(productTable)
-      .set({ manufacturer: UNSPECIFIED_MANUFACTURER })
+      .set({ brandId: null })
       .where(eq(productTable.id, sparse!.entityId));
+    await getDb(ctx.db)
+      .update(productTable)
+      .set({
+        brandId: await findOrCreateVendor(ctx.db, "Synthetic identified brand"),
+      })
+      .where(eq(productTable.id, rich!.entityId));
     await publishDetected([sparse!, rich!], {
       evidence: "Synthetic keeper quality",
       actionable: true,

@@ -579,5 +579,5 @@ export const demoGaps: WorkQueueGap[] = [
   { check: "product_image", message: "Stocked, but no cover photo yet" },
   { check: "product_price", message: "No purchase records a price" },
   { check: "product_category", message: "Pick a category so spend rolls up" },
-  { check: "product_manufacturer", message: "Manufacturer is blank" },
+  { check: "product_brand", message: "Manufacturer is blank" },
 ];

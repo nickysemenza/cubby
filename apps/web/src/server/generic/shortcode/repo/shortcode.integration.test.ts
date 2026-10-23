@@ -1,3 +1,4 @@
+import { entityRefKey } from "@cubby/schemas/entity";
 /**
  * The shortcode invariants, against a real Postgres.
  *
@@ -5,8 +6,6 @@
  * authority, and the point of most of these cases is that the index (not the
  * pre-check, which any concurrent writer can invalidate) is what holds the line.
  */
-
-import { entityRefKey } from "@cubby/schemas/entity";
 import type {
   ImageShortcode,
   IngredientShortcode,
@@ -26,6 +25,7 @@ import { describe, expect, expectTypeOf, it, vi } from "vitest";
 
 import { databaseForTransaction, getDb } from "~/server/db/helpers";
 import { entityIdentity, location, product } from "~/server/db/schema";
+import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
 import { findPgError } from "~/server/errors/db-errors";
 import {
   createLocationFixture as createLocation,
@@ -171,7 +171,10 @@ describe("insertWithShortcode", () => {
           {
             id,
             name: "Retried",
-            manufacturer: "ACME",
+            brandId: await findOrCreateVendor(
+              mode === "facade" ? databaseForTransaction(tx) : tx,
+              "ACME",
+            ),
           },
           generator.port,
         );

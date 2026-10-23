@@ -48,10 +48,13 @@ export async function seedSimulatorScenario(
   const db = buildScenarioDatabase(pool);
   await seedBaseWorld(resolveDatabaseRuntime(db).client);
   const context = buildKernelContext(db, testUserId(userId));
+  const brand = await createEntity(context, "vendor", {
+    name: "Synthetic Works",
+  });
   const product = await createEntity(context, "product", {
     name,
     price,
-    manufacturer: "Synthetic Works",
+    brandId: brand.id,
     model: null,
     categoryId: taxonomyShortcode("household"),
   });

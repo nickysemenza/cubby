@@ -17,6 +17,10 @@ import { auditLog } from "~/server/db/schema";
 import { findOrCreateIngredient } from "~/server/domains/ingredient/repo/crud";
 import { selectStaleRecipeIds } from "~/server/domains/recipe/repo/totals";
 import {
+  findOrCreateVendor,
+  getVendorByID,
+} from "~/server/domains/vendor/repo/vendor";
+import {
   entityKernelContextSchema,
   executeEntityAs,
 } from "~/server/entity-kernel";
@@ -270,7 +274,14 @@ describe("generic bulk updates", () => {
         action: "update",
         entity: "product",
         id: product.id,
-        data: { manufacturer: "Synthetic Cited Maker" },
+        data: {
+          brandId: (
+            await getVendorByID(
+              ctx.db,
+              await findOrCreateVendor(ctx.db, "Synthetic Cited Maker"),
+            )
+          ).id,
+        },
       },
       ["id"],
     );
@@ -404,12 +415,12 @@ describe("generic bulk updates", () => {
     ]);
   });
 
-  it("rolls back a manufacturer collision and reports the conflicting selection", async () => {
+  it("rolls back a Brand reference collision and reports the conflicting selection", async () => {
     const first = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({
         name: "Synthetic collision",
-        manufacturer: "Synthetic Alpha",
+        brandId: await findOrCreateVendor(ctx.db, "Synthetic Alpha"),
       }),
       ctx.actor,
     );
@@ -417,7 +428,7 @@ describe("generic bulk updates", () => {
       ctx.db,
       makeProductInput({
         name: "Synthetic collision",
-        manufacturer: "Synthetic Beta",
+        brandId: await findOrCreateVendor(ctx.db, "Synthetic Beta"),
       }),
       ctx.actor,
     );
@@ -425,25 +436,30 @@ describe("generic bulk updates", () => {
       ctx.db,
       makeProductInput({
         name: "Synthetic collision bystander",
-        manufacturer: "Synthetic Gamma",
+        brandId: await findOrCreateVendor(ctx.db, "Synthetic Gamma"),
       }),
       ctx.actor,
     );
     await expect(
       bulk("product", [first.id, second.id, bystander.id], {
-        manufacturer: "Synthetic Shared",
+        brandId: (
+          await getVendorByID(
+            ctx.db,
+            await findOrCreateVendor(ctx.db, "Synthetic Shared"),
+          )
+        ).id,
       }),
     ).rejects.toThrow(
-      `Conflicting rows: ${[first.id, second.id].sort().join(", ")}`,
+      `selected rows: ${[first.id, second.id, bystander.id].join(", ")}`,
     );
     expect(await read("product", first.id)).toMatchObject({
-      manufacturer: "Synthetic Alpha",
+      brandName: "Synthetic Alpha",
     });
     expect(await read("product", second.id)).toMatchObject({
-      manufacturer: "Synthetic Beta",
+      brandName: "Synthetic Beta",
     });
     expect(await read("product", bystander.id)).toMatchObject({
-      manufacturer: "Synthetic Gamma",
+      brandName: "Synthetic Gamma",
     });
   });
 

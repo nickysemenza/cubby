@@ -99,7 +99,8 @@ struct EntityRowPresentationTests {
         let row = EntityRow(
             id: "PRD-1001", title: "Synthetic skillet", subtitle: nil, imageURL: nil,
             raw: [
-                "id": "PRD-1001", "name": "Synthetic skillet", "manufacturer": "Synthetic",
+                "id": "PRD-1001", "name": "Synthetic skillet", "brandId": "VEN-2345",
+                "brandName": "Synthetic",
                 "dataQuality": ["score": 75, "status": "needs_data"],
             ])
         let presentation = EntityRowPresentation.resolve(descriptor: EntityCatalog[.product], row: row)
@@ -194,20 +195,20 @@ struct EntityRowPresentationTests {
         let row = EntityRow(
             id: "PRD-1001", title: "Cast Iron Skillet", subtitle: "ignored", imageURL: nil,
             raw: [
-                "id": "PRD-1001", "name": "Cast Iron Skillet", "manufacturer": "Lodge",
+                "id": "PRD-1001", "name": "Cast Iron Skillet", "brandId": "VEN-3456", "brandName": "Lodge",
                 "tags": ["kitchen", "cast-iron"], "updatedAt": "2026-09-12T10:00:00.000Z",
             ])
 
         let presentation = EntityRowPresentation.resolve(
-            descriptor: descriptor, row: row, columns: ["tags", "manufacturer"])
+            descriptor: descriptor, row: row, columns: ["tags", "brandId"])
 
         #expect(presentation.title == "Cast Iron Skillet")
         #expect(presentation.shortcode == "PRD-1001")
-        #expect(presentation.facts.map(\.id) == ["dataQuality", "tags", "manufacturer"])
+        #expect(presentation.facts.map(\.id) == ["dataQuality", "tags", "brandId"])
         #expect(presentation.facts.contains { $0.value == "Lodge" })
         #expect(presentation.facts.contains { $0.value == "kitchen, cast-iron" })
-        #expect(presentation.factLine?.contains("Manufacturer: Lodge") == true)
-        #expect(presentation.accessibilityText.contains("Manufacturer, Lodge"))
+        #expect(presentation.factLine?.contains("Brand: Lodge") == true)
+        #expect(presentation.accessibilityText.contains("Brand, Lodge"))
         #expect(!presentation.accessibilityText.contains("PRD-1001"))
     }
 

@@ -6,7 +6,7 @@ import Testing
 @Suite("EntityPatch")
 struct EntityPatchTests {
     private let original: JSONValue = [
-        "id": "PRD-2345", "name": "Skillet", "manufacturer": "Acme", "categoryId": "CAT-2224",
+        "id": "PRD-2345", "name": "Skillet", "brandId": "VEN-2345", "categoryId": "CAT-2224",
         "notes": nil, "expectedQuantity": 2,
     ]
 
@@ -17,7 +17,7 @@ struct EntityPatchTests {
             original: original,
             draft: [
                 "name": "Skillet",  // unchanged
-                "manufacturer": "Lodge",  // changed
+                "brandId": "VEN-3456",  // changed
                 "categoryId": nil,  // held → cleared
                 "notes": nil,  // original null → unchanged
                 "model": nil,  // original absent → unchanged
@@ -25,14 +25,14 @@ struct EntityPatchTests {
             ],
             nullableKeys: ["categoryId", "notes", "model"]
         )
-        #expect(patch.values == ["manufacturer": "Lodge", "expectedQuantity": 3])
+        #expect(patch.values == ["brandId": "VEN-3456", "expectedQuantity": 3])
         #expect(patch.cleared == ["categoryId"])
         #expect(!patch.isEmpty)
     }
 
     @Test func identicalDraftIsEmpty() throws {
         let patch = try EntityPatch.diff(
-            original: original, draft: ["name": "Skillet", "manufacturer": "Acme"], nullableKeys: [])
+            original: original, draft: ["name": "Skillet", "brandId": "VEN-2345"], nullableKeys: [])
         #expect(patch.isEmpty)
         #expect(patch == EntityPatch())
     }

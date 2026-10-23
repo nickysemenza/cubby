@@ -14,6 +14,7 @@ import { countUnembeddedEntities } from "~/server/domains/maintenance/service/ma
 import { productPairFingerprint } from "~/server/domains/product/repo/match/product-identity-snapshot";
 import { publishProductPair } from "~/server/domains/product/repo/match/product-match-candidate";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
+import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
 import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
 import { getActiveAssessmentSuppressionKeys } from "~/server/generic/assessment/repo/assessment-state";
 import { listSuggestionPage } from "~/server/generic/assessment/repo/suggestion-list";
@@ -195,7 +196,7 @@ describe("semantic search background tasks", () => {
       ctx.db,
       makeProductInput({
         name: "Duplicate identity one",
-        manufacturer: "Example Fixtures",
+        brandId: await findOrCreateVendor(ctx.db, "Example Fixtures"),
         model: "MODEL-REF",
         externalIds: [
           { source: "example-one", kind: "retailer_sku", externalId: "DUP-1" },
@@ -207,7 +208,7 @@ describe("semantic search background tasks", () => {
       ctx.db,
       makeProductInput({
         name: "Duplicate identity two",
-        manufacturer: "Example Fixtures",
+        brandId: await findOrCreateVendor(ctx.db, "Example Fixtures"),
         model: "MODEL-REF",
         externalIds: [
           { source: "example-two", kind: "retailer_sku", externalId: "DUP-2" },

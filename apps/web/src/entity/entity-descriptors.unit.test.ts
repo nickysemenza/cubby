@@ -22,7 +22,7 @@ import type { EntityListResultByEntity } from "./generated/entity-lists.gen";
  * a refactor cannot make the comparison vacuous.
  */
 const PRODUCT_LIST_INPUT = {
-  filters: { nameFilter: "bolt", manufacturerExact: "Milwaukee" },
+  filters: { nameFilter: "bolt", brandId: "VEN-TEST" },
   sort: [{ orderBy: "name", direction: "asc" as const }],
   pagination: { pageIndex: 0, pageSize: 25 },
 };
@@ -61,7 +61,7 @@ const KEYS = {
       entity: "product",
       input: {
         entity: "product",
-        filters: { nameFilter: "bolt", manufacturerExact: "Milwaukee" },
+        filters: { nameFilter: "bolt", brandId: "VEN-TEST" },
         sort: [{ orderBy: "name", direction: "asc" }],
         pagination: { pageIndex: 0, pageSize: 25 },
       },
@@ -93,7 +93,7 @@ const KEYS = {
       entity: "product",
       input: {
         entity: "product",
-        filters: { nameFilter: "bolt", manufacturerExact: "Milwaukee" },
+        filters: { nameFilter: "bolt", brandId: "VEN-TEST" },
         sort: [],
         pagination: { pageIndex: 0, pageSize: 25 },
       },
@@ -107,7 +107,7 @@ const KEYS = {
       entity: "product",
       input: {
         entity: "product",
-        filters: { nameFilter: "bolt", manufacturerExact: "Milwaukee" },
+        filters: { nameFilter: "bolt", brandId: "VEN-TEST" },
         sort: [{ orderBy: "name", direction: "asc" }],
         pagination: { pageIndex: 0, pageSize: 25 },
       },
@@ -395,7 +395,7 @@ describe("scoped entity descriptors", () => {
     >().toEqualTypeOf<EntityListResultByEntity["recipe"]>();
     entityListFor("recipe").queryOptions({
       // @ts-expect-error a product-only filter does not belong to recipe
-      filters: { manufacturerExact: "Milwaukee" },
+      filters: { brandId: "VEN-TEST" },
     });
   });
 });

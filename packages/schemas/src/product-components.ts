@@ -48,7 +48,7 @@ export const kitComponentRowsInput = z.object({
 export const productComponentOut = z.object({
   productId: productShortcode,
   productName: z.string(),
-  manufacturer: z.string(),
+  brandName: z.string().nullable(),
   quantity: componentQuantity,
   price: moneyNullable.describe(
     "Effective valuation/costing price — display only, not spend.",
@@ -105,7 +105,7 @@ export type KitMembershipPurchaseOut = z.infer<typeof kitMembershipPurchaseOut>;
 export const kitMembershipOut = z.object({
   parentProductId: productShortcode,
   parentProductName: z.string(),
-  manufacturer: z.string(),
+  brandName: z.string().nullable(),
   quantity: componentQuantity,
   coverImageUrl: z.url().nullable(),
   attachedAt: z.date(),

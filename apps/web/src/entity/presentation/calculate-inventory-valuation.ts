@@ -90,7 +90,7 @@ export function calculateInventoryValuation(
       pricingStatus.priced.count++;
       pricingStatus.priced.itemNames.push(product.name);
 
-      const key = product.manufacturer || "Unknown";
+      const key = product.brandName || "Unknown";
       byManufacturer.set(key, (byManufacturer.get(key) || 0) + valuation);
     } else if (isMiscProduct(product.name)) {
       // Category: misc - expected no price

@@ -210,14 +210,14 @@ async function runCase(
               identifier: "012345678905",
               url: null,
               productName: null,
-              manufacturer: null,
+              brandName: null,
             }
           : {
-              source: "manufacturer",
+              source: "brandName",
               identifier: "DRILL-20",
               url: null,
               productName: "cordless drill",
-              manufacturer: "Example Tools",
+              brandName: "Example Tools",
             };
       return {
         result: await suggestExternalIdKind(input, {
@@ -471,8 +471,8 @@ async function runCase(
       const { fixture } = aiSmokeInputs.productIdentity.parse(raw);
       const subject =
         fixture === "standard"
-          ? "Two synthetic shirts share manufacturer Example, model Crew and exact ASIN B000000001. Both retained retailer Sources explicitly confirm blue, medium, pack of one."
-          : "Two synthetic shirts share manufacturer Example and model Crew. The first is blue medium; the second has no retained color or size evidence. No exact identifier is shared.";
+          ? "Two synthetic shirts share brandName Example, model Crew and exact ASIN B000000001. Both retained retailer Sources explicitly confirm blue, medium, pack of one."
+          : "Two synthetic shirts share brandName Example and model Crew. The first is blue medium; the second has no retained color or size evidence. No exact identifier is shared.";
       return {
         result: await runDecisionChoice({
           ...productIdentityPrompt(subject),
@@ -814,11 +814,11 @@ async function runCase(
       const line = purchaseLine(fixture);
       const labels = chosen
         ? [
-            `${chosen.name} | manufacturer=${chosen.manufacturer || "unknown"} | model=${chosen.model ?? "unknown"}`,
+            `${chosen.name} | brandName=${chosen.brandName || "unknown"} | model=${chosen.model ?? "unknown"}`,
           ]
         : [
-            "Cordless drill kit | manufacturer=Example Tools | model=DRILL-20",
-            "Garden rake | manufacturer=Example Tools | model=RAKE-10",
+            "Cordless drill kit | brandName=Example Tools | model=DRILL-20",
+            "Garden rake | brandName=Example Tools | model=RAKE-10",
           ];
       return {
         result: await runDecisionChoice({
@@ -969,7 +969,7 @@ async function runCase(
       const product = await getProductByID(db, id);
       if (!product) throw new Error("Product was not found.");
       const [vector] = await embedTexts(
-        [`${product.name} ${product.manufacturer ?? ""}`.trim()],
+        [`${product.name} ${product.brandName ?? ""}`.trim()],
         {
           db,
           runId,

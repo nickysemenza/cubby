@@ -50,7 +50,6 @@ export type DiagnosticKey =
   | "partially-imported-cookbooks"
   | "tools-used-outside-ownership"
   | "image-metadata-outcomes"
-  | "manufacturer-spelling-variants"
   | "weight-sold-products"
   | "duplicate-vendors"
   | "referential-liveness-violations"

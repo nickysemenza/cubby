@@ -297,7 +297,7 @@ export default defineEntity({
       // The midpoint of the candidates' price range.
       priceRange: { type: "number" },
       candidateName: { via: "candidates.name" },
-      candidateManufacturer: { via: "candidates.manufacturer" },
+      candidateManufacturer: { via: "candidates.brand.name" },
       candidateModel: { via: "candidates.model" },
     },
     sort: {

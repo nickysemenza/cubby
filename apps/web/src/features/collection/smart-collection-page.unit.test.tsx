@@ -53,7 +53,7 @@ function operations() {
           {
             id: PRODUCT_ID,
             name: "Sample paint roller",
-            manufacturer: "Example Co.",
+            brandName: "Example Co.",
             imageUrl: null,
             direct: false,
             inherited: false,
@@ -159,11 +159,11 @@ describe("SmartCollectionPage", () => {
       name: "Condition 2 type",
     });
     fireEvent.keyDown(secondCondition, { key: "ArrowDown" });
-    const manufacturer = await screen.findByRole("option", {
+    const brandName = await screen.findByRole("option", {
       name: /Manufacturer equals/,
     });
-    fireEvent.pointerDown(manufacturer);
-    fireEvent.click(manufacturer);
+    fireEvent.pointerDown(brandName);
+    fireEvent.click(brandName);
     await waitFor(() =>
       expect(secondCondition).toHaveTextContent("Manufacturer equals"),
     );

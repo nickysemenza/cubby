@@ -99,7 +99,7 @@ export async function scanAtLocation(
     id: product.id,
     name: product.name,
     created,
-    manufacturer: product.manufacturer,
+    brandName: product.brandName,
     hasPrice: product.pricing.effectivePrice != null,
   };
   const now = new Date();

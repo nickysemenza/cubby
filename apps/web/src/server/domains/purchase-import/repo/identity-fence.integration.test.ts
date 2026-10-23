@@ -1,6 +1,6 @@
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { type ExtractedOrderCandidate } from "@cubby/schemas/purchase-import";
-import { and, eq, ne } from "drizzle-orm";
+import { and, eq, isNull, ne } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
@@ -17,6 +17,7 @@ import {
   purchase,
   vendor as vendorTable,
 } from "~/server/db/schema";
+import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
 import { ensureExternalSources } from "~/server/generic/entity-links/repo/entity-external-ids";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import {
@@ -246,7 +247,12 @@ describe("member prepare and commit identity fences", () => {
       })
       .from(vendorTable)
       // Every case starts from memberImportWorld()'s own unrelated Vendor.
-      .where(ne(vendorTable.name, "Synthetic service merchant"));
+      .where(
+        and(
+          ne(vendorTable.name, "Synthetic service merchant"),
+          isNull(vendorTable.systemKey),
+        ),
+      );
 
   it("converges an order Email on the Vendor its exact sender proves and learns the merchant name", async () => {
     const { party, vendor, existing } = await senderVendor();
@@ -484,7 +490,7 @@ describe("member prepare and commit identity fences", () => {
 
   async function existingProduct(input: {
     name: string;
-    manufacturer: string;
+    brandId: Awaited<ReturnType<typeof findOrCreateVendor>> | null;
     aliases?: string[];
   }) {
     const created = await createProductIdentityFixture(
@@ -532,7 +538,7 @@ describe("member prepare and commit identity fences", () => {
       const { vendor } = await memberImportWorld(ctx.db, ctx.actor);
       const existing = await existingProduct({
         name: "Synthetic copper instrument",
-        manufacturer: "Synthetic works",
+        brandId: await findOrCreateVendor(ctx.db, "Synthetic works"),
         aliases: ["Synthetic brass gauge"],
       });
       const preparation = await prepareMemberImport(ctx.db, ctx.actor, {
@@ -556,7 +562,7 @@ describe("member prepare and commit identity fences", () => {
     const { vendor } = await memberImportWorld(ctx.db, ctx.actor);
     const existing = await existingProduct({
       name: "Synthetic Works linen camp shirt — Green, M",
-      manufacturer: "Synthetic Works",
+      brandId: await findOrCreateVendor(ctx.db, "Synthetic Works"),
     });
     const line = {
       title: "Synthetic Works embroidered linen camp shirt — Light green, M",
@@ -600,7 +606,7 @@ describe("member prepare and commit identity fences", () => {
     const { vendor } = await memberImportWorld(ctx.db, ctx.actor);
     const owner = await existingProduct({
       name: "Synthetic steel fitting",
-      manufacturer: "Synthetic works",
+      brandId: await findOrCreateVendor(ctx.db, "Synthetic works"),
     });
     await withTransaction(ctx.db, async (tx) => {
       await tx.insert(externalSource).values({
@@ -660,7 +666,7 @@ describe("member prepare and commit identity fences", () => {
     const { vendor } = await memberImportWorld(ctx.db, ctx.actor);
     const owner = await existingProduct({
       name: "Synthetic labeled fitting",
-      manufacturer: "Synthetic works",
+      brandId: await findOrCreateVendor(ctx.db, "Synthetic works"),
     });
     await withTransaction(ctx.db, async (tx) => {
       await ensureExternalSources(tx, ["gtin"]);
@@ -727,7 +733,7 @@ describe("member prepare and commit identity fences", () => {
     const { vendor } = await memberImportWorld(ctx.db, ctx.actor);
     const existing = await existingProduct({
       name: "Synthetic copper instrument",
-      manufacturer: "Synthetic works",
+      brandId: await findOrCreateVendor(ctx.db, "Synthetic works"),
     });
     const quote = "Sold as a two-pack; the single unit is a separate listing.";
     const { committed } = await memberImport(ctx.db, ctx.actor, {
@@ -775,7 +781,7 @@ describe("member prepare and commit identity fences", () => {
     const { vendor } = await memberImportWorld(ctx.db, ctx.actor);
     const existing = await existingProduct({
       name: "Synthetic copper instrument",
-      manufacturer: "",
+      brandId: null,
     });
     const preparation = await prepareMemberImport(ctx.db, ctx.actor, {
       key: "identical-name",

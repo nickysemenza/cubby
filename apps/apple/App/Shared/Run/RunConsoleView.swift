@@ -209,7 +209,7 @@ struct RunPhotoBatchSlot: View {
                 product: .create(
                     .init(
                         kind: .create,
-                        create: .init(name: "Canvas pocket T-shirt · navy", manufacturer: "ForgeWear"))),
+                        create: .init(name: "Canvas pocket T-shirt · navy", brandId: "VEN-2345"))),
                 evidence: "The shirt and neck label show one garment with matching identity.",
                 missingImageCount: 0, updatedAt: "2026-09-24T12:00:00Z")
             let images: [PhotoRunImage] = [

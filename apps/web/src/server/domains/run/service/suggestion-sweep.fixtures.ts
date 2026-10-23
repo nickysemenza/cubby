@@ -5,6 +5,8 @@ import {
   parseEntityRef,
   runShortcode,
   type RunId,
+  type VendorId,
+  type VendorShortcode,
 } from "@cubby/schemas/identifiers";
 import type { ProductCategoryFeature } from "@cubby/schemas/product-category-fields";
 import type { SupportedDecisionModel } from "@cubby/shared/ai/models";
@@ -25,7 +27,6 @@ import {
   product as productTable,
   assessmentState as suggestionTable,
 } from "~/server/db/schema";
-import { createProduct } from "~/server/domains/product/repo/crud";
 import { entityKernelContextSchema } from "~/server/entity-kernel/adapter";
 import { publishFieldAssessment } from "~/server/generic/assessment/repo/assessment";
 import { fieldInputFingerprint } from "~/server/generic/assessment/repo/field-input-fence";
@@ -34,7 +35,10 @@ import {
   resolveLiveShortcode,
 } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
-import { makeProductInput } from "~/server/testing/repo.fixtures";
+import {
+  createProductFixture,
+  makeProductInput,
+} from "~/server/testing/repo.fixtures";
 import { createTestRequestContext } from "~/server/testing/request-context";
 
 import { ensureRun } from "../repo/ensure-run";
@@ -101,17 +105,13 @@ export const productFixture = (
   ctx: Ctx,
   name: string,
   input: {
-    manufacturer?: string;
+    brandId?: VendorId | VendorShortcode | null;
     model?: ReturnType<typeof makeProductInput>["model"];
     notes?: string;
     categoryId?: ReturnType<typeof taxonomyId>;
   } = {},
 ) =>
-  createProduct(
-    ctx.db,
-    makeProductInput({ name, manufacturer: "Synthetic maker", ...input }),
-    ctx.actor,
-  );
+  createProductFixture(ctx.db, makeProductInput({ name, ...input }), ctx.actor);
 
 export const expenseFixture = (
   db: Database,

@@ -49,7 +49,7 @@ function inputFor(
     identifier: "B08N5WRWNW",
     url: null,
     productName: null,
-    manufacturer: null,
+    brandName: null,
     ...overrides,
   };
 }

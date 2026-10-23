@@ -15,6 +15,7 @@ import {
   image,
   product,
 } from "~/server/db/schema";
+import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 import { createUploadedImageRecord } from "./image";
@@ -30,7 +31,7 @@ const ctx = withTestDb();
 it("batches current observations and removes deleted targets and replaced sources", async () => {
   const target = await insertWithShortcode(ctx.db, "product", {
     name: "Synthetic blue drill",
-    manufacturer: "Synthetic",
+    brandId: await findOrCreateVendor(ctx.db, "Synthetic"),
     kind: "durable",
   });
   const source = await createUploadedImageRecord(ctx.db, {
@@ -103,7 +104,7 @@ it("retrieves a live category and never compares the source against itself", asy
   });
   const target = await insertWithShortcode(ctx.db, "product", {
     name: "Synthetic drill",
-    manufacturer: "Synthetic",
+    brandId: await findOrCreateVendor(ctx.db, "Synthetic"),
     categoryId: category.id,
   });
   const source = await createUploadedImageRecord(ctx.db, {

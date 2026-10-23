@@ -662,7 +662,7 @@ describe("compiled list fields", () => {
       (
         await vendorList(
           ctx.db,
-          {},
+          { search: "Compiler" },
           [{ orderBy: "latestPurchaseDate", direction }],
           page,
         )

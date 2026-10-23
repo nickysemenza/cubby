@@ -29,7 +29,7 @@ describe("tool gallery derivations", () => {
       toolGalleryGroup(
         {
           inventoryEntries: [entry("cabinet", "Cabinet", ["Home", "Garage"])],
-          manufacturer: "Makita",
+          brandName: "Makita",
           trade: "cabinetry",
         },
         "location",
@@ -45,7 +45,7 @@ describe("tool gallery derivations", () => {
       toolGalleryGroup(
         {
           inventoryEntries: [entry("garage", "Garage"), entry("shed", "Shed")],
-          manufacturer: "Makita",
+          brandName: "Makita",
           trade: "cabinetry",
         },
         "location",
@@ -58,17 +58,17 @@ describe("tool gallery derivations", () => {
       toolGalleryGroup(
         {
           inventoryEntries: [entry("garage", "Garage")],
-          manufacturer: "(UNSPECIFIED)",
+          brandName: null,
           trade: null,
         },
-        "manufacturer",
+        "brandName",
       ),
     ).toEqual({ key: "", label: "Unspecified" });
     expect(
       toolGalleryGroup(
         {
           inventoryEntries: [entry("garage", "Garage")],
-          manufacturer: "Makita",
+          brandName: "Makita",
           trade: null,
         },
         "trade",
@@ -81,7 +81,7 @@ describe("tool gallery derivations", () => {
       productName: "CORDLESS Drill",
       aliases: ["Impact Driver"],
       tags: ["18V"],
-      manufacturer: "Makita",
+      brandName: "Makita",
       model: "XFD10",
       inventoryEntries: [entry("cabinet", "Cabinet", ["Home", "Garage"])],
       groupLabel: "Multiple locations",

@@ -65,7 +65,7 @@ describe("entity picker value adapters", () => {
       buildProductComboboxItem({
         id: product,
         name: "Drill",
-        manufacturer: "Makita",
+        brandName: "Makita",
       }),
     ).toMatchObject({ id: product, shortcode: product, secondary: "Makita" });
     expect(
@@ -214,7 +214,7 @@ describe("product stock picker evidence", () => {
   const base = {
     id: product,
     name: "Back Brace",
-    manufacturer: "BraceAbility",
+    brandName: "BraceAbility",
     category: categorySummaryFixture("household"),
     quantityLedger: {
       acquiredUnits: 1,

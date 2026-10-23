@@ -43,7 +43,8 @@ export default defineEntity({
     },
     titleField: "name",
     domain: "finance",
-    description: "Sources for purchases and expense evidence.",
+    description:
+      "Marketed brands and sellers for purchases and expense evidence.",
     emptyState: {
       title: "No vendors yet",
       description:
@@ -66,6 +67,14 @@ export default defineEntity({
         ],
       },
       additionalSections: [
+        {
+          kind: "relation",
+          id: "branded-products",
+          title: "Branded products",
+          relation: "branded-products",
+          filter: { descriptor: "brandId" },
+          columns: ["name", "brandId", "categoryId"],
+        },
         {
           kind: "slot",
           id: "spending-classification",
@@ -92,7 +101,7 @@ export default defineEntity({
           title: "Purchased products",
           relation: "products",
           filter: { descriptor: "related:product.vendors" },
-          columns: ["name", "manufacturer", "categoryId", "expenseTotal"],
+          columns: ["name", "brandId", "categoryId", "expenseTotal"],
         },
       ],
     },
@@ -144,6 +153,12 @@ export default defineEntity({
   },
   model: {
     fields: [
+      {
+        key: "systemKey",
+        kind: "text",
+        nullable: true,
+        validation: { read: z.string().nullable(), create: null, update: null },
+      },
       {
         key: "purchasedCategories",
         kind: "identifier",
@@ -728,6 +743,7 @@ export default defineEntity({
       labelField("agentHintsLabel", "Vendor agent hints"),
     ],
     storage: [
+      "systemKey",
       {
         key: "spendingProfile",
         specialized: "enum:spendingProfile",
@@ -906,7 +922,10 @@ export default defineEntity({
     output: { module: "@cubby/schemas/vendor", export: "vendorOut" },
   },
   storage: {
-    indexes: [{ on: ["name"], unique: true, where: "{deletedAt} IS NULL" }],
+    indexes: [
+      { on: ["name"], where: "{deletedAt} IS NULL" },
+      { on: ["systemKey"], unique: true },
+    ],
     checks: [
       { column: "spendingProfile" },
       { column: "orderEvidence", nullClause: true },
@@ -1140,6 +1159,17 @@ export default defineEntity({
     ],
   },
   relations: [
+    {
+      key: "branded-products",
+      label: "Branded products",
+      target: "product",
+      cardinality: "many",
+      provenance: {
+        kind: "local-path",
+        steps: [{ edge: "Product.brandId", direction: "incoming" }],
+      },
+      inverse: { steps: [{ edge: "Product.brandId", direction: "outgoing" }] },
+    },
     {
       key: "emails",
       label: "Emails",

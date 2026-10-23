@@ -269,7 +269,7 @@ const defaultFieldOptions = <E extends EditableEntity>(
 ): FieldOptions<E> | undefined => {
   const derived = derivedFieldOptions<E>(field);
   // `control.required` states the editor's rule where it differs from the
-  // create schema's (a manufacturer the schema merely defaults, an amount a
+  // create schema's (a brandName the schema merely defaults, an amount a
   // dedicated validator reports); null derives it.
   const required = field.control?.required;
   return required === null || required === undefined

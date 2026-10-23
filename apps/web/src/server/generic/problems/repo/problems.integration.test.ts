@@ -14,6 +14,7 @@ import { insertSettlementTransaction } from "tooling/settlement-fixtures";
 import { withTestDb } from "tooling/test-setup";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
+import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
 import {
   executeProblem,
   findProblemByType,
@@ -501,10 +502,7 @@ describe("problems — view-backed uniform rows", () => {
       views.productsMissingPrice.find((row) => row.id === thing.id),
     ).toMatchObject({
       entity: "product",
-      fields: [
-        { label: "Manufacturer", value: "Test Manufacturer", tone: null },
-        { label: "Unvalued", value: "2 units", tone: "warning" },
-      ],
+      fields: [{ label: "Unvalued", value: "2 units", tone: "warning" }],
       badges: [shelfBadge],
     });
     expect(views.staleLocations.find((row) => row.id === shelf.id)).toEqual({
@@ -1361,7 +1359,7 @@ describe("title-size suggestions — food eligibility", () => {
     ] as const) {
       eligible.push(
         await insertWithShortcode(ctx.db, "product", {
-          manufacturer: "Example",
+          brandId: await findOrCreateVendor(ctx.db, "Example"),
           ...data,
         }),
       );
@@ -1375,7 +1373,7 @@ describe("title-size suggestions — food eligibility", () => {
       { name: "Example multipack 6 x 500 g", categoryId: taxonomyId("food") },
     ] as const) {
       await insertWithShortcode(ctx.db, "product", {
-        manufacturer: "Example",
+        brandId: await findOrCreateVendor(ctx.db, "Example"),
         ...data,
       });
     }
@@ -1395,7 +1393,7 @@ describe("title-size suggestions — food eligibility", () => {
       ctx.actor,
     );
     const deleted = await insertWithShortcode(ctx.db, "product", {
-      manufacturer: "Example",
+      brandId: await findOrCreateVendor(ctx.db, "Example"),
       name: "Example deleted food 500 g",
       categoryId: taxonomyId("food"),
     });

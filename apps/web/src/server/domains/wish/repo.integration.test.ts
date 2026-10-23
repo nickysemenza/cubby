@@ -2,6 +2,7 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { updateProduct } from "~/server/domains/product/repo/crud";
+import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
 import {
   createProductFixture as createProduct,
   makeProductInput,
@@ -44,7 +45,7 @@ describe("wish candidates", () => {
       ctx.db,
       makeProductInput({
         name: "Cast iron skillet",
-        manufacturer: "Acme",
+        brandId: await findOrCreateVendor(ctx.db, "Acme"),
         model: "CI-12",
         categoryId: taxonomyShortcode("tools"),
       }),

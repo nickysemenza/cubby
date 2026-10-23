@@ -14,7 +14,7 @@ export interface InventoryEntryBase {
   id: string;
   amount: Amount;
   location?: { id: string; name: string; type: LocationType | null };
-  product?: { id: string; name: string; manufacturer: string };
+  product?: { id: string; name: string; brandName: string | null };
 }
 
 export type InventoryRelatedEntity =
@@ -24,7 +24,7 @@ export type InventoryRelatedEntity =
     }
   | {
       entity: "product";
-      data: { id: string; name: string; manufacturer: string };
+      data: { id: string; name: string; brandName: string | null };
     };
 
 /**

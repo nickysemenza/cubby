@@ -14,6 +14,7 @@ import {
 } from "~/server/domains/inventory/repo/ownership";
 import { getPurchaseByID } from "~/server/domains/purchase/repo/purchase";
 import { resolveDraftEvidenceFields } from "~/server/domains/purchase/repo/purchase-evidence-policy";
+import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
 import { resolveLiveShortcode } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
@@ -216,7 +217,7 @@ it("explains a blocking beneficiary and evaluated account alternatives without a
     inventoryOwnerDefaultEnabled: true,
   });
   const product = await insertWithShortcode(ctx.db, "product", {
-    manufacturer: "Synthetic maker",
+    brandId: await findOrCreateVendor(ctx.db, "Synthetic maker"),
     name: "Synthetic ownership product",
   });
   const purchase = await insertWithShortcode(ctx.db, "purchase", {
@@ -325,7 +326,7 @@ it("explains a blocking beneficiary and evaluated account alternatives without a
 
 it("distinguishes no acquisition, multiple acquisitions, and explicit Household from unknown", async () => {
   const product = await insertWithShortcode(ctx.db, "product", {
-    manufacturer: "Synthetic maker",
+    brandId: await findOrCreateVendor(ctx.db, "Synthetic maker"),
     name: "Synthetic missing acquisition",
   });
   const empty = await loadFieldResolutionEvidence(
@@ -463,7 +464,7 @@ it("distinguishes no acquisition, multiple acquisitions, and explicit Household 
 
 it("reports omitted ownership branches and keeps the full stack for each included entry", async () => {
   const product = await insertWithShortcode(ctx.db, "product", {
-    manufacturer: "Synthetic maker",
+    brandId: await findOrCreateVendor(ctx.db, "Synthetic maker"),
     name: "Synthetic many-entry product",
   });
   const owner = await insertWithShortcode(ctx.db, "ledgerParty", {
@@ -532,7 +533,7 @@ it("shows disabled account parties, payment agreement, and enabled unusable vend
   });
   const product = await insertWithShortcode(ctx.db, "product", {
     name: "Synthetic policy product",
-    manufacturer: "Synthetic maker",
+    brandId: await findOrCreateVendor(ctx.db, "Synthetic maker"),
   });
   const purchase = await insertWithShortcode(ctx.db, "purchase", {
     vendorId: vendor.id,

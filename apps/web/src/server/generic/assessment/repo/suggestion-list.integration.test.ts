@@ -305,7 +305,7 @@ describe("cross-family Suggestion list", () => {
     const unsure = await fieldSuggestion(
       ctx,
       product,
-      "manufacturer",
+      "brandName",
       0.7,
       new Date("2026-01-02T00:00:00Z"),
     );

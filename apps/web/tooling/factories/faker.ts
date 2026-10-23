@@ -5,7 +5,7 @@ import { en, Faker } from "@faker-js/faker";
 /**
  * Seeded Faker for test and dev data.
  *
- * Faker fills fields nothing asserts on (a product's manufacturer, a vendor's
+ * Faker fills fields nothing asserts on (a product's brandName, a vendor's
  * website). It never produces a name a locator or assertion depends on — those
  * stay `${label} ${deterministicToken(...)}` — and never produces shortcodes or
  * UPCs, which come from `@cubby/shared` generators or known-valid literals.

@@ -3,6 +3,7 @@ import { and, asc, eq, inArray, sql } from "drizzle-orm";
 
 import type { PurchaseAuditRenderedBatch } from "~/server/ai/policy/prompts/purchase-import";
 import type { Database } from "~/server/db";
+import { productBrandNameSql } from "~/server/db/computed/product-brand-sql";
 import { getDb, notDeleted } from "~/server/db/helpers";
 import {
   expense,
@@ -74,7 +75,7 @@ export async function loadPurchaseAuditBatch(
         quantity: expense.productQuantity,
         productId: product.id,
         productName: product.name,
-        productManufacturer: product.manufacturer,
+        productManufacturer: productBrandNameSql(product.brandId),
         productModel: product.model,
       })
       .from(expense)
@@ -111,7 +112,7 @@ export async function loadPurchaseAuditBatch(
           ? {
               id: expenseRow.productId,
               name: expenseRow.productName,
-              manufacturer: expenseRow.productManufacturer,
+              brandName: expenseRow.productManufacturer,
               model: expenseRow.productModel,
             }
           : null,

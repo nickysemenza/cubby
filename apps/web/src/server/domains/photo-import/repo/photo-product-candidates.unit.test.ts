@@ -5,6 +5,8 @@ import { describe, expect, it } from "vitest";
 import { forgeWearEvidence } from "../../../../../tests/fixtures/product-identity-evidence";
 import { rankPhotoProductCandidates } from "./photo-product-candidates";
 
+const brandId = parseEntityId("vendor", "00000000-0000-4000-8000-000000000041");
+
 const comparison = (
   color: "same" | "different" | "unknown",
   size: "same" | "different" | "unknown",
@@ -22,7 +24,8 @@ describe("photo product candidate ranking", () => {
       id: parseEntityId("product", crypto.randomUUID()),
       shortcode: name.endsWith("7") ? "PRD-4K7M" : "PRD-8B2Q",
       name,
-      manufacturer: "ForgeWear",
+      brandName: "ForgeWear",
+      brandId,
       hasOwnPhoto: true,
       hasPhotoImport: true,
       hasPurchase: false,
@@ -31,8 +34,7 @@ describe("photo product candidate ranking", () => {
     const size9 = candidate("ForgeWear tan work boots size 9");
     const size7 = candidate("ForgeWear tan work boots size 7");
     const ranked = rankPhotoProductCandidates(
-      "ForgeWear tan work boots",
-      "ForgeWear",
+      { name: "ForgeWear tan work boots", brandName: "ForgeWear", brandId },
       [size9, size7],
       ["US 7"],
       new Map([
@@ -66,7 +68,8 @@ describe("photo product candidate ranking", () => {
     const products = forgeWearEvidence.products.map((product) => ({
       id: parseEntityId("product", crypto.randomUUID()),
       ...product,
-      manufacturer: forgeWearEvidence.brand,
+      brandName: forgeWearEvidence.brand,
+      brandId,
     }));
     const comparisons = new Map(
       products.map((product) => [
@@ -84,8 +87,11 @@ describe("photo product candidate ranking", () => {
       ]),
     );
     const ranked = rankPhotoProductCandidates(
-      forgeWearEvidence.observedName,
-      forgeWearEvidence.brand,
+      {
+        name: forgeWearEvidence.observedName,
+        brandName: forgeWearEvidence.brand,
+        brandId,
+      },
       products,
       [],
       comparisons,
@@ -100,7 +106,8 @@ describe("photo product candidate ranking", () => {
       id: parseEntityId("product", crypto.randomUUID()),
       shortcode,
       name,
-      manufacturer: "ForgeWear",
+      brandName: "ForgeWear",
+      brandId,
       hasOwnPhoto: true,
       hasPhotoImport: true,
       hasPurchase: false,
@@ -109,8 +116,11 @@ describe("photo product candidate ranking", () => {
     const unknown = candidate("PRD-4K7M", "ForgeWear tan work boots size 9");
     const different = candidate("PRD-8B2Q", "ForgeWear tan work boots size 7");
     const ranked = rankPhotoProductCandidates(
-      "ForgeWear tan work boots size 7",
-      "ForgeWear",
+      {
+        name: "ForgeWear tan work boots size 7",
+        brandName: "ForgeWear",
+        brandId,
+      },
       [unknown, different],
       [],
       new Map([
@@ -143,15 +153,19 @@ describe("photo product candidate ranking", () => {
       id: parseEntityId("product", crypto.randomUUID()),
       shortcode,
       name,
-      manufacturer: "ForgeWear",
+      brandName: "ForgeWear",
+      brandId,
       hasOwnPhoto,
       hasPhotoImport,
       hasPurchase: true,
       hasInventory: false,
     });
     const ranked = rankPhotoProductCandidates(
-      "ForgeWear loose fit pocket T-shirt, black small",
-      "ForgeWear",
+      {
+        name: "ForgeWear loose fit pocket T-shirt, black small",
+        brandName: "ForgeWear",
+        brandId,
+      },
       [
         candidate(
           "PRD-4K7M",

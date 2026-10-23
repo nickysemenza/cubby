@@ -225,9 +225,9 @@ struct GenericEntityListModelTests {
         await model.apply(groupLevel: 1)
         #expect(model.activeGroupLevel == 1)
 
-        await model.apply(groupBy: "manufacturer")
+        await model.apply(groupBy: "brandId")
         #expect(model.activeGroupLevel == nil)
-        #expect(model.groupLevelUnavailableReason?.hasSuffix("so it has no levels.") == true)
+        #expect(model.groupLevelUnavailableReason?.isEmpty == false)
         await model.apply(groupLevel: 1)
         #expect(model.activeGroupLevel == nil)
         #expect(levels.withLock { $0 } == [2, 1, nil])

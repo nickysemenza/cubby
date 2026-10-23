@@ -139,11 +139,11 @@ describe("finance list projections", () => {
       },
       {
         entity: "vendor",
-        full: () => vendorList(ctx.db, {}, [], page),
+        full: () => vendorList(ctx.db, { search: supplier.name }, [], page),
         read: (groups?: ListEnrichmentGroup[]) =>
           vendorListRead(
             ctx.db,
-            {},
+            { search: supplier.name },
             [],
             page,
             "page",

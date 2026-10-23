@@ -3,6 +3,7 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { writeProductConversionCoverageProjection } from "~/server/domains/product/repo/conversion-coverage";
+import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
 import {
   createProductIdentityFixture,
   createRecipeFixture,
@@ -28,7 +29,7 @@ describe("ingredient mappingGap filter", () => {
         ctx.db,
         makeProductInput({
           name: `${name} product ${index}`,
-          manufacturer: "test",
+          brandId: await findOrCreateVendor(ctx.db, "test"),
           ingredientId: parseShortcodeFor("ingredient", ingredient.shortcode),
         }),
         ctx.actor,

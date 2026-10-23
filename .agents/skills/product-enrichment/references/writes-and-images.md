@@ -1,6 +1,6 @@
 # Product writes and images
 
-Manufacturer pages are authoritative for manufacturer, model, concise canonical
+Brand pages are authoritative for marketed brand, model, concise canonical
 name, and evidence for an existing taxonomy choice. Do not silently add categories. Exact retailer pages are authoritative for UPC, retailer
 SKU, exact image, and current direct offer. A current `price` override replaces
 the Expense-derived fallback; never infer it from a marketplace, crossed-out
@@ -13,10 +13,11 @@ single-item, component and multipack distinction before assigning an identifier;
 never copy a parent package identifier onto a component. A current same-name
 listing does not prove a historical generation or package size.
 
-Cubby snaps `manufacturer` on create to an established live spelling, but not
-on update. Check the established spelling before a manual correction. Create a
-missing researched Product once with all proven metadata; creation does not
-receive inventory.
+Product creates and updates accept `brandId`, a Vendor reference; `brandName` is
+read-only display data. Search Vendor names and aliases before creating a missing
+brand identity, and select the intended identity when matches are ambiguous.
+Create a missing researched Product once with all proven metadata; creation
+does not receive inventory.
 
 Before writing, check for a merge candidate: a photo-created Product with a
 matching vendor identity, or a purchase-created Product covering the same

@@ -112,7 +112,7 @@ function Surface({
   operations: EntitySuggestionsOperations;
   visible?: boolean;
 }) {
-  const record = { id, name, manufacturer: null, categoryId: null };
+  const record = { id, name, brandName: null, categoryId: null };
   return (
     <RecordSuggestionsProvider
       entity="product"
@@ -130,7 +130,7 @@ function Surface({
               entity: "product",
               basisMode: "provided",
               targets: ["categoryId"],
-              basis: { name, manufacturer: null },
+              basis: { name, brandName: null },
             }}
             currentValue={null}
             onApply={() => {}}
@@ -149,7 +149,7 @@ describe("record suggestions", () => {
     const records = ["first", "second", "offscreen"].map((name) => ({
       id: testShortcode("product", name),
       name,
-      manufacturer: null,
+      brandName: null,
       categoryId: null,
     }));
     const single = vi.fn(async () => ({ suggestions: {}, outcomes: {} }));
@@ -208,7 +208,7 @@ describe("record suggestions", () => {
     const record = {
       id,
       name: "",
-      manufacturer: null,
+      brandName: null,
       model: null,
       notes: null,
       classificationEvidence: null,
@@ -234,12 +234,10 @@ describe("record suggestions", () => {
     );
     expect(
       await screen.findByRole("button", {
-        name: /Not checked.*nothing to go on/,
+        name: /Not checked.*add a name first/,
       }),
-    ).toHaveTextContent("No evidence");
-    expect(
-      screen.queryByRole("button", { name: /Evaluation status unavailable/ }),
-    ).not.toBeInTheDocument();
+    ).toHaveTextContent("Not checked — add a name first");
+
     expect(asked).not.toHaveBeenCalled();
   });
 
@@ -453,7 +451,7 @@ describe("record suggestions", () => {
     const record = {
       id,
       name: "Synthetic oats",
-      manufacturer: null,
+      brandName: null,
       categoryId: null,
     };
     const List = () => (
@@ -498,7 +496,7 @@ describe("record suggestions", () => {
     const List = ({ name }: { name: string }) => (
       <RecordSuggestionsProvider
         entity="product"
-        records={[{ id, name, manufacturer: null, categoryId: null }]}
+        records={[{ id, name, brandName: null, categoryId: null }]}
         fieldKeys={["categoryId"]}
         operations={operations}
         storedSuggestionOperations={stored}
@@ -545,7 +543,7 @@ describe("record suggestions", () => {
           {
             id,
             name: "Synthetic gadget",
-            manufacturer: null,
+            brandName: null,
             categoryId: null,
           },
         ]}
@@ -617,7 +615,7 @@ describe("record suggestions", () => {
             {
               id,
               name: "Synthetic gadget",
-              manufacturer: null,
+              brandName: null,
               categoryId: null,
             },
           ]}
@@ -658,7 +656,7 @@ describe("record suggestions", () => {
     const records = Array.from({ length: 12 }, (_, index) => ({
       id: testShortcode("product", `batch${index}`),
       name: `Synthetic batch row ${index}`,
-      manufacturer: null,
+      brandName: null,
       categoryId: null,
     }));
     render(
@@ -701,7 +699,7 @@ describe("record suggestions", () => {
     const records = Array.from({ length: 20 }, (_, index) => ({
       id: testShortcode("product", `row${index}`),
       name: `Synthetic row ${index}`,
-      manufacturer: null,
+      brandName: null,
       categoryId: null,
     }));
     const Wrapper = harness.wrapper;
@@ -857,7 +855,7 @@ describe("record suggestions", () => {
       const record = {
         id,
         name: "Synthetic cached gadget",
-        manufacturer: null,
+        brandName: null,
         categoryId: null,
       };
       return (
@@ -1039,7 +1037,7 @@ describe("record suggestions", () => {
       }),
     };
     function Cell({ name }: { name: keyof typeof answers }) {
-      const record = { id, name, manufacturer: null, categoryId: null };
+      const record = { id, name, brandName: null, categoryId: null };
       return (
         <RecordSuggestionsProvider
           entity="product"
@@ -1200,7 +1198,7 @@ describe("record suggestions", () => {
     const record = {
       id: testShortcode("product", "tag-remove"),
       name: "Rain shell",
-      manufacturer: "Jacquemus",
+      brandName: "Jacquemus",
       categoryId: null,
       tags: ["jacquemus", "collection:favorites", "mount"],
     };
@@ -1210,7 +1208,7 @@ describe("record suggestions", () => {
       label: "Remove jacquemus",
       confidence: "high" as const,
       probability: 0.9,
-      detail: "restates manufacturer",
+      detail: "restates brandName",
       reasoning: "",
       alternatives: [],
       operation: "remove" as const,
@@ -1218,7 +1216,7 @@ describe("record suggestions", () => {
         {
           value: "jacquemus",
           probability: 0.9,
-          reason: "restates manufacturer",
+          reason: "restates brandName",
         },
       ],
     };
@@ -1278,7 +1276,7 @@ describe("record suggestions", () => {
     const record = {
       id: testShortcode("product", "tag-stale"),
       name: "Rain shell",
-      manufacturer: "Jacquemus",
+      brandName: "Jacquemus",
       categoryId: null,
       tags: ["jacquemus", "mount"],
     };
@@ -1288,7 +1286,7 @@ describe("record suggestions", () => {
       label: "Remove jacquemus",
       confidence: "high" as const,
       probability: 0.9,
-      detail: "restates manufacturer",
+      detail: "restates brandName",
       reasoning: "",
       alternatives: [],
       operation: "remove" as const,
@@ -1296,7 +1294,7 @@ describe("record suggestions", () => {
         {
           value: "jacquemus",
           probability: 0.9,
-          reason: "restates manufacturer",
+          reason: "restates brandName",
         },
       ],
     };
@@ -1313,7 +1311,7 @@ describe("record suggestions", () => {
         fieldKeys={["tags"]}
         operations={operations}
         // The tag was removed by someone else between the suggestion and the
-        // click — a sibling basis field (manufacturer) is unchanged, so only
+        // click — a sibling basis field (brandName) is unchanged, so only
         // the every-removal-still-present check catches this.
         readRecord={async () => ({ ...record, tags: ["mount"] })}
         mutationPort={createEntityMutationPort({
@@ -1658,7 +1656,7 @@ describe("record suggestions", () => {
     const record = {
       id: testShortcode("product", "merge-outcomes"),
       name: "Rain shell",
-      manufacturer: "Jacquemus",
+      brandName: "Jacquemus",
       categoryId: null,
       tags: ["jacquemus"],
     };
@@ -1725,7 +1723,7 @@ describe("record suggestions", () => {
     const record = {
       id: testShortcode("product", "unasked"),
       name: "",
-      manufacturer: null,
+      brandName: null,
       categoryId: null,
     };
     const operations: EntitySuggestionsOperations = {

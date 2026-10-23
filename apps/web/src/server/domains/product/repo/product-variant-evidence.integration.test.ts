@@ -21,6 +21,7 @@ import {
   productFixture,
   recordId,
 } from "~/server/domains/run/service/suggestion-sweep.fixtures";
+import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
 import { executeEntity } from "~/server/entity-kernel";
 import { mergeReviewedProductPair } from "~/server/generic/assessment/repo/assessment-product";
 import {
@@ -131,7 +132,9 @@ describe("retained Product identity conflict guards", () => {
     });
     await getDb(ctx.db)
       .update(product)
-      .set({ manufacturer: "Corrected synthetic maker" })
+      .set({
+        brandId: await findOrCreateVendor(ctx.db, "Corrected synthetic maker"),
+      })
       .where(inArray(product.id, [...ids]));
     expect(await prepareProductIdentityPair(ctx.db, ids)).toMatchObject({
       conflict: false,

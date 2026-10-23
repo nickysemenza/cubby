@@ -317,7 +317,7 @@ describe("previewEntity field suggestions", () => {
         tags: {
           value: "jacquemus",
           label: "Remove jacquemus",
-          detail: "restates manufacturer",
+          detail: "restates brandName",
           confidence: "high" as const,
           probability: 1,
           reasoning: "",
@@ -327,7 +327,7 @@ describe("previewEntity field suggestions", () => {
             {
               value: "jacquemus",
               probability: 1,
-              reason: "restates manufacturer",
+              reason: "restates brandName",
             },
           ],
         },

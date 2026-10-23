@@ -815,8 +815,6 @@ it("keeps a dirty field through refresh and saves it before approval", async () 
   restoreDispatch = overrideStartDispatch(async (operation, input) => {
     if (operation === "photoImport.candidatesBatch")
       return { ok: true, data: { groups: [] } };
-    if (operation === "product.manufacturerOptions")
-      return { ok: true, data: [] };
     if (operation === "photoImport.saveGroups") {
       const body = photoImportContract.ops.saveGroups.input.parse(input);
       const group = body.groups[0];
@@ -886,8 +884,6 @@ it("recovers an applied receipt on a completed Run with an unsettled proposal", 
   restoreDispatch = overrideStartDispatch(async (operation, input) => {
     if (operation === "photoImport.candidatesBatch")
       return { ok: true, data: { groups: [] } };
-    if (operation === "product.manufacturerOptions")
-      return { ok: true, data: [] };
     if (operation === "photoImport.review")
       return {
         ok: true,

@@ -1,6 +1,7 @@
 import type { ExternalIdInput } from "@cubby/schemas/external-id";
 import { and, eq, sql } from "drizzle-orm";
 
+import { productBrandNameSql } from "~/server/db/computed/product-brand-sql";
 import { entityExternalId } from "~/server/db/external-identifier-tables";
 import { product } from "~/server/db/generated/identity-storage-tables.gen";
 import { notDeleted } from "~/server/db/helpers/predicates";
@@ -14,8 +15,8 @@ export type ExternalIdPair = Pick<ExternalIdInput, "source" | "externalId"> &
 
 export type ProductHit = Pick<
   typeof product.$inferSelect,
-  "id" | "shortcode" | "name" | "manufacturer" | "model"
->;
+  "id" | "shortcode" | "name" | "model"
+> & { brandName: string | null };
 
 /** A kindless request intentionally matches every kind; typed requests have distinct keys. */
 export const externalIdKey = ({ source, externalId, kind }: ExternalIdPair) =>
@@ -40,7 +41,7 @@ export const findProductsByExternalIds = async (
       shortcode: product.shortcode,
       kind: entityExternalId.kind,
       name: product.name,
-      manufacturer: product.manufacturer,
+      brandName: productBrandNameSql(product.brandId),
       model: product.model,
     })
     .from(entityExternalId)
@@ -65,9 +66,9 @@ export const findProductsByExternalIds = async (
         (pair.kind === undefined || pair.kind === row.kind),
     );
     const unique = new Map(
-      matching.map(({ id, shortcode, name, manufacturer, model }) => [
+      matching.map(({ id, shortcode, name, brandName, model }) => [
         id,
-        { id, shortcode, name, manufacturer, model },
+        { id, shortcode, name, brandName, model },
       ]),
     );
     byPair.set(externalIdKey(pair), [...unique.values()]);

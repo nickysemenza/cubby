@@ -1,3 +1,4 @@
+import { seedProductPrerequisite } from "./fixtures/catalog";
 import { entityApi } from "./support/entity-api";
 import { EXPENSE_DATE_REQUIRED_MESSAGE } from "@cubby/schemas/expense-fields";
 import type { Page } from "@playwright/test";
@@ -267,9 +268,9 @@ test("an unchecked checkbox writes false, while leaving it unchanged writes noth
   page,
 }) => {
   const name = uniqueName(test.info(), "e2e bulk tracked product");
-  const product = await createEntityFixture(page, "product", {
+  const product = await seedProductPrerequisite(page, {
     name,
-    manufacturer: "E2E fixture",
+    brandName: "E2E fixture",
     tags: [],
     stockTracked: true,
   });

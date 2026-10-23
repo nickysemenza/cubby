@@ -36,7 +36,7 @@ const joinFields = (parts: Array<string | null | undefined>): string =>
 
 const productSearchTextInputSchema = z.object({
   name: z.string(),
-  manufacturer: nullableText,
+  brandName: nullableText,
   category: nullableText,
   model: nullableText,
   /** Preserved in lexical SearchDocument keywords, deliberately not semantic text. */
@@ -51,7 +51,7 @@ export function buildProductEmbeddingText(product: ProductSearchTextInput) {
   const parsed = productSearchTextInputSchema.parse(product);
   return joinFields([
     field("product", parsed.name),
-    field("manufacturer", parsed.manufacturer),
+    field("brandName", parsed.brandName),
     field("category", parsed.category),
     field("model", parsed.model),
     listField("aliases", parsed.aliases),

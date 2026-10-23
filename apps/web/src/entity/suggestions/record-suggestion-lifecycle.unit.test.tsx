@@ -30,12 +30,12 @@ const categoryId = testShortcode("productCategory", "food");
 const ingredientId = testShortcode("ingredient", "apple");
 type PageRecord = Pick<
   z.output<typeof productTopLevelOut>,
-  "id" | "name" | "manufacturer" | "categoryId"
+  "id" | "name" | "brandName" | "categoryId"
 > & { ingredient?: null };
 const baseRecord = {
   id,
   name: "Synthetic apple",
-  manufacturer: "Synthetic maker",
+  brandName: "Synthetic maker",
   categoryId: null,
 };
 const proposal = {

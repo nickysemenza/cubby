@@ -10,6 +10,7 @@ import {
   runOperation,
 } from "~/server/db/schema";
 import { deleteProducts } from "~/server/domains/product/repo/crud";
+import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 import { loadRunDetail } from "../repo/run-service";
@@ -91,7 +92,7 @@ describe("immutable prepared purchase review", () => {
             {
               productId: shortcode("PRD-4K7M"),
               name: "Fixture product",
-              manufacturer: "Fixture maker",
+              brandName: "Fixture maker",
               model: null,
               exactIdentifierMatch: false,
             },
@@ -154,7 +155,7 @@ describe("immutable prepared purchase review", () => {
     });
     const product = await insertWithShortcode(ctx.db, "product", {
       name: "Fixture Nasturtium",
-      manufacturer: "Fixture Seeds",
+      brandId: await findOrCreateVendor(ctx.db, "Fixture Seeds"),
     });
     await writeOutcomeReceipts(ctx.db, [
       {

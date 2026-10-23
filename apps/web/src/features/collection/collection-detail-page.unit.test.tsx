@@ -38,7 +38,7 @@ const detail: CollectionDetailOut = {
     {
       id: PRODUCT_ID,
       name: "Cordless drill",
-      manufacturer: "Example Tools",
+      brandName: "Example Tools",
       imageUrl: null,
       direct: true,
       inherited: true,
@@ -177,7 +177,7 @@ describe("CollectionDetailPage product locator", () => {
     expect(onSearchChange).toHaveBeenLastCalledWith({ q: "drill", page: 1 });
   });
 
-  it("projects manufacturer and relationship popovers into the mobile card", async () => {
+  it("projects brandName and relationship popovers into the mobile card", async () => {
     class TestIntersectionObserver {
       readonly root = null;
       readonly rootMargin = "0px";

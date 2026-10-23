@@ -31,6 +31,7 @@ import { z } from "zod";
 import { scrubErrorMessage } from "~/lib/error-diagnostics";
 import type { DecisionPort } from "~/server/ai/decision-model";
 import type { Database } from "~/server/db";
+import { productBrandNameSql } from "~/server/db/computed/product-brand-sql";
 import {
   getDb,
   notDeleted,
@@ -293,7 +294,7 @@ async function productCandidates(
           id: product.id,
           shortcode: product.shortcode,
           name: product.name,
-          manufacturer: product.manufacturer,
+          brandName: productBrandNameSql(product.brandId),
           model: product.model,
         })
         .from(product)
@@ -325,10 +326,10 @@ async function productCandidates(
         productIdentityOverlap(
           {
             name: line.title,
-            manufacturer:
-              hit.manufacturer &&
-              line.title.toLowerCase().includes(hit.manufacturer.toLowerCase())
-                ? hit.manufacturer
+            brandName:
+              hit.brandName &&
+              line.title.toLowerCase().includes(hit.brandName.toLowerCase())
+                ? hit.brandName
                 : null,
           },
           hit,

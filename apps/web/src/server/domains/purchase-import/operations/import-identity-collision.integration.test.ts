@@ -20,6 +20,7 @@ import {
 } from "~/server/db/schema";
 import { listProductMatchRows } from "~/server/domains/product/repo/match/product-match-candidate";
 import { syncProductExternalIds } from "~/server/domains/product/repo/update-helpers";
+import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import {
   createProductFixture,
@@ -225,7 +226,7 @@ describe("purchase import identifier collisions", () => {
       ctx.db,
       makeProductInput({
         name: "Synthetic copper instrument",
-        manufacturer: "Synthetic Instruments",
+        brandId: await findOrCreateVendor(ctx.db, "Synthetic Instruments"),
         model: "COPPER-XL",
         externalIds: [
           {

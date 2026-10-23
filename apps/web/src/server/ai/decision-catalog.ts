@@ -234,11 +234,11 @@ function featureRows(): CatalogRow[] {
       FIELD_SUGGESTION_FEATURE,
       classificationPrompt({
         subject: externalIdKindSubject({
-          source: "manufacturer",
+          source: "brandName",
           identifier: "DRILL-20",
           url: null,
           productName: "Cordless drill",
-          manufacturer: "Example Tools",
+          brandName: "Example Tools",
         }),
         rules: EXTERNAL_ID_KIND_RULES,
         values: externalIdKind.options,

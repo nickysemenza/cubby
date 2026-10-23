@@ -1,3 +1,4 @@
+import { seedProductPrerequisite } from "./fixtures/catalog";
 import { eq, inArray } from "drizzle-orm";
 import type { Page } from "@playwright/test";
 import { productShortcode } from "@cubby/schemas/identifiers";
@@ -91,9 +92,9 @@ test("one queue separates proposals from automatic history and reviews either en
   test.slow();
   const { db, actor } = await createEvidenceHarnessContext(page);
   const name = uniqueName(testInfo, "Synthetic queue drill");
-  const item = await createEntityFixture(page, "product", {
+  const item = await seedProductPrerequisite(page, {
     name,
-    manufacturer: "Example Tools",
+    brandName: "Example Tools",
   });
   const cover = await seedImagePrerequisite(
     "synthetic-queue-cover",
@@ -200,7 +201,7 @@ test("one queue separates proposals from automatic history and reviews either en
     page.getByRole("link", { name: new RegExp(name) }).first(),
   ).toBeVisible();
   // The resolved mobile identity must receive the name column's width rather
-  // than yielding it to manufacturer metadata or keeping a compact link cap.
+  // than yielding it to brandName metadata or keeping a compact link cap.
   expect(
     await page
       .getByText(name, { exact: true })
@@ -412,19 +413,22 @@ test("new proposal families require explicit review and preserve merge confirmat
 }, testInfo) => {
   test.slow();
   const { db } = await createEvidenceHarnessContext(page);
-  const first = await createEntityFixture(page, "product", {
+  const brand = await createEntityFixture(page, "vendor", {
+    name: "Example Tools",
+  });
+  const first = await seedProductPrerequisite(page, {
     name: uniqueName(testInfo, "Synthetic matching drill"),
-    manufacturer: "Example Tools",
+    brandId: brand.id,
     model: "SYN-DRILL-17",
   });
-  const second = await createEntityFixture(page, "product", {
+  const second = await seedProductPrerequisite(page, {
     name: uniqueName(testInfo, "Synthetic matching drill duplicate"),
-    manufacturer: "Example Tools",
+    brandId: brand.id,
     model: "SYN-DRILL-17",
   });
-  const conflicted = await createEntityFixture(page, "product", {
+  const conflicted = await seedProductPrerequisite(page, {
     name: uniqueName(testInfo, "Synthetic conflicting drill"),
-    manufacturer: "Example Tools",
+    brandId: brand.id,
     model: "SYN-DRILL-29",
   });
   const firstId = await resolveOrThrow(db, "product", first.id);

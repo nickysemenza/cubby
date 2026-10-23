@@ -49,7 +49,7 @@ const SOME_DAY = "2024-01-15";
  * (`installationId`) are deliberately absent: the caller supplies them.
  */
 const ENTITY_DEFAULTS = {
-  product: (f) => ({ name: f.name("Product"), manufacturer: f.company() }),
+  product: (f) => ({ name: f.name("Product") }),
   recipe: (f) => ({ name: f.name("Recipe"), meta: null, sections: [] }),
   ingredient: (f) => ({ name: f.name("Ingredient") }),
   // The kernel refuses a location with no type (only a Product instance may omit it).

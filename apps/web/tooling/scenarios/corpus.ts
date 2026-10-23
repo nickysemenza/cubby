@@ -428,6 +428,13 @@ async function seedConnectedHousehold(
     );
 
   const ingredients: CreatedEntity[] = [];
+  const foodBrand = await create("vendor", { name: "Cedar Example Foods" });
+  const toolBrand = await create("vendor", { name: "Bench Example Tools" });
+  const deviceBrand = await create("vendor", { name: "Example Devices" });
+  const clothingBrand = await create("vendor", {
+    name: "Thread Example Outfitters",
+  });
+  const seedBrand = await create("vendor", { name: "Sprout Example Nursery" });
   const foodProducts = [];
   for (const [index, name] of [
     "Rolled oats",
@@ -446,7 +453,7 @@ async function seedConnectedHousehold(
     ingredients.push(ingredient);
     const product = await create("product", {
       name: `Cedar ${name} package`,
-      manufacturer: "Cedar Example Foods",
+      brandId: foodBrand.id,
       ingredientId: ingredient.id,
       categoryId: taxonomyShortcode("food"),
       price: 3 + index,
@@ -466,7 +473,7 @@ async function seedConnectedHousehold(
   }
   const tool = await create("product", {
     name: "Cedar Cordless Drill",
-    manufacturer: "Bench Example Tools",
+    brandId: toolBrand.id,
     model: "EX-12",
     categoryId: taxonomyShortcode("tools"),
     price: 85,
@@ -474,7 +481,7 @@ async function seedConnectedHousehold(
   });
   const phone = await create("product", {
     name: "Cedar Test Phone",
-    manufacturer: "Example Devices",
+    brandId: deviceBrand.id,
     categoryId: taxonomyShortcode("electronics"),
     price: 250,
   });
@@ -509,7 +516,7 @@ async function seedConnectedHousehold(
     clothing.push(
       await create("product", {
         name,
-        manufacturer: "Thread Example Outfitters",
+        brandId: clothingBrand.id,
         categoryId: taxonomyShortcode("apparel"),
         notes:
           "Invented wardrobe piece.\nCare instructions: air dry and store on the upper shelf.",
@@ -558,7 +565,7 @@ async function seedConnectedHousehold(
     });
     const seeds = await create("product", {
       name: `Cedar ${name} seed packet`,
-      manufacturer: "Sprout Example Nursery",
+      brandId: seedBrand.id,
       growsPlantId: plant.id,
       categoryId: seedCategory.id,
       price: 4,
@@ -712,9 +719,10 @@ async function seedConnectedHousehold(
     const category = (["household", "tools", "apparel", "supplies"] as const)[
       index % 4
     ]!;
+    const brand = await create("vendor", { name: faker.company.name() });
     const product = await create("product", {
       name: `Cedar ${faker.commerce.productName()} ${index + 1}`,
-      manufacturer: faker.company.name(),
+      brandId: brand.id,
       categoryId: taxonomyShortcode(category),
       price: faker.number.int({ min: 5, max: 120 }),
       model: null,

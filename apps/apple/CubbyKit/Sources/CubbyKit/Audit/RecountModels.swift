@@ -7,7 +7,7 @@ public struct RecountRow: Sendable, Hashable, Identifiable {
     public struct Product: Sendable, Hashable {
         public let id: ProductCode
         public let name: String
-        public let manufacturer: String?
+        public let brandName: String?
         public let primaryGtin: String?
         /// Every GTIN-14 the product answers to: `primaryGtin` plus `gtin_14` external ids.
         public let barcodes: Set<String>
@@ -16,14 +16,14 @@ public struct RecountRow: Sendable, Hashable, Identifiable {
         public init(
             id: ProductCode,
             name: String,
-            manufacturer: String? = nil,
+            brandName: String? = nil,
             primaryGtin: String? = nil,
             barcodes: Set<String> = [],
             coverImageURL: URL? = nil
         ) {
             self.id = id
             self.name = name
-            self.manufacturer = manufacturer
+            self.brandName = brandName
             self.primaryGtin = primaryGtin
             self.barcodes = barcodes.union(primaryGtin.map { [$0] } ?? [])
             self.coverImageURL = coverImageURL
@@ -78,7 +78,7 @@ public struct RecountRow: Sendable, Hashable, Identifiable {
             product: Product(
                 id: out.product.id,
                 name: out.product.name,
-                manufacturer: out.product.manufacturer.isEmpty ? nil : out.product.manufacturer,
+                brandName: out.product.brandName,
                 primaryGtin: out.product.primaryGtin,
                 barcodes: barcodes,
                 coverImageURL: cover

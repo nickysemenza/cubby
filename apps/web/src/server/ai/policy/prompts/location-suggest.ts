@@ -18,7 +18,7 @@ const renderLocationCandidate = (
   if (candidate.tagSiblings > 0)
     hints.push(`${candidate.tagSiblings} share tags`);
   if (candidate.manufacturerSiblings > 0)
-    hints.push(`${candidate.manufacturerSiblings} same manufacturer`);
+    hints.push(`${candidate.manufacturerSiblings} same brandName`);
   if (candidate.categorySiblings > 0)
     hints.push(`${candidate.categorySiblings} same category`);
 
@@ -35,7 +35,7 @@ CODE | Room > Area > Shelf (type) - N items[; hints]
 Rules:
 1. Choose the ONE roster location the product belongs in.
 2. The location NAMES and their parent chain are the primary signal. A product belongs with the system it is part of ("PACKOUT" plates on the "PACKOUT Wall", pantry goods in a pantry, fasteners in a hardware bin).
-3. The hints ("3 share tags", "5 same manufacturer", "12 same category") are corroboration, not a ranking. A weakly-named location with a high count is a worse answer than a well-named one with none — a category is spread over dozens of locations.
+3. The hints ("3 share tags", "5 same brandName", "12 same category") are corroboration, not a ranking. A weakly-named location with a high count is a worse answer than a well-named one with none — a category is spread over dozens of locations.
 4. "already stocked here" means the product is there now. Prefer it unless the product is one that gets deliberately split across places.
 5. Prefer the most specific location that fits: a named shelf or bin over the room that contains it.
 6. Decline only when no roster location fits at all.`;

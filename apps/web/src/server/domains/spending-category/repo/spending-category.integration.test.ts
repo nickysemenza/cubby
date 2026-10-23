@@ -331,7 +331,7 @@ describe("spending category merge", () => {
     });
     const item = await insertWithShortcode(ctx.db, "product", {
       name: `Synthetic chili crisp ${crypto.randomUUID()}`,
-      manufacturer: "",
+      brandId: null,
     });
     await insertWithShortcode(ctx.db, "expense", {
       lineKind: "principal",

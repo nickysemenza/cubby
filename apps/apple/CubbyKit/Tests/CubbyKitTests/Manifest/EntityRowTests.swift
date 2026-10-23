@@ -191,7 +191,7 @@ struct EntityRowTests {
         let detail = try row.decode(ProductDetail.self)
         #expect(detail.id == ProductCode("PRD-2345"))
         #expect(detail.name == row.title)
-        #expect(detail.manufacturer == "Sample Manufacturer")
+        #expect(detail.brandName == "Sample Manufacturer")
         #expect(detail.createdAt.timeIntervalSince1970 > 0)
         // The nutrition slot renders the server's display verbatim, so it must survive the typed decode.
         #expect(detail.nutritionDisplay.basis == "Per serving · 30 g")
@@ -244,16 +244,16 @@ struct EntityRowTests {
     }
 
     /// The subtitle is the catalog's `mobile.slot: subtitle` columns in priority order (product:
-    /// manufacturer 20, category 30), not a hand-named key.
+    /// brand 20, category 30), not a hand-named key.
     @Test func subtitleFollowsTheCatalogSubtitleSlotPriority() {
-        let withManufacturer: JSONValue = [
-            "id": "PRD-2345", "name": "Sample", "manufacturer": "Acme",
+        let withBrand: JSONValue = [
+            "id": "PRD-2345", "name": "Sample", "brandId": "VEN-2345", "brandName": "Acme",
             "category": [
                 "id": "CAT-2224", "name": "Tools", "path": [["id": "CAT-2224", "name": "Tools"]],
                 "feature": "tools",
             ],
         ]
-        #expect(product.row(from: withManufacturer)?.subtitle == "Acme")
+        #expect(product.row(from: withBrand)?.subtitle == "Acme")
 
         let categoryOnly: JSONValue = [
             "id": "PRD-2345", "name": "Sample", "categoryId": "CAT-2224",

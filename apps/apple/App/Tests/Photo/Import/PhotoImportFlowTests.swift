@@ -19,7 +19,7 @@ struct PhotoImportFlowTests {
             state: .proposed,
             images: [.init(id: readyImage.id, purpose: .item)], skip: [],
             product: .create(
-                .init(kind: .create, create: .init(name: "Canvas shirt", manufacturer: "ForgeWear"))),
+                .init(kind: .create, create: .init(name: "Canvas shirt", brandId: "VEN-2345"))),
             missingImageCount: 0, updatedAt: "2026-09-25T12:00:00Z")
         var blocked = ready
         blocked.groupKey = "blocked"

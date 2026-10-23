@@ -21,7 +21,6 @@ import { createPlanting } from "~/server/domains/garden/repo/garden";
 import { createUploadedImageRecord } from "~/server/domains/image/repo/image";
 import { createInventoryEntry } from "~/server/domains/inventory/repo/crud";
 import { createLocation } from "~/server/domains/location/repo/crud";
-import { createProduct } from "~/server/domains/product/repo/crud";
 import {
   listProductMatchRows,
   productPairKey,
@@ -37,10 +36,12 @@ import {
   listProductComponents,
 } from "~/server/domains/product/repo/product-components";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
+import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
 import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
 import { resolveLiveShortcode } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import {
   createPlantFixture,
+  createProductFixture,
   makeLocationInput,
   makeProductInput,
   insertEntityAttachments,
@@ -72,11 +73,14 @@ describe("mergeProducts", () => {
     name: string,
     overrides: Omit<
       Partial<ProductRepoCreateInput>,
-      "ingredientId" | "growsPlantId" | "categoryId"
-    > & { categoryId?: ProductRepoCreateInput["categoryId"] } = {},
+      "ingredientId" | "growsPlantId" | "categoryId" | "brandId"
+    > & {
+      categoryId?: ProductRepoCreateInput["categoryId"];
+      brandId?: Parameters<typeof createProductFixture>[1]["brandId"];
+    } = {},
   ) => {
     const { categoryId = null, ...productOverrides } = overrides;
-    const created = await createProduct(
+    const created = await createProductFixture(
       ctx.db,
       makeProductInput({ name, ...productOverrides, categoryId }),
       TEST_ACTOR,
@@ -143,7 +147,7 @@ describe("mergeProducts", () => {
 
   it("previews kept names, filled attributes, and combined images before merge", async () => {
     const keeper = await seedProduct("ForgeWear pocket tee black small", {
-      manufacturer: "ForgeWear",
+      brandId: await findOrCreateVendor(ctx.db, "ForgeWear"),
       model: null,
     });
     const incoming = await seedProduct("Dark pocket shirt from photo", {
@@ -385,14 +389,13 @@ describe("mergeProducts", () => {
       orderBy: [asc(productUnitMappings.createdAt)],
     });
 
-  it("fills a purchase-created survivor's empty manufacturer from the photo-created loser", async () => {
-    // Purchase import creates Products with manufacturer "", which is not null,
-    // so a null-only carry would drop the brand read off the photographed tag.
+  it("fills a purchase-created survivor's empty brandName from the photo-created loser", async () => {
+    // An unknown Brand on the keeper must carry the donor's canonical reference.
     const keeper = await seedProduct("Everyday Crew Tee Heather Gray", {
-      manufacturer: "",
+      brandId: null,
     });
     const loser = await seedProduct("Example Brand Crew tee — Gray, M", {
-      manufacturer: "Example Brand",
+      brandId: await findOrCreateVendor(ctx.db, "Example Brand"),
     });
 
     const summary = await mergeProducts(
@@ -401,12 +404,14 @@ describe("mergeProducts", () => {
       TEST_ACTOR,
     );
 
-    expect(summary.carriedFields).toContain("manufacturer");
+    expect(summary.carriedFields).toContain("brandId");
     const survivor = await getDb(ctx.db).query.product.findFirst({
       where: eq(product.id, keeper.id),
-      columns: { manufacturer: true },
+      columns: { brandId: true },
     });
-    expect(survivor?.manufacturer).toBe("Example Brand");
+    expect(survivor?.brandId).toBe(
+      await findOrCreateVendor(ctx.db, "Example Brand"),
+    );
   });
 
   it("soft-deletes the losers and folds their identity into the survivor", async () => {

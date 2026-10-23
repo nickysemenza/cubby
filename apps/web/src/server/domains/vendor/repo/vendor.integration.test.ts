@@ -10,15 +10,22 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
-import { getDb, insertAndReturn, notDeleted } from "~/server/db/helpers";
+import {
+  getDb,
+  insertAndReturn,
+  notDeleted,
+  withTransactionDatabase,
+} from "~/server/db/helpers";
 import {
   auditLog,
   entityAttachment,
   expense,
   externalSource,
   purchase,
+  product,
   vendor,
 } from "~/server/db/schema";
+import { updateProduct } from "~/server/domains/product/repo/crud";
 import {
   deletePurchases,
   findOrCreatePurchase,
@@ -27,7 +34,11 @@ import {
 } from "~/server/domains/purchase/repo/purchase";
 import { resolveLiveShortcode } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
-import { makeExpenseInput } from "~/server/testing/repo.fixtures";
+import {
+  createProductFixture,
+  makeProductInput,
+  makeExpenseInput,
+} from "~/server/testing/repo.fixtures";
 
 import {
   deleteVendors,
@@ -47,6 +58,97 @@ import {
  */
 
 const page = { pageIndex: 0, pageSize: 50 };
+
+describe("Brand lifecycle serialization", () => {
+  const ctx = withTestDb();
+  it("finishes an edit resubmitting its Brand before a concurrent Vendor merge", async () => {
+    const keeper = await insertWithShortcode(ctx.db, "vendor", {
+      name: "Synthetic kept Brand",
+    });
+    const donor = await insertWithShortcode(ctx.db, "vendor", {
+      name: "Synthetic merged Brand",
+    });
+    const item = await createProductFixture(
+      ctx.db,
+      makeProductInput({
+        name: "Synthetic Brand lock item",
+        brandId: donor.id,
+      }),
+      ctx.actor,
+    );
+    let updating: Promise<unknown> | undefined;
+    let merging: Promise<unknown> | undefined;
+    try {
+      await withTransactionDatabase(ctx.db, async (holder) => {
+        await getDb(holder)
+          .select({ id: product.id })
+          .from(product)
+          .where(eq(product.id, item.entityId))
+          .for("update");
+        const holderPid = (
+          await getDb(holder).execute<{ pid: number }>(
+            sql`SELECT pg_backend_pid() AS pid`,
+          )
+        ).rows[0]?.pid;
+        if (!holderPid)
+          throw new Error("Synthetic Product lock holder is missing");
+        updating = updateProduct(
+          ctx.db,
+          item.entityId,
+          {
+            name: "Synthetic edited Brand lock item",
+            brandId: donor.shortcode,
+          },
+          ctx.actor,
+        ).catch((error: unknown) => error);
+        let updaterPid: number | undefined;
+        await expect
+          .poll(
+            async () => {
+              updaterPid = (
+                await getDb(ctx.db).execute<{ pid: number }>(sql`
+            SELECT pid FROM pg_stat_activity WHERE datname=current_database()
+              AND ${holderPid}::int = ANY(pg_blocking_pids(pid)) LIMIT 1`)
+              ).rows[0]?.pid;
+              return updaterPid !== undefined;
+            },
+            { timeout: 5_000, interval: 20 },
+          )
+          .toBe(true);
+        merging = mergeVendors(
+          ctx.db,
+          { keepId: keeper.shortcode, mergeIds: [donor.shortcode] },
+          ctx.actor,
+        ).catch((error: unknown) => error);
+        // With Vendor-before-Product ordering, merge waits on the editing transaction.
+        // Reversed ordering instead leaves both writers waiting on the held Product.
+        await expect
+          .poll(
+            async () =>
+              (
+                await getDb(ctx.db).execute<{ waiting: boolean }>(sql`
+          SELECT EXISTS(SELECT 1 FROM pg_stat_activity WHERE datname=current_database()
+            AND ${updaterPid}::int = ANY(pg_blocking_pids(pid))) AS waiting`)
+              ).rows[0]?.waiting,
+            { timeout: 5_000, interval: 20 },
+          )
+          .toBe(true);
+      });
+    } finally {
+      await Promise.all([updating, merging]);
+    }
+    expect(await updating).not.toBeInstanceOf(Error);
+    expect(await merging).not.toBeInstanceOf(Error);
+    expect(
+      await getDb(ctx.db)
+        .select({ name: product.name, brandId: product.brandId })
+        .from(product)
+        .where(eq(product.id, item.entityId)),
+    ).toEqual([
+      { name: "Synthetic edited Brand lock item", brandId: keeper.id },
+    ]);
+  });
+});
 
 describe("vendor repository — findOrCreateVendor", () => {
   const ctx = withTestDb();
@@ -214,7 +316,9 @@ describe("vendor repository — deletion guard", () => {
     await expect(getVendorByID(ctx.db, vendorId)).rejects.toMatchObject({
       reason: "VENDOR_NOT_FOUND",
     });
-    expect((await vendorList(ctx.db, {}, [], page)).count).toBe(0);
+    expect(
+      (await vendorList(ctx.db, {}, [], page)).data.map((row) => row.id),
+    ).not.toContain(vendorShortcode);
   });
 });
 

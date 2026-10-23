@@ -437,7 +437,9 @@ struct LinkProductsSheet: View {
                             HStack(alignment: .top) {
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text(candidate.name)
-                                    Text(candidate.manufacturer).font(.caption).foregroundStyle(.secondary)
+                                    if let brandName = candidate.brandName {
+                                        Text(brandName).font(.caption).foregroundStyle(.secondary)
+                                    }
                                 }
                                 Spacer()
                                 if let price = candidate.price {

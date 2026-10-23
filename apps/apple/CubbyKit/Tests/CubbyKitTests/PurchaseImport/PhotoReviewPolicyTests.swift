@@ -112,7 +112,7 @@ struct PhotoReviewPolicyTests {
     @Test func evidenceRetainsHeroDateAndPhotoCapture() throws {
         let data = Data(
             """
-            {"id":"PRD-4K7M","name":"Synthetic shirt","coverUrl":null,"manufacturer":null,"model":null,"identifiers":[],"notes":null,"tags":[],"category":null,"externalIds":[],
+            {"id":"PRD-4K7M","name":"Synthetic shirt","coverUrl":null,"brandName":null,"model":null,"identifiers":[],"notes":null,"tags":[],"category":null,"externalIds":[],
              "purchaseLines":[{"expenseId":"EXP-4K7M","purchaseId":null,"purchaseLabel":null,"name":"Synthetic shirt",
               "date":"2026-10-01","dateLabel":"Paid","vendor":"Example shop","cost":12,"productQuantity":2,"movement":"acquired"}],
              "ownPhotos":[{"id":"IMG-4K7M","url":"https://example.invalid/shirt.png","capturedAt":"2026-10-02T12:00:00Z"}]}

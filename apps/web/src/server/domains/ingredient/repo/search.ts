@@ -32,6 +32,10 @@ import { QueryBuilder } from "drizzle-orm/pg-core";
 import { listReadRowSchema } from "~/entity/model/list-read-fields";
 import type { Database } from "~/server/db";
 import {
+  productBrandCodeSql,
+  productBrandNameSql,
+} from "~/server/db/computed/product-brand-sql";
+import {
   categoryStockTrackingSql,
   categorySummarySql,
 } from "~/server/db/computed/product-category-sql";
@@ -222,6 +226,8 @@ export const getIngredientsByIDsLean = async (
         product: {
           where: notDeleted(product),
           extras: {
+            brandCode: productBrandCodeSql(product.brandId).as("brandCode"),
+            brandName: productBrandNameSql(product.brandId).as("brandName"),
             category: categorySummarySql(sql`${product.categoryId}`).as(
               "category",
             ),
@@ -308,6 +314,8 @@ export const enrichmentWorkbenchIngredients = async (
     with: {
       product: {
         extras: {
+          brandCode: productBrandCodeSql(product.brandId).as("brandCode"),
+          brandName: productBrandNameSql(product.brandId).as("brandName"),
           category: categorySummarySql(sql`${product.categoryId}`).as(
             "category",
           ),

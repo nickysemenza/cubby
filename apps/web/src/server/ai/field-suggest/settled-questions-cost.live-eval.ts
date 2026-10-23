@@ -75,7 +75,7 @@ describe("settled suggestion read cost", () => {
     const question = (name: string) => ({
       field: "categoryId",
       basisMode: "suggested" as const,
-      basis: { name, manufacturer: null },
+      basis: { name, brandName: null },
     });
     const live = await measured(async () => {
       for (const name of names)
@@ -85,7 +85,7 @@ describe("settled suggestion read cost", () => {
             entity: "product",
             basisMode: "suggested",
             targets: ["categoryId"],
-            basis: { name, manufacturer: null },
+            basis: { name, brandName: null },
             runKey: crypto.randomUUID(),
           },
           { decisionPort: declines },
@@ -110,7 +110,7 @@ describe("settled suggestion read cost", () => {
       entity: "product" as const,
       basisMode: "suggested" as const,
       targets: ["categoryId"],
-      basis: { name, manufacturer: null },
+      basis: { name, brandName: null },
       runKey,
     }));
     const singletonRevisit = await measured(async () => {

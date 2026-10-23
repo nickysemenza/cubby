@@ -88,7 +88,7 @@ const containerLocation = (overrides: Partial<InfLocation> = {}) =>
     product: {
       id: testShortcode("product", "PRD-AAAA"),
       name: "Two drawer tool box",
-      manufacturer: "Example",
+      brandName: "Example",
       model: "EX-2",
       category: categorySummaryFixture("storage"),
       coverImage: image("product"),

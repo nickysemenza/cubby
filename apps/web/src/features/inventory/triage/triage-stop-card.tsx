@@ -107,8 +107,8 @@ export function TriageStopCard({
                 data={product}
               />
             </h2>
-            {product.manufacturer && (
-              <Description size="xs">{product.manufacturer}</Description>
+            {product.brandName && (
+              <Description size="xs">{product.brandName}</Description>
             )}
             <Description>
               The ledger says {expected} bought
@@ -175,7 +175,7 @@ export function TriageStopCard({
           {
             id: product.id,
             name: product.name,
-            manufacturer: product.manufacturer,
+            brandName: product.brandName,
             defaultAmount: proposed,
           },
         ]}

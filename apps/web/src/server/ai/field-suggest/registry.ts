@@ -478,7 +478,7 @@ const FIELD_SUGGEST_OVERRIDES = {
       return redundantTokens({
         values,
         restating: {
-          manufacturer: basis.manufacturer,
+          brandName: basis.brandName,
           classification: category?.path.map((node) => node.name) ?? null,
           feature: category?.feature ?? null,
           alias: parseJsonStringArray(basis.aliases),
@@ -559,6 +559,13 @@ const FIELD_SUGGEST_OVERRIDES = {
       return vendors.slice(0, VENDOR_ROSTER_CAP).map((v) => v.name);
     },
   } satisfies TextRosterSuggestSpec,
+  "product.brandId": {
+    ...FIELD_SUGGEST_DECISIONS["product.brandId"],
+    roster: async (db) => (await vendorOptions(db)).slice(0, VENDOR_ROSTER_CAP),
+    idOf: (c) => c.id,
+    labelOf: (c) => c.name,
+    renderLine: (c) => `${c.id} | ${c.name}`,
+  } satisfies ReferenceSuggestSpec<{ id: string; name: string }>,
   "purchase.vendorId": {
     ...FIELD_SUGGEST_DECISIONS["purchase.vendorId"],
     roster: async (db) => {

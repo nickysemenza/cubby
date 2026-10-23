@@ -22,7 +22,7 @@ test("a person accepts a data gap as an exception from the explanation and clear
   const name = `Synthetic exception ${Date.now()}`;
   const product = await seedProductPrerequisite(page, {
     name,
-    manufacturer: "(unspecified)",
+    brandId: null,
   });
   const location = await seedLocationPrerequisite(page, `${name} shelf`);
   await createEntityFixture(page, "inventory", {
@@ -39,7 +39,7 @@ test("a person accepts a data gap as an exception from the explanation and clear
     name: /How (data )?quality is determined/,
   });
   const popover = page.locator('[data-slot="popover-content"]:visible');
-  const check = popover.locator('[data-quality-check="product_manufacturer"]');
+  const check = popover.locator('[data-quality-check="product_brand"]');
   await expect(async () => {
     if (!(await popover.isVisible())) await trigger.click();
     await expect(check).toContainText("Missing data");
@@ -52,7 +52,7 @@ test("a person accepts a data gap as an exception from the explanation and clear
   await check
     .getByLabel("Note")
     .fill(
-      "Checked [synthetic catalog](https://example.test/catalog); no manufacturer is listed.",
+      "Checked [synthetic catalog](https://example.test/catalog); no brandName is listed.",
     );
   await check.getByRole("button", { name: "Accept exception" }).click();
   await expect(check).toContainText("Accepted exception");
@@ -68,13 +68,16 @@ test("a person accepts a data gap as an exception from the explanation and clear
   await check.getByRole("button", { name: "Accept as…" }).click();
   await check
     .getByLabel("Note")
-    .fill("Synthetic item has no issued manufacturer; checked its packaging.");
+    .fill("Synthetic item has no issued brandName; checked its packaging.");
   await check.getByRole("button", { name: "Accept exception" }).click();
   await expect(check).toContainText("Accepted exception");
+  const brand = await createEntityFixture(page, "vendor", {
+    name: "Synthetic recorded brand",
+  });
   const changed = await entityApi(page.request).update(
     "product",
     product.id,
-    { manufacturer: "Synthetic recorded maker" },
+    { brandId: brand.id },
     { headers: { Origin: baseURL! } },
   );
   expect(changed.ok(), await changed.text()).toBeTruthy();

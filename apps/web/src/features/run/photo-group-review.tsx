@@ -3,7 +3,10 @@ import type {
   ImageShortcode,
   ProductShortcode,
 } from "@cubby/schemas/identifiers";
-import { productCategoryShortcode } from "@cubby/schemas/identifiers";
+import {
+  parseShortcodeFor,
+  productCategoryShortcode,
+} from "@cubby/schemas/identifiers";
 import type { ImageProcessingJobState } from "@cubby/schemas/image-processing";
 import type {
   PhotoGroupReview as PhotoGroupDecision,
@@ -57,6 +60,7 @@ import { useWorkflowCommand } from "~/entity/hooks/use-workflow-command";
 import { EntityReferencePicker } from "~/entity/picker/entity-reference-picker";
 import { Picker } from "~/entity/picker/picker";
 import { referenceEntitySearch } from "~/entity/picker/reference-entity-search";
+import { useSelectedPickerItems } from "~/entity/picker/selected-items";
 import { CategoryLabel } from "~/entity/presentation/category-label";
 import { ShortcodeProse } from "~/entity/prose/shortcode-prose";
 import { ProductVariantEvidence } from "~/features/product/product-variant-evidence";
@@ -66,10 +70,10 @@ import {
 } from "~/features/run/run-target-state";
 import { ripple } from "~/integrations/tanstack-query/cache-tags";
 import { photoImport } from "~/integrations/tanstack-query/generated/catalog/photoImport.gen";
-import { product as productOperations } from "~/integrations/tanstack-query/generated/catalog/product.gen";
 import { purchaseImport } from "~/integrations/tanstack-query/generated/catalog/purchaseImport.gen";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import { formatCurrency } from "~/lib/number-format";
+import type { ComboboxItem } from "~/ui/combobox/combobox-types";
 import { DateDisplay } from "~/ui/common/date-display";
 import { DecisionSteps } from "~/ui/common/decision-steps";
 import { Facts } from "~/ui/common/facts";
@@ -258,6 +262,36 @@ type SaveGroup = (
 ) => Promise<boolean>;
 type ImagesById = ReadonlyMap<string, PhotoRunImage>;
 const WithProductCategorySearch = referenceEntitySearch("productCategory");
+const WithBrandSearch = referenceEntitySearch("vendor");
+
+function PhotoBrandPicker({
+  value,
+  setValue,
+  label,
+  disabled,
+}: {
+  value: string | null | undefined;
+  setValue: (item: ComboboxItem | null) => void;
+  label: string;
+  disabled: boolean;
+}) {
+  const [selected] = useSelectedPickerItems("vendor", value ? [value] : [], []);
+  return (
+    <WithBrandSearch>
+      {(search) => (
+        <Picker
+          {...search}
+          entity="vendor"
+          label={label}
+          clearable
+          value={selected ?? null}
+          setValue={setValue}
+          disabled={disabled}
+        />
+      )}
+    </WithBrandSearch>
+  );
+}
 
 const isStaleGroup = (
   proposal: PhotoGroupProposal,
@@ -820,7 +854,7 @@ function CommitInput({
           </datalist>
           <span id={hintId} className="text-muted-foreground sm:col-start-2">
             {optionsLoading
-              ? "Checking existing manufacturer names…"
+              ? "Checking existing brandName names…"
               : draft.trim()
                 ? (() => {
                     const match = options.find(
@@ -830,9 +864,9 @@ function CommitInput({
                     );
                     return match
                       ? `Existing name · used on ${countLabel(match.count, "product")}`
-                      : "New manufacturer name · saved as text on this Product";
+                      : "New brandName name · saved as text on this Product";
                   })()
-                : "Use an existing manufacturer name or enter one."}
+                : "Use an existing brandName name or enter one."}
           </span>
         </>
       ) : null}
@@ -960,7 +994,7 @@ function FieldCrossChecks({
   identifiers,
 }: {
   checks: readonly PhotoFieldCrossCheck[];
-  product?: Pick<PhotoProductEvidence, "name" | "manufacturer" | "model">;
+  product?: Pick<PhotoProductEvidence, "name" | "brandName" | "model">;
   unavailable: boolean;
   identifiers?: ReactNode;
 }) {
@@ -972,7 +1006,7 @@ function FieldCrossChecks({
   const stored = (check: PhotoFieldCrossCheck) => {
     if (check.field === "identifiers") return identifiers;
     if (
-      check.field === "manufacturer" ||
+      check.field === "brandName" ||
       check.field === "model" ||
       check.field === "name"
     )
@@ -1213,7 +1247,7 @@ function SelectedProductEvidence({
               displayImage={null}
               className="font-medium"
             />
-            {product.manufacturer ? <p>{product.manufacturer}</p> : null}
+            {product.brandName ? <p>{product.brandName}</p> : null}
             {product.model ? <p>{product.model}</p> : null}
           </div>
         </Row>
@@ -1283,7 +1317,7 @@ function FieldChangeToggle({
 }
 
 const productReviewFields = (
-  ["name", "manufacturer", "model", "notes", "tags"] as const
+  ["name", "brandId", "model", "notes", "tags"] as const
 )
   .map((key) => ({
     key,
@@ -1352,6 +1386,8 @@ function ExistingProductChanges({
                         if (!checked) delete next[field];
                         else if (field === "tags")
                           next.tags = current.data?.tags ?? [];
+                        else if (field === "brandId")
+                          next.brandId = current.data?.brandId ?? null;
                         else next[field] = before;
                         return {
                           ...toGroupInput(proposal),
@@ -1381,39 +1417,58 @@ function ExistingProductChanges({
                           wrap
                         />
                       </div>
-                      <CommitInput
-                        label={`New ${presentation.label.toLocaleLowerCase()}`}
-                        required={
-                          entityFieldByKey("product", field)?.requiredOnCreate
-                        }
-                        value={after}
-                        disabled={busy}
-                        onCommit={(value, onSaved) =>
-                          save(
-                            () => ({
+                      {field === "brandId" ? (
+                        <PhotoBrandPicker
+                          label="New brand"
+                          value={changes.brandId}
+                          setValue={(item) =>
+                            save(() => ({
                               ...toGroupInput(proposal),
                               review: {
                                 ...review,
                                 productChanges: {
                                   ...changes,
-                                  [field]:
-                                    field === "tags"
-                                      ? value
-                                          .split(",")
-                                          .map((tag) => tag.trim())
-                                          .filter(Boolean)
-                                      : value ||
-                                        (field === "name" ||
-                                        field === "manufacturer"
-                                          ? ""
-                                          : null),
+                                  brandId: item
+                                    ? parseShortcodeFor("vendor", item.id)
+                                    : null,
                                 },
                               },
-                            }),
-                            onSaved,
-                          )
-                        }
-                      />
+                            }))
+                          }
+                          disabled={busy}
+                        />
+                      ) : (
+                        <CommitInput
+                          label={`New ${presentation.label.toLocaleLowerCase()}`}
+                          required={
+                            entityFieldByKey("product", field)?.requiredOnCreate
+                          }
+                          value={after}
+                          disabled={busy}
+                          onCommit={(value, onSaved) =>
+                            save(
+                              () => ({
+                                ...toGroupInput(proposal),
+                                review: {
+                                  ...review,
+                                  productChanges: {
+                                    ...changes,
+                                    [field]:
+                                      field === "tags"
+                                        ? value
+                                            .split(",")
+                                            .map((tag) => tag.trim())
+                                            .filter(Boolean)
+                                        : value ||
+                                          (field === "name" ? "" : null),
+                                  },
+                                },
+                              }),
+                              onSaved,
+                            )
+                          }
+                        />
+                      )}
                     </>
                   ) : null}
                 </Stack>
@@ -1552,10 +1607,6 @@ function ProductPanel({
       onSaved,
     );
   const product = proposal.product;
-  const manufacturers = useQuery({
-    ...productOperations.manufacturerOptions.queryOptions(),
-    enabled: product.kind === "create",
-  });
   const batch = usePhotoCandidates();
   const candidates = batch.data?.groups.find(
     (group) => group.groupKey === proposal.groupKey,
@@ -1581,10 +1632,25 @@ function ProductPanel({
   ) => {
     return saveGroup(() => selectPhotoProduct(proposal, next), onSaved);
   };
-  const renderCreateField = (
-    field: "manufacturer" | "model" | "notes" | "tags",
-  ) => {
+  const renderCreateField = (field: "brandId" | "model" | "notes" | "tags") => {
     if (product.kind !== "create") return null;
+    if (field === "brandId")
+      return (
+        <PhotoBrandPicker
+          label="Brand"
+          value={product.create.brandId}
+          setValue={(item) =>
+            saveProduct({
+              kind: "create",
+              create: {
+                ...product.create,
+                brandId: item ? parseShortcodeFor("vendor", item.id) : null,
+              },
+            })
+          }
+          disabled={busy}
+        />
+      );
     const presentation = entityFieldPresentation("product", field, "create");
     if (!presentation.editable) return null;
     const value = product.create[field];
@@ -1599,22 +1665,11 @@ function ProductPanel({
         }
         value={Array.isArray(value) ? value.join(", ") : (value ?? "")}
         crossCheck={
-          field === "manufacturer" || field === "model"
+          field === "model"
             ? checks.find((check) => check.field === field)
             : undefined
         }
-        className={
-          field === "manufacturer" || field === "model" ? "flex-1" : undefined
-        }
-        options={
-          field === "manufacturer"
-            ? (manufacturers.data?.map((entry) => ({
-                value: entry.manufacturer,
-                count: entry.count,
-              })) ?? [])
-            : undefined
-        }
-        optionsLoading={field === "manufacturer" && manufacturers.isPending}
+        className={field === "model" ? "flex-1" : undefined}
         disabled={busy}
         onCommit={(next, onSaved) =>
           saveProduct(
@@ -1628,9 +1683,7 @@ function ProductPanel({
                         .split(",")
                         .map((tag) => tag.trim())
                         .filter(Boolean)
-                    : field === "manufacturer"
-                      ? next
-                      : next || null,
+                    : next || null,
               },
             },
             onSaved,
@@ -1801,7 +1854,7 @@ function ProductPanel({
               </WithProductCategorySearch>
             </label>
             <Stack gap="sm" className="min-w-0">
-              {renderCreateField("manufacturer")}
+              {renderCreateField("brandId")}
               {renderCreateField("model")}
             </Stack>
           </Stack>

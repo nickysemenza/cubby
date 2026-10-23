@@ -132,7 +132,7 @@ struct JSONNullMiddlewareTests {
             await #expect(throws: CubbyAPIError.self) {
                 try await client.update(
                     EntityCatalog[.product], id: "PRD-2345",
-                    patch: EntityPatch(values: ["manufacturer": "Lodge"], cleared: ["categoryId"]))
+                    patch: EntityPatch(values: ["notes": "Polished"], cleared: ["brandId", "categoryId"]))
             }
         }
         let request = try #require(requests.first)
@@ -142,10 +142,28 @@ struct JSONNullMiddlewareTests {
         #expect(
             request.body == [
                 "action": "update", "entity": "product", "id": "PRD-2345",
-                "data": ["manufacturer": "Lodge", "categoryId": .null],
+                "data": ["notes": "Polished", "brandId": .null, "categoryId": .null],
             ])
         // The declared length is the sent body's own.
         #expect(request.contentLength == String(request.byteCount))
+    }
+
+    @Test func photoDraftBrandClearSurvivesTypedRPCEncoding() async throws {
+        let body: JSONValue = [
+            "runId": "RUN-4K7M", "groupKey": "synthetic-shirt", "name": "Canvas shirt",
+            "brandId": .null,
+        ]
+        let requests = try await capture { client in
+            await #expect(throws: CubbyAPIError.self) {
+                try await client.updatePhotoGroupDraft(body)
+            }
+        }
+        let request = try #require(requests.first)
+        #expect(requests.count == 1)
+        #expect(request.method == "POST")
+        #expect(request.path == OperationRoute.all["photoImport.updateDraft"]?.path)
+        #expect(request.body["brandId"] == .null)
+        #expect(request.body["name"] == .string("Canvas shirt"))
     }
 
     /// A required, nullable key inside a structured value (an alias's `externalAccountId`) is

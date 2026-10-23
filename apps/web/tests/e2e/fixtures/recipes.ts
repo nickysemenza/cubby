@@ -1,3 +1,4 @@
+import { seedProductPrerequisite } from "./catalog";
 import { upsertCookbook } from "~/server/domains/cookbook/repo/cookbook";
 import {
   makeCookbookExtraction,
@@ -90,9 +91,9 @@ export async function seedCostedIngredientPrerequisite(
   name: string,
 ) {
   const ingredient = await createEntityFixture(page, "ingredient", { name });
-  const product = await createEntityFixture(page, "product", {
+  const product = await seedProductPrerequisite(page, {
     name: `${name} Brand Product`,
-    manufacturer: "E2E fixture",
+    brandName: "E2E fixture",
     ingredientId: ingredient.id,
     unitMappings: [
       {
@@ -133,9 +134,9 @@ export async function seedNutritionPrerequisite(
     ],
     [incomplete, options.missingCalories ? [] : [{ value: 50, unit: "kcal" }]],
   ] as const) {
-    await createEntityFixture(page, "product", {
+    await seedProductPrerequisite(page, {
       name: `${ingredient.id} nutrition source`,
-      manufacturer: "E2E fixture",
+      brandName: "E2E fixture",
       ingredientId: ingredient.id,
       unitMappings: mappings.map((b) => ({
         a: { value: 100, unit: "g" },
@@ -203,9 +204,9 @@ export async function seedMealNutritionPrerequisite(
   const ingredient = await createEntityFixture(page, "ingredient", {
     name: `${name} snack ingredient`,
   });
-  const product = await createEntityFixture(page, "product", {
+  const product = await seedProductPrerequisite(page, {
     name: `${name} snack`,
-    manufacturer: "E2E fixture",
+    brandName: "E2E fixture",
     ingredientId: ingredient.id,
     labelNutrition: {
       servingGrams: 30,

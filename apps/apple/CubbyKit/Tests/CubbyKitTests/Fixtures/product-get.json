@@ -4,7 +4,13 @@
   "previousShortcodes": [],
   "name": "Sample Product",
   "acquisitionOrigin": "unknown",
-  "owners": [{ "label": "Household", "ref": null, "inherited": false }],
+  "owners": [
+    {
+      "label": "Household",
+      "ref": null,
+      "inherited": false
+    }
+  ],
   "ownershipEvidence": {
     "state": "uncertain",
     "acquiredAt": null,
@@ -17,13 +23,19 @@
     "basis": "Per serving · 30 g",
     "sourceNote": "Synthetic package label",
     "inferenceEvidence": null,
-    "rows": [{ "key": "protein", "label": "Protein (g)", "amount": 3, "inferred": false }]
+    "rows": [
+      {
+        "key": "protein",
+        "label": "Protein (g)",
+        "amount": 3,
+        "inferred": false
+      }
+    ]
   },
   "aliases": [],
   "tags": [],
   "primaryGtin": null,
   "fdc_id": null,
-  "manufacturer": "Sample Manufacturer",
   "model": null,
   "notes": null,
   "expectedQuantity": null,
@@ -81,5 +93,7 @@
   "labelImageCount": 0,
   "labelImages": [],
   "classificationEvidence": "",
-  "sources": []
+  "sources": [],
+  "brandId": "VEN-2345",
+  "brandName": "Sample Manufacturer"
 }

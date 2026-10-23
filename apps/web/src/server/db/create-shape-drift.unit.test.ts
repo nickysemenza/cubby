@@ -197,7 +197,7 @@ describe("create-input shapes track their Drizzle tables", () => {
             !(field in exempt) &&
             // Absent, or present but letting `undefined` THROUGH — both mean
             // a caller can omit a value the column has no way to fill. A
-            // schema `.default()` fills it itself (`manufacturer`), so that
+            // schema `.default()` fills it itself (`brandName`), so that
             // parses undefined into a value and is supplied.
             (createFields[field] === undefined ||
               passesUndefinedThrough(createFields[field])),

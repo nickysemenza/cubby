@@ -26,7 +26,7 @@ describe("order line thumbnails", () => {
       date: "2026-09-21",
     });
     const product = (name: string) =>
-      insertWithShortcode(ctx.db, "product", { name, manufacturer: "" });
+      insertWithShortcode(ctx.db, "product", { name, brandId: null });
     const bare = await product("Example tomato packet");
     const pictured = await product("Example pepper packet");
     const failing = await product("Example bean packet");
@@ -119,7 +119,7 @@ describe("order line thumbnails", () => {
       productId: (
         await insertWithShortcode(ctx.db, "product", {
           name: "Example tomato packet, large",
-          manufacturer: "",
+          brandId: null,
         })
       ).id,
       cost: 5,

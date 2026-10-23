@@ -89,13 +89,13 @@ describe("buildOrderBy", () => {
     const sql = renderSql(
       buildOrderBy(product, [{ orderBy: "name", direction: "asc" }], ["name"], {
         resolve: (sort) =>
-          sort.orderBy === "name" ? [asc(product.manufacturer)] : null,
+          sort.orderBy === "name" ? [asc(product.brandId)] : null,
         tieBreaker: asc(product.shortcode),
       }),
     );
 
     expect(sql).toHaveLength(3);
-    expect(sql[0]).toContain('"Product"."manufacturer" asc');
+    expect(sql[0]).toContain('"Product"."brandId" asc');
     expect(sql.at(-1)).toContain('"Product"."id" asc');
   });
 });

@@ -31,6 +31,7 @@ import {
   ensurePurchaseAgentOAuthClient,
   PURCHASE_AGENT_OAUTH_CLIENT_ID,
 } from "~/server/domains/purchase-import/repo/agent-auth";
+import { resolveProductBrandName } from "~/server/domains/vendor/repo/product-brand";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import {
   createImageFixture,
@@ -138,7 +139,10 @@ describe("photo coordinator model eval", () => {
                     ctx.db,
                     makeProductInput({
                       name: entry.name,
-                      manufacturer: entry.manufacturer,
+                      brandId: await resolveProductBrandName(
+                        ctx.db,
+                        entry.brandName,
+                      ),
                     }),
                     ctx.actor,
                   )

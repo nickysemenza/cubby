@@ -28,7 +28,7 @@ export function useUpcAwareCreate(
         if (!product) throw new Error("UPC lookup failed");
         return {
           id: product.id,
-          name: `${product.name} (${product.manufacturer})`,
+          name: `${product.name} (${product.brandName})`,
         };
       }
       return fallbackCreate(trimmed);

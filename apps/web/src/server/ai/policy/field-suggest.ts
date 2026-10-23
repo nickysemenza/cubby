@@ -227,7 +227,7 @@ const FIELD_SUGGEST_DECISION_OVERRIDES = {
     entity: "product",
     maxCandidates: REFERENCE_ROSTER_CAP,
     rules:
-      "Identify the Product model represented by this Device using any explicit manufacturer and model in its name and its declared platform. A platform alone does not identify a model. A device label, host name, network address or similar title alone does not prove identity. Conflicting model or manufacturer requires none. Missing identity stays unknown. Do not infer household ownership or acquisition from network presence. Choose none when evidence is insufficient.",
+      "Identify the Product model represented by this Device using any explicit brandName and model in its name and its declared platform. A platform alone does not identify a model. A device label, host name, network address or similar title alone does not prove identity. Conflicting model or brandName requires none. Missing identity stays unknown. Do not infer household ownership or acquisition from network presence. Choose none when evidence is insufficient.",
     subject: (b) => renderSubject("device", b),
   } satisfies ReferenceSuggestDecision,
   "task.subjectProductId": {
@@ -264,6 +264,14 @@ const FIELD_SUGGEST_DECISION_OVERRIDES = {
     maxCandidates: VENDOR_ROSTER_CAP,
     subject: (basis) => renderSubject("expense", basis),
   } satisfies TextRosterSuggestDecision,
+  "product.brandId": {
+    kind: "reference",
+    entity: "vendor",
+    maxCandidates: VENDOR_ROSTER_CAP,
+    rules:
+      "Select the existing Vendor that is this Product's marketed brand, not its physical factory or purchased-from seller. Null means unknown. Choose Generic / Unbranded only with explicit unbranded evidence, independently of commodity status.",
+    subject: (basis) => renderSubject("product", basis),
+  } satisfies ReferenceSuggestDecision,
   "purchase.vendorId": {
     kind: "reference",
     entity: "vendor",
@@ -399,7 +407,7 @@ export function fieldSuggestDecisionFor(
  * outcome (every entry survived) also reports index 1, the probability the
  * survivor is genuinely worth keeping. */
 const TAG_PRUNE_CHOICES = [
-  "Restates the manufacturer, the classification, or a generic category word already recorded elsewhere on the product.",
+  "Restates the brandName, the classification, or a generic category word already recorded elsewhere on the product.",
   "A genuine compatibility or ecosystem token (a battery platform, mount, thread, or size standard) worth keeping.",
 ] as const;
 /** One survivor tag's binary judgment; the Decisions catalog renders it. */

@@ -49,7 +49,7 @@ export function InventoryValuationSummary({
   );
 
   // Persisted rollup uses direct (items at this location) to match the
-  // location-filtered fetch this replaced. No manufacturer breakdown is stored,
+  // location-filtered fetch this replaced. No brandName breakdown is stored,
   // so the "full" variant's breakdown only shows in the fetch path.
   const totalValuation = hasPersisted
     ? (valuation?.directValuation ?? 0)
@@ -96,7 +96,7 @@ export function InventoryValuationSummary({
       {result.breakdown.length > 0 && (
         <div className="mt-4">
           <Description as="div" size="xs" className="mb-1 font-medium">
-            By manufacturer
+            By brandName
           </Description>
           <Stack as="ul" gap="xs">
             {result.breakdown.slice(0, 6).map((b) => (

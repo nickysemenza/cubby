@@ -238,7 +238,6 @@ const CLIENT_PASSTHROUGH_METHODS = {
   "photoImport.review": { method: "photoRunReview", doc: null },
   "photoImport.stage": { method: "stagePhotoImport", doc: null },
   "photoImport.startGrouping": { method: "startPhotoGrouping", doc: null },
-  "photoImport.updateDraft": { method: "updatePhotoGroupDraft", doc: null },
   "problems.getCounts": { method: "problemCounts", doc: null },
   "run.workSnapshot": { method: "runWorkSnapshot", doc: null },
   "run.control": { method: "controlRun", doc: null },

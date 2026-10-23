@@ -581,16 +581,16 @@ async function findViaCommandPalette(page: Page, query: string, name: string) {
 export async function createProduct(
   page: Page,
   name: string,
-  opts: { manufacturer?: string } = {},
+  opts: { brandName?: string } = {},
 ) {
   await page.goto("/products?create=true");
   await waitForFormHydration(page);
   const dialog = page.getByRole("dialog");
   await dialog.getByRole("textbox", { name: "Name", exact: true }).fill(name);
-  if (opts.manufacturer !== undefined) {
+  if (opts.brandName !== undefined) {
     await dialog
       .getByRole("textbox", { name: "Manufacturer", exact: true })
-      .fill(opts.manufacturer);
+      .fill(opts.brandName);
   }
   await dialog.getByRole("button", { name: /^Create$/ }).click();
   await expect(dialog).not.toBeVisible({ timeout: 15000 });

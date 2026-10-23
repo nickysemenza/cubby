@@ -54,7 +54,7 @@ const problemRowBadgeSchema = z.object({
 const problemRowFieldSchema = z.object({
   label: z.string(),
   value: z.string(),
-  /** Set when this value is itself the defect (a missing manufacturer on an identity card). */
+  /** Set when this value is itself the defect (a missing brandName on an identity card). */
   tone: z.enum(["warning", "destructive"]).nullable(),
 });
 
@@ -76,7 +76,7 @@ export type ProblemRow = z.infer<typeof problemRowSchema>;
 const productProblemFields = {
   id: productShortcode,
   name: z.string(),
-  manufacturer: z.string(),
+  brandName: z.string().nullable(),
 };
 const coverageFields = {
   covered: z.array(baseKind),
@@ -168,7 +168,7 @@ export const duplicateProductIdentitySchema = z.object({
       productIds: z.tuple([productShortcode, productShortcode]),
     }),
   ),
-  manufacturer: z.string(),
+  brandName: z.string().nullable(),
   model: z.string(),
   products: z.array(
     z.object({
@@ -246,7 +246,7 @@ export const emptyLocationSchema = z.object({
 const labelVariantFields = {
   value: z.string(),
   /**
-   * How much backs this spelling: products carrying it for a manufacturer, live
+   * How much backs this spelling: products carrying it for a brandName, live
    * purchases pointing at it for a vendor (whose name is unique per row, so
    * counting rows there could never produce a majority).
    */
@@ -349,7 +349,7 @@ export const productWithBetterUpcDataSchema = z.object({
   // AND lookup has one). null ⇒ no change for that field. A row always has ≥1
   // non-null field. `imageUrl` is an absolute URL ready to render.
   proposed: z.object({
-    manufacturer: z.string().nullable(),
+    brandName: z.string().nullable(),
     price: moneyNullable, // dollars, matches product.price + lookup.priceDollars
     imageUrl: z.string().nullable(),
   }),
@@ -710,7 +710,6 @@ export const problemDetectors = {
   // meant to keep clear. Each row is still real work — the fix is a
   // weight-to-money mapping — it just never reaches zero and stays there.
   weightSoldProducts: detector("fast", "coverage", weightSoldProductSchema),
-  manufacturerSpellingVariants: detector("fast", "defect", labelVariantSchema),
   // Two roster rows for one real vendor is simply wrong — that vendor's spend is
   // split across both — and it converges to zero: `mergeVendors` folds the pair
   // and the pair never comes back (the live roster sits at 0 across 114 vendors).

@@ -23,7 +23,7 @@ type LocationSelect = typeof location.$inferSelect & {
 
 import type { MappableProductExternalId } from "~/server/domains/product/repo/external-id-types";
 
-type ProductSelect = typeof product.$inferSelect;
+type ProductSelect = typeof product.$inferSelect & { brandName: string | null };
 
 /**
  * The identity product joined onto a location — the SKU the location IS.

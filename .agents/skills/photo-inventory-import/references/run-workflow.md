@@ -13,7 +13,7 @@ grouping, ownership, and location rules.
    propose each page's groups as you go, but hold back a page's last group
    until the next page shows whether the item continues.
 2. For each distinct item, call `imports_read.photo_candidates` with its
-   observed name and manufacturer; issue the calls for all items in one turn,
+   observed name and brand text (`brandName`); issue the calls for all items in one turn,
    since they are independent. Compare the physical variant to the returned
    Products. Prefer a matching Product with no own-item photo or earlier photo
    import, whether or not it has a vendor import or purchase. Read labels in

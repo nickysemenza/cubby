@@ -22,6 +22,7 @@ import { expenseSpendingCategoryResolutionSql } from "~/server/domains/expense/r
 import { createInventoryEntry } from "~/server/domains/inventory/repo/crud";
 import { createLedgerParty } from "~/server/domains/ledger-party/repo/ledger-party";
 import { resolveProductIdentifierSource } from "~/server/domains/product/repo/product-identifier-source";
+import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
 import {
   entityKernelContextSchema,
   executeEntity,
@@ -142,6 +143,7 @@ describe("derived field explanations against canonical records", () => {
     });
     const source = await resolveProductIdentifierSource(ctx.db, {
       url: "https://shop.example.test/catalog/item",
+      vendorId: supplier.entityId,
     });
     const offlineSupplier = await createRepoEntity(ctx, "vendor", {
       name: "Synthetic supplier without a website",
@@ -153,7 +155,7 @@ describe("derived field explanations against canonical records", () => {
     });
     // Prefix-shaped slugs do not establish ownership, and an external ID
     // that equals a registered slug remains an identifier rather than a link.
-    const unownedSource = `vendor-${supplier.entityId}`;
+    const unownedSource = "vendor-00000000-0000-4000-8000-000000000001";
     await getDb(ctx.db).insert(externalSource).values({
       slug: unownedSource,
       label: "Synthetic unowned source",
@@ -243,7 +245,7 @@ describe("derived field explanations against canonical records", () => {
     });
     const item = await insertWithShortcode(ctx.db, "product", {
       name: "Fixture toolbox",
-      manufacturer: "Fixture",
+      brandId: await findOrCreateVendor(ctx.db, "Fixture"),
       categoryId: child.id,
     });
     const line = await insertWithShortcode(ctx.db, "expense", {
@@ -779,7 +781,7 @@ describe("derived field explanations against canonical records", () => {
     });
     const product = await insertWithShortcode(ctx.db, "product", {
       name: "Fixture tracking override",
-      manufacturer: "Fixture",
+      brandId: await findOrCreateVendor(ctx.db, "Fixture"),
       categoryId: child.id,
       stockTracked: true,
     });

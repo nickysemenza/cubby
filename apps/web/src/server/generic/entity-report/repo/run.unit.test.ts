@@ -501,7 +501,7 @@ describe("prepared orders", () => {
   ) => ({
     productId: productShortcode.parse(productId),
     name,
-    manufacturer: "Fixture maker",
+    brandName: "Fixture maker",
     model: null,
     exactIdentifierMatch,
     exactNameMatch: false,

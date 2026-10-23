@@ -98,7 +98,7 @@ export type ProductMovementGroup = {
 export type ProductMovementProduct = {
   id: ProductShortcode;
   name: string;
-  manufacturer: string;
+  brandName: string | null;
   category: ProductCategory | null;
   coverImageUrl: string | null;
   usedOnProjects: MovementProject[];
@@ -127,7 +127,7 @@ export interface ProductMovementTimeline {
 type CohortProduct = {
   id: ProductShortcode;
   name: string;
-  manufacturer: string;
+  brandName: string | null;
   category: ProductCategory | null;
   coverImageUrl: string | null;
 };
@@ -278,7 +278,7 @@ async function loadCohort(
             {
               id: item.id,
               name: item.name,
-              manufacturer: item.manufacturer,
+              brandName: item.brandName,
               category: item.category,
               coverImageUrl: item.coverImageUrl,
             },
@@ -571,7 +571,7 @@ export async function getProductMovementTimeline(
       {
         id: item.id,
         name: item.name,
-        manufacturer: item.manufacturer,
+        brandName: item.brandName,
         category: item.category,
         coverImageUrl: item.coverImageUrl,
         usedOnProjects: (usagesByProduct[privateId] ?? [])

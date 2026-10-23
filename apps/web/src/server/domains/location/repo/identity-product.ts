@@ -24,7 +24,7 @@ export const mapLocationIdentityProduct = (
   return {
     id: parseShortcodeFor("product", product.shortcode),
     name: product.name,
-    manufacturer: product.manufacturer,
+    brandName: product.brandName,
     model: product.model ?? null,
     category: product.category ?? null,
     // First DISPLAYABLE image, not first image: `mapImages` drops soft-deleted

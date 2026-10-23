@@ -120,7 +120,7 @@ function aggregateMark(tokens: PhotoFieldCrossCheck["tokens"]): Mark {
 export function photoFieldCrossCheck(
   product: {
     name: string;
-    manufacturer?: string | null;
+    brandName?: string | null;
     model?: string | null;
     identifiers: readonly string[];
   },
@@ -215,7 +215,7 @@ export function photoFieldCrossCheck(
         : null,
     },
   ];
-  for (const field of ["manufacturer", "model"] as const) {
+  for (const field of ["brandName", "model"] as const) {
     const value = product[field] ?? null;
     const tokens = correctnessTokens(value ?? "").map((text) => ({
       text,

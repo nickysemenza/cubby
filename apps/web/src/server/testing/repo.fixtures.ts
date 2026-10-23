@@ -13,6 +13,8 @@ import {
   type PlantId,
   type PlantShortcode,
   type RecipeId,
+  type VendorId,
+  type VendorShortcode,
   parseEntityId,
   parseShortcodeFor,
 } from "@cubby/schemas/identifiers";
@@ -24,7 +26,7 @@ import type { ExpenseCreateInput } from "@cubby/schemas/project";
 import type { RecipeCreateInput } from "@cubby/schemas/recipe";
 import type { RecipeTotals } from "@cubby/schemas/recipe-shared";
 import type { SearchableEntity } from "@cubby/schemas/search";
-import { inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
 import { buildEntity } from "tooling/factories/build";
 import { z } from "zod";
@@ -41,6 +43,7 @@ import {
   productCategory,
   recipe,
   user,
+  vendor,
 } from "~/server/db/schema";
 import { systemActor } from "~/server/domains/run/repo/ensure-run";
 import {
@@ -48,7 +51,7 @@ import {
   type EntityPayloadValues,
 } from "~/server/entity-kernel/repo/entity-identity-writer";
 
-import { getDb } from "../db/helpers";
+import { getDb, notDeleted } from "../db/helpers";
 import {
   createIngredient,
   findOrCreateIngredient,
@@ -96,10 +99,15 @@ type ProductFixtureInput<
     | ProductCategoryShortcode
     | null
     | undefined,
-> = Omit<ProductCreateInput, "ingredientId" | "growsPlantId" | "categoryId"> & {
+  Brand extends VendorId | VendorShortcode | null | undefined,
+> = Omit<
+  ProductCreateInput,
+  "ingredientId" | "growsPlantId" | "categoryId" | "brandId"
+> & {
   ingredientId: Ingredient | null;
   growsPlantId: GrowsPlant | null;
   categoryId: Category | null;
+  brandId: NonNullable<Brand> | null;
 };
 
 /**
@@ -117,18 +125,21 @@ export const makeProductInput = <
     | ProductCategoryShortcode
     | null
     | undefined = undefined,
+  Brand extends VendorId | VendorShortcode | null | undefined = undefined,
 >(
   overrides: Omit<
     Partial<ProductCreateInput>,
-    "ingredientId" | "growsPlantId" | "categoryId"
+    "ingredientId" | "growsPlantId" | "categoryId" | "brandId"
   > & {
     ingredientId?: Ingredient;
     growsPlantId?: GrowsPlant;
     categoryId?: Category;
+    brandId?: Brand;
   } = {},
-): ProductFixtureInput<Ingredient, GrowsPlant, Category> => {
-  const { ingredientId, growsPlantId, categoryId, ...rest } = overrides;
-  // The three id fields are re-attached after the parse: this builder serves
+): ProductFixtureInput<Ingredient, GrowsPlant, Category, Brand> => {
+  const { ingredientId, growsPlantId, categoryId, brandId, ...rest } =
+    overrides;
+  // Reference fields are re-attached after the parse: this builder serves
   // both the UUID-only repo boundary and the shortcode-only router, so it must
   // not run them through the shortcode schema.
   return {
@@ -137,6 +148,7 @@ export const makeProductInput = <
     ingredientId: ingredientId ?? null,
     growsPlantId: growsPlantId ?? null,
     categoryId: categoryId ?? null,
+    brandId: brandId ?? null,
   };
 };
 
@@ -168,10 +180,32 @@ const retainEntityId =
 /** Public fixture references enter the UUID-only repository boundary here. */
 const resolveProductFixtureInput = async (
   db: Database,
-  data: Omit<ProductCreateInput, "ingredientId"> & {
+  data: Omit<
+    ProductCreateInput,
+    "ingredientId" | "brandId" | "categoryId" | "growsPlantId"
+  > & {
     ingredientId?: string | null;
+    brandId?: VendorId | VendorShortcode | null;
+    categoryId?: ProductCategoryId | ProductCategoryShortcode | null;
+    growsPlantId?: PlantId | PlantShortcode | null;
   },
 ) => {
+  const rawBrandId = data.brandId ?? null;
+  const [brand] = rawBrandId
+    ? await getDb(db)
+        .select({ shortcode: vendor.shortcode })
+        .from(vendor)
+        .where(
+          and(
+            rawBrandId.startsWith("VEN-")
+              ? eq(vendor.shortcode, rawBrandId)
+              : eq(vendor.id, parseEntityId("vendor", rawBrandId)),
+            notDeleted(vendor),
+          ),
+        )
+    : [];
+  if (rawBrandId && !brand)
+    throw new Error(`fixture: Brand ${rawBrandId} not found`);
   const rawIngredientId = data.ingredientId ?? null;
   const resolvedIngredientId = rawIngredientId?.startsWith("ING-")
     ? await resolveLiveShortcode(db, rawIngredientId, "ingredient")
@@ -179,17 +213,20 @@ const resolveProductFixtureInput = async (
   if (rawIngredientId && !resolvedIngredientId) {
     throw new Error(`fixture: ingredient ${rawIngredientId} not found`);
   }
-  const growsPlantId = data.growsPlantId
+  const growsPlantId = data.growsPlantId?.startsWith("PLANT-")
     ? await resolveLiveShortcode(db, data.growsPlantId, "plant")
-    : null;
+    : data.growsPlantId;
   if (data.growsPlantId && !growsPlantId) {
     throw new Error(`fixture: growing plant ${data.growsPlantId} not found`);
   }
   return {
     ...data,
-    categoryId: data.categoryId
+    brandId: brand ? parseShortcodeFor("vendor", brand.shortcode) : null,
+    categoryId: data.categoryId?.startsWith("CAT-")
       ? await resolveLiveShortcode(db, data.categoryId, "productCategory")
-      : null,
+      : data.categoryId
+        ? parseEntityId("productCategory", data.categoryId)
+        : null,
     growsPlantId: growsPlantId ? parseEntityId("plant", growsPlantId) : null,
     ingredientId: resolvedIngredientId
       ? parseEntityId("ingredient", resolvedIngredientId)
@@ -224,8 +261,8 @@ export async function createProductIdentityFixture(
  * the boundary. Public assertions use `id`; UUID-only repo writes use
  * `entityId`. A public ingredient id is resolved here so callers never cast a
  * shortcode into a FK brand. Pass `makeProductInput({...})`: a minimal Product
- * inserted through `insertWithShortcode` lacks required values (manufacturer)
- * and skips the domain effects of the repository create path.
+ * inserted through `insertWithShortcode` skips the domain effects of the
+ * repository create path. Brand is an optional Vendor reference, never text.
  */
 export const createProductFixture = retainEntityId(
   "product",
@@ -616,7 +653,7 @@ export const seedIngredientWithStock = async (
   if (!location) throw new Error("seed: location not created");
   const productInput = makeProductInput({
     name: `Test ${opts.name}`,
-    manufacturer: "test",
+
     ingredientId: parseShortcodeFor("ingredient", ingredient.shortcode),
     unitMappings: [CUP_TO_GRAM],
   });

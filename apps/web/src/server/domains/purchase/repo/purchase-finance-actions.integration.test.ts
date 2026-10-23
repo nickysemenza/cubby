@@ -11,6 +11,7 @@ import { expense, expenseAttribution } from "~/server/db/schema";
 import { expenseLineRoleClassifier } from "~/server/domains/expense/service/expense-line-role";
 import { createLedgerParty } from "~/server/domains/ledger-party/repo/ledger-party";
 import { splitExpense } from "~/server/domains/purchase/repo/purchase";
+import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 import {
@@ -143,11 +144,11 @@ describe("split and attach checks against the ledger", () => {
     const [attached, derived] = await Promise.all([
       insertWithShortcode(ctx.db, "product", {
         name: "Attached sample",
-        manufacturer: "Synthetic",
+        brandId: await findOrCreateVendor(ctx.db, "Synthetic"),
       }),
       insertWithShortcode(ctx.db, "product", {
         name: "Derived sample",
-        manufacturer: "Synthetic",
+        brandId: await findOrCreateVendor(ctx.db, "Synthetic"),
       }),
     ]);
     await insertWithShortcode(ctx.db, "expense", {

@@ -1,5 +1,5 @@
 /**
- * Default manufacturer name for products without a known manufacturer
+ * Default brandName name for products without a known brandName
  */
 export const UNSPECIFIED_MANUFACTURER = "(unspecified)";
 

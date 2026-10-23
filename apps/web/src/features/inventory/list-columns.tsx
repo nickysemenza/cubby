@@ -94,7 +94,7 @@ const PRODUCT_SUBJECT = {
 
 // Product attributes remain available as optional header filters.
 const INVENTORY_INITIAL_COLUMN_VISIBILITY = {
-  manufacturer: false,
+  brandName: false,
   category: false,
 };
 
@@ -216,15 +216,15 @@ export const inventoryListOverride = defineListOverride<
             ),
           );
           add(
-            columnHelper.accessor((row) => row.product.manufacturer, {
-              id: "manufacturer",
+            columnHelper.accessor((row) => row.product.brandName, {
+              id: "brandName",
               header: "Manufacturer",
               enableSorting: false,
               meta: {
                 provenance: relationshipFieldProvenance("inventory", "product"),
                 className: "min-w-0 w-40 truncate",
                 mobile: { slot: "meta", priority: 70 },
-                filterConfig: { placeholder: "Filter by manufacturer..." },
+                filterConfig: { placeholder: "Filter by brandName..." },
               },
               cell: (info) => info.getValue() || <NoneValue />,
             }),
