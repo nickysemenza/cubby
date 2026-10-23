@@ -1,6 +1,6 @@
 {
-  "id": "26a74d9e-9179-48f0-bee4-a2981b381591",
-  "prevId": "a49c3d16-9698-4bb2-a0d8-9fa65526c816",
+  "id": "9efedc35-4112-4d76-a527-ff225cb850bd",
+  "prevId": "26a74d9e-9179-48f0-bee4-a2981b381591",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -19313,6 +19313,27 @@
             }
           ],
           "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "SourceTransactionRecord_source_externalId_lookup_idx": {
+          "name": "SourceTransactionRecord_source_externalId_lookup_idx",
+          "columns": [
+            {
+              "expression": "source",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "externalId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
           "concurrently": false,
           "method": "btree",
           "with": {}

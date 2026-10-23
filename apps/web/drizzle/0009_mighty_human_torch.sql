@@ -1,0 +1,1 @@
+CREATE INDEX "SourceTransactionRecord_source_externalId_lookup_idx" ON "SourceTransactionRecord" USING btree ("source","externalId");

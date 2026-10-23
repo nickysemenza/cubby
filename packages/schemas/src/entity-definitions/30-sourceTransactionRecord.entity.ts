@@ -678,6 +678,11 @@ export default defineEntity({
   },
   storage: {
     indexes: [
+      // Invalidation reads include retained tombstones; the live unique key cannot serve them.
+      {
+        name: "SourceTransactionRecord_source_externalId_lookup_idx",
+        on: ["source", "externalId"],
+      },
       {
         name: "SourceTransactionRecord_source_externalId_key",
         unique: true,
