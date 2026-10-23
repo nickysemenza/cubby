@@ -22,9 +22,12 @@ FoodData Central release, most branded rows are superseded food revisions: the
   the separate `usda-api` Worker, its HTTP/OpenAPI surface, D1 database, and
   every USDA cache layer are deleted.
 - The DO is named by the release plus a schema generation (`2026-04.g1`), and
-  the active name is a deploy var. A schema change bumps the generation and
-  reloads the release from its R2 shards; there is no in-place migrator for
-  release data. Activation and rollback are a deploy.
+  the active name is a deploy var. Originally, schema changes bumped the
+  generation and reloaded the release from its R2 shards. The Drizzle adoption
+  in #3117 supersedes that reload policy: schema changes migrate the existing
+  instance in place, preserving its loaded release and progress. See
+  [Durable Object SQLite schemas](../development.md#durable-object-sqlite-schemas).
+  Release activation and rollback remain a deploy.
 - A release loads itself: the DO pulls gzipped `FoodSummary` NDJSON shards from
   R2 in an alarm loop and reports its progress until ready.
 - Only the current revision of each branded food is stored. An alias table

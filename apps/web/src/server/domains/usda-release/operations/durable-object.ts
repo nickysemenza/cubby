@@ -13,7 +13,9 @@ import {
   type ReleaseManifest,
 } from "@cubby/usda/release";
 import { DurableObject } from "cloudflare:workers";
+import { drizzle } from "drizzle-orm/durable-sqlite";
 
+import { migrateUsdaRelease } from "../repo/migrate";
 import type { UsdaReleaseRpc } from "./rpc";
 
 const RETRY_DELAY_MS = 30_000;
@@ -34,10 +36,12 @@ export class UsdaReleaseDurableObject
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
     this.release = releaseFromObjectName(ctx.id.name ?? "");
-    this.store = new UsdaReleaseStore(ctx.storage.sql, (fn) =>
-      ctx.storage.transactionSync(fn),
+    this.store = new UsdaReleaseStore(
+      ctx.storage.sql,
+      (fn) => ctx.storage.transactionSync(fn),
+      drizzle(ctx.storage),
     );
-    this.store.init();
+    void ctx.blockConcurrencyWhile(() => migrateUsdaRelease(ctx.storage));
   }
 
   // Every call re-checks that a loading release still has an alarm: one the

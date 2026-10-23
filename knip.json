@@ -73,7 +73,7 @@
         // `generate:claude-plugin` rewrites the committed Claude plugin.
         "generator/claude-plugin.ts!",
         "tooling/e2e-db-watchdog.mjs!",
-        "drizzle.config.ts!"
+        "drizzle*.config.ts!"
       ],
       // Test seams (fixtures, mocks, harnesses) are reached only from tests;
       // production mode leaves them out of the file graph.

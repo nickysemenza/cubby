@@ -1,10 +1,103 @@
 import { evictDurableObject, runInDurableObject } from "cloudflare:test";
 import { env } from "cloudflare:workers";
+import { drizzle } from "drizzle-orm/durable-sqlite";
+import { migrate } from "drizzle-orm/durable-sqlite/migrator";
 import { describe, expect, it } from "vitest";
 
 import { decideReadConsistency } from "~/server/db/read-consistency";
 
+import baseline from "../repo/database-freshness-migrations/0000_baseline.sql?raw";
+import journal from "../repo/database-freshness-migrations/meta/_journal.json";
+import { DatabaseFreshnessStore } from "../repo/database-freshness-store";
+
 describe("database freshness Durable Object", () => {
+  it("adopts a populated legacy store and reinitializes after a later migration", async () => {
+    const stub = env.DB_FRESHNESS.getByName(crypto.randomUUID());
+    const lastWriteAt = Date.now() + 100000;
+    await runInDurableObject(stub, (_instance, state) => {
+      state.storage.sql.exec("DROP TABLE freshness");
+      state.storage.sql.exec("DROP TABLE __drizzle_migrations");
+      state.storage.sql.exec(
+        "CREATE TABLE freshness (id INTEGER PRIMARY KEY CHECK (id = 1), last_write_at REAL NOT NULL)",
+      );
+      state.storage.sql.exec(
+        "INSERT INTO freshness VALUES (1, ?)",
+        lastWriteAt,
+      );
+      state.storage.sql.exec("CREATE TABLE problem_counts (snapshot TEXT)");
+    });
+    await evictDurableObject(stub);
+    // An immediate RPC must wait for constructor migration and retain the hint.
+    expect((await stub.readFreshness()).lastWriteAt).toBe(lastWriteAt);
+    await runInDurableObject(stub, async (_instance, state) => {
+      expect(
+        state.storage.sql.exec("SELECT * FROM __drizzle_migrations").toArray(),
+      ).toHaveLength(1);
+      expect(
+        state.storage.sql
+          .exec("SELECT name FROM sqlite_master WHERE name = 'problem_counts'")
+          .toArray(),
+      ).toEqual([]);
+      const first = journal.entries[0];
+      if (!first) throw new Error("Missing baseline journal entry");
+      // The fixture upgrade changes the catalog without adding production
+      // schema solely to exercise a later deployment and its next restart.
+      await migrate(drizzle(state.storage), {
+        journal: {
+          ...journal,
+          entries: [
+            ...journal.entries,
+            { ...first, idx: 1, when: first.when + 1, tag: "test_upgrade" },
+          ],
+        },
+        migrations: {
+          m0000: baseline,
+          m0001: "ALTER TABLE freshness ADD COLUMN test_upgrade TEXT",
+        },
+      });
+    });
+    await evictDurableObject(stub);
+    expect((await stub.recordWrite()).lastWriteAt).toBe(lastWriteAt);
+    await runInDurableObject(stub, (_instance, state) => {
+      expect(
+        state.storage.sql.exec("SELECT * FROM __drizzle_migrations").toArray(),
+      ).toHaveLength(2);
+    });
+  });
+
+  it("refuses an incompatible legacy schema before recording adoption or serving reads", async () => {
+    const stub = env.DB_FRESHNESS.getByName(crypto.randomUUID());
+    await runInDurableObject(stub, async (_instance, state) => {
+      state.storage.sql.exec("DROP TABLE freshness");
+      state.storage.sql.exec("DROP TABLE __drizzle_migrations");
+      state.storage.sql.exec(
+        "CREATE TABLE freshness (id INTEGER PRIMARY KEY, last_write_at TEXT NOT NULL)",
+      );
+      state.storage.sql.exec(
+        "INSERT INTO freshness VALUES (1, 'synthetic legacy hint')",
+      );
+      await expect(
+        new DatabaseFreshnessStore(state.storage).migrate(),
+      ).rejects.toThrow("Incompatible legacy database freshness schema");
+      expect(
+        state.storage.sql
+          .exec(
+            "SELECT name FROM sqlite_master WHERE name = '__drizzle_migrations'",
+          )
+          .toArray(),
+      ).toEqual([]);
+      expect(
+        state.storage.sql.exec("SELECT last_write_at FROM freshness").one(),
+      ).toEqual({ last_write_at: "synthetic legacy hint" });
+    });
+    await evictDurableObject(stub);
+    const error = await stub.readFreshness().then(
+      () => "resolved",
+      (error: unknown) => String(error),
+    );
+    expect(error).toContain("Incompatible legacy database freshness schema");
+  });
+
   it("publishes committed-change hints over a hibernating socket after enabling strong reads", async () => {
     const stub = env.DB_FRESHNESS.getByName(crypto.randomUUID());
     const response = await stub.fetch(

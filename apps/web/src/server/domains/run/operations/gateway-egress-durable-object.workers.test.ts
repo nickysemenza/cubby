@@ -1,8 +1,14 @@
 import { isInferenceFundingRefusal } from "@cubby/shared/ai/gateway-request";
-import { env, runInDurableObject } from "cloudflare:test";
+import { env, evictDurableObject, runInDurableObject } from "cloudflare:test";
+import { drizzle } from "drizzle-orm/durable-sqlite";
+import { migrate } from "drizzle-orm/durable-sqlite/migrator";
 import { describe, expect, it, vi } from "vitest";
 
 import { aiBudgetWindow } from "~/server/ai/budget-window";
+
+import { initializeGatewayEgress } from "../repo/gateway-egress-initialization";
+import baseline from "../repo/gateway-egress-migrations/0000_legacy_baseline.sql?raw";
+import journal from "../repo/gateway-egress-migrations/meta/_journal.json";
 
 const CREDIT = "subscriber-credit:anthropic";
 const SIX_HOURS = 6 * 60 * 60_000;
@@ -33,6 +39,204 @@ const creditRequest = () =>
     "cf-aig-byok-alias": "subscriber-credit",
     "cf-aig-no-wholesale": "true",
   });
+
+describe("Gateway egress schema adoption", () => {
+  // Empty-store admission tests cannot catch loss of retained permits, provider
+  // refusal epochs, or cooldowns during adoption of existing DOs.
+  it("adopts legacy admission state before RPCs and restarts after a subsequent migration", async () => {
+    const stub = env.AI_GATEWAY_EGRESS.getByName(crypto.randomUUID());
+    const now = Date.parse("2099-10-01T02:00:00Z");
+    await runInDurableObject(stub, async (_instance, state) => {
+      state.storage.transactionSync(() => {
+        for (const table of [
+          "__drizzle_migrations",
+          "starts",
+          "permits",
+          "cooldowns",
+          "typesafe_starts",
+          "credit_refusals",
+          "credit_epochs",
+        ])
+          state.storage.sql.exec(`DROP TABLE IF EXISTS ${table}`);
+        state.storage.sql.exec(
+          "CREATE TABLE starts (bucket TEXT NOT NULL, started INTEGER NOT NULL)",
+        );
+        state.storage.sql.exec("CREATE INDEX starts_time ON starts(started)");
+        state.storage.sql.exec(
+          "CREATE TABLE permits (token TEXT PRIMARY KEY, bucket TEXT NOT NULL, deadline INTEGER NOT NULL)",
+        );
+        state.storage.sql.exec(
+          "CREATE TABLE cooldowns (bucket TEXT PRIMARY KEY, until_ms INTEGER NOT NULL)",
+        );
+        state.storage.sql.exec(
+          "CREATE TABLE typesafe_starts (started INTEGER NOT NULL, input_tokens INTEGER NOT NULL)",
+        );
+        state.storage.sql.exec(
+          "CREATE TABLE credit_refusals (bucket TEXT PRIMARY KEY, until_ms INTEGER NOT NULL, reason TEXT NOT NULL, probe_window INTEGER NOT NULL)",
+        );
+        state.storage.sql.exec(
+          "CREATE TABLE credit_epochs (bucket TEXT PRIMARY KEY, epoch INTEGER NOT NULL)",
+        );
+        for (let index = 0; index < 64; index++) {
+          state.storage.sql.exec(
+            "INSERT INTO starts VALUES ('unified', ?)",
+            now,
+          );
+          state.storage.sql.exec(
+            "INSERT INTO permits VALUES (?, 'unified', ?)",
+            `legacy-${index}`,
+            now + 60_000,
+          );
+        }
+        state.storage.sql.exec(
+          "INSERT INTO cooldowns VALUES ('synthetic-cooldown', ?)",
+          now + 30_000,
+        );
+        state.storage.sql.exec(
+          "INSERT INTO typesafe_starts VALUES (?, 80000)",
+          now,
+        );
+        state.storage.sql.exec(
+          "INSERT INTO credit_refusals VALUES (?, ?, ?, ?)",
+          CREDIT,
+          NAMED_UNTIL,
+          CONSOLE_LIMIT,
+          aiBudgetWindow(new Date(now)).start.getTime(),
+        );
+        state.storage.sql.exec(
+          "INSERT INTO credit_epochs VALUES (?, 7)",
+          CREDIT,
+        );
+      });
+      await state.storage.setAlarm(Date.now() + 60_000);
+    });
+    await evictDurableObject(stub);
+    expect(
+      await Promise.all([
+        stub.admit("unified", now),
+        stub.admit("byok:typesafe", now),
+        stub.admit("synthetic-cooldown", now),
+        stub.admit(CREDIT, now),
+      ]),
+    ).toEqual([
+      { kind: "wait", until: now + 1_000 },
+      expect.objectContaining({ kind: "admitted" }),
+      { kind: "wait", until: now + 30_000 },
+      { kind: "refused", until: NAMED_UNTIL, reason: CONSOLE_LIMIT },
+    ]);
+    await runInDurableObject(stub, (instance) =>
+      instance.noteCreditResponse(200, "", now, 6),
+    );
+    expect(await stub.creditRefusal(now)).toEqual({
+      until: NAMED_UNTIL,
+      reason: CONSOLE_LIMIT,
+    });
+    await runInDurableObject(stub, async (_instance, state) => {
+      expect(await state.storage.getAlarm()).toBeNull();
+      expect(
+        state.storage.sql.exec("PRAGMA index_info('starts_time')").toArray(),
+      ).toMatchObject([{ name: "started" }]);
+      expect(
+        state.storage.sql
+          .exec("SELECT epoch FROM credit_epochs WHERE bucket = ?", CREDIT)
+          .toArray(),
+      ).toEqual([{ epoch: 7 }]);
+      const entry = journal.entries[0];
+      if (!entry) throw new Error("Baseline migration missing");
+      await migrate(drizzle(state.storage), {
+        journal: {
+          entries: [
+            ...journal.entries,
+            {
+              ...entry,
+              idx: 1,
+              when: entry.when + 1,
+              tag: "synthetic_upgrade",
+            },
+          ],
+        },
+        migrations: {
+          m0000: baseline,
+          m0001:
+            "ALTER TABLE credit_refusals ADD COLUMN synthetic_revision TEXT",
+        },
+      });
+    });
+    await evictDurableObject(stub);
+    await stub.finish("legacy-0", 200, null, now);
+    expect((await stub.admit("unified", now)).kind).toBe("admitted");
+    await stub.resetCreditRefusal();
+    expect(await stub.admit(CREDIT, now)).toMatchObject({
+      kind: "admitted",
+      epoch: 8,
+    });
+    await evictDurableObject(stub);
+    expect(await stub.creditRefusal(now)).toBeNull();
+    await runInDurableObject(stub, (_instance, state) => {
+      expect(
+        state.storage.sql.exec("SELECT * FROM typesafe_starts").toArray(),
+      ).toEqual([{ started: now, input_tokens: 80000 }]);
+      expect(
+        state.storage.sql.exec("SELECT DISTINCT bucket FROM starts").toArray(),
+      ).toEqual([{ bucket: "unified" }]);
+      expect(
+        state.storage.sql
+          .exec("SELECT created_at FROM __drizzle_migrations")
+          .toArray(),
+      ).toHaveLength(2);
+      expect(
+        state.storage.sql
+          .exec("PRAGMA table_info('credit_refusals')")
+          .toArray(),
+      ).toContainEqual(expect.objectContaining({ name: "synthetic_revision" }));
+    });
+  });
+
+  it.each(["table", "index"])(
+    "rejects an incompatible legacy %s before adoption and gates admission on failure",
+    async (legacyObject) => {
+      const stub = env.AI_GATEWAY_EGRESS.getByName(crypto.randomUUID());
+      const error =
+        legacyObject === "table"
+          ? "Incompatible AI Gateway egress legacy table: credit_epochs"
+          : "Incompatible AI Gateway egress legacy index: starts_time";
+      await runInDurableObject(stub, async (_instance, state) => {
+        state.storage.sql.exec("DROP TABLE __drizzle_migrations");
+        state.storage.sql.exec(
+          "INSERT INTO credit_epochs VALUES (?, 7)",
+          CREDIT,
+        );
+        if (legacyObject === "table")
+          state.storage.sql.exec(
+            "ALTER TABLE credit_epochs RENAME COLUMN epoch TO incompatible_epoch",
+          );
+        else {
+          state.storage.sql.exec("DROP INDEX starts_time");
+          state.storage.sql.exec("CREATE INDEX starts_time ON starts(bucket)");
+        }
+        await expect(initializeGatewayEgress(state.storage)).rejects.toThrow(
+          error,
+        );
+        expect(
+          state.storage.sql
+            .exec(
+              "SELECT name FROM sqlite_master WHERE name = '__drizzle_migrations'",
+            )
+            .toArray(),
+        ).toEqual([]);
+        expect(
+          state.storage.sql.exec("SELECT bucket FROM credit_epochs").toArray(),
+        ).toEqual([{ bucket: CREDIT }]);
+      });
+      await evictDurableObject(stub);
+      const startupError = await stub.admit(CREDIT).then(
+        () => "resolved",
+        (error: unknown) => String(error),
+      );
+      expect(startupError).toContain(error);
+    },
+  );
+});
 
 // Failure modes: every request re-tries a Console-refused credit key (seconds
 // of latency each); the refusal outlives Anthropic's named date or never

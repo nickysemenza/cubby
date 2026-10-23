@@ -1,14 +1,161 @@
 import { sleep } from "@cubby/shared/retry";
 import { evictDurableObject, runInDurableObject } from "cloudflare:test";
 import { env } from "cloudflare:workers";
+import { drizzle } from "drizzle-orm/durable-sqlite";
+import { migrate } from "drizzle-orm/durable-sqlite/migrator";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
 import { setCfEnv } from "~/server/cf-env";
 
+import { initializeResponseCache } from "./repo/response-cache-initialization";
+import baseline from "./repo/response-cache-migrations/0000_legacy_baseline.sql?raw";
+import journal from "./repo/response-cache-migrations/meta/_journal.json";
 import { withAiResponseCache } from "./response-cache";
 
 describe("AI response cache Durable Object", () => {
+  // Existing workflows initialize new stores. This guards adoption of paid-for
+  // legacy answers and in-flight claims, which an empty store cannot exercise.
+  it("adopts legacy rows and chunks before serving RPCs and accepts later migrations on restart", async () => {
+    const stub = env.AI_RESPONSE_CACHE.getByName(crypto.randomUUID());
+    await runInDurableObject(stub, async (_instance, state) => {
+      state.storage.transactionSync(() => {
+        state.storage.sql.exec("DROP TABLE __drizzle_migrations");
+        state.storage.sql.exec("DROP TABLE response_chunks");
+        state.storage.sql.exec("DROP TABLE responses");
+        state.storage.sql.exec(
+          "CREATE TABLE responses (key TEXT PRIMARY KEY, value TEXT, expires_at INTEGER, claim_token TEXT, lease_expires_at INTEGER)",
+        );
+        state.storage.sql.exec(
+          "CREATE INDEX responses_expires_at_idx ON responses(expires_at)",
+        );
+        state.storage.sql.exec(
+          "CREATE TABLE response_chunks (key TEXT NOT NULL, seq INTEGER NOT NULL, value TEXT NOT NULL, PRIMARY KEY (key, seq))",
+        );
+        state.storage.sql.exec(
+          "INSERT INTO responses VALUES ('inline', 'retained', 1, NULL, NULL), ('large', 'chunked:2', 1, NULL, NULL), ('refresh', 'prior', NULL, 'legacy-claim', ?), ('expired', NULL, NULL, 'expired-claim', 1)",
+          Date.now() + 90_000,
+        );
+        state.storage.sql.exec(
+          "INSERT INTO response_chunks VALUES ('large', 1, 'second'), ('large', 0, 'first')",
+        );
+      });
+      await state.storage.setAlarm(Date.now() + 60_000);
+    });
+    await evictDurableObject(stub);
+    expect(
+      await Promise.all([
+        stub.readOrClaim("inline", false),
+        stub.readOrClaim("large", false),
+        stub.readOrClaim("refresh", false),
+      ]),
+    ).toEqual([
+      { kind: "hit", value: "retained" },
+      { kind: "hit", value: "firstsecond" },
+      { kind: "busy" },
+    ]);
+    expect(await stub.renew("refresh", "wrong-claim")).toBe(false);
+    expect(await stub.renew("refresh", "legacy-claim")).toBe(true);
+    await runInDurableObject(stub, async (_instance, state) => {
+      expect(
+        state.storage.sql
+          .exec("SELECT * FROM responses WHERE key = 'expired'")
+          .toArray(),
+      ).toEqual([]);
+      expect(
+        state.storage.sql
+          .exec(
+            "SELECT name FROM sqlite_master WHERE name = 'responses_expires_at_idx'",
+          )
+          .toArray(),
+      ).toEqual([]);
+      expect(
+        state.storage.sql.exec("PRAGMA table_info('responses')").toArray()[0]
+          ?.notnull,
+      ).toBe(0);
+      expect(await state.storage.getAlarm()).toBeNull();
+      const entry = journal.entries[0];
+      if (!entry) throw new Error("Baseline migration missing");
+      // Test-only upgrade changes the catalog; production needs no extra field.
+      await migrate(drizzle(state.storage), {
+        journal: {
+          entries: [
+            ...journal.entries,
+            {
+              ...entry,
+              idx: 1,
+              when: entry.when + 1,
+              tag: "synthetic_upgrade",
+            },
+          ],
+        },
+        migrations: {
+          m0000: baseline,
+          m0001: "ALTER TABLE responses ADD COLUMN synthetic_revision TEXT",
+        },
+      });
+    });
+    await evictDurableObject(stub);
+    expect(await stub.publish("refresh", "legacy-claim", "replacement")).toBe(
+      true,
+    );
+    expect(await stub.readOrClaim("refresh", false)).toEqual({
+      kind: "hit",
+      value: "replacement",
+    });
+    await evictDurableObject(stub);
+    expect(await stub.readOrClaim("large", false)).toEqual({
+      kind: "hit",
+      value: "firstsecond",
+    });
+    await runInDurableObject(stub, (_instance, state) => {
+      expect(
+        state.storage.sql
+          .exec("SELECT created_at FROM __drizzle_migrations")
+          .toArray(),
+      ).toHaveLength(2);
+      expect(
+        state.storage.sql.exec("PRAGMA table_info('responses')").toArray(),
+      ).toContainEqual(expect.objectContaining({ name: "synthetic_revision" }));
+    });
+  });
+
+  it("rejects an incompatible legacy table before journal adoption and gates RPCs on that failure", async () => {
+    const stub = env.AI_RESPONSE_CACHE.getByName(crypto.randomUUID());
+    await runInDurableObject(stub, async (_instance, state) => {
+      state.storage.sql.exec("DROP TABLE __drizzle_migrations");
+      state.storage.sql.exec(
+        "ALTER TABLE responses RENAME COLUMN claim_token TO incompatible_claim",
+      );
+      state.storage.sql.exec(
+        "INSERT INTO responses (key, value) VALUES ('retained', 'legacy-answer')",
+      );
+      await expect(initializeResponseCache(state.storage)).rejects.toThrow(
+        "Incompatible AI response cache legacy table: responses",
+      );
+      expect(
+        state.storage.sql
+          .exec(
+            "SELECT name FROM sqlite_master WHERE name = '__drizzle_migrations'",
+          )
+          .toArray(),
+      ).toEqual([]);
+      expect(
+        state.storage.sql
+          .exec("SELECT value FROM responses WHERE key = 'retained'")
+          .toArray(),
+      ).toEqual([{ value: "legacy-answer" }]);
+    });
+    await evictDurableObject(stub);
+    const startupError = await stub.readOrClaim("retained", false).then(
+      () => "resolved",
+      (error: unknown) => String(error),
+    );
+    expect(startupError).toContain(
+      "Incompatible AI response cache legacy table: responses",
+    );
+  });
+
   it("shares one model result through the Worker cache client", async () => {
     setCfEnv(env);
     try {
