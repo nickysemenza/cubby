@@ -398,6 +398,13 @@ Resumed application receipts repeat that exact retirement check before applicati
 including recovery from a crash before the after-commit callback started.
 Automatic financial application still admits only the original ready prefix,
 sequentially. Interruption preserves reusable labels and completed publications.
+Label-page selection partitions positions by whether either original-order component
+is retained. Ordinary rows use native timestamp/ID ordering; retained rows keep the
+same component-wise overrides. Both branches apply full current-evidence eligibility,
+exact import membership, cursor comparison and Assessment existence before taking
+their bounded first sets. The merged first set is hydrated after its limit. Disjoint
+partial work indexes exclude completed labels and keep receipt recovery separate from
+ordinary cursor access; no timestamp cast is asserted immutable.
 An obsolete Job generation or lease interrupts the invocation; per-charge error
 isolation must not turn that ownership signal into an item failure or retry.
 Acceptance always validates the current broader evidence fingerprint.

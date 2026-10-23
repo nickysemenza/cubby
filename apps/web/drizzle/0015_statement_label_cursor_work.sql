@@ -1,0 +1,4 @@
+-- Index-only change: retained evidence, decisions and Run checkpoints are unchanged.
+CREATE INDEX "AssessmentState_statement_label_native_idx" ON "AssessmentState" ("createdAt",id) WHERE family='statement_transaction' AND active AND status='pending' AND ((data->>'needsLabel')::boolean OR coalesce((data->>'applicationPending')::boolean,false)) AND (data->'applicationOrder'->>'createdAt' IS NULL AND data->'applicationOrder'->>'id' IS NULL);
+--> statement-breakpoint
+CREATE INDEX "AssessmentState_statement_label_receipt_idx" ON "AssessmentState" (id) WHERE family='statement_transaction' AND active AND status='pending' AND ((data->>'needsLabel')::boolean OR coalesce((data->>'applicationPending')::boolean,false)) AND NOT (data->'applicationOrder'->>'createdAt' IS NULL AND data->'applicationOrder'->>'id' IS NULL);

@@ -28,5 +28,9 @@ CREATE UNIQUE INDEX IF NOT EXISTS "AssessmentState_statement_charge_key" ON "Ass
 CREATE INDEX IF NOT EXISTS "AssessmentState_statement_charge_history_idx" ON "AssessmentState" ((data->>'source'),(data->>'chargeKey'),"createdAt" DESC,id DESC) WHERE family='statement_transaction';
 CREATE INDEX IF NOT EXISTS "AssessmentState_statement_refs_idx" ON "AssessmentState" USING gin ((data->'refs')) WHERE family='statement_transaction' AND active AND status='pending';
 CREATE INDEX IF NOT EXISTS "AssessmentState_statement_account_idx" ON "AssessmentState" ((data->>'accountId'),(data->>'month')) WHERE family='statement_transaction' AND active AND status='pending';
+-- These work rosters are disjoint. Native positions stream in cursor order;
+-- retained positions keep the component-wise JSON override and sort only receipts.
+CREATE INDEX IF NOT EXISTS "AssessmentState_statement_label_native_idx" ON "AssessmentState" ("createdAt",id) WHERE family='statement_transaction' AND active AND status='pending' AND ((data->>'needsLabel')::boolean OR coalesce((data->>'applicationPending')::boolean,false)) AND (data->'applicationOrder'->>'createdAt' IS NULL AND data->'applicationOrder'->>'id' IS NULL);
+CREATE INDEX IF NOT EXISTS "AssessmentState_statement_label_receipt_idx" ON "AssessmentState" (id) WHERE family='statement_transaction' AND active AND status='pending' AND ((data->>'needsLabel')::boolean OR coalesce((data->>'applicationPending')::boolean,false)) AND NOT (data->'applicationOrder'->>'createdAt' IS NULL AND data->'applicationOrder'->>'id' IS NULL);
 
 `;
