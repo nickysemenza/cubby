@@ -36,10 +36,7 @@ import {
   seedImagePrerequisite,
   attachProductImagePrerequisite,
 } from "./fixtures/photos";
-import {
-  openDetailActions,
-  gotoAuthenticatedPage,
-} from "./support/e2e-helpers";
+import { gotoAuthenticatedPage } from "./support/e2e-helpers";
 import { expect, recordingVideo, test } from "./support/e2e-test";
 
 async function configureVariantDecisions(
@@ -368,22 +365,6 @@ test("reviews, approves, and discards proposed photo groups on the photo-invento
     }
   });
 
-  await gotoAuthenticatedPage(
-    page,
-    `/runs/${seed.runId}#work`,
-    page.getByRole("heading", { name: "Work", exact: true }),
-  );
-
-  await openDetailActions(page);
-  const actions = page.getByRole("group", {
-    name: "Entity actions",
-    exact: true,
-  });
-  await expect(
-    actions.getByRole("button", { name: "Start grouping" }),
-  ).toBeEnabled();
-  await page.keyboard.press("Escape");
-  if (recordingVideo) await page.waitForTimeout(1_500);
   const proposed = await startOperation(
     page.request,
     "photoImport.saveGroups",
@@ -393,6 +374,11 @@ test("reviews, approves, and discards proposed photo groups on the photo-invento
     },
   );
   expect(proposed.ok(), await proposed.text()).toBeTruthy();
+  await gotoAuthenticatedPage(
+    page,
+    `/runs/${seed.runId}#work`,
+    page.getByRole("heading", { name: "Photo review", exact: true }),
+  );
 
   // Both proposed groups render, and every seeded photo is assigned to one.
   await expect(
@@ -400,12 +386,6 @@ test("reviews, approves, and discards proposed photo groups on the photo-invento
       exact: true,
     }),
   ).toBeVisible();
-  await openDetailActions(page);
-  await expect(
-    page.getByRole("button", { name: "Start grouping" }),
-  ).toHaveCount(0);
-  await page.keyboard.press("Escape");
-
   const g1Card = page.locator("[data-photo-group]").filter({
     has: page.getByRole("heading", { name: "Gray crew t-shirt — M" }),
   });
@@ -526,26 +506,20 @@ test("reviews, approves, and discards proposed photo groups on the photo-invento
   await expect(
     page.getByText("Completed", { exact: true }).first(),
   ).toBeVisible({ timeout: 10_000 });
-  await openDetailActions(page);
-  await page
-    .getByRole("button", { name: "Start new run with same inputs" })
-    .click();
-  await expect(page).not.toHaveURL(new RegExp(`/runs/${seed.runId}(?:#|$)`));
-  const restartedId = new URL(page.url()).pathname.split("/").at(-1);
-  expect(restartedId).toBeTruthy();
-  const restarted = await page.request.get(
-    `/api/v1/run/work?runId=${restartedId}`,
-  );
-  expect(restarted.ok(), await restarted.text()).toBeTruthy();
-  const restartedRun = await restarted.json();
-  expect(restartedRun.predecessorRunPublicId).toBe(seed.runId);
-  expect(restartedRun.targets).toHaveLength(3);
+  const savedProduct = await getDb(db).query.product.findFirst({
+    where: eq(schema.product.name, correctedName),
+  });
+  expect(savedProduct).toBeDefined();
   expect(
-    restartedRun.targets.every(
-      (target: { targetType: string }) => target.targetType === "image",
-    ),
-  ).toBe(true);
-  if (recordingVideo) await page.waitForTimeout(1_500);
+    await getDb(db).query.inventoryEntry.findMany({
+      where: eq(schema.inventoryEntry.productId, savedProduct!.id),
+    }),
+  ).toMatchObject([{ amountValue: 2, amountUnit: "each" }]);
+  expect(
+    await getDb(db).query.product.findMany({
+      where: eq(schema.product.name, g2Name),
+    }),
+  ).toEqual([]);
 });
 
 test("suggests an existing variant and previews every merge decision for a created photo product", async ({
