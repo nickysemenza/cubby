@@ -1,0 +1,19 @@
+apps/web/src/server/testing/background-queue.ts
+  s_0cc53fa46ecbd7::t_8dc60a0b995f78 20,27,29-33,37-41,47,51,67,72
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "dd98f60fffa52aa059603f892f0098103805de93",
+  "prompts": {},
+  "sessions": {
+    "s_0cc53fa46ecbd7": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2e7ff6fb-224e-42e0-a270-a92fc1131a0c",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
