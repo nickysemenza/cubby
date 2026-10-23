@@ -62,7 +62,7 @@ describe("MCP workflow tools", () => {
     for (const [entity, prefix] of Object.entries(SHORTCODE_PREFIX)) {
       expect(MCP_SERVER_INSTRUCTIONS).toContain(`- ${prefix} ${entity}`);
     }
-    expect(MCP_SERVER_INSTRUCTIONS).toContain("meal_recipe.add");
+    expect(MCP_SERVER_INSTRUCTIONS).toContain("nutrition.plan_recipe");
     expect(MCP_SERVER_INSTRUCTIONS).not.toContain("add_meal_recipe");
     expect(MCP_SERVER_INSTRUCTIONS).not.toContain("attach_file,");
   });
@@ -120,7 +120,7 @@ describe("MCP workflow tools", () => {
     ).toBe(8);
   });
 
-  it("meal_recipe.add defaults to compact coverage and opts into nutrition", () => {
+  it("nutrition.plan_recipe defaults to compact coverage and opts into nutrition", () => {
     const meal = mock(mealOut, {
       overrides: { name: "Dinner", totals: knownTotals, recipes: [] },
     });
@@ -324,14 +324,14 @@ describe("MCP workflow tools", () => {
     await callMcpTool(
       createMcpServer(),
       "activity",
-      { action: "problems", type: "notAProblemType" },
+      { action: "report", input: { type: "notAProblemType" } },
       {},
       { telemetry: { identity, emit } },
     );
     await callMcpTool(
       createMcpServer(),
-      "project_overview",
-      { action: "expense_analytics", unknownFilter: "not-a-filter" },
+      "expenses",
+      { action: "analytics", input: { unknownFilter: "not-a-filter" } },
       {},
       { telemetry: { identity, emit } },
     );
@@ -353,7 +353,7 @@ describe("MCP workflow tools", () => {
     );
     expect(emit).toHaveBeenCalledWith(
       expect.objectContaining({
-        toolName: "project_overview",
+        toolName: "expenses",
         outcome: "error",
       }),
     );
@@ -396,8 +396,8 @@ describe("MCP workflow tools", () => {
 
   it("rejects unknown filters and semantic pairs outside the allowlist before running", async () => {
     const server = createMcpServer();
-    const unknown = await callMcpTool(server, "project_overview", {
-      action: "expense_analytics",
+    const unknown = await callMcpTool(server, "expenses", {
+      action: "analytics",
       costMinn: 500,
     });
     expect(unknown.isError).toBe(true);
@@ -412,7 +412,7 @@ describe("MCP workflow tools", () => {
     expect(JSON.stringify(rejected.content)).toContain("pair");
   });
 
-  it("recipe_insights.costing detail=lines drops both totals blocks and drift", () => {
+  it("recipe_insights.costing_explanation detail=lines drops both totals blocks and drift", () => {
     const explain = mock(recipeCostingExplain, {
       overrides: {
         persisted: { totals: knownTotals },
@@ -438,7 +438,7 @@ describe("MCP workflow tools", () => {
     });
   });
 
-  it("nutrition.preparations nutrition=kcal keeps cost and only the kcal estimate", () => {
+  it("nutrition.preparations_detail nutrition=kcal keeps cost and only the kcal estimate", () => {
     const view = mock(getMealPreparationsOut, {
       overrides: {
         preparations: [],

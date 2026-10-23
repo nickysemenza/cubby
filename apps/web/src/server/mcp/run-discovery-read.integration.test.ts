@@ -77,8 +77,8 @@ describe("member discovery readiness through MCP", () => {
       );
       const result = await callMcpTool(
         createMcpServer(),
-        "imports_read",
-        { action: "run_status", runId: discovery.shortcode },
+        "run",
+        { action: "work_snapshot", runId: discovery.shortcode },
         {},
         { operationContext },
       );

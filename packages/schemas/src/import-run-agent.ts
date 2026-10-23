@@ -56,9 +56,9 @@ export type ImportRunAgentToolName =
 
 /** Mail import reads Email and writes through the same public tools a member uses. */
 const MAIL_IMPORT_MCP_ACTIONS = [
-  "imports_read.mail",
-  "mail.search",
-  "mail.resolve",
+  "purchase_import.mail_read",
+  "purchase_import.mail_search",
+  "purchase_import.mail_resolve",
   "shipments.record",
   "purchase_import.prepare",
   "purchase_import.commit",
@@ -66,15 +66,15 @@ const MAIL_IMPORT_MCP_ACTIONS = [
   "entity_read.list",
   "entity_read.resolve",
   "search.global",
-  "imports_read.external_id_collisions",
+  "product_enrichment.external_id_collisions",
   "finance.converge",
 ] as const satisfies readonly CubbyMcpToolAction[];
 
 const PHOTO_MCP_ACTIONS = [
-  "imports_read.photo_context",
-  "imports_read.image_processing",
-  "imports_read.photo_candidates",
-  "imports_read.photo_proposals",
+  "photo_run.run_context",
+  "image.status",
+  "photo_run.product_candidates",
+  "photo_run.proposals",
   "entity_read.resolve",
   "search.similar",
   "photo_run.propose_groups",

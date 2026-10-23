@@ -594,7 +594,7 @@ function unresolvedTargetsSummary(
     (email) =>
       `${email.shortcode} (${email.subject ?? email.messageId}): ${reasons.get(email.id) ?? "no reason recorded"}`,
   );
-  const summary = `${countLabel(emails.length, "admitted Email")} unresolved; settle each with mail.resolve. ${lines.join("; ")}`;
+  const summary = `${countLabel(emails.length, "admitted Email")} unresolved; settle each with purchase_import.mail_resolve. ${lines.join("; ")}`;
   return summary.length > 1_000 ? `${summary.slice(0, 999)}…` : summary;
 }
 

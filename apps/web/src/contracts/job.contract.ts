@@ -142,21 +142,24 @@ const jobLogsOut = z.discriminatedUnion("status", [
 ]);
 export type JobLogsOut = z.infer<typeof jobLogsOut>;
 
-export const jobContract = defineContract("job", {
-  list: query({
-    mcp: { omit: "client_view" },
-    input: jobListInput,
-    output: jobListOut,
-    // Job state moves while a Run executes; Run writes refresh it.
-    cache: { tags: [["run"]], profile: "live-status" },
-  }),
-  logs: query({
-    mcp: {
-      omit: "operator_maintenance",
+export const jobContract = defineContract(
+  "job",
+  {
+    list: query({
+      exposure: "view",
+      input: jobListInput,
+      output: jobListOut,
+      // Job state moves while a Run executes; Run writes refresh it.
+      cache: { tags: [["run"]], profile: "live-status" },
+    }),
+    logs: query({
       note: "Raw Worker log lines for one Job; agents read Run state instead",
-    },
-    input: z.strictObject({ jobId: z.uuid() }),
-    output: jobLogsOut,
-    cache: { tags: [] },
-  }),
-});
+      description:
+        "Read raw Worker log lines for one Job and a bounded time range. Use Run status for workflow progress; logs are lower-level diagnostics.",
+      input: z.strictObject({ jobId: z.uuid() }),
+      output: jobLogsOut,
+      cache: { tags: [] },
+    }),
+  },
+  { exposure: "capability", mcpToolGroup: "maintenance" },
+);

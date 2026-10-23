@@ -30,13 +30,16 @@ describe("import run agent manifest", () => {
     expect(catalog.map((tool) => tool.name).sort()).toEqual(
       [...mcpTools].sort(),
     );
-    const imports = catalog.find((tool) => tool.name === "imports_read");
-    const allowed = mcpActions.flatMap((action) =>
-      action.startsWith("imports_read.") ? [action.slice(13)] : [],
-    );
-    for (const action of allowed)
-      expect(imports?.description).toContain(`- ${action}:`);
-    expect(imports?.description).not.toContain("- purchase_status:");
+    for (const tool of catalog) {
+      const allowed = mcpActions
+        .filter((action) => action.startsWith(`${tool.name}.`))
+        .map((action) => action.slice(tool.name.length + 1))
+        .sort();
+      const advertised = [...tool.description.matchAll(/^- ([^:]+):/gmu)]
+        .map((match) => match[1]!)
+        .sort();
+      expect(advertised).toEqual(allowed);
+    }
   });
 
   // Regression: entity_read's per-kind list filters were 134 KB of the Mail

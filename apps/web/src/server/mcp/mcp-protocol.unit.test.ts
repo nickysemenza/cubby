@@ -22,7 +22,7 @@ import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
 import { projectEntityResult } from "~/contracts/mcp-projections";
-import { MCP_TOOLS } from "~/contracts/mcp-tools";
+import { MCP_TOOL_DESCRIPTIONS } from "~/contracts/mcp-tools";
 import { mock } from "~/lib/test/mock-schema";
 import {
   entityMcpReadCommandSchema,
@@ -59,7 +59,7 @@ function kernelServer(
   registerMcpTools(
     server,
     bindingsWithKernelExecutor(execute),
-    MCP_TOOLS,
+    MCP_TOOL_DESCRIPTIONS,
     runtime ?? { markCalendarDirty: vi.fn() },
   );
   return server;
@@ -133,7 +133,10 @@ describe("MCP protocol smoke", () => {
       // Unsupported problem types return before any database read.
       const result = await client.callTool({
         name: "activity",
-        arguments: { action: "problems", type: "notAProblemType" },
+        arguments: {
+          action: "report",
+          input: { type: "notAProblemType" },
+        },
       });
       expect(result.isError).not.toBe(true);
       expect(result.structuredContent).toBeDefined();

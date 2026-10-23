@@ -59,7 +59,7 @@ for (const [type, prefix] of Object.entries(SHORTCODE_PREFIX)) {
 /**
  * A schema for a code whose entity isn't known until runtime — an MCP tool
  * whose target type is chosen by another field (`search.similar`'s
- * `pair`) or read off the prefix itself (`image.attach_files`).
+ * `pair`) or read off the prefix itself (`image.attach_file`).
  *
  * Still a `ZodString` with a real `pattern`, just one alternating over the
  * allowed prefixes, so the published JSON Schema keeps telling an agent which

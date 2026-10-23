@@ -12,40 +12,56 @@ import {
 
 import { defineContract, mutation, query } from "~/contracts/define";
 
-export const shipmentContract = defineContract("shipment", {
-  edit_observation: mutation({
-    input: editShipmentObservationInput,
-    output: shipmentReferenceOut,
-    invalidates: ["shipment", "purchase"],
-  }),
-  reassign: mutation({
-    input: reassignShipmentEvidenceInput,
-    output: shipmentReferenceOut,
-    invalidates: ["shipment", "purchase"],
-  }),
-  record: mutation({
-    native: "Record source-backed shipment evidence from the CLI",
-    nativeModels: { input: "json", output: "json" },
-    input: recordShipmentEvidenceInput,
-    output: recordShipmentEvidenceOut,
-    invalidates: ["shipment", "purchase"],
-  }),
-  associate: mutation({
-    input: associateShipmentInput,
-    output: shipmentReferenceOut,
-    invalidates: ["shipment", "purchase"],
-  }),
-  merge: mutation({
-    input: mergeShipmentInput,
-    output: shipmentReferenceOut,
-    invalidates: ["shipment", "purchase"],
-  }),
-  timeline: query({
-    native: "Verify retained shipment evidence from the CLI",
-    nativeModels: { output: "json" },
-    input: shipmentTimelineInput,
-    output: shipmentTimelineOut,
-    readPolicy: "strong",
-    cache: { tags: [["shipment.timeline"]] },
-  }),
-});
+export const shipmentContract = defineContract(
+  "shipment",
+  {
+    edit_observation: mutation({
+      description:
+        "Partially edit one retained observation using its observationId from shipments.timeline and current Shipment reference. Supply only changed fields in patch; omitted fields and source identity remain unchanged. Appends a reviewed revision, retains original captures and history, and protects it from source replay. A superseded observation refuses a different edit; read the current revision first. Interactive members only.",
+      input: editShipmentObservationInput,
+      output: shipmentReferenceOut,
+      invalidates: ["shipment", "purchase"],
+    }),
+    reassign: mutation({
+      description:
+        "Explicitly move a misassociated source package and all its retained tracking observations to another Shipment. Use sourcePackageId from shipments.timeline; replay follows the corrected association.",
+      input: reassignShipmentEvidenceInput,
+      output: shipmentReferenceOut,
+      invalidates: ["shipment", "purchase"],
+    }),
+    record: mutation({
+      description:
+        "Record shipment observations from an owned retained Email/checksum, an interactive tracking-page capture, or an exported SMS. Keep unmatched packages; never invent a Purchase. Carrier references are Vendors. Label creation or vendor shipped wording does not prove carrier possession. Repeated identical observations update first/last seen; all distinct sources and revisions remain retained.",
+      native: "Record source-backed shipment evidence from the CLI",
+      nativeModels: { input: "json", output: "json" },
+      input: recordShipmentEvidenceInput,
+      output: recordShipmentEvidenceOut,
+      invalidates: ["shipment", "purchase"],
+    }),
+    associate: mutation({
+      description:
+        "Explicitly attach, detach or correct a Shipment's Purchase association. No financial or inventory effects.",
+      input: associateShipmentInput,
+      output: shipmentReferenceOut,
+      invalidates: ["shipment", "purchase"],
+    }),
+    merge: mutation({
+      description:
+        "Explicitly merge two proven duplicate packages, retaining observations and the old SHIP reference. Conflicting Purchase associations require correction first.",
+      input: mergeShipmentInput,
+      output: shipmentReferenceOut,
+      invalidates: ["shipment", "purchase"],
+    }),
+    timeline: query({
+      description:
+        "Read every retained source observation and the deduplicated timeline. Exact durations require exact endpoints; missing or conflicting evidence remains unknown.",
+      native: "Verify retained shipment evidence from the CLI",
+      nativeModels: { output: "json" },
+      input: shipmentTimelineInput,
+      output: shipmentTimelineOut,
+      readPolicy: "strong",
+      cache: { tags: [["shipment.timeline"]] },
+    }),
+  },
+  { exposure: "capability", mcpToolGroup: "shipments" },
+);

@@ -56,7 +56,7 @@ describe("import run capabilities", () => {
 
   it("lets every agent run purpose propose a product match without granting business writes", () => {
     const capability = capabilityForPurchaseAgentAction(
-      "product_enrichment.propose_match",
+      "product_enrichment.propose_product_match",
     );
     expect(capability).toBe("match_proposal");
     for (const purpose of ["mail_import", "photo_inventory"] as const) {

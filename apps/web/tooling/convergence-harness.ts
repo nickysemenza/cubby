@@ -202,7 +202,7 @@ export async function createConvergenceFixtures(
 /**
  * Acquire the original through production ingestion. The returned linker
  * resolves it after the other sources arrive, through the same public
- * `mail.resolve` disposition a Mail import or Burn-down caller writes, rather
+ * `purchase_import.mail_resolve` disposition a Mail import or Burn-down caller writes, rather
  * than a member link or invented itemization.
  */
 export async function ingestGmailEvidence(

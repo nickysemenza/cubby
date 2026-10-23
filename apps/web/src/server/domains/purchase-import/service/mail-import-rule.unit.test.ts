@@ -5,7 +5,7 @@
  * cancellation or return reads as shipped or delivered; a confirmation links
  * a Purchase no import itemized (any lifecycle notice does); a known
  * Vendor's Email is closed unrelated; a match on another member's account or an
- * Email with retained attachment bytes skips the judgment `mail.resolve`
+ * Email with retained attachment bytes skips the judgment `purchase_import.mail_resolve`
  * would ask a model for; an abstaining (`uncertain`), member-resolved or
  * member-selected Email is disposed of as unrelated.
  */

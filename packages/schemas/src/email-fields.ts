@@ -49,7 +49,7 @@ export const EMAIL_LINK_STATE_LABEL = {
 
 /**
  * Who proposed a reviewed Email↔Purchase link: a member in the app, an agent
- * session or Pi through `mail.resolve`, an import commit, or the suggestion
+ * session or Pi through `purchase_import.mail_resolve`, an import commit, or the suggestion
  * heuristic a member then accepted or dismissed. A dismissal keeps the
  * proposer, so a dismissed agent link stays measurable as an agent error.
  * Decisions recorded before this column existed are null.

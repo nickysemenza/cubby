@@ -1148,8 +1148,8 @@ describe("retired mail import status", () => {
     );
     return callMcpTool(
       createMcpServer(),
-      "imports_read",
-      { action: "run_status", runId: runShortcode.parse(runId) },
+      "run",
+      { action: "work_snapshot", runId: runShortcode.parse(runId) },
       kernelRequestContext(entityKernel),
       { entityKernel },
     );

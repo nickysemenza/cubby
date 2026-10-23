@@ -28,8 +28,8 @@ import type { ToolExtra } from "./tools/tool-registration";
  * generic replay wrapper. Batch actions govern each item the same way.
  */
 const SELF_GOVERNED_ACTIONS = new Set<string>([
-  "mail.search",
-  "mail.resolve",
+  "purchase_import.mail_search",
+  "purchase_import.mail_resolve",
   "purchase_import.prepare",
   "purchase_import.commit",
   "photo_run.propose_groups",

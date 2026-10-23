@@ -78,8 +78,8 @@ describe("photo import finalize", () => {
     );
     const response = await callMcpTool(
       server,
-      "imports_read",
-      { action: "photo_context", runId: run.publicId },
+      "photo_run",
+      { action: "run_context", runId: run.publicId },
       kernelRequestContext(entityKernel),
       { entityKernel },
     );
@@ -136,8 +136,8 @@ describe("photo import finalize", () => {
     );
     const response = await callMcpTool(
       server,
-      "imports_read",
-      { action: "run_status", runId: run.publicId },
+      "run",
+      { action: "work_snapshot", runId: run.publicId },
       kernelRequestContext(entityKernel),
       { entityKernel },
     );
@@ -152,7 +152,7 @@ describe("photo import finalize", () => {
           warning: "Too blurry to identify",
         },
       ],
-      // The finding id is the declared write handle run.resolve_finding takes.
+      // The finding id is the declared write handle activity.resolve_run_finding takes.
       findings: [{ id: finding?.id, summary: "Synthetic status finding" }],
     });
     const { findings, ...rest } = z
@@ -195,8 +195,8 @@ describe("photo import finalize", () => {
     const page = async (cursor: number) => {
       const response = await callMcpTool(
         server,
-        "imports_read",
-        { action: "photo_context", runId: run.publicId, limit: 2, cursor },
+        "photo_run",
+        { action: "run_context", runId: run.publicId, limit: 2, cursor },
         kernelRequestContext(entityKernel),
         { entityKernel },
       );

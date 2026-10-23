@@ -12,10 +12,10 @@ and stir-fry cannot be one ingredient list.
 ## Read and decide
 
 Start with summary/count reads, then page through a narrowed result, then fetch
-the full record only when it is selected. `activity.problems` defaults to counts;
+the full record only when it is selected. `activity.report` defaults to counts;
 to inspect a class, call it with explicit `type`, `pageIndex`, and `pageSize`
 (for example `{ type: "…", pageIndex: 0, pageSize: 25 }`).
-`recipe_insights.costing` defaults to
+`recipe_insights.costing_explanation` defaults to
 `detail: "lines"`; request `detail: "full"` only when nutrient totals or drift
 are needed.
 
@@ -38,7 +38,7 @@ label plus USDA, a prep-matched generic USDA food, then an explicit
 material seasoning. Repoint a wrongly linked Product, never a shared ingredient
 whose existing recipes must keep their nutrition.
 
-Use `recipe_insights.costing` lines to find missing coverage. A nutrient-free
+Use `recipe_insights.costing_explanation` lines to find missing coverage. A nutrient-free
 item requires zero `labelNutrition` to count as covered. Cost requires mappings
 from line unit to the priced unit. Read again until `persisted.stale: false`;
 a stale browser recipe table is not a data gap.

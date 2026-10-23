@@ -1,12 +1,17 @@
 import { galleryEntities } from "@cubby/schemas/entity-manifest";
 import { testShortcode } from "@cubby/schemas/testing";
+import { fromPartial } from "@total-typescript/shoehorn";
 import { describe, expect, it } from "vitest";
 import { type JSONType, z } from "zod";
 
-import { MCP_TOOLS } from "~/contracts/mcp-tools";
+import { MCP_TOOL_DESCRIPTIONS } from "~/contracts/mcp-tools";
 import { toWire } from "~/lib/http-api/wire";
 import { MCP_TOOL_BINDINGS } from "~/server/generated/mcp-tools.gen";
 
+import {
+  describeMcpActions,
+  withProgressiveDisclosure,
+} from "./progressive-disclosure";
 import { advertisedJsonSchema, safeToJsonSchema } from "./tool-json-schema";
 import { compiledMcpTools } from "./tool-registration";
 
@@ -37,7 +42,7 @@ function collectBareDateFormats(
 
 type ActionSchemas = { name: string; input: z.ZodType; output: z.ZodType };
 
-const tools = compiledMcpTools(MCP_TOOL_BINDINGS, MCP_TOOLS);
+const tools = compiledMcpTools(MCP_TOOL_BINDINGS, MCP_TOOL_DESCRIPTIONS);
 
 /** Paths whose `items` is an array: a tuple in draft-7 form. */
 function collectTupleItems(node: JSONType, path: string, hits: string[]) {
@@ -80,6 +85,53 @@ function jsonAt(node: JSONType, ...path: string[]): JSONType {
 }
 
 describe("MCP tool JSON Schema — toWire parity", () => {
+  it("describe returns the full input and output schemas for a named action", async () => {
+    const nutrition = tools.find((tool) => tool.name === "nutrition");
+    if (!nutrition) throw new Error("Missing nutrition tool");
+    expect(nutrition.inputJsonSchema).toMatchObject({
+      properties: {
+        action: { enum: expect.arrayContaining(["plan_recipe", "describe"]) },
+        input: { type: "object" },
+      },
+      required: ["action", "input"],
+    });
+    const described = describeMcpActions(nutrition, ["plan_recipe"]);
+
+    expect(described.actions).toHaveLength(1);
+    expect(described.actions[0]).toMatchObject({
+      action: "plan_recipe",
+      description: expect.any(String),
+      inputSchema: { type: "object", properties: expect.any(Object) },
+      outputSchema: { type: "object" },
+    });
+    const handler = withProgressiveDisclosure(
+      async () => ({ content: [] }),
+      nutrition,
+    );
+    const describedResult = await handler(
+      { action: "describe", input: { actions: ["plan_recipe"] } },
+      fromPartial({}),
+    );
+    expect(describedResult.isError).not.toBe(true);
+    expect(describedResult.structuredContent).toMatchObject({
+      actions: [
+        {
+          action: "plan_recipe",
+          inputSchema: { type: "object", properties: expect.any(Object) },
+          outputSchema: { type: "object" },
+        },
+      ],
+    });
+    const unknownResult = await handler(
+      { action: "describe", input: { actions: ["missing"] } },
+      fromPartial({}),
+    );
+    expect(unknownResult.isError).toBe(true);
+    expect(unknownResult.content[0]).toMatchObject({
+      text: expect.stringContaining('Unknown action "missing"'),
+    });
+  });
+
   it.each(actions.map((action) => [action.name, action] as const))(
     "%s: input and output schema pass through toWire without throwing",
     (_name, action) => {
@@ -88,8 +140,8 @@ describe("MCP tool JSON Schema — toWire parity", () => {
     },
   );
 
-  it("documents activity.recent's nested createdAt as date-time", () => {
-    const action = requireAction("activity.recent");
+  it("documents activity.list's nested createdAt as date-time", () => {
+    const action = requireAction("activity.list");
     const schema = advertisedJsonSchema(action.name, action.output, "output");
     const createdAt = jsonAt(
       schema,
@@ -144,12 +196,14 @@ describe("MCP tool JSON Schema — toWire parity", () => {
   });
 
   it("advertises gallery and singular attachments with explicit replacement roles", () => {
-    const attachFiles = requireAction("image.attach_files").input;
+    const attachFiles = requireAction("image.attach_file").input;
     const attachExisting = requireAction("image.attach_existing").input;
-    const description =
-      compiledMcpTools(MCP_TOOL_BINDINGS, MCP_TOOLS).find(
-        (tool) => tool.name === "image",
-      )?.inputJsonSchema ?? {};
+    const image = tools.find((tool) => tool.name === "image");
+    if (!image) throw new Error("Missing image tool");
+    const description = describeMcpActions(image, [
+      "attach_file",
+      "attach_existing",
+    ]);
 
     for (const entity of galleryEntities) {
       const targetId = testShortcode(entity, "ABC1");
@@ -209,8 +263,8 @@ describe("MCP tool JSON Schema — toWire parity", () => {
   });
 
   it("publishes batched upload initiation and excludes base64 attachment input", () => {
-    const createUploads = requireAction("image.create_uploads").input;
-    const attachFiles = requireAction("image.attach_files").input;
+    const createUploads = requireAction("image.create_file_upload").input;
+    const attachFiles = requireAction("image.attach_file").input;
     const entityId = testShortcode("product", "ABC1");
     const upload = {
       entityId,

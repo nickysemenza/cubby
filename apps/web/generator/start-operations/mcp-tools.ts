@@ -2,8 +2,10 @@ import { pascalCase } from "@cubby/shared/text-case";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { z } from "zod";
-import { mcpOmission } from "../../src/contracts/define.ts";
-import { kernelActionName } from "../../src/contracts/mcp-define.ts";
+import {
+  kernelActionName,
+  type McpActionOverride,
+} from "../../src/contracts/mcp-define.ts";
 import { generatedHeader } from "../artifacts.ts";
 import type { EntityArtifacts } from "../entities/declarations.ts";
 import {
@@ -15,16 +17,19 @@ import {
 
 type Kind = "query" | "mutation";
 
-/** The runtime shape of `contracts/mcp-tools.ts`, as the generator reads it. */
-type ActionSpec = {
-  op: object;
-  destructive?: true;
-  openWorld?: true;
-};
+/** Kernel tool declarations remain hand-written; operation actions are generated. */
+type ActionSpec = { op: object; destructive?: true; openWorld?: true };
 type ToolDeclaration = { actions: Record<string, ActionSpec> };
+type ActionOverride = McpActionOverride;
 
 type ResolvedAction =
-  | { name: string; kind: Kind; kernel: string }
+  | {
+      name: string;
+      kind: Kind;
+      kernel: string;
+      destructive?: boolean;
+      openWorld?: boolean;
+    }
   | {
       name: string;
       kind: Kind;
@@ -32,7 +37,14 @@ type ResolvedAction =
       module: string;
       exportName: string;
       member: string;
+      contractModule: string;
+      contractExportName: string;
+      contractMember: string;
+      destructive?: boolean;
+      openWorld?: boolean;
     };
+
+type OperationAction = Extract<ResolvedAction, { operation: string }>;
 
 type ResolvedTool = {
   name: string;
@@ -51,89 +63,50 @@ const kernelRef = z.object({
   kind: z.enum(["query", "mutation"]),
 });
 
-/**
- * The one kind every action of a tool shares. MCP clients approve per tool,
- * so a single write action would make every read in a tool ask: a tool that
- * mixes queries and mutations fails generation.
- */
+/** MCP's read-only hint applies only when every action in the grouped tool reads. */
 export const toolKind = (
   name: string,
   actions: ReadonlyArray<{ name: string; kind: Kind }>,
 ): Kind => {
-  const [first] = actions;
-  if (!first) throw new Error(`MCP tool ${name} declares no actions`);
-  const byKind = (kind: Kind) =>
-    actions
-      .filter((action) => action.kind === kind)
-      .map((action) => action.name)
-      .join(", ");
-  if (actions.some((action) => action.kind !== first.kind))
-    throw new Error(
-      `MCP tool ${name} mixes query actions (${byKind("query")}) and mutation actions (${byKind("mutation")}). A read-only tool must stay auto-approvable: move the actions into a tool of their own kind.`,
-    );
-  return first.kind;
+  if (actions.length === 0)
+    throw new Error(`MCP tool ${name} declares no actions`);
+  return actions.every((action) => action.kind === "query")
+    ? "query"
+    : "mutation";
 };
 
-/**
- * Every query and mutation is either an MCP tool action or declares why not
- * (`mcp` in `contracts/define.ts`), never both. An omission's reference must
- * hold: a kernel alternative names a verb some tool exposes, an agent twin is
- * itself an action. Deferred capabilities live in these typed declarations;
- * subscriptions are not tool actions and are skipped.
- * Every violation is reported at once.
- */
+/** Every query and mutation resolves to an exposure kind; capabilities need agent-facing copy. */
 export const assertMcpExposure = ({
   operations,
-  exposedOperations,
-  kernelActions,
 }: {
   operations: ReadonlyArray<{
     operation: string;
     kind: "query" | "mutation" | "subscription";
-    mcp?: unknown;
+    exposure?: string;
+    description?: string;
   }>;
-  exposedOperations: ReadonlySet<string>;
-  kernelActions: ReadonlySet<string>;
 }): void => {
   const errors: string[] = [];
-  for (const { operation, kind, mcp } of operations) {
+  for (const { operation, kind, exposure, description } of operations) {
     if (kind === "subscription") continue;
-    const exposed = exposedOperations.has(operation);
-    if (mcp === undefined) {
-      if (!exposed)
-        errors.push(
-          `${operation} is not an MCP tool action and declares no \`mcp: { omit }\` reason. Add it to apps/web/src/contracts/mcp-tools.ts or declare why agents do without it (\`mcpOmission\` in contracts/define.ts).`,
-        );
-      continue;
-    }
-    const parsed = mcpOmission.safeParse(mcp);
-    if (!parsed.success) {
+    if (
+      exposure !== "capability" &&
+      exposure !== "view" &&
+      exposure !== "internal"
+    ) {
       errors.push(
-        `${operation} declares an invalid \`mcp\` omission: ${z.prettifyError(parsed.error)}`,
+        `${operation} must declare an exposure kind (capability, view, or internal).`,
       );
       continue;
     }
-    const omission = parsed.data;
-    if (exposed) {
+    if (exposure === "capability" && !description?.trim())
       errors.push(
-        `${operation} is an MCP tool action but declares \`mcp: { omit: ${omission.omit} }\`; remove one.`,
-      );
-      continue;
-    }
-    if (omission.omit === "kernel_alternative")
-      for (const verb of omission.kernel)
-        if (!kernelActions.has(verb))
-          errors.push(
-            `${operation} names kernel action ${verb}, which no MCP tool exposes.`,
-          );
-    if (omission.omit === "agent_twin" && !exposedOperations.has(omission.twin))
-      errors.push(
-        `${operation} names agent twin ${omission.twin}, which is not an MCP tool action.`,
+        `${operation} is a capability but has no agent-facing description.`,
       );
   }
   if (errors.length > 0)
     throw new Error(
-      `MCP exposure declarations are incomplete:\n- ${errors.join("\n- ")}`,
+      `Operation exposure declarations are incomplete:\n- ${errors.join("\n- ")}`,
     );
 };
 
@@ -148,99 +121,182 @@ const MCP_DECLARATION_FILES = [
   "contracts/mcp-projections.ts",
 ];
 
-const loadMcpTools = async (): Promise<Record<string, ToolDeclaration>> => {
+const loadMcpTools = async (): Promise<{
+  tools: Record<string, ToolDeclaration>;
+  overrides: Record<string, ActionOverride>;
+  descriptions: Record<string, { description: string }>;
+}> => {
   for (const file of MCP_DECLARATION_FILES)
     assertContractPurity(join(SOURCE_ROOT, file));
-  const module: { MCP_TOOLS?: Record<string, ToolDeclaration> } = await import(
+  const module: {
+    MCP_TOOLS?: Record<string, ToolDeclaration>;
+    MCP_ACTION_OVERRIDES?: Record<string, ActionOverride>;
+    MCP_TOOL_DESCRIPTIONS?: Record<string, { description: string }>;
+  } = await import(
     pathToFileURL(join(SOURCE_ROOT, "contracts/mcp-tools.ts")).href
   );
-  if (!module.MCP_TOOLS)
+  if (
+    !module.MCP_TOOLS ||
+    !module.MCP_ACTION_OVERRIDES ||
+    !module.MCP_TOOL_DESCRIPTIONS
+  )
     throw new Error(
-      "apps/web/src/contracts/mcp-tools.ts must export MCP_TOOLS",
+      "apps/web/src/contracts/mcp-tools.ts must export MCP_TOOLS, MCP_ACTION_OVERRIDES, and MCP_TOOL_DESCRIPTIONS",
     );
-  return module.MCP_TOOLS;
+  return {
+    tools: module.MCP_TOOLS,
+    overrides: module.MCP_ACTION_OVERRIDES,
+    descriptions: module.MCP_TOOL_DESCRIPTIONS,
+  };
 };
 
-/**
- * Bind every declared action to the contract member it names (identity match
- * against the loaded contracts) and that member's `implementOperationDomain`
- * handler. Fails when a tool mixes queries and mutations: MCP clients approve
- * per tool, so one write action would make every read in the tool ask.
- */
+const snakeCase = (value: string): string =>
+  value
+    .replace(/([a-z0-9])([A-Z])/gu, "$1_$2")
+    .replace(/([A-Z])([A-Z][a-z])/gu, "$1_$2")
+    .toLowerCase();
+
+/** Bind capability members and retained entity-kernel verbs into grouped tools. */
 const resolveMcpTools = async (): Promise<ResolvedTool[]> => {
-  const tools = await loadMcpTools();
-  const members = new Map<object, { operation: string; kind: string }>();
+  const { tools: kernelTools, overrides, descriptions } = await loadMcpTools();
+  const contracts = await loadContracts();
   const declared: Parameters<
     typeof assertMcpExposure
   >[0]["operations"][number][] = [];
-  for (const { contract } of await loadContracts())
+  const operationNames = new Set<string>();
+  const groups = new Map<string, Map<string, OperationAction>>();
+
+  for (const { exportName, module, contract } of contracts) {
     for (const [member, definition] of Object.entries(contract.ops)) {
       const operation = `${contract.domain}.${member}`;
-      members.set(definition, { operation, kind: definition.kind });
-      declared.push({ operation, kind: definition.kind, mcp: definition.mcp });
+      const exposure = definition.exposure ?? contract.exposure;
+      declared.push({
+        operation,
+        kind: definition.kind,
+        exposure,
+        description: definition.description,
+      });
+      if (definition.kind === "subscription" || exposure !== "capability")
+        continue;
+      const name = snakeCase(member);
+      const tool = contract.mcpToolGroup ?? snakeCase(contract.domain);
+      if (!IDENTIFIER.test(tool))
+        throw new Error(
+          `${exportName} declares invalid MCP tool group ${JSON.stringify(tool)}`,
+        );
+      if (!ACTION_NAME.test(name))
+        throw new Error(
+          `MCP action ${operation} has an invalid generated name ${JSON.stringify(name)}`,
+        );
+      const actions = groups.get(tool) ?? new Map<string, OperationAction>();
+      if (actions.has(name))
+        throw new Error(
+          `MCP tool ${tool} has duplicate action ${name}; choose a different contract member name or mcpToolGroup.`,
+        );
+      actions.set(name, {
+        name,
+        kind: definition.kind,
+        operation,
+        module: "",
+        exportName: "",
+        member: "",
+        contractModule: module,
+        contractExportName: exportName,
+        contractMember: member,
+        destructive: definition.destructive === true,
+        openWorld: definition.openWorld === true,
+      });
+      groups.set(tool, actions);
+      operationNames.add(operation);
     }
-  const { operations } = await collectStartOperationHandlers();
+  }
+  assertMcpExposure({ operations: declared });
 
-  const resolved = Object.entries(tools).map(([name, tool]) => {
+  const unknownOverrides = Object.keys(overrides).filter(
+    (operation) => !operationNames.has(operation),
+  );
+  if (unknownOverrides.length > 0)
+    throw new Error(
+      `MCP overrides name operations that are not capabilities: ${unknownOverrides.join(", ")}`,
+    );
+
+  const handlers = await collectStartOperationHandlers();
+  const resolved: ResolvedTool[] = [];
+  for (const [name, groupedActions] of groups) {
+    const actions: ResolvedAction[] = [];
+    for (const action of groupedActions.values()) {
+      const handler = handlers.operations.get(action.operation);
+      if (!handler)
+        throw new Error(
+          `MCP action ${name}.${action.name} names ${action.operation}, which has no implementOperationDomain handler`,
+        );
+      actions.push({
+        ...action,
+        module: handler.module,
+        exportName: handler.exportName,
+        member: handler.member,
+      });
+    }
+    for (const [actionName, spec] of Object.entries(
+      kernelTools[name]?.actions ?? {},
+    )) {
+      const kernel = kernelRef.safeParse(spec.op);
+      if (!kernel.success)
+        throw new Error(
+          `MCP_TOOLS.${name}.${actionName} must declare a kernel action`,
+        );
+      if (actions.some((action) => action.name === actionName))
+        throw new Error(`MCP tool ${name} has duplicate action ${actionName}`);
+      actions.push({
+        name: actionName,
+        kind: kernel.data.kind,
+        kernel: kernel.data.kernel,
+        destructive: spec.destructive,
+        openWorld: spec.openWorld,
+      });
+    }
+    if (!descriptions[name]?.description?.trim())
+      throw new Error(
+        `MCP tool ${name} has no description in MCP_TOOL_DESCRIPTIONS`,
+      );
+    resolved.push({
+      name,
+      actions: actions.sort((a, b) => a.name.localeCompare(b.name)),
+      readOnly: toolKind(name, actions) === "query",
+      destructive: actions.some((action) => action.destructive === true),
+      openWorld: actions.some((action) => action.openWorld === true),
+    });
+  }
+
+  for (const [name, tool] of Object.entries(kernelTools)) {
+    if (groups.has(name)) continue;
     if (!IDENTIFIER.test(name))
       throw new Error(`MCP tool name ${name} must be snake_case`);
     const actions = Object.entries(tool.actions).map(
-      ([action, spec]): ResolvedAction => {
-        if (!ACTION_NAME.test(action))
-          throw new Error(`MCP action ${name}.${action} has an invalid name`);
+      ([actionName, spec]): ResolvedAction => {
         const kernel = kernelRef.safeParse(spec.op);
-        if (kernel.success)
-          return {
-            name: action,
-            kind: kernel.data.kind,
-            kernel: kernel.data.kernel,
-          };
-        const member = members.get(spec.op);
-        if (!member)
+        if (!kernel.success)
           throw new Error(
-            `MCP action ${name}.${action} does not name a member of a contract exported from apps/web/src/contracts/index.ts`,
-          );
-        if (member.kind !== "query" && member.kind !== "mutation")
-          throw new Error(
-            `MCP action ${name}.${action} names ${member.operation}, a ${member.kind}; only queries and mutations can be tool actions`,
-          );
-        const handler = operations.get(member.operation);
-        if (!handler)
-          throw new Error(
-            `MCP action ${name}.${action} names ${member.operation}, which has no implementOperationDomain handler`,
+            `MCP_TOOLS.${name}.${actionName} must declare a kernel action`,
           );
         return {
-          name: action,
-          kind: member.kind,
-          operation: member.operation,
-          module: handler.module,
-          exportName: handler.exportName,
-          member: handler.member,
+          name: actionName,
+          kind: kernel.data.kind,
+          kernel: kernel.data.kernel,
+          destructive: spec.destructive,
+          openWorld: spec.openWorld,
         };
       },
     );
-    const specs = Object.values(tool.actions);
-    return {
+    resolved.push({
       name,
       actions,
       readOnly: toolKind(name, actions) === "query",
-      destructive: specs.some((spec) => spec.destructive === true),
-      openWorld: specs.some((spec) => spec.openWorld === true),
-    };
-  });
-  const actions = resolved.flatMap((tool) => tool.actions);
-  assertMcpExposure({
-    operations: declared,
-    exposedOperations: new Set(
-      actions.flatMap((action) =>
-        "operation" in action ? [action.operation] : [],
-      ),
-    ),
-    kernelActions: new Set(
-      actions.flatMap((action) => ("kernel" in action ? [action.kernel] : [])),
-    ),
-  });
-  return resolved;
+      destructive: actions.some((action) => action.destructive === true),
+      openWorld: actions.some((action) => action.openWorld === true),
+    });
+  }
+  return resolved.sort((a, b) => a.name.localeCompare(b.name));
 };
 
 const property = (key: string) =>
@@ -254,6 +310,9 @@ const renderServerBindings = (tools: ResolvedTool[]): string => {
         const names = imports.get(action.module) ?? new Set();
         names.add(action.exportName);
         imports.set(action.module, names);
+        const contractNames = imports.get(action.contractModule) ?? new Set();
+        contractNames.add(action.contractExportName);
+        imports.set(action.contractModule, contractNames);
       }
   const importLines = [...imports]
     .sort(([a], [b]) => a.localeCompare(b))
@@ -270,7 +329,11 @@ const renderServerBindings = (tools: ResolvedTool[]): string => {
             "kernel" in action
               ? `kernel: KERNEL_MCP_ACTIONS${property(action.kernel)}`
               : `operation: ${JSON.stringify(action.operation)}, run: ${action.exportName}.runs${property(action.member)}`;
-          return `      ${JSON.stringify(action.name)}: { kind: ${JSON.stringify(action.kind)}, spec: ${spec}, ${target} },`;
+          const actionSpec =
+            "kernel" in action
+              ? spec
+              : `mcpCapabilityAction(${action.contractExportName}.ops${property(action.contractMember)}, MCP_ACTION_OVERRIDES[${JSON.stringify(action.operation)} as keyof typeof MCP_ACTION_OVERRIDES])`;
+          return `      ${JSON.stringify(action.name)}: { kind: ${JSON.stringify(action.kind)}, spec: ${actionSpec}, ${target} },`;
         })
         .join("\n");
       return `  ${JSON.stringify(tool.name)}: {\n    readOnly: ${tool.readOnly},\n    destructive: ${tool.destructive},\n    openWorld: ${tool.openWorld},\n    actions: {\n${actions}\n    },\n  },`;
@@ -278,7 +341,8 @@ const renderServerBindings = (tools: ResolvedTool[]): string => {
     .join("\n");
   return (
     generatedHeader +
-    `import { MCP_TOOLS } from "~/contracts/mcp-tools";\n` +
+    `import { MCP_ACTION_OVERRIDES, MCP_TOOLS } from "~/contracts/mcp-tools";\n` +
+    `import { mcpCapabilityAction } from "~/contracts/mcp-define";\n` +
     `import { KERNEL_MCP_ACTIONS } from "~/server/mcp/kernel-actions";\n` +
     `import type { McpToolBindings } from "~/server/mcp/tools/tool-registration";\n` +
     `${importLines.join("\n")}\n\n` +
@@ -298,6 +362,13 @@ const renderNames = (tools: ResolvedTool[]): string => {
     .filter((tool) => tool.readOnly)
     .map((tool) => JSON.stringify(tool.name))
     .join(", ");
+  const mutations = tools
+    .flatMap((tool) =>
+      tool.actions
+        .filter((action) => action.kind === "mutation")
+        .map((action) => JSON.stringify(`${tool.name}.${action.name}`)),
+    )
+    .join(", ");
   const perTool = tools
     .map(
       (tool) =>
@@ -306,17 +377,18 @@ const renderNames = (tools: ResolvedTool[]): string => {
     .join("\n");
   return (
     generatedHeader +
-    `/** Every Cubby MCP tool and its actions, from \`apps/web/src/contracts/mcp-tools.ts\`. */\n` +
+    `/** Capability actions come from operation contracts; kernel actions from \`apps/web/src/contracts/mcp-tools.ts\`. */\n` +
     `export const CUBBY_MCP_TOOL_ACTIONS = {\n${table}\n} as const;\n\n` +
     `/** Tools whose actions are all queries (MCP \`readOnlyHint\`). */\n` +
     `export const CUBBY_MCP_READ_ONLY_TOOLS = [${readOnly}] as const;\n\n` +
+    `/** Every generated mutation action, including mutations in mixed tools. */\n` +
+    `export const CUBBY_MCP_MUTATION_ACTIONS = [${mutations}] as const;\n\n` +
     `export type CubbyMcpToolName = keyof typeof CUBBY_MCP_TOOL_ACTIONS;\n` +
     `export type CubbyMcpToolActionName<Tool extends CubbyMcpToolName> =\n  (typeof CUBBY_MCP_TOOL_ACTIONS)[Tool][number];\n` +
     `/** \`\${tool}.\${action}\`: the unit the purchase agent is allowed and authorized by. */\n` +
     `export type CubbyMcpToolAction = {\n  [Tool in CubbyMcpToolName]: \`\${Tool}.\${CubbyMcpToolActionName<Tool>}\`;\n}[CubbyMcpToolName];\n` +
-    `type CubbyMcpReadOnlyTool = (typeof CUBBY_MCP_READ_ONLY_TOOLS)[number];\n` +
     `/** Every write action — each needs a purchase-agent capability decision. */\n` +
-    `export type CubbyMcpMutationAction = {\n  [Tool in Exclude<CubbyMcpToolName, CubbyMcpReadOnlyTool>]: \`\${Tool}.\${CubbyMcpToolActionName<Tool>}\`;\n}[Exclude<CubbyMcpToolName, CubbyMcpReadOnlyTool>];\n\n` +
+    `export type CubbyMcpMutationAction = (typeof CUBBY_MCP_MUTATION_ACTIONS)[number];\n\n` +
     `${perTool}\n`
   );
 };

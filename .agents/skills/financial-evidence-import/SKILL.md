@@ -154,8 +154,8 @@ Read a selected `STR-` or `TIM-` through `entity_read.get`. Consult the live
 schema for filters, related records and projection fields; the import fingerprint
 alone proves neither retained membership nor complete coverage.
 
-Use `finance_read.summary` to size reconciliation by match state and
-`finance_read.drift` to investigate possible descriptor revisions. These are
+Use `finance.summary` to size reconciliation by match state and
+`finance.drift` to investigate possible descriptor revisions. These are
 workflow computations, not roster APIs. Judgment corrections use the declared
 `entity.update` fields on `sourceTransactionRecord`; obtain record IDs from
 retained reads before setting a reviewed successor. Transaction imports remain

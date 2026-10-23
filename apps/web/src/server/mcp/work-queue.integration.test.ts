@@ -577,7 +577,7 @@ describe("member actionable Work queue", () => {
       const response = await callMcpTool(
         createMcpServer(),
         "activity",
-        { action: "work_queue", source, query, pageSize: 1 },
+        { action: "for_member", source, query, pageSize: 1 },
         {},
         {
           operationContext: new McpOperationContext(
@@ -787,7 +787,7 @@ describe("member actionable Work queue", () => {
       const response = await callMcpTool(
         createMcpServer(),
         "activity",
-        { action: "work_queue", source, query },
+        { action: "for_member", source, query },
         {},
         {
           operationContext: new McpOperationContext(
@@ -897,7 +897,7 @@ describe("member actionable Work queue", () => {
         createMcpServer(),
         "activity",
         {
-          action: "work_queue",
+          action: "for_member",
           source: "problem",
           query: account.shortcode,
           pageSize,
@@ -1212,7 +1212,7 @@ describe("member actionable Work queue", () => {
       callMcpTool(
         createMcpServer(),
         "activity",
-        { action: "work_queue", ...fields },
+        { action: "for_member", ...fields },
         {},
         {
           operationContext: new McpOperationContext(

@@ -96,156 +96,176 @@ const dailyIntakeOut = z.object({
   ),
 });
 
-export const mealContract = defineContract("meal", {
-  // Bounded Home summary; see expense.monthlySummary.
-  getNutrition: query({
-    mcp: {
-      omit: "client_view",
-      note: "Home macro tiles for a meal or a household day; agents read nutrition.daily_intake per person and nutrition.preparations per meal",
-    },
-    readPolicy: "strong",
-    native: "Meal and daily macro summaries",
-    input: schemas.mealNutritionInput,
-    output: schemas.mealNutritionOut,
-    cache: {
-      tags: [
-        ["meal", "getNutrition"],
-        ["product"],
-        ["ingredient"],
-        ["recipe"],
-        ["ledgerParty"],
-      ],
-    },
-  }),
-  saveFood: mutation({
-    command: { label: "Save food", confirmation: null },
-    mcp: {
-      omit: "deferred_capability",
-    },
-    input: schemas.saveMealFoodInput,
-    output: schemas.mealFoodMutationOut,
-    invalidates: ["meal"],
-  }),
-  removeFood: mutation({
-    command: { label: "Remove food", confirmation: null },
-    mcp: {
-      omit: "deferred_capability",
-    },
-    input: schemas.removeMealFoodInput,
-    output: schemas.mealFoodMutationOut,
-    invalidates: ["meal"],
-  }),
-  getByDateRange: query({
-    mcp: {
-      omit: "kernel_alternative",
-      kernel: ["list"],
-      note: "entity_read.list on meals filtered by mealDate",
-    },
-    input: schemas.mealDateRange,
-    output: schemas.mealListOut,
-  }),
-  upcomingSummary: query({
-    mcp: { omit: "client_view" },
-    readPolicy: "strong",
-    input: schemas.mealDateRange,
-    output: schemas.upcomingMealSummaryOut,
-  }),
-  getPreparations: query({
-    mcp: { omit: "agent_twin", twin: "meal.preparationsDetail" },
-    input: schemas.getMealPreparationsInput,
-    output: schemas.getMealPreparationsOut,
-    cache: { tags: [["meal", "getPreparations"], ["recipe"]] },
-  }),
-  getShoppingList: query({
-    input: schemas.shoppingListInput,
-    output: schemas.shoppingListOut,
-  }),
-  addRecipe: mutation({
-    command: {
-      label: "Add recipe",
-      confirmation: null,
-      booleanInputs: ["convertToCooked"],
-      inputs: [
-        { kind: "record", key: "recipeId", label: "Recipe", entity: "recipe" },
-        { kind: "number", key: "scale", label: "Scale", initial: 1, min: 0.01 },
-      ],
-    },
-    mcp: { omit: "agent_twin", twin: "meal.planRecipe" },
-    native: "Plan a recipe into a meal from its composition report",
-    input: schemas.mealAddRecipeInput,
-    output: schemas.mealOut,
-    invalidates: ["meal"],
-  }),
-  updateRecipe: mutation({
-    command: {
-      label: "Change scale",
-      confirmation: null,
-      inputs: [
-        {
-          kind: "number",
-          key: "scale",
-          label: "Scale",
-          initial: null,
-          min: 0.01,
-        },
-      ],
-    },
-    native: "Change a meal recipe's scale from the composition report",
-    input: schemas.mealUpdateRecipeInput,
-    output: schemas.mealOut,
-    invalidates: ["meal"],
-  }),
-  removeRecipe: mutation({
-    command: { label: "Remove recipe", confirmation: null },
-    native: "Remove a recipe from a meal from the composition report",
-    input: schemas.mealRecipeIdInput,
-    output: schemas.mealOut,
-    invalidates: ["meal"],
-  }),
-  // Copies are plans: planned portions, no images, appended to the target days.
-  duplicate: mutation({
-    command: { label: "Duplicate meal", confirmation: null },
-    mcp: {
-      omit: "deferred_capability",
-    },
-    input: mealDuplicateInput,
-    output: schemas.mealOut,
-    invalidates: ["meal"],
-  }),
-  copyRange: mutation({
-    command: { label: "Copy meals", confirmation: null },
-    mcp: {
-      omit: "deferred_capability",
-    },
-    input: mealCopyRangeInput,
-    output: mealCopyRangeOut,
-    invalidates: ["meal"],
-  }),
-  savePreparation: mutation({
-    command: { label: "Save preparation", confirmation: null },
-    native: "Set or remove portions and the yield from the composition report",
-    input: schemas.saveMealRecipePreparationInput,
-    output: schemas.saveMealRecipePreparationOut,
-    invalidates: ["meal"],
-  }),
-  // Agent-facing (MCP `nutrition`, `meal_recipe`).
-  /** One person's daily nutrition, one line per meal plus a daily total. */
-  dailyIntake: query({
-    input: dailyIntakeInput,
-    output: dailyIntakeOut,
-  }),
-  /** `getPreparations` with every totals block trimmed to `nutrition`. */
-  preparationsDetail: query({
-    input: schemas.getMealPreparationsMcpInput,
-    output: schemas.getMealPreparationsMcpOut,
-  }),
-  /** Plan a recipe into a meal; compact identity + coverage, nutrients on request. */
-  planRecipe: mutation({
-    command: { label: "Plan recipe", confirmation: null },
-    input: schemas.mealAddRecipeInput.extend({
-      nutrition: addRecipeNutritionDetail,
+export const mealContract = defineContract(
+  "meal",
+  {
+    // Bounded Home summary; see expense.monthlySummary.
+    getNutrition: query({
+      exposure: "view",
+      note: "Home macro tiles for a meal or a household day; agents read nutrition.daily_intake per person and nutrition.preparations_detail per meal",
+      readPolicy: "strong",
+      native: "Meal and daily macro summaries",
+      input: schemas.mealNutritionInput,
+      output: schemas.mealNutritionOut,
+      cache: {
+        tags: [
+          ["meal", "getNutrition"],
+          ["product"],
+          ["ingredient"],
+          ["recipe"],
+          ["ledgerParty"],
+        ],
+      },
     }),
-    output: planRecipeOut,
-    invalidates: ["meal"],
-  }),
-});
+    saveFood: mutation({
+      description:
+        "Add or update a food entry on a Meal using its declared amount and nutrition fields. Read daily_intake afterward to confirm the saved meal.",
+      command: { label: "Save food", confirmation: null },
+      input: schemas.saveMealFoodInput,
+      output: schemas.mealFoodMutationOut,
+      invalidates: ["meal"],
+    }),
+    removeFood: mutation({
+      description:
+        "Remove one food entry from a Meal. Read the Meal afterward to confirm the intended entry was removed.",
+      command: { label: "Remove food", confirmation: null },
+      input: schemas.removeMealFoodInput,
+      output: schemas.mealFoodMutationOut,
+      invalidates: ["meal"],
+    }),
+    getByDateRange: query({
+      exposure: "view",
+      note: "entity_read.list on meals filtered by mealDate",
+      input: schemas.mealDateRange,
+      output: schemas.mealListOut,
+    }),
+    upcomingSummary: query({
+      exposure: "view",
+      readPolicy: "strong",
+      input: schemas.mealDateRange,
+      output: schemas.upcomingMealSummaryOut,
+    }),
+    getPreparations: query({
+      exposure: "view",
+      input: schemas.getMealPreparationsInput,
+      output: schemas.getMealPreparationsOut,
+      cache: { tags: [["meal", "getPreparations"], ["recipe"]] },
+    }),
+    getShoppingList: query({
+      description:
+        "Use this when the user asks what to buy or what they are short on for planned meals in a date range. It compares aggregate recipe needs with recorded inventory. Usually-on-hand ingredients are assumed available, listed separately, and excluded from shopping estimates; assumptions never represent recorded stock. Quantity issues and blocked sub-recipes disclose incomplete information. Do not invoke it to add arbitrary manual household shopping items.",
+      input: schemas.shoppingListInput,
+      output: schemas.shoppingListOut,
+    }),
+    addRecipe: mutation({
+      exposure: "view",
+      command: {
+        label: "Add recipe",
+        confirmation: null,
+        booleanInputs: ["convertToCooked"],
+        inputs: [
+          {
+            kind: "record",
+            key: "recipeId",
+            label: "Recipe",
+            entity: "recipe",
+          },
+          {
+            kind: "number",
+            key: "scale",
+            label: "Scale",
+            initial: 1,
+            min: 0.01,
+          },
+        ],
+      },
+      native: "Plan a recipe into a meal from its composition report",
+      input: schemas.mealAddRecipeInput,
+      output: schemas.mealOut,
+      invalidates: ["meal"],
+    }),
+    updateRecipe: mutation({
+      description:
+        "Adjust a planned recipe's scale or sort order within its meal.",
+      command: {
+        label: "Change scale",
+        confirmation: null,
+        inputs: [
+          {
+            kind: "number",
+            key: "scale",
+            label: "Scale",
+            initial: null,
+            min: 0.01,
+          },
+        ],
+      },
+      native: "Change a meal recipe's scale from the composition report",
+      input: schemas.mealUpdateRecipeInput,
+      output: schemas.mealOut,
+      invalidates: ["meal"],
+    }),
+    removeRecipe: mutation({
+      description: "Remove a planned recipe from its meal.",
+      command: { label: "Remove recipe", confirmation: null },
+      native: "Remove a recipe from a meal from the composition report",
+      input: schemas.mealRecipeIdInput,
+      output: schemas.mealOut,
+      invalidates: ["meal"],
+    }),
+    // Copies are plans: planned portions, no images, appended to the target days.
+    duplicate: mutation({
+      description:
+        "Copy a Meal and its food entries to the requested date. The new Meal is a separate record; inspect it before further edits.",
+      command: { label: "Duplicate meal", confirmation: null },
+      input: mealDuplicateInput,
+      output: schemas.mealOut,
+      invalidates: ["meal"],
+    }),
+    copyRange: mutation({
+      description:
+        "Copy Meals from the selected date range to the requested destination dates. This creates new Meal records; inspect the returned ids before retrying.",
+      command: { label: "Copy meals", confirmation: null },
+      input: mealCopyRangeInput,
+      output: mealCopyRangeOut,
+      invalidates: ["meal"],
+    }),
+    savePreparation: mutation({
+      description:
+        "Record measured yield and portions served from one planned recipe occurrence. Assigned portions count in daily intake by the target meal date: future is planned, today/past is logged. Confirmation fields remain for legacy compatibility and do not gate daily intake.",
+      command: { label: "Save preparation", confirmation: null },
+      native:
+        "Set or remove portions and the yield from the composition report",
+      input: schemas.saveMealRecipePreparationInput,
+      output: schemas.saveMealRecipePreparationOut,
+      invalidates: ["meal"],
+    }),
+    // Agent-facing (MCP `nutrition`, `meal_recipe`).
+    /** One person's daily nutrition, one line per meal plus a daily total. */
+    dailyIntake: query({
+      description:
+        "One person's daily nutrition with one line per meal and a daily total. Defaults to macros: kcal plus protein/carbs/fat/fiber in grams. Set includeFoods for food breakdowns, or nutrition=full for all nutrients. Uses the target meal's household date, including leftovers and unconfirmed entered portions. Future dates are planned; today/past are logged. No assigned intake returns nutrition=null and meals=[]. Nutrient null means unavailable, pending means not calculated, and partial bounds describe only known contributions (not bounds on missing food). Exact values are numbers; ranges retain lower/upper. No cost or preparation detail is included.",
+      input: dailyIntakeInput,
+      output: dailyIntakeOut,
+    }),
+    /** `getPreparations` with every totals block trimmed to `nutrition`. */
+    preparationsDetail: query({
+      description:
+        "Recipe preparations made by or served at a meal, including projected and confirmed nutrition. `nutrition` trims every totals block: `full` (default) carries all 22 nutrients, `macros` keeps kcal/protein/carbs/fat/fiber, `kcal` keeps only calories, and `none` keeps cost alone. For per-person daily intake use nutrition.daily_intake.",
+      input: schemas.getMealPreparationsMcpInput,
+      output: schemas.getMealPreparationsMcpOut,
+    }),
+    /** Plan a recipe into a meal; compact identity + coverage, nutrients on request. */
+    planRecipe: mutation({
+      description:
+        "Plan a recipe into a meal at a scale multiplier (1 = as written). Returns compact meal identity plus cost/kcal coverage. Nutrition defaults to none; request kcal, macros, or full when needed.",
+      command: { label: "Plan recipe", confirmation: null },
+      input: schemas.mealAddRecipeInput.extend({
+        nutrition: addRecipeNutritionDetail,
+      }),
+      output: planRecipeOut,
+      invalidates: ["meal"],
+    }),
+  },
+  { exposure: "capability", mcpToolGroup: "nutrition" },
+);

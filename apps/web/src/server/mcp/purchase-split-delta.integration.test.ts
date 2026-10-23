@@ -1,5 +1,5 @@
 /**
- * `expenses.split`'s MCP result: `originalCost`/`partsSum`/`delta`.
+ * `expenses.split_with_delta`'s MCP result: `originalCost`/`partsSum`/`delta`.
  *
  * The delta arithmetic itself is pure and covered in
  * `packages/schemas/src/purchase.unit.test.ts` (`splitExpenseDelta`). What
@@ -87,7 +87,7 @@ function workflowContext(
   return requireActor(createTestRequestContext(db, { auth: { userId } }));
 }
 
-describe("expenses.split MCP action — originalCost/partsSum/delta", () => {
+describe("expenses.split_with_delta MCP action — originalCost/partsSum/delta", () => {
   const ctx = withTestDb();
   const caller = () => workflowContext(ctx.db, ctx.actor.userId);
 
@@ -106,7 +106,7 @@ describe("expenses.split MCP action — originalCost/partsSum/delta", () => {
     const result = await callTool(
       "expenses",
       {
-        action: "split",
+        action: "split_with_delta",
         expenseId: original.id,
         parts: [
           {
@@ -152,7 +152,7 @@ describe("expenses.split MCP action — originalCost/partsSum/delta", () => {
     const result = await callTool(
       "expenses",
       {
-        action: "split",
+        action: "split_with_delta",
         expenseId: original.id,
         parts: [
           {
@@ -203,7 +203,7 @@ describe("expenses.split MCP action — originalCost/partsSum/delta", () => {
     const result = await callTool(
       "expenses",
       {
-        action: "split",
+        action: "split_with_delta",
         expenseId: original.id,
         parts: [
           {

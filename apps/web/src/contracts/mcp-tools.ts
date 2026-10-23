@@ -11,7 +11,6 @@ import {
   productMcpDetailOut,
   productMcpOut,
 } from "@cubby/schemas/product";
-import { projectResourceFeatureLabels } from "@cubby/schemas/product-category-relations";
 import {
   recipesUsingIngredientOut,
   recipeTagsOut,
@@ -19,19 +18,10 @@ import {
 import { parseShortcode } from "@cubby/shared";
 import { z } from "zod";
 
-import { aiContract, aiFundingContract } from "~/contracts/ai.contract";
-import { auditLogContract } from "~/contracts/audit-log.contract";
 import { cookbookContract } from "~/contracts/cookbook.contract";
-import { dataQualityContract } from "~/contracts/data-quality.contract";
-import { connectionContract } from "~/contracts/entity-graph.contract";
 import { entityGraphContract } from "~/contracts/entity-graph.contract";
 import { expenseContract } from "~/contracts/expense.contract";
-import {
-  cashFlowContract,
-  financialTransactionContract,
-} from "~/contracts/finance.contract";
-import { householdContributionContract } from "~/contracts/household-contribution.contract";
-import { imageProcessingContract } from "~/contracts/image-processing.contract";
+import { financialTransactionContract } from "~/contracts/finance.contract";
 import { imageUploadContract } from "~/contracts/image-upload.contract";
 import { imageContract } from "~/contracts/image.contract";
 import { ingredientContract } from "~/contracts/ingredient.contract";
@@ -40,6 +30,8 @@ import {
   defineMcpTools,
   kernelAction,
   mcpAction,
+  mcpActionOverride,
+  type McpActionOverride,
 } from "~/contracts/mcp-define";
 import {
   mcpItemsEnvelope,
@@ -52,86 +44,354 @@ import {
   slimUsdaFood,
   slimUsdaFoodListItem,
 } from "~/contracts/mcp-projections";
-import { playbookContract } from "~/contracts/mcp.contract";
 import { mealContract } from "~/contracts/meal.contract";
-import { photoImportContract } from "~/contracts/photo-import.contract";
 import {
   problemReportWantsCounts,
   problemsContract,
 } from "~/contracts/problems.contract";
 import { productContract } from "~/contracts/product.contract";
-import { projectContract } from "~/contracts/project.contract";
-import { purchaseImportContract } from "~/contracts/purchase-import.contract";
-import { purchaseContract } from "~/contracts/purchase.contract";
 import {
   recipeContract,
   recipeAvailabilityContract,
 } from "~/contracts/recipe.contract";
-import { recommendationsContract } from "~/contracts/recommendations.contract";
 import { runContract } from "~/contracts/run.contract";
-import { searchContract } from "~/contracts/search.contract";
-import { shipmentContract } from "~/contracts/shipment.contract";
-import { sourceTransactionRecordContract } from "~/contracts/source-transaction-record.contract";
 import { spendingClassificationContract } from "~/contracts/spending-classification.contract";
-import { suggestionsContract } from "~/contracts/suggestions.contract";
-import { taskContract } from "~/contracts/task.contract";
 import {
   usdaFoodContract,
   usdaSuggestionReason,
 } from "~/contracts/usda.contract";
-import { vendorContract } from "~/contracts/vendor.contract";
 import { workQueueContract } from "~/contracts/work-queue.contract";
 
 import { assessmentContract } from "./assessment.contract";
-
-/**
- * The Cubby MCP surface: 24 tools, each a group of actions called as
- * `{ action, ...input }`. Read-only tools hold only queries, so an MCP client
- * can auto-approve them; `pnpm generate` refuses a tool that mixes kinds.
- * Action descriptions name other actions as `tool.action`.
- *
- * The purchase agent mounts tools by name, so its allowlists and capability
- * gate key on `${tool}.${action}` (`@cubby/schemas/mcp-tools`,
- * `server/domains/purchase-import/repo/capabilities.ts`): authorizing
- * `purchase_import.prepare` never authorizes `purchase_import.commit`.
- */
 
 const usdaFoodLookupOut = z.object({ food: usdaFoodMcpOut });
 const usdaFood = (output: {
   food: Parameters<typeof slimUsdaFood>[0] | null;
 }) => ({ food: output.food ? slimUsdaFood(output.food) : null });
 
-export const MCP_TOOLS = defineMcpTools({
+/** MCP-only metadata: kernel verbs, tool descriptions, and schema/output shaping. */
+export const MCP_TOOL_DESCRIPTIONS = {
+  activity: { description: "What changed recently, and what needs fixing." },
+  ai: {
+    description: "Agent-facing AI operations, usage, and suggestion work.",
+  },
+  ai_funding: {
+    description:
+      "Change household-wide frontier AI funding (every feature's frontier chat calls, not only Mail import); read it with ai_funding.status. Call only on the member's explicit instruction.",
+  },
+  collection: {
+    description: "Manage household Collections and their member-defined tags.",
+  },
+  data_exception: {
+    description:
+      "Explicit negative knowledge on one completeness check of a Product, Vendor, Purchase, FinancialTransaction, or Expense; each call returns the recomputed dataQuality.",
+  },
+  entity: {
+    description:
+      "Write household entities: create, update, delete, merge, bulk-update, link/unlink an attachable relation, run up to 50 creates/updates at once, resolve-or-create ingredient and plant names, move inventory, and repoint project uses. Reads are entity_read. A field's own description in the schema (e.g. product.tags) states its contract — follow it rather than a pattern seen on other records.",
+  },
+  entity_graph: {
+    description:
+      "Inspect declared relationships and discover proposed connections. Discovery publishes suggestions; it does not accept links.",
+  },
   entity_read: {
     description:
       "Read household entities: get one, list or search a kind, preview a create or a link change without writing, read an attachable relation or one-hop connections, and resolve Product names or external ids. Every action is read-only. Ingredient usuallyOnHand means assumed planning availability; recorded inventory remains separate. Recipe availability includes planning coverage and incomplete-quantity warnings. Consult entities://catalog only when the schema leaves a supported entity/action unclear.",
+  },
+  expenses: {
+    description:
+      "Re-attribute existing Expense money within purchases. No action creates money or moves it to another vendor.",
+  },
+  field_explanation: {
+    description:
+      "Explain a named field using its contract and current record context.",
+  },
+  finance: {
+    description:
+      "Apply uniquely supported financial evidence, or a member's explicit booking of one posted transaction, through server checks. Ambiguous or changed accepted facts remain review work.",
+  },
+  image: {
+    description:
+      "Files and images on declared image-bearing records. Galleries append; role cover replaces a Cookbook cover and role logo replaces a Vendor logo after image validation succeeds.",
+  },
+  imports_read: {
+    description:
+      "Read Vendor coverage and fetch a representative logo from a Vendor's public website after reviewing the resolved site.",
+  },
+  inventory: {
+    description:
+      "Receive, add, and discard household inventory. These actions change recorded stock; ordinary household use does not.",
+  },
+  maintenance: {
+    description:
+      "Inspect and repair operational state when the member asks. These actions can read diagnostics, retry work, or change retained support data.",
+  },
+  nutrition: {
+    description: "Daily intake, meal preparations, and shopping needs.",
+  },
+  photo_run: {
+    description:
+      "A photo-inventory run's item grouping: propose groups for human review, or commit one when the user asks to skip review.",
+  },
+  playbook: {
+    description:
+      "Cubby's household playbooks: the step-by-step rules for purchase and receipt import, product enrichment, meal logging, household maintenance logging, photo inventory import, and garden plan import. Before starting one of those tasks, call playbook.list, then playbook.get the matching playbook and follow it.",
+  },
+  product_enrichment: {
+    description:
+      "Product identity upkeep: image integrity and match proposals. Product facts and identifier slots are written with entity.update; preserve research in `notes` inside `data`.",
+  },
+  project_overview: {
+    description:
+      "Household project, budget, tool, and spend rollups, plus repointing a Product's project-use history.",
+  },
+  purchase_import: {
+    description:
+      "Import a purchase from its source: prepare then commit one immutable import plan; confirm a merchant's Vendor; reclassify a Purchase document. A member's Claude/Codex session and Pi's Mail import use the same writers.",
+  },
+  recipe_insights: {
+    description:
+      "Recipe nutrition, costing, availability, cookbook upkeep, imports from text or URLs, and reverse lookups.",
+  },
+  run: {
+    description:
+      "Control Runs (Mail import, photo inventory, or a member's import); read one with run.work_snapshot. set_mail_import, discover_mail, commit_prepared, resolve_finding and approve/reject spend money or settle evidence: call them only on the member's explicit instruction.",
+  },
+  search: {
+    description:
+      "Search across indexed entities, compare similarity candidates, and diagnose or request repair of search embeddings.",
+  },
+  shipments: {
+    description:
+      "Retain source-backed package tracking evidence without changing money or inventory.",
+  },
+  spending_classification_write: {
+    description:
+      "Preview and apply reviewed spending-classification changes atomically.",
+  },
+  suggestions: {
+    description:
+      "Read and review proposed household changes. Review decisions remain explicit member actions.",
+  },
+  tasks_overview: {
+    description: "Task backlog reads across the whole tracker.",
+  },
+  usda_food: {
+    description:
+      "USDA FoodData Central records, the external nutrition source a Product maps to by `fdc_id`.",
+  },
+} as const;
+
+export const MCP_ACTION_OVERRIDES = {
+  "assessment.reviewBatch": mcpActionOverride(
+    assessmentContract.ops.reviewBatch,
+    {
+      project: (items) => ({ items }),
+      output: mcpItemsEnvelope(assessmentContract.ops.reviewBatch.output),
+    },
+  ),
+  "cookbook.list": mcpActionOverride(cookbookContract.ops.list, {
+    project: (items) => ({ items }),
+    output: mcpItemsEnvelope(cookbookContract.ops.list.output),
+  }),
+  "entity.connections": mcpActionOverride(entityGraphContract.ops.connections, {
+    readPolicy: "strong",
+  }),
+  "expense.analytics": mcpActionOverride(expenseContract.ops.analytics, {
+    strict: true,
+  }),
+  "financialTransaction.previewTransactionImport": mcpActionOverride(
+    financialTransactionContract.ops.previewTransactionImport,
+    {
+      readPolicy: "strong",
+    },
+  ),
+  "image.attachExisting": mcpActionOverride(imageContract.ops.attachExisting, {
+    telemetryEntity: (input) => parseShortcode(input.targetId)?.type,
+  }),
+  "image.attachFile": mcpActionOverride(imageUploadContract.ops.attachFile, {
+    batch: { resultDetail: "full", reference: (item) => item.imageId },
+    telemetryEntity: (item) => parseShortcode(item.entityId)?.type,
+  }),
+  "image.createFileUpload": mcpActionOverride(
+    imageUploadContract.ops.createFileUpload,
+    {
+      batch: { resultDetail: "full", reference: (item) => item.uploadId },
+    },
+  ),
+  "ingredient.recipeUsages": mcpActionOverride(
+    ingredientContract.ops.recipeUsages,
+    {
+      project: (usages, input) => {
+        const byRecipe = new Map<string, typeof usages>();
+        for (const usage of usages)
+          byRecipe.set(usage.recipe.id, [
+            ...(byRecipe.get(usage.recipe.id) ?? []),
+            usage,
+          ]);
+        const recipes = [...byRecipe.values()].map((rows) => ({
+          ...slimRecipe(rows[0]!.recipe),
+          usages: rows.map((usage) => ({
+            lineId: usage.id,
+            sectionName: usage.sectionName ?? null,
+            amounts: usage.amounts,
+            rawLine: usage.rawLine ?? null,
+            modifier: usage.modifier ?? null,
+          })),
+        }));
+        return { ingredientId: input.id, count: recipes.length, recipes };
+      },
+      output: recipesUsingIngredientOut,
+    },
+  ),
+  "inventory.moveEntries": mcpActionOverride(
+    inventoryContract.ops.moveEntries,
+    {
+      project: (output) => respondList(output.items, slimInventory),
+      output: inventoryMcpBulkMoveOut,
+    },
+  ),
+  "inventory.reconcileSession": mcpActionOverride(
+    inventoryContract.ops.reconcileSession,
+    {
+      project: (output) => respondList(output.items, slimInventory),
+      output: inventoryMcpBulkMoveOut,
+    },
+  ),
+  "meal.removeRecipe": mcpActionOverride(mealContract.ops.removeRecipe, {
+    project: slimMeal,
+    output: mealMcpOut,
+  }),
+  "meal.updateRecipe": mcpActionOverride(mealContract.ops.updateRecipe, {
+    project: slimMeal,
+    output: mealMcpOut,
+  }),
+  "problems.report": mcpActionOverride(problemsContract.ops.report, {
+    readPolicy: (input) =>
+      problemReportWantsCounts(input) ? "strong" : "context",
+  }),
+  "product.findOrCreateByUPC": mcpActionOverride(
+    productContract.ops.findOrCreateByUPC,
+    {
+      project: (output) => ({
+        ...slimProduct(output.product),
+        warnings: output.sideEffects.warnings,
+      }),
+      output: productMcpOut.extend({
+        warnings: z
+          .array(z.string())
+          .optional()
+          .describe(
+            "Best-effort follow-ups that failed after the product was saved, e.g. the cover-photo import.",
+          ),
+      }),
+    },
+  ),
+  "product.lookupUpc": mcpActionOverride(productContract.ops.lookupUpc, {
+    project: (output) => ({
+      ...output,
+      localProduct: output.localProduct
+        ? slimProduct(output.localProduct)
+        : null,
+    }),
+    output: productLookupUpcOut.extend({
+      localProduct: productMcpOut.nullable(),
+    }),
+  }),
+  "product.verifyImages": mcpActionOverride(productContract.ops.verifyImages, {
+    project: slimProductDetail,
+    output: productMcpDetailOut,
+    batch: {
+      maxItems: 20,
+      resultDetail: "full",
+      reference: (item) => item.id,
+      uniqueIds: true,
+    },
+  }),
+  "recipe.tags": mcpActionOverride(recipeContract.ops.tags, {
+    project: (items) => ({ items }),
+    output: mcpItemsEnvelope(recipeTagsOut),
+  }),
+  "recipeAvailability.getMakeable": mcpActionOverride(
+    recipeAvailabilityContract.ops.getMakeable,
+    {
+      project: (output) => ({ recipes: output.recipes }),
+      output: recipeAvailabilityMcpOut,
+    },
+  ),
+  "run.lifecycle": mcpActionOverride(runContract.ops.lifecycle, {
+    strict: true,
+  }),
+  "run.workSnapshot": mcpActionOverride(runContract.ops.workSnapshot, {
+    project: (output) => ({
+      ...output,
+      findings: output.findings.map(({ proposedFix, ...finding }) => ({
+        ...finding,
+        hasProposedFix: proposedFix !== null,
+      })),
+    }),
+    output: runContract.ops.workSnapshot.output.extend({
+      findings: z.array(
+        runContract.ops.workSnapshot.output.shape.findings.element
+          .omit({ proposedFix: true })
+          .extend({ hasProposedFix: z.boolean() }),
+      ),
+    }),
+  }),
+  "spendingClassification.preview": mcpActionOverride(
+    spendingClassificationContract.ops.preview,
+    {
+      readPolicy: "strong",
+    },
+  ),
+  "usda-food.byFdcId": mcpActionOverride(usdaFoodContract.ops.byFdcId, {
+    project: usdaFood,
+    output: usdaFoodLookupOut,
+  }),
+  "usda-food.find": mcpActionOverride(usdaFoodContract.ops.find, {
+    project: usdaFood,
+    output: usdaFoodLookupOut,
+  }),
+  "usda-food.search": mcpActionOverride(usdaFoodContract.ops.search, {
+    project: (output) => ({
+      meta: {
+        pageIndex: output.meta.pageIndex,
+        pageSize: output.meta.pageSize,
+        totalCount: output.meta.totalCount,
+      },
+      items: output.items.map(slimUsdaFoodListItem),
+    }),
+    output: usdaFoodMcpListOut,
+  }),
+  "usda-food.suggestForProduct": mcpActionOverride(
+    usdaFoodContract.ops.suggestForProduct,
+    {
+      project: (output) => ({
+        currentFdcId: output.currentFdcId,
+        candidates: output.candidates.map((candidate) => ({
+          reason: candidate.reason,
+          food: slimUsdaFoodListItem(candidate.food),
+        })),
+      }),
+      output: z.object({
+        currentFdcId: z.number().int().nullable(),
+        candidates: z.array(
+          z.object({
+            reason: usdaSuggestionReason,
+            food: mcpUsdaFoodListItemOut,
+          }),
+        ),
+      }),
+    },
+  ),
+  "workQueue.forMember": mcpActionOverride(workQueueContract.ops.forMember, {
+    strict: true,
+  }),
+} satisfies Readonly<Record<string, McpActionOverride>>;
+
+export const MCP_TOOLS = defineMcpTools({
+  entity_read: {
     actions: {
-      suggest_fields: mcpAction({
-        op: aiContract.ops.suggestFields,
-        modelBacked: true,
-        description:
-          "Decision-model field suggestions for a record or draft (`targets`, `basis`); a spending field also returns financeReview, whose fingerprint spending_classification_write.apply_category_suggestion takes. Mint one runKey uuid per session and reuse it for entity.record_suggestion_miss. decisionModel pins Jev (typesafe/jev) or Clef (@cf/cloudflare/clef) to replay one record through each trial model.",
-      }),
-      suggestion_queue: mcpAction({
-        op: suggestionsContract.ops.list,
-        description:
-          "The shared proposal queue: fields, statement transactions, connections and tag additions, Product pairs, image descriptions, and transfer pairs. Non-actionable candidates and already-applied automatic decisions are excluded. Scope by family, entity, recordIds (every touched endpoint), runId and column filters. Rows declare evidence, Strength, clean, actions, merge confirmation data and suppression. Review through entity.review_assessment(s), preserving expectedFingerprint and the declared application. Product merges require survivor choice and impact review; only clean rows qualify for bulk acceptance. Confidence never authorizes apply.",
-      }),
-      automatic_decisions: mcpAction({
-        op: suggestionsContract.ops.automaticDecisions,
-        description:
-          "Already-applied decisions, newest first: Email relevance, automatic Email links, mail-import outcomes, and automatic-rule applications. Filter by family, recordIds and reviewStatus. Wrong records member Feedback through entity.review_assessment. Declared correction options use verdict wrong, intent apply, correction and expectedFingerprint; without a correction use intent history. Mail-import outcomes are history only; correct affected records through their domain actions. Decisions stay in this audit after review.",
-      }),
-      suggestion_rules: mcpAction({
-        op: suggestionsContract.ops.rules,
-        description:
-          "Automatic rules: named, versioned family rules that apply matching Suggestions without review (statement_transaction.attach; statement_transaction.book_spending). Each returns its declared revision and the member switch; attach applies only while a member has it on for that revision.",
-      }),
-      inventory_ownership_context: mcpAction({
-        op: expenseContract.ops.inventoryOwnershipContext,
-        description:
-          "An inventory entry's inherited owner and beneficiary evidence with its evidenceFingerprint, for entity.confirm_inventory_owner and expenses.confirm_beneficiary.",
-      }),
       get: mcpAction({
         op: kernelAction("get", "query"),
         description:
@@ -155,17 +415,6 @@ export const MCP_TOOLS = defineMcpTools({
         description:
           'Preview without writing. `{entity, data, context?}` previews one create: contextual seeds merge first, explicit data wins, and manifest-declared decision suggestions come back with confidence and provenance. `{items: [...]}` previews up to 50 creates independently. `{operation: {action: "attach"|"detach", entity, relation, id, items}}` dry-runs a link change, returning `blockers`, `changes` and `sideEffects` with per-target breakdowns and `canProceed`; it is advisory, since the mutation re-validates in its own transaction.',
       }),
-      relations: mcpAction({
-        op: entityGraphContract.ops.relation,
-        description:
-          'A counted page of declared relation rows (`offset`, `limit`, optional `targetIds`). Purchase products and inverse product purchases union live Expense evidence with explicit links. Movement kinds describe actual Expenses and acquisition confirmations; hasPlanned marks future Expenses. Only explicit links can be unlinked. `purchase` `products`: the Products one Purchase names; `source` says why a row is there: "expense" when one of the order\'s own live Expenses names the product, "link" for an explicit purchaseProduct link (goods bought through allocation-basis installment Expenses, which never carry a productId), "both" when each exists. This is provenance, not money — no amount or quantity, nothing summed into spend; `linkAttachedAt` is null on an "expense" row, so only rows with it set have a link to unlink. `product` `components`: what one kit or multi-pack Product is made of, one row per distinct component with its quantity; each row\'s `price` is the component\'s effective price, which already blends its quantity-weighted share of every kit it is in — do not add a kit share on top. `project` `resources`: the reusable tools and software explicitly used on one exact project; tools carry lifetime purchase/use economics, software the non-additive household spend charged during the project\'s window. Sub-project uses are separate.',
-      }),
-      connections: mcpAction({
-        op: entityGraphContract.ops.connections,
-        readPolicy: "strong",
-        description:
-          'One-hop physical connections of any entity: what points at it (`incoming`) and what it points at (`outgoing`), grouped by edge with a count and the first linked records. A merged-away code reads its survivor and reports `redirectedFrom`. Pass `operation: "delete"` or `"merge"` to see each incoming group\'s declared disposition (block, detach, repoint, ...) before running it; advisory, since the mutation re-validates.',
-      }),
       resolve: mcpAction({
         op: kernelAction("resolve", "query"),
         description:
@@ -173,10 +422,7 @@ export const MCP_TOOLS = defineMcpTools({
       }),
     },
   },
-
   entity: {
-    description:
-      "Write household entities: create, update, delete, merge, bulk-update, link/unlink an attachable relation, run up to 50 creates/updates at once, resolve-or-create ingredient and plant names, move inventory, and repoint project uses. Reads are entity_read. A field's own description in the schema (e.g. product.tags) states its contract — follow it rather than a pattern seen on other records.",
     actions: {
       create: mcpAction({
         op: kernelAction("create", "mutation"),
@@ -192,7 +438,7 @@ export const MCP_TOOLS = defineMcpTools({
         op: kernelAction("delete", "mutation"),
         destructive: true,
         description:
-          'Soft-delete up to 500 records of one kind by `ids`, applying each incoming edge\'s declared disposition (block, detach, repoint). Read entity_read.connections with operation "delete" first when unsure.',
+          'Soft-delete up to 500 records of one kind by `ids`, applying each incoming edge\'s declared disposition (block, detach, repoint). Read entity_graph.connections with operation "delete" first when unsure.',
       }),
       merge: mcpAction({
         op: kernelAction("merge", "mutation"),
@@ -213,7 +459,7 @@ export const MCP_TOOLS = defineMcpTools({
       unlink: mcpAction({
         op: kernelAction("unlink", "mutation"),
         description:
-          "Detach items from one record's relation. To move a Product's project-use history, use entity.repoint_project_uses instead.",
+          "Detach items from one record's relation. To move a Product's project-use history, use project_overview.repoint_uses instead.",
       }),
       commands: mcpAction({
         op: kernelAction("commands", "mutation"),
@@ -224,980 +470,6 @@ export const MCP_TOOLS = defineMcpTools({
         op: kernelAction("resolveOrCreate", "mutation"),
         description:
           'Resolve names to ids in one call, creating what is missing. `{entity: "ingredient", names, linkProductId?}` matches case-insensitively, aliases included; each result carries `candidateProducts` (up to 5 live Products with no ingredient link whose name contains every word of the ingredient, best first) and `linkProductId` (exactly one name) links one of them to the ingredient through the normal Product update. `{entity: "plant", plants: [{name, gardenGuideKey?, ingredientName?}]}` matches a live Plant by name within the crop key when given, returning `created` per row; `ingredientName` only fills a created Plant\'s informational ingredient link. Resolve cultivars before creating Plantings — a Planting names its Plant, never free-text variety.',
-      }),
-      move_inventory: mcpAction({
-        op: inventoryContract.ops.moveEntries,
-        destructive: true,
-        project: (output) => respondList(output.items, slimInventory),
-        output: inventoryMcpBulkMoveOut,
-        description:
-          "Move inventory entries to per-item destination locations in one atomic call. Each item names an entry and where it should end up, so one call can fan a location out across many, consolidate many into one, or both. Omit an item's quantity to move the whole entry; include it for a partial move, and list one entry twice to split it across destinations. Entries merge into an existing entry for the same product at the destination. The source location is not asked for — an entry already knows where it is.",
-      }),
-      repoint_project_uses: mcpAction({
-        op: projectContract.ops.repointUses,
-        description: `Move a Product's recorded project uses onto another Product, in one transaction — how to retire or split a Product that entity.delete refuses because it has project-use history: repoint the history onto the component or replacement that should carry it, then delete. Do NOT do this as entity.unlink plus entity.link — an unlink whose link is missed discards the project's tool history with nothing to flag it. Omit projectIds to move every live use. Projects that already record the destination keep their existing row and are reported as alreadyPresent, not as an error. The destination must be a live Product in a category that allows project resources (${projectResourceFeatureLabels}).`,
-      }),
-      reconcile_inventory: mcpAction({
-        op: inventoryContract.ops.reconcileSession,
-        project: (output) => respondList(output.items, slimInventory),
-        output: inventoryMcpBulkMoveOut,
-        description:
-          "Commit a physical shelf audit of one location: the expected entry ids, the snapshot read before counting, and a resolution per entry. Only when the member counted that shelf.",
-      }),
-      resolve_scan_strays: mcpAction({
-        op: inventoryContract.ops.resolveScanStrays,
-        description:
-          "Move inventory entries a scan found out of place into targetLocationId (whole entries unless quantity is given).",
-      }),
-      confirm_inventory_owner: mcpAction({
-        op: inventoryContract.ops.confirmOwnership,
-        description:
-          "Confirm an inventory entry's inherited owner using the evidenceFingerprint its ownership context returned; quantity confirms part of the entry.",
-      }),
-      approve_detected_item: mcpAction({
-        op: aiContract.ops.approveDetectedInventoryItem,
-        description:
-          "Stock one item detected in a location photo, reusing productId or creating its Product.",
-      }),
-      review_assessment: mcpAction({
-        op: assessmentContract.ops.review,
-        description:
-          "Review immutable evidence as correct, wrong, uncertain or a presentation dismissal. Draft review does not apply; saved application is revalidated.",
-      }),
-      discover_connections: mcpAction({
-        op: connectionContract.ops.discover,
-        modelBacked: true,
-        description:
-          "Discover proposed relationships for an existing record using bounded typed matchers. Publishes Assessments, without accepting new links. Repeated purchases remain eligible. Review the exact proposed effect before acceptance.",
-      }),
-      set_suggestion_rule: mcpAction({
-        op: suggestionsContract.ops.setRule,
-        description:
-          "Turn one Automatic rule on or off ({ruleKey, enabled}) on the member's instruction. On requires eligibility (read entity_read.suggestion_rules) and refuses with the raw numbers otherwise; off is always allowed.",
-      }),
-      review_assessments: mcpAction({
-        op: assessmentContract.ops.reviewBatch,
-        project: (items) => ({ items }),
-        output: mcpItemsEnvelope(assessmentContract.ops.reviewBatch.output),
-        description:
-          "Review Assessments independently; each item returns its own outcome.",
-      }),
-    },
-  },
-
-  search: {
-    description: "Search across every indexed entity at once.",
-    actions: {
-      global: mcpAction({
-        op: searchContract.ops.global,
-        description:
-          "Fast name, alias, identifier, and shortcode search across Cubby entities. Pass entityKinds to restrict results. Every hit carries its public shortcode in id, ready for entity_read.get. This lexical lookup never calls an embedding provider. Set includeRelated only when useful; semantic results come back separately and never replace direct matches. For entity-to-entity matching use search.similar.",
-      }),
-      similar: mcpAction({
-        op: searchContract.ops.similar,
-        description:
-          "Products whose stored embedding is closest to one product seed — the only active public similarity direction; other declared pairs stay unavailable until their independent backtests pass. Pass the pair key plus the seed's id; results are nearest first with cosine similarity and the resolved source ref. Similarity ranks candidates but never verifies a match. Returns no results when the seed is uncomputed, stale, or embeddings are unavailable.",
-      }),
-    },
-  },
-
-  usda_food: {
-    description:
-      "USDA FoodData Central records, the external nutrition source a Product maps to by `fdc_id`.",
-    actions: {
-      search: mcpAction({
-        op: usdaFoodContract.ops.search,
-        openWorld: true,
-        project: (output) => ({
-          meta: {
-            pageIndex: output.meta.pageIndex,
-            pageSize: output.meta.pageSize,
-            totalCount: output.meta.totalCount,
-          },
-          items: output.items.map(slimUsdaFoodListItem),
-        }),
-        output: usdaFoodMcpListOut,
-        description:
-          "Use this when the user needs to choose among USDA records for Product nutrition mapping. Returns ranked candidates, best match first, with source type, macros, and existing Cubby links. Present the top few (name, source type, key macros, fdc_id) and let the member pick one before linking; refine the query and search again if none fit. Do not invoke it when the Cubby Product already has a resolved USDA food or for a general nutrition question that does not require record selection.",
-      }),
-      get: mcpAction({
-        op: usdaFoodContract.ops.byFdcId,
-        openWorld: true,
-        project: usdaFood,
-        output: usdaFoodLookupOut,
-        description:
-          "One USDA food by its FDC id, with compact nutrients-per-100g and any linked Cubby products.",
-      }),
-      find: mcpAction({
-        op: usdaFoodContract.ops.find,
-        openWorld: true,
-        project: usdaFood,
-        output: usdaFoodLookupOut,
-        description:
-          "One USDA food by barcode (UPC/GTIN, 12-14 digits) or NDB number; provide exactly one.",
-      }),
-      suggest_for_product: mcpAction({
-        op: usdaFoodContract.ops.suggestForProduct,
-        openWorld: true,
-        project: (output) => ({
-          currentFdcId: output.currentFdcId,
-          candidates: output.candidates.map((candidate) => ({
-            reason: candidate.reason,
-            food: slimUsdaFoodListItem(candidate.food),
-          })),
-        }),
-        output: z.object({
-          currentFdcId: z.number().int().nullable(),
-          candidates: z.array(
-            z.object({
-              reason: usdaSuggestionReason,
-              food: mcpUsdaFoodListItemOut,
-            }),
-          ),
-        }),
-        description:
-          'USDA foods that plausibly describe one Cubby Product (`productId` shortcode), best evidence first: an exact barcode hit (`reason: "upc"`), then a name + brandName search (`name_manufacturer`), then the bare name (`name`, only when the qualified search found nothing). `currentFdcId` is the Product\'s existing link, if any. Advisory: it never links anything; set `fdc_id` with entity.update after choosing, and treat a `name` match as a lead to confirm, not an identity.',
-      }),
-    },
-  },
-
-  project_overview: {
-    description: "Household project, budget, tool, and spend rollups.",
-    actions: {
-      house_status: mcpAction({
-        op: projectContract.ops.houseStatus,
-        description:
-          'What needs attention around the house, in one call: portfolio counts (active projects, open tasks, actual vs committed spend), the active projects with own + subtree rollups, a per-project task-status breakdown, the next upcoming tasks, and `attention[]` — overdue tasks, stalled projects, past-due planned expenses, missing budgets, unclassified expenses and blocked work, each with a severity, the entity it points at, and a link. Start here for "how are the projects going" / "what should I deal with", then drill in with entity_read.get(project) or list(task). Optional filters scope it to a status set, project kinds, locations, a search term, or a date window (dateFrom/dateTo — a project matches when its startDate/endDate override overlaps the window OR it has a task or expense of its own inside it; only projects with no override and no dated content are dropped, counted in hiddenByDate.projects). statusScope defaults to the live statuses (planning/not_started/in_progress) so this payload does not balloon with completed history — pass statusScope explicitly (e.g. ["done"]) to include finished projects.',
-      }),
-      budget: mcpAction({
-        op: projectContract.ops.budget,
-        description:
-          "Which projects are over budget: per project, the subtree budget estimate vs actual + committed spend, with remaining, percentUsed and an overBudget flag, worst overrun first (unbudgeted projects last), plus portfolio totals and planned-vs-actual spend by month. Same optional scope filters as house_status, but statusScope defaults to no condition (all four statuses, including done) — a budget read silently omitting completed spend would be a bug. dateFrom/dateTo scope the whole query, not just the monthly series: while a window is set a project is kept when its startDate/endDate override overlaps it OR it owns a task or expense inside it.",
-      }),
-      contribution: mcpAction({
-        op: householdContributionContract.ops.project,
-        description:
-          "Whole-group cost, initial funding, consumption, and attribution gaps for one Project, optionally including descendants. Includes planned future Expenses and excludes later household-wide transfers.",
-      }),
-      tool_suggestions: mcpAction({
-        op: projectContract.ops.toolSuggestions,
-        description:
-          "Inventoried Cubby tools to link to one exact project: tools purchased for the project at $100+ and trade-matched tools whose purchase history supports the project's task/expense trades; cheaper trade matches need at least two explicit prior project uses. A review queue only — it never links tools automatically.",
-      }),
-      product_uses: mcpAction({
-        op: productContract.ops.projectUses,
-        description:
-          "Every exact project on which a reusable tool or software Product is explicitly recorded as used. Tool rows include purchase/use economics; software rows include non-additive spend charged during each project's effective window.",
-      }),
-      expense_analytics: mcpAction({
-        op: expenseContract.ops.analytics,
-        strict: true,
-        description:
-          "Spend aggregates over the expense ledger under the same filters as entity_read.list(expense) (lineKind/costType/trade/projectId/includeSubProjects/future/search/notesSearch/urlSearch/dateFrom/dateTo/costMin/costMax/costPresenceFilter/projectPresenceFilter/vendorId/orderId). Returns summary, byCostType/byTrade/trade x costType, monthly, cumulative, byProject, and byVendor totals over all line kinds. Tax, shipping, and fee lines count under the trade and cost type of the items they were charged on (or their own typed trade); a share with no item to follow reports under trade null. Unfiltered, summary.net = sum(Expense.cost) = sum(byTrade.net) = sum(byCostType.net). A projectId, trade, or costType filter scopes totals to the matching allocation shares, so a split tax line contributes only its matching share here while the ledger lists the whole line. Credits are real (refunds and price adjustments) — net = actual + committed − credits, and cost bounds are signed, so costMax: 0 is the credits-only window. byProject and byVendor are INNER joins and deliberately do NOT sum to summary.net: byProject drops expenses with no project, byVendor rows with no purchase. Read each gap as the size of that unattributed tail, not as a bug.",
-      }),
-    },
-  },
-
-  playbook: {
-    description:
-      "Cubby's household playbooks: the step-by-step rules for purchase and receipt import, product enrichment, meal logging, household maintenance logging, photo inventory import, and garden plan import. Before starting one of those tasks, call playbook.list, then playbook.get the matching playbook and follow it.",
-    actions: {
-      list: mcpAction({
-        op: playbookContract.ops.list,
-        description:
-          "Every playbook's name, when to use it (description), entry path, and the files it bundles.",
-      }),
-      get: mcpAction({
-        op: playbookContract.ops.get,
-        description:
-          "One playbook's SKILL.md by name. Its relative links are repository paths: read them with playbook.read when a step needs them.",
-      }),
-      read: mcpAction({
-        op: playbookContract.ops.read,
-        description:
-          "A file a playbook links to, by repository path. Pass a link's #anchor (or the heading text) as heading to read just that section; a large file read without a heading returns its outline instead of its text.",
-      }),
-    },
-  },
-
-  tasks_overview: {
-    description: "Task backlog reads across the whole tracker.",
-    actions: {
-      actionable: mcpAction({
-        op: taskContract.ops.listActionable,
-        description:
-          "Unblocked tasks you can act on now — live, not done, and blocked by nothing — plus blocked tasks with transitive why-chains explaining what's in the way (a manual blocked flag, a blocking task, or a blocking project, nearest blocker first).",
-      }),
-      summary: mcpAction({
-        op: taskContract.ops.summary,
-        description:
-          "Task counts in one cheap call: totalOpen, next (unblocked and actionable now), later, inbox (no project), overdue, dueThisWeek (rolling 7 days), blocked. Size the backlog before paging entity_read.list(task).",
-      }),
-    },
-  },
-
-  recipe_insights: {
-    description:
-      "Recipe nutrition, costing, availability, and reverse lookups, plus parsing a recipe URL without saving it.",
-    actions: {
-      nutrition: mcpAction({
-        op: recipeContract.ops.nutrition,
-        description:
-          "Recipe nutrient totals scaled to a requested serving count, plus mapped-line coverage and compact reasons for unmapped lines. Refuses a recipe with no effective serving basis instead of guessing.",
-      }),
-      costing: mcpAction({
-        op: recipeContract.ops.costingExplanation,
-        description:
-          'A recipe\'s cost/calorie totals with per-ingredient diagnostics. `detail: "lines"` (default) drops the two full nutrient-totals blocks and the drift record and returns only the per-line diagnostics plus a cost/kcal coverage headline — use it when hunting the uncovered line, not the number.',
-      }),
-      cookable: mcpAction({
-        op: recipeAvailabilityContract.ops.getMakeable,
-        project: (output) => ({ recipes: output.recipes }),
-        output: recipeAvailabilityMcpOut,
-        description:
-          "Recipes ranked by planning coverage. Coverage distinguishes recorded inventory from ingredients marked usually on hand; quantity and blocked-sub-recipe warnings remain visible.",
-      }),
-      using_ingredient: mcpAction({
-        op: ingredientContract.ops.recipeUsages,
-        project: (usages, input) => {
-          const byRecipe = new Map<string, typeof usages>();
-          for (const usage of usages)
-            byRecipe.set(usage.recipe.id, [
-              ...(byRecipe.get(usage.recipe.id) ?? []),
-              usage,
-            ]);
-          const recipes = [...byRecipe.values()].map((rows) => ({
-            ...slimRecipe(rows[0]!.recipe),
-            usages: rows.map((usage) => ({
-              lineId: usage.id,
-              sectionName: usage.sectionName ?? null,
-              amounts: usage.amounts,
-              rawLine: usage.rawLine ?? null,
-              modifier: usage.modifier ?? null,
-            })),
-          }));
-          return { ingredientId: input.id, count: recipes.length, recipes };
-        },
-        output: recipesUsingIngredientOut,
-        description:
-          "Reverse lookup: every recipe that uses an ingredient, with each line's `lineId` for recipe_import.patch_line.",
-      }),
-      tags: mcpAction({
-        op: recipeContract.ops.tags,
-        project: (items) => ({ items }),
-        output: mcpItemsEnvelope(recipeTagsOut),
-        description: "Every distinct recipe tag in use.",
-      }),
-      cookbooks: mcpAction({
-        op: cookbookContract.ops.list,
-        project: (items) => ({ items }),
-        output: mcpItemsEnvelope(cookbookContract.ops.list.output),
-        description:
-          "Cookbooks (recipe sources) with the number of recipes from each.",
-      }),
-      scrape: mcpAction({
-        op: recipeContract.ops.scrapeUrl,
-        openWorld: true,
-        description:
-          "Parse a recipe from a URL into structured form WITHOUT saving it; recipe_import.import saves.",
-      }),
-    },
-  },
-
-  nutrition: {
-    description: "Daily intake, meal preparations, and shopping needs.",
-    actions: {
-      daily_intake: mcpAction({
-        op: mealContract.ops.dailyIntake,
-        description:
-          "One person's daily nutrition with one line per meal and a daily total. Defaults to macros: kcal plus protein/carbs/fat/fiber in grams. Set includeFoods for food breakdowns, or nutrition=full for all nutrients. Uses the target meal's household date, including leftovers and unconfirmed entered portions. Future dates are planned; today/past are logged. No assigned intake returns nutrition=null and meals=[]. Nutrient null means unavailable, pending means not calculated, and partial bounds describe only known contributions (not bounds on missing food). Exact values are numbers; ranges retain lower/upper. No cost or preparation detail is included.",
-      }),
-      preparations: mcpAction({
-        op: mealContract.ops.preparationsDetail,
-        description:
-          "Recipe preparations made by or served at a meal, including projected and confirmed nutrition. `nutrition` trims every totals block: `full` (default) carries all 22 nutrients, `macros` keeps kcal/protein/carbs/fat/fiber, `kcal` keeps only calories, and `none` keeps cost alone. For per-person daily intake use nutrition.daily_intake.",
-      }),
-      shopping_list: mcpAction({
-        op: mealContract.ops.getShoppingList,
-        description:
-          "Use this when the user asks what to buy or what they are short on for planned meals in a date range. It compares aggregate recipe needs with recorded inventory. Usually-on-hand ingredients are assumed available, listed separately, and excluded from shopping estimates; assumptions never represent recorded stock. Quantity issues and blocked sub-recipes disclose incomplete information. Do not invoke it to add arbitrary manual household shopping items.",
-      }),
-    },
-  },
-
-  spending_classification_read: {
-    description:
-      "Where spending went by Spending Category and other axes, and the historical impact of changing Product Category mappings, Vendor defaults, or explicit Expense categories, or merging Spending Categories.",
-    actions: {
-      preview: mcpAction({
-        op: spendingClassificationContract.ops.preview,
-        readPolicy: "strong",
-        description:
-          "Nonmutating historical impact preview. Supply one complete Product Category mapping, Vendor spending policy, selected Expense category assignment/reset, or Spending Category merge (`spendingCategoryMerge` with keepId and mergeIds; entity.merge refuses one that moves Expense history). Returns signed exact-cent category totals and deltas including shared adjustments, unknown coverage, and a fingerprint. Review before applying; stored source evidence and Expense amounts remain unchanged.",
-      }),
-      analyze: mcpAction({
-        op: expenseContract.ops.analyze,
-        description:
-          'Complete server-side pivot of the expense ledger: `filters` takes the same fields as entity_read.list(expense); `rowDimension` is spendingCategory, trade, costType, month, project, or vendor, with an optional different `columnDimension` (spendingCategory, trade, costType, month). Money is allocation shares: tax, shipping, and fees follow the items they were charged on, and filters never change which item receives an adjustment cent. `spendingCategoryRollup: "root"` buckets a spendingCategory axis by root Spending Category plus `uncategorized` (no category resolved) and `unclassified` (receipt role unresolved), so its buckets reconcile to totals.scope; otherwise rows without a live category fall into reconciliation.tail. `comparison: "previousPeriod"` (needs dateFrom and dateTo, no month axis) adds the immediately preceding equal-length window. Each bucket carries `filter`, the Ledger URL params that select its rows. Returns `status: "too_large"` instead of a grid past 200 rows, 24 month columns, or 1,000 cells. Credits are signed: net = actual + committed − credits.',
-      }),
-    },
-  },
-  spending_classification_write: {
-    description: "Apply reviewed spending classification changes atomically.",
-    actions: {
-      apply: mcpAction({
-        op: spendingClassificationContract.ops.apply,
-        description:
-          "Apply the exact reviewed request and fingerprint atomically. Refuses when policy or historical facts changed since preview. Mapping changes stay live historically; explicit Expense assignments win and null resets to inheritance. Never creates financial bookings or changes Expense amounts.",
-      }),
-      apply_category_suggestion: mcpAction({
-        op: aiContract.ops.applyFinanceCategorySuggestion,
-        description:
-          "Apply one reviewed finance category suggestion with its fingerprint; refuses when the target changed since review.",
-      }),
-    },
-  },
-
-  finance: {
-    description:
-      "Apply uniquely supported financial evidence, or a member's explicit booking of one posted transaction, through server checks. Ambiguous or changed accepted facts remain review work.",
-    actions: {
-      allocate_settlement: mcpAction({
-        op: financialTransactionContract.ops.allocateSettlement,
-        description:
-          "Save explicitly reviewed Purchase settlement allocations only while the exact prior graph remains current. Read all current allocations first and preserve unrelated edges; stale proposals are refused without mutation. Model ranking alone does not authorize an allocation. A charge whose account belongs to another member than the order's vendor account, or is not among the accounts the order's payment evidence or payment-account links name, is refused unless `acknowledgeConflicts.note` explains why; that note becomes the Purchase's confirmed_shared_use or confirmed_tender data exception.",
-      }),
-      book_transaction: mcpAction({
-        op: financialTransactionContract.ops.bookTransaction,
-        description:
-          'Book one posted Financial Transaction into spending through the reviewed booking checks (the same preview/commit as the web review, in one call; replays an identical booking). Name `purchaseId` to book into an existing Purchase, or `vendorId` to book into a new lump Purchase dated the transaction day. Incoming credits (income) book only as `economicRole: "reimbursement"`, as a negative reimbursement Expense; a reimbursement naming neither resolves the Vendor its merchant names exactly (name or alias) and refuses an unknown merchant. Links the transaction to the Purchase; never creates a Vendor. Transfers and card repayments are refused.',
-      }),
-      accept_transfer_pair: mcpAction({
-        op: financialTransactionContract.ops.acceptTransferPair,
-        description:
-          "Pair two existing legs directly; the transfer_pair Suggestions queue (entity_read.suggestion_queue family transfer_pair, reviewed through entity.review_assessment) is the primary review path and also creates missing legs. Pass the positive (outflow) and negative (inflow) FTX- legs. In one transaction it creates a Ledger Transfer from the outflow account's owner to the inflow account's owner for the absolute amount, dated the earlier leg, and links both legs as its evidence. A same-owner pair is recorded as an internal move. Refuses as data (canProceed false with the reason naming the record) unless the signs are opposite, the amounts equal, the accounts differ, both accounts have an owner, and neither leg already evidences a transfer; a refusal writes nothing.",
-      }),
-      converge: mcpAction({
-        op: financialTransactionContract.ops.converge,
-        description:
-          "Automatically book a posted genuine purchase payment only when current server evidence establishes identity, account authority, exact money and unchanged accepted facts. Optionally provide a retained Email for checksum-fenced financial event extraction; transfers, card repayments, refunds, reimbursements and incoming payments are never turned into new purchases. A sole candidate or model ranking grants no write authority. Returns review_required without spending writes when evidence is incomplete or ambiguous.",
-      }),
-    },
-  },
-
-  finance_read: {
-    description:
-      "Financial evidence summary/drift, settlement, contribution-ledger, and cash-flow reads, plus expense matching against vendor exports. Financial Transactions are settlement evidence only; all spend is Expense.cost.",
-    actions: {
-      summary: mcpAction({
-        op: sourceTransactionRecordContract.ops.summary,
-        description:
-          "Count and total source transaction records by match state for a filter — total, matched, unmatched, ignored, superseded, the dollar amount in total and per match state, and unmatchedCharges (distinct charges behind the unmatched observations). Size the remaining drift before working it, or confirm a bulk disposition landed.",
-      }),
-      drift: mcpAction({
-        op: sourceTransactionRecordContract.ops.drift,
-        description:
-          "Charges recorded TWICE under two identities. A row's identity hash covers its raw description, so a charge re-exported after its descriptor firms up (`EXAMPLE STORE PENDING` becoming `EXAMPLE STORE POSTED`) mints a second identity for money already recorded. Groups live, unsuperseded rows by (source, accountDescriptor, statementDate, providerAmount) and returns groups holding more than one, oldest row first so rows[0] is the likeliest predecessor. By default only groups spanning TWO exports are reported: one export speaks one descriptor vocabulary, so two of its own rows differing only in description are two real charges rather than one charge seen twice. Pass includeSameBatch to see them anyway. Still advisory: read the descriptions before acting. Read both records through entity_read, then use entity.update(sourceTransactionRecord) to set `supersededByRowId` on the predecessor to the reviewed successor record ID. Superseded rows drop out, so the list shrinks as it is worked.",
-      }),
-      preview_import: mcpAction({
-        op: financialTransactionContract.ops.previewTransactionImport,
-        readPolicy: "strong",
-        description:
-          "Preview client-parsed Monarch statement rows before recording settlement evidence. Normalized rows only — never a CSV path, upload, or file contents; at most 200 rows. Monarch charges are negative in the export and are normalized to positive Cubby outflows; credits become negative. The preview derives a stable source reference from account/date/amount/original statement, resolves an existing Financial Account only when unambiguous, and returns already_recorded, ready_to_create, possible_existing, unresolved_account, or indistinguishable_duplicate per row. Eligible rows may include advisory vendorInference from prior settled transactions with the same Merchant label; it neither matches nor links anything. Unresolved rows include a non-persisted provisional Account suggestion. It never creates Accounts, Financial Transactions, Purchases, or links: create only user-approved ready_to_create rows afterwards with entity.create(financialTransaction), then review every result.",
-      }),
-      transfer_pairs: mcpAction({
-        op: householdContributionContract.ops.transferPairs,
-        description:
-          "An ad hoc candidate lookup pairing selected Financial Transaction evidence with opposite-signed, different-account matches. The transfer_pair Suggestions queue (entity_read.suggestion_queue family transfer_pair) is the primary review path; use this to inspect specific transactions. It never creates Ledger Transfers, attaches evidence, or decides a match; to pair two existing legs directly, pass a reviewed candidate's outflowTransactionId and inflowTransactionId to finance.accept_transfer_pair.",
-      }),
-      contribution_ledger: mcpAction({
-        op: householdContributionContract.ops.ledger,
-        description:
-          "The household-wide contribution ledger as of a date (today when omitted). Positions include Expenses and Ledger Transfers dated through that day; evidence-gap counts describe currently attached Financial Transaction evidence. Never records attribution, transfers, or evidence.",
-      }),
-      cash_flow: mcpAction({
-        op: cashFlowContract.ops.projection,
-        description:
-          "Forward monthly cash flow over horizonMonths (6, 12, 24), computed on read and never stored. Baseline: per root Spending Category, the mean (trailing total ÷ 12) of the 12 complete household months of landed spend with no project or on the standing Household project, carried flat; categories with spend in fewer than 3 of the 12 months are Irregular, grouped as one row or separate. Envelopes: remaining = max(0, estimate − subtree net spend, which already includes committed rows and nets credits) for in_progress projects (not_started with includeNotStarted, planning only with an estimate, none under an estimated ancestor), spread evenly to a future end date; otherwise unscheduled. Committed future Expenses land in their month, overdue ones in the current month, never also in an envelope. Scenarios are what-if inflows/outflows; inflows exist only as scenarios.",
-      }),
-      expense_match: mcpAction({
-        op: expenseContract.ops.match,
-        description:
-          "Rank existing ledger rows as candidate matches for lines of a vendor export (an Amazon takeout row, an eBay OrdersReport line, a receipt). Pass up to 200 rows, each with your own `key` plus `date` and a SIGNED `amount`, optionally `label`, `orderId` and `vendor`. Returns, per key, up to `maxCandidatesPerRow` candidates carrying expenseId/name/cost/date/vendorName/orderId/projectName/productName plus the evidence to judge them: `matchedOn` (order_id | amount_date), `dayDelta`, `amountDelta`, `ratio`, `ratioLabel` and `tokenOverlap`; also `unmatched` keys and a summary. " +
-          "It RANKS candidates, it does not VERIFY them, and it never writes. Run it BEFORE proposing any new expense, and again over each row you did create (same amount, ±30 days) to catch what slipped through; confirm every match with the user before entity.update(expense) or entity.create(expense). " +
-          "Read `tokenOverlap` as a hint and NOTHING more: zero overlap is routine on TRUE matches because this ledger names the THING, not the product (a Festool vacuum is booked as `dust extractor`), and tokenizers miss compound words (`labelmaker` vs 'label maker'). High overlap on a coincidental amount is not evidence either. " +
-          "**Below about $20, READ the line descriptions before accepting anything** — small amounts are inside any usable band by construction. Genuine matches cluster at `dayDelta` 0–1; candidates scattered across a ±14d window are usually coincidences. " +
-          "`ratioLabel` classifies cost/amount against `taxRate` as exact | plus_tax | pre_tax | other; it LABELS, it does not match. Read the raw `amountDelta` on an `other` — a residual of exactly 9.99 or 12.50 is shipping. " +
-          "**Always pass `orderId` when the export line has one — and `vendor` with it.** An order id is only unique WITHIN a vendor. Each candidate reports `vendorMatch`: true (agrees), false (CONFLICTS — almost certainly the wrong row; demoted below every amount+date candidate but still returned), or null (unknown). The order-id arm catches both directions of the aggregate problem — a ledger row may AGGREGATE several export lines, or hold the SPLIT while you search for the total — and ignores the day window on purpose. " +
-          "An empty `candidates` list means 'nothing within the window', NOT 'this expense is missing'. Rows with no cost or no date are outside every amount window. Planned (`future: true`) rows are included and flagged. When one ledger row is the best candidate for two export lines it is returned for both — resolve that yourself.",
-      }),
-    },
-  },
-
-  imports_read: {
-    description:
-      "Import reads: one retained Email and its Mail triage preview, purchase-import operation status, one run's live status and target outcomes, vendor coverage, photo-run context and proposals, image processing, external-id collisions, and barcode lookup.",
-    actions: {
-      mail_import: mcpAction({
-        op: runContract.ops.mailImport,
-        description:
-          "The member's connected Gmail mailboxes with their automatic Mail import switch and targeted-search progress. AI funding for the imports is household-wide: ai_funding_read.status.",
-      }),
-
-      mail: mcpAction({
-        op: purchaseImportContract.ops.mailRead,
-        description:
-          "Read one retained Email: addressing, subject and date headers, body as compact text (HTML converted when richer than the text part; `compacted`, `truncated`, `htmlBytes` report it), preheader, cue-first links and content images within size bounds (`linksOmitted`/`imagesOmitted` count the rest), structured data, attachments and checksum. A long compact body continues from each page's nextOffset as offset (null at the end); `truncated` means evidence is missing from the compact text. Raw HTML is never returned by default; includeHtml returns one raw HTML page instead, for interactive sessions only (a Run's coordinator is refused). acceptedSourceOrders supplies owned accepted-order handles and source identities for prepare_reconciliation, separately from lifecycle Purchase links. Pass attachmentId for original PDF/image bytes (at most 3 MiB). Start research from this original and its links.",
-      }),
-      mail_outcomes: mcpAction({
-        op: purchaseImportContract.ops.mailImportOutcomes,
-        description:
-          "Read bounded immutable import outcomes for one owned Email, newest first. Read imports_read.mail and lock a blind grade before revealing these predictions. Includes Assessment handles, imported lines/total or linked/unrelated/unresolved disposition and rule/model producer. Grade member-confirmed outcomes through entity.review_assessments with intent history; grades never change the ledger.",
-      }),
-      mail_triage_preview: mcpAction({
-        op: purchaseImportContract.ops.mailTriagePreview,
-        modelBacked: true,
-        description:
-          "Preview the full deployed classification of one retained Email's Gmail original: Jev/Clef triage, then Luna with bounded image evidence only when uncertain. Records only a diagnostic Run and model usage; never changes Relevance, observations or retained content. Pass decisionModel to pin Jev or Clef; omitted samples the live split. Returns the final classification/model, triage result/view, fallback result, image evidence/refusal diagnostics, Run, elapsed time and priced usage (unknown costs stay null).",
-      }),
-      purchase_status: mcpAction({
-        op: purchaseImportContract.ops.operationStatus,
-        description:
-          "The durable status and original result of one stable purchase-import operation id. Use it after an interruption instead of inventing a new id or blindly repeating a write.",
-      }),
-      vendor_coverage: mcpAction({
-        op: vendorContract.ops.coverage,
-        description:
-          "Vendor identity, its latest live purchase date overall, and sorted unique non-null order IDs from an inclusive date range.",
-      }),
-      run_transcript: mcpAction({
-        op: runContract.ops.transcript,
-        description:
-          "Read one owned Run's committed coordinator messages, tool inputs/results/errors and submission settlements without loading or resuming execution. Both arrays are paged in chronological order; pass nextCursor as cursor until null. Defaults to 5 entries per array, at most 20. Live generation partials, credentials and binary bodies are omitted. Discovery Workflows have no coordinator conversation and return absent; read their persisted evidence with run_status. Absent means no retained conversation; it does not prove the Run never executed. Unfinished conversations may change between pages.",
-      }),
-      run_status: mcpAction({
-        op: runContract.ops.workSnapshot,
-        project: (output) => ({
-          ...output,
-          findings: output.findings.map(({ proposedFix, ...finding }) => ({
-            ...finding,
-            hasProposedFix: proposedFix !== null,
-          })),
-        }),
-        output: runContract.ops.workSnapshot.output.extend({
-          findings: z.array(
-            runContract.ops.workSnapshot.output.shape.findings.element
-              .omit({ proposedFix: true })
-              .extend({ hasProposedFix: z.boolean() }),
-          ),
-        }),
-        description:
-          "One Run's live state: status, counts, findings (each `id` is what run.resolve_finding takes; activity.problems shows a proposed fix), each target's outcome (`warning` holds a skip's reason), progress history, and write operations. An owned discovery Run also returns mailDiscovery: a paged emails audit (emailCursor/emailLimit, follow nextCursor), execution-time outcomes/ownership alongside current Email state, explicitly incomplete historical coverage, frozen mailbox scope and current mailbox coverage summarized as query counts with the next pending queries, persisted Workflow checkpoint with its in-flight page as counts, recorded AI usage/retries, and failure diagnostics. Reads stored evidence only; it never loads or resumes execution. An owned relevance reclassification Run returns mailReclassification: selected Email codes/checksums, durable publication receipts (null for legacy Runs), retained possibly truncated notes, and separately labeled classification observations that are not publication receipts. After a client timeout, read receipts before rerunning; historical completed receipts can include deferred work with linked recovery. Failed or absent receipts have unknown publication outcomes and require reconciliation before retrying. Read this to follow a run instead of polling entity_read.",
-      }),
-      photo_context: mcpAction({
-        op: photoImportContract.ops.runContext,
-        description:
-          "One photo-inventory run's owner, notes, and one page of its photos in capture order (undated photos last) with their capture time, cloud descriptions and recognized text. Pass `nextCursor` back as `cursor` until it is null; an item photographed across a page boundary continues on the next page. Set `withImageUrls` only if you can open images. Read this before proposing groups.",
-      }),
-      photo_candidates: mcpAction({
-        op: photoImportContract.ops.productCandidates,
-        description:
-          "Existing Products for a photo group, before proposing a new one: name/variant candidates and whether each has a purchase, own photo, earlier photo import, or inventory. Compare exact size and color yourself; the rank is not proof and human approval is required to attach photos.",
-      }),
-      photo_proposals: mcpAction({
-        op: photoImportContract.ops.proposals,
-        description:
-          "A photo-inventory run's proposed, committed and discarded item groups, including any name-collision `conflict` or `lastError` from a failed approval, and the pending images no proposed group mentions yet.",
-      }),
-      image_processing: mcpAction({
-        op: imageProcessingContract.ops.status,
-        description:
-          "An image's durable description and transparent-cutout processing status.",
-      }),
-      external_id_collisions: mcpAction({
-        op: productContract.ops.externalIdCollisions,
-        description:
-          "Who owns each exact (source, kind, externalId) Product identifier, in request order, including missing slots. An identifier has at most one live owner. Pass productId — the product you are about to write these onto — and `unique` splits into `owned_by_this` and `owned_by_other`; without it, `unique` only means the id has ONE live owner, which reads as a clean pass even when that owner is a different product.",
-      }),
-      upc_lookup: mcpAction({
-        op: productContract.ops.lookupUpc,
-        openWorld: true,
-        project: (output) => ({
-          ...output,
-          localProduct: output.localProduct
-            ? slimProduct(output.localProduct)
-            : null,
-        }),
-        output: productLookupUpcOut.extend({
-          localProduct: productMcpOut.nullable(),
-        }),
-        description:
-          "Resolve a UPC barcode to an identity WITHOUT creating anything: the Product already claiming the barcode, the USDA branded-food match, and the UPC lookup service's record, all at once. Use it whenever the question is what a barcode names — verifying a scan, confirming a product page describes the item you hold, or telling a bare tool from the kit it ships in. A barcode identifies the PACKAGE, so a kit and its bare-tool variant carry different UPCs; a brandName page reached by guessing a URL from a barcode is not evidence. Prefer this over upc.find_or_create unless you intend to create a Product.",
-      }),
-    },
-  },
-
-  ai_funding_read: {
-    description:
-      "Household-wide frontier AI funding: what every feature's frontier chat calls (Mail import, suggestions, agents, chat) can spend now.",
-    actions: {
-      status: mcpAction({
-        op: aiFundingContract.ops.status,
-        description:
-          "The current six-hour window's funding: credit (Claude subscriber credit spent at standard API cost of limitUsd, default $5, with state available or refused: a recorded Anthropic refusal such as a Console spend limit, skipped until `until` with one probe per window, and its raw `reason`), paid (charged cost of $1) and plan (ChatGPT plan available, paused until a quota reset, disconnected or needing reauthorization, with the raw reason). Frontier calls use credit, then the plan, then paid only where allowed; background work waits instead of paying. Change it with ai_funding.",
-      }),
-    },
-  },
-
-  activity: {
-    description: "What changed recently, and what needs fixing.",
-    actions: {
-      work_queue: mcpAction({
-        op: workQueueContract.ops.forMember,
-        strict: true,
-        description:
-          "Actionable research, review and repair work available to the connected member, including shared work. Private source and account work belonging only to another member is excluded before counts and pagination. Routing follows current evidence ownership; unresolved private ownership requires household review.",
-      }),
-      recent: mcpAction({
-        op: auditLogContract.ops.list,
-        description:
-          'Recent changes across the app, newest first — the audit trail every create/update/delete writes. Each entry has the entityKind + public shortcode entityId touched, the action, a per-field `changes` map (from → to), who did it (`user`), how the write arrived (`channel`: `web`, `api` for API keys and the Apple app, `mcp`, `caldav`, or `system` for crons and retries), the MCP OAuth client (`oauthClient`), the Apple install (`device`), the Run it belonged to (`runId`, a RUN- shortcode), and createdAt. Filter by entityKind and/or entityId for one entity\'s history; by `channel` (one value or an array), `oauthClient`, `deviceId` (DEV-) or `runId` (RUN-) to isolate what one client, install, import or agent run touched; by `createdAtFrom`/`createdAtTo` (inclusive ISO date-string bounds) for a time window — these AND with cursor pagination, so pass a window on its own for "what happened last Tuesday". Page with cursor (pass back nextCursor).',
-      }),
-      problems: mcpAction({
-        op: problemsContract.ops.report,
-        readPolicy: (input) =>
-          problemReportWantsCounts(input) ? "strong" : "context",
-        description:
-          'Data-quality problems and optional coverage backlogs across products, inventory, locations, recipes, and vendors, plus household-tracker items needing attention (overdue tasks, stalled/blocked projects, past-due planned expenses, missing budgets, unclassified expenses). countsOnly=true is the cheap triage; type="duplicateInventory" finds unique Products stored in more than one location; type="purchasesNotReconciling" holds only the unexplained Purchase differences.',
-      }),
-    },
-  },
-
-  source_transaction_records: {
-    description:
-      "Durable financial source observations, revisions and collection coverage. Cubby owns charge identity, guarded corrections and discovery through the existing Sweep.",
-    actions: {
-      record: mcpAction({
-        op: sourceTransactionRecordContract.ops.record,
-        description:
-          "Record normalized financial evidence from an MCP source or client-parsed export; never submit file contents or paths. At most 500 observations per call. Resume a collection with identical source, fingerprint, observedAt, declared count and coverage. Scoped provider IDs identify revisions; retain providerAccountId, providerTransactionId, original descriptions and providerData. For ID-less exports preserve physical rowPosition. providerAmount is charges-negative; Cubby derives its outflow-positive amount. Zero records are retained without spending. Unknown providerStatus remains null; pending/unknown status does not prevent otherwise supported booking. Complete only an exhaustively enumerated account/window whose retained count equals its declaration. A visible-only query cannot prove withdrawal; confirmedWithdrawals additionally requires complete all-visibility coverage and source rechecking. Evidence plus the existing Sweep Job intent commit atomically. Dry runs and unchanged replays launch no financial work. Guarded corrections can revise or retire untouched generated lump bookings; edited/itemized/corroborated cases remain in Suggestions. Historical observations and settlement references are retained.",
-      }),
-    },
-  },
-
-  shipments: {
-    description:
-      "Retain source-backed package tracking evidence without changing money or inventory.",
-    actions: {
-      edit_observation: mcpAction({
-        op: shipmentContract.ops.edit_observation,
-        description:
-          "Partially edit one retained observation using its observationId from shipments_read.timeline and current Shipment reference. Supply only changed fields in patch; omitted fields and source identity remain unchanged. Appends a reviewed revision, retains original captures and history, and protects it from source replay. A superseded observation refuses a different edit; read the current revision first. Interactive members only.",
-      }),
-      reassign: mcpAction({
-        op: shipmentContract.ops.reassign,
-        description:
-          "Explicitly move a misassociated source package and all its retained tracking observations to another Shipment. Use sourcePackageId from shipments_read.timeline; replay follows the corrected association.",
-      }),
-      record: mcpAction({
-        op: shipmentContract.ops.record,
-        description:
-          "Record shipment observations from an owned retained Email/checksum, an interactive tracking-page capture, or an exported SMS. Keep unmatched packages; never invent a Purchase. Carrier references are Vendors. Label creation or vendor shipped wording does not prove carrier possession. Repeated identical observations update first/last seen; all distinct sources and revisions remain retained.",
-      }),
-      associate: mcpAction({
-        op: shipmentContract.ops.associate,
-        description:
-          "Explicitly attach, detach or correct a Shipment's Purchase association. No financial or inventory effects.",
-      }),
-      merge: mcpAction({
-        op: shipmentContract.ops.merge,
-        description:
-          "Explicitly merge two proven duplicate packages, retaining observations and the old SHIP reference. Conflicting Purchase associations require correction first.",
-      }),
-    },
-  },
-  shipments_read: {
-    description:
-      "Read retained shipment evidence and reconciled tracking milestones.",
-    actions: {
-      timeline: mcpAction({
-        op: shipmentContract.ops.timeline,
-        description:
-          "Read every retained source observation and the deduplicated timeline. Exact durations require exact endpoints; missing or conflicting evidence remains unknown.",
-      }),
-    },
-  },
-
-  mail: {
-    description:
-      "A member's retained order Email: search Gmail for a missing original and record what an Email means for Purchases (read one with imports_read.mail). Emails are named by their Gmail mailboxId and messageId, so they correlate with your own Gmail connector.",
-    actions: {
-      correct_relevance: mcpAction({
-        op: purchaseImportContract.ops.correctEmailRelevance,
-        description:
-          "Correct a false-negative Email only after independently reading the exact message. Supply prior expectedChecksum, canonical reviewedChecksum and your reason. Recovers bounded original content with no models, Pi admission or routing-policy change; frozen import sources refuse.",
-      }),
-      reclassify: mcpAction({
-        op: purchaseImportContract.ops.emailReclassify,
-        description:
-          "Rerun Relevance for at most 200 owned Emails (one Run per mailbox), refetching originals. The decision model handles routine messages; uncertain results may use the relevance model. Records history and automatically settles unaccepted negatives through protected content disposal. Completed/researching imports and unreadable refetches of retained evidence await acceptance. Accepted evidence, member resolutions and same-checksum independent reviews are preserved; disagreements report conflicts. Never admits import.",
-      }),
-      rerun_preview: mcpAction({
-        op: purchaseImportContract.ops.emailPreviewRerun,
-        description:
-          "Rerun the cheap extraction preview for one related, retained Email at its current checksum. Records the preview; never imports.",
-      }),
-      import: mcpAction({
-        op: purchaseImportContract.ops.emailImport,
-        description:
-          "Start Luna import for up to 50 selected Emails, each by its `id` (EML- code) and exact checksum as mail.search and imports_read.mail return them, without a dollar allowance. An Email already linked to exactly one Purchase imports into that Purchase. Ownership, evidence and review gates still apply. An existing automatic admission retains its original authority. Automatic discovery remains classification-only; no other Email is admitted. Other paid models need their own authorization.",
-      }),
-      search: mcpAction({
-        op: purchaseImportContract.ops.mailSearch,
-        description:
-          "Search the member's connected Gmail (Gmail search syntax; Spam and Trash are always excluded) to recover a missing original, e.g. by order number. Without a Mail import Run no paid classification runs: every match is retained as an `uncertain` candidate you settle with `mail.resolve` (`unrelated` disposes of it). Under Pi's Mail import Run matches are classified like discovery. Searching never advances mailbox coverage. Page with `nextPageToken`. With several connected mailboxes, pass `mailboxId`.",
-      }),
-      resolve: mcpAction({
-        op: purchaseImportContract.ops.mailResolve,
-        description:
-          "Resolve one retained Email at its checksum: `linked` names every supported Purchase in purchaseIds for a lifecycle event; optional settlement (only with event `refunded`) records a member-reviewed mapping to existing posted refunds and their accounts, which must explain every Purchase this Email links as refunded. Writes no money or stock. `unresolved` names the gap; `unrelated` clears unaccepted content while preserving metadata and provenance. Matching reviews replay while evidence remains current; conflicting reviews refuse.",
-      }),
-      decide_purchase: mcpAction({
-        op: purchaseImportContract.ops.emailPurchaseDecide,
-        description:
-          "A member's review of one Email for one Purchase at the Email's checksum (`id` EML- code and checksum from mail.search or imports_read.mail). `linked` links every order event of the Email that suggests or was decided for that Purchase, replacing another Purchase's link on those events, and marks the Email related; `dismissed` dismisses them. An import-accepted source cannot be dismissed. List an Email's pairs with entity_read on email (`purchaseLinks`) or the Email list filtered by purchaseId/vendorId.",
-      }),
-    },
-  },
-
-  purchase_import: {
-    description:
-      "Import a purchase from its source: prepare then commit one immutable import plan; confirm a merchant's Vendor; reclassify a Purchase document. A member's Claude/Codex session and Pi's Mail import use the same writers.",
-    actions: {
-      prepare_reconciliation: mcpAction({
-        op: purchaseImportContract.ops.prepareReconciliation,
-        description:
-          "Persist a reviewed source-order preview with line bindings, Expenses, party cents, payments, allocations and spend delta. Changes no ledger or stock. Apply a finding with its reviewedFingerprint; changed state refuses. With sourceOrderId it is an optional read-only preview of commit_accepted_reconciliation.",
-      }),
-      commit_accepted_reconciliation: mcpAction({
-        op: purchaseImportContract.ops.commitAcceptedReconciliation,
-        description:
-          "Product-only repair: sourceOrderId plus attach_only lines bind existing exact item Expenses using productId or newProduct {kind:'new'}. A known original uses an exact owned preparation. For unknown historical extraction, reviewedPreparation {run,stableOrderId} names a fresh preparation of the unchanged retained Email against this Purchase; new review provenance preserves the unknown historical snapshot. Rechecks ownership, original, item, identity and claims; unchanged repeats return alreadyApplied. Changes no money, payments or Inventory.",
-      }),
-      prepare: mcpAction({
-        op: purchaseImportContract.ops.prepare,
-        description:
-          "Persist an immutable proposed purchase import. Each order names its Vendor (`vendorId`, or `vendor.name` to reuse the Vendor its sender or website domain proves or an exact-name Vendor, else create one; similar candidates need `vendor.distinctFrom`) and its source: a retained Email (`mail_message`, key `gmail:<mailboxId>:<messageId>` and the checksum imports_read.mail returned), a receipt photo, or a vendor export. Without `_runExecution.run`, a member's preparation opens its own import Run and returns its RUN- code. Returns stable order and line ids plus existing Vendor candidates (`vendorCandidates`) and Product candidates to reuse before creating one. Never writes Purchases, Expenses, or Products.",
-      }),
-      commit: mcpAction({
-        op: purchaseImportContract.ops.commit,
-        description:
-          "Commit one exact previously prepared purchase import (name its Run in `_runExecution.run`). Supply a deliberate defaultTrade, or a defaultProjectId whose effective defaults provide a trade, for principal lines. Every principal line maps to an existing Product shortcode, an explicit new Product, or unresolved; unresolved lines create a finding for review — never a speculative Product. A retained-Email source is linked to the Purchase as its confirmation. Replay-safe by operation id; rechecks targets and evidence. Commits never start Product research.",
-      }),
-      confirm_vendor: mcpAction({
-        op: purchaseImportContract.ops.confirmMerchantVendor,
-        description:
-          "Confirm that one exact statement merchant descriptor belongs to a Vendor for the authenticated household member; a later call replaces the mapping for that exact normalized descriptor.",
-      }),
-      reclassify: mcpAction({
-        op: purchaseContract.ops.reclassifyDocument,
-        description:
-          "Reclassify one existing attachment on a Purchase. Primary evidence is exactly order_confirmation, sales_order, invoice, or receipt; payment receipts, credits, returns, quotes, estimates, contracts, statements, specifications, and other files stay useful but do not make the Purchase's itemization expected. Returns the Purchase with freshly computed dataQuality.",
-      }),
-    },
-  },
-
-  expenses: {
-    description:
-      "Re-attribute existing Expense money within purchases. No action creates money or moves it to another vendor.",
-    actions: {
-      link_to_purchase: mcpAction({
-        op: purchaseContract.ops.link,
-        description:
-          "Re-parent existing Expenses onto ONE existing purchase — e.g. one plumbing transaction that spans both rough-in and fixtures. Only rewrites `purchaseId` on the given expenses: no cost/trade/costType/project changes, and the target purchase's identity (vendorId/orderId/date/statedTotal/documents) stays untouched aside from gaining those expenses. NOT for payment schedules: a contractor's progress payments are separate transactions and therefore separate purchases; use the Project rollup for that view. Refuses when `purchaseId` is not a live purchase.",
-      }),
-      split: mcpAction({
-        op: purchaseContract.ops.splitWithDelta,
-        description:
-          "Split ONE Expense into 2–100 Expenses on the SAME purchase — how an aggregate record (a combo kit or multi-item receipt entered as one Expense) gets a real per-product cost basis; a product whose only Expense is inside an aggregate has NO cost basis until it is split out. Each part gets its own name/cost/costType/trade/projectId/productId/productQuantity; productQuantity is SIGNED, and zero only on a negative-cost part. Omitted notes inherit the original's; explicit null clears them for that part. URL, date and future state are preserved. Give each part its own real name — never the old `(combo, saw portion)` naming convention. " +
-          "When the original has a recorded cost, the parts must sum to it exactly or the split is refused without replacing the original; record a purchase-level discount or refund as its own Expense instead. The response confirms `originalCost`, `partsSum`, and a zero `delta` (null for an unpriced original). The original is soft-deleted and every part lands on its `purchaseId`; with no `statedTotal`, one is seeded from the original's cost. Refuses when the Expense has no purchase — entity.update(expense) with a `vendor` (and `orderId` if known) first.",
-      }),
-      confirm_beneficiary: mcpAction({
-        op: expenseContract.ops.confirmInventoryBeneficiary,
-        description:
-          "Confirm an Expense's beneficiary inherited from an inventory entry, using the evidenceFingerprint its ownership context returned.",
-      }),
-    },
-  },
-
-  product_enrichment: {
-    description:
-      "Product identity upkeep: image integrity and match proposals. Product facts and identifier slots are written with entity.update; preserve research in `notes` inside `data`.",
-    actions: {
-      verify_images: mcpAction({
-        op: productContract.ops.verifyImages,
-        project: slimProductDetail,
-        output: productMcpDetailOut,
-        // Each item fans out to one R2 fetch PER attached file, so this is the
-        // one batch capped below 50; the refreshed image state is the whole
-        // point of the call, so results default to full.
-        batch: {
-          maxItems: 20,
-          resultDetail: "full",
-          reference: (item) => item.id,
-          uniqueIds: true,
-        },
-        description:
-          'For up to 20 products (`items: [{id:"PRD-2ABC"}]`, not {ids}) in request order, fetch every attached Product file from R2, backfill legacy integrity metadata, and record available, missing, or metadata-mismatch state; each result is the refreshed detailed Product. Ordinary entity_read.get(product) makes no R2 requests.',
-      }),
-      propose_match: mcpAction({
-        op: recommendationsContract.ops.proposeProductMatch,
-        description:
-          'Propose that two Products are the same real item, for a person to review and merge in the product match queue. Use it when you hold evidence the automatic detector cannot see — typically a photo-created Product (e.g. "Gray crew t-shirt — M", stocked, never bought) and a purchase-created Product for the same item, confirmed against the vendor\'s product page. Never merges anything: it records the pair with your evidence, ranked above detector suggestions. Re-proposing the same pair (either order) records new immutable evidence; a pair the person dismissed stays dismissed and comes back with state "dismissed".',
-      }),
-      merge_match: mcpAction({
-        op: recommendationsContract.ops.mergeProductMatch,
-        destructive: true,
-        description:
-          "Merge a queued match: mergeId folds into keepId, whose covers then lead with its own photos. Only for a pair the member agreed is one item.",
-      }),
-    },
-  },
-
-  upc: {
-    description: "Barcode-driven Product creation.",
-    actions: {
-      find_or_create: mcpAction({
-        op: productContract.ops.findOrCreateByUPC,
-        project: (output) => ({
-          ...slimProduct(output.product),
-          warnings: output.sideEffects.warnings,
-        }),
-        output: productMcpOut.extend({
-          warnings: z
-            .array(z.string())
-            .optional()
-            .describe(
-              "Best-effort follow-ups that failed after the product was saved, e.g. the cover-photo import.",
-            ),
-        }),
-        description:
-          "Find or create a product by UPC barcode: the local DB, then USDA, then the UPC lookup service. This WRITES — it mints a Product when nothing matches, named by whatever the lookup returned. To only ask what a barcode names, use imports_read.upc_lookup.",
-      }),
-    },
-  },
-
-  photo_run: {
-    description:
-      "A photo-inventory run's item grouping: propose groups for human review, or commit one when the user asks to skip review.",
-    actions: {
-      propose_groups: mcpAction({
-        op: photoImportContract.ops.proposeGroups,
-        description:
-          "Propose how a run's images group into items, for a human to review and approve on the run page — nothing is written to Products or Inventory until approval, which runs photo_run.commit_group with each group's payload. Each group has commit_group's shape (minus runId) plus optional `evidence` (why these photos are one item, and why this Product). Upserts by groupKey: a still-`proposed` group is replaced; a `committed` or `discarded` groupKey is left untouched and returned in `frozenGroupKeys`. `removeGroupKeys` drops proposed groups. Every image must be a `pending` target of the run and, across the run's proposed groups after this call, appear in exactly one group (attached or skipped) — otherwise the whole call is refused. Returns every proposal plus the pending images no group mentions yet.",
-      }),
-      commit_group: mcpAction({
-        op: photoImportContract.ops.commitGroup,
-        description:
-          'The bounded writer approval runs. Product/Inventory writes require explicit review with observedName, stockIntent and a null unresolvedReason; skip-only groups need no review. Prefer photo_run.propose_groups and let the user approve on the run page; call this only when the user explicitly asks to skip review. Turns one group of already-staged images into one Product (an existing Product by id, or a genuinely new one) with each image attached under an `item` or `label` purpose, and optionally one Inventory entry. Idempotent per (runId, groupKey): the exact same call replays the prior result; a changed payload under the same groupKey is refused unless the earlier attempt failed. When a `create` name or alias exactly (case-insensitively) matches a live Product, nothing is written and the call returns `outcome: "conflict"` with the colliding Product ids — never a speculative new Product. Every listed image must be a `pending` target of the run and appear in exactly one of `images` (attach) or `skip` (with a reason); a skip-only group touches no Product. Marks the run `completed` once no `pending` target remains.',
-      }),
-      approve_groups: mcpAction({
-        op: photoImportContract.ops.approveGroups,
-        description:
-          "Approve proposed groups (all when groupKeys is omitted), committing each as commit_group would; expectedRevisions refuses groups changed since review. Only on the member's instruction.",
-      }),
-      save_groups: mcpAction({
-        op: photoImportContract.ops.saveGroups,
-        description: "Save the run page's reviewed group edits in one call.",
-      }),
-      choose_existing: mcpAction({
-        op: photoImportContract.ops.chooseExisting,
-        description: "Point one proposed group at an existing productId.",
-      }),
-      reject_candidate: mcpAction({
-        op: photoImportContract.ops.rejectCandidate,
-        description:
-          "Record the member's Not this one verdict for a candidate Product. Suppression follows the group's photos through combine/split; supply a stable operationId.",
-      }),
-      resolve_concern: mcpAction({
-        op: photoImportContract.ops.resolveConcern,
-        description:
-          "Explicitly resolve the agent's original identity concern, preserving it with member/time and an optional reply. Product edits never resolve a concern.",
-      }),
-      update_draft: mcpAction({
-        op: photoImportContract.ops.updateDraft,
-        description:
-          "Correct one proposed group's new-Product identity before approval.",
-      }),
-      discard_group: mcpAction({
-        op: photoImportContract.ops.discardGroup,
-        description: "Discard one proposed group.",
-      }),
-    },
-  },
-
-  run: {
-    description:
-      "Control Runs (Mail import, photo inventory, or a member's import); read one with imports_read.run_status. set_mail_import, discover_mail, commit_prepared, resolve_finding and approve/reject spend money or settle evidence: call them only on the member's explicit instruction.",
-    actions: {
-      lifecycle: mcpAction({
-        op: runContract.ops.lifecycle,
-        destructive: true,
-        openWorld: true,
-        strict: true,
-        description:
-          "Control an owned Run with controlAction: cancel stops active work; retry/restart preserve the previous attempt and return its admitted successor; pause, resume, escalate_sol, retry_dispatch, abort, upload_evidence and no_evidence_available follow the Run page. run_now_paid resumes a paused Mail import or Mail discovery Run now with paid models allowed for that Run, within the paid budget; once the window's paid budget is spent it refuses unless paidOverBudgetUsd names the confirmed amount past it. It spends money: use it only on the member's explicit instruction. Unsupported states refuse without changing the Run.",
-      }),
-      set_mail_import: mcpAction({
-        op: runContract.ops.setMailImport,
-        description:
-          "Turn automatic Mail import on or off for one connected mailbox (imports_read.mail_import). On, scheduled discovery searches known Vendors' senders and unmatched transaction merchants and imports unambiguous purchases within the household AI funding budgets (ai_funding_read.status), pausing until the next window once all are spent.",
-      }),
-      sweep: mcpAction({
-        op: runContract.ops.sweep,
-        openWorld: true,
-        description:
-          "Find suggestions: start one Sweep over the chosen Suggestion families (statement_transaction and transfer_pair scoped by accountIds/since, recommendation by entityKinds, field by entity and fields; omitted scope covers everything). Returns the Sweep Run; follow it with imports_read.run_status and review results with entity_read.suggestion_queue. Model calls spend within the household AI budget and pause at it.",
-      }),
-      discover_mail: mcpAction({
-        op: runContract.ops.discoverMail,
-        openWorld: true,
-        description:
-          'Start Mail discovery now for one mailbox with Mail import on; replays an active launch. paidAllowed ("Run discovery now, paid allowed") resumes a paused discovery now; once the paid budget is spent it refuses unless paidOverBudgetUsd names the confirmed amount past it, which this discovery and the imports it starts may then spend. Use paidAllowed only on the member\'s explicit instruction.',
-      }),
-      commit_prepared: mcpAction({
-        op: runContract.ops.commitPrepared,
-        description:
-          "Commit a Run's prepared import batch with its per-line Product and trade decisions, as purchase_import.commit does.",
-      }),
-      resolve_finding: mcpAction({
-        op: problemsContract.ops.resolveRunFinding,
-        description:
-          "Apply or dismiss one Run finding by id; apply requires its reviewedFingerprint when it carries one.",
-      }),
-    },
-  },
-
-  ai_funding: {
-    description:
-      "Change household-wide frontier AI funding (every feature's frontier chat calls, not only Mail import); read it with ai_funding_read.status. Call only on the member's explicit instruction.",
-    actions: {
-      set_credit_budget: mcpAction({
-        op: aiFundingContract.ops.setCreditBudget,
-        description:
-          "Set household AI budgets per six-hour window: creditLimitUsd (Claude standard API cost), planLimitUsd (ChatGPT standard API cost, default $2), and paidLimitUsd (charged cost, default $1). Background work moves from credit to plan, then paid within these limits. Also clears a recorded Claude credit refusal, and work paused for free capacity retries now. Returns ai_funding_read.status.",
-      }),
-      reset_credit_refusal: mcpAction({
-        op: aiFundingContract.ops.resetCreditRefusal,
-        description:
-          'Clear a recorded Claude credit refusal ("Retry Claude credit now") so the next frontier call tries Claude credit again, e.g. after raising the Console spend limit; work paused for free capacity retries now. A still-refusing Console records the refusal again on that call. Returns ai_funding_read.status.',
-      }),
-    },
-  },
-
-  meal_recipe: {
-    description:
-      "Planned recipes within meals. `add` returns a `mealRecipeId`; update/remove/save_preparation take that occurrence id, never the recipe id.",
-    actions: {
-      add: mcpAction({
-        op: mealContract.ops.planRecipe,
-        description:
-          "Plan a recipe into a meal at a scale multiplier (1 = as written). Returns compact meal identity plus cost/kcal coverage. Nutrition defaults to none; request kcal, macros, or full when needed.",
-      }),
-      update: mcpAction({
-        op: mealContract.ops.updateRecipe,
-        project: slimMeal,
-        output: mealMcpOut,
-        description:
-          "Adjust a planned recipe's scale or sort order within its meal.",
-      }),
-      remove: mcpAction({
-        op: mealContract.ops.removeRecipe,
-        project: slimMeal,
-        output: mealMcpOut,
-        description: "Remove a planned recipe from its meal.",
-      }),
-      save_preparation: mcpAction({
-        op: mealContract.ops.savePreparation,
-        description:
-          "Record measured yield and portions served from one planned recipe occurrence. Assigned portions count in daily intake by the target meal date: future is planned, today/past is logged. Confirmation fields remain for legacy compatibility and do not gate daily intake.",
-      }),
-    },
-  },
-
-  recipe_import: {
-    description:
-      "Save recipes from a URL or pasted text, and patch one ingredient line in place.",
-    actions: {
-      import: mcpAction({
-        op: recipeContract.ops.importFromUrl,
-        openWorld: true,
-        description:
-          "Scrape a recipe from a URL and save it in one step; returns the new recipe's shortcode and `lineCoverage` (per line, which of price/weight/nutrients are still missing). recipe_insights.scrape parses without saving.",
-      }),
-      from_text: mcpAction({
-        op: recipeContract.ops.createFromText,
-        description:
-          "Create a recipe from raw text lines WITHOUT pre-resolving ingredient IDs — the path for a pasted prep sheet. Use entity.create(recipe) when you already have ingredient ids. Also returns `lineCoverage`.",
-      }),
-      patch_line: mcpAction({
-        op: recipeContract.ops.patchLine,
-        description:
-          "Change one recipe ingredient line — its amounts, the ingredient or sub-recipe it points at, or its source text/modifier — without resending the recipe's sections. The line keeps its position and every other line and instruction is left as-is. `lineId` comes from recipe_insights.costing's per-line diagnostics or recipe_insights.using_ingredient's usages. Also returns the recipe's refreshed `lineCoverage`.",
-      }),
-    },
-  },
-
-  image: {
-    description:
-      "Files and images on declared image-bearing records. Galleries append; role cover replaces a Cookbook cover and role logo replaces a Vendor logo after image validation succeeds.",
-    actions: {
-      create_uploads: mcpAction({
-        op: imageUploadContract.ops.createFileUpload,
-        batch: { resultDetail: "full", reference: (item) => item.uploadId },
-        description:
-          "Stage up to 50 LOCAL files (`items`) and get one presigned PUT URL per successful item — how files on disk reach Cubby, since the server is remote and `url` cannot name a local path. Three steps: call this, upload each successful item with `curl -X PUT -H 'Content-Type: <contentType>' --upload-file <path> '<uploadUrl>'`, then image.attach_files with the returned uploadIds. A failed item does not roll back successful presigns; results keep input indexes for retrying only failures. Each staged object is discarded once attached. Supported types: image/jpeg, image/png, image/gif, image/webp, image/avif, image/heic, image/heif, application/pdf.",
-      }),
-      attach_files: mcpAction({
-        op: imageUploadContract.ops.attachFile,
-        // `full`, not the compact default: an attach response is a handful of
-        // short fields, and `reused` exists so a caller can tell a replay from
-        // an upload. Items may target many records, so no duplicate-id guard.
-        batch: { resultDetail: "full", reference: (item) => item.imageId },
-        // Batch telemetry reads the first item: a batch may mix entities, and
-        // first-item attribution beats none for the common single-entity sweep.
-        telemetryEntity: (item) => parseShortcode(item.entityId)?.type,
-        description:
-          "Attach up to 50 files (`items`) in request order; each item carries its own entityId, so one call can cover many records — the cover-image pass of an enrichment sweep. Provide each file exactly one way: `url` (an http(s) link the server fetches) or `uploadId` (from image.create_uploads — the route for a local file). A Purchase attachment requires documentKind. Provide a deterministic idempotencyKey per item so a retry of a partially-failed batch cannot double-attach, and the freshly read expectedImageCount for Product gallery writes (a mismatch is a precondition failure and attaches nothing). MIME/signature conflicts are rejected.",
-      }),
-      attach_existing: mcpAction({
-        op: imageContract.ops.attachExisting,
-        telemetryEntity: (input) => parseShortcode(input.targetId)?.type,
-        description:
-          "Attach an existing uploaded image without re-uploading it. Galleries append and restore detached links; specify role cover for a Cookbook or logo for a Vendor to replace the current singular image. Repeating the current attachment is idempotent.",
-      }),
-
-      schedule_processing: mcpAction({
-        op: imageProcessingContract.ops.schedule,
-        description:
-          "Schedule processing for an uploaded image. Omitting kinds queues independent Apple and cloud descriptions, transparent subject-lift cutouts, and Clef Product identification. Supply kinds to request a subset. Cloud descriptions and Clef identification use billable AI calls; retained work is reused for the same content and processor revision. Identification saves unconfirmed suggestions and never attaches records or changes inventory.",
-      }),
-    },
-  },
-
-  data_exception: {
-    description:
-      "Explicit negative knowledge on one completeness check of a Product, Vendor, Purchase, FinancialTransaction, or Expense; each call returns the recomputed dataQuality.",
-    actions: {
-      set: mcpAction({
-        op: dataQualityContract.ops.setException,
-        description:
-          "Record why a fact is absent or a mismatch is expected. The note is required and should explain why the fact was not issued, is unavailable/not applicable, lacks sufficient detail, or why a mismatch is expected. Upserts by check without duplicates. Only after the available sources have been searched.",
-      }),
-      clear: mcpAction({
-        op: dataQualityContract.ops.clearException,
-        description:
-          "Clear exactly one explicit exception; any still-missing fact immediately reappears as a gap.",
       }),
     },
   },

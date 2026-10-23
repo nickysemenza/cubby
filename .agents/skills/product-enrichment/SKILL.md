@@ -19,7 +19,7 @@ For a resumed backlog or delegated sweep, load
 [resumption and worker handoffs](references/resumption.md) before assigning work
 or mutating queue members.
 
-For unified backlog triage, `activity.work_queue` offers the connected member's
+For unified backlog triage, `activity.for_member` offers the connected member's
 eligible work plus shared Product research. The Work queue page shows household
 routing metadata and links from Problems and Research. Public Product facts can
 be Either; private original/order/account work follows current source ownership.
@@ -136,7 +136,7 @@ Before enriching, check whether this Product has a merge candidate on the
 other side (a photo Product for a purchase-created one, or vice versa) per
 [product identity](references/product-identity.md)'s either-side-first
 contract. Apply its obvious-duplicate merge rule or propose the unresolved pair
-with `product_enrichment.propose_match` before enriching both records.
+with `product_enrichment.propose_product_match` before enriching both records.
 
 Set `kind` (`consumable` or `durable`) only when the published product or the
 order context makes it clear; never guess, and leave it unset when uncertain. It
@@ -145,7 +145,7 @@ only informs project suggestions and is independent of `stockTracked`.
 Change identifier slots with `entity.update product` collection patches on
 `externalIds` (`{op: "add"|"replace"|"remove", key, value?, expect?}`), which
 preserve unrelated IDs; a full `externalIds` array is a deliberate complete
-replacement. Check `imports_read.external_id_collisions` before each new ID. Only an
+replacement. Check `product_enrichment.external_id_collisions` before each new ID. Only an
 exact-variant part number goes in as `manufacturer_part` under its registered
 issuer source; a family/style number stays in `model`. Brand renaming never
 relabels an existing identifier tuple.
@@ -169,7 +169,7 @@ otherwise append the catalog image after the own item image (see
 [product identity](references/product-identity.md) on belongings cover order)
 and preserve our photos and labels. Later
 manual order remains authoritative until another explicit replacement. Schedule
-original analysis and useful item cutouts through `image.schedule_processing`;
+original analysis and useful item cutouts through `image.schedule`;
 skip label cutouts and already-transparent assets, preserve pairs, and let
 pending/failed processing fall back to the original. Verify every mutation, including retained
 identity facts, gallery order, cover, display position, integrity metadata, and

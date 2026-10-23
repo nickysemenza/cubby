@@ -74,17 +74,19 @@ const runDecisionsOut = z.object({
 });
 export type RunDecisionsOut = z.infer<typeof runDecisionsOut>;
 
-export const runDetailContract = defineContract("runDetail", {
-  steps: query({
-    mcp: { omit: "client_view" },
-    input: z.strictObject({ runId: runShortcode }),
-    output: runDetailStepsOut,
-    cache: { tags: [["run"]], profile: "live-status" },
-  }),
-  decisions: query({
-    mcp: { omit: "client_view" },
-    input: z.strictObject({ runId: runShortcode, family: assessmentFamily }),
-    output: runDecisionsOut,
-    cache: { tags: [["run"], ["suggestions"]] },
-  }),
-});
+export const runDetailContract = defineContract(
+  "runDetail",
+  {
+    steps: query({
+      input: z.strictObject({ runId: runShortcode }),
+      output: runDetailStepsOut,
+      cache: { tags: [["run"]], profile: "live-status" },
+    }),
+    decisions: query({
+      input: z.strictObject({ runId: runShortcode, family: assessmentFamily }),
+      output: runDecisionsOut,
+      cache: { tags: [["run"], ["suggestions"]] },
+    }),
+  },
+  { exposure: "view" },
+);

@@ -13,7 +13,7 @@ Use `finance.converge` for source-proven genuine purchase payments. Its server
 policy checks identity, money, ownership, funding and accepted lineage; inspect
 its result rather than treating a nearby candidate or model ranking as proof.
 Changed accepted facts and partial/split ambiguity require review. Nonpurchase
-financial Emails retain their financial association through `mail.resolve`;
+financial Emails retain their financial association through `purchase_import.mail_resolve`;
 they must not create Purchase spending. Exact aggregate-to-itemized replacement
 uses the reconciliation writer and refreshes the automatic booking fingerprint.
 
@@ -156,15 +156,15 @@ reject an otherwise exact date/amount/vendor match over them.
 ### Working the backlog through Transaction suggestions
 
 Recording rows starts a routine Sweep that turns each unmatched charge into
-one Transaction suggestion (`entity_read.suggestion_queue` with `family:
+one Transaction suggestion (`suggestions.list` with `family:
 "statement_transaction"`; `groups: "account_month"` adds per account × month
 sections with clean counts); `run.sweep {families: [{family:
 "statement_transaction"}]}` reruns it after hand edits to transactions or
-accounts, and `imports_read.run_status` follows its Steps. Burn the backlog group by group,
+accounts, and `run.work_snapshot` follows its Steps. Burn the backlog group by group,
 filtering a group with `where {account: {in: [FAC-…]}, month: {in: [YYYY-MM]}}`:
 
 1. Accept `clean: true` suggestions in batches of up to 100 with
-   `entity.review_assessments`: verdict `correct`, intent `apply`,
+   `suggestions.reviews`: verdict `correct`, intent `apply`,
    `expectedFingerprint` (the row's `fingerprint`), and `application {kind:
    "statement_transaction", action: <recommended>}`; an attach also names
    `transactionId`, the first candidate. For transfer/card-payment creates use
@@ -197,7 +197,7 @@ filtering a group with `where {account: {in: [FAC-…]}, month: {in: [YYYY-MM]}}
 5. A `transfer` names the member's own balance account a cash-out or funding
    descriptor points at (Venmo-style and payout balances are `stored_value`;
    PayPal is read like a card). Review the `transfer_pair` family on the global
-   Suggestions page or through `entity_read.suggestion_queue`; find pairs with
+   Suggestions page or through `suggestions.list`; find pairs with
    `run.sweep {families: [{family: "transfer_pair"}]}`. Accept using verdict
    `correct`, intent `apply`, `expectedFingerprint` and `application {kind:
    "transfer_pair"}`. It creates missing statement-backed legs and accepts the

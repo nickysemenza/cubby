@@ -430,14 +430,14 @@ describe("product match queue", () => {
   });
 });
 
-describe("product_enrichment.propose_match", () => {
+describe("product_enrichment.propose_product_match", () => {
   const ctx = withTestDb();
 
   const call = (args: Parameters<typeof callMcpTool>[2]) =>
     callMcpTool(
       createMcpServer(),
       "product_enrichment",
-      { action: "propose_match", ...args },
+      { action: "propose_product_match", ...args },
       {
         db: ctx.db,
       },

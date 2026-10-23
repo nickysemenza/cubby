@@ -6,7 +6,6 @@ import {
 import { z } from "zod";
 
 import type { QueryCachePolicy, RippleKey } from "~/contracts/cache-policy";
-import { kernelActionName } from "~/contracts/mcp-define";
 
 /**
  * Transport-neutral operation contracts.
@@ -33,56 +32,16 @@ interface OperationObservability {
   readonly productPhases?: readonly string[];
 }
 
-/**
- * Why a query or mutation is not an MCP tool action. `pnpm generate` fails
- * unless every query and mutation is either named by an action in
- * `contracts/mcp-tools.ts` or declares one of these (never both), so a new
- * operation cannot silently stay off the agent surface. There is no
- * contract-level default: each member declares its own. A `note` says why
- * when the reason alone is not obvious.
- */
-const note = z.string().min(1);
-export const mcpOmission = z.discriminatedUnion("omit", [
-  z.strictObject({
-    omit: z.enum([
-      /** A web or Apple UI read model, form helper, or UI-only state. */
-      "client_view",
-      /** A person-triggered Cubby model call; an agent makes that judgment itself. */
-      "model_assist",
-      /** Byte or URL plumbing behind an upload. */
-      "upload_transport",
-      /** Apple app, companion, or in-browser driver protocol. */
-      "device_protocol",
-      /** Credentials, sign-in, OAuth grants, and login linkage. */
-      "auth_connection",
-      /** Admin, backfill, repair, and telemetry. */
-      "operator_maintenance",
-    ]),
-    note: note.optional(),
-  }),
-  /** An exposed, agent-shaped operation serves the same need. */
-  z.strictObject({
-    omit: z.literal("agent_twin"),
-    /** The exposed operation id (`domain.member`); generation checks it. */
-    twin: z.string().regex(/^[\w-]+\.\w+$/u),
-    note: note.optional(),
-  }),
-  /**
-   * An MCP entity-kernel verb can do it. Recorded as an omission, not as
-   * proven parity: `note` says how the verb stands in.
-   */
-  z.strictObject({
-    omit: z.literal("kernel_alternative"),
-    kernel: z.tuple([kernelActionName], kernelActionName).readonly(),
-    note,
-  }),
-  /** A real agent capability not yet exposed. */
-  z.strictObject({
-    omit: z.literal("deferred_capability"),
-    note: note.optional(),
-  }),
-]);
-type McpOmission = z.input<typeof mcpOmission>;
+/** Which clients may invoke a query or mutation. Contracts own this decision. */
+export const operationExposure = z.enum(["capability", "view", "internal"]);
+export type OperationExposure = z.infer<typeof operationExposure>;
+
+export interface OperationContractDefaults {
+  /** Default audience for query and mutation members in this contract. */
+  readonly exposure?: OperationExposure;
+  /** MCP action group; defaults to the contract's domain converted to snake_case. */
+  readonly mcpToolGroup?: string;
+}
 
 /** The HTTP wire of a type-only carrier operation; see `QueryContract`. */
 export interface HttpWire {
@@ -102,7 +61,8 @@ export interface HttpWire {
  * carries exactly the flagged members, so the flag is the only way an
  * operation reaches HTTP and CubbyKit.
  *
- * `mcp` records why an operation is not an MCP tool action (`McpOmission`).
+ * `exposure` determines which clients can invoke the operation. Capability
+ * descriptions and behavior hints are consumed by the generated MCP catalog.
  *
  * Ordinary interactive queries and mutations use the authoritative adapter.
  * `readPolicy` remains declaration metadata for specialized read workflows.
@@ -121,7 +81,12 @@ export interface QueryContract<
   readonly native?: string;
   /** Native consumers that render declarations carry JSON rather than per-operation models. */
   readonly nativeModels?: { readonly input?: "json"; readonly output?: "json" };
-  readonly mcp?: McpOmission;
+  readonly exposure?: OperationExposure;
+  readonly note?: string;
+  readonly description?: string;
+  readonly destructive?: true;
+  readonly openWorld?: true;
+  readonly modelBacked?: true;
   readonly readPolicy?: "strong";
   /** Browser cache tags and freshness profile; see `QueryCachePolicy`. */
   readonly cache?: QueryCachePolicy;
@@ -146,7 +111,12 @@ export interface MutationContract<
   readonly httpWire?: HttpWire;
   readonly native?: string;
   readonly nativeModels?: { readonly input?: "json"; readonly output?: "json" };
-  readonly mcp?: McpOmission;
+  readonly exposure?: OperationExposure;
+  readonly note?: string;
+  readonly description?: string;
+  readonly destructive?: true;
+  readonly openWorld?: true;
+  readonly modelBacked?: true;
   /**
    * The browser fan-out rows a successful call invalidates. Absent or empty
    * invalidates nothing (a mutation that writes no cache-backed state, or whose
@@ -184,6 +154,8 @@ export interface OperationContract<
 > {
   readonly domain: Domain;
   readonly ops: Ops;
+  readonly exposure?: OperationExposure;
+  readonly mcpToolGroup?: string;
 }
 
 /** Member names whose kind is `query` or `mutation`. */
@@ -202,7 +174,8 @@ export const defineContract = <
 >(
   domain: Domain,
   ops: Ops,
-): OperationContract<Domain, Ops> => ({ domain, ops });
+  defaults: OperationContractDefaults = {},
+): OperationContract<Domain, Ops> => ({ domain, ops, ...defaults });
 
 export const query = <Input extends z.ZodTypeAny, Output extends z.ZodTypeAny>(
   member: Omit<QueryContract<Input, Output>, "kind">,

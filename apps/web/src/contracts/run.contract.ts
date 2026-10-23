@@ -262,275 +262,299 @@ const runControlOutput = z.object({
     .nullable(),
 });
 
-export const runContract = defineContract("run", {
-  mailImport: query({
-    native: "Show automatic Mail import switches and search progress",
-    input: z.strictObject({}),
-    output: mailImportStatus,
-    // Search progress moves while discovery runs; Run writes refresh it.
-    cache: { tags: [["run"]], profile: "live-status" },
-  }),
-  setMailImport: mutation({
-    native: "Turn automatic Mail import on or off for a connected mailbox",
-    input: setMailImportInput,
-    output: mailImportStatus,
-    invalidates: ["runOnly"],
-  }),
-  sweep: mutation({
-    native: "Find suggestions across Cubby or a chosen scope",
-    input: sweepStartInput,
-    output: z.object({ runId: runShortcode }),
-    invalidates: ["runOnly"],
-  }),
-  sweepEstimate: query({
-    mcp: { omit: "client_view" },
-    native: "Show what a Sweep would look at before it starts",
-    input: sweepStartInput,
-    output: sweepEstimateOut,
-  }),
-  discoverMail: mutation({
-    native: "Start Mail discovery now for one mailbox with Mail import on",
-    input: setMailImportInput.pick({ mailboxId: true }).extend({
-      /** Skip the wait for free AI capacity; spend from the paid budget. */
-      paidAllowed: z.boolean().optional(),
-      paidOverBudgetUsd: paidOverBudgetUsd.optional(),
+export const runContract = defineContract(
+  "run",
+  {
+    mailImport: query({
+      description:
+        "The member's connected Gmail mailboxes with their automatic Mail import switch and targeted-search progress. AI funding for the imports is household-wide: ai_funding.status.",
+      native: "Show automatic Mail import switches and search progress",
+      input: z.strictObject({}),
+      output: mailImportStatus,
+      // Search progress moves while discovery runs; Run writes refresh it.
+      cache: { tags: [["run"]], profile: "live-status" },
     }),
-    output: mailboxDiscoveryStartOutput,
-    invalidates: ["runOnly"],
-  }),
-  transcript: query({
-    input: z.object({
-      runId: runShortcode,
-      cursor: z.number().int().nonnegative().default(0),
-      limit: z.number().int().min(1).max(20).default(5),
+    setMailImport: mutation({
+      description:
+        "Turn automatic Mail import on or off for one connected mailbox (purchase_import.mail_read_import). On, scheduled discovery searches known Vendors' senders and unmatched transaction merchants and imports unambiguous purchases within the household AI funding budgets (ai_funding.status), pausing until the next window once all are spent.",
+      native: "Turn automatic Mail import on or off for a connected mailbox",
+      input: setMailImportInput,
+      output: mailImportStatus,
+      invalidates: ["runOnly"],
     }),
-    output: agentConversationSchema.extend({
-      nextCursor: z.number().int().nonnegative().nullable(),
+    sweep: mutation({
+      description:
+        "Find suggestions: start one Sweep over the chosen Suggestion families (statement_transaction and transfer_pair scoped by accountIds/since, recommendation by entityKinds, field by entity and fields; omitted scope covers everything). Returns the Sweep Run; follow it with run.work_snapshot and review results with suggestions.list. Model calls spend within the household AI budget and pause at it.",
+      openWorld: true,
+      native: "Find suggestions across Cubby or a chosen scope",
+      input: sweepStartInput,
+      output: z.object({ runId: runShortcode }),
+      invalidates: ["runOnly"],
     }),
-    readPolicy: "strong",
-  }),
-  workSnapshot: query({
-    native: "Show durable live import progress in Apple apps",
-    nativeModels: { output: "json" },
-    input: z.object({
-      runId: runShortcode,
-      emailCursor: z.number().int().nonnegative().default(0),
-      emailLimit: z.number().int().min(1).max(200).default(50),
+    sweepEstimate: query({
+      exposure: "view",
+      native: "Show what a Sweep would look at before it starts",
+      input: sweepStartInput,
+      output: sweepEstimateOut,
     }),
-    output: z.object({
-      runId: runShortcode,
-      purpose: runPurpose,
-      status: runStatus,
-      startedAt: z.iso.datetime(),
-      endedAt: z.iso.datetime().nullable(),
-      retirementReason: runDetail.shape.retirementReason,
-      coordinatorModel: z.string().nullable(),
-      agentModelMs: z.number().nonnegative(),
-      ordersSeen: z.number().int(),
-      imported: z.number().int(),
-      updated: z.number().int(),
-      skipped: z.number().int(),
-      findings: runDetail.shape.findings,
-      targetsTotal: z.number().int(),
-      targetsCompleted: z.number().int(),
-      workProgress: runWorkProgress,
-      /**
-       * Each target's outcome: what the run worked and why it ended where it
-       * did (a skip keeps its reason in `warning`).
-       */
-      targets: z.array(
-        runDetail.shape.targets.element.pick({
-          targetType: true,
-          targetShortcode: true,
-          targetName: true,
-          state: true,
-          outcome: true,
-          warning: true,
-          completedAt: true,
-        }),
-      ),
-      progress: z.array(
-        z.object({
-          phase: z.string(),
-          detail: z.string().nullable(),
-          createdAt: z.iso.datetime(),
-        }),
-      ),
-      operations: z.array(
-        runDetail.shape.operations.element.omit({ operationId: true }),
-      ),
-      /** Durable publication receipts; absent on legacy Runs. */
-      mailReclassification: mailReclassificationRead.nullable(),
-      /**
-       * Persisted Workflow evidence; mailbox coverage may advance after this
-       * Run. Query lists are summarized: hundreds of entries would swamp a
-       * status read.
-       */
-      mailDiscovery: z
-        .object({
-          scope: z.object({
-            mailboxId: z.string(),
-            scopedQueries: mailboxQueryListSummary.nullable(),
-            executionPolicy: z
-              .enum(["classification_only", "import"])
-              .nullable(),
+    discoverMail: mutation({
+      description:
+        'Start Mail discovery now for one mailbox with Mail import on; replays an active launch. paidAllowed ("Run discovery now, paid allowed") resumes a paused discovery now; once the paid budget is spent it refuses unless paidOverBudgetUsd names the confirmed amount past it, which this discovery and the imports it starts may then spend. Use paidAllowed only on the member\'s explicit instruction.',
+      openWorld: true,
+      native: "Start Mail discovery now for one mailbox with Mail import on",
+      input: setMailImportInput.pick({ mailboxId: true }).extend({
+        /** Skip the wait for free AI capacity; spend from the paid budget. */
+        paidAllowed: z.boolean().optional(),
+        paidOverBudgetUsd: paidOverBudgetUsd.optional(),
+      }),
+      output: mailboxDiscoveryStartOutput,
+      invalidates: ["runOnly"],
+    }),
+    transcript: query({
+      description:
+        "Read one owned Run's committed coordinator messages, tool inputs/results/errors and submission settlements without loading or resuming execution. Both arrays are paged in chronological order; pass nextCursor as cursor until null. Defaults to 5 entries per array, at most 20. Live generation partials, credentials and binary bodies are omitted. Discovery Workflows have no coordinator conversation and return absent; read their persisted evidence with run_status. Absent means no retained conversation; it does not prove the Run never executed. Unfinished conversations may change between pages.",
+      input: z.object({
+        runId: runShortcode,
+        cursor: z.number().int().nonnegative().default(0),
+        limit: z.number().int().min(1).max(20).default(5),
+      }),
+      output: agentConversationSchema.extend({
+        nextCursor: z.number().int().nonnegative().nullable(),
+      }),
+      readPolicy: "strong",
+    }),
+    workSnapshot: query({
+      description:
+        "One Run's live state: status, counts, findings (each `id` is what activity.resolve_run_finding takes; activity.report shows a proposed fix), each target's outcome (`warning` holds a skip's reason), progress history, and write operations. An owned discovery Run also returns mailDiscovery: a paged emails audit (emailCursor/emailLimit, follow nextCursor), execution-time outcomes/ownership alongside current Email state, explicitly incomplete historical coverage, frozen mailbox scope and current mailbox coverage summarized as query counts with the next pending queries, persisted Workflow checkpoint with its in-flight page as counts, recorded AI usage/retries, and failure diagnostics. Reads stored evidence only; it never loads or resumes execution. An owned relevance reclassification Run returns mailReclassification: selected Email codes/checksums, durable publication receipts (null for legacy Runs), retained possibly truncated notes, and separately labeled classification observations that are not publication receipts. After a client timeout, read receipts before rerunning; historical completed receipts can include deferred work with linked recovery. Failed or absent receipts have unknown publication outcomes and require reconciliation before retrying. Read this to follow a run instead of polling entity_read.",
+      native: "Show durable live import progress in Apple apps",
+      nativeModels: { output: "json" },
+      input: z.object({
+        runId: runShortcode,
+        emailCursor: z.number().int().nonnegative().default(0),
+        emailLimit: z.number().int().min(1).max(200).default(50),
+      }),
+      output: z.object({
+        runId: runShortcode,
+        purpose: runPurpose,
+        status: runStatus,
+        startedAt: z.iso.datetime(),
+        endedAt: z.iso.datetime().nullable(),
+        retirementReason: runDetail.shape.retirementReason,
+        coordinatorModel: z.string().nullable(),
+        agentModelMs: z.number().nonnegative(),
+        ordersSeen: z.number().int(),
+        imported: z.number().int(),
+        updated: z.number().int(),
+        skipped: z.number().int(),
+        findings: runDetail.shape.findings,
+        targetsTotal: z.number().int(),
+        targetsCompleted: z.number().int(),
+        workProgress: runWorkProgress,
+        /**
+         * Each target's outcome: what the run worked and why it ended where it
+         * did (a skip keeps its reason in `warning`).
+         */
+        targets: z.array(
+          runDetail.shape.targets.element.pick({
+            targetType: true,
+            targetShortcode: true,
+            targetName: true,
+            state: true,
+            outcome: true,
+            warning: true,
+            completedAt: true,
           }),
-          emails: discoveryEmailAuditPage,
-          checkpoint: mailboxDiscoveryProgressSummary.nullable(),
-          mailbox: z.object({
-            historyId: z.string().nullable(),
-            coverage: mailboxCoverageSummary.nullable(),
+        ),
+        progress: z.array(
+          z.object({
+            phase: z.string(),
+            detail: z.string().nullable(),
+            createdAt: z.iso.datetime(),
           }),
-          failureCode: z.string().nullable(),
-          error: z.string().nullable(),
-          /** Recorded AI calls only. */
-          usage: aiRunUsageOut
-            .omit({ records: true, tokensByModel: true, nextCursor: true })
-            .extend({
-              callCount: z.number().int().nonnegative(),
-              retryCount: z.number().int().nonnegative(),
+        ),
+        operations: z.array(
+          runDetail.shape.operations.element.omit({ operationId: true }),
+        ),
+        /** Durable publication receipts; absent on legacy Runs. */
+        mailReclassification: mailReclassificationRead.nullable(),
+        /**
+         * Persisted Workflow evidence; mailbox coverage may advance after this
+         * Run. Query lists are summarized: hundreds of entries would swamp a
+         * status read.
+         */
+        mailDiscovery: z
+          .object({
+            scope: z.object({
+              mailboxId: z.string(),
+              scopedQueries: mailboxQueryListSummary.nullable(),
+              executionPolicy: z
+                .enum(["classification_only", "import"])
+                .nullable(),
             }),
+            emails: discoveryEmailAuditPage,
+            checkpoint: mailboxDiscoveryProgressSummary.nullable(),
+            mailbox: z.object({
+              historyId: z.string().nullable(),
+              coverage: mailboxCoverageSummary.nullable(),
+            }),
+            failureCode: z.string().nullable(),
+            error: z.string().nullable(),
+            /** Recorded AI calls only. */
+            usage: aiRunUsageOut
+              .omit({ records: true, tokensByModel: true, nextCursor: true })
+              .extend({
+                callCount: z.number().int().nonnegative(),
+                retryCount: z.number().int().nonnegative(),
+              }),
+          })
+          .nullable(),
+      }),
+      cache: { tags: [] },
+    }),
+    catalogActivity: query({
+      exposure: "view",
+      input: z.null(),
+      output: z.object({
+        latest: z.array(runCatalogActivityEntry),
+        completed: z.array(runCatalogActivityEntry),
+      }),
+      cache: { tags: [["run"]] },
+    }),
+    history: query({
+      exposure: "view",
+      native: "Native Product enrichment history",
+      input: z
+        .object({
+          purchaseId: purchaseShortcode.optional(),
+          productId: productShortcode.optional(),
         })
-        .nullable(),
+        .refine((input) => !(input.purchaseId && input.productId), {
+          message: "Choose either a Purchase or a Product",
+        }),
+      output: runHistoryOut,
+      cache: { tags: [["run"]] },
     }),
-    cache: { tags: [] },
-  }),
-  catalogActivity: query({
-    mcp: { omit: "client_view" },
-    input: z.null(),
-    output: z.object({
-      latest: z.array(runCatalogActivityEntry),
-      completed: z.array(runCatalogActivityEntry),
+    work: query({
+      exposure: "view",
+      native:
+        "Show one Run's targets, findings, operations and prepared orders",
+      nativeModels: { output: "json" },
+      input: z.object({ runId: runShortcode }),
+      output: runDetail,
+      cache: { tags: [["run"]] },
     }),
-    cache: { tags: [["run"]] },
-  }),
-  history: query({
-    mcp: { omit: "client_view" },
-    native: "Native Product enrichment history",
-    input: z
-      .object({
-        purchaseId: purchaseShortcode.optional(),
-        productId: productShortcode.optional(),
-      })
-      .refine((input) => !(input.purchaseId && input.productId), {
-        message: "Choose either a Purchase or a Product",
+    commitPrepared: mutation({
+      description:
+        "Commit a Run's prepared import batch with its per-line Product and trade decisions, as purchase_import.commit does.",
+      native:
+        "Approve a prepared import batch after the per-line Product and trade decisions",
+      input: commitPurchaseImportInput.omit({ _runExecution: true }).extend({
+        runId: runShortcode,
+        operationId:
+          commitPurchaseImportInput.shape._runExecution.shape.operationId,
       }),
-    output: runHistoryOut,
-    cache: { tags: [["run"]] },
-  }),
-  work: query({
-    mcp: { omit: "client_view" },
-    native: "Show one Run's targets, findings, operations and prepared orders",
-    nativeModels: { output: "json" },
-    input: z.object({ runId: runShortcode }),
-    output: runDetail,
-    cache: { tags: [["run"]] },
-  }),
-  commitPrepared: mutation({
-    native:
-      "Approve a prepared import batch after the per-line Product and trade decisions",
-    input: commitPurchaseImportInput.omit({ _runExecution: true }).extend({
-      runId: runShortcode,
-      operationId:
-        commitPurchaseImportInput.shape._runExecution.shape.operationId,
+      output: commitPurchaseImportOut,
+      invalidates: ["runOnly", "purchase", "product"],
     }),
-    output: commitPurchaseImportOut,
-    invalidates: ["runOnly", "purchase", "product"],
-  }),
-  control: mutation({
-    command: {
-      label: "Update Run",
-      confirmation: null,
-      navigateRunPath: "successor.publicId",
-    },
-    mcp: {
-      omit: "agent_twin",
-      twin: "run.lifecycle",
+    control: mutation({
+      exposure: "view",
       note: "MCP reserves `action`, so agents name it controlAction",
-    },
-    native: "Stop, resume or retry a Run from its detail sections",
-    nativeModels: { input: "json", output: "json" },
-    input: runControlInput,
-    output: runControlOutput,
-    invalidates: ["runOnly"],
-  }),
-  retryStep: mutation({
-    command: { label: "Retry step", confirmation: null },
-    mcp: { omit: "operator_maintenance" },
-    native: "Retry one step's failures from a Run's Steps section",
-    input: runRetryStepInput,
-    output: z.object({ run: runDetail }),
-    invalidates: ["runOnly"],
-  }),
-  lifecycle: mutation({
-    input: runControlInput
-      .omit({ action: true })
-      .extend({ controlAction: runControlAction }),
-    output: runControlOutput.extend({
-      run: runDetail.pick({
-        publicId: true,
-        status: true,
-        failureCode: true,
-        endedAt: true,
+      command: {
+        label: "Update Run",
+        confirmation: null,
+        navigateRunPath: "successor.publicId",
+      },
+      native: "Stop, resume or retry a Run from its detail sections",
+      nativeModels: { input: "json", output: "json" },
+      input: runControlInput,
+      output: runControlOutput,
+      invalidates: ["runOnly"],
+    }),
+    retryStep: mutation({
+      description:
+        "Retry one failed step in a Run after correcting its cause. Inspect Run status and findings first; retrying may repeat that step’s external or stored side effects.",
+      command: { label: "Retry step", confirmation: null },
+      native: "Retry one step's failures from a Run's Steps section",
+      input: runRetryStepInput,
+      output: z.object({ run: runDetail }),
+      invalidates: ["runOnly"],
+    }),
+    lifecycle: mutation({
+      description:
+        "Control an owned Run with controlAction: cancel stops active work; retry/restart preserve the previous attempt and return its admitted successor; pause, resume, escalate_sol, retry_dispatch, abort, upload_evidence and no_evidence_available follow the Run page. run_now_paid resumes a paused Mail import or Mail discovery Run now with paid models allowed for that Run, within the paid budget; once the window's paid budget is spent it refuses unless paidOverBudgetUsd names the confirmed amount past it. It spends money: use it only on the member's explicit instruction. Unsupported states refuse without changing the Run.",
+      destructive: true,
+      openWorld: true,
+      input: runControlInput
+        .omit({ action: true })
+        .extend({ controlAction: runControlAction }),
+      output: runControlOutput.extend({
+        run: runDetail.pick({
+          publicId: true,
+          status: true,
+          failureCode: true,
+          endedAt: true,
+        }),
       }),
+      invalidates: ["runOnly"],
     }),
-    invalidates: ["runOnly"],
-  }),
-  logs: query({
-    mcp: { omit: "operator_maintenance" },
-    input: z.object({ runId: runShortcode }),
-    output: z.object({
-      entries: z.array(runLogEntry),
-      truncated: z.boolean(),
+    logs: query({
+      description:
+        "Read raw diagnostic log lines for one Run. Use work_snapshot for progress and findings; logs are lower-level troubleshooting evidence.",
+      input: z.object({ runId: runShortcode }),
+      output: z.object({
+        entries: z.array(runLogEntry),
+        truncated: z.boolean(),
+      }),
+      cache: { tags: [["run"]] },
     }),
-    cache: { tags: [["run"]] },
-  }),
-  /** The member's purchase-import agent OAuth grant. */
-  agentConnection: query({
-    mcp: { omit: "auth_connection" },
-    input: z.undefined(),
-    output: agentConnection,
-    cache: { tags: [["run"]] },
-  }),
-  /** Revokes the grant and pauses the runs it authorized. */
-  disconnectAgent: mutation({
-    mcp: { omit: "auth_connection" },
-    input: z.undefined(),
-    output: agentConnection,
-    invalidates: ["runOnly"],
-  }),
-  merchantRules: query({
-    mcp: { omit: "client_view" },
-    input: z.undefined(),
-    output: merchantRules,
-    cache: { tags: [] },
-  }),
-  confirmMerchantRule: mutation({
-    mcp: { omit: "agent_twin", twin: "purchaseImport.confirmMerchantVendor" },
-    input: confirmMerchantVendorRuleInput,
-    output: merchantRules,
-  }),
-  aiUsage: query({
-    mcp: { omit: "client_view" },
-    native: "Show live AI spend alongside native run timing",
-    input: aiRunUsageInput,
-    output: aiRunUsageOut,
-    cache: { tags: [["ai", "usage"]] },
-  }),
-  /**
-   * Idempotent device-side status for one photo-run image target. The
-   * uploader reports queued/running/failed/completed as it works through a
-   * run's photos; repeating the same {run, image, state} is a no-op.
-   */
-  reportDeviceWork: mutation({
-    mcp: { omit: "device_protocol" },
-    native: "Report on-device photo processing progress for a run target",
-    input: z.object({
-      run: runShortcode,
-      image: imageShortcode,
-      state: runTargetDeviceWorkState,
-      error: z.string().min(1).max(2000).optional(),
+    /** The member's purchase-import agent OAuth grant. */
+    agentConnection: query({
+      exposure: "internal",
+      input: z.undefined(),
+      output: agentConnection,
+      cache: { tags: [["run"]] },
     }),
-    output: z.object({ recorded: z.boolean() }),
-  }),
-});
+    /** Revokes the grant and pauses the runs it authorized. */
+    disconnectAgent: mutation({
+      exposure: "internal",
+      input: z.undefined(),
+      output: agentConnection,
+      invalidates: ["runOnly"],
+    }),
+    merchantRules: query({
+      exposure: "view",
+      input: z.undefined(),
+      output: merchantRules,
+      cache: { tags: [] },
+    }),
+    confirmMerchantRule: mutation({
+      exposure: "view",
+      input: confirmMerchantVendorRuleInput,
+      output: merchantRules,
+    }),
+    aiUsage: query({
+      exposure: "view",
+      native: "Show live AI spend alongside native run timing",
+      input: aiRunUsageInput,
+      output: aiRunUsageOut,
+      cache: { tags: [["ai", "usage"]] },
+    }),
+    /**
+     * Idempotent device-side status for one photo-run image target. The
+     * uploader reports queued/running/failed/completed as it works through a
+     * run's photos; repeating the same {run, image, state} is a no-op.
+     */
+    reportDeviceWork: mutation({
+      exposure: "internal",
+      native: "Report on-device photo processing progress for a run target",
+      input: z.object({
+        run: runShortcode,
+        image: imageShortcode,
+        state: runTargetDeviceWorkState,
+        error: z.string().min(1).max(2000).optional(),
+      }),
+      output: z.object({ recorded: z.boolean() }),
+    }),
+  },
+  { exposure: "capability" },
+);

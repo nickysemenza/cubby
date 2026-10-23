@@ -1216,7 +1216,7 @@ export async function runWardrobeConvergenceScenario({
       createMcpServer(),
       "product_enrichment",
       {
-        action: "propose_match",
+        action: "propose_product_match",
         productIds: [photoProduct.shortcode, purchaseProduct.shortcode],
         evidence: matchEvidence,
         sourceUrls: ["https://shop.example.test/products/crew-tee"],

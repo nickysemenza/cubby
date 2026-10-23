@@ -10,63 +10,49 @@ const mergeOutput = z.object({
   sideEffects: mutationSideEffectsSchema,
 });
 
-export const ingredientContract = defineContract("ingredient", {
-  getByName: query({
-    mcp: {
-      omit: "kernel_alternative",
-      kernel: ["resolve", "search"],
+export const ingredientContract = defineContract(
+  "ingredient",
+  {
+    getByName: query({
       note: "entity_read.resolve reports ingredientHits by name or alias; entity_read.search on ingredients",
-    },
-    input: schemas.ingredientNameFilterInput,
-    output: schemas.ingredientWithFoodOut.nullable(),
-    cache: { profile: "stable" },
-  }),
-  matchNames: query({
-    mcp: {
-      omit: "kernel_alternative",
-      kernel: ["resolve", "search"],
+      input: schemas.ingredientNameFilterInput,
+      output: schemas.ingredientWithFoodOut.nullable(),
+      cache: { profile: "stable" },
+    }),
+    matchNames: query({
       note: "entity_read.resolve reports ingredientHits by name or alias; entity_read.search on ingredients",
-    },
-    input: schemas.ingredientNamesInput,
-    output: schemas.ingredientMatchesOut,
-  }),
-  getManyByIDs: query({
-    mcp: {
-      omit: "kernel_alternative",
-      kernel: ["get", "list"],
+      input: schemas.ingredientNamesInput,
+      output: schemas.ingredientMatchesOut,
+    }),
+    getManyByIDs: query({
       note: "entity_read.get per id, or entity_read.list with an ids filter on ingredients",
-    },
-    input: schemas.ingredientIdsInput,
-    output: schemas.ingredientWithFoodLeanListOut,
-  }),
-  recipeUsages: query({
-    input: schemas.ingredientIdInput,
-    output: schemas.ingredientRecipeUsagesOut,
-    cache: { tags: [["ingredient", "recipeUsages"], ["recipe"]] },
-  }),
-  resolveOrCreate: mutation({
-    mcp: {
-      omit: "kernel_alternative",
-      kernel: ["resolveOrCreate"],
+      input: schemas.ingredientIdsInput,
+      output: schemas.ingredientWithFoodLeanListOut,
+    }),
+    recipeUsages: query({
+      exposure: "capability",
+      description:
+        "Reverse lookup: every recipe that uses an ingredient, with each line's `lineId` for recipe_insights.patch_line.",
+      input: schemas.ingredientIdInput,
+      output: schemas.ingredientRecipeUsagesOut,
+      cache: { tags: [["ingredient", "recipeUsages"], ["recipe"]] },
+    }),
+    resolveOrCreate: mutation({
       note: "entity.resolve with entity ingredient",
-    },
-    input: schemas.ingredientResolvableNamesInput,
-    output: schemas.ingredientResolveOrCreateOut,
-    invalidates: ["ingredient"],
-  }),
-  enrichmentWorkbench: query({
-    mcp: { omit: "client_view" },
-    input: schemas.enrichmentWorkbenchInput,
-    output: schemas.enrichmentRowsOut,
-  }),
-  merge: mutation({
-    mcp: {
-      omit: "kernel_alternative",
-      kernel: ["merge"],
+      input: schemas.ingredientResolvableNamesInput,
+      output: schemas.ingredientResolveOrCreateOut,
+      invalidates: ["ingredient"],
+    }),
+    enrichmentWorkbench: query({
+      input: schemas.enrichmentWorkbenchInput,
+      output: schemas.enrichmentRowsOut,
+    }),
+    merge: mutation({
       note: "entity.merge with entity ingredient",
-    },
-    input: schemas.ingredientMergeInput,
-    output: mergeOutput,
-    invalidates: ["ingredientMerge"],
-  }),
-});
+      input: schemas.ingredientMergeInput,
+      output: mergeOutput,
+      invalidates: ["ingredientMerge"],
+    }),
+  },
+  { exposure: "view", mcpToolGroup: "recipe_insights" },
+);

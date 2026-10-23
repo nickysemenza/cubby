@@ -79,7 +79,7 @@ or omitted image cannot justify a negative, while an independently established
 purchase stays related. Existing classification reasons include aggregate image,
 source-byte and request-byte diagnostics. Remote pixels are transient, not retained
 attachments; original attachment retention remains independent of model renditions.
-The Email Review section and MCP `imports_read.mail_triage_preview` invoke the
+The Email Review section and MCP `purchase_import.mail_read_triage_preview` invoke the
 same explicit classification preview: refetch Gmail, run Jev/Clef, and run Luna
 only after uncertainty, using the production image preparation and completeness
 guards. The response separates the initial decision from the final outcome and

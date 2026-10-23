@@ -74,175 +74,186 @@ const detectedInventoryWithProvenance = detectedInventorySchema.extend({
   analyzedAt: zod.coerce.date(),
 });
 
-export const aiContract = defineContract("ai", {
-  describeLocation: mutation({
-    mcp: { omit: "model_assist" },
-    native: "Analyze a location's photos from its AI description section",
-    input: aiLocationIdInput,
-    output: locationDescriptionWithProvenance,
-    invalidates: ["location"],
-  }),
-  detectInventoryItems: mutation({
-    mcp: { omit: "model_assist" },
-    input: detectInventoryItemsInput,
-    output: detectedInventoryWithProvenance,
-    invalidates: ["inventory"],
-    native: "Detect items in a just-added location photo",
-  }),
-  approveDetectedInventoryItem: mutation({
-    input: approveDetectedInventoryItemInput,
-    output: approveDetectedInventoryItemOut,
-    invalidates: ["inventory"],
-    native: "Approve one detected item into a location's inventory",
-  }),
-  identifyProduct: mutation({
-    mcp: { omit: "model_assist" },
-    input: productIdentificationInput,
-    output: productIdentificationSchema,
-    invalidates: [],
-  }),
-  suggestUsdaFood: mutation({
-    mcp: {
-      omit: "model_assist",
+export const aiContract = defineContract(
+  "ai",
+  {
+    describeLocation: mutation({
+      native: "Analyze a location's photos from its AI description section",
+      input: aiLocationIdInput,
+      output: locationDescriptionWithProvenance,
+      invalidates: ["location"],
+    }),
+    detectInventoryItems: mutation({
+      input: detectInventoryItemsInput,
+      output: detectedInventoryWithProvenance,
+      invalidates: ["inventory"],
+      native: "Detect items in a just-added location photo",
+    }),
+    approveDetectedInventoryItem: mutation({
+      exposure: "capability",
+      description:
+        "Stock one item detected in a location photo, reusing productId or creating its Product.",
+      input: approveDetectedInventoryItemInput,
+      output: approveDetectedInventoryItemOut,
+      invalidates: ["inventory"],
+      native: "Approve one detected item into a location's inventory",
+    }),
+    identifyProduct: mutation({
+      input: productIdentificationInput,
+      output: productIdentificationSchema,
+      invalidates: [],
+    }),
+    suggestUsdaFood: mutation({
       note: "Agents rank with usda_food.suggest_for_product",
-    },
-    input: usdaFoodSuggestionInput,
-    output: usdaFoodSuggestionOut,
-    invalidates: [],
-  }),
-  suggestUsdaFoodBatch: mutation({
-    mcp: { omit: "model_assist" },
-    input: usdaFoodSuggestionBatchInput,
-    output: usdaFoodSuggestionBatchOut,
-    invalidates: ["ingredient"],
-  }),
-  suggestIngredientMergeBatch: mutation({
-    mcp: { omit: "model_assist" },
-    input: ingredientMergeSuggestionBatchInput,
-    output: ingredientMergeSuggestionBatchOut,
-    invalidates: ["ingredient"],
-  }),
-  // Nested `basis` can't ride the HTTP GET projection (precedent:
-  // `entity-list.contract.ts`'s `list`) — `.queryOptions()` still works.
-  // AI and externally hydrated food reads own authoritative database helpers.
-  applyFinanceCategorySuggestion: mutation({
-    input: financeCategoryApplyInput,
-    output: financeCategoryApplyOut,
-    invalidates: [
-      "financialTransaction",
-      "purchase",
-      "expense",
-      "vendor",
-      "product",
-    ],
-    native: "Reviewed saved finance category suggestions",
-  }),
-  suggestFields: query({
-    readPolicy: "strong",
-    input: fieldSuggestionsInput,
-    output: fieldSuggestionsOut,
-    cache: { profile: "stable" },
-    queryKeyOmit: ["runKey"],
-  }),
-  suggestFieldsBatch: query({
-    readPolicy: "strong",
-    input: fieldSuggestionsBatchInput,
-    output: fieldSuggestionsBatchOut,
-    mcp: { omit: "client_view" },
-    cache: { profile: "stable" },
-  }),
-  suggestFieldsReview: query({
-    mcp: {
-      omit: "agent_twin",
-      twin: "ai.suggestFields",
+      input: usdaFoodSuggestionInput,
+      output: usdaFoodSuggestionOut,
+      invalidates: [],
+    }),
+    suggestUsdaFoodBatch: mutation({
+      input: usdaFoodSuggestionBatchInput,
+      output: usdaFoodSuggestionBatchOut,
+      invalidates: ["ingredient"],
+    }),
+    suggestIngredientMergeBatch: mutation({
+      input: ingredientMergeSuggestionBatchInput,
+      output: ingredientMergeSuggestionBatchOut,
+      invalidates: ["ingredient"],
+    }),
+    // Nested `basis` can't ride the HTTP GET projection (precedent:
+    // `entity-list.contract.ts`'s `list`) — `.queryOptions()` still works.
+    // AI and externally hydrated food reads own authoritative database helpers.
+    applyFinanceCategorySuggestion: mutation({
+      exposure: "capability",
+      description:
+        "Apply one reviewed finance category suggestion with its fingerprint; refuses when the target changed since review.",
+      input: financeCategoryApplyInput,
+      output: financeCategoryApplyOut,
+      invalidates: [
+        "financialTransaction",
+        "purchase",
+        "expense",
+        "vendor",
+        "product",
+      ],
+      native: "Reviewed saved finance category suggestions",
+    }),
+    suggestFields: query({
+      exposure: "capability",
+      description:
+        "Decision-model field suggestions for a record or draft (`targets`, `basis`); a spending field also returns financeReview, whose fingerprint ai.apply_finance_category_suggestion takes. Mint one runKey uuid per session and reuse it for entity.record_suggestion_miss. decisionModel pins Jev (typesafe/jev) or Clef (@cf/cloudflare/clef) to replay one record through each trial model.",
+      modelBacked: true,
+      readPolicy: "strong",
+      input: fieldSuggestionsInput,
+      output: fieldSuggestionsOut,
+      cache: { profile: "stable" },
+      queryKeyOmit: ["runKey"],
+    }),
+    suggestFieldsBatch: query({
+      readPolicy: "strong",
+      input: fieldSuggestionsBatchInput,
+      output: fieldSuggestionsBatchOut,
+      cache: { profile: "stable" },
+    }),
+    suggestFieldsReview: query({
       note: "The same suggestions as a list for Swift",
-    },
-    readPolicy: "strong",
-    input: fieldSuggestionsInput,
-    output: fieldSuggestionsReviewOut,
-    transport: "post",
-    native: "Reviewed manifest field suggestions with nullable proposals",
-    cache: { profile: "stable" },
-    queryKeyOmit: ["runKey"],
-  }),
-  settledSuggestionQuestions: query({
-    mcp: {
-      omit: "client_view",
+      readPolicy: "strong",
+      input: fieldSuggestionsInput,
+      output: fieldSuggestionsReviewOut,
+      transport: "post",
+      native: "Reviewed manifest field suggestions with nullable proposals",
+      cache: { profile: "stable" },
+      queryKeyOmit: ["runKey"],
+    }),
+    settledSuggestionQuestions: query({
       note: "List pages skip re-asking declined suggestion questions",
-    },
-    input: settledSuggestionQuestionsInput,
-    output: settledSuggestionQuestionsOut,
-    readPolicy: "strong",
-    transport: "post",
-    // List pages batch this read and cache each question separately, tagged
-    // with the entity kinds its decision reads (`record-suggestions.tsx`).
-    cache: { profile: "stable", tags: [["ai", "settledSuggestionQuestion"]] },
-  }),
-  decisionCatalog: query({
-    mcp: {
-      omit: "client_view",
+      input: settledSuggestionQuestionsInput,
+      output: settledSuggestionQuestionsOut,
+      readPolicy: "strong",
+      transport: "post",
+      // List pages batch this read and cache each question separately, tagged
+      // with the entity kinds its decision reads (`record-suggestions.tsx`).
+      cache: { profile: "stable", tags: [["ai", "settledSuggestionQuestion"]] },
+    }),
+    decisionCatalog: query({
       note: "The /ai Decisions tab; agents replay decisions through suggest_fields",
-    },
-    input: zod.undefined(),
-    output: decisionCatalogOut,
-    cache: { profile: "stable" },
-  }),
-  startSuggestionSweep: mutation({
-    mcp: { omit: "operator_maintenance" },
-    input: suggestionSweepStartInput,
-    output: suggestionSweepStartOut,
-    invalidates: [],
-  }),
-  pauseSuggestionSweep: mutation({
-    command: { label: "Pause suggestions", confirmation: null },
-    mcp: { omit: "operator_maintenance" },
-    input: suggestionSweepControlInput,
-    output: zod.object({ paused: zod.literal(true) }),
-    invalidates: [],
-  }),
-  resumeSuggestionSweep: mutation({
-    command: { label: "Resume suggestions", confirmation: null },
-    mcp: { omit: "operator_maintenance" },
-    input: suggestionSweepControlInput,
-    output: suggestionSweepStartOut,
-    invalidates: [],
-  }),
-  latestSuggestionSweepStatus: query({
-    mcp: { omit: "operator_maintenance" },
-    input: zod.undefined(),
-    output: suggestionSweepStatusOut,
-    cache: { profile: "stable" },
-  }),
-  // Same reason as `suggestFields`: a per-row hint, not a public HTTP query.
-  suggestExternalIdKind: query({
-    mcp: { omit: "model_assist" },
-    readPolicy: "strong",
-    input: externalIdKindSuggestionInput,
-    output: suggestExternalIdKindOut,
-    cache: { profile: "stable" },
-    queryKeyOmit: ["runKey"],
-  }),
-  usageFilterOptions: query({
-    mcp: { omit: "operator_maintenance", note: "AI spend telemetry" },
-    input: zod.undefined(),
-    output: aiUsageFilterOptionsOut,
-    cache: { tags: [["ai", "usage"]] },
-  }),
-  usageRecent: query({
-    mcp: { omit: "operator_maintenance", note: "AI spend telemetry" },
-    input: aiUsageRecentInput,
-    output: aiUsageRecentOut,
-    // Nested `filters` has no GET query projection.
-    transport: "post",
-    cache: { tags: [["ai", "usage"]] },
-  }),
-  usageSummary: query({
-    mcp: { omit: "operator_maintenance", note: "AI spend telemetry" },
-    input: aiUsageSummaryInput,
-    output: aiUsageSummaryOut,
-    cache: { tags: [["ai", "usage"]] },
-  }),
-});
+      input: zod.undefined(),
+      output: decisionCatalogOut,
+      cache: { profile: "stable" },
+    }),
+    startSuggestionSweep: mutation({
+      exposure: "capability",
+      description:
+        "Start a bounded background suggestion sweep for the requested scope. It enqueues model-backed proposal work; inspect progress with latest_suggestion_sweep_status and review proposals in suggestions.list.",
+      input: suggestionSweepStartInput,
+      output: suggestionSweepStartOut,
+      invalidates: [],
+    }),
+    pauseSuggestionSweep: mutation({
+      exposure: "capability",
+      description:
+        "Pause the active suggestion sweep. Existing progress and proposals remain recorded; inspect the result with latest_suggestion_sweep_status.",
+      command: { label: "Pause suggestions", confirmation: null },
+      input: suggestionSweepControlInput,
+      output: zod.object({ paused: zod.literal(true) }),
+      invalidates: [],
+    }),
+    resumeSuggestionSweep: mutation({
+      exposure: "capability",
+      description:
+        "Resume a paused suggestion sweep from its saved checkpoint. Inspect progress with latest_suggestion_sweep_status and review proposals in suggestions.list.",
+      command: { label: "Resume suggestions", confirmation: null },
+      input: suggestionSweepControlInput,
+      output: suggestionSweepStartOut,
+      invalidates: [],
+    }),
+    latestSuggestionSweepStatus: query({
+      exposure: "capability",
+      description:
+        "Read the latest suggestion sweep status and progress. This does not start or resume work.",
+      input: zod.undefined(),
+      output: suggestionSweepStatusOut,
+      cache: { profile: "stable" },
+    }),
+    // Same reason as `suggestFields`: a per-row hint, not a public HTTP query.
+    suggestExternalIdKind: query({
+      readPolicy: "strong",
+      input: externalIdKindSuggestionInput,
+      output: suggestExternalIdKindOut,
+      cache: { profile: "stable" },
+      queryKeyOmit: ["runKey"],
+    }),
+    usageFilterOptions: query({
+      exposure: "capability",
+      note: "AI spend telemetry",
+      description:
+        "Read the available filters for AI usage telemetry. Use these values to narrow usage_recent or usage_summary.",
+      input: zod.undefined(),
+      output: aiUsageFilterOptionsOut,
+      cache: { tags: [["ai", "usage"]] },
+    }),
+    usageRecent: query({
+      exposure: "capability",
+      note: "AI spend telemetry",
+      description:
+        "Read recent AI usage records for the requested filters. This is telemetry, not a source of authoritative household decisions.",
+      input: aiUsageRecentInput,
+      output: aiUsageRecentOut,
+      // Nested `filters` has no GET query projection.
+      transport: "post",
+      cache: { tags: [["ai", "usage"]] },
+    }),
+    usageSummary: query({
+      exposure: "capability",
+      note: "AI spend telemetry",
+      description:
+        "Summarize AI usage and cost over the requested filters and time window. Use usage_recent to inspect individual calls.",
+      input: aiUsageSummaryInput,
+      output: aiUsageSummaryOut,
+      cache: { tags: [["ai", "usage"]] },
+    }),
+  },
+  { exposure: "view" },
+);
 
 export const aiStreamsContract = defineContract("ai", {
   backfillLocationDescriptions: subscription({
@@ -256,21 +267,31 @@ export const aiStreamsContract = defineContract("ai", {
 });
 
 /** Household-wide frontier AI funding (ADR 0017), shared by every feature. */
-export const aiFundingContract = defineContract("aiFunding", {
-  status: query({
-    input: zod.strictObject({}),
-    output: aiFundingStatus,
-    // Spend and refusals move with model calls; Run writes refresh it.
-    cache: { tags: [["run"]], profile: "live-status" },
-  }),
-  setCreditBudget: mutation({
-    input: aiBudgetSettings,
-    output: aiFundingStatus,
-    invalidates: ["runOnly"],
-  }),
-  resetCreditRefusal: mutation({
-    input: zod.strictObject({}),
-    output: aiFundingStatus,
-    invalidates: ["runOnly"],
-  }),
-});
+export const aiFundingContract = defineContract(
+  "aiFunding",
+  {
+    status: query({
+      description:
+        "The current six-hour window's funding: credit (Claude subscriber credit spent at standard API cost of limitUsd, default $5, with state available or refused: a recorded Anthropic refusal such as a Console spend limit, skipped until `until` with one probe per window, and its raw `reason`), paid (charged cost of $1) and plan (ChatGPT plan available, paused until a quota reset, disconnected or needing reauthorization, with the raw reason). Frontier calls use credit, then the plan, then paid only where allowed; background work waits instead of paying. Change it with ai_funding.",
+      input: zod.strictObject({}),
+      output: aiFundingStatus,
+      // Spend and refusals move with model calls; Run writes refresh it.
+      cache: { tags: [["run"]], profile: "live-status" },
+    }),
+    setCreditBudget: mutation({
+      description:
+        "Set household AI budgets per six-hour window: creditLimitUsd (Claude standard API cost), planLimitUsd (ChatGPT standard API cost, default $2), and paidLimitUsd (charged cost, default $1). Background work moves from credit to plan, then paid within these limits. Also clears a recorded Claude credit refusal, and work paused for free capacity retries now. Returns ai_funding.status.",
+      input: aiBudgetSettings,
+      output: aiFundingStatus,
+      invalidates: ["runOnly"],
+    }),
+    resetCreditRefusal: mutation({
+      description:
+        'Clear a recorded Claude credit refusal ("Retry Claude credit now") so the next frontier call tries Claude credit again, e.g. after raising the Console spend limit; work paused for free capacity retries now. A still-refusing Console records the refusal again on that call. Returns ai_funding.status.',
+      input: zod.strictObject({}),
+      output: aiFundingStatus,
+      invalidates: ["runOnly"],
+    }),
+  },
+  { exposure: "capability" },
+);

@@ -746,9 +746,9 @@ excluded from the required desktop shards and runs in CI as an optional job
 starts has no id until the click, so scripts use `currentRunId`. Prefer it over
 a UI-less scenario for anything the Run or Purchase page shows; keep scenarios
 for server fences the UI cannot observe.
-Branch on the current public tool-result shape (`imports_read.mail` returns
+Branch on the current public tool-result shape (`purchase_import.mail_read` returns
 the retained Email's `content` and `checksum`; `purchase_import.commit` and
-`mail.resolve` settle it). Generate an item title once per fixture and reuse
+`purchase_import.mail_resolve` settle it). Generate an item title once per fixture and reuse
 it in the retained original and proposal: tests share a worker database, so
 unrelated fixtures must not collide on Product name/manufacturer. Repeated
 orders for the same item reuse the Product reference returned by resolution.

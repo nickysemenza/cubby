@@ -120,8 +120,8 @@ describe("member Run transcript through MCP", () => {
     const read = (runId: string, cursor?: number) =>
       callMcpTool(
         createMcpServer(),
-        "imports_read",
-        { action: "run_transcript", runId, limit: 1, cursor },
+        "run",
+        { action: "transcript", runId, limit: 1, cursor },
         {},
         { operationContext },
       );
