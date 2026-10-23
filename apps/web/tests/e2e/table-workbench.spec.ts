@@ -58,7 +58,10 @@ test("real Tasks group, ungroup, and compose in the board view", async ({
     status: "done",
   });
   await page.setViewportSize({ width: 1440, height: 900 });
-  await gotoAuthenticatedPage(page, `/tasks?q=${encodeURIComponent(prefix)}`);
+  await gotoAuthenticatedPage(
+    page,
+    `/tasks?searchQuery=${encodeURIComponent(prefix)}`,
+  );
   // Header-menu dispatch is covered by table-header-layout.unit.test.tsx.
   // This journey owns grouping real records through the visible list control.
   await page.getByRole("button", { name: "Group by", exact: true }).click();

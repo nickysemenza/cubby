@@ -276,7 +276,7 @@ test("reviews spending and reimbursement in the browser with stale and replay gu
   );
   await gotoAuthenticatedPage(
     page,
-    "/financial-transactions?search=Synthetic%20friend%20contribution",
+    "/financial-transactions?searchQuery=Synthetic%20friend%20contribution",
   );
   await enrichment;
   const row = page

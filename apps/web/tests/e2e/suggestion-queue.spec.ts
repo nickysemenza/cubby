@@ -214,7 +214,7 @@ test("one queue separates proposals from automatic history and reviews either en
   // review surface; repeating both presentations for each endpoint adds no write coverage.
   await gotoAuthenticatedPage(
     page,
-    `/expenses?search=${encodeURIComponent(`${name} receipt`)}`,
+    `/expenses?searchQuery=${encodeURIComponent(`${name} receipt`)}`,
   );
   const row = page.getByRole("row").filter({
     has: page.getByRole("link", { name: `${name} receipt`, exact: true }),

@@ -274,7 +274,7 @@ test("an unchecked checkbox writes false, while leaving it unchanged writes noth
     tags: [],
     stockTracked: true,
   });
-  const path = `/products?q=${encodeURIComponent(name)}`;
+  const path = `/products?searchQuery=${encodeURIComponent(name)}`;
   const readStockTracked = async () => {
     const response = await entityApi(page.request).get(
       "product",
