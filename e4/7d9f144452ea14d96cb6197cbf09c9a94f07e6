@@ -1,0 +1,53 @@
+apps/web/package.json
+  s_0a3e5c08059595::t_bd511ba247f1a5 82-84
+apps/web/src/contracts/shipment.contract.ts
+  s_0a3e5c08059595::t_dae8106b89b417 17
+apps/web/src/server/orpc-spike/generate-openapi.ts
+  s_0a3e5c08059595::t_b9cbc0858c4bb6 1-17
+apps/web/src/server/orpc-spike/http.ts
+  s_0a3e5c08059595::t_164890855abf32 1-108
+apps/web/src/server/orpc-spike/router.ts
+  s_0a3e5c08059595::t_c339ec509d3327 1-57
+apps/web/src/server/worker/http.ts
+  s_0a3e5c08059595::t_f538276852bff2 84-87,143-150
+artifacts/orpc-spike.md
+  s_0a3e5c08059595::t_4cd65315b720fc 1-69
+artifacts/orpc-spike/baseline-startup-results.json
+  s_0a3e5c08059595::t_940fba6662e71e 1-64
+artifacts/orpc-spike/measurements.json
+  s_0a3e5c08059595::t_c3f42481c94e0c 1-60
+artifacts/orpc-spike/openapi.json
+  s_0a3e5c08059595::t_9a63549538ac1c 1-881
+artifacts/orpc-spike/orpc-preview-results.json
+  s_0a3e5c08059595::t_974e6dd8cbbd73 1-527
+artifacts/orpc-spike/rpc-preview-result.json
+  s_0a3e5c08059595::t_6af9e0b5b63785 1-25
+artifacts/orpc-spike/swift-tristate/Package.resolved
+  s_0a3e5c08059595::t_00d7b081993a08 1-78
+artifacts/orpc-spike/swift-tristate/Package.swift
+  s_0a3e5c08059595::t_79d688ef7743b8 1-19
+artifacts/orpc-spike/swift-tristate/Sources/OrpcSpike/main.swift
+  s_0a3e5c08059595::t_734a1929257069 1-34
+artifacts/orpc-spike/swift-tristate/Sources/OrpcSpike/openapi-generator-config.yaml
+  s_0a3e5c08059595::t_02ee6ca8d4d062 1-3
+artifacts/orpc-spike/swift-tristate/Sources/OrpcSpike/openapi.json
+  s_0a3e5c08059595::t_c3363db3569687 1-881
+pnpm-lock.yaml
+  s_0a3e5c08059595::t_b7944f5ea110b2 386-394,3214-3302,7048,7052-7053,9472-9474,9874-9877,11150-11152,13092,13120,13651-13821,16837-16838,19361-19362,19854-19855,21068-21069
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "e47d9f144452ea14d96cb6197cbf09c9a94f07e6",
+  "prompts": {},
+  "sessions": {
+    "s_0a3e5c08059595": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a16a69-ca1d-7651-b625-4f834a5ce93e",
+        "model": "gpt-6-luna"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
