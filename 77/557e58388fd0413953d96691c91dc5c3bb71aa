@@ -1,0 +1,37 @@
+apps/web/package.json
+  s_c21400fba7a125::t_6123fe4b5ef390 120
+apps/web/src/server/db/kysely.ts
+  s_c21400fba7a125::t_91dec99e7fd1bb 1-73
+apps/web/src/server/generic/assessment/repo/automatic-decisions.ts
+  s_c21400fba7a125::t_0d63e09a6d206a 27
+apps/web/src/server/generic/assessment/repo/review-families.ts
+  s_c21400fba7a125::t_27684a71dbe1cb 546-555,558,574-583,604
+apps/web/src/server/generic/assessment/repo/review-query-bakeoff.integration.test.ts
+  s_c21400fba7a125::t_a9418cb1ecbcfb 11,17-22,34-37,108-112,123-229,231-247,249-258,263-278,280,284-289,294-307,328,356-393,404,407-411,419,426-431,463-477
+apps/web/src/server/generic/assessment/repo/review-query-kysely.ts
+  s_c21400fba7a125::t_6a530410a0c6bd 1-228
+apps/web/src/server/generic/assessment/repo/suggestion-list.ts
+  s_c21400fba7a125::t_3382a7f7f755bb 36-37
+apps/web/tooling/database-socket-lifecycle.integration.test.ts
+  s_c21400fba7a125::t_7399ab8c7284ca 1-4,109-127
+docs/adr/0016-shared-assessments-and-feedback.md
+  s_c21400fba7a125::t_d2c46b8edbd12c 133-142
+pnpm-lock.yaml
+  s_c21400fba7a125::t_3e29c9bb94d727 500-502
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "77557e58388fd0413953d96691c91dc5c3bb71aa",
+  "prompts": {},
+  "sessions": {
+    "s_c21400fba7a125": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a16a72-4f47-7a60-9771-96d0347cb8d7",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
