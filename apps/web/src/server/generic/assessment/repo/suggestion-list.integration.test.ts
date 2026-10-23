@@ -1,3 +1,4 @@
+import { assessmentFamily } from "@cubby/schemas/assessment";
 import { financialSpendingAdvice } from "@cubby/schemas/financial-booking";
 import {
   recordSourceTransactionRecordsInput,
@@ -6,7 +7,7 @@ import {
 } from "@cubby/schemas/source-transaction-record";
 import type { SuggestionListRow } from "@cubby/schemas/suggestion-list";
 import { suggestionListFilters } from "@cubby/schemas/suggestion-list";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { createEntity } from "tooling/factories/create";
 import { createRepoEntity } from "tooling/factories/repo";
 import { buildKernelContext } from "tooling/scenarios/context";
@@ -493,7 +494,7 @@ describe("cross-family Suggestion list", () => {
     );
     await fieldSuggestion(ctx, product, "model", 0.95, new Date());
     await connection(ctx);
-    await card(ctx);
+    const account = await card(ctx);
     await record(ctx, [rowInput()]);
     await generate(ctx);
     const { families } = await suggestionCountsByFamily(ctx.db);
@@ -507,6 +508,34 @@ describe("cross-family Suggestion list", () => {
       pending: 1,
       clean: 0,
     });
-    expect(byFamily.get("statement_transaction")?.pending).toBe(1);
+    expect(byFamily.get("statement_transaction")).toMatchObject({
+      pending: 1,
+      clean: 0,
+      strong: 0,
+      medium: 0,
+      weak: 1,
+    });
+    const pending = async (
+      input: Parameters<typeof suggestionCountsByFamily>[1],
+    ) =>
+      (
+        await suggestionCountsByFamily(ctx.db, {
+          family: "statement_transaction",
+          ...input,
+        })
+      ).families[0]?.pending;
+    expect(await pending({ recordIds: [account.output.id] })).toBe(1);
+    expect(await pending({ recordIds: [] })).toBe(0);
+    expect(await pending({ entity: "product" })).toBe(0);
+    expect(await pending({ where: { action: { in: ["attach"] } } })).toBe(0);
+    // A narrow count must retain the list's malformed-action diagnostic.
+    await getDb(ctx.db).execute(sql`
+      UPDATE "AssessmentState" SET data = jsonb_set(data, '{recommended}', '"unexpected"'::jsonb)
+      WHERE family = ${assessmentFamily.enum.statement_transaction}
+    `);
+    await expect(pending({})).rejects.toThrow(/Invalid option/);
+    await expect(pending({ where: { clean: { in: [true] } } })).rejects.toThrow(
+      /Invalid option/,
+    );
   });
 });

@@ -29,6 +29,7 @@ import {
   recommendationSuggestionRow,
   statementSuggestionRow,
   transferPairSuggestionRow,
+  type SuggestionCountsOut,
   type SuggestionColumnValue,
   type SuggestionImpact,
   type SuggestionListFamily,
@@ -54,6 +55,8 @@ import {
 import {
   readStatementSuggestions,
   statementSuggestionKeys,
+  statementSuggestionCountFacts,
+  type StatementSuggestionScope,
   statementSuggestionStatusCounts,
 } from "~/server/domains/transaction-import/repo/statement-suggestion-read";
 import { kindAgreed } from "~/server/domains/transaction-import/repo/statement-transaction-kind";
@@ -108,6 +111,19 @@ export const assessmentIdScope = (
   column: SQL,
 ) => (ids ? sql`${column} = ANY(${uuidArrayParam(ids)})` : sql`true`);
 
+export type SuggestionPendingCounts = Pick<
+  SuggestionCountsOut["families"][number],
+  "pending" | "clean" | "strong" | "medium" | "weak"
+>;
+
+export const emptyPendingCounts = (): SuggestionPendingCounts => ({
+  pending: 0,
+  clean: 0,
+  strong: 0,
+  medium: 0,
+  weak: 0,
+});
+
 type ReviewItem = z.input<typeof assessmentReviewInput>;
 type Action = z.infer<typeof suggestionAction>;
 type RowOf<F extends SuggestionListFamily> = Extract<
@@ -133,6 +149,11 @@ export type SuggestionFamilyPresentation<F extends SuggestionListFamily> = {
     db: Database,
     query: SuggestionFamilyQuery,
   ) => Promise<SuggestionKey[]>;
+  /** Optional count projection for scopes without column filters. */
+  pendingCounts?: (
+    db: Database,
+    query: SuggestionFamilyQuery,
+  ) => Promise<SuggestionPendingCounts>;
   /** Current rows by Assessment id; a key whose evidence went stale is absent. */
   rows: (
     db: Database,
@@ -382,22 +403,31 @@ const STATEMENT_ENTITIES: readonly ShortcodeEntity[] = [
   "ledgerParty",
 ];
 
+function statementScope(
+  query: SuggestionFamilyQuery,
+): StatementSuggestionScope | null {
+  const { filters } = query;
+  const status = filters.status;
+  if (status !== "pending" && status !== "applied") return null;
+  if (filters.entity && !STATEMENT_ENTITIES.includes(filters.entity))
+    return null;
+  const recordUuids = recordIdsOf(query, STATEMENT_ENTITIES);
+  if (recordUuids?.length === 0) return null;
+  return {
+    recordUuids,
+    runCode: runCode(query),
+    status,
+    assessmentIds: query.assessmentIds,
+  };
+}
+
 const statementTransaction: SuggestionFamilyPresentation<"statement_transaction"> =
   {
     keys: async (db, query) => {
-      const { filters } = query;
-      const status = filters.status;
-      if (status !== "pending" && status !== "applied") return [];
-      if (filters.entity && !STATEMENT_ENTITIES.includes(filters.entity))
-        return [];
-      const recordUuids = recordIdsOf(query, STATEMENT_ENTITIES);
-      if (recordUuids?.length === 0) return [];
-      const rows = await statementSuggestionKeys(db, {
-        recordUuids,
-        runCode: runCode(query),
-        status,
-        assessmentIds: query.assessmentIds,
-      });
+      const scope = statementScope(query);
+      if (!scope) return [];
+      const status = scope.status ?? "pending";
+      const rows = await statementSuggestionKeys(db, scope);
       return rows.map((row) => ({
         family: "statement_transaction" as const,
         assessmentId: row.id,
@@ -432,6 +462,17 @@ const statementTransaction: SuggestionFamilyPresentation<"statement_transaction"
               : null,
         },
       }));
+    },
+    pendingCounts: async (db, query) => {
+      const scope = statementScope(query);
+      const counts = emptyPendingCounts();
+      if (!scope) return counts;
+      for (const row of await statementSuggestionCountFacts(db, scope)) {
+        counts.pending += row.count;
+        if (row.clean) counts.clean += row.count;
+        counts[statementStrength(row)] += row.count;
+      }
+      return counts;
     },
     rows: async (db, keys) => {
       const rows = await readStatementSuggestions(
