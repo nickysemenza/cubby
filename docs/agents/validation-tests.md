@@ -13,6 +13,15 @@ their module type explicitly, matching the consumer. Build-provenance
 fixtures clone their immutable synthetic Git template with Git rather than
 recursively copying `.git` as ordinary fixture files.
 
+The built-Worker photo-agent scenario owns dispatch through the actual agent/MCP,
+persisted proposals and review progress, no Product/Inventory before review,
+explicit concern resolution and one successful approval with exact ownership,
+location and quantity read-back. Do not repeat direct rejection or replay matrices
+inside that expensive harness. `run/proposals.integration.test.ts` owns direct
+writes without review, failed unresolved approval, atomic confirmation and replay
+without changed confirmation/duplicate writes. The agent scenario keeps its real
+successful approval; only duplicate direct repository branches are removed.
+
 Photo-import route binding and source-admission unit cases import
 `photo-import-route-bindings.ts`, which evaluates contracts without loading
 repositories or the entity kernel. Runtime route creation, singular image owners

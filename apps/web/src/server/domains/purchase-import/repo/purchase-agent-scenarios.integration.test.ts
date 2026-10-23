@@ -62,7 +62,6 @@ import {
   approvePhotoGroupProposals,
   resolvePhotoGroupConcern,
 } from "~/server/domains/photo-import/repo/run/proposals";
-import { commitPhotoGroup } from "~/server/domains/photo-import/repo/run/writer";
 import { setMailImport } from "~/server/domains/purchase-import/repo/mail-import-settings";
 import { enqueueJob, claimJob } from "~/server/generic/jobs/repo/jobs";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
@@ -414,47 +413,6 @@ describe("current purchase-agent system boundaries", () => {
           eq(imageProcessingJob.sourceContentHash, checksum),
         ),
       );
-    // The direct writer cannot turn an unreviewed proposal into Product/stock.
-    await expect(
-      commitPhotoGroup(
-        ctx.db,
-        {
-          runId: runShortcode.parse(run.publicId),
-          groupKey: "synthetic-unreviewed-write",
-          images: [{ id: imageFixture.shortcode, purpose: "item" }],
-          product: { kind: "create", create: { name: productName } },
-          inventory: { locationId: closet.id, quantity: 1 },
-        },
-        ctx.actor,
-      ),
-    ).rejects.toThrow("explicit photo group review intent");
-    expect(
-      await getDb(ctx.db)
-        .select({ id: product.id })
-        .from(product)
-        .where(eq(product.name, productName)),
-    ).toEqual([]);
-    expect(await getDb(ctx.db).select().from(inventoryEntry)).toEqual([]);
-    const unconfirmed = await approvePhotoGroupProposals(
-      ctx.db,
-      { runId: run.publicId },
-      ctx.actor,
-    );
-    expect(unconfirmed.results[0]).toMatchObject({
-      outcome: "failed",
-      error: "Confirm the printed size from the label",
-    });
-    expect(unconfirmed.proposals[0]).toMatchObject({
-      state: "proposed",
-      review: { confirmation: null },
-    });
-    expect(
-      await getDb(ctx.db)
-        .select({ id: product.id })
-        .from(product)
-        .where(eq(product.name, productName)),
-    ).toEqual([]);
-    expect(await getDb(ctx.db).select().from(inventoryEntry)).toEqual([]);
     const resolved = await resolvePhotoGroupConcern(
       ctx.db,
       {
@@ -512,29 +470,6 @@ describe("current purchase-agent system boundaries", () => {
       ownerLedgerPartyId: party.id,
       locationId: closet.entityId,
     });
-    const replay = await approvePhotoGroupProposals(
-      ctx.db,
-      { runId: run.publicId, groupKeys: ["synthetic-wardrobe-item"] },
-      ctx.actor,
-    );
-    expect(replay.results).toEqual([
-      { groupKey: "synthetic-wardrobe-item", outcome: "replayed" },
-    ]);
-    expect(replay.proposals[0]?.review?.confirmation).toEqual(
-      approval.proposals[0]?.review?.confirmation,
-    );
-    expect(
-      await getDb(ctx.db)
-        .select({ id: product.id })
-        .from(product)
-        .where(eq(product.name, productName)),
-    ).toEqual([created]);
-    expect(
-      await getDb(ctx.db)
-        .select()
-        .from(inventoryEntry)
-        .where(eq(inventoryEntry.productId, created.id)),
-    ).toEqual(entries);
     expect(await scenario.violations()).toEqual([]);
   }, 60_000);
 
