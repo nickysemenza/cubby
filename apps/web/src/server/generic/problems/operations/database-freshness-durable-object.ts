@@ -13,7 +13,7 @@ import {
   acceptDoorbell,
   refuseDoorbellMessage,
   ringDoorbell,
-} from "~/server/http/doorbell";
+} from "~/server/http/doorbell-socket";
 
 import { DatabaseFreshnessStore } from "../repo/database-freshness-store";
 

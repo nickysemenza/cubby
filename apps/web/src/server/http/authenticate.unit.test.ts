@@ -67,7 +67,7 @@ describe("the same-origin rule", () => {
     ],
     ["a cross-site read", { method: "GET", origin: "https://foreign.example" }],
   ])("admits %s with a cookie", async (_name, { method, origin, site }) => {
-    const headers = new Headers();
+    const headers = new Headers({ cookie: "session=fixture" });
     if (origin) headers.set("origin", origin);
     if (site) headers.set("sec-fetch-site", site);
     expect(
@@ -94,7 +94,7 @@ describe("the same-origin rule", () => {
   ])(
     "refuses %s with a cookie before verifying it",
     async (_name, { method, origin, upgrade }) => {
-      const headers = new Headers();
+      const headers = new Headers({ cookie: "session=fixture" });
       if (origin) headers.set("origin", origin);
       if (upgrade) headers.set("upgrade", upgrade);
       expect(
@@ -103,6 +103,16 @@ describe("the same-origin rule", () => {
       expect(ports.getSession).not.toHaveBeenCalled();
     },
   );
+
+  it("answers a write with no credential at all as unauthenticated", async () => {
+    ports.getSession.mockResolvedValue({
+      response: null,
+      headers: new Headers(),
+    });
+    expect(
+      await authenticate(request({ method: "POST" }), BROWSER_AUTH),
+    ).toMatchObject({ status: 401, code: "UNAUTHORIZED" });
+  });
 
   it("exempts a bearer credential, which a foreign page cannot send ambiently", async () => {
     const result = await authenticate(

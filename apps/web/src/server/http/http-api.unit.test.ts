@@ -168,7 +168,10 @@ describe("HTTP boundary", () => {
   it.each([undefined, "https://foreign.example"])(
     "rejects cookie writes before normalizing the Origin (%s)",
     async (origin) => {
-      const headers = new Headers({ "content-type": "application/json" });
+      const headers = new Headers({
+        "content-type": "application/json",
+        cookie: "session=fixture",
+      });
       if (origin) headers.set("Origin", origin);
       expect(
         (
@@ -309,6 +312,7 @@ describe("HTTP boundary", () => {
           method: "POST",
           headers: {
             authorization: "Basic dXNlcjpwYXNz",
+            cookie: "session=fixture",
             "content-type": "application/json",
           },
           body: JSON.stringify({

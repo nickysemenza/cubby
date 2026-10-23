@@ -167,7 +167,15 @@ test.describe("companion doorbell", () => {
       (await startOperation(page.request, "imageProcessing.pull", { hello }))
         .body,
     );
-    expect(next.command).toBeNull();
+    // Parallel tests share the household queue, so another job may be
+    // waiting; the non-retryable failure itself is never handed out again.
+    expect(next.command?.jobId).not.toBe(jobId);
+    if (next.command)
+      await startOperation(page.request, "imageProcessing.release", {
+        deviceId: hello.deviceId,
+        jobId: next.command.jobId,
+        attemptId: next.command.attemptId,
+      });
   });
 
   // The doorbell only rings; a subscriber that talks is disconnected.

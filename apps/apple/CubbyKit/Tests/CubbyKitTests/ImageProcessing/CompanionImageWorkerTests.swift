@@ -233,7 +233,7 @@ struct CompanionImageWorkerTests {
             credentials: try credentials(bearer: "tok"),
             deviceID: UUID(), deviceName: "Test phone", foreground: true, isParticipating: false,
             outbox: try outbox(), transport: QueuedCompanionTransport(commands: [], delivers: false),
-                execute: { try await executions.run($0) })
+            execute: { try await executions.run($0) })
         await worker.stopAccepting()
         await worker.startCommand(try describeCommand())
         #expect(try await worker.pauseAcceptingIfSettled())

@@ -54,8 +54,8 @@ function importOrder(
   return [
     call(`${prefix}-claim`, "claim_next_import_work"),
     { check: `${prefix}-claim`, includes: source.messageId },
-    mcpRead(`${prefix}-read`, "imports_read", {
-      action: "mail",
+    mcpRead(`${prefix}-read`, "purchase_import_read", {
+      action: "mail_read",
       mailboxId: source.mailboxId,
       messageId: source.messageId,
     }),

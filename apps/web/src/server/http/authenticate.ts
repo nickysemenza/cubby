@@ -376,7 +376,13 @@ export function createAuthenticator(ports: AuthPorts) {
   ): Promise<Principal | Challenge> {
     const credential = presentedCredential(request.headers, policy);
     if (!policy.credentials.includes(credential)) return unauthorized(policy);
-    if (credential === "cookie" && crossSiteCookieRequest(request))
+    // Without a Cookie header nothing ambient was sent; verification answers
+    // 401 instead of the origin rule answering 403.
+    if (
+      credential === "cookie" &&
+      request.headers.has("cookie") &&
+      crossSiteCookieRequest(request)
+    )
       return FOREIGN_ORIGIN;
     const verified = await withTrace("auth.verify", async (span) => {
       span.setAttribute("cubby.auth.method", credential);

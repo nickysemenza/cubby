@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 import { decideReadConsistency } from "~/server/db/read-consistency";
 
 describe("database freshness Durable Object", () => {
-  it("publishes committed-change hints over a hibernating socket after enabling strong reads", async () => {
+  it("rings household.changed over a hibernating socket after enabling strong reads", async () => {
     const stub = env.DB_FRESHNESS.getByName(crypto.randomUUID());
     const response = await stub.fetch(
       new Request("https://example.test/socket", {
@@ -25,7 +25,8 @@ describe("database freshness Durable Object", () => {
     await evictDurableObject(stub);
     await stub.publishChanges(["task"]);
     expect(JSON.parse(await received)).toEqual({
-      type: "invalidate",
+      type: "ring",
+      topic: "household.changed",
       categories: ["task"],
     });
     const freshness = await stub.readFreshness();

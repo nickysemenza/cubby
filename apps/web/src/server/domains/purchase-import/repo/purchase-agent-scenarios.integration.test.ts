@@ -338,8 +338,8 @@ describe("current purchase-agent system boundaries", () => {
             },
           ],
         }),
-        mcpRead("photo-list", "imports_read", {
-          action: "photo_proposals",
+        mcpRead("photo-list", "photo_run_read", {
+          action: "proposals",
           runId: run.publicId,
         }),
         call("photo-await", "report_agent_progress", {

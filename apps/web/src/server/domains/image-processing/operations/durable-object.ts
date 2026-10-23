@@ -5,7 +5,7 @@ import {
   acceptDoorbell,
   refuseDoorbellMessage,
   ringDoorbell,
-} from "~/server/http/doorbell";
+} from "~/server/http/doorbell-socket";
 
 import type { ImageProcessingCompanionRpc } from "../service/contracts";
 

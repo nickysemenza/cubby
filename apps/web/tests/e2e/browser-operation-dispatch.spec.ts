@@ -32,18 +32,32 @@ test("browser dispatch preserves operation dates and rejects foreign origins", a
       },
     );
     expect(foreign.status()).toBe(403);
-    const outdated = await page.request.post(
+    // An outdated Apple build keeps its reads; the runner refuses its writes
+    // before parsing input, so this write's empty input never runs.
+    const outdatedHeaders = {
+      Origin: baseURL!,
+      "User-Agent": "cubby-apple/0.0.0 (iOS; synthetic-install)",
+    };
+    const outdatedRead = await page.request.post(
       browserOperationPath("auditLog.list"),
+      { data: payload, headers: outdatedHeaders },
+    );
+    expect(outdatedRead.status()).toBe(200);
+    const outdated = await page.request.post(
+      browserOperationPath("ai.pauseSuggestionSweep"),
       {
-        data: payload,
-        headers: {
-          Origin: baseURL!,
-          "User-Agent": "cubby-apple/0.0.0 (iOS; synthetic-install)",
-        },
+        data: superjson.serialize({
+          operation: "ai.pauseSuggestionSweep",
+          input: {},
+        }),
+        headers: outdatedHeaders,
       },
     );
     expect(outdated.status()).toBe(426);
-    expect(await outdated.json()).toMatchObject({ code: "UPGRADE_REQUIRED" });
+    expect(superjson.deserialize(await outdated.json())).toMatchObject({
+      ok: false,
+      error: { code: "UPGRADE_REQUIRED" },
+    });
 
     // A stale/mislabelled URL must never execute the operation in its body.
     const mismatch = await page.request.post(
