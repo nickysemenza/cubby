@@ -274,10 +274,13 @@ export default defineEntity(
               {
                 value: "stock",
                 label: "Stock",
+                glyph: { phosphor: "Package", sfSymbol: "shippingbox" },
               },
               {
                 value: "installed",
                 label: "Installed",
+                color: "domain-house",
+                glyph: { phosphor: "House", sfSymbol: "house" },
               },
             ],
           },
@@ -285,7 +288,6 @@ export default defineEntity(
             columnGroup: "Stock",
             optionRole: "category",
             optionColor: "domain-pantry",
-            optionGlyph: { phosphor: "MapPin", sfSymbol: "mappin" },
           },
           validation: {
             read: inventoryPlacement.describe(

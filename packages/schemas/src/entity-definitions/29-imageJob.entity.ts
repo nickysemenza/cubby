@@ -1,3 +1,4 @@
+import type { EnumIcon } from "@cubby/shared/enum-palette";
 import { z } from "zod";
 import {
   ACTIVITY_KIND_LABEL,
@@ -17,9 +18,15 @@ const readOnly = <T extends z.ZodTypeAny>(read: T) => ({
   update: null,
 });
 
+const KIND_GLYPH = {
+  subject_lift: { phosphor: "Scissors", sfSymbol: "scissors" },
+  describe_image: { phosphor: "TextAa", sfSymbol: "text.below.photo" },
+  identify_image: { phosphor: "Scan", sfSymbol: "viewfinder" },
+} satisfies Record<z.infer<typeof imageProcessingJobKind>, EnumIcon>;
 const kindOptions = imageProcessingJobKind.options.map((value) => ({
   value,
   label: ACTIVITY_KIND_LABEL[value],
+  glyph: KIND_GLYPH[value],
 }));
 
 const stateOptions = [
@@ -172,7 +179,6 @@ export default defineEntity({
           columnGroup: "Execution",
           optionRole: "category",
           optionColor: "neutral-status",
-          optionGlyph: { phosphor: "Image", sfSymbol: "photo" },
         },
         validation: readOnly(imageProcessingJobKind),
       },

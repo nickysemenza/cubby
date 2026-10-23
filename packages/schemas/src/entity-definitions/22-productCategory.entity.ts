@@ -199,14 +199,22 @@ export default defineEntity({
             {
               value: "inherit",
               label: "Inherit",
+              glyph: {
+                phosphor: "ArrowBendDownRight",
+                sfSymbol: "arrow.turn.down.right",
+              },
             },
             {
               value: "mapped",
               label: "Mapped",
+              color: "domain-finance",
+              glyph: { phosphor: "Tag", sfSymbol: "tag" },
             },
             {
               value: "blocked",
               label: "Keep unresolved",
+              color: "warning",
+              glyph: { phosphor: "MinusCircle", sfSymbol: "minus.circle" },
             },
           ],
         },
@@ -215,7 +223,6 @@ export default defineEntity({
           columnLabel: "Spending mode",
           optionRole: "category",
           optionColor: "neutral-status",
-          optionGlyph: { phosphor: "Tag", sfSymbol: "tag" },
         },
         validation: {
           read: spendingCategoryMappingMode.default("inherit"),

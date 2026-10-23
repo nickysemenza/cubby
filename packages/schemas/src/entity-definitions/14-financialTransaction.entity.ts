@@ -658,46 +658,67 @@ export default defineEntity(
               {
                 value: "purchase",
                 label: "Purchase",
+                glyph: { phosphor: "ShoppingCart", sfSymbol: "cart" },
                 color: "info",
               },
               {
                 value: "refund",
                 label: "Refund",
+                glyph: {
+                  phosphor: "ArrowUUpLeft",
+                  sfSymbol: "arrow.uturn.left",
+                },
                 color: "positive",
               },
               {
                 value: "account_transfer",
                 label: "Account transfer",
+                glyph: {
+                  phosphor: "ArrowsLeftRight",
+                  sfSymbol: "arrow.left.arrow.right",
+                },
                 color: "neutral-status",
               },
               {
                 value: "credit_card_payment",
                 label: "Card payment",
+                glyph: { phosphor: "CreditCard", sfSymbol: "creditcard" },
                 color: "neutral-status",
               },
               {
                 value: "fee",
                 label: "Fee",
+                glyph: { phosphor: "Coins", sfSymbol: "dollarsign.circle" },
                 color: "warning",
               },
               {
                 value: "interest",
                 label: "Interest",
+                glyph: { phosphor: "Percent", sfSymbol: "percent" },
                 color: "warning",
               },
               {
                 value: "income",
                 label: "Income",
+                glyph: { phosphor: "Money", sfSymbol: "banknote" },
                 color: "positive",
               },
               {
                 value: "adjustment",
                 label: "Adjustment",
+                glyph: {
+                  phosphor: "SlidersHorizontal",
+                  sfSymbol: "slider.horizontal.3",
+                },
                 color: "neutral-status",
               },
               {
                 value: "other",
                 label: "Other",
+                glyph: {
+                  phosphor: "DotsThreeCircle",
+                  sfSymbol: "ellipsis.circle",
+                },
                 color: "neutral-status",
               },
             ],
@@ -707,10 +728,6 @@ export default defineEntity(
             width: "sm",
             optionRole: "category",
             optionColor: "domain-finance",
-            optionGlyph: {
-              phosphor: "ArrowsLeftRight",
-              sfSymbol: "arrow.left.arrow.right",
-            },
           },
           validation: {
             read: financialTransactionKind,

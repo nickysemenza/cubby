@@ -1,12 +1,29 @@
+import type { ColorToken, EnumIcon } from "@cubby/shared/enum-palette";
 import { capitalize } from "@cubby/shared/text-case";
 import { z } from "zod";
 import { shipmentChildren } from "../child-tables/shipment";
 import { shortcodeSchema } from "../identifier-fields";
 import {
+  type ShipmentPurpose,
   shipmentExtraTrackingNumbers,
   shipmentPurpose,
 } from "../shipment-fields";
 import { defineEntity } from "./definition";
+
+const SHIPMENT_PURPOSE_PRESENTATION = {
+  incoming: {
+    color: "category-1",
+    glyph: { phosphor: "TrayArrowDown", sfSymbol: "tray.and.arrow.down" },
+  },
+  outgoing: {
+    color: "category-4",
+    glyph: { phosphor: "TrayArrowUp", sfSymbol: "tray.and.arrow.up" },
+  },
+  unknown: {
+    color: "neutral-status",
+    glyph: { phosphor: "Question", sfSymbol: "questionmark.circle" },
+  },
+} satisfies Record<ShipmentPurpose, { color: ColorToken; glyph: EnumIcon }>;
 
 export default defineEntity({
   key: "shipment",
@@ -181,13 +198,13 @@ export default defineEntity({
           columnGroup: "Purchase",
           optionRole: "category",
           optionColor: "neutral-status",
-          optionGlyph: { phosphor: "Package", sfSymbol: "shippingbox" },
         },
         control: {
           kind: "select",
           options: shipmentPurpose.options.map((value) => ({
             value,
             label: capitalize(value),
+            ...SHIPMENT_PURPOSE_PRESENTATION[value],
           })),
         },
         validation: {

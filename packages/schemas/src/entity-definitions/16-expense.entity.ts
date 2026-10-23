@@ -448,10 +448,16 @@ export default defineEntity({
             {
               value: "vendor",
               label: "Vendor charge",
+              glyph: { phosphor: "Storefront", sfSymbol: "storefront" },
             },
             {
               value: "reimbursement",
               label: "Reimbursement",
+              color: "category-2",
+              glyph: {
+                phosphor: "HandCoins",
+                sfSymbol: "dollarsign.arrow.circlepath",
+              },
             },
           ],
         },
@@ -460,7 +466,6 @@ export default defineEntity({
           columnLabel: "Role",
           optionRole: "category",
           optionColor: "domain-finance",
-          optionGlyph: { phosphor: "Storefront", sfSymbol: "storefront" },
         },
         validation: {
           read: z.enum(["vendor", "reimbursement"]).default("vendor"),

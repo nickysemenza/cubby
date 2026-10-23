@@ -1,3 +1,4 @@
+import type { EnumIcon } from "@cubby/shared/enum-palette";
 import { runChildren } from "../child-tables/run.js";
 import { z } from "zod";
 import {
@@ -17,6 +18,32 @@ import {
 } from "../run-fields.js";
 import { runWorkProgress } from "../run-work-progress.js";
 import { defineEntity } from "./definition.js";
+
+const RUN_PURPOSE_GLYPH = {
+  account_sync: { phosphor: "Bank", sfSymbol: "building.columns" },
+  mail_import: { phosphor: "Receipt", sfSymbol: "receipt" },
+  purchase_validation: { phosphor: "SealCheck", sfSymbol: "checkmark.seal" },
+  product_enrichment: { phosphor: "Package", sfSymbol: "shippingbox" },
+  photo_inventory: { phosphor: "Camera", sfSymbol: "camera" },
+  ai_suggest: { phosphor: "Sparkle", sfSymbol: "sparkles" },
+  suggestion_sweep: { phosphor: "MagicWand", sfSymbol: "wand.and.stars" },
+  ai_refresh: { phosphor: "ArrowClockwise", sfSymbol: "arrow.clockwise" },
+  background: { phosphor: "Gear", sfSymbol: "gearshape" },
+  file_import: { phosphor: "FileArrowUp", sfSymbol: "doc.badge.arrow.up" },
+  mail_search: { phosphor: "MagnifyingGlass", sfSymbol: "magnifyingglass" },
+  mail_discovery: { phosphor: "Envelope", sfSymbol: "envelope" },
+  mail_reclassify: {
+    phosphor: "Funnel",
+    sfSymbol: "line.3.horizontal.decrease.circle",
+  },
+  connection_discovery: { phosphor: "Link", sfSymbol: "link" },
+  maintenance: { phosphor: "Wrench", sfSymbol: "wrench" },
+  derived_refresh: {
+    phosphor: "ArrowsClockwise",
+    sfSymbol: "arrow.triangle.2.circlepath",
+  },
+  sweep: { phosphor: "Broom", sfSymbol: "wind" },
+} satisfies Record<z.infer<typeof runPurpose>, EnumIcon>;
 
 const readOnly = <T extends z.ZodTypeAny>(read: T) => ({
   read,
@@ -406,6 +433,7 @@ export default defineEntity({
           options: runPurpose.options.map((value) => ({
             value,
             label: RUN_PURPOSE_LABEL[value],
+            glyph: RUN_PURPOSE_GLYPH[value],
           })),
         },
         display: {
@@ -413,7 +441,6 @@ export default defineEntity({
           width: "sm",
           optionRole: "category",
           optionColor: "domain-finance",
-          optionGlyph: { phosphor: "Gear", sfSymbol: "gearshape" },
         },
         validation: readOnly(runPurpose),
       },
@@ -426,26 +453,38 @@ export default defineEntity({
             {
               value: "foreground",
               label: "Foreground",
+              glyph: { phosphor: "AppWindow", sfSymbol: "macwindow" },
             },
             {
               value: "discovery",
               label: "Discovery",
+              glyph: { phosphor: "Binoculars", sfSymbol: "binoculars" },
             },
             {
               value: "manual",
               label: "Manual",
+              glyph: {
+                phosphor: "HandPointing",
+                sfSymbol: "hand.point.up.left",
+              },
             },
             {
               value: "backfill",
               label: "Backfill",
+              glyph: {
+                phosphor: "ClockCounterClockwise",
+                sfSymbol: "clock.arrow.circlepath",
+              },
             },
             {
               value: "scheduled",
               label: "Scheduled",
+              glyph: { phosphor: "CalendarBlank", sfSymbol: "calendar" },
             },
             {
               value: "ephemeral",
               label: "Ephemeral",
+              glyph: { phosphor: "Lightning", sfSymbol: "bolt" },
             },
           ],
         },
@@ -453,7 +492,6 @@ export default defineEntity({
           columnGroup: "Execution",
           optionRole: "category",
           optionColor: "domain-finance",
-          optionGlyph: { phosphor: "Lightning", sfSymbol: "bolt" },
         },
         validation: readOnly(runTrigger),
       },
