@@ -1,63 +1,94 @@
 import { PDF_CONTENT_TYPE } from "@cubby/schemas/image";
-import { sql } from "drizzle-orm";
+import { and, sql } from "drizzle-orm";
 
+import type { Database, DrizzleTransaction } from "~/server/db";
+import { notDeleted, unwrapDb, uuidArrayParam } from "~/server/db/helpers";
 import { image } from "~/server/db/retained-tables";
+import { entityDisplayImagePresenceSql } from "~/server/entity-kernel/repo/entity-display-image";
+import { qualityCheck } from "~/server/generic/data-quality/repo/builders";
+import { defineStoredEntityChecks } from "~/server/generic/data-quality/repo/stored-registry";
 
-import { defineEntityChecks } from "../registry";
+export const IMAGE_QUALITY_RULES_VERSION = 1;
 
-type Image = typeof image;
+type ImageQualityRecord = Awaited<
+  ReturnType<typeof loadImageQualityRecords>
+>[number];
+const observed = qualityCheck.observed<ImageQualityRecord>;
+const when = qualityCheck.when<ImageQualityRecord>;
+const imageColumn = (column: string) => sql`"Image".${sql.identifier(column)}`;
 
-const isOwn = (t: Image) => sql`${t.source} = 'own'`;
-const isOwnOrScreenshot = (t: Image) =>
-  sql`${t.source} IN ('own', 'screenshot')`;
-
-// A PDF document carries pages, not raster dimensions.
-const isRaster = (t: Image) => sql`${t.contentType} <> ${PDF_CONTENT_TYPE}`;
-
-const hasLiveSighting = (t: Image) => sql`EXISTS (
-  SELECT 1 FROM "ImageSighting" dq_sighting
-  WHERE dq_sighting."imageId" = ${t.id} AND dq_sighting."deletedAt" IS NULL
-)`;
-
-export const imageChecks = defineEntityChecks({
+export const imageChecks = defineStoredEntityChecks({
   entity: "image",
   table: image,
+  rulesVersion: IMAGE_QUALITY_RULES_VERSION,
+  load: loadImageQualityRecords,
   checks: {
-    image_provenance_unknown: {
-      missing: (t) => sql`${t.source} = 'unknown'`,
-    },
-    // Defect, not missing: an image is only expected to name a capturer once
-    // it is household-sourced, and the gap is the derivation landing on a tie
-    // (`captureAttribution = ambiguous`) rather than a blank value.
-    image_capture_attribution: {
-      expected: isOwn,
-      missing: (t) => sql`${t.captureAttribution} = 'ambiguous'`,
-    },
-    // `own` and `screenshot` are the two sources with a genuine capture
-    // moment; `catalog`/`unknown` never carry one.
-    image_capture_date: {
-      expected: isOwnOrScreenshot,
-      missing: (t) => sql`${t.capturedAt} IS NULL`,
-    },
-    image_dimensions: {
-      expected: isRaster,
-      missing: (t) =>
-        sql`(${t.width} IS NULL OR ${t.height} IS NULL OR ${t.width} <= 0 OR ${t.height} <= 0)`,
-    },
-    // The same storage/render verdicts `displayableImageWhere` reads: the
-    // record exists but its bytes are gone, mismatched, or unrenderable.
-    image_asset_unusable: {
-      missing: (t) => sql`(
-        ${t.storageStatus} IN ('missing', 'metadata_mismatch')
-        OR (${isRaster(t)} AND ${t.renderStatus} = 'failed')
-      )`,
-    },
-    // `own` without any live sighting means the household-sourced claim has
-    // no photo-library evidence behind it — a legacy upload never matched by
-    // a library scan, or a sighting later deleted.
-    image_sighting_missing: {
-      expected: isOwn,
-      missing: (t) => sql`NOT ${hasLiveSighting(t)}`,
-    },
+    image_display_image: qualityCheck.hasImage,
+    image_provenance_unknown: observed((record) => record.source !== "unknown"),
+    // Only the ambiguous derivation result is a defect; a blank attribution
+    // has historically remained outside this check.
+    image_capture_attribution: when(
+      (record) => record.source === "own",
+      observed((record) => record.captureAttribution !== "ambiguous"),
+    ),
+    image_capture_date: when(
+      (record) => record.source === "own" || record.source === "screenshot",
+      observed((record) => record.capturedAt !== null),
+    ),
+    image_dimensions: when(
+      (record) => record.contentType !== PDF_CONTENT_TYPE,
+      observed(
+        (record) =>
+          record.width !== null &&
+          record.height !== null &&
+          record.width > 0 &&
+          record.height > 0,
+      ),
+    ),
+    image_asset_unusable: observed((record) => !record.assetUnusable),
+    image_sighting_missing: when(
+      (record) => record.source === "own",
+      observed((record) => record.hasLiveSighting),
+    ),
   },
 });
+
+async function loadImageQualityRecords(
+  db: Database | DrizzleTransaction,
+  ids: readonly string[],
+) {
+  if (!ids.length) return [];
+  return unwrapDb(db)
+    .select({
+      id: image.id,
+      shortcode: image.shortcode,
+      source: image.source,
+      captureAttribution: image.captureAttribution,
+      capturedAt: image.capturedAt,
+      contentType: image.contentType,
+      width: image.width,
+      height: image.height,
+      renderStatus: image.renderStatus,
+      storageStatus: image.storageStatus,
+      assetUnusable: sql<boolean>`(
+        ${image.storageStatus} IN ('missing', 'metadata_mismatch')
+        OR (
+          ${image.contentType} <> ${PDF_CONTENT_TYPE}
+          AND ${image.renderStatus} = 'failed'
+        )
+      )`,
+      hasLiveSighting: sql<boolean>`EXISTS (
+        SELECT 1 FROM "ImageSighting" dq_image_sighting
+        WHERE dq_image_sighting."imageId" = ${imageColumn("id")}
+          AND dq_image_sighting."deletedAt" IS NULL
+      )`,
+      hasDisplayImage: sql<boolean>`${entityDisplayImagePresenceSql(
+        "image",
+        imageColumn("id"),
+      )}`,
+    })
+    .from(image)
+    .where(
+      and(notDeleted(image), sql`${image.id} = ANY(${uuidArrayParam(ids)})`),
+    );
+}

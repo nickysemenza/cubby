@@ -1,12 +1,13 @@
 import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { productCategoryUpdateData } from "@cubby/schemas/product-category";
-import { sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { buildEntity } from "tooling/factories/build";
 import { taxonomyShortcode } from "tooling/product-category-fixtures";
 import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { unwrapDb } from "~/server/db/helpers";
+import { job } from "~/server/db/schema";
 import { upsertCookbook } from "~/server/domains/cookbook/repo/cookbook";
 import {
   ensureGlobalUnknownLocation,
@@ -18,6 +19,8 @@ import {
   updateProductCategory,
 } from "~/server/domains/product-category/repo/product-category";
 import { upsertCookbookRecipe } from "~/server/domains/recipe/repo/crud";
+import { recordChange } from "~/server/generic/changes/repo/change";
+import { advanceJob } from "~/server/generic/jobs/service/jobs";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import {
   createIngredientFixture,
@@ -35,16 +38,37 @@ import {
   makeRecipeInput,
   insertEntityAttachments,
 } from "~/server/testing/repo.fixtures";
+import { refreshFamilyHandler } from "~/server/workflows/background-tasks/refresh-families";
 
 import { loadDataQualities } from "./hydrate";
 
 /**
  * For each pantry/garden scored entity, one row that trips a real check and
- * one that satisfies it. Ported entries pass `source: "live"` to exercise the
- * batch TypeScript evaluator; unported entries still exercise their SQL path.
+ * one that satisfies it. Stored-quality entries are read after their quality
+ * family publishes the batch-loaded outcomes.
  */
 describe("data quality: pantry and garden entities", () => {
   const ctx = withTestDb();
+  const refreshQuality = async () => {
+    for (let page = 0; page < 8; page++) {
+      const [intent] = await unwrapDb(ctx.db)
+        .select()
+        .from(job)
+        .where(eq(job.key, "refresh:quality"));
+      if (!intent) throw new Error("Expected quality intent from source write");
+      expect(
+        await advanceJob(ctx.db, intent.id, {
+          "refresh.family": refreshFamilyHandler,
+        }),
+      ).toBe("succeeded");
+      const [current] = await unwrapDb(ctx.db)
+        .select()
+        .from(job)
+        .where(eq(job.id, intent.id));
+      if (current?.state === "completed") return;
+    }
+    throw new Error("Synthetic pantry quality pass exceeded page budget");
+  };
 
   it("recipe: ingredients, instructions and source", async () => {
     const gap = await createRecipeFixture(
@@ -72,6 +96,7 @@ describe("data quality: pantry and garden entities", () => {
       TEST_ACTOR,
     );
 
+    await refreshQuality();
     const hydrated = await loadDataQualities(ctx.db, "recipe", [
       gap.entityId,
       complete.entityId,
@@ -114,6 +139,7 @@ describe("data quality: pantry and garden entities", () => {
     );
     expect(withProduct).toBeTruthy();
 
+    await refreshQuality();
     const hydrated = await loadDataQualities(ctx.db, "ingredient", [
       ownRecipeIngredient.entityId,
     ]);
@@ -143,6 +169,7 @@ describe("data quality: pantry and garden entities", () => {
       TEST_ACTOR,
     );
 
+    await refreshQuality();
     const hydrated = await loadDataQualities(ctx.db, "ingredient", [
       unusedIngredient.entityId,
     ]);
@@ -184,6 +211,7 @@ describe("data quality: pantry and garden entities", () => {
       TEST_ACTOR,
     );
 
+    await refreshQuality();
     const hydrated = await loadDataQualities(ctx.db, "cookbook", [
       gap.entityId,
       complete.entityId,
@@ -232,6 +260,7 @@ describe("data quality: pantry and garden entities", () => {
       "A tidy pantry shelf.",
     );
 
+    await refreshQuality();
     const hydrated = await loadDataQualities(ctx.db, "location", [
       gap.entityId,
       complete.entityId,
@@ -323,6 +352,7 @@ describe("data quality: pantry and garden entities", () => {
       TEST_ACTOR,
     );
 
+    await refreshQuality();
     const hydrated = await loadDataQualities(ctx.db, "meal", [
       gap.entityId,
       complete.entityId,
@@ -359,7 +389,10 @@ describe("data quality: pantry and garden entities", () => {
       TEST_ACTOR,
     );
     const before = (
-      await loadDataQualities(ctx.db, "recipe", [recipe.entityId])
+      await (async () => {
+        await refreshQuality();
+        return loadDataQualities(ctx.db, "recipe", [recipe.entityId]);
+      })()
     ).get(recipe.entityId);
     expect(before?.gaps.map((gap) => gap.check)).toEqual([
       "recipe_display_image",
@@ -370,6 +403,11 @@ describe("data quality: pantry and garden entities", () => {
       WHERE "recipeId" = ${recipe.entityId}`);
     await unwrapDb(ctx.db).execute(sql`
       UPDATE "Ingredient" SET "deletedAt" = now() WHERE "shortcode" = ${ingredient.id}`);
+    await recordChange(ctx.db, {
+      kind: "source",
+      categories: ["recipe", "ingredient"],
+    });
+    await refreshQuality();
 
     const after = (
       await loadDataQualities(ctx.db, "recipe", [recipe.entityId])
@@ -393,6 +431,7 @@ describe("data quality: pantry and garden entities", () => {
       recipeId: recipe.entityId,
     });
     const id = parseEntityId("ingredient", wrapper.id);
+    await refreshQuality();
     const live = (await loadDataQualities(ctx.db, "ingredient", [id])).get(id);
     expect(live?.gaps.map((g) => g.check)).not.toContain(
       "ingredient_recipe_deleted",
@@ -400,6 +439,11 @@ describe("data quality: pantry and garden entities", () => {
 
     await unwrapDb(ctx.db).execute(sql`
       UPDATE "Recipe" SET "deletedAt" = now() WHERE "id" = ${recipe.entityId}`);
+    await recordChange(ctx.db, {
+      kind: "source",
+      categories: ["recipe"],
+    });
+    await refreshQuality();
     const orphaned = (await loadDataQualities(ctx.db, "ingredient", [id])).get(
       id,
     )!;
@@ -429,6 +473,11 @@ describe("data quality: pantry and garden entities", () => {
     );
     await unwrapDb(ctx.db).execute(sql`
       UPDATE "Recipe" SET "deletedAt" = now() WHERE "id" = ${recipe.entityId}`);
+    await recordChange(ctx.db, {
+      kind: "source",
+      categories: ["recipe"],
+    });
+    await refreshQuality();
     const quality = (
       await loadDataQualities(ctx.db, "meal", [meal.entityId])
     ).get(meal.entityId)!;
@@ -476,6 +525,7 @@ describe("data quality: pantry and garden entities", () => {
       TEST_ACTOR,
     );
     const ids = [parent, inherited, unmapped, blocked].map((c) => c.entityId);
+    await refreshQuality();
     const hydrated = await loadDataQualities(ctx.db, "productCategory", ids);
     const flagged = (c: typeof parent) =>
       hydrated
@@ -504,6 +554,8 @@ describe("data quality: pantry and garden entities", () => {
       storageStatus: "missing",
     });
     const ids = [pdf, zero, lost].map((row) => parseEntityId("image", row.id));
+    await recordChange(ctx.db, { kind: "source", categories: ["image"] });
+    await refreshQuality();
     const hydrated = await loadDataQualities(ctx.db, "image", ids);
     const checks = (index: number) =>
       hydrated.get(ids[index]!)?.gaps.map((g) => g.check) ?? [];
@@ -539,6 +591,7 @@ describe("data quality: pantry and garden entities", () => {
       TEST_ACTOR,
     );
 
+    await refreshQuality();
     const hydrated = await loadDataQualities(ctx.db, "productCategory", [
       gap.entityId,
       completeRoot.entityId,

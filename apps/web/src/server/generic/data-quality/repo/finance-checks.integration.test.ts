@@ -1,11 +1,12 @@
 import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
-import { sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
 import { taxonomyShortcode } from "tooling/product-category-fixtures";
 import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { unwrapDb } from "~/server/db/helpers";
+import { job } from "~/server/db/schema";
 import {
   createGardenEntry,
   createPlanting,
@@ -19,6 +20,7 @@ import {
   updateVendor,
 } from "~/server/domains/vendor/repo/vendor";
 import { createWish } from "~/server/domains/wish/repo";
+import { advanceJob } from "~/server/generic/jobs/service/jobs";
 import { resolveLiveShortcode } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import {
@@ -29,17 +31,38 @@ import {
   makeProductInput,
   insertEntityAttachments,
 } from "~/server/testing/repo.fixtures";
+import { refreshFamilyHandler } from "~/server/workflows/background-tasks/refresh-families";
 
 import { setDataException } from "./exceptions";
 import { loadDataQualities } from "./hydrate";
 
 /**
  * For each finance/project scored entity, one row that trips a real check and
- * one that satisfies it. Ported entries pass `source: "live"` to exercise the
- * batch TypeScript evaluator; unported entries still exercise their SQL path.
+ * one that satisfies it. Stored-quality entries are read after their quality
+ * family publishes the batch-loaded outcomes.
  */
 describe("data quality: finance and project entities", () => {
   const ctx = withTestDb();
+  const refreshQuality = async () => {
+    for (let page = 0; page < 8; page++) {
+      const [intent] = await unwrapDb(ctx.db)
+        .select()
+        .from(job)
+        .where(eq(job.key, "refresh:quality"));
+      if (!intent) throw new Error("Expected quality intent from source write");
+      expect(
+        await advanceJob(ctx.db, intent.id, {
+          "refresh.family": refreshFamilyHandler,
+        }),
+      ).toBe("succeeded");
+      const [current] = await unwrapDb(ctx.db)
+        .select()
+        .from(job)
+        .where(eq(job.id, intent.id));
+      if (current?.state === "completed") return;
+    }
+    throw new Error("Synthetic finance quality pass exceeded page budget");
+  };
 
   it("project: kind, and a start date only once work has begun", async () => {
     const gap = await createRepoEntity(ctx, "project", {
@@ -142,6 +165,7 @@ describe("data quality: finance and project entities", () => {
       imageId: logo.id,
     });
 
+    await refreshQuality();
     const hydrated = await loadDataQualities(ctx.db, "vendor", [
       untransacted.entityId,
       gap.entityId,
@@ -180,8 +204,7 @@ describe("data quality: finance and project entities", () => {
       gaps: [],
     });
 
-    // Exceptions are no longer Product/Purchase-only (ADR 0006): a vendor
-    // records why its logo cannot be found, and a new website reopens it.
+    // Stored waivers are durable member decisions across evidence changes.
     const excepted = await setDataException(
       ctx.db,
       {
@@ -202,12 +225,13 @@ describe("data quality: finance and project entities", () => {
       { website: "https://stall.example.test" },
       ctx.actor,
     );
+    await refreshQuality();
     const reopened = (
       await loadDataQualities(ctx.db, "vendor", [gap.entityId])
     ).get(gap.entityId);
-    expect(reopened?.gaps.map((g) => g.check)).toContain("vendor_logo");
+    expect(reopened?.gaps.map((g) => g.check)).not.toContain("vendor_logo");
     expect(reopened?.exceptions).toContainEqual(
-      expect.objectContaining({ check: "vendor_logo", state: "stale" }),
+      expect.objectContaining({ check: "vendor_logo", state: "active" }),
     );
   });
 
@@ -252,6 +276,7 @@ describe("data quality: finance and project entities", () => {
       itemizationExpectation: "not_expected",
     });
 
+    await refreshQuality();
     const hydrated = await loadDataQualities(
       ctx.db,
       "vendor",
@@ -288,6 +313,7 @@ describe("data quality: finance and project entities", () => {
       { orderEvidence: "online_account" },
       ctx.actor,
     );
+    await refreshQuality();
     const resolved = (
       await loadDataQualities(ctx.db, "vendor", [sourceOff.entityId])
     ).get(sourceOff.entityId);

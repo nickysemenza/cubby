@@ -2518,9 +2518,14 @@ batch loader produces the records consumed by pure shared `qualityCheck` builder
 The shared `data-quality-score.ts` formula owns stored scores too.
 
 In addition to Shipment, stored checks now cover Device, GardenEntry, ImageJob,
-Inventory, Plant, Planting, Project, SpendingCategory, Wish, LedgerParty and
-LedgerTransfer. Related-row loaders batch live Locations, candidate Products,
-FinancialAccounts and non-void FinancialTransactions with each ID page.
+Inventory, Plant, Planting, Project, SpendingCategory, Wish, LedgerParty,
+LedgerTransfer, Cookbook, Image, Ingredient, Location, Meal, Recipe, Vendor and
+ProductCategory. Related-row facts are loaded once per ID page; soft-deleted
+Recipes, Ingredients, Products, Purchases, attachments and Images do not count
+where the former SQL check excluded them. Cookbook covers, Vendor logos and
+Location description prerequisites use the shared displayability predicate.
+Recipe total publications and Location AI-description changes enroll quality
+refresh because Meal cost completeness and Location descriptions read them.
 
 `EntityQuality` stores a nullable score, rules version and computation time;
 `EntityQualityCheck` stores pass, gap, waived or not_applicable for each check.
