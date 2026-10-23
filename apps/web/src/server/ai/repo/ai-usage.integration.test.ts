@@ -6,7 +6,7 @@ import { createDatabase } from "~/server/db/database-runtime";
 type ModelCost = NonNullable<AiModelPricing[keyof AiModelPricing]["cost"]>;
 import { eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
-import pg from "pg";
+import { createPostgresPool } from "tooling/postgres-pool";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi, afterEach, beforeEach } from "vitest";
 import { z } from "zod";
@@ -136,7 +136,10 @@ describe("listAiUsageForRun", () => {
       sql`ANALYZE "AiUsage", "ImageProcessingJob", "ImageProcessingAttempt", "Run"`,
     );
     const statements: { text: string; params: unknown[] }[] = [];
-    const pool = new pg.Pool({ connectionString: ctx.databaseUrl, max: 1 });
+    const pool = createPostgresPool({
+      connectionString: ctx.databaseUrl,
+      max: 1,
+    });
     const client = drizzle({
       client: pool,
       schema,
