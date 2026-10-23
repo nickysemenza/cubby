@@ -246,6 +246,19 @@ Keep a `PgTable` object when passing a plain table to `.from()`: raw SQL
 interpolation of an aliased table emits only its alias, losing the underlying
 table declaration. Derived SQL sources must not convert plain-table fallbacks
 into SQL fragments.
+Query shape: narrow to the requested identities before per-row work. A
+MATERIALIZED CTE that builds JSON or runs correlated policy lookups for every
+eligible row, then filters by scope, multiplies cost by the population. In the
+Assessment eligibility rewrite, moving rule checks behind a materialized
+identity barrier cut one scope's rule lookups from about 13,400 to 11. Match a
+primary reference column directly instead of expanding a JSON array. When many
+list reads need the same derived value, compute it once in a background family
+and read the stored result (as data quality does) rather than recomputing it in
+every list statement. Load related facts once per ID page, never per row. Write
+queries with the Drizzle builder and typed helpers; Kysely matched Drizzle's
+plans without fixing the raw JSON predicates and needed a separate adapter.
+Benchmark with the related graphs seeded: empty Email, Purchase or settlement
+tables hide the cost of subqueries that walk them.
 A repeated SELECT/GROUP BY expression must use identical constants: separate
 bind parameters make PostgreSQL treat its copies as different expressions.
 Inline compile-time schema enum values with `sql.raw`, keeping user input bound;

@@ -204,7 +204,9 @@ describe("settlement allocations — write path", () => {
     // `onConflictDoNothing` onto this edge would silently drop one slice, losing
     // money-shaped evidence and breaking the sum invariant.
     const account = await mkAccount();
-    const [a, b] = await Promise.all([mkPurchase(), mkPurchase()]);
+    // Sequential: concurrent findOrCreateVendor calls can create two vendors.
+    const a = await mkPurchase();
+    const b = await mkPurchase();
     const txn = await mkTransaction(account.id);
     await update(txn.id, {
       allocations: [
@@ -225,7 +227,9 @@ describe("settlement allocations — write path", () => {
 
   it("moves a non-colliding slice onto the survivor", async () => {
     const account = await mkAccount();
-    const [a, b] = await Promise.all([mkPurchase(), mkPurchase()]);
+    // Sequential: concurrent findOrCreateVendor calls can create two vendors.
+    const a = await mkPurchase();
+    const b = await mkPurchase();
     const txn = await mkTransaction(account.id, {
       purchaseId: a.id,
       amount: -25,
