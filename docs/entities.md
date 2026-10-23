@@ -1951,6 +1951,11 @@ pagination and input equality fingerprints retain their existing meanings.
 
 ## Filters and search
 
+Wish ranges are owned by `apps/web/src/server/domains/wish/price-range.ts`.
+Hydration, sorting and totals use its SQL aggregate over the effective Product
+price; null prices are omitted, zero is priced, and no priced candidates means
+no range. Candidate hydration computes this only for the requested Wish IDs.
+
 `apps/web/src/lib/search-normalization.ts` owns the search normalization recipe:
 trim, collapse whitespace, then lowercase. Query input, document writers and
 embedding freshness SQL interpret that same recipe and whitespace set.

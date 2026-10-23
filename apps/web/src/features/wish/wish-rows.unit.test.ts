@@ -1,6 +1,5 @@
 import { testCompleteDataQuality, testShortcode } from "@cubby/schemas/testing";
 import type { WishCandidateOut, WishListItemOut } from "@cubby/schemas/wish";
-import { wishPriceRange } from "@cubby/schemas/wish-fields";
 import { describe, expect, it } from "vitest";
 
 import { buildWishRows, wishSubRows } from "./wish-rows";
@@ -25,7 +24,6 @@ const wish = (
   shortcode: string,
   candidates: WishCandidateOut[] = [],
 ): WishListItemOut => {
-  const priceRange = wishPriceRange(candidates);
   return {
     id: testShortcode("wish", shortcode),
     name: `Wish ${shortcode}`,
@@ -33,7 +31,7 @@ const wish = (
     acquiredAt: null,
     candidates,
     candidateCount: candidates.length,
-    priceRange,
+    priceRange: null,
     displayImages: [],
     dataQuality: testCompleteDataQuality(),
     createdAt: new Date("2026-01-01"),
@@ -95,36 +93,5 @@ describe("buildWishRows", () => {
     const [row] = buildWishRows([wish("WSH-0004", [candidate("PRD-CCCC", 1)])]);
     const child = row?.kind === "wish" ? row.subRows[0]! : undefined;
     expect(wishSubRows(child!)).toBeUndefined();
-  });
-});
-
-describe("wishPriceRange", () => {
-  it("spans the priced candidates and counts them", () => {
-    expect(
-      wishPriceRange([
-        candidate("PRD-A", 200),
-        candidate("PRD-B", 650),
-        candidate("PRD-C", 425),
-      ]),
-    ).toEqual({ low: 200, high: 650, pricedCount: 3 });
-  });
-
-  it("collapses a lone candidate to an equal low and high", () => {
-    expect(wishPriceRange([candidate("PRD-A", 425)])).toEqual({
-      low: 425,
-      high: 425,
-      pricedCount: 1,
-    });
-  });
-
-  it("excludes unpriced candidates instead of treating them as free", () => {
-    expect(
-      wishPriceRange([candidate("PRD-A", 200), candidate("PRD-B", null)]),
-    ).toEqual({ low: 200, high: 200, pricedCount: 1 });
-  });
-
-  it("is null when nothing is priced", () => {
-    expect(wishPriceRange([candidate("PRD-A", null)])).toBeNull();
-    expect(wishPriceRange([])).toBeNull();
   });
 });
