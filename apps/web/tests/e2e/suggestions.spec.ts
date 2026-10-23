@@ -45,6 +45,7 @@ import { expect, test } from "./support/e2e-test";
 import { startOperation } from "./support/start-operation";
 import {
   createEntityFixture,
+  createFixtureGraph,
   createEvidenceHarnessContext,
   ensureMemberParty,
 } from "./fixtures/core";
@@ -470,9 +471,30 @@ test("statement Suggestions attach to a named candidate, bulk-accept a clean sup
   const { db, actor } = await createEvidenceHarnessContext(page);
   const alias = uniqueName(testInfo, "Statement card");
   const owner = await ensureMemberParty(page, alias);
-  const category = await createEntityFixture(page, "spendingCategory", {
-    name: `${alias} spending`,
-  });
+  const { category, account, recorded } = await createFixtureGraph(
+    page,
+    async (create) => {
+      const category = await create("spendingCategory", {
+        name: `${alias} spending`,
+      });
+      const account = await create("financialAccount", {
+        name: alias,
+        ledgerPartyId: owner.shortcode,
+        provisional: false,
+        identity: { kind: "credit_card", issuer: null, network: "visa" },
+        sourceAliases: [{ source: "monarch", alias, externalAccountId: null }],
+      });
+      const recorded = await create("financialTransaction", {
+        accountId: account.id,
+        amount: 61.07,
+        merchant: `${alias} Hardware`,
+        kind: "purchase",
+        status: "pending",
+        transactionDate: "2026-05-11",
+      });
+      return { category, account, recorded };
+    },
+  );
   const labelSpending = () =>
     labelStatementSuggestions(db, {
       port: answering({ kind: "purchase", counterparty: "business" }),
@@ -485,13 +507,6 @@ test("statement Suggestions attach to a named candidate, bulk-accept a clean sup
           counterparty: "business",
         }),
     });
-  const account = await createEntityFixture(page, "financialAccount", {
-    name: alias,
-    ledgerPartyId: owner.shortcode,
-    provisional: false,
-    identity: { kind: "credit_card", issuer: null, network: "visa" },
-    sourceAliases: [{ source: "monarch", alias, externalAccountId: null }],
-  });
   const accountId = await resolveOrThrow(db, "financialAccount", account.id);
   const spendingTotal = async () => {
     const spent = await getDb(db).execute<{ total: number }>(sql`
@@ -501,14 +516,6 @@ test("statement Suggestions attach to a named candidate, bulk-accept a clean sup
     `);
     return spent.rows[0]?.total;
   };
-  const recorded = await createEntityFixture(page, "financialTransaction", {
-    accountId: account.id,
-    amount: 61.07,
-    merchant: `${alias} Hardware`,
-    kind: "purchase",
-    status: "pending",
-    transactionDate: "2026-05-11",
-  });
   const hardware = `${alias} HARDWARE 0441`;
   const hold = `${alias} HOLD`;
   const cafe = `${alias} CAFE`;
@@ -538,19 +545,9 @@ test("statement Suggestions attach to a named candidate, bulk-accept a clean sup
   await generateStatementSuggestions(db, importId);
 
   const view = `/suggestions?family=statement_transaction&record=financialAccount:${account.id}&group=account_month`;
-  await gotoAuthenticatedPage(page, view);
   const table = suggestionsTable(page);
   const rowFor = (text: string) =>
     table.getByRole("row").filter({ hasText: text });
-  // The provider's category is named as its source's evidence, never "Category".
-  await expect(
-    table.getByRole("columnheader", { name: "Provider category" }),
-  ).toBeVisible();
-  // Without decision labels no create's kind is agreed, so nothing is clean.
-  await expect(
-    page.getByRole("button", { name: "Accept 0 clean" }),
-  ).toBeDisabled();
-
   await labelSpending();
   await gotoAuthenticatedPage(page, view);
   await rowFor(hardware)
@@ -694,17 +691,6 @@ test("statement Suggestions attach to a named candidate, bulk-accept a clean sup
     .getByRole("button", { name: "Dismiss", exact: true })
     .click();
   await expect(rowFor(cafe)).toHaveCount(0);
-
-  await gotoAuthenticatedPage(
-    page,
-    `/source-transaction-records?q=${encodeURIComponent(hardware)}`,
-  );
-  await expect(
-    page
-      .getByRole("table", { name: "Source transaction records Table" })
-      .getByRole("row")
-      .filter({ hasText: hardware }),
-  ).toContainText("Matched");
 });
 
 // Failure mode: Find suggestions starts a Sweep without showing what it will

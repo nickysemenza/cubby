@@ -180,6 +180,16 @@ classification routing and unchanged Email/evidence storage through the real
 operation/MCP composition with provider/model seams. Dedicated native preview
 button/error recovery sampling is a deliberate diagnostic-UI coverage gap.
 
+The statement Suggestions journey seeds its category, account and pending candidate
+in one graph and begins after decision labels are published. It retains named
+candidate attachment, reviewed Vendor correction, pending spending, explicit clean
+bulk confirmation, supersession money and dismissal. `statement-transaction-kind.unit.test.ts`
+owns the no-label clean-acceptance guard, and `statement-suggestions.integration.test.ts`
+owns applied source `matched` state. `finance-evidence-journey.spec.ts` retains
+real source-list/detail navigation and immutable provider facts. The removed
+unlabeled-state visit and final source-status visit no longer sample those
+specific UI states; no review/write outcome or money assertion is removed.
+
 The Gmail Product-merge browser setup creates both conflicting identities in one
 fixture graph and scopes the merge list by their shared synthetic Product name.
 Keep both exact-identifier conflicts, explicit choice and native merge readback;
