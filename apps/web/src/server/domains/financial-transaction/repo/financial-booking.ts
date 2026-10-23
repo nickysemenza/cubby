@@ -11,7 +11,8 @@ import { expenseCreateInput } from "@cubby/schemas/project";
 import { purchaseCreateInput } from "@cubby/schemas/purchase";
 import { cents } from "@cubby/shared";
 import { sha256Hex } from "@cubby/shared/sha256";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
+import { groupBy } from "es-toolkit";
 
 import type { Database } from "~/server/db";
 import {
@@ -90,28 +91,58 @@ export async function bookingGraph(
   purchaseId: typeof purchase.$inferSelect.id | null,
 ) {
   if (!purchaseId) return { target: null, lines: [], attributions: [] };
-  const target = await getDb(db).query.purchase.findFirst({
-    where: and(eq(purchase.id, purchaseId), notDeleted(purchase)),
-  });
-  if (!target) return fail("The selected Purchase is no longer live.");
-  const lines = await getDb(db)
-    .select()
-    .from(expense)
-    .where(and(eq(expense.purchaseId, purchaseId), notDeleted(expense)))
-    .orderBy(expense.id);
-  const attributions = await getDb(db)
-    .select()
-    .from(expenseAttribution)
-    .innerJoin(expense, eq(expense.id, expenseAttribution.expenseId))
-    .where(
-      and(
-        eq(expense.purchaseId, purchaseId),
-        notDeleted(expense),
-        notDeleted(expenseAttribution),
-      ),
-    )
-    .orderBy(expenseAttribution.id);
-  return { target, lines, attributions };
+  const graph = (await bookingGraphs(db, [purchaseId])).get(purchaseId);
+  if (!graph) return fail("The selected Purchase is no longer live.");
+  return graph;
+}
+
+/** Read-only page preparation; authoritative booking still loads its current graph. */
+export async function bookingGraphs(
+  db: Database,
+  purchaseIds: readonly (typeof purchase.$inferSelect.id)[],
+) {
+  const ids = [...new Set(purchaseIds)];
+  const targets = ids.length
+    ? await getDb(db).query.purchase.findMany({
+        where: and(inArray(purchase.id, ids), notDeleted(purchase)),
+      })
+    : [];
+  const lines = ids.length
+    ? await getDb(db)
+        .select()
+        .from(expense)
+        .where(and(inArray(expense.purchaseId, ids), notDeleted(expense)))
+        .orderBy(expense.id)
+    : [];
+  const attributions = ids.length
+    ? await getDb(db)
+        .select()
+        .from(expenseAttribution)
+        .innerJoin(expense, eq(expense.id, expenseAttribution.expenseId))
+        .where(
+          and(
+            inArray(expense.purchaseId, ids),
+            notDeleted(expense),
+            notDeleted(expenseAttribution),
+          ),
+        )
+        .orderBy(expenseAttribution.id)
+    : [];
+  const linesByPurchase = groupBy(lines, (line) => line.purchaseId ?? "");
+  const attributionsByPurchase = groupBy(
+    attributions,
+    (entry) => entry.Expense.purchaseId ?? "",
+  );
+  return new Map(
+    targets.map((target) => [
+      target.id,
+      {
+        target,
+        lines: linesByPurchase[target.id] ?? [],
+        attributions: attributionsByPurchase[target.id] ?? [],
+      },
+    ]),
+  );
 }
 async function bookingCategory(
   db: Database,

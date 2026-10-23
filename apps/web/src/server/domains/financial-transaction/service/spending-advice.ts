@@ -18,9 +18,12 @@ import {
 } from "~/server/ai/policy/features";
 import { runStructuredFeature } from "~/server/ai/run-feature";
 import type { Database } from "~/server/db";
-import { resolveNames } from "~/server/entity-kernel/resolve";
 
-import { financialSpendingCategoryHistory } from "../repo/financial-spending";
+import {
+  financialSpendingCategoryHistory,
+  resolveFinancialSpendingVendors,
+  type FinancialSpendingPage,
+} from "../repo/financial-spending";
 
 export type SpendingAdvicePort = (input: {
   judgment: StatementTransactionJudgment;
@@ -43,6 +46,7 @@ export async function adviseSpending(
     model?: SupportedDecisionModel;
     port?: DecisionPort;
     spendingAdvice?: SpendingAdvicePort;
+    preparation?: Pick<FinancialSpendingPage, "categoryHistory" | "vendors">;
   },
 ) {
   const create = input.judgment.create;
@@ -51,9 +55,11 @@ export async function adviseSpending(
     return financialSpendingAdvice.parse(await input.spendingAdvice(input));
   const merchant = create.merchant?.trim() || create.rawDescription?.trim();
   if (!merchant) return financialSpendingAdvice.parse({});
-  const [named] = await resolveNames(db, "vendor", [{ name: merchant }], {
-    create: false,
-  });
+  const [named] = await resolveFinancialSpendingVendors(
+    db,
+    [merchant],
+    input.preparation,
+  );
   let identity = merchantIdentityProposal.parse({
     name: named?.row?.name ?? null,
     counterparty: "unknown",
@@ -94,9 +100,15 @@ export async function adviseSpending(
         identity.confidence = "low";
     }
   }
-  const history = named?.row
-    ? await financialSpendingCategoryHistory(db, named.row.id)
-    : [];
+  let history: Awaited<ReturnType<typeof financialSpendingCategoryHistory>> =
+    [];
+  if (named?.row) {
+    const lookup =
+      input.preparation?.categoryHistory.get(named.row.id) ??
+      financialSpendingCategoryHistory(db, named.row.id);
+    input.preparation?.categoryHistory.set(named.row.id, lookup);
+    history = await lookup;
+  }
   const result = await suggestFields(
     db,
     input.runId,

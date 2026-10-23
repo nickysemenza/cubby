@@ -70,12 +70,33 @@ export async function lockPartySettlement(
   );
 }
 
-type RetainedPayment = {
-  amount: number;
-  chargedAt: Date | null;
-  cardLastFour: string | null;
-  tender: PaymentTender;
+type RetainedPayment = Readonly<
+  Pick<
+    typeof purchasePaymentEvidence.$inferSelect,
+    "amount" | "chargedAt" | "cardLastFour" | "tender"
+  >
+>;
+
+const retainedPaymentFields = {
+  sourceClaimId: purchasePaymentEvidence.sourceClaimId,
+  amount: purchasePaymentEvidence.amount,
+  chargedAt: purchasePaymentEvidence.chargedAt,
+  cardLastFour: purchasePaymentEvidence.cardLastFour,
+  tender: purchasePaymentEvidence.tender,
 };
+
+type RetainedPaymentRow = RetainedPayment &
+  Pick<typeof purchasePaymentEvidence.$inferSelect, "sourceClaimId">;
+
+type RetainedSettlementDiscoveryFacts = Readonly<{
+  target: Readonly<
+    Pick<typeof purchase.$inferSelect, "vendorId" | "statedTotal">
+  > | null;
+  hasAllocation: boolean;
+  hasNegativeAllocation: boolean;
+  payments: readonly RetainedPayment[] | "conflicting_sources";
+  ownerIds: readonly LedgerPartyId[];
+}>;
 
 type Charge = SettlementCandidate & {
   kind: ReturnType<typeof financialTransactionKind.parse>;
@@ -108,19 +129,19 @@ async function loadPaymentSet(
   purchaseId: PurchaseId,
 ): Promise<RetainedPayment[] | "conflicting_sources"> {
   const rows = await tx
-    .select({
-      sourceClaimId: purchasePaymentEvidence.sourceClaimId,
-      amount: purchasePaymentEvidence.amount,
-      chargedAt: purchasePaymentEvidence.chargedAt,
-      cardLastFour: purchasePaymentEvidence.cardLastFour,
-      tender: purchasePaymentEvidence.tender,
-    })
+    .select(retainedPaymentFields)
     .from(purchasePaymentEvidence)
     .where(eq(purchasePaymentEvidence.purchaseId, purchaseId))
     .orderBy(
       asc(purchasePaymentEvidence.sourceClaimId),
       asc(purchasePaymentEvidence.evidenceIndex),
     );
+  return normalizePaymentSet(rows);
+}
+
+function normalizePaymentSet(
+  rows: readonly RetainedPaymentRow[],
+): RetainedPayment[] | "conflicting_sources" {
   const bySource = new Map<string, RetainedPayment[]>();
   for (const row of rows) {
     const set = bySource.get(row.sourceClaimId) ?? [];
@@ -157,6 +178,86 @@ async function loadPaymentSet(
     tender: knownTender.get(paymentKey(payment)) ?? payment.tender,
     cardLastFour: knownCard.get(paymentKey(payment)) ?? payment.cardLastFour,
   }));
+}
+
+/**
+ * Page-local discovery facts only. Plans still match each charge separately;
+ * commit planning ignores these snapshots and re-reads under its usual locks.
+ */
+export async function prepareRetainedSettlementDiscovery(
+  tx: SettlementReader,
+  purchaseIds: readonly PurchaseId[],
+): Promise<ReadonlyMap<PurchaseId, RetainedSettlementDiscoveryFacts>> {
+  const facts = new Map<PurchaseId, RetainedSettlementDiscoveryFacts>();
+  const ids = [...new Set(purchaseIds)];
+  const batchSize = 512;
+  for (let offset = 0; offset < ids.length; offset += batchSize) {
+    const batch = ids.slice(offset, offset + batchSize);
+    const targets = await tx
+      .select({
+        id: purchase.id,
+        vendorId: purchase.vendorId,
+        statedTotal: purchase.statedTotal,
+      })
+      .from(purchase)
+      .where(and(inArray(purchase.id, batch), notDeleted(purchase)));
+    const allocations = await tx
+      .select({
+        purchaseId: financialTransactionAllocation.purchaseId,
+        hasNegative: sql<boolean>`bool_or(${financialTransactionAllocation.amount} < 0)`,
+      })
+      .from(financialTransactionAllocation)
+      .where(
+        and(
+          inArray(financialTransactionAllocation.purchaseId, batch),
+          notDeleted(financialTransactionAllocation),
+        ),
+      )
+      .groupBy(financialTransactionAllocation.purchaseId);
+    const payments = await tx
+      .select({
+        ...retainedPaymentFields,
+        purchaseId: purchasePaymentEvidence.purchaseId,
+        ledgerPartyId: importSourceClaim.ledgerPartyId,
+      })
+      .from(purchasePaymentEvidence)
+      .leftJoin(
+        importSourceClaim,
+        eq(importSourceClaim.id, purchasePaymentEvidence.sourceClaimId),
+      )
+      .where(inArray(purchasePaymentEvidence.purchaseId, batch))
+      .orderBy(
+        asc(purchasePaymentEvidence.sourceClaimId),
+        asc(purchasePaymentEvidence.evidenceIndex),
+      );
+    const targetsById = new Map(targets.map((row) => [row.id, row]));
+    const allocationsById = new Map(
+      allocations.map((row) => [row.purchaseId, row]),
+    );
+    const paymentsById = new Map<PurchaseId, RetainedPaymentRow[]>();
+    const ownersById = new Map<PurchaseId, Set<LedgerPartyId>>();
+    for (const row of payments) {
+      const retained = paymentsById.get(row.purchaseId) ?? [];
+      retained.push(row);
+      paymentsById.set(row.purchaseId, retained);
+      if (row.ledgerPartyId) {
+        const owners =
+          ownersById.get(row.purchaseId) ?? new Set<LedgerPartyId>();
+        owners.add(row.ledgerPartyId);
+        ownersById.set(row.purchaseId, owners);
+      }
+    }
+    for (const id of batch) {
+      facts.set(id, {
+        target: targetsById.get(id) ?? null,
+        hasAllocation: allocationsById.has(id),
+        hasNegativeAllocation: allocationsById.get(id)?.hasNegative ?? false,
+        payments: normalizePaymentSet(paymentsById.get(id) ?? []),
+        ownerIds: [...(ownersById.get(id) ?? [])],
+      });
+    }
+  }
+  return facts;
 }
 
 /**
@@ -272,6 +373,24 @@ const toPolicyPayments = (payments: RetainedPayment[]) =>
     cardLastFour: payment.cardLastFour ?? undefined,
     tender: payment.tender,
   }));
+
+/** A charge absent from every payment's exact matcher cannot appear in its full plan. */
+export function retainedSettlementDiscoveryCouldMatch(
+  facts: RetainedSettlementDiscoveryFacts | undefined,
+  charge: SettlementCandidate,
+  existingCharge: boolean,
+) {
+  // Attachment previews can change an existing charge; the full planner uses
+  // its stored representation instead of the supplied additional charge.
+  if (existingCharge || !facts) return true;
+  return (
+    facts.payments !== "conflicting_sources" &&
+    facts.payments.some(
+      (payment) =>
+        matchCompletePaymentSet(toPolicyPayments([payment]), [charge]) !== null,
+    )
+  );
+}
 
 /**
  * Other live Purchases still short of their own payment total whose retained
@@ -492,52 +611,69 @@ export async function planPurchaseRetainedSettlement(
     /** Preview never acquires write/advisory locks or changes allocations. */
     discovery?: boolean;
   },
+  discovery?: ReadonlyMap<PurchaseId, RetainedSettlementDiscoveryFacts>,
 ): Promise<
   Exclude<RetainedSettlementOutcome, "allocated"> | PlannedAllocation[]
 > {
   if (!input.discovery) await lockPartySettlement(tx, input.ledgerPartyId);
+  const preloaded = input.discovery
+    ? discovery?.get(input.purchaseId)
+    : undefined;
   const targetQuery = tx
     .select({ vendorId: purchase.vendorId, statedTotal: purchase.statedTotal })
     .from(purchase)
     .where(and(eq(purchase.id, input.purchaseId), notDeleted(purchase)))
     .limit(1);
-  const [target] = await targetQuery;
+  const [target] = preloaded ? [preloaded.target] : await targetQuery;
   if (!target?.vendorId) return "no_evidence";
   const refund =
     input.additionalCharges?.some(
       (charge) => charge.kind === "refund" && charge.amount < 0,
     ) ?? false;
-  const [existing] = await tx
-    .select({ id: financialTransactionAllocation.id })
-    .from(financialTransactionAllocation)
-    .where(
-      and(
-        eq(financialTransactionAllocation.purchaseId, input.purchaseId),
-        notDeleted(financialTransactionAllocation),
-        refund ? sql`${financialTransactionAllocation.amount} < 0` : undefined,
-      ),
-    )
-    .limit(1);
+  const existing = preloaded
+    ? refund
+      ? preloaded.hasNegativeAllocation
+      : preloaded.hasAllocation
+    : (
+        await tx
+          .select({ id: financialTransactionAllocation.id })
+          .from(financialTransactionAllocation)
+          .where(
+            and(
+              eq(financialTransactionAllocation.purchaseId, input.purchaseId),
+              notDeleted(financialTransactionAllocation),
+              refund
+                ? sql`${financialTransactionAllocation.amount} < 0`
+                : undefined,
+            ),
+          )
+          .limit(1)
+      ).length > 0;
   if (existing && !refund) return "already_allocated";
 
-  const retained = await loadPaymentSet(tx, input.purchaseId);
+  const retained =
+    preloaded?.payments ?? (await loadPaymentSet(tx, input.purchaseId));
   if (retained === "conflicting_sources") return retained;
   const payments = retained.filter((payment) =>
     refund ? payment.amount < 0 : payment.amount > 0,
   );
   if (refund && !retained.some((payment) => payment.amount > 0))
     return "no_evidence";
-  const owners = await tx
-    .selectDistinct({ ledgerPartyId: importSourceClaim.ledgerPartyId })
-    .from(purchasePaymentEvidence)
-    .innerJoin(
-      importSourceClaim,
-      eq(importSourceClaim.id, purchasePaymentEvidence.sourceClaimId),
-    )
-    .where(eq(purchasePaymentEvidence.purchaseId, input.purchaseId));
+  const ownerIds =
+    preloaded?.ownerIds ??
+    (
+      await tx
+        .selectDistinct({ ledgerPartyId: importSourceClaim.ledgerPartyId })
+        .from(purchasePaymentEvidence)
+        .innerJoin(
+          importSourceClaim,
+          eq(importSourceClaim.id, purchasePaymentEvidence.sourceClaimId),
+        )
+        .where(eq(purchasePaymentEvidence.purchaseId, input.purchaseId))
+    ).map((owner) => owner.ledgerPartyId);
   if (
-    !owners.length ||
-    owners.some((owner) => owner.ledgerPartyId !== input.ledgerPartyId)
+    !ownerIds.length ||
+    ownerIds.some((ownerId) => ownerId !== input.ledgerPartyId)
   )
     return "conflicting_sources";
   // Without a dated payment line there is no posting window to bound the

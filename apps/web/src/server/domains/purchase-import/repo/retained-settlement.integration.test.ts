@@ -20,6 +20,7 @@ import {
   merchantVendorRule,
   purchase,
   expense,
+  importSourceClaim,
   purchasePaymentEvidence,
   sourceOrderObservation,
 } from "~/server/db/schema";
@@ -37,6 +38,7 @@ import {
 import { startImportRunFixture } from "../service/import-run.fixtures";
 import {
   planPurchaseRetainedSettlement,
+  prepareRetainedSettlementDiscovery,
   settleRetainedPaymentEvidence,
 } from "./retained-settlement";
 
@@ -275,8 +277,8 @@ describe("settlement from retained order evidence", () => {
       ],
     });
     await charge(card.id, { amount: 20, postedDate: "2026-09-02" });
-    const planned = await withTransaction(ctx.db, (tx) =>
-      planPurchaseRetainedSettlement(tx, {
+    const planned = await withTransaction(ctx.db, async (tx) => {
+      const input = {
         purchaseId,
         ledgerPartyId: party.id,
         discovery: true,
@@ -290,13 +292,98 @@ describe("settlement from retained order evidence", () => {
             storedValue: false,
           },
         ],
-      }),
-    );
+      } satisfies Parameters<typeof planPurchaseRetainedSettlement>[1];
+      const standalone = await planPurchaseRetainedSettlement(tx, input);
+      const discovery = await prepareRetainedSettlementDiscovery(tx, [
+        purchaseId,
+        purchaseId,
+      ]);
+      expect(
+        await planPurchaseRetainedSettlement(tx, input, discovery),
+      ).toEqual(standalone);
+      // Facts are reusable across source charges; the resulting plans are not.
+      const changed = {
+        ...input,
+        additionalCharges: input.additionalCharges.map((row) => ({
+          ...row,
+          amount: 31,
+        })),
+      };
+      expect(await planPurchaseRetainedSettlement(tx, changed, discovery)).toBe(
+        "incomplete",
+      );
+      expect(await planPurchaseRetainedSettlement(tx, changed)).toBe(
+        "incomplete",
+      );
+      await tx
+        .update(purchasePaymentEvidence)
+        .set({ chargedAt: null })
+        .where(eq(purchasePaymentEvidence.purchaseId, purchaseId));
+      // Commit planning must ignore even a supplied discovery snapshot.
+      expect(
+        await planPurchaseRetainedSettlement(
+          tx,
+          { ...input, discovery: false },
+          discovery,
+        ),
+      ).toBe("no_evidence");
+      await tx
+        .update(purchase)
+        .set({ deletedAt: new Date() })
+        .where(eq(purchase.id, purchaseId));
+      const deleted = await prepareRetainedSettlementDiscovery(tx, [
+        purchaseId,
+      ]);
+      expect(await planPurchaseRetainedSettlement(tx, input, deleted)).toBe(
+        "no_evidence",
+      );
+      expect(await planPurchaseRetainedSettlement(tx, input)).toBe(
+        "no_evidence",
+      );
+      return standalone;
+    });
     expect(
       Array.isArray(planned)
         ? planned.map((entry) => entry.charge.amount).sort((a, b) => a - b)
         : planned,
     ).toEqual([20, 30]);
+    expect(await allocationsFor([purchaseId])).toEqual([]);
+  });
+
+  it("retains stored payment evidence when an attachment preview changes the amount", async () => {
+    const { card, vendor, run } = await world();
+    const purchaseId = await importOrder(run, {
+      orderId: "attachment-amount-preview",
+      total: 50,
+      payments: [
+        { amount: 20, chargedAt: "2026-09-02T12:00:00.000Z" },
+        { amount: 30, chargedAt: "2026-09-03T12:00:00.000Z" },
+      ],
+    });
+    const stored = await charge(card.id, {
+      amount: 20,
+      postedDate: "2026-09-02",
+    });
+    await charge(card.id, { amount: 30, postedDate: "2026-09-03" });
+    const plan = await previewFinancialSpending(
+      ctx.db,
+      {
+        transactionId: stored.shortcode,
+        advice: financialSpendingAdvice.parse({
+          vendorName: vendor.name,
+          vendorConfidence: "high",
+          counterparty: "business",
+        }),
+      },
+      {
+        settlementRef: {
+          source: "synthetic-bank",
+          externalId: "attachment-amount-preview",
+        },
+        fields: { amount: 21 },
+      },
+    );
+    expect(plan.candidates).toMatchObject([{ strength: "strong" }]);
     expect(await allocationsFor([purchaseId])).toEqual([]);
   });
 
@@ -353,7 +440,7 @@ describe("settlement from retained order evidence", () => {
   });
 
   it("discovers an old refund original from retained refund evidence despite its positive settlement", async () => {
-    const { card, vendor, run } = await world();
+    const { card, vendor, run, party } = await world();
     const purchaseId = await importOrder(run, {
       orderId: "old-refund-original",
       total: 80,
@@ -381,6 +468,42 @@ describe("settlement from retained order evidence", () => {
         tender: retained.tender,
         cardLastFour: retained.cardLastFour,
       });
+    await withTransaction(ctx.db, async (tx) => {
+      const discovery = await prepareRetainedSettlementDiscovery(tx, [
+        purchaseId,
+      ]);
+      const positive = {
+        purchaseId,
+        ledgerPartyId: party.id,
+        discovery: true,
+      };
+      expect(
+        await planPurchaseRetainedSettlement(tx, positive, discovery),
+      ).toBe("already_allocated");
+      expect(await planPurchaseRetainedSettlement(tx, positive)).toBe(
+        "already_allocated",
+      );
+      const refundInput = {
+        ...positive,
+        additionalCharges: [
+          {
+            id: "prospective-refund",
+            kind: "refund",
+            amount: -15,
+            occurredAt: new Date("2026-09-03T12:00:00.000Z"),
+            cardLastFours: [],
+            storedValue: false,
+          },
+        ],
+      } satisfies Parameters<typeof planPurchaseRetainedSettlement>[1];
+      const standalone = await planPurchaseRetainedSettlement(tx, refundInput);
+      expect(standalone).toMatchObject([
+        { next: [{ purchaseId, amount: -15 }] },
+      ]);
+      expect(
+        await planPurchaseRetainedSettlement(tx, refundInput, discovery),
+      ).toEqual(standalone);
+    });
     const refund = await createRepoEntity(ctx, "financialTransaction", {
       accountId: card.shortcode,
       kind: "refund",
@@ -602,6 +725,100 @@ describe("settlement from retained order evidence", () => {
     await charge(card.id, { amount: 25, postedDate: "2026-09-03" });
     await settleRetainedPaymentEvidence(ctx.db);
     expect(await allocationsFor([first, second])).toEqual([]);
+  });
+
+  it("preserves source conflicts and payment multiplicity when discovery facts share a page", async () => {
+    const { party, run } = await world();
+    const twins = await importOrder(run, {
+      orderId: "discovery-twins",
+      total: 10,
+      payments: [
+        { amount: 5, chargedAt: "2026-09-02T12:00:00.000Z", tender: "card" },
+        { amount: 5, chargedAt: "2026-09-02T12:00:00.000Z", tender: "card" },
+      ],
+    });
+    const conflicting = await importOrder(run, {
+      orderId: "discovery-conflict",
+      total: 40,
+      payments: [
+        { amount: 40, chargedAt: "2026-09-02T12:00:00.000Z", tender: "card" },
+      ],
+    });
+    await importOrder(run, {
+      orderId: "discovery-conflict",
+      source: "export",
+      total: 40,
+      payments: [
+        {
+          amount: 40,
+          chargedAt: "2026-09-02T12:00:00.000Z",
+          tender: "stored_value",
+        },
+      ],
+    });
+    const [exportClaim] = await getDb(ctx.db)
+      .select({ id: importSourceClaim.id })
+      .from(importSourceClaim)
+      .where(
+        and(
+          eq(importSourceClaim.ledgerPartyId, party.id),
+          eq(importSourceClaim.externalKey, "shop:export:discovery-conflict"),
+        ),
+      );
+    if (!exportClaim) throw new Error("Expected imported export source claim");
+    // Normal intake holds conflicting sources for review. Reproduce retained
+    // historical disagreement only after creating both supported sources.
+    await getDb(ctx.db)
+      .insert(purchasePaymentEvidence)
+      .values({
+        purchaseId: conflicting,
+        sourceClaimId: exportClaim.id,
+        evidenceIndex: 0,
+        amount: 40,
+        chargedAt: new Date("2026-09-02T12:00:00.000Z"),
+        tender: "stored_value",
+      })
+      .onConflictDoNothing();
+    await withTransaction(ctx.db, async (tx) => {
+      const discovery = await prepareRetainedSettlementDiscovery(tx, [
+        twins,
+        conflicting,
+      ]);
+      // Two identical retained lines must not collapse into one payment.
+      expect(discovery.get(twins)?.payments).toMatchObject([
+        { amount: 5, tender: "card" },
+        { amount: 5, tender: "card" },
+      ]);
+      const input = {
+        purchaseId: twins,
+        ledgerPartyId: party.id,
+        discovery: true,
+        additionalCharges: [
+          {
+            id: "prospective-single-twin",
+            amount: 5,
+            kind: "purchase",
+            occurredAt: new Date("2026-09-02T12:00:00.000Z"),
+            cardLastFours: [],
+            storedValue: false,
+          },
+        ],
+      } satisfies Parameters<typeof planPurchaseRetainedSettlement>[1];
+      expect(await planPurchaseRetainedSettlement(tx, input, discovery)).toBe(
+        "incomplete",
+      );
+      expect(await planPurchaseRetainedSettlement(tx, input)).toBe(
+        "incomplete",
+      );
+      const conflictInput = { ...input, purchaseId: conflicting };
+      expect(
+        await planPurchaseRetainedSettlement(tx, conflictInput, discovery),
+      ).toBe("conflicting_sources");
+      expect(await planPurchaseRetainedSettlement(tx, conflictInput)).toBe(
+        "conflicting_sources",
+      );
+    });
+    expect(await allocationsFor([twins, conflicting])).toEqual([]);
   });
 
   it("never settles against a void or expected charge, or one mapped to another vendor", async () => {

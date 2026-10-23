@@ -205,6 +205,7 @@ const listRead = (
   );
 const list = completeListReader(spendingCategoryOut, listRead);
 export const listSpendingCategories = list;
+export const readSpendingCategories = listRead;
 const crud = createEntityCrud({
   table: spendingCategory,
   entity: "spendingCategory",

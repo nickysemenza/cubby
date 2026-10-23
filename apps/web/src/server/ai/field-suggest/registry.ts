@@ -24,7 +24,7 @@ import {
 } from "@cubby/schemas/project";
 import {
   spendingCategoryFilters,
-  type SpendingCategoryOut,
+  spendingCategoryOut,
 } from "@cubby/schemas/spending-category";
 import { isCollectionTag } from "@cubby/shared/collection-tag";
 import {
@@ -63,7 +63,7 @@ import {
   listProductCategoryTreeOptions as loadProductCategoryTreeOptions,
 } from "~/server/domains/product-category/repo/product-category";
 import { projectNameOptions as loadProjectNameOptions } from "~/server/domains/project/repo/lookup";
-import { listSpendingCategories } from "~/server/domains/spending-category/repo/spending-category";
+import { readSpendingCategories } from "~/server/domains/spending-category/repo/spending-category";
 import { vendorOptions } from "~/server/domains/vendor/repo/vendor";
 import { semanticEntityCandidates } from "~/server/generic/embedding/service/semantic-search.service";
 import {
@@ -347,7 +347,14 @@ function pruneCandidates(raw: RawBasis, arrayKey: string): readonly string[] {
   );
 }
 
-type SpendingCategoryCandidate = SpendingCategoryOut & { path: string };
+const spendingRosterRow = spendingCategoryOut.pick({
+  id: true,
+  name: true,
+  parentId: true,
+});
+type SpendingCategoryCandidate = z.infer<typeof spendingRosterRow> & {
+  path: string;
+};
 
 async function spendingCategoryRoster(
   db: Database,
@@ -361,15 +368,16 @@ async function spendingCategoryRoster(
 async function loadSpendingCategoryRoster(
   db: Database,
 ): Promise<SpendingCategoryCandidate[]> {
-  const rows: SpendingCategoryOut[] = [];
+  const rows: z.infer<typeof spendingRosterRow>[] = [];
   for (let pageIndex = 0; ; pageIndex++) {
-    const page = await listSpendingCategories(
+    const page = await readSpendingCategories(
       db,
       spendingCategoryFilters.parse({}),
       [{ orderBy: "name", direction: "asc" }],
       { pageIndex, pageSize: MAX_PAGE_SIZE },
+      { kind: "selected", fields: ["id", "name", "parentId"], groups: [] },
     );
-    rows.push(...page.data);
+    rows.push(...spendingRosterRow.array().parse(page.data));
     if (rows.length >= page.count || page.data.length === 0) break;
   }
   const byId = new Map(rows.map((row) => [row.id, row]));

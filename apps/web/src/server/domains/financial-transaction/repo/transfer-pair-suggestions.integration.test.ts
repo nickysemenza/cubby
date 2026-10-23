@@ -264,8 +264,8 @@ describe("transfer-pair suggestions", () => {
 
   it("prepares shared pools without changing independently rebuilt pair judgments", async () => {
     const member = await owner("Synthetic profile member");
-    await account("Synthetic profile checking", member);
-    await account("Synthetic profile savings", member, savings);
+    const checking = await account("Synthetic profile checking", member);
+    const reserve = await account("Synthetic profile savings", member, savings);
     await statement(
       Array.from({ length: 8 }, (_, index) => [
         {
@@ -282,14 +282,18 @@ describe("transfer-pair suggestions", () => {
         },
       ]).flat(),
     );
+    for (const amount of [501, 502]) {
+      await transaction(checking, amount, "2026-05-04");
+      await transaction(reserve, -amount, "2026-05-04");
+    }
     const page = await generateTransferPairSuggestionsPage(ctx.db, {
       runId: null,
       limit: 128,
     });
     expect(page.failed).toEqual([]);
-    expect(page.found).toBe(8);
+    expect(page.found).toBe(10);
     const published = await pending();
-    expect(published).toHaveLength(8);
+    expect(published).toHaveLength(10);
     for (const { judgment, fingerprint } of published) {
       const rebuilt = await currentTransferPair(ctx.db, judgment.key);
       expect(rebuilt).toEqual(judgment);

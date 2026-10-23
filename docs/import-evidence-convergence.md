@@ -32,6 +32,16 @@ transaction's current facts, since attaching evidence alone changes no kind,
 amount or posting state.
 Already-booked spending is a no-op, and another possible Purchase prevents a
 new clean booking. All money continues to be `SUM(Expense.cost)`.
+Discovery selects candidates from names, dates, amounts and retained payment
+evidence before reading their receipt graphs. The existing payment matcher
+rejects prospective charges that cannot match any retained payment line before loading
+stored charge competitors; plausible payments retain the complete planner. A review-only positive-charge
+plan with an unresolved booking prerequisite does not hydrate candidate
+Expenses, attributions, allocations or vendor category history. Refund category inheritance and
+already-booked checks still read their necessary graphs. Page preparation
+batches read-only candidate facts; it never supplies cached evidence to a
+booking commit. Ready plans and commit-time validation retain the complete
+graph and current ownership checks.
 Matched transactions with live allocations create no new statement booking
 work; an existing pending booking is revisited so completion can retire it.
 Expense edits use generic field Suggestions, and allocation reconciliation uses
@@ -376,8 +386,9 @@ model decisions. Replacement suggestions retain the original model provenance,
 copy only the model votes and candidate labels, and recompute kind and clean
 status from current rules, history and transfer evidence. Changed model inputs
 or candidates retire the old labels atomically with the replacement; suppressed
-or settled charges remain excluded. Generation and label pages commit per
-charge, so interruption preserves reusable labels and completed publications.
+or settled charges remain excluded. Generation commits bounded batches of
+independent charges; label publication commits per charge. Interruption preserves
+reusable labels and completed publications.
 Acceptance always validates the current broader evidence fingerprint.
 
 Within one read-only proposal page, spending preparation loads shared account
@@ -390,10 +401,38 @@ only inside that page; per-charge date, amount, refund and explicit-target rules
 still select candidates. Requests outside the admitted bounds use the original
 fresh SQL selector. Publication retains its own
 four-transaction limit and per-charge locks, suppression checks and settlement
-rechecks. Generation logs separate selection, preparation, publication and
+rechecks. Rule replacements share batch admission, retirement and publication
+while retaining each charge's ordinal and compatible label checkpoint. A charge
+with reusable paid labels follows the ordinary writer to rebuild its judgment
+from current facts. Generation logs separate selection, preparation, publication and
 import-application durations with aggregate counts, without source records.
+Transfer generation hydrates eligible transaction seeds once per page, including
+known absent seeds. A failed bulk read falls back to isolated seed reads.
+Transfer and statement-matching previews omit unused advisory Vendor inference. Statement seed preview
+batches and each seed's exact competitor pool remain
+unchanged; broader preview batches can change duplicate admission. Retirement
+and acceptance rebuild current evidence.
+Within a preparation page, previews share raw observations for the exact same
+file-fingerprint scope; each call retains its own duplicate-admission input rows.
+Preview indexes retain source-scoped reference identity, provider account scope,
+file occurrence positions and the original ledger candidate order. Each row's
+nearby search still evaluates every transaction on its account in the read pool.
+The initial statement count aggregates the same eligibility predicate once;
+generation continues selecting bounded charge identities before hydration.
 Generation checkpoints depend only on model-free generation and publication;
-optional model preparation cannot delay them. The later label step retains
+optional model preparation cannot delay them. Label rounds apply the settled
+kind votes before preparing shared spending facts; each charge then uses those
+read-only facts with its own advice. The existing field-suggestion batch scope
+shares classification catalogs within the round without sharing model answers.
+The spending roster requests only identity, name and parent fields, leaving
+unrelated category connections and stock tracking unloaded. Advice and its
+spending preview share the same read-only vendor resolution and history.
+Vendor history resolves the selected live, nonfuture Expenses through the shared
+bulk category policy before grouping; it does not resolve category ancestry anew
+for every line or omit uncategorized lines.
+Shared preparation failures fall back to
+isolated reads, and publication/booking never use the page cache as commit
+validation. The later label step retains
 ownership of model decisions and reuses compatible durable label checkpoints.
 Charge pagination applies the whole-charge cursor before aggregating retained
 observations, while preserving every observation within each selected identity.

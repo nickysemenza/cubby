@@ -502,6 +502,7 @@ async function loadStatementLegs(
       },
       {
         candidatePolicy: "suggestion",
+        includeVendorInference: false,
         preparation,
         accountHints: new Map(
           page.flatMap(({ charge, observations }) => {
@@ -1002,16 +1003,53 @@ async function potentialTransferSeeds(db: Database, keys: readonly string[]) {
   );
 }
 
+/** Batch only transaction seeds: statement preview duplicates depend on its exact input batch. */
+async function prepareTransactionSeedLegs(
+  db: Database,
+  accounts: Accounts,
+  seeds: readonly string[],
+) {
+  const codes = seeds.flatMap((seed) => {
+    const parsed = parseLegKey(seed);
+    return parsed?.code ? [parsed.code] : [];
+  });
+  const prepared = new Map<string, LegFacts | null>(
+    codes.map((code) => [code, null]),
+  );
+  if (!codes.length) return prepared;
+  try {
+    const legs = await loadTransactionLegs(db, accounts, {
+      codes,
+      seedOnly: true,
+    });
+    for (const leg of legs) prepared.set(leg.key.slice(4), leg);
+    return prepared;
+  } catch (error) {
+    if (isWorkflowInterrupted(error)) throw error;
+    // Isolate bad rows or transient read failures through the existing per-seed path.
+    return new Map<string, LegFacts | null>();
+  }
+}
+
 /** Page-local advisory reads only. Exact pool scopes preserve each seed's
  * duplicate/competitor semantics; acceptance always rebuilds fresh evidence. */
 function transferPreparation(
   db: Database,
   accounts: Accounts,
   preview: Awaited<ReturnType<typeof prepareFinancialStatementPreview>>,
+  seedLegs: ReadonlyMap<string, LegFacts | null>,
 ) {
   const pools = new Map<string, Promise<ReturnType<typeof poolOf>>>();
   return {
     preview,
+    transactionSeeds(codes: readonly string[], seedOnly?: boolean) {
+      if (!seedOnly || !codes.every((code) => seedLegs.has(code)))
+        return undefined;
+      return codes.flatMap((code) => {
+        const leg = seedLegs.get(code);
+        return leg ? [leg] : [];
+      });
+    },
     pool(filter: Pick<LegFilter, "amountsCents" | "from" | "to">) {
       const key = canonicalJson({
         amountsCents: filter.amountsCents ? [...filter.amountsCents] : null,
@@ -1051,10 +1089,11 @@ async function discover(
     const charges = parsed.flatMap((leg) => (leg?.charge ? [leg.charge] : []));
     seedLegs = [
       ...(codes.length
-        ? await loadTransactionLegs(db, accounts, {
+        ? (preparation?.transactionSeeds(codes, seeds.seedOnly) ??
+          (await loadTransactionLegs(db, accounts, {
             codes,
             seedOnly: seeds.seedOnly,
-          })
+          })))
         : []),
       ...(charges.length
         ? await loadStatementLegs(
@@ -1718,6 +1757,7 @@ export async function generateTransferPairSuggestionsPage(
         db,
         accounts,
         await prepareFinancialStatementPreview(db),
+        await prepareTransactionSeedLegs(db, accounts, [...potentialSeeds]),
       )
     : undefined;
   for (const [index, seed] of seeds.entries()) {

@@ -10,6 +10,7 @@ import { financialAccount, financialTransaction } from "~/server/db/schema";
 import {
   previewFinancialSpending,
   prepareFinancialSpendingPage,
+  prepareFinancialSpendingCandidates,
   type FinancialSpendingPage,
 } from "~/server/domains/financial-transaction/repo/financial-spending";
 
@@ -91,7 +92,7 @@ const spendingTarget = (judgment: StatementTransactionJudgment) =>
 export const STATEMENT_SPENDING_PREPARATION_CONCURRENCY = 4;
 
 /** Account/transaction metadata is shared only while this read-only page is built. */
-export async function prepareStatementSpendingPage(
+export async function prepareStatementSpendingFacts(
   db: Database,
   judgments: readonly StatementTransactionJudgment[],
 ) {
@@ -107,6 +108,15 @@ export async function prepareStatementSpendingPage(
       return target ? [parseEntityId("financialTransaction", target)] : [];
     }),
   });
+  await prepareFinancialSpendingCandidates(db, page);
+  return page;
+}
+
+export async function prepareStatementSpendingPage(
+  db: Database,
+  judgments: readonly StatementTransactionJudgment[],
+) {
+  const page = await prepareStatementSpendingFacts(db, judgments);
   await forEachConcurrently(
     judgments,
     STATEMENT_SPENDING_PREPARATION_CONCURRENCY,

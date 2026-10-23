@@ -45,6 +45,8 @@ import { settlementRefsFor } from "~/server/generic/entity-links/repo/entity-ext
  */
 const canonical = (value: string) =>
   value.normalize("NFKC").trim().replace(/\s+/g, " ").toLowerCase();
+const pairKey = (source: string, identity: string) =>
+  JSON.stringify([source, identity]);
 
 const networkFromDescriptor = (descriptor: string) => {
   const normalized = canonical(descriptor);
@@ -98,6 +100,8 @@ export type FinancialStatementPreviewOptions = {
    * apply, so both sides agree on what a candidate is.
    */
   candidatePolicy?: "import" | "suggestion";
+  /** Skip advisory Vendor enrichment when an internal caller consumes only identity/overlap facts. */
+  includeVendorInference?: boolean;
   /** Server-owned retained observations, never supplied by a client. */
   retainedRefs?: ReadonlyMap<string, string>;
   /** Server-only: a stored SourceTransactionRecord account outranks alias/last4 resolution, keyed by row key. */
@@ -106,7 +110,7 @@ export type FinancialStatementPreviewOptions = {
   preparation?: FinancialStatementPreviewPreparation;
 };
 
-/** Account metadata and shortcode resolution shared within one proposal build. Ledger evidence stays fresh. */
+/** Account metadata and exact file-observation scopes shared within one advisory build. Transactions stay fresh. */
 export async function prepareFinancialStatementPreview(db: Database) {
   const accounts = await unwrapDb(db)
     .select({
@@ -129,6 +133,10 @@ export async function prepareFinancialStatementPreview(db: Database) {
     )
     .where(notDeleted(financialAccount));
   return {
+    sameFiles: new Map<
+      string,
+      Promise<ReturnType<typeof indexFileObservations>>
+    >(),
     accounts: accounts.map((account) => ({
       ...account,
       identity: financialAccountIdentity.parse(account.identity),
@@ -143,6 +151,50 @@ export async function prepareFinancialStatementPreview(db: Database) {
 type FinancialStatementPreviewPreparation = Awaited<
   ReturnType<typeof prepareFinancialStatementPreview>
 >;
+
+function loadSameFileObservations(
+  db: Database,
+  fingerprints: readonly string[],
+) {
+  return unwrapDb(db)
+    .select({
+      source: sourceTransactionRecord.source,
+      externalId: sourceTransactionRecord.externalId,
+      fingerprint: transactionImport.fingerprint,
+      rowPosition: sourceTransactionRecord.rowPosition,
+    })
+    .from(sourceTransactionRecord)
+    .innerJoin(
+      transactionImport,
+      sql`${sourceTransactionRecord.batchId} = ${transactionImport.id}`,
+    )
+    .where(
+      and(
+        notDeleted(sourceTransactionRecord),
+        notDeleted(transactionImport),
+        inArray(transactionImport.fingerprint, [...fingerprints]),
+      ),
+    )
+    .execute();
+}
+
+function indexFileObservations(
+  observations: Awaited<ReturnType<typeof loadSameFileObservations>>,
+) {
+  const positions = new Map<
+    string,
+    Set<(typeof observations)[number]["rowPosition"]>
+  >();
+  for (const observation of observations) {
+    const key = pairKey(observation.source, observation.externalId);
+    const retained =
+      positions.get(key) ??
+      new Set<(typeof observations)[number]["rowPosition"]>();
+    retained.add(observation.rowPosition);
+    positions.set(key, retained);
+  }
+  return positions;
+}
 
 /**
  * Preview only: client-parsed rows become a decision worklist. It intentionally
@@ -207,27 +259,34 @@ export async function previewFinancialTransactionImport(
       row.importFingerprint ? [row.importFingerprint] : [],
     ),
   );
-  const sameFileObservations = fingerprints.length
-    ? await unwrapDb(db)
-        .select({
-          source: sourceTransactionRecord.source,
-          externalId: sourceTransactionRecord.externalId,
-          fingerprint: transactionImport.fingerprint,
-          rowPosition: sourceTransactionRecord.rowPosition,
-        })
-        .from(sourceTransactionRecord)
-        .innerJoin(
-          transactionImport,
-          sql`${sourceTransactionRecord.batchId} = ${transactionImport.id}`,
-        )
-        .where(
-          and(
-            notDeleted(sourceTransactionRecord),
-            notDeleted(transactionImport),
-            inArray(transactionImport.fingerprint, fingerprints),
+  // Reuse raw observations only; duplicate admission still sees this call's exact input rows.
+  const fileCache =
+    options.preparation?.sameFiles ??
+    new Map<string, Promise<ReturnType<typeof indexFileObservations>>>();
+  const missingFiles = fingerprints.filter(
+    (fingerprint) => !fileCache.has(fingerprint),
+  );
+  if (missingFiles.length) {
+    const loaded = loadSameFileObservations(db, missingFiles);
+    for (const fingerprint of missingFiles)
+      fileCache.set(
+        fingerprint,
+        loaded.then((rows) =>
+          indexFileObservations(
+            rows.filter((row) => row.fingerprint === fingerprint),
           ),
-        )
-    : [];
+        ),
+      );
+  }
+  const filePositions = new Map<
+    string,
+    ReturnType<typeof indexFileObservations>
+  >();
+  await Promise.all(
+    fingerprints.map(async (fingerprint) => {
+      filePositions.set(fingerprint, await fileCache.get(fingerprint)!);
+    }),
+  );
   // Transactions already holding one of these rows' settlement references,
   // probed on the live `(source, kind, externalId)` unique. The source comes
   // from the row rather than a literal, so a non-monarch export looks itself
@@ -301,6 +360,47 @@ export async function previewFinancialTransactionImport(
     ...transaction,
     sourceRefs: refsByTransaction.get(transaction.id) ?? [],
   }));
+  // Preserve ledger order and every competitor while avoiding a full-ledger
+  // scan for each input row. Reference identity stays source-scoped.
+  const transactionsByAccount = new Map<string, typeof parsedTransactions>();
+  const transactionsByRef = new Map<string, typeof parsedTransactions>();
+  for (const transaction of parsedTransactions) {
+    const accountRows = transactionsByAccount.get(transaction.accountId) ?? [];
+    accountRows.push(transaction);
+    transactionsByAccount.set(transaction.accountId, accountRows);
+    for (const key of new Set(
+      transaction.sourceRefs.map((ref) => pairKey(ref.source, ref.externalId)),
+    )) {
+      const refRows = transactionsByRef.get(key) ?? [];
+      refRows.push(transaction);
+      transactionsByRef.set(key, refRows);
+    }
+  }
+  const observationsByProvider = new Map<string, typeof observations>();
+  for (const observation of observations) {
+    if (!observation.providerTransactionId) continue;
+    const key = pairKey(observation.source, observation.providerTransactionId);
+    const matching = observationsByProvider.get(key) ?? [];
+    matching.push(observation);
+    observationsByProvider.set(key, matching);
+  }
+  const providerObservations = (row: FinancialTransactionImportRow) =>
+    row.providerTransactionId
+      ? (observationsByProvider.get(
+          pairKey(row.source, row.providerTransactionId),
+        ) ?? [])
+      : [];
+  const providerInputKey = (row: FinancialTransactionImportRow) =>
+    JSON.stringify([
+      row.source,
+      row.providerTransactionId,
+      row.providerAccountId ?? canonical(row.account),
+    ]);
+  const providerInputCounts = new Map<string, number>();
+  for (const row of providerPairs) {
+    const key = providerInputKey(row);
+    providerInputCounts.set(key, (providerInputCounts.get(key) ?? 0) + 1);
+  }
 
   const accountFor = (row: FinancialTransactionImportRow) => {
     const hinted = options.accountHints?.get(row.key);
@@ -327,10 +427,8 @@ export async function previewFinancialTransactionImport(
             alias.externalAccountId !== row.providerAccountId,
         ),
       );
-      const conflictingRecord = observations.some(
+      const conflictingRecord = providerObservations(row).some(
         (observation) =>
-          observation.source === row.source &&
-          observation.providerTransactionId === row.providerTransactionId &&
           observation.providerAccountId !== null &&
           observation.providerAccountId !== row.providerAccountId,
       );
@@ -375,13 +473,7 @@ export async function previewFinancialTransactionImport(
       (fingerprintCounts.get(externalId) ?? 0) > 1) ||
     Boolean(
       row.providerTransactionId &&
-      input.rows.filter(
-        (other) =>
-          other.source === row.source &&
-          other.providerTransactionId === row.providerTransactionId &&
-          (other.providerAccountId ?? canonical(other.account)) ===
-            (row.providerAccountId ?? canonical(row.account)),
-      ).length > 1,
+      (providerInputCounts.get(providerInputKey(row)) ?? 0) > 1,
     )
       ? "indistinguishable_duplicate"
       : recorded > 0
@@ -411,51 +503,52 @@ export async function previewFinancialTransactionImport(
         notes: row.notes,
       };
     const account = accountFor(row);
-    const exactOccurrence = parsedTransactions.filter(
+    const exactOccurrence = (
+      transactionsByRef.get(pairKey(sourceRef.source, sourceRef.externalId)) ??
+      []
+    ).filter(
       (transaction) =>
-        (!row.providerAccountId ||
-          (account && transaction.accountId === account.id)) &&
-        transaction.sourceRefs.some(
-          (ref) =>
-            ref.source === sourceRef.source &&
-            ref.externalId === sourceRef.externalId,
-        ),
+        !row.providerAccountId ||
+        (account && transaction.accountId === account.id),
+    );
+    const providerTransactionIds = new Set(
+      providerObservations(row)
+        .filter(
+          (observation) =>
+            row.providerAccountId === undefined ||
+            row.providerAccountId === null ||
+            observation.providerAccountId === row.providerAccountId,
+        )
+        .flatMap(
+          (observation) =>
+            transactionsByRef.get(
+              pairKey(observation.source, observation.externalId),
+            ) ?? [],
+        )
+        .map((transaction) => transaction.id),
     );
     const providerMatches =
       account && row.providerTransactionId
-        ? parsedTransactions.filter(
-            (transaction) =>
-              transaction.accountId === account.id &&
-              transaction.sourceRefs.some((ref) =>
-                observations.some(
-                  (observation) =>
-                    observation.source === row.source &&
-                    observation.providerTransactionId ===
-                      row.providerTransactionId &&
-                    (row.providerAccountId === undefined ||
-                      row.providerAccountId === null ||
-                      observation.providerAccountId ===
-                        row.providerAccountId) &&
-                    observation.source === ref.source &&
-                    observation.externalId === ref.externalId,
-                ),
-              ),
+        ? (transactionsByAccount.get(account.id) ?? []).filter((transaction) =>
+            providerTransactionIds.has(transaction.id),
           )
         : [];
+    const occurrencePositions = row.importFingerprint
+      ? filePositions.get(row.importFingerprint)
+      : undefined;
     const belongsToAnotherOccurrence = (
       transaction: (typeof parsedTransactions)[number],
     ) =>
       Boolean(
-        row.importFingerprint &&
-        transaction.sourceRefs.some((ref) =>
-          sameFileObservations.some(
-            (observation) =>
-              observation.source === row.source &&
-              observation.fingerprint === row.importFingerprint &&
-              observation.rowPosition !== row.rowPosition &&
-              observation.source === ref.source &&
-              observation.externalId === ref.externalId,
-          ),
+        occurrencePositions &&
+        transaction.sourceRefs.some(
+          (ref) =>
+            ref.source === row.source &&
+            [
+              ...(occurrencePositions.get(
+                pairKey(ref.source, ref.externalId),
+              ) ?? []),
+            ].some((position) => position !== row.rowPosition),
         ),
       );
     const sameFacts = (transaction: (typeof parsedTransactions)[number]) =>
@@ -469,17 +562,11 @@ export async function previewFinancialTransactionImport(
           !belongsToAnotherOccurrence(providerMatches[0]!)
         ? providerMatches
         : [];
-    const legacyMatches = parsedTransactions.filter(
-      (transaction) =>
-        account &&
-        transaction.accountId === account.id &&
-        transaction.sourceRefs.some(
-          (ref) =>
-            ref.source === row.source && ref.externalId === legacyIds[index],
-        ),
-    );
+    const legacyMatches = (
+      transactionsByRef.get(pairKey(row.source, legacyIds[index]!)) ?? []
+    ).filter((transaction) => account && transaction.accountId === account.id);
     const nearbyMatches = account
-      ? parsedTransactions.filter((transaction) => {
+      ? (transactionsByAccount.get(account.id) ?? []).filter((transaction) => {
           const sameAmount =
             cents(Number(transaction.amount)) === cents(normalizedAmount);
           if (
@@ -574,13 +661,16 @@ export async function previewFinancialTransactionImport(
   );
   const inferences = await merchantVendorInferences(
     db,
-    eligibleRows.flatMap((row) =>
-      row.proposed.merchant ? [row.proposed.merchant] : [],
-    ),
+    options.includeVendorInference === false
+      ? []
+      : eligibleRows.flatMap((row) =>
+          row.proposed.merchant ? [row.proposed.merchant] : [],
+        ),
   );
   const enrichedRows = rows.map((row) => ({
     ...row,
     vendorInference:
+      options.includeVendorInference !== false &&
       row.proposed.merchant &&
       (row.status === "ready_to_create" || row.status === "unresolved_account")
         ? (inferences.get(normalizeMerchant(row.proposed.merchant)) ?? {

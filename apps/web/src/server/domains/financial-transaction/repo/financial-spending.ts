@@ -13,6 +13,7 @@ import { financialTransactionSettlementViolation } from "@cubby/schemas/financia
 import { parseShortcodeFor, parseEntityId } from "@cubby/schemas/identifiers";
 import { cents } from "@cubby/shared";
 import { and, eq, inArray, sql } from "drizzle-orm";
+import { groupBy } from "es-toolkit";
 import { z } from "zod";
 
 import type { Database } from "~/server/db";
@@ -29,10 +30,15 @@ import {
   spendingCategory,
   vendor as vendorTable,
 } from "~/server/db/schema";
-import { effectiveExpenseSpendingCategorySql } from "~/server/domains/expense/repo/expense-category-resolution";
+import {
+  effectiveExpenseSpendingCategoriesSql,
+  effectiveExpenseSpendingCategorySql,
+} from "~/server/domains/expense/repo/expense-category-resolution";
 import { lockFinancialEvidenceKeys } from "~/server/domains/financial-transaction/repo/financial-evidence";
 import {
   planPurchaseRetainedSettlement,
+  prepareRetainedSettlementDiscovery,
+  retainedSettlementDiscoveryCouldMatch,
   settlePurchaseFromRetainedPayments,
 } from "~/server/domains/purchase-import/repo/retained-settlement";
 import { resolveNames } from "~/server/entity-kernel/resolve";
@@ -48,6 +54,7 @@ import { canonicalJson, jsonSnapshot } from "~/server/lib/canonical-json";
 import {
   bookFinancialTransaction,
   bookingGraph,
+  bookingGraphs,
   digestValue,
   loadFinancialBookingLineage,
   previewFinancialBooking,
@@ -153,6 +160,9 @@ export async function prepareFinancialSpendingPage(
     >;
     sources?: readonly {
       amount: number;
+      merchant?: string | null;
+      rawDescription?: string | null;
+      kind?: string;
       transactionDate?: string | null;
       postedDate?: string | null;
     }[];
@@ -233,7 +243,9 @@ export async function prepareFinancialSpendingPage(
       `)
         ).rows
       : [];
-  return {
+  const page = {
+    sources,
+    retainedSettlement: await prepareRetainedSettlementDiscovery(getDb(db), []),
     candidateBounds,
     candidateAmounts: new Set(amounts),
     paymentCandidates,
@@ -256,10 +268,87 @@ export async function prepareFinancialSpendingPage(
     >(),
     payments: new Map<string, ReturnType<typeof purchasePayments>>(),
   };
+  const allocatedIds = [...new Set(allocations.map((row) => row.purchaseId))];
+  for (const [id, graph] of await loadSpendingGraphs(db, allocatedIds))
+    page.graphs.set(id, Promise.resolve(graph));
+  return page;
 }
 export type FinancialSpendingPage = Awaited<
   ReturnType<typeof prepareFinancialSpendingPage>
 >;
+
+/** Hydrate the candidate union once; each preview still selects its exact evidence. */
+export async function prepareFinancialSpendingCandidates(
+  db: Database,
+  page: FinancialSpendingPage,
+) {
+  const names = [
+    ...new Set(
+      page.sources.flatMap((source) => {
+        const name = source.merchant?.trim() || source.rawDescription?.trim();
+        return name ? [name] : [];
+      }),
+    ),
+  ];
+  const resolved = await resolveSpendingVendors(db, names);
+  const byName = new Map(resolved.map((result) => [result.name, result]));
+  for (const result of resolved)
+    page.vendors.set(canonicalJson([result.name]), Promise.resolve([result]));
+  const vendorIds = [
+    ...new Set(
+      resolved.flatMap((result) => (result.row ? [result.row.id] : [])),
+    ),
+  ];
+  const bounds = page.candidateBounds;
+  if (bounds && vendorIds.length) {
+    const { rows } = await getDb(db).execute<
+      SpendingCandidate & { vendorId: string }
+    >(sql`
+      SELECT p.id,p.shortcode,p."displayLabel",p.date,p."vendorId" FROM "Purchase" p
+      WHERE p."deletedAt" IS NULL AND p."vendorId" IN (${sql.join(
+        vendorIds.map((id) => sql`${id}::uuid`),
+        sql`, `,
+      )})
+        AND p.date BETWEEN ${bounds.first}::date-14 AND ${bounds.last}::date+14 ORDER BY p.id
+    `);
+    const byVendor = groupBy(rows, (row) => row.vendorId);
+    for (const vendorId of vendorIds)
+      page.vendorCandidates.set(
+        vendorId,
+        Promise.resolve(
+          (byVendor[vendorId] ?? []).map(
+            ({ vendorId: _vendorId, ...row }) => row,
+          ),
+        ),
+      );
+  }
+  const ids = new Set(
+    [...page.allocations.values()].flatMap((rows) =>
+      rows.map((row) => row.purchaseId),
+    ),
+  );
+  for (const source of page.sources) {
+    const date = source.transactionDate ?? source.postedDate;
+    if (!date) continue;
+    const name = source.merchant?.trim() || source.rawDescription?.trim();
+    const candidates = await spendingCandidates(
+      db,
+      {
+        date,
+        amount: cents(source.amount),
+        refund: source.kind === "refund",
+        vendorId: name ? byName.get(name)?.row?.id : undefined,
+      },
+      page,
+    );
+    for (const candidate of candidates)
+      ids.add(parseEntityId("purchase", candidate.id));
+  }
+  page.retainedSettlement = await prepareRetainedSettlementDiscovery(
+    getDb(db),
+    [...ids],
+  );
+}
 
 async function spendingFacts(
   db: Database,
@@ -327,7 +416,7 @@ async function spendingFacts(
 /** Capacity includes other settlements and effective categories, not just a signed line. */
 function spendingGraph(
   db: Database,
-  purchaseId: Parameters<typeof bookingGraph>[1],
+  purchaseId: NonNullable<Parameters<typeof bookingGraph>[1]>,
   page?: FinancialSpendingPage,
 ) {
   const cached = page?.graphs.get(purchaseId);
@@ -339,31 +428,52 @@ function spendingGraph(
 
 async function loadSpendingGraph(
   db: Database,
-  purchaseId: Parameters<typeof bookingGraph>[1],
+  purchaseId: NonNullable<Parameters<typeof bookingGraph>[1]>,
 ) {
-  const graph = await bookingGraph(db, purchaseId);
-  const categories = (
-    await getDb(db).execute<{ id: string; category: string | null }>(sql`
-    SELECT e.id, ${effectiveExpenseSpendingCategorySql("e")} AS category FROM "Expense" e
-    WHERE e."purchaseId" = ${purchaseId} AND e."deletedAt" IS NULL ORDER BY e.id
+  const graph = (await loadSpendingGraphs(db, [purchaseId])).get(purchaseId);
+  if (!graph) return refuse("The selected Purchase is no longer live.");
+  return graph;
+}
+
+async function loadSpendingGraphs(
+  db: Database,
+  purchaseIds: readonly NonNullable<Parameters<typeof bookingGraph>[1]>[],
+) {
+  const ids = [...new Set(purchaseIds)];
+  const graphs = await bookingGraphs(db, ids);
+  const categories = ids.length
+    ? (
+        await getDb(db).execute<{
+          id: string;
+          purchaseId: string;
+          category: string | null;
+        }>(sql`
+    SELECT e.id, e."purchaseId", ${effectiveExpenseSpendingCategorySql("e")} AS category FROM "Expense" e
+    WHERE e."purchaseId" IN (${sql.join(
+      ids.map((id) => sql`${id}::uuid`),
+      sql`, `,
+    )}) AND e."deletedAt" IS NULL ORDER BY e.id
   `)
-  ).rows;
-  const settlements = (
-    await getDb(db).execute<{
-      transactionId: string;
-      transactionCode: string;
-      amount: number;
-      kind: string;
-      status: string;
-      deletedAt: string | null;
-      ledgerTransferId: string | null;
-      transactionAmount: number;
-      allocatedAmount: number;
-      accountDeletedAt: string | null;
-      transaction: unknown;
-      account: unknown;
-      owner: unknown;
-    }>(sql`SELECT a."transactionId", f.shortcode AS "transactionCode", a.amount, f.kind, f.status, f."deletedAt", f."ledgerTransferId",
+      ).rows
+    : [];
+  const settlements = ids.length
+    ? (
+        await getDb(db).execute<{
+          purchaseId: string;
+          transactionId: string;
+          transactionCode: string;
+          amount: number;
+          kind: string;
+          status: string;
+          deletedAt: string | null;
+          ledgerTransferId: string | null;
+          transactionAmount: number;
+          allocatedAmount: number;
+          accountDeletedAt: string | null;
+          transaction: unknown;
+          account: unknown;
+          owner: unknown;
+        }>(sql`SELECT a."purchaseId", a."transactionId", f.shortcode AS "transactionCode", a.amount, f.kind, f.status, f."deletedAt", f."ledgerTransferId",
     f.amount AS "transactionAmount", fa."deletedAt" AS "accountDeletedAt",
     (SELECT sum(coverage.amount) FROM "FinancialTransactionAllocation" coverage
       WHERE coverage."transactionId" = f.id AND coverage."deletedAt" IS NULL) AS "allocatedAmount",
@@ -371,10 +481,29 @@ async function loadSpendingGraph(
     FROM "FinancialTransactionAllocation" a JOIN "FinancialTransaction" f ON f.id = a."transactionId"
     JOIN "FinancialAccount" fa ON fa.id = f."accountId"
     LEFT JOIN "LedgerParty" lp ON lp.id = fa."ledgerPartyId"
-    WHERE a."purchaseId" = ${purchaseId} AND a."deletedAt" IS NULL ORDER BY a."transactionId", a.id
+    WHERE a."purchaseId" IN (${sql.join(
+      ids.map((id) => sql`${id}::uuid`),
+      sql`, `,
+    )}) AND a."deletedAt" IS NULL ORDER BY a."transactionId", a.id
   `)
-  ).rows;
-  return { ...graph, categories, settlements };
+      ).rows
+    : [];
+  const categoriesByPurchase = groupBy(categories, (row) => row.purchaseId);
+  const settlementsByPurchase = groupBy(settlements, (row) => row.purchaseId);
+  return new Map(
+    [...graphs].map(([id, graph]) => [
+      id,
+      {
+        ...graph,
+        categories: (categoriesByPurchase[id] ?? []).map(
+          ({ purchaseId: _purchaseId, ...row }) => row,
+        ),
+        settlements: (settlementsByPurchase[id] ?? []).map(
+          ({ purchaseId: _purchaseId, ...row }) => row,
+        ),
+      },
+    ]),
+  );
 }
 
 function availableCents(
@@ -439,11 +568,17 @@ export async function financialSpendingCategoryHistory(
       name: string | null;
       lines: number;
     }>(sql`
-    SELECT ${effectiveExpenseSpendingCategorySql("e")} AS category, c.name, count(*)::int AS lines
-    FROM "Expense" e JOIN "Purchase" p ON p.id=e."purchaseId"
-    LEFT JOIN "SpendingCategory" c ON c.id=${effectiveExpenseSpendingCategorySql("e")} AND c."deletedAt" IS NULL
-    WHERE p."vendorId"=${vendorId} AND p."deletedAt" IS NULL AND e."deletedAt" IS NULL AND NOT e.future
-    GROUP BY ${effectiveExpenseSpendingCategorySql("e")}, c.name ORDER BY category NULLS FIRST
+    WITH selected_expenses AS (
+      SELECT e.id, e."purchaseId", e."productId", e."spendingCategoryId", e."lineKind"
+      FROM "Expense" e JOIN "Purchase" p ON p.id=e."purchaseId"
+      WHERE p."vendorId"=${vendorId} AND p."deletedAt" IS NULL AND e."deletedAt" IS NULL AND NOT e.future
+    ), resolved AS (
+      ${effectiveExpenseSpendingCategoriesSql(sql`selected_expenses`)}
+    )
+    SELECT r."spendingCategoryId" AS category, c.name, count(*)::int AS lines
+    FROM resolved r
+    LEFT JOIN "SpendingCategory" c ON c.id=r."spendingCategoryId" AND c."deletedAt" IS NULL
+    GROUP BY r."spendingCategoryId", c.name ORDER BY category NULLS FIRST
   `)
   ).rows;
 }
@@ -465,10 +600,10 @@ function reviewedSpendingAdvice(request: Request) {
   });
 }
 
-function spendingVendors(
+export function resolveFinancialSpendingVendors(
   db: Database,
   names: readonly string[],
-  page?: FinancialSpendingPage,
+  page?: Pick<FinancialSpendingPage, "vendors">,
 ) {
   const key = canonicalJson([...names]);
   const cached = page?.vendors.get(key);
@@ -575,6 +710,37 @@ async function spendingCandidates(
   return [...candidates.values()].sort((a, b) => a.id.localeCompare(b.id));
 }
 
+function needsBookingCategoryEvidence(
+  input: Parameters<typeof spendingBlocker>[0],
+) {
+  return (
+    input.facts.source.kind === "refund" || spendingBlocker(input) === null
+  );
+}
+
+function candidateGraphInputs(
+  candidates: readonly SpendingCandidate[],
+  input: Parameters<typeof spendingBlocker>[0],
+) {
+  return needsBookingCategoryEvidence(input) ? candidates : [];
+}
+
+async function categoryHistoryForDiscovery(
+  db: Database,
+  vendorId: string | undefined,
+  input: Parameters<typeof spendingBlocker>[0],
+  page?: FinancialSpendingPage,
+) {
+  // History cannot unblock missing classification. Refunds may inherit their
+  // category later, so retain their history before evaluating the final plan.
+  if (!vendorId || !needsBookingCategoryEvidence(input)) return [];
+  const lookup =
+    page?.categoryHistory.get(vendorId) ??
+    financialSpendingCategoryHistory(db, vendorId);
+  page?.categoryHistory.set(vendorId, lookup);
+  return lookup;
+}
+
 /** Discovery does not authorize a write; the same retained evidence is rebuilt at commit. */
 async function discoverSpendingEvidence(
   db: Database,
@@ -592,7 +758,7 @@ async function discoverSpendingEvidence(
       ].filter((value): value is string => Boolean(value)),
     ),
   ];
-  const resolved = await spendingVendors(db, names, page);
+  const resolved = await resolveFinancialSpendingVendors(db, names, page);
   const vendors = new Map(
     resolved.flatMap((result) =>
       result.row ? [[result.row.id, result.row] as const] : [],
@@ -662,13 +828,29 @@ async function discoverSpendingEvidence(
       cardLastFours: cardLastFoursOn(account.cardNumbers, date),
       storedValue: account.identity.kind === "stored_value",
     };
+    const retained =
+      page?.retainedSettlement ??
+      (await prepareRetainedSettlementDiscovery(
+        getDb(db),
+        liveCandidates.map((candidate) =>
+          parseEntityId("purchase", candidate.id),
+        ),
+      ));
     for (const candidate of liveCandidates) {
-      const plan = await planPurchaseRetainedSettlement(getDb(db), {
-        purchaseId: parseEntityId("purchase", candidate.id),
-        ledgerPartyId: account.ledgerPartyId!,
-        additionalCharges: [charge],
-        discovery: true,
-      });
+      const purchaseId = parseEntityId("purchase", candidate.id);
+      const facts = retained.get(purchaseId);
+      if (!retainedSettlementDiscoveryCouldMatch(facts, charge, Boolean(row)))
+        continue;
+      const plan = await planPurchaseRetainedSettlement(
+        getDb(db),
+        {
+          purchaseId,
+          ledgerPartyId: account.ledgerPartyId!,
+          additionalCharges: [charge],
+          discovery: true,
+        },
+        retained,
+      );
       if (
         Array.isArray(plan) &&
         plan.some((entry) => entry.charge.id === charge.id)
@@ -676,17 +858,33 @@ async function discoverSpendingEvidence(
         strong.set(candidate.shortcode, plan);
     }
   }
-  let history: Awaited<ReturnType<typeof financialSpendingCategoryHistory>> =
-    [];
-  if (vendor) {
-    const lookup =
-      page?.categoryHistory.get(vendor.id) ??
-      financialSpendingCategoryHistory(db, vendor.id);
-    page?.categoryHistory.set(vendor.id, lookup);
-    history = await lookup;
-  }
+  const history = await categoryHistoryForDiscovery(
+    db,
+    vendor?.id,
+    {
+      facts,
+      advice,
+      category,
+      history: [],
+      vendorResolved: Boolean(vendor),
+      ambiguous: ambiguous && !request.vendorId,
+      categoryHistoryReviewed: request.categoryHistoryReviewed,
+    },
+    page,
+  );
   const candidateEvidence = [];
-  for (const candidate of liveCandidates)
+  // Review-only plans cannot be committed. Load receipt graphs only once
+  // classification can admit booking, or a refund needs its original category.
+  const graphCandidates = candidateGraphInputs(liveCandidates, {
+    facts,
+    advice,
+    category,
+    history,
+    vendorResolved: Boolean(vendor),
+    ambiguous: ambiguous && !request.vendorId,
+    categoryHistoryReviewed: request.categoryHistoryReviewed,
+  });
+  for (const candidate of graphCandidates)
     candidateEvidence.push({
       ...candidate,
       graph: await spendingGraph(
