@@ -166,6 +166,9 @@ Record-scoped reads restrict reference kinds before expanding related graphs.
 Email outcomes traverse linked Purchases only for Purchase scopes; field
 reference expansion selects only the requested target kinds. Mixed scopes keep
 every requested endpoint, while presentation still enumerates all references.
+Reference expansion is projected inside the materialized eligibility relation.
+Consumers match those references directly; rejoining the base tables can let the
+planner expand unrelated history before intersecting eligible identities.
 The [connection journey](../guide/entity-connections.md) owns its behavior.
 The shared public review operation supports historical review without applying,
 or review plus a prepared domain action. Saved-field inference mints Assessment
