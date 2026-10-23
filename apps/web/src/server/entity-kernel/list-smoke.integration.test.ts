@@ -42,13 +42,21 @@ import { generatedEntityListFields } from "@cubby/schemas/entity-list-fields";
 import { entityInspectorMetadata } from "@cubby/schemas/entity-manifest";
 import { ingredientFiltersSchema } from "@cubby/schemas/ingredient";
 import { SHORTCODE_BODY_LENGTH, SHORTCODE_CHARS } from "@cubby/shared";
+import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
 import { listEntities } from "~/entity/generated/entity-lists.gen";
 import { mock } from "~/lib/test/mock-schema";
+import { getDb } from "~/server/db/helpers";
+import { run as runTable } from "~/server/db/schema";
 import { ingredientList } from "~/server/domains/ingredient/repo/search";
+import { ensureRun } from "~/server/domains/run/repo/ensure-run";
+import {
+  ensureRunSteps,
+  startRunStep,
+} from "~/server/domains/run/repo/run-step";
 import { executeEntity } from "~/server/entity-kernel";
 import { ENTITY_KERNEL_ENTITIES } from "~/server/entity-kernel/contracts";
 import type {
@@ -180,6 +188,40 @@ describe("entity list smoke — shared selection/count FROM context", () => {
   it("resolves every declared filter and sort for every listable entity", async () => {
     const universe = await seedReferenceUniverse(ctx.db);
     const kernelCtx = buildKernelContext(ctx.db);
+    // Contextual input filters need retained selection metadata, not a random token.
+    const inspectionRun = await ensureRun(ctx.db, ctx.actor, {
+      purpose: "sweep",
+      execution: false,
+      input: {
+        kind: "sweep",
+        families: [
+          { family: "transfer_pair", scope: {} },
+          { family: "statement_transaction", scope: {} },
+        ],
+      },
+    });
+    const countedAt = new Date().toISOString();
+    const inputSteps = [
+      { key: "transfer_pair_scan", label: "Synthetic transfer inputs" },
+      { key: "statement_generate", label: "Synthetic statement inputs" },
+    ];
+    await ensureRunSteps(ctx.db, inspectionRun, inputSteps);
+    for (const step of inputSteps)
+      await startRunStep(ctx.db, inspectionRun, step.key, {
+        found: 0,
+        input: {
+          mode: "count",
+          total: 0,
+          countedAt,
+          boundary: step.key === "transfer_pair_scan" ? countedAt : null,
+        },
+      });
+    const [inspection] = await getDb(ctx.db)
+      .select({ code: runTable.shortcode })
+      .from(runTable)
+      .where(eq(runTable.id, inspectionRun));
+    if (!inspection)
+      throw new Error("Synthetic inspection Run was not retained");
 
     const failures: string[] = [];
     const skipped: string[] = [];
@@ -242,11 +284,15 @@ describe("entity list smoke — shared selection/count FROM context", () => {
       for (const [key, fieldSchema] of Object.entries(filterFields)) {
         seed += 1;
         const excludeReason = excludeKeys.get(key);
-        const sample = buildFilterSample(
-          fieldSchema,
-          seed,
-          universe.shortcodeByPrefix,
-        );
+        const sample =
+          key === "runStepInput"
+            ? {
+                ok: true as const,
+                value: fieldSchema.parse(
+                  `${inspection.code}:${entity === "financialTransaction" ? "transfer_pair_scan" : "statement_generate"}`,
+                ),
+              }
+            : buildFilterSample(fieldSchema, seed, universe.shortcodeByPrefix);
         if (!sample.ok) {
           skipped.push(`${entity} filter ${key}: ${sample.reason}`);
           continue;
