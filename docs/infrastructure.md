@@ -782,7 +782,21 @@ because the `AI` binding supplies Worker-identity authentication.
 Run detail shows a Plan table from `RUN_KINDS` in
 `packages/schemas/src/activity-fields.ts`, filtered by the Run's selected
 families. It lists steps in declaration order with purpose, scope, input count,
-state and results. Inputs are counted at step start; unstarted steps never read
+state, results, elapsed wall time and the current step ETA. Generic report table
+cells retain their complete plain-text values and may additionally declare
+status-pill, figure or internal-link presentation. Wall time includes queue and
+paused time after the step starts; completed steps use their retained end time.
+
+Financial input links use declared `runStepInput` list predicates backed by
+the same SQL selectors as execution. They re-evaluate current eligibility under
+the stored Run scope and recorded cutoff, not an archived membership snapshot.
+Source-record lists show all live observations for selected charge keys, so
+their row count can exceed the input count. Selection criteria explain later
+account admission and scope exceptions. Assessment stages link to this Run’s
+related decisions, not an exact input population; those stages can inspect
+assessments published by other Runs.
+
+Inputs are counted at step start; unstarted steps never read
 as zero-input work. Stored steps outside the current declaration/selection are
 shown separately as historical execution history, not future planned work.
 Scope summaries describe selected accounts/imports without exposing source IDs.

@@ -179,6 +179,19 @@ const reportChart = z.object({
   caption: z.string().optional(),
 });
 
+/** Optional semantic presentation; `cells` remains the complete plain-text fallback. */
+const reportTableCellPresentation = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("status"), state: z.enum(reportRowStates) }),
+  z.object({ kind: z.literal("figure") }),
+  z.object({
+    kind: z.literal("links"),
+    links: z.array(
+      z.object({ label: z.string(), href: z.string().regex(/^\/(?!\/)/) }),
+    ),
+    note: z.string().optional(),
+  }),
+]);
+
 const reportTable = z.object({
   kind: z.literal("table"),
   title: z.string().optional(),
@@ -188,6 +201,10 @@ const reportTable = z.object({
     z.object({
       id: z.string(),
       cells: z.array(z.string()),
+      /** Zero-based column indexes. Readers may ignore these without losing the row's text. */
+      presentation: z
+        .record(z.string().regex(/^(0|[1-9]\d*)$/), reportTableCellPresentation)
+        .optional(),
       ref: reportRef.optional(),
     }),
   ),

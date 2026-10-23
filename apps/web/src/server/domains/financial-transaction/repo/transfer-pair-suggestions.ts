@@ -87,6 +87,11 @@ const CLEAN_GAP_DAYS = 3;
 const OVERLAP_WINDOW_DAYS = 3;
 /** Pool reach around the seeds: a candidate's competitors and overlaps included. */
 const POOL_WINDOW_DAYS = 2 * CANDIDATE_WINDOW_DAYS;
+import {
+  transferPairMoneyMoveKinds,
+  transferPairSeedKeys,
+} from "./transfer-pair-input";
+
 const PREVIEW_CHUNK = 500;
 // Amortize Job dispatch between pages; the byte bound still limits publications.
 export const TRANSFER_PAIR_GENERATION_PAGE = 128;
@@ -96,10 +101,9 @@ export const TRANSFER_PAIR_PUBLICATION_CONCURRENCY = 4;
 export const TRANSFER_PAIR_PUBLISH_CONCURRENCY = 4;
 
 /** Kinds that move money between accounts; they retrieve a leg, never prove it. */
-const MONEY_MOVES = new Set<FinancialTransactionKind>([
-  "account_transfer",
-  "credit_card_payment",
-]);
+const MONEY_MOVES = new Set<FinancialTransactionKind>(
+  transferPairMoneyMoveKinds,
+);
 /**
  * Exact provider category values for a cash withdrawal, folded as
  * `statementTransactionKind` folds categories. Provider metadata, not a
@@ -1458,35 +1462,6 @@ const noResults = () =>
     still_candidate: 0,
     inactive: 0,
   }) satisfies Record<TransferPairNoResult, number>;
-
-/**
- * The seed identities a scan pages; `createdBefore` is the population
- * boundary a Sweep step froze with its count, so late arrivals wait for the
- * next pass.
- */
-const transferPairSeedKeys = (input: {
-  since: string | null;
-  createdBefore?: string | null;
-}) => sql`
-      SELECT 'ftx:' || ft.shortcode AS key FROM "FinancialTransaction" ft
-      WHERE ft."deletedAt" IS NULL AND ft.status IN (${sql.join(
-        transferEvidenceStatuses.map((status) => sql`${status}`),
-        sql`, `,
-      )})
-        AND ft."ledgerTransferId" IS NULL
-        AND COALESCE(ft."postedDate", ft."transactionDate") IS NOT NULL
-        AND (ft.kind IN (${sql.join(
-          [...MONEY_MOVES].map((kind) => sql`${kind}`),
-          sql`, `,
-        )}) OR ft."sourceCategory" IS NOT NULL)
-        ${input.since ? sql`AND COALESCE(ft."postedDate", ft."transactionDate") >= ${input.since}::date` : sql``}
-        ${input.createdBefore ? sql`AND ft."createdAt" <= ${input.createdBefore}::timestamptz` : sql``}
-      UNION
-      SELECT 'stmt:' || r.source || ':' || ${chargeKeyOf("r")} AS key
-      FROM "SourceTransactionRecord" r
-      WHERE r."deletedAt" IS NULL AND r."sourceCategory" IS NOT NULL
-        ${input.since ? sql`AND r."statementDate" >= ${input.since}::date` : sql``}
-        ${input.createdBefore ? sql`AND r."createdAt" <= ${input.createdBefore}::timestamptz` : sql``}`;
 
 /** Raw identities are paged before hydration; each seed still reads its complete competing pool. */
 async function nextTransferPairSeeds(

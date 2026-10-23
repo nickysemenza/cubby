@@ -512,7 +512,7 @@ export function useTableState(
     const next = routerSearchSchema.parse(JSON.parse(serializedUrlState));
     void navigate({
       to: ".",
-      search: (prev) => {
+      search: (prev: unknown) => {
         const merged = routerSearchSchema.parse(prev);
         for (const key of managedKeys) {
           if (next[key] === undefined) delete merged[key];

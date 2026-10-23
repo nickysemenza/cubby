@@ -2,6 +2,7 @@ import { slotActionsOf } from "@cubby/schemas/entity-report";
 import type {
   EntityReportInput,
   ReportBlock,
+  ReportRowState,
 } from "@cubby/schemas/entity-report";
 import { ArrowSquareOutIcon } from "@phosphor-icons/react/dist/csr/ArrowSquareOut";
 import {
@@ -30,6 +31,7 @@ import { Row, Stack } from "~/ui/layout";
 import { buttonVariants } from "~/ui/primitives/button";
 import { Button } from "~/ui/primitives/button";
 import { Description } from "~/ui/primitives/description";
+import { EnumPill } from "~/ui/primitives/enum-pill";
 import { Eyebrow } from "~/ui/primitives/eyebrow";
 import { Progress } from "~/ui/primitives/progress";
 import { Skeleton } from "~/ui/primitives/skeleton";
@@ -177,6 +179,62 @@ function Chart({ block }: { block: Extract<ReportBlock, { kind: "chart" }> }) {
   );
 }
 
+const TABLE_STATUS_TONE = {
+  done: "var(--positive)",
+  running: "var(--info)",
+  warning: "var(--warning)",
+  failed: "var(--destructive)",
+  skipped: "var(--neutral-status)",
+  not_reached: "var(--neutral-status)",
+} satisfies Record<ReportRowState, string>;
+
+type TableBlock = Extract<ReportBlock, { kind: "table" }>;
+function TableCellValue({
+  row,
+  index,
+}: {
+  row: TableBlock["rows"][number];
+  index: number;
+}) {
+  const text = row.cells[index] ?? "";
+  const presentation = row.presentation?.[String(index)];
+  if (presentation?.kind === "status")
+    return (
+      <EnumPill
+        optionRole="status"
+        color={TABLE_STATUS_TONE[presentation.state]}
+      >
+        {text}
+      </EnumPill>
+    );
+  if (presentation?.kind === "links")
+    return (
+      <Stack gap="xs">
+        <ShortcodeProse>{text}</ShortcodeProse>
+        <Row wrap gap="sm">
+          {presentation.links.map((link) => (
+            <a
+              key={link.href}
+              href={link.href}
+              className="text-primary underline-offset-2 hover:underline"
+            >
+              {link.label}
+            </a>
+          ))}
+        </Row>
+        {presentation.note ? (
+          <details className="text-xs text-muted-foreground">
+            <summary className="cursor-pointer">Selection criteria</summary>
+            <p className="mt-1 max-w-prose">{presentation.note}</p>
+          </details>
+        ) : null}
+      </Stack>
+    );
+  if (presentation?.kind === "figure")
+    return <span className="font-mono tabular-nums">{text}</span>;
+  return <ShortcodeProse>{text}</ShortcodeProse>;
+}
+
 /** A column whose every filled cell is a figure (money, a count, a dash) aligns right. */
 const FIGURE = /^(?:[-−+]?[$€£]?[\d.,]+%?|—)$/;
 const figureColumns = (block: Extract<ReportBlock, { kind: "table" }>) =>
@@ -200,7 +258,11 @@ function Table({ block }: { block: Extract<ReportBlock, { kind: "table" }> }) {
       <StaticTable<(typeof block.rows)[number]>
         rows={block.rows}
         rowKey={(row) => row.id}
-        className={cn(block.columns.length > 4 && "min-w-3xl")}
+        className={cn(
+          block.columns.length >= 8
+            ? "min-w-6xl"
+            : block.columns.length > 4 && "min-w-3xl",
+        )}
         columns={block.columns.map<
           StaticTableColumn<(typeof block.rows)[number]>
         >((column, index) => ({
@@ -223,7 +285,7 @@ function Table({ block }: { block: Extract<ReportBlock, { kind: "table" }> }) {
                 {row.cells[index]}
               </Link>
             ) : (
-              <ShortcodeProse>{row.cells[index] ?? ""}</ShortcodeProse>
+              <TableCellValue row={row} index={index} />
             ),
         }))}
       />

@@ -1,9 +1,9 @@
 import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
 import type { ListGroupBy } from "@cubby/schemas/pagination";
 
-import { entities } from "~/entity/entities";
-import { getEntityFilters } from "~/entity/filter-manifest";
 import { encodeFilters, sortToParam } from "~/entity/filters";
+import { generatedEntityFilters } from "~/entity/generated/entity-filter-bindings.gen";
+import { generatedBrowserRoutes } from "~/entity/generated/entity-routes.gen";
 import type { ViewDefinition } from "~/entity/model/view-manifest";
 
 type ListState = {
@@ -23,7 +23,7 @@ export const entityListSearch = (
   entity: BrowserRoutedEntity,
   state: ListState,
 ) => {
-  const specs = getEntityFilters(entity);
+  const specs = generatedEntityFilters[entity];
   const known = new Set(specs.map((spec) => spec.columnId));
   const unknown = state.filters.find(({ id }) => !known.has(id));
   if (unknown)
@@ -48,7 +48,7 @@ export const entityListHref = (
   state: ListState,
   params: Record<string, string> = {},
 ): string =>
-  `${entities[entity].routes.list}?${new URLSearchParams({
+  `${generatedBrowserRoutes[entity].routes.list}?${new URLSearchParams({
     ...params,
     ...entityListSearch(entity, state),
   }).toString()}`;
