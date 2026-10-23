@@ -1,0 +1,23 @@
+apps/web/src/server/generic/data-quality/repo/sql.ts
+  s_0cc53fa46ecbd7::t_d2c67e9fa39952 34,60-61,66-69,274,399,415
+apps/web/src/server/generic/data-quality/repo/stored-sql.ts
+  s_0cc53fa46ecbd7::t_433ff792bd274e 8,15,19-20
+apps/web/tooling/entity-quality-migration.integration.test.ts
+  s_0cc53fa46ecbd7::t_9bc6edb5415102 11,31
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "5541d2dd317aeb70abbcb16d29ea7fc3217e193a",
+  "prompts": {},
+  "sessions": {
+    "s_0cc53fa46ecbd7": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2e7ff6fb-224e-42e0-a270-a92fc1131a0c",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
