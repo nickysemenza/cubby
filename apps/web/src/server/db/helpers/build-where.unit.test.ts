@@ -466,8 +466,8 @@ describe("buildProductWhere", () => {
     },
     {
       name: "brandId",
-      filters: { brandId: "DeWalt" },
-      contains: '"brandName"',
+      filters: { brandId: parseShortcodeFor("vendor", "VEN-ABCDE") },
+      contains: '"brandId"',
     },
   ])(
     "still narrows by $name (declared stored filter)",

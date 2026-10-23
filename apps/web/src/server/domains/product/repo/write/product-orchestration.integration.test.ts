@@ -1,5 +1,4 @@
 import { ingredientShortcode } from "@cubby/schemas/identifiers";
-import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
 import type { FoodSummary } from "@cubby/usda";
 import { fromPartial } from "@total-typescript/shoehorn";
 import { createRepoEntity } from "tooling/factories/repo";
@@ -99,7 +98,7 @@ const usdaFood = (overrides: Partial<FoodSummary> = {}): FoodSummary => ({
   foodInfo: { data_type: "branded_food", description: "Store Brand Salt" },
   brandedFoodInfo: {
     brand_owner: "Acme",
-    brand_name: null,
+    brand_name: "Market Salt",
     branded_food_category: null,
     gtin_upc: "022222222220",
     ingredients: null,
@@ -178,7 +177,7 @@ describe("findOrCreateByUPC", () => {
 
     expect(result.created).toBe(true);
     expect(result.product.name).toBe("Store Brand Salt");
-    expect(result.product.brandName).toBe("Acme");
+    expect(result.product.brandName).toBe("Market Salt");
     expect(result.product.primaryGtin).toBe(upc.padStart(14, "0"));
   });
 
@@ -239,7 +238,8 @@ describe("findOrCreateByUPC", () => {
 
     expect(result.created).toBe(true);
     expect(result.product.name).toBe("Fallback Name");
-    expect(result.product.brandName).toBe(UNSPECIFIED_MANUFACTURER);
+    expect(result.product.brandName).toBeNull();
+    expect(result.product.brandId).toBeNull();
     expect(result.product.primaryGtin).toBe(upc.padStart(14, "0"));
   });
 
@@ -288,7 +288,12 @@ describe("findOrCreateByCode", () => {
 
   it("resolves concurrent ISBN creation to one Product", async () => {
     const canonical = "09780132350884";
-    const services = [unexpectedUsdaClient(), upcLookupClient()] as const;
+    const services = [
+      unexpectedUsdaClient(),
+      upcLookupClient(async () =>
+        upcResponse({ brand: "Synthetic Book Press" }),
+      ),
+    ] as const;
     const [a, b] = await Promise.all([
       findOrCreateByCode(
         ctx.db,
@@ -308,6 +313,8 @@ describe("findOrCreateByCode", () => {
 
     expect([a.created, b.created].sort()).toEqual([false, true]);
     expect(a.product.id).toBe(b.product.id);
+    expect(a.product.brandId).not.toBeNull();
+    expect(a.product.brandName).toBe("Synthetic Book Press");
   });
 
   describe("ISBN title fallback", () => {

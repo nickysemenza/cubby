@@ -25,7 +25,6 @@ import {
   purchase,
 } from "~/server/db/schema";
 import { getExpenseByShortcode } from "~/server/domains/expense/repo/crud";
-import { createProduct } from "~/server/domains/product/repo/crud";
 import {
   linkExpensesToPurchaseWorkflow,
   splitExpenseWorkflow,
@@ -41,6 +40,7 @@ import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-u
 import { requireActor } from "~/server/http/request-context";
 import {
   makeExpenseInput,
+  createProductFixture,
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
 import { createTestRequestContext } from "~/server/testing/request-context";
@@ -194,7 +194,7 @@ describe("purchase application workflows", () => {
     );
     expect(parts.map((part) => part.cost).sort()).toEqual([5, 7]);
     expect(await getExpenseByShortcode(ctx.db, original.id)).toBeNull();
-    const item = await createProduct(
+    const item = await createProductFixture(
       ctx.db,
       makeProductInput({ name: "Workflow durable item" }),
       ctx.actor,
@@ -346,7 +346,7 @@ describe("purchase repository — splitExpense", () => {
     const { output: project } = await createRepoEntity(ctx, "project", {
       name: "split project",
     });
-    const product = await createProduct(
+    const product = await createProductFixture(
       ctx.db,
       makeProductInput({
         name: "Combo Saw",

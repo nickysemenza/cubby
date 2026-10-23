@@ -64,6 +64,7 @@ describe("product MCP response projection", () => {
       seed: 4,
       overrides: {
         id: testShortcode("product", "PRD-PROJ"),
+        brandId: testShortcode("vendor", "VEN-BRAND"),
         images: [itemImage, itemPdf],
         labelImages: [labelImage],
       },
@@ -71,6 +72,7 @@ describe("product MCP response projection", () => {
 
     const summary = slimProduct(product);
     expect(summary).toMatchObject({
+      brandId: product.brandId,
       imageCount: 3,
       itemImageCount: 1,
       labelImageCount: 1,
@@ -79,6 +81,7 @@ describe("product MCP response projection", () => {
 
     const detail = slimProductDetail(product);
     expect(detail).toMatchObject({
+      brandId: product.brandId,
       imageCount: 3,
       itemImageCount: 1,
       labelImageCount: 1,

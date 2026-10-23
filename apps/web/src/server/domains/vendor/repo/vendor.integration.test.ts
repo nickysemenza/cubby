@@ -214,7 +214,9 @@ describe("vendor repository — deletion guard", () => {
     await expect(getVendorByID(ctx.db, vendorId)).rejects.toMatchObject({
       reason: "VENDOR_NOT_FOUND",
     });
-    expect((await vendorList(ctx.db, {}, [], page)).count).toBe(0);
+    expect(
+      (await vendorList(ctx.db, {}, [], page)).data.map((row) => row.id),
+    ).not.toContain(vendorShortcode);
   });
 });
 

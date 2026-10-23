@@ -173,7 +173,7 @@ async function productIdentifierSource(
           .where(eq(externalSource.slug, slug))
       )[0];
   if (!registered && !register) return null;
-  if (!registered || (owner && registered.vendorId !== owner.id))
+  if (!registered || registered.vendorId !== (owner?.id ?? null))
     throw new Error(
       `Identifier issuer has incompatible source ownership: ${slug} is registered to ${
         registered?.vendorId

@@ -304,14 +304,25 @@ export async function photoProductCandidates(
       ? proposal.product.create.name
       : (proposal.product.existing?.name ?? proposal.committedProduct?.name));
   if (!name) return [];
+  const existingCode =
+    proposal.product.kind === "existing"
+      ? (proposal.product.existing?.id ?? proposal.committedProduct?.id)
+      : null;
+  const [existingBrand] = existingCode
+    ? await getDb(db)
+        .select({ code: productBrandCodeSql(product.brandId) })
+        .from(product)
+        .where(and(eq(product.shortcode, existingCode), notDeleted(product)))
+    : [];
   const brandId =
     proposal.product.kind === "create"
       ? proposal.product.create.brandId
       : proposal.review?.productChanges &&
           "brandId" in proposal.review.productChanges
         ? proposal.review.productChanges.brandId
-        : (proposal.product.existing?.brandId ??
-          proposal.committedProduct?.brandId);
+        : existingBrand?.code
+          ? parseShortcodeFor("vendor", existingBrand.code)
+          : null;
   const imageIds = new Set(proposal.images.map((entry) => entry.id));
   const evidenceTexts = images
     .filter((image) => imageIds.has(image.id))

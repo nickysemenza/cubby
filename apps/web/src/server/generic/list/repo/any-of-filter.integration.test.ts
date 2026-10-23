@@ -4,6 +4,7 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { effectiveFieldSql } from "~/server/db/computed/effective-field";
+import { productBrandNameSql } from "~/server/db/computed/product-brand-sql";
 import { getDb } from "~/server/db/helpers";
 import { formatSearchTerm, textArrayMatches } from "~/server/db/helpers/query";
 import {
@@ -276,7 +277,7 @@ describe("anyOf text filters", () => {
           JOIN "Product" p ON p."id" = wc."toEntityId" AND p."deletedAt" IS NULL
           WHERE wc."fromEntityId" = ${wish.id}
             AND wc."deletedAt" IS NULL AND wc."kind" = 'wishCandidate'
-            AND (p."name" ILIKE ${`%${term}%`} OR p."brandName" ILIKE ${`%${term}%`} OR p."model" ILIKE ${`%${term}%`})
+            AND (p."name" ILIKE ${`%${term}%`} OR ${productBrandNameSql(sql.raw('p."brandId"'))} ILIKE ${`%${term}%`} OR p."model" ILIKE ${`%${term}%`})
         )`,
       );
     const wishMatches = await equivalence(

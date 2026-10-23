@@ -49,13 +49,10 @@ describe("Product identifier issuer registry", () => {
         { url: "https://unregistered.invalid.test/p/4" },
       ]),
     ).toEqual(
-      [
-        "retained-catalog",
-        "retained-catalog",
-        "retained-catalog",
-        "retained-catalog",
-        null,
-      ].map((source) => ({ source, error: null })),
+      [null, null, "retained-catalog", null, null].map((source) => ({
+        source,
+        error: null,
+      })),
     );
     expect(await getDb(ctx.db).select().from(externalSource)).toHaveLength(1);
   });
@@ -87,7 +84,7 @@ describe("Product identifier issuer registry", () => {
         .where(eq(externalSource.slug, "shop")),
     ).toMatchObject([{ vendorId: null }]);
   });
-  it("refuses ambiguous canonical domain ownership and names both Vendors", async () => {
+  it("keeps URL-only identity independent of Brands sharing a website", async () => {
     const vendors = [];
     for (const name of ["Example first retailer", "Example second retailer"])
       vendors.push(
@@ -96,17 +93,16 @@ describe("Product identifier issuer registry", () => {
           website: "https://example.test",
         }),
       );
-    await expect(
-      resolveProductIdentifierSource(ctx.db, {
-        url: "https://example.test/p/1",
-      }),
-    ).rejects.toThrow("ambiguous");
+    const source = await resolveProductIdentifierSource(ctx.db, {
+      url: "https://example.test/p/1",
+    });
     const [lookup] = await lookupProductIdentifierSources(ctx.db, [
       { url: "https://example.test/p/1" },
     ]);
-    expect(lookup?.source).toBeNull();
-    expect(lookup?.error).toContain("ambiguous");
-    for (const row of vendors) expect(lookup?.error).toContain(row.shortcode);
+    expect(lookup).toEqual({ source, error: null });
+    expect(await getDb(ctx.db).select().from(externalSource)).toMatchObject([
+      { slug: source, vendorId: null },
+    ]);
   });
   // Regression: one Vendor owning a legacy slug beside its host registration
   // threw for every claim, failing the catalog-wide duplicate detector.
@@ -129,11 +125,12 @@ describe("Product identifier issuer registry", () => {
     expect(
       await resolveProductIdentifierSource(ctx.db, {
         url: "https://example.test/p/1",
+        vendorId: issuer.id,
       }),
     ).toBe("example-catalog");
     expect(
       await lookupProductIdentifierSources(ctx.db, [
-        { url: "https://example.test/p/1" },
+        { url: "https://example.test/p/1", vendorId: issuer.id },
         { vendorId: issuer.id },
       ]),
     ).toEqual([
@@ -141,7 +138,7 @@ describe("Product identifier issuer registry", () => {
       { source: "example-catalog", error: null },
     ]);
   });
-  it("registers the host issuer instead of reusing an owned export source", async () => {
+  it("registers a stable Vendor issuer instead of reusing an owned export source", async () => {
     const issuer = await insertWithShortcode(ctx.db, "vendor", {
       name: "Example retailer",
       website: "https://example.test",
@@ -155,7 +152,7 @@ describe("Product identifier issuer registry", () => {
     const registered = await resolveProductIdentifierSource(ctx.db, {
       vendorId: issuer.id,
     });
-    expect(registered).toBe("host-6578616d706c652e74657374");
+    expect(registered).toBe(`vendor-${issuer.id}`);
     expect(
       await getDb(ctx.db)
         .select({ slug: externalSource.slug, issuer: externalSource.issuer })

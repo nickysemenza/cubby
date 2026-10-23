@@ -180,9 +180,14 @@ const retainEntityId =
 /** Public fixture references enter the UUID-only repository boundary here. */
 const resolveProductFixtureInput = async (
   db: Database,
-  data: Omit<ProductCreateInput, "ingredientId" | "brandId"> & {
+  data: Omit<
+    ProductCreateInput,
+    "ingredientId" | "brandId" | "categoryId" | "growsPlantId"
+  > & {
     ingredientId?: string | null;
     brandId?: VendorId | VendorShortcode | null;
+    categoryId?: ProductCategoryId | ProductCategoryShortcode | null;
+    growsPlantId?: PlantId | PlantShortcode | null;
   },
 ) => {
   const rawBrandId = data.brandId ?? null;
@@ -208,18 +213,20 @@ const resolveProductFixtureInput = async (
   if (rawIngredientId && !resolvedIngredientId) {
     throw new Error(`fixture: ingredient ${rawIngredientId} not found`);
   }
-  const growsPlantId = data.growsPlantId
+  const growsPlantId = data.growsPlantId?.startsWith("PLANT-")
     ? await resolveLiveShortcode(db, data.growsPlantId, "plant")
-    : null;
+    : data.growsPlantId;
   if (data.growsPlantId && !growsPlantId) {
     throw new Error(`fixture: growing plant ${data.growsPlantId} not found`);
   }
   return {
     ...data,
     brandId: brand ? parseShortcodeFor("vendor", brand.shortcode) : null,
-    categoryId: data.categoryId
+    categoryId: data.categoryId?.startsWith("CAT-")
       ? await resolveLiveShortcode(db, data.categoryId, "productCategory")
-      : null,
+      : data.categoryId
+        ? parseEntityId("productCategory", data.categoryId)
+        : null,
     growsPlantId: growsPlantId ? parseEntityId("plant", growsPlantId) : null,
     ingredientId: resolvedIngredientId
       ? parseEntityId("ingredient", resolvedIngredientId)

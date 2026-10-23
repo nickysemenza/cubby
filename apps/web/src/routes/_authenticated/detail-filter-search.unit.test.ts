@@ -7,7 +7,7 @@ describe("detail filter link route contracts", () => {
   it("keeps Product, Location, and exact Inventory facets across navigation", () => {
     expect(
       entitySearch.product.schema.parse({
-        brandName: "Acme",
+        brandId: "VEN-ABCDE",
         model: "2853-20",
         category: "CAT-2224",
         tags: "M18",
@@ -15,7 +15,7 @@ describe("detail filter link route contracts", () => {
         location: "LOC-2ABC,__none__",
       }),
     ).toMatchObject({
-      brandName: "Acme",
+      brandId: "VEN-ABCDE",
       model: "2853-20",
       category: "CAT-2224",
       tags: "M18",
@@ -162,14 +162,14 @@ describe("detail filter link route contracts", () => {
   });
 
   it("exposes each entity's literal filter keys to typed links", () => {
-    const product = entitySearch.product.schema.parse({ brandName: "Acme" });
+    const product = entitySearch.product.schema.parse({ brandId: "VEN-ABCDE" });
     const location = entitySearch.location.schema.parse({ type: "shelf" });
     const task = entitySearch.task.schema.parse({ status: "in_progress" });
 
     // Property access is the assertion here: the keys survive in the *type* —
     // where `Route.useSearch()` and `<Link search>` read them — because the
     // generated schema spells every key as a literal.
-    expect(product.brandName).toBe("Acme");
+    expect(product.brandId).toBe("VEN-ABCDE");
     expect(product.model).toBeUndefined();
     expect(product.tags).toBeUndefined();
     expect(location.type).toBe("shelf");

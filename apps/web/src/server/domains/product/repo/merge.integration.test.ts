@@ -21,7 +21,6 @@ import { createPlanting } from "~/server/domains/garden/repo/garden";
 import { createUploadedImageRecord } from "~/server/domains/image/repo/image";
 import { createInventoryEntry } from "~/server/domains/inventory/repo/crud";
 import { createLocation } from "~/server/domains/location/repo/crud";
-import { createProduct } from "~/server/domains/product/repo/crud";
 import {
   listProductMatchRows,
   productPairKey,
@@ -42,6 +41,7 @@ import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-re
 import { resolveLiveShortcode } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import {
   createPlantFixture,
+  createProductFixture,
   makeLocationInput,
   makeProductInput,
   insertEntityAttachments,
@@ -73,11 +73,14 @@ describe("mergeProducts", () => {
     name: string,
     overrides: Omit<
       Partial<ProductRepoCreateInput>,
-      "ingredientId" | "growsPlantId" | "categoryId"
-    > & { categoryId?: ProductRepoCreateInput["categoryId"] } = {},
+      "ingredientId" | "growsPlantId" | "categoryId" | "brandId"
+    > & {
+      categoryId?: ProductRepoCreateInput["categoryId"];
+      brandId?: Parameters<typeof createProductFixture>[1]["brandId"];
+    } = {},
   ) => {
     const { categoryId = null, ...productOverrides } = overrides;
-    const created = await createProduct(
+    const created = await createProductFixture(
       ctx.db,
       makeProductInput({ name, ...productOverrides, categoryId }),
       TEST_ACTOR,

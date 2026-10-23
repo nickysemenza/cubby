@@ -774,10 +774,7 @@ const readProductListPage = async (
   type ProductListExtras = {
     -readonly [K in keyof typeof extras]?: (typeof extras)[K];
   };
-  const selectedExtras: ProductListExtras = {
-    brandName: extras.brandName,
-    brandCode: extras.brandCode,
-  };
+  const selectedExtras: ProductListExtras = {};
   if (relationFields) selectedExtras.category = extras.category;
   if (wantsListGroup(projection, "quality"))
     selectedExtras.classificationEvidence = extras.classificationEvidence;
@@ -905,6 +902,9 @@ export const listProductsRead = async (
       ));
   const plan = listReadPlan<ProductSelectedPageRow>("product", {
     media: true,
+    references: {
+      brandId: { kind: "lookup", name: "brandName", missing: "null" },
+    },
     bindings: (bind) => {
       const relations = bind.batch(({ rows }) =>
         loadProductListRelations(
@@ -2483,7 +2483,6 @@ export const quickCreateProductRecord = async (
 
   const values = {
     name: data.name,
-    brandId: await resolveProductBrand(db, data.brandId),
     fdc_id: data.fdc_id ?? null,
     model: data.model ?? null,
     expectedQuantity: data.expectedQuantity ?? null,
@@ -2499,15 +2498,17 @@ export const quickCreateProductRecord = async (
   // that: a losing racer must commit nothing, or it leaves a barcode-less
   // Product behind for the recovery to find instead of the winner.
   const { newProduct, externalIds } = await withTransaction(db, async (tx) => {
+    const brandId = await resolveProductBrand(tx, data.brandId);
+    const productValues = { ...values, brandId };
     // An explicit `shortcode` only comes from the import/restore path, which is
     // replaying a code that already exists; everything else mints one through
     // `insertWithShortcode` so it gets the collision retry.
     const inserted = data.shortcode
       ? await insertPayloadWithIdentity(tx, product, "product", {
-          ...values,
+          ...productValues,
           shortcode: data.shortcode,
         })
-      : await insertWithShortcode(tx, "product", values);
+      : await insertWithShortcode(tx, "product", productValues);
 
     if (incomingGtin != null) {
       await applyPrimaryBarcode(tx, inserted.id, incomingGtin);

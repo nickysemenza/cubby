@@ -1426,12 +1426,15 @@ describe("photo group proposals", () => {
       ],
     });
 
+    const brand = await insertWithShortcode(ctx.db, "vendor", {
+      name: "ForgeWear",
+    });
     const changed = await updatePhotoGroupProductDraft(ctx.db, {
       runId: run.shortcode,
       groupKey: "shirt",
       name: "Synthetic Canvas Shirt, Medium",
       categoryId: null,
-      brandName: "ForgeWear",
+      brandId: parseShortcodeFor("vendor", brand.shortcode),
       model: null,
       notes: "Size confirmed from tag",
     });
@@ -1440,7 +1443,7 @@ describe("photo group proposals", () => {
       kind: "create",
       create: {
         name: "Synthetic Canvas Shirt, Medium",
-        brandName: "ForgeWear",
+        brandId: brand.shortcode,
         notes: "Size confirmed from tag",
       },
     });

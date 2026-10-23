@@ -63,7 +63,16 @@ export async function resolveProductBrandName(
 }
 
 export const resolveProductBrand = async (
-  db: Database | DrizzleTransaction,
+  db: DrizzleTransaction,
   code: VendorShortcode | null | undefined,
-): Promise<VendorId | null> =>
-  code ? resolveOrThrow(db, "vendor", code) : null;
+): Promise<VendorId | null> => {
+  if (!code) return null;
+  // Hold the selected live identity through the Product write, so a concurrent
+  // Vendor merge/delete cannot leave the new reference on a tombstone.
+  const [row] = await db
+    .select({ id: vendor.id })
+    .from(vendor)
+    .where(and(eq(vendor.shortcode, code), notDeleted(vendor)))
+    .for("share");
+  return row?.id ?? resolveOrThrow(db, "vendor", code);
+};

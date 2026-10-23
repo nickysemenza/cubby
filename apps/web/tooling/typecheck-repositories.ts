@@ -17,6 +17,8 @@ export const repositoryOwners = [
   "src/server/db/job-schema.ts",
   "src/server/lib/canonical-json.ts",
   "src/server/db/computed/product-classification-evidence.ts",
+  "src/server/db/computed/product-brand-sql.ts",
+  "src/server/db/computed/brand-name-sql.ts",
   "src/server/generated/shortcode-tables.gen.ts",
   "src/server/generic/audit-log/repo/field-write.ts",
   "src/server/generic/assessment/repo/field-input-fence.ts",

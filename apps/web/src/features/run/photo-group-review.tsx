@@ -60,6 +60,7 @@ import { useWorkflowCommand } from "~/entity/hooks/use-workflow-command";
 import { EntityReferencePicker } from "~/entity/picker/entity-reference-picker";
 import { Picker } from "~/entity/picker/picker";
 import { referenceEntitySearch } from "~/entity/picker/reference-entity-search";
+import { useSelectedPickerItems } from "~/entity/picker/selected-items";
 import { CategoryLabel } from "~/entity/presentation/category-label";
 import { ShortcodeProse } from "~/entity/prose/shortcode-prose";
 import { ProductVariantEvidence } from "~/features/product/product-variant-evidence";
@@ -72,6 +73,7 @@ import { photoImport } from "~/integrations/tanstack-query/generated/catalog/pho
 import { purchaseImport } from "~/integrations/tanstack-query/generated/catalog/purchaseImport.gen";
 import { invalidateOperationTags } from "~/integrations/tanstack-query/operation-cache";
 import { formatCurrency } from "~/lib/number-format";
+import type { ComboboxItem } from "~/ui/combobox/combobox-types";
 import { DateDisplay } from "~/ui/common/date-display";
 import { DecisionSteps } from "~/ui/common/decision-steps";
 import { Facts } from "~/ui/common/facts";
@@ -261,6 +263,35 @@ type SaveGroup = (
 type ImagesById = ReadonlyMap<string, PhotoRunImage>;
 const WithProductCategorySearch = referenceEntitySearch("productCategory");
 const WithBrandSearch = referenceEntitySearch("vendor");
+
+function PhotoBrandPicker({
+  value,
+  setValue,
+  label,
+  disabled,
+}: {
+  value: string | null | undefined;
+  setValue: (item: ComboboxItem | null) => void;
+  label: string;
+  disabled: boolean;
+}) {
+  const [selected] = useSelectedPickerItems("vendor", value ? [value] : [], []);
+  return (
+    <WithBrandSearch>
+      {(search) => (
+        <Picker
+          {...search}
+          entity="vendor"
+          label={label}
+          clearable
+          value={selected ?? null}
+          setValue={setValue}
+          disabled={disabled}
+        />
+      )}
+    </WithBrandSearch>
+  );
+}
 
 const isStaleGroup = (
   proposal: PhotoGroupProposal,
@@ -1387,46 +1418,25 @@ function ExistingProductChanges({
                         />
                       </div>
                       {field === "brandId" ? (
-                        <WithBrandSearch>
-                          {({
-                            items,
-                            isLoading,
-                            onSearchChange,
-                            onOpenChange,
-                            onCreateNew,
-                          }) => (
-                            <Picker
-                              entity="vendor"
-                              label="New brand"
-                              clearable
-                              items={items}
-                              value={
-                                items.find(
-                                  (item) => item.id === changes.brandId,
-                                ) ?? null
-                              }
-                              setValue={(item) =>
-                                save(() => ({
-                                  ...toGroupInput(proposal),
-                                  review: {
-                                    ...review,
-                                    productChanges: {
-                                      ...changes,
-                                      brandId: item
-                                        ? parseShortcodeFor("vendor", item.id)
-                                        : null,
-                                    },
-                                  },
-                                }))
-                              }
-                              isLoading={isLoading}
-                              onSearchChange={onSearchChange}
-                              onOpenChange={onOpenChange}
-                              onCreateNew={onCreateNew}
-                              disabled={busy}
-                            />
-                          )}
-                        </WithBrandSearch>
+                        <PhotoBrandPicker
+                          label="New brand"
+                          value={changes.brandId}
+                          setValue={(item) =>
+                            save(() => ({
+                              ...toGroupInput(proposal),
+                              review: {
+                                ...review,
+                                productChanges: {
+                                  ...changes,
+                                  brandId: item
+                                    ? parseShortcodeFor("vendor", item.id)
+                                    : null,
+                                },
+                              },
+                            }))
+                          }
+                          disabled={busy}
+                        />
                       ) : (
                         <CommitInput
                           label={`New ${presentation.label.toLocaleLowerCase()}`}
@@ -1626,39 +1636,20 @@ function ProductPanel({
     if (product.kind !== "create") return null;
     if (field === "brandId")
       return (
-        <WithBrandSearch>
-          {({
-            items,
-            isLoading,
-            onSearchChange,
-            onOpenChange,
-            onCreateNew,
-          }) => (
-            <Picker
-              entity="vendor"
-              label="Brand"
-              clearable
-              items={items}
-              value={
-                items.find((item) => item.id === product.create.brandId) ?? null
-              }
-              setValue={(item) =>
-                saveProduct({
-                  kind: "create",
-                  create: {
-                    ...product.create,
-                    brandId: item ? parseShortcodeFor("vendor", item.id) : null,
-                  },
-                })
-              }
-              isLoading={isLoading}
-              onSearchChange={onSearchChange}
-              onOpenChange={onOpenChange}
-              onCreateNew={onCreateNew}
-              disabled={busy}
-            />
-          )}
-        </WithBrandSearch>
+        <PhotoBrandPicker
+          label="Brand"
+          value={product.create.brandId}
+          setValue={(item) =>
+            saveProduct({
+              kind: "create",
+              create: {
+                ...product.create,
+                brandId: item ? parseShortcodeFor("vendor", item.id) : null,
+              },
+            })
+          }
+          disabled={busy}
+        />
       );
     const presentation = entityFieldPresentation("product", field, "create");
     if (!presentation.editable) return null;

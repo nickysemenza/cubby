@@ -74,12 +74,15 @@ describe("photo product candidates", () => {
 
   // A model budget cap or OCR-derived title silently leaves otherwise eligible candidates unchecked.
   it("checks every retrieved candidate concurrently using stable name and identifier inputs", async () => {
+    const brand = await insertWithShortcode(ctx.db, "vendor", {
+      name: "Synthetic Forge",
+    });
     for (let index = 0; index < 21; index++)
       await createProductIdentityFixture(
         ctx.db,
         makeProductInput({
           name: `Synthetic Forge canvas boot blue ${index}`,
-          brandId: await findOrCreateVendor(ctx.db, "Synthetic Forge"),
+          brandId: brand.id,
         }),
         ctx.actor,
       );
@@ -88,7 +91,7 @@ describe("photo product candidates", () => {
       ctx.db,
       {
         name: "Synthetic Forge canvas boot blue",
-        brandName: "Synthetic Forge",
+        brandId: parseShortcodeFor("vendor", brand.shortcode),
         evidenceTexts: [
           {
             source: "label_ocr",
@@ -491,7 +494,7 @@ describe("photo product candidates", () => {
       ctx.db,
       {
         name: "ForgeWear pocket tee black small",
-        brandName: "ForgeWear",
+        brandId: clean.brandId,
       },
       ctx.actor,
     );

@@ -123,6 +123,8 @@ const product = {
   id: PRODUCT_ID,
   shortcode: "PRD-TEST",
   name: "Flour",
+  brandId: null,
+  brandCode: null,
   brandName: "Generic",
   aliases: [],
   tags: [],
