@@ -5,7 +5,7 @@ import type { Database, DrizzleTransaction } from "~/server/db";
 import { locationAiDescriptionSql } from "~/server/db/computed/location-ai-description";
 import { notDeleted, unwrapDb, uuidArrayParam } from "~/server/db/helpers";
 import { location } from "~/server/db/retained-tables";
-import { displayableImageRawSql } from "~/server/domains/image/repo/image-displayability";
+import { displayableImageSql } from "~/server/domains/image/repo/image-displayability";
 import { entityDisplayImagePresenceSql } from "~/server/entity-kernel/repo/entity-display-image";
 import { qualityCheck } from "~/server/generic/data-quality/repo/builders";
 import { defineStoredEntityChecks } from "~/server/generic/data-quality/repo/stored-registry";
@@ -63,7 +63,7 @@ async function loadLocationQualityRecords(
           AND dq_location_image."deletedAt" IS NULL
         WHERE dq_location_attachment."entityId" = ${locationColumn("id")}
           AND dq_location_attachment."deletedAt" IS NULL
-          AND ${sql.raw(displayableImageRawSql("dq_location_image"))}
+          AND ${displayableImageSql("dq_location_image")}
       )`,
       hasInventoryForProduct: sql<boolean>`EXISTS (
         SELECT 1 FROM "InventoryEntry" dq_location_inventory

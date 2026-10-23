@@ -133,11 +133,20 @@ export type DisplayableFile = {
   storageStatus?: ImageStorageStatus | null;
 };
 
+/** Excluded values are shared by in-memory filtering and repository SQL. */
+export const imageDisplayabilityExclusions = [
+  { field: "contentType", values: [PDF_CONTENT_TYPE] },
+  { field: "renderStatus", values: ["failed"] },
+  { field: "storageStatus", values: ["missing", "metadata_mismatch"] },
+] satisfies readonly {
+  field: keyof DisplayableFile;
+  values: readonly string[];
+}[];
+
 export const isDisplayableImageFile = (file: DisplayableFile): boolean =>
-  !isDocumentFile(file) &&
-  file.renderStatus !== "failed" &&
-  file.storageStatus !== "missing" &&
-  file.storageStatus !== "metadata_mismatch";
+  imageDisplayabilityExclusions.every(
+    ({ field, values }) => !values.some((value) => file[field] === value),
+  );
 
 export type PartitionedEntityFiles<T> = { images: T[]; documents: T[] };
 

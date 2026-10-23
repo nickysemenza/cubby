@@ -29,6 +29,7 @@ import type { Database } from "~/server/db";
 import { getDb, householdDaySqlText, ilikeContains } from "~/server/db/helpers";
 import { actualExpenseSql } from "~/server/db/helpers/predicates";
 import { expenseDerivedReadSql } from "~/server/domains/expense/repo/expense-derived-read";
+import { displayableImageSql } from "~/server/domains/image/repo/image-displayability";
 import { resolveEntityDisplayImages } from "~/server/entity-kernel/repo/entity-display-image";
 import { createAppError } from "~/server/errors/app-error";
 import { compileTraversal } from "~/server/generic/relatedness/repo/traversal";
@@ -754,19 +755,17 @@ export async function loadRelatedSummary(
   })();
   // Gallery photos and a vendor logo are all attachments (ADR 0006).
   const imageJoin = definition.imageTarget
-    ? `LEFT JOIN LATERAL (
+    ? sql`LEFT JOIN LATERAL (
         SELECT i."id", i."key", i."filename", i."contentType"
         FROM "EntityAttachment" ti
         JOIN "Image" i ON i."id" = ti."imageId" AND i."deletedAt" IS NULL
         WHERE ti."entityId" = t."id"
           AND ti."deletedAt" IS NULL
-          AND i."contentType" <> 'application/pdf'
-          AND (i."renderStatus" IS NULL OR i."renderStatus" <> 'failed')
-          AND (i."storageStatus" IS NULL OR i."storageStatus" NOT IN ('missing', 'metadata_mismatch'))
+          AND ${displayableImageSql("i")}
         ORDER BY ti."sortOrder", ti."createdAt", ti."id"
         LIMIT 1
       ) img ON TRUE`
-    : "";
+    : sql``;
   const targetValid =
     definition.targetPresence === "required"
       ? sql`true`
@@ -794,7 +793,7 @@ export async function loadRelatedSummary(
       SELECT se.*, t."shortcode" AS "targetId", t."name" AS "targetLabel", ${imageColumns}
       FROM scoped_expenses se
       ${sql.raw(definition.targetJoin)}
-      ${sql.raw(imageJoin)}
+      ${imageJoin}
       WHERE ${targetValid}
         ${search ? sql`AND t."name" ILIKE ${ilikeContains(search)}` : sql``}
     ), grouped AS (

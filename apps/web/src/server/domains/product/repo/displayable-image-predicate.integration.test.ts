@@ -1,9 +1,17 @@
-import { eq } from "drizzle-orm";
+import {
+  isDisplayableImageFile,
+  type DisplayableFile,
+} from "@cubby/schemas/image";
+import { and, eq, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { getDb } from "~/server/db/helpers";
 import { image } from "~/server/db/schema";
+import {
+  displayableImageSql,
+  displayableImageWhere,
+} from "~/server/domains/image/repo/image-displayability";
 import { selectUpcImageBackfill } from "~/server/domains/product/repo/write/product-orchestration";
 import { setDataException } from "~/server/generic/data-quality/repo/exceptions";
 import { findProductsWithUpcGaps } from "~/server/generic/problems/repo/detectors-product";
@@ -29,6 +37,35 @@ import {
 // exceptions so a recorded dead end is not re-researched on every sweep.
 describe("displayable Product image predicate", () => {
   const ctx = withTestDb();
+
+  it("compiles the same exclusions as in-memory displayability", async () => {
+    const files: DisplayableFile[] = [
+      { contentType: "image/jpeg" },
+      {
+        contentType: "application/octet-stream",
+        renderStatus: null,
+        storageStatus: null,
+      },
+      { contentType: "application/pdf" },
+      { contentType: "image/jpeg", renderStatus: "failed" },
+      { contentType: "image/jpeg", storageStatus: "missing" },
+      { contentType: "image/jpeg", storageStatus: "metadata_mismatch" },
+    ];
+    for (const file of files) {
+      const result = await getDb(ctx.db).execute<{ displayable: boolean }>(sql`
+        SELECT ${displayableImageSql("i")} AS displayable FROM
+        (SELECT ${file.contentType}::text AS "contentType",
+          ${file.renderStatus ?? null}::text AS "renderStatus",
+          ${file.storageStatus ?? null}::text AS "storageStatus") i
+      `);
+      expect(result.rows[0]?.displayable).toBe(isDisplayableImageFile(file));
+    }
+    const stored = await createImageFixture(ctx.db, "synthetic-alias-check");
+    const relational = await getDb(ctx.db).query.image.findMany({
+      where: and(eq(image.id, stored.id), displayableImageWhere),
+    });
+    expect(relational.map((row) => row.id)).toContain(stored.id);
+  });
 
   const stocked = async (name: string, upc: string) => {
     const shelf = await createLocationFixture(

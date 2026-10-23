@@ -861,7 +861,10 @@ recursively consume another entity's resolved `displayImages`. The centralized
 resolver in `apps/web/src/server/entity-kernel/repo/entity-display-image.ts` orders direct
 displayable images before related images, filters unavailable files, and
 deduplicates by image ID. Web and native clients render the first result and do
-not derive their own cover.
+not derive their own cover. The exclusions in
+`packages/schemas/src/image.ts` own file displayability; both the in-memory
+predicate and aliased repository SQL compile that declaration. Attachment
+liveness and purpose remain relationship rules at the resolver/query.
 
 Declare display sources in preference order. Array position compiles to
 priority after directly owned images; ordering defaults to `declared`, with explicit `newest` or
