@@ -36,5 +36,6 @@ export const shipmentContract = defineContract("shipment", {
     input: shipmentTimelineInput,
     output: shipmentTimelineOut,
     readPolicy: "strong",
+    cache: { tags: [["shipment.timeline"]] },
   }),
 });

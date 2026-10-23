@@ -454,6 +454,7 @@ export const ripple = {
     ["purchase"],
     ["vendor"],
     ["shipment.timeline"],
+    ["dashboard"],
   ]),
   /** A purchase-product link is visible from both ends, but it carries no
    * money or quantity — no spend, inventory, or calendar state. */

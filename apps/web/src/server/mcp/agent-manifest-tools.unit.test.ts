@@ -155,7 +155,7 @@ describe("import run agent manifest", () => {
       // runs through the adapter's replay wrapper, which requires it.
       const readers =
         purpose === "mail_import"
-          ? ["purchase_import", "finance"]
+          ? ["purchase_import", "finance", "shipments"]
           : ["entity", "photo_run"];
       for (const tool of catalog)
         expect(envelope.has(tool.name), `${purpose} ${tool.name}`).toBe(
