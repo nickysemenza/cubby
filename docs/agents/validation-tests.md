@@ -541,6 +541,15 @@ it in the retained original and proposal: tests share a worker database, so
 unrelated fixtures must not collide on Product name/manufacturer. Repeated
 orders for the same item reuse the Product reference returned by resolution.
 
+Garden journeys batch their Plant, Location and existing Planting prerequisites.
+The populated Location journey owns its native section create action and both
+Planting rows; shared empty-section/count behavior stays in the two viewport
+`continuous-detail.spec.ts` cases. Dedicated empty-Location section sampling is
+removed. Journal creation retains immediate display and a fresh Location document
+read-back of the same saved entry; an extra intervening Planting reload adds no
+write coverage. Dedicated Planting-journal reload composition is the deliberate
+gap. Keep status persistence, inferred timeline and real photo-thumbnail coverage.
+
 Independent garden create/edit/journal, meal product/ingredient/manual-food,
 recipe nutrition basis/catalog/scale, and photo evidence/recovery/rejection
 journeys use separate graphs. Product photo creation owns upload coverage;

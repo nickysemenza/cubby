@@ -2,15 +2,10 @@ import type { Page } from "@playwright/test";
 import { entityApi } from "./support/entity-api";
 import { z } from "zod";
 
-import {
-  seedPlantPrerequisite,
-  seedLocationPrerequisite,
-  seedPlantingPrerequisite,
-} from "./fixtures/catalog";
+import { createFixtureGraph } from "./fixtures/core";
 import { seedImagePrerequisite } from "./fixtures/photos";
 import {
   selectComboboxItem,
-  waitForAppHydration,
   gotoAuthenticatedPage,
 } from "./support/e2e-helpers";
 import { expect, test } from "./support/e2e-test";
@@ -21,20 +16,26 @@ async function seedGarden(page: Page) {
   const suffix = Date.now();
   const cropName = `e2e garden crop ${suffix}`;
   const growingBedName = `e2e growing bed ${suffix}`;
-  const emptyShelfName = `e2e empty shelf ${suffix}`;
-
-  const crop = await seedPlantPrerequisite(page, cropName);
-  const growingBed = await seedLocationPrerequisite(page, growingBedName);
-  // Seed an existing planting and create another through the generic dialog.
-  const existingPlanting = await seedPlantingPrerequisite(page, {
-    plantId: crop.id,
-    locationId: growingBed.id,
-  });
+  const { crop, growingBed, existingPlanting } = await createFixtureGraph(
+    page,
+    async (create) => {
+      const crop = await create("plant", { name: cropName });
+      const growingBed = await create("location", {
+        name: growingBedName,
+        type: "room",
+        parentId: null,
+      });
+      const existingPlanting = await create("planting", {
+        plantId: crop.id,
+        locationId: growingBed.id,
+      });
+      return { crop, growingBed, existingPlanting };
+    },
+  );
 
   return {
     cropName,
     growingBedName,
-    emptyShelfName,
     crop,
     growingBed,
     existingPlanting,
@@ -44,25 +45,13 @@ async function seedGarden(page: Page) {
 test("location relation sections create a planting and list both plantings", async ({
   page,
 }) => {
-  const { crop, cropName, growingBed, emptyShelfName } = await seedGarden(page);
-  const emptyShelf = await seedLocationPrerequisite(page, emptyShelfName);
+  const { crop, cropName, growingBed } = await seedGarden(page);
   // Section ids are stable manifest ids (`04-location.entity.ts`); the
   // heading text itself gains a live row count once data loads
   // (`SectionCard`), so the id is the precise handle for "is this section
   // showing at all" rather than its content.
   const plantingsSection = page.locator("#plantings");
   const gardenEntriesSection = page.locator("#garden-entries");
-
-  await gotoAuthenticatedPage(page, `/locations/${emptyShelf.id}#work`);
-  await expect(plantingsSection).toBeVisible();
-  await expect(plantingsSection.getByText("0", { exact: true })).toBeVisible();
-  await expect(
-    plantingsSection.getByRole("button", { name: "New planting", exact: true }),
-  ).toBeVisible();
-  await expect(gardenEntriesSection).toBeVisible();
-  await expect(
-    gardenEntriesSection.getByText("0", { exact: true }),
-  ).toBeVisible();
 
   await gotoAuthenticatedPage(page, `/locations/${growingBed.id}#work`);
   await expect(plantingsSection).toBeVisible();
@@ -165,14 +154,6 @@ test("a planting journal entry persists and appears in its location relation", a
   await expect(
     journal.getByText("First harvest from this planting", { exact: true }),
   ).toBeVisible();
-  await page.reload();
-  await waitForAppHydration(page);
-  await expect(
-    page
-      .getByRole("table", { name: "Journal" })
-      .getByText("First harvest from this planting", { exact: true }),
-  ).toBeVisible();
-
   // The entry it just logged (`locationId: growingBed`) is a garden entry
   // for the bed too, so its Garden entries section now shows the entry.
   await gotoAuthenticatedPage(page, `/locations/${growingBed.id}#work`);
@@ -189,17 +170,8 @@ test("a planting journal entry persists and appears in its location relation", a
 test("a bought seedling (transplantedOn only, no season start) gets an inferred interval on the plantings Lifecycles timeline", async ({
   page,
 }) => {
-  const suffix = Date.now();
-  const cropName = `e2e seedling crop ${suffix}`;
-  const bedName = `e2e seedling bed ${suffix}`;
-  const crop = await seedPlantPrerequisite(page, cropName);
-  const bed = await seedLocationPrerequisite(page, bedName);
-  // This planting has no lifecycle start, so it contributes no interval
-  // and cannot become a second timeline row to disambiguate from.
-  await seedPlantingPrerequisite(page, {
-    plantId: crop.id,
-    locationId: bed.id,
-  });
+  // The seeded planting has no lifecycle start and contributes no interval.
+  const { cropName, growingBed: bed } = await seedGarden(page);
 
   await gotoAuthenticatedPage(page, `/locations/${bed.id}#work`);
   await page.getByRole("button", { name: "New planting", exact: true }).click();
@@ -240,14 +212,11 @@ test("a planting's list row shows a thumbnail once a journal entry with a photo 
   baseURL,
 }) => {
   const suffix = Date.now();
-  const cropName = `e2e photo crop ${suffix}`;
-  const bedName = `e2e photo bed ${suffix}`;
-  const crop = await seedPlantPrerequisite(page, cropName);
-  const bed = await seedLocationPrerequisite(page, bedName);
-  const planting = await seedPlantingPrerequisite(page, {
-    plantId: crop.id,
-    locationId: bed.id,
-  });
+  const {
+    cropName,
+    growingBed: bed,
+    existingPlanting: planting,
+  } = await seedGarden(page);
 
   // Real, servable image bytes for this fixture's key — the planting's list
   // row has no gallery of its own (decision #5); it borrows the latest
