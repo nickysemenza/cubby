@@ -162,6 +162,10 @@ the shared review operation to a typed domain action; unrelated recommendation
 scopes remain history-only. Existing field, Product-pair and Email-link
 Assessments retain their original handles and authority. A connection can be
 read from either endpoint without creating a second judgment or review ledger.
+Record-scoped reads restrict reference kinds before expanding related graphs.
+Email outcomes traverse linked Purchases only for Purchase scopes; field
+reference expansion selects only the requested target kinds. Mixed scopes keep
+every requested endpoint, while presentation still enumerates all references.
 The [connection journey](../guide/entity-connections.md) owns its behavior.
 The shared public review operation supports historical review without applying,
 or review plus a prepared domain action. Saved-field inference mints Assessment
