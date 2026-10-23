@@ -441,6 +441,13 @@ coverage tradeoff in the deleting commit. Use the `ui` jsdom tier for a distinct
 failure that does not need native browser behavior; avoid duplicating the same
 shared capability in both tiers.
 
+The Wardrobe browser journeys retain ownership edits, grouped category navigation,
+subtype inclusion and section exclusion. The mobile sticky-header coordinate
+check is deliberately omitted: creating a scrolling inventory population solely
+to assert header position costs a full browser journey for a presentation detail.
+Shared responsive capabilities do not establish sticky behavior; verify that
+visual detail during relevant layout work instead.
+
 ## Test and dev data factories
 
 One layer builds data for Vitest, E2E, and the dev corpus:
