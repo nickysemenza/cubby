@@ -105,7 +105,10 @@ const hasIdentifier = (t: Product) =>
 const derivedPrice = (t: Product, context?: QualityReadContext) =>
   qualityReadColumn(context, "derivedPrice") ?? derivedPriceFilterSql(t.id);
 const hasDerivedPrice = (t: Product, context?: QualityReadContext) =>
-  hasDerivedProductPriceSql(t.id, context);
+  // Scalar quality runs after paging; do not expand its price evidence to the catalog.
+  context === undefined
+    ? sql`${derivedPriceFilterSql(t.id)} IS NOT NULL`
+    : hasDerivedProductPriceSql(t.id, context);
 
 export const productChecks = defineEntityChecks({
   entity: "product",
