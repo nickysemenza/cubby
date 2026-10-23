@@ -38,6 +38,7 @@ import {
   isEntityShortcodeCollision,
 } from "~/server/entity-kernel/repo/entity-identity-writer";
 import { findPgError } from "~/server/errors/db-errors";
+import { recordChange } from "~/server/generic/changes/repo/change";
 
 /** How many fresh shortcodes to try before giving up — mirrors
  * `shortcode-utils.ts`'s `MAX_RETRIES`, which this intentionally does not
@@ -79,6 +80,7 @@ export async function upsertDeviceFromHello(
     const now = new Date();
     const [existing] = await selectByInstallationId(tx, hello.installationId);
     let id = existing?.id;
+    let createdDevice = false;
     if (!id) {
       for (let attempt = 0; attempt < MAX_SHORTCODE_RETRIES; attempt++) {
         try {
@@ -98,6 +100,7 @@ export async function upsertDeviceFromHello(
               }),
           );
           id = created.id;
+          createdDevice = true;
           break;
         } catch (error) {
           if (findPgError(error)?.code !== "23505") throw error;
@@ -131,6 +134,11 @@ export async function upsertDeviceFromHello(
       .returning({
         automaticWork: device.automaticWork,
         remotePaused: device.remotePaused,
+      });
+    if (createdDevice)
+      await recordChange(transactionDb, {
+        kind: "source",
+        categories: ["device"],
       });
     // SAFETY: `id` was just found-or-created live, in the same transaction.
     return updated!;

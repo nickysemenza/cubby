@@ -572,6 +572,11 @@ export async function claimImageProcessingJob(
           lastError: "Transparent derivative is unavailable",
         })
         .where(eq(imageProcessingJob.id, candidate.id));
+      await recordChange(tx, {
+        kind: "projection",
+        categories: ["imageJob"],
+        refresh: ["quality"],
+      });
       return null;
     }
 
@@ -621,6 +626,12 @@ export async function claimImageProcessingJob(
         dispatchedAt: new Date(),
       })
       .where(eq(imageProcessingJob.id, candidate.id));
+    if (candidate.kind === "subject_lift" && candidate.derivativeId)
+      await recordChange(tx, {
+        kind: "projection",
+        categories: ["image", "imageJob"],
+        refresh: ["quality"],
+      });
     const {
       previousAttemptId: _previousAttemptId,
       executionId: _executionId,
@@ -864,6 +875,11 @@ export async function retryFailedImageProcessingJobs(
         submissionId: options?.submissionId ?? null,
       })
       .where(inArray(imageProcessingJob.id, ids));
+    await recordChange(tx, {
+      kind: "projection",
+      categories: ["imageJob"],
+      refresh: ["quality"],
+    });
     return ids;
   });
 }
@@ -1291,11 +1307,12 @@ export async function completeImageProcessingJob(
       );
     await recordChange(tx, {
       kind: "projection",
-      categories: ["image", "relatedData"],
+      categories: ["image", "imageJob", "relatedData"],
       // Selected descriptions are inputs to image and attached-owner search documents.
-      ...(job.kind === "describe_image"
-        ? { refresh: ["search"] as const }
-        : {}),
+      refresh:
+        job.kind === "describe_image"
+          ? (["quality", "search"] as const)
+          : (["quality"] as const),
     });
     if (job.kind === "describe_image") settledPhotoRunId = job.runId;
     return { adopted: true, orphanKey: null };

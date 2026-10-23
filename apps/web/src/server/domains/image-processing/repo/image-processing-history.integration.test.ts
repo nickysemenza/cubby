@@ -686,7 +686,11 @@ describe("image execution history conservation", () => {
     expect(await familyGenerations()).toEqual(
       before.map((row) => ({
         ...row,
-        generation: row.generation + (row.key === "refresh:search" ? 1 : 0),
+        generation:
+          row.generation +
+          (row.key === "refresh:search" || row.key === "refresh:quality"
+            ? 1
+            : 0),
       })),
     );
   });
