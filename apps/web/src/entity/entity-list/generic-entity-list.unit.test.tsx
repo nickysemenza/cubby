@@ -1,8 +1,4 @@
-import { isSlotListView } from "@cubby/schemas/entity-definitions/definition";
-import {
-  type BrowserRoutedEntity,
-  browserRoutedEntities,
-} from "@cubby/schemas/entity-manifest";
+import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
 import { entitySummary } from "@cubby/schemas/entity-summary";
 import { buildNutrition, withMacros } from "@cubby/schemas/nutrition";
 import { testShortcode } from "@cubby/schemas/testing";
@@ -40,8 +36,6 @@ import type {
   ListQueryOptionsFn,
   ListQueryResponse,
 } from "~/ui/hooks/use-paginated-table-core";
-
-import { listSlotFor } from "./list-slots";
 
 installFeatures();
 
@@ -96,10 +90,6 @@ async function renderListPage(
   return render(<div />, { wrapper: harness.routerWrapper });
 }
 
-const listedEntities = browserRoutedEntities.filter(
-  (entity) => entitySummary[entity].list.views.length > 0,
-);
-
 describe("list manifest and deferred rows", () => {
   // Provider hydration, subject menus, unit mapping and tree nesting execute
   // before deferred cells. Each must tolerate a core-only page.
@@ -138,18 +128,6 @@ describe("list manifest and deferred rows", () => {
       );
     },
   );
-
-  it("every declared slot view has a web fill, and no fill is undeclared", () => {
-    for (const entity of listedEntities) {
-      for (const view of entitySummary[entity].list.views) {
-        if (!isSlotListView(view)) continue;
-        expect(
-          listSlotFor(entity, view.id),
-          `${entity}.${view.id}`,
-        ).toBeDefined();
-      }
-    }
-  });
 });
 
 describe("listPage", () => {
@@ -352,29 +330,13 @@ describe("GenericEntityList", () => {
     },
   });
 
-  // Regression: the projects index crashed at column build because a
-  // reference column (`parentProjectId`) had no override; every declared
-  // table view must build its columns from the manifest alone.
-  it.each(
-    listedEntities.filter((entity) => {
-      return entitySummary[entity].list.views.some((view) => view === "table");
-    }),
-  )(
-    "table: %s builds its columns and header without an override",
-    async (entity) => {
-      await renderListPage(
-        entity,
-        `${entities[entity].routes.list}?view=table`,
-        [],
-      );
-      expect(
-        await screen.findByRole("table", { name: /table$/i }),
-      ).toBeVisible();
-      expect(
-        screen.queryByText("Something went wrong"),
-      ).not.toBeInTheDocument();
-    },
-  );
+  // Project reference columns once crashed before the first row rendered.
+  // Populated shared rendering belongs to list-capabilities.preview.test.tsx.
+  it("builds Project reference columns without an override", async () => {
+    await renderListPage("project", "/projects?view=table", []);
+    expect(await screen.findByRole("table", { name: /table$/i })).toBeVisible();
+    expect(screen.queryByText("Something went wrong")).not.toBeInTheDocument();
+  });
 
   it("table: renders server-backed rows through the entity's column module", async () => {
     await renderListPage("meal", "/meals?view=table", [meal]);

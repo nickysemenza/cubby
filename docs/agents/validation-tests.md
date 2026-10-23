@@ -293,8 +293,10 @@ harness seeds the synthetic USDA release into `USDA_RELEASES` before any USDA re
 profile throws when its routes and the compiled Worker's queue consumer names
 differ in either direction. That check covers consumer queue names only, not
 producers, Durable Objects, Hyperdrive, or service bindings, so it is not
-exhaustive binding coverage; `tooling/workerd-runtime-profiles.integration.test.ts`
-probes every real consumer and the database destination in the coupled runtime.
+exhaustive binding coverage. A separate cold-start probe of every coupled
+consumer is deliberately omitted: required agent scenarios exercise real
+dispatch, and paying another Worker startup to test harness wiring is not
+worth the ordinary correctness gate's cost.
 Required offline/Gmail browser journeys and purchase-agent integration scenarios
 exercise the other profiles. Separate absence-of-consumer probes for those
 harness profiles are deliberately omitted.

@@ -573,6 +573,18 @@ failures and existing timeouts still bound impossible or stuck runs.
 
 ### Retained experiment conclusions
 
+Individual correctness cases should target single-digit seconds. Report module
+collection and fixture startup separately from scenario execution; splitting a
+long scenario into cases does not establish less total work. Keep the existing
+HTML reports and compare natural CI runs before changing worker counts.
+The development corpus clone/auth/search/image contract remains in
+`tooling/dev/corpus-template.integration.test.ts`; a second full-corpus graph,
+chronology, reseed and native-QA sweep is deliberately omitted. Shared populated
+list capability checks own presentation, with one focused Project column-build
+regression instead of rendering empty tables for every entity. Run slot
+declarations are exercised by the retained import/photo browser workflows,
+rather than a unit matrix repeating slot names and predicates.
+
 Collect naturally occurring successful PR runs before claiming a new median.
 Compare queue time, required-check p50/p95, cache misses, cancellations,
 job-minutes, and merge-to-deploy time. Historical experiment tables and run

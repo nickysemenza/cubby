@@ -188,7 +188,6 @@ const workerSafetyTests = ["src/server/mcp/worker-validation.unit.test.ts"];
 const workerdIntegrationTests = [
   "tooling/database-socket-lifecycle.integration.test.ts",
   "src/server/domains/purchase-import/repo/purchase-agent-scenarios.integration.test.ts",
-  "tooling/workerd-runtime-profiles.integration.test.ts",
 ];
 const integrationTests = [
   "src/**/*.integration.test.ts",

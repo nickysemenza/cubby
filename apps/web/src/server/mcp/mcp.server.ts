@@ -4,7 +4,10 @@ import {
 } from "@cubby/schemas/telemetry";
 
 import { mcpContract } from "~/contracts/mcp.contract";
-import { listMcpUsageActivity } from "~/server/mcp/mcp-usage";
+import {
+  getMcpUsageAggregateData,
+  listMcpUsageActivity,
+} from "~/server/mcp/mcp-usage";
 import { getMcpUsageDashboard } from "~/server/mcp/mcp-usage.service";
 import { implementOperationDomain } from "~/server/operation-runtime/operation-domain.server";
 
@@ -18,9 +21,14 @@ export const mcpHandlers = implementOperationDomain(mcpContract, {
       instructions: MCP_SERVER_INSTRUCTIONS,
     });
   },
-  usageDashboard: async (context, input) =>
-    mcpUsageDashboardBrowserOut.parse(
-      await getMcpUsageDashboard(context.db, input.window),
-    ),
+  usageDashboard: async (context, input) => {
+    const { listMcpToolCatalog } = await import("~/server/mcp/server");
+    return mcpUsageDashboardBrowserOut.parse(
+      await getMcpUsageDashboard(context.db, input.window, {
+        listCatalog: listMcpToolCatalog,
+        loadAggregate: getMcpUsageAggregateData,
+      }),
+    );
+  },
   usageActivity: (context, input) => listMcpUsageActivity(context.db, input),
 });
