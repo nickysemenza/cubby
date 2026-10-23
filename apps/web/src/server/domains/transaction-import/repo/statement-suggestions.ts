@@ -34,7 +34,7 @@ import { cents } from "@cubby/shared";
 import { JOB_PAGE_LIMITS } from "@cubby/shared/job-page-limits";
 import { sha256Hex } from "@cubby/shared/sha256";
 import { createLogger } from "@cubby/worker-tracing";
-import { inArray, type SQL, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, type SQL, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { forEachConcurrently } from "~/lib/concurrency-limiter";
@@ -74,6 +74,7 @@ import { transactionImportMembers } from "~/server/domains/transaction-import/re
 import {
   publishAssessment,
   publishAssessments,
+  matchedRulesOf,
 } from "~/server/generic/assessment/repo/assessment";
 import { transitionAssessmentStates } from "~/server/generic/assessment/repo/assessment-state";
 import {
@@ -2679,6 +2680,94 @@ export async function completeStatementApplications(
       },
       { kind: "statement_application_completed" },
     );
+  });
+}
+
+export const STATEMENT_APPLICATION_PREFIX_LIMIT =
+  JOB_PAGE_LIMITS.suggestionsPerPage;
+
+/** A locked publication without rule stamps cannot admit an automatic effect.
+ * Only the original consecutive prefix is resolved; callers must apply a
+ * boundary charge after releasing these locks and reread the remaining suffix.
+ */
+export async function completeNoActionStatementPrefix(
+  db: Database,
+  entries: readonly {
+    assessmentId: string;
+    charge: ChargeRef;
+    evidenceFingerprint: string;
+  }[],
+) {
+  const window = entries.slice(0, STATEMENT_APPLICATION_PREFIX_LIMIT);
+  if (!window.length) return 0;
+  if (new Set(window.map((entry) => entry.assessmentId)).size !== window.length)
+    throw new Error("Statement application prefix contains duplicate receipts");
+  // A negative preflight only declines batching; ordinary admission reads fresh.
+  // Positive results prove nothing until the whole prefix is locked and checked.
+  const first = window[0]!;
+  const [candidate] = await getDb(db)
+    .select({ id: assessmentState.id })
+    .from(assessmentState)
+    .where(
+      and(
+        eq(assessmentState.id, first.assessmentId),
+        eq(assessmentState.family, assessmentFamily.enum.statement_transaction),
+        eq(assessmentState.active, true),
+        eq(assessmentState.status, suggestionStatus.enum.pending),
+        isNull(assessmentState.suppression),
+        sql`${suggestionField("source", STATE)} = ${first.charge.source}`,
+        sql`${suggestionField("chargeKey", STATE)} = ${first.charge.chargeKey}`,
+        sql`${suggestionField("evidenceFingerprint", STATE)} = ${first.evidenceFingerprint}`,
+        sql`${assessmentState.data}->'applicationPending' = 'true'::jsonb`,
+        sql`jsonb_array_length(${matchedRulesOf(sql`${assessmentState.data}`)}) = 0`,
+      ),
+    )
+    .limit(1);
+  if (!candidate) return 0;
+  return withTransactionDatabase(db, async (tx) => {
+    await assertWorkflowEffect(tx);
+    const rows = await getDb(tx)
+      .select({
+        id: assessmentState.id,
+        family: assessmentState.family,
+        active: assessmentState.active,
+        status: assessmentState.status,
+        suppression: assessmentState.suppression,
+        data: assessmentState.data,
+        hasRules: sql<boolean>`jsonb_array_length(${matchedRulesOf(sql`${assessmentState.data}`)}) > 0`,
+      })
+      .from(assessmentState)
+      .where(
+        inArray(
+          assessmentState.id,
+          window.map((entry) => entry.assessmentId),
+        ),
+      )
+      .orderBy(assessmentState.id)
+      .for("update");
+    const byId = new Map(rows.map((row) => [row.id, row]));
+    const settled: string[] = [];
+    for (const entry of window) {
+      const row = byId.get(entry.assessmentId);
+      const data = stateData.safeParse(row?.data);
+      if (
+        !row ||
+        row.family !== assessmentFamily.enum.statement_transaction ||
+        !row.active ||
+        row.status !== suggestionStatus.enum.pending ||
+        row.suppression !== null ||
+        row.hasRules ||
+        !data.success ||
+        data.data.source !== entry.charge.source ||
+        data.data.chargeKey !== entry.charge.chargeKey ||
+        data.data.evidenceFingerprint !== entry.evidenceFingerprint ||
+        data.data.applicationPending !== true
+      )
+        break;
+      settled.push(entry.assessmentId);
+    }
+    await completeStatementApplications(tx, settled);
+    return settled.length;
   });
 }
 

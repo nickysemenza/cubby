@@ -15,12 +15,13 @@ import {
 } from "@cubby/schemas/statement-suggestion";
 import { workQueueHouseholdInput } from "@cubby/schemas/work-queue";
 import { DECISION_MODEL } from "@cubby/shared/ai/models";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { createEntity } from "tooling/factories/create";
 import { createRepoIdentity } from "tooling/factories/repo";
 import { buildKernelContext } from "tooling/scenarios/context";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
+import { z } from "zod";
 
 import { AiBudgetExhaustedError } from "~/server/ai/budget";
 import type { DecisionPort } from "~/server/ai/decision-model";
@@ -55,6 +56,9 @@ import * as statementSuggestionsRepo from "~/server/domains/transaction-import/r
 import { labelStatementSuggestions as runStatementLabels } from "~/server/domains/transaction-import/service/statement-suggestion-labels";
 import * as assessmentRepo from "~/server/generic/assessment/repo/assessment";
 import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
+import { transitionAssessmentStates } from "~/server/generic/assessment/repo/assessment-state";
+import * as assessmentStateRepo from "~/server/generic/assessment/repo/assessment-state";
+import * as automaticRuleRuntime from "~/server/generic/assessment/repo/automatic-rule-runtime";
 import { setAutomaticRule } from "~/server/generic/assessment/repo/automatic-rule-runtime";
 import {
   acceptCleanSuggestions,
@@ -2053,6 +2057,342 @@ describe("statement Transaction suggestions", () => {
     expect(result.labelled).toBe(0);
     expect(await suggestions(ctx)).toEqual([]);
   });
+
+  it.each([false, true])(
+    "completes no-action labels with import scope %s and preserves its admission path",
+    async (importScoped) => {
+      await card(ctx);
+      const recorded = await record(ctx, [
+        rowInput(),
+        rowInput({
+          providerAmount: -19,
+          rawDescription: "SYNTHETIC PERSONAL PAYMENT",
+        }),
+      ]);
+      await generate(ctx);
+      const admission = vi.spyOn(
+        automaticRuleRuntime,
+        "applyAutomaticRulesForCharge",
+      );
+      try {
+        expect(
+          await labelStatementSuggestions(ctx.db, {
+            port: answering({ kind: "purchase", counterparty: "person" }),
+            runId: await ensureRun(ctx.db, ctx.actor, {
+              purpose: "background",
+            }),
+            ...(importScoped && { importId: recorded.batchId }),
+          }),
+        ).toMatchObject({
+          completed: 2,
+          failed: [],
+          next: null,
+        });
+        expect(admission).toHaveBeenCalledTimes(importScoped ? 2 : 0);
+        expect(
+          await statementSuggestionsRepo.countSuggestionsNeedingLabels(ctx.db),
+        ).toBe(0);
+        expect(await getDb(ctx.db).select().from(financialTransaction)).toEqual(
+          [],
+        );
+      } finally {
+        admission.mockRestore();
+      }
+    },
+  );
+
+  it("rereads a replaced no-action suffix and preserves its evidence refusal after an earlier attachment", async () => {
+    await enableStatementAttach(ctx);
+    const account = (await card(ctx)).output;
+    for (const amount of [21, 25])
+      await createRepoIdentity(ctx, "financialTransaction", {
+        accountId: account.id,
+        kind: "purchase",
+        status: "posted",
+        amount,
+        postedDate: amount === 21 ? "2026-05-05" : "2026-06-05",
+        merchant: "Example Grocer",
+        rawDescription: `SYNTHETIC EXISTING ${amount}`,
+        sourceRefs: [],
+      });
+    const suffix = rowInput({
+      providerTransactionId: "synthetic-prefix-suffix",
+      providerAmount: -24,
+      statementDate: "2026-06-04",
+      rawDescription: "SYNTHETIC PREFIX SUFFIX",
+    });
+    for (const [index, source] of [
+      rowInput({
+        providerAmount: -18,
+        statementDate: "2026-04-04",
+        rawDescription: "SYNTHETIC PREFIX LEADING",
+      }),
+      rowInput({
+        providerAmount: -21,
+        rawDescription: "SYNTHETIC PREFIX BOOKING",
+      }),
+      suffix,
+    ].entries()) {
+      await record(ctx, [source], { fingerprint: `synthetic-prefix-${index}` });
+      await generate(ctx);
+    }
+    const apply = automaticRuleRuntime.applyAutomaticRulesForCharge;
+    let replaced = false;
+    const admission = vi
+      .spyOn(automaticRuleRuntime, "applyAutomaticRulesForCharge")
+      .mockImplementation(async (...args) => {
+        const outcome = await apply(...args);
+        if (outcome.applied.length && !replaced) {
+          replaced = true;
+          const old = (await suggestions(ctx)).find(
+            (row) => row.rawDescription === suffix.rawDescription,
+          )!;
+          if (!old) throw new Error("Expected the original suffix publication");
+          await record(ctx, [{ ...suffix, providerAmount: -25 }], {
+            fingerprint: "synthetic-prefix-correction",
+          });
+          await statementSuggestionsRepo.regenerateCharges(ctx.db, [
+            { source: old.source, chargeKey: old.chargeKey },
+          ]);
+          // A concurrent refresh settles the replacement through real publication/application.
+          await label(
+            ctx,
+            answering({ kind: "purchase", counterparty: "business" }),
+          );
+          const [retained] = await getDb(ctx.db)
+            .select()
+            .from(assessmentState)
+            .where(eq(assessmentState.id, old.assessmentId));
+          if (retained?.active)
+            throw new Error("Expected the old suffix receipt to be retired");
+        }
+        return outcome;
+      });
+    try {
+      const personal = answering({ kind: "purchase", counterparty: "person" });
+      const business = answering({
+        kind: "purchase",
+        counterparty: "business",
+      });
+      const result = await label(ctx, (input) =>
+        input.state.includes("SYNTHETIC PREFIX BOOKING")
+          ? business(input)
+          : personal(input),
+      );
+      expect(result).toMatchObject({ completed: 3, next: null });
+      // The ordinary path also refuses this obsolete evidence in its later
+      // rebuild round. Completing a no-action prefix must not bypass that fence.
+      expect(result.failed).toHaveLength(1);
+      expect(result.failed[0]!.message).toContain(
+        "lost its active evidence fence",
+      );
+      expect(replaced).toBe(true);
+      expect(admission).toHaveBeenCalledTimes(3);
+      const booked = await getDb(ctx.db)
+        .select({ amount: financialTransaction.amount })
+        .from(financialTransaction)
+        .orderBy(financialTransaction.amount);
+      expect(booked).toEqual([{ amount: 21 }, { amount: 25 }]);
+      expect(
+        await statementSuggestionsRepo.countSuggestionsNeedingLabels(ctx.db),
+      ).toBe(0);
+    } finally {
+      admission.mockRestore();
+    }
+  });
+
+  it("drains only the exact no-action receipt prefix and rolls completion back atomically", async () => {
+    await card(ctx);
+    await record(
+      ctx,
+      [0, 1, 2, 3].map((index) =>
+        rowInput({
+          providerAmount: -20 - index,
+          rawDescription: `SYNTHETIC PREFIX ${index}`,
+        }),
+      ),
+    );
+    await generate(ctx);
+    const entries = await completeLabelPublications(ctx);
+    const results =
+      await statementSuggestionsRepo.publishCompleteStatementLabels(
+        ctx.db,
+        entries,
+      );
+    const targets = entries.map((entry) => {
+      const result = results.get(
+        statementSuggestionsRepo.chargeId(entry.proposal.charge),
+      );
+      if (result?.kind !== "ready")
+        throw new Error("Expected retained synthetic receipt");
+      return {
+        assessmentId: result.receipt.assessmentId,
+        charge: entry.proposal.charge,
+        evidenceFingerprint: result.receipt.evidenceFingerprint,
+      };
+    });
+    const ids = targets.map((entry) => entry.assessmentId);
+    await databaseHelpers.withTransactionDatabase(ctx.db, async (tx) => {
+      await transitionAssessmentStates(
+        tx,
+        inArray(assessmentState.id, ids),
+        (row) => ({
+          data: {
+            ...z.record(z.string(), z.json()).parse(row.data),
+            matchedRules:
+              row.id === targets[2]!.assessmentId
+                ? ["statement_transaction.attach@synthetic"]
+                : [],
+          },
+        }),
+        { kind: "synthetic_prefix_setup" },
+      );
+    });
+    await setAutomaticRule(ctx.db, ctx.actor, {
+      ruleKey: "statement_transaction.attach",
+      enabled: false,
+    });
+    const read = () =>
+      getDb(ctx.db)
+        .select()
+        .from(assessmentState)
+        .where(inArray(assessmentState.id, ids))
+        .orderBy(assessmentState.id);
+    const before = await read();
+    const eventsBefore = await getDb(ctx.db)
+      .select()
+      .from(feedback)
+      .orderBy(feedback.id);
+    await expect(
+      databaseHelpers.withTransactionDatabase(ctx.db, async (tx) => {
+        expect(
+          await statementSuggestionsRepo.completeNoActionStatementPrefix(
+            tx,
+            targets,
+          ),
+        ).toBe(2);
+        throw new Error("Synthetic outer rollback");
+      }),
+    ).rejects.toThrow("Synthetic outer rollback");
+    expect(await read()).toEqual(before);
+    expect(
+      await getDb(ctx.db).select().from(feedback).orderBy(feedback.id),
+    ).toEqual(eventsBefore);
+    expect(
+      await statementSuggestionsRepo.completeNoActionStatementPrefix(ctx.db, [
+        { ...targets[0]!, evidenceFingerprint: "synthetic obsolete evidence" },
+        ...targets.slice(1),
+      ]),
+    ).toBe(0);
+    expect(
+      await statementSuggestionsRepo.completeNoActionStatementPrefix(
+        ctx.db,
+        targets,
+      ),
+    ).toBe(2);
+    const after = await read();
+    for (const [index, target] of targets.entries()) {
+      const row = after.find((row) => row.id === target.assessmentId)!;
+      expect(
+        z.record(z.string(), z.json()).parse(row.data).applicationPending,
+      ).toBe(index < 2 ? undefined : true);
+    }
+    // A paused rule is still a boundary; suffix receipts remain for the ordinary path.
+    expect(
+      await statementSuggestionsRepo.completeNoActionStatementPrefix(
+        ctx.db,
+        targets.slice(2),
+      ),
+    ).toBe(0);
+    expect(
+      await statementSuggestionsRepo.completeNoActionStatementPrefix(
+        ctx.db,
+        targets,
+      ),
+    ).toBe(0);
+    expect(await getDb(ctx.db).select().from(financialTransaction)).toEqual([]);
+  });
+
+  it.each(["cancelled", "expired"] as const)(
+    "fences no-action receipt completion under %s Job ownership",
+    async (failure) => {
+      await card(ctx);
+      await record(ctx, [rowInput()]);
+      await generate(ctx);
+      const entries = await completeLabelPublications(ctx);
+      const outcomes =
+        await statementSuggestionsRepo.publishCompleteStatementLabels(
+          ctx.db,
+          entries,
+        );
+      const entry = entries[0]!;
+      const outcome = outcomes.get(
+        statementSuggestionsRepo.chargeId(entry.proposal.charge),
+      );
+      if (outcome?.kind !== "ready")
+        throw new Error("Expected synthetic pending receipt");
+      const targets = [
+        {
+          assessmentId: outcome.receipt.assessmentId,
+          charge: entry.proposal.charge,
+          evidenceFingerprint: outcome.receipt.evidenceFingerprint,
+        },
+      ];
+      const before = await getDb(ctx.db)
+        .select()
+        .from(assessmentState)
+        .where(eq(assessmentState.id, targets[0]!.assessmentId));
+      const beforeEvents = await getDb(ctx.db)
+        .select()
+        .from(feedback)
+        .orderBy(feedback.id);
+      const transition = assessmentStateRepo.transitionAssessmentStates;
+      const writes = vi
+        .spyOn(assessmentStateRepo, "transitionAssessmentStates")
+        .mockImplementation(async (...args) => {
+          const changed = await transition(...args);
+          const owner = currentJobExecution();
+          if (owner && failure === "expired" && changed.length)
+            vi.setSystemTime(owner.claim.leaseExpiresAt.getTime() + 1);
+          return changed;
+        });
+      vi.useFakeTimers({ toFake: ["Date"] });
+      try {
+        await expect(
+          withJobFixtureExecution(
+            ctx.db,
+            {
+              key: "synthetic.no-action-fence",
+              kind: "synthetic.no-action",
+              input: {},
+            },
+            async () => {
+              const owner = currentJobExecution();
+              if (!owner) throw new Error("Expected real Job execution");
+              if (failure === "cancelled")
+                await cancelJob(ctx.db, owner.claim.id);
+              return statementSuggestionsRepo.completeNoActionStatementPrefix(
+                ctx.db,
+                targets,
+              );
+            },
+          ),
+        ).rejects.toThrow("Job generation or lease is obsolete");
+        expect(
+          await getDb(ctx.db)
+            .select()
+            .from(assessmentState)
+            .where(eq(assessmentState.id, targets[0]!.assessmentId)),
+        ).toEqual(before);
+        expect(
+          await getDb(ctx.db).select().from(feedback).orderBy(feedback.id),
+        ).toEqual(beforeEvents);
+      } finally {
+        vi.useRealTimers();
+        writes.mockRestore();
+      }
+    },
+  );
 
   it("recovers a committed label receipt before its obsolete input fence after retirement failure", async () => {
     const account = (await card(ctx)).output;

@@ -397,7 +397,14 @@ retirement before acknowledgement. Recovery does not recreate or restamp labels.
 Resumed application receipts repeat that exact retirement check before application,
 including recovery from a crash before the after-commit callback started.
 Automatic financial application still admits only the original ready prefix,
-sequentially. Interruption preserves reusable labels and completed publications.
+sequentially. Unscoped label passes may complete consecutive no-action receipts
+in bounded transactions: lock the exact receipts, verify their charge/evidence,
+active pending state and absent rule descriptors, then clear only the proven
+prefix through the projection writer. A missing, replaced or rule-bearing receipt
+stops the batch even when its rule is paused. Release the locks before ordinary
+application and reread the suffix after it. Import-scoped passes retain regeneration
+before each admission, since regeneration can introduce actionable rules.
+Interruption preserves reusable labels and completed publications.
 Label-page selection partitions positions by whether either original-order component
 is retained. Ordinary rows use native timestamp/ID ordering; retained rows keep the
 same component-wise overrides. Both branches apply full current-evidence eligibility,
