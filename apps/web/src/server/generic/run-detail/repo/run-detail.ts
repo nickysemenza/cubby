@@ -1,4 +1,5 @@
 import type { AssessmentFamily } from "@cubby/schemas/assessment";
+import { sweepRunInput } from "@cubby/schemas/run-fields";
 import { and, count, desc, eq } from "drizzle-orm";
 import { z } from "zod";
 
@@ -24,14 +25,19 @@ export async function readRunDetailSteps(
   const runId = await resolveOrThrow(db, "run", code);
   const [owner, steps] = await Promise.all([
     getDb(db)
-      .select({ purpose: run.purpose, status: run.status })
+      .select({ purpose: run.purpose, status: run.status, input: run.input })
       .from(run)
       .where(eq(run.id, runId)),
     readRunSteps(db, runId),
   ]);
   if (!owner[0]) throw new Error(`Run ${code} does not exist`);
   return {
-    ...owner[0],
+    purpose: owner[0].purpose,
+    status: owner[0].status,
+    input:
+      owner[0].purpose === "sweep"
+        ? (sweepRunInput.safeParse(owner[0].input).data ?? null)
+        : null,
     steps: steps.map((step) => ({
       key: step.key,
       label: step.label,

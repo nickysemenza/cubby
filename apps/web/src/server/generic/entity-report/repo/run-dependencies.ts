@@ -45,20 +45,26 @@ import {
 const PAGE_SIZE = 25;
 
 const reportHeaderReader = createEntityReader<
-  Pick<typeof runTable.$inferSelect, "purpose" | "status">,
-  Pick<RunOut, "purpose" | "status">,
+  Pick<typeof runTable.$inferSelect, "purpose" | "status" | "input">,
+  Pick<RunOut, "purpose" | "status"> &
+    Pick<typeof runTable.$inferSelect, "input">,
   "run"
 >({
   entity: "run",
   fetchById: async (db, id) => {
     const [row] = await getDb(db)
-      .select({ purpose: runTable.purpose, status: runTable.status })
+      .select({
+        purpose: runTable.purpose,
+        status: runTable.status,
+        input: runTable.input,
+      })
       .from(runTable)
       .where(and(eq(runTable.id, id), notDeleted(runTable)))
       .limit(1);
     return row;
   },
   fromDB: (_db, row) => ({
+    input: row.input,
     purpose: runPurpose.parse(row.purpose),
     status: runStatus.parse(row.status),
   }),
@@ -86,6 +92,7 @@ const runBase = reportDependency(async (execution) => {
     detail,
     status: runStatus.parse((detail ?? header).status),
     purpose: (detail ?? header).purpose,
+    input: header.input,
   };
 });
 
@@ -154,10 +161,11 @@ const importSlot = (slot: Parameters<typeof importReportBlocks>[0]) =>
 
 export const RUN_REPORTS = {
   "run.steps": runSlot(async (execution) => {
-    const { code, status, purpose } = await execution.read(runBase);
+    const { code, status, purpose, input } = await execution.read(runBase);
     if (!isStepRunPurpose(purpose)) return { blocks: [] };
     return {
       blocks: runStepsBlocks({
+        input,
         code,
         purpose,
         status,

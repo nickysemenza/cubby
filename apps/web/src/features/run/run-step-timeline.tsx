@@ -18,7 +18,6 @@ import { Progress } from "~/ui/primitives/progress";
 
 import { WaitNotice } from "../job/job-status";
 import {
-  formatEta,
   humanizeKey,
   INPUT_MODE_LABEL,
   type RunStepView,
@@ -185,9 +184,7 @@ function InputBlock({ step }: { step: RunStepView }) {
           ) : null}
           {step.rate ? (
             <>
-              {step.rate.etaMs !== null ? (
-                <span>{formatEta(step.rate.etaMs)}</span>
-              ) : null}
+              <span>Step ETA: {step.rate.estimate}</span>
               <span>
                 {formatCount(Math.round(step.rate.perMinute))} {step.unit}/min{" "}
                 {step.rate.basis}
@@ -195,6 +192,8 @@ function InputBlock({ step }: { step: RunStepView }) {
             </>
           ) : step.ratePaused ? (
             <span>Rate paused</span>
+          ) : step.phase === "running" ? (
+            <span>Step ETA: Unknown — collecting progress intervals</span>
           ) : null}
         </span>
       </div>

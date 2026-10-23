@@ -233,24 +233,34 @@ export async function transitionAssessmentState(
 }
 
 /**
- * Creates the current row when its Assessment is published. The Assessment's
- * `projection` holds this same snapshot, so no projection event is recorded.
+ * Creates current rows only for newly published Assessments. Each Assessment's
+ * `projection` holds the same snapshot, so no projection event is recorded.
  */
-export async function insertPublishedAssessmentState(
+export async function insertPublishedAssessmentStates(
   db: RepositoryQueryInput,
-  values: typeof assessmentState.$inferInsert & { id: string },
+  values: readonly (typeof assessmentState.$inferInsert & { id: string })[],
 ) {
+  if (!values.length) return;
   await getDb(db)
     .insert(assessmentState)
-    .values({
-      ...values,
-      // A JSON null suggestion stays a JSON value, not SQL NULL.
-      suggestedValue:
-        values.suggestedValue === null
-          ? sql`'null'::jsonb`
-          : values.suggestedValue,
-    });
-  await repositoryChanged(db, ["ai", "suggestions", "problems", values.entity]);
+    .values(
+      values.map((value) => ({
+        ...value,
+        // A JSON null suggestion stays a JSON value, not SQL NULL.
+        suggestedValue:
+          value.suggestedValue === null
+            ? sql`'null'::jsonb`
+            : value.suggestedValue,
+      })),
+    );
+  await repositoryChanged(db, [
+    ...new Set([
+      "ai",
+      "suggestions",
+      "problems",
+      ...values.map((value) => value.entity),
+    ]),
+  ]);
 }
 
 /**

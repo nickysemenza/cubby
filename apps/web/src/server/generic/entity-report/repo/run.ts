@@ -14,6 +14,10 @@ import {
   hasImportRunReports,
   runStepDeclaration,
 } from "@cubby/schemas/run-fields";
+import {
+  formatRunWorkEstimate,
+  runWorkEstimate,
+} from "@cubby/schemas/run-work-progress";
 import type { SuggestionCountsOut } from "@cubby/schemas/suggestion-list";
 import { TRADE_LABELS, tradeValues } from "@cubby/schemas/task-fields";
 import { AI_USAGE_TRANSPORT_LABELS } from "@cubby/schemas/telemetry";
@@ -33,6 +37,7 @@ import {
   formatCurrency,
   formatPercent,
 } from "~/lib/number-format";
+import { runPlanBlocks } from "~/lib/run-plan";
 import { PRODUCT_IDENTITY_REVIEW_REASON } from "~/server/domains/product/repo/resolve-names";
 import { runHasCapability } from "~/server/domains/purchase-import/repo/capabilities";
 import { findingHasExpired } from "~/server/domains/purchase-import/repo/finding-expiry";
@@ -901,6 +906,7 @@ export type RunStepsReport = {
   purpose: string;
   status: string;
   steps: RunStepRead[];
+  input?: unknown;
 };
 
 const STEP_STATE = {
@@ -928,7 +934,6 @@ const tallyText = (tallies: Record<string, number> | undefined) =>
  * count. "Retry failed" re-admits a stopped step's failures.
  */
 export function runStepsBlocks(report: RunStepsReport): ReportBlock[] {
-  if (!report.steps.length) return [];
   const running = ACTIVE_RUN_STATUSES.some(
     (status) => status === report.status,
   );
@@ -1020,7 +1025,10 @@ export function runStepsBlocks(report: RunStepsReport): ReportBlock[] {
           : [],
     });
   });
-  return [records(rows, { title: "Steps" })];
+  return [
+    records(rows, { title: "Steps" }),
+    ...runPlanBlocks({ ...report, input: report.input }),
+  ];
 }
 
 function workProgressBlocks(
@@ -1028,6 +1036,7 @@ function workProgressBlocks(
 ): ReportBlock[] {
   if (!progress) return [];
   const phase = progress.current;
+  const range = runWorkEstimate(phase);
   const summary = (work: typeof phase) =>
     `${formatCount(work.processed)} / ${work.total === null ? "unknown" : formatCount(work.total)} ${work.unit} · ${formatCount(work.failures)} failed`;
   const rate =
@@ -1038,11 +1047,7 @@ function workProgressBlocks(
     ? phase.state === "failed"
       ? "Phase ended with failures"
       : "Phase complete"
-    : phase.etaSeconds === null
-      ? phase.total === null
-        ? "Total unknown"
-        : "Estimating…"
-      : `Phase ETA: about ${formatDuration(Math.ceil(phase.etaSeconds / 30) * 30_000)} remaining`;
+    : `Step ETA: ${range && phase.estimateState === "current" && phase.state === "running" ? formatRunWorkEstimate(range) : phase.total === null ? "Unknown — input total unknown" : phase.estimateState === "paused" || phase.estimateState === "stale" ? "Unknown — rate paused or stale" : "Unknown — collecting progress intervals"}`;
   return [
     {
       kind: "progress",

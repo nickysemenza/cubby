@@ -197,9 +197,10 @@ function Table({ block }: { block: Extract<ReportBlock, { kind: "table" }> }) {
   const figures = figureColumns(block);
   return (
     <Stack gap="xs">
-      <StaticTable
+      <StaticTable<(typeof block.rows)[number]>
         rows={block.rows}
         rowKey={(row) => row.id}
+        className={cn(block.columns.length > 4 && "min-w-3xl")}
         columns={block.columns.map<
           StaticTableColumn<(typeof block.rows)[number]>
         >((column, index) => ({
@@ -262,7 +263,7 @@ export function ReportBlocks({
   recordsList?: (block: Extract<ReportBlock, { kind: "records" }>) => ReactNode;
 }) {
   return (
-    <Stack gap="xs">
+    <Stack gap="xs" className="min-w-0">
       {blocks.map((block, index) => {
         const key = blockKey(block, index);
         switch (block.kind) {

@@ -46,6 +46,7 @@ import {
   acceptCleanSuggestions,
   listSuggestionPage,
 } from "~/server/generic/assessment/repo/suggestion-list";
+import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { readWorkQueue } from "~/server/generic/work-queue/service/work-queue-read";
 import { captureBackgroundQueue } from "~/server/testing/background-queue";
 
@@ -61,6 +62,7 @@ import {
   generateStatementHoldVoidPage,
   labelledProposal,
   publishChargeProposal,
+  retryStatementGenerationRefs,
 } from "./statement-suggestions";
 
 const importInput = (
@@ -415,6 +417,24 @@ describe("statement Transaction suggestions", () => {
       );
     expect(batch).toHaveLength(4);
     expect(view(batch)).toEqual(view(single));
+    const generated = await generateStatementSuggestionPage(ctx.db, {
+      after: null,
+      runId: null,
+    });
+    expect(generated).toMatchObject({ published: batch.length, failed: [] });
+    // Batching the initial publication must retain the exact evidence and
+    // judgments that the single-charge review/apply path rebuilds.
+    for (const proposal of single) {
+      expect(
+        await publishChargeProposal(ctx.db, proposal, {
+          kind: "rule",
+          model: null,
+          revision: statementSuggestionsRepo.STATEMENT_SUGGESTION_REVISION,
+          runId: null,
+          evaluationId: null,
+        }),
+      ).toMatchObject({ outcome: "unchanged", labelsReused: 0 });
+    }
   });
 
   // Failure modes: a re-export doubles the suggestion; an ignore recorded on
@@ -821,23 +841,120 @@ describe("statement Transaction suggestions", () => {
       await getDb(ctx.db).execute(
         sql`DELETE FROM "SyntheticStatementPublicationFailure"`,
       );
-      const recovered = await generateStatementSuggestionPage(ctx.db, {
-        after: null,
+      const recovered = await retryStatementGenerationRefs(ctx.db, {
         runId: null,
-        limit: 5,
+        refs: first.failed.flatMap((failure) =>
+          failure.ref ? [failure.ref] : [],
+        ),
       });
       expect(recovered).toMatchObject({
-        found: 5,
-        processed: 5,
-        published: 1,
-        unchanged: 4,
+        done: 1,
+        skipped: 0,
         failed: [],
-        next: first.next,
+        published: 1,
+        unchanged: 0,
+      });
+      expect(
+        await retryStatementGenerationRefs(ctx.db, {
+          runId: null,
+          refs: first.failed.flatMap((failure) =>
+            failure.ref ? [failure.ref] : [],
+          ),
+        }),
+      ).toMatchObject({ done: 1, skipped: 0, failed: [] });
+      const missing = await retryStatementGenerationRefs(ctx.db, {
+        runId: null,
+        refs: ["charge:synthetic:missing"],
+      });
+      expect(missing).toMatchObject({
+        done: 0,
+        skipped: 0,
+        failed: [
+          {
+            ref: "charge:synthetic:missing",
+            message: expect.stringContaining("not found"),
+          },
+        ],
       });
       expect(await suggestions(ctx)).toHaveLength(7);
     } finally {
       await removeFailure();
     }
+  });
+
+  it("recovers missed retirement even when settled transfer evidence produces no proposal", async () => {
+    const account = (await card(ctx)).output;
+    await record(ctx, [rowInput()]);
+    await generateStatementSuggestionPage(ctx.db, { after: null, runId: null });
+    const [pending] = await suggestions(ctx);
+    const [observation] = (await listSourceTransactionRecords(ctx.db, {})).data;
+    if (!pending || !observation)
+      throw new Error("Missing synthetic recovery evidence");
+    await createRepoIdentity(ctx, "financialTransaction", {
+      accountId: account.id,
+      kind: "account_transfer",
+      status: "posted",
+      amount: 42.5,
+      transactionDate: "2026-05-04",
+      postedDate: "2026-05-04",
+      sourceRefs: [
+        { source: observation.source, externalId: observation.externalId },
+      ],
+    });
+    // Recreate only the stale projection a missed after-commit retirement left.
+    await getDb(ctx.db)
+      .update(assessmentState)
+      .set({ active: true, status: "pending" })
+      .where(eq(assessmentState.id, pending.assessmentId));
+    const charge = {
+      source: observation.source,
+      chargeKey: observation.chargeKey,
+    };
+    expect(await buildChargeProposals(ctx.db, [charge])).toEqual([]);
+    const other = await createRepoIdentity(ctx, "financialAccount", {
+      name: "Synthetic other account",
+      identity: { kind: "credit_card", issuer: null, network: "visa" },
+      sourceAliases: [],
+    });
+    const outside = await retryStatementGenerationRefs(ctx.db, {
+      runId: null,
+      scope: {
+        accountIds: [
+          await resolveOrThrow(ctx.db, "financialAccount", other.output.id),
+        ],
+      },
+      refs: [`charge:${charge.source}:${charge.chargeKey}`],
+    });
+    expect(outside).toMatchObject({
+      done: 0,
+      skipped: 1,
+      failed: [],
+      published: 0,
+    });
+    expect(
+      await getDb(ctx.db)
+        .select({ active: assessmentState.active })
+        .from(assessmentState)
+        .where(eq(assessmentState.id, pending.assessmentId)),
+    ).toEqual([{ active: true }]);
+    expect(
+      await retryStatementGenerationRefs(ctx.db, {
+        runId: null,
+        refs: [`charge:${charge.source}:${charge.chargeKey}`],
+      }),
+    ).toMatchObject({ done: 1, skipped: 0, failed: [] });
+    expect(
+      await getDb(ctx.db)
+        .select({
+          active: assessmentState.active,
+          status: assessmentState.status,
+        })
+        .from(assessmentState)
+        .where(eq(assessmentState.id, pending.assessmentId)),
+    ).toEqual([{ active: false, status: "superseded" }]);
+    expect(
+      await getDb(ctx.db).select({ cost: expense.cost }).from(expense),
+    ).toEqual([]);
   });
 
   // Retired spending must not silently stay hidden when positive source

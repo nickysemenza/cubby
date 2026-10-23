@@ -12,6 +12,10 @@ import {
   type RunStepError,
   type RunStepMeta,
 } from "@cubby/schemas/run-step";
+import {
+  runWorkEstimate,
+  formatRunWorkEstimate,
+} from "@cubby/schemas/run-work-progress";
 import { z } from "zod";
 
 import type {
@@ -25,6 +29,7 @@ import type {
   RunDetailStepsOut,
 } from "~/contracts/run-detail.contract";
 import { formatInstant } from "~/lib/date-format";
+import { declaredRunSteps } from "~/lib/run-plan";
 
 /**
  * The Run detail page's one reading of stored RunSteps and Job facts. Every
@@ -83,7 +88,7 @@ type StepRate = {
   perMinute: number;
   /** Where the rate comes from ("over the last 10 min", "since it started"). */
   basis: string;
-  etaMs: number | null;
+  estimate: string;
 };
 
 type StepTally = { key: string; label: string; value: number };
@@ -193,27 +198,52 @@ const boundaryText = (boundary: unknown): string | null => {
 function rateOf(
   step: RunDetailStep,
   meta: Partial<RunStepMeta>,
-  processed: number,
-  left: number | null,
   now: number,
 ): StepRate | null {
   const sample = meta.work?.current;
-  if (sample?.ratePerSecond && sample.phase === step.key && !sample.finished) {
+  const estimate = sample ? runWorkEstimate(sample) : null;
+  if (
+    sample?.ratePerSecond &&
+    estimate &&
+    sample.phase === step.key &&
+    !sample.finished &&
+    now - Date.parse(sample.sampledAt) <= 120_000 &&
+    sample.activity !== "capacity" &&
+    sample.activity !== "retry"
+  ) {
     const perSecond = sample.ratePerSecond;
     return {
       perMinute: perSecond * 60,
-      basis: "recent pages",
-      etaMs: left === null ? null : (left / perSecond) * 1000,
+      basis: "across progress intervals, including queue delays",
+      estimate: formatRunWorkEstimate(estimate),
     };
   }
-  if (!step.startedAt || processed === 0) return null;
-  const elapsed = now - Date.parse(step.startedAt);
-  if (elapsed <= 0) return null;
-  const perSecond = processed / (elapsed / 1000);
+  return null;
+}
+
+function stepCounts(
+  mode: RunStepInputMode,
+  step: RunDetailStep,
+  meta: Partial<RunStepMeta>,
+) {
+  const removed = meta.tallies?.removed ?? 0;
+  const processed = step.done + step.failed + step.skipped + removed;
+  const total =
+    mode === "count"
+      ? (meta.input?.total ??
+        (step.pages > 0 || step.startedAt ? step.found : null))
+      : mode === "estimate"
+        ? (meta.input?.total ?? null)
+        : null;
+  const left = mode === "count" ? step.left : null;
   return {
-    perMinute: perSecond * 60,
-    basis: "since it started",
-    etaMs: left === null ? null : (left / perSecond) * 1000,
+    processed,
+    total,
+    left,
+    fraction:
+      mode === "count" && total
+        ? Math.min(1, (total - (left ?? 0)) / total)
+        : null,
   };
 }
 
@@ -228,15 +258,7 @@ function stepView(
   const phase = PHASE_OF[step.state];
   // The frozen input wins; a step that has not counted yet reads as declared.
   const mode = meta.input?.mode ?? declaration?.input.mode ?? "tally";
-  const removed = meta.tallies?.removed ?? 0;
-  const processed = step.done + step.failed + step.skipped + removed;
-  const total =
-    mode === "count"
-      ? (meta.input?.total ?? step.found)
-      : mode === "estimate"
-        ? (meta.input?.total ?? null)
-        : null;
-  const left = mode === "count" ? step.left : null;
+  const { processed, total, left, fraction } = stepCounts(mode, step, meta);
   const live = phase === "running" || phase === "waiting";
   const stepWait: StepWait | null =
     phase === "waiting" || phase === "paused"
@@ -261,15 +283,15 @@ function stepView(
     total,
     processed,
     left,
-    fraction:
-      mode === "count" && total
-        ? Math.min(1, (total - (left ?? 0)) / total)
-        : null,
+    fraction,
     countedAt: meta.input?.countedAt ?? step.startedAt,
     boundary: boundaryText(meta.input?.boundary),
     rate:
-      mode === "count" && phase === "running"
-        ? rateOf(step, meta, processed, left, now)
+      mode === "count" &&
+      phase === "running" &&
+      !jobWait(job) &&
+      (!job || job.state === "running")
+        ? rateOf(step, meta, now)
         : null,
     ratePaused: mode === "count" && (phase === "waiting" || phase === "paused"),
     tallies: Object.entries(meta.tallies ?? {}).map(([key, value]) => ({
@@ -332,10 +354,36 @@ export function runOverview(
   detail: RunDetailStepsOut,
   jobs: JobListOut | undefined,
   now: number,
+  input: RunDetailStepsOut["input"],
 ): RunOverview {
   const primary = jobs?.primary ?? null;
-  const steps = detail.steps.map((step) =>
-    stepView(detail.purpose, step, primary, now),
+  const steps = declaredRunSteps(detail.purpose, input).map(
+    (declaration, position) => {
+      const stored = detail.steps.find((step) => step.key === declaration.key);
+      return stepView(
+        detail.purpose,
+        stored ?? {
+          key: declaration.key,
+          label: declaration.label,
+          position,
+          state: "queued",
+          found: 0,
+          done: 0,
+          failed: 0,
+          skipped: 0,
+          left: null,
+          pages: 0,
+          pausedReason: null,
+          pausedUntil: null,
+          startedAt: null,
+          endedAt: null,
+          errors: [],
+          meta: null,
+        },
+        primary,
+        now,
+      );
+    },
   );
   const moving = steps.findIndex((step) =>
     ["running", "waiting", "paused", "failed"].includes(step.phase),
@@ -387,16 +435,6 @@ export const DECISION_STATUS_LABEL = {
   pending: "Needs review",
   applied: "Applied",
   rejected: "Rejected",
-  superseded: "Superseded",
-  resolved: "Resolved",
+  superseded: "Replaced",
+  resolved: "Review complete",
 } as const satisfies Record<RunDecisionStatus, string>;
-
-export const formatEta = (ms: number) => {
-  const minutes = Math.round(ms / 60_000);
-  if (minutes < 1) return "under a minute left";
-  if (minutes < 60) return `about ${minutes} min left`;
-  const hours = Math.round(minutes / 60);
-  return hours < 48
-    ? `about ${hours} h left`
-    : `about ${Math.round(hours / 24)} days left`;
-};

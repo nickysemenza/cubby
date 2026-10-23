@@ -262,6 +262,43 @@ describe("transfer-pair suggestions", () => {
         judgment.inflow.accountId === accountId,
     );
 
+  it("prepares shared pools without changing independently rebuilt pair judgments", async () => {
+    const member = await owner("Synthetic profile member");
+    await account("Synthetic profile checking", member);
+    await account("Synthetic profile savings", member, savings);
+    await statement(
+      Array.from({ length: 8 }, (_, index) => [
+        {
+          account: "Synthetic profile checking",
+          date: "2026-05-04",
+          amount: 100 + index,
+          description: `SYNTHETIC TRANSFER OUT ${index}`,
+        },
+        {
+          account: "Synthetic profile savings",
+          date: "2026-05-04",
+          amount: -(100 + index),
+          description: `SYNTHETIC TRANSFER IN ${index}`,
+        },
+      ]).flat(),
+    );
+    const page = await generateTransferPairSuggestionsPage(ctx.db, {
+      runId: null,
+      limit: 128,
+    });
+    expect(page.failed).toEqual([]);
+    expect(page.found).toBe(8);
+    const published = await pending();
+    expect(published).toHaveLength(8);
+    for (const { judgment, fingerprint } of published) {
+      const rebuilt = await currentTransferPair(ctx.db, judgment.key);
+      expect(rebuilt).toEqual(judgment);
+      expect(rebuilt && (await fingerprintTransferPair(rebuilt))).toEqual(
+        fingerprint,
+      );
+    }
+  });
+
   it("filters ordinary spending seeds in one page without per-record hydration", async () => {
     const member = await owner("Synthetic batch member");
     const checking = await account("Synthetic batch checking", member);

@@ -17,6 +17,7 @@ import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { formatInstant } from "~/lib/date-format";
 import { formatCurrency } from "~/lib/number-format";
 import { cn } from "~/lib/utils";
+import { Disclosure } from "~/ui/layout/disclosure";
 import { Panel } from "~/ui/layout/panel";
 import { SidePanelSection } from "~/ui/overlays/side-panel";
 import { StaticTable } from "~/ui/primitives/static-table";
@@ -25,7 +26,13 @@ import type { StatusTone } from "../job/job-status";
 import { DECISION_STATUS_LABEL, humanizeKey } from "./run-view-model";
 
 /** One ledger facet: a status, or a family's finer reading of one. */
-type DecisionFacetDef = { key: string; label: string; tone: StatusTone };
+type DecisionFacetDef = {
+  key: string;
+  label: string;
+  tone: StatusTone;
+  description: string;
+  visibleWhenEmpty?: boolean;
+};
 
 type DecisionColumn = {
   id: string;
@@ -46,6 +53,7 @@ export type DecisionPresenter = {
   noun: string;
   facets: readonly DecisionFacetDef[];
   facetOf: (row: RunDecision) => DecisionFacetDef;
+  explanation: (row: RunDecision) => string;
   columns: readonly DecisionColumn[];
   /** Text the ledger search matches. */
   searchText: (row: RunDecision) => string;
@@ -54,33 +62,70 @@ export type DecisionPresenter = {
   Evidence: (props: { row: RunDecision }) => ReactNode;
 };
 
+/** Success states stay visible at zero so readiness cannot be mistaken for application. */
+export function decisionFacetCounts(
+  rows: readonly RunDecision[],
+  presenter: Pick<DecisionPresenter, "facets" | "facetOf">,
+) {
+  const counts = new Map<string, number>();
+  for (const row of rows) {
+    const key = presenter.facetOf(row).key;
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+  return presenter.facets
+    .filter((def) => def.visibleWhenEmpty || counts.has(def.key))
+    .map((def) => ({ ...def, count: counts.get(def.key) ?? 0 }));
+}
+
 const STATUS_FACETS = {
   pending: {
     key: "pending",
     label: DECISION_STATUS_LABEL.pending,
     tone: "info",
+    description: "Review the evidence before deciding what to record.",
   },
   applied: {
     key: "applied",
     label: DECISION_STATUS_LABEL.applied,
     tone: "positive",
+    description: "The recommendation was applied to your records.",
+    visibleWhenEmpty: true,
   },
   rejected: {
     key: "rejected",
     label: DECISION_STATUS_LABEL.rejected,
     tone: "neutral",
+    description:
+      "This recommendation was declined; it is no longer awaiting a decision.",
   },
   superseded: {
     key: "superseded",
     label: DECISION_STATUS_LABEL.superseded,
     tone: "neutral",
+    description:
+      "A later publication replaced this recommendation. Review the current recommendation instead.",
   },
   resolved: {
     key: "resolved",
     label: DECISION_STATUS_LABEL.resolved,
     tone: "neutral",
+    description:
+      "Review is complete; no pending action remains on this assessment.",
   },
 } as const satisfies Record<RunDecision["status"], DecisionFacetDef>;
+
+const NOT_CURRENT: DecisionFacetDef = {
+  key: "not_current",
+  label: "No longer current",
+  tone: "neutral",
+  description:
+    "This assessment is no longer current. Review the latest recommendation instead; this one cannot be applied.",
+};
+
+const statusFacet = (row: RunDecision) =>
+  row.status === "pending" && !row.active
+    ? NOT_CURRENT
+    : STATUS_FACETS[row.status];
 
 const shortId = (id: string) => `ASM-${id.slice(0, 6).toUpperCase()}`;
 const when = (iso: string) => formatInstant(iso, "monthDayTime");
@@ -104,7 +149,7 @@ function Attribution({ row }: { row: RunDecision }) {
         <dt className="text-muted-foreground">Updated</dt>
         <dd>
           {when(row.updatedAt)}
-          {row.active ? "" : " · replaced by a later publication"}
+          {row.active ? "" : " · no longer current"}
         </dd>
       </dl>
     </SidePanelSection>
@@ -135,8 +180,9 @@ const summaryOf = (judgment: unknown): string => {
 
 const genericPresenter = (family: AssessmentFamily): DecisionPresenter => ({
   noun: `${humanizeKey(family).toLowerCase()} Assessments`,
-  facets: Object.values(STATUS_FACETS),
-  facetOf: (row) => STATUS_FACETS[row.status],
+  facets: [...Object.values(STATUS_FACETS), NOT_CURRENT],
+  facetOf: statusFacet,
+  explanation: (row) => statusFacet(row).description,
   columns: [
     {
       id: "summary",
@@ -172,11 +218,14 @@ const genericPresenter = (family: AssessmentFamily): DecisionPresenter => ({
   title: (row) => summaryOf(row.judgment),
   Evidence: ({ row }) => (
     <>
-      <SidePanelSection title="Stored judgment">
+      <SidePanelSection title="What this means">
+        <p className="text-xs">{statusFacet(row).description}</p>
+      </SidePanelSection>
+      <Disclosure summary="Raw diagnostics">
         <pre className="overflow-auto rounded-md bg-muted px-2 py-1.5 font-mono text-2xs/4 break-words whitespace-pre-wrap">
           {JSON.stringify(row.judgment, null, 2)}
         </pre>
-      </SidePanelSection>
+      </Disclosure>
       <Attribution row={row} />
     </>
   ),
@@ -223,20 +272,77 @@ const CHECKS = [
 ])[];
 
 const TRANSFER_FACETS = {
-  needs_review: { key: "needs_review", label: "Needs review", tone: "info" },
-  ambiguous: { key: "ambiguous", label: "Ambiguous", tone: "warning" },
-  blocked: { key: "blocked", label: "Blocked", tone: "neutral" },
+  ready: {
+    key: "ready_to_apply",
+    label: "Ready to apply",
+    tone: "positive",
+    description:
+      "All recorded checks passed and apply is available. Review and apply the recommendation to record the transfer; nothing has changed yet.",
+    visibleWhenEmpty: true,
+  },
+  needs_review: {
+    key: "needs_review",
+    label: "Needs review",
+    tone: "info",
+    description:
+      "Some evidence needs review before this can be treated as a confirmed transfer.",
+  },
+  ambiguous: {
+    key: "ambiguous",
+    label: "Multiple possible matches",
+    tone: "warning",
+    description:
+      "More than one candidate could match a side of this transfer. Review the alternatives before recording it.",
+  },
   ...STATUS_FACETS,
 } as const satisfies Record<string, DecisionFacetDef>;
 
 const transferFacet = (row: RunDecision): DecisionFacetDef => {
-  if (row.status !== "pending") return STATUS_FACETS[row.status];
+  if (row.status !== "pending" || !row.active) return statusFacet(row);
   const judgment = parse(row);
-  if (!judgment || judgment.clean) return TRANSFER_FACETS.needs_review;
+  if (
+    judgment?.clean &&
+    judgment.blockers.length === 0 &&
+    judgment.apply.available
+  )
+    return TRANSFER_FACETS.ready;
+  if (!judgment) return TRANSFER_FACETS.needs_review;
   return judgment.blockers.includes("competing_candidates")
     ? TRANSFER_FACETS.ambiguous
-    : TRANSFER_FACETS.blocked;
+    : TRANSFER_FACETS.needs_review;
 };
+
+const BLOCKER_EXPLANATION = {
+  competing_candidates: "More than one candidate could match this movement.",
+  date_gap: "The two posting dates are farther apart than the matching limit.",
+  owner_missing: "An account owner is missing.",
+  owners_differ:
+    "The account owners differ and the movement between them needs review.",
+  weak_movement:
+    "The descriptions do not provide enough evidence that both sides are a transfer.",
+  unresolved_overlap: "Another unresolved record may represent the same money.",
+  cash_leg_missing: "The cash side has not been recorded.",
+} satisfies Record<TransferPairBlocker, string>;
+
+export function decisionExplanation(row: RunDecision): string {
+  if (row.status === "applied")
+    return "Recorded as a transfer. This recommendation has already been applied; no further apply is needed.";
+  const facet = transferFacet(row);
+  if (row.status !== "pending" || !row.active) return facet.description;
+  const judgment = parse(row);
+  if (!judgment)
+    return "The stored evidence could not be read. Review the raw diagnostics; apply readiness is unknown.";
+  if (facet.key === "ready_to_apply") return facet.description;
+  const reasons = judgment.blockers.map(
+    (blocker) => BLOCKER_EXPLANATION[blocker],
+  );
+  return [
+    ...reasons,
+    judgment.apply.available
+      ? "A reviewed apply is available, but this is not a confirmed transfer and nothing has changed yet."
+      : "Apply is unavailable. Review the stored reason in Raw diagnostics; nothing has changed yet.",
+  ].join(" ");
+}
 
 const account = (leg: Pick<TransferPairLeg, "accountName">) => leg.accountName;
 
@@ -261,14 +367,6 @@ function Leg({
     </span>
   );
 }
-
-const reasonOf = (row: RunDecision, judgment: TransferPairJudgment) =>
-  row.status === "applied"
-    ? "Applied"
-    : row.status === "superseded"
-      ? "Replaced by a later publication"
-      : (judgment.reasons[0] ??
-        (judgment.clean ? "Awaiting review" : "Blocked"));
 
 const passed = (judgment: TransferPairJudgment) =>
   CHECKS.filter(([blocker]) => !judgment.blockers.includes(blocker)).length;
@@ -302,6 +400,9 @@ function TransferEvidence({ row }: { row: RunDecision }) {
   ];
   return (
     <>
+      <SidePanelSection title="What this means">
+        <p className="text-xs">{decisionExplanation(row)}</p>
+      </SidePanelSection>
       <SidePanelSection title="Legs">
         <StaticTable
           rows={legRows}
@@ -379,22 +480,27 @@ function TransferEvidence({ row }: { row: RunDecision }) {
                 )}
                 <span>
                   <span className="font-medium text-foreground">{name}</span>{" "}
-                  <span className="text-muted-foreground">{why}</span>
-                  {failed ? (
-                    <code className="mt-1 block rounded-md bg-muted px-2 py-1 font-mono text-2xs break-words">
-                      {blocker}
-                    </code>
-                  ) : null}
+                  <span className="text-muted-foreground">
+                    {failed ? BLOCKER_EXPLANATION[blocker] : why}
+                  </span>
                 </span>
               </li>
             );
           })}
         </ul>
-        {judgment.reasons.length ? (
+        <Disclosure summary="Raw diagnostics">
           <pre className="rounded-md bg-muted px-2 py-1.5 font-mono text-2xs/4 break-words whitespace-pre-wrap">
-            {judgment.reasons.join("\n")}
+            {JSON.stringify(
+              {
+                blockers: judgment.blockers,
+                reasons: judgment.reasons,
+                apply: judgment.apply,
+              },
+              null,
+              2,
+            )}
           </pre>
-        ) : null}
+        </Disclosure>
       </SidePanelSection>
       <SidePanelSection title="Outcome">
         <Panel tone="default" flush className="grid overflow-hidden text-xs">
@@ -402,13 +508,15 @@ function TransferEvidence({ row }: { row: RunDecision }) {
             <span className="text-muted-foreground">Recommendation</span>
             <span className="grid gap-0.5">
               <strong className="text-sm font-semibold text-foreground-strong">
-                {judgment.clean
-                  ? "Record as a transfer"
-                  : "Review before recording"}
+                {row.status === "applied"
+                  ? "Recorded as a transfer"
+                  : row.status !== "pending" || !row.active
+                    ? "No action on this recommendation"
+                    : transferFacet(row).key === "ready_to_apply"
+                      ? "Ready to apply"
+                      : "Review before recording"}
               </strong>
-              {judgment.apply.available
-                ? "A reviewed apply can proceed."
-                : (judgment.apply.reason ?? "Apply is unavailable.")}
+              {decisionExplanation(row)}
             </span>
           </div>
           <div className="grid grid-cols-[6.75rem_minmax(0,1fr)] gap-2.5 border-t border-border bg-muted px-2.5 py-2">
@@ -462,14 +570,17 @@ function TransferEvidence({ row }: { row: RunDecision }) {
 const transferPairPresenter: DecisionPresenter = {
   noun: "transfer candidates",
   facets: [
+    TRANSFER_FACETS.ready,
     TRANSFER_FACETS.needs_review,
     TRANSFER_FACETS.ambiguous,
-    TRANSFER_FACETS.blocked,
     TRANSFER_FACETS.applied,
     TRANSFER_FACETS.rejected,
     TRANSFER_FACETS.superseded,
+    TRANSFER_FACETS.resolved,
+    NOT_CURRENT,
   ],
   facetOf: transferFacet,
+  explanation: decisionExplanation,
   columns: [
     {
       id: "outflow",
@@ -514,16 +625,12 @@ const transferPairPresenter: DecisionPresenter = {
     {
       id: "reason",
       header: "Reason",
-      value: (row) => {
-        const judgment = parse(row);
-        return judgment ? reasonOf(row, judgment) : null;
-      },
+      value: decisionExplanation,
       className: "text-muted-foreground",
       cell: (row) => {
-        const judgment = parse(row);
         return (
           <span className="block max-w-[17.5rem] truncate">
-            {judgment ? reasonOf(row, judgment) : "—"}
+            {decisionExplanation(row)}
           </span>
         );
       },

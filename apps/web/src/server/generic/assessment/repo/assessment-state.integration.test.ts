@@ -11,6 +11,7 @@ import {
 } from "~/server/domains/run/service/suggestion-sweep.fixtures";
 import {
   publishAssessment,
+  publishAssessments,
   recordFeedback,
 } from "~/server/generic/assessment/repo/assessment";
 import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
@@ -63,6 +64,217 @@ const recommendation = (productId: string, key: string) => ({
 // or loses an Email link review when its Email is removed.
 describe("AssessmentState rebuild", () => {
   const ctx = withTestDb();
+
+  it("publishes batches in input order with singleton-equivalent snapshots and JSON nulls", async () => {
+    const product = await productFixture(ctx, "Synthetic bulk parity item");
+    const productId = await recordId(ctx.db, product.id, "product");
+    const input = recommendation(productId, "bulk-parity");
+    const projection = {
+      suggestedValue: null,
+      data: { candidateKey: "bulk-parity" },
+    };
+    const singleton = await publishAssessment(ctx.db, input, projection);
+    const fresh = { ...input, publicationKey: `${input.publicationKey}:batch` };
+    const image = {
+      publicationKey: "synthetic:batch:null-image-judgment",
+      family: "image_description" as const,
+      subject: {
+        kind: "image_description" as const,
+        entity: "image" as const,
+        recordId: crypto.randomUUID(),
+        contentHash: null,
+      },
+      judgment: null,
+      fingerprint: null,
+      producer: null,
+      evidence: null,
+    };
+    const sample = {
+      publicationKey: "synthetic:batch:evaluation-sample",
+      family: "evaluation_sample" as const,
+      subject: {
+        kind: "evaluation_sample" as const,
+        evaluation: "email_accuracy" as const,
+        ownerUserId: ctx.actor.userId,
+      },
+      judgment: { version: 1 as const, strata: [], items: [] },
+      fingerprint: null,
+      producer: null,
+      evidence: null,
+      served: false,
+    };
+    const entries = [
+      { input: fresh, projection },
+      { input, projection: { suggestedValue: "ignored replay projection" } },
+      { input: image },
+      {
+        input: fresh,
+        projection: { suggestedValue: "ignored duplicate projection" },
+      },
+      { input: sample },
+    ];
+    const rows = await publishAssessments(ctx.db, entries);
+    expect(rows.map((row) => row.publicationKey)).toEqual(
+      entries.map((entry) => entry.input.publicationKey),
+    );
+    const [batched, replayed, nullImage, duplicate, evaluation] = rows;
+    expect(replayed).toEqual(singleton);
+    expect(duplicate).toEqual(batched);
+    expect(batched?.projection).toEqual(singleton.projection);
+    expect(nullImage?.judgment).toBeNull();
+    expect(nullImage?.projection).toMatchObject({ suggestedValue: null });
+    expect(evaluation?.projection).toBeNull();
+    const ids = rows.map((row) => row.id);
+    const states = await liveRows(ctx, ids);
+    expect(states).toHaveLength(3);
+    expect(states.every((state) => state.suggestedValue === null)).toBe(true);
+    expect(await rebuiltRows(ctx, ids)).toEqual(states);
+    expect(await publishAssessments(ctx.db, entries)).toEqual(rows);
+    expect(await liveRows(ctx, ids)).toEqual(states);
+    expect(await publishAssessments(ctx.db, [])).toEqual([]);
+  });
+
+  it("rolls back new batch publications when an existing key changes immutable evidence", async () => {
+    const product = await productFixture(ctx, "Synthetic bulk conflict item");
+    const productId = await recordId(ctx.db, product.id, "product");
+    const input = recommendation(productId, "existing-bulk-conflict");
+    const existing = await publishAssessment(ctx.db, input);
+    const fresh = recommendation(productId, "rolled-back-bulk-publication");
+    const before = await liveRows(ctx, [existing.id]);
+    await expect(
+      publishAssessments(ctx.db, [
+        { input: fresh },
+        { input: { ...input, evidence: { changed: true } } },
+      ]),
+    ).rejects.toThrow(
+      "Assessment publication retry changed immutable evidence",
+    );
+    expect(
+      await getDb(ctx.db)
+        .select()
+        .from(assessment)
+        .where(eq(assessment.publicationKey, fresh.publicationKey)),
+    ).toEqual([]);
+    expect(await liveRows(ctx, [existing.id])).toEqual(before);
+  });
+
+  it("rejects conflicting duplicate publication keys without retaining other batch rows", async () => {
+    const product = await productFixture(
+      ctx,
+      "Synthetic duplicate conflict item",
+    );
+    const productId = await recordId(ctx.db, product.id, "product");
+    const duplicate = recommendation(productId, "conflicting-bulk-duplicate");
+    const other = recommendation(productId, "duplicate-bulk-bystander");
+    await expect(
+      publishAssessments(ctx.db, [
+        { input: other },
+        { input: duplicate },
+        { input: { ...duplicate, judgment: { candidateKey: "changed" } } },
+      ]),
+    ).rejects.toThrow(
+      "Assessment publication retry changed immutable evidence",
+    );
+    expect(
+      await getDb(ctx.db)
+        .select()
+        .from(assessment)
+        .where(
+          inArray(assessment.publicationKey, [
+            duplicate.publicationKey,
+            other.publicationKey,
+          ]),
+        ),
+    ).toEqual([]);
+  });
+
+  it("validates every batch judgment and projection before publishing any rows", async () => {
+    const product = await productFixture(ctx, "Synthetic invalid batch item");
+    const productId = await recordId(ctx.db, product.id, "product");
+    const valid = recommendation(productId, "valid-before-invalid-bulk");
+    const invalid = recommendation(productId, "invalid-bulk");
+    await expect(
+      publishAssessments(ctx.db, [
+        { input: valid },
+        { input: { ...invalid, judgment: null } },
+      ]),
+    ).rejects.toThrow(/expected object/);
+    await expect(
+      publishAssessments(ctx.db, [
+        { input: valid },
+        { input: invalid, projection: { recordId: "invalid-target" } },
+      ]),
+    ).rejects.toThrow(/Invalid UUID/);
+    expect(
+      await getDb(ctx.db)
+        .select()
+        .from(assessment)
+        .where(
+          inArray(assessment.publicationKey, [
+            valid.publicationKey,
+            invalid.publicationKey,
+          ]),
+        ),
+    ).toEqual([]);
+  });
+
+  it("preserves reviewed and absent projection states when a batch replays existing publications", async () => {
+    const product = await productFixture(ctx, "Synthetic bulk replay item");
+    const productId = await recordId(ctx.db, product.id, "product");
+    const reviewedInput = recommendation(productId, "bulk-reviewed");
+    const absentInput = recommendation(productId, "bulk-absent");
+    const [reviewed, absent] = await publishAssessments(ctx.db, [
+      { input: reviewedInput },
+      { input: absentInput },
+    ]);
+    await withTransaction(ctx.db, (tx) =>
+      transitionAssessmentState(
+        tx,
+        reviewed!.id,
+        {
+          status: "resolved",
+          confidence: 0.7,
+          confirmedValue: { present: true, value: "retained" },
+        },
+        { kind: "synthetic-batch-review" },
+      ),
+    );
+    // A publication retry cannot repair a missing projection implicitly.
+    await getDb(ctx.db)
+      .delete(assessmentState)
+      .where(eq(assessmentState.id, absent!.id));
+    const ids = [reviewed!.id, absent!.id];
+    const before = await getDb(ctx.db)
+      .select()
+      .from(assessmentState)
+      .where(inArray(assessmentState.id, ids));
+    const fresh = recommendation(productId, "bulk-with-replays");
+    const rows = await publishAssessments(ctx.db, [
+      {
+        input: absentInput,
+        projection: { suggestedValue: "must not recreate" },
+      },
+      { input: fresh },
+      {
+        input: reviewedInput,
+        projection: { suggestedValue: "must not overwrite", status: "pending" },
+      },
+    ]);
+    expect(rows[0]).toEqual(absent);
+    expect(rows[2]).toEqual(reviewed);
+    expect(
+      await getDb(ctx.db)
+        .select()
+        .from(assessmentState)
+        .where(inArray(assessmentState.id, ids)),
+    ).toEqual(before);
+    expect(
+      await liveRows(
+        ctx,
+        rows.map((row) => row.id),
+      ),
+    ).toHaveLength(2);
+  });
 
   it("replays publication, member review and system transitions exactly", async () => {
     const product = await productFixture(ctx, "Synthetic parity item");

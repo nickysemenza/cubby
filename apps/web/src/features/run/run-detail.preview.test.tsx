@@ -22,7 +22,7 @@ import { RunDecisions, RunDiagnostics, RunStepsDetail } from "./run-detail";
 const NOW = Date.now();
 const ago = (minutes: number) => new Date(NOW - minutes * 60_000).toISOString();
 
-// SAFETY: the detail body reads only the Run's shortcode, status and purpose.
+// SAFETY: the detail body reads only the Run's shortcode, status, purpose and selected input.
 const run = {
   id: "RUN-4K7M",
   status: "running",
@@ -54,6 +54,13 @@ const step = (
 });
 
 const steps: RunDetailStepsOut = {
+  input: {
+    kind: "sweep",
+    families: [
+      { family: "transfer_pair", scope: {} },
+      { family: "statement_transaction", scope: {} },
+    ],
+  },
   purpose: "sweep",
   status: "running",
   steps: [
@@ -245,8 +252,10 @@ afterEach(() => {
 it("shows each step's own count, what sets its speed, and steps not yet counted", async () => {
   renderRun();
   const strip = await screen.findByTestId("run-step-strip");
-  expect(strip).toHaveTextContent("Step 2 of 3");
+  expect(strip).toHaveTextContent("Step 1 of 6");
   expect(strip).toHaveTextContent("no overall percentage");
+  expect(strip).toHaveTextContent("Overall ETA: Unknown");
+  expect(screen.getByText("Historical steps")).toBeVisible();
 
   const current = screen.getByTestId("run-step-transfer_pair_scan");
   // 300 done + 60 skipped + 12 removed of the frozen 1,200.
@@ -287,7 +296,7 @@ it.each([1440, 402])(
 
     await userEvent.click(
       await within(screen.getByTestId("run-step-strip")).findByRole("button", {
-        name: /blocked/i,
+        name: /needs review/i,
       }),
     );
     expect(await within(ledger).findByText("1 of 2 decisions")).toBeVisible();
@@ -308,7 +317,13 @@ it.each([1440, 402])(
         within(drawer).getByText("Transfers create no Expenses."),
       ).toBeVisible(),
     );
-    expect(within(drawer).getByText("owners_differ")).toBeVisible();
+    expect(
+      within(drawer).getAllByText(/The account owners differ/)[0],
+    ).toBeVisible();
+    await userEvent.click(
+      within(drawer).getByRole("button", { name: "Raw diagnostics" }),
+    );
+    expect(within(drawer).getByText(/"owners_differ"/)).toBeVisible();
     await userEvent.keyboard("{Escape}");
     await waitFor(() =>
       expect(

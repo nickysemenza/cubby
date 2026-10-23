@@ -88,14 +88,14 @@ describe("evaluateBinding", () => {
     ).toEqual({ status: "unknown", reason: "Unknown — no recent samples." });
   });
 
-  it("reports a saturated in-page concurrency cap", () => {
+  it("does not mistake a peak concurrency sample for the bottleneck", () => {
     expect(
       evaluateBinding(
         running({
           key: "transfer_pair_scan",
           lastPageMs: 4_000,
           page: {
-            timings: { preparation: 1_000, publication: 3_000 },
+            timings: { preparation: 3_000, publication: 1_000 },
             queries: 40,
             concurrency: { publication: TRANSFER_PAIR_PUBLICATION_CONCURRENCY },
           },
@@ -103,8 +103,9 @@ describe("evaluateBinding", () => {
       ),
     ).toMatchObject({
       status: "binding",
-      key: "page.transfer_publication",
-      evidence: `publication concurrency ${TRANSFER_PAIR_PUBLICATION_CONCURRENCY} of ${TRANSFER_PAIR_PUBLICATION_CONCURRENCY} busy`,
+      key: null,
+      label: "Page work",
+      evidence: "preparation 75% of page time · 40 queries/page",
     });
   });
 
@@ -133,7 +134,7 @@ describe("evaluateBinding", () => {
     });
   });
 
-  it("names the drain budget when a page nearly fills it", () => {
+  it("does not blame the drain budget for a slow indivisible page", () => {
     expect(
       evaluateBinding(
         running({
@@ -142,6 +143,9 @@ describe("evaluateBinding", () => {
           page: null,
         }),
       ),
-    ).toMatchObject({ status: "binding", key: "drain.time" });
+    ).toMatchObject({
+      status: "unknown",
+      reason: expect.stringContaining("does not interrupt a page"),
+    });
   });
 });

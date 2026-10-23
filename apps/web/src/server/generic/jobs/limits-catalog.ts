@@ -314,14 +314,11 @@ const WAIT_LIMIT = {
   rate_limit: "provider.retry_after",
 } as const satisfies Partial<Record<JobWaitReason, LimitKey>>;
 
-/** A page this close to the drain budget is being cut by it. */
-const NEAR_BUDGET = 0.8;
-
 /**
  * Which limit sets the Run's speed now. A typed Job wait names its limit;
- * a due Job behind others is held by drain capacity; a running page near the
- * drain budget is cut by it; a running step with a declared page cap moves
- * one capped page at a time. Without a sample there is no answer.
+ * a due Job behind others is held by drain capacity. Running pages report
+ * measured work: a full concurrency peak or elapsed drain budget alone does
+ * not prove what made a page slow. The drain yields only between pages.
  */
 export function evaluateBinding(input: BindingInput): LimitBinding {
   const { job } = input;
@@ -386,37 +383,17 @@ export function evaluateBinding(input: BindingInput): LimitBinding {
   const lastPageMs = step?.lastPageMs ?? null;
   if (!step || (lastPageMs === null && !step.page))
     return { status: "unknown", reason: "Unknown — no recent samples." };
-  if (lastPageMs !== null && lastPageMs >= JOB_DRAIN.timeBudgetMs * NEAR_BUDGET)
-    return binding(
-      "drain.time",
-      `Last page took ${formatDuration(lastPageMs)} of the ${formatDuration(JOB_DRAIN.timeBudgetMs)} budget`,
-    );
-  const caps = stepLimits(step.key);
-  const saturated = caps.find(
-    (limit) =>
-      "phase" in limit &&
-      (step.page?.concurrency?.[limit.phase] ?? 0) >= limit.value,
-  );
-  if (saturated && "phase" in saturated)
-    return binding(
-      saturated.key,
-      `${saturated.phase} concurrency ${formatCount(step.page?.concurrency?.[saturated.phase] ?? 0)} of ${formatCount(saturated.value)} busy`,
-    );
-  // No limiter binds: the page's own work sets the pace.
+  // The drain checks its budget between pages, never interrupts a page.
+  // Peak concurrency is an observed maximum, not evidence of contention.
   const work = step.page ? pageWork(step.page, lastPageMs) : null;
   if (work) return work;
-  const pageCap = caps.find((limit) => !("phase" in limit));
-  if (pageCap && lastPageMs !== null)
-    return binding(
-      pageCap.key,
-      `Pages of up to ${formatCount(pageCap.value)} ${pageCap.unit}; last page took ${formatDuration(lastPageMs)}`,
-    );
-  return lastPageMs === null
-    ? { status: "unknown", reason: "Unknown — no recent samples." }
-    : {
-        status: "none",
-        reason: `Pages finish well inside the drain budget (last ${formatDuration(lastPageMs)}).`,
-      };
+  return {
+    status: "unknown",
+    reason:
+      lastPageMs === null
+        ? "Unknown — no recent samples."
+        : `Last page took ${formatDuration(lastPageMs)}; phase timings were not recorded. The ${formatDuration(JOB_DRAIN.timeBudgetMs)} drain budget yields between pages and does not interrupt a page.`,
+  };
 }
 
 const stepLimits = (stepKey: string) =>

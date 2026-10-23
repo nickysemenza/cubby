@@ -95,7 +95,11 @@ export function DecisionLedger({
             }),
             cell: ({ row }) => {
               const def = presenter.facetOf(row.original);
-              return <StatusPill tone={def.tone}>{def.label}</StatusPill>;
+              return (
+                <span title={presenter.explanation(row.original)}>
+                  <StatusPill tone={def.tone}>{def.label}</StatusPill>
+                </span>
+              );
             },
           }),
         );
@@ -146,6 +150,11 @@ export function DecisionLedger({
   const close = () => setOpenId(null);
   return (
     <div className="min-w-0" data-testid="decision-ledger">
+      <p className="pb-2 text-xs text-muted-foreground">
+        {facet
+          ? presenter.facets.find((def) => def.key === facet)?.description
+          : "Recommendations change records only when applied. Opening evidence does not apply a recommendation."}
+      </p>
       <RTable
         table={table}
         embedded

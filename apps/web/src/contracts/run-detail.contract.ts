@@ -1,5 +1,6 @@
 import { assessmentFamily } from "@cubby/schemas/assessment";
 import { runShortcode } from "@cubby/schemas/identifiers";
+import { sweepRunInput } from "@cubby/schemas/run-fields";
 import { runStepErrors, runStepState } from "@cubby/schemas/run-step";
 import { z } from "zod";
 
@@ -28,6 +29,8 @@ const runDetailStep = z.object({
 export type RunDetailStep = z.infer<typeof runDetailStep>;
 
 const runDetailStepsOut = z.object({
+  /** Only the manifest selection, never another Run kind's private input payload. */
+  input: sweepRunInput.nullable().optional(),
   purpose: z.string(),
   status: z.string(),
   steps: z.array(runDetailStep),
