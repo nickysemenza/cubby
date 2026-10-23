@@ -3,7 +3,6 @@ import { z } from "zod";
 import { spendingCategorySummarySchema } from "@cubby/schemas/spending-classification";
 import { fieldResolutionSchema } from "@cubby/schemas/field-resolution";
 import {
-  openCellExplanation,
   gotoAuthenticatedPage,
   selectComboboxItem,
 } from "./support/e2e-helpers";
@@ -124,7 +123,13 @@ test("linked Expense categories display their readable label and transaction exp
   await expect(
     row.locator('[data-column-id="itemizationExpectation"]'),
   ).toContainText("Not expected");
-  await openCellExplanation(row, "How expense categories is determined");
+  await row.locator('[data-cell-col="spendingCategorySummary"]').hover();
+  const categoryExplanation = row.getByRole("button", {
+    name: "How expense categories is determined",
+    exact: true,
+  });
+  await expect(categoryExplanation).toBeVisible();
+  await categoryExplanation.dispatchEvent("click");
   const popover = page.locator('[data-slot="popover-content"]');
   await expect(popover).toContainText("Single category");
   await expect(popover).toContainText(
@@ -137,7 +142,13 @@ test("linked Expense categories display their readable label and transaction exp
   );
 
   await page.keyboard.press("Escape");
-  await openCellExplanation(row, "How itemization is determined");
+  await row.locator('[data-cell-col="itemizationExpectation"]').hover();
+  const expectationExplanation = row.getByRole("button", {
+    name: "How itemization is determined",
+    exact: true,
+  });
+  await expect(expectationExplanation).toBeVisible();
+  await expectationExplanation.dispatchEvent("click");
   await expect(popover).toContainText("Technical details");
   await expect(
     popover.getByText("Confirmed allocations 1", { exact: true }),
