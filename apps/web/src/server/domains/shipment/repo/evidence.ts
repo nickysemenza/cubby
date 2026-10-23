@@ -706,9 +706,6 @@ export async function editShipmentObservation(
         },
       },
     ]);
-    await recordDerivedRefreshRoots(tdb, [
-      { entityKind: "shipment", entityId: row.id },
-    ]);
     return result;
   });
 }
