@@ -57,7 +57,13 @@ Vendor default freshness and successful apply/read-back belong in
 `vendor-suggestion-context.integration.test.ts` owns independent evidence and
 fingerprint changes. Do not duplicate these API-only assertions in a browser
 journey that merely opens a Vendor link: that also races unrelated derived work.
-The emoji/category browser journey retains actual editors and category navigation.
+The emoji browser journey retains suggestion acceptance without an early write,
+compound emoji Save and explicit clear with HTTP read-back. It uses one Product
+Category and no longer visits Spending Category and filtered category pages.
+`category-connections.integration.test.ts` owns inherited mapping identity, the
+reverse category list and effective-category filtering, including blocked-child
+exclusion. The reverse-list disclosure, View all URL composition and final phone
+overflow sample are deliberate gaps; shared list responsive coverage remains.
 This removes the dedicated HTTP Vendor-apply smoke; production serialization
 conflicts remain separately tracked rather than being claimed fixed by this move.
 
