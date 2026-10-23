@@ -1,4 +1,7 @@
+import { and, asc, count, desc, eq, inArray, sql } from "drizzle-orm";
+import type { BaseSQLiteDatabase } from "drizzle-orm/sqlite-core";
 import { z } from "zod";
+import { food as foodTable, foodAlias, releaseState } from "./sql-schema";
 import {
   dataTypeEnum,
   type FoodLookupParam,
@@ -25,9 +28,8 @@ import {
   type ReleaseManifest,
 } from "./shard";
 
-// Bump when the table layout below changes. A new generation is a new Durable
-// Object name, so the release reloads from its R2 shards instead of migrating
-// derived data in place (ADR 0008).
+// Stable namespace generation. Schema changes migrate the existing object in
+// place so loaded releases and in-flight shard progress survive deployments.
 export const USDA_RELEASE_GENERATION = 1;
 
 export const usdaReleaseObjectName = (release: ReleaseId) =>
@@ -79,47 +81,6 @@ export type FoodSearchPage = { data: FoodSummaryCompact[]; count: number };
 // object or a persistent R2 error surfaces instead of loading forever.
 export const MAX_SHARD_ATTEMPTS = 3;
 
-const SCHEMA = [
-  `CREATE TABLE IF NOT EXISTS release_state (
-     id INTEGER PRIMARY KEY CHECK (id = 1),
-     release TEXT NOT NULL,
-     state TEXT NOT NULL,
-     manifest TEXT,
-     next_shard INTEGER NOT NULL DEFAULT 0,
-     attempts INTEGER NOT NULL DEFAULT 0,
-     error TEXT,
-     started_at TEXT NOT NULL,
-     ready_at TEXT
-   )`,
-  `CREATE TABLE IF NOT EXISTS food (
-     fdc_id INTEGER PRIMARY KEY,
-     data_type TEXT NOT NULL,
-     description TEXT NOT NULL,
-     barcode_key TEXT,
-     ndb_number INTEGER,
-     summary TEXT NOT NULL
-   )`,
-  "CREATE INDEX IF NOT EXISTS food_barcode_key ON food (barcode_key)",
-  "CREATE INDEX IF NOT EXISTS food_ndb_number ON food (ndb_number)",
-  "CREATE INDEX IF NOT EXISTS food_description ON food (description)",
-  "CREATE INDEX IF NOT EXISTS food_data_type ON food (data_type, description)",
-  `CREATE TABLE IF NOT EXISTS food_alias (
-     fdc_id INTEGER PRIMARY KEY,
-     current_fdc_id INTEGER NOT NULL
-   ) WITHOUT ROWID`,
-];
-
-// Contentless: the text lives in `food`; this table only maps terms to
-// rowid = fdc_id. Brand columns weigh less than the description. The rank
-// setting persists, so it is written once, with the table.
-const SEARCH_SCHEMA = [
-  `CREATE VIRTUAL TABLE food_search USING fts5(
-     description, brand_name, brand_owner,
-     content = '', tokenize = 'unicode61 remove_diacritics 1'
-   )`,
-  "INSERT INTO food_search (food_search, rank) VALUES ('rank', 'bm25(1.0, 0.3, 0.3)')",
-];
-
 const stateRow = z.object({
   release: z.string(),
   state: releaseStatus.shape.state,
@@ -132,7 +93,6 @@ const stateRow = z.object({
 });
 type StateRow = z.infer<typeof stateRow>;
 
-const summaryRow = z.object({ fdc_id: z.number(), summary: z.string() });
 const countRow = z.object({ count: z.number() });
 
 const MAX_SQL_VARIABLES = 100;
@@ -156,19 +116,14 @@ export class UsdaReleaseStore {
   constructor(
     private readonly sql: ReleaseSql,
     private readonly transaction: <T>(fn: () => T) => T,
+    private readonly db: Pick<
+      BaseSQLiteDatabase<"sync", unknown>,
+      "select" | "insert" | "update" | "delete"
+    >,
   ) {}
 
-  init() {
-    for (const statement of SCHEMA) this.sql.exec(statement);
-    const [search] = this.sql
-      .exec("SELECT 1 AS present FROM sqlite_master WHERE name = 'food_search'")
-      .toArray();
-    if (!search)
-      for (const statement of SEARCH_SCHEMA) this.sql.exec(statement);
-  }
-
   private stateRow(): StateRow | null {
-    const [row] = this.sql.exec("SELECT * FROM release_state").toArray();
+    const row = this.db.select().from(releaseState).get();
     return row ? stateRow.parse(row) : null;
   }
 
@@ -189,12 +144,16 @@ export class UsdaReleaseStore {
         `Manifest for ${manifest.release} found under release ${release}`,
       );
     }
-    this.sql.exec(
-      "INSERT INTO release_state (id, release, state, manifest, started_at) VALUES (1, ?, 'loading', ?, ?)",
-      release,
-      JSON.stringify(manifest),
-      new Date().toISOString(),
-    );
+    this.db
+      .insert(releaseState)
+      .values({
+        id: 1,
+        release,
+        state: "loading",
+        manifest: JSON.stringify(manifest),
+        started_at: new Date().toISOString(),
+      })
+      .run();
   }
 
   isLoading() {
@@ -227,23 +186,31 @@ export class UsdaReleaseStore {
     if (row?.state !== "loading") return null;
     const key = shardKey(row.release, row.next_shard);
     if (row.attempts >= MAX_SHARD_ATTEMPTS) {
-      this.sql.exec(
-        "UPDATE release_state SET state = 'failed', error = ? WHERE id = 1",
-        `${key} did not load after ${row.attempts} attempts${row.error ? `; last error: ${row.error}` : ""}`,
-      );
+      this.db
+        .update(releaseState)
+        .set({
+          state: "failed",
+          error: `${key} did not load after ${row.attempts} attempts${row.error ? `; last error: ${row.error}` : ""}`,
+        })
+        .where(eq(releaseState.id, 1))
+        .run();
       return null;
     }
-    this.sql.exec(
-      "UPDATE release_state SET attempts = attempts + 1 WHERE id = 1",
-    );
+    this.db
+      .update(releaseState)
+      .set({ attempts: sql`${releaseState.attempts} + 1` })
+      .where(eq(releaseState.id, 1))
+      .run();
     return key;
   }
 
   /** Returns a failed load to loading from its last committed shard. */
   resume() {
-    this.sql.exec(
-      "UPDATE release_state SET state = 'loading', attempts = 0, error = NULL WHERE id = 1 AND state = 'failed'",
-    );
+    this.db
+      .update(releaseState)
+      .set({ state: "loading", attempts: 0, error: null })
+      .where(and(eq(releaseState.id, 1), eq(releaseState.state, "failed")))
+      .run();
   }
 
   /**
@@ -274,12 +241,17 @@ export class UsdaReleaseStore {
       const manifest = this.manifest(row);
       const next = row.next_shard + 1;
       const done = manifest !== null && next >= manifest.shardCount;
-      this.sql.exec(
-        "UPDATE release_state SET next_shard = ?, attempts = 0, error = NULL, state = ?, ready_at = ? WHERE id = 1",
-        next,
-        done ? "ready" : "loading",
-        done ? new Date().toISOString() : null,
-      );
+      this.db
+        .update(releaseState)
+        .set({
+          next_shard: next,
+          attempts: 0,
+          error: null,
+          state: done ? "ready" : "loading",
+          ready_at: done ? new Date().toISOString() : null,
+        })
+        .where(eq(releaseState.id, 1))
+        .run();
     });
   }
 
@@ -294,25 +266,31 @@ export class UsdaReleaseStore {
     const row = this.stateRow();
     if (!row) return false;
     const failed = failure.permanent || row.attempts >= MAX_SHARD_ATTEMPTS;
-    this.sql.exec(
-      "UPDATE release_state SET error = ?, state = ? WHERE id = 1",
-      failure.message,
-      failed ? "failed" : "loading",
-    );
+    this.db
+      .update(releaseState)
+      .set({ error: failure.message, state: failed ? "failed" : "loading" })
+      .where(eq(releaseState.id, 1))
+      .run();
     return !failed;
   }
 
   private insert(food: FoodSummary, superseded: number[]) {
     const branded = food.brandedFoodInfo;
-    this.sql.exec(
-      "INSERT OR REPLACE INTO food (fdc_id, data_type, description, barcode_key, ndb_number, summary) VALUES (?, ?, ?, ?, ?, ?)",
-      food.fdc_id,
-      food.foodInfo.data_type,
-      food.foodInfo.description,
-      branded ? usdaBarcodeKey(branded.gtin_upc) : null,
-      food.legacyFoodInfo?.ndb_number ?? null,
-      JSON.stringify(food),
-    );
+    const value = {
+      fdc_id: food.fdc_id,
+      data_type: food.foodInfo.data_type,
+      description: food.foodInfo.description,
+      barcode_key: branded ? usdaBarcodeKey(branded.gtin_upc) : null,
+      ndb_number: food.legacyFoodInfo?.ndb_number ?? null,
+      summary: JSON.stringify(food),
+    };
+    this.db
+      .insert(foodTable)
+      .values(value)
+      .onConflictDoUpdate({ target: foodTable.fdc_id, set: value })
+      .run();
+    // Drizzle has no FTS5 virtual-table write builder. Contentless FTS keeps
+    // its existing rowid mapping and weighted rank configuration.
     this.sql.exec(
       "INSERT INTO food_search (rowid, description, brand_name, brand_owner) VALUES (?, ?, ?, ?)",
       food.fdc_id,
@@ -321,11 +299,14 @@ export class UsdaReleaseStore {
       branded?.brand_owner ?? "",
     );
     for (const old of superseded) {
-      this.sql.exec(
-        "INSERT OR REPLACE INTO food_alias (fdc_id, current_fdc_id) VALUES (?, ?)",
-        old,
-        food.fdc_id,
-      );
+      this.db
+        .insert(foodAlias)
+        .values({ fdc_id: old, current_fdc_id: food.fdc_id })
+        .onConflictDoUpdate({
+          target: foodAlias.fdc_id,
+          set: { current_fdc_id: food.fdc_id },
+        })
+        .run();
     }
   }
 
@@ -357,16 +338,15 @@ export class UsdaReleaseStore {
     for (const chunk of chunks([...new Set(values)], MAX_SQL_VARIABLES)) {
       // `fdc_id DESC` with first-wins keeps the newest record when a barcode or
       // NDB number is shared by several current foods.
-      const rows = this.sql
-        .exec(
-          `SELECT ${column} AS key, fdc_id, summary FROM food WHERE ${column} IN (${chunk.map(() => "?").join(", ")}) ORDER BY fdc_id DESC`,
-          ...chunk,
-        )
-        .toArray();
-      for (const row of rows) {
-        const { summary } = summaryRow.parse(row);
-        const key = z.union([z.string(), z.number()]).parse(row.key);
-        if (!out.has(key)) out.set(key, parseSummary(summary));
+      const selected = foodTable[column];
+      const rows = this.db
+        .select({ key: selected, summary: foodTable.summary })
+        .from(foodTable)
+        .where(inArray(selected, chunk))
+        .orderBy(desc(foodTable.fdc_id))
+        .all();
+      for (const { key, summary } of rows) {
+        if (key !== null && !out.has(key)) out.set(key, parseSummary(summary));
       }
     }
     return out;
@@ -375,18 +355,12 @@ export class UsdaReleaseStore {
   private currentIds(ids: number[]): Map<number, number> {
     const out = new Map<number, number>();
     for (const chunk of chunks([...new Set(ids)], MAX_SQL_VARIABLES)) {
-      const rows = this.sql
-        .exec(
-          `SELECT fdc_id, current_fdc_id FROM food_alias WHERE fdc_id IN (${chunk.map(() => "?").join(", ")})`,
-          ...chunk,
-        )
-        .toArray();
-      for (const row of rows) {
-        const alias = z
-          .object({ fdc_id: z.number(), current_fdc_id: z.number() })
-          .parse(row);
-        out.set(alias.fdc_id, alias.current_fdc_id);
-      }
+      const rows = this.db
+        .select()
+        .from(foodAlias)
+        .where(inArray(foodAlias.fdc_id, chunk))
+        .all();
+      for (const alias of rows) out.set(alias.fdc_id, alias.current_fdc_id);
     }
     return out;
   }
@@ -434,7 +408,50 @@ export class UsdaReleaseStore {
     return page;
   }
 
+  private listPage(args: FoodSearchArgs): FoodSearchPage {
+    const types = dataTypePredicate(
+      "data_type",
+      args.dataTypeFilter,
+      args.foodsOnly,
+      args.dataTypes,
+    );
+    for (const value of types.values) dataTypeEnum.parse(value);
+    const where = types.values.length
+      ? inArray(foodTable.data_type, types.values)
+      : undefined;
+    const column =
+      args.orderBy === "fdc_id"
+        ? foodTable.fdc_id
+        : args.orderBy === "data_type"
+          ? foodTable.data_type
+          : foodTable.description;
+    const order =
+      args.orderBy === "relevance" || args.direction === "asc"
+        ? asc(column)
+        : desc(column);
+    const rows = this.db
+      .select({ summary: foodTable.summary })
+      .from(foodTable)
+      .where(where)
+      .orderBy(order, asc(foodTable.fdc_id))
+      .limit(args.pageSize)
+      .offset(args.pageIndex * args.pageSize)
+      .all();
+    const total = this.db
+      .select({ count: count() })
+      .from(foodTable)
+      .where(where)
+      .get();
+    return {
+      data: rows.map((row) => toFoodSummaryCompact(parseSummary(row.summary))),
+      count: total?.count ?? 0,
+    };
+  }
+
   private searchPage(args: FoodSearchArgs, ftsQuery: string): FoodSearchPage {
+    if (!ftsQuery) return this.listPage(args);
+    // MATCH, rank and the weighted FTS5 tie-break expressions are kept together
+    // as raw SQL because Drizzle does not model virtual FTS tables.
     const types = dataTypePredicate(
       "f.data_type",
       args.dataTypeFilter,
@@ -442,25 +459,17 @@ export class UsdaReleaseStore {
       args.dataTypes,
     );
     for (const value of types.values) dataTypeEnum.parse(value);
-    const conditions = [
-      ...(ftsQuery ? ["food_search MATCH ?"] : []),
-      ...(types.sql ? [types.sql] : []),
-    ];
-    const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
-    const whereValues = [...(ftsQuery ? [ftsQuery] : []), ...types.values];
-    const from = ftsQuery
-      ? "food_search JOIN food f ON f.fdc_id = food_search.rowid"
-      : "food f";
+    const where = `WHERE food_search MATCH ?${types.sql ? ` AND ${types.sql}` : ""}`;
+    const whereValues = [ftsQuery, ...types.values];
+    const from = "food_search JOIN food f ON f.fdc_id = food_search.rowid";
 
     const orderValues: Array<string | number> = [];
     let order: string;
-    if (args.orderBy === "relevance" && ftsQuery) {
+    if (args.orderBy === "relevance") {
       orderValues.push(...matchQualityBindings(args.nameFilter?.trim() ?? ""));
       // Textual fit leads; data type is a late tie-break; fdc_id is only the
       // unique terminal key that keeps LIMIT/OFFSET paging deterministic.
       order = `${matchQualityCase("f.description")}, food_search.rank, LENGTH(f.description), ${dataTypePriorityCase("f.data_type")}, f.fdc_id`;
-    } else if (args.orderBy === "relevance") {
-      order = "f.description, f.fdc_id";
     } else {
       order = `f.${sqlOrderBy(args.orderBy)} ${sqlDirection(args.direction)}, f.fdc_id`;
     }

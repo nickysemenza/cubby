@@ -204,9 +204,37 @@ reports the raw error if the load fails. Changing the synthetic foods needs a
 new release id or `pnpm dev reset`, because a loaded release object keeps its
 data.
 
-Changing the release tables bumps `USDA_RELEASE_GENERATION` in
-`packages/usda/src/release/store.ts`, which reloads the release from the same
-shards under a new object name.
+USDA release schema changes use the Durable Object migrations described below.
+Keep `USDA_RELEASE_GENERATION` and existing object names stable when migrating
+stored releases; a new object name would abandon their loaded state.
+
+### Durable Object SQLite schemas
+
+Relational Durable Object stores use `drizzle-orm/durable-sqlite` for ordinary
+queries and checked-in Drizzle migrations for schema evolution. Calendar,
+AI response cache, AI Gateway egress, database freshness, and USDA release each
+own their schema and migration history. Key/value session storage remains
+key/value. Raw SQL is appropriate for migration DDL, unsupported SQLite features
+such as FTS, or a materially clearer expression; document the reason rather
+than maintaining a second ordinary CRUD path.
+
+Generate a store's next migration with
+`pnpm --dir apps/web exec drizzle-kit generate --config=<store-config>` using
+its `drizzle.*.config.ts`. Inspect the SQL, journal and latest snapshot together,
+and bundle the new SQL in that store's migration imports. Applied migrations
+are immutable. Run migrations under `blockConcurrencyWhile` during object
+initialization before accepting storage operations. Keep synchronous critical
+sections synchronous; adding an `await` can change interleaving even when the
+queries are equivalent.
+
+The initial adoption migrations preserve existing tables and rows instead of
+resetting objects or replaying unconditional table creation. Check legacy
+schema compatibility before recording adoption, and verify both an empty object
+and populated predecessor storage through real DO tests. Later migrations run
+against the recorded history. Drizzle migrations change SQLite tables within
+each instance; Cloudflare configuration migrations separately own DO class
+lifecycle. Preserve class exports, bindings and object names during storage
+refactors.
 
 ### Neon cache diagnostics
 

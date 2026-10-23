@@ -10,6 +10,8 @@ import {
 } from "@cubby/shared/ai/gateway-request";
 import { scrubCredentialValues } from "@cubby/worker-tracing/scrub-error-message";
 import { DurableObject } from "cloudflare:workers";
+import { count, eq, inArray, lte, max, min, sql } from "drizzle-orm";
+import { drizzle } from "drizzle-orm/durable-sqlite";
 
 import { aiBudgetWindow } from "~/server/ai/budget-window";
 import {
@@ -18,6 +20,15 @@ import {
   gatewayEgressInput,
   type GatewayAdmission,
 } from "~/server/ai/gateway-egress-contract";
+
+import { initializeGatewayEgress } from "../repo/gateway-egress-initialization";
+import {
+  cooldowns,
+  creditEpochs,
+  creditRefusals,
+  permits,
+  starts,
+} from "../repo/gateway-egress-sql-schema";
 
 const {
   windowMs: WINDOW_MS,
@@ -59,70 +70,55 @@ export class AiGatewayEgressDurableObject extends DurableObject<Env> {
     return this.env.CF_VERSION_METADATA.id;
   }
 
+  private readonly db;
+
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
-    // Postgres Jobs now retain startup, recovery and funding intent.
-    void ctx.blockConcurrencyWhile(() => ctx.storage.deleteAlarm());
-    ctx.storage.sql.exec(
-      "CREATE TABLE IF NOT EXISTS starts (bucket TEXT NOT NULL, started INTEGER NOT NULL)",
-    );
-    ctx.storage.sql.exec(
-      "CREATE INDEX IF NOT EXISTS starts_time ON starts(started)",
-    );
-    ctx.storage.sql.exec(
-      "CREATE TABLE IF NOT EXISTS permits (token TEXT PRIMARY KEY, bucket TEXT NOT NULL, deadline INTEGER NOT NULL)",
-    );
-    ctx.storage.sql.exec(
-      "CREATE TABLE IF NOT EXISTS cooldowns (bucket TEXT PRIMARY KEY, until_ms INTEGER NOT NULL)",
-    );
-    // A provider credit refusal (ADR 0017) refuses credit admission until
-    // `until_ms`, except one probe per six-hour window; `probe_window` is the
-    // start of the window whose probe is spent.
-    ctx.storage.sql.exec(
-      "CREATE TABLE IF NOT EXISTS credit_refusals (bucket TEXT PRIMARY KEY, until_ms INTEGER NOT NULL, reason TEXT NOT NULL, probe_window INTEGER NOT NULL)",
-    );
-    // Bumped by every reset and every recorded refusal. A credit response is
-    // observed only under the epoch its request was admitted in, so a request
-    // in flight across a reset cannot re-record the refusal it cleared, and an
-    // older success cannot clear a newer refusal.
-    ctx.storage.sql.exec(
-      "CREATE TABLE IF NOT EXISTS credit_epochs (bucket TEXT PRIMARY KEY, epoch INTEGER NOT NULL)",
-    );
+    this.db = drizzle(ctx.storage);
+    void ctx.blockConcurrencyWhile(async () => {
+      await initializeGatewayEgress(ctx.storage);
+      // Postgres Jobs now retain startup, recovery and funding intent.
+      await ctx.storage.deleteAlarm();
+    });
   }
 
   private creditEpoch() {
     return (
-      this.ctx.storage.sql
-        .exec<{ epoch: number }>(
-          "SELECT epoch FROM credit_epochs WHERE bucket = ?",
-          CREDIT_BUCKET,
-        )
-        .toArray()[0]?.epoch ?? 0
+      this.db
+        .select({ epoch: creditEpochs.epoch })
+        .from(creditEpochs)
+        .where(eq(creditEpochs.bucket, CREDIT_BUCKET))
+        .get()?.epoch ?? 0
     );
   }
 
   private bumpCreditEpoch() {
-    this.ctx.storage.sql.exec(
-      "INSERT INTO credit_epochs VALUES (?, 1) ON CONFLICT(bucket) DO UPDATE SET epoch = epoch + 1",
-      CREDIT_BUCKET,
-    );
+    this.db
+      .insert(creditEpochs)
+      .values({ bucket: CREDIT_BUCKET, epoch: 1 })
+      .onConflictDoUpdate({
+        target: creditEpochs.bucket,
+        set: { epoch: sql`${creditEpochs.epoch} + 1` },
+      })
+      .run();
   }
 
   private activeCreditRefusal(now: number) {
-    const sql = this.ctx.storage.sql;
-    sql.exec("DELETE FROM credit_refusals WHERE until_ms <= ?", now);
-    return sql
-      .exec<{ until_ms: number; reason: string; probe_window: number }>(
-        "SELECT until_ms, reason, probe_window FROM credit_refusals WHERE bucket = ?",
-        CREDIT_BUCKET,
-      )
-      .toArray()[0];
+    this.db
+      .delete(creditRefusals)
+      .where(lte(creditRefusals.untilMs, now))
+      .run();
+    return this.db
+      .select()
+      .from(creditRefusals)
+      .where(eq(creditRefusals.bucket, CREDIT_BUCKET))
+      .get();
   }
 
   /** The active Claude credit refusal, if any. */
   async creditRefusal(now = Date.now()) {
     const row = this.activeCreditRefusal(now);
-    return row ? { until: row.until_ms, reason: row.reason } : null;
+    return row ? { until: row.untilMs, reason: row.reason } : null;
   }
 
   /** The member's "Retry Claude credit now"; a credit budget change too. */
@@ -132,10 +128,10 @@ export class AiGatewayEgressDurableObject extends DurableObject<Env> {
   }
 
   private clearCreditRefusal() {
-    this.ctx.storage.sql.exec(
-      "DELETE FROM credit_refusals WHERE bucket = ?",
-      CREDIT_BUCKET,
-    );
+    this.db
+      .delete(creditRefusals)
+      .where(eq(creditRefusals.bucket, CREDIT_BUCKET))
+      .run();
   }
 
   /**
@@ -161,73 +157,83 @@ export class AiGatewayEgressDurableObject extends DurableObject<Env> {
     // Raw diagnostics stay whole (AGENTS.md); only credentials are redacted.
     const reason = scrubCredentialValues(body);
     this.bumpCreditEpoch();
-    this.ctx.storage.sql.exec(
-      "INSERT INTO credit_refusals VALUES (?, ?, ?, ?) ON CONFLICT(bucket) DO UPDATE SET until_ms = excluded.until_ms, reason = excluded.reason, probe_window = excluded.probe_window",
-      CREDIT_BUCKET,
-      creditRefusalUntil(reason, now),
+    const refusal = {
+      untilMs: creditRefusalUntil(reason, now),
       reason,
-      windowStart(now),
-    );
+      probeWindow: windowStart(now),
+    };
+    this.db
+      .insert(creditRefusals)
+      .values({ bucket: CREDIT_BUCKET, ...refusal })
+      .onConflictDoUpdate({ target: creditRefusals.bucket, set: refusal })
+      .run();
   }
 
   async admit(bucket: string, now = Date.now()): Promise<GatewayAdmission> {
-    const sql = this.ctx.storage.sql;
-    sql.exec("DELETE FROM starts WHERE started <= ?", now - WINDOW_MS);
-    sql.exec("DELETE FROM permits WHERE deadline <= ?", now);
+    // No await between checking capacity and reserving the permit.
+    this.db
+      .delete(starts)
+      .where(lte(starts.started, now - WINDOW_MS))
+      .run();
+    this.db.delete(permits).where(lte(permits.deadline, now)).run();
     const refusal =
       bucket === CREDIT_BUCKET ? this.activeCreditRefusal(now) : undefined;
     const probing =
-      refusal !== undefined && refusal.probe_window < windowStart(now);
+      refusal !== undefined && refusal.probeWindow < windowStart(now);
     // Refused credit answers at once so the ladder moves on without waiting.
     if (refusal && !probing)
       return {
         kind: "refused",
-        until: refusal.until_ms,
+        until: refusal.untilMs,
         reason: refusal.reason,
       };
     const cooldown =
-      sql
-        .exec<{ until_ms: number }>(
-          "SELECT max(until_ms) AS until_ms FROM cooldowns WHERE bucket IN (?, ?)",
-          bucket,
-          bucket === TYPESAFE_BUCKET ? bucket : "all",
+      this.db
+        .select({ untilMs: max(cooldowns.untilMs) })
+        .from(cooldowns)
+        .where(
+          inArray(cooldowns.bucket, [
+            bucket,
+            bucket === TYPESAFE_BUCKET ? bucket : "all",
+          ]),
         )
-        .one().until_ms ?? 0;
+        .get()?.untilMs ?? 0;
     if (cooldown > now) return { kind: "wait", until: cooldown };
     if (bucket === "unified") {
-      const active = sql
-        .exec<{ count: number; earliest: number }>(
-          "SELECT count(*) AS count, min(deadline) AS earliest FROM permits WHERE bucket = ?",
-          bucket,
-        )
-        .one();
+      const active = this.db
+        .select({ count: count(), earliest: min(permits.deadline) })
+        .from(permits)
+        .where(eq(permits.bucket, bucket))
+        .get();
+      if (!active) throw new Error("Missing permit admission aggregate");
       if (active.count >= UNIFIED_MAX_IN_FLIGHT)
-        return { kind: "wait", until: Math.min(active.earliest, now + 1_000) };
-      const starts = sql
-        .exec<{ count: number; earliest: number }>(
-          "SELECT count(*) AS count, min(started) AS earliest FROM starts WHERE bucket = ?",
-          bucket,
-        )
-        .one();
-      if (starts.count >= REQUESTS_PER_WINDOW)
-        return { kind: "wait", until: starts.earliest + WINDOW_MS };
+        return {
+          kind: "wait",
+          until: Math.min(active.earliest ?? now, now + 1_000),
+        };
+      const recent = this.db
+        .select({ count: count(), earliest: min(starts.started) })
+        .from(starts)
+        .where(eq(starts.bucket, bucket))
+        .get();
+      if (!recent) throw new Error("Missing unified admission aggregate");
+      if (recent.count >= REQUESTS_PER_WINDOW)
+        return { kind: "wait", until: (recent.earliest ?? now) + WINDOW_MS };
     }
     const token = crypto.randomUUID();
     // Spent only once admitted, so a capacity wait cannot use up the probe.
     if (probing)
-      sql.exec(
-        "UPDATE credit_refusals SET probe_window = ? WHERE bucket = ?",
-        windowStart(now),
-        CREDIT_BUCKET,
-      );
+      this.db
+        .update(creditRefusals)
+        .set({ probeWindow: windowStart(now) })
+        .where(eq(creditRefusals.bucket, CREDIT_BUCKET))
+        .run();
     if (bucket === "unified")
-      sql.exec("INSERT INTO starts VALUES (?, ?)", bucket, now);
-    sql.exec(
-      "INSERT INTO permits VALUES (?, ?, ?)",
-      token,
-      bucket,
-      now + REQUEST_DEADLINE_MS,
-    );
+      this.db.insert(starts).values({ bucket, started: now }).run();
+    this.db
+      .insert(permits)
+      .values({ token, bucket, deadline: now + REQUEST_DEADLINE_MS })
+      .run();
     return bucket === CREDIT_BUCKET
       ? { kind: "admitted", token, epoch: this.creditEpoch() }
       : { kind: "admitted", token };
@@ -239,15 +245,13 @@ export class AiGatewayEgressDurableObject extends DurableObject<Env> {
     retryAfter: string | null,
     now = Date.now(),
   ) {
-    const sql = this.ctx.storage.sql;
-    const permit = sql
-      .exec<{ bucket: string }>(
-        "SELECT bucket FROM permits WHERE token = ?",
-        token,
-      )
-      .toArray()[0];
+    const permit = this.db
+      .select({ bucket: permits.bucket })
+      .from(permits)
+      .where(eq(permits.token, token))
+      .get();
     if (!permit) return;
-    sql.exec("DELETE FROM permits WHERE token = ?", token);
+    this.db.delete(permits).where(eq(permits.token, token)).run();
     if (status === 429) {
       const seconds = retryAfter === null ? NaN : Number(retryAfter);
       const parsed = Number.isFinite(seconds)
@@ -258,11 +262,17 @@ export class AiGatewayEgressDurableObject extends DurableObject<Env> {
         Number.isFinite(parsed) ? parsed : now + 1_000,
       );
       // Unified responses have unknown limit scope; credit refusals must leave paid fallback available.
-      sql.exec(
-        "INSERT INTO cooldowns VALUES (?, ?) ON CONFLICT(bucket) DO UPDATE SET until_ms = max(until_ms, excluded.until_ms)",
-        permit.bucket === "unified" ? "all" : permit.bucket,
-        until,
-      );
+      this.db
+        .insert(cooldowns)
+        .values({
+          bucket: permit.bucket === "unified" ? "all" : permit.bucket,
+          untilMs: until,
+        })
+        .onConflictDoUpdate({
+          target: cooldowns.bucket,
+          set: { untilMs: sql`max(${cooldowns.untilMs}, ${until})` },
+        })
+        .run();
     }
   }
 
