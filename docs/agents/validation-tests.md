@@ -57,9 +57,14 @@ list’s post-create indexing and invalidation are separate outcomes. Do not mak
 this editor regression depend on the newly created row entering that list.
 
 Connected-record Plant/Project/Task and both purchase paths use one fixture
-graph with one shared brand. Booking-review prerequisites settle once before the
-first browser action; its reimbursement credit is still created after booking.
-Keep all route, stale-approval, replay and signed-money assertions.
+graph with one shared brand. Booking-review prerequisites, including the independent
+reimbursement source, settle once before the first browser action. Its native
+Purchase choice still happens after booking creates that Purchase. Keep the stale
+approval, replay and signed-money assertions. The final reimbursement detail
+read-back owns its stored override and resolved policy; do not repeat that same
+value with a third page visit just to render a shared list cell. Dedicated
+post-booking reimbursement list-cell composition is no longer sampled there;
+real transaction detail review and exact resolved-policy read-back remain.
 
 Reviewed booking corrections belong in the existing PostgreSQL category/refund
 owner: reimbursement reattachment preserves category and net money, transfer
