@@ -1,0 +1,29 @@
+apps/web/docs/web-runtime.md
+  s_16882afa1e38ca::t_8e4645eeac07e2 276-283
+apps/web/src/server/ai/field-suggest/registry.ts
+  s_16882afa1e38ca::t_167d4b8eaf80ae 500
+apps/web/src/server/domains/location/repo/location.integration.test.ts
+  s_16882afa1e38ca::t_6b01150e585cf3 9,13,15,47-83
+apps/web/src/server/domains/location/repo/lookup.ts
+  s_16882afa1e38ca::t_2106027a2500ce 16,89,130,132-133,138,145,149
+apps/web/src/server/domains/product/repo/list.integration.test.ts
+  s_16882afa1e38ca::t_6a30ed5f758d48 304-347
+apps/web/src/server/domains/product/repo/match/product-match-review.ts
+  s_16882afa1e38ca::t_23c3bfb73290f1 32-35,166
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "504bfd4ca071acb0e12cc894a07e17e73043a1d6",
+  "prompts": {},
+  "sessions": {
+    "s_16882afa1e38ca": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a16a6a-0a75-7111-9f3c-b5b97e53f6bd",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
