@@ -1,5 +1,5 @@
 import { createDatabase } from "~/server/db/database-runtime";
-import { createPostgresPool } from "../../../tooling/postgres-pool";
+import { createPostgresPool } from "#web/tooling/postgres-pool.ts";
 import "../support/build-constants";
 import { buildActorContext } from "@cubby/schemas/context";
 import { testUserId } from "@cubby/schemas/testing";
@@ -19,8 +19,8 @@ import {
   type CreatableEntity,
   type EntityOverrides,
   buildEntity,
-} from "../../../tooling/factories/build";
-import { buildKernelContext } from "../../../tooling/scenarios/context";
+} from "#web/tooling/factories/build.ts";
+import { buildKernelContext } from "#web/tooling/scenarios/context.ts";
 import { getDb, withTransactionDatabase } from "~/server/db/helpers";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { drainDerivedRefreshFrontier } from "~/server/testing/background-queue";

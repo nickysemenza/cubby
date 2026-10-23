@@ -11,4 +11,5 @@ import { AlertDialog } from "~/ui/primitives/alert-dialog";
 import { Button } from "@base-ui/react/button";
 export { DialogTrigger } from "~/ui/primitives/dialog";
 const staticLazy = import(`~/ui/primitives/dialog`);
+import { Dialog as NativeAliasDialog } from "#web/src/ui/primitives/dialog.tsx";
 const staticRequired = require(`@base-ui/react/dialog`);

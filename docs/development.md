@@ -9,21 +9,30 @@ For what Cubby is and how its entities fit together, see the
 
 Keep nearby implementation files and colocated tests on relative imports. For
 distant web source dependencies, use `~/…`; for web tooling dependencies loaded
-through the web resolver, use `tooling/…`. Three or more parent traversals are a
-signal to look for an existing alias or package export. Do not add a second
-source-root spelling such as `@/` alongside `~/`.
+through the web resolver, use `tooling/…`. `cubby/no-deep-relative-imports` rejects
+module specifiers beginning with three or more `../` segments, including
+re-exports, dynamic imports, import types and `require`. Nearby `./`, `../` and
+`../../` imports remain relative. Do not add a second source-root spelling such
+as `@/` alongside `~/`.
 
 Across workspace packages, use their `@cubby/<package>/<subpath>` exports and
 declare the dependency in the consuming package. Do not add tsconfig mappings
 into another package's source tree or create barrels only to shorten imports.
-Generators may read declaration files and fixtures directly when those files
-are their compilation inputs rather than a package API.
+Generators and compiler tests use `@cubby/schemas/compiler/…` for authoring
+metadata and declaration inputs. That namespace is excluded from HTTP schema
+name registration: compiler inputs must not change native wire model naming.
 
 TypeScript `paths` describe resolution; they do not rewrite emitted imports.
 The web Vite and Vitest configurations support the web aliases. Scripts run
-directly by Node use explicit `.ts` extensions for relative imports and must not
-depend on web-only aliases. Filesystem paths, `new URL(…, import.meta.url)` and
-glob patterns are not module specifiers; preserve their runtime semantics.
+directly by Node remain TypeScript and use native type stripping. Within the
+web package, `#web/…` is a package-local `imports` mapping with explicit `.ts`
+extensions; it works in Node without reading tsconfig. Shared root script helpers
+are exported through `cubby/tooling/…`; the web package declares that workspace
+dependency. Root asset exports also give bundled raw imports stable specifiers.
+These mappings name the existing files rather than adding wrapper modules.
+Filesystem paths, `new URL(…, import.meta.url)` and glob patterns are not module
+specifiers; preserve their runtime semantics. Raw asset module imports still
+follow the lint rule.
 The [repository typecheck boundary](#typechecking) also constrains which imports
 must use aliases.
 

@@ -1,7 +1,7 @@
+import purchaseDeclaration from "@cubby/schemas/compiler/entity-definitions/12-purchase.entity";
+import vendorAccountDeclaration from "@cubby/schemas/compiler/entity-definitions/21-vendorAccount.entity";
 import { describe, expect, it } from "vitest";
 
-import purchaseDeclaration from "../../../../packages/schemas/src/entity-definitions/12-purchase.entity";
-import vendorAccountDeclaration from "../../../../packages/schemas/src/entity-definitions/21-vendorAccount.entity";
 import {
   compileEntity,
   validateEntityIdentities,

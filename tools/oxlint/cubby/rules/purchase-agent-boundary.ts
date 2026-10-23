@@ -29,11 +29,11 @@ const ALLOWED_PACKAGES = [
 ];
 
 /** The bundled skill Markdown the coordinator's workflow is built from. */
-const SKILL_MARKDOWN = /^(\.\.\/)+\.agents\/skills\/[^?]+\.md\?raw$/u;
+const SKILL_MARKDOWN = /^cubby\/agent-skills\/[^?]+\.md\?raw$/u;
 
 function allowedSource(source: string): boolean {
+  if (SKILL_MARKDOWN.test(source)) return !source.includes("/../");
   if (source.startsWith("./")) return !source.includes("/../");
-  if (source.startsWith("../")) return SKILL_MARKDOWN.test(source);
   return ALLOWED_PACKAGES.some((pattern) => pattern.test(source));
 }
 

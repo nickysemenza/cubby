@@ -10,6 +10,7 @@ test("Worker WASM capabilities stay behind the server interface", () => {
   for (const source of [
     "@cubby/recipebridge/worker",
     "~/server/wasm",
+    "#web/src/server/wasm.ts",
     "../../server/wasm",
   ]) {
     const target = targetPath(client, source);

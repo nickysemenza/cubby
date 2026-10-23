@@ -1,5 +1,5 @@
-import { modulesChildren } from "../../../packages/schemas/src/child-tables/modules.ts";
-import { retainedTableExports } from "../../../packages/schemas/src/child-tables/retained.ts";
+import { modulesChildren } from "@cubby/schemas/compiler/child-tables/modules";
+import { retainedTableExports } from "@cubby/schemas/compiler/child-tables/retained";
 import { readFile, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -7,7 +7,7 @@ import { z } from "zod";
 import {
   connectedViews,
   derivedConnectedRelationship,
-} from "../../../packages/schemas/src/connected-view-definitions.ts";
+} from "@cubby/schemas/compiler/connected-view-definitions";
 import type {
   CompiledEntity,
   EntityArtifacts,

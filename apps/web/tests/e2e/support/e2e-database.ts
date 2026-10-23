@@ -1,9 +1,9 @@
-import { createPostgresPool } from "../../../tooling/postgres-pool";
-import { seedBaseWorld } from "../../../tooling/factories/base-world";
+import { createPostgresPool } from "#web/tooling/postgres-pool.ts";
+import { seedBaseWorld } from "#web/tooling/factories/base-world.ts";
 import {
   type DatabaseLease,
   leaseDatabase,
-} from "../../../tooling/test-database-lease";
+} from "#web/tooling/test-database-lease.ts";
 import { drizzle as drizzleNodePostgres } from "drizzle-orm/node-postgres";
 
 /**

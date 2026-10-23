@@ -4,9 +4,9 @@ import { fileURLToPath } from "node:url";
 import {
   holdLock,
   WORKTREE_HARNESS_LOCK,
-} from "../../../tooling/dev-services/harness-lock.ts";
-import { prepareTemplate } from "../../../tooling/test-database-lease";
-import { webBuildNeedsBuild } from "../../../tooling/web-build-provenance";
+} from "#web/tooling/dev-services/harness-lock.ts";
+import { prepareTemplate } from "#web/tooling/test-database-lease.ts";
+import { webBuildNeedsBuild } from "#web/tooling/web-build-provenance.ts";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);

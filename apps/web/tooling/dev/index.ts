@@ -7,7 +7,7 @@ import {
   devSessionSchema as sessionSchema,
   type DevSession as Session,
 } from "./state";
-import { localSimulatorServer } from "../../../apple/tooling/lib/simulator-server.ts";
+import { localSimulatorServer } from "cubby/tooling/simulator-server";
 import { devContainerBackend } from "../dev-services/dev-container.ts";
 import { resolveOwnedDevProfile } from "../dev-services/shared-postgres.ts";
 import { spawn, execFileSync, type ChildProcess } from "node:child_process";
@@ -24,7 +24,7 @@ import { shouldRetryRuntime } from "./runtime-retry.ts";
 import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { pollUntil } from "@cubby/shared/retry";
-import { runOrThrow } from "../../../../scripts/lib/run.ts";
+import { runOrThrow } from "cubby/tooling/run";
 
 import { z } from "zod";
 import { devFixturePackSchema } from "./fixtures.ts";

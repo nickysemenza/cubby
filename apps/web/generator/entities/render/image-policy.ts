@@ -2,8 +2,8 @@ import { generatedHeader } from "../../artifacts.ts";
 import {
   photoCategories,
   photoCategoryKeys,
-} from "../../../../../packages/schemas/src/photo-categories.ts";
-import { IMAGE_FIELD_KEYS } from "../../../../../packages/schemas/src/image-field-keys.ts";
+} from "@cubby/schemas/compiler/photo-categories";
+import { IMAGE_FIELD_KEYS } from "@cubby/schemas/compiler/image-field-keys";
 import type { CompiledEntity, EntityArtifacts } from "../declarations.ts";
 
 /**

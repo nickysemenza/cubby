@@ -15,6 +15,7 @@ import {
 import { noOrdinaryDialogBypassRule } from "./rules/no-ordinary-dialog-bypass.ts";
 import { domainLayersRule } from "./rules/domain-layers.ts";
 import { noDomainBarrelRule } from "./rules/no-domain-barrel.ts";
+import { noDeepRelativeImportsRule } from "./rules/no-deep-relative-imports.ts";
 import { noErrorToastInHandlerRule } from "./rules/no-error-toast-in-handler.ts";
 import { noHandRolledPluralRule } from "./rules/no-hand-rolled-plural.ts";
 import { noRawEnumLiteralInSqlRule } from "./rules/no-raw-enum-literal-in-sql.ts";
@@ -45,6 +46,7 @@ const cubbyPlugin = eslintCompatPlugin({
     "no-ordinary-dialog-bypass": noOrdinaryDialogBypassRule,
     "domain-layers": domainLayersRule,
     "no-domain-barrel": noDomainBarrelRule,
+    "no-deep-relative-imports": noDeepRelativeImportsRule,
     "no-ad-hoc-calendar-day": noAdHocCalendarDayRule,
     "no-ad-hoc-number-format": noAdHocNumberFormatRule,
     "no-error-toast-in-handler": noErrorToastInHandlerRule,

@@ -4,13 +4,13 @@ import {
   harnessExplorerUrl,
   sanitizeWorkerdLogs,
   type WorkerdLog,
-} from "../../../tooling/e2e-workerd-logs";
-import { scenarioControls } from "../../../tooling/purchase-agent-workerd-harness";
-import { WORKERD_PROFILES } from "../../../tooling/workerd-harness";
+} from "#web/tooling/e2e-workerd-logs.ts";
+import { scenarioControls } from "#web/tooling/purchase-agent-workerd-harness.ts";
+import { WORKERD_PROFILES } from "#web/tooling/workerd-harness.ts";
 import {
   openWorkerdRuntime,
   type WorkerdRuntimeOptions,
-} from "../../../tooling/workerd-runtime";
+} from "#web/tooling/workerd-runtime.ts";
 import { createE2EDatabase } from "./e2e-database";
 
 type E2EStorageState = Awaited<ReturnType<APIRequestContext["storageState"]>>;

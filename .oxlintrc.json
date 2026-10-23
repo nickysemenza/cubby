@@ -83,6 +83,7 @@
     "cubby/no-hand-rolled-plural": "error",
     "cubby/domain-layers": "error",
     "cubby/no-domain-barrel": "error",
+    "cubby/no-deep-relative-imports": "error",
     "cubby/no-ordinary-dialog-bypass": "error",
     "eslint/no-shadow": "off",
     "eslint/no-underscore-dangle": "off",

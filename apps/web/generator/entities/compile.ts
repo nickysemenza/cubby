@@ -7,13 +7,13 @@ import type { RawReadSchemas } from "@cubby/schemas/entity-definitions/definitio
 import { resolveFieldDisplay, schemaAtReadPath } from "./presentation.ts";
 import { deriveBulkUpdateFields } from "./bulk.ts";
 import { collectionArraySchema } from "@cubby/schemas/entity-collection";
-import type { ChildTableDeclaration } from "../../../../packages/schemas/src/entity-definitions/child-definition.ts";
+import type { ChildTableDeclaration } from "@cubby/schemas/compiler/entity-definitions/child-definition";
 import {
   servesKernelGet,
   hasGenericListOperation,
 } from "./list-capabilities.ts";
 import { humanize } from "@cubby/shared/text-case";
-import { parseRangeBounds } from "../../../../packages/shared/src/filter.ts";
+import { parseRangeBounds } from "@cubby/shared/filter";
 import { compileEnumOptions } from "@cubby/shared/enum-palette";
 import {
   FILTER_KINDS,
@@ -26,7 +26,7 @@ import {
   FILTER_ANY,
   FILTER_NONE,
 } from "@cubby/schemas/filter-sentinel-fields";
-import { photoCategories } from "../../../../packages/schemas/src/photo-categories.ts";
+import { photoCategories } from "@cubby/schemas/compiler/photo-categories";
 import type {
   EntityDeclarationMetadata,
   EntityFieldModelMetadata,

@@ -121,6 +121,20 @@ test("type assertions need a SAFETY comment unless they narrow to literal types"
   );
 });
 
+test("deep module imports are rejected across static, dynamic, type and require forms", () => {
+  const diagnostics = lintFixture(
+    "no-deep-relative-imports",
+    "no-deep-relative-imports.txt",
+    "cubby",
+  );
+  assert.deepEqual(
+    diagnostics
+      .map((diagnostic) => diagnostic.labels[0]?.span.line)
+      .sort((a, b) => (a ?? 0) - (b ?? 0)),
+    [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+  );
+});
+
 test("raw enum values in Drizzle SQL are rejected", () => {
   // The rule is global, so an OS-tmpdir fixture runs it; a fixture under
   // apps/web/src/server races the generator's import-boundary scan in CI.
@@ -407,7 +421,7 @@ test("ordinary dialogs cannot bypass Overlay but triggers and confirmations rema
   );
   assert.deepEqual(
     diagnostics.map((diagnostic) => diagnostic.labels[0]?.span.line),
-    [1, 2, 3, 4, 5, 6, 7, 8, 13, 14],
+    [1, 2, 3, 4, 5, 6, 7, 8, 13, 14, 15],
   );
 });
 

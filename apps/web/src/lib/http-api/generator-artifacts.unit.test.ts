@@ -4,7 +4,7 @@ import { join } from "node:path";
 
 import { expect, it } from "vitest";
 
-import { writeArtifacts } from "../../../generator/artifacts";
+import { writeArtifacts } from "#web/generator/artifacts.ts";
 
 it("preserves modification times for unchanged generated artifacts", async () => {
   const root = await mkdtemp(join(tmpdir(), "cubby-artifacts-"));

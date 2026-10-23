@@ -14,7 +14,7 @@ import {
 import { dirname, join, resolve } from "node:path";
 
 import { checkTypecheckBoundaries } from "./checks/typecheck-boundaries.ts";
-import { typeChecker as compiler } from "../../../scripts/tsc.ts";
+import { typeChecker as compiler } from "cubby/tooling/type-checker";
 import { repositoryPrograms } from "./typecheck-repositories.ts";
 
 const app = resolve(import.meta.dirname, "..");

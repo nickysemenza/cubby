@@ -15,13 +15,13 @@ import {
 } from "@cubby/shared/client-constants";
 import { APPLE_CLIENT_COMPATIBILITY_VERSION } from "@cubby/shared/apple-client-version";
 import { APPLE_APP_IDENTITIES } from "@cubby/shared/apple-app-identity";
-import { IMPORT_REPORT_RUN_PURPOSES } from "../../../../../packages/schemas/src/activity-fields.ts";
+import { IMPORT_REPORT_RUN_PURPOSES } from "@cubby/schemas/compiler/activity-fields";
 import { identifierKindPresentation } from "@cubby/schemas/external-id";
 import {
   WAYFINDING_DOMAINS,
   WAYFINDING_DOMAIN_PRESENTATION,
 } from "@cubby/schemas/entity-definitions/definition";
-import { readR2PublicUrl } from "../../../tooling/cloudflare-public-config.ts";
+import { readR2PublicUrl } from "#web/tooling/cloudflare-public-config.ts";
 import { generatedHeader } from "../../artifacts.ts";
 import type { EntityArtifacts } from "../declarations.ts";
 

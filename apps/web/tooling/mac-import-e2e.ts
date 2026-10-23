@@ -6,7 +6,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { pollUntil } from "@cubby/shared/retry";
-import { runOrThrow } from "../../../scripts/lib/run.ts";
+import { runOrThrow } from "cubby/tooling/run";
 import { request } from "@playwright/test";
 import { z } from "zod";
 import { APPLE_APP_IDENTITIES } from "@cubby/shared/apple-app-identity";
@@ -34,8 +34,8 @@ import {
 import { openWorkerdRuntime, type WorkerdRuntime } from "./workerd-runtime";
 import { leaseNamedDatabase } from "./test-database-lease";
 import { ensureWebBuild, readWebBuildProvenance } from "./web-build-provenance";
-import { appleFfiFingerprint } from "../../../scripts/apple-ffi";
-import { digestFiles, walkFiles } from "../../../scripts/lib/tree-digest.ts";
+import { appleFfiFingerprint } from "cubby/tooling/apple-ffi";
+import { digestFiles, walkFiles } from "cubby/tooling/tree-digest";
 
 const webRoot = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),

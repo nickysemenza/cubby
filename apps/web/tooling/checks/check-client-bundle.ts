@@ -14,7 +14,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 
-import { walkFiles } from "../../../../scripts/lib/tree-digest.ts";
+import { walkFiles } from "cubby/tooling/tree-digest";
 
 const CLIENT_DIR = getWorkerAssetsDir(process.cwd());
 const WORKER_DIR = getWorkerBundleDir(process.cwd());

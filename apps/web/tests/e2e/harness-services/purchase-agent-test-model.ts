@@ -2,8 +2,8 @@
 import type {
   ScriptStep,
   ScriptValue,
-} from "../../../tooling/purchase-agent-script";
-import { parseSignal } from "../../../src/server/domains/purchase-agent/service/signals";
+} from "#web/tooling/purchase-agent-script.ts";
+import { parseSignal } from "#web/src/server/domains/purchase-agent/service/signals.ts";
 
 type ResponsesFunctionCall = {
   type: "function_call";

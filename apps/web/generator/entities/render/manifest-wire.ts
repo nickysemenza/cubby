@@ -4,7 +4,7 @@ import {
   structuredTextFormats,
   type ManifestWireName,
   type ManifestWire,
-} from "../../../../../packages/schemas/src/manifest-wire.ts";
+} from "@cubby/schemas/compiler/manifest-wire";
 import { generatedHeader } from "../../artifacts.ts";
 
 const swiftType = (type: string): string => {

@@ -1,12 +1,12 @@
 import { z } from "zod";
 import { entityKeys, entitySummary } from "@cubby/schemas/entity-summary";
-import { generatedEntityFieldModels } from "../../../../packages/schemas/src/generated/entity-field-model.gen.ts";
+import { generatedEntityFieldModels } from "@cubby/schemas/compiler/generated/entity-field-model.gen";
 import {
   type HeroActionBodyValue,
   type NativeHeroActionPlan,
   nativeCollectionActionPlans,
   nativeHeroActionPlans,
-} from "../../../../packages/schemas/src/native-coverage.ts";
+} from "@cubby/schemas/compiler/native-coverage";
 import type { KernelActions } from "../entities/render/index.ts";
 
 /** The top-level keys of a hero-action body template. */

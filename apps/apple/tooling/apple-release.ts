@@ -13,7 +13,7 @@ import { execFileSync } from "node:child_process";
 import { appendFileSync } from "node:fs";
 import path from "node:path";
 
-import { APPLE_CLIENT_COMPATIBILITY_VERSION } from "../../../packages/shared/src/apple-client-version.ts";
+import { APPLE_CLIENT_COMPATIBILITY_VERSION } from "@cubby/shared/apple-client-version";
 
 // Build numbers are this plus the workflow's run_number, shared by both
 // platforms. Mac build numbers must keep increasing; the offset sits above the

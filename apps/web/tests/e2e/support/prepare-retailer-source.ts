@@ -8,7 +8,7 @@ import { preparePurchaseImport } from "~/server/domains/purchase-import/operatio
 import {
   sha256Hex,
   syntheticOrderIds,
-} from "../../../tooling/convergence-harness";
+} from "#web/tooling/convergence-harness.ts";
 import type { E2EWorkerRuntime } from "./e2e-worker-runtime";
 import { expect } from "./e2e-test";
 

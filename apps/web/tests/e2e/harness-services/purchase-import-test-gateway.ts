@@ -7,7 +7,7 @@
  */
 import { z } from "zod";
 
-import { isModelPricingRead } from "../../../tooling/ai/model-pricing-transport";
+import { isModelPricingRead } from "#web/tooling/ai/model-pricing-transport.ts";
 
 const decisionFixture = z.object({
   feature: z.string().min(1),

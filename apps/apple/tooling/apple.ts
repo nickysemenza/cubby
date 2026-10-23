@@ -24,17 +24,14 @@
 // use the regular `Cubby-*` schemes with ~/.lldbinit-Xcode (apps/apple/AGENTS.md
 // "Debugging on device"). This covers the "just put it on the phone" case the
 // `-NoDebugger` schemes exist for.
-import { APPLE_CLIENT_COMPATIBILITY_VERSION } from "../../../packages/shared/src/apple-client-version.ts";
-import { APPLE_APP_IDENTITIES } from "../../../packages/shared/src/apple-app-identity.ts";
+import { APPLE_CLIENT_COMPATIBILITY_VERSION } from "@cubby/shared/apple-client-version";
+import { APPLE_APP_IDENTITIES } from "@cubby/shared/apple-app-identity";
 import { installedApprovalVerifier } from "./lib/mac-app-approval.ts";
 import { installMacApp, stopMacAppProcesses } from "./lib/mac-app-install.ts";
 import { spawnSync } from "node:child_process";
 import { checkApple } from "./apple-validation.ts";
 
-import {
-  captureSyncChecked,
-  runSyncChecked,
-} from "../../../scripts/lib/run.ts";
+import { captureSyncChecked, runSyncChecked } from "cubby/tooling/run";
 import {
   existsSync,
   lstatSync,

@@ -1,8 +1,8 @@
 import { createPostgresPool } from "./postgres-pool";
 import { execFileSync, spawn } from "node:child_process";
 import { pollUntil } from "@cubby/shared/retry";
-import { digestFiles, walkFiles } from "../../../scripts/lib/tree-digest.ts";
-import { spawnToExit } from "../../../scripts/lib/run.ts";
+import { digestFiles, walkFiles } from "cubby/tooling/tree-digest";
+import { spawnToExit } from "cubby/tooling/run";
 import { holdLock, NATIVE_DEVICE_LOCK } from "./dev-services/harness-lock.ts";
 import { sharedDeviceCommand } from "../../apple/tooling/lib/shared-device-command.ts";
 import { createHash, randomBytes } from "node:crypto";

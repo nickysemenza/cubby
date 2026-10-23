@@ -6,7 +6,7 @@ import { globSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { parseSync } from "oxc-parser";
 
-import { typeChecker } from "../../../../scripts/tsc.ts";
+import { typeChecker } from "cubby/tooling/type-checker";
 
 // An implementation reached through this global script invalidates the whole
 // app after edits to its dependencies. Inspect the compiler's resolved graph,

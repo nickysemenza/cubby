@@ -1,8 +1,8 @@
 import { render, screen, waitFor } from "@testing-library/react";
+import journey from "cubby/guide/product-identity-journey.md?raw";
 import { afterEach, expect, it, vi } from "vitest";
 import { page } from "vitest/browser";
 
-import journey from "../../../../../../docs/guide/product-identity-journey.md?raw";
 import { GuideDoc } from "./guide-doc";
 
 afterEach(() => vi.unstubAllGlobals());

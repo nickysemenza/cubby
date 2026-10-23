@@ -6,7 +6,7 @@ import { dirname, resolve } from "node:path";
 function dialogModule(source: string, filename: string): boolean {
   const path = source.startsWith(".")
     ? resolve(dirname(filename), source)
-    : source;
+    : source.replace(/^#web\//u, "apps/web/");
   return (
     /(?:^|\/)ui\/primitives\/(?:dialog|sheet)(?:\.[cm]?[jt]sx?)?$/u.test(
       path,

@@ -1,5 +1,5 @@
 import path from "node:path";
-import { runOrThrow } from "../../../../scripts/lib/run.ts";
+import { runOrThrow } from "cubby/tooling/run";
 
 /** Corpus imports execute application code, including generated bindings and WASM. */
 export async function ensureDevSeedArtifacts(root: string): Promise<void> {

@@ -3,12 +3,11 @@ export const INLINE_EMAIL_PNG_BASE64 =
   "iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAAAtUlEQVR42u3bsRHDMAzAQDvnSTJOhkrhoTxOVpF3cIovCPTiQTi23NdaaxvMSwtoCqAFNAXQApoCaAFNAbSApgBaQFMALaApgBbQHP8OeJ8f/Yft970evx2/AQXQApoCaAFNAbSApgBaQFMALaApgBbQFEALaAqgBTQF0AKaAmgBTQG0gKYAWkBTAC2gKYAW0BRAC2jGB9g7mBhOAbSApgBaQFMALaApgBbQFEALaAqgBTTjA9xg9gt51WLnMQAAAABJRU5ErkJggg==";
 
 import type { WCompactEmail } from "@cubby/recipebridge/worker";
-
-import forwarded from "../../../../../../../../recipebridge/fixtures/email/forwarded.html?raw";
-import imageOnlyReceipt from "../../../../../../../../recipebridge/fixtures/email/image-only-receipt.html?raw";
-import jsonLdOrder from "../../../../../../../../recipebridge/fixtures/email/json-ld-order.html?raw";
-import newsletter from "../../../../../../../../recipebridge/fixtures/email/newsletter.html?raw";
-import orderTable from "../../../../../../../../recipebridge/fixtures/email/order-table.html?raw";
+import forwarded from "cubby/recipe-fixtures/email/forwarded.html?raw";
+import imageOnlyReceipt from "cubby/recipe-fixtures/email/image-only-receipt.html?raw";
+import jsonLdOrder from "cubby/recipe-fixtures/email/json-ld-order.html?raw";
+import newsletter from "cubby/recipe-fixtures/email/newsletter.html?raw";
+import orderTable from "cubby/recipe-fixtures/email/order-table.html?raw";
 
 /** The synthetic Email HTML recipebridge's own tests read. */
 export const EMAIL_HTML_FIXTURES = {

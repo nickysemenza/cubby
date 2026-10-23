@@ -2,9 +2,9 @@ import { generatedHeader } from "../../artifacts.ts";
 import {
   childTableMetadataSchema,
   type ChildTableDeclaration,
-} from "../../../../../packages/schemas/src/entity-definitions/child-definition.ts";
+} from "@cubby/schemas/compiler/entity-definitions/child-definition";
 import { validateChildTables } from "../child-tables.ts";
-import { retainedTableExports } from "../../../../../packages/schemas/src/child-tables/retained.ts";
+import { retainedTableExports } from "@cubby/schemas/compiler/child-tables/retained";
 import {
   childTableDependencies,
   renderChildTables,
