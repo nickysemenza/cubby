@@ -16,10 +16,12 @@ import {
   expense,
   purchase as purchaseTable,
   spendingCategory,
+  vendor as vendorTable,
 } from "~/server/db/schema";
 import { applyFinanceCategorySuggestion } from "~/server/domains/financial-transaction/repo/finance-suggestion-context";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
+import { loadVendorSuggestionContext } from "~/server/domains/vendor/repo/vendor-suggestion-context";
 import { entityKernelContextSchema } from "~/server/entity-kernel";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import {
@@ -223,6 +225,46 @@ describe("reviewed linked finance category suggestions", () => {
       }),
     );
     expect(await stored()).toBe(f.category.id);
+
+    // Vendor defaults use their own reviewed fingerprint and the same audited
+    // writer; an intervening Vendor edit must invalidate the accepted review.
+    const vendorEvidence = await loadVendorSuggestionContext(
+      ctx.db,
+      f.vendor.shortcode,
+    );
+    const vendorReview = financeCategoryApplyInput.parse({
+      entity: "vendor",
+      entityId: f.vendor.shortcode,
+      fingerprint: vendorEvidence.fingerprint,
+      defaultSpendingCategoryId: f.category.shortcode,
+      spendingProfile: "food_retail",
+    });
+    const vendorDefaults = () =>
+      getDb(ctx.db).query.vendor.findFirst({
+        where: eq(vendorTable.id, f.vendor.id),
+        columns: { defaultSpendingCategoryId: true, spendingProfile: true },
+      });
+    const before = await vendorDefaults();
+    await getDb(ctx.db)
+      .update(vendorTable)
+      .set({ notes: "Synthetic evidence changed after review" })
+      .where(eq(vendorTable.id, f.vendor.id));
+    await expect(
+      applyFinanceCategorySuggestion(f.context, vendorReview),
+    ).rejects.toThrow(/changed.*fresh suggestion/i);
+    expect(await vendorDefaults()).toEqual(before);
+    const freshVendor = await loadVendorSuggestionContext(
+      ctx.db,
+      f.vendor.shortcode,
+    );
+    await applyFinanceCategorySuggestion(f.context, {
+      ...vendorReview,
+      fingerprint: freshVendor.fingerprint,
+    });
+    expect(await vendorDefaults()).toEqual({
+      defaultSpendingCategoryId: f.category.id,
+      spendingProfile: "food_retail",
+    });
   });
   it("keeps mixed roles distinct, excludes retired evidence, and scopes an Expense to its own line", async () => {
     const f = await fixture();

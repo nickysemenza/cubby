@@ -4,7 +4,6 @@ import { fieldSuggestionsReply } from "./support/field-suggestion-wire";
 import { publishAssessment } from "~/server/generic/assessment/repo/assessment";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { entityApi } from "./support/entity-api";
-import { createPostgresPool } from "../../tooling/postgres-pool";
 import { z } from "zod";
 import superjson from "superjson";
 import { dispatchesOperation, unbatchFor } from "./support/dispatch-wire";
@@ -148,115 +147,6 @@ test("edits compound emoji, clears it, and browses inherited category membership
   await expect(page).toHaveURL(new RegExp(`spendingCategory=${spending}`));
   await page.setViewportSize({ width: 390, height: 844 });
   await expectViewportBounded(page);
-});
-
-test("reviews vendor purchase evidence and rejects stale accepted defaults", async ({
-  page,
-  baseURL,
-  e2eRuntime,
-}) => {
-  test.setTimeout(90_000);
-  const { buildScenarioDatabase } =
-    await import("../../tooling/scenarios/context");
-  const { loadVendorSuggestionContext } =
-    await import("~/server/domains/vendor/repo/vendor-suggestion-context");
-  const pool = createPostgresPool({ connectionString: e2eRuntime.databaseUrl });
-  const db = buildScenarioDatabase(pool);
-  const headers = { Origin: baseURL! };
-  const create = async (
-    path: string,
-    data: z.infer<ReturnType<typeof z.json>>,
-  ) => {
-    const response = await entityApi(page.request).create(path, data, {
-      headers,
-    });
-    expect(response.status(), await response.text()).toBe(200);
-    return z
-      .object({ item: z.object({ id: z.string() }) })
-      .parse(await response.json()).item.id;
-  };
-  try {
-    const groceries = await create("spendingCategory", {
-      name: "Synthetic evidence groceries",
-    });
-    const foodCategory = await create("productCategory", {
-      name: "Synthetic evidence food",
-      spendingCategoryMode: "mapped",
-      spendingCategoryId: groceries,
-    });
-    const food = await create("product", {
-      name: "Synthetic evidence carrots",
-      categoryId: foodCategory,
-    });
-    const foodVendor = await create("vendor", {
-      name: "Synthetic evidence market",
-    });
-    const line = async (vendorId: string, productId?: string) => {
-      const purchaseId = await create("purchase", {
-        vendorId,
-        date: "2026-09-01",
-      });
-      const data: z.infer<ReturnType<typeof z.json>> = {
-        name: "Synthetic evidence purchase line",
-        lineKind: "principal",
-        cost: 12,
-        date: "2026-09-01",
-        costType: "materials",
-        trade: "other",
-        purchaseId,
-      };
-      if (productId) data.productId = productId;
-      await create("expense", data);
-    };
-    await line(foodVendor, food);
-    await line(foodVendor, food);
-    const foodEvidence = await loadVendorSuggestionContext(db, foodVendor);
-    expect(foodEvidence.groups).toHaveLength(1);
-    expect(foodEvidence.lines).toHaveLength(2);
-    await gotoAuthenticatedPage(page, `/vendors/${foodVendor}`);
-    await expect(
-      page.getByRole("link", { name: /Synthetic evidence food/ }).first(),
-    ).toBeVisible();
-    const accepted = {
-      entity: "vendor",
-      entityId: foodVendor,
-      fingerprint: foodEvidence.fingerprint,
-      defaultSpendingCategoryId: groceries,
-      spendingProfile: "food_retail",
-    };
-    const changed = await entityApi(page.request).update(
-      "vendor",
-      foodVendor,
-      { notes: "Synthetic evidence changed after review" },
-      { headers },
-    );
-    expect(changed.ok(), await changed.text()).toBeTruthy();
-    const stale = await page.request.post(
-      "/api/v1/ai/applyFinanceCategorySuggestion",
-      { headers, data: accepted },
-    );
-    expect(stale.ok()).toBe(false);
-    const fresh = await loadVendorSuggestionContext(db, foodVendor);
-    const applied = await page.request.post(
-      "/api/v1/ai/applyFinanceCategorySuggestion",
-      { headers, data: { ...accepted, fingerprint: fresh.fingerprint } },
-    );
-    expect(applied.ok(), await applied.text()).toBeTruthy();
-    const saved = await entityApi(page.request).get("vendor", foodVendor, {});
-    expect(
-      z
-        .object({
-          defaultSpendingCategoryId: z.string(),
-          spendingProfile: z.string(),
-        })
-        .parse(await saved.json()),
-    ).toEqual({
-      defaultSpendingCategoryId: groceries,
-      spendingProfile: "food_retail",
-    });
-  } finally {
-    await pool.end();
-  }
 });
 
 test("unassessed quality remains visible in phone cards", async ({

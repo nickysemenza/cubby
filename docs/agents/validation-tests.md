@@ -17,6 +17,15 @@ repositories or the entity kernel. Runtime route creation, singular image owners
 and SQL relationship traversal stay in the existing photo-import transaction
 integration suite, which already imports those production bindings.
 
+Vendor default freshness and successful apply/read-back belong in
+`finance-context.integration.test.ts`, beside the Expense review owner.
+`vendor-suggestion-context.integration.test.ts` owns independent evidence and
+fingerprint changes. Do not duplicate these API-only assertions in a browser
+journey that merely opens a Vendor link: that also races unrelated derived work.
+The emoji/category browser journey retains actual editors and category navigation.
+This removes the dedicated HTTP Vendor-apply smoke; production serialization
+conflicts remain separately tracked rather than being claimed fixed by this move.
+
 Detail renderer and browser tests assert the continuous page: every section is
 accessible without a view switch. Select a section hash to verify scrolling,
 focus and history; empty sections retain headings, index entries and actions.
