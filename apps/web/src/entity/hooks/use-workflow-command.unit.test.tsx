@@ -10,6 +10,7 @@ import type { ReactNode } from "react";
 import superjson from "superjson";
 import { afterEach, expect, it, vi } from "vitest";
 
+import { loadWorkflowCommandOptions } from "~/integrations/tanstack-query/generated/commands.gen";
 import { getContext } from "~/integrations/tanstack-query/root-provider";
 
 import { useWorkflowCommand } from "./use-workflow-command";
@@ -18,6 +19,8 @@ afterEach(() => vi.unstubAllGlobals());
 
 // Losing catalog metadata bypasses invalidation; losing scope overlaps Run writes.
 it("serializes scoped operations while publishing their exact bodies and metadata", async () => {
+  // Load the real command before timing scope scheduling, independently of cold imports.
+  await loadWorkflowCommandOptions("assessment.reviewBatch");
   const gate = Promise.withResolvers<void>();
   const fetchResponse = vi.fn(async () => {
     await gate.promise;
