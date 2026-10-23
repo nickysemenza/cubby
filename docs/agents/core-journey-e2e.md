@@ -22,8 +22,9 @@ screenshots out of fixtures and test reports.
 | Explicit receive and later recount                                  | Wardrobe run verifies that order import leaves stock unchanged; [native fieldwork API E2E](../../apps/web/tests/e2e/native-fieldwork-api.spec.ts) commits and rejects a stale native recount over HTTP                                                                                                                                                                                                                                                                                                                                      | A location with two stock rows for recount                                                     | The wardrobe run creates its room and initial inventory through the entity writer; a photo-to-optional-receive UI check remains                                                               |
 
 The joined Gmail browser import check covers explicit Product conflict review
-and merge. Both booking directions remain covered by
-[`import-order-convergence.spec.ts`](../../apps/web/tests/e2e/import-order-convergence.spec.ts). The prepared Run cannot commit until a Product
+and merge. Sampled source-order permutations remain covered by
+[`import-order-convergence.integration.test.ts`](../../apps/web/src/server/domains/purchase-import/repo/import-order-convergence.integration.test.ts);
+the joined Gmail journey retains reviewed statement booking and receipt reconciliation. The prepared Run cannot commit until a Product
 choice and expense trade are supplied. After approval, durable readback requires
 one live Product with both identifiers, one Purchase and its economic line, and
 no automatic inventory change. Gmail discovery starts from the real app Connect

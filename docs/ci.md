@@ -577,9 +577,13 @@ Individual correctness cases should target single-digit seconds. Report module
 collection and fixture startup separately from scenario execution; splitting a
 long scenario into cases does not establish less total work. Keep the existing
 HTML reports and compare natural CI runs before changing worker counts.
-The development corpus clone/auth/search/image contract remains in
-`tooling/dev/corpus-template.integration.test.ts`; a second full-corpus graph,
-chronology, reseed and native-QA sweep is deliberately omitted. Shared populated
+Development database collection safety remains in
+`tooling/dev/corpus-template.integration.test.ts`: connected databases, explicit
+names, the requested target and reused ownership retain their checks. The cold
+corpus clone/auth/search/image, refresh-intent and checkout-edit-retention case
+is deliberately omitted, alongside the full-corpus graph, chronology, reseed
+and native-QA sweep. These rare development bootstrap contracts no longer have
+dedicated automated coverage. Shared populated
 list capability checks own presentation, with one focused Project column-build
 regression instead of rendering empty tables for every entity. Run slot
 declarations are exercised by the retained import/photo browser workflows,

@@ -437,6 +437,11 @@ requests; do not implement a second filter engine. A capability matrix replaces
 route × viewport × state copies. Native previews retain native layout, media
 queries, scrolling and observers; only jsdom setup supplies browser emulation.
 
+`enum-field-display.unit.test.tsx` owns declared enum labels and tones;
+`navigation-count-badge.unit.test.ts` and dashboard integration own count semantics.
+The enum/color browser journey's repeated route visits and computed CSS comparisons
+are omitted. Exact active-icon and token colors remain a visual-verification gap.
+
 Keep server inclusion/exclusion, full-filter totals and stored effects at the
 real HTTP or PostgreSQL boundary. Keep a small real browser composition suite
 for navigation/history, actual inspectors, grouped/nested loading and retry,
