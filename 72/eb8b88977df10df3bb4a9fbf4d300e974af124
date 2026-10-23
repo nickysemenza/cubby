@@ -1,0 +1,61 @@
+apps/web/drizzle/0020_entity_quality.sql
+  s_8fd3a19aead36e::t_c6cf62b9312443 1-20
+apps/web/drizzle/meta/_journal.json
+  s_8fd3a19aead36e::t_e49894d08f32c9 144-150
+apps/web/src/server/db/entity-quality-schema.ts
+  s_8fd3a19aead36e::t_d948af7f74ea6b 1-73
+apps/web/src/server/db/retained-tables.ts
+  s_8fd3a19aead36e::t_41f703b556bee5 1
+apps/web/src/server/entity-kernel/repo/entity-identity-writer.ts
+  s_8fd3a19aead36e::t_252412108cce54 13-16,22,95-103
+apps/web/src/server/generic/data-quality/repo/builders.ts
+  s_8fd3a19aead36e::t_c847eb17f934b6 1-36
+apps/web/src/server/generic/data-quality/repo/entries.ts
+  s_8fd3a19aead36e::t_1796eac32a3d55 36,40-42,84-97
+apps/web/src/server/generic/data-quality/repo/exceptions.ts
+  s_8fd3a19aead36e::t_51008c67184ca0 29,32,89,92,97-109,132-133
+apps/web/src/server/generic/data-quality/repo/hydrate.ts
+  s_8fd3a19aead36e::t_fdc6b5863a5d0c 37,45,224,234-240,251,253,279,281-313,438-439,445-449,467-470,513,519
+apps/web/src/server/generic/data-quality/repo/refresh.ts
+  s_8fd3a19aead36e::t_b2d6a1b957472d 1-89
+apps/web/src/server/generic/data-quality/repo/registry.ts
+  s_8fd3a19aead36e::t_1e7fa092e28a79 66
+apps/web/src/server/generic/data-quality/repo/sql.ts
+  s_8fd3a19aead36e::t_c1936e6e2d30cd 18,23,33-38,54-78,193,221-222,275-278,346-350,400-403,410-423
+apps/web/src/server/generic/data-quality/repo/stored-registry.ts
+  s_8fd3a19aead36e::t_95f1dcff3e78a7 1-68
+apps/web/src/server/generic/data-quality/repo/stored-sql.ts
+  s_8fd3a19aead36e::t_a8b203436d31a3 1-43
+apps/web/src/server/generic/data-quality/repo/stored.ts
+  s_8fd3a19aead36e::t_7d03e4d1408eb3 1-236
+apps/web/src/server/generic/derived-refresh/repo/process.ts
+  s_8fd3a19aead36e::t_ab01a4bbf7b758 23,119
+apps/web/src/server/generic/list/repo/list-projection.ts
+  s_8fd3a19aead36e::t_db48ce38b69b35 394,463
+apps/web/tooling/typecheck-repositories.ts
+  s_8fd3a19aead36e::t_8f21b9894e752a 18
+docs/agents/domain-rules.md
+  s_8fd3a19aead36e::t_65c047fe3c0eba 284,292-294
+docs/entities.md
+  s_8fd3a19aead36e::t_13b316caf3e5ab 2268,2498-2524
+packages/schemas/src/activity-fields.ts
+  s_8fd3a19aead36e::t_f304613bda74d2 294-302
+packages/schemas/src/data-quality-shape.ts
+  s_8fd3a19aead36e::t_c88d386b507cb3 19-27
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "72eb8b88977df10df3bb4a9fbf4d300e974af124",
+  "prompts": {},
+  "sessions": {
+    "s_8fd3a19aead36e": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a16a6a-52a7-79f0-b86f-568877e9845d",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
