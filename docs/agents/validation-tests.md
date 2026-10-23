@@ -9,7 +9,9 @@ notifications available to the next test.
 Keep pure logic imported directly by standalone Node subprocesses in alias-free
 `.ts` files. Vitest uses the application's configured aliases; server composition
 keeps the declared `~/server/` boundary. Temporary subprocess workspaces declare
-their module type explicitly, matching the consumer.
+their module type explicitly, matching the consumer. Build-provenance
+fixtures clone their immutable synthetic Git template with Git rather than
+recursively copying `.git` as ordinary fixture files.
 
 Photo-import route binding and source-admission unit cases import
 `photo-import-route-bindings.ts`, which evaluates contracts without loading
@@ -35,6 +37,16 @@ Connected-record Plant/Project/Task and both purchase paths use one fixture
 graph with one shared brand. Booking-review prerequisites settle once before the
 first browser action; its reimbursement credit is still created after booking.
 Keep all route, stale-approval, replay and signed-money assertions.
+
+Reviewed booking corrections belong in the existing PostgreSQL category/refund
+owner: reimbursement reattachment preserves category and net money, transfer
+conversion retires its generated Expense and exposes non-booking coverage, and
+an edited Expense prevents conversion without changing its money or transfer.
+The removed API-only browser case exercised no UI. The financial-booking-review
+browser journey retains stale approval, replay and reimbursement interactions;
+finance-evidence-journey retains source-record navigation and provider immutability.
+Dedicated HTTP routing for the two correction operations is no longer sampled
+by that case; generic operation transport and direct correction outcomes remain.
 
 Detail renderer and browser tests assert the continuous page: every section is
 accessible without a view switch. Select a section hash to verify scrolling,

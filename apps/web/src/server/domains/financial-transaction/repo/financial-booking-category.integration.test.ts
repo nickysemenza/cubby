@@ -1,5 +1,6 @@
 import { financialBookingInput } from "@cubby/schemas/financial-booking";
 import { eq } from "drizzle-orm";
+import { buildEntity } from "tooling/factories/build";
 import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
@@ -11,6 +12,8 @@ import {
   financialTransactionAllocation,
   purchase as purchaseTable,
 } from "~/server/db/schema";
+import { updateExpense } from "~/server/domains/expense/repo/crud";
+import { createLedgerTransfer } from "~/server/domains/ledger-transfer/repo";
 import { getPurchaseByID } from "~/server/domains/purchase/repo/purchase";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
@@ -29,6 +32,7 @@ import {
   previewFinancialBookingCorrection,
   commitFinancialBookingCorrection,
 } from "./financial-booking-correction";
+import { financialTransactionRepository } from "./financial-transaction";
 
 // SQL-backed approval regressions: displayed defaults must not become overrides, and bank
 // credits must not silently reuse original charges, discounts, or spent refunds.
@@ -293,9 +297,11 @@ describe("reviewed booking category and refund capacity", () => {
     expect(storedLine?.spendingCategoryId).toBe(otherCategory.id);
     expect(storedPurchase?.spendingCategoryId).toBe(otherCategory.id);
   });
-  it("reattaches a reimbursement to an unclassified Purchase without erasing its explicit line category", async () => {
-    const { category, vendor, purchase, transaction } = await fixture();
-    const source = await transaction(-15);
+  it("reattaches reimbursement, preserves categories and money, and converts only unchanged bookings", async () => {
+    const { category, vendor, purchase, transaction, line, owner } =
+      await fixture();
+    await line(120);
+    const source = await transaction(-40);
     const booked = await commitFinancialBooking(
       ctx.db,
       await previewFinancialBooking(
@@ -321,6 +327,89 @@ describe("reviewed booking category and refund capacity", () => {
     });
     expect(storedLine?.purchaseId).toBe(purchase.id);
     expect(storedLine?.spendingCategoryId).toBe(category.id);
+    expect(await getPurchaseByID(ctx.db, purchase.id)).toMatchObject({
+      expenseTotal: 80,
+    });
+
+    const recipient = await createRepoEntity(ctx, "ledgerParty", {
+      name: "Synthetic correction recipient",
+      kind: "guest",
+    });
+    const transferReview = async (amount: number) => {
+      const source = await transaction(amount);
+      const booking = await commitFinancialBooking(
+        ctx.db,
+        await previewFinancialBooking(
+          ctx.db,
+          financialBookingInput.parse({
+            transactionId: source.output.id,
+            vendorId: vendor.shortcode,
+            spendingCategoryId: category.shortcode,
+            economicRole: "vendor",
+          }),
+        ),
+        ctx.actor,
+      );
+      const expenseId = booking.expenseId;
+      if (!expenseId) throw new Error("Expected generated booking Expense");
+      const transfer = await createLedgerTransfer(
+        ctx.db,
+        buildEntity("ledgerTransfer", {
+          fromPartyId: owner.output.id,
+          toPartyId: recipient.output.id,
+          amount,
+          date: "2026-09-10",
+        }),
+        ctx.actor,
+      );
+      const review = await previewFinancialBookingCorrection(ctx.db, {
+        transactionId: source.output.id,
+        action: { kind: "convert_to_transfer", transferId: transfer.output.id },
+      });
+      return { source, expenseId, transfer, review };
+    };
+    const converted = await transferReview(20);
+    await commitFinancialBookingCorrection(ctx.db, converted.review, ctx.actor);
+    expect(
+      await financialTransactionRepository.repository.get(
+        kernelCtx(ctx),
+        converted.source.output.id,
+      ),
+    ).toMatchObject({
+      kind: "account_transfer",
+      ledgerTransferId: converted.transfer.output.id,
+      coverage: { booking: "not_applicable" },
+    });
+    expect(
+      await getDb(ctx.db).query.expense.findFirst({
+        where: eq(expense.shortcode, converted.expenseId),
+      }),
+    ).toMatchObject({ deletedAt: expect.any(Date) });
+
+    const stale = await transferReview(25);
+    await updateExpense(
+      ctx.db,
+      stale.expenseId,
+      { notes: "Synthetic reviewed note change" },
+      ctx.actor,
+    );
+    await expect(
+      commitFinancialBookingCorrection(ctx.db, stale.review, ctx.actor),
+    ).rejects.toThrow(/original booking was edited/);
+    expect(
+      await getDb(ctx.db).query.expense.findFirst({
+        where: eq(expense.shortcode, stale.expenseId),
+      }),
+    ).toMatchObject({
+      deletedAt: null,
+      cost: 25,
+      notes: "Synthetic reviewed note change",
+    });
+    expect(
+      await getDb(ctx.db).query.financialTransaction.findFirst({
+        where: eq(financialTransaction.id, stale.source.entityId),
+      }),
+    ).toMatchObject({ kind: "purchase", ledgerTransferId: null });
   });
   it("refuses first approval when the classification catalog changes after review", async () => {
     const { purchase, transaction } = await fixture();
