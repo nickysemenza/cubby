@@ -77,8 +77,14 @@ test("Product identifier edits preserve additions and apply explicit identity ac
   ]);
 
   await edit.click();
-  await dialog
-    .getByRole("button", { name: "Remove External IDs 2", exact: true })
+  // A combined Add/Replace need not preserve saved-row order.
+  await identifiers
+    .locator("div")
+    .filter({ has: page.getByText("C", { exact: true }) })
+    .filter({
+      has: page.getByRole("button", { name: /^Remove External IDs \d+$/ }),
+    })
+    .getByRole("button", { name: /^Remove External IDs \d+$/ })
     .click();
   await save();
   expect(await stored()).toEqual([{ code: "B", primary: true }]);
