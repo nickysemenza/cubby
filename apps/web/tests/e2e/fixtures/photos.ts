@@ -26,10 +26,7 @@ import { requireActor } from "~/server/http/request-context";
 import { createTestRequestContext } from "~/server/testing/request-context";
 import { startPhotoInventoryRun } from "~/server/domains/purchase-import/repo/run-service";
 import {
-  seedProductCategoryPrerequisite,
-  seedLocationPrerequisite,
-} from "./catalog";
-import {
+  createFixtureGraph,
   getFixtureDb,
   fixtureUserId,
   ensureMemberParty,
@@ -428,10 +425,25 @@ export async function seedPhotoGroupReviewRun(
 
   await ensureMemberParty(page, name);
 
-  const location = await seedLocationPrerequisite(page, `${name} location`);
-  const category = await seedProductCategoryPrerequisite(page, {
-    name: `${name} apparel`,
-  });
+  const { location, category } = await createFixtureGraph(
+    page,
+    async (create) => {
+      const location = await create("location", {
+        name: `${name} location`,
+        type: "room",
+        parentId: null,
+      });
+      const category = await create("productCategory", {
+        name: `${name} apparel`,
+        aliases: [],
+        description: null,
+        parentId: null,
+        sortOrder: 0,
+        feature: null,
+      });
+      return { location, category };
+    },
+  );
 
   const seedRunImage = async (label: "shirt" | "label" | "boots") => {
     const bytes = readFileSync(
@@ -462,9 +474,11 @@ export async function seedPhotoGroupReviewRun(
       shortcode: parseShortcodeFor("image", row.shortcode),
     };
   };
-  const itemImage = await seedRunImage("shirt");
-  const labelImage = await seedRunImage("label");
-  const soloImage = await seedRunImage("boots");
+  const [itemImage, labelImage, soloImage] = await Promise.all([
+    seedRunImage("shirt"),
+    seedRunImage("label"),
+    seedRunImage("boots"),
+  ]);
 
   const run = await startPhotoInventoryRun(db, { actorUserId: userId });
 

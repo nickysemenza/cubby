@@ -28,6 +28,11 @@ repositories or the entity kernel. Runtime route creation, singular image owners
 and SQL relationship traversal stay in the existing photo-import transaction
 integration suite, which already imports those production bindings.
 
+Photo-group review prerequisites create their Location and Product category in one
+fixture graph. Independent shirt, label and boots uploads run together; keep their
+ordered result tuple and wait for every verified Image before linking the Run's
+ordered roster. This batches setup without changing photo groups or assertions.
+
 The saved-photo evidence browser journey keeps attach/create distinctions, a real
 saved cover that decodes, native label-to-name editing and one phone overflow
 check. `photo-run-detail.preview.test.tsx` owns native review presentation and
