@@ -51,6 +51,7 @@ import {
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import { buildPartialUpdateValues } from "~/server/db/helpers";
 import { notDeleted, unwrapDb, withTransaction } from "~/server/db/helpers";
+import type { ListReadIntent } from "~/server/db/helpers/query";
 import { product, productCategory } from "~/server/db/schema";
 import { resolveStockTrackingField } from "~/server/domains/inventory/repo/stock-tracking";
 import { categoryMappingSql } from "~/server/domains/product-category/repo/category-connections";
@@ -442,10 +443,11 @@ export const listProductCategoriesRead = (
   sorts: SortParams[],
   pagination: PaginationParams,
   projection: ListProjection = { kind: "full" },
+  readIntent: ListReadIntent = "page",
 ) =>
   scaffold.read(
     db,
-    { filters, sorts, pagination, projection },
+    { filters, sorts, pagination, projection, readIntent },
     {
       where: buildProductCategoryWhere(filters),
       read: categoryRead,

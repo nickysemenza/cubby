@@ -37,8 +37,22 @@ export const purchaseRepository = defineRepository("purchase", {
   },
   get: onDb(getPurchaseByShortcode),
   list: listOn(purchaseList),
-  listRead: (ctx, filters, sorts, pagination, projection) =>
-    purchaseListRead(ctx.db, filters, sorts, pagination, "page", projection),
+  listRead: (
+    ctx,
+    filters,
+    sorts,
+    pagination,
+    projection,
+    readIntent = "page",
+  ) =>
+    purchaseListRead(
+      ctx.db,
+      filters,
+      sorts,
+      pagination,
+      readIntent,
+      projection,
+    ),
   listSummary: (ctx, filters) => purchaseListSummary(ctx.db, filters),
   create: asActor(createPurchase),
   update: (ctx, id, data) => updatePurchase(ctx.db, id, data, ctx.actorContext),

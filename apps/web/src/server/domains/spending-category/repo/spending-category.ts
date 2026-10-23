@@ -30,6 +30,7 @@ import {
   unwrapDb,
   withTransaction,
 } from "~/server/db/helpers";
+import type { ListReadIntent } from "~/server/db/helpers/query";
 import { productCategory } from "~/server/db/schema";
 import { spendingCategory } from "~/server/db/schema";
 import { effectiveExpenseSpendingCategorySql } from "~/server/domains/expense/repo/expense-category-resolution";
@@ -195,10 +196,11 @@ const listRead = (
   sorts: SortParams[],
   pagination: PaginationParams,
   projection: ListProjection = { kind: "full" },
+  readIntent: ListReadIntent = "page",
 ) =>
   scaffold.read(
     db,
-    { filters, sorts, pagination, projection },
+    { filters, sorts, pagination, projection, readIntent },
     { read: categoryRead },
   );
 const list = completeListReader(spendingCategoryOut, listRead);

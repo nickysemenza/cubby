@@ -8,6 +8,7 @@ import type { ListReadRow } from "~/entity/model/list-read-fields";
 import type { UpcLookupService } from "~/server/clients/upc";
 import type { USDAClient } from "~/server/clients/usda";
 import type { Database } from "~/server/db";
+import type { ListReadIntent } from "~/server/db/helpers/query";
 import type { ExpenseLineRoleClassifier } from "~/server/domains/expense/repo/line-role-classifier";
 import type { MealMutationHooks } from "~/server/domains/meal/repo/crud";
 import type { RecipeCostingService } from "~/server/domains/recipe/repo/recipe-costing";
@@ -167,6 +168,7 @@ export type EntityRepository<
     sorts: SortParams[],
     pagination: PaginationParams,
     projection: ListProjection,
+    readIntent?: ListReadIntent,
   ): Promise<ListReadPage<ListReadRow>>;
   listSummary?(
     ctx: EntityKernelContext,

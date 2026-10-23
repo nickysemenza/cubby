@@ -9,6 +9,7 @@ import { and, eq, inArray } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { notDeleted, unwrapDb } from "~/server/db/helpers";
+import type { ListReadIntent } from "~/server/db/helpers/query";
 import { shipment, purchase, vendor } from "~/server/db/schema";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import {
@@ -92,10 +93,11 @@ export const listShipmentsRead = (
   sorts: SortParams[],
   pagination: PaginationParams,
   projection: ListProjection = { kind: "full" },
+  readIntent: ListReadIntent = "page",
 ) =>
   scaffold.read(
     db,
-    { filters, sorts, pagination, projection },
+    { filters, sorts, pagination, projection, readIntent },
     { read: shipmentRead },
   );
 
@@ -134,5 +136,14 @@ export const shipmentRepository = defineRepository("shipment", {
     sorts: SortParams[],
     pagination: PaginationParams,
     projection: ListProjection,
-  ) => listShipmentsRead(ctx.db, filters, sorts, pagination, projection),
+    readIntent: ListReadIntent = "page",
+  ) =>
+    listShipmentsRead(
+      ctx.db,
+      filters,
+      sorts,
+      pagination,
+      projection,
+      readIntent,
+    ),
 });

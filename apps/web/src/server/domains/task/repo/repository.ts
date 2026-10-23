@@ -23,8 +23,14 @@ export const taskRepository = defineRepository("task", {
   get: onDb(getTaskByShortcode),
   list: (ctx, filters, sorts, pagination) =>
     taskList(ctx.db, filters, sorts, pagination, "page"),
-  listRead: (ctx, filters, sorts, pagination, projection) =>
-    taskListRead(ctx.db, filters, sorts, pagination, projection, "page"),
+  listRead: (
+    ctx,
+    filters,
+    sorts,
+    pagination,
+    projection,
+    readIntent = "page",
+  ) => taskListRead(ctx.db, filters, sorts, pagination, projection, readIntent),
   create: asActor(createTask),
   createRead: (ctx, data, fields) =>
     createTaskRead(ctx.db, data, ctx.actorContext, fields),

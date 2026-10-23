@@ -389,6 +389,7 @@ export function defineProgressiveListOperations<
             [],
             { pageIndex: 0, pageSize: 1 },
             { kind: "base" },
+            "count",
           )
         ).count;
       const [total, ...counts] = await withTrace(

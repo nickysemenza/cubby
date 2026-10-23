@@ -29,6 +29,7 @@ import {
   unwrapDb,
   withTransaction,
 } from "~/server/db/helpers";
+import type { ListReadIntent } from "~/server/db/helpers/query";
 import {
   financialAccount,
   financialTransaction,
@@ -648,10 +649,11 @@ export const listLedgerTransfersRead = async (
   sorts: SortParams[],
   pagination: PaginationParams,
   projection: ListProjection = { kind: "full" },
+  readIntent: ListReadIntent = "page",
 ) =>
   ledgerTransferScaffold.read(
     db,
-    { filters, sorts, pagination, projection },
+    { filters, sorts, pagination, projection, readIntent },
     {
       where: buildLedgerTransferWhere(filters),
       select: (page) =>

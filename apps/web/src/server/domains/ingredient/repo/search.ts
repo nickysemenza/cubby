@@ -665,13 +665,14 @@ export const ingredientListRead = async (
   sorts: SortParams[],
   pagination: PaginationParams,
   projection: ListProjection,
+  readIntent: ListReadIntent = "page",
 ) => {
   const page = await ingredientListImpl(
     db,
     filters,
     sorts,
     pagination,
-    "page",
+    readIntent,
     projection,
   );
   if (!("count" in page)) throw new Error("Wrong ingredient list read intent");

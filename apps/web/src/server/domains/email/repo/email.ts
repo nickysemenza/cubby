@@ -19,6 +19,7 @@ import { and, desc, eq, inArray, ne, sql } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { notDeleted, unwrapDb } from "~/server/db/helpers";
+import type { ListReadIntent } from "~/server/db/helpers/query";
 import {
   expense,
   product,
@@ -510,8 +511,9 @@ const emailListRead =
     sorts: SortParams[],
     pagination: PaginationParams,
     projection: ListProjection = { kind: "full" },
+    readIntent: ListReadIntent = "page",
   ) => {
-    const request = { filters, sorts, pagination, projection };
+    const request = { filters, sorts, pagination, projection, readIntent };
     const context = await scaffold.context(db, request);
     const scope = context.has(emailScope)
       ? context.get(emailScope)
@@ -568,6 +570,7 @@ export const emailRepository = defineRepository("email", {
     sorts: SortParams[],
     pagination: PaginationParams,
     projection: ListProjection,
+    readIntent: ListReadIntent = "page",
   ) =>
     emailListRead(ctx.actorContext)(
       ctx.db,
@@ -575,5 +578,6 @@ export const emailRepository = defineRepository("email", {
       sorts,
       pagination,
       projection,
+      readIntent,
     ),
 });

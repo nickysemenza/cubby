@@ -1090,13 +1090,20 @@ export const financialTransactionRepository = defineRepository(
     lifecycle: { delete: FINANCIAL_TRANSACTION_DELETE_EDGE_POLICY },
     get: onDb(getFinancialTransactionByShortcode),
     list: listOn(listFinancialTransactions),
-    listRead: (ctx, filters, sorts, pagination, projection) =>
+    listRead: (
+      ctx,
+      filters,
+      sorts,
+      pagination,
+      projection,
+      readIntent = "page",
+    ) =>
       listFinancialTransactionsRead(
         ctx.db,
         filters,
         sorts,
         pagination,
-        "page",
+        readIntent,
         projection,
       ),
     create: asActor(createFinancialTransaction),

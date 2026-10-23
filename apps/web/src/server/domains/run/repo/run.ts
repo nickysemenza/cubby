@@ -17,6 +17,7 @@ import {
   unwrapDb,
   withTransactionDatabase,
 } from "~/server/db/helpers";
+import type { ListReadIntent } from "~/server/db/helpers/query";
 import { run as runTable } from "~/server/db/schema";
 import {
   defineRepository,
@@ -156,10 +157,11 @@ export const listRunsRead = (
   sorts: SortParams[],
   pagination: PaginationParams,
   projection: ListProjection = { kind: "full" },
+  readIntent: ListReadIntent = "page",
 ) =>
   scaffold.read(
     db,
-    { filters, sorts, pagination, projection },
+    { filters, sorts, pagination, projection, readIntent },
     { read: runRead },
   );
 export const listRuns = completeListReader(runOut, listRunsRead);

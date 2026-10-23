@@ -57,6 +57,7 @@ import {
   updateLiveAndReturn,
   withTransactionOn,
 } from "~/server/db/helpers";
+import type { ListReadIntent } from "~/server/db/helpers/query";
 import { repositoryQueries } from "~/server/db/repository-access.boundary";
 import type {
   EntityKernelContext,
@@ -395,7 +396,7 @@ export const listOn =
   ): TResult =>
     fn(ctx.db, filters, sorts, pagination);
 
-/** A staged read receives projection, never anything as its `readIntent`. */
+/** Projection controls row shape; count intent retains the same filter population. */
 export const listReadOn =
   <TFilters, TResult>(
     fn: (
@@ -404,6 +405,7 @@ export const listReadOn =
       sorts: SortParams[],
       pagination: PaginationParams,
       projection: ListProjection,
+      readIntent?: ListReadIntent,
     ) => TResult,
   ) =>
   (
@@ -412,8 +414,9 @@ export const listReadOn =
     sorts: SortParams[],
     pagination: PaginationParams,
     projection: ListProjection,
+    readIntent: ListReadIntent = "page",
   ): TResult =>
-    fn(ctx.db, filters, sorts, pagination, projection);
+    fn(ctx.db, filters, sorts, pagination, projection, readIntent);
 
 /** A `(db, …args, actor)` repository write as a kernel method `(ctx, …args)`. */
 export const asActor = <

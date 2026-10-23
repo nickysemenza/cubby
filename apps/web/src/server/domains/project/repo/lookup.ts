@@ -268,13 +268,14 @@ export const buildProjectListQuery = async (
   sorts: SortParams[],
   attentionItems?: readonly ProjectAttentionItem[],
   preparedTree?: ProjectTree,
+  readIntent: ListReadIntent = "page",
 ) => {
   // `getEntityCounts` calls this with `{}` inside a function whose design is
   // one round trip, so the tree and attention items load only when a filter,
   // sort or group asks; rows hydrate apart from this context.
   const context = await projectScaffold.context(
     db,
-    { filters, sorts, projection: { kind: "base" } },
+    { filters, sorts, projection: { kind: "base" }, readIntent },
     attentionItems === undefined ? [] : [[projectAttention, attentionItems]],
   );
   const loadedTree = context.has(projectCompletion)
@@ -282,7 +283,10 @@ export const buildProjectListQuery = async (
     : preparedTree;
   const whereClause = projectScaffold.where(filters, { context });
 
-  const orderByArray = projectScaffold.orderBy(sorts, {}, filters, context);
+  const orderByArray =
+    readIntent === "count"
+      ? []
+      : projectScaffold.orderBy(sorts, {}, filters, context);
 
   return { tree: loadedTree, whereClause, orderByArray, context };
 };
@@ -348,6 +352,7 @@ export const projectListRead = async (
       sorts,
       prepared?.attentionItems,
       prepared?.tree,
+      readIntent,
     );
   // Both start beside the page read rather than after it.
   const sumsRead =

@@ -57,6 +57,7 @@ import {
   updateAndReturn,
   withTransaction,
 } from "~/server/db/helpers";
+import type { ListReadIntent } from "~/server/db/helpers/query";
 import {
   cookbook,
   entityAttachment,
@@ -409,10 +410,11 @@ export const cookbookListRead = (
   sorts: SortParams[],
   pagination: PaginationParams,
   projection: ListProjection,
+  readIntent: ListReadIntent = "page",
 ) =>
   cookbookScaffold.read(
     db,
-    { filters, sorts, pagination, projection },
+    { filters, sorts, pagination, projection, readIntent },
     {
       select: (page) => selectCookbookSummaryRows(db, page),
       read: cookbookRead(db),

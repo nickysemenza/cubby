@@ -19,6 +19,7 @@ import { z } from "zod";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { sourceTransactionSettlements } from "~/server/db/computed/source-transaction-settlement-sql";
 import { notDeleted, unwrapDb, withTransactionOn } from "~/server/db/helpers";
+import type { ListReadIntent } from "~/server/db/helpers/query";
 import { sourceTransactionRecord, transactionImport } from "~/server/db/schema";
 import { runStepInputListRows } from "~/server/domains/run/repo/run-step-input";
 import {
@@ -278,10 +279,11 @@ export const listSourceTransactionRecordsRead = (
   sorts: SortParams[],
   pagination: PaginationParams,
   projection: ListProjection = { kind: "full" },
+  readIntent: ListReadIntent = "page",
 ) =>
   sourceScaffold.read(
     db,
-    { filters, sorts, pagination, projection },
+    { filters, sorts, pagination, projection, readIntent },
     {
       read: sourceRead,
       select: async (page) => {
@@ -311,10 +313,11 @@ export const listTransactionImportsRead = (
   sorts: SortParams[],
   pagination: PaginationParams,
   projection: ListProjection = { kind: "full" },
+  readIntent: ListReadIntent = "page",
 ) =>
   importScaffold.read(
     db,
-    { filters, sorts, pagination, projection },
+    { filters, sorts, pagination, projection, readIntent },
     { read: importRead },
   );
 const listImports = completeListReader(
@@ -500,6 +503,7 @@ export const sourceTransactionRecordRepository = defineRepository(
       sorts: SortParams[],
       pagination: PaginationParams,
       projection: ListProjection,
+      readIntent: ListReadIntent = "page",
     ) =>
       listSourceTransactionRecordsRead(
         ctx.db,
@@ -507,6 +511,7 @@ export const sourceTransactionRecordRepository = defineRepository(
         sorts,
         pagination,
         projection,
+        readIntent,
       ),
     update: asActor(updateSource),
   },
@@ -528,6 +533,7 @@ export const transactionImportRepository = defineRepository(
       sorts: SortParams[],
       pagination: PaginationParams,
       projection: ListProjection,
+      readIntent: ListReadIntent = "page",
     ) =>
       listTransactionImportsRead(
         ctx.db,
@@ -535,6 +541,7 @@ export const transactionImportRepository = defineRepository(
         sorts,
         pagination,
         projection,
+        readIntent,
       ),
   },
 );

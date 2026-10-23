@@ -227,6 +227,10 @@ missing IDs and failed reads; cached matches remain visible during refresh error
 Progressive row views preserve the data array and unaffected record objects
 until their immutable base pages or enrichment patches change; loading and
 summary-only updates must not rebuild the table dataset.
+Saved-view counts forward count intent through the canonical repository reader.
+They retain the same filters, prepared membership facts and custom counts as the
+list, while skipping row selection, presentation bindings, ordering and group
+summaries. Filter-dependent preparation remains necessary for exact totals.
 For automatic suggestion recomputation, prioritize visible rows plus a bounded
 prefetch buffer, reuse current saved answers, and batch only missing or
 invalidated decisions after checking their individual caches. Virtualized
