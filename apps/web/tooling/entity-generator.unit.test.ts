@@ -1899,8 +1899,6 @@ describe("typed entity compiler", () => {
       compile(fields(["status", "dueOn"]))[0]?.inspector.detail.hero,
     ).toEqual({
       chip: null,
-      stats: [],
-      chart: null,
       breadcrumb: null,
       when: null,
       images: false,
