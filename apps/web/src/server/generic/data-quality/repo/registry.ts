@@ -34,20 +34,6 @@ export type QualityReadContext =
       ) => SQL | undefined;
     };
 
-/**
- * The bound bulk relation's precomputed `column` (`filterRead`/`derivedRead`
- * under `derivedAlias`), or undefined when the statement bound none and the
- * check keeps its record-level SQL. Every check reads bulk evidence here so
- * the relation is read once per statement, never re-derived per check.
- */
-export const qualityReadColumn = (
-  context: QualityReadContext | undefined,
-  column: string,
-): SQL | undefined =>
-  context?.derivedAlias
-    ? sql`${sql.identifier(context.derivedAlias)}.${sql.identifier(column)}`
-    : undefined;
-
 export interface CheckBinding<T extends ScoredTable> {
   /** Whether the check applies to this row at all; omitted = always. */
   expected?(t: T, context?: QualityReadContext): SQL;
