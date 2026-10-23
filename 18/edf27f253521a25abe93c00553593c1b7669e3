@@ -1,0 +1,33 @@
+apps/web/src/server/generic/data-quality/repo/checks/ledger-party.ts
+  s_308eb1d4a9403a::t_62448b2a5bffce 1,3-8,10-11,13-15,17,20-21,23-30,33-65
+apps/web/src/server/generic/data-quality/repo/checks/ledger-transfer.ts
+  s_308eb1d4a9403a::t_f8774faaa68b0c 1,3-11,13-14,16-18,20,23-24,26-29,32-64
+apps/web/src/server/generic/data-quality/repo/finance-checks.integration.test.ts
+  s_308eb1d4a9403a::t_524e3e3b2088dd 582-587,622-627,709-714
+docs/entities.md
+  s_0314190f88aa33::t_758ecaaa312642 2507-2508,2515-2519
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "18edf27f253521a25abe93c00553593c1b7669e3",
+  "prompts": {},
+  "sessions": {
+    "s_0314190f88aa33": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "3bb663cd-9908-47ed-9085-a69f6f6a79dc",
+        "model": "claude-fable-5-1"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    },
+    "s_308eb1d4a9403a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a16a89-9819-73a2-bc4c-b4a703c65c22",
+        "model": "gpt-6-luna"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
