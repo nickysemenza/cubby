@@ -13,6 +13,49 @@ const rows = [
 // enrichment must not hide base rows or invent healthy/zero values. New pages
 // and newly visible groups must reuse completed groups rather than reread them.
 describe("progressive list lifecycle", () => {
+  it("retains unchanged row views while exposing fresh base and enrichment values", async () => {
+    const session = new ProgressiveListSession<(typeof rows)[number]>(() => {});
+    session.setPages([rows]);
+    const initial = session.rows();
+    session.setPages([rows]);
+    expect(session.rows()).toBe(initial);
+    const response = Promise.withResolvers<{
+      groups: {
+        id: "derived";
+        state: "ready";
+        data: { id: string; count: number }[];
+      }[];
+      missingIds: string[];
+    }>();
+    const loading = session.load(
+      [rows[0]!],
+      ["derived"],
+      async () => response.promise,
+    );
+    expect(session.rows()).toBe(initial);
+    response.resolve({
+      groups: [
+        { id: "derived", state: "ready", data: [{ id: "first", count: 1 }] },
+      ],
+      missingIds: [],
+    });
+    await loading;
+    const enriched = session.rows();
+    expect(enriched[0]).toEqual({ ...rows[0], count: 1 });
+    expect(enriched[0]).not.toBe(initial[0]);
+    expect(enriched[1]).toBe(initial[1]);
+    expect(session.rows()).toBe(enriched);
+    session.setPages([[{ ...rows[0]!, name: "Refreshed" }, rows[1]!]]);
+    expect(session.rows()[0]).toEqual({
+      id: "first",
+      name: "Refreshed",
+      count: 1,
+    });
+    expect(session.rows()[1]).toBe(enriched[1]);
+    session.reset("fresh-query");
+    expect(session.rows()[0]).toEqual({ id: "first", name: "Refreshed" });
+  });
+
   it("keeps base order and isolates group errors while excluding missing ids", async () => {
     const session = new ProgressiveListSession(() => {});
     session.reset("initial");

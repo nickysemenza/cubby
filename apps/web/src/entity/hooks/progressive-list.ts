@@ -39,6 +39,11 @@ export class ProgressiveListSession<T extends { id: string } = { id: string }> {
   private patches = new Map<string, ListReadRow>();
   private states = new Map<string, ListGroupState>();
   private retained = new Set<string>();
+  private mergedRows: T[] | undefined;
+  private rowViews = new Map<
+    string,
+    { base: T; patch: ListReadRow | undefined; value: T }
+  >();
   constructor(private readonly publish: () => void) {}
 
   reset(generation: string) {
@@ -48,6 +53,8 @@ export class ProgressiveListSession<T extends { id: string } = { id: string }> {
     this.patches.clear();
     this.states.clear();
     this.retained.clear();
+    this.rowViews.clear();
+    this.mergedRows = undefined;
   }
   /** Same-scope refreshes retain completed values, never in-flight reads. */
   retain(
@@ -55,6 +62,8 @@ export class ProgressiveListSession<T extends { id: string } = { id: string }> {
     deferredFields: readonly string[] = [],
   ) {
     this.patches = new Map(previous.patches);
+    this.rowViews.clear();
+    this.mergedRows = undefined;
     // A confirmed full-record read can publish deferred values into base rows.
     // Carry those forward before a later base response omits deferred keys.
     for (const page of previous.pages) {
@@ -87,7 +96,13 @@ export class ProgressiveListSession<T extends { id: string } = { id: string }> {
       if (state.state === "loading") this.states.set(key, { state: "pending" });
   }
   setPages(pages: readonly (readonly T[])[]) {
+    if (
+      pages.length === this.pages.length &&
+      pages.every((page, index) => page === this.pages[index])
+    )
+      return;
     this.pages = pages;
+    this.mergedRows = undefined;
   }
   state(id: string, group: ListReadGroup): ListGroupState {
     const key = `${id}:${group}`;
@@ -98,16 +113,27 @@ export class ProgressiveListSession<T extends { id: string } = { id: string }> {
       : state;
   }
   rows(): T[] {
+    if (this.mergedRows) return this.mergedRows;
     const seen = new Set<string>();
-    return this.pages.flatMap((page) =>
+    const views: typeof this.rowViews = new Map();
+    this.mergedRows = this.pages.flatMap((page) =>
       page.flatMap((row) => {
         if (seen.has(row.id)) return [];
         seen.add(row.id);
         // Confirmed core fields must win over retained enrichment from an
         // earlier read. Deferred keys absent from the base still stay visible.
-        return [{ ...this.patches.get(row.id), ...row }];
+        const patch = this.patches.get(row.id);
+        const prior = this.rowViews.get(row.id);
+        const value =
+          prior?.base === row && prior.patch === patch
+            ? prior.value
+            : { ...patch, ...row };
+        views.set(row.id, { base: row, patch, value });
+        return [value];
       }),
     );
+    this.rowViews = views;
+    return this.mergedRows;
   }
   async load(
     rows: readonly T[],
@@ -197,6 +223,7 @@ export class ProgressiveListSession<T extends { id: string } = { id: string }> {
           ...this.patches.get(identity.data.id),
           ...identity.data,
         });
+        this.mergedRows = undefined;
       }
     }
   }
