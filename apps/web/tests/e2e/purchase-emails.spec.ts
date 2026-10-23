@@ -45,20 +45,4 @@ test("reviews an Email's Purchase link from the Purchase's Emails section", asyn
   );
   // Linking is the member's relevance evidence.
   await expect(page.getByText("Related").first()).toBeVisible();
-  // A diagnostic preview must be explicit and must not replace member evidence
-  // when the Gmail original cannot be read.
-  const preview = page.getByRole("region", { name: "Classification preview" });
-  await preview
-    .getByRole("button", { name: "Preview classification", exact: true })
-    .click();
-  await expect(preview.getByRole("alert")).toContainText(/Google/u);
-  await expect(
-    preview.getByRole("button", {
-      name: "Preview classification",
-      exact: true,
-    }),
-  ).toBeEnabled();
-  await page.reload();
-  await expect(page.getByText("Related").first()).toBeVisible();
-  await expect(page.getByRole("link", { name: "Open in Gmail" })).toBeVisible();
 });

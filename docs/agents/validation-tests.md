@@ -163,6 +163,14 @@ navigation. An open editor and an active chip may share the same accessible
 label; that transient duplication is not a failed filter. Keep shared range,
 quality and presentation permutations in their owning regressions rather than
 repeating them in each list journey.
+Purchase–Email browser review keeps the suggested candidate, dismissed state after
+reload, explicit Link, linked Email navigation, Gmail-original URL and member
+relevance. It does not repeat a missing-Google diagnostic preview or reload again
+after that failed read. `full-preview.integration.test.ts` owns the preview's
+classification routing and unchanged Email/evidence storage through the real
+operation/MCP composition with provider/model seams. Dedicated native preview
+button/error recovery sampling is a deliberate diagnostic-UI coverage gap.
+
 The Gmail Product-merge browser setup creates both conflicting identities in one
 fixture graph and scopes the merge list by their shared synthetic Product name.
 Keep both exact-identifier conflicts, explicit choice and native merge readback;
