@@ -29,6 +29,7 @@ const scaffold = listScaffold("shipment", shipment);
 export const buildShipmentWhere = (filters: ShipmentFilters = {}) =>
   scaffold.where(filters);
 const shipmentRead = {
+  media: true,
   references: {
     purchaseId: {
       kind: "lookup",
