@@ -28,6 +28,7 @@ import {
 
 import {
   listAiUsageForRun,
+  listAiUsageFilterOptions,
   listRecentAiUsage,
   summarizeAiUsage,
 } from "./ai-usage";
@@ -582,6 +583,12 @@ describe("AiUsage transport", () => {
   it("matches provider, model, and feature exactly and query case-insensitively", async () => {
     await insertCalls([
       {
+        minute: -120 * 24 * 60,
+        provider: "synthetic-legacy-provider",
+        model: "synthetic-legacy-model",
+        feature: "synthetic-legacy-feature",
+      },
+      {
         minute: 1,
         operation: "describeShelf",
         feature: "location-description",
@@ -612,6 +619,12 @@ describe("AiUsage transport", () => {
     expect(await features({ query: "RECIPE" })).toEqual(["recipe-flow"]);
     // LIKE metacharacters in a query are literal text, not wildcards.
     expect(await features({ query: "%" })).toEqual([]);
+    // Filter choices cover full history, including outside every summary window.
+    expect(await listAiUsageFilterOptions(ctx.db)).toMatchObject({
+      provider: expect.arrayContaining(["synthetic-legacy-provider"]),
+      model: expect.arrayContaining(["synthetic-legacy-model"]),
+      feature: expect.arrayContaining(["synthetic-legacy-feature"]),
+    });
   });
 
   it("keeps transports apart in the daily summary and run usage", async () => {
