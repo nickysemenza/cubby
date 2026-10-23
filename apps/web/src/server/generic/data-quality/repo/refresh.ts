@@ -6,7 +6,6 @@ import type { Database } from "~/server/db";
 import { entityIdentity } from "~/server/db/entity-identity-schema";
 import { getDb } from "~/server/db/helpers";
 import { recordChange } from "~/server/generic/changes/repo/change";
-import { REFRESH_PAGE_SIZE } from "~/server/generic/derived-refresh/repo/families";
 
 import { storedEntryFor } from "./entries";
 import {
@@ -16,6 +15,8 @@ import {
 } from "./stored";
 
 const cursor = z.object({ after: z.uuid().optional() });
+// Loaders batch per kind, so a larger page costs about the same statements.
+const QUALITY_PAGE_SIZE = 200;
 const migratedKinds = () =>
   scoredEntities.filter((kind) => storedEntryFor(kind));
 const sources = (boundary: string) =>
@@ -49,7 +50,7 @@ export const qualityRefreshDriver = {
         ),
       )
       .orderBy(asc(entityIdentity.id))
-      .limit(REFRESH_PAGE_SIZE);
+      .limit(QUALITY_PAGE_SIZE);
     const ids = refs.map((ref) => ref.id);
     const prepare = async (readDb: Database) => {
       const rows = [];
@@ -68,21 +69,22 @@ export const qualityRefreshDriver = {
     const changed = await changedQualityIds(db, ids, prepared);
     return {
       next:
-        refs.length === REFRESH_PAGE_SIZE ? { after: refs.at(-1)!.id } : null,
+        refs.length === QUALITY_PAGE_SIZE ? { after: refs.at(-1)!.id } : null,
       scanned: refs.length,
       pending: changed.length,
       publish: async (tx: Database) => {
-        // The Job token/generation is checked by routine publication. Compare
-        // the current inputs' verdicts too before publishing prepared output.
-        if (JSON.stringify(await prepare(tx)) !== JSON.stringify(prepared))
-          throw new Error("Quality inputs changed during preparation");
-        await publishQualityRows(tx, ids, prepared);
-        if (changed.length)
+        // The Job token/generation is checked by routine publication. Publish
+        // verdicts from the transaction's own reads so a concurrent edit is
+        // captured rather than failing the page.
+        const current = await prepare(tx);
+        const published = await changedQualityIds(tx, ids, current);
+        await publishQualityRows(tx, ids, current);
+        if (published.length)
           await recordChange(tx, {
             kind: "projection",
             categories: migratedKinds(),
           });
-        return { evaluated: prepared.length, changed: changed.length };
+        return { evaluated: current.length, changed: published.length };
       },
     };
   },

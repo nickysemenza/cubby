@@ -37,6 +37,17 @@ export async function invalidateRefreshFamily(
   db: RepositoryQueryInput,
   family: RefreshFamily,
 ) {
+  if (family === "quality") {
+    // A full quality pass outlasts the gap between household writes. Restarting
+    // it on each write superseded every page, so production never published.
+    // A pass in progress (running, or queued between pages with a cursor)
+    // finishes, and its scheduled repeat covers this change.
+    const [current] = await repositoryQueries(db)
+      .select({ state: job.state, cursor: job.cursor })
+      .from(job)
+      .where(eq(job.key, `refresh:${family}`));
+    if (current?.state === "running" || current?.cursor != null) return;
+  }
   await enqueueJob(db, {
     key: `refresh:${family}`,
     kind: "refresh.family",

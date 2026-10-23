@@ -2348,7 +2348,10 @@ wait for the next pass. Search counts its sources across every searchable
 table. The step's COUNT runs when the Run opens and starts `done` at the
 records earlier pages scanned. Invalidation restarts the pass; its first page
 ends the abandoned generation's Run with its counts, whether or not the new
-pass opens a Run. Every Run is kept. Connection
+pass opens a Run. Quality is the exception: a full pass outlasts the gap
+between household writes, so invalidating a quality pass in progress (running,
+or queued with a cursor) leaves it alone, and its scheduled repeat covers the
+change. Quality pages publish the verdicts read in the publication transaction. Every Run is kept. Connection
 discovery follows the same lazy pattern as a `connection_discovery` Run that
 owns its evaluations. Routine kinds are hidden from the Runs list by its
 declared initial filter.
