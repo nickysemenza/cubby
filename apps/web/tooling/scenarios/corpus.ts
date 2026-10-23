@@ -119,7 +119,7 @@ function assertHouseholdDatabase(pool: Pool) {
 
 /** New declared tables must have actual rows; read-only external catalogs report
  * their owning runtime rather than pretending to create a database record. */
-export async function readHouseholdCoverage(
+async function readHouseholdCoverage(
   pool: Pool,
 ): Promise<z.infer<typeof coverageRow>[]> {
   const rows: z.infer<typeof coverageRow>[] = [];
