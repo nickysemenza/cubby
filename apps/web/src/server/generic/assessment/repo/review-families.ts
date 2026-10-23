@@ -597,10 +597,7 @@ function assessmentRecordMatch(scope: AssessmentRecordScope): SQL {
 }
 
 /** Scope identities before expensive automatic receipts; retain a statement-local barrier. */
-export function touchingAssessmentQuery(
-  db: Database,
-  scope: AssessmentRecordScope,
-) {
+function touchingAssessmentQuery(db: Database, scope: AssessmentRecordScope) {
   const client = unwrapDb(db);
   const a = reviewAssessment;
   const s = reviewState;

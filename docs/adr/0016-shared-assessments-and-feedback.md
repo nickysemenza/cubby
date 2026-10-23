@@ -124,12 +124,6 @@ matched identities before checking application and member Feedback. Broad entity
 scopes use one join so the identity barrier does not duplicate full-table work.
 The existing family/active/status and Feedback assessment indexes serve both paths.
 
-The opt-in `CUBBY_ASSESSMENT_PERF=20000` integration probe in
-`review-query-bakeoff.integration.test.ts` records alternating JSON EXPLAIN ANALYZE
-BUFFERS plans under ignored `artifacts/`; its ordinary small fixture asserts parity
-with the former query and preserves transaction visibility. Local query timings
-are separate from deployed Worker/Hyperdrive request latency.
-
 ## Cutover preservation
 
 One owner controls the production cutover. An early expansion/copy is not the
