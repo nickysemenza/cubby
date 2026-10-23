@@ -513,13 +513,14 @@ failure that does not need native browser behavior; avoid duplicating the same
 shared capability in both tiers.
 
 `expense-category-summary.integration.test.ts` owns category summaries beyond
-25 linked lines, including full money and transaction read-back. The finance
-category browser journey uses two refund lines for readable labels, explanations,
-explicit policy and reset-to-inherited behavior. Avoid a second full list reload
-merely to repeat the explicit value already read back and shown on detail.
-Use `openCellExplanation` when the runtime explanation rail’s host column has
-not been established. A declaration’s assessment placement does not identify
-every derived-value explanation control.
+25 linked lines, full money/read-back, and explicit transaction itemization policy
+reset to the Purchase fallback with stored null and source provenance. The finance
+browser journey keeps two refund lines for readable labels and read-only
+explanations. Its per-entity enum reset is no longer sampled in a second document;
+`inheritance.spec.ts` retains the real generic Use inherited interaction and
+stored-mode readback. Use `openCellExplanation` when the runtime rail’s host
+column has not been established; assessment placement does not identify every
+derived-value explanation control.
 
 The Wardrobe browser journeys retain ownership edits, grouped category navigation,
 subtype inclusion and section exclusion. The mobile sticky-header coordinate
