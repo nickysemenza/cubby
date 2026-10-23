@@ -31,11 +31,7 @@ import {
 } from "~/server/generic/data-quality/repo/registry";
 
 import { dataQualityEntries, qualityEntryFor, storedEntryFor } from "./entries";
-import {
-  storedQualityRelation,
-  storedCheckStateSql,
-  storedScoreSql,
-} from "./stored-sql";
+import { storedCheckStateSql, storedScoreSql } from "./stored-sql";
 
 /**
  * Every builder here returns ONE parenthesized group. Callers embed these
@@ -61,15 +57,16 @@ export const entryFor = (
           entity,
           table: registered.table,
           related: registered.related,
-          filterRead: () => storedQualityRelation(entity),
+          // No shared relation: indexed per-row lookups stay valid under any FROM,
+          // including callers that reuse a list `where` beside their own joins.
           checks: Object.fromEntries(
             dataChecksByEntity[entity].options.map((check) => [
               check,
               {
-                expected: (t: ScoredTable, context?: QualityReadContext) =>
-                  sql`coalesce(${storedCheckStateSql(entity, check, t, context)}, ${sqlEnumConstant(entityQualityCheckState, "not_applicable")}) <> ${sqlEnumConstant(entityQualityCheckState, "not_applicable")}`,
-                missing: (t: ScoredTable, context?: QualityReadContext) =>
-                  sql`coalesce(${storedCheckStateSql(entity, check, t, context)} IN (${sqlEnumConstant(entityQualityCheckState, "gap")}, ${sqlEnumConstant(entityQualityCheckState, "waived")}), false)`,
+                expected: (t: ScoredTable) =>
+                  sql`coalesce(${storedCheckStateSql(entity, check, t)}, ${sqlEnumConstant(entityQualityCheckState, "not_applicable")}) <> ${sqlEnumConstant(entityQualityCheckState, "not_applicable")}`,
+                missing: (t: ScoredTable) =>
+                  sql`coalesce(${storedCheckStateSql(entity, check, t)} IN (${sqlEnumConstant(entityQualityCheckState, "gap")}, ${sqlEnumConstant(entityQualityCheckState, "waived")}), false)`,
               },
             ]),
           ),
@@ -275,7 +272,7 @@ export const gapCondition = (
 ): SQL => {
   if (storedEntryFor(entity))
     return group(
-      sql`coalesce(${storedCheckStateSql(entity, check, t, context)} = ${sqlEnumConstant(entityQualityCheckState, "gap")}, false)`,
+      sql`coalesce(${storedCheckStateSql(entity, check, t)} = ${sqlEnumConstant(entityQualityCheckState, "gap")}, false)`,
     );
   const active = activeExceptionSql(entity, check, t);
   const raw = rawGapCondition(entity, check, t, context);
@@ -400,7 +397,7 @@ export const scoreSql = (
   context?: QualityReadContext,
 ): SQL =>
   storedEntryFor(entity)
-    ? storedScoreSql(entity, t, context)
+    ? storedScoreSql(entity, t)
     : fromCheckStates(entity, t, scoreFromStates, context);
 
 /** Authoritative pill tone; a defect cannot be inferred from the numeric score. */
@@ -416,7 +413,7 @@ export const statusSql = (
       weight: dataCheckWeight[check],
       scoreCap: dataCheckScoreCap[check],
       defect: isDefectDataCheck(check),
-      state: sql`CASE ${storedCheckStateSql(entity, check, t, context)}
+      state: sql`CASE ${storedCheckStateSql(entity, check, t)}
       WHEN ${sqlEnumConstant(entityQualityCheckState, "pass")} THEN ${code("satisfied")} WHEN ${sqlEnumConstant(entityQualityCheckState, "gap")} THEN ${code("gap")}
       WHEN ${sqlEnumConstant(entityQualityCheckState, "waived")} THEN ${code("excepted")} ELSE ${code("not_applicable")} END`,
     })),

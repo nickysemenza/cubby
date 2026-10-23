@@ -8,7 +8,7 @@ import { withMigrationDatabase } from "./test-database-lease";
 it("preserves populated identities and waivers while adding kind-checked quality rows", async () => {
   await withMigrationDatabase(async (client) => {
     const db = drizzle(client);
-    await migrateDatabase(db, { through: "0019_job_useful_progress" });
+    await migrateDatabase(db, { through: "0020_service_product_categories" });
     const id = "00000000-0000-4000-8000-000000000001";
     await client.query(
       `INSERT INTO "Entity" (id, kind, shortcode) VALUES ($1, 'shipment', 'SHIP-SYNTHETIC')`,
@@ -28,7 +28,7 @@ it("preserves populated identities and waivers while adding kind-checked quality
       JOIN "Shipment" s ON s.id = e.id JOIN "DataException" d ON d."entityId" = e.id WHERE e.id = $1`,
       [id],
     );
-    await migrateDatabase(db, { through: "0020_entity_quality" });
+    await migrateDatabase(db, { through: "0021_entity_quality" });
     const after = await client.query(
       `SELECT e.*, s.name, d.note, d.fingerprint FROM "Entity" e
       JOIN "Shipment" s ON s.id = e.id JOIN "DataException" d ON d."entityId" = e.id WHERE e.id = $1`,
