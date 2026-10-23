@@ -1,6 +1,7 @@
 import { SUGGESTION_AUTO_APPLY_THRESHOLD } from "@cubby/schemas/ai-evaluation";
 import {
   FIELD_ASSIGNMENT_REVISION,
+  AUTOMATIC_RULE_KEYS,
   type AutomaticRuleFamily,
   type AutomaticRuleKey,
 } from "@cubby/schemas/automatic-rule";
@@ -127,6 +128,14 @@ export type AutomaticRuleMatch = {
 /** `<ruleKey>@<revision>`: the stamp a publication and receipt carry. */
 export const ruleBase = (key: AutomaticRuleKey) =>
   `${key}@${AUTOMATIC_RULES[key].revision()}`;
+
+/** Unscoped statement sweeps cannot execute these current-revision rules. */
+export const importOnlyStatementRuleStamps = () =>
+  AUTOMATIC_RULE_KEYS.filter(
+    (key) =>
+      AUTOMATIC_RULES[key].family === "statement_transaction" &&
+      AUTOMATIC_RULES[key].execution === "import_clean",
+  ).map(ruleBase);
 
 function evaluate<F extends AutomaticRuleFamily>(
   key: AutomaticRuleKey,

@@ -60,6 +60,7 @@ import { transitionAssessmentStates } from "~/server/generic/assessment/repo/ass
 import * as assessmentStateRepo from "~/server/generic/assessment/repo/assessment-state";
 import * as automaticRuleRuntime from "~/server/generic/assessment/repo/automatic-rule-runtime";
 import { setAutomaticRule } from "~/server/generic/assessment/repo/automatic-rule-runtime";
+import { ruleBase } from "~/server/generic/assessment/repo/automatic-rules";
 import {
   acceptCleanSuggestions,
   listSuggestionPage,
@@ -2408,7 +2409,11 @@ describe("statement Transaction suggestions", () => {
             matchedRules:
               row.id === targets[2]!.assessmentId
                 ? ["statement_transaction.attach@synthetic"]
-                : [],
+                : row.id === targets[1]!.assessmentId
+                  ? [ruleBase("statement_transaction.book_spending")]
+                  : row.id === targets[3]!.assessmentId
+                    ? ["statement_transaction.book_spending@synthetic-obsolete"]
+                    : [],
           },
         }),
         { kind: "synthetic_prefix_setup" },
@@ -2474,6 +2479,13 @@ describe("statement Transaction suggestions", () => {
       await statementSuggestionsRepo.completeNoActionStatementPrefix(
         ctx.db,
         targets,
+      ),
+    ).toBe(0);
+    // An obsolete import-only stamp is not proof of the current execution contract.
+    expect(
+      await statementSuggestionsRepo.completeNoActionStatementPrefix(
+        ctx.db,
+        targets.slice(3),
       ),
     ).toBe(0);
     expect(await getDb(ctx.db).select().from(financialTransaction)).toEqual([]);

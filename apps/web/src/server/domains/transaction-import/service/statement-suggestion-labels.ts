@@ -72,7 +72,10 @@ import {
 } from "~/server/domains/transaction-import/repo/statement-suggestions";
 import { decideStatementKind } from "~/server/domains/transaction-import/repo/statement-transaction-kind";
 import { applyAutomaticRulesForCharge } from "~/server/generic/assessment/repo/automatic-rule-runtime";
-import { matchStatementRules } from "~/server/generic/assessment/repo/automatic-rules";
+import {
+  importOnlyStatementRuleStamps,
+  matchStatementRules,
+} from "~/server/generic/assessment/repo/automatic-rules";
 import { withJobPhase } from "~/server/generic/jobs/context";
 import type { PageWork } from "~/server/generic/jobs/page-work";
 import { canonicalJson } from "~/server/lib/canonical-json";
@@ -478,7 +481,9 @@ async function completeNoActionTargets(
       !assessmentId ||
       !evidenceFingerprint ||
       // A nonempty hint only declines batching. Absence still needs locked proof.
-      matchStatementRules(next.row.judgment).length > 0
+      matchStatementRules(next.row.judgment).some(
+        (match) => !importOnlyStatementRuleStamps().includes(match.stamp),
+      )
     )
       break;
     window.push({ assessmentId, charge: next.charge, evidenceFingerprint });
