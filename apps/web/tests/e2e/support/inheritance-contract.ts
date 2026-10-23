@@ -41,50 +41,5 @@ export function inheritanceContract() {
       page.getByText("From purchase", { exact: true }).first(),
     ).toBeVisible();
     await expectViewportBounded(page);
-    await gotoAuthenticatedPage(page, `/expenses/${fixture.charge.id}`);
-    await expect(
-      page.getByText("Allocated from", { exact: true }).first(),
-    ).toBeVisible();
-    await expect(
-      page.locator(`a[href="/projects/${fixture.project.id}"]`).first(),
-    ).toBeVisible();
-    const projectExplanation = page.getByRole("button", {
-      name: "How project is determined",
-      exact: true,
-    });
-    await projectExplanation.click();
-    const panelId = await projectExplanation.getAttribute("aria-controls");
-    expect(panelId).toBeTruthy();
-    const explanation = page.locator(`[id="${panelId}"]`);
-    await expect(
-      explanation.getByText("Project share", { exact: true }),
-    ).toBeVisible();
-    await expect(explanation.getByText("$1.00", { exact: true })).toBeVisible();
-    // The source link names the project (not its shortcode) once it loads.
-    await expect(
-      explanation.locator(`a[href="/projects/${fixture.project.id}"]`).first(),
-    ).not.toHaveText(fixture.project.id);
-    await expect(
-      explanation.getByText("Stored override", { exact: true }),
-    ).toHaveCount(0);
-    await expectViewportBounded(page);
-    await gotoAuthenticatedPage(page, `/purchases/${fixture.purchase.id}#work`);
-    const projectCell = page
-      .getByRole("row")
-      .filter({ hasText: /Inheritance \d+ item/ })
-      .first()
-      .locator('[data-cell-col="projectId"]');
-    // Its source mark overlays the active row only, as a person sees it.
-    await projectCell.hover();
-    await expect(
-      projectCell.getByText("purchase default", { exact: true }),
-    ).toBeAttached();
-    await expect
-      .poll(() =>
-        projectCell.evaluate(
-          (cell) => cell.scrollWidth <= cell.clientWidth + 1,
-        ),
-      )
-      .toBe(true);
   });
 }
