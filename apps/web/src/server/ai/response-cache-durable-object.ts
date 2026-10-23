@@ -46,7 +46,6 @@ export class AiResponseCacheDurableObject
           ),
         )
         .run();
-      await ctx.storage.deleteAlarm();
     });
   }
 

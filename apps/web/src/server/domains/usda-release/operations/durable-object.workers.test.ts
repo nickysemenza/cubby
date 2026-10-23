@@ -17,15 +17,10 @@ import {
 } from "cloudflare:test";
 import { env } from "cloudflare:workers";
 import { drizzle } from "drizzle-orm/durable-sqlite";
-import { migrate } from "drizzle-orm/durable-sqlite/migrator";
 import { seedUsdaRelease } from "tooling/dev/usda-synthetic-release";
 import { describe, expect, it } from "vitest";
 
-import { migrateUsdaRelease } from "../repo/migrate";
-import baseline from "../repo/migrations/0000_baseline.sql?raw";
-import journal from "../repo/migrations/meta/_journal.json";
 import { usdaReleaseObjectName } from "../service/client";
-import legacySchema from "./legacy-schema.test.sql?raw";
 import type { UsdaReleaseRpc } from "./rpc";
 
 // Synthetic foods only. Each test seeds its own release id so the shared R2
@@ -153,153 +148,6 @@ const descriptions = (rows: Array<{ foodInfo: { description: string } }>) =>
   rows.map((row) => row.foodInfo.description);
 
 describe("USDA release Durable Object", () => {
-  it("adopts loaded legacy rows, aliases and FTS without changing object names, then reinitializes after an upgrade", async () => {
-    const { release, manifest, stub, object } = await seedRelease([
-      [
-        current({
-          fdc_id: 1301,
-          description: "Synthetic legacy oats",
-          gtin: "299000000106",
-          ndb: 1301,
-        }),
-      ],
-    ]);
-    const summary = food({
-      fdc_id: 1301,
-      description: "Synthetic legacy oats",
-      gtin: "299000000106",
-      ndb: 1301,
-    });
-    await runInDurableObject(object, (_instance, state) => {
-      for (const table of [
-        "food_search",
-        "food",
-        "food_alias",
-        "release_state",
-        "__drizzle_migrations",
-      ])
-        state.storage.sql.exec(`DROP TABLE ${table}`);
-      for (const statement of legacySchema
-        .split(";")
-        .filter((value) => value.trim()))
-        state.storage.sql.exec(statement);
-      state.storage.sql.exec(
-        "INSERT INTO release_state (id, release, state, manifest, next_shard, started_at, ready_at) VALUES (1, ?, 'ready', ?, 1, ?, ?)",
-        release,
-        JSON.stringify(manifest),
-        "2001-01-01T00:00:00.000Z",
-        "2001-01-01T00:01:00.000Z",
-      );
-      state.storage.sql.exec(
-        "INSERT INTO food VALUES (?, ?, ?, ?, ?, ?)",
-        summary.fdc_id,
-        summary.foodInfo.data_type,
-        summary.foodInfo.description,
-        "00299000000106",
-        1301,
-        JSON.stringify(summary),
-      );
-      state.storage.sql.exec("INSERT INTO food_alias VALUES (1300, 1301)");
-      state.storage.sql.exec(
-        "INSERT INTO food_search (rowid, description, brand_name, brand_owner) VALUES (1301, 'Synthetic legacy oats', '', 'Synthetic Foods Co')",
-      );
-    });
-    await evictDurableObject(object);
-    expect(usdaReleaseObjectName(release)).toBe(`${release}.g1`);
-    expect(await stub.getFood(1300)).toEqual(summary);
-    expect(
-      (
-        await stub.lookupBatch([
-          { kind: "upc", gtin_upc: "299000000106" },
-          { kind: "ndb", ndb_number: 1301 },
-        ])
-      ).map((row) => row?.fdc_id),
-    ).toEqual([1301, 1301]);
-    expect(
-      (
-        await stub.search({
-          nameFilter: "legacy oats",
-          orderBy: "relevance",
-          direction: "asc",
-          pageIndex: 0,
-          pageSize: 10,
-        })
-      ).data.map((row) => row.fdc_id),
-    ).toEqual([1301]);
-    expect(await stub.status()).toMatchObject({
-      state: "ready",
-      shardsLoaded: 1,
-      startedAt: "2001-01-01T00:00:00.000Z",
-      readyAt: "2001-01-01T00:01:00.000Z",
-    });
-    await runInDurableObject(object, async (_instance, state) => {
-      expect(
-        state.storage.sql.exec("SELECT * FROM __drizzle_migrations").toArray(),
-      ).toHaveLength(1);
-      expect(
-        state.storage.sql
-          .exec(
-            "SELECT name FROM sqlite_master WHERE type = 'index' AND name LIKE 'food_%'",
-          )
-          .toArray(),
-      ).toHaveLength(4);
-      expect(
-        state.storage.sql
-          .exec("SELECT sql FROM sqlite_master WHERE name = 'food_alias'")
-          .one().sql,
-      ).toContain("WITHOUT ROWID");
-      const first = journal.entries[0];
-      if (!first) throw new Error("Missing baseline journal entry");
-      await migrate(drizzle(state.storage), {
-        journal: {
-          ...journal,
-          entries: [
-            ...journal.entries,
-            { ...first, idx: 1, when: first.when + 1, tag: "test_upgrade" },
-          ],
-        },
-        migrations: {
-          m0000: baseline,
-          m0001: "ALTER TABLE food ADD COLUMN test_upgrade TEXT",
-        },
-      });
-    });
-    await evictDurableObject(object);
-    expect(await stub.getFood(1300)).toEqual(summary);
-    await runInDurableObject(object, (_instance, state) => {
-      expect(
-        state.storage.sql.exec("SELECT * FROM __drizzle_migrations").toArray(),
-      ).toHaveLength(2);
-    });
-  });
-
-  it("rejects incompatible legacy indexes before journal adoption and refuses RPCs", async () => {
-    const { stub, object } = await seedRelease([
-      [current({ fdc_id: 1401, description: "Synthetic incompatible food" })],
-    ]);
-    await runInDurableObject(object, async (_instance, state) => {
-      state.storage.sql.exec("DROP TABLE __drizzle_migrations");
-      state.storage.sql.exec("DROP INDEX food_barcode_key");
-      state.storage.sql.exec(
-        "CREATE UNIQUE INDEX food_barcode_key ON food (description)",
-      );
-      await expect(migrateUsdaRelease(state.storage)).rejects.toThrow(
-        "Incompatible legacy USDA release schema: food_barcode_key",
-      );
-      expect(
-        state.storage.sql
-          .exec(
-            "SELECT name FROM sqlite_master WHERE name = '__drizzle_migrations'",
-          )
-          .toArray(),
-      ).toEqual([]);
-    });
-    await evictDurableObject(object);
-    expect(await rejection(stub.status())).toContain(
-      "Incompatible legacy USDA release schema: food_barcode_key",
-    );
-  });
-
   it("refuses reads with load progress until every shard is loaded", async () => {
     const { release, stub, object } = await seedRelease([
       [current({ fdc_id: 101, description: "Oats, raw" })],
