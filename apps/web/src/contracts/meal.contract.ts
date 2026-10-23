@@ -102,7 +102,7 @@ export const mealContract = defineContract(
     // Bounded Home summary; see expense.monthlySummary.
     getNutrition: query({
       exposure: "view",
-      note: "Home macro tiles for a meal or a household day; agents read nutrition.daily_intake per person and nutrition.preparations_detail per meal",
+      note: "Home macro tiles for a meal or a household day; agents read nutrition_read.daily_intake per person and nutrition_read.preparations_detail per meal",
       readPolicy: "strong",
       native: "Meal and daily macro summaries",
       input: schemas.mealNutritionInput,
@@ -251,7 +251,7 @@ export const mealContract = defineContract(
     /** `getPreparations` with every totals block trimmed to `nutrition`. */
     preparationsDetail: query({
       description:
-        "Recipe preparations made by or served at a meal, including projected and confirmed nutrition. `nutrition` trims every totals block: `full` (default) carries all 22 nutrients, `macros` keeps kcal/protein/carbs/fat/fiber, `kcal` keeps only calories, and `none` keeps cost alone. For per-person daily intake use nutrition.daily_intake.",
+        "Recipe preparations made by or served at a meal, including projected and confirmed nutrition. `nutrition` trims every totals block: `full` (default) carries all 22 nutrients, `macros` keeps kcal/protein/carbs/fat/fiber, `kcal` keeps only calories, and `none` keeps cost alone. For per-person daily intake use nutrition_read.daily_intake.",
       input: schemas.getMealPreparationsMcpInput,
       output: schemas.getMealPreparationsMcpOut,
     }),

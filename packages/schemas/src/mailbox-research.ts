@@ -594,7 +594,7 @@ export const mailResolveDisposition = z.discriminatedUnion("kind", [
 ]);
 export const mailResolveInput = mailMessageRef.extend({
   checksum: sha256.describe(
-    "The checksum purchase_import.mail_read returned for this Email.",
+    "The checksum purchase_import_read.mail_read returned for this Email.",
   ),
   disposition: mailResolveDisposition,
 });
@@ -607,7 +607,7 @@ export const mailResolveOut = mailMessageRef.extend({
   financialAssociations: z.array(mailFinancialAssociation),
 });
 export const MAIL_ATTACHMENT_MAX_BYTES = 3 * 1024 * 1024;
-/** A retained attachment's original bytes, read through `mail.read`. */
+/** A retained attachment's original bytes, read through `purchase_import_read.mail_read`. */
 export const mailAttachmentOriginal = z.strictObject({
   attachmentId: z.string().min(1).max(200),
   filename: z.string().max(1_000),

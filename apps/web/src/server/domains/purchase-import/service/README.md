@@ -67,7 +67,7 @@ pending: nothing here starts Product research.
    Each relevance rerun stores a versioned publication-receipt checkpoint in
    `Run.progress` before work, after every reached Email, and with the deferred
    tail on completion. The frozen
-   selection and checksums remain in `Run.input`. `run.work_snapshot`
+   selection and checksums remain in `Run.input`. `run_read.work_snapshot`
    exposes `mailReclassification` through a narrow member-owned read: selected
    Email codes/checksums, exact receipts, retained notes, and separately labeled
    immutable classification observations. A client timeout does not imply the
@@ -120,7 +120,7 @@ pending: nothing here starts Product research.
    recognized order identifiers and up to five live Purchases holding one),
    so the coordinator skips the Vendor and order-id lookups most Emails
    otherwise start with.
-4. **Writes**: `purchase_import.mail_read` reads a retained Email (`mail-tool.ts`
+4. **Writes**: `purchase_import_read.mail_read` reads a retained Email (`mail-tool.ts`
    `readMail`); `purchase_import.prepare/commit` (`import-orders.ts`) import an
    order through `writer.ts`, and a mail-sourced commit (message or
    attachment) links and settles the Email as the Purchase's confirmation,

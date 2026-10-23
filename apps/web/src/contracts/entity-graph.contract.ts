@@ -55,7 +55,7 @@ export const entityGraphContract = defineContract(
       cache: { tags: [["relatedData"], ...ENTITY_ROOT_TAGS] },
     }),
     records: query({
-      note: "Agents read relations through entity_graph.relation and entity_graph.connections",
+      note: "Agents read relations through entity_graph_read.relation and entity_graph_read.connections",
       input: entityRecordsInputSchema,
       output: entityRecordsOutputSchema,
       cache: { tags: [["relatedData"], ...ENTITY_ROOT_TAGS] },

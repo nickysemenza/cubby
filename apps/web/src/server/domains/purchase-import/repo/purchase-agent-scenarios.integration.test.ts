@@ -538,8 +538,8 @@ describe("current purchase-agent system boundaries", () => {
     ): ScriptStep[] => [
       call(`${prefix}-claim`, "claim_next_import_work"),
       { check: `${prefix}-claim`, includes: ambiguous.messageId },
-      mcp(`${prefix}-resolve`, "mail", runId, {
-        action: "resolve",
+      mcp(`${prefix}-resolve`, "purchase_import", runId, {
+        action: "mail_resolve",
         mailboxId,
         messageId: ambiguous.messageId,
         checksum: from(`${prefix}-claim`, "read.checksum"),
@@ -844,8 +844,8 @@ describe("current purchase-agent system boundaries", () => {
     scenarioRunId = started.runId;
     await authorizePurchaseAgent(ctx.db, ctx.actor.userId);
     const unresolved = (id: string, claim: string): ScriptStep =>
-      mcp(id, "mail", started.runId, {
-        action: "resolve",
+      mcp(id, "purchase_import", started.runId, {
+        action: "mail_resolve",
         mailboxId,
         messageId: from(claim, "email.messageId"),
         checksum: from(claim, "read.checksum"),

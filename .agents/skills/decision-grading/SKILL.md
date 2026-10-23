@@ -74,7 +74,7 @@ existing local-secret loader. Keep calls sequential and show sample sizes first.
    Lock grades before opening predictions. If the member changes the label
    contract after scoring, preserve the original blind grades and report the
    policy-adjusted scores separately.
-3. `purchase_import.mail_read_triage_preview` runs the deployed full classification on one
+3. `purchase_import_read.mail_triage_preview` runs the deployed full classification on one
    Email: Jev/Clef followed by Luna only after uncertainty (optionally pin
    `decisionModel`). It publishes no Email changes; its diagnostic Run records
    model usage. Read `triage` separately from the final classification, and inspect
@@ -99,7 +99,7 @@ existing local-secret loader. Keep calls sequential and show sample sizes first.
    or unresolved with the missing evidence. Missing original/attachments or
    unavailable Purchase context stays unavailable; a body-only replay cannot
    establish full-context parity.
-2. Read the Email's Assessment history through `purchase_import.mail_read_outcomes`
+2. Read the Email's Assessment history through `purchase_import_read.mail_import_outcomes`
    and retain its Assessment handle and producer in session memory. Rule and
    coordinator outcomes are separate evidence; do not attribute a rule result
    to the coordinator model. Agent producer model is null until a causal settling
@@ -135,7 +135,7 @@ existing local-secret loader. Keep calls sequential and show sample sizes first.
    judgments in the session; production MCP cannot grade disposable database
    handles.
 5. After member confirmation, record each served outcome's grade through
-   `suggestions.reviews` with `assessmentId`, unique `operationId`,
+   `suggestions.review_batch` with `assessmentId`, unique `operationId`,
    `intent: "history"`, `verdict`, and optional `reason`/`correction`. A correction
    carries the complete outcome, including reason or imported lines/total.
    Session model opinions remain independent grades until the member confirms

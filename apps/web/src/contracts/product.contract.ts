@@ -69,14 +69,14 @@ export const productContract = defineContract(
       invalidates: ["product"],
     }),
     applyUpcData: mutation({
-      note: "entity.update with fields read from product_enrichment.lookup_upc",
+      note: "entity.update with fields read from product_enrichment_read.lookup_upc",
       ...productWorkflowSchemas.applyUpcData,
       invalidates: ["productRecipe"],
     }),
     findOrCreateByUPC: mutation({
       exposure: "capability",
       description:
-        "Find or create a product by UPC barcode: the local DB, then USDA, then the UPC lookup service. This WRITES — it mints a Product when nothing matches, named by whatever the lookup returned. To only ask what a barcode names, use product_enrichment.lookup_upc.",
+        "Find or create a product by UPC barcode: the local DB, then USDA, then the UPC lookup service. This WRITES — it mints a Product when nothing matches, named by whatever the lookup returned. To only ask what a barcode names, use product_enrichment_read.lookup_upc.",
       native: "Capture unknown barcode",
       ...productWorkflowSchemas.findOrCreateByUPC,
       invalidates: ["productLookup"],
@@ -103,7 +103,7 @@ export const productContract = defineContract(
     /** Which field wins, and what blocks, before a two-product merge commits. */
     mergePreview: query({
       exposure: "capability",
-      note: "Keeper and incoming field winners and blockers; entity_graph.connections reports only edge dispositions",
+      note: "Keeper and incoming field winners and blockers; entity_graph_read.connections reports only edge dispositions",
       description:
         "Preview Product merge winners, conflicts, and blockers for the selected keeper and incoming Product. This is read-only; review it before entity.merge.",
       input: mergeProductMatchInput.pick({ keepId: true, mergeId: true }),
@@ -123,7 +123,7 @@ export const productContract = defineContract(
       },
     }),
     components: query({
-      note: "Agents read components through entity_graph.relation",
+      note: "Agents read components through entity_graph_read.relation",
       ...productWorkflowSchemas.components,
       cache: {
         tags: [
@@ -182,7 +182,7 @@ export const productContract = defineContract(
       ...productWorkflowSchemas.discardPreview,
       cache: { tags: [["product"], ["inventory"]] },
     }),
-    // Agent-facing (MCP `imports_read`, `product_enrichment`).
+    // Agent-facing (MCP `product_enrichment`, `product_enrichment_read`).
     /** What a barcode names in every source at once, creating nothing. */
     lookupUpc: query({
       exposure: "capability",

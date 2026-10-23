@@ -202,7 +202,7 @@ export type RecipeCostingExplainDetail = z.infer<
 >;
 
 /**
- * `recipe_insights.costing_explanation` with `detail: "lines"`: the per-line diagnostics
+ * `recipe_insights_read.costing_explanation` with `detail: "lines"`: the per-line diagnostics
  * without the two 22-nutrient totals blocks and the drift record. The totals
  * are what `entity get recipe` already returns; an agent chasing "which line
  * is uncovered" only needs the diagnostics plus a coverage headline.

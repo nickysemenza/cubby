@@ -14,7 +14,10 @@ import type { StartOperationIdOfKind } from "~/lib/generated/start-operation-reg
 import { roundTo } from "~/lib/round-to";
 import { getDb } from "~/server/db/helpers";
 import { run as runTable } from "~/server/db/schema";
-import { assertPurchaseAgentAction } from "~/server/domains/purchase-import/repo/capabilities";
+import {
+  assertPurchaseAgentAction,
+  purchaseAgentRunActions,
+} from "~/server/domains/purchase-import/repo/capabilities";
 import { toPublicErrorPayload } from "~/server/errors/app-error";
 import {
   errorReportingHeaders,
@@ -1018,7 +1021,15 @@ function registerCompiledTool(
     input: z.looseObject({}).optional(),
   });
   const registeredCallback = tool.compact
-    ? withProgressiveDisclosure(callback, tool)
+    ? withProgressiveDisclosure(callback, tool, async (extra) => {
+        const principal = principalInExtra(extra);
+        if (!principal?.delegation) return undefined;
+        const { allowed } = await purchaseAgentRunActions(
+          principal.context.db,
+          principal.delegation.runId,
+        );
+        return new Set(allowed);
+      })
     : callback;
   server.registerTool(
     tool.name,

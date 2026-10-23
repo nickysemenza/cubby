@@ -27,16 +27,21 @@ const shortName = (action: { name: string }) => action.name.split(".")[1]!;
 export function describeMcpActions(
   tool: Pick<CompiledTool, "actions" | "actionJson">,
   names: readonly string[],
+  visible?: ReadonlySet<string>,
 ) {
   if (names.length === 0)
     throw new Error(
       "describe needs input.actions with at least one action name",
     );
+  // A delegated agent may describe only the actions its Run mounts; hidden
+  // actions are reported as unknown and left out of the available list.
+  const shown = (key: string) => visible === undefined || visible.has(key);
   return {
     actions: names.map((name) => {
       const action = tool.actions.get(name);
-      if (!action) {
+      if (!action || !shown(action.name)) {
         const available = [...tool.actions.keys()]
+          .filter(shown)
           .map((key) => key.split(".")[1]!)
           .join(", ");
         throw new Error(
@@ -60,6 +65,9 @@ export function withProgressiveDisclosure(
     extra: ToolExtra,
   ) => Promise<CallToolResult>,
   tool: CompiledTool,
+  visibleActions?: (
+    extra: ToolExtra,
+  ) => Promise<ReadonlySet<string> | undefined>,
 ) {
   return async (
     params: ToolArguments,
@@ -71,7 +79,11 @@ export function withProgressiveDisclosure(
       try {
         const input = describeInputSchema.parse(params.input);
         const output = describeToolOutputSchema.parse(
-          describeMcpActions(tool, input.actions),
+          describeMcpActions(
+            tool,
+            input.actions,
+            await visibleActions?.(extra),
+          ),
         );
         return {
           content: [{ type: "text", text: JSON.stringify(output) }],

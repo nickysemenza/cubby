@@ -70,7 +70,7 @@ export const MCP_TOOL_DESCRIPTIONS = {
   },
   ai_funding: {
     description:
-      "Change household-wide frontier AI funding (every feature's frontier chat calls, not only Mail import); read it with ai_funding.status. Call only on the member's explicit instruction.",
+      "Change household-wide frontier AI funding (every feature's frontier chat calls, not only Mail import); read it with ai_funding_read.status. Call only on the member's explicit instruction.",
   },
   collection: {
     description: "Manage household Collections and their member-defined tags.",
@@ -411,7 +411,7 @@ export const MCP_TOOLS = defineMcpTools({
         op: kernelAction("delete", "mutation"),
         destructive: true,
         description:
-          'Soft-delete up to 500 records of one kind by `ids`, applying each incoming edge\'s declared disposition (block, detach, repoint). Read entity_graph.connections with operation "delete" first when unsure.',
+          'Soft-delete up to 500 records of one kind by `ids`, applying each incoming edge\'s declared disposition (block, detach, repoint). Read entity_graph_read.connections with operation "delete" first when unsure.',
       }),
       merge: mcpAction({
         op: kernelAction("merge", "mutation"),

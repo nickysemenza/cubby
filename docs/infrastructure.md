@@ -608,7 +608,7 @@ so every ladder moves straight to the ChatGPT plan; unified (paid) traffic is
 unaffected. One credit request per window passes as a probe: success clears
 the refusal, another refusal records it again. "Retry Claude credit now"
 (Settings → AI funding, MCP `ai_funding.reset_credit_refusal`) and any credit
-budget change clear it and resume funding-paused Runs. `ai_funding.status`
+budget change clear it and resume funding-paused Runs. `ai_funding_read.status`
 and the AI funding card report it as `credit.state` `refused`, with `until` and
 `reason`. Refusals that arrive only inside a stream are not recorded.
 
@@ -778,8 +778,8 @@ rewriting their retained history.
 
 Field decision prompts are measured from a Claude/Codex session over Cubby
 MCP, following `.agents/skills/decision-grading`: reviewed Suggestions
-(`suggestions.list` with `status`) are the labels, and
-`ai.suggest_fields` with `decisionModel` replays a record through
+(`suggestions_read.list` with `status`) are the labels, and
+`ai_read.suggest_fields` with `decisionModel` replays a record through
 Jev or Clef server-side. Only aggregates leave the session.
 
 The `AI_GATEWAY_API_KEY` environment variable authenticates the direct REST

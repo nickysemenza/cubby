@@ -13,16 +13,16 @@ Claude or Codex session researches it later through the Research queue.
    classifier outcomes. Related lifecycle and duplicate confirmation Emails
    reach you even when their Purchase is already itemized: inspect and record
    their package evidence before resolving them.
-2. The claim's `read` is the Email's first `mcp__cubby__imports_read` `mail`
+2. The claim's `read` is the Email's first `mcp__cubby__purchase_import_read` `mail_read`
    read; `readError` instead names why Cubby could not read it. Call
-   `imports_read` `mail` only for an attachment's original (`attachmentId`,
+   `purchase_import_read` `mail_read` only for an attachment's original (`attachmentId`,
    when the order details live in a PDF or image) or a later page. Note the
    read's `checksum`; item `images` give the exact `src` for a line's
    `imageUrl`. When `content.nextOffset` is not null,
    read again with `offset` set to it until it is null before extracting
    lines or a total. If `content.truncated` is still true after the last page,
    evidence is missing: import only when every item line and the total are
-   present; otherwise `mail` `resolve` it `unresolved` naming what is missing.
+   present; otherwise `purchase_import` `mail_resolve` it `unresolved` naming what is missing.
    The claim's `known` holds the lookups an Email usually starts with:
    `senderVendor`, the Vendor its sender proves (null when none), and
    `purchases`, the live Purchases (at most 5) whose order id is one of
@@ -69,7 +69,7 @@ Claude or Codex session researches it later through the Research queue.
      When that Purchase is not itemized yet (`known.purchases[].imported` is
      false), still link the notice; itemizing is the order confirmation's
      work. Import from the confirmation in this Run only when it is already
-     yours (`boundToRun`) or a `mail` `search` shows it `pending` or
+     yours (`boundToRun`) or a `purchase_import` `mail_search` shows it `pending` or
      `blocked`. When another Run holds it, `prepare` refuses with
      `MAIL_SOURCE_HELD_BY_RUN`: link the notice and claim the next Email;
      neither retrying nor escalating changes that refusal.
@@ -79,13 +79,13 @@ Claude or Codex session researches it later through the Research queue.
      ["financialTransaction"]`, by merchant). For a purchase payment,
      `finance` `converge` with its FTX- code and the Email's EML- `id`; Cubby
      books only what server evidence establishes. For a transfer, incoming
-     payment, reimbursement, card repayment or refund, `mail` `resolve` with
+     payment, reimbursement, card repayment or refund, `purchase_import` `mail_resolve` with
      `financial`, the FTX- `transactionId` and a reason: Cubby associates the
      Email, without spending, only when a current member-accepted mapping
      proves this Email/checksum/transaction/account and its event amount and
      direction agree. Provider identifier equality alone cannot establish a
      cross-provider mapping. On `review_required` or a
-     refused association, `mail` `resolve` the Email `unresolved` with the
+     refused association, `purchase_import` `mail_resolve` the Email `unresolved` with the
      blocker.
    - **A forwarded or shared copy of someone else's purchase**: forwarding
      alone never proves the recipient bought it. Automatic import refuses an
@@ -93,19 +93,19 @@ Claude or Codex session researches it later through the Research queue.
      `resolve` it `unresolved` naming the attribution gap so the member can
      select it explicitly. Linking it to an existing Purchase as evidence is
      fine and creates no vendor relationship.
-   - **An order whose Purchase you cannot establish**: `mail` `resolve` with
+   - **An order whose Purchase you cannot establish**: `purchase_import` `mail_resolve` with
      `unresolved` and the concrete gap.
    - **A payment notice `finance` `converge` returns review-required for**
      (a provider wallet such as Amazon Pay naming a card label but no
      member-accepted account): resolve it `unresolved` at once with the raw
      converge reason; do not retry. Only a member's `financial` disposition
      with `review` settles it.
-   - **Not about a purchase**: `mail` `resolve` with `unrelated`. Cubby deletes
+   - **Not about a purchase**: `purchase_import` `mail_resolve` with `unrelated`. Cubby deletes
      its unprotected retained copy.
 4. When the order's original is missing (a shipment Email for an order you have
-   not seen), `mail` `search` by order number, sender or Vendor before
+   not seen), `purchase_import` `mail_search` by order number, sender or Vendor before
    deciding it is unresolved, and read retained matches from the same
-   mailbox with `imports_read` `mail` for context. A search result alone is
+   mailbox with `purchase_import_read` `mail_read` for context. A search result alone is
    not evidence. To import or link a supporting original of the same
    purchase, name it in `prepare` or `resolve` like an admitted Email: Cubby
    admits it to this Run only when its decisions establish the same purchase

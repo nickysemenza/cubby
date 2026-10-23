@@ -297,7 +297,7 @@ export const photoImportContract = defineContract(
     }),
     review: query({
       exposure: "view",
-      note: "Agents read proposals through photo_run.proposals",
+      note: "Agents read proposals through photo_run_read.proposals",
       native:
         "Review proposed photo groups and processing status in Apple apps",
       input: z.object({ runId: runShortcode }),
@@ -306,7 +306,7 @@ export const photoImportContract = defineContract(
     }),
     candidates: query({
       exposure: "view",
-      note: "Agents read candidates through photo_run.product_candidates",
+      note: "Agents read candidates through photo_run_read.product_candidates",
       native: "Explain possible Product matches for a proposed photo group",
       input: z.object({
         runId: runShortcode,
@@ -593,7 +593,7 @@ export const photoImportContract = defineContract(
       input: photoImportReconcileInputSchema,
       output: photoImportReconcileOutputSchema,
     }),
-    // Agent-facing (MCP `imports_read`, `photo_run`): the photo agent's reads
+    // Agent-facing (MCP `photo_run`, `photo_run_read`): the photo agent's reads
     // and bounded writers.
     /** One bounded page of a run's photos in capture order, with owner and notes. */
     runContext: query({

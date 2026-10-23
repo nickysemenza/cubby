@@ -296,7 +296,7 @@ export const recipeContract = defineContract(
     importFromUrl: mutation({
       exposure: "capability",
       description:
-        "Scrape a recipe from a URL and save it in one step; returns the new recipe's shortcode and `lineCoverage` (per line, which of price/weight/nutrients are still missing). recipe_insights.scrape_url parses without saving.",
+        "Scrape a recipe from a URL and save it in one step; returns the new recipe's shortcode and `lineCoverage` (per line, which of price/weight/nutrients are still missing). recipe_insights_read.scrape_url parses without saving.",
       openWorld: true,
       input: z.object({ url: scrapeRecipeInput }),
       output: recipeImportWriteOut,
@@ -314,7 +314,7 @@ export const recipeContract = defineContract(
     patchLine: mutation({
       exposure: "capability",
       description:
-        "Change one recipe ingredient line — its amounts, the ingredient or sub-recipe it points at, or its source text/modifier — without resending the recipe's sections. The line keeps its position and every other line and instruction is left as-is. `lineId` comes from recipe_insights.costing_explanation's per-line diagnostics or recipe_insights.recipe_usages's usages. Also returns the recipe's refreshed `lineCoverage`.",
+        "Change one recipe ingredient line — its amounts, the ingredient or sub-recipe it points at, or its source text/modifier — without resending the recipe's sections. The line keeps its position and every other line and instruction is left as-is. `lineId` comes from recipe_insights_read.costing_explanation's per-line diagnostics or recipe_insights_read.recipe_usages's usages. Also returns the recipe's refreshed `lineCoverage`.",
       input: recipeLinePatchInput,
       output: recipeLinePatchOut,
       invalidates: ["recipe"],
@@ -424,7 +424,7 @@ export const recipeAvailabilityContract = defineContract(
   {
     getRecipeAvailability: query({
       exposure: "view",
-      note: "Agents read cookable recipes through recipe_insights.get_makeable",
+      note: "Agents read cookable recipes through recipe_insights_read.get_makeable",
       input: recipeAvailabilityInput,
       output: recipeAvailabilityOut,
       cache: { tags: [["recipe", "availability"]] },

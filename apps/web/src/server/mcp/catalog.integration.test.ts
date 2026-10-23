@@ -549,6 +549,21 @@ describe("MCP catalog", () => {
         })
         .parse(commit._meta)["cubby/error"].diagnostics.stage,
     ).toBe("context");
+    // describe hides unmounted actions too, including from the available list.
+    const described = await callMcpTool(
+      createMcpServer(),
+      "purchase_import",
+      { action: "describe", input: { actions: ["commit"] } },
+      kernelRequestContext(kernel),
+      {
+        entityKernel: kernel,
+        purchaseAgent: { runId: run.id, grantId: "catalog-grant" },
+      },
+    );
+    expect(described.isError).toBe(true);
+    const refusal = JSON.stringify(described.content);
+    expect(refusal).toContain("Unknown action");
+    expect(refusal).not.toContain("prepare");
   });
 
   it("shows a purchase agent only its run purpose's actions", async () => {

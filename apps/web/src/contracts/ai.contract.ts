@@ -183,7 +183,7 @@ export const aiContract = defineContract(
     startSuggestionSweep: mutation({
       exposure: "capability",
       description:
-        "Start a bounded background suggestion sweep for the requested scope. It enqueues model-backed proposal work; inspect progress with latest_suggestion_sweep_status and review proposals in suggestions.list.",
+        "Start a bounded background suggestion sweep for the requested scope. It enqueues model-backed proposal work; inspect progress with latest_suggestion_sweep_status and review proposals in suggestions_read.list.",
       input: suggestionSweepStartInput,
       output: suggestionSweepStartOut,
       invalidates: [],
@@ -200,7 +200,7 @@ export const aiContract = defineContract(
     resumeSuggestionSweep: mutation({
       exposure: "capability",
       description:
-        "Resume a paused suggestion sweep from its saved checkpoint. Inspect progress with latest_suggestion_sweep_status and review proposals in suggestions.list.",
+        "Resume a paused suggestion sweep from its saved checkpoint. Inspect progress with latest_suggestion_sweep_status and review proposals in suggestions_read.list.",
       command: { label: "Resume suggestions", confirmation: null },
       input: suggestionSweepControlInput,
       output: suggestionSweepStartOut,
@@ -280,14 +280,14 @@ export const aiFundingContract = defineContract(
     }),
     setCreditBudget: mutation({
       description:
-        "Set household AI budgets per six-hour window: creditLimitUsd (Claude standard API cost), planLimitUsd (ChatGPT standard API cost, default $2), and paidLimitUsd (charged cost, default $1). Background work moves from credit to plan, then paid within these limits. Also clears a recorded Claude credit refusal, and work paused for free capacity retries now. Returns ai_funding.status.",
+        "Set household AI budgets per six-hour window: creditLimitUsd (Claude standard API cost), planLimitUsd (ChatGPT standard API cost, default $2), and paidLimitUsd (charged cost, default $1). Background work moves from credit to plan, then paid within these limits. Also clears a recorded Claude credit refusal, and work paused for free capacity retries now. Returns ai_funding_read.status.",
       input: aiBudgetSettings,
       output: aiFundingStatus,
       invalidates: ["runOnly"],
     }),
     resetCreditRefusal: mutation({
       description:
-        'Clear a recorded Claude credit refusal ("Retry Claude credit now") so the next frontier call tries Claude credit again, e.g. after raising the Console spend limit; work paused for free capacity retries now. A still-refusing Console records the refusal again on that call. Returns ai_funding.status.',
+        'Clear a recorded Claude credit refusal ("Retry Claude credit now") so the next frontier call tries Claude credit again, e.g. after raising the Console spend limit; work paused for free capacity retries now. A still-refusing Console records the refusal again on that call. Returns ai_funding_read.status.',
       input: zod.strictObject({}),
       output: aiFundingStatus,
       invalidates: ["runOnly"],

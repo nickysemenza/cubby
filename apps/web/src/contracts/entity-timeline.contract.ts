@@ -13,7 +13,7 @@ export const entityTimelineContract = defineContract(
   "entity",
   {
     timeline: query({
-      note: "Agents read change history through activity.list",
+      note: "Agents read change history through activity_read.list",
       input: z.custom<EntityTimelineInputByEntity[TimelineEntity]>(),
       output: z.custom<EntityTimelineOut>(),
       nativeModels: { input: "json" },

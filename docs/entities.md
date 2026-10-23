@@ -512,7 +512,7 @@ shows several slots of one record (a Run) polls one `entityReport.getMany`, so t
 record once per poll.
 
 **Run work progress.** The storage-only `getRunWorkProgress` projection supplies
-both `run.work_snapshot.workProgress` and the Run's shared `progress`
+both `run_read.work_snapshot.workProgress` and the Run's shared `progress`
 report block. Every Run purpose declares a count source: step receipts,
 target outcomes, operations, images, model calls, or its typed checkpoint.
 Exploratory populations have `total: null`, never an invented zero. Step drivers
@@ -2386,7 +2386,7 @@ presence key it was already published under (expense
 `projectPresenceFilter`); others get the generated
 `<columnId>PresenceFilter`.
 
-A repository reference column may opt into `entity_graph.connections` with
+A repository reference column may opt into `entity_graph_read.connections` with
 `{ reference: "financialTransaction", connection: true }`. Only mark the
 canonical direction: the row's `owner` is the source and the reference is the
 target; the reader exposes both outgoing and incoming groups under
@@ -2636,7 +2636,7 @@ Problems, Email attention, findings and account work. It derives a filterable
 Waiting for column from current source/account authority, with Either for
 shared research and unresolved for missing private ownership. Its filter is
 any-of: Me (mine or Either), Either, a member (routed to them only), and No
-value for Unresolved. This is a read projection, not a new entity or assignment ledger. MCP `activity.for_member`
+value for Unresolved. This is a read projection, not a new entity or assignment ledger. MCP `activity_read.for_member`
 uses the connected member implicitly and filters eligibility before counts
 and paging; the household UI's routing filters do not grant private access.
 
@@ -3066,7 +3066,7 @@ The physical graph is composed at read time from `ENTITY_EDGES` and
 `ENTITY_EDGE_OWNERS` (`generic/entity-links/repo/entity-edge-source.ts`): `(edgeKey, sourceKind,
 sourceId, targetKind, targetId)` with both ends live. It backs the Relations
 tab's Connections, the impact preview, the graph explorer's physical edges,
-the Problems orphan finder, and MCP `entity_graph.connections`. Writes never go
+the Problems orphan finder, and MCP `entity_graph_read.connections`. Writes never go
 through it.
 
 The orphan finder restricts graph arms to edges touching its checked kinds
@@ -3452,7 +3452,7 @@ inline evidence, keyboard review (↑/↓, →, A, D), a confirmed "Accept N cle
 that re-lists before each chunk, bulk Dismiss and Never suggest (no bulk
 Wrong), and Find suggestions, which estimates and starts a Sweep. A
 collapsible Automatic rules section lists each rule's state, measured
-precision and member switch (`suggestions.rules`/`setRule`; On only when
+precision and member switch (`suggestions_read.rules`/`setRule`; On only when
 eligible, Off after a confirm). Its `family`, `record` (`<kind>:<CODE>`) and `runId` params scope it.
 Every entity list batches the same queue's pending counts and opens its shared
 inline review; detail pages show a scoped Suggestions section. Family declarations

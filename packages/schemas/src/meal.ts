@@ -280,7 +280,7 @@ export const getMealPreparationsMcpInput = getMealPreparationsInput.extend({
 });
 
 /**
- * `nutrition.preparations_detail` over MCP: the same shape as {@link getMealPreparationsOut}
+ * `nutrition_read.preparations_detail` over MCP: the same shape as {@link getMealPreparationsOut}
  * but every `totals.nutrition` may be a subset of the 22 nutrient keys. One
  * meal read carries (1 + preparations + portions + 2) totals objects; at 22
  * estimates each that was ~10KB to answer "is this portion confirmed?". The

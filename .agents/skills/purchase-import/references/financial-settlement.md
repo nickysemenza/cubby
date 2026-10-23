@@ -164,7 +164,7 @@ accounts, and `run_read.work_snapshot` follows its Steps. Burn the backlog group
 filtering a group with `where {account: {in: [FAC-…]}, month: {in: [YYYY-MM]}}`:
 
 1. Accept `clean: true` suggestions in batches of up to 100 with
-   `suggestions.reviews`: verdict `correct`, intent `apply`,
+   `suggestions.review_batch`: verdict `correct`, intent `apply`,
    `expectedFingerprint` (the row's `fingerprint`), and `application {kind:
    "statement_transaction", action: <recommended>}`; an attach also names
    `transactionId`, the first candidate. For transfer/card-payment creates use

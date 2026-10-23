@@ -80,7 +80,7 @@ checksums, replay, money conservation and unresolved-identity review still apply
    status; related originals and useful attachments become retained evidence.
    Frontier chat-model calls share the household AI budget, a $1 per six-hour
    UTC safety net; classification, decision models and embeddings are not
-   budgeted (`purchase_import.mail_read_import` shows the window).
+   budgeted (`run_read.mail_import` shows the window).
    Confirmation,
    shipping, delivery, cancellation and refund mail may link to one Purchase.
    An exact order id helps; a unique supported match can use account, items,

@@ -389,8 +389,8 @@ describe("isolated Mail coordinator replay", () => {
               {
                 steps: [
                   call("claim", "claim_next_import_work"),
-                  mcp("resolve", "mail", started.runId, {
-                    action: "resolve",
+                  mcp("resolve", "purchase_import", started.runId, {
+                    action: "mail_resolve",
                     mailboxId,
                     messageId: from("claim", "email.messageId"),
                     checksum: from("claim", "read.checksum"),

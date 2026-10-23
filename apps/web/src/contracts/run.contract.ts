@@ -267,7 +267,7 @@ export const runContract = defineContract(
   {
     mailImport: query({
       description:
-        "The member's connected Gmail mailboxes with their automatic Mail import switch and targeted-search progress. AI funding for the imports is household-wide: ai_funding.status.",
+        "The member's connected Gmail mailboxes with their automatic Mail import switch and targeted-search progress. AI funding for the imports is household-wide: ai_funding_read.status.",
       native: "Show automatic Mail import switches and search progress",
       input: z.strictObject({}),
       output: mailImportStatus,
@@ -276,7 +276,7 @@ export const runContract = defineContract(
     }),
     setMailImport: mutation({
       description:
-        "Turn automatic Mail import on or off for one connected mailbox (purchase_import.mail_read_import). On, scheduled discovery searches known Vendors' senders and unmatched transaction merchants and imports unambiguous purchases within the household AI funding budgets (ai_funding.status), pausing until the next window once all are spent.",
+        "Turn automatic Mail import on or off for one connected mailbox (state: run_read.mail_import). On, scheduled discovery searches known Vendors' senders and unmatched transaction merchants and imports unambiguous purchases within the household AI funding budgets (ai_funding_read.status), pausing until the next window once all are spent.",
       native: "Turn automatic Mail import on or off for a connected mailbox",
       input: setMailImportInput,
       output: mailImportStatus,
@@ -284,7 +284,7 @@ export const runContract = defineContract(
     }),
     sweep: mutation({
       description:
-        "Find suggestions: start one Sweep over the chosen Suggestion families (statement_transaction and transfer_pair scoped by accountIds/since, recommendation by entityKinds, field by entity and fields; omitted scope covers everything). Returns the Sweep Run; follow it with run.work_snapshot and review results with suggestions.list. Model calls spend within the household AI budget and pause at it.",
+        "Find suggestions: start one Sweep over the chosen Suggestion families (statement_transaction and transfer_pair scoped by accountIds/since, recommendation by entityKinds, field by entity and fields; omitted scope covers everything). Returns the Sweep Run; follow it with run_read.work_snapshot and review results with suggestions_read.list. Model calls spend within the household AI budget and pause at it.",
       openWorld: true,
       native: "Find suggestions across Cubby or a chosen scope",
       input: sweepStartInput,
@@ -325,7 +325,7 @@ export const runContract = defineContract(
     }),
     workSnapshot: query({
       description:
-        "One Run's live state: status, counts, findings (each `id` is what activity.resolve_run_finding takes; activity.report shows a proposed fix), each target's outcome (`warning` holds a skip's reason), progress history, and write operations. An owned discovery Run also returns mailDiscovery: a paged emails audit (emailCursor/emailLimit, follow nextCursor), execution-time outcomes/ownership alongside current Email state, explicitly incomplete historical coverage, frozen mailbox scope and current mailbox coverage summarized as query counts with the next pending queries, persisted Workflow checkpoint with its in-flight page as counts, recorded AI usage/retries, and failure diagnostics. Reads stored evidence only; it never loads or resumes execution. An owned relevance reclassification Run returns mailReclassification: selected Email codes/checksums, durable publication receipts (null for legacy Runs), retained possibly truncated notes, and separately labeled classification observations that are not publication receipts. After a client timeout, read receipts before rerunning; historical completed receipts can include deferred work with linked recovery. Failed or absent receipts have unknown publication outcomes and require reconciliation before retrying. Read this to follow a run instead of polling entity_read.",
+        "One Run's live state: status, counts, findings (each `id` is what activity.resolve_run_finding takes; activity_read.report shows a proposed fix), each target's outcome (`warning` holds a skip's reason), progress history, and write operations. An owned discovery Run also returns mailDiscovery: a paged emails audit (emailCursor/emailLimit, follow nextCursor), execution-time outcomes/ownership alongside current Email state, explicitly incomplete historical coverage, frozen mailbox scope and current mailbox coverage summarized as query counts with the next pending queries, persisted Workflow checkpoint with its in-flight page as counts, recorded AI usage/retries, and failure diagnostics. Reads stored evidence only; it never loads or resumes execution. An owned relevance reclassification Run returns mailReclassification: selected Email codes/checksums, durable publication receipts (null for legacy Runs), retained possibly truncated notes, and separately labeled classification observations that are not publication receipts. After a client timeout, read receipts before rerunning; historical completed receipts can include deferred work with linked recovery. Failed or absent receipts have unknown publication outcomes and require reconciliation before retrying. Read this to follow a run instead of polling entity_read.",
       native: "Show durable live import progress in Apple apps",
       nativeModels: { output: "json" },
       input: z.object({

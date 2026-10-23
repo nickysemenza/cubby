@@ -55,6 +55,6 @@ When a later eater shares a batch originally sized for one person, enlarge the
 recipe quantities and yield to the true combined amount before adding their
 portion.
 
-Verify `nutrition.daily_intake(date, partyId)` for every eater: it must be `logged`,
+Verify `nutrition_read.daily_intake(date, partyId)` for every eater: it must be `logged`,
 have nutrition, and include the meal. Report per-meal kcal/protein/carbs/fat
 and clearly name every estimate.

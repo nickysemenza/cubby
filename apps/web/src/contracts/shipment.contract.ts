@@ -17,7 +17,7 @@ export const shipmentContract = defineContract(
   {
     edit_observation: mutation({
       description:
-        "Partially edit one retained observation using its observationId from shipments.timeline and current Shipment reference. Supply only changed fields in patch; omitted fields and source identity remain unchanged. Appends a reviewed revision, retains original captures and history, and protects it from source replay. A superseded observation refuses a different edit; read the current revision first. Interactive members only.",
+        "Partially edit one retained observation using its observationId from shipments_read.timeline and current Shipment reference. Supply only changed fields in patch; omitted fields and source identity remain unchanged. Appends a reviewed revision, retains original captures and history, and protects it from source replay. A superseded observation refuses a different edit; read the current revision first. Interactive members only.",
       native: "Correct retained shipment observations from the CLI",
       nativeModels: { input: "json", output: "json" },
       input: editShipmentObservationInput,
@@ -26,7 +26,7 @@ export const shipmentContract = defineContract(
     }),
     reassign: mutation({
       description:
-        "Explicitly move a misassociated source package and all its retained tracking observations to another Shipment. Use sourcePackageId from shipments.timeline; replay follows the corrected association.",
+        "Explicitly move a misassociated source package and all its retained tracking observations to another Shipment. Use sourcePackageId from shipments_read.timeline; replay follows the corrected association.",
       input: reassignShipmentEvidenceInput,
       output: shipmentReferenceOut,
       invalidates: ["shipment", "purchase"],

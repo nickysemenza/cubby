@@ -41,7 +41,7 @@ import {
 
 import { defineContract, mutation, query } from "~/contracts/define";
 
-// Agent- and caller-facing (MCP `purchase_import`, `mail`, `imports_read`):
+// Agent- and caller-facing (MCP `purchase_import`, `purchase_import_read`):
 // the same writers serve Pi's Mail import and a member's Claude/Codex session.
 export const purchaseImportContract = defineContract(
   "purchaseImport",
@@ -65,7 +65,7 @@ export const purchaseImportContract = defineContract(
     }),
     emailImport: mutation({
       description:
-        "Start Luna import for up to 50 selected Emails, each by its `id` (EML- code) and exact checksum as purchase_import.mail_search and purchase_import.mail_read return them, without a dollar allowance. An Email already linked to exactly one Purchase imports into that Purchase. Ownership, evidence and review gates still apply. An existing automatic admission retains its original authority. Automatic discovery remains classification-only; no other Email is admitted. Other paid models need their own authorization.",
+        "Start Luna import for up to 50 selected Emails, each by its `id` (EML- code) and exact checksum as purchase_import.mail_search and purchase_import_read.mail_read return them, without a dollar allowance. An Email already linked to exactly one Purchase imports into that Purchase. Ownership, evidence and review gates still apply. An existing automatic admission retains its original authority. Automatic discovery remains classification-only; no other Email is admitted. Other paid models need their own authorization.",
       command: {
         label: "Import Email",
         confirmation: null,
@@ -79,7 +79,7 @@ export const purchaseImportContract = defineContract(
     /** Link or dismiss one Email for one Purchase (Purchase, Vendor and Email pages). */
     emailPurchaseDecide: mutation({
       description:
-        "A member's review of one Email for one Purchase at the Email's checksum (`id` EML- code and checksum from purchase_import.mail_search or purchase_import.mail_read). `linked` links every order event of the Email that suggests or was decided for that Purchase, replacing another Purchase's link on those events, and marks the Email related; `dismissed` dismisses them. An import-accepted source cannot be dismissed. List an Email's pairs with entity_read on email (`purchaseLinks`) or the Email list filtered by purchaseId/vendorId.",
+        "A member's review of one Email for one Purchase at the Email's checksum (`id` EML- code and checksum from purchase_import.mail_search or purchase_import_read.mail_read). `linked` links every order event of the Email that suggests or was decided for that Purchase, replacing another Purchase's link on those events, and marks the Email related; `dismissed` dismisses them. An import-accepted source cannot be dismissed. List an Email's pairs with entity_read on email (`purchaseLinks`) or the Email list filtered by purchaseId/vendorId.",
       command: { label: "Update Purchase link", confirmation: null },
       input: emailPurchaseDecisionInput,
       output: emailPurchaseDecisionOut,
@@ -125,7 +125,7 @@ export const purchaseImportContract = defineContract(
     /** Persist an immutable proposed import; writes no Purchase, Expense, or Product. */
     prepare: mutation({
       description:
-        "Persist an immutable proposed purchase import. Each order names its Vendor (`vendorId`, or `vendor.name` to reuse the Vendor its sender or website domain proves or an exact-name Vendor, else create one; similar candidates need `vendor.distinctFrom`) and its source: a retained Email (`mail_message`, key `gmail:<mailboxId>:<messageId>` and the checksum purchase_import.mail_read returned), a receipt photo, or a vendor export. Without `_runExecution.run`, a member's preparation opens its own import Run and returns its RUN- code. Returns stable order and line ids plus existing Vendor candidates (`vendorCandidates`) and Product candidates to reuse before creating one. Never writes Purchases, Expenses, or Products.",
+        "Persist an immutable proposed purchase import. Each order names its Vendor (`vendorId`, or `vendor.name` to reuse the Vendor its sender or website domain proves or an exact-name Vendor, else create one; similar candidates need `vendor.distinctFrom`) and its source: a retained Email (`mail_message`, key `gmail:<mailboxId>:<messageId>` and the checksum purchase_import_read.mail_read returned), a receipt photo, or a vendor export. Without `_runExecution.run`, a member's preparation opens its own import Run and returns its RUN- code. Returns stable order and line ids plus existing Vendor candidates (`vendorCandidates`) and Product candidates to reuse before creating one. Never writes Purchases, Expenses, or Products.",
       input: preparePurchaseImportInput,
       output: preparePurchaseImportOut,
     }),
@@ -152,7 +152,7 @@ export const purchaseImportContract = defineContract(
     /** Read one retained Email, optionally one attachment's original bytes. */
     mailImportOutcomes: query({
       description:
-        "Read bounded immutable import outcomes for one owned Email, newest first. Read purchase_import.mail_read and lock a blind grade before revealing these predictions. Includes Assessment handles, imported lines/total or linked/unrelated/unresolved disposition and rule/model producer. Grade member-confirmed outcomes through suggestions.review_batch with intent history; grades never change the ledger.",
+        "Read bounded immutable import outcomes for one owned Email, newest first. Read purchase_import_read.mail_read and lock a blind grade before revealing these predictions. Includes Assessment handles, imported lines/total or linked/unrelated/unresolved disposition and rule/model producer. Grade member-confirmed outcomes through suggestions.review_batch with intent history; grades never change the ledger.",
       input: mailImportOutcomesInput,
       output: mailImportOutcomesOut,
       readPolicy: "strong",
