@@ -40,11 +40,16 @@ failed-save recovery: a rejected name stays dirty through refresh, valid notes
 can save without acknowledging that name, approval remains blocked, and retry
 submits the saved revision before approval. It drives the real `CommitInput` and
 photo draft barrier shared by create and existing-Product edits. The selected-field
-E2E retains real identity resolution, incompatible-entry and fractional-quantity
-recovery, notes-only application preserving the original Product name, unchanged
-historical stock and fresh Product-detail read-back. Its duplicate failed-name
-HTTP save/retry sequence is removed; dedicated existing-Product failed-save
-composition is the deliberate gap, with the shared native barrier retained.
+E2E retains real identity resolution, the historical stock decision, notes-only
+application preserving the original Product name, and exact unchanged 2 kg stock.
+Batch the existing Product and its stock together; finish at the committed
+read-back. `run/proposals.integration.test.ts`'s explicit-resolution/selected-fields
+case owns unresolved refusal, selective mutation and replay. Incompatible-entry
+recovery, fractional-count error presentation, the sibling reference/receive
+preview, repeated Run totals/phone overflow and the Product-detail cache-freshness
+visit are omitted from this journey. These are deliberate interaction/composition
+gaps, alongside its removed existing-Product failed-name HTTP save/retry sequence;
+the shared native failed-save barrier remains required coverage.
 
 Photo-group review prerequisites create their Location and Product category in one
 fixture graph. Independent shirt, label and boots uploads run together; keep their

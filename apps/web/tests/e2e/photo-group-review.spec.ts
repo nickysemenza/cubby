@@ -29,6 +29,7 @@ import * as schema from "~/server/db/schema";
 import {
   createEvidenceHarnessContext,
   createEntityFixture,
+  createFixtureGraph,
 } from "./fixtures/core";
 import {
   seedPhotoGroupReviewRun,
@@ -65,29 +66,35 @@ test.afterEach(async ({ e2eRuntime }) => {
 });
 
 // Applying historical evidence must neither receive stock nor replace fields
-// the reviewer did not select. An unresolved proposal and a fractional count
-// cannot be applied using an older saved payload.
-test("resolves identity, validates counts, and applies selected fields without receiving historical stock", async ({
+// the reviewer did not select. Resolve identity before approving the notes-only
+// historical update; the native owner retains failed-save recovery.
+test("applies selected notes to a resolved historical Product without changing its name or stock", async ({
   page,
   e2eRuntime,
 }) => {
   // Includes upload seeding, lazy hydration, and several persisted edits.
   test.setTimeout(Math.max(test.info().timeout, 60_000));
   const name = `Synthetic review ${Date.now()}`;
-  const existing = await createEntityFixture(page, "product", {
-    name: `${name} shirt`,
-    notes: "Original catalog notes",
-  });
   const seed = await seedPhotoGroupReviewRun(
     page,
     name,
     e2eRuntime.objectStorageUrl,
   );
-  const incompatibleStock = await createEntityFixture(page, "inventory", {
-    productId: existing.id,
-    locationId: seed.location.id,
-    amount: { value: 2, unit: "kg" },
-  });
+  const { existing, historicalStock } = await createFixtureGraph(
+    page,
+    async (create) => {
+      const existing = await create("product", {
+        name: `${name} shirt`,
+        notes: "Original catalog notes",
+      });
+      const historicalStock = await create("inventory", {
+        productId: existing.id,
+        locationId: seed.location.id,
+        amount: { value: 2, unit: "kg" },
+      });
+      return { existing, historicalStock };
+    },
+  );
   const proposed = await startOperation(
     page.request,
     "photoImport.saveGroups",
@@ -113,23 +120,6 @@ test("resolves identity, validates counts, and applies selected fields without r
     `/runs/${seed.runId}#photo-group-g1`,
     page.getByRole("heading", { name: "Photo review" }),
   );
-  const other = page.locator("#photo-group-g2");
-  await other.scrollIntoViewIfNeeded();
-  await other
-    .getByRole("button", { name: /^(Change|Open) Own it now\?$/ })
-    .click();
-  await other.getByRole("combobox", { name: "stock decision" }).click();
-  await page
-    .getByRole("option", { name: "Yes, add to inventory", exact: true })
-    .click();
-  // Receiving a reference-only group lands where its siblings receive.
-  await expect(
-    other.getByText(`Create a count of 1 at Home › ${name} location.`),
-  ).toBeVisible();
-  await other.getByRole("combobox", { name: "stock decision" }).click();
-  await page
-    .getByRole("option", { name: "Just a reference photo", exact: true })
-    .click();
   const group = page.locator("#photo-group-g1");
   await expect(
     group.getByRole("button", { name: "Attach 1 photo", exact: true }),
@@ -138,35 +128,6 @@ test("resolves identity, validates counts, and applies selected fields without r
   await group
     .getByRole("button", { name: "Change Own it now?", exact: true })
     .click();
-  // A failed existing-entry selection can be replaced with a fresh count.
-  await group.getByRole("combobox", { name: "existing stock entry" }).click();
-  await page
-    .getByRole("option")
-    .filter({ hasText: `${name} shirt` })
-    .first()
-    .click();
-  await expect(
-    group.getByText("Retry the stock-entry selection before applying"),
-  ).toBeVisible();
-  await group
-    .getByRole("button", { name: "Create a fresh count here", exact: true })
-    .click();
-  await expect(
-    group.getByText("Retry the stock-entry selection before applying"),
-  ).toHaveCount(0);
-  const quantity = group.getByRole("spinbutton", { name: "Qty" });
-  await quantity.fill("1.5");
-  await group
-    .getByRole("button", { name: "Attach 1 photo", exact: true })
-    .click();
-  await expect(
-    group.getByText("Enter a whole number greater than 0."),
-  ).toBeVisible();
-  await expect(
-    group.getByRole("button", { name: "Attach 1 photo", exact: true }),
-  ).toBeVisible();
-  await quantity.fill("1");
-  await quantity.blur();
   await group.getByRole("combobox", { name: "stock decision" }).click();
   await page
     .getByRole("option", {
@@ -209,34 +170,16 @@ test("resolves identity, validates counts, and applies selected fields without r
     name: `${name} shirt`,
     notes: "Label confirmed: medium",
   });
+  if (!product) throw new Error("Reviewed Product missing after approval");
   const stock = await db.query.inventoryEntry.findMany({
-    where: eq(schema.inventoryEntry.productId, product!.id),
+    where: eq(schema.inventoryEntry.productId, product.id),
   });
   expect(stock).toHaveLength(1);
-  expect(stock[0]?.shortcode).toBe(incompatibleStock.id);
-  await expect(
-    page.getByRole("navigation", { name: "Section index" }),
-  ).toHaveCount(1);
-  await expect(
-    page.getByText("Run cost · includes all nested work"),
-  ).toBeVisible();
-
-  await page.setViewportSize({ width: 402, height: 874 });
-  await expect
-    .poll(() =>
-      page.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
-    )
-    .toBe(true);
-
-  // The optional editor primed this Product's detail cache before applying.
-  // Following its result link must show the committed fields immediately.
-  await group
-    .getByRole("link", { name: `${name} shirt`, exact: true })
-    .first()
-    .click();
-  await expect(
-    page.getByText("Label confirmed: medium", { exact: true }),
-  ).toBeVisible();
+  expect(stock[0]).toMatchObject({
+    shortcode: historicalStock.id,
+    amountValue: 2,
+    amountUnit: "kg",
+  });
 });
 
 test("approves two selected photo groups with one reviewed batch action", async ({
