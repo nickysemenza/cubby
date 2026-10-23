@@ -1,7 +1,11 @@
 import type { ShipmentObservationInput } from "@cubby/schemas/shipment-evidence";
 import { describe, expect, it } from "vitest";
 
-import { reconcileShipmentTimeline, shipmentMilestones } from "./timeline";
+import {
+  reconcileShipmentTimeline,
+  shipmentEventSummary,
+  shipmentMilestones,
+} from "./timeline";
 
 const event = (
   kind: ShipmentObservationInput["kind"],
@@ -45,6 +49,77 @@ describe("shipment evidence reconciliation", () => {
         { id: "two", event: scan, superseded: false },
       ]),
     ).toHaveLength(2);
+  });
+
+  it("summarizes distinct current events without substituting unknown event times", () => {
+    const first = event("label_created", "2026-06-01T09:00:00Z");
+    const last = event("delivered", "2026-06-03T10:30:00Z");
+    const unknown = {
+      ...first,
+      time: { kind: "unknown" },
+    } satisfies ShipmentObservationInput;
+    const timeline = reconcileShipmentTimeline([
+      { id: "first", event: first, superseded: false },
+      { id: "duplicate", event: first, superseded: false },
+      { id: "last", event: last, superseded: false },
+      { id: "unknown", event: unknown, superseded: false },
+      {
+        id: "old",
+        event: event("delivered", "2026-06-09T00:00:00Z"),
+        superseded: true,
+      },
+    ]);
+    expect(shipmentEventSummary(timeline)).toEqual({
+      firstEventDate: "2026-06-01",
+      lastEventDate: "2026-06-03",
+      eventSpanHours: 49.5,
+      eventSpanLabel: "49.5h",
+      eventCount: 3,
+    });
+    expect(shipmentEventSummary(timeline.slice(0, 1))).toMatchObject({
+      eventSpanHours: null,
+    });
+    expect(shipmentEventSummary([])).toEqual({
+      firstEventDate: null,
+      lastEventDate: null,
+      eventSpanHours: null,
+      eventSpanLabel: null,
+      eventCount: 0,
+    });
+  });
+
+  it("keeps calendar-day precision for coarse endpoints, including mixed time precision", () => {
+    const coarse = {
+      ...event("label_created", "2026-06-01T00:00:00Z"),
+      time: { kind: "date", value: "2026-06-01" },
+    } satisfies ShipmentObservationInput;
+    const local = {
+      ...coarse,
+      time: { kind: "local", value: "June 5 morning", timezone: null },
+    } satisfies ShipmentObservationInput;
+    const summary = (last: ShipmentObservationInput) =>
+      shipmentEventSummary(
+        reconcileShipmentTimeline([
+          { id: "first", event: coarse, superseded: false },
+          { id: "last", event: last, superseded: false },
+          { id: "local", event: local, superseded: false },
+        ]),
+      );
+    expect(
+      summary({ ...coarse, time: { kind: "date", value: "2026-06-03" } }),
+    ).toMatchObject({
+      firstEventDate: "2026-06-01",
+      lastEventDate: "2026-06-03",
+      eventSpanHours: 48,
+      eventSpanLabel: "2d",
+      eventCount: 3,
+    });
+    expect(
+      summary(event("delivered", "2026-06-03T23:30:00-02:00")),
+    ).toMatchObject({
+      eventSpanHours: 48,
+      eventSpanLabel: "2d",
+    });
   });
 
   it("measures transit across carrier handoffs using first possession", () => {

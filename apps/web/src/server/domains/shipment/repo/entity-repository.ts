@@ -10,6 +10,12 @@ import type { Database, DrizzleTransaction } from "~/server/db";
 import { notDeleted, unwrapDb } from "~/server/db/helpers";
 import type { ListReadIntent } from "~/server/db/helpers/query";
 import { shipment } from "~/server/db/schema";
+import {
+  loadShipmentEventSummaries,
+  shipmentEventSummaries,
+  shipmentSummarySort,
+} from "~/server/domains/shipment/repo/event-summary";
+import { shipmentEventSummary } from "~/server/domains/shipment/repo/timeline";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import {
   createEntityReader,
@@ -26,11 +32,40 @@ import { completeListReader } from "~/server/generic/list/repo/list-read-adapter
 type ReaderDb = Database | DrizzleTransaction;
 type ShipmentRow = typeof shipment.$inferSelect;
 
-const scaffold = listScaffold("shipment", shipment);
+const scaffold = listScaffold("shipment", shipment, {
+  derived: {
+    firstEventDate: shipmentSummarySort("firstEventDate"),
+    lastEventDate: shipmentSummarySort("lastEventDate"),
+    eventSpanHours: shipmentSummarySort("eventSpanHours"),
+    eventCount: shipmentSummarySort("eventCount"),
+  },
+});
 export const buildShipmentWhere = (filters: ShipmentFilters = {}) =>
   scaffold.where(filters);
 const shipmentRead = {
   media: true,
+  bindings: (bind) => {
+    const summaries = bind.batch(({ db, rows, context }) =>
+      context.has(shipmentEventSummaries)
+        ? Promise.resolve(context.get(shipmentEventSummaries))
+        : loadShipmentEventSummaries(
+            db,
+            rows.map((row) => row.id),
+          ),
+    );
+    return [
+      summaries.fields(
+        shipmentOut.pick({
+          firstEventDate: true,
+          lastEventDate: true,
+          eventSpanHours: true,
+          eventSpanLabel: true,
+          eventCount: true,
+        }),
+        (row, loaded) => loaded.get(row.id) ?? shipmentEventSummary([]),
+      ),
+    ];
+  },
   references: {
     purchaseId: {
       kind: "lookup",

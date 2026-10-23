@@ -28,6 +28,11 @@ describe("list column deferred reads", () => {
       ]),
     );
   });
+  it("requests the formatted span label with the numeric shipment sort value", () => {
+    expect(listColumnReadFields("shipment", "eventSpanHours")).toEqual(
+      expect.arrayContaining(["eventSpanHours", "eventSpanLabel"]),
+    );
+  });
   it("retains stored assignment mode for an inherited project editor", () => {
     expect(listColumnReadFields("task", "projectId")).toEqual(
       expect.arrayContaining(["projectId", "projectMode", "fieldResolutions"]),

@@ -31,6 +31,7 @@ export function listColumnReadFields(
         : []),
       ...[
         read,
+        ...(field.display.labelPath ? [field.display.labelPath] : []),
         ...(projection ? [projection] : []),
         ...(explanation && "sourceDependencies" in explanation
           ? explanation.sourceDependencies.map((source) => source.path)

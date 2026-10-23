@@ -2,6 +2,8 @@ import type { ShipmentObservationInput } from "@cubby/schemas/shipment-evidence"
 import { shipmentTimelineOut } from "@cubby/schemas/shipment-evidence";
 import { and, eq, inArray } from "drizzle-orm";
 
+import { householdLocalDate } from "~/lib/household-date";
+import { roundTo } from "~/lib/round-to";
 import type { Database } from "~/server/db";
 import { getDb } from "~/server/db/helpers";
 import {
@@ -55,6 +57,48 @@ export function reconcileShipmentTimeline(
       event.time.kind === "instant" ? Date.parse(event.time.value) : Infinity;
     return time(a.event) - time(b.event);
   });
+}
+
+/** Summary endpoints preserve date precision; capture/observation times never fill gaps. */
+export function shipmentEventSummary(
+  timeline: ReturnType<typeof reconcileShipmentTimeline>,
+) {
+  const dated = timeline.flatMap<
+    Extract<ShipmentObservationInput["time"], { kind: "instant" | "date" }>
+  >(({ event }) => {
+    const time = event.time;
+    if (time.kind === "instant")
+      return [{ ...time, value: new Date(time.value).toISOString() }];
+    return time.kind === "date" ? [time] : [];
+  });
+  const day = (time: (typeof dated)[number]) =>
+    time.kind === "date"
+      ? time.value
+      : householdLocalDate(new Date(time.value));
+  // Compare mixed precision in household calendar days; midnight is only a sorting anchor.
+  const epoch = (time: (typeof dated)[number]) => Date.parse(time.value);
+  dated.sort((a, b) => day(a).localeCompare(day(b)) || epoch(a) - epoch(b));
+  const first = dated[0];
+  const last = dated.at(-1);
+  const coarse = first?.kind === "date" || last?.kind === "date";
+  const hours =
+    !first || !last || dated.length < 2
+      ? null
+      : coarse
+        ? (Date.parse(day(last)) - Date.parse(day(first))) / 3600000
+        : (epoch(last) - epoch(first)) / 3600000;
+  return {
+    firstEventDate: first ? day(first) : null,
+    lastEventDate: last ? day(last) : null,
+    eventSpanHours: hours,
+    eventSpanLabel:
+      hours === null
+        ? null
+        : coarse
+          ? `${hours / 24}d`
+          : `${roundTo(hours, 2)}h`,
+    eventCount: timeline.length,
+  };
 }
 
 export function shipmentMilestones(
