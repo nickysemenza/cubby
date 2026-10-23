@@ -145,7 +145,11 @@ relevance fallback and the Mail import Runs it starts:
 The isolate shares concurrent reads of a Run's immutable lineage origin and
 retains only found roots. Missing roots and failed reads remain retryable.
 Funding windows, quota status, paid grants and budget admission are still read
-fresh for each call; origin reuse does not authorize spending.
+fresh for each call; origin reuse does not authorize spending. Paid-grant reads
+resolve the bounded predecessor chain, each direct parent and the latest grant
+in one statement. Direct parents join the visited fence, so a later predecessor
+already in that scope stops traversal before contributing its own parent. Reads
+do not traverse parent ancestry or cache authorization.
 
 Each budget admission reads current settings and window usage in one SQL
 statement. Empty ledgers still load configured limits; absent settings retain
