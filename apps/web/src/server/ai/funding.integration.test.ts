@@ -9,7 +9,98 @@ import { aiUsage, run } from "~/server/db/schema";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
+import { readAiBudget, setCreditBudget } from "./budget";
 import { isBackgroundRun, readChatGptPlanAvailability } from "./funding";
+
+describe("AI budget admission", () => {
+  const ctx = withTestDb();
+  it("reads fresh settings and filtered usage together, including an empty ledger", async () => {
+    const now = new Date("2026-10-01T01:00:00.000Z");
+    const empty = await countTestDbQueries(() => readAiBudget(ctx.db, now));
+    expect(empty.queryCount).toBe(1);
+    expect(empty.result).toMatchObject({
+      credit: { limitUsd: 1.5, spentUsd: 0 },
+      plan: { limitUsd: 2, spentUsd: 0 },
+      paid: { limitUsd: 1, spentUsd: 0 },
+    });
+    await setCreditBudget(ctx.db, {
+      creditLimitUsd: 3,
+      planLimitUsd: 4,
+      paidLimitUsd: 5,
+    });
+    expect(await readAiBudget(ctx.db, now)).toMatchObject({
+      credit: { limitUsd: 3, spentUsd: 0 },
+      plan: { limitUsd: 4, spentUsd: 0 },
+      paid: { limitUsd: 5, spentUsd: 0 },
+    });
+    const runId = await ensureRun(ctx.db, ctx.actor, { purpose: "ai_suggest" });
+    for (const [billingReason, standardCost, chargedCost] of [
+      ["subscriber_credit", 0.25, 0],
+      ["plan", 0.5, 0],
+      ["standard", 0.75, 0.6],
+      ["cache", 9, 0],
+    ] as const) {
+      await getDb(ctx.db)
+        .insert(aiUsage)
+        .values({
+          runId,
+          feature: "synthetic-budget",
+          provider: "openai",
+          model: "gpt-6-sol",
+          operation: "synthetic.generation",
+          durationMs: 1,
+          createdAt: now,
+          standardCost,
+          chargedCost,
+          costEvidence: {
+            standard: { source: "estimate", pricingSource: "pi_sdk" },
+            charged: { source: "estimate", pricingSource: "pi_sdk" },
+            billingReason,
+          },
+        });
+    }
+    await getDb(ctx.db)
+      .insert(aiUsage)
+      .values([
+        {
+          runId,
+          feature: "synthetic-budget",
+          provider: "openai",
+          model: "gpt-6-sol",
+          operation: "synthetic.generation",
+          durationMs: 1,
+          standardCost: 10,
+          createdAt: new Date("2026-09-30T23:59:59.999Z"),
+        },
+        {
+          runId,
+          feature: "synthetic-budget",
+          provider: "openai",
+          model: "gpt-6-sol",
+          operation: "synthetic.generation",
+          durationMs: 1,
+          standardCost: 10,
+          createdAt: now,
+          deletedAt: now,
+        },
+        {
+          runId,
+          feature: "synthetic-budget",
+          provider: "typesafe",
+          model: "typesafe/jev",
+          operation: "synthetic.decision",
+          durationMs: 1,
+          standardCost: 10,
+          createdAt: now,
+        },
+      ]);
+    expect(await readAiBudget(ctx.db, now)).toMatchObject({
+      credit: { limitUsd: 3, spentUsd: 0.25 },
+      plan: { limitUsd: 4, spentUsd: 0.5 },
+      paid: { limitUsd: 5, spentUsd: 0.6 },
+    });
+  });
+});
 
 // A local budget boundary is only a re-probe time. Reporting it as OpenAI's
 // reset gives false usage information; withholding a real hint loses recovery.
