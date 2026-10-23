@@ -115,6 +115,26 @@ table's `totalCount` identifies truncated source reads and suppresses those
 counts; its caller labels the loaded scope. The table does not read or write
 the page's URL state.
 
+Declared `display.columnGroup` labels form quiet desktop header bands above
+the ordinary sortable/filterable column headers. Shared identity columns stay
+outside the bands. Columns in a band remain contiguous: reorder members within
+their band, move whole bands earlier/later in Columns, and pin/unpin all members
+together. Group Show/Hide changes the member columns' visibility; individual
+visibility controls still work. A group with no visible members has no header.
+Layout application also repairs interleaved groups and split pin regions.
+These controls use the existing session-only column layout and Restore defaults.
+Phone cards keep their existing composition; Columns offers the same groups.
+Related-preview columns declare the same `columnGroup` in the related-view
+presentation registry; their data loading remains with the existing shared
+related-preview pipeline.
+
+`display.columnBar` supplements a numeric cell with absolute magnitude against
+the largest absolute value across the table's loaded, filtered rows, before
+pagination. Loading more rows can change this scale. The signed, formatted value
+and clipboard data remain authoritative; refunds are never clamped to zero.
+Zero and unavailable values have no bar, and non-table values keep plain text.
+The scale and loaded scope are available on hover and to assistive technology.
+
 `RTable`'s `inspector` composes the shared `SidePanelLayout`: a right column at
 wide widths and the shared sheet below, including embedded detail sections.
 Its content receives table row stepping over the filtered/sorted row model;

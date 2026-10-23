@@ -527,6 +527,10 @@ const buildMetadataSchemas = () => {
        * everywhere else.
        */
       columnLabel: nonEmptyString().max(14).nullable().optional().default(null),
+      /** Optional thematic column band; identical labels form one movable group. */
+      columnGroup: nonEmptyString().nullable().optional().default(null),
+      /** Supplement the numeric value with a shared loaded-row magnitude scale. */
+      columnBar: z.boolean().optional().default(false),
       /**
        * Roster (label, tone) for the enum-like value this field renders when
        * it has no select control of its own: a derived status, or the
@@ -587,6 +591,8 @@ const buildMetadataSchemas = () => {
         mobile,
         listHidden,
         columnLabel,
+        columnGroup,
+        columnBar,
         referencePreviewLimit,
         valueOptions,
         optionRole,
@@ -610,6 +616,8 @@ const buildMetadataSchemas = () => {
         mobile,
         listHidden,
         columnLabel,
+        columnGroup,
+        columnBar,
         referencePreviewLimit,
         valueOptions,
         optionRole,

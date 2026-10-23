@@ -123,7 +123,41 @@ export function columnRegion(column: {
  */
 export type ColumnMove =
   | { kind: "reorder"; id: string; over: string }
+  | { kind: "reorder-group"; id: string; over: string }
   | { kind: "place"; id: string; region: ColumnRegion; over?: string };
+
+/** Adjacent bands in painted order, including ungrouped columns as singletons. */
+export function columnBands<
+  T extends RoleBearingColumn & {
+    columnDef: { meta?: { columnGroup?: string } };
+  },
+>(columns: readonly T[]) {
+  const bands: { label: string | undefined; columns: T[] }[] = [];
+  for (const column of columns) {
+    const label = column.columnDef.meta?.columnGroup;
+    const previous = bands.at(-1);
+    if (label && previous?.label === label) previous.columns.push(column);
+    else bands.push({ label, columns: [column] });
+  }
+  return bands;
+}
+
+/** A layout cannot split a declared group, even when an old view interleaves it. */
+function contiguousOrder(
+  ids: readonly string[],
+  groupFor: (id: string) => string | undefined,
+) {
+  const emitted = new Set<string>();
+  return ids.flatMap((id) => {
+    if (emitted.has(id)) return [];
+    const group = groupFor(id);
+    const members = group
+      ? ids.filter((item) => groupFor(item) === group)
+      : [id];
+    members.forEach((item) => emitted.add(item));
+    return members;
+  });
+}
 
 /**
  * Each region's columns in display order. Pinned regions follow
@@ -169,7 +203,7 @@ function allowedMove<TData extends RowData>(
     move.over === undefined ? undefined : table.getColumn(move.over);
   if (!column || isLockedColumn(column) || move.id === move.over) return;
   if (target && isLockedColumn(target)) return;
-  if (move.kind === "reorder" && !target) return;
+  if (move.kind !== "place" && !target) return;
   const region = columnRegion(column);
   const landing = move.kind === "place" ? move.region : region;
   if (target && columnRegion(target) !== landing) return;
@@ -195,17 +229,54 @@ export function moveColumn<TData extends RowData>(
   const resolved = allowedMove(table, move);
   if (!resolved) return;
   const { column, target, region, landing } = resolved;
+  const group = column.columnDef.meta?.columnGroup;
+  const targetGroup = target?.columnDef.meta?.columnGroup;
+  // Ordinary drags reorder within a band. Only an explicit band move may
+  // cross its boundary; pinning any member moves the whole band atomically.
+  if (move.kind === "reorder" && group !== targetGroup) return;
+  if (move.kind === "place" && target && group !== targetGroup) return;
+  if (move.kind === "reorder-group" && group === targetGroup && group) return;
+  const regionColumns = columnsByRegion(table)[region];
+  const members = regionColumns
+    .filter((item) =>
+      group
+        ? item.columnDef.meta?.columnGroup === group
+        : item.id === column.id,
+    )
+    .map((item) => item.id);
+  const moving =
+    move.kind === "reorder-group" || region !== landing ? members : [column.id];
+  const moveIds = (ids: readonly string[]) => {
+    if (moving.length === 1 && move.kind !== "reorder-group")
+      return placed(ids, column.id, target?.id, region === landing);
+    const rest = ids.filter((id) => !moving.includes(id));
+    const targetMembers = targetGroup
+      ? rest.filter(
+          (id) =>
+            table.getColumn(id)?.columnDef.meta?.columnGroup === targetGroup,
+        )
+      : target
+        ? [target.id]
+        : [];
+    const backwards = ids.indexOf(column.id) > ids.indexOf(target?.id ?? "");
+    const anchor = backwards ? targetMembers[0] : targetMembers.at(-1);
+    const index = anchor
+      ? rest.indexOf(anchor) + (backwards ? 0 : 1)
+      : rest.length;
+    rest.splice(index, 0, ...moving);
+    return rest;
+  };
   const pinning = table.state.columnPinning;
   const pins = { start: pinning.start ?? [], end: pinning.end ?? [] };
   const sameRegion = region === landing;
   if (!sameRegion && region !== "center") {
-    pins[region] = pins[region].filter((id) => id !== column.id);
+    pins[region] = pins[region].filter((id) => !moving.includes(id));
   }
   if (landing !== "center") {
-    pins[landing] = placed(pins[landing], column.id, target?.id, sameRegion);
+    pins[landing] = moveIds(pins[landing]);
   } else if (target) {
     const order = table.getAllLeafColumns().map(({ id }) => id);
-    table.setColumnOrder(placed(order, column.id, target.id, sameRegion));
+    table.setColumnOrder(moveIds(order));
   }
   if (sameRegion && region === "center") return;
   table.setColumnPinning({
@@ -295,10 +366,50 @@ export function applyColumnLayout<TData extends RowData>(
   table: CubbyTable<TData>,
   layout: CubbyDefaultTableLayout,
 ) {
-  table.setColumnOrder(withLockedEndLast(table, layout.columnOrder));
+  const groupFor = (id: string) =>
+    table.getColumn(id)?.columnDef.meta?.columnGroup;
+  const order = contiguousOrder(
+    [
+      ...new Set([
+        ...layout.columnOrder,
+        ...table.getAllLeafColumns().map((column) => column.id),
+      ]),
+    ],
+    groupFor,
+  );
+  const start = layout.columnPinning.start ?? [];
+  const end = layout.columnPinning.end ?? [];
+  // The first pinned member chooses the region for its whole group.
+  const startGroups = new Set(start.map(groupFor).filter(Boolean));
+  const endGroups = new Set(
+    end.map(groupFor).filter((group) => group && !startGroups.has(group)),
+  );
+  const pinned = (
+    ids: readonly string[],
+    groups: ReadonlySet<string | undefined>,
+  ) =>
+    contiguousOrder(
+      [
+        ...new Set([
+          ...ids,
+          ...order.filter((id) => {
+            const group = groupFor(id);
+            return group !== undefined && groups.has(group);
+          }),
+        ]),
+      ],
+      groupFor,
+    );
+  table.setColumnOrder(withLockedEndLast(table, order));
   table.setColumnPinning({
-    start: layout.columnPinning.start ?? [],
-    end: withLockedEndLast(table, layout.columnPinning.end ?? []),
+    start: pinned(start, startGroups),
+    end: withLockedEndLast(
+      table,
+      pinned(
+        end.filter((id) => !startGroups.has(groupFor(id))),
+        endGroups,
+      ),
+    ),
   });
   table.setColumnVisibility(layout.columnVisibility);
   table.setColumnSizing(layout.columnSizing);
@@ -571,7 +682,7 @@ export function columnWidthVariables(
   return variables;
 }
 
-type ColumnDescriptor = { id: string; role?: EntityColumnRole };
+type ColumnDescriptor = { id: string; role?: EntityColumnRole; group?: string };
 
 function columnDescriptorsFromDefs<TData extends RowData>(
   columns: MaterializedColumnDef<TData>[],
@@ -591,7 +702,12 @@ function columnDescriptorsFromDefs<TData extends RowData>(
         def.id ??
         accessorKey?.replaceAll(".", "_") ??
         (isNonEmptyColumnHeader(def.header) ? def.header : undefined);
-      if (id) result.push({ id, role: def.meta?.entityColumnRole });
+      if (id)
+        result.push({
+          id,
+          role: def.meta?.entityColumnRole,
+          group: def.meta?.columnGroup,
+        });
     }
   };
   visit(columns);
@@ -778,7 +894,14 @@ function computeDefaultLayout(
       lockedIds.has(id) || initialColumnVisibility[id] !== false;
   }
   return {
-    columnOrder: [...lockedStart, ...rest, ...lockedEnd],
+    columnOrder: [
+      ...lockedStart,
+      ...contiguousOrder(
+        rest,
+        (id) => descriptors.find((column) => column.id === id)?.group,
+      ),
+      ...lockedEnd,
+    ],
     columnPinning: { start: lockedStart, end: lockedEnd },
     columnVisibility,
     // Nothing here is persisted anymore; a resize simply becomes TanStack's own
@@ -819,7 +942,7 @@ export function useTableColumnLayout<TData extends RowData>({
     [normalizedColumns],
   );
   const definitionKey = columnDescriptors
-    .map(({ id, role }) => `${id}:${role ?? ""}`)
+    .map(({ id, role, group }) => `${id}:${role ?? ""}:${group ?? ""}`)
     .join("");
   const visibilityKey = JSON.stringify(initialColumnVisibility);
   // Fresh column-def arrays are common; their stable signatures are the

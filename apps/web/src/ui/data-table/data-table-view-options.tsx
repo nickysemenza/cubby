@@ -32,12 +32,8 @@ interface DataTableViewOptionsProps<TData extends RowData> {
  * Same derivation `LedgerFilters` uses: a column's own string `header` reads
  * better than its raw id ("Data quality", not "dataQuality"), and `humanize`
  * is only the fallback for headers that aren't plain strings (icons, JSX).
- * Column meta has no other honest signal to group columns by — `mobile.slot`
- * (title/subtitle/meta/trailing) exists to place fields on a phone card, not
- * to categorize a settings menu, and on `/products` it's unset (implicit
- * "hidden") for roughly half the columns, so grouping by it would dump most
- * of the list into one meaningless bucket. Search is what makes 26 items
- * navigable instead.
+ * The customizer groups columns only by explicit `columnGroup` metadata;
+ * phone-card slots do not classify column meaning.
  */
 export function columnLabel<TData extends RowData>(
   column: Column<TData, unknown>,

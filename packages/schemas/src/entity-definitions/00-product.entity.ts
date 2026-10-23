@@ -93,6 +93,8 @@ export default defineEntity(
           "expenses",
         ],
         relationFilterOverrides: {
+          // Seller history is distinct from the new branded-product filter.
+          vendors: { descriptor: "productId" },
           "project-uses": { descriptor: "usedToolId" },
           "purchased-projects": { descriptor: "purchasedProductId" },
           wishes: { descriptor: "related:wish.candidates" },

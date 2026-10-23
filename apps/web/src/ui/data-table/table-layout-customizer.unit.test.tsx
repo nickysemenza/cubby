@@ -1,7 +1,18 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
-import { createCubbyColumnHelper, useCubbyTable } from "./table-features";
+import TableHeaderLayout from "~/entity/table/table-header-layout";
+
+import {
+  applyColumnLayout,
+  moveColumn,
+  useTableColumnLayout,
+} from "./column-layout";
+import {
+  createCubbyColumnHelper,
+  createCubbyColumnCollection,
+  useCubbyTable,
+} from "./table-features";
 import TableLayoutCustomizer from "./table-layout-customizer";
 import type { CubbyTableMeta } from "./table-meta";
 
@@ -67,6 +78,127 @@ function LayoutHarness() {
 }
 
 describe("TableLayoutCustomizer", () => {
+  it("hides, restores, reorders and pins whole bands without splitting their columns", () => {
+    const grouped = helper.columns([
+      helper.accessor("name", { id: "name", header: "Name" }),
+      helper.accessor("trade", {
+        id: "spend",
+        header: "Spend",
+        meta: { columnGroup: "Purchasing" },
+      }),
+      helper.display({
+        id: "products",
+        header: "Products",
+        meta: { columnGroup: "Brand" },
+      }),
+      helper.display({
+        id: "purchases",
+        header: "Purchases",
+        meta: { columnGroup: "Purchasing" },
+      }),
+    ]);
+    function GroupHarness() {
+      const layout = useTableColumnLayout({
+        columns: createCubbyColumnCollection<TestRow>((add) =>
+          grouped.forEach(add),
+        ),
+      });
+      const table = useCubbyTable({
+        columns: layout.columns,
+        data: [],
+        initialState: layout.defaultLayout,
+      });
+      return (
+        <>
+          <TableLayoutCustomizer table={table} />
+          <table>
+            <thead>
+              <TableHeaderLayout
+                table={table}
+                styles={{ header: "", sortIcon: "" }}
+                isDebugEnabled={false}
+              />
+            </thead>
+          </table>
+          <output data-testid="painted">
+            {table
+              .getVisibleLeafColumns()
+              .map((column) => column.id)
+              .join(",")}
+          </output>
+          <output data-testid="pins">
+            {table.state.columnPinning.start?.join(",")}
+          </output>
+          <button
+            onClick={() =>
+              moveColumn(table, {
+                kind: "reorder",
+                id: "spend",
+                over: "products",
+              })
+            }
+          >
+            Invalid cross-group move
+          </button>
+          <button
+            onClick={() =>
+              applyColumnLayout(table, {
+                ...layout.defaultLayout,
+                columnOrder: ["name", "spend", "products", "purchases"],
+                columnPinning: { start: ["spend"], end: ["purchases"] },
+              })
+            }
+          >
+            Apply interleaved layout
+          </button>
+        </>
+      );
+    }
+    render(<GroupHarness />);
+    const painted = () => screen.getByTestId("painted");
+    expect(painted()).toHaveTextContent("name,spend,purchases,products");
+    expect(
+      screen.getByRole("columnheader", { name: "Purchasing" }),
+    ).toHaveAttribute("colspan", "2");
+    fireEvent.click(
+      screen.getByRole("button", { name: "Invalid cross-group move" }),
+    );
+    expect(painted()).toHaveTextContent("name,spend,purchases,products");
+    fireEvent.click(
+      screen.getByRole("button", { name: "Move Purchases earlier" }),
+    );
+    expect(painted()).toHaveTextContent("name,purchases,spend,products");
+    fireEvent.click(
+      screen.getByRole("button", { name: "Hide Purchasing group" }),
+    );
+    expect(painted()).toHaveTextContent("name,products");
+    expect(
+      screen.queryByRole("columnheader", { name: "Purchasing" }),
+    ).toBeNull();
+    fireEvent.click(
+      screen.getByRole("button", { name: "Show Purchasing group" }),
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: "Move Purchasing group later" }),
+    );
+    expect(painted()).toHaveTextContent("name,products,purchases,spend");
+    fireEvent.click(screen.getByRole("button", { name: "Pin Spend to start" }));
+    expect(screen.getByTestId("pins")).toHaveTextContent("purchases,spend");
+    fireEvent.click(
+      screen.getByRole("button", { name: "Pin Products to start" }),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Move Spend earlier" }));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Move Purchasing group later" }),
+    );
+    expect(screen.getByTestId("pins")).toHaveTextContent(
+      "products,spend,purchases",
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: "Apply interleaved layout" }),
+    );
+    expect(screen.getByTestId("pins")).toHaveTextContent("spend,purchases");
+  });
   it("keeps structural columns out of every mutable affordance", () => {
     render(<LayoutHarness />);
 

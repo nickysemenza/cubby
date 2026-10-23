@@ -129,6 +129,8 @@ export const resolveColumnExplanation = <TData>(
 export interface CubbyColumnMeta<TData = CellData> {
   /** Stable table role; layout and styling must not infer this from an id. */
   entityColumnRole?: EntityColumnRole;
+  /** The declaration's thematic band; columns in a band move and pin together. */
+  columnGroup?: string;
   /** Generated origin metadata for relation-backed or computed values. */
   provenance?: EntityFieldProvenance | null;
   /** Fetchable explanation for a manifest-declared computed value. */

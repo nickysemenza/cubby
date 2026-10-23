@@ -37,6 +37,7 @@ export interface RelatedPreviewColumnsResult<TData extends { id: string }> {
 }
 
 interface RelatedPreviewColumnMeta {
+  columnGroup?: string;
   filterConfig?: FilterConfig;
   mobile: MobileColumnMeta;
 }
@@ -84,6 +85,7 @@ export function useRelatedPreviewColumnDefs<TData extends { id: string }>({
           ? manifestFilterConfig(entity, columnId, filterOptions)
           : undefined;
         const meta: RelatedPreviewColumnMeta = {
+          columnGroup: view.columnGroup,
           mobile: { slot: "meta", priority: 80 },
         };
         if (filterConfig) meta.filterConfig = filterConfig;

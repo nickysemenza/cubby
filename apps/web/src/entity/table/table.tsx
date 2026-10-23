@@ -50,6 +50,7 @@ import { CellSelectionContext } from "../../ui/data-table/cell-selection-context
 import {
   columnOffsetValue,
   columnWidthValue,
+  spacerWidthValue,
 } from "../../ui/data-table/column-layout";
 import { DataTablePagination } from "../../ui/data-table/data-table-pagination";
 import {
@@ -1021,6 +1022,31 @@ function DesktopTableView<TItem extends RowData>({
               containerClassName="overflow-visible"
               style={columnSizeVars}
             >
+              {/* A spanning first header row otherwise makes fixed-table layout
+                  divide each band's width equally among its leaf columns. */}
+              {table
+                .getVisibleLeafColumns()
+                .some((column) => column.columnDef.meta?.columnGroup) && (
+                <colgroup>
+                  {[
+                    ...table.getStartVisibleLeafColumns(),
+                    ...table.getCenterVisibleLeafColumns(),
+                  ].map((column) => (
+                    <col
+                      key={column.id}
+                      style={{ width: columnWidthValue(column.id) }}
+                    />
+                  ))}
+                  <col style={{ width: spacerWidthValue }} />
+                  {table.getEndVisibleLeafColumns().map((column) => (
+                    <col
+                      key={column.id}
+                      style={{ width: columnWidthValue(column.id) }}
+                    />
+                  ))}
+                  {isDebugEnabled && <col />}
+                </colgroup>
+              )}
               <TableHeader className="sticky top-0 z-30 border-b border-border bg-card [&_th]:bg-card [&_tr]:border-b-0">
                 <TableHeaderLayout
                   table={table}

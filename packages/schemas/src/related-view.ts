@@ -27,6 +27,8 @@ interface RelatedViewPresentationDefinition {
   source: Entity;
   relationship?: string;
   defaultVisible: boolean;
+  /** Thematic band for this relation's optional table column. */
+  columnGroup?: string;
   order: "alphabetical" | "newest" | "task";
   filterPrefix?: string;
   /**
@@ -276,7 +278,17 @@ const relatedViewPresentationRegistry = [
     filterPrefix: "parentTask",
   },
   {
+    key: "vendor.brandedProducts",
+    source: "vendor",
+    relationship: "branded-products",
+    columnGroup: "Brand / catalog",
+    defaultVisible: true,
+    order: "alphabetical",
+    filterPrefix: "brandedProduct",
+  },
+  {
     key: "vendor.expenses",
+    columnGroup: "Purchasing",
     source: "vendor",
     relationship: "expenses",
     defaultVisible: true,
@@ -291,6 +303,7 @@ const relatedViewPresentationRegistry = [
   },
   {
     key: "vendor.purchases",
+    columnGroup: "Purchasing",
     source: "vendor",
     relationship: "purchases",
     defaultVisible: false,
@@ -298,6 +311,7 @@ const relatedViewPresentationRegistry = [
   },
   {
     key: "vendor.products",
+    columnGroup: "Purchasing",
     source: "vendor",
     relationship: "products",
     defaultVisible: false,
@@ -306,6 +320,7 @@ const relatedViewPresentationRegistry = [
   },
   {
     key: "vendor.projects",
+    columnGroup: "Purchasing",
     source: "vendor",
     relationship: "projects",
     defaultVisible: false,
@@ -314,6 +329,7 @@ const relatedViewPresentationRegistry = [
   },
   {
     key: "vendor.transactions",
+    columnGroup: "Purchasing",
     source: "vendor",
     relationship: "transactions",
     defaultVisible: false,
@@ -462,6 +478,7 @@ const relatedViewRelationshipKeys = {
   "task.blockedBy": "blocked-by",
   "task.parent": "parent",
   "vendor.expenses": "expenses",
+  "vendor.brandedProducts": "branded-products",
   "vendorAccount.purchases": "purchases",
   "vendor.purchases": "purchases",
   "vendor.products": "products",
@@ -825,6 +842,7 @@ export const taskRelatedFilterFields = {
   ...trio("parentTask", taskShortcode),
 };
 export const vendorRelatedFilterFields = {
+  ...trio("brandedProduct", productShortcode),
   ...trio("expense", expenseShortcode),
   ...trio("purchase", purchaseShortcode),
   ...trio("product", productShortcode),

@@ -17,6 +17,7 @@ import {
   type MailSearchState,
 } from "@cubby/schemas/mailbox-research";
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
+import { itemizationExpectation } from "@cubby/schemas/purchase-evidence-policy";
 import { vendorSpendingProfile } from "@cubby/schemas/spending-classification";
 import type {
   VendorCreateInput,
@@ -55,6 +56,7 @@ import {
   databaseForTransaction,
   isTransaction,
   notDeleted,
+  sqlEnumConstant,
   withTransaction,
 } from "~/server/db/helpers";
 import { entityAttachment, image, purchase, vendor } from "~/server/db/schema";
@@ -72,6 +74,11 @@ import { listMemberMailboxes } from "~/server/domains/purchase-import/repo/gmail
 import { vendorSearchTerms } from "~/server/domains/purchase-import/repo/gmail/vendor-identity";
 import { vendorMailQueries } from "~/server/domains/purchase-import/repo/gmail/vendor-mail-scope";
 import { foldChargeInto } from "~/server/domains/purchase/repo/purchase";
+import {
+  effectivePurchaseItemizationExpectationSql,
+  purchaseHasItemizationSql,
+  purchaseHasPrimaryDocumentSql,
+} from "~/server/domains/purchase/repo/purchase-evidence-policy";
 import { vendorEvidenceFieldResolutionsSql } from "~/server/domains/purchase/repo/purchase-evidence-policy";
 import { assertReviewedSpendingClassification } from "~/server/domains/spending-category/repo/spending-classification-review-authorization";
 import { foldVendorAccountsInto } from "~/server/domains/vendor-account/repo/vendor-account";
@@ -286,6 +293,53 @@ export const vendorPurchaseCount = correlated<number>(
      WHERE p."vendorId" = "Vendor"."id" AND p."deletedAt" IS NULL)`,
 );
 
+const vendorBrandedProductCount = correlated<number>(
+  `(SELECT count(*)::int FROM "Product" p
+     WHERE p."brandId" = "Vendor"."id" AND p."deletedAt" IS NULL)`,
+);
+
+const vendorBrandCategoryCount = correlated<number>(
+  `(SELECT count(DISTINCT pc.id)::int FROM "Product" p
+    JOIN "ProductCategory" pc ON pc.id=p."categoryId" AND pc."deletedAt" IS NULL
+    WHERE p."brandId"="Vendor"."id" AND p."deletedAt" IS NULL)`,
+);
+
+const vendorPurchasedBrandProductCount = correlated<number>(
+  `(SELECT count(DISTINCT g.id)::int FROM "Product" g
+    JOIN "Expense" e ON e."productId"=g.id AND e."deletedAt" IS NULL
+    JOIN "Purchase" p ON p.id=e."purchaseId" AND p."deletedAt" IS NULL
+    WHERE g."brandId"="Vendor"."id" AND g."deletedAt" IS NULL)`,
+);
+
+// Brand attribution requires a linked live Product. Seller spend also includes
+// unlinked lines; these two sums overlap and must never be added together.
+const vendorBrandSpend = correlated<number>(
+  `(SELECT COALESCE(sum(e.cost),0)::double precision FROM "Product" g
+    JOIN "Expense" e ON e."productId"=g.id AND e."deletedAt" IS NULL
+    JOIN "Purchase" p ON p.id=e."purchaseId" AND p."deletedAt" IS NULL
+    WHERE g."brandId"="Vendor"."id" AND g."deletedAt" IS NULL)`,
+);
+
+const vendorExpenseCount = correlated<number>(
+  `(SELECT count(*)::int FROM "Expense" e
+    JOIN "Purchase" p ON p.id=e."purchaseId" AND p."deletedAt" IS NULL
+    WHERE p."vendorId"="Vendor"."id" AND e."deletedAt" IS NULL)`,
+);
+
+const vendorFirstPurchaseDate = correlated<string | null>(
+  `(SELECT min(p.date) FROM "Purchase" p
+    WHERE p."vendorId"="Vendor"."id" AND p."deletedAt" IS NULL)`,
+);
+
+const vendorDocumentedPurchaseCount = sql<number>`(SELECT count(*)::int FROM "Purchase" vp
+  WHERE vp."vendorId"=${sql.raw('"Vendor"."id"')} AND vp."deletedAt" IS NULL
+    AND ${purchaseHasPrimaryDocumentSql("vp")})`;
+
+const vendorMissingItemizationCount = sql<number>`(SELECT count(*)::int FROM "Purchase" vp
+  WHERE vp."vendorId"=${sql.raw('"Vendor"."id"')} AND vp."deletedAt" IS NULL
+    AND ${effectivePurchaseItemizationExpectationSql("vp")}=${sqlEnumConstant(itemizationExpectation, itemizationExpectation.enum.required)}
+    AND NOT ${purchaseHasItemizationSql("vp")})`;
+
 const vendorSpend = correlated<number>(
   `(SELECT COALESCE(sum(e."cost"), 0)::double precision
       FROM "Expense" e
@@ -436,6 +490,14 @@ const vendorColumns = {
   createdAt: vendor.createdAt,
   updatedAt: vendor.updatedAt,
   purchaseCount: vendorPurchaseCount,
+  brandedProductCount: vendorBrandedProductCount,
+  brandCategoryCount: vendorBrandCategoryCount,
+  purchasedBrandProductCount: vendorPurchasedBrandProductCount,
+  brandSpend: vendorBrandSpend,
+  expenseCount: vendorExpenseCount,
+  firstPurchaseDate: vendorFirstPurchaseDate,
+  documentedPurchaseCount: vendorDocumentedPurchaseCount,
+  missingItemizationCount: vendorMissingItemizationCount,
   spend: vendorSpend,
   latestPurchaseDate: vendorLatestPurchaseDate,
   logo: {
@@ -493,6 +555,14 @@ type VendorRow = {
   createdAt: Date;
   updatedAt: Date;
   purchaseCount: number;
+  brandedProductCount: number;
+  brandCategoryCount: number;
+  purchasedBrandProductCount: number;
+  brandSpend: number;
+  expenseCount: number;
+  firstPurchaseDate: string | null;
+  documentedPurchaseCount: number;
+  missingItemizationCount: number;
   spend: number;
   latestPurchaseDate: string | null;
   mailSearch: MailSearchState | null;
@@ -585,6 +655,14 @@ const dbVendorToAPI = (row: VendorRow, dataQuality: DataQuality): VendorOut => {
     agentHintsLabel: agentHintsLabel(agentHints),
     notes: row.notes,
     purchaseCount: Number(row.purchaseCount),
+    brandedProductCount: Number(row.brandedProductCount),
+    brandCategoryCount: Number(row.brandCategoryCount),
+    purchasedBrandProductCount: Number(row.purchasedBrandProductCount),
+    brandSpend: Number(row.brandSpend),
+    expenseCount: Number(row.expenseCount),
+    firstPurchaseDate: row.firstPurchaseDate,
+    documentedPurchaseCount: Number(row.documentedPurchaseCount),
+    missingItemizationCount: Number(row.missingItemizationCount),
     spend: Number(row.spend),
     latestPurchaseDate: row.latestPurchaseDate,
     mailSearch: row.mailSearch,
@@ -599,6 +677,14 @@ const vendorScaffold = listScaffold("vendor", vendor, {
   derived: {
     spend: vendorSpend,
     purchaseCount: vendorPurchaseCount,
+    brandedProductCount: vendorBrandedProductCount,
+    brandCategoryCount: vendorBrandCategoryCount,
+    purchasedBrandProductCount: vendorPurchasedBrandProductCount,
+    brandSpend: vendorBrandSpend,
+    expenseCount: vendorExpenseCount,
+    firstPurchaseDate: vendorFirstPurchaseDate,
+    documentedPurchaseCount: vendorDocumentedPurchaseCount,
+    missingItemizationCount: vendorMissingItemizationCount,
     // A vendor with no purchases leads a newest-first list.
     latestPurchaseDate: { sql: vendorLatestPurchaseDate, nulls: "high" },
     mailSearch: vendorMailSearch.value(vendorMailSearchSql),
@@ -623,6 +709,14 @@ export const vendorListRead = async (
 ) => {
   const {
     purchaseCount,
+    brandedProductCount,
+    brandCategoryCount,
+    purchasedBrandProductCount,
+    brandSpend,
+    expenseCount,
+    firstPurchaseDate,
+    documentedPurchaseCount,
+    missingItemizationCount,
     spend,
     latestPurchaseDate,
     fieldResolutions,
@@ -640,6 +734,14 @@ export const vendorListRead = async (
           ...core,
           ...listGroupFields(projection, "derived", () => ({
             purchaseCount,
+            brandedProductCount,
+            brandCategoryCount,
+            purchasedBrandProductCount,
+            brandSpend,
+            expenseCount,
+            firstPurchaseDate,
+            documentedPurchaseCount,
+            missingItemizationCount,
             spend,
             latestPurchaseDate,
             fieldResolutions,

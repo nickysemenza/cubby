@@ -3117,6 +3117,29 @@ which entity declarations must not import.
 
 ## Product Brand and Purchase Seller
 
+The Vendor table separates Purchasing fields from Brand / catalog using declared
+column groups. Its branded-product count includes live Products whose `brandId`
+is this Vendor, independently of products purchased from the Vendor as Seller.
+It is a read-time aggregate; no inventory or financial records are changed.
+Brand / catalog also counts distinct live categories and distinct products with
+purchase-linked expense history. Brand spend sums signed live `Expense.cost`
+through live Products of this brand and live Purchases across all sellers.
+Unlinked expense lines cannot be attributed to a brand. Seller spend includes
+all live expense lines through the seller's live purchases. The two spend
+columns overlap and must not be added. Brand counts and spend exclude deleted
+Products, Purchases and Expenses; refunds remain in spend and purchase history.
+Seller history adds live expense-line count and first purchase date. Documented
+purchase count uses the existing primary receipt/invoice predicate; absence is
+not a required-document gap. Missing-itemization count uses the existing
+required-itemization policy and itemization predicate, excluding unclassified
+and not-expected purchases. Zero missing items does not imply full assessment.
+Recent expenses belongs to the seller's Purchasing header group.
+The default branded-products preview column belongs to Brand / catalog and
+uses the direct Product Brand relation. Its search, product selection and
+presence filters use the distinct `brandedProduct` prefix; Purchasing's optional
+products preview continues to use the purchase-evidence relationship. They
+share the generic related-preview rendering and loading pipeline.
+
 `Vendor` is the canonical identity for both roles. A Product's optional
 `brandId` names its marketed **Brand**; a Purchase's required `vendorId` names
 its **Seller**. Product create/update inputs accept the Vendor reference,

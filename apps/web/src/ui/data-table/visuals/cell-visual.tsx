@@ -1,6 +1,32 @@
 import type { ReactNode } from "react";
 
+import { useDenseCell } from "~/ui/common/stacked-value";
+
 import { CellFrame } from "../cell-frame";
+
+/** Signed values retain their text; the bar compares magnitude on one shared scale. */
+export function CellMagnitudeBar({
+  value,
+  maximum,
+  children,
+}: {
+  value: unknown;
+  maximum: number;
+  children: ReactNode;
+}) {
+  const dense = useDenseCell();
+  if (!dense || typeof value !== "number" || !Number.isFinite(value))
+    return children;
+  return (
+    <CellBar
+      value={Math.abs(value)}
+      maximum={maximum}
+      label={`Bar compares absolute magnitude across loaded rows; maximum ${maximum}. Signed value shown in text.`}
+    >
+      {children}
+    </CellBar>
+  );
+}
 
 /** Visuals are supplementary: the caller retains editing and clipboard ownership. */
 export function CellBar({

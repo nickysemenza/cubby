@@ -313,6 +313,8 @@ export type EntityField = Readonly<{
       | null;
     referencePreviewLimit: number | null;
     columnLabel: string | null;
+    columnGroup?: string;
+    columnBar?: boolean;
     preview: boolean;
   }>;
   validation: Readonly<{

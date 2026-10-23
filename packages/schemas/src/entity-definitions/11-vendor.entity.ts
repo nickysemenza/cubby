@@ -133,6 +133,14 @@ export default defineEntity({
         media: ["logo", "displayImages"],
         derived: [
           "purchaseCount",
+          "brandedProductCount",
+          "brandCategoryCount",
+          "purchasedBrandProductCount",
+          "brandSpend",
+          "expenseCount",
+          "firstPurchaseDate",
+          "documentedPurchaseCount",
+          "missingItemizationCount",
           "spend",
           "latestPurchaseDate",
           "mailSearch",
@@ -263,6 +271,7 @@ export default defineEntity({
           ],
         },
         display: {
+          columnGroup: "Purchasing",
           columnLabel: "Profile",
           optionRole: "category",
           optionColor: "domain-finance",
@@ -286,7 +295,7 @@ export default defineEntity({
             basis: ["name", "website", "notes", "spendingProfile"],
           },
         },
-        display: { columnLabel: "Category" },
+        display: { columnGroup: "Purchasing", columnLabel: "Category" },
         validation: {
           read: spendingCategoryShortcode.nullable().default(null),
           create: spendingCategoryShortcode.nullable().default(null),
@@ -344,6 +353,7 @@ export default defineEntity({
           ],
         },
         display: {
+          columnGroup: "Purchasing",
           columnLabel: "Item lines",
           optionRole: "status",
           optionColor: "neutral-status",
@@ -481,6 +491,7 @@ export default defineEntity({
           ],
         },
         display: {
+          columnGroup: "Purchasing",
           columnLabel: "Evidence",
           optionRole: "category",
           optionColor: "domain-finance",
@@ -581,9 +592,189 @@ export default defineEntity({
         },
       },
       {
+        key: "brandCategoryCount",
+        kind: "number",
+        display: {
+          columnGroup: "Brand / catalog",
+          columnLabel: "Categories",
+          width: "sm",
+        },
+        provenance: {
+          kind: "derived",
+          sources: [{ entity: "product" }, { entity: "productCategory" }],
+        },
+        explanation: {
+          ruleId: "vendor.brandCategoryCount",
+          description:
+            "Number of distinct live product categories used by live products carrying this vendor as their marketed brand. Uncategorized products are excluded.",
+          readPath: "brandCategoryCount",
+        },
+        validation: {
+          read: z.number().int().nonnegative(),
+          create: null,
+          update: null,
+        },
+      },
+      {
+        key: "purchasedBrandProductCount",
+        kind: "number",
+        display: {
+          columnGroup: "Brand / catalog",
+          columnLabel: "Purchased",
+          width: "sm",
+        },
+        provenance: {
+          kind: "derived",
+          sources: [{ entity: "expense" }, { entity: "product" }],
+        },
+        explanation: {
+          ruleId: "vendor.purchasedBrandProductCount",
+          description:
+            "Number of distinct live branded products linked to live expense lines through live purchases, across all sellers. Refund-linked products remain part of purchase history.",
+          readPath: "purchasedBrandProductCount",
+        },
+        validation: {
+          read: z.number().int().nonnegative(),
+          create: null,
+          update: null,
+        },
+      },
+      {
+        key: "brandSpend",
+        kind: "number",
+        display: {
+          columnGroup: "Brand / catalog",
+          columnLabel: "Brand spend",
+          width: "sm",
+          format: "signedCurrency",
+          columnBar: true,
+        },
+        provenance: {
+          kind: "derived",
+          sources: [{ entity: "expense" }, { entity: "product" }],
+        },
+        explanation: {
+          ruleId: "vendor.brandSpend",
+          description:
+            "Sum of live Expense.cost linked to live products carrying this brand through live purchases, across all sellers, including refunds. Expenses without a linked product cannot be attributed to a brand. This can overlap seller spend and is not additive with it.",
+          readPath: "brandSpend",
+        },
+        validation: { read: money, create: null, update: null },
+      },
+      {
+        key: "expenseCount",
+        kind: "number",
+        display: {
+          columnGroup: "Purchasing",
+          columnLabel: "Expense lines",
+          width: "sm",
+        },
+        provenance: { kind: "derived", sources: [{ entity: "expense" }] },
+        explanation: {
+          ruleId: "vendor.expenseCount",
+          description:
+            "Number of live expense lines belonging to this seller through live purchases, including refunds.",
+          readPath: "expenseCount",
+        },
+        validation: {
+          read: z.number().int().nonnegative(),
+          create: null,
+          update: null,
+        },
+      },
+      {
+        key: "firstPurchaseDate",
+        kind: "date",
+        nullable: true,
+        display: {
+          columnGroup: "Purchasing",
+          columnLabel: "First purchase",
+          width: "sm",
+          format: "plainDate",
+        },
+        provenance: { kind: "derived", sources: [{ entity: "purchase" }] },
+        explanation: {
+          ruleId: "vendor.firstPurchaseDate",
+          description:
+            "Earliest date among live purchases from this seller. No purchases means no date.",
+          readPath: "firstPurchaseDate",
+        },
+        validation: { read: plainDate.nullable(), create: null, update: null },
+      },
+      {
+        key: "documentedPurchaseCount",
+        kind: "number",
+        display: {
+          columnGroup: "Purchasing",
+          columnLabel: "Documented",
+          width: "sm",
+        },
+        provenance: { kind: "derived", sources: [{ entity: "purchase" }] },
+        explanation: {
+          ruleId: "vendor.documentedPurchaseCount",
+          description:
+            "Number of live purchases from this seller with a retained primary receipt or invoice. Documents are optional: absent documents are not a coverage gap.",
+          readPath: "documentedPurchaseCount",
+        },
+        validation: {
+          read: z.number().int().nonnegative(),
+          create: null,
+          update: null,
+        },
+      },
+      {
+        key: "missingItemizationCount",
+        kind: "number",
+        display: {
+          columnGroup: "Purchasing",
+          columnLabel: "Missing items",
+          width: "sm",
+        },
+        provenance: { kind: "derived", sources: [{ entity: "purchase" }] },
+        explanation: {
+          ruleId: "vendor.missingItemizationCount",
+          description:
+            "Number of live purchases from this seller whose existing itemization coverage is missing: itemization is required but not present. Unclassified and not-expected policies are excluded; zero does not imply all purchases were assessed.",
+          readPath: "missingItemizationCount",
+        },
+        validation: {
+          read: z.number().int().nonnegative(),
+          create: null,
+          update: null,
+        },
+      },
+      {
+        key: "brandedProductCount",
+        kind: "number",
+        display: {
+          columnGroup: "Brand / catalog",
+          columnLabel: "Products",
+          width: "sm",
+        },
+        provenance: {
+          kind: "derived",
+          sources: [{ entity: "product", relation: "branded-products" }],
+        },
+        explanation: {
+          ruleId: "vendor.branded-product-count",
+          description:
+            "Number of live products carrying this vendor as their marketed brand, independently of where those products were purchased.",
+          readPath: "brandedProductCount",
+        },
+        validation: {
+          read: z.number().int().nonnegative(),
+          create: null,
+          update: null,
+        },
+      },
+      {
         key: "purchaseCount",
         kind: "number",
-        display: { width: "sm", mobile: { slot: "meta", priority: 20 } },
+        display: {
+          columnGroup: "Purchasing",
+          width: "sm",
+          mobile: { slot: "meta", priority: 20 },
+        },
         provenance: {
           kind: "derived",
           sources: [{ entity: "purchase", relation: "purchases" }],
@@ -608,6 +799,9 @@ export default defineEntity({
         // a credit rather than spend. The footer stays exact: `vendorList`
         // returns a `sums.spend` over the whole filtered set.
         display: {
+          columnGroup: "Purchasing",
+          columnLabel: "Seller spend",
+          columnBar: true,
           format: "signedCurrency",
           width: "sm",
           mobile: { slot: "trailing", priority: 5 },
@@ -636,6 +830,7 @@ export default defineEntity({
         kind: "date",
         nullable: true,
         display: {
+          columnGroup: "Purchasing",
           columnLabel: "Last purchase",
           format: "plainDate",
           mobile: { slot: "meta", priority: 35 },
@@ -664,6 +859,7 @@ export default defineEntity({
         kind: "enum",
         nullable: true,
         display: {
+          columnGroup: "Purchasing",
           columnLabel: "Mail search",
           width: "sm",
           valueOptions: [
@@ -838,6 +1034,14 @@ export default defineEntity({
     derived: {
       spend: { type: "number" },
       purchaseCount: { type: "number" },
+      brandedProductCount: { type: "number" },
+      brandCategoryCount: { type: "number" },
+      purchasedBrandProductCount: { type: "number" },
+      brandSpend: { type: "number" },
+      expenseCount: { type: "number" },
+      firstPurchaseDate: { type: "date" },
+      documentedPurchaseCount: { type: "number" },
+      missingItemizationCount: { type: "number" },
       latestPurchaseDate: { type: "date" },
       // Mail discovery's searches for this vendor, from MailboxCursor coverage.
       mailSearch: { type: "enum", options: mailSearchState.options },
@@ -851,6 +1055,14 @@ export default defineEntity({
         "spend",
         "name",
         "purchaseCount",
+        "brandedProductCount",
+        "brandCategoryCount",
+        "purchasedBrandProductCount",
+        "brandSpend",
+        "expenseCount",
+        "firstPurchaseDate",
+        "documentedPurchaseCount",
+        "missingItemizationCount",
         "latestPurchaseDate",
         "mailSearch",
         "orderEvidence",
@@ -908,6 +1120,14 @@ export default defineEntity({
       "returnWindowDays",
       "notes",
       "purchaseCount",
+      "brandedProductCount",
+      "brandCategoryCount",
+      "purchasedBrandProductCount",
+      "brandSpend",
+      "expenseCount",
+      "firstPurchaseDate",
+      "documentedPurchaseCount",
+      "missingItemizationCount",
       "spend",
       "latestPurchaseDate",
       "mailSearch",
@@ -1108,6 +1328,24 @@ export default defineEntity({
         urlKey: "related-product",
         kind: "text",
         placeholder: "Search related products...",
+      },
+      {
+        columnId: "related:vendor.brandedProducts",
+        field: "brandedProductSearch",
+        urlKey: "related-branded-product",
+        kind: "text",
+        placeholder: "Search branded products...",
+      },
+      {
+        columnId: "brandedProductId",
+        kind: "idMulti",
+        placeholder: "Filter by branded product...",
+        brandRef: { entity: "product" },
+      },
+      {
+        columnId: "brandedProductPresenceFilter",
+        kind: "presence",
+        placeholder: "Filter branded products presence...",
       },
       {
         columnId: "productId",

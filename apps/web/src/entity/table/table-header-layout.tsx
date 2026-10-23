@@ -52,6 +52,7 @@ import {
   columnWidthValue,
   columnOffsetValue,
   isLockedColumn,
+  columnBands,
   moveColumn,
   spacerWidthValue,
   useColumnLayoutDndProps,
@@ -662,6 +663,14 @@ export default function TableHeaderLayout<TData extends RowData>({
   const center = table.getCenterHeaderGroups();
   const end = table.getEndHeaderGroups();
   const depth = Math.max(start.length, center.length, end.length);
+  const regions = [
+    table.getStartVisibleLeafColumns(),
+    table.getCenterVisibleLeafColumns(),
+    table.getEndVisibleLeafColumns(),
+  ];
+  const hasBands = regions.some((columns) =>
+    columns.some((column) => column.columnDef.meta?.columnGroup),
+  );
 
   return (
     <DndContext
@@ -673,6 +682,72 @@ export default function TableHeaderLayout<TData extends RowData>({
         items={table.getVisibleLeafColumns().map((column) => column.id)}
         strategy={horizontalListSortingStrategy}
       >
+        {hasBands && (
+          <TableRow data-column-bands="" className="border-b border-border/50">
+            {regions.flatMap((columns, regionIndex) => [
+              ...(regionIndex === 2
+                ? [
+                    <TableHead
+                      key="band-spacer"
+                      aria-hidden
+                      scope={undefined}
+                      className="h-6 px-0"
+                      style={{ width: spacerWidthValue }}
+                    />,
+                  ]
+                : []),
+              ...columnBands(columns).map((band) => {
+                const first = band.columns[0];
+                if (!first) return null;
+                const pinned = first.getIsPinned();
+                const width = `calc(${band.columns.map((column) => columnWidthValue(column.id)).join(" + ")})`;
+                return (
+                  <TableHead
+                    key={`band-${first.id}`}
+                    scope={band.label ? "colgroup" : undefined}
+                    aria-hidden={band.label ? undefined : true}
+                    colSpan={band.columns.length}
+                    data-column-band={band.label}
+                    className={cn(
+                      "h-6 overflow-hidden px-1 text-2xs font-medium",
+                      band.label && "border-b border-l border-border/60",
+                      pinned && "sticky z-40",
+                    )}
+                    style={{
+                      width,
+                      minWidth: width,
+                      maxWidth: width,
+                      ...(pinned === "start"
+                        ? {
+                            insetInlineStart: columnOffsetValue(
+                              columns,
+                              first.id,
+                              "start",
+                            ),
+                          }
+                        : pinned === "end"
+                          ? {
+                              insetInlineEnd: columnOffsetValue(
+                                columns,
+                                band.columns.at(-1)?.id ?? first.id,
+                                "end",
+                              ),
+                            }
+                          : {}),
+                    }}
+                  >
+                    <span className="block truncate" title={band.label}>
+                      {band.label}
+                    </span>
+                  </TableHead>
+                );
+              }),
+            ])}
+            {isDebugEnabled && (
+              <TableHead className="h-6" aria-hidden scope={undefined} />
+            )}
+          </TableRow>
+        )}
         {Array.from({ length: depth }, (_, index) => {
           const leading = [
             ...(start[index]?.headers ?? []),
