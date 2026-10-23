@@ -74,6 +74,47 @@ const FROM = sql`FROM "AssessmentState" s
   LEFT JOIN "LedgerParty" account_owner ON account_owner.id = fa."ledgerPartyId"
   JOIN "SourceTransactionRecord" r ON r.id = s."recordId"`;
 
+// Counts and list keys use the same first surviving candidate as hydration.
+const FIRST_CANDIDATE = sql`LEFT JOIN LATERAL (
+      SELECT candidate->${"label"} AS label, ft.shortcode
+      FROM jsonb_array_elements(a.judgment->'candidates') WITH ORDINALITY AS c(candidate, position)
+      JOIN "FinancialTransaction" ft ON ft.id = (candidate->>'transactionId')::uuid
+      ORDER BY position LIMIT 1
+    ) first_candidate ON true`;
+
+/** Only facts used by unfiltered pending counts; no list-column hydration. */
+export async function statementSuggestionCountFacts(
+  db: Database,
+  filters: StatementSuggestionScope,
+) {
+  const { rows } = await unwrapDb(db).execute<{
+    recommended: string;
+    automatic: boolean;
+    clean: boolean;
+    labelSame: string | null;
+    labelConfidence: string | null;
+    count: number;
+  }>(sql`
+    -- Evaluate eligibility and correlated facts once before aggregation.
+    WITH facts AS MATERIALIZED (
+      SELECT ${suggestionField("recommended")} AS recommended, (${currentClean}) AS clean,
+        first_candidate.label->>${"same"} AS "labelSame",
+        first_candidate.label->>${"confidence"} AS "labelConfidence",
+        ${automaticApplicationRule(sql`s.id`)} AS "automaticRule"
+      ${FROM}
+      ${FIRST_CANDIDATE}
+      WHERE ${conditions(filters)}
+    )
+    SELECT recommended, clean, "labelSame", "labelConfidence",
+      ("automaticRule" IS NOT NULL) AS automatic, count(*)::int AS count
+    FROM facts
+    GROUP BY recommended, clean, "labelSame", "labelConfidence", ("automaticRule" IS NOT NULL)
+  `);
+  // Keys validate every eligible action before excluding automatic applications.
+  for (const row of rows) statementTransactionAction.parse(row.recommended);
+  return rows.filter((row) => !row.automatic);
+}
+
 /** Every pending suggestion in scope with its list columns, before hydration. */
 export async function statementSuggestionKeys(
   db: Database,
@@ -117,13 +158,7 @@ export async function statementSuggestionKeys(
       ${matchedRulesOf(sql`s.data`)} AS "matchedRules",
       ${automaticApplicationRule(sql`s.id`)} AS "automaticRule"
     ${FROM}
-    -- The first candidate that still exists, as hydration shows it.
-    LEFT JOIN LATERAL (
-      SELECT candidate->${"label"} AS label, ft.shortcode
-      FROM jsonb_array_elements(a.judgment->'candidates') WITH ORDINALITY AS c(candidate, position)
-      JOIN "FinancialTransaction" ft ON ft.id = (candidate->>'transactionId')::uuid
-      ORDER BY position LIMIT 1
-    ) first_candidate ON true
+    ${FIRST_CANDIDATE}
     WHERE ${conditions(filters)}
   `);
   return rows.map((row) => ({

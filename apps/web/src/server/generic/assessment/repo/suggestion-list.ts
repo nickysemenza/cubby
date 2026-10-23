@@ -29,6 +29,7 @@ import { reviewAssessmentBatch } from "~/server/generic/assessment/repo/assessme
 import {
   type SuggestionFamilyQuery,
   type SuggestionKey,
+  emptyPendingCounts,
   suggestionFamilies,
 } from "~/server/generic/assessment/repo/suggestion-families";
 import { resolveShortcodes } from "~/server/generic/shortcode/repo/shortcode-resolver";
@@ -217,7 +218,7 @@ function filterKeys(
   );
 }
 
-async function scopedKeys(db: Database, filters: SuggestionListFilters) {
+async function scopedFamilyQuery(db: Database, filters: SuggestionListFilters) {
   const families = familiesOf(filters);
   const known = knownColumns(families);
   const unknown = Object.keys(filters.where).filter(
@@ -239,11 +240,19 @@ async function scopedKeys(db: Database, filters: SuggestionListFilters) {
       AND s.status = ${filters.status} ${filters.status === "pending" ? sql`AND s.active` : sql``}
       ${filters.runId ? sql`AND s."runId" = (SELECT id FROM "Run" WHERE shortcode = ${filters.runId})` : sql``}`,
   });
-  if (touching?.size === 0) return { families, keys: [], all: [] };
   const familyScope = {
     filters: { ...query.filters, entity: undefined, recordIds: undefined },
     assessmentIds: touching ? [...touching] : undefined,
   };
+  return { families, touching, familyScope };
+}
+
+async function scopedKeys(db: Database, filters: SuggestionListFilters) {
+  const { families, touching, familyScope } = await scopedFamilyQuery(
+    db,
+    filters,
+  );
+  if (touching?.size === 0) return { families, keys: [], all: [] };
   const keys = (
     await Promise.all(
       families.map((family) =>
@@ -455,18 +464,41 @@ export async function suggestionCountsByFamily(
     ...suggestionCountsInput.parse(raw),
     status: "pending" as const,
   };
-  const { families, keys } = await scopedKeys(db, filters);
+  const { families, touching, familyScope } = await scopedFamilyQuery(
+    db,
+    filters,
+  );
   const counts = await Promise.all(
     families.map(async (family) => {
-      const own = keys.filter((key) => key.family === family);
-      const outcomes = await suggestionFamilies[family].outcomes(db, filters);
+      const presentation = suggestionFamilies[family];
+      let pending = emptyPendingCounts();
+      if (touching?.size !== 0) {
+        if (
+          "pendingCounts" in presentation &&
+          presentation.pendingCounts &&
+          Object.keys(filters.where).length === 0
+        ) {
+          pending = await presentation.pendingCounts(db, familyScope);
+        } else {
+          const own = filterKeys(
+            (await presentation.keys(db, familyScope)).filter(
+              (key) =>
+                key.automaticRule === null &&
+                (!touching || touching.has(key.assessmentId)),
+            ),
+            filters.where,
+          );
+          for (const key of own) {
+            pending.pending++;
+            if (key.clean) pending.clean++;
+            pending[key.strength]++;
+          }
+        }
+      }
+      const outcomes = await presentation.outcomes(db, filters);
       return {
         family,
-        pending: own.length,
-        clean: own.filter((key) => key.clean).length,
-        strong: own.filter((key) => key.strength === "strong").length,
-        medium: own.filter((key) => key.strength === "medium").length,
-        weak: own.filter((key) => key.strength === "weak").length,
+        ...pending,
         ...outcomes,
       };
     }),

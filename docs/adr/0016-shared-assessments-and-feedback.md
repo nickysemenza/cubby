@@ -324,7 +324,14 @@ them, with no child Runs. Automatic passes are routine Sweeps. Family
 registry entries still own candidate matching, stale-evidence rechecks, apply
 authority and identity or financial safeguards.
 The shared layer adds listing, Strength, Impact, the clean flag and bulk
-actions. It never adds a generic confirmation: connections keep their
+actions. Families may supply a narrow pending-count projection for scopes
+without column filters, using the same eligibility and scope as list keys.
+Column-filtered counts retain the shared key filters; reviewed outcome counts
+retain their independent family, entity and Run scope. Statement counts group
+only clean and first-candidate label facts, then reuse the family's Strength
+classification. They materialize those facts once before aggregation and omit
+automatic-rule applications exactly as the pending list does.
+It never adds a generic confirmation: connections keep their
 per-integration review paths and stay individually reviewed.
 
 An Automatic rule is the only way a Suggestion applies without review. It is a
