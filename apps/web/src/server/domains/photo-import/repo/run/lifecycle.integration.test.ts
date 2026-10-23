@@ -23,6 +23,7 @@ import { IMAGE_DESCRIPTION_PROCESSOR_REVISION } from "~/server/domains/image-pro
 import { productionPhotoImportCommitPorts } from "~/server/domains/photo-import/repo/photo-import-commit";
 import { retireSettledCoordinators } from "~/server/domains/purchase-import/repo/run-retirement";
 import {
+  controlRun,
   finalizePhotoRun,
   startGuardedPhotoCoordinator,
   startPhotoInventoryRun,
@@ -1005,6 +1006,44 @@ describe("photo run lifecycle", () => {
       .update(runTable)
       .set({ status: "completed", endedAt: new Date() })
       .where(eq(runTable.id, run.id));
+    // Restart copies every source image into a new attempt; reopening below
+    // must still preserve the original Run's committed work.
+    const sourceImages = await getDb(ctx.db)
+      .select({
+        imageId: photoRunImage.imageId,
+        position: photoRunImage.position,
+        workKey: photoRunImage.workKey,
+        targetFingerprint: photoRunImage.targetFingerprint,
+      })
+      .from(photoRunImage)
+      .where(eq(photoRunImage.runId, run.id))
+      .orderBy(photoRunImage.position);
+    const restarted = await controlRun(ctx.db, ctx.actor, {
+      runPublicId: run.shortcode,
+      action: "restart",
+    });
+    expect(restarted.successorRunId).toBeTruthy();
+    expect(restarted.successorRunId).not.toBe(run.id);
+    const successorId = parseEntityId("run", restarted.successorRunId!);
+    expect(await readRun(successorId)).toMatchObject({
+      predecessorRunId: run.id,
+      purpose: "photo_inventory",
+      input: run.input,
+    });
+    const copiedImages = await getDb(ctx.db)
+      .select({
+        imageId: photoRunImage.imageId,
+        position: photoRunImage.position,
+        workKey: photoRunImage.workKey,
+        targetFingerprint: photoRunImage.targetFingerprint,
+        state: photoRunImage.state,
+      })
+      .from(photoRunImage)
+      .where(eq(photoRunImage.runId, successorId))
+      .orderBy(photoRunImage.position);
+    expect(copiedImages).toEqual(
+      sourceImages.map((image) => ({ ...image, state: "pending" })),
+    );
     const reopened = await admitPhotoRunBatch(ctx.db, {
       runId: run.shortcode,
       clientBatchId: crypto.randomUUID(),

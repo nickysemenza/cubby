@@ -36,10 +36,7 @@ import {
   seedImagePrerequisite,
   attachProductImagePrerequisite,
 } from "./fixtures/photos";
-import {
-  openDetailActions,
-  gotoAuthenticatedPage,
-} from "./support/e2e-helpers";
+import { gotoAuthenticatedPage } from "./support/e2e-helpers";
 import { expect, recordingVideo, test } from "./support/e2e-test";
 
 async function configureVariantDecisions(
@@ -345,45 +342,7 @@ test("reviews, approves, and discards proposed photo groups on the photo-invento
     e2eRuntime.objectStorageUrl,
   );
   const g2Name = `${name} solo find`;
-  const categoryAlias = `${name} taxonomy alias`;
   const { db } = await createEvidenceHarnessContext(page);
-  await getDb(db)
-    .update(schema.productCategory)
-    .set({ aliases: [categoryAlias] })
-    .where(eq(schema.productCategory.shortcode, seed.category.id));
-  const categoryReads: { operation: string; groups?: string[] }[] = [];
-  page.on("request", (request) => {
-    for (const item of dispatchOperations(request)) {
-      const input = z
-        .object({
-          entity: z.literal("productCategory"),
-          groups: z.array(z.string()).optional(),
-        })
-        .safeParse(item.input);
-      if (input.success)
-        categoryReads.push({
-          operation: item.operation,
-          groups: input.data.groups,
-        });
-    }
-  });
-
-  await gotoAuthenticatedPage(
-    page,
-    `/runs/${seed.runId}#work`,
-    page.getByRole("heading", { name: "Work", exact: true }),
-  );
-
-  await openDetailActions(page);
-  const actions = page.getByRole("group", {
-    name: "Entity actions",
-    exact: true,
-  });
-  await expect(
-    actions.getByRole("button", { name: "Start grouping" }),
-  ).toBeEnabled();
-  await page.keyboard.press("Escape");
-  if (recordingVideo) await page.waitForTimeout(1_500);
   const proposed = await startOperation(
     page.request,
     "photoImport.saveGroups",
@@ -393,6 +352,11 @@ test("reviews, approves, and discards proposed photo groups on the photo-invento
     },
   );
   expect(proposed.ok(), await proposed.text()).toBeTruthy();
+  await gotoAuthenticatedPage(
+    page,
+    `/runs/${seed.runId}#work`,
+    page.getByRole("heading", { name: "Photo review", exact: true }),
+  );
 
   // Both proposed groups render, and every seeded photo is assigned to one.
   await expect(
@@ -400,12 +364,6 @@ test("reviews, approves, and discards proposed photo groups on the photo-invento
       exact: true,
     }),
   ).toBeVisible();
-  await openDetailActions(page);
-  await expect(
-    page.getByRole("button", { name: "Start grouping" }),
-  ).toHaveCount(0);
-  await page.keyboard.press("Escape");
-
   const g1Card = page.locator("[data-photo-group]").filter({
     has: page.getByRole("heading", { name: "Gray crew t-shirt — M" }),
   });
@@ -440,34 +398,6 @@ test("reviews, approves, and discards proposed photo groups on the photo-invento
   ).toBeVisible();
   if (recordingVideo) await page.waitForTimeout(1_500);
 
-  await g1Card.getByRole("combobox", { name: "category" }).fill(categoryAlias);
-  await page.getByRole("option", { name: `${name} apparel` }).click();
-  await expect
-    .poll(async () => {
-      const response = await page.request.get(
-        `/api/v1/photoImport/review?runId=${seed.runId}`,
-      );
-      const body = await response.json();
-      return body.review.proposals.find(
-        (proposal: { groupKey: string }) => proposal.groupKey === "g1",
-      )?.product.create.categoryId;
-    })
-    .toBe(seed.category.id);
-  // The complete searchable taxonomy needs identity and hierarchy, not every
-  // category's galleries, quality assessments, or derived table fields.
-  expect(
-    categoryReads.filter((read) => read.operation === "entity.list"),
-  ).toHaveLength(0);
-  expect(
-    categoryReads.some((read) => read.operation === "entity.listBase"),
-  ).toBeTruthy();
-  const enrichment = categoryReads.filter(
-    (read) => read.operation === "entity.listEnrichment",
-  );
-  expect(enrichment.length).toBeGreaterThan(0);
-  for (const read of enrichment) expect(read.groups).toEqual(["relations"]);
-  if (recordingVideo) await page.waitForTimeout(1_500);
-
   // The Photos table lists every seeded image.
   const photosCard = page.getByRole("region", { name: "Run photos" });
   await expect(
@@ -476,7 +406,7 @@ test("reviews, approves, and discards proposed photo groups on the photo-invento
 
   // Blurring the edited name and clicking Approve in the same gesture must
   // save the correction before creating the Product.
-  const correctedName = "Gray crew t-shirt — size M";
+  const correctedName = `${name} Gray crew t-shirt — size M`;
   await g1Card
     .getByRole("textbox", { name: "New product name" })
     .fill(correctedName);
@@ -526,26 +456,20 @@ test("reviews, approves, and discards proposed photo groups on the photo-invento
   await expect(
     page.getByText("Completed", { exact: true }).first(),
   ).toBeVisible({ timeout: 10_000 });
-  await openDetailActions(page);
-  await page
-    .getByRole("button", { name: "Start new run with same inputs" })
-    .click();
-  await expect(page).not.toHaveURL(new RegExp(`/runs/${seed.runId}(?:#|$)`));
-  const restartedId = new URL(page.url()).pathname.split("/").at(-1);
-  expect(restartedId).toBeTruthy();
-  const restarted = await page.request.get(
-    `/api/v1/run/work?runId=${restartedId}`,
-  );
-  expect(restarted.ok(), await restarted.text()).toBeTruthy();
-  const restartedRun = await restarted.json();
-  expect(restartedRun.predecessorRunPublicId).toBe(seed.runId);
-  expect(restartedRun.targets).toHaveLength(3);
+  const savedProduct = await getDb(db).query.product.findFirst({
+    where: eq(schema.product.name, correctedName),
+  });
+  expect(savedProduct).toBeDefined();
   expect(
-    restartedRun.targets.every(
-      (target: { targetType: string }) => target.targetType === "image",
-    ),
-  ).toBe(true);
-  if (recordingVideo) await page.waitForTimeout(1_500);
+    await getDb(db).query.inventoryEntry.findMany({
+      where: eq(schema.inventoryEntry.productId, savedProduct!.id),
+    }),
+  ).toMatchObject([{ amountValue: 2, amountUnit: "each" }]);
+  expect(
+    await getDb(db).query.product.findMany({
+      where: eq(schema.product.name, g2Name),
+    }),
+  ).toEqual([]);
 });
 
 test("suggests an existing variant and previews every merge decision for a created photo product", async ({

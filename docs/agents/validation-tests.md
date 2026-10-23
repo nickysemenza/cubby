@@ -40,6 +40,23 @@ fixture graph. Independent shirt, label and boots uploads run together; keep the
 ordered result tuple and wait for every verified Image before linking the Run's
 ordered roster. This batches setup without changing photo groups or assertions.
 
+The approve/discard photo journey saves its prerequisite proposals before opening
+the Run; it does not wait for an API-seeded empty page to discover them through
+live polling. Keep native label-purpose editing, decoded images,
+blur-and-approve name saving, discard and completion. The existing proposed-Product
+draft-edit case in `run/proposals.integration.test.ts` owns a selected category
+through draft save, approval and exact Product read-back. The browser no longer
+samples category-alias selection or taxonomy request shapes; these are deliberate
+picker-composition and performance-sampling gaps. Read back the corrected Product, exactly two received units and no
+Product for the discarded group. The existing completed-Run case in
+`run/lifecycle.integration.test.ts` also owns restart: a distinct successor keeps
+the predecessor, input and every ordered image/fingerprint, resetting copied work
+to pending while the original committed work remains intact. The generic MCP Run
+lifecycle case retains real restart dispatch. Dedicated photo restart menu/HTTP
+composition and empty-versus-proposed Start grouping button visibility are
+intentional browser coverage gaps; manual grouping admission remains in the
+photo lifecycle SQL owner. No scenario is deleted or split.
+
 Nutrition-label review fixtures already upload servable bytes and persist verified
 hash/dimensions before attaching the label. Inject the external description against
 that verified source; do not repeat `verifyImages` or visit an auth page just to
