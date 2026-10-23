@@ -448,6 +448,15 @@ to assert header position costs a full browser journey for a presentation detail
 Shared responsive capabilities do not establish sticky behavior; verify that
 visual detail during relevant layout work instead.
 
+Vendor default freshness and successful apply/read-back belong in
+`finance-context.integration.test.ts`, beside the Expense review owner.
+`vendor-suggestion-context.integration.test.ts` owns independent evidence and
+fingerprint changes. Do not duplicate these API-only assertions in a browser
+journey that merely opens a Vendor link: that also races unrelated derived work.
+The emoji/category browser journey retains actual editors and category navigation.
+This removes the dedicated HTTP Vendor-apply smoke; production serialization
+conflicts remain separately tracked rather than being claimed fixed by this move.
+
 ## Test and dev data factories
 
 One layer builds data for Vitest, E2E, and the dev corpus:
