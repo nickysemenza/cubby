@@ -84,6 +84,13 @@ dispatch remains in `table-header-layout.unit.test.tsx`; do not duplicate its
 hover/focus disclosure in a backend-connected grouping journey.
 Testing Library role queries use exact string names by default; Playwright's
 `exact` option is not a Testing Library option.
+Shopping-list quantity assertions scope to the named Ingredient row’s Need cell; worker-shared
+meal fixtures may legitimately produce the same quantity for other ingredients.
+Connection-path assertions choose a visible matching link rather than the first
+DOM match, because collapsed/responsive branches can retain hidden duplicates.
+Native-workspace session bootstrap assertions include the response body on a
+status mismatch so a server failure can be attributed without another replay.
+
 Daily aggregation fixtures keep same-day rows on one recent household day;
 minute offsets from wall-clock time can straddle midnight and correctly produce
 multiple day groups. Keep the transport-summary regression pinned to that boundary.

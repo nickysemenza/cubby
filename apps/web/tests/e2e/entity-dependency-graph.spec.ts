@@ -73,7 +73,10 @@ test("connections workspace shares dense facts, linked paths, and native handoff
   await page.getByRole("button", { name: "Paths list", exact: true }).click();
   const paths = page.getByLabel("Connection paths", { exact: true });
   await expect(
-    paths.locator(`a[href="/products/${product.id}"]`).first(),
+    paths
+      .locator(`a[href="/products/${product.id}"]`)
+      .filter({ visible: true })
+      .first(),
   ).toBeVisible();
   await expect(
     paths.getByRole("link", { name: "Connection lighting purchase" }).first(),
