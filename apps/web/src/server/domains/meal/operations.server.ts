@@ -2,7 +2,6 @@ import type {
   AggregatedNeed,
   BlockedSubRecipe,
 } from "@cubby/schemas/availability";
-import type { MealId } from "@cubby/schemas/identifiers";
 import type {
   MealPreparationNutritionDetail,
   SaveMealRecipePreparationInput,
@@ -54,19 +53,12 @@ import type {
   AvailabilityService,
   PlannedLine,
 } from "~/server/domains/recipe/service/availability.service";
-import { runMutationSideEffects } from "~/server/entity-kernel/repo/mutation-side-effects";
+import { recordChange } from "~/server/generic/changes/repo/change";
 import { bindShortcodeResolver } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { implementOperationDomain } from "~/server/operation-runtime/operation-domain.server";
 import { bindWorkflow, workflow } from "~/server/workflows/runtime";
 
 const mealShortcodes = bindShortcodeResolver("meal");
-
-const refreshMealEmbedding = (db: Database, id: MealId, source: string) =>
-  runMutationSideEffects(db, {
-    action: "updated",
-    entity: { entity: "meal", id: id },
-    source,
-  });
 
 type MealMutationContext = {
   db: Database;
@@ -78,19 +70,19 @@ export const saveMealRecipePreparationWorkflow = bindWorkflow(
     "meal.savePreparation",
   )
     .commit("saved", async ({ context }, { input }) =>
-      saveMealRecipePreparation(context.db, input, context.actorContext),
+      withTransactionDatabase(context.db, async (transactionDb) => {
+        const result = await saveMealRecipePreparation(
+          transactionDb,
+          input,
+          context.actorContext,
+        );
+        await recordChange(transactionDb, {
+          kind: "source",
+          categories: ["meal"],
+        });
+        return result;
+      }),
     )
-    .effect("embeddings", async ({ context }, { saved }) => {
-      const affectedIds = await mealShortcodes.all(
-        context.db,
-        saved.affectedMealIds,
-      );
-      return Promise.all(
-        affectedIds.map((id) =>
-          refreshMealEmbedding(context.db, id, "meal.savePreparation"),
-        ),
-      );
-    })
     .output(({ saved }) => saved),
 );
 
@@ -102,28 +94,35 @@ export const addRecipeToMealWorkflow = bindWorkflow(
       mealShortcodes.one(context.db, input.mealId),
     )
     .commit("updated", async ({ context }, { input, mealId }) =>
-      withTransactionDatabase(context.db, async (db) => {
-        if (input.convertToCooked)
-          await updateMeal(
-            db,
-            mealId,
-            { mealKind: "cooked" },
-            context.actorContext,
-          );
-        return addRecipeToMeal(
-          db,
-          mealId,
-          {
-            recipeId: input.recipeId,
-            scale: input.scale,
-            sortOrder: input.sortOrder,
+      withTransactionDatabase(context.db, async (transactionDb) => {
+        const result = await withTransactionDatabase(
+          transactionDb,
+          async (db) => {
+            if (input.convertToCooked)
+              await updateMeal(
+                db,
+                mealId,
+                { mealKind: "cooked" },
+                context.actorContext,
+              );
+            return addRecipeToMeal(
+              db,
+              mealId,
+              {
+                recipeId: input.recipeId,
+                scale: input.scale,
+                sortOrder: input.sortOrder,
+              },
+              context.actorContext,
+            );
           },
-          context.actorContext,
         );
+        await recordChange(transactionDb, {
+          kind: "source",
+          categories: ["meal"],
+        });
+        return result;
       }),
-    )
-    .effect("embedding", async ({ context }, { mealId }) =>
-      refreshMealEmbedding(context.db, mealId, "meal.addRecipe"),
     )
     .output(({ updated }) => updated),
 );
@@ -136,14 +135,19 @@ export const duplicateMealWorkflow = bindWorkflow(
       mealShortcodes.one(context.db, input.mealId),
     )
     .commit("copied", async ({ context }, { input, mealId }) =>
-      duplicateMeal(context.db, context.actorContext, mealId, input.date),
-    )
-    .effect("embeddings", async ({ context }, { copied }) =>
-      Promise.all(
-        copied.mealIds.map((id) =>
-          refreshMealEmbedding(context.db, id, "meal.duplicate"),
-        ),
-      ),
+      withTransactionDatabase(context.db, async (transactionDb) => {
+        const result = await duplicateMeal(
+          transactionDb,
+          context.actorContext,
+          mealId,
+          input.date,
+        );
+        await recordChange(transactionDb, {
+          kind: "source",
+          categories: ["meal"],
+        });
+        return result;
+      }),
     )
     .output(({ copied }) => copied),
 );
@@ -153,14 +157,18 @@ export const copyMealRangeWorkflow = bindWorkflow(
     "meal.copyRange",
   )
     .commit("copied", async ({ context }, { input }) =>
-      copyMealRange(context.db, context.actorContext, input),
-    )
-    .effect("embeddings", async ({ context }, { copied }) =>
-      Promise.all(
-        copied.mealIds.map((id) =>
-          refreshMealEmbedding(context.db, id, "meal.copyRange"),
-        ),
-      ),
+      withTransactionDatabase(context.db, async (transactionDb) => {
+        const result = await copyMealRange(
+          transactionDb,
+          context.actorContext,
+          input,
+        );
+        await recordChange(transactionDb, {
+          kind: "source",
+          categories: ["meal"],
+        });
+        return result;
+      }),
     )
     .output(({ copied }) => copied),
 );
@@ -183,10 +191,18 @@ export const removeMealRecipeWorkflow = bindWorkflow(
     "meal.removeRecipe",
   )
     .commit("removed", async ({ context }, { input }) =>
-      removeMealRecipeWithEntityId(context.db, input.id, context.actorContext),
-    )
-    .effect("embedding", async ({ context }, { removed }) =>
-      refreshMealEmbedding(context.db, removed.entityId, "meal.removeRecipe"),
+      withTransactionDatabase(context.db, async (transactionDb) => {
+        const result = await removeMealRecipeWithEntityId(
+          transactionDb,
+          input.id,
+          context.actorContext,
+        );
+        await recordChange(transactionDb, {
+          kind: "source",
+          categories: ["meal"],
+        });
+        return result;
+      }),
     )
     .output(({ removed }) => removed.output),
 );

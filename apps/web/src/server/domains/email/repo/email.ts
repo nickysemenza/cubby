@@ -324,12 +324,7 @@ const emailRead = (
   media: true,
   // includes-deleted: immutable mail metadata retains its original owner and Run.
   references: {
-    ledgerPartyId: {
-      kind: "lookup",
-      name: "ledgerPartyName",
-      missing: "error",
-      includeDeleted: true,
-    },
+    ledgerPartyId: { kind: "lookup", missing: "error", includeDeleted: true },
     runId: { kind: "lookup", missing: "null", includeDeleted: true },
   },
   bindings: (bind) => {

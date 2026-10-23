@@ -3,6 +3,7 @@ import { type ReactNode, Suspense, useState } from "react";
 
 import { ShortcodeProse } from "~/entity/prose/shortcode-prose";
 import { DateDisplay } from "~/ui/common/date-display";
+import { RecordDetail } from "~/ui/common/record-list";
 import { Row, Stack } from "~/ui/layout";
 import { Button } from "~/ui/primitives/button";
 import { Description } from "~/ui/primitives/description";
@@ -214,7 +215,7 @@ export function RecordsBlockView({
   const blockCommands = (block.commands ?? []).map((command) => (
     <CommandButton key={command.id} command={command} commands={commands} />
   ));
-  return (
+  const content = (
     <Stack as="section" aria-label={block.title} gap="sm" className="w-full">
       <RecordsHeader
         title={block.rows.length > 0 ? block.title : undefined}
@@ -277,6 +278,11 @@ export function RecordsBlockView({
         ) : null,
       )}
     </Stack>
+  );
+  return block.disclosureLabel ? (
+    <RecordDetail summary={block.disclosureLabel}>{content}</RecordDetail>
+  ) : (
+    content
   );
 }
 

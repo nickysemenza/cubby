@@ -72,9 +72,9 @@ import {
   preferredImageDescriptionPolicy,
 } from "~/server/domains/image-processing/repo/description-policy";
 import { MAIL_ATTACHMENT_UPLOAD_REASON } from "~/server/domains/mail/repo/mail-attachment-uploads";
-import { runMutationSideEffects } from "~/server/entity-kernel/repo/mutation-side-effects";
 import { publishAssessment } from "~/server/generic/assessment/repo/assessment";
 import { readConfirmedDescription } from "~/server/generic/assessment/repo/assessment-image";
+import { recordChange } from "~/server/generic/changes/repo/change";
 import { currentJobExecution } from "~/server/generic/jobs/context";
 import {
   enqueueJob,
@@ -1289,6 +1289,14 @@ export async function completeImageProcessingJob(
         },
         { phase: "publication" },
       );
+    await recordChange(tx, {
+      kind: "projection",
+      categories: ["image", "relatedData"],
+      // Selected descriptions are inputs to image and attached-owner search documents.
+      ...(job.kind === "describe_image"
+        ? { refresh: ["search"] as const }
+        : {}),
+    });
     if (job.kind === "describe_image") settledPhotoRunId = job.runId;
     return { adopted: true, orphanKey: null };
   });
@@ -1403,11 +1411,7 @@ export async function saveImageDescriptionAnalysis(
     },
     { suggestedValue: result.description },
   );
-  await runMutationSideEffects(db, {
-    entity: { entity: "image", id: input.imageId },
-    action: "updated",
-    source: "image-description",
-  });
+  await recordChange(db, { kind: "projection", categories: ["image"] });
 }
 
 /**

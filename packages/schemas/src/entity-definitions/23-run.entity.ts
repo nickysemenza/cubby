@@ -281,7 +281,6 @@ export default defineEntity({
         labelOverride: "Activity",
         display: {
           columnGroup: "Execution",
-          detail: false,
           labelPath: "activityAt",
           renderer: { list: "run-activity" },
         },
@@ -441,7 +440,7 @@ export default defineEntity({
         kind: "identifier",
         nullable: true,
         reference: { entity: "vendor" },
-        display: { columnGroup: "Scope" },
+        display: { columnGroup: "Scope", labelPath: "vendorName" },
         validation: readOnly(vendorShortcode.nullable()),
       },
       {
@@ -451,7 +450,7 @@ export default defineEntity({
         // purposes always carry the member scope (`Run_import_party_check`).
         nullable: true,
         reference: { entity: "ledgerParty" },
-        display: { columnGroup: "Scope" },
+        display: { columnGroup: "Scope", labelPath: "ledgerPartyName" },
         validation: readOnly(ledgerPartyShortcode.nullable()),
       },
       {
@@ -679,14 +678,12 @@ export default defineEntity({
         validation: readOnly(z.string().nullable()),
       },
       {
-        display: { detail: false, list: false },
         key: "vendorName",
         kind: "text",
         nullable: true,
         validation: readOnly(z.string().nullable()),
       },
       {
-        display: { detail: false, list: false },
         key: "ledgerPartyName",
         kind: "text",
         // Null with `ledgerPartyId` on runs that group AI work.

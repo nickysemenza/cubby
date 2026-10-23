@@ -1,10 +1,7 @@
 import { withTransactionDatabase } from "~/server/db/helpers";
-import {
-  mutationEvents,
-  runMutationSideEffects,
-  runMutationSideEffectsForEntities,
-} from "~/server/entity-kernel/repo/mutation-side-effects";
+import { registerLocationImageChange } from "~/server/entity-kernel/repo/mutation-side-effects";
 import { defineRepository, onDb } from "~/server/entity-kernel/repo/repository";
+import { recordChange } from "~/server/generic/changes/repo/change";
 import { bindShortcodeResolver } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 import {
@@ -20,11 +17,9 @@ import { getLocationByShortcode } from "./lookup";
 const locationShortcodes = bindShortcodeResolver("location");
 
 /**
- * `sideEffects: false`: a location write dispatches its own events, which
- * carry whether its images changed (the vision description depends on it).
+ * Location image changes enroll vision analysis in the save transaction.
  */
 export const locationRepository = defineRepository("location", {
-  sideEffects: false,
   lifecycle: { delete: LOCATION_DELETE_EDGE_POLICY },
   get: onDb(getLocationByShortcode),
   list: (ctx, filters, sorts, pagination) =>
@@ -45,35 +40,35 @@ export const locationRepository = defineRepository("location", {
       projection,
       readIntent,
     ),
-  create: async (ctx, data) => {
-    const { output, entityId } = await createLocationRecord(
-      ctx.db,
-      data,
-      ctx.actorContext,
-    );
-    await runMutationSideEffects(ctx.db, {
-      action: "created",
-      entity: { entity: "location", id: entityId },
-      source: "location.create",
-      locationImagesChanged: (data.pendingImageIds?.length ?? 0) > 0,
-    });
-    return { output, entityId };
-  },
-  createRead: async (ctx, data, fields) => {
-    const result = await createLocationRecord.read(
-      fields,
-      ctx.db,
-      data,
-      ctx.actorContext,
-    );
-    await runMutationSideEffects(ctx.db, {
-      action: "created",
-      entity: { entity: "location", id: result.entityId },
-      source: "location.create",
-      locationImagesChanged: (data.pendingImageIds?.length ?? 0) > 0,
-    });
-    return result;
-  },
+  create: (ctx, data) =>
+    withTransactionDatabase(ctx.db, async (db) => {
+      const { output, entityId } = await createLocationRecord(
+        db,
+        data,
+        ctx.actorContext,
+      );
+      if (data.pendingImageIds?.length)
+        await registerLocationImageChange(db, {
+          locationId: entityId,
+          runId: ctx.actorContext.runId ?? undefined,
+        });
+      return { output, entityId };
+    }),
+  createRead: (ctx, data, fields) =>
+    withTransactionDatabase(ctx.db, async (db) => {
+      const result = await createLocationRecord.read(
+        fields,
+        db,
+        data,
+        ctx.actorContext,
+      );
+      if (data.pendingImageIds?.length)
+        await registerLocationImageChange(db, {
+          locationId: result.entityId,
+          runId: ctx.actorContext.runId ?? undefined,
+        });
+      return result;
+    }),
   update: async (ctx, shortcode, data) => {
     const entityId = await locationShortcodes.one(ctx.db, shortcode);
     const imagesChanged =
@@ -89,12 +84,11 @@ export const locationRepository = defineRepository("location", {
         data,
         ctx.actorContext,
       );
-      await runMutationSideEffects(transactionDb, {
-        action: "updated",
-        entity: { entity: "location", id: entityId },
-        source: "location.update",
-        locationImagesChanged: imagesChanged,
-      });
+      if (imagesChanged)
+        await registerLocationImageChange(transactionDb, {
+          locationId: entityId,
+          runId: ctx.actorContext.runId ?? undefined,
+        });
       return {
         output: updated,
         entityId,
@@ -115,22 +109,18 @@ export const locationRepository = defineRepository("location", {
         data,
         ctx.actorContext,
       );
-      await runMutationSideEffects(transactionDb, {
-        action: "updated",
-        entity: { entity: "location", id: entityId },
-        source: "location.update",
-        locationImagesChanged: imagesChanged,
-      });
+      if (imagesChanged)
+        await registerLocationImageChange(transactionDb, {
+          locationId: entityId,
+          runId: ctx.actorContext.runId ?? undefined,
+        });
       return result;
     });
   },
   delete: async (ctx, shortcodes) => {
     const ids = await locationShortcodes.all(ctx.db, shortcodes);
     const result = await deleteLocations(ctx.db, ids, ctx.actorContext);
-    await runMutationSideEffectsForEntities(
-      ctx.db,
-      mutationEvents("location", "deleted", ids, "location.delete"),
-    );
+    await recordChange(ctx.db, { kind: "source", categories: ["location"] });
     return result;
   },
 });

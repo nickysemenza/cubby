@@ -43,7 +43,7 @@ const base = {
       repository: null,
       references: { label: null, resolver: null },
       filters: null,
-      search: { projection: null, semanticText: null, dependentRefresh: null },
+      search: { projection: null, semanticText: null },
     },
   },
 };

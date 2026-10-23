@@ -13,7 +13,6 @@ import {
 } from "~/server/domains/image-processing/repo/image-processing";
 import { describeOriginalImage } from "~/server/domains/image/service/image-description.service";
 import { ensureRun, systemActor } from "~/server/domains/run/repo/ensure-run";
-import { refreshDirectImageOwnerSearchDocuments } from "~/server/generic/search/repo/search-document";
 
 /** The same cloud policy, immutable history, and followups for edge and companion JPEG inputs. */
 export async function completeCloudImageDescription(
@@ -73,7 +72,6 @@ export async function completeCloudImageDescription(
     },
   });
   if (!completion.adopted) return false;
-  await refreshDirectImageOwnerSearchDocuments(db, input.imageId);
   const { publishImageProcessingWakeups } =
     await import("~/server/domains/image-processing/repo/image-processing-maintenance");
   await publishImageProcessingWakeups(

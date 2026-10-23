@@ -4,15 +4,12 @@ import {
 } from "@cubby/schemas/purchase";
 
 import {
-  mutationEvents,
-  runMutationSideEffectsForEntities,
-} from "~/server/entity-kernel/repo/mutation-side-effects";
-import {
   asActor,
   defineRepository,
   listOn,
   onDb,
 } from "~/server/entity-kernel/repo/repository";
+import { recordChange } from "~/server/generic/changes/repo/change";
 import { bindShortcodeResolver } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 import {
@@ -61,20 +58,10 @@ export const purchaseRepository = defineRepository("purchase", {
   // The detached expenses and transactions re-project without the purchase.
   delete: async (ctx, ids) => {
     const detached = await deletePurchases(ctx.db, ids, ctx.actorContext);
-    await runMutationSideEffectsForEntities(ctx.db, [
-      ...mutationEvents(
-        "expense",
-        "updated",
-        detached.expenseIds,
-        "purchase.delete",
-      ),
-      ...mutationEvents(
-        "financialTransaction",
-        "updated",
-        detached.financialTransactionIds,
-        "purchase.delete",
-      ),
-    ]);
+    await recordChange(ctx.db, {
+      kind: "source",
+      categories: ["expense", "financialTransaction"],
+    });
     return detached;
   },
   merge: {

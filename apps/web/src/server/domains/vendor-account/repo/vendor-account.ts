@@ -284,18 +284,8 @@ export const loadVendorAccountRunActivity = async (
 // still names the account's scope rather than failing the read.
 const accountRead = {
   references: {
-    vendorId: {
-      kind: "lookup",
-      name: "vendorName",
-      missing: "error",
-      includeDeleted: true,
-    },
-    ledgerPartyId: {
-      kind: "lookup",
-      name: "ledgerPartyName",
-      missing: "error",
-      includeDeleted: true,
-    },
+    vendorId: { kind: "lookup", missing: "error", includeDeleted: true },
+    ledgerPartyId: { kind: "lookup", missing: "error", includeDeleted: true },
   },
   bindings: (bind) => {
     const activity = bind.batch(({ db, rows }) =>

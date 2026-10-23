@@ -158,7 +158,7 @@ export default defineEntity({
         nullable: true,
         reference: { entity: "ledgerParty" },
         control: { kind: "specialized", renderer: "entity-select" },
-        display: { columnGroup: "Device" },
+        display: { columnGroup: "Device", labelPath: "ledgerPartyName" },
         validation: {
           read: ledgerPartyShortcode.nullable(),
           create: ledgerPartyShortcode.nullable().optional(),
@@ -176,7 +176,7 @@ export default defineEntity({
           // The Product link identifies the physical device used for activity attribution.
           suggest: { basis: ["name", "platform"], reviewRequired: true },
         },
-        display: { list: false },
+        display: { list: false, labelPath: "productName" },
         validation: {
           read: productShortcode.nullable(),
           create: productShortcode.nullable().optional(),
@@ -184,7 +184,6 @@ export default defineEntity({
         },
       },
       {
-        display: { detail: false, list: false },
         key: "ledgerPartyName",
         kind: "text",
         nullable: true,
@@ -199,7 +198,6 @@ export default defineEntity({
         validation: { read: z.string().nullable(), create: null, update: null },
       },
       {
-        display: { detail: false, list: false },
         key: "productName",
         kind: "text",
         nullable: true,

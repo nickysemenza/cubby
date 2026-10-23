@@ -672,7 +672,6 @@ const listLedgerTransfers = completeListReader(
 );
 
 export const ledgerTransferRepository = defineRepository("ledgerTransfer", {
-  sideEffects: false,
   lifecycle: { delete: LEDGER_TRANSFER_DELETE_EDGE_POLICY },
   get: onDb(getLedgerTransferByShortcode),
   list: listOn(listLedgerTransfers),

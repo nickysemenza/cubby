@@ -6,16 +6,13 @@ import type {
   EntityRepository,
 } from "~/server/entity-kernel/adapter";
 import {
-  mutationEvents,
-  runMutationSideEffectsForEntities,
-} from "~/server/entity-kernel/repo/mutation-side-effects";
-import {
   defineRepository,
   listOn,
   listReadOn,
   onDb,
 } from "~/server/entity-kernel/repo/repository";
 import { createAppError } from "~/server/errors/app-error";
+import { recordChange } from "~/server/generic/changes/repo/change";
 import { bindShortcodeResolver } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 import {
@@ -126,9 +123,6 @@ export const inventoryRepository = defineRepository("inventory", {
   delete: async (ctx, shortcodes) => {
     const ids = await inventoryShortcodes.all(ctx.db, shortcodes);
     await deleteInventoryEntries(ctx.db, ids, ctx.actorContext);
-    await runMutationSideEffectsForEntities(
-      ctx.db,
-      mutationEvents("inventory", "deleted", ids, "inventory.delete"),
-    );
+    await recordChange(ctx.db, { kind: "source", categories: ["inventory"] });
   },
 });

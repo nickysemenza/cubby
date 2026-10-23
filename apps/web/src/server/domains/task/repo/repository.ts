@@ -1,17 +1,15 @@
-import { getDb } from "~/server/db/helpers";
-import { refreshDerivedSearchRefs } from "~/server/entity-kernel/repo/mutation-side-effects";
 import {
   asActor,
   defineRepository,
   onDb,
 } from "~/server/entity-kernel/repo/repository";
+import { recordChange } from "~/server/generic/changes/repo/change";
 
 import {
   createTask,
   createTaskRead,
   deleteTasks,
   getTaskByShortcode,
-  liveSubtasks,
   TASK_DELETE_EDGE_POLICY,
   updateTask,
   updateTaskRead,
@@ -45,23 +43,9 @@ export const taskRepository = defineRepository("task", {
       fields,
       ctx.caldavHooks?.task,
     ),
-  // Subtasks go with their parent; report every removed task. Older data can
-  // nest deeper than the one-level cascade: a surviving task below a removed
-  // one inherited through it, so its projection is refreshed with its own
-  // descendants'.
   delete: async (ctx, ids) => {
     const result = await deleteTasks(ctx.db, ids, ctx.actorContext);
-    const survivors = (await liveSubtasks(getDb(ctx.db), result.ids)).map(
-      (row) => row.id,
-    );
-    await refreshDerivedSearchRefs(
-      ctx.db,
-      survivors.map((entityId) => ({
-        entityKind: "task" as const,
-        entityId,
-      })),
-      "task.delete.inheritingDescendants",
-    );
+    await recordChange(ctx.db, { kind: "source", categories: ["task"] });
     return { ...result, removed: result.shortcodes };
   },
 });

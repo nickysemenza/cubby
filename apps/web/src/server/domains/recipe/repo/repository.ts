@@ -1,11 +1,8 @@
 import {
-  mutationEvents,
-  runMutationSideEffectsForEntities,
-} from "~/server/entity-kernel/repo/mutation-side-effects";
-import {
   defineRepository,
   listOn,
 } from "~/server/entity-kernel/repo/repository";
+import { recordChange } from "~/server/generic/changes/repo/change";
 import { bindShortcodeResolver } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 import {
@@ -87,10 +84,7 @@ export const recipeRepository = defineRepository("recipe", {
   delete: async (ctx, shortcodes) => {
     const ids = await recipeShortcodes.all(ctx.db, shortcodes);
     const result = await deleteRecipes(ctx.db, ids, ctx.actorContext);
-    await runMutationSideEffectsForEntities(
-      ctx.db,
-      mutationEvents("recipe", "deleted", ids, "recipe.delete"),
-    );
+    await recordChange(ctx.db, { kind: "source", categories: ["recipe"] });
     return result;
   },
 });

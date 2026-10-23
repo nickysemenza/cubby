@@ -4,6 +4,7 @@ import type { z } from "zod";
 
 import { locationContract } from "~/contracts/location.contract";
 import type { Database } from "~/server/db";
+import { withTransactionDatabase } from "~/server/db/helpers";
 import {
   ensureGlobalUnknownLocation,
   locationSearch,
@@ -14,7 +15,7 @@ import {
   getLocationInventoryBreakdown,
 } from "~/server/domains/location/repo/tree";
 import { getLocationValuationSummary } from "~/server/domains/location/repo/valuation";
-import { runMutationSideEffects } from "~/server/entity-kernel/repo/mutation-side-effects";
+import { recordChange } from "~/server/generic/changes/repo/change";
 import { bindShortcodeResolver } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { implementOperationDomain } from "~/server/operation-runtime/operation-domain.server";
 import { bindWorkflow, workflow } from "~/server/workflows/runtime";
@@ -36,21 +37,17 @@ const rosterFilters = (filters: z.infer<typeof locationFiltersSchema>) => ({
   productPresenceFilter: filters.productPresenceFilter,
 });
 
-/** The upsert commits first; resolving its shortcode and the side effects then
- * run as post-commit effects that a cancelled request cannot skip. */
+/** The upsert and source intent share one commit. */
 const ensureGlobalUnknownWorkflow = bindWorkflow(
   workflow<LocationWorkflowContext, undefined>("location.ensureGlobalUnknown")
     .commit("location", async ({ context }) =>
-      ensureGlobalUnknownLocation(context.db, context.actorContext),
-    )
-    .effect("entityId", async ({ context }, { location }) =>
-      shortcodes.one(context.db, location.id),
-    )
-    .effect("effects", async ({ context }, { entityId }) =>
-      runMutationSideEffects(context.db, {
-        action: "updated",
-        entity: { entity: "location", id: entityId },
-        source: "location.ensureGlobalUnknown",
+      withTransactionDatabase(context.db, async (db) => {
+        const location = await ensureGlobalUnknownLocation(
+          db,
+          context.actorContext,
+        );
+        await recordChange(db, { kind: "source", categories: ["location"] });
+        return location;
       }),
     )
     .output(({ location }) => location),

@@ -2194,15 +2194,9 @@ export default defineEntity({
       displaySources: [
         {
           relationPath: ["products"],
-          priority: 1,
-          ordering: "declared",
-          identityEvidence: false,
         },
         {
           relationPath: ["vendor"],
-          priority: 2,
-          ordering: "declared",
-          identityEvidence: false,
         },
       ],
       ingress: [

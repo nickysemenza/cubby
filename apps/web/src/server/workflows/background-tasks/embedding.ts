@@ -11,8 +11,8 @@ import { z } from "zod";
 import type { Database } from "~/server/db";
 import { entityIdentity } from "~/server/db/entity-identity-schema";
 import { getDb, withTransactionDatabase } from "~/server/db/helpers";
-import { repositoryChanged } from "~/server/db/repository-access.boundary";
 import { entityEmbedding, job } from "~/server/db/retained-tables";
+import { recordChange } from "~/server/generic/changes/repo/change";
 import { vectorPayloadHash } from "~/server/generic/embedding/repo/embedding-artifact";
 import { embeddingTextHash } from "~/server/generic/embedding/repo/semantic/hash";
 import { normalizeSearchText } from "~/server/generic/embedding/repo/semantic/text";
@@ -280,12 +280,10 @@ export function embeddingJobHandler(
                 indexedAt: new Date(),
               },
             });
-          await repositoryChanged(tx, [
-            input.entityKind,
-            "search",
-            "relatedData",
-            "problems",
-          ]);
+          await recordChange(tx, {
+            kind: "projection",
+            categories: [input.entityKind, "search", "relatedData", "problems"],
+          });
         },
       };
     },

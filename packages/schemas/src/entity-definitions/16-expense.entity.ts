@@ -1874,15 +1874,9 @@ Rules:
       displaySourceOverrides: [
         {
           relationPath: ["product"],
-          priority: 0,
-          ordering: "declared",
-          identityEvidence: false,
         },
         {
           relationPath: ["purchase"],
-          priority: 1,
-          ordering: "declared",
-          identityEvidence: false,
         },
       ],
       ingress: [

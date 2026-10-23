@@ -1507,27 +1507,16 @@ Rules:
       displaySources: [
         {
           relationPath: ["tasks"],
-          priority: 1,
           ordering: "newest",
-          identityEvidence: false,
         },
         {
           relationPath: ["task-products"],
-          priority: 2,
-          ordering: "declared",
-          identityEvidence: false,
         },
         {
           relationPath: ["purchased-products"],
-          priority: 3,
-          ordering: "declared",
-          identityEvidence: false,
         },
         {
           relationPath: ["resources"],
-          priority: 4,
-          ordering: "declared",
-          identityEvidence: false,
         },
       ],
       ingress: [

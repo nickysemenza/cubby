@@ -151,6 +151,7 @@ import {
   computeChanges,
   logAuditEntry,
 } from "~/server/generic/audit-log/repo/audit-log";
+import { recordChange } from "~/server/generic/changes/repo/change";
 import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
 import type { QualityReadContext } from "~/server/generic/data-quality/repo/registry";
 import {
@@ -904,9 +905,6 @@ export const listProductsRead = async (
       ));
   const plan = listReadPlan<ProductSelectedPageRow>("product", {
     media: true,
-    references: {
-      brandId: { kind: "lookup", name: "brandName", missing: "null" },
-    },
     bindings: (bind) => {
       const relations = bind.batch(({ rows }) =>
         loadProductListRelations(
@@ -2152,6 +2150,8 @@ export async function updateProduct<TOutput>(
           changes,
         });
       }
+
+      await recordChange(tx, { kind: "source", categories: ["product"] });
 
       if (readOutput) return readOutput(tx, updated);
       const pricing = await loadProductPricing(tx, [updated]);

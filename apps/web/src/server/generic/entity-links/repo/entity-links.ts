@@ -1,3 +1,9 @@
+import {
+  ENTITY_LINK_KINDS,
+  type EntityLinkEnd,
+  type EntityLinkKind,
+  entityLinkKinds,
+} from "@cubby/schemas/entity-links";
 /**
  * The one write/read seam for `EntityLink` (ADR 0007). Every many-to-many
  * relationship between entities is a row here, typed by its link kind in
@@ -9,13 +15,6 @@
  * Every predicate names its link kind: `toEntityId` alone matches a
  * product's purchase, tool, wish, and component links at once.
  */
-
-import {
-  ENTITY_LINK_KINDS,
-  type EntityLinkEnd,
-  type EntityLinkKind,
-  entityLinkKinds,
-} from "@cubby/schemas/entity-links";
 import { and, eq, inArray, isNull, type SQL, sql } from "drizzle-orm";
 import type { AnyPgColumn } from "drizzle-orm/pg-core";
 import { groupBy, sumBy, uniq } from "es-toolkit";
@@ -25,7 +24,7 @@ import { type RepositoryQueryTransaction as DrizzleTransaction } from "~/server/
 import { repositoryQueries as unwrapDb } from "~/server/db/repository-access.boundary";
 import { entityIdentity, entityLink } from "~/server/db/retained-tables";
 import { createAppError } from "~/server/errors/app-error";
-import { recordContextRefresh as captureContextRefresh } from "~/server/generic/derived-refresh/repo/capture.boundary";
+import { recordChange } from "~/server/generic/changes/repo/change";
 
 /** `entityLink` or an alias of it. */
 type LinkTable = {
@@ -127,14 +126,10 @@ export async function attachLinks(
     });
   const endpoints = ENTITY_LINK_KINDS[kind];
   if (rows.length)
-    await captureContextRefresh(
-      tx,
-      "EntityLink",
-      rows.flatMap((row) => [
-        { entityKind: endpoints.from, entityId: row.fromEntityId },
-        { entityKind: endpoints.to, entityId: row.toEntityId },
-      ]),
-    );
+    await recordChange(tx, {
+      kind: "source",
+      categories: [endpoints.from, endpoints.to],
+    });
   return rows.map((row) => row.id);
 }
 
@@ -156,14 +151,10 @@ async function softDeleteLinks(
     });
   const endpoints = ENTITY_LINK_KINDS[kind];
   if (rows.length)
-    await captureContextRefresh(
-      tx,
-      "EntityLink",
-      rows.flatMap((row) => [
-        { entityKind: endpoints.from, entityId: row.fromEntityId },
-        { entityKind: endpoints.to, entityId: row.toEntityId },
-      ]),
-    );
+    await recordChange(tx, {
+      kind: "source",
+      categories: [endpoints.from, endpoints.to],
+    });
   return rows;
 }
 

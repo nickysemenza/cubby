@@ -2,13 +2,11 @@ import type { ActorContext } from "@cubby/schemas/context";
 import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 import { parseShortcodeFor, type PlantingId } from "@cubby/schemas/identifiers";
 import { and, asc, eq, inArray } from "drizzle-orm";
-import { uniq } from "es-toolkit";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import { notDeleted, unwrapDb } from "~/server/db/helpers";
 import { entityLink, planting } from "~/server/db/schema";
-import { refreshDerivedSearchRefs } from "~/server/entity-kernel/repo/mutation-side-effects";
 import {
   asActor,
   defineRepository,
@@ -17,6 +15,7 @@ import {
   diffUnorderedIdSet,
   logAuditEntries,
 } from "~/server/generic/audit-log/repo/audit-log";
+import { recordChange } from "~/server/generic/changes/repo/change";
 import { liveLinks } from "~/server/generic/entity-links/repo/entity-links";
 import { deleteByPolicy } from "~/server/generic/removal/repo/dispositions";
 import { bindShortcodeResolver } from "~/server/generic/shortcode/repo/shortcode-resolver";
@@ -165,12 +164,8 @@ export const plantingRepository = defineRepository("planting", {
       data,
       ctx.actorContext,
     ),
-  // The detached entries are read before the delete removes their links.
   delete: async (ctx, shortcodes) => {
     const ids = await plantings.all(ctx.db, shortcodes);
-    const affectedEntryIds = uniq(
-      (await entryPlantingSets(ctx.db, ids)).map((row) => row.gardenEntryId),
-    );
     const result = await deleteByPolicy(ctx.db, {
       entity: "planting",
       policy: PLANTING_DELETE_EDGE_POLICY,
@@ -179,14 +174,7 @@ export const plantingRepository = defineRepository("planting", {
       beforeDelete: (tx, removed) =>
         auditEntryPlantingSets(tx, removed, ctx.actorContext),
     });
-    await refreshDerivedSearchRefs(
-      ctx.db,
-      affectedEntryIds.map((entityId) => ({
-        entityKind: "gardenEntry" as const,
-        entityId,
-      })),
-      "planting.delete.detachGardenEntries",
-    );
+    await recordChange(ctx.db, { kind: "source", categories: ["gardenEntry"] });
     return result;
   },
 });

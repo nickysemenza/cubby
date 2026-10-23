@@ -18,8 +18,8 @@ import { and, asc, eq, inArray, sql } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { getDb, unwrapDb, withTransactionDatabase } from "~/server/db/helpers";
-import { repositoryChanged } from "~/server/db/repository-access.boundary";
 import { run, runStep } from "~/server/db/schema";
+import { recordChange } from "~/server/generic/changes/repo/change";
 import { currentJobExecution } from "~/server/generic/jobs/context";
 import {
   assertWorkflowEffect,
@@ -184,7 +184,8 @@ async function writeRunStepPage(
     })
     .where(and(eq(runStep.runId, runId), eq(runStep.key, key)))
     .returning({ id: runStep.id });
-  if (changed.length) await repositoryChanged(db, ["run"]);
+  if (changed.length)
+    await recordChange(db, { kind: "projection", categories: ["run"] });
 }
 
 /** Re-admits a failed step: its failures become work again, counts stay history. */

@@ -18,7 +18,7 @@ import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
 import { resolveNames } from "~/server/entity-kernel/resolve";
 import { createAppError } from "~/server/errors/app-error";
 import { logAuditEntry } from "~/server/generic/audit-log/repo/audit-log";
-import { captureDerivedRefresh } from "~/server/generic/derived-refresh/repo/capture";
+import { recordChange } from "~/server/generic/changes/repo/change";
 
 type Db = Database | DrizzleTransaction;
 
@@ -174,13 +174,7 @@ async function learnSenderAlias(
       notes: { from: null, to: null },
     },
   });
-  await captureDerivedRefresh(db, [
-    {
-      entityKind: "vendor",
-      entityId: owner.id,
-      changedFields: ["aliases", "notes"],
-    },
-  ]);
+  await recordChange(db, { kind: "source", categories: ["vendor"] });
   return owner.id;
 }
 
@@ -297,9 +291,7 @@ export async function resolveImportVendor(
       action: "update",
       changes: { notes: { from: null, to: null } },
     });
-    await captureDerivedRefresh(db, [
-      { entityKind: "vendor", entityId: created, changedFields: ["notes"] },
-    ]);
+    await recordChange(db, { kind: "source", categories: ["vendor"] });
   }
   return created;
 }

@@ -1253,15 +1253,9 @@ export default defineEntity({
       displaySources: [
         {
           relationPath: ["subject"],
-          priority: 1,
-          ordering: "declared",
-          identityEvidence: false,
         },
         {
           relationPath: ["project"],
-          priority: 2,
-          ordering: "declared",
-          identityEvidence: false,
         },
       ],
       ingress: [

@@ -158,11 +158,8 @@ export const deriveImageDisplaySources = (
         ...capabilities,
         images: {
           ...images,
-          displaySourceOverrides: candidates.map((relation, priority) => ({
+          displaySourceOverrides: candidates.map((relation) => ({
             relationPath: [relation.key],
-            priority,
-            ordering: "declared",
-            identityEvidence: false,
           })),
         },
       },

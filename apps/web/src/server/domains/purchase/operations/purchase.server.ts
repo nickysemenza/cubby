@@ -1,5 +1,5 @@
 import { financialTransactionOut } from "@cubby/schemas/financial-transaction";
-import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
+import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { expenseOut } from "@cubby/schemas/project";
 import {
   type linkExpensesToPurchaseInput,
@@ -10,6 +10,7 @@ import {
 
 import { purchaseContract } from "~/contracts/purchase.contract";
 import { suggestSettlementMatch } from "~/server/ai/settlement-candidate-rank";
+import { withTransactionDatabase } from "~/server/db/helpers";
 import { recomputeRecipesForPriceAffectedProducts } from "~/server/domains/expense/repo/price-affected-recipes";
 import { expenseLineRoleClassifier } from "~/server/domains/expense/service/expense-line-role";
 import {
@@ -39,15 +40,8 @@ import {
 } from "~/server/domains/run/repo/ensure-run";
 import { executeEntity, executeEntityAs } from "~/server/entity-kernel";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
-import {
-  mutationEvents,
-  runMutationSideEffectsForEntities,
-} from "~/server/entity-kernel/repo/mutation-side-effects";
 import { createAppError } from "~/server/errors/app-error";
-import {
-  resolveAllPresent,
-  resolveShortcode,
-} from "~/server/generic/shortcode/repo/shortcode-resolver";
+import { recordChange } from "~/server/generic/changes/repo/change";
 import { implementOperationDomain } from "~/server/operation-runtime/operation-domain.server";
 import { bindWorkflow, workflow } from "~/server/workflows/runtime";
 
@@ -56,16 +50,18 @@ export const linkExpensesToPurchaseWorkflow = bindWorkflow(
     "purchase.link",
   )
     .commit("link", ({ context }, { input }) =>
-      linkExpensesToPurchase(context.db, input, context.actorContext),
-    )
-    .effect("expenseIds", ({ context }, { input }) =>
-      resolveAllPresent(context.db, "expense", input.expenseIds),
-    )
-    .effect("effects", ({ context }, { expenseIds }) =>
-      runMutationSideEffectsForEntities(
-        context.db,
-        mutationEvents("expense", "updated", expenseIds, "purchase.link"),
-      ),
+      withTransactionDatabase(context.db, async (transactionDb) => {
+        const result = await linkExpensesToPurchase(
+          transactionDb,
+          input,
+          context.actorContext,
+        );
+        await recordChange(transactionDb, {
+          kind: "source",
+          categories: ["expense"],
+        });
+        return result;
+      }),
     )
     .output(({ link }) => link),
 );
@@ -75,37 +71,19 @@ export const splitExpenseWorkflow = bindWorkflow(
     "purchase.split",
   )
     .commit("split", ({ context }, { input }) =>
-      splitExpense(
-        context.db,
-        input,
-        context.actorContext,
-        expenseLineRoleClassifier(),
-      ),
-    )
-    .effect("references", async ({ context }, { input, split }) => {
-      const originalRef = await resolveShortcode(context.db, input.expenseId);
-      const newIds = await resolveAllPresent(
-        context.db,
-        "expense",
-        split.items.map((item) => item.id),
-      );
-      return { originalRef, newIds };
-    })
-    .effect(
-      "effects",
-      async ({ context }, { references: { originalRef, newIds } }) => {
-        await runMutationSideEffectsForEntities(context.db, [
-          ...(originalRef?.entity === "expense"
-            ? mutationEvents(
-                "expense",
-                "deleted",
-                [parseEntityId("expense", originalRef.id)],
-                "purchase.split",
-              )
-            : []),
-          ...mutationEvents("expense", "created", newIds, "purchase.split"),
-        ]);
-      },
+      withTransactionDatabase(context.db, async (transactionDb) => {
+        const result = await splitExpense(
+          transactionDb,
+          input,
+          context.actorContext,
+          expenseLineRoleClassifier(),
+        );
+        await recordChange(transactionDb, {
+          kind: "source",
+          categories: ["expense"],
+        });
+        return result;
+      }),
     )
     .effect("pricing", async ({ context }, { split }) => {
       if (split.priceAffectedProductIds.length > 0) {

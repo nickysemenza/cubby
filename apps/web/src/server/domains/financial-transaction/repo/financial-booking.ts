@@ -33,9 +33,9 @@ import { createExpense } from "~/server/domains/expense/repo/crud";
 import { spendingClassificationRevision } from "~/server/domains/expense/repo/expense-category-resolution";
 import { lockFinancialEvidenceKeys } from "~/server/domains/financial-transaction/repo/financial-evidence";
 import { createPurchase } from "~/server/domains/purchase/repo/purchase";
-import { refreshDerivedSearchRefs } from "~/server/entity-kernel/repo/mutation-side-effects";
 import { resolveNames } from "~/server/entity-kernel/resolve";
 import { createAppError } from "~/server/errors/app-error";
+import { recordChange } from "~/server/generic/changes/repo/change";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 import { updateFinancialTransaction } from "./financial-transaction";
@@ -480,25 +480,10 @@ export async function commitFinancialBooking(
           ),
         })
         .where(eq(financialTransaction.id, id));
-      await refreshDerivedSearchRefs(
-        txDb,
-        [
-          {
-            entityKind: "purchase",
-            entityId: await resolveOrThrow(txDb, "purchase", target),
-          },
-          { entityKind: "financialTransaction", entityId: id },
-          ...(expenseId
-            ? [
-                {
-                  entityKind: "expense" as const,
-                  entityId: await resolveOrThrow(txDb, "expense", expenseId),
-                },
-              ]
-            : []),
-        ],
-        "financialTransaction.commitBooking",
-      );
+      await recordChange(txDb, {
+        kind: "source",
+        categories: ["purchase", "financialTransaction", "expense"],
+      });
       return { purchaseId: target, expenseId, replayed: false };
     },
     { isolationLevel: "serializable" },

@@ -88,7 +88,6 @@ const entityPorts = (
     search: {
       projection: ports.search.projection,
       semanticText: ports.search.semanticText,
-      dependentRefresh: ports.search.dependentRefresh,
     },
     timeline: ports.timeline,
   };
@@ -3012,10 +3011,6 @@ const validateImageDisplaySources = (
   for (const [index, source] of entity.imagePolicy.displaySources.entries()) {
     const sourceContext = `${context}.displaySources[${index}]`;
     imagePolicyPathTarget(entities, entity, source.relationPath, sourceContext);
-    if (source.identityEvidence)
-      throw new EntityDeclarationError(
-        `${sourceContext}.identityEvidence must be false: borrowed display images are not identity evidence.`,
-      );
   }
 };
 

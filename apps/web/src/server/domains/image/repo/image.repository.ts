@@ -20,7 +20,6 @@ const imageShortcodes = bindShortcodeResolver("image");
 
 /** Images are created by the upload workflow, never as a row CRUD action. */
 export const imageRepository = defineRepository("image", {
-  sideEffects: false,
   lifecycle: { delete: IMAGE_HARD_DELETE },
   get: async (ctx, shortcode) =>
     getImageById(ctx.db, await imageShortcodes.one(ctx.db, shortcode)),

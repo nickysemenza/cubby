@@ -901,9 +901,6 @@ Rules:
         displaySources: [
           {
             relationPath: ["recipes"],
-            priority: 1,
-            ordering: "declared",
-            identityEvidence: false,
           },
         ],
         ingress: [

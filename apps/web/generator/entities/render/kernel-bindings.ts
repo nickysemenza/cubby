@@ -96,7 +96,6 @@ export const renderKernelBindingsArtifacts = (
           ports.filters,
           ports.search.projection,
           ports.search.semanticText,
-          ports.search.dependentRefresh,
           ports.timeline,
           ...entity.relationMutations.flatMap(
             ({ itemSchema, rowSchema, adapter }) => [

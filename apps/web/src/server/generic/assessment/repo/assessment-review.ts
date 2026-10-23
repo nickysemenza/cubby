@@ -49,7 +49,7 @@ import {
   acceptSuggestion,
   applyFieldCorrection,
 } from "~/server/generic/assessment/repo/suggestion-review";
-import { captureContextRefresh } from "~/server/generic/derived-refresh/repo/context-capture";
+import { recordChange } from "~/server/generic/changes/repo/change";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 import { isReviewFamily, type ReviewFamily } from "./review-families";
@@ -282,9 +282,7 @@ const assessmentFamilies = {
         { confirmedValue: correction, status: "applied" },
         cause,
       );
-      await captureContextRefresh(db, "AssessmentState", [
-        { entityKind: "image", entityId: state.recordId },
-      ]);
+      await recordChange(db, { kind: "source", categories: ["image"] });
     },
   },
   product_pair: {

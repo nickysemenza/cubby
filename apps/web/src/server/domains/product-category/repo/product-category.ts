@@ -305,11 +305,9 @@ const categoryRead = {
   references: {
     spendingCategoryId: {
       kind: "lookup",
-      name: "spendingCategoryName",
       emoji: "spendingCategoryEmoji",
       missing: "null",
     },
-    parentId: { kind: "lookup", name: "parentName", missing: "null" },
   },
   bindings: (bind) => {
     const mappings = bind.batch(({ db, rows }) =>

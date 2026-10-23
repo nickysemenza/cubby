@@ -606,9 +606,6 @@ export default defineEntity(
         displaySourceOverrides: [
           {
             relationPath: ["products"],
-            priority: 0,
-            ordering: "declared",
-            identityEvidence: false,
           },
         ],
         ingress: [

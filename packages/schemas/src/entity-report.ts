@@ -127,7 +127,7 @@ const reportFormat = z.enum(["money", "count", "text"]);
 
 /** A record a row or bar links to. */
 const reportRef = z.object({
-  entity: z.enum(["project", "recipe"]),
+  entity: z.string().min(1),
   id: z.string(),
 });
 
@@ -382,6 +382,26 @@ const reportForm = z.object({
 });
 export type ReportForm = z.infer<typeof reportForm>;
 
+/** Time precision is evidence: local wall time and calendar days are never instants. */
+export const reportTime = z.discriminatedUnion("kind", [
+  z.object({
+    kind: z.literal("instant"),
+    value: z.iso.datetime({ offset: true }),
+  }),
+  z.object({ kind: z.literal("date"), value: z.iso.date() }),
+  z.object({
+    kind: z.literal("local"),
+    value: z.string(),
+    timezone: z.string().nullable(),
+  }),
+  z.object({
+    kind: z.literal("unknown"),
+    /** A separately labeled receipt fallback, never the event's timestamp. */
+    receiptAt: z.iso.datetime({ offset: true }).optional(),
+  }),
+]);
+export type ReportTime = z.infer<typeof reportTime>;
+
 const reportRecordRow = z.object({
   /** The record the row opens (any entity key), or null for a row that only reads. */
   entity: z.string().nullable(),
@@ -397,8 +417,8 @@ const reportRecordRow = z.object({
     .optional(),
   /** An ISO instant each client prints in its own locale and zone. */
   at: z.string().optional(),
-  /** Include relative age beside the timestamp instead of only in its tooltip. */
-  showRelativeTime: z.boolean().optional(),
+  /** Precision-aware time; when supplied, replaces the legacy instant presentation. */
+  time: reportTime.optional(),
   /** The list of other records this row summarises, opened as the trailing link. */
   listLink: z
     .object({
@@ -430,6 +450,7 @@ const reportRecordRow = z.object({
         text: z.string(),
         tone: reportTone.optional(),
         ref: reportRef.optional(),
+        url: z.httpUrl().optional(),
       }),
     )
     .optional(),
@@ -468,6 +489,8 @@ export const reportRecordsBlock = z.object({
   /** What the block stands for, for a client that picks it out of a report (`portions:<mealRecipeId>`). */
   key: z.string().optional(),
   title: z.string().optional(),
+  /** Hide secondary evidence behind a labeled disclosure, initially collapsed. */
+  disclosureLabel: z.string().optional(),
   rows: z.array(reportRecordRow),
   empty: z.string(),
   /** Verbs on the record the slot belongs to (`reportSlotActions`). */

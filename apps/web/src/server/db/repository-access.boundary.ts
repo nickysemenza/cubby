@@ -13,15 +13,7 @@ import {
   withTransactionDatabase,
   runAfterCommit,
   runBeforeCommit,
-  recordCommittedChanges,
 } from "~/server/db/helpers/core";
-
-export function repositoryChanged(
-  db: RepositoryQueryInput,
-  categories: readonly string[],
-): Promise<void> {
-  return recordCommittedChanges(db, categories);
-}
 
 /** Native SQL builders without the assembled relational schema or pool ownership. */
 export type RepositoryQueryClient = Pick<
@@ -53,7 +45,7 @@ export const repositoryBeforeCommit = (
   effect: (tx: RepositoryQueryTransaction) => Promise<void>,
   options?: {
     phase?: "validation" | "fence" | "capture" | "publication";
-    changedKeys?: readonly string[];
+    key?: string;
   },
 ): Promise<void> => runBeforeCommit(db, effect, options);
 

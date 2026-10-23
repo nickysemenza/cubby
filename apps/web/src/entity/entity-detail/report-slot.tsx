@@ -11,10 +11,8 @@ import {
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
-import { Link } from "@tanstack/react-router";
 import { type ReactNode, useEffect } from "react";
 
-import { entityDetailLink } from "~/entity/entities";
 import { ShortcodeProse } from "~/entity/prose/shortcode-prose";
 import { ripple } from "~/integrations/tanstack-query/cache-tags";
 import { cursorQueryOptions } from "~/integrations/tanstack-query/cursor-query-options";
@@ -42,7 +40,7 @@ import {
 
 import { DetailAction, reportDetailActionsFor } from "./detail-action-bar";
 import { RecordsBlockView, RecordsDetailActions } from "./records-block";
-import { ReportVerb } from "./records-ledger";
+import { ReportVerb, ReportRefLink } from "./records-ledger";
 
 type RecordReportInput = Omit<EntityReportInput, "scope"> & { id: string };
 
@@ -278,12 +276,10 @@ function Table({ block }: { block: Extract<ReportBlock, { kind: "table" }> }) {
           ),
           cell: (row) =>
             index === 0 && row.ref ? (
-              <Link
-                {...entityDetailLink(row.ref.entity, row.ref.id)}
-                className="text-primary underline-offset-2 hover:underline"
-              >
-                {row.cells[index]}
-              </Link>
+              <ReportRefLink
+                reference={row.ref}
+                text={row.cells[index] ?? ""}
+              />
             ) : (
               <TableCellValue row={row} index={index} />
             ),

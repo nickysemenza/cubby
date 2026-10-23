@@ -6,8 +6,8 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { notDeleted, unwrapDb, withTransaction } from "~/server/db/helpers";
-import { repositoryChanged } from "~/server/db/repository-access.boundary";
 import { entityEmbedding, searchDocument } from "~/server/db/schema";
+import { recordChange } from "~/server/generic/changes/repo/change";
 import { lockRefreshFamily } from "~/server/generic/derived-refresh/repo/families";
 import {
   getOrphanedSearchDocumentRefs,
@@ -32,7 +32,10 @@ async function softDeleteEntityEmbeddingsTx(
     )
     .returning({ id: entityEmbedding.id });
   if (changed.length)
-    await repositoryChanged(tx, ["search", "relatedData", "problems"]);
+    await recordChange(tx, {
+      kind: "projection",
+      categories: ["search", "relatedData", "problems"],
+    });
 }
 
 /** Revalidate persisted candidates and retire both artifacts atomically. */
@@ -97,7 +100,10 @@ async function retireSearchArtifactsTx(
     )
     .returning({ id: searchDocument.entityId });
   if (changed.length)
-    await repositoryChanged(tx, ["search", "relatedData", "problems"]);
+    await recordChange(tx, {
+      kind: "projection",
+      categories: ["search", "relatedData", "problems"],
+    });
 }
 
 export async function getEntityEmbeddingDeletedAtForRef(

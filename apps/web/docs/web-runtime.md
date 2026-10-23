@@ -199,6 +199,10 @@ mount and detail loaders refetch those invalidated baselines before reuse.
 Refresh status renders only after its own hydration boundary is ready, since
 the shell can initiate subscription recovery before streamed sections hydrate.
 Additional hints received during refresh are combined for the next read.
+Declared reference and projection-path consumers add their own cache roots to
+the hint's ripple. This uses generated read dependencies without recursively
+expanding mutation ripples. Projection completion uses the same notification
+path as edits; timestamp-only periodic updates do not imply changed output.
 Subscription establishment, reconnect and app resume resync cache-backed queries
 to recover missed hints. Logout unmounts the subscription; delivery requires
 reauthentication after its five-minute lease expires.
@@ -287,7 +291,10 @@ canonical scalars, converts root identity, excludes private foreign keys, and
 owns quality/media completion. Generic browser list schemas include `displayImages`; declare it in `presentation.list.read.media` and enable `media` in the repository read plan, including entities with no images. This keeps the field out of the base response until its media loader runs. Reference instructions distinguish stored UUID
 lookups from already projected public IDs. Domain bindings retain their typed
 computations and page-batch inputs; their output schema determines admission
-from the canonical partition. Shared batches memoize once for the selected page,
+from the canonical partition. Stored reference names derive from declared label
+paths; to-one record-valued derived paths use compiled traversal and the canonical
+label resolver. Explicit bindings retain domain enrichment and inheritance.
+Shared batches memoize once for the selected page,
 including explicit dependencies between domain computations. Unknown demand or
 conflicting writers fail before selection; count and empty pages never load
 bindings. A skipped field remains absent, and a required field missing from a

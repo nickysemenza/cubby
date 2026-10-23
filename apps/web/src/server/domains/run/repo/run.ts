@@ -51,20 +51,17 @@ const runRead = {
   references: {
     vendorAccountId: {
       kind: "lookup",
-      name: "vendorAccountLabel",
       missing: "null",
       includeDeleted: true,
     },
     vendorId: {
       kind: "lookup",
-      name: "vendorName",
       missing: "null",
       includeDeleted: true,
       consumers: ["displayName", "iconEntity"],
     },
     ledgerPartyId: {
       kind: "lookup",
-      name: "ledgerPartyName",
       missing: "null",
       includeDeleted: true,
       consumers: ["displayName", "iconEntity"],

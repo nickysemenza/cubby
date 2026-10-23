@@ -12,8 +12,8 @@ import {
   notDeleted,
   updateAndReturn,
 } from "~/server/db/helpers";
-import { repositoryChanged } from "~/server/db/repository-access.boundary";
 import { aiAnalysis } from "~/server/db/schema";
+import { recordChange } from "~/server/generic/changes/repo/change";
 
 const log = createLogger("ai.analysis");
 
@@ -140,7 +140,10 @@ export async function upsertAiAnalysis<T>(
       { result: parsed },
       eq(aiAnalysis.id, existing.id),
     );
-    await repositoryChanged(db, [key.entityKind]);
+    await recordChange(db, {
+      kind: "projection",
+      categories: [key.entityKind],
+    });
     return parsed;
   }
 
@@ -153,6 +156,6 @@ export async function upsertAiAnalysis<T>(
     inputFingerprint: key.inputFingerprint,
     result: parsed,
   });
-  await repositoryChanged(db, [key.entityKind]);
+  await recordChange(db, { kind: "projection", categories: [key.entityKind] });
   return parsed;
 }

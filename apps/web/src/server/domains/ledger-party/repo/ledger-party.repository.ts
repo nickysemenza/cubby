@@ -41,7 +41,6 @@ const ledgerPartyMergeSummary = z.object({
 });
 
 export const ledgerPartyRepository = defineRepository("ledgerParty", {
-  sideEffects: false,
   lifecycle: {
     delete: LEDGER_PARTY_DELETE_EDGE_POLICY,
     merge: LEDGER_PARTY_MERGE_EDGE_POLICY,

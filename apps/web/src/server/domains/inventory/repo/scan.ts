@@ -20,7 +20,7 @@ import { and, eq, inArray } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
 import { stockOnly } from "~/server/db/computed/inventory-placement";
-import { getDb, notDeleted } from "~/server/db/helpers";
+import { getDb, notDeleted, withTransaction } from "~/server/db/helpers";
 import { amountFromColumns } from "~/server/db/helpers";
 import { inventoryEntry } from "~/server/db/schema";
 import { logAuditEntry } from "~/server/generic/audit-log/repo/audit-log";
@@ -87,18 +87,19 @@ export const markInventoryEntryVerified = async (
   db: Database,
   id: InventoryId,
   actor: ActorContext,
-): Promise<void> => {
-  await getDb(db)
-    .update(inventoryEntry)
-    .set({ verifiedAt: new Date() })
-    .where(and(eq(inventoryEntry.id, id), notDeleted(inventoryEntry)));
+): Promise<void> =>
+  withTransaction(db, async (tx) => {
+    await tx
+      .update(inventoryEntry)
+      .set({ verifiedAt: new Date() })
+      .where(and(eq(inventoryEntry.id, id), notDeleted(inventoryEntry)));
 
-  await logAuditEntry(db, actor, {
-    entityKind: "inventory",
-    entityId: id,
-    action: "update",
+    await logAuditEntry(tx, actor, {
+      entityKind: "inventory",
+      entityId: id,
+      action: "update",
+    });
   });
-};
 
 /**
  * Re-read specific stock rows by shortcode, dropping any that no longer exist.

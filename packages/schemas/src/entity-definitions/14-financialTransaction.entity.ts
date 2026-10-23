@@ -1834,21 +1834,13 @@ export default defineEntity(
         displaySourceOverrides: [
           {
             relationPath: ["purchase"],
-            priority: 1,
             ordering: "newest",
-            identityEvidence: false,
           },
           {
             relationPath: ["products"],
-            priority: 2,
-            ordering: "declared",
-            identityEvidence: false,
           },
           {
             relationPath: ["vendor"],
-            priority: 3,
-            ordering: "declared",
-            identityEvidence: false,
           },
         ],
         ingress: [

@@ -6,7 +6,7 @@ import {
   type FilterDescriptor,
   type SourceRef,
 } from "../declarations.ts";
-import { entityProjectionMaps } from "./index.ts";
+import { entityProjectionMaps } from "./capabilities.ts";
 
 /**
  * One aliased runtime import per distinct `module#export`, sorted so the

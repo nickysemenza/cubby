@@ -83,6 +83,7 @@ export default defineEntity({
         display: {
           columnGroup: "Account",
           mobile: { slot: "subtitle", priority: 10 },
+          labelPath: "vendorName",
         },
         validation: {
           read: vendorShortcode,
@@ -95,7 +96,7 @@ export default defineEntity({
         kind: "identifier",
         reference: { entity: "ledgerParty" },
         control: { kind: "specialized", renderer: "entity-select" },
-        display: { columnGroup: "Account" },
+        display: { columnGroup: "Account", labelPath: "ledgerPartyName" },
         validation: {
           read: ledgerPartyShortcode,
           create: ledgerPartyShortcode,
@@ -178,13 +179,11 @@ export default defineEntity({
         },
       },
       {
-        display: { detail: false, list: false },
         key: "vendorName",
         kind: "text",
         validation: { read: z.string(), create: null, update: null },
       },
       {
-        display: { detail: false, list: false },
         key: "ledgerPartyName",
         kind: "text",
         validation: { read: z.string(), create: null, update: null },

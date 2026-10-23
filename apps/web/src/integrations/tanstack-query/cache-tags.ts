@@ -1,4 +1,7 @@
-import { entityKeys } from "@cubby/schemas/entity-summary";
+import {
+  entityKeys,
+  entityReadDependents,
+} from "@cubby/schemas/entity-summary";
 import { imagePolicyCatalog } from "@cubby/schemas/image-policy";
 
 import type { RippleKey } from "~/contracts/cache-policy";
@@ -538,9 +541,11 @@ export const rippleWithProblems = (
 export const rippleFor = (keys: readonly RippleKey[]): InvalidationTagSet => {
   const [first, ...rest] = keys;
   if (first === undefined) return EMPTY_INVALIDATION_TAG_SET;
+  const resolve = (key: RippleKey) =>
+    readDependents.has(key) ? entityRipple(key) : ripple[key];
   return rest.length === 0
-    ? ripple[first]
-    : exactRippleTags(...keys.map((key) => ripple[key]));
+    ? resolve(first)
+    : exactRippleTags(...keys.map(resolve));
 };
 
 /** Union named ripple sets without allowing a call site to construct tags. */
@@ -590,6 +595,9 @@ export const calendarHouseholdRipple = (
  * the result stays safe to pass into a hook dependency array or a memoized
  * config — the contract `invalidatesFor` documented. */
 const fallbackRipples = new Map<string, InvalidationTagSet>();
+const readDependents = new Map<string, readonly string[]>(
+  Object.entries(entityReadDependents),
+);
 
 const isDeclaredRipple = (entity: string): entity is keyof typeof ripple =>
   entity in ripple;
@@ -600,11 +608,20 @@ const isDeclaredRipple = (entity: string): entity is keyof typeof ripple =>
  * silently invalidating nothing.
  */
 export const entityRipple = (entity: string): InvalidationTagSet => {
-  const declared = isDeclaredRipple(entity) ? ripple[entity] : undefined;
-  if (declared) return declared;
   const cached = fallbackRipples.get(entity);
   if (cached) return cached;
-  const built = rippleTags([[entity], ["dashboard"]]);
+  const declared = isDeclaredRipple(entity)
+    ? ripple[entity]
+    : rippleTags([[entity], ["dashboard"]]);
+  // Add only explicit read consumers. Never recursively expand their mutation ripples.
+  const consumers = readDependents.get(entity) ?? [];
+  const built =
+    consumers.length === 0
+      ? declared
+      : rippleTags(
+          declared,
+          consumers.map((consumer): OperationCacheTag => [consumer]),
+        );
   fallbackRipples.set(entity, built);
   return built;
 };

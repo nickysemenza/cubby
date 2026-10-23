@@ -1,3 +1,10 @@
+import type {
+  GeneratedListField,
+  GeneratedRowSet,
+  GeneratedGroupChoice,
+  GeneratedInherit,
+  GeneratedListScope,
+} from "@cubby/schemas/entity-projection-types";
 import { z } from "zod";
 import { humanize } from "@cubby/shared/text-case";
 
@@ -19,78 +26,16 @@ export const relationshipProvenanceSchema = z.object({
   steps: z.array(relationshipPathStep).optional(),
 });
 
-type Terminal =
-  | Readonly<{ kind: "record"; titleColumn: string | null }>
-  | Readonly<{ kind: "field"; column: string; fieldKind: string }>;
+type Terminal = Extract<
+  GeneratedListField<string>,
+  { shape: "via" }
+>["terminal"];
 
 /**
  * A compiled `model.derived` entry. `sort`/`group` hold the reason the list
  * compiler rejects that use, derived from the declaration, or null.
  */
-type CompiledListField =
-  | Readonly<{
-      shape: "via";
-      path: string;
-      steps: readonly RelationshipPathStep[];
-      target: string;
-      terminal: Terminal;
-      /** The path passes through a to-many step, so a row has several values. */
-      many: boolean;
-      sort: string | null;
-      group: string | null;
-    }>
-  | Readonly<{
-      shape: "rows";
-      path: string;
-      /** The `model.rows` key the path starts at. */
-      rows: string;
-      /** A column of the row (a JSON item key), or an entity it references. */
-      terminal:
-        | Readonly<{
-            kind: "column";
-            column: string;
-            /** The column's field kind, when the declaration knows it. */
-            fieldKind: string | null;
-            /** An enum column's options, labelled as its field's control. */
-            options: readonly GroupOption[] | null;
-          }>
-        | Readonly<{
-            kind: "record";
-            target: string;
-            titleColumn: string | null;
-            /**
-             * The row's foreign key to the record, when the declaration
-             * names it (a relation row set's field); else the row table's
-             * one foreign key to the target.
-             */
-            column: string | null;
-          }>;
-      sort: string;
-      group: string;
-    }>
-  | Readonly<{
-      shape: "value";
-      type: "text" | "number" | "date" | "dateInterval" | "boolean" | "enum";
-      options: readonly string[] | null;
-      sort: null;
-      group: string | null;
-    }>
-  | Readonly<{
-      shape: "predicate";
-      predicate:
-        | "text"
-        | "multiselect"
-        | "idMulti"
-        | "boolean"
-        | "presence"
-        | "range";
-      options: readonly string[] | null;
-      reason: string;
-      sort: string;
-      group: string;
-      /** Why a value filter over it cannot exclude, or null when `negatable`. */
-      exclude: string | null;
-    }>;
+type CompiledListField = GeneratedListField<string>;
 
 type GroupOption = Readonly<{ value: string; label: string }>;
 
@@ -99,31 +44,7 @@ type GroupOption = Readonly<{ value: string; label: string }>;
  * are checked when the server loads (`rowSetSql`); a JSON row set's `keys`
  * come from its field's item schema.
  */
-type CompiledRowSet = Readonly<{
-  label: string;
-  storage:
-    | Readonly<{
-        kind: "path";
-        steps: readonly RelationshipPathStep[];
-        where: Readonly<Record<string, string>>;
-      }>
-    | Readonly<{ kind: "json"; column: string; keys: readonly string[] }>
-    | Readonly<{
-        kind: "relation";
-        steps: readonly RelationshipPathStep[];
-        /** The entity whose records the relation's rows are. */
-        target: string;
-      }>
-    | Readonly<{
-        kind: "repository";
-        /** Column → the entity it references, or null for a value. */
-        columns: Readonly<Record<string, string | null>>;
-        /** Reference columns exposed as nonphysical connections. */
-        connections: readonly string[];
-        /** A value column's declared type. */
-        types: Readonly<Record<string, string>>;
-      }>;
-}>;
+type CompiledRowSet = GeneratedRowSet<string>;
 
 /**
  * What a section key reads: an own column, a to-one related record (keyed by
@@ -131,26 +52,7 @@ type CompiledRowSet = Readonly<{
  * derived value the repository supplies. `options` orders and labels enum
  * sections in declared order; text sections order by value.
  */
-type GroupValue =
-  | Readonly<{
-      kind: "column";
-      column: string;
-      options: readonly GroupOption[] | null;
-    }>
-  | Readonly<{
-      kind: "record";
-      steps: readonly RelationshipPathStep[];
-      target: string;
-      titleColumn: string;
-    }>
-  | Readonly<{
-      kind: "field";
-      steps: readonly RelationshipPathStep[];
-      target: string;
-      column: string;
-      options: readonly GroupOption[] | null;
-    }>
-  | Readonly<{ kind: "derived"; options: readonly GroupOption[] | null }>;
+type GroupValue = NonNullable<GeneratedGroupChoice<string>["value"]>;
 
 /**
  * One `model.grouping` choice. `value` is null exactly when `reason` says why
@@ -159,23 +61,7 @@ type GroupValue =
  * its generated "Include sub-…" toggle. `levels` counts the hierarchy levels
  * (1 = top) the choice can group at; 0 exactly when `levelReason` says why.
  */
-type CompiledGroupChoice = Readonly<{
-  key: string;
-  label: string;
-  noValueLabel: string;
-  reason: string | null;
-  value: GroupValue | null;
-  filter: Readonly<{
-    columnId: string;
-    noValue: boolean;
-    subtree: string | null;
-  }> | null;
-  levels: number;
-  levelReason: string | null;
-  multiple: boolean;
-  dateKind: "date" | "timestamp" | null;
-  buckets: readonly ("day" | "week" | "month" | "quarter" | "year")[];
-}>;
+type CompiledGroupChoice = GeneratedGroupChoice<string>;
 
 /**
  * Group by menus offer this many hierarchy levels at most. Deeper levels hold
@@ -187,42 +73,20 @@ const GROUP_LEVEL_CHOICES = 3;
  * One step of an inheritance path: the foreign key on the current entity
  * (by field key and column) and the entity it leads to.
  */
-type InheritHop = Readonly<{ field: string; column: string; target: string }>;
+type InheritHop = Extract<
+  GeneratedInherit<string>["from"][number],
+  { kind: "effective" }
+>["hops"][number];
 
 /** A compiled `resolution.inherit` source, in declared order. */
-type InheritSource =
-  | Readonly<{
-      kind: "hierarchy";
-      parentColumn: string;
-      maxDepth: number;
-      /** The walk stops at an ancestor whose effective field differs. */
-      whileSame: Readonly<{ field: string; column: string }> | null;
-    }>
-  | Readonly<{
-      kind: "effective";
-      hops: readonly InheritHop[];
-      field: string;
-      column: string;
-    }>;
+type InheritSource = GeneratedInherit<string>["from"][number];
 
 /**
  * A field's compiled fallback chain: its column, the mode that decides
  * whether the row's own value wins, and its sources. `empty` is the value a
  * non-nullable list reads when nothing decides.
  */
-type CompiledInherit = Readonly<{
-  column: string;
-  /** The entity the field references, for readers that show its record. */
-  reference: string | null;
-  empty: "array" | null;
-  mode: Readonly<{
-    column: string;
-    inherit: string;
-    none: readonly string[];
-    explicitIfSet: boolean;
-  }> | null;
-  from: readonly InheritSource[];
-}>;
+type CompiledInherit = GeneratedInherit<string>;
 
 export type CompiledEntityListFields = Readonly<{
   derived: Readonly<Record<string, CompiledListField>>;
@@ -253,10 +117,7 @@ export type CompiledEntityListFields = Readonly<{
  * holds, and the compiled path (to-one, to-many or a row-set terminal) that
  * leads to its records.
  */
-type CompiledListScope = Readonly<{
-  filters: string;
-  via: Extract<CompiledListField, { shape: "via" | "rows" }>;
-}>;
+type CompiledListScope = GeneratedListScope<string>;
 
 /**
  * Compiles `presentation.list.scope` to columns and each related scope's
@@ -1417,6 +1278,27 @@ const validateAnyOfMembers = (
   }
 };
 
+const validateDerivedReference = (
+  entity: CompiledEntity,
+  key: string,
+  projection: CompiledListField,
+  context: string,
+): void => {
+  const field = entity.fieldModel.fields.find((field) => field.key === key);
+  if (
+    projection.shape === "via" &&
+    !projection.many &&
+    projection.terminal.kind === "record" &&
+    field?.reference &&
+    field.readKey !== null &&
+    !entity.fieldModel.storage.some((stored) => stored.key === key) &&
+    field.reference.entity !== projection.target
+  )
+    throw new EntityDeclarationError(
+      `${context} targets ${projection.target}, but the read field references ${field.reference.entity}.`,
+    );
+};
+
 /**
  * The cross-entity half of the list-field compiler: resolves `via` paths
  * through declared relations, derives each sort/group rejection reason,
@@ -1464,6 +1346,7 @@ export const compileListFields = (
                     ? null
                     : `Include only: ${entry.reason.replace(/\.$/, "")}.`,
               };
+      validateDerivedReference(entity, key, derived[key], derivedContext);
     }
     const sort = entity.fieldModel.sort;
     for (const key of sort?.fields ?? []) {

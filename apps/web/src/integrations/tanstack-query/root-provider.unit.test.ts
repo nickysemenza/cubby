@@ -174,4 +174,19 @@ describe("root MutationCache invalidation", () => {
       ),
     ).toEqual([["vendor", "options"]]);
   });
+
+  it("refreshes Shipment reads when their declared seller label changes", async () => {
+    expect(
+      await invalidatedTagsFor(
+        { operation: "entity.mutate", invalidates: ripple.none },
+        {
+          entity: "vendor",
+          action: "update",
+          id: "VEN-1",
+          data: { name: "Synthetic seller" },
+        },
+        [["shipment"], ["entity", "filterOptions"]],
+      ),
+    ).toEqual([["shipment"], ["entity", "filterOptions"]]);
+  });
 });

@@ -326,27 +326,15 @@ export default defineEntity({
       displaySourceOverrides: [
         {
           relationPath: ["purchase"],
-          priority: 1,
-          ordering: "declared",
-          identityEvidence: false,
         },
         {
           relationPath: ["purchase", "products"],
-          priority: 2,
-          ordering: "declared",
-          identityEvidence: false,
         },
         {
           relationPath: ["purchase", "vendor"],
-          priority: 3,
-          ordering: "declared",
-          identityEvidence: false,
         },
         {
           relationPath: ["carrier"],
-          priority: 4,
-          ordering: "declared",
-          identityEvidence: false,
         },
       ],
     },

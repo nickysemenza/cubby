@@ -148,7 +148,11 @@ calculations.
 The reconciled history uses the shared records timeline and date formatter,
 including relative age. Each row exposes its normalized event status alongside
 the original source wording and links. Retained observations remain available
-in a separate evidence table; formatting never changes their timestamps.
+behind a collapsed, labeled records disclosure on web and native; formatting
+never changes their timestamps. Shared report times distinguish instants (with
+relative age), date-only values, literal local times with known or unknown zone,
+and unknown event times with a separately labeled Email receipt fallback. Every
+supporting Email and tracking-page source remains navigable.
 
 Explicit Purchase attachment or detachment is a reviewed decision that replay
 cannot override. `shipments.reassign` moves an incorrectly associated source

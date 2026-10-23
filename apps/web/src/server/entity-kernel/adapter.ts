@@ -240,7 +240,6 @@ export interface EntityKernelCoreBinding<
   S extends EntityBindingSchemas = SchemasFor<E>,
 > {
   entity: E;
-  sideEffects: boolean;
   schemas: S;
   sort: EntitySortContract;
   lifecycle: EntityLifecycleContract;

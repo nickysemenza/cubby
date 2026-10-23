@@ -112,7 +112,7 @@ const base = {
       repository: null,
       references: { label: null, resolver: null },
       filters: null,
-      search: { projection: null, semanticText: null, dependentRefresh: null },
+      search: { projection: null, semanticText: null },
     },
   },
 };
@@ -790,8 +790,8 @@ describe("typed entity compiler", () => {
       capabilities: {
         images: {
           displaySourceOverrides: [
-            { relationPath: ["image"], priority: 0 },
-            { relationPath: ["subject"], priority: 1 },
+            { relationPath: ["image"] },
+            { relationPath: ["subject"] },
           ],
         },
       },

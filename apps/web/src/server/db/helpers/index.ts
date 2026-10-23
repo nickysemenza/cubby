@@ -15,7 +15,6 @@ export {
   parentTransactionDatabase,
   runAfterCommit,
   runBeforeCommitDatabase,
-  pendingTransactionChanges,
   unwrapDb,
   withTransaction,
   withTransactionDatabase,

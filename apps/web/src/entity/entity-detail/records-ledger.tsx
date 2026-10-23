@@ -2,6 +2,7 @@ import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
 import type {
   ReportCommand,
   ReportRecordRow,
+  ReportTime,
 } from "@cubby/schemas/entity-report";
 import { ArrowSquareOutIcon } from "@phosphor-icons/react/dist/csr/ArrowSquareOut";
 import { type ReactNode, Suspense, useState } from "react";
@@ -10,6 +11,7 @@ import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { FilterRefLink } from "~/entity/components/ref-link/leaf";
 import { entities } from "~/entity/entities";
 import { ShortcodeProse } from "~/entity/prose/shortcode-prose";
+import { formatCalendarDay } from "~/lib/date-format";
 import { householdLocalDate } from "~/lib/household-date";
 import { cn } from "~/lib/utils";
 import { DateDisplay } from "~/ui/common/date-display";
@@ -121,6 +123,28 @@ const isLoud = (row: ReportRecordRow) =>
 /** A whole line that is a machine code (`source_too_large`) reads as one, in mono. */
 const isCode = (text: string) => /^[a-z0-9]+(?:_[a-z0-9]+)+$/.test(text);
 
+/** Report references use the same routed identity presentation as record titles. */
+export function ReportRefLink({
+  reference,
+  text,
+}: {
+  reference: { entity: string; id: string };
+  text: string;
+}) {
+  const entity = routedEntity(reference.entity);
+  return entity === null ? (
+    <span>{text}</span>
+  ) : (
+    <EntityRefLink
+      variant="chip"
+      entity={entity}
+      id={reference.id}
+      name={text}
+      displayImage={null}
+    />
+  );
+}
+
 /**
  * The row's lines, one under another: an untoned line is its result, the rest evidence. On a wide
  * row each quiet line clips with its whole text as its tooltip; failures and warnings wrap in full.
@@ -131,7 +155,7 @@ function RowText({ row }: { row: ReportRecordRow }) {
     <span className="block min-w-0 text-xs/5 break-words">
       {(row.lines ?? []).map((line) => (
         <span
-          key={`${line.tone ?? ""}:${line.text}`}
+          key={`${line.tone ?? ""}:${line.text}:${line.ref?.id ?? line.url ?? ""}`}
           className={cn(
             "block",
             line.tone ? TONE_TEXT[line.tone] : "text-foreground",
@@ -140,14 +164,12 @@ function RowText({ row }: { row: ReportRecordRow }) {
           title={clip ? line.text : undefined}
         >
           {line.ref ? (
-            <EntityRefLink
-              variant="preview"
-              entity={line.ref.entity}
-              id={line.ref.id}
-              displayImage={null}
-            >
+            <ReportRefLink reference={line.ref} text={line.text} />
+          ) : line.url ? (
+            <a href={line.url} target="_blank" rel="noreferrer">
               {line.text}
-            </EntityRefLink>
+              <ArrowSquareOutIcon aria-hidden className="inline size-3" />
+            </a>
           ) : isCode(line.text) ? (
             <code className="font-mono text-2xs">{line.text}</code>
           ) : (
@@ -180,6 +202,37 @@ function RowTitle({ row }: { row: ReportRecordRow }) {
   );
 }
 
+/** Render precision without converting a local wall time or calendar day to an instant. */
+export function ReportTimeDisplay({ time }: { time: ReportTime }) {
+  switch (time.kind) {
+    case "instant":
+      return <DateDisplay timestamp={time.value} stacked={false} />;
+    case "date":
+      return (
+        <span>{formatCalendarDay(time.value, "dateShort")} (date only)</span>
+      );
+    case "local":
+      return (
+        <span>
+          {time.value} ({time.timezone ?? "timezone unknown"})
+        </span>
+      );
+    case "unknown":
+      return (
+        <span>
+          Event time unknown
+          {time.receiptAt ? (
+            <>
+              {" "}
+              · Email received{" "}
+              <DateDisplay timestamp={time.receiptAt} stacked={false} />
+            </>
+          ) : null}
+        </span>
+      );
+  }
+}
+
 /** The row's figure (linked to the list it summarises) and time, on one right edge. */
 function RowTrailing({
   row,
@@ -189,7 +242,7 @@ function RowTrailing({
   sharedDay: boolean;
 }) {
   const listEntity = routedEntity(row.listLink?.entity ?? null);
-  if (!row.trailing && !row.at) return null;
+  if (!row.trailing && !row.at && !row.time) return null;
   return (
     <>
       {row.trailing && row.listLink && listEntity ? (
@@ -206,12 +259,11 @@ function RowTrailing({
       ) : row.trailing ? (
         <span className="text-foreground">{row.trailing}</span>
       ) : null}
-      {row.trailing && row.at ? " " : null}
-      {row.at ? (
-        <DateDisplay
-          timestamp={row.at}
-          clock={row.showRelativeTime ? undefined : sharedDay ? "time" : "day"}
-        />
+      {row.trailing && (row.time || row.at) ? " " : null}
+      {row.time ? (
+        <ReportTimeDisplay time={row.time} />
+      ) : row.at ? (
+        <DateDisplay timestamp={row.at} clock={sharedDay ? "time" : "day"} />
       ) : null}
     </>
   );

@@ -62,7 +62,7 @@ const declarationWithRange = (start: string, end: string) => ({
       repository: null,
       references: { label: null, resolver: null },
       filters: null,
-      search: { projection: null, semanticText: null, dependentRefresh: null },
+      search: { projection: null, semanticText: null },
     },
   },
   model: {

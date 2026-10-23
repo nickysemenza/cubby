@@ -106,8 +106,8 @@ and retain their behavior checks; passing the helper's own tests proves only tha
 - Background execution: `server/generic/jobs/` owns durable scheduling, retries
   and claims; `server/workflows/jobs.ts` composes production handlers. Runs retain
   domain progress and history. Derived refresh records broad family Job intent
-  through `server/generic/derived-refresh/capture.boundary.ts` in the save
-  transaction; `repo/process.ts` prepares bounded pages through injected ports.
+  through `server/generic/changes/repo/change.ts` in the save transaction;
+  `derived-refresh/repo/process.ts` prepares bounded pages through injected ports.
   Provider work happens before the transaction that checks current inputs and
   saves the output. [Background derived data](../entities.md#background-derived-data)
   owns freshness, recovery and discovery semantics.

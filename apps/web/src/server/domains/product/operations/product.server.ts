@@ -78,10 +78,6 @@ import {
   listProductProjectUses,
   setProductProjectUses,
 } from "~/server/domains/project/repo/tools";
-import {
-  runMutationSideEffects,
-  runMutationSideEffectsForEntities,
-} from "~/server/entity-kernel/repo/mutation-side-effects";
 import { semanticProductCandidates } from "~/server/generic/embedding/service/semantic-search.service";
 import { shouldUseSemanticComboboxFallback } from "~/server/generic/embedding/service/semantic/combobox-fallback";
 import { SEMANTIC_MATCH_MIN_SIMILARITY } from "~/server/generic/embedding/service/semantic/constants";
@@ -211,7 +207,7 @@ export async function quickCreateProductWorkflow(
   context: ProductWorkflowContext,
   input: z.output<typeof productQuickCreatePayload>,
 ) {
-  const { output: product, entityId } = await quickCreateProductRecord(
+  const { output: product } = await quickCreateProductRecord(
     context.db,
     {
       name: input.name,
@@ -231,11 +227,7 @@ export async function quickCreateProductWorkflow(
     },
     context.actorContext,
   );
-  await runMutationSideEffects(context.db, {
-    action: "created",
-    entity: { entity: "product", id: entityId },
-    source: "product.quickCreate",
-  });
+
   return product;
 }
 
@@ -281,29 +273,6 @@ export const discardProductWorkflow = bindWorkflow(
         context.actorContext,
       ),
     )
-    .effect("indexed", async ({ context }, { result }) =>
-      runMutationSideEffectsForEntities(context.db, [
-        {
-          action: "created",
-          entity: { entity: "expense", id: result.expenseId },
-          source: "product.discard",
-        },
-        ...(result.inventory
-          ? [
-              {
-                action: result.inventory.removed
-                  ? ("deleted" as const)
-                  : ("updated" as const),
-                entity: {
-                  entity: "inventory" as const,
-                  id: result.inventory.entryId,
-                },
-                source: "product.discard",
-              },
-            ]
-          : []),
-      ]),
-    )
     .effect("recipesRecomputed", async ({ context }, { result }) =>
       recomputeRecipesForPriceAffectedProducts(
         context.db,
@@ -345,13 +314,6 @@ const createManyProductsDefinition = defineBulkWorkflow({
         input,
         context.actorContext,
       ),
-    )
-    .effect("indexed", async ({ context }, { created }) =>
-      runMutationSideEffects(context.db, {
-        action: "created",
-        entity: { entity: "product", id: created.entityId },
-        source: "product.createMany",
-      }),
     )
     .effect("ingredientId", async ({ context }, { created }) => {
       if (!created.output.ingredient?.id) return null;
@@ -415,13 +377,6 @@ const markProductsUsdaUnavailableDefinition = defineBulkWorkflow({
         { usdaUnavailable: true },
         context.actorContext,
       ),
-    )
-    .effect("indexed", async ({ context }, { id }) =>
-      runMutationSideEffects(context.db, {
-        action: "updated",
-        entity: { entity: "product", id },
-        source: "product.markUsdaUnavailableMany",
-      }),
     )
     .output(() => undefined),
   finalize: workflow<

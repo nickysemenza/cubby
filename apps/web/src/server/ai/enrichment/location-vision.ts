@@ -71,8 +71,8 @@ import {
 } from "~/server/domains/product/repo/crud";
 import { findProductByNameWithBrandClaim } from "~/server/domains/product/repo/lookup";
 import { resolveProductBrandName } from "~/server/domains/vendor/repo/product-brand";
-import { runMutationSideEffects } from "~/server/entity-kernel/repo/mutation-side-effects";
 import { createAppError } from "~/server/errors/app-error";
+import { recordChange } from "~/server/generic/changes/repo/change";
 import { semanticProductCandidates } from "~/server/generic/embedding/service/semantic-search.service";
 import { assertCurrentJob } from "~/server/generic/jobs/repo/execution";
 import {
@@ -407,11 +407,7 @@ export async function describeLocation(
     inputFingerprint,
     async (tx) => {
       await upsertAiAnalysis(tx, analysisKey, result);
-      await runMutationSideEffects(tx, {
-        action: "updated",
-        entity: { entity: "location", id: locationId },
-        source: "location-ai.description",
-      });
+      await recordChange(tx, { kind: "projection", categories: ["location"] });
     },
   );
   const missMetadata = cacheMetadata(
@@ -713,11 +709,7 @@ export async function approveDetectedInventoryItem(
       productShortcode = created.id;
       productNameForToast = created.name;
       createdProduct = true;
-      await runMutationSideEffects(db, {
-        action: "created",
-        entity: { entity: "product", id: productId },
-        source: "location-ai.inventory.approve",
-      });
+      await recordChange(db, { kind: "source", categories: ["product"] });
     }
   }
 
@@ -742,11 +734,7 @@ export async function approveDetectedInventoryItem(
     },
     actor,
   );
-  await runMutationSideEffects(db, {
-    action: "created",
-    entity: { entity: "inventory", id: createdInventory.id },
-    source: "location-ai.inventory.approve",
-  });
+  await recordChange(db, { kind: "source", categories: ["inventory"] });
 
   return {
     inventoryId: createdInventory.shortcode,
