@@ -2548,27 +2548,40 @@ qualify. Existing weighted image checks still own their domain requirements.
 Entities without applicable weighted checks remain unassessed when the image
 check passes; an absent image supplies the unresolved 99 cap.
 
-Product price checks share catalog price evidence for filtering and a scoped
-numeric projection for quality hydration. Applicability, missing-value checks,
-and exception fingerprints read the same projection during hydration. Both
-projections reuse the kit-pricing rules used by scalar prices and list totals;
-zero remains a known price and an absent derived price remains null.
-Scalar quality reads keep price evidence correlated to the requested Product;
-page enrichment must not evaluate service/category subplans for the catalog.
-Composite reads can supply statement-local presence evidence through the same
-quality-filter context used by the list scaffold and Product filters. The Work
-queue registers one materialized price relation when a compiled predicate
-requests it; standalone filters retain their closed predicates. Numeric
-fingerprints keep the canonical scalar or joined value, so sharing presence
-does not change exception identity.
+Product uses stored TypeScript checks at rules version 1. One loader reads a
+bounded Product ID page's identity, category liveness, inventory, acquisition,
+external identifier, orphan-retention and displayability facts, then delegates
+one batched price read to `loadProductPricing`. The existing kit-pricing rules
+remain authoritative: zero is known, ancestors contribute weighted acquisition
+prices, misc: buckets and service Products (whose category feature is a service) have no
+price expectation, service Products also have no identifier expectation, and
+unstocked historical
+Products are never charged a missing-price gap. Checks perform no I/O.
+
+Product lists, dataStatus/dataGap filters, score sorts, Research saved views,
+related Purchase rollups and Work queue research branches read published
+`EntityQuality`/`EntityQualityCheck` rows. The Work queue no longer registers a
+Product price CTE. Non-quality price-presence views, including optional misc
+bucket valuations, retain live pricing semantics; quality applicability cannot
+stand in for price presence. Product, Expense, inventory, brand/vendor, category, kit and
+attachment writers register source changes through the existing transactional
+`recordChange` owner (including audit logging); image integrity updates do too.
+The broad quality pass recomputes affected Products, including kit descendants,
+without mutation-time dependent traversal. Reads leave old publications intact
+until the pass completes.
 
 A Product's `commodity` flag marks interchangeable goods with no single
-listing. It removes the brand, Identifier and Amazon ASIN checks from the
-Product's applicable set rather than recording an exception, and it is a
-deliberate member decision, never inferred from an unknown or Generic Brand.
-Only applicability reads it; those checks' fingerprints are unchanged, so
-clearing the flag reopens the gaps while existing exceptions keep their
-evidence.
+listing. It removes brand, Identifier and Amazon ASIN checks from applicability;
+it is a deliberate member decision, never inferred from an unknown or Generic
+Brand. Product checks otherwise preserve their former applicability and gap
+semantics. Waivers intentionally change: legacy fingerprints are ignored and
+retained decisions remain active across input changes, passing checks and
+commodity toggles until explicitly cleared. The legacy signature field accepts
+an empty string for stored-mode decisions; it is never evaluated. Exception
+mutation responses evaluate the saved decision live without publishing a repair.
+Standalone Product predicates use closed stored-row lookups unless their caller
+explicitly supplies the matching quality relation context, so footer sums and
+custom FROM clauses cannot accidentally reference an unbound join alias.
 
 Purchase paperwork-mismatch predicates share one vendor-Expense aggregate for
 the total, line count and unpriced count. The reconciliation module owns their
@@ -2659,8 +2672,9 @@ applicability, and exceptions retain the shared record-level calculation.
 The Research queue ([terminology](guide/terminology.md#purchase-research)) is no table: it is the
 `research-queue` saved views on Product, Purchase, Expense and Vendor, which filter
 `dataGaps` to the checks research can close and sort by `dataQuality`
-ascending. A `DataException` bound to the evidence fingerprint removes an item
-until its inputs change.
+ascending. For stored-quality kinds such as Product, a durable `DataException`
+closes the gap until explicitly cleared. Unported kinds retain their legacy
+evidence-bound exception behavior until their port.
 
 The dedicated `/work-queue` page combines those predicates with interactive
 Problems, Email attention, findings and account work. It derives a filterable

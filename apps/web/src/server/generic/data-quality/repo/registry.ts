@@ -23,12 +23,10 @@ export const liveQualityRow = (t: ScoredTable): SQL =>
 export type QualityReadContext =
   | {
       readonly derivedAlias: string;
-      readonly hasDerivedValue?: never;
       readonly derivedValue?: never;
     }
   | {
       readonly derivedAlias?: never;
-      readonly hasDerivedValue?: (field: string, entityId: AnyColumn) => SQL;
       /** Unsupported fields return undefined to retain their canonical scalar read. */
       readonly derivedValue?: (
         field: string,

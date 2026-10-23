@@ -13,7 +13,7 @@ import { describe, expect, it } from "vitest";
 
 import { product } from "~/server/db/schema";
 
-import { dataQualityEntries } from "./entries";
+import { dataQualityEntries, storedEntryFor } from "./entries";
 import { calculateDataQualityScore } from "./hydrate";
 import {
   checksOf,
@@ -116,7 +116,10 @@ describe("data-quality registry", () => {
   // An exception is keyed by the check's evidence fingerprint, so every check
   // of an exception-bearing entity must declare its inputs.
   it.each(
-    scoredEntities.filter((entity) => dataQualityExceptionEntities[entity]),
+    scoredEntities.filter(
+      (entity) =>
+        dataQualityExceptionEntities[entity] && !storedEntryFor(entity),
+    ),
   )("%s declares fingerprint inputs for every check", (entity) => {
     const entry = entryFor(entity);
     expect(
@@ -179,11 +182,11 @@ describe("score and status evaluate each predicate once", () => {
     ["statusSql", statusSql],
     [
       "statusCondition",
-      (entity: "product") => statusCondition(entity, "complete"),
+      (entity: "purchase") => statusCondition(entity, "complete"),
     ],
   ] as const)("%s", (_, build) => {
-    const rendered = render(build("product"));
-    const exemptible = checksOf("product").filter(
+    const rendered = render(build("purchase"));
+    const exemptible = checksOf("purchase").filter(
       (check) => dataCheckExemptible[check],
     ).length;
     expect(rendered.split('FROM "DataException"').length - 1).toBe(exemptible);
@@ -208,7 +211,8 @@ describe("aliased evaluation", () => {
   it("renders a related row's check against the alias, not the base table", () => {
     const related = alias(product, "dq_r");
     const rendered = render(gapCondition("product", "product_brand", related));
-    expect(rendered).toContain('"dq_r"."brandId"');
+    expect(rendered).toContain('"dq_r"."id"');
+    expect(rendered).toContain('"EntityQualityCheck"');
     expect(rendered).not.toContain('"Product"."brandId"');
     expect(getTableName(related)).toBe("dq_r");
   });
@@ -224,7 +228,8 @@ describe("purchase import expectations", () => {
   it("uses check inputs, not target timestamps, to keep an exception active", () => {
     const productSql = render(gapCondition("product", "product_brand"));
     const purchaseSql = render(gapCondition("purchase", "paperwork_mismatch"));
-    expect(productSql).toContain("to_jsonb");
+    expect(productSql).toContain('"EntityQualityCheck"');
+    expect(productSql).not.toContain("to_jsonb");
     expect(purchaseSql).toContain("to_jsonb");
     expect(productSql).not.toContain('"updatedAt"');
     expect(purchaseSql).not.toContain('"updatedAt"');

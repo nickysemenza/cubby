@@ -7,6 +7,7 @@ import { image } from "~/server/db/schema";
 import { selectUpcImageBackfill } from "~/server/domains/product/repo/write/product-orchestration";
 import { setDataException } from "~/server/generic/data-quality/repo/exceptions";
 import { findProductsWithUpcGaps } from "~/server/generic/problems/repo/detectors-product";
+import { publishQualityFixtures } from "~/server/testing/quality.fixtures";
 import {
   createImageFixture,
   createInventoryFixture,
@@ -65,6 +66,7 @@ describe("displayable Product image predicate", () => {
       .set({ deletedAt: new Date() })
       .where(eq(image.id, photo.id));
 
+    await publishQualityFixtures(ctx.db, "product");
     const noImages = await findProductsWithNoImages(ctx.db);
     expect(noImages.map((row) => row.id)).toContain(product.entityId);
     expect(await countProductsWithNoImagesWithGtin(ctx.db)).toBe(
@@ -81,6 +83,7 @@ describe("displayable Product image predicate", () => {
       purpose: "label",
     });
 
+    await publishQualityFixtures(ctx.db, "product");
     const candidates = await findProductsWithUpcGaps(ctx.db);
     expect(
       candidates.find((row) => row.id === product.entityId)?.hasImage,
@@ -101,6 +104,7 @@ describe("displayable Product image predicate", () => {
       ctx.actor,
     );
 
+    await publishQualityFixtures(ctx.db, "product");
     const selected = (await selectUpcImageBackfill(ctx.db)).map(
       (row) => row.productId,
     );

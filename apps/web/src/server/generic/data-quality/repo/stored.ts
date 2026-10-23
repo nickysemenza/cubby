@@ -63,6 +63,9 @@ async function loadExceptions(
       and(
         eq(dataExceptionRecord.entityKind, kind),
         inArray(dataExceptionRecord.entityId, [...ids]),
+        inArray(dataExceptionRecord.check, [
+          ...dataChecksByEntity[kind].options,
+        ]),
       ),
     );
 }

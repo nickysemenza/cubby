@@ -2550,10 +2550,19 @@ export const updateImageIntegrity = async (
     | "verifiedAt"
   >,
 ): Promise<void> => {
-  await getDb(db)
-    .update(image)
-    .set(values)
-    .where(and(eq(image.id, imageId), notDeleted(image)));
+  await withTransaction(db, async (tx) => {
+    const changed = await tx
+      .update(image)
+      .set(values)
+      .where(and(eq(image.id, imageId), notDeleted(image)))
+      .returning({ id: image.id });
+    // Displayability is a quality input for every attached entity.
+    if (changed.length)
+      await recordChange(tx, {
+        kind: "source",
+        categories: ["image", "relatedData"],
+      });
+  });
 };
 
 export const selectImagesMissingDimensions = async (

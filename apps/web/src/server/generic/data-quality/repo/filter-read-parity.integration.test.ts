@@ -33,6 +33,7 @@ import {
   readWorkQueue,
 } from "~/server/generic/work-queue/service/work-queue-read";
 
+import { storedEntryFor } from "./entries";
 import { liveQualityRow } from "./registry";
 import {
   checksOf,
@@ -370,7 +371,7 @@ describe("bulk quality relations", () => {
     expect(linked.rows.map((row) => row.linked)).toEqual([true, true]);
 
     const bulkEntities = scoredEntities.filter(
-      (entity) => entryFor(entity).filterRead,
+      (entity) => !storedEntryFor(entity) && entryFor(entity).filterRead,
     );
     expect(bulkEntities).toEqual(expect.arrayContaining(["email", "purchase"]));
     const results = new Map<string, z.infer<typeof rowSchema>>();

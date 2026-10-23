@@ -204,7 +204,10 @@ FOR UPDATE`);
     }
   });
 
-  const quality = (await loadDataQualities(db, entityKind, [id])).get(id);
+  // The mutation response reflects the saved decision without repairing publication.
+  const quality = (await loadDataQualities(db, entityKind, [id], "live")).get(
+    id,
+  );
   if (!quality) {
     throw new Error(`Data quality was not loaded for ${input.entityId}`);
   }

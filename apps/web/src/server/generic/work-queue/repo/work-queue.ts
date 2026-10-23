@@ -64,7 +64,6 @@ import {
   expense,
   financialAccount,
   financialTransaction,
-  product,
   vendor,
   run as runTable,
   assessmentState as suggestionTable,
@@ -73,7 +72,6 @@ import { buildEmailWhere } from "~/server/domains/email/repo/email";
 import { buildExpenseWhereClause } from "~/server/domains/expense/repo/lookup";
 import { buildFinancialTransactionWhere } from "~/server/domains/financial-transaction/repo/financial-transaction";
 import { buildProductWhere } from "~/server/domains/product/repo/crud";
-import { productPriceEvidenceSql } from "~/server/domains/product/repo/pricing";
 import {
   expectedQuantityReadSql,
   onHandUnitsReadSql,
@@ -324,16 +322,16 @@ async function workQueueProjection(
     selections.push(
       ...workQueueCandidate(scope, {
         entity: "product",
-        table: sql`${product}`,
+        table: quality.source("product"),
         id: sql`"Product".shortcode`,
         name: sql`"Product".name`,
         owners: sql`ARRAY[]::uuid[]`,
         where: await buildProductWhere(
           db,
           productFiltersSchema.parse(productGaps),
-          readContexts.product,
+          quality.context("product"),
         ),
-        details: research("product", readContexts.product),
+        details: research("product", quality.context("product")),
         key: "research:product",
         shared: true,
         carriesGaps: true,
@@ -822,7 +820,6 @@ async function queryWorkQueue(
   const kinds = oneOrManyValues(input.kind);
   if (kinds?.length)
     candidateConditions.push(sql`kind IN (${textList(kinds)})`);
-  let needsPriceEvidence = false;
   let needsOnHandEvidence = false;
   let needsExpectedEvidence = false;
   const productReadContext: QualityReadContext = {
@@ -839,13 +836,6 @@ async function queryWorkQueue(
           needsOnHandEvidence = true;
           return sql`((SELECT jsonb_object_agg("productId", "onHandUnits") FROM work_product_on_hand) ->> ${entityId}::text)::double precision`;
         },
-    hasDerivedValue: (field, entityId) => {
-      needsPriceEvidence = true;
-      return sql`${entityId} IN (
-        SELECT "entityId" FROM work_product_price
-        WHERE ${sql.identifier(field)} IS NOT NULL
-      )`;
-    },
   };
   const quality = statementQualityRelations({ scoped: Boolean(record) });
   const projection = await workQueueProjection(
@@ -975,17 +965,7 @@ async function queryWorkQueue(
   // rather than window-sorting every eligible row and sorting again by position.
   // oxlint-disable-next-line cubby/no-raw-enum-literal-in-sql -- JSON property names below are the response contract, not vocabulary values.
   const result = await getDb(db).execute(sql`
-    WITH ${
-      needsPriceEvidence
-        ? sql`work_product_price AS MATERIALIZED (${productPriceEvidenceSql(
-            // A record read prices only its Product; the kit walk climbs
-            // from it, so pricing the whole catalog adds nothing.
-            record?.entity === "product"
-              ? sql`ARRAY(SELECT price_record."id" FROM "Product" price_record WHERE price_record."shortcode" = ${record.id})`
-              : undefined,
-          )}),`
-        : sql``
-    }
+    WITH
     ${needsOnHandEvidence ? sql`work_product_on_hand AS MATERIALIZED (${onHandUnitsReadSql()}),` : sql``}
     ${needsExpectedEvidence ? sql`work_product_expected AS MATERIALIZED (${expectedQuantityReadSql()}),` : sql``}
     work_connection_prediction AS MATERIALIZED (

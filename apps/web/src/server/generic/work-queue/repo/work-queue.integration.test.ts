@@ -28,6 +28,7 @@ import {
   readRecordWorkQueue,
   readWorkQueue,
 } from "~/server/generic/work-queue/service/work-queue-read";
+import { publishQualityFixtures } from "~/server/testing/quality.fixtures";
 import {
   createProductIdentityFixture,
   makeProductInput,
@@ -43,13 +44,23 @@ import { seedRunFinding } from "~/server/testing/run-finding.fixtures";
 // or findings, inflate counts, or hide incurred work in a mixed purchase.
 // Overlapping diagnostic reads must retain complete diagnostic rows, source
 // filters and member routing; one failed diagnostic must fail the whole read.
-// Shared price evidence must preserve explicit/zero prices, inherited kit
-// prices and exception fingerprints; unrelated check reads must not require it.
+// Stored price checks preserve explicit/zero prices and inherited kit prices;
+// Product research reads must not recompute price evidence.
 // Entity predicates and diagnostics may overlap, but must preserve scoped
 // results, declaration order and the one shared Project-attention snapshot.
 // A grouped read whose sections disagree with its page order misfiles rows.
 describe("Work queue gaps, typed columns, and record rows", () => {
   const ctx = withTestDb();
+  const publishedWorkQueue: typeof readWorkQueue = async (...args) => {
+    await publishQualityFixtures(ctx.db, "product");
+    return readWorkQueue(...args);
+  };
+  const publishedRecordWorkQueue: typeof readRecordWorkQueue = async (
+    ...args
+  ) => {
+    await publishQualityFixtures(ctx.db, "product");
+    return readRecordWorkQueue(...args);
+  };
 
   // Listing must not reconstruct every pending connection's evidence before
   // pagination. Background retirement owns display freshness; apply still fences it.
@@ -115,7 +126,7 @@ describe("Work queue gaps, typed columns, and record rows", () => {
         new Error("Synthetic full-population evidence rebuild"),
       );
     try {
-      const page = await readWorkQueue(
+      const page = await publishedWorkQueue(
         ctx.db,
         null,
         workQueueHouseholdInput.parse({ source: "suggestion", pageSize: 1 }),
@@ -171,7 +182,7 @@ describe("Work queue gaps, typed columns, and record rows", () => {
   };
 
   const read = (input: z.input<typeof workQueueHouseholdInput>) =>
-    readWorkQueue(
+    publishedWorkQueue(
       ctx.db,
       null,
       workQueueHouseholdInput.parse({ pageSize: 100, ...input }),
@@ -250,7 +261,7 @@ describe("Work queue gaps, typed columns, and record rows", () => {
     expect(page.items[0]?.explanations.length).toBeGreaterThan(0);
     const record = page.items[0]?.id;
     if (!record) throw new Error("Research row has no record");
-    const strip = await readRecordWorkQueue(ctx.db, null, record, false);
+    const strip = await publishedRecordWorkQueue(ctx.db, null, record, false);
     expect(
       strip.items.find((row) => row.key === page.items[0]?.key)?.explanations,
     ).toEqual(page.items[0]?.explanations);
@@ -404,7 +415,7 @@ describe("Work queue gaps, typed columns, and record rows", () => {
         .sort(),
     ).toEqual(visible.sort());
     for (const code of hidden) {
-      const strip = await readRecordWorkQueue(ctx.db, null, code, false);
+      const strip = await publishedRecordWorkQueue(ctx.db, null, code, false);
       expect(strip.items).toEqual([]);
       expect(strip.meta.totalCount).toBe(0);
     }
@@ -553,7 +564,7 @@ describe("Work queue gaps, typed columns, and record rows", () => {
       summary: "Synthetic typed sort finding.",
       evidenceFingerprint: "synthetic-typed-sort-finding",
     });
-    const strip = await readRecordWorkQueue(
+    const strip = await publishedRecordWorkQueue(
       ctx.db,
       null,
       purchase.shortcode,
@@ -641,7 +652,7 @@ describe("Work queue gaps, typed columns, and record rows", () => {
       .filter((row) => row.entity === "project")
       .map((row) => row.key);
     expect(projectKeys.length).toBeGreaterThan(0);
-    const strip = await readRecordWorkQueue(
+    const strip = await publishedRecordWorkQueue(
       ctx.db,
       null,
       project.shortcode,
@@ -657,7 +668,7 @@ describe("Work queue gaps, typed columns, and record rows", () => {
     const { lines } = await merchandiseOrder(prefix);
     const [refund, line] = lines;
     if (!refund || !line) throw new Error("fixture lines missing");
-    const strip = await readRecordWorkQueue(
+    const strip = await publishedRecordWorkQueue(
       ctx.db,
       null,
       refund.shortcode,
@@ -703,7 +714,7 @@ describe("Work queue gaps, typed columns, and record rows", () => {
     expect(queue.items).toContainEqual(
       expect.objectContaining({ suggestionFamily: "field", entity: null }),
     );
-    const productStrip = await readRecordWorkQueue(
+    const productStrip = await publishedRecordWorkQueue(
       ctx.db,
       null,
       product.id,
@@ -770,7 +781,7 @@ describe("Work queue gaps, typed columns, and record rows", () => {
       lineBasis: "item_line",
       economicRole: "vendor",
     });
-    const household = await readRecordWorkQueue(
+    const household = await publishedRecordWorkQueue(
       ctx.db,
       first.id,
       privateLine.shortcode,
@@ -782,7 +793,7 @@ describe("Work queue gaps, typed columns, and record rows", () => {
         kind: "members",
         members: [{ id: second.shortcode, name: second.name }],
       });
-    const fenced = await readRecordWorkQueue(
+    const fenced = await publishedRecordWorkQueue(
       ctx.db,
       first.id,
       privateLine.shortcode,
