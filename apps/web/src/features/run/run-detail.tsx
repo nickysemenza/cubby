@@ -233,6 +233,7 @@ export function RunStepsDetail({ record }: { record: RunOut }) {
       <RunStepStrip overview={overview} figures={figures} />
       <ReportBlocks
         blocks={runPlanBlocks({
+          runId: record.id,
           purpose: record.purpose,
           input: steps.data?.input,
           steps: steps.data?.steps ?? [],

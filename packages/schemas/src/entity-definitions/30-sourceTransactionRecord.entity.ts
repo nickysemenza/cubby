@@ -624,6 +624,10 @@ export default defineEntity({
       "vendorInference",
     ],
     rows: {
+      runStepInputs: {
+        label: "Run step inputs",
+        repository: { token: "text" },
+      },
       receivedImports: { label: "Received imports", relation: "imports" },
       acceptedTransactions: {
         label: "Accepted transactions",
@@ -633,6 +637,7 @@ export default defineEntity({
       },
     },
     derived: {
+      runStepInput: { via: "runStepInputs.token" },
       importId: { via: "imports" },
       matchState: {
         type: "enum",
@@ -765,6 +770,18 @@ export default defineEntity({
       export: "sourceTransactionRecordFilterFields",
     },
     descriptors: [
+      {
+        columnId: "runStepInput",
+        kind: "text",
+        label: "Run step input",
+        placeholder: "RUN shortcode:step key",
+        deriveSchema: true,
+        schemaRef: {
+          module: "@cubby/schemas/run-step-input",
+          export: "runStepInputFilterToken",
+        },
+        derived: true,
+      },
       {
         columnId: "rawDescription",
         field: "search",

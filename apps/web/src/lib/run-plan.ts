@@ -1,4 +1,4 @@
-import type { ReportBlock } from "@cubby/schemas/entity-report";
+import type { ReportBlock, ReportRowState } from "@cubby/schemas/entity-report";
 import {
   RUN_KINDS,
   isStepRunPurpose,
@@ -11,9 +11,16 @@ import {
   type SweepFamilyScope,
 } from "@cubby/schemas/run-fields";
 import { runStepMeta } from "@cubby/schemas/run-step";
+import {
+  readRunWorkPhase,
+  runWorkEstimate,
+  formatRunWorkEstimate,
+} from "@cubby/schemas/run-work-progress";
 
 import type { RunDetailStep } from "~/contracts/run-detail.contract";
+import { entityListHref } from "~/entity/entity-list-href";
 import { formatCalendarDay } from "~/lib/date-format";
+import { formatDuration } from "~/lib/format-duration";
 import { formatCount } from "~/lib/number-format";
 
 type PlanStep = Pick<
@@ -27,7 +34,62 @@ type PlanStep = Pick<
   | "skipped"
   | "pages"
   | "meta"
->;
+> &
+  Partial<{ [K in "startedAt" | "endedAt"]: RunDetailStep[K] | Date }>;
+type PlanTableRow = Extract<ReportBlock, { kind: "table" }>["rows"][number];
+
+function stepState(step: PlanStep | undefined) {
+  if (!step || step.state === "queued")
+    return {
+      label: step && step.pages > 0 ? "Queued to resume" : "Not started",
+      state: "not_reached",
+    } satisfies { label: string; state: ReportRowState };
+  const states = {
+    running: { label: "Running", state: "running" },
+    waiting: { label: "Waiting", state: "warning" },
+    paused: { label: "Paused", state: "warning" },
+    failed: { label: "Failed", state: "failed" },
+    done: { label: "Done", state: "done" },
+  } satisfies Record<
+    Exclude<PlanStep["state"], "queued">,
+    { label: string; state: ReportRowState }
+  >;
+  return states[step.state];
+}
+
+const atMs = (at: Date | string) =>
+  at instanceof Date ? at.getTime() : Date.parse(at);
+function stepTiming(step: PlanStep | undefined, now: Date) {
+  const start = step?.startedAt ? atMs(step.startedAt) : null;
+  const end = step?.endedAt
+    ? atMs(step.endedAt)
+    : step && !["done", "failed"].includes(step.state)
+      ? now.getTime()
+      : null;
+  const elapsed =
+    start !== null &&
+    end !== null &&
+    Number.isFinite(start) &&
+    Number.isFinite(end)
+      ? formatDuration(Math.max(0, end - start))
+      : "—";
+  if (!step || (step.state === "queued" && step.pages === 0))
+    return [elapsed, "Not estimated"];
+  if (step.state === "done" || step.state === "failed") return [elapsed, "—"];
+  if (step.state !== "running") return [elapsed, "Waiting"];
+  const sample = runStepMeta.safeParse(step.meta).data?.work?.current;
+  if (!sample) return [elapsed, "Collecting observations"];
+  const live = readRunWorkPhase(sample, "running", now);
+  if (live.estimateState !== "current" || live.state !== "running")
+    return [elapsed, "Not estimated"];
+  const estimate = runWorkEstimate(sample);
+  return [
+    elapsed,
+    estimate
+      ? formatRunWorkEstimate(estimate).split(" · ").slice(0, 2).join(" · ")
+      : "Collecting observations",
+  ];
+}
 
 export function declaredRunSteps(
   purpose: string,
@@ -68,12 +130,91 @@ function scopeLabel(entry: SweepFamilyScope) {
   return parts.join(" · ") || "All eligible inputs";
 }
 
+/** These are current selector views; counted membership was not retained as a snapshot. */
+function inputInspection(
+  runId: string | undefined,
+  key: string,
+  counted: boolean,
+) {
+  if (!runId) return null;
+  const list = (
+    entity: "financialTransaction" | "sourceTransactionRecord",
+    label: string,
+  ) => ({
+    label,
+    href: entityListHref(entity, {
+      filters: [{ id: "runStepInput", value: `${runId}:${key}` }],
+    }),
+  });
+  const current = counted
+    ? "Current eligibility under the Run scope and recorded cutoff; original membership was not saved."
+    : "Input inspection becomes available when this step records its count and selection boundary.";
+  switch (key) {
+    case "transfer_pair_scan":
+      return {
+        kind: "links",
+        links: counted
+          ? [
+              list("financialTransaction", "Transactions"),
+              list("sourceTransactionRecord", "Source records"),
+            ]
+          : [],
+        note: `Live categorized source charge keys, plus dated observed/pending/posted transactions without a transfer that have a movement kind or category. Date/cutoff apply; accounts are checked later. Source rows include every live observation for selected keys, so row counts differ. ${current}`,
+      } satisfies NonNullable<PlanTableRow["presentation"]>[string];
+    case "statement_generate":
+      return {
+        kind: "links",
+        links: counted
+          ? [
+              list(
+                "sourceTransactionRecord",
+                "Source records for eligible charges",
+              ),
+            ]
+          : [],
+        note: `Non-ignored, non-superseded charges needing a match, lifecycle correction or spending booking. Import/date scope selects charge keys; account admission happens later. All live observations for selected keys are shown, so row counts differ. ${current}`,
+      } satisfies NonNullable<PlanTableRow["presentation"]>[string];
+    case "statement_holds":
+      return {
+        kind: "links",
+        links: counted
+          ? [list("financialTransaction", "Pending transactions to inspect")]
+          : [],
+        note: `Live pending transactions in selected accounts whose settlement references all have provider-pending evidence. Import/date restrictions do not apply. Inspection does not imply a hold can be voided. ${current}`,
+      } satisfies NonNullable<PlanTableRow["presentation"]>[string];
+    case "transfer_pair_retire":
+    case "transfer_pair_label":
+    case "statement_label":
+      return {
+        kind: "links",
+        links: [
+          {
+            label: "View this Run’s decisions",
+            href: `/runs/${encodeURIComponent(runId)}#decisions`,
+          },
+        ],
+        note:
+          key === "transfer_pair_retire"
+            ? "Stored transfer-pair assessments in account/date/cutoff scope, including inactive or reviewed ones. Related decisions are not an exact input list."
+            : key === "transfer_pair_label"
+              ? "This Run’s pending pairs needing labels, or pairs awaiting statement refresh. Related decisions are not an exact input list."
+              : "Current pending statement advice needing a label or application, optionally restricted by import. This population can span Runs; the link shows only this Run’s decisions.",
+      } satisfies NonNullable<PlanTableRow["presentation"]>[string];
+    default:
+      return null;
+  }
+}
+
 /** Both clients render this declared plan through the generic report/StaticTable path. */
-export function runPlanBlocks(run: {
-  purpose: string;
-  input: unknown;
-  steps: readonly PlanStep[];
-}): ReportBlock[] {
+export function runPlanBlocks(
+  run: {
+    purpose: string;
+    runId?: string;
+    input: unknown;
+    steps: readonly PlanStep[];
+  },
+  now = new Date(),
+): ReportBlock[] {
   if (!isStepRunPurpose(run.purpose)) return [];
   const families =
     run.purpose === "sweep"
@@ -105,15 +246,35 @@ export function runPlanBlocks(run: {
     {
       kind: "table",
       title: "Plan",
-      columns: ["Step", "Purpose", "Scope", "Input", "State", "Results"],
-      rows: plan.map((declaration, index) => {
+      columns: [
+        "Step",
+        "Purpose",
+        "Scope",
+        "Input",
+        "State",
+        "Results",
+        "Elapsed (wall)",
+        "Step ETA",
+      ],
+      rows: plan.map((declaration, index): PlanTableRow => {
         const stored = run.steps.find((step) => step.key === declaration.key);
         const family = families?.find(
           (entry) => entry.family === declaration.family,
         );
         const frozen = runStepMeta.safeParse(stored?.meta).data?.input;
+        const state = stepState(stored);
+        const inspection = inputInspection(
+          run.runId,
+          declaration.key,
+          frozen?.mode === "count",
+        );
         return {
           id: declaration.key,
+          presentation: {
+            "4": { kind: "status", state: state.state },
+            "6": { kind: "figure" },
+            ...(inspection ? { "3": inspection } : {}),
+          },
           cells: [
             `${index + 1}. ${declaration.label}`,
             declaration.purpose,
@@ -123,14 +284,9 @@ export function runPlanBlocks(run: {
               : stored && (frozen || stored.pages > 0)
                 ? `${declaration.input.mode === "estimate" ? "About " : ""}${formatCount(frozen?.total ?? stored.found)} ${declaration.unit}`
                 : "Counted when step starts",
-            stored
-              ? stored.state === "queued"
-                ? stored.pages > 0
-                  ? "Queued to resume"
-                  : "Not started"
-                : stored.state
-              : "Not started",
+            state.label,
             `${resultText(stored)}${declaration.results ? ` · ${declaration.results.family.replaceAll("_", " ")} Suggestions` : ""}`,
+            ...stepTiming(stored, now),
           ],
         };
       }),
@@ -145,10 +301,19 @@ export function runPlanBlocks(run: {
           {
             kind: "table" as const,
             title: "Historical steps",
-            columns: ["Step", "State", "Results"],
-            rows: historical.map((step) => ({
+            columns: ["Step", "State", "Results", "Elapsed (wall)", "Step ETA"],
+            rows: historical.map((step): PlanTableRow => ({
               id: step.key,
-              cells: [step.label, step.state, resultText(step)],
+              cells: [
+                step.label,
+                stepState(step).label,
+                resultText(step),
+                ...stepTiming(step, now),
+              ],
+              presentation: {
+                "1": { kind: "status", state: stepState(step).state },
+                "3": { kind: "figure" },
+              },
             })),
           },
         ]

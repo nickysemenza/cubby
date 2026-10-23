@@ -1027,7 +1027,7 @@ export function runStepsBlocks(report: RunStepsReport): ReportBlock[] {
   });
   return [
     records(rows, { title: "Steps" }),
-    ...runPlanBlocks({ ...report, input: report.input }),
+    ...runPlanBlocks({ ...report, runId: report.code, input: report.input }),
   ];
 }
 

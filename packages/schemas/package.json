@@ -148,6 +148,7 @@
     "./vendor-account-fields": "./src/vendor-account-fields.ts",
     "./run-fields": "./src/run-fields.ts",
     "./run-step": "./src/run-step.ts",
+    "./run-step-input": "./src/run-step-input.ts",
     "./job": "./src/job.ts",
     "./run-work-progress": "./src/run-work-progress.ts",
     "./sweep": "./src/sweep.ts",

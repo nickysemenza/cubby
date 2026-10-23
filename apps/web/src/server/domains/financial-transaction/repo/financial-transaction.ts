@@ -72,6 +72,7 @@ import {
   financialTransactionCoverageSql,
   financialTransactionEvidenceFieldResolutionsSql,
 } from "~/server/domains/purchase/repo/purchase-evidence-policy";
+import { runStepInputListRows } from "~/server/domains/run/repo/run-step-input";
 import {
   enrichFinancialTransactionsWithVendorInference,
   enrichFinancialTransactionVendorRead,
@@ -430,6 +431,7 @@ const financialTransactionScaffold = listScaffold(
   financialTransaction,
   {
     rows: {
+      runStepInputs: runStepInputListRows("financialTransaction"),
       acceptedSourceRecords: sql`SELECT "transaction" AS "owner", "record" FROM (${sourceTransactionSettlements}) accepted`,
     },
     derived: {

@@ -20,6 +20,7 @@ import type { Database, DrizzleTransaction } from "~/server/db";
 import { sourceTransactionSettlements } from "~/server/db/computed/source-transaction-settlement-sql";
 import { notDeleted, unwrapDb, withTransactionOn } from "~/server/db/helpers";
 import { sourceTransactionRecord, transactionImport } from "~/server/db/schema";
+import { runStepInputListRows } from "~/server/domains/run/repo/run-step-input";
 import {
   merchantVendorInferences,
   normalizeMerchant,
@@ -69,6 +70,7 @@ const sourceScaffold = listScaffold(
   sourceTransactionRecord,
   {
     rows: {
+      runStepInputs: runStepInputListRows("sourceTransactionRecord"),
       acceptedTransactions: sql`SELECT "record" AS "owner", "transaction" FROM (${sourceTransactionSettlements}) accepted`,
     },
     derived: {
@@ -80,9 +82,16 @@ const importScaffold = listScaffold("transactionImport", transactionImport, {
   derived: { rowCountStored: storedCount },
 });
 
-export const buildSourceTransactionRecordWhere = (
+export const buildSourceTransactionRecordWhere = async (
+  db: ReaderDb,
   filters: SourceTransactionRecordFilters = {},
-) => sourceScaffold.where(filters);
+) =>
+  sourceScaffold.where(filters, {
+    context: await sourceScaffold.context(db, {
+      filters,
+      readIntent: "count",
+    }),
+  });
 export const buildTransactionImportWhere = (
   filters: TransactionImportFilters = {},
 ) => importScaffold.where(filters);

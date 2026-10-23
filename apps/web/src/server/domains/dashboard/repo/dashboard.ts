@@ -71,7 +71,7 @@ type CountWhere = (db: Database) => SQL | undefined | Promise<SQL | undefined>;
 type LocalCountEntity = keyof DashboardLocalCounts;
 
 const COUNT_WHERE = {
-  sourceTransactionRecord: () => buildSourceTransactionRecordWhere(),
+  sourceTransactionRecord: (db) => buildSourceTransactionRecordWhere(db),
   transactionImport: () => buildTransactionImportWhere(),
   product: (db) => buildProductWhere(db, {}),
   recipe: () => buildRecipeWhere({}),
