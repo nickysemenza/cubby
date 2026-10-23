@@ -123,6 +123,12 @@ grouped delivery notices and opaque short links do not establish a match.
 Keep unresolvable notices outside shipment intake until their package is proven.
 Unattended Mail import cannot submit SMS exports.
 
+Interactive scripts can use the existing CLI login and `cubby call
+shipment.record --json-body '<JSON>'` to send the same evidence packets over
+the authenticated HTTP API. Omit MCP's top-level `action` from the request body.
+Read back with `cubby call shipment.timeline --query shipmentId=SHIP-4K7MN`.
+The CLI retains its credential locally; scripts do not export or print it.
+
 Relevance routing retains actual recipient parcel notices from vendors, carriers
 and Shop even when no merchant, order, amount or Purchase is known; shipping
 promotions and scanned-letter digests remain unrelated. A Shipment is one
