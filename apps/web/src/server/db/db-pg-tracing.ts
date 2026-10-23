@@ -2,8 +2,13 @@ import { createLogger } from "@cubby/worker-tracing";
 import pg from "pg";
 
 import { databaseStatementForTrace } from "~/server/db/db-query-telemetry";
+import { currentJobExecution } from "~/server/generic/jobs/context";
 
-import { TraceNames, withTrace } from "../observability/tracing";
+import {
+  databaseTraceCaller,
+  TraceNames,
+  withTrace,
+} from "../observability/tracing";
 import {
   beginDatabaseAcquire,
   beginDatabaseQuery,
@@ -227,6 +232,10 @@ const traceQuery = (
 
     const sql = databaseStatementForTrace(args[0]);
     const operation = extractOperation(sql);
+    const job = currentJobExecution();
+    const caller = job
+      ? ["job", job.claim.kind, job.details.stepKey].filter(Boolean).join(".")
+      : databaseTraceCaller();
     const execute = () =>
       withTrace(TraceNames.db(operation ?? "query"), async (span) => {
         if (span.isRecording) {
@@ -237,6 +246,7 @@ const traceQuery = (
             "db.query.text": sql,
             "db.query.transaction": getTransaction(),
             "cubby.db.binding_role": role,
+            "cubby.db.caller": caller,
           });
         }
         const finishQuery = beginDatabaseQuery();

@@ -2,6 +2,10 @@ import { fromPartial } from "@total-typescript/shoehorn";
 import type pg from "pg";
 import { describe, expect, it, vi } from "vitest";
 
+import { withJobExecution, setJobStepKey } from "../generic/jobs/context";
+import type { JobClaim } from "../generic/jobs/repo/jobs";
+import * as tracing from "../observability/tracing";
+import type { Database } from "./database";
 import { withDatabaseOperationMetrics } from "./db-observability";
 import {
   createPoolQueryOwnershipBoundary,
@@ -26,6 +30,93 @@ const queryResult = (): pg.QueryResult => ({
 // Failures: queued work can look like database execution, a rejected query can
 // poison the client tail, or reused leases can inherit the wrong role/owner.
 describe("node-postgres tracing adapters", () => {
+  it("attributes queued queries to isolated callers through enrichment spans", async () => {
+    const attributes: Record<string, string | number | boolean | undefined>[] =
+      [];
+    const original = tracing.withTrace;
+    const spy = vi
+      .spyOn(tracing, "withTrace")
+      .mockImplementation((name, fn, attrs) =>
+        original(
+          name,
+          async (span) => {
+            if (!name.startsWith("db.")) return fn(span);
+            const values: Record<
+              string,
+              string | number | boolean | undefined
+            > = {};
+            attributes.push(values);
+            const recording = {
+              ...span,
+              isRecording: true,
+              setAttributes: (entries: typeof values) =>
+                Object.assign(values, entries),
+            };
+            return fn(recording);
+          },
+          attrs,
+        ),
+      );
+    try {
+      const client = fromPartial<pg.PoolClient>({
+        query: vi.fn(async () => queryResult()),
+        release: vi.fn(),
+      });
+      const pool = tracePool(
+        fromPartial<pg.Pool>({
+          query: vi.fn(async () => queryResult()),
+          connect: vi.fn(async () => client),
+        }),
+        "strong",
+      );
+      const connection = await pool.connect();
+      attributes.length = 0;
+      await Promise.all([
+        tracing.withTrace("start.query.product.list", () =>
+          tracing.withTrace("entity.list.enrichment.group", async () => {
+            await Promise.all([
+              connection.query("select 1"),
+              connection.query("select 2"),
+            ]);
+          }),
+        ),
+        tracing.withInvocationTrace("cf.scheduled", () =>
+          tracing.withTrace("job.routine", () =>
+            tracing.withTrace("workflow.routine.products", async () => {
+              await connection.query("select 3");
+            }),
+          ),
+        ),
+      ]);
+      expect(
+        attributes
+          .filter((value) => value["db.query.text"])
+          .map((value) => value["cubby.db.caller"]),
+      ).toEqual([
+        "start.query.product.list",
+        "start.query.product.list",
+        "workflow.routine.products",
+      ]);
+      await withJobExecution(
+        fromPartial<Database>({}),
+        fromPartial<JobClaim>({ kind: "run.execute" }),
+        async () => {
+          setJobStepKey("products");
+          await connection.query("select 4");
+        },
+      );
+      expect(attributes.at(-1)).toMatchObject({
+        "cubby.db.caller": "job.run.execute.products",
+      });
+      await connection.query("select 5");
+      expect(attributes.at(-1)?.["cubby.db.caller"]).toBeUndefined();
+      expect(tracing.databaseTraceCaller()).toBeUndefined();
+      connection.release();
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
   it("measures serialized client waits separately and continues after rejection", async () => {
     let rejectFirst: (error: Error) => void = () => {};
     const firstGate = new Promise<pg.QueryResult>((_resolve, reject) => {

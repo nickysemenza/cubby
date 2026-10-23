@@ -939,6 +939,17 @@ span. Other code uses `withTrace` for child operations and
 `annotateActiveSpan` for an already initialized active span. Outside the Worker
 build these helpers run work without tracing.
 
+Database query spans carry `cubby.db.caller`: the nearest enclosing Start
+query/mutation, Job, workflow/routine step, or HTTP route span name. The tracing
+wrappers propagate the name stack through AsyncLocalStorage, including queued
+client work and concurrent siblings; intervening database, list and provider
+spans do not replace the semantic owner. Jobs use the existing execution
+context's kind and selected step (`job.<kind>.<step>`) in preference to the
+span stack, including when no native span is recording. Other traced work falls back to its
+nearest non-database span; untraced work omits the attribute. This supplements
+`db.query.text`, binding role and returned-row count for caller-level query
+comparisons without exporting record identifiers or arguments.
+
 Authenticated Start, workflow-stream, HTTP and MCP failures follow the
 [raw diagnostic contract](agents/domain-rules.md#error-diagnostics). Only credential-shaped
 values are redacted. Request-scoped reporting captures the original exception
