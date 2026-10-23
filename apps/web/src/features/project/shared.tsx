@@ -7,7 +7,10 @@ import { FunnelIcon } from "@phosphor-icons/react/dist/csr/Funnel";
 import { Link } from "@tanstack/react-router";
 import { z } from "zod";
 
-import { EntityRefLink } from "~/entity/components/entity-ref-link";
+import {
+  EntityRefLink,
+  VendorOrderLink,
+} from "~/entity/components/entity-ref-link";
 import { VendorCell } from "~/entity/components/vendor-cell";
 import { manifestFilterConfig } from "~/entity/filter-manifest";
 import { multiSelectFilterFnBy, type FilterValue } from "~/entity/filters";
@@ -115,7 +118,6 @@ export function expenseVendorColumn(
                 });
                 return (
                   <EntityRefLink
-                    variant="chip"
                     entity="purchase"
                     id={expense.purchaseId}
                     name={label}
@@ -133,7 +135,6 @@ export function expenseVendorColumn(
                 vendor={v.name}
                 vendorId={persistedVendorId(v.name, expense)}
                 logo={expense.vendorLogo}
-                compactOnMobile
               />
             ) : (
               <NoneValue />
@@ -170,8 +171,7 @@ export function expenseOrderIdColumn(
           >
             <FunnelIcon className="size-3.5" />
           </Link>
-          <EntityRefLink
-            variant="order"
+          <VendorOrderLink
             orderUrl={expense.orderUrl}
             orderId={v}
             vendorName={expense.vendor}

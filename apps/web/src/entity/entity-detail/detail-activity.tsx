@@ -7,7 +7,7 @@ import {
 } from "@cubby/schemas/entity-manifest";
 import { useState } from "react";
 
-import { EntityRefLink } from "~/entity/components/entity-ref-link";
+import { EntityAuditLink } from "~/entity/components/entity-ref-link";
 import { formatCalendarDay, formatInstant } from "~/lib/date-format";
 import { dateSpanParts } from "~/lib/date-span";
 import { householdLocalDate } from "~/lib/household-date";
@@ -134,8 +134,7 @@ export function DetailActivity({ entity, id }: { entity: Entity; id: string }) {
                       : { title: event.title, subtitle: event.subtitle };
                   const primary =
                     event.kind === "record" && event.shortcode ? (
-                      <EntityRefLink
-                        variant="audit"
+                      <EntityAuditLink
                         entityKind={event.entity}
                         entityId={event.shortcode}
                         name={title}

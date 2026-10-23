@@ -186,6 +186,50 @@ describe("entity reference filter options", () => {
     ]);
   });
 
+  it("recognizes purchases by receipt identity and vendor/date context, including selected matches outside the search", async () => {
+    const vendorId = (
+      await getVendorByID(
+        ctx.db,
+        await findOrCreateVendor(ctx.db, "Synthetic Apparel"),
+      )
+    ).id;
+    const record = await createPurchase(
+      ctx.db,
+      buildEntity("purchase", {
+        vendorId,
+        orderId: "SYNTHETIC-ORDER",
+        displayLabel: "Autumn wardrobe",
+        date: "2026-10-12",
+      }),
+      TEST_ACTOR,
+    );
+    const input = {
+      source: "entity" as const,
+      entity: "purchase" as const,
+      search: "Synthetic Apparel",
+      selectedIds: [],
+      limit: 25,
+      include: [],
+    };
+    const roster = await getFilterOptions(ctx.db, input);
+    expect(roster.items).toEqual([
+      expect.objectContaining({
+        id: record.output.id,
+        label: "SYNTHETIC-ORDER (Autumn wardrobe)",
+        detail: "Synthetic Apparel · Oct 12, 2026",
+      }),
+    ]);
+    expect(
+      (
+        await getFilterOptions(ctx.db, {
+          ...input,
+          search: "no matching page",
+          selectedIds: [record.output.id],
+        })
+      ).items,
+    ).toEqual(roster.items);
+  });
+
   // The vendor picker ranks its roster by live purchase count and shows each
   // vendor's logo; both used to come from a dedicated `vendor.options` read.
   it("projects counts and logos, ordering a counted roster by usage", async () => {

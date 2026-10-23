@@ -3,14 +3,8 @@ import type { EntityFieldProvenance } from "@cubby/schemas/entity-fields";
 import { useQuery } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 
-import { EntityIdentityMark } from "~/entity/components/entity-identity-mark";
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
-import {
-  browserEntityDefinition,
-  entityDetailParams,
-  isBrowserRoutedEntity,
-  type EntityDetailRoute,
-} from "~/entity/entities";
+import { isBrowserRoutedEntity } from "~/entity/entities";
 import {
   formatFieldProvenance,
   isInspectableFieldProvenance,
@@ -89,25 +83,13 @@ function RelatedRecords({
                   gap="sm"
                   className="min-h-9 border-b border-border px-2 py-1 last:border-b-0"
                 >
-                  <EntityIdentityMark
-                    entity={item.entityKind}
-                    displayImage={node?.image ?? null}
-                    size="row"
-                  />
                   {isBrowserRoutedEntity(item.entityKind) ? (
                     <EntityRefLink
-                      variant="table"
-                      tone="muted"
-                      // SAFETY: the browser-routed guard establishes that this entity has a detail route.
-                      to={
-                        browserEntityDefinition(item.entityKind).routes
-                          .detail as EntityDetailRoute
-                      }
-                      params={entityDetailParams(item.entityId)}
-                      className="min-w-0 truncate"
-                    >
-                      {label}
-                    </EntityRefLink>
+                      entity={item.entityKind}
+                      id={item.entityId}
+                      name={label}
+                      displayImage={node?.image ?? null}
+                    />
                   ) : (
                     <span className="min-w-0 truncate">{label}</span>
                   )}

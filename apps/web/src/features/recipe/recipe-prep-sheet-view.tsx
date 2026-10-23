@@ -2,7 +2,6 @@ import { countLabel } from "@cubby/shared/pluralize";
 import { memo, useMemo } from "react";
 
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
-import { dottedEntityLink } from "~/entity/components/ref-link/leaf";
 import { MarkdownText } from "~/entity/prose/markdown";
 import { formatCurrencyRange } from "~/lib/number-format";
 import { formatCurrency } from "~/lib/number-format";
@@ -75,14 +74,10 @@ function ShoppingList({
             >
               <span className="truncate" title={need.name}>
                 <EntityRefLink
-                  variant="preview"
-                  displayImage={null}
                   entity="ingredient"
                   id={need.ingredientShortcode}
-                  className={dottedEntityLink}
-                >
-                  {need.name}
-                </EntityRefLink>
+                  name={need.name}
+                />
               </span>
               <span className="shrink-0 font-mono text-xs text-muted-foreground tabular-nums">
                 {need.grams != null ? gramText(need.grams) : "—"}
@@ -196,14 +191,11 @@ function Component({
         </span>
         <h3 className="my-0 font-heading text-base leading-tight font-medium tracking-tight">
           <EntityRefLink
-            variant="preview"
             displayImage={recipeTreeDisplayImage(node.recipe)}
             entity="recipe"
             id={node.recipe.id}
-            className={dottedEntityLink}
-          >
-            {node.recipe.name}
-          </EntityRefLink>
+            name={node.recipe.name}
+          />
         </h3>
         <div className="ml-auto text-right text-xs leading-tight text-muted-foreground">
           {makes && (

@@ -203,13 +203,10 @@ function IdentificationSummary({ image }: { image: ImageWithEntity }) {
                 key={candidate.productId}
                 primary={
                   <EntityRefLink
-                    variant="preview"
                     entity="product"
                     id={candidate.productId}
-                    displayImage={null}
-                  >
-                    {candidate.name}
-                  </EntityRefLink>
+                    name={candidate.name}
+                  />
                 }
                 trailing={`${Math.round(candidate.probability * 100)}% confidence`}
                 actions={

@@ -258,8 +258,7 @@ export const RelationshipSummaryTable: FC<RelationshipSummaryTableProps> = ({
                     displayImage={
                       target.image ? { url: target.image.url } : null
                     }
-                    showIdentityMark={false}
-                    truncate
+                    bare
                   />
                 );
               },

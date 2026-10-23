@@ -293,13 +293,7 @@ export function PhotoImportRunView({ run }: { run: RunDetail }) {
             <ul className="space-y-1 text-xs">
               {failed.map((id) => (
                 <li key={id} className="flex flex-wrap items-baseline gap-2">
-                  <EntityRefLink
-                    variant="chip"
-                    entity="image"
-                    id={id}
-                    name={id}
-                    displayImage={null}
-                  />
+                  <EntityRefLink entity="image" id={id} name={id} />
                   <span>
                     {review.data?.images.find((image) => image.id === id)
                       ?.describeReason ?? "Cloud description failed"}

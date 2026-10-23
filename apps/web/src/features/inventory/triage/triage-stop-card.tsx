@@ -100,12 +100,7 @@ export function TriageStopCard({
               className="text-left"
             />
             <h2 className="min-w-0 font-heading text-xl font-semibold">
-              <EntityRefLink
-                displayImage={null}
-                showIdentityMark={false}
-                entity="product"
-                data={product}
-              />
+              <EntityRefLink bare entity="product" data={product} />
             </h2>
             {product.brandName && (
               <Description size="xs">{product.brandName}</Description>

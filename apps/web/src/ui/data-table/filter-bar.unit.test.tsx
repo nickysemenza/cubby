@@ -136,10 +136,9 @@ describe("FilterBar", () => {
     fireEvent.change(input, { target: { value: "s" } });
     // Same element: the row did not jump into Active and remount its editor.
     expect(screen.getByRole("textbox", { name: "Filter Name" })).toBe(input);
-    // The panel row, still expanded (the strip's new chip shares the name).
-    expect(
-      screen.getByRole("button", { name: "Name: s", expanded: true }),
-    ).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Filter Name" })).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "All filters" }));
+    expect(screen.getAllByRole("button", { name: "Name: s" })).toHaveLength(2);
   });
 
   it("hydrates an active deferred filter before its editor is opened", () => {
@@ -367,10 +366,9 @@ describe("FilterBar", () => {
         editRequest={{ key: "tags" }}
       />,
     );
-    expect(await screen.findByRole("button", { name: "Tags" })).toHaveAttribute(
-      "aria-expanded",
-      "true",
-    );
+    expect(
+      await screen.findByRole("region", { name: "Filter Tags" }),
+    ).toBeVisible();
     expect(screen.getByRole("option", { name: "Home" })).toBeInTheDocument();
   });
 

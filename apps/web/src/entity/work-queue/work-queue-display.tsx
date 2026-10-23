@@ -75,9 +75,8 @@ export function WorkActionDetails({
                   {prerequisite.state}: {prerequisite.reason}
                   {prerequisite.record ? (
                     <EntityRefLink
-                      variant="byId"
-                      entityKind={prerequisite.record.entity}
-                      entityId={prerequisite.record.id}
+                      entity={prerequisite.record.entity}
+                      id={prerequisite.record.id}
                     />
                   ) : null}
                 </span>
@@ -101,9 +100,8 @@ export function WorkActionDetails({
                   Unblocks: {dependency.reason}
                   {dependency.record ? (
                     <EntityRefLink
-                      variant="byId"
-                      entityKind={dependency.record.entity}
-                      entityId={dependency.record.id}
+                      entity={dependency.record.entity}
+                      id={dependency.record.id}
                     />
                   ) : null}
                 </span>
@@ -159,7 +157,7 @@ export function WaitingForPill({ waitingFor }: { waitingFor: WorkWaitingFor }) {
           {waitingFor.members.map((member) => (
             <EntityRefLink
               key={member.id}
-              variant="chip"
+
               entity="ledgerParty"
               id={member.id}
               name={member.name}

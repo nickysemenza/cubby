@@ -95,18 +95,7 @@ export function FlowSourceContent({
             {name}
           </Link>
         ) : (
-          <EntityRefLink
-            variant="preview"
-            displayImage={null}
-            entity="ingredient"
-            id={id}
-            className={cn(
-              dottedEntityLink,
-              readable && "min-h-11 items-center",
-            )}
-          >
-            {name}
-          </EntityRefLink>
+          <EntityRefLink entity="ingredient" id={id} name={name} />
         )}
         <IngredientModifier modifier={usage.modifier} />
         {source.role && (

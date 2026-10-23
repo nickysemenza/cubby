@@ -137,7 +137,6 @@ export function CalendarSchedule({ data, window }: CalendarScheduleProps) {
               entityDisplayImageKey({ entityKind: "task", entityId: id })
             ] ?? null
           }
-          truncate
         />
       );
     }
@@ -152,7 +151,6 @@ export function CalendarSchedule({ data, window }: CalendarScheduleProps) {
               entityDisplayImageKey({ entityKind: "planting", entityId: id })
             ] ?? null
           }
-          truncate
         />
       );
     }

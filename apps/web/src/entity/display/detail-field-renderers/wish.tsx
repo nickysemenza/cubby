@@ -33,7 +33,6 @@ function WishCandidateRow({ candidate }: { candidate: WishCandidateOut }) {
           </span>
           <span className="min-w-0">
             <EntityRefLink
-              variant="chip"
               entity="product"
               id={candidate.id}
               name={candidate.name}

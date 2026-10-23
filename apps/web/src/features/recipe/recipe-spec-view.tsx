@@ -2,7 +2,6 @@ import { uniq } from "es-toolkit";
 import { Fragment, memo, useMemo, useState } from "react";
 
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
-import { dottedEntityLink } from "~/entity/components/ref-link/leaf";
 import { MarkdownText } from "~/entity/prose/markdown";
 import { renderValueOrMissing } from "~/lib/result";
 import { blockReasonText } from "~/lib/sub-recipe-reason";
@@ -276,16 +275,11 @@ function SpecNode({
       {!isRoot && (
         <div className="mb-1 flex flex-wrap items-center gap-x-2 eyebrow">
           <EntityRefLink
-            variant="preview"
-            displayImage={recipeTreeDisplayImage(node.recipe)}
             entity="recipe"
             id={node.recipe.id}
-            className={cn(dottedEntityLink, "font-semibold")}
-          >
-            <span style={{ color: depthRule(node.depth) }}>
-              {node.recipe.name}
-            </span>
-          </EntityRefLink>
+            name={node.recipe.name}
+            displayImage={recipeTreeDisplayImage(node.recipe)}
+          />
           {node.recipe.yield?.value ? (
             <span className="text-slate">
               · yields {formatYield(node.recipe.yield)}

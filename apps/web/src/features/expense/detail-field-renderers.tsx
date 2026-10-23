@@ -36,8 +36,6 @@ function ExpenseProjectField({ expense }: { expense: ExpenseOut }) {
                     id: share.projectId,
                     name: share.projectName ?? share.projectId,
                   }}
-                  displayImage={null}
-                  truncate
                 />
               ) : (
                 <span>Unassigned</span>

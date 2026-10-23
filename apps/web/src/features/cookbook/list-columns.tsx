@@ -34,7 +34,6 @@ function CookbookProductLink({
       displayImage={displayImage}
       entity="product"
       data={product}
-      compact
     />
   );
 }

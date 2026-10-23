@@ -12,7 +12,6 @@ import { useId, useMemo, useState } from "react";
 import { match } from "ts-pattern";
 
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
-import { dottedEntityLink } from "~/entity/components/ref-link/leaf";
 import { formatNumberRange } from "~/lib/format-range";
 import { scaleNutrition } from "~/lib/nutrition-estimates";
 import { formatEstimate } from "~/lib/nutrition-format";
@@ -259,25 +258,17 @@ export const RecipeIngredientList: React.FC<{
                 {match(row)
                   .with({ type: "ingredient" }, (r) => (
                     <EntityRefLink
-                      variant="preview"
-                      displayImage={null}
                       entity="ingredient"
                       id={r.ingredient.id}
-                      className={dottedEntityLink}
-                    >
-                      {name}
-                    </EntityRefLink>
+                      name={name}
+                    />
                   ))
                   .with({ type: "recipe" }, (r) => (
                     <EntityRefLink
-                      variant="preview"
-                      displayImage={null}
                       entity="recipe"
                       id={r.recipe.id}
-                      className={dottedEntityLink}
-                    >
-                      {name}
-                    </EntityRefLink>
+                      name={name}
+                    />
                   ))
                   .exhaustive()}
                 <IngredientModifier modifier={row.modifier} />

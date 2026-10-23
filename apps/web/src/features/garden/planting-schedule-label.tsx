@@ -67,7 +67,6 @@ export function usePlantingScheduleLabel(
                 entityDisplayImageKey({ entityKind: "planting", entityId: id })
               ] ?? null
             }
-            truncate
           />
         );
       }
@@ -82,7 +81,6 @@ export function usePlantingScheduleLabel(
                 entityDisplayImageKey({ entityKind: "location", entityId: id })
               ] ?? null
             }
-            truncate
           />
         );
       }

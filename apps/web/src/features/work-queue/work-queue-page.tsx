@@ -387,12 +387,7 @@ function queueColumns(
         cell: (info) => {
           const vendor = info.row.original.vendor;
           return vendor ? (
-            <EntityRefLink
-              variant="chip"
-              entity="vendor"
-              id={vendor.id}
-              name={vendor.name}
-            />
+            <EntityRefLink entity="vendor" id={vendor.id} name={vendor.name} />
           ) : null;
         },
         meta: attachCubbyColumnMeta<QueueTableRow>({

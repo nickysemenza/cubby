@@ -12,7 +12,6 @@ import type { ReactNode } from "react";
 import { match } from "ts-pattern";
 
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
-import { dottedEntityLink } from "~/entity/components/ref-link/leaf";
 import { cn } from "~/lib/utils";
 
 import { type RecipeTreeRow, recipeTreeDisplayImage } from "./recipe-tree";
@@ -117,7 +116,6 @@ export function TreeRowNameLink({
   if (!ref) return name;
   return (
     <EntityRefLink
-      variant="preview"
       displayImage={
         row.kind === "subrecipe"
           ? recipeTreeDisplayImage(row.child.recipe)
@@ -125,9 +123,7 @@ export function TreeRowNameLink({
       }
       entity={ref.entity}
       id={ref.id}
-      className={dottedEntityLink}
-    >
-      {name}
-    </EntityRefLink>
+      name={name}
+    />
   );
 }

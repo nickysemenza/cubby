@@ -1,7 +1,7 @@
 import { XIcon } from "@phosphor-icons/react/dist/csr/X";
 import type { FC } from "react";
 
-import { EntityRefLink } from "~/entity/components/entity-ref-link";
+import { EntityFilterLink } from "~/entity/components/entity-ref-link";
 import { cn } from "~/lib/utils";
 import { Row } from "~/ui/layout";
 import { Badge } from "~/ui/primitives/badge";
@@ -109,8 +109,7 @@ export const RecipeTagList: FC<RecipeTagListProps> = ({
           />
         );
         return filterable && !onRemove ? (
-          <EntityRefLink
-            variant="filter"
+          <EntityFilterLink
             key={tag}
             to="/recipes"
             search={{ tags: tag }}
@@ -119,7 +118,7 @@ export const RecipeTagList: FC<RecipeTagListProps> = ({
             className="no-underline"
           >
             {rendered}
-          </EntityRefLink>
+          </EntityFilterLink>
         ) : (
           <span key={tag}>{rendered}</span>
         );

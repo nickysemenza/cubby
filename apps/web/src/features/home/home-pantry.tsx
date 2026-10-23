@@ -2,7 +2,6 @@ import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
-import { entities, entityDetailParams } from "~/entity/entities";
 import { location } from "~/integrations/tanstack-query/generated/catalog/location.gen";
 import { CurrencyValue } from "~/ui/common/currency-value";
 import { EmptyState } from "~/ui/feedback/empty-state";
@@ -56,16 +55,7 @@ export function HomePantry() {
                 />
               }
             >
-              <EntityRefLink
-                variant="table"
-                tone="identity"
-                to={entities.location.routes.detail}
-                params={entityDetailParams(item.id)}
-                title={item.name}
-                className="truncate font-normal"
-              >
-                {item.name}
-              </EntityRefLink>
+              <EntityRefLink entity="location" id={item.id} name={item.name} />
             </HomeRow>
           ))}
         </HomeList>

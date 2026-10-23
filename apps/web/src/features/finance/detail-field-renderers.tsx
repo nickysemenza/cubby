@@ -1,5 +1,7 @@
-import { EntityRefLink } from "~/entity/components/entity-ref-link";
-import { entities, entityDetailParams } from "~/entity/entities";
+import {
+  EntityRefLink,
+  EntityFilterLink,
+} from "~/entity/components/entity-ref-link";
 import { FinancialBookingCorrectionReview } from "~/features/finance/financial-booking-correction-review";
 import { FinancialBookingReview } from "~/features/finance/financial-booking-review";
 import { PossibleVendor } from "~/features/finance/possible-vendor";
@@ -37,16 +39,8 @@ export const financialTransactionDetailFields = {
           {transaction.allocations.map((allocation) => (
             <Row key={allocation.purchaseId} justify="between" gap="sm">
               <Row align="center" gap="tight">
-                <EntityRefLink
-                  variant="table"
-                  to={entities.purchase.routes.detail}
-                  params={entityDetailParams(allocation.purchaseId)}
-                  tone="mono"
-                >
-                  {allocation.purchaseId}
-                </EntityRefLink>
-                <EntityRefLink
-                  variant="filter"
+                <EntityRefLink entity="purchase" id={allocation.purchaseId} />
+                <EntityFilterLink
                   to="/financial-transactions"
                   search={{ purchaseId: allocation.purchaseId }}
                   label={`Show all transactions allocated to ${allocation.purchaseId}`}

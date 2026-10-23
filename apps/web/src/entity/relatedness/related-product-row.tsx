@@ -30,7 +30,6 @@ export function RelatedProductRow({
           entity="product"
           data={product}
           displayImage={displayImage}
-          truncate
         />
       }
       secondary={evidence || null}

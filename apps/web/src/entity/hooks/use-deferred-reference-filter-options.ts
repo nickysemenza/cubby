@@ -4,9 +4,15 @@ import { useQueries } from "@tanstack/react-query";
 import { useCallback, useMemo, useRef, useState } from "react";
 
 import {
+  useEntityDisplayImages,
+  useEntityDisplayImageMap,
+  entityDisplayImageKey,
+} from "~/entity/entity-media/entity-display-images";
+import {
   getEntityFilters,
   referenceFilterOptionsKey,
 } from "~/entity/filter-manifest";
+import { recordFilterOption } from "~/entity/filter-option-presentation";
 import { isPickerEntity, recordSource } from "~/entity/picker/picker";
 import { entityFilterOptions } from "~/integrations/tanstack-query/generated/catalog/entityFilterOptions.gen";
 import type { RuntimeFilterOptions } from "~/ui/hooks/filter-option-types";
@@ -61,6 +67,7 @@ export function useDeferredEntityRosters(
         search: debouncedSearch[key] ?? "",
         selectedIds: [...(selected[key] ?? [])],
         limit: 25,
+        include: ["emoji"],
       }),
       enabled: active[key] === true,
     })),
@@ -97,6 +104,16 @@ export function useDeferredEntityRosters(
     },
     [],
   );
+  const inheritedImages = useEntityDisplayImageMap();
+  const images = useEntityDisplayImages(
+    references.flatMap(({ target }, index) =>
+      (queries[index]?.data?.items ?? []).map((item) => ({
+        entityKind: target,
+        entityId: item.id,
+      })),
+    ),
+    inheritedImages,
+  );
   return useMemo(
     () =>
       Object.fromEntries(
@@ -106,11 +123,18 @@ export function useDeferredEntityRosters(
             key,
             {
               options:
-                query?.data?.items.map((item) => ({
-                  value: item.id,
-                  label: item.label,
-                  detail: item.detail,
-                })) ?? [],
+                query?.data?.items.map((item) =>
+                  recordFilterOption(
+                    target,
+                    item,
+                    images[
+                      entityDisplayImageKey({
+                        entityKind: target,
+                        entityId: item.id,
+                      })
+                    ] ?? null,
+                  ),
+                ) ?? [],
               onActivate: (selectedIds?: readonly string[]) =>
                 activate(key, selectedIds),
               onSearchChange: (value: string) =>
@@ -127,6 +151,6 @@ export function useDeferredEntityRosters(
           ];
         }),
       ),
-    [activate, queries, references],
+    [activate, queries, references, images],
   );
 }

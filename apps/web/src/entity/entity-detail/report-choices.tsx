@@ -250,13 +250,7 @@ function ChoiceRecordLink({
   return (
     <>
       {routed ? (
-        <EntityRefLink
-          variant="chip"
-          entity={routed}
-          id={record.id}
-          name={record.name}
-          displayImage={null}
-        />
+        <EntityRefLink entity={routed} id={record.id} name={record.name} />
       ) : (
         <span className="text-sm">{record.name}</span>
       )}

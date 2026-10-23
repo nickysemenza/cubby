@@ -257,3 +257,13 @@ Pass the exact technical string rather than reconstructing it from display text.
 Do not hide essential facts, wrap existing buttons/links, or automatically make
 every field inspectable. Run types and run timeline reason, phase and input-mode
 labels use this shared component; standalone technical facts remain visible.
+
+### Record link appearance
+
+`EntityRefLink` renders a record pill by default. Use `bare` for table name
+columns. The shared pill owns image size, text, fallback marks and wrapping;
+entity declarations own labels and identity data. Candidate filter rows reuse
+the same noninteractive identity, with detail and counts outside the pill.
+Resolve canonical display images in batches at collection boundaries and pass
+them through the display-image provider, including transitive images. Never
+start an image query from a cell or option row.

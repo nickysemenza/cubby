@@ -13,8 +13,7 @@ import { TruncatedList } from "~/ui/truncated-list";
 
 import { InlineRefLink } from "./inline";
 
-export type ListRefLinkProps = {
-  variant: "list";
+type ListRefLinkProps = {
   /** Compact mode: truncates long names with max-width */
   compact?: boolean;
   /** Maximum items to show before truncating with "+N more". undefined = show all */
@@ -39,9 +38,7 @@ export type ListRefLinkProps = {
     }
 );
 
-export function ListRefLink(
-  props: Omit<ListRefLinkProps, "variant"> & { variant?: "list" },
-) {
+export function ListRefLink(props: ListRefLinkProps) {
   const { items, compact, maxItems, resolveImages = true } = props;
   const inheritedImages = useEntityDisplayImageMap();
 
@@ -92,7 +89,6 @@ export function ListRefLink(
           entity="usda-food"
           data={item}
           displayImage={null}
-          compact={compact}
         />
       );
     if (props.entity === "location" && "type" in item)
@@ -102,7 +98,6 @@ export function ListRefLink(
           entity="location"
           data={item}
           displayImage={imageOf("location", item.id)}
-          compact={compact}
         />
       );
     if (props.entity === "product" && "brandName" in item)
@@ -112,7 +107,6 @@ export function ListRefLink(
           entity="product"
           data={item}
           displayImage={imageOf("product", item.id)}
-          compact={compact}
         />
       );
     if (
@@ -125,7 +119,6 @@ export function ListRefLink(
           entity={props.entity}
           data={item}
           displayImage={imageOf(props.entity, item.id)}
-          compact={compact}
         />
       );
     throw new Error(`Unexpected ${props.entity} inline-link item shape`);

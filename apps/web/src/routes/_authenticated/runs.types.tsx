@@ -10,7 +10,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import type { z } from "zod";
 
 import type { runCatalogActivityEntry } from "~/contracts/run.contract";
-import { EntityRefLink } from "~/entity/components/entity-ref-link";
+import { EntityAuditLink } from "~/entity/components/entity-ref-link";
 import { fieldEnumOptions } from "~/entity/display/enum-field-display";
 import { Page } from "~/entity/page/page";
 import { run } from "~/integrations/tanstack-query/generated/catalog/run.gen";
@@ -67,8 +67,7 @@ function RunActivity({ entry }: { entry: ActivityEntry | undefined }) {
   return (
     <Stack gap="xs">
       <Row align="center" wrap gap="sm">
-        <EntityRefLink
-          variant="audit"
+        <EntityAuditLink
           entityKind="run"
           entityId={entry.shortcode}
           displayImage={null}

@@ -18,7 +18,15 @@ import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 import { Facts } from "~/ui/common/facts";
 import { DenseCellContext } from "~/ui/common/stacked-value";
 
-import { EntityRefLink } from "./entity-ref-link";
+import {
+  EntityRefLink,
+  EntityRefList,
+  EntityAuditLink,
+  EntityRouteLink,
+  EntityFilterLink,
+  VendorOrderLink,
+} from "./entity-ref-link";
+import { PreviewRefLink as EntityPreviewLink } from "./ref-link/leaf";
 
 let harness: ReturnType<typeof createBrowserTestHarness>;
 
@@ -41,7 +49,7 @@ const seededProductImage = (id: string) =>
     },
   }) as const;
 
-describe("EntityRefLink inline variant", () => {
+describe("EntityRefLink with entity data", () => {
   const product = { id: "PRD-TEST", name: "Test product" };
 
   it("keeps identity links to one name even when stacked context is requested", () => {
@@ -51,8 +59,7 @@ describe("EntityRefLink inline variant", () => {
           entity="product"
           data={{ ...product, brandName: "Synthetic brandName" }}
           displayImage={null}
-          stacked
-          wrap
+
           context="Synthetic context"
         />
       </DenseCellContext>,
@@ -83,7 +90,7 @@ describe("EntityRefLink inline variant", () => {
         entity="product"
         data={product}
         displayImage={{ url: "https://example.com/product.jpg" }}
-        showIdentityMark={false}
+        bare
       />,
     );
 
@@ -178,19 +185,14 @@ describe("EntityRefLink inline variant", () => {
   });
 });
 
-describe("EntityRefLink chip variant", () => {
+describe("EntityRefLink record identity", () => {
   it("falls back to the provider's canonical image when none is passed", () => {
     renderLink(
       <EntityDisplayImagesProvider
         refs={[]}
         seeded={seededProductImage("PRD-CHIP")}
       >
-        <EntityRefLink
-          variant="chip"
-          entity="product"
-          id="PRD-CHIP"
-          name="Chip product"
-        />
+        <EntityRefLink entity="product" id="PRD-CHIP" name="Chip product" />
       </EntityDisplayImagesProvider>,
     );
 
@@ -210,9 +212,7 @@ describe("EntityRefLink chip variant", () => {
     async (entity, id, href) => {
       const queryKey = entityPreviewQueryOptions(entity, id).queryKey;
       harness.queryClient.setQueryDefaults(queryKey, { enabled: false });
-      renderLink(
-        <EntityRefLink variant="chip" entity={entity} id={id} name={null} />,
-      );
+      renderLink(<EntityRefLink entity={entity} id={id} name={null} />);
       expect(screen.getByRole("status")).toHaveTextContent("Loading");
       expect(screen.queryByRole("link")).toBeNull();
       await act(async () => {
@@ -243,9 +243,7 @@ describe("EntityRefLink list variant", () => {
       brandName: "Fairlife",
       fdc_id: 2670155,
     };
-    renderLink(
-      <EntityRefLink variant="list" entity="product" items={[linkedProduct]} />,
-    );
+    renderLink(<EntityRefList entity="product" items={[linkedProduct]} />);
 
     expect(
       screen.getByRole("link", { name: /Fairlife 2% milk/ }),
@@ -254,8 +252,7 @@ describe("EntityRefLink list variant", () => {
 
   it("still renders declared USDA foods through the usda-food branch", () => {
     renderLink(
-      <EntityRefLink
-        variant="list"
+      <EntityRefList
         entity="usda-food"
         items={[{ fdc_id: 171265, foodInfo: { description: "Milk, whole" } }]}
       />,
@@ -278,8 +275,7 @@ describe("EntityRefLink list variant", () => {
         refs={[]}
         seeded={seededProductImage(product.id)}
       >
-        <EntityRefLink
-          variant="list"
+        <EntityRefList
           entity="product"
           items={[product]}
           resolveImages={false}
@@ -295,7 +291,7 @@ describe("EntityRefLink list variant", () => {
   });
 
   it("renders the empty placeholder for no items", () => {
-    renderLink(<EntityRefLink variant="list" entity="recipe" items={[]} />);
+    renderLink(<EntityRefList entity="recipe" items={[]} />);
 
     expect(screen.getByText("No items linked yet.")).toBeInTheDocument();
   });
@@ -304,12 +300,7 @@ describe("EntityRefLink list variant", () => {
 describe("EntityRefLink by-id variant", () => {
   it("links a supplied name without fetching the record", () => {
     renderLink(
-      <EntityRefLink
-        variant="byId"
-        entityKind="project"
-        entityId="PRJ-TEST"
-        name="Deck rebuild"
-      />,
+      <EntityRefLink entity="project" id="PRJ-TEST" name="Deck rebuild" />,
     );
 
     expect(screen.getByRole("link", { name: /Deck rebuild/ })).toHaveAttribute(
@@ -323,9 +314,8 @@ describe("EntityRefLink by-id variant", () => {
   it("renders an inventory entry unlinked", () => {
     renderLink(
       <EntityRefLink
-        variant="byId"
-        entityKind="inventory"
-        entityId="00000000-0000-0000-0000-000000000000"
+        entity="inventory"
+        id="00000000-0000-0000-0000-000000000000"
       />,
     );
 
@@ -336,9 +326,8 @@ describe("EntityRefLink by-id variant", () => {
   it("sends a cookbook to the cookbook index", () => {
     renderLink(
       <EntityRefLink
-        variant="byId"
-        entityKind="cookbook"
-        entityId="00000000-0000-0000-0000-000000000000"
+        entity="cookbook"
+        id="00000000-0000-0000-0000-000000000000"
       />,
     );
 
@@ -352,8 +341,7 @@ describe("EntityRefLink by-id variant", () => {
 describe("EntityRefLink audit variant", () => {
   it("leads with the name and trails the code as a stamp", () => {
     renderLink(
-      <EntityRefLink
-        variant="audit"
+      <EntityAuditLink
         entityKind="project"
         entityId="PRJ-TEST"
         name="Deck rebuild"
@@ -369,8 +357,7 @@ describe("EntityRefLink audit variant", () => {
 
   it("falls back to type plus code when no name resolved", () => {
     renderLink(
-      <EntityRefLink
-        variant="audit"
+      <EntityAuditLink
         entityKind="project"
         entityId="PRJ-TEST"
         displayImage={null}
@@ -387,8 +374,7 @@ describe("EntityRefLink audit variant", () => {
     expect(isBrowserRoutedEntity(unrouted)).toBe(false);
 
     renderLink(
-      <EntityRefLink
-        variant="audit"
+      <EntityAuditLink
         entityKind={unrouted}
         entityId="IMS-TEST"
         name="Old sighting"
@@ -401,18 +387,17 @@ describe("EntityRefLink audit variant", () => {
   });
 });
 
-describe("EntityRefLink preview variant", () => {
+describe("Record preview trigger", () => {
   it("links the record around arbitrary children", () => {
     renderLink(
-      <EntityRefLink
-        variant="preview"
+      <EntityPreviewLink
         entity="ingredient"
         id="ING-TEST"
         displayImage={null}
         showIdentityMark={false}
       >
         flour
-      </EntityRefLink>,
+      </EntityPreviewLink>,
     );
 
     expect(screen.getByRole("link", { name: "flour" })).toHaveAttribute(
@@ -423,14 +408,9 @@ describe("EntityRefLink preview variant", () => {
 
   it("routes usda-food by its fdc id", () => {
     renderLink(
-      <EntityRefLink
-        variant="preview"
-        entity="usda-food"
-        id="171265"
-        displayImage={null}
-      >
+      <EntityPreviewLink entity="usda-food" id="171265" displayImage={null}>
         Milk
-      </EntityRefLink>,
+      </EntityPreviewLink>,
     );
 
     expect(screen.getByRole("link", { name: /Milk/ })).toHaveAttribute(
@@ -450,14 +430,13 @@ describe("EntityRefLink table variant", () => {
         <tbody>
           <tr onClick={onRowClick}>
             <td>
-              <EntityRefLink
-                variant="table"
+              <EntityRouteLink
                 to="/usda/upc/$code"
                 params={{ code: "012345678905" }}
                 tone="mono"
               >
                 012345678905
-              </EntityRefLink>
+              </EntityRouteLink>
             </td>
           </tr>
         </tbody>
@@ -474,15 +453,14 @@ describe("EntityRefLink table variant", () => {
 describe("EntityRefLink filter variant", () => {
   it("turns a read-only facet into a readable filtered-list link", () => {
     renderLink(
-      <EntityRefLink
-        variant="filter"
+      <EntityFilterLink
         display="value"
         to="/products"
         search={{ brandName: "Acme" }}
         label="Show all products by Acme"
       >
         Acme
-      </EntityRefLink>,
+      </EntityFilterLink>,
     );
 
     const link = screen.getByRole("link", {
@@ -502,8 +480,7 @@ describe("EntityRefLink filter variant", () => {
             label: "Category",
             value: <button type="button">Edit category</button>,
             filterAction: (
-              <EntityRefLink
-                variant="filter"
+              <EntityFilterLink
                 to="/products"
                 search={{ category: "CAT-2224" }}
                 label="Show all products in Tools"
@@ -533,26 +510,21 @@ describe("EntityRefLink filter variant", () => {
 describe("EntityRefLink order variant", () => {
   it("renders nothing when the order isn't linkable", () => {
     const { container: noUrl } = renderLink(
-      <EntityRefLink
-        variant="order"
-        orderUrl={null}
-        orderId="txn:2023-09-17/639/5201"
-      />,
+      <VendorOrderLink orderUrl={null} orderId="txn:2023-09-17/639/5201" />,
     );
     expect(noUrl).toBeEmptyDOMElement();
 
     // `undefined` reaches this from the optional `orderUrl` on the preview-card
     // view models, and must behave the same as an explicit null.
     const { container: undef } = renderLink(
-      <EntityRefLink variant="order" orderUrl={undefined} orderId="AB12" />,
+      <VendorOrderLink orderUrl={undefined} orderId="AB12" />,
     );
     expect(undef).toBeEmptyDOMElement();
   });
 
   it("opens the vendor's order page in a new tab, named for the order", () => {
     renderLink(
-      <EntityRefLink
-        variant="order"
+      <VendorOrderLink
         orderUrl="https://shop.example/orders?orderNumber=AB12"
         orderId="AB12"
         vendorName="Acme Supply"
@@ -573,8 +545,7 @@ describe("EntityRefLink order variant", () => {
 
   it("still names the link when the vendor was soft-deleted", () => {
     renderLink(
-      <EntityRefLink
-        variant="order"
+      <VendorOrderLink
         orderUrl="https://x.test/AB12"
         orderId="AB12"
         vendorName={null}

@@ -160,7 +160,6 @@ export function FinancialTransactionFormFields({
             <span className="text-xs text-muted-foreground">
               Suggested purchases · Showing purchases from{" "}
               <EntityRefLink
-                variant="chip"
                 entity="vendor"
                 id={scopedVendorId}
                 name={suggested.vendorName}

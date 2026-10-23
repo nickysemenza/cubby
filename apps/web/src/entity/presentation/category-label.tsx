@@ -64,12 +64,5 @@ export function CategoryLabelById({
     return <Spinner className="size-3" aria-label="Loading category" />;
   }
   // A deleted category or a failed vocabulary read keeps its record link.
-  return (
-    <EntityRefLink
-      variant="byId"
-      entityKind="productCategory"
-      entityId={id}
-      name={name}
-    />
-  );
+  return <EntityRefLink entity="productCategory" id={id} name={name} />;
 }

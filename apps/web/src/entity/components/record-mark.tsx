@@ -57,7 +57,7 @@ const isShortcodeEntity = (value: Entity): value is ShortcodeEntity =>
  * A record's emoji: `emoji` when the caller has it (`null` = known-empty),
  * else the lightweight options query's answer, `null` until it loads.
  */
-export function useResolvedRecordEmoji(
+function useResolvedRecordEmoji(
   entity: Entity,
   recordId: string,
   emoji: string | null | undefined,
@@ -84,7 +84,7 @@ export function useResolvedRecordEmoji(
  * Resolves relation-only links through the lightweight options query.
  * Explicit emoji values skip the lookup.
  */
-export function RecordMarkById({
+function RecordMarkById({
   entity,
   recordId,
   emoji,

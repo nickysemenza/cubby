@@ -5,7 +5,7 @@ import { cn } from "~/lib/utils";
 
 /**
  * Set inside a desktop table cell, where values take their dense form: dates,
- * timestamps and entity links stack in two lines and a quality score drops
+ * timestamps stack in two lines and a quality score drops
  * its "/100". Identity cells always retain a single name line. Phone cards, ledgers and prose keep their one-line forms;
  * another surface opts in with the component's `stacked` prop. `linksTo` is
  * the entity whose icon the column header already paints.
@@ -24,10 +24,6 @@ export function useDenseCell(stacked?: boolean) {
   const cell = useContext(DenseCellContext);
   return cell?.identity ? false : (stacked ?? cell !== null);
 }
-
-/** The entity whose icon this cell's column header paints, if any. */
-export const useHeaderEntity = () =>
-  useContext(DenseCellContext)?.linksTo ?? null;
 
 /** A stacked value's muted second line: 12px on 13px. */
 export const STACKED_SECONDARY_CLASS =

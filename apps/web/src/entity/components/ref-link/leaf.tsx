@@ -9,8 +9,8 @@ import type { ReactNode } from "react";
 import { Suspense } from "react";
 
 import { EntityIdentityMark } from "~/entity/components/entity-identity-mark";
+import { EntityPill } from "~/entity/components/entity-pill";
 import type { EntityPreviewContent as EntityPreviewContentComponent } from "~/entity/components/entity-preview-content";
-import { RecordEmoji } from "~/entity/components/record-emoji";
 import { RecordMarkByReference } from "~/entity/components/record-mark";
 import {
   entities,
@@ -21,17 +21,14 @@ import {
   type EntityDetailRoute,
 } from "~/entity/entities";
 import { useEntityDisplayImage } from "~/entity/entity-media/entity-display-images";
-import { SpendingCategoryPill } from "~/entity/presentation/spending-category-pill";
 import {
   hoverPreviewEntities,
   type HoverPreviewEntity,
 } from "~/entity/preview/preview-entities";
 import { browserOnlyLazy } from "~/lib/browser-only-lazy";
 import { cn } from "~/lib/utils";
-import { PersonAvatar } from "~/ui/common/person-avatar";
 import { useIdentityCell } from "~/ui/common/stacked-value";
 import { ExternalLinkIcon } from "~/ui/external-link";
-import { EnumPill } from "~/ui/primitives/enum-pill";
 import {
   PreviewCard,
   PreviewCardContent,
@@ -63,18 +60,9 @@ const EntityPreviewContent = browserOnlyLazy<
 export const dottedEntityLink =
   "underline decoration-border/70 decoration-dotted underline-offset-2 transition-colors hover:text-primary hover:decoration-primary hover:decoration-solid";
 
-// Leaf components take their variant's props minus the dispatcher's
-// discriminant, so `EntityRefLink` can hand them `props` unchanged.
-// Distributive so a variant whose props are a union (the table variant's
-// correlated `to`/`params`) keeps each member intact.
-type Leaf<Props extends { variant: string }> = Props extends unknown
-  ? Omit<Props, "variant"> & { variant?: Props["variant"] }
-  : never;
-
 // ── preview ────────────────────────────────────────────────────────────────
 
-export type PreviewRefLinkProps = {
-  variant: "preview";
+type PreviewRefLinkProps = {
   entity: HoverPreviewEntity;
   /**
    * The canonical public id used for both navigation and the preview query.
@@ -109,7 +97,7 @@ export function PreviewRefLink({
   showIdentityMark = true,
   openInNewTab,
   className,
-}: Leaf<PreviewRefLinkProps>) {
+}: PreviewRefLinkProps) {
   const linkClass = cn(
     showIdentityMark && "inline-flex items-center gap-1",
     className,
@@ -223,11 +211,6 @@ type TableLinkBase = {
   title?: string;
 } & (USDALookupRoute | EntityRoute);
 
-export type TableRefLinkProps = {
-  variant: "table";
-  tone: TableLinkRole;
-} & TableLinkBase;
-
 /**
  * A plain styled link for a table cell. It stops the click so a clickable row
  * never also navigates to its own destination. The chip and avatar variants
@@ -240,7 +223,7 @@ export function TableRefLink({
   className = "",
   title,
   tone,
-}: Leaf<{ variant: "table"; tone?: TableLinkRole } & TableLinkBase>) {
+}: { tone?: TableLinkRole } & TableLinkBase) {
   return (
     <Link
       className={tableLinkVariants({ tone, className })}
@@ -257,31 +240,22 @@ export function TableRefLink({
 // ── chip ───────────────────────────────────────────────────────────────────
 
 const isHoverPreviewEntity = (
-  entity: BrowserRoutedEntity,
+  entity: BrowserRoutedEntity | "usda-food",
 ): entity is HoverPreviewEntity =>
   hoverPreviewEntities.some((candidate) => candidate === entity);
 
-/** Entities whose records are people: they lead with an initials avatar. */
-const PERSON_ENTITIES: ReadonlySet<Entity> = new Set<Entity>(["ledgerParty"]);
-
-export type ChipRefLinkProps = {
-  emoji?: string | null;
-  variant: "chip";
-  entity: BrowserRoutedEntity;
+type ChipRefLinkProps = {
+  entity: BrowserRoutedEntity | "usda-food";
   id: string;
   name: string | null;
-  /** Full labels in bounded explanation panels; dense cells keep truncation. */
-  wrap?: boolean;
-  /**
-   * An 11px tinted chip with no mark, for chip clusters in table rows where
-   * a mark on every chip repeats what the column already says.
-   */
-  compact?: boolean;
-  /**
-   * `undefined` falls back to the nearest `EntityDisplayImagesProvider`'s
-   * cover; an explicit `null` renders the entity icon.
-   */
+  bare?: boolean;
+  emoji?: string | null;
   displayImage?: ImageUrlSummary | null;
+  className?: string;
+  openInNewTab?: boolean;
+  /** Declared context remains outside the identity pill. */
+  context?: string;
+  fallback?: ReactNode;
 };
 
 /**
@@ -296,139 +270,82 @@ export function ChipRefLink({
   name,
   displayImage,
   emoji,
-  wrap = false,
-  compact = false,
-}: Leaf<ChipRefLinkProps>) {
-  const identity = useIdentityCell();
+  bare,
+  className,
+  openInNewTab,
+  context,
+  fallback,
+}: ChipRefLinkProps) {
+  const identityCell = useIdentityCell();
+  const identity = bare ?? identityCell;
   const label = name ?? id;
   const providedImage = useEntityDisplayImage({
     entityKind: entity,
     entityId: id,
   });
   const image = displayImage === undefined ? providedImage : displayImage;
-  // A person reads by their initials disc, never a generic entity icon.
-  const avatar = PERSON_ENTITIES.has(entity) ? (
-    <PersonAvatar id={id} name={label} />
-  ) : null;
-  // One name may take a second line in a 32px row (15px + 15px) before it
-  // clamps; the cell spill shows the rest. `wrap` lets bounded panels flow.
-  const labelClass = identity
-    ? "truncate"
-    : wrap
-      ? "break-words whitespace-normal"
-      : "line-clamp-2 break-words whitespace-normal leading-[15px]";
-  if (avatar) {
-    const text = (
-      <span className={cn("min-w-0", compact ? "truncate" : labelClass)}>
-        {label}
-      </span>
-    );
-    const className = "inline-flex max-w-full min-w-0 items-center gap-1";
-    return isHoverPreviewEntity(entity) ? (
-      <PreviewRefLink
-        entity={entity}
-        id={id}
-        displayImage={image}
-        showIdentityMark={false}
-        className={tableLinkVariants({ className })}
-      >
-        {avatar}
-        {text}
-      </PreviewRefLink>
-    ) : (
-      <TableRefLink
-        to={entities[entity].routes.detail}
-        params={entityDetailParams(id)}
-        title={label}
-        className={className}
-      >
-        {avatar}
-        {text}
-      </TableRefLink>
-    );
-  }
-  // Spending categories have one presentation wherever they are compact.
-  if (compact && entity === "spendingCategory")
-    return <SpendingCategoryPill id={id} label={label} emoji={emoji} />;
-  if (compact) {
-    const chip = "inline-flex max-w-full min-w-0";
-    const text = (
-      <EnumPill
-        optionRole="category"
-        icon={<RecordEmoji entity={entity} emoji={emoji} size={12} />}
-      >
-        {label}
-      </EnumPill>
-    );
-    return isHoverPreviewEntity(entity) ? (
-      <PreviewRefLink
-        entity={entity}
-        id={id}
-        displayImage={image}
-        showIdentityMark={false}
-        className={tableLinkVariants({ className: chip })}
-      >
-        {text}
-      </PreviewRefLink>
-    ) : (
-      <TableRefLink
-        to={entities[entity].routes.detail}
-        params={entityDetailParams(id)}
-        title={label}
-        className={chip}
-      >
-        {text}
-      </TableRefLink>
-    );
-  }
-  if (isHoverPreviewEntity(entity))
-    return (
-      <PreviewRefLink
-        entity={entity}
-        id={id}
-        displayImage={image}
-        fallbackMark={
-          <RecordMarkByReference
-            entity={entity}
-            recordId={id}
-            emoji={emoji}
-            size={12}
-          />
-        }
-        className={tableLinkVariants({ className: "max-w-full min-w-0" })}
-      >
-        <span className={cn("min-w-0", labelClass)}>{label}</span>
-      </PreviewRefLink>
-    );
-  return (
+  const content = identity ? (
+    <span className="min-w-0 truncate">{label}</span>
+  ) : (
+    <EntityPill
+      entity={entity}
+      id={id}
+      name={label}
+      displayImage={image}
+      emoji={emoji}
+      fallback={
+        <RecordMarkByReference
+          entity={entity}
+          recordId={id}
+          emoji={emoji}
+          size={12}
+          fallback={fallback}
+        />
+      }
+    />
+  );
+  return isHoverPreviewEntity(entity) ? (
+    <PreviewRefLink
+      entity={entity}
+      id={id}
+      displayImage={image}
+      showIdentityMark={false}
+      className={tableLinkVariants({
+        tone: identity ? "identity" : undefined,
+        className: cn(
+          "inline-flex max-w-full min-w-0 items-center gap-1 align-middle",
+          className,
+        ),
+      })}
+      openInNewTab={openInNewTab}
+    >
+      {content}
+      {!identity && context && (
+        <span className="min-w-0 truncate text-2xs text-muted-foreground">
+          {" "}
+          · {context}
+        </span>
+      )}
+    </PreviewRefLink>
+  ) : (
     <TableRefLink
       to={entities[entity].routes.detail}
       params={entityDetailParams(id)}
       title={label}
-      className="inline-flex max-w-full min-w-0 items-center gap-1"
+      tone={identity ? "identity" : undefined}
+      className={cn(
+        "inline-flex max-w-full min-w-0 items-center gap-1 align-middle",
+        className,
+      )}
     >
-      <EntityIdentityMark
-        entity={entity}
-        displayImage={image}
-        emoji={emoji}
-        fallback={
-          <RecordMarkByReference
-            entity={entity}
-            recordId={id}
-            emoji={emoji}
-            size={12}
-          />
-        }
-      />
-      <span className={cn("min-w-0", labelClass)}>{label}</span>
+      {content}
     </TableRefLink>
   );
 }
 
 // ── audit ──────────────────────────────────────────────────────────────────
 
-export type AuditRefLinkProps = {
-  variant: "audit";
+type AuditRefLinkProps = {
   entityKind: Entity;
   entityId: string;
   name?: string | null;
@@ -456,15 +373,19 @@ export function AuditRefLink({
   displayImage,
   compact,
   className: classNameProp,
-}: Leaf<AuditRefLinkProps>) {
+}: AuditRefLinkProps) {
   const label = entityLabel(entityKind);
   const title = name ? `${name} · ${entityId}` : `${label} ${entityId}`;
   const content = (
     <>
-      <EntityIdentityMark entity={entityKind} displayImage={displayImage} />
       {name ? (
         <>
-          <span className={cn(compact && "truncate")}>{name}</span>
+          <EntityPill
+            entity={entityKind}
+            id={entityId}
+            name={name}
+            displayImage={displayImage}
+          />
           <span className="shrink-0 text-xs font-medium text-slate">
             {entityId}
           </span>
@@ -507,8 +428,7 @@ export function AuditRefLink({
 
 // ── filter ─────────────────────────────────────────────────────────────────
 
-export type FilterRefLinkProps = LinkProps & {
-  variant: "filter";
+type FilterRefLinkProps = LinkProps & {
   /** Accessible action text, also shown in the icon display's tooltip. */
   label: string;
   /** Wrap a readable value, or render the secondary filter action beside it. */
@@ -525,7 +445,6 @@ export type FilterRefLinkProps = LinkProps & {
  * place the `icon` display beside it instead, so controls are never nested.
  */
 export function FilterRefLink({
-  variant: _variant,
   label,
   display = "icon",
   children,
@@ -570,8 +489,7 @@ export function FilterRefLink({
 
 // ── order ──────────────────────────────────────────────────────────────────
 
-export type OrderRefLinkProps = {
-  variant: "order";
+type OrderRefLinkProps = {
   orderUrl: string | null | undefined;
   orderId: string | null | undefined;
   vendorName?: string | null;
@@ -593,7 +511,7 @@ export function OrderRefLink({
   orderUrl,
   orderId,
   vendorName,
-}: Leaf<OrderRefLinkProps>) {
+}: OrderRefLinkProps) {
   if (!orderUrl) return null;
   return (
     <ExternalLinkIcon

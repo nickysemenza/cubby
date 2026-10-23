@@ -138,7 +138,6 @@ export const ExpensePurchaseSection: FC<ExpensePurchaseSectionProps> = ({
           }
           entity="purchase"
           data={data.purchase}
-          truncate
         />
         {/* Secondary: the rest of this vendor's spend in the ledger. `vendor`
             is the URL key and carries the vendor shortcode (same shape as
@@ -172,7 +171,6 @@ export const ExpensePurchaseSection: FC<ExpensePurchaseSectionProps> = ({
                 }
                 entity="expense"
                 data={line}
-                truncate
               />
               <Row
                 align="center"

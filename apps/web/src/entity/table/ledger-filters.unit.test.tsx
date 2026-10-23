@@ -170,7 +170,7 @@ describe("LedgerFilters", () => {
     act(() => requestColumnFilterEdit(table!, "trade"));
 
     expect(
-      await screen.findByRole("button", { name: "Trade", expanded: true }),
+      await screen.findByRole("region", { name: "Filter Trade" }),
     ).toBeInTheDocument();
   });
 

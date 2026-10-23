@@ -126,7 +126,6 @@ export function CompactSummaryReport({
                         row.id &&
                         isRoutedReportEntity(row.entity) ? (
                           <EntityRefLink
-                            variant="chip"
                             entity={row.entity}
                             id={row.id}
                             name={row.title}
@@ -406,7 +405,6 @@ export function DetailSummary<E extends GenericDetailEntity>({
                         primary={
                           isBrowserRoutedEntity(item.target.entityKind) ? (
                             <EntityRefLink
-                              variant="chip"
                               entity={item.target.entityKind}
                               id={item.target.entityId}
                               name={item.target.label}

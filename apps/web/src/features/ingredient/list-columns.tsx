@@ -5,7 +5,10 @@ import type {
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import { EntityRefLink } from "~/entity/components/entity-ref-link";
+import {
+  EntityRefLink,
+  EntityRefList,
+} from "~/entity/components/entity-ref-link";
 import { EntityIcon } from "~/entity/entities";
 import { entityMutationOptionsFactory } from "~/entity/entity-contracts";
 import {
@@ -71,7 +74,6 @@ function ProductPillWithFood({ product }: { product: IngredientProduct }) {
         displayImage={displayImage}
         entity="product"
         data={product}
-        compact
       />
       {food ? (
         <Tooltip>
@@ -113,8 +115,7 @@ function RecipeUsageCell({ ingredient }: { ingredient: IngredientListItem }) {
           <TooltipContent>Appears in {recipes.length} recipes</TooltipContent>
         </Tooltip>
       )}
-      <EntityRefLink
-        variant="list"
+      <EntityRefList
         entity="recipe"
         items={recipes.slice(0, 1)}
         maxItems={1}
