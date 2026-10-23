@@ -227,6 +227,7 @@ import {
   expectedQuantitySql,
   hasUnknownAcquisitionLinesSql,
   hasUnknownQuantityLinesSql,
+  unknownQuantityLinesReadSql,
   loadProductPickerQuantities,
   onHandUnitsFilterSql,
   onHandUnitsSql,
@@ -437,7 +438,10 @@ const productScaffold = listScaffold("product", product, {
     // category default takes its members out of it.
     stockTrackedDecided: sql`${effectiveFieldSql("product", "stockTracked")} IS NOT NULL`,
     miscBucket: sql`lower(${product.name}) LIKE 'misc:%'`,
-    unknownQuantityLines: hasUnknownQuantityLinesSql(product.id),
+    unknownQuantityLines: {
+      value: hasUnknownQuantityLinesSql(product.id),
+      set: unknownQuantityLinesReadSql(),
+    },
     priced: listReadValue(
       (read) =>
         sql`(${product.price} IS NOT NULL OR ${hasDerivedProductPriceSql(product.id, read)})`,
