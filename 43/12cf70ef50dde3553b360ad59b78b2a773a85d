@@ -1,0 +1,35 @@
+apps/web/src/server/domains/image/repo/image-displayability.ts
+  s_a3b6b46af29582::t_a8f1a3d2426dcc 1-2,4-14,16,35
+apps/web/src/server/domains/product/repo/displayable-image-predicate.integration.test.ts
+  s_a3b6b46af29582::t_b365e5870bcc9b 1-5,11,38-61
+apps/web/src/server/generic/data-quality/repo/checks/cookbook.ts
+  s_a3b6b46af29582::t_f7cc8dcac4fa12 7,58
+apps/web/src/server/generic/data-quality/repo/checks/location.ts
+  s_a3b6b46af29582::t_2ae71602cc1f5a 8,66
+apps/web/src/server/generic/data-quality/repo/checks/vendor.ts
+  s_a3b6b46af29582::t_71918891d52265 6,80
+apps/web/src/server/generic/entity-links/repo/related-view.ts
+  s_a3b6b46af29582::t_3311ae58d030a3 32,758,764,768,796
+docs/entities.md
+  s_a3b6b46af29582::t_8b4b316366605b 864-867
+packages/schemas/src/image.ts
+  s_a3b6b46af29582::t_09b567830d3fe3 136-145,147-149
+tools/oxlint/cubby/no-raw-enum-literal-in-sql-baseline.json
+  s_a3b6b46af29582::t_fa18fccdfd1c61 18
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "4312cf70ef50dde3553b360ad59b78b2a773a85d",
+  "prompts": {},
+  "sessions": {
+    "s_a3b6b46af29582": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a16ae9-09b9-7271-bc7a-c96487de65fa",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
