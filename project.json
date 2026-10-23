@@ -15,14 +15,14 @@
         // list sources), and the preview-fixture builder in apps/web/scripts.
         "{workspaceRoot}/apps/web/generator/**/*",
         "{workspaceRoot}/scripts/lib/tree-digest.ts",
+        "{workspaceRoot}/scripts/lib/playbook-sources.ts",
         "{workspaceRoot}/packages/**/*",
         "{workspaceRoot}/apps/web/src/**/*",
         "{workspaceRoot}/apps/web/tooling/checks/apple-preview-fixtures.ts",
         // Purchase-import prompt sources (apps/web/generator/agent-prompts.ts)
         // and the playbooks with the Markdown they link to (playbooks.ts).
         "{workspaceRoot}/.agents/skills/**/*.md",
-        "{workspaceRoot}/docs/**/*.md",
-        "{workspaceRoot}/README.md",
+        "playbookMarkdown",
         // The R2 public origin generated into `SharedConstants.swift`.
         "{workspaceRoot}/apps/web/cloudflare.config.ts",
         "{workspaceRoot}/apps/web/tooling/cloudflare-public-config.ts",

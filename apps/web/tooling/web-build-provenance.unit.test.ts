@@ -289,12 +289,23 @@ describe("web build freshness", () => {
       matchesSource: false,
     });
   });
-  // Playbooks bundle the docs their skills link to, wherever they live.
-  it("treats repository docs and the README as source", () => {
-    for (const doc of ["docs/agents/synthetic.md", "README.md"]) {
+  it("ignores editorial docs but fingerprints guides and linked playbook docs", () => {
+    for (const doc of [
+      "docs/guide/synthetic.md",
+      "docs/agents/synthetic.md",
+      "README.md",
+    ]) {
       const { root, put } = fixture();
-      writeWebBuildProvenance(root);
       put(doc);
+      if (!doc.startsWith("docs/guide/"))
+        put(
+          ".agents/skills/purchase-import/SKILL.md",
+          `[Reference](../../../${doc})`,
+        );
+      writeWebBuildProvenance(root);
+      put("docs/development.md", "editorial change");
+      expect(readWebBuildProvenance(root).sourceFresh).toBe(true);
+      put(doc, "changed runtime Markdown");
       expect(readWebBuildProvenance(root).details.reason).toBe(
         "source-changed",
       );

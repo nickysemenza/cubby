@@ -235,8 +235,8 @@ iterating, lint the edited paths with `pnpm exec oxlint <paths>` rather than
 `pnpm lint`; the commit hook owns staged lint/format. Run the full configured
 Knip check for changed entry points/dependencies or removed consumers; a
 dependency-only check misses orphaned files and exports. Run generator validation for changed declarations and
-`actionlint` for CI workflow changes. CI starts every Linux lane and replays
-unchanged tasks from the Nx cache; that is not an instruction to run those
+`actionlint` for CI workflow changes. CI runs formatting and links for editorial-only docs; other changes start
+every Linux lane and replay unchanged tasks from the Nx cache; that is not an instruction to run those
 lanes locally.
 
 One root agent owns any broad validation that the change needs. A subagent runs
@@ -348,8 +348,8 @@ base ref. Committing, pushing, or handing off work does not trigger additional
 local checks. Report local results and anything unrun without implying that a
 successful push proves correctness.
 
-`CI passed` must pass for the final PR head's content before merge. CI starts
-every Linux lane and path-filters only Rust and Apple
+`CI passed` must pass for the final PR head's content before merge. Editorial-only docs run formatting and links. Other changes start
+every Linux lane and additionally path-filter Rust and Apple
 ([ADR 0020](../adr/0020-cache-routed-ci.md)). A passing result in the
 shared Nx remote cache for the same input hash satisfies a started lane's
 check only when the execution environment also matches; CI replays it in seconds
