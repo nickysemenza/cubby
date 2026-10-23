@@ -76,7 +76,10 @@ export default defineEntity(
           kind: "text-array",
           collection: { key: "value" },
           control: { kind: "specialized", renderer: "tag-list" },
-          display: { mobile: { slot: "subtitle", priority: 10 } },
+          display: {
+            columnGroup: "Publication",
+            mobile: { slot: "subtitle", priority: 10 },
+          },
           validation: {
             read: z.array(z.string()),
             create: null,
@@ -88,7 +91,7 @@ export default defineEntity(
           kind: "text-array",
           collection: { key: "value" },
           control: { kind: "specialized", renderer: "tag-list" },
-          display: {},
+          display: { columnGroup: "Publication" },
           validation: {
             read: z.array(z.string()),
             create: null,
@@ -140,7 +143,11 @@ export default defineEntity(
         {
           key: "recipeCount",
           kind: "number",
-          display: { mobile: { slot: "trailing", priority: 10 } },
+          display: {
+            columnGroup: "Contents",
+            columnBar: true,
+            mobile: { slot: "trailing", priority: 10 },
+          },
           provenance: {
             kind: "derived",
             sources: [{ entity: "recipe", relation: "recipes" }],
@@ -241,7 +248,7 @@ export default defineEntity(
           kind: "json",
           nullable: true,
           reference: { entity: "product" },
-          display: {},
+          display: { columnGroup: "Publication" },
           validation: {
             read: cookbookProductSummary.nullable(),
             create: null,

@@ -262,7 +262,10 @@ export default defineEntity({
           kind: "select",
           options: selectControlOptions.projectStatus,
         },
-        display: { mobile: { slot: "subtitle", priority: 10 } },
+        display: {
+          columnGroup: "Plan",
+          mobile: { slot: "subtitle", priority: 10 },
+        },
         validation: {
           read: projectStatusSchema,
           create: projectStatusSchema.default("planning"),
@@ -289,7 +292,7 @@ Rules:
             ],
           },
         },
-        display: {},
+        display: { columnGroup: "Plan" },
         validation: {
           read: projectKindSchema.nullable(),
           create: projectKindSchema.nullable().default(null),
@@ -373,6 +376,7 @@ Rules:
         },
         control: { kind: "specialized", renderer: "entity-select" },
         display: {
+          columnGroup: "Responsibility",
           columnLabel: "Assignee",
           width: "md",
           mobile: { slot: "meta", priority: 40, interactive: true },
@@ -500,6 +504,8 @@ Rules:
         nullable: true,
         control: { kind: "number", renderer: "money", placeholder: "e.g. 500" },
         display: {
+          columnGroup: "Plan",
+          columnBar: true,
           mobile: { slot: "trailing", priority: 10 },
           columnLabel: "Estimate",
           preview: true,
@@ -518,7 +524,7 @@ Rules:
         nullable: true,
         reference: { entity: "project" },
         control: { kind: "specialized", renderer: "entity-select" },
-        display: { columnLabel: "Parent" },
+        display: { columnGroup: "Dependencies", columnLabel: "Parent" },
         validation: {
           read: projectShortcode.nullable(),
           create: projectShortcode.nullable().default(null),
@@ -531,7 +537,7 @@ Rules:
         nullable: true,
         dateRange: { start: "startDate", end: "endDate", semantics: "period" },
         control: { kind: "dateRange" },
-        display: { columnIdOverride: "startDate" },
+        display: { columnGroup: "Plan", columnIdOverride: "startDate" },
         validation: {
           read: storedDateRangeSchema.nullable(),
           create: dateRangeSchema.nullable().default(null),
@@ -546,7 +552,7 @@ Rules:
         kind: "text",
         nullable: true,
         control: { kind: "textarea" },
-        display: {},
+        display: { columnGroup: "Plan" },
         validation: {
           read: z.string().describe("Freeform markdown").nullable(),
           create: z.string().nullable().default(null),
@@ -563,7 +569,7 @@ Rules:
           sources: [{ label: "Google Drive folder identifier" }],
         },
         control: { kind: "text", renderer: "url" },
-        display: { columnLabel: "Drive folder" },
+        display: { columnGroup: "References", columnLabel: "Drive folder" },
         validation: {
           read: googleDriveFolderUrl,
           create: googleDriveFolderUrl.default(null),
@@ -580,7 +586,7 @@ Rules:
           sources: [{ label: "Notion page identifier" }],
         },
         control: { kind: "text", renderer: "url" },
-        display: { columnLabel: "Notion page" },
+        display: { columnGroup: "References", columnLabel: "Notion page" },
         validation: {
           read: notionPageUrl,
           create: notionPageUrl.default(null),
@@ -592,7 +598,7 @@ Rules:
         kind: "identifier",
         reference: { entity: "project", multiple: true },
         control: { kind: "specialized", renderer: "entity-multi-select" },
-        display: { columnLabel: "Blocked by" },
+        display: { columnGroup: "Dependencies", columnLabel: "Blocked by" },
         validation: {
           read: z.array(projectShortcode),
           create: null,
@@ -616,7 +622,7 @@ Rules:
         key: "parentProjectName",
         kind: "text",
         nullable: true,
-        display: { detail: false },
+        display: { columnGroup: "Dependencies", detail: false },
         provenance: {
           kind: "derived",
           sources: [{ entity: "project", relation: "parent" }],
@@ -640,7 +646,11 @@ Rules:
         key: "childProjectIds",
         kind: "identifier",
         reference: { entity: "project", multiple: true },
-        display: { detail: false, columnLabel: "Subprojects" },
+        display: {
+          columnGroup: "Dependencies",
+          detail: false,
+          columnLabel: "Subprojects",
+        },
         validation: {
           read: z.array(projectShortcode),
           create: null,
@@ -651,7 +661,7 @@ Rules:
         key: "blockingIds",
         kind: "identifier",
         reference: { entity: "project", multiple: true },
-        display: {},
+        display: { columnGroup: "Dependencies" },
         validation: {
           read: z.array(projectShortcode),
           create: null,
@@ -715,6 +725,7 @@ Rules:
           sources: [{ label: "Own task completion rollup" }],
         },
         display: {
+          columnGroup: "Work",
           detail: false,
           preview: true,
           labelPath: "taskProgress",

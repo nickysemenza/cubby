@@ -159,6 +159,7 @@ export const ingredientListOverride = defineListOverride<
               id: "appearsInRecipes",
               header: "Recipes",
               meta: attachCubbyColumnMeta<IngredientListItem>({
+                columnGroup: "Use",
                 provenance: relationshipFieldProvenance(
                   "ingredient",
                   "recipes",
@@ -181,6 +182,7 @@ export const ingredientListOverride = defineListOverride<
               id: "product",
               header: "Product",
               meta: {
+                columnGroup: "Catalog",
                 provenance: relationshipFieldProvenance(
                   "ingredient",
                   "products",

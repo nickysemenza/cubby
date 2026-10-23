@@ -297,6 +297,7 @@ export default defineEntity({
           ],
         },
         display: {
+          columnGroup: "Evidence",
           columnLabel: "Booked",
           optionRole: "status",
           optionColor: "neutral-status",
@@ -344,6 +345,7 @@ export default defineEntity({
           ],
         },
         display: {
+          columnGroup: "Evidence",
           columnLabel: "Documented",
           optionRole: "status",
           optionColor: "neutral-status",
@@ -391,6 +393,7 @@ export default defineEntity({
           ],
         },
         display: {
+          columnGroup: "Evidence",
           columnLabel: "Itemized",
           optionRole: "status",
           optionColor: "neutral-status",
@@ -443,6 +446,7 @@ export default defineEntity({
           ],
         },
         display: {
+          columnGroup: "Evidence",
           columnLabel: "Products",
           optionRole: "status",
           optionColor: "neutral-status",
@@ -481,6 +485,7 @@ export default defineEntity({
           sources: [{ label: "Live Expense category allocations" }],
         },
         display: {
+          columnGroup: "Booking",
           columnLabel: "Categories",
           renderer: {
             detail: "spending-category-summary",
@@ -532,7 +537,7 @@ export default defineEntity({
           renderer: "entity-select",
           suggest: { basis: ["displayLabel", "vendorId", "notes"] },
         },
-        display: { columnLabel: "Fallback" },
+        display: { columnGroup: "Booking", columnLabel: "Fallback" },
         validation: {
           read: spendingCategoryShortcode.nullable().default(null),
           create: spendingCategoryShortcode.nullable().default(null),
@@ -597,6 +602,7 @@ export default defineEntity({
           ],
         },
         display: {
+          columnGroup: "Evidence",
           columnLabel: "Evidence",
           optionRole: "status",
           optionColor: "neutral-status",
@@ -691,7 +697,11 @@ export default defineEntity({
           renderer: "entity-select",
           suggest: { basis: ["displayLabel", "orderId", "notes"] },
         },
-        display: { labelPath: "vendorName", renderer: { list: "vendor-cell" } },
+        display: {
+          columnGroup: "Order",
+          labelPath: "vendorName",
+          renderer: { list: "vendor-cell" },
+        },
         validation: {
           read: vendorShortcode,
           create: vendorShortcode,
@@ -707,7 +717,11 @@ export default defineEntity({
           kind: "text",
           placeholder: "Vendor order / receipt #",
         },
-        display: { labelPath: "orderId", renderer: { list: "order-link" } },
+        display: {
+          columnGroup: "Order",
+          labelPath: "orderId",
+          renderer: { list: "order-link" },
+        },
         validation: {
           read: z.string().nullable(),
           create: z.string().nullable().default(null),
@@ -758,6 +772,7 @@ export default defineEntity({
           initial: "today",
         },
         display: {
+          columnGroup: "Order",
           format: "plainDate",
           mobile: { slot: "meta", priority: 30 },
         },
@@ -781,6 +796,7 @@ export default defineEntity({
           placeholder: "What the receipt says",
         },
         display: {
+          columnGroup: "Booking",
           format: "currency",
           mobile: { slot: "trailing", priority: 1 },
           width: "sm",
@@ -799,7 +815,7 @@ export default defineEntity({
           kind: "textarea",
           placeholder: "Anything worth remembering",
         },
-        display: {},
+        display: { columnGroup: "Order" },
         validation: {
           read: z.string().nullable(),
           create: z.string().nullable().default(null),
@@ -900,6 +916,8 @@ export default defineEntity({
         // The count beside its unpriced lines ("5 · 2 unpriced"), composed by
         // the server; the field itself stays the numeric sort value.
         display: {
+          columnGroup: "Booking",
+          columnBar: true,
           detail: false,
           labelPath: "expenseCountLabel",
           width: "sm",
@@ -941,6 +959,8 @@ export default defineEntity({
         // `SUM(Expense.cost)`: a negative total (a net credit) reads as money
         // in, a positive one (spend) stays neutral.
         display: {
+          columnGroup: "Booking",
+          columnBar: true,
           detail: false,
           columnLabel: "Total",
           width: "sm",
@@ -971,6 +991,7 @@ export default defineEntity({
         key: "reconciliation",
         kind: "json",
         display: {
+          columnGroup: "Booking",
           detail: false,
           labelPath: "reconciliationLabel",
           renderer: { list: "reconciliation-status" },
@@ -1032,6 +1053,7 @@ export default defineEntity({
         key: "financialReconciliation",
         kind: "json",
         display: {
+          columnGroup: "Settlement",
           detail: false,
           columnLabel: "Financial",
           labelPath: "financialReconciliationLabel",
@@ -1097,6 +1119,8 @@ export default defineEntity({
         key: "documentCount",
         kind: "number",
         display: {
+          columnGroup: "Evidence",
+          columnBar: true,
           detail: false,
           width: "xs",
           mobile: { slot: "meta", priority: 70 },
@@ -1149,6 +1173,7 @@ export default defineEntity({
         kind: "number",
         labelOverride: "Transactions",
         display: {
+          columnGroup: "Settlement",
           detail: false,
           listHidden: true,
           width: "xs",

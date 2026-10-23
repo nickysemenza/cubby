@@ -83,6 +83,7 @@ export default defineEntity({
           ],
         },
         display: {
+          columnGroup: "Device",
           optionRole: "category",
           optionColor: "neutral-status",
           optionGlyph: { phosphor: "DeviceMobile", sfSymbol: "iphone" },
@@ -122,7 +123,7 @@ export default defineEntity({
         control: { kind: "text", placeholder: "ISO date and time" },
         kind: "timestamp",
         nullable: true,
-        display: { format: "timestamp" },
+        display: { columnGroup: "Background work", format: "timestamp" },
         validation: {
           read: z.date().nullable(),
           create: null,
@@ -133,7 +134,7 @@ export default defineEntity({
         key: "automaticWork",
         kind: "boolean",
         control: { kind: "checkbox" },
-        display: { columnLabel: "Automatic" },
+        display: { columnGroup: "Background work", columnLabel: "Automatic" },
         validation: {
           read: z.boolean(),
           create: z.boolean().default(true),
@@ -144,7 +145,7 @@ export default defineEntity({
         key: "remotePaused",
         kind: "boolean",
         control: { kind: "checkbox" },
-        display: { columnLabel: "Paused" },
+        display: { columnGroup: "Background work", columnLabel: "Paused" },
         validation: {
           read: z.boolean(),
           create: z.boolean().default(false),
@@ -157,7 +158,7 @@ export default defineEntity({
         nullable: true,
         reference: { entity: "ledgerParty" },
         control: { kind: "specialized", renderer: "entity-select" },
-        display: {},
+        display: { columnGroup: "Device" },
         validation: {
           read: ledgerPartyShortcode.nullable(),
           create: ledgerPartyShortcode.nullable().optional(),

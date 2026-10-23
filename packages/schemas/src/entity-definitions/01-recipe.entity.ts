@@ -192,6 +192,7 @@ export default defineEntity(
           nullable: true,
           control: { kind: "number" },
           display: {
+            columnGroup: "Recipe",
             width: "xs",
             mobile: { slot: "trailing", priority: 5, interactive: true },
           },
@@ -230,7 +231,7 @@ export default defineEntity(
           collection: { key: "value" },
           nullable: true,
           control: { kind: "specialized", renderer: "tag-list" },
-          display: {},
+          display: { columnGroup: "Recipe" },
           validation: {
             read: recipeTopLevelFields.tags,
             create: recipeTags.nullable().optional(),
@@ -246,7 +247,7 @@ export default defineEntity(
           // Hidden by default (`listHidden`) but toggleable via the View menu —
           // never actually shown by default before this field went through
           // `createEntityDisplayColumns`.
-          display: { listHidden: true },
+          display: { columnGroup: "Recipe", listHidden: true },
           validation: {
             read: recipeTopLevelFields.notes,
             create: recipeNotes.nullable().optional(),
@@ -260,6 +261,8 @@ export default defineEntity(
           // Computed from `totals.cost` at read time — no column of its own
           // in the list row, so a named renderer builds the cell.
           display: {
+            columnGroup: "Per recipe",
+
             labelPath: "costTotalLabel",
             renderer: { list: "estimate-cost" },
           },
@@ -284,6 +287,8 @@ export default defineEntity(
           nullable: true,
           // Computed from `totals.nutrition.kcal` at read time; see costTotal.
           display: {
+            columnGroup: "Per recipe",
+
             columnLabel: "Calories",
             labelPath: "caloriesTotalLabel",
             renderer: { list: "estimate-kcal" },
@@ -312,6 +317,8 @@ export default defineEntity(
           // A live MealRecipe count in the list response, not a stored column.
           reference: { entity: "meal", multiple: true },
           display: {
+            columnGroup: "Source & use",
+            columnBar: true,
             width: "xs",
             format: "count",
             mobile: { slot: "meta", priority: 40 },
@@ -432,6 +439,7 @@ export default defineEntity(
           kind: "json",
           nullable: true,
           display: {
+            columnGroup: "Source & use",
             renderer: { list: "recipe-source", detail: "recipe-source" },
           },
           provenance: {
@@ -676,6 +684,8 @@ export default defineEntity(
           // count, so the server composes the text; sorting and the range filter
           // stay on the minute count.
           display: {
+            columnGroup: "Per recipe",
+            columnBar: true,
             detail: false,
             columnLabel: "Minutes",
             readPath: "meta.times.totalMinutes",

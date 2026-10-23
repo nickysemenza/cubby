@@ -131,7 +131,7 @@ export default defineEntity(
         {
           key: "url",
           kind: "text",
-          display: { listHidden: true },
+          display: { columnGroup: "File", listHidden: true },
           provenance: {
             kind: "derived",
             sources: [{ label: "Image storage" }],
@@ -152,7 +152,7 @@ export default defineEntity(
         {
           key: "key",
           kind: "text",
-          display: { listHidden: true },
+          display: { columnGroup: "File", listHidden: true },
           validation: {
             read: z.string(),
             create: null,
@@ -163,6 +163,8 @@ export default defineEntity(
           key: "size",
           kind: "number",
           display: {
+            columnGroup: "File",
+            columnBar: true,
             width: "xs",
             format: "bytes",
             mobile: { slot: "trailing", priority: 5 },
@@ -176,7 +178,11 @@ export default defineEntity(
         {
           key: "contentType",
           kind: "text",
-          display: { width: "sm", mobile: { slot: "subtitle", priority: 10 } },
+          display: {
+            columnGroup: "File",
+            width: "sm",
+            mobile: { slot: "subtitle", priority: 10 },
+          },
           validation: {
             read: z.string(),
             create: null,
@@ -187,6 +193,7 @@ export default defineEntity(
           key: "status",
           kind: "enum",
           display: {
+            columnGroup: "Processing",
             mobile: { slot: "meta", priority: 20 },
             valueOptions: [
               {
@@ -218,7 +225,7 @@ export default defineEntity(
           key: "width",
           kind: "number",
           nullable: true,
-          display: { listHidden: true },
+          display: { columnGroup: "File", listHidden: true },
           validation: {
             read: z.number().int().positive().nullable(),
             create: null,
@@ -229,7 +236,7 @@ export default defineEntity(
           key: "height",
           kind: "number",
           nullable: true,
-          display: { listHidden: true },
+          display: { columnGroup: "File", listHidden: true },
           validation: {
             read: z.number().int().positive().nullable(),
             create: null,
@@ -252,7 +259,7 @@ export default defineEntity(
           nullable: true,
           // Hidden by default: it repeats Type except when sniffing disagrees
           // with the stored content type, which the detail page shows.
-          display: { listHidden: true },
+          display: { columnGroup: "File", listHidden: true },
           validation: {
             read: z.string().nullable(),
             create: null,
@@ -263,7 +270,7 @@ export default defineEntity(
           key: "sha256",
           kind: "text",
           nullable: true,
-          display: { listHidden: true },
+          display: { columnGroup: "File", listHidden: true },
           validation: {
             read: z.string().nullable(),
             create: null,
@@ -275,6 +282,7 @@ export default defineEntity(
           kind: "enum",
           nullable: true,
           display: {
+            columnGroup: "Processing",
             columnLabel: "Render",
             optionRole: "status",
             optionColor: "neutral-status",
@@ -299,6 +307,7 @@ export default defineEntity(
           kind: "enum",
           nullable: true,
           display: {
+            columnGroup: "Processing",
             columnLabel: "Storage",
             optionRole: "status",
             optionColor: "neutral-status",
@@ -353,6 +362,7 @@ export default defineEntity(
             ],
           },
           display: {
+            columnGroup: "Provenance",
             optionRole: "category",
             optionColor: "neutral-status",
             optionGlyph: { phosphor: "Image", sfSymbol: "photo" },
@@ -403,7 +413,7 @@ export default defineEntity(
           key: "useOriginal",
           control: { kind: "checkbox" },
           kind: "boolean",
-          display: {},
+          display: { columnGroup: "Processing" },
           validation: {
             read: z.boolean(),
             create: null,
@@ -414,7 +424,7 @@ export default defineEntity(
           key: "verifiedAt",
           kind: "timestamp",
           nullable: true,
-          display: {},
+          display: { columnGroup: "Processing" },
           validation: {
             read: z.date().nullable(),
             create: null,
@@ -426,7 +436,7 @@ export default defineEntity(
           control: { kind: "text", placeholder: "ISO date and time" },
           kind: "timestamp",
           nullable: true,
-          display: { format: "timestamp" },
+          display: { columnGroup: "Provenance", format: "timestamp" },
           validation: {
             read: z.date().nullable(),
             create: null,
@@ -488,7 +498,7 @@ export default defineEntity(
           nullable: true,
           reference: { entity: "ledgerParty" },
           control: { kind: "specialized", renderer: "entity-select" },
-          display: { columnLabel: "Captured by" },
+          display: { columnGroup: "Provenance", columnLabel: "Captured by" },
           explanation: {
             ruleId: "image.capturedBy",
             description:
@@ -530,6 +540,7 @@ export default defineEntity(
           key: "captureAttribution",
           kind: "enum",
           display: {
+            columnGroup: "Provenance",
             columnLabel: "Attribution",
             optionRole: "status",
             optionColor: "neutral-status",

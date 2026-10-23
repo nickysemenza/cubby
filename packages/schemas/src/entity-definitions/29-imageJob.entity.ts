@@ -137,6 +137,7 @@ export default defineEntity({
         kind: "enum",
         control: { kind: "select", options: kindOptions },
         display: {
+          columnGroup: "Execution",
           optionRole: "category",
           optionColor: "neutral-status",
           optionGlyph: { phosphor: "Image", sfSymbol: "photo" },
@@ -148,6 +149,7 @@ export default defineEntity({
         kind: "enum",
         control: { kind: "select", options: stateOptions },
         display: {
+          columnGroup: "Execution",
           width: "sm",
           optionRole: "status",
           optionColor: "neutral-status",
@@ -158,7 +160,7 @@ export default defineEntity({
         key: "imageId",
         kind: "identifier",
         reference: { entity: "image" },
-        display: {},
+        display: { columnGroup: "Scope" },
         validation: readOnly(imageShortcode),
       },
       {
@@ -167,20 +169,20 @@ export default defineEntity({
         nullable: true,
         // Background maintenance schedules jobs without a requesting Run.
         reference: { entity: "run" },
-        display: {},
+        display: { columnGroup: "Scope" },
         validation: readOnly(runShortcode.nullable()),
       },
       {
         key: "attempts",
         kind: "number",
-        display: {},
+        display: { columnGroup: "Execution" },
         validation: readOnly(z.int().nonnegative()),
       },
       {
         key: "lastExecutor",
         kind: "text",
         nullable: true,
-        display: { columnLabel: "Executor" },
+        display: { columnGroup: "Execution", columnLabel: "Executor" },
         provenance: {
           kind: "derived",
           sources: [{ label: "Latest attempt" }],
@@ -196,7 +198,7 @@ export default defineEntity({
         key: "lastError",
         kind: "text",
         nullable: true,
-        display: { columnLabel: "Last error" },
+        display: { columnGroup: "Execution", columnLabel: "Last error" },
         validation: readOnly(z.string().nullable()),
       },
       {
@@ -217,7 +219,12 @@ export default defineEntity({
       {
         key: "chargedCost",
         kind: "number",
-        display: { columnLabel: "Charged", format: "currency" },
+        display: {
+          columnGroup: "Cost",
+          columnBar: true,
+          columnLabel: "Charged",
+          format: "currency",
+        },
         provenance: {
           kind: "derived",
           sources: [{ label: "AI usage of this job's attempts" }],
@@ -260,7 +267,7 @@ export default defineEntity({
         key: "completedAt",
         kind: "timestamp",
         nullable: true,
-        display: { format: "timestamp" },
+        display: { columnGroup: "Execution", format: "timestamp" },
         validation: readOnly(z.date().nullable()),
       },
       {

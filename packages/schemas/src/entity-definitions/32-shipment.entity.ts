@@ -59,7 +59,7 @@ export default defineEntity({
         kind: "identifier",
         nullable: true,
         reference: { entity: "purchase" },
-        display: { labelPath: "purchaseName" },
+        display: { columnGroup: "Purchase", labelPath: "purchaseName" },
         validation: {
           read: shortcodeSchema("purchase").nullable(),
           create: null,
@@ -89,7 +89,7 @@ export default defineEntity({
         kind: "identifier",
         nullable: true,
         reference: { entity: "vendor" },
-        display: { labelPath: "carrierName" },
+        display: { columnGroup: "Tracking", labelPath: "carrierName" },
         validation: {
           read: shortcodeSchema("vendor").nullable(),
           create: null,
@@ -106,7 +106,7 @@ export default defineEntity({
         key: "trackingNumber",
         kind: "text",
         nullable: true,
-        display: {},
+        display: { columnGroup: "Tracking" },
         validation: { read: z.string().nullable(), create: null, update: null },
       },
       {
@@ -126,6 +126,7 @@ export default defineEntity({
         key: "purpose",
         kind: "enum",
         display: {
+          columnGroup: "Purchase",
           optionRole: "category",
           optionColor: "neutral-status",
           optionGlyph: { phosphor: "Package", sfSymbol: "shippingbox" },

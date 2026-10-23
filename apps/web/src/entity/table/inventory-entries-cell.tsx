@@ -62,7 +62,7 @@ export interface InventoryEntriesCellProps<
   TEntity extends InventoryRelatedEntity["entity"],
 > {
   entries: TEntry[];
-  context?: ReactNode;
+  context?: string | null;
   entity: TEntity;
   getRelatedEntity: (
     entry: TEntry,
@@ -352,12 +352,22 @@ export function InventoryEntriesCell<
   TEntry extends InventoryEntryBase,
   TEntity extends InventoryRelatedEntity["entity"],
 >(props: InventoryEntriesCellProps<T, TEntry, TEntity>) {
+  const dense = useDenseCell();
+  const supplementalContext = props.entries.length > 0 ? props.context : null;
   return (
-    <div className="min-w-0">
+    <div
+      className="min-w-0"
+      title={dense ? (supplementalContext ?? undefined) : undefined}
+    >
       <InventoryEntriesCellBody {...props} />
-      {props.entries.length > 0 && props.context ? (
-        <div className="truncate text-xs text-muted-foreground">
-          {props.context}
+      {supplementalContext ? (
+        // The location and amount already occupy both lines of a dense row.
+        <div
+          className={
+            dense ? "sr-only" : "truncate text-xs text-muted-foreground"
+          }
+        >
+          {supplementalContext}
         </div>
       ) : null}
     </div>

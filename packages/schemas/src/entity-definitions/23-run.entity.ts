@@ -264,6 +264,7 @@ export default defineEntity({
         kind: "json",
         labelOverride: "Work",
         display: {
+          columnGroup: "Results",
           detail: false,
           labelPath: "workProgress.current.label",
           renderer: { list: "run-throughput" },
@@ -279,6 +280,7 @@ export default defineEntity({
         kind: "timestamp",
         labelOverride: "Activity",
         display: {
+          columnGroup: "Execution",
           detail: false,
           labelPath: "activityAt",
           renderer: { list: "run-activity" },
@@ -346,6 +348,7 @@ export default defineEntity({
           ],
         },
         display: {
+          columnGroup: "Execution",
           width: "sm",
           optionRole: "status",
           optionColor: "neutral-status",
@@ -363,6 +366,7 @@ export default defineEntity({
           })),
         },
         display: {
+          columnGroup: "Execution",
           width: "sm",
           optionRole: "category",
           optionColor: "domain-finance",
@@ -403,6 +407,7 @@ export default defineEntity({
           ],
         },
         display: {
+          columnGroup: "Execution",
           optionRole: "category",
           optionColor: "domain-finance",
           optionGlyph: { phosphor: "Lightning", sfSymbol: "bolt" },
@@ -424,7 +429,11 @@ export default defineEntity({
         kind: "identifier",
         nullable: true,
         reference: { entity: "vendorAccount" },
-        display: { columnLabel: "Account", labelPath: "vendorAccountLabel" },
+        display: {
+          columnGroup: "Scope",
+          columnLabel: "Account",
+          labelPath: "vendorAccountLabel",
+        },
         validation: readOnly(vendorAccountShortcode.nullable()),
       },
       {
@@ -432,7 +441,7 @@ export default defineEntity({
         kind: "identifier",
         nullable: true,
         reference: { entity: "vendor" },
-        display: {},
+        display: { columnGroup: "Scope" },
         validation: readOnly(vendorShortcode.nullable()),
       },
       {
@@ -442,7 +451,7 @@ export default defineEntity({
         // purposes always carry the member scope (`Run_import_party_check`).
         nullable: true,
         reference: { entity: "ledgerParty" },
-        display: {},
+        display: { columnGroup: "Scope" },
         validation: readOnly(ledgerPartyShortcode.nullable()),
       },
       {
@@ -454,14 +463,14 @@ export default defineEntity({
       {
         key: "startedAt",
         kind: "timestamp",
-        display: { format: "timestamp" },
+        display: { columnGroup: "Execution", format: "timestamp" },
         validation: readOnly(z.date()),
       },
       {
         key: "endedAt",
         kind: "timestamp",
         nullable: true,
-        display: { format: "timestamp" },
+        display: { columnGroup: "Execution", format: "timestamp" },
         validation: readOnly(z.date().nullable()),
       },
       {
@@ -519,25 +528,45 @@ export default defineEntity({
       {
         key: "ordersSeen",
         kind: "number",
-        display: { detail: false, width: "sm" },
+        display: {
+          columnGroup: "Results",
+          columnBar: true,
+          detail: false,
+          width: "sm",
+        },
         validation: readOnly(z.number().int().nonnegative()),
       },
       {
         key: "imported",
         kind: "number",
-        display: { detail: false, width: "sm" },
+        display: {
+          columnGroup: "Results",
+          columnBar: true,
+          detail: false,
+          width: "sm",
+        },
         validation: readOnly(z.number().int().nonnegative()),
       },
       {
         key: "updated",
         kind: "number",
-        display: { detail: false, width: "sm" },
+        display: {
+          columnGroup: "Results",
+          columnBar: true,
+          detail: false,
+          width: "sm",
+        },
         validation: readOnly(z.number().int().nonnegative()),
       },
       {
         key: "skipped",
         kind: "number",
-        display: { detail: false, width: "sm" },
+        display: {
+          columnGroup: "Results",
+          columnBar: true,
+          detail: false,
+          width: "sm",
+        },
         validation: readOnly(z.number().int().nonnegative()),
       },
       {

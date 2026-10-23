@@ -108,8 +108,9 @@ test("cookbooks keep server search across card and list presentations", async ({
   await expect(
     page
       .getByRole("table", { name: "Cookbooks table" })
+      .locator("tbody")
       .getByRole("row")
-      .nth(1)
+      .first()
       .getByRole("link", { name: `${name} Roasting`, exact: true }),
   ).toBeVisible();
 });

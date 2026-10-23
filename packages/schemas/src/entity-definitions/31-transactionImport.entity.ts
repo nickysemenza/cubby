@@ -46,7 +46,7 @@ export default defineEntity({
       {
         key: "source",
         kind: "text",
-        display: {},
+        display: { columnGroup: "Source" },
         validation: { read: z.string(), create: null, update: null },
       },
       {
@@ -65,6 +65,7 @@ export default defineEntity({
         key: "dateKind",
         kind: "enum",
         display: {
+          columnGroup: "Source",
           optionRole: "status",
           optionColor: "neutral-status",
           optionGlyph: { phosphor: "Info", sfSymbol: "info.circle" },
@@ -84,7 +85,7 @@ export default defineEntity({
         key: "rowCountDeclared",
         kind: "number",
         nullable: true,
-        display: {},
+        display: { columnGroup: "Rows", columnBar: true },
         validation: {
           read: z.number().int().nullable(),
           create: null,
@@ -94,7 +95,7 @@ export default defineEntity({
       {
         key: "observedAt",
         kind: "timestamp",
-        display: { format: "timestamp" },
+        display: { columnGroup: "Source", format: "timestamp" },
         validation: { read: z.date(), create: null, update: null },
       },
       {
@@ -108,7 +109,7 @@ export default defineEntity({
         key: "completedAt",
         kind: "timestamp",
         nullable: true,
-        display: { format: "timestamp" },
+        display: { columnGroup: "Execution", format: "timestamp" },
         validation: { read: z.date().nullable(), create: null, update: null },
       },
       {
@@ -148,7 +149,7 @@ export default defineEntity({
           sources: [{ label: "Retained import membership" }],
         },
         kind: "number",
-        display: {},
+        display: { columnGroup: "Rows", columnBar: true },
         validation: {
           read: z.number().int().nonnegative(),
           create: null,

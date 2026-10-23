@@ -47,6 +47,7 @@ export interface RelatedViewDefinition extends RelatedViewPresentationDefinition
 
 const relatedViewPresentationRegistry = [
   {
+    columnGroup: "Purchasing",
     key: "product.vendors",
     source: "product",
     relationship: "vendors",
@@ -55,6 +56,7 @@ const relatedViewPresentationRegistry = [
     inverseKey: "vendor.products",
   },
   {
+    columnGroup: "Work",
     key: "product.projects",
     source: "product",
     relationship: "purchased-projects",
@@ -63,6 +65,7 @@ const relatedViewPresentationRegistry = [
     inverseKey: "project.purchasedProducts",
   },
   {
+    columnGroup: "Work",
     key: "product.usedOnProjects",
     source: "product",
     relationship: "project-uses",
@@ -72,6 +75,7 @@ const relatedViewPresentationRegistry = [
     inverseKey: "project.usedTools",
   },
   {
+    columnGroup: "Purchasing",
     key: "product.purchases",
     source: "product",
     relationship: "purchases",
@@ -79,6 +83,7 @@ const relatedViewPresentationRegistry = [
     order: "newest",
   },
   {
+    columnGroup: "Purchasing",
     key: "product.expenses",
     source: "product",
     relationship: "expenses",
@@ -86,6 +91,7 @@ const relatedViewPresentationRegistry = [
     order: "newest",
   },
   {
+    columnGroup: "Stock",
     key: "product.inventory",
     source: "product",
     relationship: "inventory",
@@ -94,6 +100,7 @@ const relatedViewPresentationRegistry = [
     filterPrefix: "relatedInventory",
   },
   {
+    columnGroup: "Wish list",
     key: "product.wishes",
     source: "product",
     relationship: "wishes",
@@ -101,6 +108,7 @@ const relatedViewPresentationRegistry = [
     order: "alphabetical",
   },
   {
+    columnGroup: "Work",
     key: "product.tasks",
     source: "product",
     relationship: "tasks",
@@ -108,6 +116,7 @@ const relatedViewPresentationRegistry = [
     order: "task",
   },
   {
+    columnGroup: "Food",
     key: "product.meals",
     source: "product",
     relationship: "meals",
@@ -116,6 +125,7 @@ const relatedViewPresentationRegistry = [
     inverseKey: "meal.foodProducts",
   },
   {
+    columnGroup: "Food",
     key: "product.eaters",
     source: "product",
     relationship: "eaters",
@@ -124,6 +134,7 @@ const relatedViewPresentationRegistry = [
     filterPrefix: "eater",
   },
   {
+    columnGroup: "Use",
     key: "ingredient.meals",
     source: "ingredient",
     relationship: "meals",
@@ -132,6 +143,7 @@ const relatedViewPresentationRegistry = [
     inverseKey: "meal.foodIngredients",
   },
   {
+    columnGroup: "Use",
     key: "ingredient.eaters",
     source: "ingredient",
     relationship: "eaters",
@@ -140,6 +152,7 @@ const relatedViewPresentationRegistry = [
     filterPrefix: "eater",
   },
   {
+    columnGroup: "Recipe",
     key: "recipe.ingredients",
     source: "recipe",
     relationship: "ingredients",
@@ -147,6 +160,7 @@ const relatedViewPresentationRegistry = [
     order: "alphabetical",
   },
   {
+    columnGroup: "Source & use",
     key: "recipe.meals",
     source: "recipe",
     relationship: "meals",
@@ -155,6 +169,7 @@ const relatedViewPresentationRegistry = [
     inverseKey: "meal.recipes",
   },
   {
+    columnGroup: "Food",
     key: "meal.recipes",
     source: "meal",
     relationship: "recipes",
@@ -163,6 +178,7 @@ const relatedViewPresentationRegistry = [
     inverseKey: "recipe.meals",
   },
   {
+    columnGroup: "Food",
     key: "meal.foodProducts",
     source: "meal",
     relationship: "food-products",
@@ -172,6 +188,7 @@ const relatedViewPresentationRegistry = [
     inverseKey: "product.meals",
   },
   {
+    columnGroup: "Food",
     key: "meal.foodIngredients",
     source: "meal",
     relationship: "food-ingredients",
@@ -181,6 +198,7 @@ const relatedViewPresentationRegistry = [
     inverseKey: "ingredient.meals",
   },
   {
+    columnGroup: "People",
     // The `eaters` relation's list column reads only the primary (food-entry)
     // source; the `portions` (served-portion) source is graph-only, because
     // `relatedViewPath` below compiles `provenance.steps` and never `sources`.
@@ -193,6 +211,7 @@ const relatedViewPresentationRegistry = [
     inverseKey: "ledgerParty.meals",
   },
   {
+    columnGroup: "Stock",
     key: "location.ingredients",
     source: "location",
     relationship: "ingredients",
@@ -200,6 +219,7 @@ const relatedViewPresentationRegistry = [
     order: "alphabetical",
   },
   {
+    columnGroup: "Catalog",
     key: "inventory.ingredient",
     source: "inventory",
     relationship: "ingredient",
@@ -207,6 +227,7 @@ const relatedViewPresentationRegistry = [
     order: "alphabetical",
   },
   {
+    columnGroup: "Dependencies",
     key: "project.blockedBy",
     source: "project",
     relationship: "blocked-by",
@@ -214,6 +235,7 @@ const relatedViewPresentationRegistry = [
     order: "alphabetical",
   },
   {
+    columnGroup: "Work",
     key: "project.tasks",
     source: "project",
     relationship: "tasks",
@@ -221,6 +243,7 @@ const relatedViewPresentationRegistry = [
     order: "task",
   },
   {
+    columnGroup: "Purchasing",
     key: "project.expenses",
     source: "project",
     relationship: "expenses",
@@ -228,6 +251,7 @@ const relatedViewPresentationRegistry = [
     order: "newest",
   },
   {
+    columnGroup: "Work",
     key: "project.taskProducts",
     source: "project",
     relationship: "task-products",
@@ -236,6 +260,7 @@ const relatedViewPresentationRegistry = [
     filterPrefix: "taskProduct",
   },
   {
+    columnGroup: "Purchasing",
     key: "project.purchasedProducts",
     source: "project",
     relationship: "purchased-products",
@@ -245,6 +270,7 @@ const relatedViewPresentationRegistry = [
     inverseKey: "product.projects",
   },
   {
+    columnGroup: "Work",
     key: "project.usedTools",
     source: "project",
     relationship: "resources",
@@ -254,6 +280,7 @@ const relatedViewPresentationRegistry = [
     inverseKey: "product.usedOnProjects",
   },
   {
+    columnGroup: "Purchasing",
     key: "project.vendors",
     source: "project",
     relationship: "vendors",
@@ -262,6 +289,7 @@ const relatedViewPresentationRegistry = [
     inverseKey: "vendor.projects",
   },
   {
+    columnGroup: "Dependencies",
     key: "task.blockedBy",
     source: "task",
     relationship: "blocked-by",
@@ -270,6 +298,7 @@ const relatedViewPresentationRegistry = [
     filterPrefix: "blockedByTask",
   },
   {
+    columnGroup: "Dependencies",
     key: "task.parent",
     source: "task",
     relationship: "parent",
@@ -295,6 +324,7 @@ const relatedViewPresentationRegistry = [
     order: "newest",
   },
   {
+    columnGroup: "Imports",
     key: "vendorAccount.purchases",
     source: "vendorAccount",
     relationship: "purchases",
@@ -336,6 +366,7 @@ const relatedViewPresentationRegistry = [
     order: "newest",
   },
   {
+    columnGroup: "Booking",
     key: "purchase.expenses",
     source: "purchase",
     relationship: "expenses",
@@ -343,6 +374,7 @@ const relatedViewPresentationRegistry = [
     order: "newest",
   },
   {
+    columnGroup: "Settlement",
     key: "purchase.transactions",
     source: "purchase",
     relationship: "financial-transactions",
@@ -350,6 +382,7 @@ const relatedViewPresentationRegistry = [
     order: "newest",
   },
   {
+    columnGroup: "Booking",
     key: "purchase.products",
     source: "purchase",
     relationship: "products",
@@ -357,6 +390,7 @@ const relatedViewPresentationRegistry = [
     order: "alphabetical",
   },
   {
+    columnGroup: "Booking",
     key: "purchase.projects",
     source: "purchase",
     relationship: "projects",
@@ -364,6 +398,7 @@ const relatedViewPresentationRegistry = [
     order: "alphabetical",
   },
   {
+    columnGroup: "Evidence",
     key: "expense.transactions",
     source: "expense",
     relationship: "transactions",
@@ -371,6 +406,7 @@ const relatedViewPresentationRegistry = [
     order: "newest",
   },
   {
+    columnGroup: "Activity",
     key: "financialAccount.transactions",
     source: "financialAccount",
     relationship: "transactions",
@@ -378,6 +414,7 @@ const relatedViewPresentationRegistry = [
     order: "newest",
   },
   {
+    columnGroup: "Activity",
     key: "financialAccount.purchases",
     source: "financialAccount",
     relationship: "purchases",
@@ -385,6 +422,7 @@ const relatedViewPresentationRegistry = [
     order: "newest",
   },
   {
+    columnGroup: "Activity",
     key: "financialAccount.vendors",
     source: "financialAccount",
     relationship: "vendors",
@@ -392,6 +430,7 @@ const relatedViewPresentationRegistry = [
     order: "alphabetical",
   },
   {
+    columnGroup: "Booking",
     key: "financialTransaction.vendor",
     source: "financialTransaction",
     relationship: "vendor",
@@ -399,6 +438,7 @@ const relatedViewPresentationRegistry = [
     order: "alphabetical",
   },
   {
+    columnGroup: "Booking",
     key: "financialTransaction.expenses",
     source: "financialTransaction",
     relationship: "expenses",
@@ -406,6 +446,7 @@ const relatedViewPresentationRegistry = [
     order: "newest",
   },
   {
+    columnGroup: "Booking",
     key: "financialTransaction.products",
     source: "financialTransaction",
     relationship: "products",
@@ -413,6 +454,7 @@ const relatedViewPresentationRegistry = [
     order: "alphabetical",
   },
   {
+    columnGroup: "Options",
     key: "wish.candidates",
     source: "wish",
     relationship: "candidates",
@@ -420,6 +462,7 @@ const relatedViewPresentationRegistry = [
     order: "alphabetical",
   },
   {
+    columnGroup: "Meals",
     // The `meals` relation's list column reads only the primary (food-entry)
     // source; the `portions` (served-portion) source is graph-only, because
     // `relatedViewPath` below compiles `provenance.steps` and never `sources`.
@@ -431,6 +474,7 @@ const relatedViewPresentationRegistry = [
     inverseKey: "meal.eaters",
   },
   {
+    columnGroup: "Meals",
     key: "ledgerParty.recipesEaten",
     source: "ledgerParty",
     relationship: "recipes-eaten",

@@ -129,21 +129,9 @@ test("linked Expense categories display their readable label and transaction exp
   const category = row.getByText(categoryName, { exact: true });
   await expect(category).toBeVisible();
   await expect(category).toHaveText(categoryName);
-  // Headers paint short labels; the full label is the header's tooltip.
-  const headers = await page
-    .getByRole("columnheader")
-    .evaluateAll((cells) =>
-      cells.map(
-        (cell) =>
-          cell.querySelector("[data-header-label]")?.getAttribute("title") ??
-          "",
-      ),
-    );
-  const expectationIndex = headers.indexOf("Itemization expectation");
-  expect(expectationIndex).toBeGreaterThanOrEqual(0);
-  await expect(row.getByRole("cell").nth(expectationIndex)).toContainText(
-    "Not expected",
-  );
+  await expect(
+    row.locator('[data-column-id="itemizationExpectation"]'),
+  ).toContainText("Not expected");
   await openCellExplanation(row, "How expense categories is determined");
   const popover = page.locator('[data-slot="popover-content"]');
   await expect(popover).toContainText("Single category");
@@ -202,9 +190,9 @@ test("linked Expense categories display their readable label and transaction exp
   await reloaded;
   await expect(row.getByLabel("Loading field")).toHaveCount(0);
   await expect(category).toHaveText(categoryName);
-  await expect(row.getByRole("cell").nth(expectationIndex)).toContainText(
-    "Expected",
-  );
+  await expect(
+    row.locator('[data-column-id="itemizationExpectation"]'),
+  ).toContainText("Expected");
   const explicit = await entityApi(page.request).get(
     "financialTransaction",
     transactionId,

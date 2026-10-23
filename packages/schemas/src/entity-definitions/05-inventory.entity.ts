@@ -212,6 +212,7 @@ export default defineEntity(
           kind: "json",
           control: { kind: "specialized", renderer: "amount" },
           display: {
+            columnGroup: "Stock",
             format: "amount",
             mobile: { slot: "trailing", priority: 0 },
           },
@@ -238,6 +239,7 @@ export default defineEntity(
             ],
           },
           display: {
+            columnGroup: "Stock",
             optionRole: "category",
             optionColor: "domain-pantry",
             optionGlyph: { phosphor: "MapPin", sfSymbol: "mappin" },
@@ -290,6 +292,7 @@ export default defineEntity(
           },
           control: { kind: "specialized", renderer: "entity-select" },
           display: {
+            columnGroup: "Ownership",
             columnLabel: "Owner",
             width: "md",
             labelPath: "effectiveOwnership.effectiveOwner.name",
@@ -372,6 +375,7 @@ export default defineEntity(
           nullable: true,
           // The list row carries the valuation as a plain amount of money.
           display: {
+            columnGroup: "Stock",
             detail: false,
             width: "md",
             readPath: "valuation",
@@ -423,6 +427,7 @@ export default defineEntity(
           kind: "timestamp",
           nullable: true,
           display: {
+            columnGroup: "Stock",
             format: "timestamp",
             mobile: { slot: "meta", priority: 60 },
           },

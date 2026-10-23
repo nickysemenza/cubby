@@ -64,7 +64,10 @@ export default defineEntity({
           kind: "select",
           options: selectControlOptions.ledgerPartyKind,
         },
-        display: { mobile: { slot: "subtitle", priority: 10 } },
+        display: {
+          columnGroup: "Party",
+          mobile: { slot: "subtitle", priority: 10 },
+        },
         validation: {
           read: ledgerPartyKind,
           create: ledgerPartyKind,
@@ -76,7 +79,7 @@ export default defineEntity({
         kind: "text",
         nullable: true,
         control: { kind: "textarea" },
-        display: {},
+        display: { columnGroup: "Party" },
         validation: {
           read: z.string().nullable(),
           create: z.string().nullable().default(null),

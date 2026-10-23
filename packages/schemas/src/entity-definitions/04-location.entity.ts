@@ -286,7 +286,10 @@ Rules:
             },
             initial: { value: "room" },
           },
-          display: { mobile: { slot: "subtitle", priority: 15 } },
+          display: {
+            columnGroup: "Place",
+            mobile: { slot: "subtitle", priority: 15 },
+          },
           validation: {
             read: locationType,
             create: locationType.optional(),
@@ -395,6 +398,7 @@ Rules:
           nullable: true,
           labelOverride: "Is a",
           display: {
+            columnGroup: "Place",
             detail: false,
             labelPath: "product.name",
             renderer: { list: "product-link" },
@@ -423,6 +427,7 @@ Rules:
           kind: "timestamp",
           nullable: true,
           display: {
+            columnGroup: "Stock",
             columnLabel: "Last counted",
             format: "timestamp",
             mobile: { slot: "meta", priority: 90 },
@@ -445,6 +450,7 @@ Rules:
             sources: [{ label: "Latest location-description AI analysis" }],
           },
           display: {
+            columnGroup: "Place",
             detail: false,
             listHidden: true,
             width: "lg",
@@ -489,6 +495,7 @@ Rules:
           kind: "json",
           nullable: true,
           display: {
+            columnGroup: "Stock",
             detail: false,
             labelPath: "valuationLabel",
             renderer: { list: "valuation-summary" },

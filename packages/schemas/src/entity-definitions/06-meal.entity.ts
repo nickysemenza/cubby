@@ -127,6 +127,7 @@ export default defineEntity(
             initial: "today",
           },
           display: {
+            columnGroup: "Meal",
             format: "plainDate",
             mobile: { slot: "subtitle", priority: 10 },
           },
@@ -153,7 +154,7 @@ export default defineEntity(
           kind: "number",
           nullable: true,
           control: { kind: "number" },
-          display: {},
+          display: { columnGroup: "Meal" },
           validation: {
             read: z.number().int().nullable(),
             create: z.number().int().nullable().optional(),
@@ -180,7 +181,10 @@ Rules:
               ],
             },
           },
-          display: { mobile: { slot: "meta", priority: 30 } },
+          display: {
+            columnGroup: "Meal",
+            mobile: { slot: "meta", priority: 30 },
+          },
           validation: {
             read: mealTypeSchema.nullable(),
             create: mealTypeSchema
@@ -218,7 +222,11 @@ Rules:
             // optional with no Zod default to read.
             initial: { value: "cooked" },
           },
-          display: { width: "sm", mobile: { slot: "meta", priority: 40 } },
+          display: {
+            columnGroup: "Meal",
+            width: "sm",
+            mobile: { slot: "meta", priority: 40 },
+          },
           validation: {
             read: mealKindSchema,
             create: mealKindSchema
@@ -238,6 +246,7 @@ Rules:
           kind: "json",
           control: { kind: "specialized", renderer: "structured-field" },
           display: {
+            columnGroup: "Food",
             detail: false,
             labelPath: "recipes[].recipe.name",
             renderer: { list: "recipe-links" },
@@ -395,6 +404,7 @@ Rules:
           // the estimate engine, which a SQL ORDER BY cannot reproduce for
           // partial/pending/unavailable results. The server composes the text.
           display: {
+            columnGroup: "Food",
             columnIdOverride: "cost",
             labelPath: "costTotalLabel",
             width: "xs",

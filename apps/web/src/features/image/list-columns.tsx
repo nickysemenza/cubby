@@ -41,6 +41,7 @@ export const imageListOverride = defineListOverride<
               id: "entity",
               header: "Associated Entities",
               meta: {
+                columnGroup: "Usage",
                 provenance: labeledFieldProvenance("Entity associations"),
                 className: "w-40",
                 mobile: { slot: "meta", priority: 30 },

@@ -88,7 +88,7 @@ export default defineEntity({
         kind: "text",
         nullable: true,
         control: { kind: "textarea" },
-        display: {},
+        display: { columnGroup: "Decision" },
         validation: {
           read: z.string().nullable(),
           create: z.string().nullable().default(null),
@@ -136,6 +136,7 @@ export default defineEntity({
         kind: "timestamp",
         nullable: true,
         display: {
+          columnGroup: "Decision",
           valueOptions: [
             {
               value: "acquired",

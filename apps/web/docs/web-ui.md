@@ -130,12 +130,28 @@ Related-preview columns declare the same `columnGroup` in the related-view
 presentation registry; their data loading remains with the existing shared
 related-preview pipeline.
 
+Every entity list declares its thematic bands with its own fields. Catalog and
+stock facts, purchasing and settlement, work and dependencies, and execution
+and results stay distinct. Custom relation columns join the same bands through
+the shared column helpers. Identity, quality, images, and audit timestamps remain
+outside thematic bands; narrow lists may have just one band. Embedded entity
+tables inherit the target fields' bands for the columns they expose.
+
 `display.columnBar` supplements a numeric cell with absolute magnitude against
 the largest absolute value across the table's loaded, filtered rows, before
 pagination. Loading more rows can change this scale. The signed, formatted value
 and clipboard data remain authoritative; refunds are never clamped to zero.
 Zero and unavailable values have no bar, and non-table values keep plain text.
 The scale and loaded scope are available on hover and to assistive technology.
+Opt in for comparable monetary values, counts, durations, calories, or file sizes.
+Do not compare quantities with different units or fabricate trend samples,
+targets, or coverage denominators from a scalar total. A bar is magnitude, not
+completion or a judgment that a larger value is better.
+
+Inventory relation cells keep location and quantity in the two-line dense row
+budget. Supplemental stock context is available as hover and accessible text
+when a location is present; outside dense tables, or without a location, it
+remains visible. A third status line must not overlap the next row.
 
 `RTable`'s `inspector` composes the shared `SidePanelLayout`: a right column at
 wide widths and the shared sheet below, including embedded detail sections.

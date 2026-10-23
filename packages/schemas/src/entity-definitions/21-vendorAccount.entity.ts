@@ -80,7 +80,10 @@ export default defineEntity({
         kind: "identifier",
         reference: { entity: "vendor" },
         control: { kind: "specialized", renderer: "entity-select" },
-        display: { mobile: { slot: "subtitle", priority: 10 } },
+        display: {
+          columnGroup: "Account",
+          mobile: { slot: "subtitle", priority: 10 },
+        },
         validation: {
           read: vendorShortcode,
           create: vendorShortcode,
@@ -92,7 +95,7 @@ export default defineEntity({
         kind: "identifier",
         reference: { entity: "ledgerParty" },
         control: { kind: "specialized", renderer: "entity-select" },
-        display: {},
+        display: { columnGroup: "Account" },
         validation: {
           read: ledgerPartyShortcode,
           create: ledgerPartyShortcode,
@@ -128,7 +131,7 @@ export default defineEntity({
           kind: "derived",
           sources: [{ label: "Latest Run start for this account" }],
         },
-        display: { format: "timestamp" },
+        display: { columnGroup: "Imports", format: "timestamp" },
         validation: {
           read: z.date().nullable(),
           create: null,
@@ -143,7 +146,11 @@ export default defineEntity({
           kind: "derived",
           sources: [{ label: "Latest completed Run end for this account" }],
         },
-        display: { columnLabel: "Last success", format: "timestamp" },
+        display: {
+          columnGroup: "Imports",
+          columnLabel: "Last success",
+          format: "timestamp",
+        },
         validation: {
           read: z.date().nullable(),
           create: null,
@@ -153,7 +160,7 @@ export default defineEntity({
       {
         key: "purchaseCount",
         kind: "number",
-        display: { width: "sm" },
+        display: { columnGroup: "Imports", columnBar: true, width: "sm" },
         provenance: {
           kind: "derived",
           sources: [{ entity: "purchase", relation: "purchases" }],

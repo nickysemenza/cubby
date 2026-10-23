@@ -1,7 +1,6 @@
 import type { RecipeSource } from "@cubby/schemas/recipe-shared";
-import type { CellData } from "@tanstack/react-table";
-import { fireEvent, render, screen } from "@testing-library/react";
-import type { ReactNode } from "react";
+import { flexRender } from "@tanstack/react-table";
+import { fireEvent, render, renderHook, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
@@ -9,7 +8,8 @@ import { installFeatures } from "~/features/registry";
 import {
   createCubbyColumnCollection,
   createCubbyColumnHelper,
-  type CubbyColumnDef,
+  materializeCubbyColumns,
+  useCubbyTable,
 } from "~/ui/data-table/table-features";
 
 import { detailFieldRenderersFor } from "./detail-field-renderers";
@@ -50,30 +50,6 @@ const RECIPE_ROW: RecipeRow = {
   meals: 2,
   notes: "Fixture notes",
 };
-
-/**
- * Narrows a column's `cell` to a callable renderer taking only `{ row }` —
- * every plain-scalar column `createEntityDisplayColumns` builds itself, and
- * the same shape every override here uses. Copied from the shared
- * `entity-display.unit.test.tsx` fixture rather than imported: it captures
- * `TValue` per call site (see `materializeCubbyColumns`'s doc in
- * table-features.ts), so it can't be hoisted to a shared helper module either.
- */
-function isRowRenderer<TRecord extends object, TValue extends CellData>(
-  cell: CubbyColumnDef<TRecord, TValue>["cell"],
-): cell is (context: { row: { original: TRecord } }) => ReactNode {
-  return typeof cell === "function";
-}
-
-function renderRowCell<TRecord extends object, TValue extends CellData>(
-  cell: CubbyColumnDef<TRecord, TValue>["cell"],
-  record: TRecord,
-): ReactNode {
-  if (!isRowRenderer<TRecord, TValue>(cell)) {
-    throw new Error("Expected a row cell renderer.");
-  }
-  return cell({ row: { original: record } });
-}
 
 /**
  * Builds the recipe list's columns the same way `recipelist.tsx` does:
@@ -125,19 +101,22 @@ function buildRecipeColumnMeta() {
   }));
 }
 
-/** Renders one column's cell against a fixture row — filtered to a single
- * column and invoked inside the same `.visit()` callback, so its `cell` is
- * used exactly where its `TValue` is still concrete (see
- * `materializeCubbyColumns`'s doc in table-features.ts). */
+/** Exercise renderers with the real table context, including shared metric scales. */
 function renderRecipeCell(columnId: string, row: RecipeRow) {
-  const columns = buildRecipeColumns();
-  const matched = columns.filter((column) => column.id === columnId);
-  const rendered = matched.visit((column) => renderRowCell(column.cell, row));
-  const [first] = rendered;
-  if (rendered.length !== 1 || first === undefined) {
-    throw new Error(`Expected exactly one column with id ${columnId}.`);
-  }
-  return first;
+  const columns = materializeCubbyColumns(buildRecipeColumns());
+  const { result } = renderHook(() =>
+    useCubbyTable({
+      data: [row],
+      columns,
+      getRowId: () => "fixture",
+    }),
+  );
+  const cell = result.current
+    .getRow("fixture")
+    .getAllCells()
+    .find((candidate) => candidate.column.id === columnId);
+  if (!cell) throw new Error(`Expected column ${columnId}.`);
+  return flexRender(cell.column.columnDef.cell, cell.getContext());
 }
 
 describe("recipe list display columns", () => {

@@ -333,6 +333,7 @@ export const productListOverride = defineListOverride<
               "ingredient",
               {
                 header: "Ingredient",
+                columnGroup: "Food",
                 className: "w-32",
                 mobile: { slot: "meta", priority: 45, interactive: true },
                 enableSorting: true,
@@ -383,15 +384,8 @@ export const productListOverride = defineListOverride<
               (e) => e.location,
               {
                 id: "location",
-                context: (product) =>
-                  product.stockStatus ? (
-                    <span
-                      title={product.stockStatus}
-                      className="text-xs text-muted-foreground"
-                    >
-                      {product.stockStatus}
-                    </span>
-                  ) : null,
+                columnGroup: "Stock",
+                context: (product) => product.stockStatus,
                 contextReadFields: ["stockStatus"],
                 explanation: {
                   entity: "product",

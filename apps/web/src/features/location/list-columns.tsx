@@ -59,6 +59,7 @@ export const locationListOverride = defineListOverride<
           add(
             createEntityInlineLinkColumn(columnHelper, "children", "location", {
               header: "Children",
+              columnGroup: "Hierarchy",
               className: "w-40",
               mobile: { slot: "meta", priority: 55 },
               provenance: relationshipFieldProvenance("location", "children"),
@@ -71,6 +72,7 @@ export const locationListOverride = defineListOverride<
               "location",
               {
                 header: "Parent",
+                columnGroup: "Hierarchy",
                 className: "w-56",
                 mobile: { slot: "subtitle", priority: 20 },
                 provenance: relationshipFieldProvenance(
@@ -99,6 +101,7 @@ export const locationListOverride = defineListOverride<
               (e) => e.product,
               {
                 layout: "inline",
+                columnGroup: "Stock",
                 enableSorting: true,
                 mobile: { slot: "meta", priority: 80 },
                 provenance: relationshipFieldProvenance(
