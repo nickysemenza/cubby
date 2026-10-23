@@ -695,7 +695,6 @@ export default defineEntity({
         kind: "multiselect",
         placeholder: "Filter by Relevance...",
         deriveSchema: true,
-        stored: true,
         options: relevanceOptions,
       },
       {
@@ -703,7 +702,6 @@ export default defineEntity({
         kind: "multiselect",
         placeholder: "Filter by Relevance stage...",
         deriveSchema: true,
-        stored: true,
         options: stageOptions,
       },
       {
@@ -718,7 +716,6 @@ export default defineEntity({
         kind: "multiselect",
         placeholder: "Filter by status...",
         deriveSchema: true,
-        stored: true,
         options: statusOptions,
       },
       {
@@ -742,7 +739,6 @@ export default defineEntity({
         brandRef: { entity: "ledgerParty" },
         currentMember: true,
         deriveSchema: true,
-        stored: true,
       },
       {
         columnId: "runId",
@@ -750,12 +746,10 @@ export default defineEntity({
         placeholder: "Filter by Run...",
         brandRef: { entity: "run" },
         deriveSchema: true,
-        stored: true,
       },
       {
         columnId: "linked",
         kind: "boolean",
-        derived: true,
         placeholder: "Filter by Purchase association...",
         deriveSchema: true,
         options: [
@@ -774,7 +768,6 @@ export default defineEntity({
         columnId: "purchaseId",
         label: "Purchase",
         kind: "idMulti",
-        derived: true,
         placeholder: "Emails for Purchase...",
         brandRef: { entity: "purchase" },
         singleValue: { reason: EMAIL_SCOPE_REASON, group: "emailScope" },
@@ -783,7 +776,6 @@ export default defineEntity({
         columnId: "vendorId",
         label: "Vendor",
         kind: "idMulti",
-        derived: true,
         placeholder: "Emails for Vendor...",
         brandRef: { entity: "vendor" },
         singleValue: { reason: EMAIL_SCOPE_REASON, group: "emailScope" },
@@ -792,7 +784,6 @@ export default defineEntity({
         columnId: "vendorAccountId",
         label: "Vendor account",
         kind: "idMulti",
-        derived: true,
         placeholder: "Emails for Vendor account...",
         brandRef: { entity: "vendorAccount" },
         singleValue: { reason: EMAIL_SCOPE_REASON, group: "emailScope" },
@@ -800,7 +791,6 @@ export default defineEntity({
       {
         columnId: "reviewConflict",
         kind: "boolean",
-        derived: true,
         placeholder: "Stage disagrees with review",
         deriveSchema: true,
         options: [

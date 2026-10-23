@@ -479,7 +479,6 @@ export default defineEntity({
         kind: "idMulti",
         brandRef: { entity: "spendingCategory" },
         deriveSchema: true,
-        stored: true,
       },
     ],
   },

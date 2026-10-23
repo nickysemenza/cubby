@@ -864,7 +864,6 @@ export default defineEntity({
         kind: "idMulti",
         brandRef: { entity: "financialAccount" },
         deriveSchema: true,
-        stored: true,
         placeholder: "Filter accountId...",
       },
       {
@@ -872,7 +871,6 @@ export default defineEntity({
         kind: "idMulti",
         brandRef: { entity: "transactionImport" },
         deriveSchema: true,
-        stored: true,
         placeholder: "Filter batchId...",
       },
       {
@@ -880,7 +878,6 @@ export default defineEntity({
         kind: "idMulti",
         brandRef: { entity: "transactionImport" },
         deriveSchema: true,
-        stored: true,
         placeholder: "Filter withdrawalImportId...",
       },
       {
@@ -888,35 +885,30 @@ export default defineEntity({
         kind: "idMulti",
         brandRef: { entity: "sourceTransactionRecord" },
         deriveSchema: true,
-        stored: true,
         placeholder: "Filter supersededByRowId...",
       },
       {
         columnId: "matchState",
         kind: "multiselect",
         deriveSchema: true,
-        derived: true,
         placeholder: "Filter matchState...",
       },
       {
         columnId: "disposition",
         kind: "multiselect",
         deriveSchema: true,
-        stored: true,
         placeholder: "Filter disposition...",
       },
       {
         columnId: "dispositionReason",
         kind: "multiselect",
         deriveSchema: true,
-        stored: true,
         placeholder: "Filter dispositionReason...",
       },
       {
         columnId: "providerStatus",
         kind: "multiselect",
         deriveSchema: true,
-        stored: true,
         placeholder: "Filter providerStatus...",
       },
       {
@@ -952,14 +944,12 @@ export default defineEntity({
         kind: "idMulti",
         brandRef: { entity: "financialTransaction" },
         deriveSchema: true,
-        derived: true,
         placeholder: "Filter transactionId...",
       },
       {
         columnId: "current",
         kind: "boolean",
         deriveSchema: true,
-        stored: true,
         placeholder: "Filter current...",
       },
       {
@@ -967,7 +957,6 @@ export default defineEntity({
         kind: "idMulti",
         brandRef: { entity: "transactionImport" },
         deriveSchema: true,
-        derived: true,
         placeholder: "Filter received imports...",
       },
     ],
@@ -1118,12 +1107,9 @@ export default defineEntity({
   ],
   search: "lexical",
   capabilities: {
-    auditable: true,
     images: { storage: false },
-    softDelete: true,
     delete: { mode: "soft", bulk: true },
     merge: false,
-    lifecycle: "mutable",
     timeline: "default",
   },
   extensions: {

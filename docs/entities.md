@@ -2090,10 +2090,12 @@ effective subject product's name) or a `type: "text"` value. A multi-field
 search is that declared list, never a predicate. `anyOf` does not sort or
 group, and a text filter never declares `stored`.
 
-A `stored` descriptor names the standard predicate over one stored column:
-`stored: true` reads the column named by `columnId`; `stored: { columns }`
-names it when the descriptor id is virtual; `stored: { array: true }` marks a
-multiselect over a `text[]` column as an overlap. Enum filters
+A `stored` descriptor names the standard predicate over one stored column.
+A non-text, non-range filter that sets `deriveSchema` and whose `columnId`
+names a stored field gets that binding by inference, so it declares nothing;
+`stored: { columns }` names the column when the descriptor id is virtual, and
+`stored: { array: true }` marks a multiselect over a `text[]` column as an
+overlap. Enum filters
 OR their declared `nullable` presence in, a boolean over a nullable
 non-boolean column reads as presence (`true` is NOT NULL), and ranges are
 inclusive bounds: a range reads its `wire` keys (`from`/`to`, and `presence`
@@ -2213,9 +2215,12 @@ link state). A `related:<view>` roster entry orders by the view's first chip
 release rather than a table, a declared exception whose service orders by its
 declared values.
 
-A filter descriptor reads a derived field with `derived: true` (the entry
-named by its `columnId`) or `derived: "<key>"` (another entry, so several
-filters share one value or a column filters by an effective value). A value
+A filter descriptor reads a derived field named by its `columnId` by
+inference when it has no other binding, including entries the compiler
+synthesizes. It declares `derived: true` only where a stored field shares that
+key (the inferred stored binding would otherwise win), or `derived: "<key>"`
+for another entry, so several filters share one value or a column filters by
+an effective value. A value
 entry filters by its type: `text` as a search term, any-of, or presence;
 `number`/`date` as a range or presence; `dateInterval` as a range (overlap)
 or one date (containment); `boolean` as a flag (UNKNOWN reads as

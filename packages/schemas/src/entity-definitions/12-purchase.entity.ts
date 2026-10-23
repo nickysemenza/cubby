@@ -1531,7 +1531,6 @@ export default defineEntity({
         brandRef: { entity: "ledgerParty" },
         currentMember: true,
         deriveSchema: true,
-        stored: true,
       },
       {
         columnId: "purchaserId",
@@ -1549,7 +1548,6 @@ export default defineEntity({
       {
         columnId: "financialReconciliation",
         kind: "multiselect",
-        derived: true,
         placeholder: "Filter financial reconciliation...",
       },
       {
@@ -1581,14 +1579,12 @@ export default defineEntity({
         optionsKey: "vendor",
         brandRef: { entity: "vendor" },
         deriveSchema: true,
-        stored: true,
       },
       {
         columnId: "orderId",
         field: "orderIdPresenceFilter",
         kind: "presence",
         deriveSchema: true,
-        stored: true,
         placeholder: "Filter by order id...",
         options: [
           { value: "has", label: "Has order id", meta: true },
@@ -1624,7 +1620,6 @@ export default defineEntity({
         kind: "presence",
         placeholder: "Filter by stated total...",
         deriveSchema: true,
-        stored: true,
         options: [
           { value: "has", label: "Has stated total", meta: true },
           { value: "none", label: "(none)", meta: true },
@@ -1676,7 +1671,6 @@ export default defineEntity({
       {
         columnId: "reconciliation",
         kind: "multiselect",
-        derived: true,
         placeholder: "Filter reconciliation...",
         options: [
           { value: "match", label: "Reconciles" },

@@ -2461,7 +2461,6 @@ Rules:
           kind: "idMulti",
           optionsKey: "vendor",
           brandRef: { entity: "vendor" },
-          stored: true,
           placeholder: "Filter by brand...",
           deriveSchema: true,
         },
@@ -2509,7 +2508,6 @@ Rules:
         },
         {
           columnId: "upcPresence",
-          derived: true,
           field: "upcPresenceFilter",
           kind: "presence",
           placeholder: "Filter UPC presence...",
@@ -2540,7 +2538,6 @@ Rules:
         },
         {
           columnId: "categoryFeature",
-          derived: true,
           field: "categoryFeatureFilter",
           kind: "multiselect",
           label: "Category family",
@@ -2549,7 +2546,6 @@ Rules:
         },
         {
           columnId: "categoryId",
-          stored: true,
           deriveSchema: true,
           urlKey: "category",
           field: "categoryFilter",
@@ -2572,7 +2568,6 @@ Rules:
         },
         {
           columnId: "servingAsLocations",
-          derived: true,
           field: "servingAsLocationPresenceFilter",
           kind: "presence",
           placeholder: "Filter in service...",
@@ -2583,7 +2578,6 @@ Rules:
         },
         {
           columnId: "ingredient",
-          derived: true,
           deriveSchema: true,
           field: "ingredientIdFilter",
           kind: "idMulti",
@@ -2593,7 +2587,6 @@ Rules:
         },
         {
           columnId: "growsPlant",
-          derived: true,
           deriveSchema: true,
           field: "growsPlantIdFilter",
           kind: "idMulti",
@@ -2801,28 +2794,24 @@ Rules:
           field: "pricePresenceFilter",
           kind: "presence",
           placeholder: "Filter price presence...",
-          derived: true,
         },
         {
           columnId: "miscBucket",
           field: "miscBucketFilter",
           kind: "presence",
           placeholder: "Filter misc buckets...",
-          derived: true,
         },
         {
           columnId: "unknownQuantityLines",
           field: "unknownQuantityLinesFilter",
           kind: "presence",
           placeholder: "Filter lines with no quantity...",
-          derived: true,
         },
         {
           columnId: "taskStatus",
           field: "taskStatusFilter",
           kind: "multiselect",
           placeholder: "Filter task status...",
-          derived: true,
         },
         {
           columnId: "food",
@@ -2837,7 +2826,6 @@ Rules:
         },
         {
           columnId: "image",
-          derived: true,
           field: "imagePresenceFilter",
           kind: "presence",
           placeholder: "Filter images...",
@@ -2848,7 +2836,6 @@ Rules:
         },
         {
           columnId: "inventoryMultiplicity",
-          derived: true,
           field: "inventoryMultiplicity",
           kind: "boolean",
           placeholder: "Filter inventory multiplicity...",
@@ -2861,7 +2848,6 @@ Rules:
         },
         {
           columnId: "kitAccounting",
-          derived: true,
           field: "kitAccounting",
           kind: "boolean",
           placeholder: "Filter kit accounting...",
@@ -2869,7 +2855,6 @@ Rules:
         },
         {
           columnId: "ownershipReconciliation",
-          derived: true,
           field: "ownershipReconciliation",
           kind: "boolean",
           placeholder: "Filter ownership reconciliation...",
@@ -2882,7 +2867,6 @@ Rules:
         },
         {
           columnId: "conversionCoverage",
-          derived: true,
           field: "conversionCoverage",
           kind: "boolean",
           placeholder: "Filter conversion coverage...",
@@ -2890,7 +2874,6 @@ Rules:
         },
         {
           columnId: "conversionTopology",
-          derived: true,
           field: "conversionTopology",
           kind: "boolean",
           placeholder: "Filter conversion topology...",
@@ -2898,7 +2881,6 @@ Rules:
         },
         {
           columnId: "unitMappingQuality",
-          derived: true,
           field: "unitMappingPresenceFilter",
           kind: "presence",
           placeholder: "Filter mappings...",
@@ -2927,7 +2909,6 @@ Rules:
           kind: "multiselect",
           placeholder: "Filter by kind...",
           deriveSchema: true,
-          stored: true,
           schemaRef: {
             module: "@cubby/schemas/product-fields",
             export: "productKindSchema",
@@ -2941,7 +2922,6 @@ Rules:
         },
         {
           columnId: "components",
-          derived: true,
           field: "componentPresenceFilter",
           kind: "presence",
           placeholder: "Filter kits...",

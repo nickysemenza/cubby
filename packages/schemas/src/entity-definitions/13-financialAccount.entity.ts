@@ -754,7 +754,6 @@ export default defineEntity({
         brandRef: { entity: "ledgerParty" },
         currentMember: true,
         deriveSchema: true,
-        stored: true,
       },
       {
         columnId: "providerVendorId",
@@ -762,7 +761,6 @@ export default defineEntity({
         placeholder: "Filter by provider...",
         brandRef: { entity: "vendor" },
         deriveSchema: true,
-        stored: true,
       },
       {
         columnId: "ledgerPartyId",
@@ -771,7 +769,6 @@ export default defineEntity({
         brandRef: { entity: "ledgerParty" },
         currentMember: true,
         deriveSchema: true,
-        stored: true,
       },
       {
         columnId: "name",
@@ -801,7 +798,6 @@ export default defineEntity({
         kind: "boolean",
         placeholder: "Filter by status...",
         deriveSchema: true,
-        stored: true,
         options: [
           { value: "false", label: "Known" },
           { value: "true", label: "Provisional" },
@@ -821,19 +817,16 @@ export default defineEntity({
       },
       {
         columnId: "last4",
-        derived: true,
         kind: "multiselect",
         placeholder: "Filter by last four digits...",
       },
       {
         columnId: "source",
-        derived: true,
         kind: "multiselect",
         placeholder: "Filter by source...",
       },
       {
         columnId: "externalAccountId",
-        derived: true,
         kind: "multiselect",
         placeholder: "Filter by external account id...",
       },

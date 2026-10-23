@@ -733,7 +733,6 @@ export default defineEntity(
           placeholder: "Filter by product id...",
           brandRef: { entity: "product" },
           deriveSchema: true,
-          stored: true,
           schemaDescription: "Filter by exact product IDs",
         },
         // Includes stock in sub-locations unless `includeSubLocations` is false
@@ -746,7 +745,6 @@ export default defineEntity(
           brandRef: { entity: "location" },
           label: "Location",
           deriveSchema: true,
-          stored: true,
           schemaDescription:
             "Filter to stock in the selected Locations and, unless includeSubLocations is false, their descendants",
         },
@@ -781,7 +779,6 @@ export default defineEntity(
           columnId: "category",
           field: "categoryFilter",
           kind: "idMulti",
-          derived: true,
           deriveSchema: true,
           schemaDescription: "Filter by product category",
           label: "Category",
@@ -796,7 +793,6 @@ export default defineEntity(
           label: "Category family",
           placeholder: "Filter category family...",
           optionsKey: "productCategoryFamilies",
-          derived: true,
           deriveSchema: true,
           schemaRef: {
             module: "@cubby/schemas/product-category-fields",
@@ -830,7 +826,6 @@ export default defineEntity(
           label: "Ownership",
           placeholder: "Filter ownership...",
           deriveSchema: true,
-          stored: true,
           options: [
             { value: "inherit", label: "Inherited" },
             { value: "explicit", label: "Set here" },
@@ -868,7 +863,6 @@ export default defineEntity(
           kind: "multiselect",
           placeholder: "Filter placement...",
           deriveSchema: true,
-          stored: true,
           schemaDescription:
             "Filter by placement: 'stock' (movable stock) and/or 'installed' (fixtures). Omitted returns both.",
           options: [
@@ -881,7 +875,6 @@ export default defineEntity(
           field: "locationRole",
           kind: "boolean",
           placeholder: "Filter location role...",
-          derived: true,
           deriveSchema: true,
           schemaDescription:
             "true: stock parked in the household-wide Unknown location; false: stock with a real location.",
@@ -898,7 +891,6 @@ export default defineEntity(
             { value: "priceable", label: "Missing despite product price" },
             { value: "unpriceable", label: "Missing, product unpriced" },
           ],
-          derived: true,
           deriveSchema: true,
         },
         {

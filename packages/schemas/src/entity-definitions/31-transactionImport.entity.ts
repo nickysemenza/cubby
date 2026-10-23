@@ -317,7 +317,6 @@ export default defineEntity({
         kind: "idMulti",
         brandRef: { entity: "sourceTransactionRecord" },
         deriveSchema: true,
-        derived: true,
         placeholder: "Filter received source records...",
       },
     ],
@@ -391,9 +390,7 @@ export default defineEntity({
   ],
   search: "lexical",
   capabilities: {
-    auditable: true,
     images: { storage: false },
-    softDelete: true,
     delete: null,
     merge: false,
     lifecycle: "readOnly",

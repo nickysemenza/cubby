@@ -285,7 +285,6 @@ export default defineEntity({
         kind: "multiselect",
         placeholder: "Filter by kind...",
         deriveSchema: true,
-        stored: true,
         schemaRef: {
           module: "@cubby/schemas/ledger-party-fields",
           export: "ledgerPartyKind",

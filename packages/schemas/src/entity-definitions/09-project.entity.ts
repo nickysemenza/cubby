@@ -1042,7 +1042,6 @@ Rules:
     descriptors: [
       {
         columnId: "assigneeId",
-        derived: true,
         urlKey: "assignee",
         field: "assigneeId",
         kind: "idMulti",
@@ -1054,7 +1053,6 @@ Rules:
 
       {
         columnId: "image",
-        derived: true,
         deriveSchema: true,
         schemaDescription:
           "Filter to projects that do / don't have at least one image (PDF attachments don't count).",
@@ -1080,7 +1078,6 @@ Rules:
         kind: "multiselect",
         placeholder: "Filter by status...",
         deriveSchema: true,
-        stored: true,
         schemaRef: {
           module: "@cubby/schemas/project-fields",
           export: "projectStatusSchema",
@@ -1106,7 +1103,6 @@ Rules:
         kind: "multiselect",
         placeholder: "Filter by kind...",
         deriveSchema: true,
-        stored: true,
         schemaRef: {
           module: "@cubby/schemas/project-fields",
           export: "projectKindSchema",
@@ -1122,7 +1118,6 @@ Rules:
       },
       {
         columnId: "attention",
-        derived: true,
         deriveSchema: true,
         kind: "multiselect",
         placeholder: "Filter tracker attention...",
@@ -1168,7 +1163,6 @@ Rules:
       },
       {
         columnId: "completionYear",
-        derived: true,
         urlKey: "completed",
         kind: "multiselect",
         placeholder: "Filter by completion year...",

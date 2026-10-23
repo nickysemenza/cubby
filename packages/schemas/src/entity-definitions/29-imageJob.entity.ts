@@ -422,7 +422,6 @@ export default defineEntity({
         kind: "multiselect",
         placeholder: "Filter by kind...",
         deriveSchema: true,
-        stored: true,
         options: kindOptions,
       },
       {
@@ -430,7 +429,6 @@ export default defineEntity({
         kind: "multiselect",
         placeholder: "Filter by state...",
         deriveSchema: true,
-        stored: true,
         options: stateOptions,
       },
       {
@@ -439,7 +437,6 @@ export default defineEntity({
         placeholder: "Filter by Image...",
         brandRef: { entity: "image" },
         deriveSchema: true,
-        stored: true,
       },
       {
         columnId: "runId",
@@ -447,7 +444,6 @@ export default defineEntity({
         placeholder: "Filter by Run...",
         brandRef: { entity: "run" },
         deriveSchema: true,
-        stored: true,
       },
       {
         // A job joins every submission that scheduled or retried it
@@ -455,7 +451,6 @@ export default defineEntity({
         columnId: "submissionId",
         kind: "multiselect",
         placeholder: "Filter by submission...",
-        derived: true,
       },
       {
         columnId: "createdAt",

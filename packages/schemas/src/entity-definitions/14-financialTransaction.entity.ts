@@ -1410,19 +1410,16 @@ export default defineEntity(
           kind: "idMulti",
           brandRef: { entity: "sourceTransactionRecord" },
           deriveSchema: true,
-          derived: true,
           placeholder: "Filter source records...",
         },
         {
           columnId: "allocationIntegrity",
           kind: "multiselect",
-          derived: true,
           placeholder: "Filter allocation integrity...",
         },
         {
           columnId: "descriptorProcessor",
           kind: "multiselect",
-          derived: true,
           placeholder: "Filter payment processor...",
         },
         {
@@ -1440,7 +1437,6 @@ export default defineEntity(
           kind: "multiselect",
           placeholder: "Filter by kind...",
           deriveSchema: true,
-          stored: true,
           schemaFromRead: true,
           options: [
             { value: "purchase", label: "Purchase" },
@@ -1459,7 +1455,6 @@ export default defineEntity(
           kind: "multiselect",
           placeholder: "Filter by status...",
           deriveSchema: true,
-          stored: true,
           schemaFromRead: true,
           options: [
             { value: "expected", label: "Expected" },
@@ -1493,7 +1488,6 @@ export default defineEntity(
           optionsKey: "account",
           brandRef: { entity: "financialAccount" },
           deriveSchema: true,
-          stored: true,
         },
         {
           columnId: "purchaseId",
@@ -1516,7 +1510,6 @@ export default defineEntity(
         {
           columnId: "itemization",
           kind: "multiselect",
-          derived: true,
           placeholder: "Filter itemization...",
           options: [
             { value: "bare", label: "No purchase" },
@@ -1532,14 +1525,12 @@ export default defineEntity(
           urlKey: "source",
           wire: { kind: "param", name: "source" },
           kind: "multiselect",
-          derived: true,
           placeholder: "Filter by source...",
           optionsKey: "source",
         },
         {
           columnId: "externalId",
           kind: "multiselect",
-          derived: true,
           placeholder: "Filter by external id...",
         },
         {

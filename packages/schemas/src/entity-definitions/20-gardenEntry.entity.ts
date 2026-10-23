@@ -437,7 +437,6 @@ export default defineEntity({
           { value: "harvest", label: "Harvest" },
         ],
         deriveSchema: true,
-        stored: true,
       },
       {
         columnId: "observedOn",
@@ -457,7 +456,6 @@ export default defineEntity({
         columnId: "locationId",
         kind: "idMulti",
         deriveSchema: true,
-        stored: true,
         placeholder: "Filter by location...",
         brandRef: { entity: "location" },
       },
@@ -467,14 +465,12 @@ export default defineEntity({
         placeholder: "Filter by planting...",
         brandRef: { entity: "planting" },
         deriveSchema: true,
-        derived: true,
       },
       {
         // A planting's journal: its own entries plus whole-location entries
         // observed during one of its confirmed location periods.
         columnId: "journalPlantingId",
         kind: "idMulti",
-        derived: true,
         placeholder: "Journal for planting...",
         brandRef: { entity: "planting" },
       },
