@@ -18,6 +18,7 @@ import { formatDuration } from "~/lib/format-duration";
 import { pageTitle } from "~/lib/page-title";
 import { DateDisplay } from "~/ui/common/date-display";
 import { Facts } from "~/ui/common/facts";
+import { InspectableValue } from "~/ui/common/inspectable-value";
 import {
   RecordList,
   RecordRow,
@@ -137,31 +138,51 @@ function RunTypeDetails({
       <Facts
         layout="list"
         facts={[
-          { label: "Purpose key", value: purpose, className: "font-mono" },
+          {
+            label: "Type",
+            value: (
+              <InspectableValue value={purpose}>{kind.label}</InspectableValue>
+            ),
+          },
           {
             label: "Started by",
-            value: triggerLabels[kind.trigger],
-            caption: <code>{kind.trigger}</code>,
+            value: (
+              <InspectableValue value={kind.trigger}>
+                {triggerLabels[kind.trigger]}
+              </InspectableValue>
+            ),
           },
           {
             label: "Execution",
-            value: kind.execution
-              ? executionDescriptions[kind.execution]
-              : "Domain-owned execution; no run.execute driver declared",
+            value: kind.execution ? (
+              <InspectableValue value={kind.execution}>
+                {executionDescriptions[kind.execution]}
+              </InspectableValue>
+            ) : (
+              "Domain-owned execution; no run.execute driver declared"
+            ),
           },
           {
             label: "Progress",
-            value: progressDescriptions[kind.progress],
-            caption: <code>{kind.progress}</code>,
+            value: (
+              <InspectableValue value={kind.progress}>
+                {progressDescriptions[kind.progress]}
+              </InspectableValue>
+            ),
           },
           {
             label: "AI evaluations",
-            value:
-              kind.aiWork === "owned"
-                ? "Owned directly by this Run"
-                : kind.aiWork === "requested"
-                  ? "Requested by reference"
-                  : "No evaluation ownership declared",
+            value: kind.aiWork ? (
+              <InspectableValue value={kind.aiWork}>
+                {kind.aiWork === "owned"
+                  ? "Owned directly by this Run"
+                  : kind.aiWork === "requested"
+                    ? "Requested by reference"
+                    : "No evaluation ownership declared"}
+              </InspectableValue>
+            ) : (
+              "No evaluation ownership declared"
+            ),
           },
           {
             label: "Lifecycle",
@@ -208,12 +229,9 @@ function RunTypeDetails({
                   </span>
                 }
                 primary={
-                  <Stack gap="tight">
-                    <span className="font-medium">{step.label}</span>
-                    <code className="text-xs break-all text-muted-foreground">
-                      {step.key}
-                    </code>
-                  </Stack>
+                  <InspectableValue value={step.key} className="font-medium">
+                    {step.label}
+                  </InspectableValue>
                 }
                 secondary={step.purpose}
                 clip={false}
