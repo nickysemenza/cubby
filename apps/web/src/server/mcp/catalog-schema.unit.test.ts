@@ -816,6 +816,9 @@ describe("MCP catalog schemas", () => {
  */
 const KERNEL_SCHEMA_BUDGET = 143_360;
 const WORKFLOW_SCHEMA_BUDGET = 19_456;
+// Retained shipment packages and observations expand purchase-import inputs.
+// Keep this allowance scoped to that tool rather than every workflow.
+const PURCHASE_IMPORT_SCHEMA_BUDGET = 20_480;
 const KERNEL_TOOLS = new Set(["entity", "entity_read"]);
 
 function isObject(value: JSONType | undefined): value is JsonObject {
@@ -882,7 +885,9 @@ describe("MCP catalog publication without services", () => {
       const size = JSON.stringify(schema).length;
       const budget = KERNEL_TOOLS.has(tool.name)
         ? KERNEL_SCHEMA_BUDGET
-        : WORKFLOW_SCHEMA_BUDGET;
+        : tool.name === "purchase_import"
+          ? PURCHASE_IMPORT_SCHEMA_BUDGET
+          : WORKFLOW_SCHEMA_BUDGET;
       if (size > budget) oversized.push(`${tool.name}: ${size} > ${budget}`);
     }
     expect(oversized).toEqual([]);
