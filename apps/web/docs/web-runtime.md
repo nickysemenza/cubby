@@ -249,6 +249,9 @@ Sibling saved-view counts may share explicitly filter-independent preparation
 through one database-bound operation scope. Each view still selects its own
 membership and applies its complete filters. Ordinary filter-dependent prepares
 and seeded contexts remain local; the scope ends with the count operation.
+Proposal-count badges subscribe to shared counts only for eligible title cells
+and fieldless mobile titles. Other cells return their existing content before
+joining that context.
 For automatic suggestion recomputation, prioritize visible rows plus a bounded
 prefetch buffer, reuse current saved answers, and batch only missing or
 invalidated decisions after checking their individual caches. Virtualized
