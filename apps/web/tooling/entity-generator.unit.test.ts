@@ -33,6 +33,7 @@ import {
 import { hasGenericListOperation } from "../generator/entities/list-capabilities";
 import { deriveImageDisplaySources } from "../generator/entities/derive";
 import { renderImagePolicyArtifacts } from "../generator/entities/render/image-policy";
+import { entityReadDependents } from "../generator/entities/read-dependencies";
 import {
   renderEntityTableArtifacts,
   renderIdentityStorageTablesArtifact,
@@ -2276,6 +2277,27 @@ describe("typed entity compiler", () => {
       "entity-literal-alpha.gen.ts",
       "notes.gen.ts",
     ]);
+  });
+
+  it("tracks composed media inputs without recursively expanding unrelated reads", async () => {
+    const declarations = await loadEntityDeclarations();
+    const dependents = entityReadDependents(declarations);
+    expect(dependents.vendor).toEqual(
+      expect.arrayContaining([
+        "product",
+        "ingredient",
+        "inventory",
+        "expense",
+        "task",
+        "project",
+        "location",
+      ]),
+    );
+    expect(dependents.vendor).not.toContain("vendor");
+    expect(dependents.task).toContain("project");
+    expect(dependents.project).toContain("task");
+    expect(dependents.project).not.toContain("project");
+    expect(dependents.spendingCategory).toEqual(["productCategory"]);
   });
 
   it("lists every routed entity with a contract, read-only or not", async () => {

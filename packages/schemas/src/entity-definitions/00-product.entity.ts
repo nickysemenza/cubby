@@ -3676,6 +3676,7 @@ Rules:
       },
       images: {
         storage: imageAssociationStorage.shape.product.value,
+        displaySources: [{ relationPath: ["brand"] }],
         ingress: [
           { kind: "self", routeId: "product-self" },
           { kind: "createSelf", routeId: "product-new", enabled: true },
