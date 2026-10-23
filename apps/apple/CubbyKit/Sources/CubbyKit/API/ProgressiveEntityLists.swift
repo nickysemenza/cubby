@@ -29,11 +29,12 @@ extension CubbyClient {
         let requested = groups.filter { !visible.isDisjoint(with: $0.fields) }
         let deferred = EntityListDeferred(
             groups: requested,
-            enrich: { [self] ids, groups in
+            enrich: { [self] ids, groupIDs in
+                let fields = Set(requested.filter { groupIDs.contains($0.id) }.flatMap(\.fields)).sorted()
                 let request: JSONValue = [
                     "entity": .string(descriptor.key.rawValue),
                     "ids": .array(ids.map(JSONValue.string)),
-                    "groups": .array(groups.map(JSONValue.string)),
+                    "fields": .array(fields.map(JSONValue.string)),
                 ]
                 let response = try JSONValue(
                     encoding: try await entityListEnrichment(try request.decoded()))

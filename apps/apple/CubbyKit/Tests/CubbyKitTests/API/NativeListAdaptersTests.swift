@@ -23,6 +23,38 @@ private final class NativeListStub: URLProtocol, @unchecked Sendable {
 @Suite("Native list adapters", .timeLimit(.minutes(1)), .serialized)
 @MainActor
 struct NativeListAdaptersTests {
+    @Test func progressiveGroupsRequestTheirAdvertisedFields() async throws {
+        defer { NativeListStub.handler.withLock { $0 = nil } }
+        let bodies = Mutex<[Data]>([])
+        NativeListStub.handler.withLock { handler in
+            handler = { request in
+                if request.url?.path.hasSuffix("listBase") == true {
+                    return (
+                        200,
+                        Data(
+                            #"{"entity":"product","data":[],"meta":{"pageIndex":0,"pageSize":25,"totalCount":0},"groups":[{"id":"media","fields":["displayImages","images"]},{"id":"derived","fields":["syntheticHiddenField"]}]}"#
+                                .utf8)
+                    )
+                }
+                bodies.withLock { $0.append((try? Self.requestBody(request)) ?? Data()) }
+                return (
+                    200,
+                    Data(
+                        #"{"entity":"product","groups":[{"id":"media","fields":["displayImages","images"],"state":"ready","data":[]}],"missingIds":[]}"#
+                            .utf8)
+                )
+            }
+        }
+        let page = try await makeClient().progressiveList(EntityCatalog[.product])
+        let deferred = try #require(page.deferred)
+        #expect(deferred.groups.map(\.id) == ["media"])
+        _ = try await deferred.enrich(["PRD-SYNTHETIC"], ["media"])
+        let body = try #require(bodies.withLock { $0.first })
+        let input = try JSONDecoder().decode(JSONValue.self, from: body)
+        #expect(input["fields"] == ["displayImages", "images"])
+        #expect(input["groups"] == nil)
+    }
+
     private func makeClient() throws -> CubbyClient {
         let store = InMemorySessionTokenStore()
         try store.save(.bearer("tok"), for: "localhost:3000")

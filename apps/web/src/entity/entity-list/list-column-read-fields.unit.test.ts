@@ -51,19 +51,25 @@ describe("list column deferred reads", () => {
     const fields = listColumnReadFields("product", "servingAsLocations");
     const requested = groups
       .filter((group) => group.fields.some((field) => fields.includes(field)))
-      .map((group) => group.id);
+      .map((group) => ({
+        ...group,
+        fields: group.fields.filter((field) => fields.includes(field)),
+      }));
     const session = new ProgressiveListSession(() => {});
     session.reset("initial");
     session.setPages([rows]);
-    await session.load(rows, requested, async (_ids, requestedGroups) => ({
-      groups: requestedGroups.map((id) => ({
-        id,
-        state: "ready",
-        data: [{ id: rows[0]!.id, quantityLedger: { locationCount: 2 } }],
-      })),
+    await session.load(rows, requested, async (_ids, requestedFields) => ({
+      groups: [
+        {
+          id: "derived",
+          fields: requestedFields,
+          state: "ready",
+          data: [{ id: rows[0]!.id, quantityLedger: { locationCount: 2 } }],
+        },
+      ],
       missingIds: [],
     }));
-    expect(session.state(rows[0]!.id, "derived").state).toBe("ready");
+    expect(session.state(rows[0]!.id, "quantityLedger").state).toBe("ready");
     expect(session.rows()[0]).toMatchObject({
       quantityLedger: { locationCount: 2 },
     });

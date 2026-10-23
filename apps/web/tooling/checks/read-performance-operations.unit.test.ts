@@ -391,7 +391,7 @@ it.each([false, true])(
           const body = request.url?.endsWith("listBase")
             ? {
                 data: hasRows ? [{ id: "synthetic-private-id" }] : [],
-                groups: [{ id: "derived" }],
+                groups: [{ id: "derived", fields: ["unitPrice"] }],
               }
             : request.url?.endsWith("listEnrichment")
               ? { groups: [{ state: "ready" }] }

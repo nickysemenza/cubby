@@ -106,12 +106,13 @@ export function useProgressiveList<T extends { id: string }>({
     for (const page of pages) {
       const groups =
         page.deferredGroups
-          ?.filter(
-            (group) =>
-              fields === undefined ||
-              group.fields.some((field) => fields.includes(field)),
-          )
-          .map((group) => group.id) ?? [];
+          ?.map((group) => ({
+            ...group,
+            fields: group.fields.filter(
+              (field) => fields === undefined || fields.includes(field),
+            ),
+          }))
+          .filter((group) => group.fields.length > 0) ?? [];
       // A page may legally contain more ids than the wire enrichment cap.
       for (let offset = 0; offset < page.items.length; offset += 500) {
         void session.load(
@@ -160,15 +161,25 @@ export function useProgressiveList<T extends { id: string }>({
       const group = current.pages
         ?.flatMap((page) => page.deferredGroups ?? [])
         .find((entry) => entry.fields.includes(field));
-      return group ? current.session.state(id, group.id) : undefined;
+      return group ? current.session.state(id, field) : undefined;
     },
     [],
   );
+  const isFieldReady = useCallback((id: string, field: string) => {
+    const current = stateRef.current;
+    if (!current.enabled) return true;
+    const deferred = current.pages?.some((page) =>
+      page.deferredGroups?.some((group) => group.fields.includes(field)),
+    );
+    return !deferred || current.session.freshState(id, field).state === "ready";
+  }, []);
   const enrichmentFailures: ListEnrichmentFailure[] = [];
   for (const [pageIndex, page] of (pages ?? []).entries()) {
     for (const group of page.deferredGroups ?? []) {
       const state = page.items
-        .map((row) => session.state(row.id, group.id))
+        .flatMap((row) =>
+          group.fields.map((field) => session.state(row.id, field)),
+        )
         .find((state) => state.state === "error");
       if (state?.state === "error")
         enrichmentFailures.push({ pageIndex, group: group.id, state });
@@ -189,7 +200,7 @@ export function useProgressiveList<T extends { id: string }>({
       for (let offset = 0; offset < page.items.length; offset += 500) {
         await session.retry(
           page.items.slice(offset, offset + 500),
-          [group],
+          page.deferredGroups?.filter((entry) => entry.id === group) ?? [],
           activePlan.enrich,
         );
       }
@@ -197,6 +208,7 @@ export function useProgressiveList<T extends { id: string }>({
     [pages, paused, refreshing, session],
   );
   return {
+    isFieldReady,
     enrichmentFailures,
     retryEnrichment,
     retrySummary,

@@ -641,7 +641,7 @@ export const renderEntityArtifacts = (
           const pick = Object.fromEntries(
             ["id", ...inspector.list.read[group]].map((field) => [field, true]),
           );
-          return `z.object({id:z.literal(${JSON.stringify(group)}),state:z.literal("ready"),data:z.array(z.object(${key}ListItem.shape).pick(${compactLiteral(pick)}).partial().required({id:true}))})`;
+          return `z.object({id:z.literal(${JSON.stringify(group)}),fields:z.array(z.string()),state:z.literal("ready"),data:z.array(z.object(${key}ListItem.shape).pick(${compactLiteral(pick)}).partial().required({id:true}))})`;
         })
         .join(",\n");
       return `z.object({entity:z.literal(${JSON.stringify(key)}),groups:z.array(z.discriminatedUnion("state",[
@@ -655,8 +655,8 @@ export const entityListBaseMetaSchema = entityListMetaSchema.omit({sums:true});
 export const entityListGroupSchema = z.object({id:z.enum(["media","quality","relations","derived"]),fields:z.array(z.string())});
 ${listBaseItemSchemas}
 export const entityListBaseOutputSchema = z.discriminatedUnion("entity", [${listBaseVariants}]);
-export const entityListEnrichmentInputSchema = z.object({entity:z.enum(listEntities),ids:z.array(z.string().min(1)).max(500),groups:z.array(z.enum(["media","quality","relations","derived"])).max(4)});
-export const entityListEnrichmentErrorSchema = z.object({id:z.enum(["media","quality","relations","derived"]),state:z.literal("error"),error:publicStartOperationErrorSchema});
+export const entityListEnrichmentInputSchema = z.object({entity:z.enum(listEntities),ids:z.array(z.string().min(1)).max(500),fields:z.array(z.string().min(1)).max(500)});
+export const entityListEnrichmentErrorSchema = z.object({id:z.enum(["media","quality","relations","derived"]),fields:z.array(z.string()),state:z.literal("error"),error:publicStartOperationErrorSchema});
 export const entityListEnrichmentOutputSchema = z.discriminatedUnion("entity",[${listEnrichmentVariants}]);
 export const entityListSummaryOutputSchema = z.object({entity:z.enum(listEntities),sums:z.record(z.string(),z.number()).optional(),totalLabels:z.record(z.string(),z.string()).optional()});
 `;
