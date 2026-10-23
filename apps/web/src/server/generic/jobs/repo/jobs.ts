@@ -534,10 +534,10 @@ export async function repeatJob(
 export async function assertJobClaim(
   db: RepositoryQueryInput,
   claim: JobClaim,
-  lock = false,
+  lock?: "share" | "update",
 ) {
   const query = repositoryQueries(db)
-    .select()
+    .select({ leaseExpiresAt: job.leaseExpiresAt })
     .from(job)
     .where(
       and(
@@ -547,7 +547,7 @@ export async function assertJobClaim(
         eq(job.leaseToken, claim.leaseToken),
       ),
     );
-  const [current] = await (lock ? query.for("update") : query);
+  const [current] = await (lock ? query.for(lock) : query);
   if (
     !current?.leaseExpiresAt ||
     current.leaseExpiresAt.getTime() <= Date.now()

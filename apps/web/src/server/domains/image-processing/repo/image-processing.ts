@@ -413,7 +413,7 @@ export async function claimImageProcessingJob(
       await assertJobClaim(
         databaseForTransaction(tx),
         currentExecution.claim,
-        true,
+        "update",
       );
       await tx
         .update(imageProcessingJob)

@@ -47,7 +47,7 @@ import {
   listSuggestionPage,
 } from "~/server/generic/assessment/repo/suggestion-list";
 import { currentJobExecution } from "~/server/generic/jobs/context";
-import { cancelJob } from "~/server/generic/jobs/repo/jobs";
+import { cancelJob, renewJob } from "~/server/generic/jobs/repo/jobs";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { readWorkQueue } from "~/server/generic/work-queue/service/work-queue-read";
 import {
@@ -1862,7 +1862,7 @@ describe("statement Transaction suggestions", () => {
     await card(ctx);
     await record(
       ctx,
-      Array.from({ length: 40 }, (_, index) =>
+      Array.from({ length: 168 }, (_, index) =>
         rowInput({
           merchant: `Example Merchant ${index}`,
           rawDescription: `SYNTHETIC CHARGE ${index}`,
@@ -1879,50 +1879,106 @@ describe("statement Transaction suggestions", () => {
     let publishActive = 0;
     let publishPeak = 0;
     const publish = assessmentRepo.publishAssessments;
+    const releasePublications = Promise.withResolvers<void>();
+    const renewalStarted = Promise.withResolvers<number>();
+    let publicationDb: Parameters<typeof publish>[0] | undefined;
+    let claim:
+      | NonNullable<ReturnType<typeof currentJobExecution>>["claim"]
+      | undefined;
+    let renewal: Promise<boolean> | undefined;
+    let renewalQueued = false;
+    let publicationsAfterQueue = 0;
     const batchSizes: number[] = [];
     const spy = vi
       .spyOn(assessmentRepo, "publishAssessments")
       .mockImplementation(async (...args) => {
         publishPeak = Math.max(publishPeak, ++publishActive);
         batchSizes.push(args[1].length);
+        publicationDb ??= args[0];
+        claim ??= currentJobExecution()?.claim;
+        if (renewalQueued) publicationsAfterQueue++;
         try {
-          await new Promise((resolve) => setTimeout(resolve, 5));
+          await releasePublications.promise;
           return await publish(...args);
         } finally {
           publishActive--;
         }
       });
-    const pending = labelStatementSuggestions(ctx.db, {
-      port: async (input) => {
-        modelPeak = Math.max(modelPeak, ++modelActive);
-        started.resolve();
-        await release.promise;
-        try {
-          return await answer(input);
-        } finally {
-          modelActive--;
-        }
+    const runId = await ensureRun(ctx.db, ctx.actor, { purpose: "background" });
+    const pending = withJobFixtureExecution(
+      ctx.db,
+      {
+        key: "synthetic.label-fanout-real-job",
+        kind: "synthetic.label-fanout",
+        input: {},
       },
-      runId: await ensureRun(ctx.db, ctx.actor, { purpose: "background" }),
-    });
+      () =>
+        labelStatementSuggestions(ctx.db, {
+          port: async (input) => {
+            modelPeak = Math.max(modelPeak, ++modelActive);
+            started.resolve();
+            await release.promise;
+            try {
+              return await answer(input);
+            } finally {
+              modelActive--;
+            }
+          },
+          runId,
+        }),
+    );
     try {
       await started.promise;
       // Model answers remain outstanding while the complete page fans out.
       await new Promise((resolve) => setTimeout(resolve, 100));
       expect(publishActive).toBe(0);
       release.resolve();
+      await expect.poll(() => publishActive).toBe(4);
+      const owner = claim;
+      const held = publicationDb;
+      if (!owner || !held) throw new Error("Expected real Job publications");
+      renewal = databaseHelpers.withTransactionDatabase(ctx.db, async (tx) => {
+        const pid = await getDb(tx).execute<{ pid: number }>(
+          sql`SELECT pg_backend_pid() AS pid`,
+        );
+        const controlPid = pid.rows[0]?.pid;
+        if (!controlPid) throw new Error("Expected renewal connection");
+        renewalStarted.resolve(controlPid);
+        return renewJob(tx, owner);
+      });
+      renewal.catch(renewalStarted.reject);
+      const renewalPid = await renewalStarted.promise;
+      // Observe through a held publication connection: four holders plus the
+      // renewal already occupy the five-connection production pool shape.
+      await expect
+        .poll(async () => {
+          const waiting = await getDb(held).execute<{
+            waiting: boolean;
+          }>(sql`SELECT EXISTS (
+          SELECT 1 FROM pg_stat_activity WHERE pid = ${renewalPid}::int
+            AND cardinality(pg_blocking_pids(pid)) > 0
+        ) AS waiting`);
+          return waiting.rows[0]?.waiting;
+        })
+        .toBe(true);
+      renewalQueued = true;
+      releasePublications.resolve();
       const outcome = await pending;
+      expect(await renewal).toBe(true);
+      expect(publicationsAfterQueue).toBe(2);
       expect(modelPeak).toBeGreaterThanOrEqual(30);
       expect(outcome).toMatchObject({
-        labelled: 40,
-        labels: { generated: 120 },
+        labelled: 168,
+        labels: { generated: 504 },
       });
       expect(publishPeak).toBeGreaterThan(1);
       expect(publishPeak).toBeLessThanOrEqual(4);
-      expect(batchSizes.sort((a, b) => a - b)).toEqual([8, 32]);
+      expect(batchSizes.sort((a, b) => a - b)).toEqual([8, 32, 32, 32, 32, 32]);
     } finally {
       release.resolve();
+      releasePublications.resolve();
       await pending;
+      await renewal;
       spy.mockRestore();
     }
   });

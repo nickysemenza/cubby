@@ -68,7 +68,18 @@ served kind derived from existing Job timestamps. Priority ranks only within a
 kind; manual Run execution has raised priority. The drain reselects batches of
 25 with a default 256-page / 20-second budget. Budget exhaustion publishes a
 new wake. Claims use `SKIP LOCKED`, renewed leases and generation/token fences;
-successful pages reset consecutive failures. Exhausted failures and member
+effect-only transactions hold shared Job row locks and recheck ownership and
+wall-clock lease expiry before commit. Shared holders permit unrelated effects,
+while renewal and member controls remain excluded until every holder finishes.
+Job settlement, claim and mutation boundaries retain exclusive locks. A
+transaction that will mutate its own Job acquires exclusive ownership before any
+effect guard or domain lock; it must not upgrade shared ownership afterwards.
+Shared admission does not promise FIFO ordering with waiting controls. Each
+bounded page drains its effect transactions before exclusive settlement; the next
+page cannot bypass a waiting control through that settlement/claim boundary.
+Keep effect transactions short; admission and publication reject expired leases.
+Domain evidence and ordering locks remain independent. Successful pages reset
+consecutive failures. Exhausted failures and member
 pauses require explicit action.
 
 Typed `waitReason` and `waitUntil` distinguish provider capacity, AI funding

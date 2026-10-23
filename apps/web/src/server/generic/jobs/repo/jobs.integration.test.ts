@@ -21,7 +21,7 @@ import {
 } from "~/server/workflows/runs/lifecycle";
 
 import { setJobStepKey, withJobExecution } from "../context";
-import { JobDeferredError } from "../errors";
+import { JobDeferredError, JobSupersededError } from "../errors";
 import { advanceJob, drainDueJobs } from "../service/jobs";
 import { assertCurrentJob } from "./execution";
 import {
@@ -33,6 +33,7 @@ import {
   failJob,
   pauseJob,
   publishJobPage,
+  renewJob,
   retryJob,
 } from "./jobs";
 
@@ -170,6 +171,209 @@ describe("durable jobs", () => {
     });
   });
 
+  it("admits independent effect transactions under the same Job claim concurrently", async () => {
+    const saved = await enqueue("synthetic.concurrent-effects");
+    const claimed = await claimJob(ctx.db, saved.id);
+    if (!claimed) throw new Error("Expected concurrent effect claim");
+    await withJobExecution(ctx.db, claimed, () =>
+      withTransactionDatabase(ctx.db, async (first) => {
+        await assertCurrentJob(first);
+        const firstPid = await getDb(first).execute<{ pid: number }>(
+          sql`SELECT pg_backend_pid() AS pid`,
+        );
+        await withTransactionDatabase(ctx.db, async (second) => {
+          await getDb(second).execute(sql`SET LOCAL lock_timeout = '1s'`);
+          const secondPid = await getDb(second).execute<{ pid: number }>(
+            sql`SELECT pg_backend_pid() AS pid`,
+          );
+          expect(secondPid.rows[0]?.pid).not.toBe(firstPid.rows[0]?.pid);
+          await assertCurrentJob(second);
+          await enqueueJob(second, {
+            key: "synthetic.concurrent-effect-second",
+            kind: "synthetic.output",
+            input: {},
+          });
+        });
+        await enqueueJob(first, {
+          key: "synthetic.concurrent-effect-first",
+          kind: "synthetic.output",
+          input: {},
+        });
+      }),
+    );
+    expect(
+      await getDb(ctx.db)
+        .select()
+        .from(job)
+        .where(
+          sql`${job.key} IN ('synthetic.concurrent-effect-first', 'synthetic.concurrent-effect-second')`,
+        ),
+    ).toHaveLength(2);
+  });
+
+  it.each(["renew", "cancel", "pause", "invalidate"] as const)(
+    "allows %s to progress after bounded rolling effect arrivals drain",
+    async (action) => {
+      const saved = await enqueue(`synthetic.shared-control-${action}`);
+      const claimed = await claimJob(ctx.db, saved.id);
+      if (!claimed) throw new Error("Expected shared-control claim");
+      const holders: { release: () => void; completion: Promise<void> }[] = [];
+      const holdEffect = () => {
+        const admitted = Promise.withResolvers<void>();
+        const release = Promise.withResolvers<void>();
+        const completion = withJobExecution(ctx.db, claimed, () =>
+          withTransactionDatabase(ctx.db, async (tx) => {
+            await getDb(tx).execute(sql`SET LOCAL lock_timeout = '5s'`);
+            await assertCurrentJob(tx);
+            admitted.resolve();
+            await release.promise;
+          }),
+        );
+        completion.catch(admitted.reject);
+        const holder = { release: () => release.resolve(), completion };
+        holders.push(holder);
+        return { ...holder, admitted: admitted.promise };
+      };
+      const controlStarted = Promise.withResolvers<number>();
+      let control: Promise<void> | undefined;
+      try {
+        const first = holdEffect();
+        const second = holdEffect();
+        await Promise.all([first.admitted, second.admitted]);
+        control = withTransactionDatabase(ctx.db, async (tx) => {
+          const pid = await getDb(tx).execute<{ pid: number }>(
+            sql`SELECT pg_backend_pid() AS pid`,
+          );
+          const controlPid = pid.rows[0]?.pid;
+          if (!controlPid) throw new Error("Expected control connection");
+          controlStarted.resolve(controlPid);
+          switch (action) {
+            case "renew":
+              await renewJob(tx, claimed);
+              break;
+            case "cancel":
+              await cancelJob(tx, claimed.id);
+              break;
+            case "pause":
+              await pauseJob(tx, claimed.id);
+              break;
+            case "invalidate":
+              await enqueueJob(tx, {
+                key: saved.key,
+                kind: saved.kind,
+                input: {},
+                invalidate: true,
+              });
+              break;
+          }
+        });
+        control.catch(controlStarted.reject);
+        const controlPid = await controlStarted.promise;
+        const isWaiting = async () => {
+          const waiting = await getDb(ctx.db).execute<{
+            waiting: boolean;
+          }>(sql`SELECT EXISTS (
+            SELECT 1 FROM pg_stat_activity WHERE pid = ${controlPid}::int
+              AND cardinality(pg_blocking_pids(pid)) > 0
+          ) AS waiting`);
+          return waiting.rows[0]?.waiting;
+        };
+        await expect.poll(isWaiting).toBe(true);
+        let rolling = holdEffect();
+        await rolling.admitted;
+        // Fresh effects can pass a queued writer. Drain the original holders,
+        // then roll a finite page frontier without assuming tuple-lock fairness.
+        first.release();
+        second.release();
+        await Promise.all([first.completion, second.completion]);
+        for (let index = 0; index < 8; index++) {
+          const next = holdEffect();
+          await next.admitted;
+          rolling.release();
+          await rolling.completion;
+          rolling = next;
+          await expect.poll(isWaiting).toBe(true);
+        }
+        rolling.release();
+        await rolling.completion;
+        await control;
+        // A page must pass exclusive settlement before it can start more work.
+        let nextPagePublished = false;
+        const settled = await publishJobPage(
+          ctx.db,
+          claimed,
+          { done: false },
+          async () => {
+            nextPagePublished = true;
+          },
+        );
+        expect(settled).toBe(action === "renew");
+        expect(nextPagePublished).toBe(action === "renew");
+      } finally {
+        for (const holder of holders) holder.release();
+        await Promise.allSettled([
+          ...holders.map((holder) => holder.completion),
+          ...(control ? [control] : []),
+        ]);
+      }
+    },
+  );
+
+  it("rejects an effect whose lease expires while it waits for ownership admission", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    let pending: Promise<void> | undefined;
+    try {
+      const saved = await enqueue("synthetic.expired-admission");
+      const claimed = await claimJob(ctx.db, saved.id);
+      if (!claimed) throw new Error("Expected admission claim");
+      await withTransactionDatabase(ctx.db, async (holder) => {
+        await getDb(holder)
+          .select()
+          .from(job)
+          .where(eq(job.id, claimed.id))
+          .for("update");
+        const pid = await getDb(holder).execute<{ pid: number }>(
+          sql`SELECT pg_backend_pid() AS pid`,
+        );
+        const holderPid = pid.rows[0]?.pid;
+        if (!holderPid) throw new Error("Expected admission lock holder");
+        pending = withJobExecution(ctx.db, claimed, () =>
+          withTransactionDatabase(ctx.db, async (tx) => {
+            await assertCurrentJob(tx);
+            await enqueueJob(tx, {
+              key: "synthetic.expired-admission-output",
+              kind: "synthetic.output",
+              input: {},
+            });
+          }),
+        );
+        pending.catch(() => undefined);
+        await expect
+          .poll(async () => {
+            const waiting = await getDb(ctx.db).execute<{
+              waiting: boolean;
+            }>(sql`SELECT EXISTS (
+            SELECT 1 FROM pg_stat_activity WHERE ${holderPid}::int = ANY(pg_blocking_pids(pid))
+              AND query ILIKE '%Job%'
+          ) AS waiting`);
+            return waiting.rows[0]?.waiting;
+          })
+          .toBe(true);
+        vi.setSystemTime(claimed.leaseExpiresAt.getTime() + 1);
+      });
+      await expect(pending).rejects.toBeInstanceOf(JobSupersededError);
+      expect(
+        await getDb(ctx.db)
+          .select()
+          .from(job)
+          .where(eq(job.key, "synthetic.expired-admission-output")),
+      ).toEqual([]);
+    } finally {
+      await Promise.allSettled(pending ? [pending] : []);
+      vi.useRealTimers();
+    }
+  });
+
   // Publication installs an outer commit fence. Completing its own Job must
   // happen after that fence, while output and acknowledgement remain atomic.
   it("commits fenced output and its completed Job under a real execution context", async () => {
@@ -180,6 +384,21 @@ describe("durable jobs", () => {
       await withJobExecution(ctx.db, claimed, () =>
         publishJobPage(ctx.db, claimed, { done: true }, async (tx) => {
           await assertCurrentJob(tx);
+          let competingCallback = false;
+          await expect(
+            withTransactionDatabase(ctx.db, async (second) => {
+              await getDb(second).execute(sql`SET LOCAL lock_timeout = '1s'`);
+              await publishJobPage(
+                second,
+                claimed,
+                { done: true },
+                async () => {
+                  competingCallback = true;
+                },
+              );
+            }),
+          ).rejects.toMatchObject({ cause: { code: "55P03" } });
+          expect(competingCallback).toBe(false);
           await enqueueJob(tx, {
             key: "synthetic.fenced-output",
             kind: "synthetic.output",
@@ -203,41 +422,49 @@ describe("durable jobs", () => {
   });
 
   // A transaction may outlive the lease even when PostgreSQL's transaction time has not changed.
-  it("rolls back output when the Job expires before the transaction commits", async () => {
-    vi.useFakeTimers({ toFake: ["Date"] });
-    try {
-      const saved = await enqueue("synthetic.expired-before-commit");
-      const claimed = await claimJob(ctx.db, saved.id);
-      if (!claimed) throw new Error("Expected publication claim");
-      await expect(
-        withJobExecution(ctx.db, claimed, () =>
-          withTransactionDatabase(ctx.db, async (tx) => {
-            await assertCurrentJob(tx);
-            await enqueueJob(tx, {
-              key: "synthetic.expired-output",
-              kind: "synthetic.output",
-              input: {},
-            });
-            await runBeforeCommitDatabase(
-              tx,
-              async () => {
-                vi.setSystemTime(claimed.leaseExpiresAt.getTime() + 1);
-              },
-              "capture",
-            );
-          }),
-        ),
-      ).rejects.toThrow("Job generation or lease is obsolete");
-      expect(
-        await getDb(ctx.db)
-          .select()
-          .from(job)
-          .where(eq(job.key, "synthetic.expired-output")),
-      ).toEqual([]);
-    } finally {
-      vi.useRealTimers();
-    }
-  });
+  it.each(["direct", "savepoint"] as const)(
+    "rolls back output when the Job expires before the %s transaction commits",
+    async (boundary) => {
+      vi.useFakeTimers({ toFake: ["Date"] });
+      try {
+        const saved = await enqueue("synthetic.expired-before-commit");
+        const claimed = await claimJob(ctx.db, saved.id);
+        if (!claimed) throw new Error("Expected publication claim");
+        await expect(
+          withJobExecution(ctx.db, claimed, () =>
+            withTransactionDatabase(ctx.db, async (tx) => {
+              if (boundary === "savepoint")
+                await withTransactionDatabase(tx, (child) =>
+                  assertCurrentJob(child),
+                );
+              else await assertCurrentJob(tx);
+              await enqueueJob(tx, {
+                key: "synthetic.expired-output",
+                kind: "synthetic.output",
+                input: {},
+              });
+              await runBeforeCommitDatabase(
+                tx,
+                async () => {
+                  vi.setSystemTime(claimed.leaseExpiresAt.getTime() + 1);
+                  expect(await claimJob(ctx.db, claimed.id)).toBeNull();
+                },
+                "capture",
+              );
+            }),
+          ),
+        ).rejects.toThrow("Job generation or lease is obsolete");
+        expect(
+          await getDb(ctx.db)
+            .select()
+            .from(job)
+            .where(eq(job.key, "synthetic.expired-output")),
+        ).toEqual([]);
+      } finally {
+        vi.useRealTimers();
+      }
+    },
+  );
 
   // Cancellation/pause must fence an already prepared page. Explicit retry
   // resumes the committed checkpoint; a new input generation starts over.
