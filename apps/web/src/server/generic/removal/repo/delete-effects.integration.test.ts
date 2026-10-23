@@ -6,13 +6,23 @@ import { getDb, runAfterCommit } from "~/server/db/helpers";
 import { recipe } from "~/server/db/schema";
 import {
   deleteRecipes,
+  getRecipeByShortcode,
   RECIPE_DELETE_EDGE_POLICY,
+  recipeList,
 } from "~/server/domains/recipe/repo/crud";
+import { defineEntityOperations } from "~/server/entity-kernel/entity-operations";
+import {
+  defineRepository,
+  listOn,
+  onDb,
+} from "~/server/entity-kernel/repo/repository";
+import { requireActor } from "~/server/http/request-context";
 import { captureBackgroundQueue } from "~/server/testing/background-queue";
 import {
   createRecipeFixture,
   makeRecipeInput,
 } from "~/server/testing/repo.fixtures";
+import { createTestRequestContext } from "~/server/testing/request-context";
 
 import { executeDeleteWithEffects } from "./delete-effects";
 
@@ -35,6 +45,42 @@ describe("delete effect snapshot contention", () => {
       }),
       ctx.actor,
     );
+
+  it("retains snapshot retries through the kernel delete workflow", async () => {
+    const subject = await fixture();
+    let attempts = 0;
+    const binding = defineRepository("recipe", {
+      lifecycle: { delete: RECIPE_DELETE_EDGE_POLICY },
+      get: onDb(getRecipeByShortcode),
+      list: listOn(recipeList),
+      delete: async (context) => {
+        if (++attempts === 1) {
+          await getDb(ctx.db)
+            .update(recipe)
+            .set({ totalsComputedAt: new Date(0) })
+            .where(eq(recipe.id, subject.entityId));
+        }
+        return deleteRecipes(
+          context.db,
+          [subject.entityId],
+          context.actorContext,
+        );
+      },
+    });
+    const operations = defineEntityOperations(binding);
+    const context = requireActor(
+      createTestRequestContext(ctx.db, {
+        auth: { userId: ctx.actor.userId },
+      }),
+    );
+    await operations.delete(context, [subject.id]);
+    expect(attempts).toBe(2);
+    const [stored] = await getDb(ctx.db)
+      .select({ deletedAt: recipe.deletedAt })
+      .from(recipe)
+      .where(eq(recipe.id, subject.entityId));
+    expect(stored?.deletedAt).toBeInstanceOf(Date);
+  });
 
   it("deletes after a background cache update replaces its snapshot tuple", async () => {
     const subject = await fixture();

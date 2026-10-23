@@ -604,24 +604,7 @@ const buildEntityOperations = <
           };
         })
         .commit("deleted", async ({ context }, { validated }) =>
-          withTransactionDatabase(context.db, async (db) => {
-            const deleted = await validated.run(
-              {
-                ...context,
-                db,
-                services: {
-                  ...context.services,
-                  recipeCosting: context.services.recipeCosting.bindTo(db),
-                },
-              },
-              validated.ids,
-            );
-            await recordChange(db, {
-              kind: "source",
-              categories: [binding.entity],
-            });
-            return deleted;
-          }),
+          validated.run(context, validated.ids),
         )
         .effect("receipt", async (_, { deleted }) => {
           if (!deleted.affectedEdges)

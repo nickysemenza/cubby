@@ -71,19 +71,12 @@ export const splitExpenseWorkflow = bindWorkflow(
     "purchase.split",
   )
     .commit("split", ({ context }, { input }) =>
-      withTransactionDatabase(context.db, async (transactionDb) => {
-        const result = await splitExpense(
-          transactionDb,
-          input,
-          context.actorContext,
-          expenseLineRoleClassifier(),
-        );
-        await recordChange(transactionDb, {
-          kind: "source",
-          categories: ["expense"],
-        });
-        return result;
-      }),
+      splitExpense(
+        context.db,
+        input,
+        context.actorContext,
+        expenseLineRoleClassifier(),
+      ),
     )
     .effect("pricing", async ({ context }, { split }) => {
       if (split.priceAffectedProductIds.length > 0) {
