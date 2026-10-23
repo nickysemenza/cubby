@@ -23,6 +23,8 @@ readable labels.
 Within a query scope, unchanged rendered cells retain their measured contribution;
 content changes invalidate only the affected cell. New cells and font readiness
 receive fresh measurements, and a new query scope resets the fit.
+Mutations without an eligible unmeasured cell skip geometry reads as well as
+offscreen cloning, so unrelated enrichment cannot force a fitting layout.
 
 Desktop table cells containing `DateDisplay`'s open-overdue marker use the
 destructive surface tint across the cell. Keep the overdue text as a second

@@ -324,6 +324,31 @@ function DateFitFixture() {
 const width = (element: Element) => element.getBoundingClientRect().width;
 
 describe("rendered column fit", () => {
+  it("does not read table geometry for mutations outside the measured cells", async () => {
+    await page.viewport(1440, 900);
+    await document.fonts.ready;
+    const view = render(<FitFixture />);
+    await waitFor(() =>
+      expect(width(view.getByTestId("location"))).toBeLessThan(100),
+    );
+    await new Promise<void>((resolve) =>
+      requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+    );
+    const table = view.container.querySelector("table");
+    if (!table?.parentElement)
+      throw new Error("Missing fitted table container");
+    const geometry = vi.spyOn(table, "getBoundingClientRect");
+    try {
+      table.parentElement.append(document.createElement("span"));
+      await new Promise<void>((resolve) =>
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+      );
+      expect(geometry).not.toHaveBeenCalled();
+    } finally {
+      geometry.mockRestore();
+    }
+  });
+
   it("measures newly mounted cells without cloning unchanged rows", async () => {
     await page.viewport(1440, 900);
     await document.fonts.ready;
