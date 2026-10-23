@@ -1,6 +1,5 @@
 import type { Locator, Page } from "@playwright/test";
 
-import { buildEntityReport } from "~/server/generic/entity-report/repo";
 import { attachPurchaseProducts } from "~/server/domains/purchase/repo/purchase-products";
 import { resolveLiveShortcode } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
@@ -289,24 +288,65 @@ for (const state of ["owned", "exited", "uncertain"] as const) {
     page,
   }, testInfo) => {
     const name = uniqueName(testInfo, `Synthetic ${state} overview`);
-    const member = await ensureMemberParty(page, name);
+    await ensureMemberParty(page, name);
     const feature = state === "owned" ? "food" : "tools";
-    const category = await seedProductCategoryPrerequisite(page, {
-      name: `${name} category`,
-      parentId: taxonomyShortcode(feature),
-    });
-    const product = await seedProductPrerequisite(page, {
-      name,
-      categoryId: category.id,
-    });
-    const vendor = await createFixture(page, "vendor", {
-      name: `${name} vendor`,
-    });
-    const purchase = await createFixture(page, "purchase", {
-      vendorId: vendor.id,
-      orderId: `${name} order`,
-      date: "2026-01-05",
-    });
+    const { product, purchase } = await createFixtureGraph(
+      page,
+      async (create) => {
+        const category = await create("productCategory", {
+          name: `${name} category`,
+          parentId: taxonomyShortcode(feature),
+          sortOrder: 0,
+          feature: null,
+        });
+        const brand = await create("vendor", { name: "E2E fixture" });
+        const product = await create("product", {
+          name,
+          categoryId: category.id,
+          brandId: brand.id,
+        });
+        const vendor = await create("vendor", { name: `${name} vendor` });
+        const purchase = await create("purchase", {
+          vendorId: vendor.id,
+          orderId: `${name} order`,
+          date: "2026-01-05",
+        });
+        if (state !== "uncertain") {
+          await create("expense", {
+            name: `${name} acquisition`,
+            productId: product.id,
+            purchaseId: purchase.id,
+            cost: 25,
+            productQuantity: 1,
+            date: "2026-01-05",
+            costType: "materials",
+            trade: "other",
+            lineKind: "principal",
+            lineBasis: "item_line",
+          });
+          if (state === "exited") {
+            const exitPurchase = await create("purchase", {
+              vendorId: vendor.id,
+              orderId: `${name} exit order`,
+              date: "2026-01-06",
+            });
+            await create("expense", {
+              name: `${name} exit`,
+              productId: product.id,
+              purchaseId: exitPurchase.id,
+              cost: -15,
+              productQuantity: -1,
+              date: "2026-01-06",
+              costType: "materials",
+              trade: "other",
+              lineKind: "principal",
+              lineBasis: "item_line",
+            });
+          }
+        }
+        return { product, purchase };
+      },
+    );
     if (state === "uncertain") {
       await linkProducts(page, purchase.id, [product.id]);
       await evidenceLine(page, {
@@ -317,29 +357,6 @@ for (const state of ["owned", "exited", "uncertain"] as const) {
         productQuantity: 1,
         future: true,
       });
-    } else {
-      await evidenceLine(page, {
-        name: `${name} acquisition`,
-        productId: product.id,
-        purchaseId: purchase.id,
-        cost: 25,
-        productQuantity: 1,
-      });
-      if (state === "exited") {
-        const exitPurchase = await createFixture(page, "purchase", {
-          vendorId: vendor.id,
-          orderId: `${name} exit order`,
-          date: "2026-01-06",
-        });
-        await evidenceLine(page, {
-          name: `${name} exit`,
-          productId: product.id,
-          purchaseId: exitPurchase.id,
-          cost: -15,
-          productQuantity: -1,
-          date: "2026-01-06",
-        });
-      }
     }
 
     await gotoAuthenticatedPage(page, `/products/${product.id}`);
@@ -416,24 +433,6 @@ for (const state of ["owned", "exited", "uncertain"] as const) {
           }),
         ).toBeVisible();
     }
-    await page
-      .getByRole("heading", { level: 2, name: "Overview", exact: true })
-      .scrollIntoViewIfNeeded();
-    await page
-      .getByRole("heading", { name: "Enrichment history", exact: true })
-      .scrollIntoViewIfNeeded();
-    const { db, actor } = await createEvidenceHarnessContext(page);
-    const report = await buildEntityReport(
-      db,
-      { slot: "product.runs", scope: { kind: "record", id: product.id } },
-      async () => member,
-      actor,
-    );
-    const history = report.blocks.find((block) => block.kind === "records");
-    if (history?.kind !== "records" || !history.empty)
-      throw new Error("Missing empty Product research history");
-    expect(history.rows).toHaveLength(0);
-    await expect(page.getByText(history.empty, { exact: true })).toBeVisible();
   });
 }
 

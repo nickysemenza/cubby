@@ -528,6 +528,12 @@ to assert header position costs a full browser journey for a presentation detail
 Shared responsive capabilities do not establish sticky behavior; verify that
 visual detail during relevant layout work instead.
 
+Product ownership overviews keep the three movement states, ownership guidance
+and their supporting sections. Build each acquired/exited state in one fixture
+graph; uncertain ownership keeps its explicit Product link before the future
+Expense. The visible Runs section covers composition without repeating an empty
+report query and matching its copy for every ownership state.
+
 Fast header pointer probes wait for the intended dnd-kit target announcement
 before release; completion of mouse input alone does not establish that React
 has processed drag-over. Keep the actual final header-order assertion.
