@@ -350,8 +350,8 @@ describe("reviewed booking category and refund capacity", () => {
         ),
         ctx.actor,
       );
-      if (!booking.expenseId)
-        throw new Error("Expected generated booking Expense");
+      const expenseId = booking.expenseId;
+      if (!expenseId) throw new Error("Expected generated booking Expense");
       const transfer = await createLedgerTransfer(
         ctx.db,
         buildEntity("ledgerTransfer", {
@@ -359,7 +359,6 @@ describe("reviewed booking category and refund capacity", () => {
           toPartyId: recipient.output.id,
           amount,
           date: "2026-09-10",
-          kind: "internal_move",
         }),
         ctx.actor,
       );
@@ -367,7 +366,7 @@ describe("reviewed booking category and refund capacity", () => {
         transactionId: source.output.id,
         action: { kind: "convert_to_transfer", transferId: transfer.output.id },
       });
-      return { source, booking, transfer, review };
+      return { source, expenseId, transfer, review };
     };
     const converted = await transferReview(20);
     await commitFinancialBookingCorrection(ctx.db, converted.review, ctx.actor);
@@ -383,14 +382,14 @@ describe("reviewed booking category and refund capacity", () => {
     });
     expect(
       await getDb(ctx.db).query.expense.findFirst({
-        where: eq(expense.shortcode, converted.booking.expenseId),
+        where: eq(expense.shortcode, converted.expenseId),
       }),
     ).toMatchObject({ deletedAt: expect.any(Date) });
 
     const stale = await transferReview(25);
     await updateExpense(
       ctx.db,
-      stale.booking.expenseId,
+      stale.expenseId,
       { notes: "Synthetic reviewed note change" },
       ctx.actor,
     );
@@ -399,7 +398,7 @@ describe("reviewed booking category and refund capacity", () => {
     ).rejects.toThrow(/original booking was edited/);
     expect(
       await getDb(ctx.db).query.expense.findFirst({
-        where: eq(expense.shortcode, stale.booking.expenseId),
+        where: eq(expense.shortcode, stale.expenseId),
       }),
     ).toMatchObject({
       deletedAt: null,
