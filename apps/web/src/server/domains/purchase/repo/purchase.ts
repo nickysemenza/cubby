@@ -187,6 +187,12 @@ import {
 } from "./purchase-purchaser";
 
 export const PURCHASE_DELETE_EDGE_POLICY = {
+  "Shipment.purchaseId": {
+    code: "detach-shipment",
+    effect: "detach",
+    description:
+      "Packages and their tracking evidence survive without a Purchase association.",
+  },
   "SourceOrderObservation.purchaseId": {
     code: "preserve-source-observation",
     effect: "preserve",
@@ -244,6 +250,12 @@ export const PURCHASE_DELETE_EDGE_POLICY = {
 } as const satisfies IncomingEdgePolicy<"purchase", OperationDisposition>;
 
 export const PURCHASE_MERGE_EDGE_POLICY = {
+  "Shipment.purchaseId": {
+    code: "repoint-shipment",
+    effect: "repoint",
+    description:
+      "Packages follow the surviving Purchase without changing tracking evidence.",
+  },
   "SourceOrderObservation.purchaseId": {
     code: "preserve-source-observation",
     effect: "preserve",

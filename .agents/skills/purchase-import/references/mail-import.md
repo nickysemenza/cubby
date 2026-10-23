@@ -9,10 +9,10 @@ Claude or Codex session researches it later through the Research queue.
    `mailboxId` and `messageId` with its `read`, or returns `none` when every
    Email is settled. It takes no arguments. The host gives each call a durable
    identity; a new call observes current work, while retrying that same call
-   preserves its result. Cubby itself settles, before claiming, a shipped,
-   delivered or duplicate confirmation notice whose printed order id names
-   exactly one recorded Purchase of the sender's Vendor, and an Email its
-   classifier confidently called unrelated.
+   preserves its result. Before claiming, Cubby settles confident unrelated
+   classifier outcomes. Related lifecycle and duplicate confirmation Emails
+   reach you even when their Purchase is already itemized: inspect and record
+   their package evidence before resolving them.
 2. The claim's `read` is the Email's first `mcp__cubby__imports_read` `mail`
    read; `readError` instead names why Cubby could not read it. Call
    `imports_read` `mail` only for an attachment's original (`attachmentId`,
@@ -44,6 +44,13 @@ Claude or Codex session researches it later through the Research queue.
      read's `attachmentId` (itself the attachment's key, which Cubby also
      accepts alone) and that attachment's `checksum`). Then `commit` it with a
      resolution for every principal line.
+   - **Package observations** (vendor, carrier or Shop): retain each package
+     with `shipments.record`, using the read's EML- `id` and checksum and a
+     supported Purchase or null. Follow
+     [shipment intake](order-mail.md#record-shipment-evidence) and
+     [package extraction](extraction.md#package-observations). Then resolve the
+     Email using the applicable disposition below. An unmatched package stays
+     retained; no Purchase, priced line or stock receipt is invented.
    - **A lifecycle Email about an existing Purchase** (shipped, delivered,
      cancelled, refunded, or another event): take that Purchase from
      `known.purchases`, or find it by order id and Vendor, then `mail`

@@ -59,6 +59,7 @@ const MAIL_IMPORT_MCP_ACTIONS = [
   "imports_read.mail",
   "mail.search",
   "mail.resolve",
+  "shipments.record",
   "purchase_import.prepare",
   "purchase_import.commit",
   "entity_read.get",

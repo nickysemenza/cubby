@@ -115,24 +115,18 @@ describe("mail import rule", () => {
     ).toEqual([]);
   });
 
-  it("links the one same-Vendor Purchase its identifier names", () => {
-    expect(decideMailByRule(evidence())).toEqual({
-      kind: "linked",
-      purchaseId,
-      event: "shipped",
-    });
-    expect(
-      decideMailByRule(
-        evidence({
-          subject: "Delivered: your order SYN-1001",
-          candidates: [
-            candidate,
-            { ...candidate, purchaseId: siblingId, vendorId: otherVendorId },
-          ],
-        }),
-      ),
-    ).toEqual({ kind: "linked", purchaseId, event: "delivered" });
-  });
+  it.each([
+    "Your order SYN-1001 has shipped",
+    "Delivered: your order SYN-1001",
+    "Order confirmation SYN-1001",
+  ])(
+    "leaves an imported order's %s notice for package extraction",
+    (subject) => {
+      expect(decideMailByRule(evidence({ subject }))).toMatchObject({
+        kind: "coordinator",
+      });
+    },
+  );
 
   it.each<[string, Partial<MailRuleEvidence>]>([
     [
@@ -222,12 +216,6 @@ describe("mail import rule", () => {
       ).toMatchObject({ kind: "coordinator" });
     },
   );
-
-  it("settles a duplicate confirmation of an imported order", () => {
-    expect(
-      decideMailByRule(evidence({ subject: "Order confirmation SYN-1001" })),
-    ).toEqual({ kind: "linked", purchaseId, event: "confirmation" });
-  });
 
   it.each(["rule", "decision", "model"] as const)(
     "resolves a confident %s unrelated classification unrelated",

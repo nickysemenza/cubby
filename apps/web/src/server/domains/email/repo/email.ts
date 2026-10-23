@@ -27,6 +27,7 @@ import {
   ledgerParty,
   email as emailTable,
   emailFinancialAssociation,
+  shipmentSourceCapture,
   vendorAccount,
 } from "~/server/db/schema";
 import { readEmailFinancialAssociations } from "~/server/domains/email/repo/email-financial-associations";
@@ -180,7 +181,7 @@ export async function readEmailAssociations(
   };
 }
 
-/** Accepted source, lifecycle or reviewed financial evidence protects its original. */
+/** Accepted order, lifecycle, financial or shipment evidence protects its original. */
 export async function hasAcceptedEmailAssociation(
   db: Database | DrizzleTransaction,
   input: {
@@ -196,6 +197,9 @@ export async function hasAcceptedEmailAssociation(
       linked: sql<boolean>`(${emailLinkedSql()} OR EXISTS (
       SELECT 1 FROM ${emailFinancialAssociation} reviewed_financial_evidence
       WHERE reviewed_financial_evidence."emailId" = "Email"."id"
+    ) OR EXISTS (
+      SELECT 1 FROM ${shipmentSourceCapture} shipment_evidence
+      WHERE shipment_evidence."emailId" = "Email"."id"
     ))`,
     })
     .from(emailTable)

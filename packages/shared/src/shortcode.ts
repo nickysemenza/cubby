@@ -210,6 +210,7 @@ const shortcodeParser =
 const PARSE_CANONICAL_SHORTCODE = {
   sourceTransactionRecord: shortcodeParser("sourceTransactionRecord"),
   transactionImport: shortcodeParser("transactionImport"),
+  shipment: shortcodeParser("shipment"),
   email: shortcodeParser("email"),
   imageJob: shortcodeParser("imageJob"),
   spendingCategory: shortcodeParser("spendingCategory"),

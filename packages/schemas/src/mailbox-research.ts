@@ -1,3 +1,4 @@
+import { shipmentEvidence } from "./shipment-evidence";
 import { supportedDecisionModelSchema } from "@cubby/shared/ai/models";
 import { z } from "zod";
 import {
@@ -524,9 +525,31 @@ export const mailResolveDisposition = z.discriminatedUnion("kind", [
           "Purchase links must be distinct.",
         ),
       event: mailEvent,
+      shipments: z
+        .array(
+          z.object({
+            purchaseId: purchaseShortcode,
+            shipments: z.array(shipmentEvidence).min(1).max(50),
+          }),
+        )
+        .max(50)
+        .optional()
+        .describe(
+          "Package observations from this exact Email, each assigned to one of purchaseIds. No money or inventory writes.",
+        ),
       settlement: mailSettlementReview.optional(),
       via: mailAdmissionPath.optional(),
     })
+    .refine(
+      (value) =>
+        value.shipments?.every((packet) =>
+          value.purchaseIds.includes(packet.purchaseId),
+        ) ?? true,
+      {
+        message: "Shipment packets must name a linked Purchase.",
+        path: ["shipments"],
+      },
+    )
     .refine((value) => !value.settlement || value.event === "refunded", {
       message: "Settlement evidence requires a refunded lifecycle event.",
       path: ["settlement"],

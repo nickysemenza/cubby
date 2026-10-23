@@ -22,6 +22,7 @@ import {
  */
 export const reportSlots = [
   "task.briefing",
+  "shipment.tracking",
   "email.review",
   "recipe.availability",
   "recipe.costing-coverage",

@@ -49,6 +49,16 @@ const candidateRules = process.env.MAIL_PROMPT_CANDIDATE_RULES?.trim();
 const carrierDigestCases = [
   {
     label: "related",
+    body: "Your parcel is out for delivery today. Tracking number SYNTRACK345678. Shipper: Generic Fulfillment Warehouse. No merchant, order number or amount is supplied.",
+    html: "",
+  },
+  {
+    label: "related",
+    body: "Shop package update: package reference SYN-PACKAGE-2, a separate parcel containing the replacement filter, has a label created. Tracking number is not available yet.",
+    html: "",
+  },
+  {
+    label: "related",
     body: "Your daily inbound parcel digest: a package from Cedar Hardware is arriving tomorrow. Tracking number SYNTRACK123456. A package from Harbor Books is in transit. Tracking number SYNTRACK789012.",
     html: "",
   },

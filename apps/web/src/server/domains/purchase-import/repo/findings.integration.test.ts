@@ -1,5 +1,4 @@
 import { parseEntityId } from "@cubby/schemas/identifiers";
-import type { ImportWriterInput } from "@cubby/schemas/purchase-import";
 import { testUserId } from "@cubby/schemas/testing";
 import { and, eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
@@ -11,7 +10,6 @@ import {
   orderMailEvent,
   user,
 } from "~/server/db/schema";
-import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import {
@@ -40,12 +38,11 @@ import {
   resolveArrivedFindingsForPurchase,
   resolveRunFinding,
 } from "./findings";
-import { arrivalAsksToReceive, importVendorOrder } from "./writer";
 
 describe("resolveArrivedFindingsForPurchase", () => {
   const ctx = withTestDb();
 
-  /** Mirrors the "arrived" finding `writer.ts` files once every shipment is delivered. */
+  /** Historical receiving findings remain actionable after package intake replaces the boolean. */
   const fileArrivedFinding = async (
     ledgerPartyId: string,
     purchaseId: string,
@@ -351,273 +348,6 @@ describe("resolveArrivedFindingsForPurchase", () => {
       ).resolves.toEqual({ resolved });
     expect((await readFinding(decidedFinding)).status).toBe("applied");
     expect((await readFinding(emptyFinding)).status).toBe("open");
-  });
-});
-
-/**
- * Failure modes: a delivered order of only untracked goods still asks to be
- * received; a Product's own `true` inside an untracked category is ignored;
- * an unresolved line (no Product yet) is silently dropped from the prompt.
- */
-describe("arrived finding follows stock tracking", () => {
-  const ctx = withTestDb();
-
-  type Line = { title: string } & (
-    | { product: { id: string } }
-    | { unresolved: true }
-  );
-
-  async function importDelivered(
-    key: string,
-    lines: Line[],
-    seller: NonNullable<Parameters<typeof memberImportWorld>[2]>["vendor"] = {},
-  ) {
-    const { party, vendor } = await memberImportWorld(ctx.db, ctx.actor, {
-      vendor: { name: `Synthetic delivered vendor ${key}`, ...seller },
-    });
-    const runId = await ensureRun(ctx.db, ctx.actor, {
-      purpose: "file_import",
-      trigger: "manual",
-      status: "running",
-    });
-    const input: ImportWriterInput = {
-      runId,
-      ledgerPartyId: party.id,
-      vendorId: vendor.id,
-      vendorAccountId: null,
-      defaultTrade: "other",
-      source: {
-        kind: "receipt_photo",
-        externalKey: `synthetic:delivered-${key}`,
-        checksum: Buffer.from(key).toString("hex").padEnd(64, "0").slice(0, 64),
-      },
-      extraction: {
-        status: "ready",
-        candidate: {
-          orderId: `EXAMPLE-DELIVERED-${key}`,
-          orderedAt: "2026-09-01T18:00:00Z",
-          merchant: vendor.name,
-          currency: "USD",
-          printedGrandTotal: lines.length * 5,
-          lines: lines.map((line) => ({
-            title: line.title,
-            amount: 5,
-            quantity: 1,
-            lineKind: "principal" as const,
-          })),
-          payments: [],
-          allShipmentsDelivered: true,
-        },
-      },
-      productResolutions: lines.map((line, lineIndex) =>
-        "product" in line
-          ? { kind: "existing", lineIndex, productId: line.product.id }
-          : {
-              kind: "unresolved",
-              lineIndex,
-              reason: "Two synthetic variants conflict.",
-            },
-      ),
-      primaryDocumentImageId: null,
-      screenshotImageId: null,
-    };
-    const imported = await importVendorOrder(ctx.db, input, ctx.actor.userId);
-    if (!imported.purchaseId) throw new Error("Synthetic Purchase missing");
-    const findings = await getDb(ctx.db)
-      .select({ kind: runFinding.kind })
-      .from(runFinding)
-      .where(
-        and(
-          eq(runFinding.entityId, imported.purchaseId),
-          eq(runFinding.kind, "arrived"),
-        ),
-      );
-    return findings.length > 0;
-  }
-
-  async function world() {
-    const untracked = await insertWithShortcode(ctx.db, "productCategory", {
-      name: "Synthetic groceries",
-      stockTracked: false,
-    });
-    const untrackedChild = await insertWithShortcode(
-      ctx.db,
-      "productCategory",
-      { name: "Synthetic produce", parentId: untracked.id },
-    );
-    const tracked = await insertWithShortcode(ctx.db, "productCategory", {
-      name: "Synthetic hand tools",
-      stockTracked: true,
-    });
-    const product = async (
-      name: string,
-      categoryId: string,
-      stockTracked: boolean | null = null,
-    ) =>
-      insertWithShortcode(ctx.db, "product", {
-        name,
-        brandId: await findOrCreateVendor(ctx.db, "Example maker"),
-        categoryId: parseEntityId("productCategory", categoryId),
-        stockTracked,
-      });
-    return {
-      flour: await product("Synthetic flour", untracked.id),
-      apples: await product("Synthetic apples", untrackedChild.id),
-      chisel: await product("Synthetic chisel", tracked.id),
-      grinder: await product("Synthetic grain grinder", untracked.id, true),
-    };
-  }
-
-  it("files no arrived finding when every line is effectively untracked", async () => {
-    const { flour, apples } = await world();
-    expect(
-      await importDelivered("untracked", [
-        { title: "Synthetic flour", product: flour },
-        { title: "Synthetic apples", product: apples },
-      ]),
-    ).toBe(false);
-  });
-
-  it("asks to receive when one line is tracked", async () => {
-    const { flour, chisel } = await world();
-    expect(
-      await importDelivered("one-tracked", [
-        { title: "Synthetic flour", product: flour },
-        { title: "Synthetic chisel", product: chisel },
-      ]),
-    ).toBe(true);
-  });
-
-  it("asks to receive when a line is still unresolved", async () => {
-    const { flour } = await world();
-    expect(
-      await importDelivered("unresolved", [
-        { title: "Synthetic flour", product: flour },
-        { title: "Synthetic mystery item", unresolved: true },
-      ]),
-    ).toBe(true);
-  });
-
-  // A reviewed aggregate replacement defers creating a promoted line's
-  // Product, so the line has no Product yet; applying the replacement later
-  // never re-evaluates the prompt, so the pending promotion must ask now.
-  it("asks to receive a pending promotion that has no Product yet", async () => {
-    const { flour } = await world();
-    const vendorId = await findOrCreateVendor(
-      ctx.db,
-      "Pending promotion vendor",
-    );
-    const pending = await insertWithShortcode(ctx.db, "purchase", {
-      vendorId,
-      date: "2026-09-01",
-      displayLabel: "Aggregate awaiting replacement",
-    });
-    const decision = {
-      productId: null,
-      promote: false,
-      variantDoubt: false,
-      probability: 1,
-      unresolvedReason: null,
-      lineKind: "principal" as const,
-      kitKind: "single" as const,
-      reversalKind: null,
-    };
-    const asks = (promote: boolean) =>
-      getDb(ctx.db).transaction((tx) =>
-        arrivalAsksToReceive(tx, {
-          purchaseId: pending.id,
-          identityDecisions: [
-            { ...decision, productId: flour.id },
-            { ...decision, promote },
-          ],
-          productLines: [],
-        }),
-      );
-    expect(await asks(false)).toBe(false);
-    expect(await asks(true)).toBe(true);
-  });
-
-  // Failures: a grocery order whose new Products have no category asks the
-  // member to receive food the household never stock-tracks; an explicitly
-  // tracked Product on such an order stops asking.
-  describe("undecided Products on a not-tracked spending context", () => {
-    const undecided = async (name: string) =>
-      insertWithShortcode(ctx.db, "product", {
-        name,
-        brandId: await findOrCreateVendor(ctx.db, "Example maker"),
-      });
-
-    it("does not ask on a food-retail Vendor's order", async () => {
-      const bread = await undecided("Synthetic sourdough loaf");
-      expect(
-        await importDelivered(
-          "food-retail",
-          [{ title: "Synthetic sourdough loaf", product: bread }],
-          { spendingProfile: "food_retail" },
-        ),
-      ).toBe(false);
-    });
-
-    it("does not ask when the effective spending category inherits not tracked", async () => {
-      const parent = await insertWithShortcode(ctx.db, "spendingCategory", {
-        name: "Synthetic consumables",
-        stockTracked: false,
-      });
-      const child = await insertWithShortcode(ctx.db, "spendingCategory", {
-        name: "Synthetic pantry restock",
-        parentId: parent.id,
-      });
-      // The Product's own category is undecided; its spending mapping is not.
-      const mapped = await insertWithShortcode(ctx.db, "productCategory", {
-        name: "Synthetic pantry staples",
-        spendingCategoryMode: "mapped",
-        spendingCategoryId: child.id,
-      });
-      const beans = await insertWithShortcode(ctx.db, "product", {
-        name: "Synthetic dried beans",
-        brandId: await findOrCreateVendor(ctx.db, "Example maker"),
-        categoryId: mapped.id,
-      });
-      expect(
-        await importDelivered("category-untracked", [
-          { title: "Synthetic dried beans", product: beans },
-        ]),
-      ).toBe(false);
-    });
-
-    it("still asks for an undecided Product on an ordinary order", async () => {
-      const lamp = await undecided("Synthetic desk lamp");
-      expect(
-        await importDelivered("ordinary", [
-          { title: "Synthetic desk lamp", product: lamp },
-        ]),
-      ).toBe(true);
-    });
-
-    it("still asks for an explicitly tracked Product on a food order", async () => {
-      const kettle = await insertWithShortcode(ctx.db, "product", {
-        name: "Synthetic stovetop kettle",
-        brandId: await findOrCreateVendor(ctx.db, "Example maker"),
-        stockTracked: true,
-      });
-      expect(
-        await importDelivered(
-          "food-tracked",
-          [{ title: "Synthetic stovetop kettle", product: kettle }],
-          { spendingProfile: "food_retail" },
-        ),
-      ).toBe(true);
-    });
-  });
-
-  it("asks to receive a Product tracked by its own decision inside an untracked category", async () => {
-    const { apples, grinder } = await world();
-    expect(
-      await importDelivered("override", [
-        { title: "Synthetic apples", product: apples },
-        { title: "Synthetic grain grinder", product: grinder },
-      ]),
-    ).toBe(true);
   });
 });
 

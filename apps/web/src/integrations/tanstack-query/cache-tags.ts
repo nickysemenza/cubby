@@ -449,6 +449,12 @@ export const ripple = {
   ]),
 
   purchase: purchaseRipple,
+  shipment: rippleTags([
+    ["shipment"],
+    ["purchase"],
+    ["vendor"],
+    ["shipment.timeline"],
+  ]),
   /** A purchase-product link is visible from both ends, but it carries no
    * money or quantity — no spend, inventory, or calendar state. */
   purchaseProduct: rippleTags([["purchase"], ["product"], ["relatedData"]]),

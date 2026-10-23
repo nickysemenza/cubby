@@ -187,6 +187,7 @@ test("input-first Google, statement then retailer, and reviewed Product merge", 
         detail: null,
         candidate: {
           ...names.retailerCandidate,
+          shipments: [],
           lines: [
             {
               title: names.productName,

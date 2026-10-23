@@ -8,6 +8,7 @@ import { upsertCookbookInput } from "@cubby/schemas/import-recipe";
 import { plainDate } from "@cubby/schemas/base-entity";
 import { recordSourceTransactionRecordsInput } from "@cubby/schemas/source-transaction-record";
 import { recordSourceTransactionRecords } from "~/server/domains/transaction-import/repo/source-transaction-record";
+import { recordShipmentEvidence } from "~/server/domains/shipment/repo/evidence";
 import { saveMealFoodInput } from "@cubby/schemas/meal";
 import { z } from "zod";
 import type { Pool } from "pg";
@@ -795,6 +796,56 @@ async function seedConnectedHousehold(
       ][vendorIndex],
     });
   }
+  const carrier = await create("vendor", { name: "Cedar Example Parcel" });
+  await recordShipmentEvidence(
+    db,
+    {
+      source: {
+        kind: "tracking_page",
+        url: "https://tracking.example/cedar-package",
+        externalKey: "cedar-demo-package",
+        capturedAt: new Date().toISOString(),
+        content:
+          "Synthetic parcel: collected, then delivered to Cedar Household.",
+      },
+      purchaseId: purchases[0]!.id,
+      shipments: [
+        {
+          shipmentId: null,
+          sourceShipmentKey: "cedar-package-one",
+          distinctPackageEvidence: null,
+          carrierId: carrier.id,
+          carrierName: "Cedar Example Parcel",
+          trackingNumber: "CEDAR-DEMO-PARCEL",
+          extraTrackingNumbers: [],
+          purpose: "outbound",
+          observations: [
+            {
+              sourceEventKey: "pickup",
+              kind: "carrier_possession",
+              time: { kind: "date", value: day(-18) },
+              rawStatus: "Collected from seller",
+              location: "Example origin depot",
+              carrierId: carrier.id,
+              carrierName: "Cedar Example Parcel",
+              trackingNumber: "CEDAR-DEMO-PARCEL",
+            },
+            {
+              sourceEventKey: "delivery",
+              kind: "delivered",
+              time: { kind: "date", value: day(-15) },
+              rawStatus: "Delivered",
+              location: "Example destination",
+              carrierId: carrier.id,
+              carrierName: "Cedar Example Parcel",
+              trackingNumber: "CEDAR-DEMO-PARCEL",
+            },
+          ],
+        },
+      ],
+    },
+    context.actorContext,
+  );
   await create("expense", {
     name: "Cedar Planned Workshop Supplies",
     cost: 35,

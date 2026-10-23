@@ -61,6 +61,12 @@ for (const entity of entities) {
 // internal edges (session -> user, oauth_refresh_token -> oauth_client, etc.)
 // all need an entry here as well, since none of them are app-domain entities.
 const NON_ENTITY_FK_TARGETS = {
+  ShipmentSourceCapture:
+    "retained shipment source evidence, owned by the shipment intake workflow",
+  ShipmentObservation:
+    "package tracking observations retained as Shipment child evidence",
+  ShipmentSourcePackage:
+    "stable source package identities for retained tracking evidence",
   Assessment:
     "immutable typed judgment history shared by current projections and Feedback",
   AiEvaluation:
@@ -114,6 +120,19 @@ const NON_ENTITY_FK_TARGETS = {
  * once its edge becomes graph-visible.
  */
 const NON_GRAPH_ENTITY_FK_EXEMPTIONS = {
+  "ShipmentSourceCapture.emailId": {
+    classification: "metadata",
+    reason: "retained shipping Email provenance, not a separate graph record",
+  },
+  "ShipmentSourcePackage.shipmentId": {
+    classification: "ownership",
+    reason: "source package identity owned by its accepted Shipment",
+  },
+  "ShipmentObservation.shipmentId": {
+    classification: "ownership",
+    reason:
+      "tracking evidence owned by a Shipment and shown in its shared report",
+  },
   "Job.runId": {
     classification: "metadata",
     reason:

@@ -378,6 +378,10 @@ function searchDocumentSourceSql(
         COALESCE(NULLIF(r."rawDescription", ''), r.merchant, r."accountDescriptor"), r."accountDescriptor",
         r.source, ARRAY[r."externalId"]::text[], ARRAY[r.merchant, r."sourceCategory", r.notes]::text[]
       FROM "SourceTransactionRecord" r WHERE r."deletedAt" IS NULL AND 'sourceTransactionRecord' IN (${types}) AND ${requested(sql`r.id`)} AND ${bounded(sql`r."createdAt"`)}`,
+    shipment: () => sql`
+      SELECT 'shipment', s.id::text, s.shortcode, s.name, s."trackingNumber",
+        s.purpose, ARRAY[]::text[], ARRAY[s.notes]::text[]
+      FROM "Shipment" s WHERE s."deletedAt" IS NULL AND 'shipment' IN (${types}) AND ${requested(sql`s.id`)} AND ${bounded(sql`s."createdAt"`)}`,
     transactionImport: () => sql`
       SELECT 'transactionImport', i.id::text, i.shortcode, i.label, i.fingerprint,
         i.source, ARRAY[]::text[], ARRAY[i.notes]::text[]

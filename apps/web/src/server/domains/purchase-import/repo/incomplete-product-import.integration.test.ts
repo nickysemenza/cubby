@@ -420,7 +420,7 @@ describe("incomplete itemized purchase identity", () => {
         .select({ kind: runFinding.kind })
         .from(runFinding)
         .where(eq(runFinding.runId, saved!.runId!)),
-    ).toEqual([{ kind: "arrived" }]);
+    ).toEqual([]);
   });
 
   it.each(["date", "total"] as const)(

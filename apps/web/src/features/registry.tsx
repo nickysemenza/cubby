@@ -143,6 +143,7 @@ const detailSlots = {
     ),
   },
   imageJob: { attempts: reportSlot<"imageJob">("imageJob.attempts") },
+  shipment: { tracking: reportSlot<"shipment">("shipment.tracking") },
   product: {
     ownership: slot(() =>
       named(

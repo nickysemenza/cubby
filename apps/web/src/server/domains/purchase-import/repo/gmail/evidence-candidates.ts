@@ -99,7 +99,7 @@ function readyOrder(value: StructuredEvidence) {
       printedGrandTotal: order.price,
       lines: orderLines(order),
       payments: [],
-      allShipmentsDelivered: null,
+      shipments: [],
     },
   });
   if (extraction.status !== "ready") throw new Error("Candidate is not ready");

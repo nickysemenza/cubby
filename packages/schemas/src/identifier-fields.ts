@@ -87,6 +87,7 @@ export const vendorId = ENTITY_ID_SCHEMA.vendor;
 export const vendorAccountId = ENTITY_ID_SCHEMA.vendorAccount;
 export const runEntityId = ENTITY_ID_SCHEMA.run;
 export const purchaseId = ENTITY_ID_SCHEMA.purchase;
+export const shipmentId = ENTITY_ID_SCHEMA.shipment;
 export const wishId = ENTITY_ID_SCHEMA.wish;
 export const plantingId = ENTITY_ID_SCHEMA.planting;
 export const gardenEntryId = ENTITY_ID_SCHEMA.gardenEntry;
@@ -117,6 +118,7 @@ export type VendorId = EntityId<"vendor">;
 export type VendorAccountId = EntityId<"vendorAccount">;
 export type RunId = EntityId<"run">;
 export type PurchaseId = EntityId<"purchase">;
+export type ShipmentId = EntityId<"shipment">;
 export type WishId = EntityId<"wish">;
 export type PlantingId = EntityId<"planting">;
 export type GardenEntryId = EntityId<"gardenEntry">;
@@ -198,6 +200,7 @@ const PARSE_ENTITY_REF = {
   productCategory: entityRefParser("productCategory"),
   project: entityRefParser("project"),
   purchase: entityRefParser("purchase"),
+  shipment: entityRefParser("shipment"),
   recipe: entityRefParser("recipe"),
   task: entityRefParser("task"),
   vendor: entityRefParser("vendor"),
@@ -243,6 +246,7 @@ export {
   spendingCategoryShortcode,
   projectShortcode,
   purchaseShortcode,
+  shipmentShortcode,
   parseShortcodeFor,
   recipeShortcode,
   shortcodeSchema,
@@ -278,6 +282,7 @@ export type {
   SpendingCategoryShortcode,
   ProjectShortcode,
   PurchaseShortcode,
+  ShipmentShortcode,
   RecipeShortcode,
   ShortcodeFor,
   TaskShortcode,

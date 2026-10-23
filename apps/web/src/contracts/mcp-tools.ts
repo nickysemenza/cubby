@@ -70,6 +70,7 @@ import {
 import { recommendationsContract } from "~/contracts/recommendations.contract";
 import { runContract } from "~/contracts/run.contract";
 import { searchContract } from "~/contracts/search.contract";
+import { shipmentContract } from "~/contracts/shipment.contract";
 import { sourceTransactionRecordContract } from "~/contracts/source-transaction-record.contract";
 import { spendingClassificationContract } from "~/contracts/spending-classification.contract";
 import { suggestionsContract } from "~/contracts/suggestions.contract";
@@ -780,6 +781,44 @@ export const MCP_TOOLS = defineMcpTools({
         op: sourceTransactionRecordContract.ops.record,
         description:
           "Record normalized financial evidence from an MCP source or client-parsed export; never submit file contents or paths. At most 500 observations per call. Resume a collection with identical source, fingerprint, observedAt, declared count and coverage. Scoped provider IDs identify revisions; retain providerAccountId, providerTransactionId, original descriptions and providerData. For ID-less exports preserve physical rowPosition. providerAmount is charges-negative; Cubby derives its outflow-positive amount. Zero records are retained without spending. Unknown providerStatus remains null; pending/unknown status does not prevent otherwise supported booking. Complete only an exhaustively enumerated account/window whose retained count equals its declaration. A visible-only query cannot prove withdrawal; confirmedWithdrawals additionally requires complete all-visibility coverage and source rechecking. Evidence plus the existing Sweep Job intent commit atomically. Dry runs and unchanged replays launch no financial work. Guarded corrections can revise or retire untouched generated lump bookings; edited/itemized/corroborated cases remain in Suggestions. Historical observations and settlement references are retained.",
+      }),
+    },
+  },
+
+  shipments: {
+    description:
+      "Retain source-backed package tracking evidence without changing money or inventory.",
+    actions: {
+      reassign: mcpAction({
+        op: shipmentContract.ops.reassign,
+        description:
+          "Explicitly move a misassociated source package and all its retained tracking observations to another Shipment. Use sourcePackageId from shipments_read.timeline; replay follows the corrected association.",
+      }),
+      record: mcpAction({
+        op: shipmentContract.ops.record,
+        description:
+          "Record shipment observations from an owned retained Email/checksum or an interactive tracking-page capture. Keep unmatched packages; never invent a Purchase. Carrier references are Vendors. Label creation or vendor shipped wording does not prove carrier possession. Repeated identical observations update first/last seen; all distinct sources and revisions remain retained.",
+      }),
+      associate: mcpAction({
+        op: shipmentContract.ops.associate,
+        description:
+          "Explicitly attach, detach or correct a Shipment's Purchase association. No financial or inventory effects.",
+      }),
+      merge: mcpAction({
+        op: shipmentContract.ops.merge,
+        description:
+          "Explicitly merge two proven duplicate packages, retaining observations and the old SHIP reference. Conflicting Purchase associations require correction first.",
+      }),
+    },
+  },
+  shipments_read: {
+    description:
+      "Read retained shipment evidence and reconciled tracking milestones.",
+    actions: {
+      timeline: mcpAction({
+        op: shipmentContract.ops.timeline,
+        description:
+          "Read every retained source observation and the deduplicated timeline. Exact durations require exact endpoints; missing or conflicting evidence remains unknown.",
       }),
     },
   },
