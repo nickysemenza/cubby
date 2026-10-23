@@ -1,6 +1,7 @@
 import { and, eq, sql } from "drizzle-orm";
 import { groupBy } from "es-toolkit";
 
+import { hasText } from "~/lib/text-whitespace";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { notDeleted, unwrapDb, uuidArrayParam } from "~/server/db/helpers";
 import { photoRunImage, run, runOperation } from "~/server/db/retained-tables";
@@ -47,7 +48,7 @@ export const runChecks = defineStoredEntityChecks({
                 target.state === "unavailable") &&
               target.outcome !== null &&
               target.completedAt !== null &&
-              (target.state === "completed" || !!target.warning?.trim()),
+              (target.state === "completed" || hasText(target.warning)),
           ),
       ),
     ),

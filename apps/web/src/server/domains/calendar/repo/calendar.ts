@@ -32,6 +32,7 @@ import { uniq } from "es-toolkit";
 
 import { shiftPlainDate } from "~/lib/household-date";
 import { aggregateTotals } from "~/lib/nutrition-estimates";
+import { effectiveTaskDueDate } from "~/lib/task-dates";
 import type { Database } from "~/server/db";
 import { getDb, notDeleted, relations } from "~/server/db/helpers";
 import { expense, project, task, meal, planting } from "~/server/db/schema";
@@ -51,6 +52,7 @@ import { projectScaffold } from "~/server/domains/project/repo/lookup";
 import { loadProjectDateWindows } from "~/server/domains/project/repo/subtree";
 import { getRecipeCoverImageUrlsByShortcodes } from "~/server/domains/recipe/repo/crud";
 import { getTasksByIDs } from "~/server/domains/task/repo/crud";
+import { effectiveTaskDueDateSql } from "~/server/domains/task/repo/helpers";
 import { dbTaskToAPI } from "~/server/domains/task/repo/helpers";
 import { taskScaffold } from "~/server/domains/task/repo/lookup";
 import { hydrateTaskInheritanceRows } from "~/server/domains/task/repo/task-project-inheritance";
@@ -164,10 +166,7 @@ const loadCalendarTasks = async (
         condition,
         or(isNotNull(task.dueDate), isNotNull(task.dueEndDate)),
         lte(sql`coalesce(${task.dueDate}, ${task.dueEndDate})`, endInclusive),
-        gte(
-          sql`coalesce(${task.dueEndDate}, ${task.dueDate})`,
-          input.startDate,
-        ),
+        gte(effectiveTaskDueDateSql(), input.startDate),
       ),
     );
   if (!ids.length) return [];
@@ -270,7 +269,7 @@ const mapTaskItems = async (
     // SAFETY: `row` came from `rows`, which `dataQualities` was loaded for.
     const value = dbTaskToAPI(row, [], [], 0, 0, dataQualities.get(row.id)!);
     const startDate = value.due?.start ?? value.due?.end;
-    const endDate = value.due?.end ?? value.due?.start;
+    const endDate = effectiveTaskDueDate(value) ?? undefined;
     return startDate && endDate
       ? [
           {
@@ -519,10 +518,7 @@ export async function getCalendarSchedule(
                     sql`coalesce(${task.dueDate}, ${task.dueEndDate})`,
                     endInclusive,
                   ),
-                  gte(
-                    sql`coalesce(${task.dueEndDate}, ${task.dueDate})`,
-                    input.startDate,
-                  ),
+                  gte(effectiveTaskDueDateSql(), input.startDate),
                 ),
               ),
               taskCondition,

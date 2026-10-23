@@ -1,14 +1,15 @@
 import { and, sql } from "drizzle-orm";
 
+import { hasText } from "~/lib/text-whitespace";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { notDeleted, unwrapDb, uuidArrayParam } from "~/server/db/helpers";
 import { vendor } from "~/server/db/retained-tables";
-import { displayableImageRawSql } from "~/server/domains/image/repo/image-displayability";
+import { displayableImageSql } from "~/server/domains/image/repo/image-displayability";
 import { entityDisplayImagePresenceSql } from "~/server/entity-kernel/repo/entity-display-image";
 import { qualityCheck } from "~/server/generic/data-quality/repo/builders";
 import { defineStoredEntityChecks } from "~/server/generic/data-quality/repo/stored-registry";
 
-const VENDOR_QUALITY_RULES_VERSION = 1;
+const VENDOR_QUALITY_RULES_VERSION = 2;
 
 type VendorQualityRecord = Awaited<
   ReturnType<typeof loadVendorQualityRecords>
@@ -17,10 +18,6 @@ const observed = qualityCheck.observed<VendorQualityRecord>;
 const when = qualityCheck.when<VendorQualityRecord>;
 const vendorColumn = (column: string) =>
   sql`"Vendor".${sql.identifier(column)}`;
-
-// Match PostgreSQL trim(), which removes ASCII spaces only.
-const hasText = (value: string | null) =>
-  value !== null && value.replace(/^ +| +$/g, "") !== "";
 
 export const vendorChecks = defineStoredEntityChecks({
   entity: "vendor",
@@ -77,7 +74,7 @@ async function loadVendorQualityRecords(
           AND dq_vendor_attachment."role" = 'logo'
           AND dq_vendor_attachment."deletedAt" IS NULL
           AND dq_vendor_image."deletedAt" IS NULL
-          AND ${sql.raw(displayableImageRawSql("dq_vendor_image"))}
+          AND ${displayableImageSql("dq_vendor_image")}
       )`,
       hasDisplayImage: sql<boolean>`${entityDisplayImagePresenceSql(
         "vendor",

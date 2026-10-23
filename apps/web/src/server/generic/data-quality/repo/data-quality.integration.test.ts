@@ -8,6 +8,8 @@ import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
+import { TEXT_WHITESPACE, hasText, trimText } from "~/lib/text-whitespace";
+import { hasTextSql, trimTextSql } from "~/server/db/computed/text-whitespace";
 import { withDatabaseOperationMetrics } from "~/server/db/db-observability";
 import { unwrapDb } from "~/server/db/helpers";
 import {
@@ -42,6 +44,7 @@ import {
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
 
+import { qualityCheck } from "./builders";
 import { clearDataException, setDataException } from "./exceptions";
 import { loadDataQualities } from "./hydrate";
 import type { ScoredTable } from "./registry";
@@ -58,6 +61,35 @@ const page = { pageIndex: 0, pageSize: 50 };
  */
 describe("data quality: list filters, sort and hydration agree", () => {
   const ctx = withTestDb();
+
+  it("treats Unicode whitespace identically in stored checks and SQL", async () => {
+    for (const value of [
+      null,
+      "",
+      TEXT_WHITESPACE,
+      `${TEXT_WHITESPACE}value${TEXT_WHITESPACE}`,
+      "\u200b",
+    ]) {
+      const result = await unwrapDb(ctx.db).execute<{
+        present: boolean;
+        trimmed: string | null;
+      }>(sql`
+        SELECT ${hasTextSql(sql`${value}::text`)} AS present,
+          ${trimTextSql(sql`${value}::text`)} AS trimmed
+      `);
+      expect(result.rows[0]).toEqual({
+        present: hasText(value),
+        trimmed: value === null ? null : trimText(value),
+      });
+      expect(
+        qualityCheck.required<{ value: string | null }>("value")({ value }),
+      ).toBe(hasText(value) ? "pass" : "gap");
+      expect(value === null ? null : trimText(value)).toBe(
+        value?.trim() ?? null,
+      );
+    }
+  });
+
   const publishedQualities: typeof loadDataQualities = async (...args) => {
     await publishQualityFixtures(ctx.db, "product");
     return loadDataQualities(...args);

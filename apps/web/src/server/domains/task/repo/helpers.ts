@@ -11,6 +11,7 @@ import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type { TaskOut } from "@cubby/schemas/project";
 import { sql } from "drizzle-orm";
 
+import { taskDueDatePrecedence } from "~/lib/task-dates";
 import {
   mapImages,
   type MappableImageRecord,
@@ -22,8 +23,18 @@ import { task } from "~/server/db/retained-tables";
 
 /** SQL counterpart of `effectiveTaskDueDate` for repository predicates. */
 
-export const effectiveTaskDueDateSql = () =>
-  sql`coalesce(${task.dueEndDate}, ${task.dueDate})`;
+// Without an alias, column objects let relational queries rewrite the table alias.
+export const effectiveTaskDueDateSql = (alias?: string) => {
+  const columns = { end: task.dueEndDate, start: task.dueDate } as const;
+  return sql`coalesce(${sql.join(
+    taskDueDatePrecedence.map((key) =>
+      alias
+        ? sql`${sql.identifier(alias)}.${sql.identifier(columns[key].name)}`
+        : sql`${columns[key]}`,
+    ),
+    sql`, `,
+  )})`;
+};
 
 /**
  * Shape of a `task` row loaded with its (nullable) parent `project` name and

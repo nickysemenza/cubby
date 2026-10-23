@@ -20,18 +20,3 @@ export const wishPriceRangeOut = z.object({
   pricedCount: z.number().int().nonnegative(),
 });
 export type WishPriceRange = z.infer<typeof wishPriceRangeOut>;
-
-/** Canonical candidate-price projection used by list rows and explanations. */
-export const wishPriceRange = (
-  candidates: readonly WishCandidateOut[],
-): WishPriceRange | null => {
-  const prices = candidates.flatMap((candidate) =>
-    candidate.price === null ? [] : [candidate.price],
-  );
-  if (prices.length === 0) return null;
-  return {
-    low: Math.min(...prices),
-    high: Math.max(...prices),
-    pricedCount: prices.length,
-  };
-};

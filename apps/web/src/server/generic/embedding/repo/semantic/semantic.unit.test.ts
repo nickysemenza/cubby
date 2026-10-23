@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 
+import { normalizeSearchText } from "~/lib/search-normalization";
+
 import { shouldUseSemanticComboboxFallback } from "../../service/semantic/combobox-fallback";
 import { embeddingTextHash } from "./hash";
 import {
@@ -7,7 +9,6 @@ import {
   buildLocationEmbeddingText,
   buildProductEmbeddingText,
   buildTaskEmbeddingText,
-  normalizeSearchText,
 } from "./text";
 
 describe("semantic search text builders", () => {

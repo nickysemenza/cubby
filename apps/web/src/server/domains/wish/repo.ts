@@ -17,7 +17,10 @@ import type {
   WishUpdateData,
 } from "@cubby/schemas/wish";
 import { wishListItemOut } from "@cubby/schemas/wish";
-import { wishPriceRange } from "@cubby/schemas/wish-fields";
+import {
+  wishPriceRangeOut,
+  type WishPriceRange,
+} from "@cubby/schemas/wish-fields";
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { uniq } from "es-toolkit";
 
@@ -32,11 +35,7 @@ import {
 } from "~/server/db/helpers";
 import type { ListReadIntent } from "~/server/db/helpers/query";
 import { entityLink, product, wish } from "~/server/db/schema";
-import {
-  effectiveProductPriceSql,
-  loadProductPricing,
-  resolveProductPricing,
-} from "~/server/domains/product/repo/pricing";
+import { effectiveProductPriceSql } from "~/server/domains/product/repo/pricing";
 import { wishCandidateItems } from "~/server/entity-kernel/repo/detail-display-labels";
 import {
   type MutationReceipt,
@@ -68,6 +67,8 @@ import {
 } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
+import { wishPriceRangeSql } from "./price-range";
+
 type WishRow = typeof wish.$inferSelect;
 
 const WISH_DELETE_EDGE_POLICY = {
@@ -85,6 +86,7 @@ type CandidateRow = Pick<
   brandName: string | null;
   wishId: WishId;
   inventoried: boolean;
+  priceRange: WishPriceRange | null;
 };
 
 const candidateRowsForWishes = async (
@@ -92,15 +94,17 @@ const candidateRowsForWishes = async (
   wishIds: readonly WishId[],
 ): Promise<Map<WishId, CandidateRow[]>> => {
   if (wishIds.length === 0) return new Map();
-  const rows = await unwrapDb(db)
+  const candidates = unwrapDb(db)
     .select({
       wishId: entityLink.fromEntityId,
       id: product.id,
       shortcode: product.shortcode,
       name: product.name,
-      brandName: productBrandNameSql(product.brandId),
+      brandName: productBrandNameSql(product.brandId).as("brandName"),
       model: product.model,
-      price: product.price,
+      price: sql<
+        number | null
+      >`${sql.raw(effectiveProductPriceSql('"Product"'))}`.as("price"),
       createdAt: product.createdAt,
       updatedAt: product.updatedAt,
       // includes-installed: excluding installed rows would make the wish
@@ -108,7 +112,7 @@ const candidateRowsForWishes = async (
       inventoried: sql<boolean>`EXISTS (
         SELECT 1 FROM "InventoryEntry" ie
         WHERE ie."productId" = ${product.id} AND ie."deletedAt" IS NULL
-      )`,
+      )`.as("inventoried"),
     })
     .from(entityLink)
     .innerJoin(product, eq(product.id, entityLink.toEntityId))
@@ -119,12 +123,30 @@ const candidateRowsForWishes = async (
         notDeleted(product),
       ),
     )
+    .as("wish_candidates");
+  const rows = await unwrapDb(db)
+    .select({
+      wishId: candidates.wishId,
+      id: candidates.id,
+      shortcode: candidates.shortcode,
+      name: candidates.name,
+      brandName: candidates.brandName,
+      model: candidates.model,
+      price: candidates.price,
+      createdAt: candidates.createdAt,
+      updatedAt: candidates.updatedAt,
+      inventoried: candidates.inventoried,
+      priceRange: wishPriceRangeSql(
+        sql`${candidates.price}`,
+        sql`${candidates.wishId}`,
+      ),
+    })
+    .from(candidates)
     .orderBy(
-      asc(productBrandNameSql(product.brandId)),
-      asc(product.name),
-      asc(product.model),
+      asc(candidates.brandName),
+      asc(candidates.name),
+      asc(candidates.model),
     );
-  const pricing = await loadProductPricing(db, rows);
   const byWish = new Map<WishId, CandidateRow[]>();
   for (const row of rows) {
     const wishId = parseEntityId("wish", row.wishId);
@@ -132,9 +154,6 @@ const candidateRowsForWishes = async (
       ...row,
       wishId,
       inventoried: Boolean(row.inventoried),
-      price:
-        pricing.get(row.id)?.effectivePrice ??
-        resolveProductPricing(row.price).effectivePrice,
     };
     byWish.set(wishId, [...(byWish.get(wishId) ?? []), candidate]);
   }
@@ -167,7 +186,7 @@ const toWishOut = (
     candidates: publicCandidates,
     candidateItems: wishCandidateItems(publicCandidates),
     candidateCount: publicCandidates.length,
-    priceRange: wishPriceRange(publicCandidates),
+    priceRange: candidates[0]?.priceRange ?? null,
     dataQuality,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
@@ -222,7 +241,7 @@ const wishRead = {
             candidates: alternatives,
             candidateItems: wishCandidateItems(alternatives),
             candidateCount: alternatives.length,
-            priceRange: wishPriceRange(alternatives),
+            priceRange: loaded.get(row.id)?.[0]?.priceRange ?? null,
           };
         },
       ),
@@ -230,30 +249,15 @@ const wishRead = {
   },
 } satisfies ListReadOptions<WishRow>;
 
-/**
- * Low / high effective price across a wish's live candidate alternatives.
- *
- * `effectiveProductPriceSql` is the SQL twin of the `explicit ?? derived` rule
- * `candidateRowsForWishes` applies in TS through `loadProductPricing`, so the
- * footer totals and the per-row ranges the client derives agree by
- * construction. Unpriced candidates drop out of MIN/MAX rather than counting
- * as $0 — same rule as `wishPriceRange` on the client — and a wish with no
- * priced candidate at all aggregates to NULL, which the outer sums COALESCE
- * away.
- *
- * Both soft-delete guards are load-bearing: emptying a wish soft-deletes its
- * `wishCandidate` links, so a subquery without them would price alternatives the
- * user already removed.
- */
-const candidatePriceAggregate = (fn: "min" | "max") => sql`(
-    SELECT ${sql.raw(fn)}(${sql.raw(effectiveProductPriceSql("p"))})
+/** The same aggregate used by page hydration, scoped to one wish for sorting/totals. */
+const wishPriceRangeProjection = sql`(
+    SELECT ${wishPriceRangeSql(sql.raw(effectiveProductPriceSql("p")))}
     FROM "EntityLink" wc
     JOIN "Product" p ON p."id" = wc."toEntityId" AND p."deletedAt" IS NULL
     WHERE wc."fromEntityId" = ${wish.id} AND wc."deletedAt" IS NULL AND wc."kind" = 'wishCandidate'
   )`;
-
-const wishPriceLow = candidatePriceAggregate("min");
-const wishPriceHigh = candidatePriceAggregate("max");
+const wishPriceLow = sql`(${wishPriceRangeProjection} ->> ${wishPriceRangeOut.keyof().enum.low})::double precision`;
+const wishPriceHigh = sql`(${wishPriceRangeProjection} ->> ${wishPriceRangeOut.keyof().enum.high})::double precision`;
 /** Midpoint of the range — the repo's deterministic sort key for ranged values. */
 const wishPriceMid = sql`((${wishPriceLow} + ${wishPriceHigh}) / 2)`;
 

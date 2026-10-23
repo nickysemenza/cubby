@@ -26,6 +26,7 @@ import { entityAttachment, image, project } from "~/server/db/schema";
 import { expenseDerivedReadSql } from "~/server/domains/expense/repo/expense-derived-read";
 import { displayableImageWhere } from "~/server/domains/image/repo/image-displayability";
 import { withProjectExternalUrls } from "~/server/domains/project/repo/external-links";
+import { effectiveTaskDueDateSql } from "~/server/domains/task/repo/helpers";
 import { listPrepare } from "~/server/generic/list/repo/field-compiler";
 import { listScaffold } from "~/server/generic/list/repo/list";
 import type { ListProjection } from "~/server/generic/list/repo/list-contracts";
@@ -144,7 +145,7 @@ export const projectScaffold = listScaffold("project", project, {
           AND parent.depth < ${MAX_PROJECT_TREE_DEPTH}
       ), allocations AS (${expenseDerivedReadSql("projects")})
       SELECT min(coalesce(node."startDate", LEAST(
-        (SELECT min(coalesce(t."dueEndDate", t."dueDate")) FROM "Task" t
+        (SELECT min(${effectiveTaskDueDateSql("t")}) FROM "Task" t
          WHERE ${effectiveFieldSql("task", "projectId", "t")} = node."id" AND t."deletedAt" IS NULL),
         (SELECT min(e."date") FROM "Expense" e JOIN allocations a ON a."expenseId" = e."id"
          WHERE a."projectId" = node."id" AND e."deletedAt" IS NULL)

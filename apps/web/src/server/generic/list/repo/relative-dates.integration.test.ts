@@ -16,6 +16,7 @@ import {
   householdLocalDate,
   shiftPlainDate,
 } from "~/lib/household-date";
+import { effectiveTaskDueDate } from "~/lib/task-dates";
 import { getDb, householdDaySql } from "~/server/db/helpers";
 import { expense, location, planting, task } from "~/server/db/schema";
 import { expenseList } from "~/server/domains/expense/repo/lookup";
@@ -44,6 +45,22 @@ import {
  */
 describe("relative date tokens and date intervals", () => {
   const ctx = withTestDb();
+
+  it("uses the same task due-date precedence in SQL and TypeScript", async () => {
+    for (const due of [
+      null,
+      { start: "2026-04-01", end: null },
+      { start: "2026-04-01", end: "2026-04-03" },
+      { start: null, end: "2026-04-03" },
+    ]) {
+      const result = await getDb(ctx.db).execute<{ due: string | null }>(sql`
+        SELECT ${effectiveTaskDueDateSql("t")} AS due FROM
+        (SELECT ${due?.start ?? null}::text AS "dueDate", ${due?.end ?? null}::text AS "dueEndDate") t
+      `);
+      expect(result.rows[0]?.due).toBe(effectiveTaskDueDate({ due }));
+    }
+  });
+
   const page = { pageIndex: 0, pageSize: 200 };
   const today = householdLocalDate();
   const day = (offset: number) => shiftPlainDate(today, offset);

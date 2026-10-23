@@ -17,6 +17,7 @@ import {
   householdLocalDate,
   shiftPlainDate,
 } from "~/lib/household-date";
+import { effectiveTaskDueDate } from "~/lib/task-dates";
 
 import type {
   CalDavCollection,
@@ -305,7 +306,9 @@ function setDates(
   const last =
     projection.entity === "meal"
       ? projection.date
-      : (projection.dueEndDate ?? projection.dueDate);
+      : effectiveTaskDueDate({
+          due: { start: projection.dueDate, end: projection.dueEndDate },
+        });
   if (!begin || !last || last < begin)
     throw new Error("Calendar projection lacks valid event dates");
   const exclusive = shiftPlainDate(last, 1);

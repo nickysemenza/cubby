@@ -31,6 +31,7 @@ import {
   effectiveFieldSql,
   inheritedFieldOfColumn,
 } from "~/server/db/computed/effective-field";
+import { trimTextSql } from "~/server/db/computed/text-whitespace";
 import { householdDaySql } from "~/server/db/helpers/query";
 import { createAppError } from "~/server/errors/app-error";
 import type { QualityReadContext } from "~/server/generic/data-quality/repo/registry";
@@ -876,7 +877,7 @@ export const groupSql = (
             : sql`${leaf}::date`;
         const text =
           choice.dateKind === null
-            ? sql`NULLIF(btrim(${leaf}::text), '')`
+            ? sql`NULLIF(${trimTextSql(sql`${leaf}::text`)}, '')`
             : sql`date_trunc(${bucket ?? "day"}::text, ${day}::timestamp)::date::text`;
         return {
           choice,
@@ -900,7 +901,7 @@ export const groupSql = (
           label: null,
           order: ["key"],
           subtree: null,
-          members: sql`SELECT DISTINCT NULLIF(btrim(v::text), '') AS "key", null::text AS "label", false AS "subtree" FROM unnest(${raw}) AS v WHERE NULLIF(btrim(v::text), '') IS NOT NULL`,
+          members: sql`SELECT DISTINCT NULLIF(${trimTextSql(sql`v::text`)}, '') AS "key", null::text AS "label", false AS "subtree" FROM unnest(${raw}) AS v WHERE NULLIF(${trimTextSql(sql`v::text`)}, '') IS NOT NULL`,
         };
       if (choice.dateKind !== null) {
         const day =
@@ -917,7 +918,7 @@ export const groupSql = (
         };
       }
       // Blank text reads as no value, like an absent one.
-      const text = sql`NULLIF(btrim(${raw}::text), '')`;
+      const text = sql`NULLIF(${trimTextSql(sql`${raw}::text`)}, '')`;
       return {
         choice,
         key: text,

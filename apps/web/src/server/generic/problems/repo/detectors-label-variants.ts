@@ -3,6 +3,7 @@ import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { ProblemItem } from "@cubby/schemas/problems";
 import { type Column, type SQL, sql } from "drizzle-orm";
 
+import { hasTextSql } from "~/server/db/computed/text-whitespace";
 import { type Database } from "~/server/db/database";
 import { repositoryQueries as getDb } from "~/server/db/repository-access.boundary";
 import { purchase, vendor } from "~/server/db/retained-tables";
@@ -62,7 +63,7 @@ const findSpellingVariants = async (
       FROM ${table}
       WHERE "deletedAt" IS NULL
         AND ${column} IS NOT NULL
-        AND btrim(${column}) <> ''
+        AND ${hasTextSql(column)}
         AND ${extraWhere}
       GROUP BY ${table.id}, ${column}
     ),

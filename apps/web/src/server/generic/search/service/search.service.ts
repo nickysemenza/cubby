@@ -13,12 +13,12 @@ import { createLogger } from "@cubby/worker-tracing";
 import { type SQL, sql } from "drizzle-orm";
 import { z } from "zod";
 
+import { normalizeSearchText } from "~/lib/search-normalization";
 import type { Database } from "~/server/db";
 import { loadLocationAncestors } from "~/server/domains/location/repo/tree";
 import { resolveEntityDisplayImages } from "~/server/entity-kernel/repo/entity-display-image";
 import { loadRecordEmojiReferences } from "~/server/entity-kernel/repo/entity-emoji";
 import { findSemanticEntityCandidates } from "~/server/generic/embedding/repo/entity-embedding-search";
-import { normalizeSearchText } from "~/server/generic/embedding/repo/semantic/text";
 import { getSemanticEmbeddingConfig } from "~/server/generic/embedding/service/semantic/config";
 import { SEMANTIC_MIN_QUERY_LENGTH } from "~/server/generic/embedding/service/semantic/constants";
 import {

@@ -16,6 +16,7 @@ import {
   type ScheduleSegment,
   type ScheduleWindow,
 } from "~/features/schedule/schedule-grid";
+import { effectiveTaskDueDate } from "~/lib/task-dates";
 import { Description } from "~/ui/primitives/description";
 
 const milestoneFields = [
@@ -28,7 +29,7 @@ const milestoneFields = [
 export function calendarScheduleRows(data: CalendarScheduleOut): ScheduleRow[] {
   const tasks: ScheduleRow[] = data.tasks.map((task) => {
     const first = task.due?.start ?? task.due?.end ?? null;
-    const last = task.due?.end ?? task.due?.start ?? null;
+    const last = effectiveTaskDueDate(task);
     const segments: ScheduleSegment[] =
       first && last
         ? [

@@ -3,7 +3,7 @@ import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { and, eq, isNull, sql } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
-import { trimBrandNameSql } from "~/server/db/computed/brand-name-sql";
+import { trimTextSql } from "~/server/db/computed/text-whitespace";
 import {
   getDb,
   notDeleted,
@@ -42,7 +42,7 @@ export async function resolveProductBrandName(
             ? eq(vendor.systemKey, GENERIC_BRAND_SYSTEM_KEY)
             : and(
                 isNull(vendor.systemKey),
-                sql`(lower(${trimBrandNameSql(vendor.name)}) = lower(${name}) OR EXISTS (SELECT 1 FROM unnest(${vendor.aliases}) alias WHERE lower(${trimBrandNameSql(sql`alias`)}) = lower(${name})))`,
+                sql`(lower(${trimTextSql(vendor.name)}) = lower(${name}) OR EXISTS (SELECT 1 FROM unnest(${vendor.aliases}) alias WHERE lower(${trimTextSql(sql`alias`)}) = lower(${name})))`,
               ),
         ),
       );

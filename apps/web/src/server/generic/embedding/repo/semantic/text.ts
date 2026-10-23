@@ -413,7 +413,3 @@ export function buildGardenEntryEmbeddingText(
     field("notes", parsed.note),
   ]);
 }
-
-export function normalizeSearchText(text: string): string {
-  return text.trim().replace(/\s+/g, " ").toLowerCase();
-}

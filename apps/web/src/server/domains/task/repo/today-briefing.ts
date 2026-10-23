@@ -12,6 +12,7 @@ import { sql } from "drizzle-orm";
 import { householdDaysFromNow, householdLocalDate } from "~/lib/household-date";
 import { type Database } from "~/server/db/database";
 import { repositoryQueries as getDb } from "~/server/db/repository-access.boundary";
+import { effectiveTaskDueDateSql } from "~/server/domains/task/repo/helpers";
 
 import { openTaskBlockingCtes } from "./blocking-sql";
 
@@ -67,11 +68,11 @@ export async function getTaskTodayBriefing(
         )::int AS "laterCount",
         COUNT(*) FILTER (WHERE "isBlocked")::int AS "blockedCount",
         COUNT(*) FILTER (
-          WHERE COALESCE("dueEndDate", "dueDate") < ${today}
+          WHERE ${effectiveTaskDueDateSql("briefing_tasks")} < ${today}
         )::int AS "overdueCount",
         COUNT(*) FILTER (
-          WHERE COALESCE("dueEndDate", "dueDate") >= ${today}
-            AND COALESCE("dueEndDate", "dueDate") <= ${weekOut}
+          WHERE ${effectiveTaskDueDateSql("briefing_tasks")} >= ${today}
+            AND ${effectiveTaskDueDateSql("briefing_tasks")} <= ${weekOut}
         )::int AS "dueThisWeekCount"
       FROM briefing_tasks
     ), ranked_next AS (
@@ -80,10 +81,10 @@ export async function getTaskTodayBriefing(
         ROW_NUMBER() OVER (
           ORDER BY
             CASE
-              WHEN COALESCE("dueEndDate", "dueDate") < ${today} THEN 0
+              WHEN ${effectiveTaskDueDateSql("briefing_tasks")} < ${today} THEN 0
               ELSE 1
             END,
-            COALESCE("dueEndDate", "dueDate") ASC NULLS LAST,
+            ${effectiveTaskDueDateSql("briefing_tasks")} ASC NULLS LAST,
             CASE WHEN "status" = 'in_progress' THEN 0 ELSE 1 END,
             "name" ASC
         ) AS "rank"

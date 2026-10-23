@@ -15,6 +15,7 @@ import { sql } from "drizzle-orm";
 import { householdDaysFromNow, householdLocalDate } from "~/lib/household-date";
 import { type Database } from "~/server/db/database";
 import { repositoryQueries as getDb } from "~/server/db/repository-access.boundary";
+import { effectiveTaskDueDateSql } from "~/server/domains/task/repo/helpers";
 
 import { openTaskBlockingCtes } from "./blocking-sql";
 
@@ -40,11 +41,11 @@ export async function getTaskSummary(db: Database): Promise<TaskSummaryOut> {
       )::int AS "later",
       COUNT(*) FILTER (WHERE t."projectId" IS NULL)::int AS "inbox",
       COUNT(*) FILTER (
-        WHERE COALESCE(t."dueEndDate", t."dueDate") < ${today}
+        WHERE ${effectiveTaskDueDateSql("t")} < ${today}
       )::int AS "overdue",
       COUNT(*) FILTER (
-        WHERE COALESCE(t."dueEndDate", t."dueDate") >= ${today}
-          AND COALESCE(t."dueEndDate", t."dueDate") <= ${weekOut}
+        WHERE ${effectiveTaskDueDateSql("t")} >= ${today}
+          AND ${effectiveTaskDueDateSql("t")} <= ${weekOut}
       )::int AS "dueThisWeek",
       COUNT(*) FILTER (WHERE bt."id" IS NOT NULL)::int AS "blocked"
     FROM "Task" t

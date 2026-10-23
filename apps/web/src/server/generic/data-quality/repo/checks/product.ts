@@ -1,8 +1,10 @@
 import { type InventoryPlacement } from "@cubby/shared";
 import { and, sql } from "drizzle-orm";
 
+import { hasText } from "~/lib/text-whitespace";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { expenseAcquisitionSql } from "~/server/db/computed/expense-aggregate-sql";
+import { hasTextSql } from "~/server/db/computed/text-whitespace";
 import { notDeleted, unwrapDb, uuidArrayParam } from "~/server/db/helpers";
 import { actualExpenseSql } from "~/server/db/helpers/predicates";
 import { product } from "~/server/db/schema";
@@ -80,7 +82,7 @@ const hasPurchaseProductLink = (t: Product) => sql`EXISTS (
 const hasExternalId = (t: Product) => sql`EXISTS (
   SELECT 1 FROM "EntityExternalId" dq_xid
   WHERE dq_xid."entityId" = ${t.id} AND dq_xid."deletedAt" IS NULL
-    AND trim(dq_xid."externalId") <> ''
+    AND ${hasTextSql(sql`dq_xid."externalId"`)}
 )`;
 
 // A soft-deleted category still sits in `categoryId`; it classifies nothing.
@@ -90,16 +92,13 @@ const hasLiveCategory = (t: Product) => sql`EXISTS (
 )`;
 
 /** Bump when the rules or their declared scoring metadata change. */
-export const PRODUCT_QUALITY_RULES_VERSION = 1;
+export const PRODUCT_QUALITY_RULES_VERSION = 2;
 
 type ProductQualityRecord = Awaited<
   ReturnType<typeof loadProductQualityRecords>
 >[number];
 const observed = qualityCheck.observed<ProductQualityRecord>;
 const when = qualityCheck.when<ProductQualityRecord>;
-// Match PostgreSQL trim: only ASCII spaces, preserving the former identity rule.
-const hasText = (value: string) => value.replace(/^ +| +$/g, "") !== "";
-
 export const productChecks = defineStoredEntityChecks({
   entity: "product",
   table: product,

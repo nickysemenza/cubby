@@ -4,7 +4,7 @@ import type { Database, DrizzleTransaction } from "~/server/db";
 import { notDeleted, unwrapDb, uuidArrayParam } from "~/server/db/helpers";
 import { cookbook } from "~/server/db/retained-tables";
 import { cookbookSourceRecipeCountSql } from "~/server/domains/cookbook/repo/cookbook-source-count";
-import { displayableImageRawSql } from "~/server/domains/image/repo/image-displayability";
+import { displayableImageSql } from "~/server/domains/image/repo/image-displayability";
 import { entityDisplayImagePresenceSql } from "~/server/entity-kernel/repo/entity-display-image";
 import { qualityCheck } from "~/server/generic/data-quality/repo/builders";
 import { defineStoredEntityChecks } from "~/server/generic/data-quality/repo/stored-registry";
@@ -55,7 +55,7 @@ async function loadCookbookQualityRecords(
           AND dq_cookbook_attachment."role" = 'cover'
           AND dq_cookbook_attachment."deletedAt" IS NULL
           AND dq_cookbook_image."deletedAt" IS NULL
-          AND ${sql.raw(displayableImageRawSql("dq_cookbook_image"))}
+          AND ${displayableImageSql("dq_cookbook_image")}
       )`,
       hasDisplayImage: sql<boolean>`${entityDisplayImagePresenceSql(
         "cookbook",
