@@ -1,5 +1,5 @@
 /** Cloudflare-native custom spans; non-Worker callers run without tracing. */
-import { AsyncLocalStorage } from "node:async_hooks";
+import * as asyncHooks from "node:async_hooks";
 
 import {
   type CfTracing,
@@ -77,7 +77,16 @@ export const TraceNames = {
  */
 export type AppSpan = TraceSpan;
 
-const traceContext = new AsyncLocalStorage<readonly string[]>();
+interface TraceContext {
+  run<R>(names: readonly string[], fn: () => R): R;
+  getStore(): readonly string[] | undefined;
+}
+
+// Shared lib modules reach browser bundles, where Vite stubs node builtins.
+const traceContext: TraceContext =
+  typeof window === "undefined"
+    ? new asyncHooks.AsyncLocalStorage<readonly string[]>()
+    : { run: (_names, fn) => fn(), getStore: () => undefined };
 
 /** Semantic owner survives intervening list, provider and database spans. */
 export const databaseTraceCaller = (): string | undefined => {
