@@ -821,17 +821,19 @@ describe("runDecisionChoices", () => {
       return Response.json({
         result: {
           usage: { input_tokens: 9, output_tokens: 2 },
+          // Questions arrive after independent cache preparation; insertion order
+          // does not identify the original question. Return reversed keyed answers.
           answers: Object.fromEntries(
             Object.keys(input.questions)
               .reverse()
-              .map((id, index) => [
+              .map((id) => [
                 id,
                 {
                   type: "choice",
-                  choice: index === 0 ? "c1" : "c0",
+                  choice: id === "q1" ? "c1" : "c0",
                   confidence: 0.9,
                   probabilities:
-                    index === 0 ? { c0: 0.1, c1: 0.9 } : { c0: 0.9, c1: 0.1 },
+                    id === "q1" ? { c0: 0.1, c1: 0.9 } : { c0: 0.9, c1: 0.1 },
                 },
               ]),
           ),
