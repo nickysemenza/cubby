@@ -37,7 +37,7 @@ it("renders the journey diagrams without clipping node labels", async () => {
     await page.viewport(width, 900);
     const clippedLabels = diagrams.flatMap((diagram) =>
       Array.from(diagram.querySelectorAll("svg text")).flatMap((label) => {
-        const svg = label.ownerSVGElement;
+        const svg = label.closest("svg");
         if (!svg) return [];
         const box = svg.getBoundingClientRect();
         const text = label.getBoundingClientRect();
