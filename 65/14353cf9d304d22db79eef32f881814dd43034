@@ -1,0 +1,29 @@
+apps/web/src/server/generic/data-quality/repo/sql.unit.test.ts
+  s_a3b6b46af29582::t_71ce2fd19a2c8d 153-154,156,165-173
+apps/web/tooling/scenarios/performance.ts
+  s_0cc53fa46ecbd7::t_95c15ca3bfb2bf 218
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "6514353cf9d304d22db79eef32f881814dd43034",
+  "prompts": {},
+  "sessions": {
+    "s_0cc53fa46ecbd7": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2e7ff6fb-224e-42e0-a270-a92fc1131a0c",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    },
+    "s_a3b6b46af29582": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a16ae9-09b9-7271-bc7a-c96487de65fa",
+        "model": "unknown"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}

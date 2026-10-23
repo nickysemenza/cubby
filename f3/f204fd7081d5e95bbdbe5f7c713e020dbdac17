@@ -1,0 +1,17 @@
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "f3f204fd7081d5e95bbdbe5f7c713e020dbdac17",
+  "prompts": {},
+  "sessions": {
+    "s_7b8700ee7a9c2b": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a16aa3-b63d-7e70-8a12-2185f530da26",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}

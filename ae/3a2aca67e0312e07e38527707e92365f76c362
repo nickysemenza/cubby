@@ -1,0 +1,19 @@
+docs/entities.md
+  s_0cc53fa46ecbd7::t_a2265d28e3fb7d 2530-2533,2587,2607-2608,2627-2629
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "ae3a2aca67e0312e07e38527707e92365f76c362",
+  "prompts": {},
+  "sessions": {
+    "s_0cc53fa46ecbd7": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2e7ff6fb-224e-42e0-a270-a92fc1131a0c",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}

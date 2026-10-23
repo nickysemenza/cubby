@@ -1,0 +1,21 @@
+apps/web/src/server/generic/data-quality/repo/checks/shipment.ts
+  s_0cc53fa46ecbd7::t_97225610d45cca 1-4,56-58
+apps/web/src/server/generic/data-quality/repo/shipment-checks.integration.test.ts
+  s_0cc53fa46ecbd7::t_71ac47825c7b48 407-408,415,417,430,444,447,456,462,464,509,524
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "319e7ba600986370fa705b35027142b0773fce3d",
+  "prompts": {},
+  "sessions": {
+    "s_0cc53fa46ecbd7": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2e7ff6fb-224e-42e0-a270-a92fc1131a0c",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}

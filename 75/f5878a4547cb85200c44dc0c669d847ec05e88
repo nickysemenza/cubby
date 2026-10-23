@@ -1,0 +1,61 @@
+apps/web/src/server/domains/shipment/repo/entity-repository.ts
+  s_8fd3a19aead36e::t_accd6a98018499 130-132
+apps/web/src/server/generic/data-quality/repo/builders.ts
+  s_8fd3a19aead36e::t_0b3752d3be38d7 3,7,12,22,26,30,37-39
+apps/web/src/server/generic/data-quality/repo/checks/shipment.ts
+  s_8fd3a19aead36e::t_f0d10cfeaa2fcc 1,3-5,7-12,14-15,17-22,25-26,28-41,44-109
+apps/web/src/server/generic/data-quality/repo/hydrate.ts
+  s_8fd3a19aead36e::t_bab230c83e783a 205,262,300-301,422-437,439-447
+apps/web/src/server/generic/data-quality/repo/shipment-checks.integration.test.ts
+  s_8fd3a19aead36e::t_06cab8ee346863 1,4,6,9-15,17,28,31-41,124-145,242-245,249-253,260-273,277-279,281-284,287-329,349,361-520
+apps/web/src/server/generic/data-quality/repo/stored.ts
+  s_8fd3a19aead36e::t_e3583d1beedcb8 35,160-169
+apps/web/tooling/entity-quality-migration.integration.test.ts
+  s_8fd3a19aead36e::t_9a9a77620b348e 1-71
+apps/web/tooling/scenarios/performance.integration.test.ts
+  s_8fd3a19aead36e::t_f3fe8b5583b9e6 1,12-16,43-44,69-70,84-85,110-130
+apps/web/tooling/scenarios/performance.ts
+  s_8fd3a19aead36e::t_49ba9aefcd88e6 7-8,37-41,190-217,219-276,354-355,561-572,594
+docs/entities.md
+  s_8fd3a19aead36e::t_4024ae3259be4c 2503-2511,2515
+docs/local-development.md
+  s_8fd3a19aead36e::t_4c05ab7abc8330 254,259
+packages/schemas/src/entity-definitions/32-shipment.entity.ts
+  s_8fd3a19aead36e::t_b2d534ef4ce488 549
+apps/web/src/server/generic/assessment/repo/automatic-decisions.ts
+  s_c21400fba7a125::t_fb110ebe5d884d 43
+apps/web/src/server/generic/assessment/repo/review-families.ts
+  s_c21400fba7a125::t_d139095a662749 7,21-34,39,46-50,60-94,244,265,285-292,324,339-344,346-358,360-370,372,451-629,632,636-638
+apps/web/src/server/generic/assessment/repo/review-query-bakeoff.integration.test.ts
+  s_c21400fba7a125::t_852df00b82e25a 1-308
+apps/web/src/server/generic/assessment/repo/suggestion-families.ts
+  s_c21400fba7a125::t_97247c575bcbf8 61-64,646
+apps/web/src/server/generic/assessment/repo/suggestion-list.ts
+  s_c21400fba7a125::t_c809e7e2000920 235-240
+docs/adr/0016-shared-assessments-and-feedback.md
+  s_c21400fba7a125::t_9588285e089335 116-132
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "75f5878a4547cb85200c44dc0c669d847ec05e88",
+  "prompts": {},
+  "sessions": {
+    "s_8fd3a19aead36e": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a16a6a-52a7-79f0-b86f-568877e9845d",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    },
+    "s_c21400fba7a125": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a16a72-4f47-7a60-9771-96d0347cb8d7",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}

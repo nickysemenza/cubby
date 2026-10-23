@@ -1,0 +1,39 @@
+apps/web/src/server/generic/data-quality/repo/checks/cookbook.ts
+  s_0cc53fa46ecbd7::t_90eff77c50f21e 12
+apps/web/src/server/generic/data-quality/repo/checks/image.ts
+  s_0cc53fa46ecbd7::t_2ee2268dd17d22 11
+apps/web/src/server/generic/data-quality/repo/checks/ingredient.ts
+  s_0cc53fa46ecbd7::t_9ed971096d2c1c 10
+apps/web/src/server/generic/data-quality/repo/checks/location.ts
+  s_0cc53fa46ecbd7::t_39b409107da431 13
+apps/web/src/server/generic/data-quality/repo/checks/meal.ts
+  s_0cc53fa46ecbd7::t_79f7b87cc65df8 10
+apps/web/src/server/generic/data-quality/repo/checks/product-category.ts
+  s_0cc53fa46ecbd7::t_04da7c99503e77 11
+apps/web/src/server/generic/data-quality/repo/checks/recipe.ts
+  s_0cc53fa46ecbd7::t_64b589d835fcec 10
+apps/web/src/server/generic/data-quality/repo/checks/vendor.ts
+  s_0cc53fa46ecbd7::t_a14558240824c7 11
+apps/web/src/server/generic/data-quality/repo/shipment-checks.integration.test.ts
+  s_0cc53fa46ecbd7::t_3a44e43d0bad7b 385-389,394-397
+apps/web/src/server/generic/problems/repo/problems.integration.test.ts
+  s_0cc53fa46ecbd7::t_2153d3d2823da2 23-26,641,748
+apps/web/src/server/generic/work-queue/repo/work-queue.integration.test.ts
+  s_0cc53fa46ecbd7::t_36bb00236c22b3 31,55,61
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "ad7244e291e975c5cd4b611bac0003ad5f3abe03",
+  "prompts": {},
+  "sessions": {
+    "s_0cc53fa46ecbd7": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2e7ff6fb-224e-42e0-a270-a92fc1131a0c",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
