@@ -1,0 +1,39 @@
+apps/web/src/lib/search-normalization.ts
+  s_a3b6b46af29582::t_b85bd66b12c669 1-22
+apps/web/src/server/db/computed/search-normalization.ts
+  s_a3b6b46af29582::t_63b9209291d0dc 1-15
+apps/web/src/server/generic/embedding/repo/entity-embedding-refresh.ts
+  s_a3b6b46af29582::t_3dcb4848bc536c 14
+apps/web/src/server/generic/embedding/repo/entity-embedding-search.ts
+  s_a3b6b46af29582::t_d30162d9227fb2 11
+apps/web/src/server/generic/embedding/repo/semantic/semantic.unit.test.ts
+  s_a3b6b46af29582::t_f125baae4ec002 3-4
+apps/web/src/server/generic/search/repo/search-document.ts
+  s_a3b6b46af29582::t_51a50d995d75f0 14,20,902
+apps/web/src/server/generic/search/repo/search-lexical.ts
+  s_a3b6b46af29582::t_73b90941e21014 4
+apps/web/src/server/generic/search/repo/search-source-selection.integration.test.ts
+  s_a3b6b46af29582::t_dee02149535bd3 1,5-8,23-38
+apps/web/src/server/generic/search/service/search.service.ts
+  s_a3b6b46af29582::t_3be24e4e7ba09b 16
+apps/web/src/server/workflows/background-tasks/embedding.ts
+  s_a3b6b46af29582::t_f37909b01e4409 11
+docs/entities.md
+  s_a3b6b46af29582::t_84b6e99ed93e10 1954-1957
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "c14c2c6377724e3bb484b6c8e8657829c99a4acf",
+  "prompts": {},
+  "sessions": {
+    "s_a3b6b46af29582": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a16ae9-09b9-7271-bc7a-c96487de65fa",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}

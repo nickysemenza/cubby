@@ -1,0 +1,87 @@
+apps/web/src/server/domains/image/repo/image-displayability.ts
+  s_a3b6b46af29582::t_a8f1a3d2426dcc 5,13-14,18-21,49
+apps/web/src/server/domains/product/repo/displayable-image-predicate.integration.test.ts
+  s_a3b6b46af29582::t_b365e5870bcc9b 1-4,41-62,68-69
+apps/web/src/server/generic/data-quality/repo/checks/cookbook.ts
+  s_a3b6b46af29582::t_f7cc8dcac4fa12 7,58
+apps/web/src/server/generic/data-quality/repo/checks/location.ts
+  s_a3b6b46af29582::t_2ae71602cc1f5a 9,63
+  s_a3b6b46af29582::t_ff4e8587f8d913 4,14
+apps/web/src/server/generic/data-quality/repo/checks/vendor.ts
+  s_a3b6b46af29582::t_71918891d52265 7,77
+  s_a3b6b46af29582::t_8a73578a6c4b5e 3,12
+apps/web/src/server/generic/entity-links/repo/related-view.ts
+  s_a3b6b46af29582::t_3311ae58d030a3 32,758,764,768,796
+docs/entities.md
+  s_a3b6b46af29582::t_8b4b316366605b 864-867
+  s_a3b6b46af29582::t_b2e03d3631049d 1954-1957
+  s_a3b6b46af29582::t_45d6dc9c9312a4 2512-2518
+packages/schemas/src/image.ts
+  s_a3b6b46af29582::t_09b567830d3fe3 136-145,147-149
+tools/oxlint/cubby/no-raw-enum-literal-in-sql-baseline.json
+  s_a3b6b46af29582::t_fa18fccdfd1c61 18
+apps/web/src/features/calendar/calendar-schedule.tsx
+  s_a3b6b46af29582::t_f413c952cf9e54 19,32
+apps/web/src/lib/task-dates.ts
+  s_a3b6b46af29582::t_c3a9ed4e63e454 4-5,7-11
+apps/web/src/server/domains/calendar/repo/calendar.ts
+  s_a3b6b46af29582::t_a93c4f3d759bf7 35,55,169,272,521
+apps/web/src/server/domains/calendar/service/caldav-ics.ts
+  s_a3b6b46af29582::t_84a66dff523ac8 20,309-311
+apps/web/src/server/domains/project/repo/attention.ts
+  s_a3b6b46af29582::t_dcab97447af05e 48,260-262
+apps/web/src/server/domains/project/repo/lookup.ts
+  s_a3b6b46af29582::t_a3b833d0dfe203 29,148
+apps/web/src/server/domains/task/repo/helpers.ts
+  s_a3b6b46af29582::t_67b1c6a02973b0 14,29,34-37
+apps/web/src/server/domains/task/repo/summary.ts
+  s_a3b6b46af29582::t_63be5ac1301dab 18,44,47-48
+apps/web/src/server/domains/task/repo/today-briefing.ts
+  s_a3b6b46af29582::t_ea26903a808406 15,71,74-75,84,87
+apps/web/src/server/generic/entity-report/repo/task.ts
+  s_a3b6b46af29582::t_6df3ebdcbba8de 4-5,34
+apps/web/src/server/generic/list/repo/relative-dates.integration.test.ts
+  s_a3b6b46af29582::t_0a5547ef3b22a4 19,48-63
+apps/web/src/lib/text-whitespace.ts
+  s_a3b6b46af29582::t_277234273a5454 1-12
+apps/web/src/server/db/computed/text-whitespace.ts
+  s_a3b6b46af29582::t_3b0b9d90fb384b 3-9
+apps/web/src/server/domains/product/repo/lookup.ts
+  s_a3b6b46af29582::t_64ab1d9fa30bff 25,299
+apps/web/src/server/domains/vendor/repo/product-brand.ts
+  s_a3b6b46af29582::t_c53aba36175a04 6,45
+apps/web/src/server/generic/data-quality/repo/builders.ts
+  s_a3b6b46af29582::t_7ce950f823151b 3-4,20
+apps/web/src/server/generic/data-quality/repo/checks/product-category.ts
+  s_a3b6b46af29582::t_35f18a0d78e550 3,12
+apps/web/src/server/generic/data-quality/repo/checks/product.ts
+  s_a3b6b46af29582::t_e71825278b7019 4,7,85,95
+apps/web/src/server/generic/data-quality/repo/checks/recipe.ts
+  s_a3b6b46af29582::t_9135b7f72d5233 4,11,86,91
+apps/web/src/server/generic/data-quality/repo/checks/run.ts
+  s_a3b6b46af29582::t_8ab44dd5e6782d 4,51
+apps/web/src/server/generic/data-quality/repo/data-quality.integration.test.ts
+  s_a3b6b46af29582::t_b26ffc2adc1f27 11-12,47,64-92
+apps/web/src/server/generic/entity-graph/repo/entity-graph.ts
+  s_a3b6b46af29582::t_27417baf2eea14 26,284,294,300
+apps/web/src/server/generic/list/repo/field-compiler.ts
+  s_a3b6b46af29582::t_9e04de339bebaf 34,880,904,921
+apps/web/src/server/generic/problems/repo/detectors-label-variants.ts
+  s_a3b6b46af29582::t_69deb052bc0fc5 6,66
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "95d6e1c1e9ef22ecc493ab5b8345a17336ab3a19",
+  "prompts": {},
+  "sessions": {
+    "s_a3b6b46af29582": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a16ae9-09b9-7271-bc7a-c96487de65fa",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
