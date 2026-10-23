@@ -3,7 +3,7 @@ import {
   taxonomyId,
   taxonomyShortcode,
 } from "tooling/product-category-fixtures";
-import { withTestDb } from "tooling/test-setup";
+import { countTestDbQueries, withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
 
 import { getDb } from "~/server/db/helpers";
@@ -183,16 +183,25 @@ describe("persisted Suggestion sweeps", () => {
       processed.push({ id: input.entityId!, field });
       return noProposal(field);
     });
-    const started = await startSuggestionSweep(
-      ctx.db,
-      {
-        entity: "product",
-        fields: ["categoryId", "tags"],
-        filters: { ids: [matching.id] },
-      },
-      { context, suggest, pauseAfter: 1 },
+    // The roster once resolved each listed row's shortcode separately, which
+    // made a whole-entity sweep issue one Product lookup per row.
+    const { result: started, statements } = await countTestDbQueries(() =>
+      startSuggestionSweep(
+        ctx.db,
+        {
+          entity: "product",
+          fields: ["categoryId", "tags"],
+          filters: { ids: [matching.id] },
+        },
+        { context, suggest, pauseAfter: 1 },
+      ),
     );
     expect(processed).toEqual([{ id: matching.id, field: "categoryId" }]);
+    expect(
+      statements.filter((statement) =>
+        statement.includes('"Product"."shortcode" = $1'),
+      ),
+    ).toEqual([]);
 
     await resumeSuggestionSweep(ctx.db, started.id, { context, suggest });
     expect(processed).toEqual([
