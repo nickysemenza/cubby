@@ -501,13 +501,15 @@ WHERE ${t.id} = ANY(${uuidArrayParam(ids)}) AND ${liveQualityRow(t)}
 
 /**
  * Real, computed `DataQuality` for live rows of one entity, keyed by id. A
- * requested id that is deleted or unknown is absent from the map.
+ * requested id that is deleted or unknown is absent from the map. Record
+ * reads evaluate stored-mode checks live; list pages and the Work queue pass
+ * `"stored"` so displayed quality matches the published rows they sort by.
  */
 export const loadDataQualities = async <E extends ScoredEntity>(
   db: Database | DrizzleTransaction,
   entity: E,
   ids: readonly EntityId<E>[],
-  source: "stored" | "live" = "stored",
+  source: "stored" | "live" = "live",
 ): Promise<Map<EntityId<E>, DataQuality>> => {
   const uniqueIds = uniq(ids);
   const result = new Map<EntityId<E>, DataQuality>();
@@ -527,7 +529,7 @@ export const loadDataQualities = async <E extends ScoredEntity>(
     );
     const evaluated = new Map<string, Evaluated>();
     if (targetIds.length > 0)
-      for (const row of await loadEvaluations(db, target, targetIds))
+      for (const row of await loadEvaluations(db, target, targetIds, source))
         evaluated.set(row.id, evaluateRow(target, row));
     relatedQualities.set(target, evaluated);
   }

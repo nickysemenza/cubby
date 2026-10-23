@@ -738,7 +738,12 @@ async function stateRowQuality<E extends ScoredEntity & ShortcodeEntity>(
     rows.flatMap((item) => (item.id ? [item.id] : [])),
     entity,
   );
-  const qualities = await loadDataQualities(db, entity, [...ids.values()]);
+  const qualities = await loadDataQualities(
+    db,
+    entity,
+    [...ids.values()],
+    "stored",
+  );
   for (const item of rows) {
     const id = item.id ? ids.get(item.id) : undefined;
     const quality = id ? qualities.get(id) : undefined;

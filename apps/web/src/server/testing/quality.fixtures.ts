@@ -2,7 +2,10 @@ import type { ScoredEntity } from "@cubby/schemas/data-quality";
 
 import type { Database } from "~/server/db";
 import { unwrapDb, withTransaction } from "~/server/db/helpers";
-import { dataQualityEntries } from "~/server/generic/data-quality/repo/entries";
+import {
+  dataQualityEntries,
+  storedEntryFor,
+} from "~/server/generic/data-quality/repo/entries";
 import {
   prepareQualityPublications,
   publishQualityRows,
@@ -25,4 +28,10 @@ export async function publishQualityFixtures(db: Database, kind: ScoredEntity) {
       );
     });
   }
+}
+
+/** Publishes every stored-mode entity, for reads that filter on published rows. */
+export async function publishAllQualityFixtures(db: Database) {
+  for (const kind of Object.keys(dataQualityEntries) as ScoredEntity[])
+    if (storedEntryFor(kind)) await publishQualityFixtures(db, kind);
 }

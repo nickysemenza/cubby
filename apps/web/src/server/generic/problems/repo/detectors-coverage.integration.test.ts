@@ -2,6 +2,7 @@ import { createRepoEntity } from "tooling/factories/repo";
 import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import { publishAllQualityFixtures } from "~/server/testing/quality.fixtures";
 import {
   createIngredientFixture,
   createInventoryFixture,
@@ -27,6 +28,7 @@ describe("coverage totals", () => {
   const ctx = withTestDb();
 
   it("counts each meter over its own population", async () => {
+    await publishAllQualityFixtures(ctx.db);
     const before = await findCoverageTotals(ctx.db);
 
     const shelf = await createLocationFixture(
@@ -95,6 +97,7 @@ describe("coverage totals", () => {
       vendorId: transacted.output.id,
     });
 
+    await publishAllQualityFixtures(ctx.db);
     const after = await findCoverageTotals(ctx.db);
     const delta = (key: keyof typeof after) => after[key] - before[key];
 

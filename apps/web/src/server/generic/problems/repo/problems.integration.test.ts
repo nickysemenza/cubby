@@ -20,6 +20,7 @@ import {
   findProblemByType,
 } from "~/server/generic/problems/service/problem-execution.service";
 import { captureBackgroundQueue } from "~/server/testing/background-queue";
+import { publishAllQualityFixtures } from "~/server/testing/quality.fixtures";
 import { publishQualityFixtures } from "~/server/testing/quality.fixtures";
 let backgroundQueue: ReturnType<typeof captureBackgroundQueue>;
 beforeEach(() => {
@@ -284,6 +285,7 @@ describe("Problems card read projections", () => {
         ctx.actor,
       );
     }
+    await publishAllQualityFixtures(ctx.db);
     const grouped = await findFastProblems(ctx.db);
     const sections: Partial<ProblemArrays> = grouped;
     const clients = createTestRequestContext(ctx.db);
@@ -454,6 +456,7 @@ describe("problems — view-backed uniform rows", () => {
       ctx.actor,
     );
 
+    await publishAllQualityFixtures(ctx.db);
     const views = await findViewProblems(ctx.db);
     expect(
       views.negativeExpectedQuantity.some(({ id }) => id === thing.id),
@@ -557,6 +560,7 @@ describe("problems — orphaned products", () => {
         linkValues("productComponent", kit.entityId, component.entityId, 1),
       );
 
+    await publishAllQualityFixtures(ctx.db);
     const ids = (await findFastProblems(ctx.db)).orphanedProducts.map(
       (row) => row.id,
     );
