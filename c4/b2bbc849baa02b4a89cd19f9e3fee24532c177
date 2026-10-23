@@ -1,7 +1,9 @@
 apps/web/drizzle/0021_entity_quality.sql
   s_0cc53fa46ecbd7::t_e7f34181bde605 20-21
+  s_0cc53fa46ecbd7::t_fd867d8db27e3e 20-21
 apps/web/src/server/db/retained-tables.ts
   s_0cc53fa46ecbd7::t_20270adca3c461 273-275
+  s_0cc53fa46ecbd7::t_b96dc0f69258ff 273-275
 apps/web/src/server/domains/purchase/repo/purchase.ts
   s_0cc53fa46ecbd7::t_ab3143aec078b1 136,602,611,639-640,648-650,684-685,714,894
 apps/web/src/server/generic/data-quality/repo/data-quality.integration.test.ts
@@ -12,8 +14,10 @@ apps/web/src/server/generic/data-quality/repo/entries.ts
   s_0cc53fa46ecbd7::t_65c8f0fcd54bf3 18,37,82
 apps/web/src/server/generic/data-quality/repo/exceptions.ts
   s_0cc53fa46ecbd7::t_250300b0f976d6 30,38,74-76,78-81,100-106
+  s_0cc53fa46ecbd7::t_88cd68048483df 30,38,74-76,78-81,100-106
 apps/web/src/server/generic/data-quality/repo/hydrate.ts
   s_0cc53fa46ecbd7::t_f61f5b8b98d983 37,251,259-279,295-296,309-317,321,323
+  s_0cc53fa46ecbd7::t_ef215696e2c825 37,251,259-279,295-296,309-317,321,323
 apps/web/src/server/generic/data-quality/repo/quality-score.integration.test.ts
   s_0cc53fa46ecbd7::t_5b9c973422daea 12,45-48,50,53,61,75,77
 apps/web/src/server/generic/data-quality/repo/registry.ts
@@ -22,6 +26,7 @@ apps/web/src/server/generic/data-quality/repo/shipment-checks.integration.test.t
   s_0cc53fa46ecbd7::t_f5cdac93755480 389
 apps/web/src/server/generic/data-quality/repo/sql.ts
   s_0cc53fa46ecbd7::t_7d5dc3ad97a995 18,27-28,36-38,45,50-51,53,58-61,63,70,73,78-81,124-125,130,136-137,143-144,153,226,234,259,264
+  s_0cc53fa46ecbd7::t_43224173b2bd86 18,27-28,36-38,45,50-51,53,58-61,63,70,73,78-81,124-125,130,136-137,143-144,153,259,264
 apps/web/src/server/generic/data-quality/repo/sql.unit.test.ts
   s_0cc53fa46ecbd7::t_ea421a7c5e83da 14,101,103-112
 apps/web/src/server/generic/data-quality/repo/stored-registry.ts
