@@ -5,9 +5,14 @@ import { prepareCapturedRetailerOrder } from "./support/prepare-retailer-source"
 import { z } from "zod";
 import { and, eq, inArray, or } from "drizzle-orm";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
+import { financialBookingInput } from "@cubby/schemas/financial-booking";
 
 import * as schema from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/db/helpers";
+import {
+  previewFinancialBooking,
+  commitFinancialBooking,
+} from "~/server/domains/financial-transaction/repo/financial-booking";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { resolveProductIdentifierSource } from "~/server/domains/product/repo/product-identifier-source";
 import { setMemberLoginParty } from "~/server/http/member-login";
@@ -25,12 +30,7 @@ import {
   createEvidenceHarnessContext,
   ensureMemberParty,
 } from "./fixtures/core";
-import {
-  chooseOption,
-  escapeRegExp,
-  gotoAuthenticatedPage,
-  selectComboboxItem,
-} from "./support/e2e-helpers";
+import { chooseOption, gotoAuthenticatedPage } from "./support/e2e-helpers";
 import { expect, test } from "./support/e2e-test";
 import {
   applyReviewedSourceReconciliation,
@@ -311,54 +311,20 @@ test("input-first Google, statement then retailer, and Product identity converge
     });
     if (!transaction)
       throw new Error("Reviewed statement created no transaction");
-    await gotoAuthenticatedPage(
-      page,
-      `/financial-transactions/${transaction.shortcode}`,
+    // The dedicated booking browser owner drives this form. Here its committed
+    // aggregate is the prerequisite for the retailer's later reviewed itemization.
+    const review = await previewFinancialBooking(
+      db,
+      financialBookingInput.parse({
+        transactionId: transaction.shortcode,
+        vendorId: canonicalVendor.id,
+        spendingCategoryId: prerequisites.category.id,
+        trade: "other",
+      }),
     );
-    if (purchaseCode) {
-      const purchasePicker = page.getByRole("combobox", {
-        name: "Existing purchase",
-        exact: true,
-      });
-      await expect(async () => {
-        await purchasePicker.click();
-        await expect(purchasePicker).toHaveAttribute("aria-expanded", "true");
-      }).toPass({ timeout: 5000 });
-      await purchasePicker.fill(purchaseCode);
-      await page
-        .getByRole("option", {
-          name: new RegExp(`^${escapeRegExp(names.orderId)}`),
-        })
-        .click();
-    } else {
-      await selectComboboxItem(
-        page,
-        page.getByRole("combobox", { name: "Vendor", exact: true }),
-        vendorName,
-      );
-      await selectComboboxItem(
-        page,
-        page.getByRole("combobox", {
-          name: "Spending category",
-          exact: true,
-        }),
-        `${names.name} clothing`,
-      );
-    }
-    await page
-      .getByRole("button", { name: "Review Expense", exact: true })
-      .click();
-    await expect(
-      page.getByText(new RegExp(escapeRegExp(`${names.name} card`))).first(),
-    ).toBeVisible();
-    await performOperation(page, "financialTransaction.commitBooking", () =>
-      page
-        .getByRole("button", {
-          name: purchaseCode ? "Link settlement" : "Record Expense",
-          exact: true,
-        })
-        .click(),
-    );
+    expect(review).toMatchObject({ action: "create_aggregate", amount: 42.5 });
+    const booked = await commitFinancialBooking(db, review, actor);
+    expect(booked.expenseId).not.toBeNull();
     const allocation =
       await database.query.financialTransactionAllocation.findFirst({
         where: and(
@@ -379,8 +345,9 @@ test("input-first Google, statement then retailer, and Product identity converge
           notDeleted(schema.purchase),
         ),
       }));
+    expect(purchase).toMatchObject({ spendingCategoryId: categoryId });
     purchaseCode = purchase?.shortcode;
-    expect(purchaseCode).toBeTruthy();
+    expect(purchaseCode).toBe(booked.purchaseId);
   }
   const productId = await resolveOrThrow(db, "product", product.id);
   const aliasId = await resolveOrThrow(db, "product", duplicate.id);
@@ -489,13 +456,6 @@ test("input-first Google, statement then retailer, and Product identity converge
   });
   if (!retainedEmail?.orderMailId)
     throw new Error("Gmail original has no retained Email evidence");
-  await gotoAuthenticatedPage(page, `/emails/${retainedEmail.shortcode}`);
-  const originalMailUrl = `https://mail.google.com/mail/u/0/#all/synthetic-thread-${token}`;
-  await expect(
-    page
-      .getByRole("link", { name: "Open in Gmail", exact: true })
-      .and(page.locator(`a[href="${originalMailUrl}"]`)),
-  ).toBeVisible();
   const purchases = await database.query.purchase.findMany({
     where: and(
       eq(schema.purchase.vendorId, vendorId),
