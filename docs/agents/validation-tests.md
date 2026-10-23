@@ -130,6 +130,15 @@ kernel also creates their SearchDocument. A raw row insert can appear in the
 initial picker list and disappear when typed search resolves. For typed search,
 use the picker helper's query/code option to wait for the actual search response
 before selecting the record.
+The quality-exception browser journey batches its fixture graph, then accepts one
+exception, changes the evidence, reloads to establish persistence and clears the
+stale exception through the real UI. Keep required-note admission and saved
+Markdown links. Do not add a second accept/clear/accept cycle: the existing
+`data-quality.integration.test.ts` active-exception case owns clearing and score
+restoration; `availability-explanation.integration.test.ts` owns MCP set/clear,
+blank-note refusal and stale evidence. Dedicated native active-exception clearing
+is no longer sampled; native stale clearing and server active clearing remain.
+
 Dense-header browser coverage resizes one populated detail page across desktop,
 constrained desktop and phone widths, then drives the shared action/editor dialogs
 once on the phone. Do not repeat full navigation or seed an unrelated Product list

@@ -4,11 +4,7 @@ import {
   gotoAuthenticatedPage,
   reloadAuthenticatedPage,
 } from "./support/e2e-helpers";
-import {
-  seedProductPrerequisite,
-  seedLocationPrerequisite,
-} from "./fixtures/catalog";
-import { createEntityFixture } from "./fixtures/core";
+import { createFixtureGraph } from "./fixtures/core";
 import { expect, test } from "./support/e2e-test";
 
 // Required native capability tests own explanation loading/retry, bounded
@@ -20,15 +16,20 @@ test("a person accepts a data gap as an exception from the explanation and clear
   test.setTimeout(60_000);
   await page.setViewportSize({ width: 402, height: 874 });
   const name = `Synthetic exception ${Date.now()}`;
-  const product = await seedProductPrerequisite(page, {
-    name,
-    brandId: null,
-  });
-  const location = await seedLocationPrerequisite(page, `${name} shelf`);
-  await createEntityFixture(page, "inventory", {
-    productId: product.id,
-    locationId: location.id,
-    amount: { value: 1, unit: "each" },
+  const { product, brand } = await createFixtureGraph(page, async (create) => {
+    const product = await create("product", { name, brandId: null });
+    const location = await create("location", {
+      name: `${name} shelf`,
+      type: "room",
+      parentId: null,
+    });
+    await create("inventory", {
+      productId: product.id,
+      locationId: location.id,
+      amount: { value: 1, unit: "each" },
+    });
+    const brand = await create("vendor", { name: "Synthetic recorded brand" });
+    return { product, brand };
   });
   await gotoAuthenticatedPage(
     page,
@@ -59,21 +60,6 @@ test("a person accepts a data gap as an exception from the explanation and clear
   await expect(
     check.getByRole("link", { name: "synthetic catalog" }),
   ).toHaveAttribute("href", "https://example.test/catalog");
-  await expect(
-    check.getByRole("button", { name: "Clear exception" }),
-  ).toBeVisible();
-  await check.getByRole("button", { name: "Clear exception" }).click();
-  await expect(check).toContainText("Missing data");
-  await expect(check.getByRole("button", { name: "Accept as…" })).toBeVisible();
-  await check.getByRole("button", { name: "Accept as…" }).click();
-  await check
-    .getByLabel("Note")
-    .fill("Synthetic item has no issued brandName; checked its packaging.");
-  await check.getByRole("button", { name: "Accept exception" }).click();
-  await expect(check).toContainText("Accepted exception");
-  const brand = await createEntityFixture(page, "vendor", {
-    name: "Synthetic recorded brand",
-  });
   const changed = await entityApi(page.request).update(
     "product",
     product.id,
