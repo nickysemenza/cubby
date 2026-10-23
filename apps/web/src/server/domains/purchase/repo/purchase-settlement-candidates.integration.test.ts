@@ -1,15 +1,21 @@
 import { SETTLEMENT_CANDIDATE_LIMIT } from "@cubby/schemas/financial-transaction";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { createRepoEntity, createRepoIdentity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { getDb, notDeleted } from "~/server/db/helpers";
 import {
+  expense,
   financialTransaction,
   financialTransactionAllocation,
+  inventoryEntry,
 } from "~/server/db/schema";
 import { applyFinancialSettlementAllocation } from "~/server/domains/financial-transaction/repo/financial-settlement-allocation";
+import {
+  createProductIdentityFixture,
+  makeProductInput,
+} from "~/server/testing/repo.fixtures";
 
 import { proposeSettlementAllocations } from "./purchase-settlement-allocation";
 import {
@@ -193,7 +199,7 @@ describe("settlement candidate graph preservation", () => {
       exactAmount: true,
     });
   });
-  it("refuses a stale proposal without replacing a newly accepted unrelated edge", async () => {
+  it("applies a signed refund without changing spend or stock and refuses a stale split", async () => {
     const account = await createRepoEntity(ctx, "financialAccount", {
       name: "Synthetic stale card",
       identity: { kind: "cash" },
@@ -210,23 +216,70 @@ describe("settlement candidate graph preservation", () => {
     const third = await createRepoEntity(ctx, "purchase", {
       vendorId: vendor.output.id,
     });
+    const item = await createProductIdentityFixture(
+      ctx.db,
+      makeProductInput({
+        name: "Synthetic refunded item",
+      }),
+      ctx.actor,
+    );
+    await createRepoEntity(ctx, "expense", {
+      name: "Synthetic retained itemized cost",
+      purchaseId: first.output.id,
+      productId: item.id,
+      productQuantity: 1,
+      cost: 42.5,
+      trade: "other",
+      lineBasis: "item_line",
+    });
+    const expenses = () =>
+      getDb(ctx.db)
+        .select()
+        .from(expense)
+        .where(
+          and(
+            inArray(expense.purchaseId, [
+              first.entityId,
+              second.entityId,
+              third.entityId,
+            ]),
+            notDeleted(expense),
+          ),
+        );
+    const expensesBefore = await expenses();
+    expect(expensesBefore.map((row) => row.cost)).toEqual([42.5]);
+    const stockBefore = await getDb(ctx.db).select().from(inventoryEntry);
     const transaction = await createRepoEntity(ctx, "financialTransaction", {
       accountId: account.output.id,
-      amount: 100,
-      kind: "purchase",
+      amount: -15,
+      kind: "refund",
       status: "posted",
       postedDate: "2026-09-01",
-      allocations: [{ purchaseId: first.output.id, amount: 100 }],
+      allocations: [{ purchaseId: first.output.id, amount: -15 }],
     });
-    const priorAllocations = [{ purchaseId: first.output.id, amount: 100 }];
+    const priorAllocations = [{ purchaseId: first.output.id, amount: -15 }];
+    await expect(
+      applyFinancialSettlementAllocation(
+        ctx.db,
+        {
+          transactionId: transaction.output.id,
+          priorAllocations,
+          allocations: [
+            { purchaseId: first.output.id, amount: 10 },
+            { purchaseId: second.output.id, amount: 5 },
+          ],
+        },
+        ctx.actor,
+      ),
+    ).rejects.toThrow(/same sign/);
     await applyFinancialSettlementAllocation(
       ctx.db,
       {
         transactionId: transaction.output.id,
         priorAllocations,
         allocations: [
-          { purchaseId: first.output.id, amount: 70 },
-          { purchaseId: second.output.id, amount: 30 },
+          { purchaseId: first.output.id, amount: -10 },
+          { purchaseId: second.output.id, amount: -5 },
         ],
       },
       ctx.actor,
@@ -238,8 +291,8 @@ describe("settlement candidate graph preservation", () => {
           transactionId: transaction.output.id,
           priorAllocations,
           allocations: [
-            { purchaseId: first.output.id, amount: 60 },
-            { purchaseId: third.output.id, amount: 40 },
+            { purchaseId: first.output.id, amount: -9 },
+            { purchaseId: third.output.id, amount: -6 },
           ],
         },
         ctx.actor,
@@ -263,9 +316,13 @@ describe("settlement candidate graph preservation", () => {
     expect(saved).toHaveLength(2);
     expect(saved).toEqual(
       expect.arrayContaining([
-        { purchaseId: first.entityId, amount: 70 },
-        { purchaseId: second.entityId, amount: 30 },
+        { purchaseId: first.entityId, amount: -10 },
+        { purchaseId: second.entityId, amount: -5 },
       ]),
+    );
+    expect(await expenses()).toEqual(expensesBefore);
+    expect(await getDb(ctx.db).select().from(inventoryEntry)).toEqual(
+      stockBefore,
     );
   });
 

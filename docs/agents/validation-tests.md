@@ -107,20 +107,20 @@ finance-evidence-journey retains source-record navigation and provider immutabil
 Dedicated HTTP routing for the two correction operations is no longer sampled
 by that case; generic operation transport and direct correction outcomes remain.
 
-The signed-settlement browser journey keeps the refund-specific interaction:
-negative default, refusal of a positive draft without writing, explicit approval,
-exact negative allocation, unchanged itemized Expense and no received stock.
-Build its small prerequisite graph once. The split-settlement browser owner
-keeps charge splitting and accepted residual preservation; do not repeat those
-steps or reopen the dialog here. `source-transaction-record.integration.test.ts`
-owns immutable intake and replay, `financial-convergence.integration.test.ts`
-owns accepted-identity replay and attachment without another Expense, and
-`gmail.input-first-import.spec.ts` retains real captured-import review.
-`purchase-settlement-allocation.unit.test.ts` owns signed draft conservation;
-`financial-transaction-allocations.integration.test.ts` owns stored signed splits
-and refusal of mixed signs. Combined statement intake/retailer import/refund
-HTTP composition and reopening an accepted split are deliberate coverage gaps
-in this smaller browser journey. No scenario is added, deleted or split.
+Signed refund allocation belongs in the existing
+`purchase-settlement-candidates.integration.test.ts` stale-split owner. It rejects
+positive allocations against a refund, applies the exact negative split, refuses
+a stale replacement, and preserves itemized Expense money and Inventory rows.
+`purchase-settlement-allocation.unit.test.ts` owns negative proposal/default and
+sign/conservation rules; `financial-transaction-allocations.integration.test.ts`
+owns stored negative splits and mixed-sign refusal. The real split-settlement
+browser journey retains the shared dialog, explicit review and committed write;
+`match-statement.unit.test.tsx` drives the renderer's server-proposal and
+validated-save seam. A second full refund browser journey repeats that mechanism
+and is removed. Negative-form presentation and refund-specific HTTP composition
+are deliberate gaps. Source-record SQL owns immutable intake/replay, financial
+convergence SQL owns accepted-identity replay/attachment without another Expense,
+and Gmail import retains real captured-import review.
 
 Split-settlement browser coverage keeps the residual proposal's accepted edge,
 no allocation or Expense before approval, real split editing, and exact saved
@@ -134,7 +134,7 @@ exclusions. The batch ranking case retains exact-amount and merchant ordering.
 splits and mixed-sign refusal.
 The full capped HTTP response, pending-date fallback button and post-save
 Purchase amount-row invalidation are deliberate composition gaps in the smaller
-split journey. No scenario is split or deleted.
+split journey. The retained split scenario stays intact.
 
 Run-progress browser coverage loads one target-free Run and retains phase counts,
 paused-rate context, completed work, expandable Workflow handoffs, readable errors
