@@ -659,6 +659,11 @@ stored `idMulti` back-filter on its target when none names this entity, so
 the generated predicate serves it without repository code. Every
 idMulti filter declares a `brandRef`, so its URL values stay shortcode-native
 and related-view filters stay usable as back-filters.
+Broad related-view filters over product-linked principal Expenses resolve
+effective Project assignments once per statement through the existing bulk
+inheritance owner. Bounded related-record reads retain scalar resolution.
+Both preserve explicit/default/household precedence and live-record guards;
+ID/presence alternatives remain separate from name-search witnesses.
 A relation section's create button seeds the descriptor's field on the new
 record: the descriptor key itself when it is a create field there, otherwise
 the one reference field on the target whose `reference.entity` equals the
