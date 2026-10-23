@@ -7,7 +7,7 @@ import { createEntity } from "tooling/factories/create";
 import { createRepoIdentity } from "tooling/factories/repo";
 import { buildKernelContext } from "tooling/scenarios/context";
 import { countTestDbQueries, withTestDb } from "tooling/test-setup";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import {
   getDb,
@@ -20,6 +20,7 @@ import {
   financialAccount,
   financialTransaction as transactionTable,
   financialTransactionAllocation,
+  spendingCategory,
   vendor as vendorTable,
 } from "~/server/db/schema";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
@@ -153,6 +154,99 @@ describe("shared spending booking", () => {
       expect(
         await previewFinancialSpending(ctx.db, request, undefined, page),
       ).toEqual(await previewFinancialSpending(ctx.db, request));
+  });
+  it("shares category reads within an advisory page and rebuilds them before commit", async () => {
+    const { account, transaction, advice, category } = await fixture();
+    const accountId = await resolveOrThrow(
+      ctx.db,
+      "financialAccount",
+      account.output.id,
+    );
+    const transactionId = await resolveOrThrow(
+      ctx.db,
+      "financialTransaction",
+      transaction.output.id,
+    );
+    const prepare = () =>
+      prepareFinancialSpendingPage(ctx.db, {
+        accountIds: [accountId],
+        transactionIds: [transactionId],
+        sources: [{ amount: 42.5, transactionDate: "2026-05-04" }],
+      });
+    const request = {
+      source: financialSpendingSource.parse({
+        accountId: account.output.id,
+        kind: "purchase",
+        status: "posted",
+        amount: 42.5,
+        transactionDate: "2026-05-04",
+        postedDate: null,
+        rawDescription: null,
+        merchant: "Synthetic Orchard",
+        sourceRefs: [
+          { source: "synthetic-bank", externalId: "synthetic-page-category" },
+        ],
+      }),
+      advice,
+    };
+    const page = await prepare();
+    const categoryReads = vi.spyOn(
+      getDb(ctx.db).query.spendingCategory,
+      "findFirst",
+    );
+    const shared = await Promise.all(
+      Array.from({ length: 4 }, () =>
+        previewFinancialSpending(ctx.db, request, undefined, page),
+      ),
+    );
+    expect(categoryReads).toHaveBeenCalledTimes(1);
+    categoryReads.mockRestore();
+    const fresh = await previewFinancialSpending(ctx.db, request);
+    expect(shared).toEqual(Array.from({ length: 4 }, () => fresh));
+    expect(fresh.status).toBe("ready");
+
+    const plan = await previewFinancialSpending(
+      ctx.db,
+      { transactionId: transaction.output.id, advice },
+      undefined,
+      page,
+    );
+    await getDb(ctx.db)
+      .update(spendingCategory)
+      .set({ name: "Synthetic renamed groceries" })
+      .where(eq(spendingCategory.shortcode, category.id));
+    // Advisory facts may be reused in this page, but never authorize a commit.
+    await expect(
+      commitFinancialSpending(ctx.db, plan, ctx.actor),
+    ).rejects.toThrow(/changed/);
+    const next = await previewFinancialSpending(
+      ctx.db,
+      request,
+      undefined,
+      await prepare(),
+    );
+    expect(next).toEqual(await previewFinancialSpending(ctx.db, request));
+    expect(next.snapshot).not.toBe(fresh.snapshot);
+
+    await getDb(ctx.db)
+      .update(spendingCategory)
+      .set({ deletedAt: new Date() })
+      .where(eq(spendingCategory.shortcode, category.id));
+    const missingPage = await prepare();
+    const missingReads = vi.spyOn(
+      getDb(ctx.db).query.spendingCategory,
+      "findFirst",
+    );
+    const missing = await Promise.all(
+      Array.from({ length: 4 }, () =>
+        previewFinancialSpending(ctx.db, request, undefined, missingPage),
+      ),
+    );
+    expect(missingReads).toHaveBeenCalledTimes(1);
+    missingReads.mockRestore();
+    expect(missing).toEqual(Array.from({ length: 4 }, () => missing[0]));
+    expect(missing[0]).toEqual(await previewFinancialSpending(ctx.db, request));
+    expect(missing[0]?.status).toBe("review_required");
   });
   it("counts effective Vendor history without future or deleted spending", async () => {
     const { vendor, category } = await fixture();
