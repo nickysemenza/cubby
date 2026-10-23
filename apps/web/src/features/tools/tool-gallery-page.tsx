@@ -69,7 +69,7 @@ const GROUP_OPTIONS: ReadonlyArray<
 
 const GROUP_NOUN = {
   location: "location",
-  brandName: "brandName",
+  brandName: "brand",
   trade: "trade",
 } as const satisfies Record<ToolGalleryGroupBy, string>;
 

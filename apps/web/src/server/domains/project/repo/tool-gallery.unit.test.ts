@@ -58,7 +58,7 @@ describe("tool gallery derivations", () => {
       toolGalleryGroup(
         {
           inventoryEntries: [entry("garage", "Garage")],
-          brandName: "(UNSPECIFIED)",
+          brandName: null,
           trade: null,
         },
         "brandName",

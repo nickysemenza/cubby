@@ -379,10 +379,10 @@ describe("Tools gallery", () => {
     );
 
     const picker = await screen.findByRole("combobox", {
-      name: "Jump to brandName",
+      name: "Jump to brand",
     });
     fireEvent.click(
-      screen.getByRole("button", { name: "Show jump to brandName options" }),
+      screen.getByRole("button", { name: "Show jump to brand options" }),
     );
     fireEvent.change(picker, { target: { value: "Maker 10" } });
     fireEvent.click(await screen.findByRole("option", { name: /maker 10/i }));

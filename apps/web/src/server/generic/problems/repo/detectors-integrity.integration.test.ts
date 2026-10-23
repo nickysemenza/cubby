@@ -40,6 +40,7 @@ import {
   orderMailAttachment,
   assessmentState as suggestion,
   photoGroupProposal,
+  photoGroupSourceEvidence,
   runPushRegistration,
   productConversionCoverage,
   productUnitMappings,
@@ -1663,6 +1664,13 @@ const SOURCE_FACTORIES = {
   "Run.predecessorRunId": (db, targetId) =>
     mkRun(db, {
       predecessorRunId: parseEntityId("run", targetId),
+    }),
+
+  "PhotoGroupSourceEvidence.runId": (db, targetId) =>
+    insertAndReturn(db, photoGroupSourceEvidence, {
+      runId: parseEntityId("run", targetId),
+      groupKey: uniq("source"),
+      sourceManufacturer: "Synthetic original brand",
     }),
 
   "PhotoGroupProposal.runId": (db, targetId) =>

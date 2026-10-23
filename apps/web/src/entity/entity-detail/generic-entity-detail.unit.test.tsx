@@ -249,6 +249,7 @@ describe("GenericEntityDetail", () => {
     const product = {
       ...record,
       brandName: "Milwaukee",
+      brandId: testShortcode("vendor", "VEN-TEST"),
       model: "2853-20",
       category: categorySummaryFixture("tools"),
       tags: [],
@@ -272,9 +273,9 @@ describe("GenericEntityDetail", () => {
     );
     expect(
       screen.getByRole("link", {
-        name: "Show all products with brandName Milwaukee",
+        name: "Show all products with brand Milwaukee",
       }),
-    ).toHaveAttribute("href", "/products?brandName=Milwaukee");
+    ).toHaveAttribute("href", "/products?brandId=VEN-TEST");
     expect(
       screen.getByRole("link", {
         name: "Show all products with category Tools",
@@ -307,7 +308,7 @@ describe("GenericEntityDetail", () => {
     }
     // The first fields section is the record's facts aside, ahead of the
     // groups when the columns stack.
-    for (const label of ["Name", "Manufacturer", "Category"]) {
+    for (const label of ["Name", "Brand", "Category"]) {
       const fact = within(container).getByText(label, {
         selector: '[data-slot="fact-label"]',
       });

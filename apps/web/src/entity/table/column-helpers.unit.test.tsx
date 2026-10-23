@@ -62,7 +62,6 @@ function renderColumn<TRow extends RowData, TValue>(
   column: ColumnDef<TRow, TValue>,
   row: TRow,
   wrap?: (children: ReactNode) => ReactNode,
-  options?: { browser?: boolean },
 ) {
   function Harness() {
     const table = useTable<typeof cubbyTableFeatures, TRow>({
@@ -83,7 +82,7 @@ function renderColumn<TRow extends RowData, TValue>(
     );
     return wrap?.(markup) ?? markup;
   }
-  if (!options?.browser) return render(<Harness />);
+
   const browserHarness = createBrowserTestHarness();
   activeBrowserHarnesses.push(browserHarness);
   const result = render(
@@ -143,7 +142,7 @@ describe("createSingleEntityInlineLinkColumn", () => {
     const cellData = column.meta?.cellData;
     if (!cellData?.applyPaste) throw new Error("expected a pasteable relation");
 
-    renderColumn(column, productRow, undefined, { browser: true });
+    renderColumn(column, productRow);
     expect(
       await screen.findByRole("link", { name: /Workbench light/ }),
     ).toHaveAttribute("href", "/products/PRD-2ABC");
@@ -170,7 +169,7 @@ describe("createSingleEntityInlineLinkColumn", () => {
     // after construction to cover the same malformed response a Zod boundary
     // can deliver without weakening the static fixture type.
     if (!malformed.product) throw new Error("expected a product projection");
-    Object.assign(malformed.product, { brandName: null });
+    Object.assign(malformed.product, { brandName: 42 });
 
     renderColumn(productColumn(), malformed);
     expect(screen.getByText("—")).toBeInTheDocument();
@@ -210,7 +209,7 @@ describe("createEntityInlineLinkColumn", () => {
         { id: "PRD-2ABC", name: "Workbench light", brandName: "Makita" },
       ],
     };
-    Object.assign(malformed.products[0]!, { brandName: null });
+    Object.assign(malformed.products[0]!, { brandName: 42 });
 
     expect(() => renderColumn(productCollectionColumn(), malformed)).toThrow(
       "Invalid input",
@@ -538,7 +537,6 @@ describe("createActionsColumn", () => {
         const CopyActionsProvider = withCopyActions("product", copiedCodes);
         return <CopyActionsProvider>{children}</CopyActionsProvider>;
       },
-      { browser: true },
     );
 
     fireEvent.click(await screen.findByRole("button", { name: "Open menu" }));
@@ -558,7 +556,6 @@ describe("createActionsColumn", () => {
         const CopyActionsProvider = withCopyActions("image", copiedCodes);
         return <CopyActionsProvider>{children}</CopyActionsProvider>;
       },
-      { browser: true },
     );
 
     fireEvent.click(await screen.findByRole("button", { name: "Open menu" }));

@@ -32,7 +32,7 @@ interface MetadataRow {
   id: string;
   name: string;
   notes: string | null;
-  brandName: string;
+  brandId: string;
 }
 
 const helper = createCubbyColumnHelper<MetadataRow>();
@@ -42,7 +42,7 @@ const ignoreFilterChange = () => undefined;
 const nameEditable = { onSave: save };
 const columns = createCubbyColumnCollection<MetadataRow>((add) => {
   add(createTextColumn(helper, "notes", { editable: { onSave: save } }));
-  add(helper.accessor("brandName", { header: "Manufacturer" }));
+  add(helper.accessor("brandId", { header: "Brand" }));
 });
 const buildFilters = () => ({});
 const queryOptions = () => ({
@@ -53,7 +53,7 @@ const queryOptions = () => ({
         id: "PRD-TEST",
         name: "Example product",
         notes: null,
-        brandName: "Example maker",
+        brandId: "VEN-22222",
       },
     ],
     meta: { pageIndex: 0, pageSize: 25, totalCount: 1 },
@@ -92,7 +92,7 @@ function MetadataTable({
   const table = list.workbench.table;
   const filterConfig = table
     .getAllLeafColumns()
-    .find((column) => column.id === "brandName")?.columnDef.meta?.filterConfig;
+    .find((column) => column.id === "brandId")?.columnDef.meta?.filterConfig;
   const cell = table
     .getRowModel()
     .rows[0]?.getVisibleCells()
@@ -101,9 +101,7 @@ function MetadataTable({
     <>
       {filterConfig && (
         <FilterBar
-          fields={[
-            barFieldFromConfig("brandName", "Manufacturer", filterConfig),
-          ]}
+          fields={[barFieldFromConfig("brandId", "Brand", filterConfig)]}
           filters={noFilters}
           onChange={ignoreFilterChange}
         />
@@ -133,14 +131,18 @@ describe("list editor metadata refresh", () => {
     "retains the %s draft and focus while filter options refresh",
     async (field) => {
       const initial: RuntimeFilterOptions = {
-        manufacturers: [{ value: "old", label: "Earlier maker" }],
+        "reference:vendor:brandId": [
+          { value: "VEN-22222", label: "Earlier maker" },
+        ],
       };
       const updated: RuntimeFilterOptions = {
-        manufacturers: [{ value: "new", label: "Updated maker" }],
+        "reference:vendor:brandId": [
+          { value: "VEN-33333", label: "Updated maker" },
+        ],
       };
       const loading: RuntimeFilterOptions = {
-        manufacturers: {
-          options: [{ value: "old", label: "Earlier maker" }],
+        "reference:vendor:brandId": {
+          options: [{ value: "VEN-22222", label: "Earlier maker" }],
           isLoading: true,
           onActivate: () => undefined,
           onSearchChange: () => undefined,
@@ -168,9 +170,7 @@ describe("list editor metadata refresh", () => {
       expect(screen.getByRole("textbox")).toHaveValue("Unfinished draft");
       fireEvent.keyDown(input, { key: "Escape" });
       fireEvent.click(screen.getByRole("button", { name: "Filters" }));
-      fireEvent.click(
-        await screen.findByRole("button", { name: "Manufacturer" }),
-      );
+      fireEvent.click(await screen.findByRole("button", { name: "Brand" }));
       expect(
         await screen.findByRole("option", { name: "Updated maker" }),
       ).toBeVisible();

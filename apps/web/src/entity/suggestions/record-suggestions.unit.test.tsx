@@ -234,12 +234,10 @@ describe("record suggestions", () => {
     );
     expect(
       await screen.findByRole("button", {
-        name: /Not checked.*nothing to go on/,
+        name: /Not checked.*add a name first/,
       }),
-    ).toHaveTextContent("No evidence");
-    expect(
-      screen.queryByRole("button", { name: /Evaluation status unavailable/ }),
-    ).not.toBeInTheDocument();
+    ).toHaveTextContent("Not checked — add a name first");
+
     expect(asked).not.toHaveBeenCalled();
   });
 

@@ -143,6 +143,7 @@ describe("derived field explanations against canonical records", () => {
     });
     const source = await resolveProductIdentifierSource(ctx.db, {
       url: "https://shop.example.test/catalog/item",
+      vendorId: supplier.entityId,
     });
     const offlineSupplier = await createRepoEntity(ctx, "vendor", {
       name: "Synthetic supplier without a website",
@@ -154,7 +155,7 @@ describe("derived field explanations against canonical records", () => {
     });
     // Prefix-shaped slugs do not establish ownership, and an external ID
     // that equals a registered slug remains an identifier rather than a link.
-    const unownedSource = `vendor-${supplier.entityId}`;
+    const unownedSource = "vendor-00000000-0000-4000-8000-000000000001";
     await getDb(ctx.db).insert(externalSource).values({
       slug: unownedSource,
       label: "Synthetic unowned source",

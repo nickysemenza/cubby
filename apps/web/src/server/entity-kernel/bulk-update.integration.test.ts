@@ -450,7 +450,7 @@ describe("generic bulk updates", () => {
         ).id,
       }),
     ).rejects.toThrow(
-      `Conflicting rows: ${[first.id, second.id].sort().join(", ")}`,
+      `selected rows: ${[first.id, second.id, bystander.id].join(", ")}`,
     );
     expect(await read("product", first.id)).toMatchObject({
       brandName: "Synthetic Alpha",

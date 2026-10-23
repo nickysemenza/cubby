@@ -133,7 +133,7 @@ function buildProductColumns() {
       );
       add(
         helper.display({
-          id: "brandName",
+          id: "brandId",
           cell: ({ row }) => <span>{row.original.brandName}</span>,
         }),
       );

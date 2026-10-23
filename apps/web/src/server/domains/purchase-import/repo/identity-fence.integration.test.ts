@@ -1,6 +1,6 @@
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { type ExtractedOrderCandidate } from "@cubby/schemas/purchase-import";
-import { and, eq, ne } from "drizzle-orm";
+import { and, eq, isNull, ne } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
@@ -247,7 +247,12 @@ describe("member prepare and commit identity fences", () => {
       })
       .from(vendorTable)
       // Every case starts from memberImportWorld()'s own unrelated Vendor.
-      .where(ne(vendorTable.name, "Synthetic service merchant"));
+      .where(
+        and(
+          ne(vendorTable.name, "Synthetic service merchant"),
+          isNull(vendorTable.systemKey),
+        ),
+      );
 
   it("converges an order Email on the Vendor its exact sender proves and learns the merchant name", async () => {
     const { party, vendor, existing } = await senderVendor();

@@ -213,7 +213,9 @@ describe("entity reference filter options", () => {
       include: ["count", "logo"],
     });
     expect(
-      roster.items.map(({ id, count, logo }) => ({ id, count, logo })),
+      roster.items
+        .filter(({ id }) => id === busy || id === quiet)
+        .map(({ id, count, logo }) => ({ id, count, logo })),
     ).toEqual([
       { id: busy, count: 2, logo: null },
       { id: quiet, count: 0, logo: null },

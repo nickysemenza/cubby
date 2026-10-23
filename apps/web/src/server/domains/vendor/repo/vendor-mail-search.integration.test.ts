@@ -170,6 +170,7 @@ describe("vendor Mail search status", () => {
         ).data.map((row) => [row.name, row.mailSearch]),
       );
     expect(await states()).toEqual({
+      "Generic / Unbranded": null,
       "Synthetic Done Vendor": "done",
       "Synthetic Moved Vendor": "not_started",
       "Synthetic Partial Vendor": "in_progress",

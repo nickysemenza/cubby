@@ -22,6 +22,7 @@ const productAt = (shortcode: string, componentCount = 0) =>
     primaryGtin: null,
     fdc_id: null,
     growsPlantId: null,
+    brandId: "VEN-22222",
     brandName: "Test",
     model: null,
     modelPresence: false,

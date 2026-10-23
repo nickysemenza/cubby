@@ -718,6 +718,12 @@ describe("product match review surfaces", () => {
       .update(productTable)
       .set({ brandId: null })
       .where(eq(productTable.id, sparse!.entityId));
+    await getDb(ctx.db)
+      .update(productTable)
+      .set({
+        brandId: await findOrCreateVendor(ctx.db, "Synthetic identified brand"),
+      })
+      .where(eq(productTable.id, rich!.entityId));
     await publishDetected([sparse!, rich!], {
       evidence: "Synthetic keeper quality",
       actionable: true,

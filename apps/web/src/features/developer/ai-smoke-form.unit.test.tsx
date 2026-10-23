@@ -123,7 +123,11 @@ describe("AI smoke form", () => {
         />
       );
     }
-    render(<Form />);
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <Form />
+      </QueryClientProvider>,
+    );
     expect(screen.getByLabelText("Entity")).toHaveTextContent("product");
     expect(screen.getByLabelText("Basis mode")).toHaveTextContent("provided");
     expect(screen.getByLabelText("Basis · name")).toBeInTheDocument();

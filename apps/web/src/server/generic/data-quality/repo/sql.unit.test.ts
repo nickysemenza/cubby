@@ -208,8 +208,8 @@ describe("aliased evaluation", () => {
   it("renders a related row's check against the alias, not the base table", () => {
     const related = alias(product, "dq_r");
     const rendered = render(gapCondition("product", "product_brand", related));
-    expect(rendered).toContain('"dq_r"."brandName"');
-    expect(rendered).not.toContain('"Product"."brandName"');
+    expect(rendered).toContain('"dq_r"."brandId"');
+    expect(rendered).not.toContain('"Product"."brandId"');
     expect(getTableName(related)).toBe("dq_r");
   });
 

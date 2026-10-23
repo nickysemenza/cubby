@@ -502,10 +502,7 @@ describe("problems — view-backed uniform rows", () => {
       views.productsMissingPrice.find((row) => row.id === thing.id),
     ).toMatchObject({
       entity: "product",
-      fields: [
-        { label: "Manufacturer", value: "Test Manufacturer", tone: null },
-        { label: "Unvalued", value: "2 units", tone: "warning" },
-      ],
+      fields: [{ label: "Unvalued", value: "2 units", tone: "warning" }],
       badges: [shelfBadge],
     });
     expect(views.staleLocations.find((row) => row.id === shelf.id)).toEqual({

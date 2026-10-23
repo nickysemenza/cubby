@@ -37,9 +37,13 @@ export async function discoverAcquisitionCandidateScan(
   const record = z
     .record(z.string(), z.json())
     .parse((await connectionRecord(db, source)).row);
+  const productBrandName =
+    source.entityKind === "product"
+      ? await acquisitionBrandText(db, source)
+      : null;
   const identity = [
     record.name,
-    record.brandName,
+    productBrandName,
     record.model,
     record.displayLabel,
   ]
@@ -72,7 +76,7 @@ export async function discoverAcquisitionCandidateScan(
   // or Expense line) and, on first Expense pairing, the known-brand slugs.
   const sourceBrandText =
     source.entityKind === "product"
-      ? basisValueOf(record.brandName)
+      ? productBrandName
       : basisValueOf(record.name);
   let brands: Set<string> | undefined;
   for (const kind of kinds)

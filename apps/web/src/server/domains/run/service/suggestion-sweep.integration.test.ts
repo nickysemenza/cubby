@@ -188,7 +188,7 @@ describe("persisted Suggestion sweeps", () => {
       {
         entity: "product",
         fields: ["categoryId", "tags"],
-        filters: { brandFilter: "Synthetic maker" },
+        filters: { ids: [matching.id] },
       },
       { context, suggest, pauseAfter: 1 },
     );

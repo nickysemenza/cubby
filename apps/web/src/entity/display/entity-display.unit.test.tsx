@@ -722,7 +722,7 @@ describe("declared entity displays", () => {
       // width: "sm" -> "w-28", width: "md" -> "w-40"
       expect(byId.fdc_id?.className).toBe("w-28");
       expect(byId.categoryId?.className).toBe("w-40");
-      expect(byId.brandName?.className).toBe("w-40");
+      expect(byId.brandId?.className).toBe("w-40");
       expect(byId.model?.className).toBe("w-40");
       expect(byId.notes?.className).toBe("w-40");
       // No declared width (e.g. usdaUnavailable) stays unset.
@@ -734,7 +734,7 @@ describe("declared entity displays", () => {
       const byId = Object.fromEntries(
         buildProductColumnMeta().map((d) => [d.id, d]),
       );
-      expect(byId.brandName?.mobile).toEqual({
+      expect(byId.brandId?.mobile).toEqual({
         slot: "subtitle",
         priority: 20,
         interactive: undefined,
@@ -768,7 +768,7 @@ describe("declared entity displays", () => {
         buildProductColumnMeta().map((d) => [d.id, d]),
       );
       // In `generatedEntitySort.product.fields`.
-      expect(byId.brandName?.enableSorting).toBe(true);
+      expect(byId.brandId?.enableSorting).toBe(true);
       expect(byId.fdc_id?.enableSorting).toBe(true);
       expect(byId.notes?.enableSorting).toBe(true);
       // Not in the roster.
