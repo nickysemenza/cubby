@@ -64,24 +64,6 @@ test("recent AI calls filter transport and status before limiting rows", async (
   await page.getByRole("heading", { name: "AI", exact: true }).hover();
   await expect(page.locator("[data-cell-spill-overlay]")).toHaveCount(0);
 
-  // Full-history choices must remain available outside every summary window.
-  for (const [label, value] of [
-    ["Provider", "synthetic-legacy-provider"],
-    ["Model", "synthetic-legacy-model"],
-    ["Feature", "synthetic-legacy-feature"],
-  ] as const) {
-    await selectComboboxItem(
-      page,
-      recent.getByRole("combobox", { name: label }),
-      value,
-    );
-    await expect(
-      recent.getByText("synthetic.older-subscription"),
-    ).toBeVisible();
-    await expect(recent.getByText("synthetic.newer-gateway")).toHaveCount(0);
-    await recent.getByRole("button", { name: "Clear", exact: true }).click();
-  }
-
   const filtered = page.waitForResponse((response) =>
     dispatchesOperation(response.request(), "ai.usageRecent", ({ input }) =>
       JSON.stringify(input).includes('"transport":"chatgpt"'),

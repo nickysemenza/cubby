@@ -164,6 +164,15 @@ restoration; `availability-explanation.integration.test.ts` owns MCP set/clear,
 blank-note refusal and stale evidence. Dedicated native active-exception clearing
 is no longer sampled; native stale clearing and server active clearing remain.
 
+AI usage recent-call browser coverage retains transport/status filtering before
+the row limit, search/Clear, refreshed provider choices and visible cost evidence.
+Do not repeat Provider/Model/Feature full-history picker permutations there.
+`ai-usage.integration.test.ts` owns exact provider/model/feature filters,
+case-insensitive query matching and filter choices older than every summary
+window; its separate recent-call case owns filtering before a small explicit
+limit. Model/Feature picker-specific HTTP composition is the deliberate gap;
+the Provider refresh interaction and real transport/status journey remain.
+
 Suggestion queue fixtures batch each independent prerequisite graph before
 publishing its proposals: Product/brand/Expense, Project/placement stock, matching
 Products/tag target, and each tag's supporting Products. Preserve entity writer
