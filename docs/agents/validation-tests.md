@@ -626,6 +626,13 @@ hover or keyboard focus between timestamp cells or chart bars, scope assertions
 to the target value's tooltip and `[data-open]`: the previous tooltip can remain
 open briefly during focus transfer as well as mounted during its closing animation.
 
+Connections workspace coverage explicitly selects its record before resizing to
+phone, then waits for and dismisses the modal Graph inspector before using the
+underlying Paths list toolbar. Selection retains inspector state across the
+breakpoint; an open sheet correctly hides the toolbar from accessibility. Keep
+the real close interaction, linked destinations/Back and native handoff; do not
+use hidden-role queries or forced clicks to bypass modal focus containment.
+
 Scope sidebar assertions by the section's own heading, not arbitrary descendant
 headings: nested panels and relationship graphs can repeat the same heading.
 Assert that the intended container is unique; do not use `first()` to hide a

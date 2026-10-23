@@ -133,7 +133,19 @@ test("connections workspace shares dense facts, linked paths, and native handoff
   await expect(page).toHaveURL(factURL);
   await page.goBack();
   await expect(card).toBeVisible();
+  await page.getByRole("button", { name: "Fit focus", exact: true }).click();
+  await graph
+    .locator(`.react-flow__node[data-id="expense:${expense.id}"]`)
+    .click();
   await page.setViewportSize({ width: 390, height: 844 });
+  // Desktop selection becomes a modal inspector on phone; dismiss it before
+  // using the toolbar that the open sheet correctly hides from accessibility.
+  const mobileInspector = page.getByRole("dialog", { name: "Graph inspector" });
+  await expect(mobileInspector).toBeVisible();
+  await mobileInspector
+    .getByRole("button", { name: "Close", exact: true })
+    .click();
+  await expect(mobileInspector).not.toBeVisible();
   await page.getByRole("button", { name: "Paths list", exact: true }).click();
   expect(
     await page.evaluate(
