@@ -106,6 +106,12 @@ constrained desktop and phone widths, then drives the shared action/editor dialo
 once on the phone. Do not repeat full navigation or seed an unrelated Product list
 for header coverage; category navigation stays in the emoji/category journey.
 
+Bulk-edit checkbox and nullable-reference journeys reopen their dialog on the
+current populated list after committed read-back, using idempotent row selection.
+They do not reload the document just to start another edit. The task-board
+cold-form journey batches its two fixtures and scopes the list to their shared
+name; keep its CPU-throttled initialization and dirty-field read-backs.
+
 Infinite entity lists disable URL pagination synchronization; `pageSize` in a
 list URL does not shrink their loaded page. Unloaded-selection browser fixtures
 must cross the actual default page boundary and hold the next-page response
