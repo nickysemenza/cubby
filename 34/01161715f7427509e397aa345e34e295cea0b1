@@ -1,0 +1,21 @@
+.github/workflows/ci.yaml
+  s_7523c5f706d337::t_616cc50e86bb86 164-165,174
+docs/ci.md
+  s_7523c5f706d337::t_1ae04c1e3b7c09 55-57
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "3401161715f7427509e397aa345e34e295cea0b1",
+  "prompts": {},
+  "sessions": {
+    "s_7523c5f706d337": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a16a4f-5cbc-7101-a438-b0084deab1e5",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
