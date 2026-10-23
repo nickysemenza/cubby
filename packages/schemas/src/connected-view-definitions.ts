@@ -121,6 +121,12 @@ export const connectedViews = {
   ],
   cookbook: [
     {
+      key: "copy-locations",
+      title: "Physical copy locations",
+      target: "location",
+      routes: [["product", "inventory", "location"]],
+    },
+    {
       key: "ingredients",
       title: "Ingredients",
       target: "ingredient",
@@ -612,6 +618,12 @@ export const connectedViews = {
   ],
   device: [],
   plant: [
+    {
+      key: "growing-locations",
+      title: "Growing locations",
+      target: "location",
+      routes: [["plantings", "location"]],
+    },
     {
       key: "purchases",
       title: "Purchases",

@@ -495,7 +495,6 @@ const checkHero = (
         `${lookup.context}.detail.hero.chip ${hero.chip} must be an enum or boolean field.`,
       );
   }
-  for (const key of hero.stats) lookup.read(key, "detail.hero.stats");
   if (hero.breadcrumb !== null) {
     const field = lookup.read(hero.breadcrumb, "detail.hero.breadcrumb");
     if (field.reference === null)
@@ -928,6 +927,16 @@ export const compilePresentation = (
         ]
       : declaredSections;
   checkHero(detail.hero, lookup);
+  const summaryIds = new Set<string>();
+  for (const slot of detail.summary) {
+    if (summaryIds.has(slot.id))
+      throw new EntityDeclarationError(
+        `${lookup.context}.detail.summary repeats ${slot.id}`,
+      );
+    summaryIds.add(slot.id);
+    if (slot.kind === "fields")
+      for (const key of slot.fields) lookup.read(key, "detail.summary.fields");
+  }
   const readable = readableFields(
     fieldModel,
     facts.readSchemas.detail,
@@ -985,6 +994,7 @@ export const compilePresentation = (
     ...presentation,
     edit,
     detail: {
+      summary: detail.summary,
       variant: detail.variant,
       hero: {
         ...detail.hero,
@@ -1143,8 +1153,8 @@ export const validateRelationSections = (
 ) => {
   const byKey = new Map(entities.map((entity) => [entity.key, entity]));
   for (const entity of entities) {
-    const chart = entity.inspector.detail.hero.chart;
-    if (chart) {
+    for (const chart of entity.inspector.detail.summary) {
+      if (chart.kind !== "chart" && chart.kind !== "records") continue;
       const routes = chart.viewKey.startsWith("relation:")
         ? [[chart.viewKey.slice(9)]]
         : Object.entries(connectedViews)
@@ -1152,7 +1162,7 @@ export const validateRelationSections = (
             .find((view) => view.key === chart.viewKey)?.routes;
       if (!routes?.length)
         throw new EntityDeclarationError(
-          `${entity.key}.detail.hero.chart names an unknown connection view ${chart.viewKey}`,
+          `${entity.key}.detail.summary names an unknown connection view ${chart.viewKey}`,
         );
       for (const route of routes) {
         let target: CompiledEntity | undefined = entity;
@@ -1166,9 +1176,9 @@ export const validateRelationSections = (
               ? byKey.get(relation.target)
               : undefined;
         }
-        if (target?.key !== "expense")
+        if (!target || (chart.kind === "chart" && target.key !== "expense"))
           throw new EntityDeclarationError(
-            `${entity.key}.detail.hero.chart must traverse local relations to Expense`,
+            `${entity.key}.detail.summary ${chart.id} must traverse local relations${chart.kind === "chart" ? " to Expense" : ""}`,
           );
       }
     }

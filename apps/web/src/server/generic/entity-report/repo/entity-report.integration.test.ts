@@ -5,11 +5,15 @@ import type {
 import { entityReportOut } from "@cubby/schemas/entity-report";
 import { entityReportInput } from "@cubby/schemas/entity-report";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
+import { eq } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb, countTestDbQueries } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import { unwrapDb } from "~/server/db/helpers";
+import { expense } from "~/server/db/schema";
 import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
+import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import {
   createInventoryFixture,
@@ -40,6 +44,109 @@ describe("entity report", () => {
   const ctx = withTestDb("mcp");
   // A collection scope must never fall through to a record builder, silently
   // discard filters, or count nested project spend twice in its headline.
+  it("ranks sellers by distinct live actual purchases and preserves last-purchase dates", async () => {
+    const product = await createProductIdentityFixture(
+      ctx.db,
+      makeProductInput({ name: "Summary fixture Product" }),
+      ctx.actor,
+    );
+    const sellers = await Promise.all(
+      ["First", "Second", "Deleted", "Fourth", "Fifth"].map((name) =>
+        insertWithShortcode(ctx.db, "vendor", {
+          name: `Summary ${name}`,
+          ...(name === "Deleted" ? { deletedAt: new Date() } : {}),
+        }),
+      ),
+    );
+    const add = async (
+      seller: (typeof sellers)[number],
+      date: string,
+      options: {
+        duplicate?: boolean;
+        planned?: boolean;
+        deletedLine?: boolean;
+        deletedPurchase?: boolean;
+      } = {},
+    ) => {
+      const purchase = await insertWithShortcode(ctx.db, "purchase", {
+        vendorId: seller.id,
+        date,
+        ...(options.deletedPurchase ? { deletedAt: new Date() } : {}),
+      });
+      // Raw child fixtures deliberately include retained deleted evidence; the summary's
+      // actual/live predicates, rather than write-side cleanup, must exclude it.
+      for (let i = 0; i < (options.duplicate ? 2 : 1); i++) {
+        await insertWithShortcode(ctx.db, "expense", {
+          name: "Summary line",
+          lineKind: "principal",
+          productId: productId,
+          purchaseId: purchase.id,
+          cost: 10,
+          future: options.planned ?? false,
+          date,
+          costType: "materials",
+          trade: "other",
+          ...(options.deletedLine ? { deletedAt: new Date() } : {}),
+        });
+      }
+    };
+    const productId = await resolveOrThrow(ctx.db, "product", product.id);
+    await add(sellers[0]!, "2026-05-01", { duplicate: true });
+    await add(sellers[0]!, "2026-06-01");
+    await add(sellers[1]!, "2026-07-01");
+    await add(sellers[3]!, "2026-04-01");
+    await add(sellers[4]!, "2026-03-01");
+    await add(sellers[1]!, "2026-12-01", { deletedLine: true });
+    await add(sellers[1]!, "2026-12-02", { planned: true });
+    await add(sellers[1]!, "2026-12-03", { deletedPurchase: true });
+    await add(sellers[2]!, "2026-12-04");
+    const result = await buildEntityReport(
+      ctx.db,
+      { slot: "product.sellers", scope: { kind: "record", id: product.id } },
+      async () => null,
+      ctx.actor,
+    );
+    const block = blocksOf(result.blocks, "records")[0]!;
+    expect(
+      block.rows
+        .filter((row) => row.entity === "vendor")
+        .map((row) => ({
+          title: row.title,
+          count: row.trailing,
+          date: row.time?.kind === "date" ? row.time.value : null,
+        })),
+    ).toEqual([
+      { title: "Summary First", count: "2 purchases", date: "2026-06-01" },
+      { title: "Summary Second", count: "1 purchase", date: "2026-07-01" },
+      { title: "Summary Fourth", count: "1 purchase", date: "2026-04-01" },
+    ]);
+    expect(block.footer).toContain("of 4 sellers");
+    expect(block.listLink).toEqual({
+      entity: "vendor",
+      filters: { productId: product.id },
+    });
+    await unwrapDb(ctx.db)
+      .update(expense)
+      .set({ deletedAt: new Date() })
+      .where(eq(expense.productId, productId));
+    expect(
+      blocksOf(
+        (
+          await buildEntityReport(
+            ctx.db,
+            {
+              slot: "product.sellers",
+              scope: { kind: "record", id: product.id },
+            },
+            async () => null,
+            ctx.actor,
+          )
+        ).blocks,
+        "records",
+      )[0]?.rows,
+    ).toEqual([]);
+  });
+
   it("validates collection scopes and totals selected project roots once", async () => {
     const { output: parent } = await createRepoEntity(ctx, "project", {
       name: "Selected parent",

@@ -62,8 +62,40 @@ export default defineEntity(
       },
       icons: { phosphor: "Image", sfSymbol: "photo", emoji: "🖼️" },
       detail: {
+        summary: [
+          {
+            kind: "report",
+            id: "linked-records",
+            title: "Linked records",
+            slot: "image.associations",
+          },
+          {
+            kind: "fields",
+            id: "captured",
+            title: "Captured",
+            fields: ["capturedAt"],
+          },
+          {
+            kind: "fields",
+            id: "file",
+            title: "File",
+            fields: ["filename", "contentType", "size"],
+          },
+          {
+            kind: "fields",
+            id: "dimensions",
+            title: "Dimensions",
+            fields: ["width", "height"],
+          },
+          {
+            kind: "fields",
+            id: "processing",
+            title: "Processing",
+            fields: ["status", "renderStatus", "storageStatus"],
+          },
+        ],
+
         hero: {
-          stats: ["width", "height", "size"],
           when: { field: "capturedAt", label: "Taken" },
         },
         additionalSections: [

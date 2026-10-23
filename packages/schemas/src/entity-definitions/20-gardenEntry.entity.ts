@@ -36,6 +36,45 @@ export default defineEntity({
       emoji: "📓",
     },
     detail: {
+      summary: [
+        {
+          kind: "fields",
+          id: "observation",
+          title: "Observation",
+          fields: ["observedOn", "kind"],
+        },
+        {
+          kind: "records",
+          id: "location",
+          title: "Location",
+          viewKey: "relation:location",
+        },
+        {
+          kind: "records",
+          id: "plantings",
+          title: "Plantings",
+          viewKey: "relation:plantings",
+        },
+        {
+          kind: "fields",
+          id: "harvest",
+          title: "Harvest",
+          fields: ["harvestAmount"],
+        },
+        {
+          kind: "fields",
+          id: "observation-note",
+          title: "Observation note",
+          fields: ["notes"],
+        },
+        {
+          kind: "records",
+          id: "evidence",
+          title: "Evidence",
+          viewKey: "relation:images",
+        },
+      ],
+
       activityRelations: [
         { relation: "plantings", dateField: "sowedOn" },
         { relation: "images", dateField: "capturedAt" },

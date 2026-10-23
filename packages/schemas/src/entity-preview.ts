@@ -8,7 +8,9 @@ export function entityPreviewFieldKeys(entity: Entity): readonly string[] {
   const section = detail.sections.find((item) => item.kind === "fields");
   return [
     ...new Set([
-      ...detail.hero.stats,
+      ...detail.summary.flatMap((slot) =>
+        slot.kind === "fields" ? slot.fields : [],
+      ),
       ...(section?.kind === "fields" ? section.fields : []),
     ]),
   ].filter(

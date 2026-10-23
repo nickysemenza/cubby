@@ -1,3 +1,4 @@
+import { detailSummarySchema } from "../entity-detail-summary";
 import { displayImageQualityCheck } from "./data-quality-image";
 import {
   colorTokenSchema,
@@ -1343,6 +1344,7 @@ const buildMetadataSchemas = () => {
         .strict(),
       detail: z
         .object({
+          summary: detailSummarySchema.optional().default([]),
           /**
            * `journal`: the first (relation) section renders before the
            * supporting fields, with a "Log entry" create button prefilled
@@ -1356,17 +1358,6 @@ const buildMetadataSchemas = () => {
             .object({
               /** An enum or boolean field rendered as the title chip. */
               chip: fieldKey.nullable().optional().default(null),
-              stats: z.array(fieldKey).max(4).optional().default([]),
-              /** Expense-only monthly series through a declared connection view. */
-              chart: z
-                .object({
-                  kind: z.literal("monthlyExpenseSpend"),
-                  viewKey: nonEmptyString(),
-                })
-                .strict()
-                .nullable()
-                .optional()
-                .default(null),
               /** A reference field rendered as the ancestry breadcrumb. */
               breadcrumb: fieldKey.nullable().optional().default(null),
               /**
@@ -1385,16 +1376,12 @@ const buildMetadataSchemas = () => {
             })
             .strict()
             .prefault({})
-            .transform(
-              ({ chip, stats, chart, breadcrumb, when, extraActions }) => ({
-                chip,
-                stats,
-                chart,
-                breadcrumb,
-                when,
-                actions: extraActions,
-              }),
-            ),
+            .transform(({ chip, breadcrumb, when, extraActions }) => ({
+              chip,
+              breadcrumb,
+              when,
+              actions: extraActions,
+            })),
           /** Only these relations contribute dated records to merged activity. */
           activityRelations: z
             .array(
@@ -1454,6 +1441,7 @@ const buildMetadataSchemas = () => {
         .transform(
           ({
             sectionOverrides,
+            summary,
             activityRelations,
             overviewSections,
             additionalSections,
@@ -1463,6 +1451,7 @@ const buildMetadataSchemas = () => {
             omitRelations,
           }) => ({
             variant: variantOverride,
+            summary,
             hero,
             sections: sectionOverrides,
             activityRelations,

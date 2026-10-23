@@ -15,6 +15,7 @@ struct ReportHost {
 struct RecordRowView: View {
     let row: ReportPresentation.RecordRow
     var large = false
+    var informational = false
     /// Runs the row's commands (a run's approve, apply, dismiss); nil where none are offered.
     var model: ReportSlotModel?
 
@@ -39,7 +40,9 @@ struct RecordRowView: View {
                 }
             }
         } rail: {
-            if row.listLink == nil, let trailing = row.trailing, !trailing.isEmpty { Text(trailing) }
+            if row.listLink == nil || informational, let trailing = row.trailing, !trailing.isEmpty {
+                Text(trailing)
+            }
             if let time = row.time {
                 switch time {
                 case .instant(let date): DateDisplay(date: date)
@@ -66,6 +69,13 @@ struct RecordRowView: View {
             }
         } supplement: {
             extras
+            if !row.paths.isEmpty { RecordPathView(paths: row.paths) }
+            if informational, let link = row.listLink {
+                NavigationLink(value: Route.entityList(link.entity, filters: link.filterState)) {
+                    Text(row.trailing ?? "View records").font(.caption)
+                        .frame(minHeight: FieldGuideTokens.touchTarget)
+                }
+            }
         }
         .accessibilityElement(children: .contain)
     }
@@ -79,7 +89,7 @@ struct RecordRowView: View {
                 }
             }
         }
-        if let label = row.detailLabel, let text = row.detailText {
+        if !informational, let label = row.detailLabel, let text = row.detailText {
             VStack(alignment: .leading) {
                 Text(label).font(.caption.weight(.medium))
                 Text(text).font(.caption.monospaced()).textSelection(.enabled)
@@ -92,7 +102,7 @@ struct RecordRowView: View {
                 Text(hint).font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
             }
         }
-        if let model, !row.commands.isEmpty {
+        if !informational, let model, !row.commands.isEmpty {
             ReportCommandBar(commands: row.commands, model: model)
         }
     }

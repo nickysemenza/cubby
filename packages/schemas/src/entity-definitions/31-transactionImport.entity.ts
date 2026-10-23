@@ -23,12 +23,50 @@ export default defineEntity({
       savedViews: [],
     },
     detail: {
+      summary: [
+        {
+          kind: "fields",
+          id: "source-scope",
+          title: "Source & scope",
+          fields: ["source", "label", "dateKind"],
+        },
+        {
+          kind: "fields",
+          id: "intake-counts",
+          title: "Intake counts",
+          fields: ["rowCountStored", "rowCountDeclared"],
+        },
+        {
+          kind: "records",
+          id: "retained-records",
+          title: "Retained records",
+          viewKey: "relation:records",
+        },
+        {
+          kind: "records",
+          id: "first-seen-records",
+          title: "First-seen records",
+          viewKey: "relation:firstRecords",
+        },
+        {
+          kind: "records",
+          id: "withdrawn-records",
+          title: "Withdrawn records",
+          viewKey: "relation:withdrawnRecords",
+        },
+        {
+          kind: "report",
+          id: "reconciliation",
+          title: "Reconciliation coverage",
+          slot: "transactionImport.reconciliation-summary",
+        },
+      ],
+
       relationFilterOverrides: {
         records: { descriptor: "importId" },
         firstRecords: { descriptor: "batchId" },
         withdrawnRecords: { descriptor: "withdrawalImportId" },
       },
-      hero: { stats: ["rowCountStored"] },
     },
   },
   model: {

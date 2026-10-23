@@ -134,6 +134,62 @@ export default defineEntity(
         emoji: "💳",
       },
       detail: {
+        summary: [
+          {
+            kind: "fields",
+            id: "amount-event",
+            title: "Amount & event",
+            fields: ["amount", "transactionDate", "kind", "status"],
+          },
+          {
+            kind: "records",
+            id: "account",
+            title: "Account",
+            viewKey: "relation:account",
+          },
+          {
+            kind: "records",
+            id: "purchase",
+            title: "Purchase",
+            viewKey: "relation:purchase",
+          },
+          {
+            kind: "fields",
+            id: "reconciliation",
+            title: "Reconciliation",
+            fields: ["allocations"],
+          },
+          {
+            kind: "chart",
+            id: "monthly-spend",
+            title: "Spend over 12 months",
+            viewKey: "relation:expenses",
+          },
+          {
+            kind: "records",
+            id: "expenses",
+            title: "Expenses",
+            viewKey: "relation:expenses",
+          },
+          {
+            kind: "report",
+            id: "source-observations",
+            title: "Source observations",
+            slot: "financialTransaction.source-summary",
+          },
+          {
+            kind: "fields",
+            id: "classification-coverage",
+            title: "Classification coverage",
+            fields: [
+              "bookingCoverage",
+              "documentCoverage",
+              "itemizationCoverage",
+              "productsCoverage",
+            ],
+          },
+        ],
+
         activityRelations: [
           { relation: "purchase", dateField: "date" },
           { relation: "expenses", dateField: "date" },
@@ -141,10 +197,6 @@ export default defineEntity(
         omitRelations: {
           products:
             "Reached through the Purchases table on this page; the product path is three joins deep.",
-        },
-        hero: {
-          chart: { kind: "monthlyExpenseSpend", viewKey: "relation:expenses" },
-          stats: ["amount"],
         },
       },
     },

@@ -1,6 +1,6 @@
 import { ingredientReadSchemas } from "../ingredient-read-fields";
 import { defineEntity } from "./definition.js";
-import { ingredientShortcode } from "../identifier-fields.js";
+import { ingredientShortcode, productShortcode } from "../identifier-fields.js";
 import { ingredientApplicabilityKey } from "../codec.js";
 import { imageOut } from "./field-primitives.js";
 import { z } from "zod";
@@ -30,6 +30,57 @@ export default defineEntity(
       },
       icons: { phosphor: "Carrot", sfSymbol: "leaf", emoji: "🥕" },
       detail: {
+        summary: [
+          {
+            kind: "records",
+            id: "products",
+            title: "Products",
+            viewKey: "relation:products",
+          },
+          {
+            kind: "records",
+            id: "stocked-locations",
+            title: "Stocked locations",
+            viewKey: "locations",
+          },
+          {
+            kind: "records",
+            id: "recipe-uses",
+            title: "Recipe uses",
+            viewKey: "relation:recipes",
+          },
+          {
+            kind: "fields",
+            id: "nutrition-source",
+            title: "Nutrition source",
+            fields: ["nutritionSourceProductId"],
+          },
+          {
+            kind: "report",
+            id: "bought-from",
+            title: "Bought from",
+            slot: "ingredient.sellers",
+          },
+          {
+            kind: "records",
+            id: "meals",
+            title: "Meals",
+            viewKey: "relation:meals",
+          },
+          {
+            kind: "fields",
+            id: "cooking-role",
+            title: "Cooking role",
+            fields: ["usuallyOnHand"],
+          },
+          {
+            kind: "records",
+            id: "growing-source",
+            title: "Growing source",
+            viewKey: "relation:plants",
+          },
+        ],
+
         activityRelations: [{ relation: "meals", dateField: "date" }],
         omitRelations: {
           eaters:
@@ -119,6 +170,23 @@ export default defineEntity(
     },
     model: {
       fields: [
+        {
+          key: "nutritionSourceProductId",
+          labelOverride: "Nutrition source Product",
+          kind: "identifier",
+          readKeyOverride: null,
+          nullable: true,
+          reference: { entity: "product" },
+          display: {
+            readPath: "nutritionProduct.productId",
+            detailLabelPath: "nutritionProduct.name",
+          },
+          validation: {
+            read: productShortcode.nullable(),
+            create: null,
+            update: null,
+          },
+        },
         {
           key: "name",
           kind: "text",

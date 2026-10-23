@@ -39,7 +39,40 @@ export default defineEntity({
         "A device registers itself the first time its companion app connects.",
     },
     icons: { phosphor: "DeviceMobile", sfSymbol: "iphone", emoji: "📱" },
-    detail: {},
+    detail: {
+      summary: [
+        {
+          kind: "records",
+          id: "member",
+          title: "Member",
+          viewKey: "relation:owner",
+        },
+        {
+          kind: "records",
+          id: "hardware-product",
+          title: "Hardware Product",
+          viewKey: "relation:hardware",
+        },
+        {
+          kind: "fields",
+          id: "platform-versions",
+          title: "Platform & versions",
+          fields: ["platform", "osVersion", "appVersion"],
+        },
+        {
+          kind: "fields",
+          id: "last-seen",
+          title: "Last seen",
+          fields: ["lastSeenAt"],
+        },
+        {
+          kind: "fields",
+          id: "automatic-work",
+          title: "Automatic work",
+          fields: ["automaticWork"],
+        },
+      ],
+    },
   },
   model: {
     fields: [

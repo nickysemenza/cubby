@@ -153,13 +153,35 @@ when a required state is missing rather than adding a parallel override path.
 
 ## Detail summary data
 
-`presentation.detail.hero.stats` selects up to four readable field keys. The
-resolved keys live in `entitySummary[entity].detail.hero.stats`; their field
-metadata and values use the same field model and detail read as the rest of the
-page. No separate summary query or entity-specific stat map is needed.
+`presentation.detail.summary` owns the ordered header cells for every entity.
+The generic header renders up to eight applicable cells beneath the identity
+and actions; it does not add another Overview section. Entries have stable
+`id` and `title` values and one of four kinds:
 
-`detail.hero.chart: { kind: "monthlyExpenseSpend", viewKey }` selects an existing
-connection view (or `relation:<key>`). Every path must end at Expense. The
+- `fields` groups one to four readable field keys, using the same effective
+  field values and renderers as the rest of the record.
+- `records` names a declared connected view or `relation:<key>`, showing up to
+  three linked targets, the complete count, and witnessed paths.
+- `report` names an existing report owner and presents concise informational
+  figures, records, progress or charts. Workflow forms and commands stay in
+  their owning detail section.
+- `chart` names an Expense-ending connection view and draws the canonical
+  monthly-spend series. A chart consumes one of the eight slots.
+
+Web and native consume this declaration through their generated presentation
+metadata. Do not maintain independent per-entity header maps, a second chart
+registry, or client-side arithmetic. Empty optional relationships may disappear;
+meaningful unknown values, pending reads and failed reads remain distinct.
+Preserve declaration order rather than dynamically ranking the cells themselves.
+
+Product seller rankings count distinct actual Purchases containing that Product
+through its Expense evidence, not Expense line count or arbitrary shared-order
+reachability. Preview rows retain purchase count and last-purchased date.
+Product purchase-project context follows its own Expenses to their Projects;
+a sibling item on the same order cannot supply its purpose. A Brand reference
+names the marketed Brand, never an inferred physical manufacturer.
+
+For `chart`, every declared path must end at Expense. The
 `entity.monthlyExpenseSpend` read returns the current household calendar month
 and eleven predecessors, oldest first, zero-filled. It sums distinct live actual
 Expense costs (including credits), rounds dollars to cents after summing, and

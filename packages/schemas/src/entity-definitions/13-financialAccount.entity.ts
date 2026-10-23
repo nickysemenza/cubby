@@ -66,11 +66,53 @@ export default defineEntity({
       emoji: "🏦",
     },
     detail: {
+      summary: [
+        {
+          kind: "records",
+          id: "owner",
+          title: "Owner",
+          viewKey: "relation:ledger-party",
+        },
+        {
+          kind: "records",
+          id: "provider",
+          title: "Provider",
+          viewKey: "relation:provider-vendor",
+        },
+        {
+          kind: "fields",
+          id: "account-identity",
+          title: "Account identity",
+          fields: ["identity", "issuer", "network"],
+        },
+        {
+          kind: "chart",
+          id: "monthly-spend",
+          title: "Spend over 12 months",
+          viewKey: "expenses",
+        },
+        {
+          kind: "records",
+          id: "transactions",
+          title: "Transactions",
+          viewKey: "relation:transactions",
+        },
+        {
+          kind: "records",
+          id: "purchases",
+          title: "Purchases",
+          viewKey: "relation:purchases",
+        },
+        {
+          kind: "report",
+          id: "unresolved-transactions",
+          title: "Transactions needing review",
+          slot: "financialAccount.review-summary",
+        },
+      ],
+
       activityRelations: [{ relation: "purchases", dateField: "date" }],
-      hero: {
-        chart: { kind: "monthlyExpenseSpend", viewKey: "expenses" },
-        stats: ["transactionCount"],
-      },
+
       omitRelations: {
         vendors:
           "Three joins through transactions; the Transactions table links each transaction's vendor.",

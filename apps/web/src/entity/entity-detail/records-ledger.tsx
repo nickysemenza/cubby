@@ -149,7 +149,7 @@ export function ReportRefLink({
  * The row's lines, one under another: an untoned line is its result, the rest evidence. On a wide
  * row each quiet line clips with its whole text as its tooltip; failures and warnings wrap in full.
  */
-function RowText({ row }: { row: ReportRecordRow }) {
+export function ReportRowText({ row }: { row: ReportRecordRow }) {
   const clip = !isLoud(row);
   return (
     <span className="block min-w-0 text-xs/5 break-words">
@@ -420,7 +420,9 @@ function ReportRecordLine({
         </span>
       }
       clip={false}
-      secondary={lineCount === 1 && !blockText ? <RowText row={row} /> : null}
+      secondary={
+        lineCount === 1 && !blockText ? <ReportRowText row={row} /> : null
+      }
       trailing={<RowTrailing row={row} sharedDay={context.day !== null} />}
       actions={
         hasLinks || verbs.length > 0 ? (
@@ -434,7 +436,7 @@ function ReportRecordLine({
       detail={
         blockText || opened || row.detail || (choice && context.choices) ? (
           <>
-            {blockText ? <RowText row={row} /> : null}
+            {blockText ? <ReportRowText row={row} /> : null}
             {opened ? (
               <div className="flex flex-wrap items-center gap-2">
                 <CommandButton

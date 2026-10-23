@@ -60,8 +60,40 @@ export default defineEntity({
       emoji: "🔁",
     },
     detail: {
+      summary: [
+        {
+          kind: "fields",
+          id: "amount-date",
+          title: "Amount & date",
+          fields: ["amount", "date"],
+        },
+        {
+          kind: "records",
+          id: "from",
+          title: "From",
+          viewKey: "relation:from-party",
+        },
+        {
+          kind: "records",
+          id: "to",
+          title: "To",
+          viewKey: "relation:to-party",
+        },
+        {
+          kind: "fields",
+          id: "classification",
+          title: "Classification",
+          fields: ["classification"],
+        },
+        {
+          kind: "records",
+          id: "financial-evidence",
+          title: "Financial evidence",
+          viewKey: "relation:evidence-transactions",
+        },
+      ],
+
       hero: {
-        stats: ["amount"],
         when: { field: "date", label: "Transferred" },
       },
       additionalSections: [

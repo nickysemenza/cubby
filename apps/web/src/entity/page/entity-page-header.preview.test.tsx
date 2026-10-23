@@ -31,10 +31,15 @@ for (const width of [402, 900, 1280]) {
           heroStamp={{ label: "Ready" }}
           rawData={{ createdAt: "2026-01-01T12:00:00Z" }}
           heroActions={{ primary: <Button size="sm">Edit</Button> }}
-          heroStats={[
-            { label: "Value", value: "$48.00" },
-            { label: "On hand", value: "3" },
-          ]}
+          summary={
+            <div
+              data-testid="detail-key-numbers"
+              className="grid grid-cols-2 border-y border-border p-3"
+            >
+              <span>Value $48.00</span>
+              <span>On hand 3</span>
+            </div>
+          }
         />
       </div>,
       { wrapper: harness.wrapper },
@@ -57,7 +62,7 @@ for (const width of [402, 900, 1280]) {
       width < 640 ? 164 : 120,
     );
     expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(width);
-    expect(screen.getByText("$48.00")).toBeVisible();
+    expect(screen.getByText("Value $48.00")).toBeVisible();
   });
 }
 

@@ -48,6 +48,57 @@ export default defineEntity(
         emoji: "🍽️",
       },
       detail: {
+        summary: [
+          {
+            kind: "fields",
+            id: "when-occasion",
+            title: "When & occasion",
+            fields: ["date", "mealType"],
+          },
+          {
+            kind: "records",
+            id: "recipes",
+            title: "Recipes",
+            viewKey: "relation:recipes",
+          },
+          {
+            kind: "records",
+            id: "direct-products",
+            title: "Direct Products",
+            viewKey: "relation:food-products",
+          },
+          {
+            kind: "records",
+            id: "direct-ingredients",
+            title: "Direct Ingredients",
+            viewKey: "relation:food-ingredients",
+          },
+          {
+            kind: "records",
+            id: "people",
+            title: "People",
+            viewKey: "relation:eaters",
+          },
+          {
+            kind: "fields",
+            id: "nutrition",
+            title: "Nutrition",
+            fields: ["totals"],
+          },
+          {
+            kind: "fields",
+            id: "estimated-cost",
+            title: "Estimated cost",
+            fields: ["cost"],
+          },
+          {
+            kind: "records",
+            id: "evidence",
+            title: "Evidence",
+            viewKey: "relation:images",
+          },
+        ],
+
         activityRelations: [{ relation: "images", dateField: "capturedAt" }],
         omitRelations: {
           eaters: "The composition slot renders each eater's portions.",
@@ -58,7 +109,7 @@ export default defineEntity(
           recipes:
             "The composition slot renders served recipes with their portions.",
         },
-        hero: { stats: ["calories"], when: { field: "date", label: "Eaten" } },
+        hero: { when: { field: "date", label: "Eaten" } },
         additionalSections: [
           {
             kind: "slot",

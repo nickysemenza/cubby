@@ -398,7 +398,7 @@ export function ReportBlocks({
 }
 
 /** A record being worked refreshes its reports this often while the server says it is live. */
-const LIVE_POLL_MS = 3_000;
+export const LIVE_REPORT_POLL_MS = 3_000;
 
 /**
  * The Run slots one page polls together: a single `getMany` read loads the run once for all of
@@ -485,7 +485,7 @@ function useReportBlocks(
     enabled: batched,
     refetchInterval: (state) =>
       state.state.data?.reports.some((entry) => entry.report.live)
-        ? LIVE_POLL_MS
+        ? LIVE_REPORT_POLL_MS
         : false,
   });
   const paged = useInfiniteQuery({

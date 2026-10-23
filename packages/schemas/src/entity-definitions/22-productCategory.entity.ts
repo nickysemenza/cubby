@@ -25,10 +25,39 @@ export default defineEntity({
     recordEmojiField: "emoji",
     titleField: "name",
     detail: {
-      hero: {
-        chart: { kind: "monthlyExpenseSpend", viewKey: "expenses" },
-        stats: ["productCount"],
-      },
+      summary: [
+        {
+          kind: "fields",
+          id: "category-position",
+          title: "Category position",
+          fields: ["path"],
+        },
+        {
+          kind: "records",
+          id: "products",
+          title: "Products",
+          viewKey: "relation:products",
+        },
+        {
+          kind: "records",
+          id: "child-categories",
+          title: "Child categories",
+          viewKey: "relation:children",
+        },
+        {
+          kind: "fields",
+          id: "spending-classification",
+          title: "Spending classification",
+          fields: ["effectiveSpendingCategory"],
+        },
+        {
+          kind: "chart",
+          id: "monthly-spend",
+          title: "Spend over 12 months",
+          viewKey: "expenses",
+        },
+      ],
+
       additionalSections: [
         {
           kind: "slot",

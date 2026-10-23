@@ -23,8 +23,10 @@ describe("declared detail data", () => {
         "shortcodePrefix" in descriptor ? descriptor.shortcodePrefix : null;
       return prefix ? [{ entityKind: entity, entityId: `${prefix}2345` }] : [];
     });
-    for (const source of sources.filter(
-      (source) => entitySummary[source.entityKind].detail.hero.chart,
+    for (const source of sources.filter((source) =>
+      entitySummary[source.entityKind].detail.summary.some(
+        (slot) => slot.kind === "chart",
+      ),
     )) {
       const series = await getMonthlyExpenseSpend(
         ctx.db,

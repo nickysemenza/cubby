@@ -395,8 +395,6 @@ struct EntityDetailContent: View {
     @Environment(AppModel.self) private var appModel
     @State private var timeline: EntityTimelineOut?
     @State private var timelineError: String?
-    @State private var spendPoints: MonthlyExpenseSpendOutput?
-    @State private var spendError: String?
     @State private var activityEvents: [DetailActivityEvent] = []
     @State private var activityCursor: String?
     @State private var activityError: String?
@@ -472,15 +470,7 @@ struct EntityDetailContent: View {
                             supplement
                         }
                     }
-                    if presentation.heroChart != nil {
-                        if let spendError {
-                            InlineLoadFailure(message: spendError) { await loadSpend() }
-                        } else if let spendPoints {
-                            MonthlyExpenseSpendChart(points: spendPoints)
-                        } else {
-                            LoadingIndicator(label: "Loading monthly spend")
-                        }
-                    }
+                    DetailSummaryGrid(descriptor: descriptor, row: row)
                     HStack(alignment: .top, spacing: FieldGuideTokens.Space.lg) {
                         VStack(alignment: .leading, spacing: FieldGuideTokens.Space.lg) {
                             if descriptor.key == .location {
@@ -555,7 +545,7 @@ struct EntityDetailContent: View {
             .accessibilityIdentifier("detail.\(descriptor.key.rawValue)")
             .task(id: row.id) {
                 await loadTimelineIfDeclared()
-                await loadChartAndActivity()
+                await loadActivity()
             }
             .modifier(DetailContentsNavigation(entries: contentsEntries))
             .modifier(FieldGuideRecordInspector(descriptor: descriptor, row: row))
@@ -666,15 +656,9 @@ struct EntityDetailContent: View {
                     }
                 }
             }
-            if presentation.heroChart != nil {
+            if !presentation.summarySlots.isEmpty {
                 Section {
-                    if let spendError {
-                        InlineLoadFailure(message: spendError) { await loadSpend() }
-                    } else if let spendPoints {
-                        MonthlyExpenseSpendChart(points: spendPoints)
-                    } else {
-                        LoadingIndicator(label: "Loading monthly spend")
-                    }
+                    DetailSummaryGrid(descriptor: descriptor, row: row)
                 }
             }
             if let journal = journalSection {
@@ -727,7 +711,7 @@ struct EntityDetailContent: View {
         .accessibilityIdentifier("detail.\(descriptor.key.rawValue)")
         .task(id: row.id) {
             await loadTimelineIfDeclared()
-            await loadChartAndActivity()
+            await loadActivity()
         }
         .modifier(DetailContentsNavigation(entries: contentsEntries))
         .modifier(FieldGuideRecordInspector(descriptor: descriptor, row: row))
@@ -853,22 +837,6 @@ struct EntityDetailContent: View {
         connectedRecords?.preview?.views.contains(where: { $0.totalCount > 0 }) ?? false
     }
 
-    private func loadChartAndActivity() async {
-        if presentation.heroChart != nil { await loadSpend() }
-        if !presentation.activityRelations.isEmpty { await loadActivity() }
-    }
-
-    private func loadSpend() async {
-        guard presentation.heroChart != nil else { return }
-        spendError = nil
-        do {
-            spendPoints = try await appModel.client.monthlyExpenseSpend(
-                .init(source: EntityGraphRootInput(entityKind: descriptor.key, entityId: row.id)))
-        } catch {
-            spendError = error.userMessage
-        }
-    }
-
     private func loadActivity() async {
         guard !presentation.activityRelations.isEmpty else { return }
         activityError = nil
@@ -929,7 +897,7 @@ struct EntityDetailContent: View {
                             Divider()
                             LabeledContent("Type", value: descriptor.singular)
                             LabeledContent("Code", value: row.id)
-                            ForEach(descriptor.presentation.heroStats, id: \.self) { key in
+                            ForEach(descriptor.presentation.summaryFieldKeys, id: \.self) { key in
                                 if let field = descriptor.field(key),
                                     let value = EntityFieldValue.text(
                                         in: row.raw, field: field, surface: "detail")

@@ -35,7 +35,7 @@ function resolveConnectedView(source: Entity, viewKey: string) {
   if (viewKey.startsWith("relation:")) {
     const key = viewKey.slice("relation:".length);
     const relation = entityManifest[source].relationships.find(
-      (candidate) => candidate.key === key && candidate.cardinality === "many",
+      (candidate) => candidate.key === key,
     );
     if (!relation) throw new Error(`Unknown relation view ${source}.${key}`);
     if (relation.provenance.kind === "derived")

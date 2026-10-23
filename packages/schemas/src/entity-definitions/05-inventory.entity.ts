@@ -55,7 +55,50 @@ export default defineEntity(
       },
       icons: { phosphor: "Package", sfSymbol: "cube.box", emoji: "🗃️" },
       detail: {
-        hero: { stats: ["amount"] },
+        summary: [
+          {
+            kind: "records",
+            id: "product",
+            title: "Product",
+            viewKey: "relation:product",
+          },
+          {
+            kind: "fields",
+            id: "placement-amount",
+            title: "Placement & amount",
+            fields: ["placement", "amount"],
+          },
+          {
+            kind: "records",
+            id: "location",
+            title: "Location",
+            viewKey: "relation:location",
+          },
+          {
+            kind: "fields",
+            id: "ownership",
+            title: "Ownership",
+            fields: ["effectiveOwnership"],
+          },
+          {
+            kind: "fields",
+            id: "estimated-value",
+            title: "Estimated value",
+            fields: ["valuation"],
+          },
+          {
+            kind: "fields",
+            id: "last-verified",
+            title: "Last verified",
+            fields: ["verifiedAt"],
+          },
+          {
+            kind: "records",
+            id: "product-purchases",
+            title: "Product purchase history",
+            viewKey: "purchases",
+          },
+        ],
       },
       list: {
         titleSubtitle: true,

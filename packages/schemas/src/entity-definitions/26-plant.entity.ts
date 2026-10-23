@@ -68,15 +68,52 @@ export default defineEntity({
     },
     icons: { phosphor: "Leaf", sfSymbol: "leaf.circle", emoji: "🌿" },
     detail: {
+      summary: [
+        {
+          kind: "fields",
+          id: "grow-verdict",
+          title: "Grow verdict",
+          fields: ["verdict"],
+        },
+        {
+          kind: "records",
+          id: "plantings",
+          title: "Plantings",
+          viewKey: "relation:plantings",
+        },
+        {
+          kind: "records",
+          id: "seed-products",
+          title: "Seed Products",
+          viewKey: "relation:products",
+        },
+        {
+          kind: "records",
+          id: "food-connection",
+          title: "Food connection",
+          viewKey: "relation:ingredient",
+        },
+        {
+          kind: "fields",
+          id: "starting-window",
+          title: "Starting windows",
+          fields: ["guideSowWindow", "guideTransplantWindow"],
+        },
+        {
+          kind: "records",
+          id: "growing-locations",
+          title: "Growing locations",
+          viewKey: "growing-locations",
+        },
+        {
+          kind: "records",
+          id: "observations",
+          title: "Garden observations",
+          viewKey: "garden-entries",
+        },
+      ],
+
       activityRelations: [{ relation: "plantings", dateField: "sowedOn" }],
-      hero: {
-        stats: [
-          "daysFromSowMin",
-          "daysFromSowMax",
-          "daysFromTransplantMin",
-          "daysFromTransplantMax",
-        ],
-      },
     },
     list: {
       read: {

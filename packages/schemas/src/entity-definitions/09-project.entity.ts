@@ -69,6 +69,57 @@ export default defineEntity({
     },
     icons: { phosphor: "Hammer", sfSymbol: "hammer", emoji: "🛠️" },
     detail: {
+      summary: [
+        {
+          kind: "fields",
+          id: "progress-dates",
+          title: "Progress & dates",
+          fields: ["status", "taskProgress", "dates"],
+        },
+        {
+          kind: "records",
+          id: "tasks",
+          title: "Tasks",
+          viewKey: "relation:tasks",
+        },
+        {
+          kind: "records",
+          id: "blockers",
+          title: "Blockers",
+          viewKey: "relation:blocked-by",
+        },
+        {
+          kind: "report",
+          id: "budget-coverage",
+          title: "Budget & coverage",
+          slot: "project.budget",
+        },
+        {
+          kind: "chart",
+          id: "monthly-spend",
+          title: "Spend over 12 months",
+          viewKey: "relation:expenses",
+        },
+        {
+          kind: "fields",
+          id: "places-assignee",
+          title: "Places & assignee",
+          fields: ["locations", "assigneeId"],
+        },
+        {
+          kind: "records",
+          id: "purchased-products",
+          title: "Purchased Products",
+          viewKey: "relation:purchased-products",
+        },
+        {
+          kind: "records",
+          id: "sub-projects",
+          title: "Sub-projects",
+          viewKey: "relation:sub-projects",
+        },
+      ],
+
       activityRelations: [
         { relation: "purchases", dateField: "date" },
         { relation: "defaultPurchases", dateField: "date" },
@@ -90,8 +141,6 @@ export default defineEntity({
           "A subset of the Purchases table; each purchase shows its default project as a field.",
       },
       hero: {
-        chart: { kind: "monthlyExpenseSpend", viewKey: "relation:expenses" },
-        stats: ["spent", "costEstimate"],
         chip: "status",
 
         extraActions: ["setStatus"],
