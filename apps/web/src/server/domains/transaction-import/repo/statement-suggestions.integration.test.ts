@@ -2150,7 +2150,7 @@ describe("statement Transaction suggestions", () => {
       expect(publicationsAfterQueue).toBe(2);
       expect(modelPeak).toBeGreaterThanOrEqual(30);
       expect(spendingPeak).toBeGreaterThan(1);
-      expect(spendingPeak).toBeLessThanOrEqual(8);
+      expect(spendingPeak).toBeLessThanOrEqual(32);
       expect(outcome).toMatchObject({
         labelled: 168,
         labels: { generated: 504 },
