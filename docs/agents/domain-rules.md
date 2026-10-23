@@ -246,6 +246,19 @@ Keep a `PgTable` object when passing a plain table to `.from()`: raw SQL
 interpolation of an aliased table emits only its alias, losing the underlying
 table declaration. Derived SQL sources must not convert plain-table fallbacks
 into SQL fragments.
+Query shape: narrow to the requested identities before per-row work. A
+MATERIALIZED CTE that builds JSON or runs correlated policy lookups for every
+eligible row, then filters by scope, multiplies cost by the population. In the
+Assessment eligibility rewrite, moving rule checks behind a materialized
+identity barrier cut one scope's rule lookups from about 13,400 to 11. Match a
+primary reference column directly instead of expanding a JSON array. When many
+list reads need the same derived value, compute it once in a background family
+and read the stored result (as data quality does) rather than recomputing it in
+every list statement. Load related facts once per ID page, never per row. Write
+queries with the Drizzle builder and typed helpers; Kysely matched Drizzle's
+plans without fixing the raw JSON predicates and needed a separate adapter.
+Benchmark with the related graphs seeded: empty Email, Purchase or settlement
+tables hide the cost of subqueries that walk them.
 A repeated SELECT/GROUP BY expression must use identical constants: separate
 bind parameters make PostgreSQL treat its copies as different expressions.
 Inline compile-time schema enum values with `sql.raw`, keeping user input bound;
@@ -281,15 +294,10 @@ a disable comment with the reason.
 Inside the entity kernel's write transaction every DB touch must go through the
 transaction-bound context: a service still bound to the request pool that
 updates the row the transaction holds deadlocks silently, and only E2E on
-workerd exposes it. A data exception's fingerprint is declared per check in
-that check's registry binding (`CheckBinding.fingerprint(t)` in
-`apps/web/src/server/generic/data-quality/repo/checks/<entity>.ts`) — the inputs it
-reads, for example the live Expense count or primary-document set — not
-`updatedAt`: unrelated edits must not reopen it, while changed evidence must.
-Hydration and the filter/sort SQL evaluate that same binding (one SQL
-expression per check, shared by `hydrate.ts` and `sql.ts`), so the two paths
-cannot drift apart; legacy `updatedAt` fingerprints remain stale until an
-explicit migration proves the old exception is still active.
+workerd exposes it. Data-quality checks are TypeScript functions over one batch
+loader per ID page; list SQL reads only their published outcomes, so hydration
+and filters cannot drift apart. Waivers hold across input changes until cleared;
+see [Data quality](../entities.md#data-quality).
 
 Unit vocabulary derives from `recipebridge`'s `size_unit_aliases()`; the TS
 title matcher and the Postgres prefilter both build from it — never hand-list

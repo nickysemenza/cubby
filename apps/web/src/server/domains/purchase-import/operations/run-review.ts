@@ -53,6 +53,7 @@ import {
 } from "~/server/domains/purchase-import/repo/mail-run-membership";
 import { failOperationsForRun } from "~/server/domains/run/repo/run-operation";
 import { transitionAssessmentStates } from "~/server/generic/assessment/repo/assessment-state";
+import { recordChange } from "~/server/generic/changes/repo/change";
 import { EXECUTED_RUN_PURPOSES } from "~/server/workflows/runs/contract";
 
 import { loadPurchaseAuditBatch } from "../repo/audit-batch";
@@ -261,6 +262,7 @@ async function reconcileSettledRunOnce(
           updatedAt: new Date(),
         })
         .where(eq(runTable.id, scope.public.runId));
+      await recordChange(tx, { kind: "source", categories: ["email"] });
       return { unresolved: [], reasons: new Map<string, string>() };
     });
     if (settled && !settled.unresolved.length)
@@ -691,6 +693,8 @@ async function stopRunForReviewOnce(
         ),
       )
       .returning({ purpose: runTable.purpose, input: runTable.input });
+    if (stopped)
+      await recordChange(tx, { kind: "source", categories: ["run"] });
     // A Run without a roster (erased, or a legacy/manual Mail import) has no
     // Email to return, and stopping it for review must never fail on parsing one.
     if (stopped?.purpose === "mail_import" && stopped.input !== null)

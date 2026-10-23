@@ -68,7 +68,11 @@ const updateRecipeTotalsBatch = async (
     RETURNING (previous.totals IS DISTINCT FROM v.totals OR previous.stale) AS changed
   `);
   if (changed.rows.some((row) => row.changed))
-    await recordChange(db, { kind: "projection", categories: ["recipe"] });
+    await recordChange(db, {
+      kind: "projection",
+      categories: ["recipe"],
+      refresh: ["quality"],
+    });
 };
 
 /**

@@ -19,6 +19,7 @@ import {
 } from "~/server/domains/expense/repo/expense-derived-read";
 import { disposalPurchaseIds } from "~/server/domains/product/repo/ownership";
 import { projectScaffold } from "~/server/domains/project/repo/lookup";
+import type { QualityReadContext } from "~/server/generic/data-quality/repo/registry";
 import {
   ListContext,
   listFilterValues,
@@ -253,7 +254,11 @@ const analyticsFilters = (filters: ExpenseFilters): ExpenseFilters => {
 export const buildExpenseWhereClause = async (
   db: Database,
   filters: ExpenseFilters,
-  options?: { omitAllocationScope?: boolean; context?: ListContext },
+  options?: {
+    omitAllocationScope?: boolean;
+    context?: ListContext;
+    readContext?: QualityReadContext;
+  },
 ): Promise<SQL | undefined> => {
   const selected = options?.omitAllocationScope
     ? analyticsFilters(filters)
@@ -264,7 +269,11 @@ export const buildExpenseWhereClause = async (
       filters: selected,
       readIntent: "count",
     }));
-  return expenseScaffold.where(selected, { context });
+  // Standalone totals and callers with their own FROM supply no statement-local evidence.
+  return expenseScaffold.where(selected, {
+    context,
+    readContext: options?.readContext ?? {},
+  });
 };
 
 export const expenseListRead = async (

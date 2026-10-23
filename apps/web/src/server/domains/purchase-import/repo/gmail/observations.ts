@@ -31,6 +31,7 @@ import {
   ensureEmailAssessment,
   EMAIL_OBSERVATION_RECEIPT,
 } from "~/server/generic/assessment/repo/assessment-email";
+import { recordChange } from "~/server/generic/changes/repo/change";
 import { findOrCreateWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 /** The caller holds the Email lock; stored unknown telemetry remains unknown. */
@@ -87,6 +88,7 @@ export async function snapshotStoredEmailPrediction(
     .returning();
   if (!snapshot)
     throw new Error("Email historical prediction insert returned no row");
+  await recordChange(tx, { kind: "source", categories: ["email"] });
   return snapshot;
 }
 
@@ -226,6 +228,7 @@ export async function recordEmailClassificationObservation(
           conflict: parsed.conflict,
         },
       });
+    await recordChange(tx, { kind: "source", categories: ["email"] });
     return observation;
   });
 }
@@ -368,6 +371,7 @@ export async function recordEmailCandidateObservation(
       .returning();
     if (!record)
       throw new Error("Email candidate observation insert returned no row");
+    await recordChange(tx, { kind: "source", categories: ["email"] });
     return record;
   });
 }

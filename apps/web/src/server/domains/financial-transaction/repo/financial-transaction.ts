@@ -52,6 +52,7 @@ import {
   emptySpendingCategorySummary,
   loadTransactionSpendingCategorySummaries,
 } from "~/server/domains/expense/repo/expense-category-summary";
+import { allocationIntegrityDefectSql } from "~/server/domains/financial-transaction/repo/financial-allocation-integrity";
 import { lockFinancialEvidenceKeys } from "~/server/domains/financial-transaction/repo/financial-evidence";
 import { financialTransactionItemizationSql } from "~/server/domains/financial-transaction/repo/financial-reconciliation";
 import {
@@ -98,7 +99,6 @@ import {
   logAuditEntry,
 } from "~/server/generic/audit-log/repo/audit-log";
 import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
-import { gapCondition } from "~/server/generic/data-quality/repo/sql";
 import {
   assertSettlementRefsAvailable,
   replaceSettlementRefs,
@@ -438,11 +438,8 @@ const financialTransactionScaffold = listScaffold(
       // An unnamed merchant leads a descending list.
       merchant: { sql: sql`${financialTransaction.merchant}`, nulls: "high" },
       itemization: sql`${financialTransactionItemizationSql('"FinancialTransaction"."id"')}`,
-      allocationIntegrity: sql`CASE WHEN ${gapCondition(
-        "financialTransaction",
-        "financial_transaction_allocation_integrity",
-        financialTransaction,
-      )} THEN ${financialTransactionAllocationIntegrity.enum.defect}::text END`,
+      // Live: an integrity defect must surface without waiting for a quality refresh.
+      allocationIntegrity: sql`CASE WHEN ${allocationIntegrityDefectSql('"FinancialTransaction"')} THEN ${financialTransactionAllocationIntegrity.enum.defect}::text END`,
       descriptorProcessor: descriptorProcessorSql,
     },
   },

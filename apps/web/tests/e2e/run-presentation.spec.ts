@@ -4,6 +4,7 @@ import { imageProcessingJob } from "~/server/db/image-processing-schema";
 import { run, runStep } from "~/server/db/schema";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { getDb } from "~/server/db/helpers";
+import { publishQualityFixtures } from "~/server/testing/quality.fixtures";
 
 import {
   openCellExplanation,
@@ -75,6 +76,8 @@ test("related Runs show account labels and shared quality", async ({
     startedAt: new Date("2026-09-01T10:00:00Z"),
     endedAt: new Date("2026-09-01T10:01:00Z"),
   });
+  // Raw inserts bypass change capture; publish the Run quality lists read.
+  await publishQualityFixtures(db, "run");
   await gotoAuthenticatedPage(page, `/vendors/${vendor.shortcode}`);
   await page
     .getByRole("heading", { level: 2, name: "Work", exact: true })

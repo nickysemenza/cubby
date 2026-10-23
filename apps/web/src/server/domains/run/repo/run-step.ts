@@ -300,23 +300,30 @@ export async function finishStepRunRow(
     routine: boolean;
   },
 ) {
-  const failed = outcome.failedLabels.length > 0;
-  const [finished] = await getDb(db)
-    .update(run)
-    .set({
-      status: failed ? "needs_review" : "completed",
-      endedAt: new Date(),
-      failureCode: failed ? "step_failures" : null,
-      dispatchError: failed
-        ? `${outcome.failedLabels.join(", ")} recorded failures`
-        : null,
-      routine: outcome.routine,
-    })
-    .where(
-      and(eq(run.id, runId), eq(run.status, "running"), attemptIs(attempt)),
-    )
-    .returning({ id: run.id });
-  return Boolean(finished);
+  return withTransactionDatabase(db, async (tx) => {
+    const failed = outcome.failedLabels.length > 0;
+    const [finished] = await getDb(tx)
+      .update(run)
+      .set({
+        status: failed ? "needs_review" : "completed",
+        endedAt: new Date(),
+        failureCode: failed ? "step_failures" : null,
+        dispatchError: failed
+          ? `${outcome.failedLabels.join(", ")} recorded failures`
+          : null,
+        routine: outcome.routine,
+      })
+      .where(
+        and(eq(run.id, runId), eq(run.status, "running"), attemptIs(attempt)),
+      )
+      .returning({ id: run.id, purpose: run.purpose });
+    if (finished)
+      await recordChange(tx, {
+        kind: finished.purpose === "derived_refresh" ? "projection" : "source",
+        categories: ["run"],
+      });
+    return Boolean(finished);
+  });
 }
 
 export async function readStepRunOwner(db: Database, runId: RunId) {

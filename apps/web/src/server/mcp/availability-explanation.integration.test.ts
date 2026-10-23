@@ -21,7 +21,7 @@ import { createMcpServer } from "./server";
 
 describe("availability explanations through MCP", () => {
   const ctx = withTestDb("mcp");
-  it("accepts, clears, and invalidates the evidence-bound finding", async () => {
+  it("accepts, clears, and retains the finding across evidence changes", async () => {
     const saved = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({
@@ -76,8 +76,9 @@ describe("availability explanations through MCP", () => {
     const changed = (
       await loadDataQualities(ctx.db, "product", [saved.entityId])
     ).get(saved.entityId)!;
+    // Waivers never reopen: the decision stays active after the evidence changes.
     expect(changed.exceptions).toContainEqual(
-      expect.objectContaining({ state: "stale" }),
+      expect.objectContaining({ note, state: "active" }),
     );
   });
 });

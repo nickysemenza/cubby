@@ -34,10 +34,11 @@ import { resolveCurrentMemberFilters } from "~/server/entity-kernel/current-memb
 import { publishFieldAssessment } from "~/server/generic/assessment/repo/assessment";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
-import { readWorkQueue } from "~/server/generic/work-queue/service/work-queue-read";
+import { readWorkQueue as readCurrentWorkQueue } from "~/server/generic/work-queue/service/work-queue-read";
 import { requireActor } from "~/server/http/request-context";
 import { createMcpServer } from "~/server/mcp/server";
-import { callMcpTool } from "~/server/testing/mcp-test-utils";
+import { callMcpTool as callCurrentMcpTool } from "~/server/testing/mcp-test-utils";
+import { publishAllQualityFixtures } from "~/server/testing/quality.fixtures";
 import {
   createImageFixture,
   createInventoryFixture,
@@ -62,6 +63,15 @@ import {
 // missing ownership fails closed, and filtering precedes counts and paging. Assert through the production MCP transport.
 describe("member actionable Work queue", () => {
   const ctx = withTestDb("mcp");
+  // Work queue quality branches read published rows; publish fixtures before each read.
+  const readWorkQueue: typeof readCurrentWorkQueue = async (...args) => {
+    await publishAllQualityFixtures(ctx.db);
+    return readCurrentWorkQueue(...args);
+  };
+  const callMcpTool: typeof callCurrentMcpTool = async (...args) => {
+    await publishAllQualityFixtures(ctx.db);
+    return callCurrentMcpTool(...args);
+  };
 
   // Recent amounts remain evidence, but investigation waits through two full business days.
   it("separates awaiting posting from actionable settlement and transfer work", async () => {

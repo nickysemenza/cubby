@@ -2,8 +2,6 @@ import { suggestionStatus } from "@cubby/schemas/ai";
 import {
   assessmentFamily,
   type assessmentReviewInput,
-  feedbackAuthority,
-  feedbackVerdict,
 } from "@cubby/schemas/assessment";
 import {
   type DataCheck,
@@ -60,7 +58,10 @@ import {
   statementSuggestionStatusCounts,
 } from "~/server/domains/transaction-import/repo/statement-suggestion-read";
 import { kindAgreed } from "~/server/domains/transaction-import/repo/statement-transaction-kind";
-import { reviewFamilyDeclarations } from "~/server/generic/assessment/repo/review-families";
+import {
+  reviewFamilyDeclarations,
+  pendingRecommendationEligibility,
+} from "~/server/generic/assessment/repo/review-families";
 import {
   fieldSuggestionKeys,
   readFieldSuggestions,
@@ -642,14 +643,7 @@ const recommendation: SuggestionFamilyPresentation<"recommendation"> = {
         AND ${assessmentIdScope(query.assessmentIds, sql`a.id`)}
         AND s.status = ${suggestionStatus.enum.pending}
         AND ${reviewFamilyDeclarations.recommendation.scopes.connection}
-        AND NOT EXISTS (SELECT 1 FROM "Feedback" f WHERE f."assessmentId" = a.id
-          AND f.authority = ${feedbackAuthority.enum.member}
-          AND f.verdict IN (${feedbackVerdict.enum.wrong}, ${feedbackVerdict.enum.dismissed}))
-        AND NOT EXISTS (SELECT 1 FROM "AssessmentState" suppressed WHERE suppressed.active
-          AND suppressed.entity = s.entity AND suppressed."recordId" = s."recordId"
-          AND suppressed.suppression->>'scope' = a.subject->>'scope'
-          AND suppressed.suppression->>'candidateKey' = a.subject->>'candidateKey'
-          AND (suppressed.suppression->>'fingerprint' IS NULL OR suppressed.suppression->>'fingerprint' = a.fingerprint))
+        AND ${pendingRecommendationEligibility()}
         ${roster ? sql`AND (${endpoint("source")} IN (${roster}) OR ${endpoint("target")} IN (${roster}))` : sql``}
         ${filters.entity ? sql`AND (${side("source", "entityKind")} = ${filters.entity} OR ${side("target", "entityKind")} = ${filters.entity})` : sql``}
         ${run ? sql`AND s."runId" = (SELECT id FROM "Run" WHERE shortcode = ${run})` : sql``}

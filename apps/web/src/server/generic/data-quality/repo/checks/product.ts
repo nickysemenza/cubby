@@ -1,22 +1,18 @@
 import { type InventoryPlacement } from "@cubby/shared";
-import { sql } from "drizzle-orm";
+import { and, sql } from "drizzle-orm";
 
+import type { Database, DrizzleTransaction } from "~/server/db";
 import { expenseAcquisitionSql } from "~/server/db/computed/expense-aggregate-sql";
+import { notDeleted, unwrapDb, uuidArrayParam } from "~/server/db/helpers";
 import { actualExpenseSql } from "~/server/db/helpers/predicates";
 import { product } from "~/server/db/schema";
 import { productHasDisplayableImageSql } from "~/server/domains/image/repo/image-displayability";
 import { orphanedProductCondition } from "~/server/domains/product/repo/orphan-condition";
-import {
-  derivedPriceFilterSql,
-  hasDerivedProductPriceSql,
-  productPriceEvidenceSql,
-} from "~/server/domains/product/repo/pricing";
+import { loadProductPricing } from "~/server/domains/product/repo/pricing";
 import { serviceCategorySql } from "~/server/domains/product/repo/service-category";
-import {
-  defineEntityChecks,
-  qualityReadColumn,
-  type QualityReadContext,
-} from "~/server/generic/data-quality/repo/registry";
+import { entityDisplayImagePresenceSql } from "~/server/entity-kernel/repo/entity-display-image";
+import { qualityCheck } from "~/server/generic/data-quality/repo/builders";
+import { defineStoredEntityChecks } from "~/server/generic/data-quality/repo/stored-registry";
 
 type Product = typeof product;
 
@@ -93,87 +89,105 @@ const hasLiveCategory = (t: Product) => sql`EXISTS (
   WHERE dq_cat."id" = ${t.categoryId} AND dq_cat."deletedAt" IS NULL
 )`;
 
-// A commodity (`product.commodity`) is interchangeable across sellers with no
-// single listing, so a brand, identifier or ASIN is not expected of it. Only
-// `expected` reads the flag: the fingerprints stay as they were, so turning it
-// off reopens the gaps without invalidating existing exceptions' evidence.
-const isBranded = (t: Product) => sql`NOT ${t.commodity}`;
+/** Bump when the rules or their declared scoring metadata change. */
+export const PRODUCT_QUALITY_RULES_VERSION = 1;
 
-const hasIdentifier = (t: Product) =>
-  sql`((${t.model} IS NOT NULL AND trim(${t.model}) <> '') OR ${hasExternalId(t)})`;
+type ProductQualityRecord = Awaited<
+  ReturnType<typeof loadProductQualityRecords>
+>[number];
+const observed = qualityCheck.observed<ProductQualityRecord>;
+const when = qualityCheck.when<ProductQualityRecord>;
+// Match PostgreSQL trim: only ASCII spaces, preserving the former identity rule.
+const hasText = (value: string) => value.replace(/^ +| +$/g, "") !== "";
 
-const derivedPrice = (t: Product, context?: QualityReadContext) =>
-  qualityReadColumn(context, "derivedPrice") ?? derivedPriceFilterSql(t.id);
-const hasDerivedPrice = (t: Product, context?: QualityReadContext) =>
-  // Scalar quality runs after paging; do not expand its price evidence to the catalog.
-  context === undefined
-    ? sql`${derivedPriceFilterSql(t.id)} IS NOT NULL`
-    : hasDerivedProductPriceSql(t.id, context);
-
-export const productChecks = defineEntityChecks({
+export const productChecks = defineStoredEntityChecks({
   entity: "product",
   table: product,
-  derivedRead: productPriceEvidenceSql,
+  rulesVersion: PRODUCT_QUALITY_RULES_VERSION,
+  load: loadProductQualityRecords,
   checks: {
-    product_orphaned: { missing: orphanedProductCondition },
-    // Identity applies to every Product, spend or stock or neither: a
-    // catalog-only entry still earns its name, maker, and category.
-    product_name: {
-      missing: (t) => sql`trim(${t.name}) = ''`,
-      fingerprint: (t) => [sql`${t.name}`],
-    },
-    product_brand: {
-      expected: isBranded,
-      missing: (t) => sql`${t.brandId} IS NULL`,
-      fingerprint: (t) => [sql`${t.brandId}`],
-    },
-    product_external_id: {
-      expected: (t) =>
-        sql`${isBranded(t)} AND NOT ${serviceCategorySql(sql`${t.categoryId}`)}`,
-      missing: (t) => sql`NOT ${hasIdentifier(t)}`,
-      fingerprint: (t) => [hasIdentifier(t)],
-    },
-    product_category: {
-      missing: (t) => sql`NOT ${hasLiveCategory(t)}`,
-      fingerprint: (t) => [sql`${t.categoryId}`],
-    },
-    product_price: {
-      // A `misc:` bucket is a heterogeneous pile and is *expected* to be
-      // unpriced (the per-location summary makes the same split); a stocked
-      // product otherwise carries no value into its location's total. An
-      // unstocked Product earns credit for a known price (zero included) but
-      // is never charged a gap: its historical price may be unknowable.
-      expected: (t, context) =>
-        sql`NOT ${serviceCategorySql(sql`${t.categoryId}`)} AND (${hasStock(t)} OR ${t.price} IS NOT NULL OR (${hasDerivedPrice(t, context)})) AND lower(${t.name}) NOT LIKE 'misc:%'`,
-      missing: (t, context) =>
-        sql`(${t.price} IS NULL AND NOT (${hasDerivedPrice(t, context)}))`,
-      fingerprint: (t, context) => [sql`${t.price}`, derivedPrice(t, context)],
-    },
-    product_image: {
-      // STOCKED ONLY. An image earns its keep for something you can walk up to
-      // and fail to recognise on a shelf; for a sold-off or purely historical
-      // product it is decoration. Scoping to inventory also keeps this check
-      // from lighting up a large share of the catalogue on day one, which is
-      // what would have made it noise rather than a worklist.
-      expected: hasInventory,
-      missing: (t) => sql`NOT ${hasDisplayableImage(t)}`,
-      fingerprint: (t) => [hasInventory(t), hasDisplayableImage(t)],
-    },
-    amazon_asin: {
-      expected: (t) => sql`${isBranded(t)} AND ${hasAmazonPurchase(t)}`,
-      missing: (t) => sql`NOT ${hasAmazonId(t)}`,
-      fingerprint: (t) => [hasAmazonPurchase(t), hasAmazonId(t)],
-    },
-    product_unpurchased: {
-      expected: (t) =>
-        sql`${hasInventory(t)} AND ${t.acquisitionOrigin} NOT IN ('gift', 'previously_owned')`,
-      missing: (t) =>
-        sql`NOT (${hasAcquiringExpense(t)} OR ${hasPurchaseProductLink(t)})`,
-      fingerprint: (t) => [
-        sql`${t.acquisitionOrigin}`,
-        hasAcquiringExpense(t),
-        hasPurchaseProductLink(t),
-      ],
-    },
+    product_orphaned: observed((r) => !r.orphaned),
+    product_name: observed((r) => hasText(r.name)),
+    product_brand: when(
+      (r) => !r.commodity,
+      observed((r) => r.brandId !== null),
+    ),
+    product_external_id: when(
+      (r) => !r.commodity && !r.service,
+      observed(
+        (r) => (r.model !== null && hasText(r.model)) || r.hasExternalId,
+      ),
+    ),
+    product_category: observed((r) => r.hasLiveCategory),
+    // Zero is known. Unstocked historical Products are never charged a price gap;
+    // heterogeneous misc: buckets deliberately carry no valuation expectation.
+    product_price: when(
+      (r) =>
+        !r.service &&
+        (r.hasStock || r.hasPrice) &&
+        !r.name.toLowerCase().startsWith("misc:"),
+      observed((r) => r.hasPrice),
+    ),
+    // Installed fixtures count as inventory for image and purchase evidence.
+    product_image: when(
+      (r) => r.hasInventory,
+      observed((r) => r.hasProductImage),
+    ),
+    product_display_image: observed((r) => r.hasDisplayImage),
+    amazon_asin: when(
+      (r) => !r.commodity && r.hasAmazonPurchase,
+      observed((r) => r.hasAmazonId),
+    ),
+    product_unpurchased: when(
+      (r) =>
+        r.hasInventory &&
+        !["gift", "previously_owned"].includes(r.acquisitionOrigin),
+      observed((r) => r.hasAcquiringExpense || r.hasPurchaseProductLink),
+    ),
   },
 });
+
+async function loadProductQualityRecords(
+  db: Database | DrizzleTransaction,
+  ids: readonly string[],
+) {
+  if (!ids.length) return [];
+  // One source page and one batched pricing read. Domain SQL owners preserve
+  // attachment liveness, acquisition policy, orphan retention and kit pricing.
+  const rows = await unwrapDb(db)
+    .select({
+      id: product.id,
+      shortcode: product.shortcode,
+      name: product.name,
+      model: product.model,
+      brandId: product.brandId,
+      commodity: product.commodity,
+      acquisitionOrigin: product.acquisitionOrigin,
+      price: product.price,
+      // Service Products are charges, not catalogued goods: no identifier or valuation.
+      service: sql<boolean>`${serviceCategorySql(sql`${product.categoryId}`)}`,
+      orphaned: sql<boolean>`${orphanedProductCondition(product)}`,
+      hasInventory: sql<boolean>`${hasInventory(product)}`,
+      hasStock: sql<boolean>`${hasStock(product)}`,
+      hasExternalId: sql<boolean>`${hasExternalId(product)}`,
+      hasLiveCategory: sql<boolean>`${hasLiveCategory(product)}`,
+      hasProductImage: sql<boolean>`${hasDisplayableImage(product)}`,
+      hasDisplayImage: sql<boolean>`${entityDisplayImagePresenceSql("product", sql`${product.id}`)}`,
+      hasAmazonPurchase: sql<boolean>`${hasAmazonPurchase(product)}`,
+      hasAmazonId: sql<boolean>`${hasAmazonId(product)}`,
+      hasAcquiringExpense: sql<boolean>`${hasAcquiringExpense(product)}`,
+      hasPurchaseProductLink: sql<boolean>`${hasPurchaseProductLink(product)}`,
+    })
+    .from(product)
+    .where(
+      and(
+        notDeleted(product),
+        sql`${product.id} = ANY(${uuidArrayParam(ids)})`,
+      ),
+    );
+  const pricing = await loadProductPricing(db, rows);
+  return rows.map((row) => ({
+    ...row,
+    hasPrice: pricing.get(row.id)?.effectivePrice != null,
+  }));
+}

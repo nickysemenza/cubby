@@ -31,7 +31,8 @@ export async function recordChange(
   db: RepositoryQueryInput,
   change: RepositoryChange,
 ): Promise<void> {
-  // Run progress and its audit history are execution metadata, not family inputs.
+  // Run source state is completed-import evidence for Email quality. Progress
+  // publications remain projection metadata and enroll no family by default.
   const families =
     change.kind === "projection"
       ? (change.refresh ?? [])
@@ -39,7 +40,9 @@ export async function recordChange(
           change.categories.every(
             (category) => category === "run" || category === "auditLog",
           )
-        ? []
+        ? change.categories.includes("run")
+          ? ["quality"]
+          : []
         : refreshFamily.options;
   if (families.length && !("rollback" in db) && !repositoryParentDatabase(db)) {
     await repositoryTransaction(db, (tx) => recordChange(tx, change));

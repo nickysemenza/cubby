@@ -10,9 +10,10 @@ import { getConnectedRecords } from "~/server/generic/entity-links/repo/connecte
 import { loadRelatedPreviews } from "~/server/generic/entity-links/repo/related-view";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import {
-  readRecordWorkQueue,
-  readWorkQueue,
+  readRecordWorkQueue as readCurrentRecordWorkQueue,
+  readWorkQueue as readCurrentWorkQueue,
 } from "~/server/generic/work-queue/service/work-queue-read";
+import { publishAllQualityFixtures } from "~/server/testing/quality.fixtures";
 import {
   createImageFixture,
   insertEntityAttachments,
@@ -29,6 +30,17 @@ import {
 // purchases and counts (including deleted rows) in account previews.
 describe("vendor identity and purchase account coverage", () => {
   const ctx = withTestDb();
+  // Work queue quality branches read published rows.
+  const readWorkQueue: typeof readCurrentWorkQueue = async (...args) => {
+    await publishAllQualityFixtures(ctx.db);
+    return readCurrentWorkQueue(...args);
+  };
+  const readRecordWorkQueue: typeof readCurrentRecordWorkQueue = async (
+    ...args
+  ) => {
+    await publishAllQualityFixtures(ctx.db);
+    return readCurrentRecordWorkQueue(...args);
+  };
 
   it("queues one logo gap for a vendor with no purchases or accounts and clears it when fixed", async () => {
     const vendor = await insertWithShortcode(ctx.db, "vendor", {

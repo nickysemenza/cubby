@@ -20,6 +20,7 @@ import {
   routineStepHandler,
   type RoutineStepDriversFor,
 } from "~/server/domains/run/repo/routine-run";
+import { qualityRefreshDriver } from "~/server/generic/data-quality/repo/refresh";
 import {
   refreshFamilyInput,
   REFRESH_PAGE_SIZE,
@@ -115,6 +116,7 @@ function refreshFamilyDrivers(
   ports: RefreshFamilyPreparation,
 ): RoutineStepDriversFor<"derived_refresh"> {
   return {
+    quality: qualityRefreshDriver,
     search: {
       count: (db, boundary) =>
         countSearchDocumentSources(db, [...searchableEntities], boundary),

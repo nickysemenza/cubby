@@ -1,62 +1,91 @@
-import { sql } from "drizzle-orm";
+import { and, sql } from "drizzle-orm";
 
+import type { Database, DrizzleTransaction } from "~/server/db";
+import { notDeleted, unwrapDb, uuidArrayParam } from "~/server/db/helpers";
 import { vendor } from "~/server/db/retained-tables";
 import { displayableImageRawSql } from "~/server/domains/image/repo/image-displayability";
+import { entityDisplayImagePresenceSql } from "~/server/entity-kernel/repo/entity-display-image";
+import { qualityCheck } from "~/server/generic/data-quality/repo/builders";
+import { defineStoredEntityChecks } from "~/server/generic/data-quality/repo/stored-registry";
 
-import { defineEntityChecks } from "../registry";
+const VENDOR_QUALITY_RULES_VERSION = 1;
 
-type Vendor = typeof vendor;
+type VendorQualityRecord = Awaited<
+  ReturnType<typeof loadVendorQualityRecords>
+>[number];
+const observed = qualityCheck.observed<VendorQualityRecord>;
+const when = qualityCheck.when<VendorQualityRecord>;
+const vendorColumn = (column: string) =>
+  sql`"Vendor".${sql.identifier(column)}`;
 
-// Website discovery and logo research can precede a first purchase.
-// Order evidence becomes expected once a vendor has purchases.
-const hasLivePurchase = (t: Vendor) => sql`EXISTS (
-  SELECT 1 FROM "Purchase" dq_ven_p
-  WHERE dq_ven_p."vendorId" = ${t.id} AND dq_ven_p."deletedAt" IS NULL
-)`;
+// Match PostgreSQL trim(), which removes ASCII spaces only.
+const hasText = (value: string | null) =>
+  value !== null && value.replace(/^ +| +$/g, "") !== "";
 
-// The logo is the vendor's one `logo` attachment (ADR 0006); a set but
-// non-displayable image is the same as no logo.
-const hasDisplayableLogo = (t: Vendor) => sql`EXISTS (
-  SELECT 1 FROM "EntityAttachment" dq_ven_att
-  JOIN "Image" dq_ven_img ON dq_ven_img."id" = dq_ven_att."imageId"
-  WHERE dq_ven_att."entityId" = ${t.id} AND dq_ven_att."role" = 'logo'
-    AND dq_ven_att."deletedAt" IS NULL AND dq_ven_img."deletedAt" IS NULL
-    AND ${sql.raw(displayableImageRawSql("dq_ven_img"))}
-)`;
-
-export const vendorChecks = defineEntityChecks({
+export const vendorChecks = defineStoredEntityChecks({
   entity: "vendor",
   table: vendor,
+  rulesVersion: VENDOR_QUALITY_RULES_VERSION,
+  load: loadVendorQualityRecords,
   checks: {
-    vendor_order_evidence: {
-      expected: hasLivePurchase,
-      missing: (t) => sql`${t.orderEvidence} IS NULL`,
-      fingerprint: (t) => [sql`${t.orderEvidence}`],
-    },
-    // Source classification only guides where to look; the itemization
-    // expectation decides whether item lines are wanted. Expecting item lines
-    // from a vendor that leaves no order evidence is the one contradiction;
-    // an in-store shop whose receipts are sometimes kept (`receipt_only`)
-    // with itemization `not_expected` is ordinary. Changing either value
-    // resolves it, so no exception reason exists.
-    vendor_order_evidence_conflict: {
-      missing: (t) =>
-        sql`(${t.orderEvidence} = 'not_expected' AND ${t.itemizationExpectation} = 'required')`,
-      fingerprint: (t) => [
-        sql`${t.orderEvidence}`,
-        sql`${t.itemizationExpectation}`,
-      ],
-    },
-    vendor_logo: {
-      expected: (t) => sql`${t.systemKey} IS NULL`,
-      missing: (t) => sql`NOT ${hasDisplayableLogo(t)}`,
-      // A new website is new evidence for a logo search.
-      fingerprint: (t) => [sql`${t.website}`, hasDisplayableLogo(t)],
-    },
-    vendor_website: {
-      expected: (t) => sql`${t.systemKey} IS NULL`,
-      missing: (t) => sql`(${t.website} IS NULL OR trim(${t.website}) = '')`,
-      fingerprint: (t) => [sql`${t.name}`, sql`${t.website}`],
-    },
+    vendor_display_image: qualityCheck.hasImage,
+    vendor_order_evidence: when(
+      (record) => record.hasLivePurchase,
+      observed((record) => record.orderEvidence !== null),
+    ),
+    vendor_order_evidence_conflict: observed(
+      (record) =>
+        !(
+          record.orderEvidence === "not_expected" &&
+          record.itemizationExpectation === "required"
+        ),
+    ),
+    vendor_logo: when(
+      (record) => record.systemKey === null,
+      observed((record) => record.hasDisplayableLogo),
+    ),
+    vendor_website: when(
+      (record) => record.systemKey === null,
+      observed((record) => hasText(record.website)),
+    ),
   },
 });
+
+async function loadVendorQualityRecords(
+  db: Database | DrizzleTransaction,
+  ids: readonly string[],
+) {
+  if (!ids.length) return [];
+  return unwrapDb(db)
+    .select({
+      id: vendor.id,
+      shortcode: vendor.shortcode,
+      orderEvidence: vendor.orderEvidence,
+      itemizationExpectation: vendor.itemizationExpectation,
+      systemKey: vendor.systemKey,
+      website: vendor.website,
+      hasLivePurchase: sql<boolean>`EXISTS (
+        SELECT 1 FROM "Purchase" dq_vendor_purchase
+        WHERE dq_vendor_purchase."vendorId" = ${vendorColumn("id")}
+          AND dq_vendor_purchase."deletedAt" IS NULL
+      )`,
+      hasDisplayableLogo: sql<boolean>`EXISTS (
+        SELECT 1 FROM "EntityAttachment" dq_vendor_attachment
+        JOIN "Image" dq_vendor_image
+          ON dq_vendor_image."id" = dq_vendor_attachment."imageId"
+        WHERE dq_vendor_attachment."entityId" = ${vendorColumn("id")}
+          AND dq_vendor_attachment."role" = 'logo'
+          AND dq_vendor_attachment."deletedAt" IS NULL
+          AND dq_vendor_image."deletedAt" IS NULL
+          AND ${sql.raw(displayableImageRawSql("dq_vendor_image"))}
+      )`,
+      hasDisplayImage: sql<boolean>`${entityDisplayImagePresenceSql(
+        "vendor",
+        vendorColumn("id"),
+      )}`,
+    })
+    .from(vendor)
+    .where(
+      and(notDeleted(vendor), sql`${vendor.id} = ANY(${uuidArrayParam(ids)})`),
+    );
+}

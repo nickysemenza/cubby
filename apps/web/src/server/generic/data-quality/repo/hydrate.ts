@@ -15,7 +15,6 @@ import {
   DEFAULT_UNRESOLVED_SCORE_CAP,
   dataException,
   dataExceptionReasonLabel,
-  dataQualityExceptionEntities,
   dataQualityFacets,
   relatedDataQualityEntities,
   type QualityScore,
@@ -34,13 +33,9 @@ import { unwrapDb, uuidArrayParam } from "~/server/db/helpers";
 import { exceptionReasonsFor } from "~/server/generic/data-quality/repo/exception-reasons";
 import { liveQualityRow } from "~/server/generic/data-quality/repo/registry";
 
-import {
-  checkMissingCondition,
-  checksOf,
-  entryFor,
-  expectedCondition,
-  fingerprintSql,
-} from "./sql";
+import { storedEntryFor } from "./entries";
+import { checksOf, entryFor } from "./sql";
+import { evaluateLiveQuality, loadPublishedQuality } from "./stored";
 
 type CheckState = QualityTerm["state"];
 
@@ -200,7 +195,7 @@ export const buildQualityBreakdown = (
   });
 };
 
-/** The lazy explanation reuses the same SQL evaluation as list hydration. */
+/** The lazy explanation uses current inputs, sharing the registered check functions. */
 export const loadQualityBreakdown = async (
   db: Database | DrizzleTransaction,
   entity: ScoredEntity,
@@ -219,7 +214,7 @@ export const loadQualityBreakdown = async (
   const target = selected[0];
   if (!target)
     throw new Error(`No live ${entity} record for quality explanation`);
-  const [row] = await loadEvaluations(db, entity, [target.id]);
+  const [row] = await loadEvaluations(db, entity, [target.id], "live");
   if (!row) throw new Error("Quality evaluation was not loaded");
   const evaluation = evaluateRow(entity, row);
   const expected = checksOf(entity).filter(
@@ -229,7 +224,13 @@ export const loadQualityBreakdown = async (
     expected,
     evaluation.gaps.map((gap) => dataCheck.parse(gap.check)),
     evaluation.exceptions
-      .filter((exception) => exception.state === "active")
+      .filter(
+        (exception) =>
+          exception.state === "active" &&
+          row[
+            gapKey(checksOf(entity).indexOf(dataCheck.parse(exception.check)))
+          ] === true,
+      )
       .map((exception) => dataCheck.parse(exception.check)),
     evaluation.exceptions,
   );
@@ -240,114 +241,43 @@ const hydrationRow = z
     id: z.string(),
     shortcode: z.string(),
     exceptions: z.array(dataException),
+    storedScore: z.number().nullable().optional(),
   })
-  .catchall(z.union([z.boolean(), z.string(), z.null()]));
-const fingerprintColumn = z
-  .string()
-  .nullish()
-  .transform((value) => value ?? null);
-
+  .catchall(z.union([z.boolean(), z.string(), z.number(), z.null()]));
 const expectedKey = (index: number) => `e${index}`;
 const gapKey = (index: number) => `g${index}`;
-const fingerprintKey = (index: number) => `f${index}`;
+const waivedKey = (index: number) => `w${index}`;
 
-/**
- * One statement per entity: every check's `expected` and raw gap as boolean
- * columns. Rendered through `execute`, not the select builder, because a
- * single-table select builder renders selected columns unqualified and a
- * correlated subquery over the same table then self-joins
- * (docs/agents/domain-rules.md).
- *
- * A fingerprint only decides whether a stored exception still matches its
- * live gap, so it is evaluated afterwards for just those rows and checks.
- * Planning every check's fingerprint for every row roughly doubled the
- * statement for records that carry no exception.
- */
+/** Published rows for list pages, or the same TypeScript checks evaluated live. */
 const loadEvaluations = async (
   db: Database | DrizzleTransaction,
   entity: ScoredEntity,
   ids: readonly string[],
+  source: "stored" | "live" = "stored",
 ) => {
-  const entry = entryFor(entity);
-  const t = entry.table;
-  const checks = checksOf(entity);
-  const evaluationContext = (selected: readonly string[]) => {
-    const derived = entry.derivedRead?.(uuidArrayParam(selected));
-    return {
-      context: derived ? { derivedAlias: "dq_derived" } : undefined,
-      join: derived
-        ? sql`LEFT JOIN (${derived}) dq_derived ON dq_derived."entityId" = ${t.id}`
-        : sql``,
-    };
-  };
-  const { context, join } = evaluationContext(ids);
-  const withExceptions = dataQualityExceptionEntities[entity];
-  const columns = checks.flatMap((check, index) => [
-    sql`${expectedCondition(entity, check, t, context)} AS ${sql.identifier(expectedKey(index))}`,
-    // `missing` alone; `evaluateRow` requires `expected` too. `rawGapCondition`
-    // would plan every `expected` twice (see `scoreSql`).
-    sql`${checkMissingCondition(entity, check, t, context)} AS ${sql.identifier(gapKey(index))}`,
-  ]);
-  const exceptions = withExceptions
-    ? sql`COALESCE((
-  SELECT jsonb_agg(jsonb_build_object(
-    'check', dq_exception."check",
-    'reason', dq_exception."reason",
-    'note', dq_exception."note",
-    'fingerprint', dq_exception."fingerprint"
-  ) ORDER BY dq_exception."check")
-  FROM "DataException" dq_exception
-  WHERE dq_exception."entityId" = ${t.id}
-    AND dq_exception."check" IN (${sql.join(
-      checks.map((check) => sql`${check}`),
-      sql`, `,
-    )})
-), '[]'::jsonb)`
-    : sql`'[]'::jsonb`;
-  const result = await unwrapDb(db).execute(sql`SELECT
-  ${t.id} AS "id",
-  ${t.shortcode} AS "shortcode",
-  ${exceptions} AS "exceptions",
-  ${sql.join(columns, sql`, `)}
-FROM ${t}
-${join}
-WHERE ${t.id} = ANY(${uuidArrayParam(ids)}) AND ${liveQualityRow(t)}`);
-  const rows = z.array(hydrationRow).parse(result.rows);
-  const compared = checks.flatMap((check, index) => {
-    if (!dataCheckExemptible[check]) return [];
-    const rowIds = rows
-      .filter(
-        (row) =>
-          row[expectedKey(index)] === true &&
-          row[gapKey(index)] === true &&
-          row.exceptions.some((exception) => exception.check === check),
-      )
-      .map((row) => row.id);
-    return rowIds.length === 0 ? [] : [{ check, index, rowIds }];
-  });
-  if (compared.length === 0) return rows;
-  const fingerprintIds = uniq(compared.flatMap(({ rowIds }) => rowIds));
-  const fingerprinted = evaluationContext(fingerprintIds);
-  const fingerprints = await unwrapDb(db).execute(sql`SELECT
-  ${t.id} AS "id",
-  ${sql.join(
-    compared.map(
-      ({ check, index, rowIds }) =>
-        sql`CASE WHEN ${t.id} = ANY(${uuidArrayParam(rowIds)}) THEN ${fingerprintSql(entity, check, t, fingerprinted.context)} END AS ${sql.identifier(fingerprintKey(index))}`,
-    ),
-    sql`, `,
-  )}
-FROM ${t}
-${fingerprinted.join}
-WHERE ${t.id} = ANY(${uuidArrayParam(fingerprintIds)}) AND ${liveQualityRow(t)}`);
-  const byId = new Map(
-    z
-      .array(hydrationRow.pick({ id: true }).catchall(fingerprintColumn))
-      .parse(fingerprints.rows)
-      .map((row) => [row.id, row]),
+  const stored = storedEntryFor(entity);
+  const rows =
+    source === "live"
+      ? await evaluateLiveQuality(db, stored, ids)
+      : await loadPublishedQuality(db, entity, ids);
+  return rows.map((row) =>
+    hydrationRow.parse({
+      id: row.id,
+      shortcode: row.shortcode,
+      exceptions: row.exceptions,
+      ...("score" in row ? { storedScore: row.score } : {}),
+      ...Object.fromEntries(
+        checksOf(entity).flatMap((check, index) => {
+          const state = row.checks[check] ?? "not_applicable";
+          return [
+            [expectedKey(index), state !== "not_applicable"],
+            [gapKey(index), state === "gap" || state === "waived"],
+            [waivedKey(index), state === "waived"],
+          ];
+        }),
+      ),
+    }),
   );
-  // Each fingerprint is NULL outside its own compared rows.
-  return rows.map((row) => ({ ...row, ...byId.get(row.id) }));
 };
 
 type Evaluated = Omit<DataQuality, "relatedGaps" | "relatedExceptions">;
@@ -362,12 +292,8 @@ const evaluateRow = (
   const checks = checksOf(entity);
   const targetId = parseShortcodeFor(entity, row.shortcode);
   const expectedChecks: DataCheck[] = [];
-  const rawGaps: Array<
-    Omit<DataQualityGap, "check"> & {
-      check: DataCheck;
-      fingerprint: string | null;
-    }
-  > = [];
+  const rawGaps: Array<Omit<DataQualityGap, "check"> & { check: DataCheck }> =
+    [];
   checks.forEach((check, index) => {
     if (row[expectedKey(index)] === true) expectedChecks.push(check);
     if (row[expectedKey(index)] !== true || row[gapKey(index)] !== true) return;
@@ -378,32 +304,23 @@ const evaluateRow = (
       targetType: entity,
       targetId,
       message: dataCheckMessage[check],
-      fingerprint: fingerprintColumn.parse(row[fingerprintKey(index)]),
     });
   });
-  const rawByCheck = new Map(rawGaps.map((gap) => [gap.check, gap]));
-  const exceptions: DataQualityException[] = !dataQualityExceptionEntities[
-    entity
-  ]
-    ? []
-    : row.exceptions.map(({ fingerprint, ...exception }) => ({
-        ...exception,
-        targetType: entity,
-        targetId,
-        state:
-          dataCheckExemptible[exception.check] &&
-          rawByCheck.get(exception.check)?.fingerprint === fingerprint
-            ? "active"
-            : "stale",
-      }));
-  const activeChecks = new Set(
-    exceptions
-      .filter((exception) => exception.state === "active")
-      .map((exception) => exception.check),
+  // Waivers never reopen: every recorded decision on an exemptible check holds.
+  const exceptions: DataQualityException[] = row.exceptions.map(
+    (exception) => ({
+      ...exception,
+      targetType: entity,
+      targetId,
+      state: dataCheckExemptible[exception.check] ? "active" : "stale",
+    }),
   );
-  const gaps = rawGaps
-    .filter((gap) => !activeChecks.has(gap.check))
-    .map(({ fingerprint: _fingerprint, ...gap }) => gap);
+  // Stored outcomes remain authoritative until publication, including a waiver
+  // added or withdrawn since the last pass. Live evaluation carries the same states.
+  const activeChecks = new Set(
+    checks.filter((_, index) => row[waivedKey(index)] === true),
+  );
+  const gaps = rawGaps.filter((gap) => !activeChecks.has(gap.check));
   const terms = qualityTerms(
     expectedChecks,
     gaps.map((gap) => gap.check),
@@ -416,8 +333,10 @@ const evaluateRow = (
     ).status,
     gaps: gaps.filter((gap) => gap.facet === name),
   }));
-  const { score, status } = scoreQualityTerms(terms);
-  return { status, score, facets, gaps, exceptions };
+  const calculated = scoreQualityTerms(terms);
+  const score =
+    row.storedScore === undefined ? calculated.score : row.storedScore;
+  return { status: calculated.status, score, facets, gaps, exceptions };
 };
 
 /** `(ownerId, relatedId)` pairs for every declared roll-up relation. */
@@ -454,18 +373,21 @@ WHERE ${t.id} = ANY(${uuidArrayParam(ids)}) AND ${liveQualityRow(t)}
 
 /**
  * Real, computed `DataQuality` for live rows of one entity, keyed by id. A
- * requested id that is deleted or unknown is absent from the map.
+ * requested id that is deleted or unknown is absent from the map. Record
+ * reads evaluate stored-mode checks live; list pages and the Work queue pass
+ * `"stored"` so displayed quality matches the published rows they sort by.
  */
 export const loadDataQualities = async <E extends ScoredEntity>(
   db: Database | DrizzleTransaction,
   entity: E,
   ids: readonly EntityId<E>[],
+  source: "stored" | "live" = "live",
 ): Promise<Map<EntityId<E>, DataQuality>> => {
   const uniqueIds = uniq(ids);
   const result = new Map<EntityId<E>, DataQuality>();
   if (uniqueIds.length === 0) return result;
   const [rows, relatedIds] = await Promise.all([
-    loadEvaluations(db, entity, uniqueIds),
+    loadEvaluations(db, entity, uniqueIds, source),
     loadRelatedIds(db, entity, uniqueIds),
   ]);
   // Roll-ups are one hop (the generator rejects chains): a related row
@@ -479,7 +401,7 @@ export const loadDataQualities = async <E extends ScoredEntity>(
     );
     const evaluated = new Map<string, Evaluated>();
     if (targetIds.length > 0)
-      for (const row of await loadEvaluations(db, target, targetIds))
+      for (const row of await loadEvaluations(db, target, targetIds, source))
         evaluated.set(row.id, evaluateRow(target, row));
     relatedQualities.set(target, evaluated);
   }

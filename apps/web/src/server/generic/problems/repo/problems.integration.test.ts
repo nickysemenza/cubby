@@ -20,6 +20,10 @@ import {
   findProblemByType,
 } from "~/server/generic/problems/service/problem-execution.service";
 import { captureBackgroundQueue } from "~/server/testing/background-queue";
+import {
+  publishAllQualityFixtures,
+  publishQualityFixtures,
+} from "~/server/testing/quality.fixtures";
 let backgroundQueue: ReturnType<typeof captureBackgroundQueue>;
 beforeEach(() => {
   backgroundQueue = captureBackgroundQueue();
@@ -283,6 +287,7 @@ describe("Problems card read projections", () => {
         ctx.actor,
       );
     }
+    await publishAllQualityFixtures(ctx.db);
     const grouped = await findFastProblems(ctx.db);
     const sections: Partial<ProblemArrays> = grouped;
     const clients = createTestRequestContext(ctx.db);
@@ -453,6 +458,7 @@ describe("problems — view-backed uniform rows", () => {
       ctx.actor,
     );
 
+    await publishAllQualityFixtures(ctx.db);
     const views = await findViewProblems(ctx.db);
     expect(
       views.negativeExpectedQuantity.some(({ id }) => id === thing.id),
@@ -556,6 +562,7 @@ describe("problems — orphaned products", () => {
         linkValues("productComponent", kit.entityId, component.entityId, 1),
       );
 
+    await publishAllQualityFixtures(ctx.db);
     const ids = (await findFastProblems(ctx.db)).orphanedProducts.map(
       (row) => row.id,
     );
@@ -631,6 +638,7 @@ describe("problems — understated meal cost", () => {
     );
     const meal = createdMeal.output;
 
+    await publishQualityFixtures(ctx.db, "meal");
     const row = (await findFastProblems(ctx.db)).understatedCostMeals.find(
       (candidate) => candidate.id === meal.id,
     );
@@ -737,6 +745,7 @@ describe("problems — understated meal cost", () => {
       )
     ).output;
 
+    await publishQualityFixtures(ctx.db, "meal");
     const row = (await findFastProblems(ctx.db)).understatedCostMeals.find(
       (candidate) => candidate.id === meal.id,
     );
@@ -758,6 +767,10 @@ describe("problems — understated meal cost", () => {
 
 describe("problems — charges not reconciling", () => {
   const ctx = withTestDb();
+  const publishedProblems: typeof findFastProblems = async (...args) => {
+    await publishQualityFixtures(ctx.db, "purchase");
+    return findFastProblems(...args);
+  };
 
   const seedLine = (overrides: Partial<ExpenseCreateInput>) =>
     unwrap(createRepoEntity(ctx, "expense", makeExpenseInput(overrides)));
@@ -805,7 +818,7 @@ describe("problems — charges not reconciling", () => {
       100,
     );
 
-    const { purchasesNotReconciling } = await findFastProblems(ctx.db);
+    const { purchasesNotReconciling } = await publishedProblems(ctx.db);
 
     expect(purchasesNotReconciling.map((c) => c.id)).toEqual([
       bigCharge.id,
@@ -872,7 +885,7 @@ describe("problems — charges not reconciling", () => {
     });
 
     expect(
-      (await findFastProblems(ctx.db)).purchasesNotReconciling,
+      (await publishedProblems(ctx.db)).purchasesNotReconciling,
     ).toHaveLength(1);
 
     await getDb(ctx.db)
@@ -880,7 +893,7 @@ describe("problems — charges not reconciling", () => {
       .set({ status: "posted", postedDate: "2026-07-03" })
       .where(eq(financialTransaction.id, refund.id));
 
-    expect((await findFastProblems(ctx.db)).purchasesNotReconciling).toEqual(
+    expect((await publishedProblems(ctx.db)).purchasesNotReconciling).toEqual(
       [],
     );
   });
@@ -950,6 +963,10 @@ describe("problems — duplicate spend candidates", () => {
 // stated total against its own lines and never looks at a card statement.
 describe("problems — purchase financial settlement mismatches", () => {
   const ctx = withTestDb();
+  const publishedProblems: typeof findFastProblems = async (...args) => {
+    await publishQualityFixtures(ctx.db, "purchase");
+    return findFastProblems(...args);
+  };
 
   const seedLine = (overrides: Partial<ExpenseCreateInput>) =>
     unwrap(createRepoEntity(ctx, "expense", makeExpenseInput(overrides)));
@@ -1000,8 +1017,11 @@ describe("problems — purchase financial settlement mismatches", () => {
     });
   };
 
-  const mismatches = async () =>
-    (await findFastProblems(ctx.db)).purchaseFinancialSettlementMismatches;
+  const mismatches = async () => {
+    await publishQualityFixtures(ctx.db, "purchase");
+    return (await publishedProblems(ctx.db))
+      .purchaseFinancialSettlementMismatches;
+  };
 
   it("flags a purchase the card evidence underpays, and leaves a fully-settled one alone", async () => {
     const settled = await seedLine({
@@ -1101,60 +1121,27 @@ describe("problems — purchase financial settlement mismatches", () => {
     expect(financial.status).toBe("mismatch");
     expect(financial.delta).toBeCloseTo(-0.02);
 
-    // Expense writes advance the Purchase evidence clock, so the acceptance
-    // cannot silently survive a changed ledger total.
+    // Every comparison waiver remains durable across changed ledger totals,
+    // incurred/planned status and settlement amounts; raw financial deltas remain live.
     await updateExpense(ctx.db, mismatched.id, { cost: 120.01 }, ctx.actor);
-    expect((await mismatches()).map((row) => row.id)).toEqual([
-      purchaseShortcode,
-    ]);
-
-    await setDataException(
-      ctx.db,
-      {
-        entityId: purchaseShortcode,
-        check: "settlement_mismatch",
-        reason: "expected_mismatch",
-        note: "The changed settlement amount is documented separately.",
-      },
-      ctx.actor,
-    );
     expect(await mismatches()).toEqual([]);
-
-    // Moving a line between planned and incurred spend changes the comparison
-    // total even though its money value stays fixed.
     await updateExpense(ctx.db, mismatched.id, { future: true }, ctx.actor);
-    expect((await mismatches()).map((row) => row.id)).toEqual([
-      purchaseShortcode,
-    ]);
-    expect(
-      (await getPurchaseByID(ctx.db, purchaseId)).dataQuality.exceptions.find(
-        (exception) => exception.check === "settlement_mismatch",
-      )?.state,
-    ).toBe("stale");
-
-    await setDataException(
-      ctx.db,
-      {
-        entityId: purchaseShortcode,
-        check: "settlement_mismatch",
-        reason: "expected_mismatch",
-        note: "The revised expense total still differs from the posted bank evidence.",
-      },
-      ctx.actor,
-    );
     expect(await mismatches()).toEqual([]);
-
-    // FinancialTransaction writes use the same target touch through the
-    // allocation path, including the single-allocation amount shorthand.
+    expect(
+      (await getPurchaseByID(ctx.db, purchaseId)).dataQuality.exceptions,
+    ).toContainEqual(
+      expect.objectContaining({
+        check: "settlement_mismatch",
+        state: "active",
+      }),
+    );
     await updateFinancialTransaction(
       ctx.db,
       parseShortcodeFor("financialTransaction", transaction.shortcode),
       { amount: 119.97 },
       ctx.actor,
     );
-    expect((await mismatches()).map((row) => row.id)).toEqual([
-      purchaseShortcode,
-    ]);
+    expect(await mismatches()).toEqual([]);
   });
 
   it("compares against incurred spend only, so a planned line can't manufacture a mismatch", async () => {

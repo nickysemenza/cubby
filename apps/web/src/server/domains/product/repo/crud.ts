@@ -435,10 +435,7 @@ const productScaffold = listScaffold("product", product, {
       value: hasUnknownQuantityLinesSql(product.id),
       set: unknownQuantityLinesReadSql(),
     },
-    priced: listReadValue(
-      (read) =>
-        sql`NOT ${serviceCategorySql(sql`${product.categoryId}`)} AND (${product.price} IS NOT NULL OR ${hasDerivedProductPriceSql(product.id, read)})`,
-    ),
+    priced: sql`NOT ${serviceCategorySql(sql`${product.categoryId}`)} AND (${product.price} IS NOT NULL OR ${hasDerivedProductPriceSql(product.id)})`,
     effectiveOwner: ownedProducts.predicate<AnyOfValue>((prepared, value) => {
       const ids = selectProductIdsByOwner(
         prepared,
@@ -700,7 +697,12 @@ const productWhere = async (
     preparation,
   });
   return {
-    where: productScaffold.where(filters, { context, readContext }),
+    // This predicate also feeds standalone sums and callers with their own FROM.
+    // Only an explicit caller context may supply statement-local stock evidence.
+    where: productScaffold.where(filters, {
+      context,
+      readContext: readContext ?? {},
+    }),
     context,
   };
 };

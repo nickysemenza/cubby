@@ -1,46 +1,44 @@
 import type { ScoredEntity } from "@cubby/schemas/data-quality";
 
-import { cookbookChecks } from "~/server/generic/data-quality/repo/checks/cookbook";
 import { deviceChecks } from "~/server/generic/data-quality/repo/checks/device";
 import { emailChecks } from "~/server/generic/data-quality/repo/checks/email";
 import { financialAccountChecks } from "~/server/generic/data-quality/repo/checks/financial-account";
 import { gardenEntryChecks } from "~/server/generic/data-quality/repo/checks/garden-entry";
-import { imageChecks } from "~/server/generic/data-quality/repo/checks/image";
 import { imageJobChecks } from "~/server/generic/data-quality/repo/checks/image-job";
-import { ingredientChecks } from "~/server/generic/data-quality/repo/checks/ingredient";
 import { inventoryChecks } from "~/server/generic/data-quality/repo/checks/inventory";
 import { ledgerPartyChecks } from "~/server/generic/data-quality/repo/checks/ledger-party";
 import { ledgerTransferChecks } from "~/server/generic/data-quality/repo/checks/ledger-transfer";
-import { locationChecks } from "~/server/generic/data-quality/repo/checks/location";
-import { mealChecks } from "~/server/generic/data-quality/repo/checks/meal";
 import { plantChecks } from "~/server/generic/data-quality/repo/checks/plant";
 import { plantingChecks } from "~/server/generic/data-quality/repo/checks/planting";
-import { productCategoryChecks } from "~/server/generic/data-quality/repo/checks/product-category";
 import { projectChecks } from "~/server/generic/data-quality/repo/checks/project";
-import { recipeChecks } from "~/server/generic/data-quality/repo/checks/recipe";
 import { runChecks } from "~/server/generic/data-quality/repo/checks/run";
 import { shipmentChecks } from "~/server/generic/data-quality/repo/checks/shipment";
 import { spendingCategoryChecks } from "~/server/generic/data-quality/repo/checks/spending-category";
-import { vendorChecks } from "~/server/generic/data-quality/repo/checks/vendor";
 import { wishChecks } from "~/server/generic/data-quality/repo/checks/wish";
-import type {
-  EntityChecks,
-  ScoredTable,
-} from "~/server/generic/data-quality/repo/registry";
+import type { ScoredTable } from "~/server/generic/data-quality/repo/registry";
 
+import { cookbookChecks } from "./checks/cookbook";
 import { expenseChecks } from "./checks/expense";
 import { financialTransactionChecks } from "./checks/financial-transaction";
+import { imageChecks } from "./checks/image";
+import { ingredientChecks } from "./checks/ingredient";
+import { locationChecks } from "./checks/location";
+import { mealChecks } from "./checks/meal";
 import { productChecks } from "./checks/product";
+import { productCategoryChecks } from "./checks/product-category";
 import { purchaseChecks } from "./checks/purchase";
+import { recipeChecks } from "./checks/recipe";
 import { taskChecks } from "./checks/task";
+import { vendorChecks } from "./checks/vendor";
+import type { StoredEntityChecks } from "./stored-registry";
 
 /** The registry's owner contract: one entry per scored entity. */
 export type DataQualityEntries = {
-  readonly [E in ScoredEntity]: EntityChecks<E, ScoredTable>;
+  readonly [E in ScoredEntity]: StoredEntityChecks<E, ScoredTable>;
 };
 
 /**
- * Every scored entity's SQL bindings, keyed by entity. `satisfies` is the
+ * Every scored entity's evaluator, keyed by entity. `satisfies` is the
  * gate: a manifest that declares `capabilities.dataQuality` for an entity
  * with no entry here — or an entry missing one of the entity's generated
  * check ids — fails typecheck. Exported with its inferred (per-table) type so
@@ -78,3 +76,7 @@ export const dataQualityEntries = {
   imageJob: imageJobChecks,
   image: imageChecks,
 } satisfies DataQualityEntries;
+
+export const storedEntryFor = (
+  entity: ScoredEntity,
+): StoredEntityChecks<ScoredEntity, ScoredTable> => dataQualityEntries[entity];

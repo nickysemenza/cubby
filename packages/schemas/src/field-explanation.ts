@@ -58,7 +58,11 @@ export const qualityBreakdown = z.object({
       exceptionReasons: z.array(
         z.object({ reason: dataExceptionReason, label: z.string() }),
       ),
-      /** The recorded exception, active or stale, that `clearException` removes. */
+      /**
+       * The recorded exception that `clearException` removes. Waivers never
+       * reopen; `stale` marks only a recorded waiver on a check that no longer
+       * accepts waivers.
+       */
       exception: z
         .object({
           reason: dataExceptionReason,

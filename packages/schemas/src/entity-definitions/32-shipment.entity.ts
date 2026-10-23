@@ -541,7 +541,7 @@ export default defineEntity({
           label: "Conflicting shipment chronology",
           satisfiedLabel: "Consistent shipment chronology",
           message:
-            "Delivery reports conflict or delivery precedes a carrier movement event.",
+            "Exact delivery reports conflict or exact shipment milestones are out of order.",
           placement: { section: "tracking" },
         },
       ],

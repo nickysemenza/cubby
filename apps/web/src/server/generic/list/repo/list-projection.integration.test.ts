@@ -313,7 +313,8 @@ describe("progressive list readers", () => {
         groups: ["quality"],
       }),
     );
-    expect(quality.queryCount).toBe(3);
+    // Page, count, active waivers, then one stored-quality read for the page.
+    expect(quality.queryCount).toBe(4);
     expect(quality.result.data[0]).toEqual({
       id: created.shortcode,
       dataQuality: full.data[0]?.dataQuality,

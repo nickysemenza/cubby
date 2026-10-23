@@ -4,7 +4,8 @@ import { z } from "zod";
 import { generateShortcode, type ShortcodeType } from "@cubby/shared";
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import type { SearchableEntity } from "@cubby/schemas/search";
-import type { UserId } from "@cubby/schemas/identifiers";
+import { shipmentObservationInput } from "@cubby/schemas/shipment-evidence";
+import type { PurchaseId, UserId } from "@cubby/schemas/identifiers";
 import { mailResearchRunInput } from "@cubby/schemas/run-fields";
 import type { Database } from "~/server/db";
 import {
@@ -33,6 +34,11 @@ import {
   importSourceOrder,
   spendingCategory,
   productCategory,
+  shipment,
+  shipmentObservation,
+  shipmentObservationCapture,
+  shipmentSourceCapture,
+  shipmentSourcePackage,
 } from "~/server/db/schema";
 import { writeOutcomeReceipts } from "~/server/domains/purchase-import/service/run-outcome.fixtures";
 import {
@@ -181,6 +187,93 @@ export async function seedPerformanceCorpus(
     [];
   const claims: (typeof importSourceClaim.$inferInsert)[] = [];
   const sourceOrders: (typeof importSourceOrder.$inferInsert)[] = [];
+  const parcels: (typeof shipment.$inferInsert)[] = [];
+  const packages: (typeof shipmentSourcePackage.$inferInsert)[] = [];
+  const observations: (typeof shipmentObservation.$inferInsert)[] = [];
+  const captureMemberships: (typeof shipmentObservationCapture.$inferInsert)[] =
+    [];
+  const capturedAt = new Date("2026-01-18T12:00:00Z");
+  const trackingCapture = {
+    id: randomUUID(),
+    sourceKey: "synthetic-performance-tracking",
+    checksum: createHash("sha256")
+      .update("Synthetic tracking evidence")
+      .digest("hex"),
+    actorUserId: userId,
+    source: {
+      kind: "tracking_page" as const,
+      url: "https://tracking.example/performance",
+      externalKey: "synthetic-performance-tracking",
+      capturedAt: capturedAt.toISOString(),
+      content: "Synthetic tracking evidence",
+    },
+  };
+
+  function addShipment(orderId: PurchaseId, label: string, bundle: number) {
+    const parcel = {
+      ...identity("shipment"),
+      name: `${label} parcel`,
+      purchaseId: orderId,
+      trackingNumber: `SYNTHETIC-TRACK-${bundle + 1}`,
+      purpose: "incoming",
+    };
+    parcels.push(parcel);
+    created("shipment", parcel.id);
+    const packet = {
+      id: randomUUID(),
+      shipmentId: parcel.id,
+      sourceKey: trackingCapture.sourceKey,
+      packageKey: `synthetic-package-${bundle}`,
+    };
+    packages.push(packet);
+    // Complete, sparse and undated evidence exercise stored gap filters and score sorts.
+    for (const kind of bundle % 3 === 1
+      ? ["carrier_possession"]
+      : ["carrier_possession", "delivered"]) {
+      const event = shipmentObservationInput.parse({
+        kind,
+        sourceEventKey: `${bundle}-${kind}`,
+        time:
+          bundle % 3 === 2
+            ? { kind: "unknown" }
+            : {
+                kind: "instant",
+                value:
+                  kind === "delivered"
+                    ? "2026-01-18T09:00:00Z"
+                    : "2026-01-15T09:00:00Z",
+              },
+        rawStatus: `Synthetic ${kind}`,
+        location: null,
+        carrierId: null,
+        carrierName: null,
+        trackingNumber: parcel.trackingNumber,
+      });
+      const observation = {
+        id: randomUUID(),
+        shipmentId: parcel.id,
+        sourceCaptureId: trackingCapture.id,
+        sourceKey: trackingCapture.sourceKey,
+        sourcePackageId: packet.id,
+        sourceEventKey: event.sourceEventKey,
+        occurrenceKey: `synthetic-${bundle}-${kind}`,
+        fingerprint: createHash("sha256")
+          .update(JSON.stringify(event))
+          .digest("hex"),
+        firstSeenAt: capturedAt,
+        lastSeenAt: capturedAt,
+        event,
+      };
+      observations.push(observation);
+      captureMemberships.push({
+        observationId: observation.id,
+        captureId: trackingCapture.id,
+        firstSeenAt: capturedAt,
+        lastSeenAt: capturedAt,
+      });
+    }
+  }
+
   for (let bundle = 0; bundle < bundles; bundle++) {
     const label = `Synthetic performance ${String(bundle + 1).padStart(4, "0")}`;
     const bundleProducts = [];
@@ -258,6 +351,8 @@ export async function seedPerformanceCorpus(
     };
     purchases.push(order);
     created("purchase", order.id);
+
+    addShipment(order.id, label, bundle);
     // Nested inherited price, signed exits, refunds, and future work all take
     // different ledger branches; the unpriced stocked SKU has no acquisition.
     for (let line = 0; line < 12; line++) {
@@ -463,6 +558,18 @@ export async function seedPerformanceCorpus(
     // Run-routed Purchases reference their Run.
     await batches(runs, (rows) => tx.insert(run).values(rows));
     await batches(purchases, (rows) => tx.insert(purchase).values(rows));
+    await batches(parcels, (rows) => tx.insert(shipment).values(rows));
+    await tx.insert(shipmentSourceCapture).values(trackingCapture);
+    await batches(packages, (rows) =>
+      tx.insert(shipmentSourcePackage).values(rows),
+    );
+    await batches(observations, (rows) =>
+      tx.insert(shipmentObservation).values(rows),
+    );
+    await batches(captureMemberships, (rows) =>
+      tx.insert(shipmentObservationCapture).values(rows),
+    );
+
     await batches(expenses, (rows) => tx.insert(expense).values(rows));
     await batches(mails, (rows) => tx.insert(orderMail).values(rows));
     await batches(emails, (rows) => tx.insert(email).values(rows));
@@ -484,7 +591,7 @@ export async function seedPerformanceCorpus(
     );
     // Immediate reads must see the new volume, rather than waiting for autoanalyze.
     await tx.execute(
-      sql`ANALYZE ${product}, ${entityLink}, ${inventoryEntry}, ${purchase}, ${expense}, ${orderMail}, ${run}, ${email}, ${entityIdentity}, ${financialTransaction}, ${financialTransactionAllocation}, ${importSourceClaim}, ${importSourceOrder}`,
+      sql`ANALYZE ${product}, ${entityLink}, ${inventoryEntry}, ${purchase}, ${expense}, ${orderMail}, ${run}, ${email}, ${entityIdentity}, ${financialTransaction}, ${financialTransactionAllocation}, ${importSourceClaim}, ${importSourceOrder}, ${shipment}, ${shipmentObservation}`,
     );
     await batches(refs, (rows) => refreshSearchDocuments(tx, rows));
   });

@@ -17,9 +17,10 @@ import {
   getVendorByID,
 } from "~/server/domains/vendor/repo/vendor";
 import { setDataException } from "~/server/generic/data-quality/repo/exceptions";
-import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
+import { loadDataQualities as readDataQualities } from "~/server/generic/data-quality/repo/hydrate";
 import { linkValues } from "~/server/generic/entity-links/repo/entity-links";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { publishQualityFixtures } from "~/server/testing/quality.fixtures";
 import {
   createImageFixture,
   insertEntityAttachments,
@@ -38,6 +39,10 @@ import {
 // the same expressions used by hydration, list filtering, and score sorting.
 describe("purchase evidence policy", () => {
   const ctx = withTestDb();
+  const loadDataQualities: typeof readDataQualities = async (...args) => {
+    await publishQualityFixtures(ctx.db, "purchase");
+    return readDataQualities(...args);
+  };
 
   async function fixture() {
     const category = await insertWithShortcode(ctx.db, "spendingCategory", {
@@ -199,6 +204,7 @@ describe("purchase evidence policy", () => {
       amount: 1000,
     });
     const itemization = async () => {
+      await publishQualityFixtures(ctx.db, "purchase");
       const result = await unwrapDb(ctx.db).execute(sql`
         SELECT ${purchaseCoverageSql("p")}->>'itemization' AS itemization,
           (SELECT ${financialTransactionItemizationSql("ft.id")}
@@ -258,10 +264,8 @@ describe("purchase evidence policy", () => {
     });
   });
 
-  // A linked Product is new goods evidence even when it does not itemize the
-  // Purchase, so it reopens an accepted gap; a Purchase without links keeps
-  // the fingerprint its exception was accepted with.
-  it("reopens an accepted itemization gap when a Product is linked", async () => {
+  // New linked goods do not revoke a retained member waiver.
+  it("retains an itemization waiver when a Product is linked", async () => {
     const { purchase } = await fixture();
     await unwrapDb(ctx.db).execute(
       sql`UPDATE "Purchase" SET "itemizationExpectation" = ${itemizationExpectation.enum.required} WHERE id = ${purchase.id}`,
@@ -283,16 +287,16 @@ describe("purchase evidence policy", () => {
     await unwrapDb(ctx.db)
       .insert(entityLink)
       .values(linkValues("purchaseProduct", purchase.id, product.id));
-    const reopened = (
+    const retained = (
       await loadDataQualities(ctx.db, "purchase", [purchase.id])
     ).get(purchase.id);
-    expect(reopened?.gaps.map((gap) => gap.check)).toContain(
+    expect(retained?.gaps.map((gap) => gap.check)).not.toContain(
       "purchase_itemization",
     );
-    expect(reopened?.exceptions).toContainEqual(
+    expect(retained?.exceptions).toContainEqual(
       expect.objectContaining({
         check: "purchase_itemization",
-        state: "stale",
+        state: "active",
       }),
     );
   });
@@ -528,8 +532,7 @@ describe("purchase evidence policy", () => {
     },
   );
 
-  // Regression: the line fingerprint hashes the whole Expense row, so adding
-  // the productNotExpected column reopened every accepted itemization gap.
+  // Changes to line policy metadata preserve a retained itemization waiver.
   it("keeps an accepted itemization gap accepted when Expense gains productNotExpected", async () => {
     const { purchase } = await fixture();
     await unwrapDb(ctx.db).execute(
@@ -574,7 +577,7 @@ describe("purchase evidence policy", () => {
   });
 
   it.each(["unavailable", "history_expired"] as const)(
-    "accepts %s itemization history and reopens it when new receipt evidence arrives",
+    "retains %s itemization history when new receipt evidence arrives",
     async (reason) => {
       const { purchase } = await fixture();
       await unwrapDb(ctx.db).execute(
@@ -616,16 +619,16 @@ describe("purchase evidence policy", () => {
         role: "attachment",
         documentKind: "receipt",
       });
-      const reopened = (
+      const retained = (
         await loadDataQualities(ctx.db, "purchase", [purchase.id])
       ).get(purchase.id);
-      expect(reopened?.gaps.map((gap) => gap.check)).toContain(
+      expect(retained?.gaps.map((gap) => gap.check)).not.toContain(
         "purchase_itemization",
       );
-      expect(reopened?.exceptions).toContainEqual(
+      expect(retained?.exceptions).toContainEqual(
         expect.objectContaining({
           check: "purchase_itemization",
-          state: "stale",
+          state: "active",
         }),
       );
     },
@@ -820,7 +823,7 @@ describe("vendor itemization default from order evidence", () => {
   it("never reports a derived value as an order evidence conflict", async () => {
     const derived = await vendorWith("not_expected");
     const conflicting = await vendorWith("not_expected", "required");
-    const qualities = await loadDataQualities(ctx.db, "vendor", [
+    const qualities = await readDataQualities(ctx.db, "vendor", [
       derived.id,
       conflicting.id,
     ]);

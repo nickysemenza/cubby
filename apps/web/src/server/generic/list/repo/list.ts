@@ -95,10 +95,6 @@ import { SHORTCODE_TABLE } from "~/server/generated/shortcode-tables.gen";
 import type { QualityReadContext } from "~/server/generic/data-quality/repo/registry";
 import {
   dataQualityFilterPredicates,
-  qualityFilterContext,
-  hasDataQualityFilter,
-  qualityFilterSource,
-  qualityFilterJoin,
   dataQualitySortResolver,
 } from "~/server/generic/data-quality/repo/sql";
 import { relatedWhereConditions } from "~/server/generic/entity-links/repo/related-view";
@@ -1367,9 +1363,6 @@ export interface ListPage {
   orderBy: SQL[];
   limit: number;
   offset: number;
-  /** The bulk quality relation `where`/`orderBy` read; a custom row select
-   * that builds its own FROM must LEFT JOIN it. */
-  qualityJoin?: { relation: SQL; on: SQL };
 }
 
 interface ListRequest<Filters extends object> {
@@ -1670,13 +1663,9 @@ export function listScaffold<
   // sort are declared by the manifest block, so they bind here for every
   // list at once rather than beside each repo's own conditions.
   const scored = isScoredEntity(entity) ? entity : null;
-  const qualityContext = scored ? qualityFilterContext(scored) : undefined;
-  const qualitySource: PgTable | SQL = scored
-    ? qualityFilterSource(scored, table)
-    : table;
-  const scoreSort = scored
-    ? dataQualitySortResolver(scored, table, qualityContext)
-    : null;
+  const scoreSort = scored ? dataQualitySortResolver(scored, table) : null;
+  // SAFETY: T extends PgTable; this erases only the generic FROM constraint.
+  const listTable: PgTable = table;
   /** The self-reference a declared `list.tree` nests under. */
   const treeParent = (): AnyColumn => {
     const tree = Object.entries(entitySummary).find(
@@ -1709,7 +1698,7 @@ export function listScaffold<
       return sql`${parent} IN (SELECT ${table.id} FROM ${table} WHERE ${requested})`;
     }
     // A row whose parent is absent, deleted, or filtered out is a root.
-    return sql`(${parent} IS NULL OR ${parent} NOT IN (SELECT ${table.id} FROM ${qualitySource} WHERE ${filtered ?? sql`true`}))`;
+    return sql`(${parent} IS NULL OR ${parent} NOT IN (SELECT ${table.id} FROM ${table} WHERE ${filtered ?? sql`true`}))`;
   };
   /** Each listed parent's direct children that match `filtered`, by shortcode. */
   const childCounts = async (
@@ -1731,7 +1720,7 @@ export function listScaffold<
         code: sql<string>`(SELECT p.${shortcode} FROM ${name} p WHERE p.${id} = ${parentOf})`,
         count: sql<number>`count(*)::int`,
       })
-      .from(qualitySource)
+      .from(listTable)
       .where(
         and(
           filtered,
@@ -1873,16 +1862,10 @@ export function listScaffold<
         [],
         [
           options?.population?.(),
-          // Only a caller's own read context reaches derived SQL; the
-          // scaffold's quality join alias exists only beside its own FROM.
+          // Only a caller's own read context reaches derived SQL.
           ...scaffold.filterPredicates(filters, context.withRead(readContext)),
           ...(scored
-            ? dataQualityFilterPredicates(
-                scored,
-                table,
-                filters,
-                readContext ?? qualityContext,
-              )
+            ? dataQualityFilterPredicates(scored, table, filters)
             : []),
           ...auditDateWhereConditions(table, filters),
           // The declared related-view filters (`related-<key>`, `<prefix>Id`,
@@ -1961,13 +1944,9 @@ export function listScaffold<
         nesting.scope === "flat" || !parent
           ? filtered
           : and(filtered, nestingCondition(nesting, parent, filtered));
-      const source: PgTable | SQL =
-        scored !== null && hasDataQualityFilter(filters)
-          ? qualitySource
-          : table;
       const matches = unwrapDb(db)
         .selectDistinct({ id: sql<string>`${table.shortcode}` })
-        .from(source)
+        .from(listTable)
         .where(where);
       const relation = sql`(
         WITH matches(code) AS MATERIALIZED (${matches}), population AS (
@@ -2121,8 +2100,6 @@ export function listScaffold<
         readIntent: "count",
       });
       const where = scaffold.where(rest, { context });
-      const source: PgTable | SQL =
-        scored !== null && hasDataQualityFilter(rest) ? qualitySource : table;
       const value = stored.value;
       if (descriptor.kind === "range") {
         const bound = (aggregate: "min" | "max") =>
@@ -2131,7 +2108,7 @@ export function listScaffold<
             : sql<string | null>`${sql.raw(aggregate)}(${value})::text`;
         const [row] = await unwrapDb(db)
           .select({ min: bound("min"), max: bound("max") })
-          .from(source)
+          .from(listTable)
           .where(where);
         return {
           id: descriptorId,
@@ -2147,7 +2124,7 @@ export function listScaffold<
           value: sql<string | null>`(${keyed})::text`,
           count: sql<number>`count(*)::int`,
         })
-        .from(source)
+        .from(listTable)
         .where(where)
         .groupBy(sql`1`);
       return {
@@ -2214,13 +2191,9 @@ export function listScaffold<
       memberships?: ListGroupMembership[];
       membershipCount?: number;
     }> {
-      const readsQuality =
-        scored !== null &&
-        (hasDataQualityFilter(request.filters) ||
-          request.sorts.some((sort) => sort.orderBy === "dataQuality"));
       // Keep the PgTable object: interpolating an aliased table into SQL
       // emits only its alias, while Drizzle's FROM builder names its origin.
-      const source: PgTable | SQL = readsQuality ? qualitySource : table;
+      const source = listTable;
       const context = spec.context ?? (await scaffold.context(db, request));
       const filtered =
         "where" in spec
@@ -2245,8 +2218,6 @@ export function listScaffold<
         throw new Error(
           `${entity} counts its own FROM; pass its joins to group the list`,
         );
-      const qualityJoin =
-        readsQuality && scored ? qualityFilterJoin(scored, table) : undefined;
       const page: ListPage = {
         where,
         // A count never orders, and skipped the prepares a derived sort reads.
@@ -2265,7 +2236,6 @@ export function listScaffold<
               ],
         limit: take,
         offset: skip,
-        ...(qualityJoin ? { qualityJoin } : {}),
       };
       const load = spec.load;
       const loadIds = load
@@ -2302,21 +2272,14 @@ export function listScaffold<
           }
         : (spec.select ??
           (async (clauses: ListPage) => {
-            // Keep Drizzle's root table and column decoders when a derived
-            // relation joins the list; SELECT * would also return its fields.
+            // Keep Drizzle's root table and column decoders.
             // SAFETY: T extends PgTable; erase only the generic FROM constraint.
             const root: PgTable = table;
-            const query = unwrapDb(db)
+            // SAFETY: selecting only the root table's columns preserves Row,
+            // including its Drizzle decoders.
+            return (await unwrapDb(db)
               .select(getTableColumns(root))
               .from(root)
-              .$dynamic();
-            const join = clauses.qualityJoin;
-            const selected = join
-              ? query.leftJoin(join.relation, join.on)
-              : query;
-            // SAFETY: selecting only the root table's columns preserves Row,
-            // including its Drizzle decoders; derived fields are not returned.
-            return (await selected
               .where(clauses.where)
               .orderBy(...clauses.orderBy)
               .limit(clauses.limit)

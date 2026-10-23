@@ -22,6 +22,7 @@ import {
   withTransactionDatabase,
 } from "~/server/db/helpers";
 import { run as runTable, ledgerParty, user } from "~/server/db/schema";
+import { recordChange } from "~/server/generic/changes/repo/change";
 import { enqueueJob } from "~/server/generic/jobs/repo/jobs";
 import {
   findOrCreateWithShortcode,
@@ -85,13 +86,16 @@ export async function ensureRun(
   // its `decisionPort:` key), so touch-and-return it in one statement. The actor
   // snapshot and insert below cost three more round trips per call, which a
   // table's per-row suggestions multiplied into Hyperdrive pool starvation.
-  if (input.clientKey) {
+  const clientKey = input.clientKey;
+  if (clientKey) {
+    // The touch only advances a completed Run's endedAt, which no quality
+    // verdict reads, so it enrolls no refresh.
     const [existing] = await database
       .update(runTable)
       .set({
         endedAt: sql`CASE WHEN ${runTable.status} = 'completed' THEN ${now}::timestamptz ELSE ${runTable.endedAt} END`,
       })
-      .where(eq(runTable.clientKey, input.clientKey))
+      .where(eq(runTable.clientKey, clientKey))
       .returning({ id: runTable.id });
     if (existing) return existing.id;
   }
@@ -160,6 +164,13 @@ export async function ensureRun(
         input: { runId: row.id, purpose: input.purpose },
         runId: row.id,
       });
+    // Refresh telemetry must not invalidate the family that is publishing it.
+    await recordChange(tx, {
+      kind: row.purpose === "derived_refresh" ? "projection" : "source",
+      categories: ["run"],
+    });
+    if (row.purpose === "mail_import")
+      await recordChange(tx, { kind: "source", categories: ["email"] });
     return row.id;
   });
 }

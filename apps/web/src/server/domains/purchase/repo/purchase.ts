@@ -133,19 +133,11 @@ import {
   logAuditEntry,
 } from "~/server/generic/audit-log/repo/audit-log";
 import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
-import {
-  qualityReadColumn,
-  type QualityReadContext,
-} from "~/server/generic/data-quality/repo/registry";
-import {
-  gapCondition,
-  qualityFilterSource,
-} from "~/server/generic/data-quality/repo/sql";
+import { gapCondition } from "~/server/generic/data-quality/repo/sql";
 import {
   validateProductPolicy,
   validateLiveInheritedPolicies,
 } from "~/server/generic/inheritance/repo/inheritance-validation";
-import { listReadValue } from "~/server/generic/list/repo/field-compiler";
 import { listScaffold } from "~/server/generic/list/repo/list";
 import type { ListProjection } from "~/server/generic/list/repo/list-contracts";
 import {
@@ -607,25 +599,20 @@ const syncPurchaseImages = async (
  * `expected_mismatch` exception, which only the gap condition applies, so an
  * excepted mismatch has no verdict.
  */
-const reconciliationSql = (read?: QualityReadContext): SQL => {
+const reconciliationSql = (): SQL => {
   const tolerance = cents(RECONCILIATION_TOLERANCE);
-  // A bulk read binds the precomputed vendor aggregate and refund total.
-  const vendorTotal = qualityReadColumn(read, "vendorTotal");
-  const aggregate = vendorTotal
-    ? sql`SELECT ${vendorTotal} AS total, ${qualityReadColumn(read, "vendorCount")} AS "expenseCount", ${qualityReadColumn(read, "vendorUnpricedCount")} AS "unpricedCount"`
-    : sql.raw(vendorExpenseAggregateSql('"Purchase"'));
-  const refund =
-    qualityReadColumn(read, "postedRefundTotal") ?? purchasePostedRefundTotal;
+  const aggregate = sql.raw(vendorExpenseAggregateSql('"Purchase"'));
+  const refund = purchasePostedRefundTotal;
   // One vendor-expense scan feeds every verdict; the delta and refund are
   // whole cents, as `reconcilePurchase` compares them. Mirrors its
   // zero-expense guard: once the totals fail to match, a purchase with no
   // lines is `unknown` rather than a mismatch.
   return sql`(SELECT CASE
+    WHEN ${gapCondition("purchase", "paperwork_mismatch", purchase)} THEN ${purchaseReconciliation.enum.mismatch}::text
     WHEN verdict.stated IS NULL OR NOT (abs(verdict.delta) <= ${tolerance} OR verdict."expenseCount" > 0) THEN ${purchaseReconciliation.enum.unknown}::text
     WHEN abs(verdict.delta) <= ${tolerance} THEN ${purchaseReconciliation.enum.match}::text
     WHEN verdict."unpricedCount" = 0 AND verdict.delta < ${-tolerance}
       AND verdict.refund = verdict.delta THEN ${purchaseReconciliation.enum.refund_adjusted}::text
-    WHEN ${gapCondition("purchase", "paperwork_mismatch", purchase, read)} THEN ${purchaseReconciliation.enum.mismatch}::text
   END FROM (
     SELECT ${purchase.statedTotal} AS stated,
       floor((agg.total * 100)::numeric + 0.5) - floor((${purchase.statedTotal} * 100)::numeric + 0.5) AS delta,
@@ -649,11 +636,8 @@ const purchaseScaffold = listScaffold("purchase", purchase, {
       WHEN ${purchaseUnpricedExpenseCount} > 0 THEN ${purchaseExpenseStatus.enum.unpriced}::text
       ELSE ${purchaseExpenseStatus.enum.priced}::text END`,
     hasDocuments: sql`${purchaseDocumentCount} > 0`,
-    financialReconciliation: listReadValue(
-      (read) =>
-        sql`CASE WHEN ${gapCondition("purchase", "settlement_mismatch", undefined, read)} THEN ${purchaseFinancialReconciliation.enum.mismatch}::text END`,
-    ),
-    reconciliation: listReadValue(reconciliationSql),
+    financialReconciliation: sql`CASE WHEN ${gapCondition("purchase", "settlement_mismatch")} THEN ${purchaseFinancialReconciliation.enum.mismatch}::text END`,
+    reconciliation: reconciliationSql(),
     effectivePurchaser: {
       value: purchasePurchaserSql,
       set: purchasePurchaserSetSql,
@@ -661,12 +645,9 @@ const purchaseScaffold = listScaffold("purchase", purchase, {
   },
 });
 
-/** The complete WHERE for a purchase list. `getEntityCounts` calls it with `{}` — see repo/dashboard.ts.
- * A `readContext` binds the bulk quality relation its caller joins. */
-export const buildPurchaseWhereClause = (
-  filters: PurchaseFilters,
-  readContext?: QualityReadContext,
-) => purchaseScaffold.where(filters, { readContext });
+/** The complete WHERE for a purchase list. `getEntityCounts` calls it with `{}` — see repo/dashboard.ts. */
+export const buildPurchaseWhereClause = (filters: PurchaseFilters) =>
+  purchaseScaffold.where(filters);
 
 export const purchaseListRead = async (
   db: Database,
@@ -700,8 +681,8 @@ export const purchaseListRead = async (
     db,
     { filters, sorts, pagination, readIntent, projection },
     {
-      select: (page) => {
-        const query = getDb(db)
+      select: (page) =>
+        getDb(db)
           .select({
             ...core,
             ...listGroupFields(projection, "relations", () => ({
@@ -727,14 +708,10 @@ export const purchaseListRead = async (
             })),
           })
           .from(purchase)
-          .$dynamic();
-        const join = page.qualityJoin;
-        return (join ? query.leftJoin(join.relation, join.on) : query)
           .where(page.where)
           .orderBy(...page.orderBy)
           .limit(page.limit)
-          .offset(page.offset);
-      },
+          .offset(page.offset),
       read: {
         media: true,
         references: { purchaserOverrideId: { kind: "public" } },
@@ -914,8 +891,7 @@ export const purchaseListSummary = async (
     .where(
       and(
         notDeleted(expense),
-        // Quality filters read the bulk relation joined by this FROM.
-        sql`${expense.purchaseId} IN (SELECT ${purchase.id} FROM ${qualityFilterSource("purchase")} WHERE ${where ?? sql`true`})`,
+        sql`${expense.purchaseId} IN (SELECT ${purchase.id} FROM ${purchase} WHERE ${where ?? sql`true`})`,
       ),
     );
   return {
@@ -2422,13 +2398,9 @@ export const foldChargeInto = async (
     },
   });
 
-  // Evidence-changing invariant: this fold re-points Expenses,
-  // FinancialTransactions, and documents onto the survivor. The next quality
-  // read recomputes each affected check's input fingerprint, so its exception
-  // becomes stale even though the survivor's own scalar fields may not change.
-  // Retain this touch for cache freshness and the existing mutation contract;
-  // it is no longer the invalidation mechanism. The linked Products also need
-  // the touch because their quality evidence can read through moved Expenses.
+  // Moved Expenses and documents change current quality inputs. The source
+  // registration below enrolls the broad family; retained waivers stay durable.
+  // Touch affected records for cache freshness, not quality invalidation.
   const movedExpenseProducts =
     moved.length > 0
       ? await tx.query.expense.findMany({

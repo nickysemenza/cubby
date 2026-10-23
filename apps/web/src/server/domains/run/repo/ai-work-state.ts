@@ -10,6 +10,7 @@ import {
   withTransactionDatabase,
 } from "~/server/db/helpers";
 import { aiEvaluation, run } from "~/server/db/schema";
+import { recordChange } from "~/server/generic/changes/repo/change";
 import {
   currentJobExecution,
   assertCurrentJob,
@@ -87,6 +88,13 @@ export async function writeRunningAttemptProgress(
       await (
         await import("./work-progress")
       ).checkpointRunWorkProgress(target, written[0].shortcode);
+    if (
+      written.length &&
+      (set.status !== undefined ||
+        set.endedAt !== undefined ||
+        set.startedAt !== undefined)
+    )
+      await recordChange(target, { kind: "source", categories: ["run"] });
     return written.length > 0;
   };
   return withTransactionDatabase(db, async (tx) => {

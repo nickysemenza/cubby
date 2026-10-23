@@ -520,15 +520,10 @@ describe("buildMealWhere", () => {
     },
   );
 
-  it("recipeCostCoverage=true matches partial and unavailable costs that recorded contributors", async () => {
+  it("recipeCostCoverage=true reads the stored recipe-cost gap", async () => {
     const rendered = await where({ recipeCostCoverage: true });
-    expect(rendered).toContain("'partial'");
-    expect(rendered).toContain("'unavailable'");
-    expect(rendered).toContain("{cost,coverage,total}");
-    // The subselect joins two tables, so the JSON column must stay qualified.
-    expect(rendered).toMatch(
-      /dq_recipe_cost\."totals" #>> '\{cost,coverage,total\}'/,
-    );
+    expect(rendered).toContain('FROM "EntityQualityCheck" dq_check');
+    expect(rendered).toContain("= 'gap'");
   });
 });
 

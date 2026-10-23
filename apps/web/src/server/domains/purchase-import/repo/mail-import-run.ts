@@ -43,6 +43,7 @@ import {
   actorSnapshot,
   assertRunParent,
 } from "~/server/domains/run/repo/ensure-run";
+import { recordChange } from "~/server/generic/changes/repo/change";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 import { dispatchStartedRun } from "./dispatch";
@@ -282,6 +283,7 @@ export async function admitMailImport(
       .returning({ orderMailId: emailTable.orderMailId });
     if (assigned.length !== fresh.length)
       throw new Error("Mail source ownership assignment is incomplete.");
+    await recordChange(tx, { kind: "source", categories: ["email"] });
     await dispatchStartedRun(tx, {
       id: row.id,
       eventId: row.dispatchEventId!,

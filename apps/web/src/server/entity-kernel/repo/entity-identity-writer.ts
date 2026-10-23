@@ -10,11 +10,16 @@ import {
 import type { PgTable } from "drizzle-orm/pg-core";
 
 import { entityIdentity } from "~/server/db/entity-identity-schema";
+import {
+  entityQuality,
+  entityQualityCheck,
+} from "~/server/db/entity-quality-schema";
 import type { RepositoryQueryTransaction } from "~/server/db/repository-access.boundary";
 import {
   findPgError,
   type UnparsedDatabaseError,
 } from "~/server/errors/db-errors";
+import { lockRefreshFamily } from "~/server/generic/derived-refresh/repo/families";
 
 export type EntityPayloadValues<T extends PgTable> = InferInsertModel<T> & {
   shortcode: string;
@@ -87,6 +92,15 @@ export async function tombstoneEntityIdentities(
   at = new Date(),
 ): Promise<void> {
   if (ids.length === 0) return;
+  // Publication locks its Job before projection rows; removal uses that order too.
+  await lockRefreshFamily(tx, "search");
+  await lockRefreshFamily(tx, "quality");
+  await tx
+    .delete(entityQualityCheck)
+    .where(inArray(entityQualityCheck.entityId, [...ids]));
+  await tx
+    .delete(entityQuality)
+    .where(inArray(entityQuality.entityId, [...ids]));
   await tx
     .update(entityIdentity)
     .set({ deletedAt: at })

@@ -1,13 +1,23 @@
+import { parseEntityId } from "@cubby/schemas/identifiers";
+import { eq, sql } from "drizzle-orm";
+import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 
 import { unwrapDb } from "~/server/db/helpers";
-import { run as runTable } from "~/server/db/schema";
+import {
+  ledgerParty,
+  photoRunImage,
+  run as runTable,
+} from "~/server/db/schema";
 import { loadRunDetail } from "~/server/domains/purchase-import/repo/run-service";
 import { writeOutcomeReceipts } from "~/server/domains/purchase-import/service/run-outcome.fixtures";
+import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { listRunsRead } from "~/server/domains/run/repo/run";
 import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { publishQualityFixtures } from "~/server/testing/quality.fixtures";
+import { createImageFixture } from "~/server/testing/repo.fixtures";
 
 import { loadDataQualities } from "./hydrate";
 import { scoreSql, statusCondition } from "./sql";
@@ -16,31 +26,38 @@ import { scoreSql, statusCondition } from "./sql";
 // or an impossible timeline. Active work and non-browser work remain valid.
 describe("Run data quality", () => {
   const ctx = withTestDb();
+  beforeEach(async () => {
+    const member = await createRepoEntity(ctx, "ledgerParty", {
+      name: "Synthetic Run member",
+      kind: "member",
+    });
+    await unwrapDb(ctx.db)
+      .update(ledgerParty)
+      .set({ userId: ctx.actor.userId })
+      .where(eq(ledgerParty.id, member.entityId));
+  });
   const start = new Date("2026-09-01T10:00:00Z");
   const end = new Date("2026-09-01T10:01:00Z");
 
   const makeRun = async (
     status: "running" | "completed",
     endedAt: Date | null = end,
+    purpose: "product_enrichment" | "photo_inventory" = "product_enrichment",
   ) => {
-    const party = await insertWithShortcode(ctx.db, "ledgerParty", {
-      name: "Fixture agent",
-      kind: "guest",
-    });
-    return insertWithShortcode(ctx.db, "run", {
-      ledgerPartyId: party.id,
-      actorLedgerPartyShortcode: party.shortcode,
-      actorLedgerPartyName: party.name,
-      actorLedgerPartyKind: party.kind,
-      actorUserId: ctx.actor.userId,
-      actorName: "Fixture agent",
-      actorEmail: "agent@example.test",
-      purpose: "product_enrichment",
+    const id = await ensureRun(ctx.db, ctx.actor, {
+      purpose,
       trigger: "manual",
+      execution: false,
       status,
-      startedAt: start,
-      endedAt,
     });
+    await unwrapDb(ctx.db).execute(
+      sql`UPDATE "Run" SET "startedAt" = ${start}, "endedAt" = ${endedAt} WHERE id = ${id}`,
+    );
+    const [row] = await unwrapDb(ctx.db)
+      .select()
+      .from(runTable)
+      .where(eq(runTable.id, id));
+    return row!;
   };
 
   it("scores complete and honestly skipped targets without requiring a browser capture", async () => {
@@ -92,7 +109,7 @@ describe("Run data quality", () => {
       });
   });
 
-  it("exposes invalid completion records through hydration and shared SQL filters", async () => {
+  it("exposes invalid completion records through live hydration and published filters", async () => {
     const product = await insertWithShortcode(ctx.db, "product", {
       name: "Fixture packet",
       brandId: await findOrCreateVendor(ctx.db, "Fixture Seeds"),
@@ -139,6 +156,7 @@ describe("Run data quality", () => {
       ]),
     );
     expect(qualities.get(badClock.id)?.status).toBe("defect");
+    await publishQualityFixtures(ctx.db, "run");
     const filtered = await unwrapDb(ctx.db)
       .select({ id: runTable.id, score: scoreSql("run", runTable) })
       .from(runTable)
@@ -149,6 +167,38 @@ describe("Run data quality", () => {
     expect(
       Number(filtered.find((row) => row.id === unfinished.id)?.score),
     ).toBe(qualities.get(unfinished.id)?.score);
+  });
+  it("checks the live photo roster and requires an explanation for skipped images", async () => {
+    const run = await makeRun("completed", end, "photo_inventory");
+    const image = await createImageFixture(ctx.db, "synthetic-quality-photo");
+    await unwrapDb(ctx.db)
+      .insert(photoRunImage)
+      .values({
+        runId: run.id,
+        imageId: parseEntityId("image", image.id),
+        position: 0,
+        targetFingerprint: "a".repeat(64),
+        state: "skipped",
+        outcome: "skipped",
+        completedAt: end,
+      });
+    const before = (await loadDataQualities(ctx.db, "run", [run.id])).get(
+      run.id,
+    );
+    expect(before?.gaps.map((gap) => gap.check)).toContain(
+      "run_target_outcomes",
+    );
+    await unwrapDb(ctx.db)
+      .update(photoRunImage)
+      .set({ skipReason: "Synthetic duplicate photo" })
+      .where(eq(photoRunImage.runId, run.id));
+    await publishQualityFixtures(ctx.db, "run");
+    const after = (
+      await loadDataQualities(ctx.db, "run", [run.id], "stored")
+    ).get(run.id);
+    expect(after?.gaps.map((gap) => gap.check)).not.toContain(
+      "run_target_outcomes",
+    );
   });
   it("projects the target account's human label rather than its identifier", async () => {
     const product = await insertWithShortcode(ctx.db, "product", {
@@ -186,6 +236,7 @@ describe("Run data quality", () => {
   });
   it("delivers quality through the progressive enrichment projection", async () => {
     const run = await makeRun("running", null);
+    await publishQualityFixtures(ctx.db, "run");
     const args = [{}, [], { pageIndex: 0, pageSize: 50 }] as const;
     const base = await listRunsRead(ctx.db, args[0], [...args[1]], args[2], {
       kind: "base",

@@ -1,6 +1,4 @@
-import { displayImageQualityCheck } from "@cubby/schemas/data-quality";
 import {
-  DEFAULT_UNRESOLVED_SCORE_CAP,
   dataCheckExemptible,
   dataCheckScoreCap,
   type DataCheck,
@@ -15,236 +13,72 @@ import {
   relatedDataQualityEntities,
   type ScoredEntity,
 } from "@cubby/schemas/data-quality";
+import { entityQualityCheckState } from "@cubby/schemas/data-quality-shape";
 import { getTableName, type SQL, sql } from "drizzle-orm";
-import { alias, type PgTable } from "drizzle-orm/pg-core";
+import { alias } from "drizzle-orm/pg-core";
 import { z } from "zod";
 
-import { entityDisplayImagePresenceSql } from "~/server/entity-kernel/repo/entity-display-image";
+import { sqlEnumConstant } from "~/server/db/sql-enum";
 import {
   liveQualityRow,
-  type CheckBinding,
-  type QualityReadContext,
-  type EntityChecks,
   type ScoredTable,
 } from "~/server/generic/data-quality/repo/registry";
 
-import { type DataQualityEntries, dataQualityEntries } from "./entries";
+import { dataQualityEntries, storedEntryFor } from "./entries";
+import type { StoredEntityChecks } from "./stored-registry";
+import { storedCheckStateSql, storedScoreSql } from "./stored-sql";
 
 /**
  * Every builder here returns ONE parenthesized group. Callers embed these
  * under `NOT` and beside `OR`, and
  * `NOT a AND b` once emptied a production worklist because the group was a
  * bare conjunction. The unit test asserts the shape on the rendered SQL.
+ *
+ * Predicates read published `EntityQualityCheck`/`EntityQuality` rows through
+ * indexed per-row lookups, so they stay valid under any FROM clause.
  */
 const group = (inner: SQL): SQL => sql`(${inner})`;
-
-const entries: DataQualityEntries = dataQualityEntries;
 
 /** One registry entry, read through the erased-table contract. */
 export const entryFor = (
   entity: ScoredEntity,
-): Omit<EntityChecks<ScoredEntity, ScoredTable>, "checks"> & {
-  checks: Readonly<Partial<Record<DataCheck, CheckBinding<ScoredTable>>>>;
-} => {
-  const entry = entries[entity];
-  const imageCheck = displayImageQualityCheck(entity).id;
-  if (!dataChecksByEntity[entity].options.some((check) => check === imageCheck))
-    return entry;
-  return {
-    ...entry,
-    checks: {
-      ...entry.checks,
-      [imageCheck]: {
-        missing: (t: ScoredTable) =>
-          sql`NOT ${entityDisplayImagePresenceSql(entity, sql`${t.id}`)}`,
-      },
-    },
-  };
-};
-
-/** Bulk predicates and their FROM must use the same declared derived relation. */
-export const qualityFilterContext = (
-  entity: ScoredEntity,
-): QualityReadContext =>
-  // An unjoined catalog filter still needs bulk evidence; undefined denotes a scalar read.
-  entryFor(entity).filterRead ? { derivedAlias: "dq_filter" } : {};
-
-export const qualityFilterJoin = (entity: ScoredEntity, t: ScoredTable) => {
-  const derived = entryFor(entity).filterRead?.();
-  return derived
-    ? {
-        relation: sql`(${derived}) dq_filter`,
-        on: sql`dq_filter."entityId" = ${t.id}`,
-      }
-    : undefined;
-};
-
-/**
- * One MATERIALIZED bulk quality relation per entity for a multi-branch
- * statement. Inlining `qualityFilterSource` in every UNION arm re-plans and
- * re-aggregates the same relation per arm; `source` joins the shared CTE under
- * the same `dq_filter` alias and `ctes` emits each used relation once. A
- * record-scoped statement (`scoped`) keeps the plain table and the record-level
- * predicates: a whole-entity relation behind MATERIALIZED cannot be narrowed
- * to the one requested record.
- */
-export const statementQualityRelations = ({
-  scoped = false,
-}: { scoped?: boolean } = {}) => {
-  const used = new Set<ScoredEntity>();
-  const name = (entity: ScoredEntity) => sql.identifier(`quality_${entity}`);
-  return {
-    /** The read context matching `source`: record-level SQL when scoped. */
-    context(entity: ScoredEntity): QualityReadContext | undefined {
-      return scoped ? {} : qualityFilterContext(entity);
-    },
-    source(
-      entity: ScoredEntity,
-      t: ScoredTable = entryFor(entity).table,
-    ): PgTable | SQL {
-      if (scoped || !entryFor(entity).filterRead) return t;
-      used.add(entity);
-      return sql`${t} LEFT JOIN ${name(entity)} dq_filter ON dq_filter."entityId" = ${t.id}`;
-    },
-    ctes(): SQL[] {
-      return [...used].flatMap((entity) => {
-        const relation = entryFor(entity).filterRead?.();
-        return relation
-          ? [sql`${name(entity)} AS MATERIALIZED (${relation})`]
-          : [];
-      });
-    },
-  };
-};
-
-export type StatementQualityRelations = ReturnType<
-  typeof statementQualityRelations
->;
-
-export const qualityFilterSource = (
-  entity: ScoredEntity,
-  t: ScoredTable = entryFor(entity).table,
-): PgTable | SQL => {
-  const join = qualityFilterJoin(entity, t);
-  return join ? sql`${t} LEFT JOIN ${join.relation} ON ${join.on}` : t;
-};
-
-const bindingFor = (
-  entity: ScoredEntity,
-  check: DataCheck,
-): CheckBinding<ScoredTable> => {
-  const binding = Object.entries(entryFor(entity).checks).find(
-    ([id]) => id === check,
-  )?.[1];
-  if (!binding)
-    throw new Error(`${check} is not a ${entity} data-quality check.`);
-  return binding;
-};
+): StoredEntityChecks<ScoredEntity, ScoredTable> => storedEntryFor(entity);
 
 export const checksOf = (entity: ScoredEntity): readonly DataCheck[] =>
   dataChecksByEntity[entity].options;
 
-const hasExceptions = (entity: ScoredEntity): boolean =>
-  dataQualityExceptionEntities[entity];
+const state = (name: z.infer<typeof entityQualityCheckState>) =>
+  sqlEnumConstant(entityQualityCheckState, name);
 
-const fingerprintValue = (value: SQL): SQL =>
-  sql`COALESCE(to_jsonb(${value})::text, 'null')`;
-
-/**
- * `<check>:<input>|<input>…` with JSON scalar spelling, so null, strings,
- * numbers and booleans are unambiguous and an exception never couples to an
- * unrelated row timestamp. `hydrate.ts` compares stored fingerprints against
- * exactly this rendering.
- */
-export const fingerprintSql = (
-  entity: ScoredEntity,
-  check: DataCheck,
-  t: ScoredTable = entryFor(entity).table,
-  context?: QualityReadContext,
-): SQL => {
-  const binding = bindingFor(entity, check);
-  if (!dataCheckExemptible[check]) return sql`NULL::text`;
-  if (!binding.fingerprint)
-    throw new Error(`${check} declares no fingerprint inputs.`);
-  return sql`${check} || ':' || concat_ws('|', ${sql.join(
-    [...binding.fingerprint(t, context)].map(fingerprintValue),
-    sql`, `,
-  )})`;
-};
-
-/** The alias an excepted row is fingerprinted under. */
-const EXCEPTED_ALIAS = "dq_excepted";
-
-/**
- * An exception row whose stored fingerprint still matches the live evidence;
- * `null` when the check cannot be excepted. A stale exception is not active.
- *
- * The set is read from the exception side, so only excepted rows are
- * fingerprinted. Correlated to `t`, the planner hashed `(entityId,
- * fingerprint)` and fingerprinted every candidate row of a bulk read.
- */
+/** A published waiver; `null` when the check cannot be waived. */
 export const activeExceptionSql = (
   entity: ScoredEntity,
   check: DataCheck,
   t: ScoredTable,
-): SQL | null => {
-  if (!hasExceptions(entity) || !dataCheckExemptible[check]) return null;
-  const table = dataQualityEntries[entity].table;
-  const excepted = alias(table, EXCEPTED_ALIAS);
-  // A raw `${excepted}` renders only the alias; the FROM needs both names.
-  const from = sql.raw(`"${getTableName(table)}" "${EXCEPTED_ALIAS}"`);
-  // A scalar subquery per exception row: as a join clause the planner hashed
-  // the fingerprint, evaluating it for every row of the excepted table.
-  return sql`${t.id} IN (
-  SELECT dq_exception."entityId" FROM "DataException" dq_exception
-  WHERE dq_exception."check" = ${check}
-    AND dq_exception."fingerprint" = (
-      SELECT ${fingerprintSql(entity, check, excepted)} FROM ${from}
-      WHERE ${excepted.id} = dq_exception."entityId"
-    )
-)`;
-};
+): SQL | null =>
+  dataQualityExceptionEntities[entity] && dataCheckExemptible[check]
+    ? group(sql`${storedCheckStateSql(entity, check, t)} = ${state("waived")}`)
+    : null;
 
+/** The check applies to the row; an unpublished row applies nowhere. */
 export const expectedCondition = (
   entity: ScoredEntity,
   check: DataCheck,
   t: ScoredTable = entryFor(entity).table,
-  context?: QualityReadContext,
-): SQL => {
-  const binding = bindingFor(entity, check);
-  return group(binding.expected ? binding.expected(t, context) : sql`true`);
-};
-
-/** The check's `missing` predicate alone; a gap only where also expected. */
-export const checkMissingCondition = (
-  entity: ScoredEntity,
-  check: DataCheck,
-  t: ScoredTable = entryFor(entity).table,
-  context?: QualityReadContext,
-): SQL => group(bindingFor(entity, check).missing(t, context));
-
-/** `expected AND missing`, before any exception is applied. */
-const rawGapCondition = (
-  entity: ScoredEntity,
-  check: DataCheck,
-  t: ScoredTable = entryFor(entity).table,
-  context?: QualityReadContext,
 ): SQL =>
   group(
-    sql`${expectedCondition(entity, check, t, context)} AND ${checkMissingCondition(entity, check, t, context)}`,
+    sql`coalesce(${storedCheckStateSql(entity, check, t)}, ${state("not_applicable")}) <> ${state("not_applicable")}`,
   );
 
-/** A live gap: expected, missing, and not covered by an active exception. */
+/** An unwaived published gap. */
 export const gapCondition = (
   entity: ScoredEntity,
   check: DataCheck,
   t: ScoredTable = entryFor(entity).table,
-  context?: QualityReadContext,
-): SQL => {
-  const active = activeExceptionSql(entity, check, t);
-  const raw = rawGapCondition(entity, check, t, context);
-  return active === null ? raw : group(sql`${raw} AND NOT ${active}`);
-};
+): SQL =>
+  group(
+    sql`coalesce(${storedCheckStateSql(entity, check, t)} = ${state("gap")}, false)`,
+  );
 
 const orGroup = (conditions: readonly SQL[]): SQL =>
   conditions.length === 0
@@ -264,35 +98,6 @@ type StateTerm = Omit<QualityTerm, "state"> & { state: SQL };
 const code = (state: QualityTerm["state"]) =>
   sql.raw(String(qualityStateCode[state]));
 
-/**
- * `scoreQualityTerms` in SQL over one state column per check. `LEAST` skips
- * NULLs, so the weighted score (NULL without applicable weight) and the
- * lowest unresolved cap (NULL without a gap) combine exactly as the TS does.
- */
-export const scoreFromStates = (terms: readonly StateTerm[]): SQL => {
-  if (terms.length === 0) return sql`NULL::numeric`;
-  const sum = (pick: (term: StateTerm) => SQL) =>
-    sql.join(terms.map(pick), sql` + `);
-  const expected = sum(
-    (term) =>
-      sql`CASE WHEN ${term.state} <> ${code("not_applicable")} THEN ${sql.raw(String(term.weight))} ELSE 0 END`,
-  );
-  const satisfied = sum(
-    (term) =>
-      sql`CASE WHEN ${term.state} IN (${code("satisfied")}, ${code("excepted")}) THEN ${sql.raw(String(term.weight))} ELSE 0 END`,
-  );
-  const caps = sql.join(
-    terms.map(
-      (term) =>
-        sql`CASE WHEN ${term.state} = ${code("gap")} THEN ${sql.raw(String(term.scoreCap ?? DEFAULT_UNRESOLVED_SCORE_CAP))} END`,
-    ),
-    sql`, `,
-  );
-  return group(
-    sql`LEAST(round(100.0 * (${satisfied}) / NULLIF((${expected}), 0), 2), ${caps})`,
-  );
-};
-
 /** `scoreQualityTerms(...).status` in SQL; the precedence order is the TS one. */
 export const statusFromStates = (terms: readonly StateTerm[]): SQL => {
   const any = (
@@ -308,76 +113,44 @@ export const statusFromStates = (terms: readonly StateTerm[]): SQL => {
       .map((term) => sql`${term.state} <> ${code("not_applicable")}`),
   );
   return group(sql`CASE
-  WHEN ${any((term) => term.defect, "gap")} THEN 'defect'
-  WHEN ${any(() => true, "gap")} THEN 'needs_data'
-  WHEN NOT ${weighted} THEN 'not_assessed'
-  WHEN ${any(() => true, "excepted")} THEN 'complete_with_exceptions'
-  ELSE 'complete' END`);
+  WHEN ${any((term) => term.defect, "gap")} THEN ${sqlEnumConstant(dataQualityStatus, "defect")}
+  WHEN ${any(() => true, "gap")} THEN ${sqlEnumConstant(dataQualityStatus, "needs_data")}
+  WHEN NOT ${weighted} THEN ${sqlEnumConstant(dataQualityStatus, "not_assessed")}
+  WHEN ${any(() => true, "excepted")} THEN ${sqlEnumConstant(dataQualityStatus, "complete_with_exceptions")}
+  ELSE ${sqlEnumConstant(dataQualityStatus, "complete")} END`);
 };
 
 /**
- * Each check's `expected`, `missing` and active-exception lookup evaluated
- * ONCE, as one state code, in an `OFFSET 0` subquery (the offset stops
- * Postgres pulling it up and re-inlining them). Postgres has no
- * common-subexpression elimination, and planner memory grows with every
- * inlined copy of a correlated policy subquery until the statement ends:
- * spelling each `expected` in several sums once helped one
- * FinancialTransaction list plan ~0.5 GB. The CASE also skips `missing` where
- * a check is not expected and the exception lookup where nothing is missing.
- */
-const fromCheckStates = (
-  entity: ScoredEntity,
-  t: ScoredTable,
-  select: (terms: readonly StateTerm[]) => SQL,
-  context?: QualityReadContext,
-): SQL => {
-  const checks = checksOf(entity);
-  const inputs = sql.join(
-    checks.map((check, index) => {
-      const active = activeExceptionSql(entity, check, t);
-      return sql`CASE
-    WHEN ${expectedCondition(entity, check, t, context)} IS NOT TRUE THEN ${code("not_applicable")}
-    WHEN ${checkMissingCondition(entity, check, t, context)} IS NOT TRUE THEN ${code("satisfied")}
-    ${active === null ? sql`` : sql`WHEN ${active} THEN ${code("excepted")}`}
-    ELSE ${code("gap")} END AS ${sql.identifier(`s${index}`)}`;
-    }),
-    sql`, `,
-  );
-  const terms = checks.map((check, index) => ({
-    weight: dataCheckWeight[check],
-    scoreCap: dataCheckScoreCap[check],
-    defect: isDefectDataCheck(check),
-    state: sql`dq_state.${sql.identifier(`s${index}`)}`,
-  }));
-  return group(
-    sql`(SELECT ${select(terms)} FROM (SELECT ${inputs} OFFSET 0) dq_state)`,
-  );
-};
-
-/**
- * The record's score: what `entity.records` returns and `ORDER BY
- * dataQuality` sorts on, equal to the hydrated `score`.
+ * The record's published score: what `entity.records` returns and `ORDER BY
+ * dataQuality` sorts on.
  */
 export const scoreSql = (
   entity: ScoredEntity,
   t: ScoredTable = entryFor(entity).table,
-  context?: QualityReadContext,
-): SQL => fromCheckStates(entity, t, scoreFromStates, context);
+): SQL => storedScoreSql(entity, t);
 
 /** Authoritative pill tone; a defect cannot be inferred from the numeric score. */
 export const statusSql = (
   entity: ScoredEntity,
   t: ScoredTable = entryFor(entity).table,
-  context?: QualityReadContext,
-): SQL => fromCheckStates(entity, t, statusFromStates, context);
+): SQL =>
+  statusFromStates(
+    checksOf(entity).map((check) => ({
+      weight: dataCheckWeight[check],
+      scoreCap: dataCheckScoreCap[check],
+      defect: isDefectDataCheck(check),
+      state: sql`CASE ${storedCheckStateSql(entity, check, t)}
+      WHEN ${state("pass")} THEN ${code("satisfied")} WHEN ${state("gap")} THEN ${code("gap")}
+      WHEN ${state("waived")} THEN ${code("excepted")} ELSE ${code("not_applicable")} END`,
+    })),
+  );
 
 /** The `dataStatus` filter: the same status expression the row displays. */
 export const statusCondition = (
   entity: ScoredEntity,
   status: DataQualityStatus,
   t: ScoredTable = entryFor(entity).table,
-  context?: QualityReadContext,
-): SQL => group(sql`${statusSql(entity, t, context)} = ${status}`);
+): SQL => group(sql`${statusSql(entity, t)} = ${status}`);
 
 /** The alias a related row is evaluated under inside a roll-up subquery. */
 const RELATED_ALIAS = "dq_r";
@@ -435,19 +208,6 @@ const dataQualityFilterValues = z
   })
   .passthrough();
 
-/** The derived quality relation is unnecessary for plain list/count reads. */
-export const hasDataQualityFilter = <Filters extends object>(
-  filters: Filters,
-): boolean => {
-  const values = dataQualityFilterValues.parse(filters);
-  return (
-    values.dataStatus.length > 0 ||
-    values.dataGap.length > 0 ||
-    values.dataQualityExclude.length > 0 ||
-    values.dataGapsExclude.length > 0
-  );
-};
-
 /**
  * The `dataStatus` / `dataGap` list predicates for one entity, from filters
  * the generated schema already validated. Each is any-of. A `dataGap` naming a related
@@ -458,17 +218,12 @@ export const dataQualityFilterPredicates = <Filters extends object>(
   entity: ScoredEntity,
   t: ScoredTable,
   filters: Filters,
-  context?: QualityReadContext,
 ): SQL[] => {
   const values = dataQualityFilterValues.parse(filters);
   const statuses = (picked: readonly DataQualityStatus[]) =>
     picked.length === 0
       ? []
-      : [
-          orGroup(
-            picked.map((status) => statusCondition(entity, status, t, context)),
-          ),
-        ];
+      : [orGroup(picked.map((status) => statusCondition(entity, status, t)))];
   const own = dataChecksByEntity[entity];
   const related = relatedDataQualityEntities[entity].map(
     (target) => dataChecksByEntity[target],
@@ -476,8 +231,7 @@ export const dataQualityFilterPredicates = <Filters extends object>(
   const gaps = (picked: readonly string[]) => {
     const conditions = picked.flatMap((value) => {
       const ownCheck = own.safeParse(value);
-      if (ownCheck.success)
-        return [gapCondition(entity, ownCheck.data, t, context)];
+      if (ownCheck.success) return [gapCondition(entity, ownCheck.data, t)];
       const relatedCheck = related
         .map((schema) => schema.safeParse(value))
         .find((parsed) => parsed.success);
@@ -502,11 +256,11 @@ const DATA_QUALITY_SORT = "dataQuality";
 
 /** `resolve` for `buildOrderBy`: the score, asc = weakest row first. */
 export const dataQualitySortResolver =
-  (entity: ScoredEntity, t: ScoredTable, context?: QualityReadContext) =>
+  (entity: ScoredEntity, t: ScoredTable) =>
   (sort: { orderBy: string; direction: string }): SQL[] | null =>
     sort.orderBy === DATA_QUALITY_SORT
       ? [
           // A not-assessed (null) score sorts after every scored row either way.
-          sql`${scoreSql(entity, t, context)} ${sql.raw(sort.direction === "asc" ? "asc" : "desc")} NULLS LAST`,
+          sql`${scoreSql(entity, t)} ${sql.raw(sort.direction === "asc" ? "asc" : "desc")} NULLS LAST`,
         ]
       : null;

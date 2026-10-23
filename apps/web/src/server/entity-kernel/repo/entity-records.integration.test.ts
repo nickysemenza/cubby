@@ -9,10 +9,11 @@ import { createExpense } from "~/server/domains/expense/repo/crud";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import {
   buildEntityRecordsQuery,
-  listEntityRecords,
+  listEntityRecords as listCurrentEntityRecords,
 } from "~/server/entity-kernel/repo/entity-records";
 import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { publishAllQualityFixtures } from "~/server/testing/quality.fixtures";
 import {
   createLocationFixture,
   createProductIdentityFixture,
@@ -26,6 +27,13 @@ import {
 // and score-only rosters losing the authoritative status needed for pill color.
 describe("combined entity records", () => {
   const ctx = withTestDb();
+  // Record rosters sort and filter by published quality.
+  const listEntityRecords: typeof listCurrentEntityRecords = async (
+    ...args
+  ) => {
+    await publishAllQualityFixtures(ctx.db);
+    return listCurrentEntityRecords(...args);
+  };
   it("evaluates default-list quality and image subplans only for the requested page", async () => {
     for (let i = 0; i < 30; i++) {
       await createProductIdentityFixture(

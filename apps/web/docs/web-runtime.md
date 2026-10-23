@@ -275,6 +275,14 @@ rendering alone does not bound the records passed to a data provider. Verify
 server operation and SQL counts as well as HTTP request counts when changing
 list loading; increasing concurrency is not a substitute for shared work.
 
+Product list pages carry storage IDs through USDA and pricing enrichment; they
+must not resolve each public row code back to its ID. Multi-record identity
+resolution uses the shared `resolveLiveShortcodes` / `resolveAllOrThrow` helpers
+once per entity and bounded page. An inventory-location suggestion reads its
+Product source by shortcode and carries that source's ID into the candidate
+aggregates, avoiding a separate identity query for every roster. This keeps
+live-row and legacy-code handling at the read boundary.
+
 `RecordSuggestionsProvider` keeps stored review/bulk-action scope over loaded
 records while mounted `RecordSuggestionBoundary` rows admit automatic work
 from desktop and mobile virtualizers, including their overscan. Its AI

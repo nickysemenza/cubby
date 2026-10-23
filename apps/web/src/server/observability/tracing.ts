@@ -1,4 +1,6 @@
 /** Cloudflare-native custom spans; non-Worker callers run without tracing. */
+import * as asyncHooks from "node:async_hooks";
+
 import {
   type CfTracing,
   enterInvocationSpan,
@@ -75,6 +77,29 @@ export const TraceNames = {
  */
 export type AppSpan = TraceSpan;
 
+interface TraceContext {
+  run<R>(names: readonly string[], fn: () => R): R;
+  getStore(): readonly string[] | undefined;
+}
+
+// Shared lib modules reach browser bundles, where Vite stubs node builtins.
+const traceContext: TraceContext =
+  typeof window === "undefined"
+    ? new asyncHooks.AsyncLocalStorage<readonly string[]>()
+    : { run: (_names, fn) => fn(), getStore: () => undefined };
+
+/** Semantic owner survives intervening list, provider and database spans. */
+export const databaseTraceCaller = (): string | undefined => {
+  const names = [...(traceContext.getStore() ?? [])].reverse();
+  return (
+    names.find((name) =>
+      /^(?:start\.(?:query|mutation|serverFn)|job\.|workflow\.|routine\.|run\.step|[A-Z]+ \/)/u.test(
+        name,
+      ),
+    ) ?? names.find((name) => !name.startsWith("db."))
+  );
+};
+
 /**
  * Run `fn` inside a Cloudflare span, mark thrown errors, and end it when work
  * settles. Outside Workers, run directly with a non-recording span.
@@ -84,10 +109,15 @@ export const withTrace = async <T>(
   fn: (span: AppSpan) => Promise<T>,
   attributes?: Record<string, SpanAttr>,
 ): Promise<T> => {
-  if (IS_CF) {
-    return enterSpan(await getCfTracing(), name, fn, { attributes });
-  }
-  return fn(NOOP_TRACE_SPAN);
+  return traceContext.run(
+    [...(traceContext.getStore() ?? []), name],
+    async () => {
+      if (IS_CF) {
+        return enterSpan(await getCfTracing(), name, fn, { attributes });
+      }
+      return fn(NOOP_TRACE_SPAN);
+    },
+  );
 };
 
 /** Load tracing at ingress, annotating the invocation before its timing child. */
@@ -96,9 +126,13 @@ export const withInvocationTrace = async <T>(
   fn: (span: AppSpan) => Promise<T>,
   attributes?: Record<string, SpanAttr>,
 ): Promise<T> => {
-  if (IS_CF)
-    return enterInvocationSpan(await getCfTracing(), name, fn, { attributes });
-  return fn(NOOP_TRACE_SPAN);
+  return traceContext.run([name], async () => {
+    if (IS_CF)
+      return enterInvocationSpan(await getCfTracing(), name, fn, {
+        attributes,
+      });
+    return fn(NOOP_TRACE_SPAN);
+  });
 };
 
 /** Run work under a span whose lifetime is explicitly ended by the caller. */
@@ -107,10 +141,15 @@ export const withManualTrace = async <T>(
   fn: (span: AppSpan, end: () => void) => Promise<T>,
   attributes?: Record<string, SpanAttr>,
 ): Promise<T> => {
-  if (IS_CF) {
-    return enterManualSpan(await getCfTracing(), name, fn, { attributes });
-  }
-  return fn(NOOP_TRACE_SPAN, () => {});
+  return traceContext.run(
+    [...(traceContext.getStore() ?? []), name],
+    async () => {
+      if (IS_CF) {
+        return enterManualSpan(await getCfTracing(), name, fn, { attributes });
+      }
+      return fn(NOOP_TRACE_SPAN, () => {});
+    },
+  );
 };
 
 /** Synchronous work uses the native runtime warmed by its enclosing span. */
@@ -118,9 +157,11 @@ export const withSynchronousManualTrace = <T>(
   name: string,
   fn: (span: AppSpan, end: () => void) => T,
 ): T => {
-  const tracing = IS_CF ? cfTracing : undefined;
-  if (!tracing) return fn(NOOP_TRACE_SPAN, () => {});
-  return enterSynchronousManualSpan(tracing, name, fn);
+  return traceContext.run([...(traceContext.getStore() ?? []), name], () => {
+    const tracing = IS_CF ? cfTracing : undefined;
+    if (!tracing) return fn(NOOP_TRACE_SPAN, () => {});
+    return enterSynchronousManualSpan(tracing, name, fn);
+  });
 };
 
 /**

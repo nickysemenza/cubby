@@ -19,7 +19,6 @@ import {
   type ExpenseAllocationProjectScope,
   type ExpenseJointAllocationRow,
 } from "./expense-project-allocation";
-import type { ExpenseSpendingAllocationRow } from "./expense-spending-allocation";
 
 /** Each read declares its allocation dimensions before execution. Scope is
  * applied to rounded output shares, never to the complete sibling denominator.
@@ -33,7 +32,6 @@ const derivedReads = {
   names: { categories: false, projects: true, principals: false },
   categoryNames: { categories: true, projects: true, principals: false },
   presence: { categories: false, projects: true, principals: false },
-  categoryEvidence: { categories: true, projects: true, principals: false },
 } satisfies Record<
   string,
   { categories: boolean; projects: boolean; principals: boolean }
@@ -56,12 +54,6 @@ export function expenseDerivedReadSql(
       round(source."cost"::numeric * 100)::bigint AS "costCents", source."projectId"
       FROM "Expense" source WHERE source."deletedAt" IS NULL
       ${expenseIds ? sql`AND ${expenseSelectionConditionSql(sql`source."id"`, expenseIds)}` : sql``}`;
-  if (read === "categoryEvidence")
-    return sql`SELECT "expenseId",
-        bool_or("spendingCategoryId" IS NULL OR incomplete) AS missing,
-        jsonb_agg(jsonb_build_array("spendingCategoryId", amount, incomplete) ORDER BY "spendingCategoryId") AS evidence
-        FROM (${expenseDerivedReadSql("categories", { scope, expenseIds, draft, source: preparedSource })}) category_share
-        GROUP BY "expenseId"`;
   const categories =
     derivedReads[read].categories ||
     scope?.spendingCategoryIds !== undefined ||
@@ -140,14 +132,6 @@ export const expenseDerivedMembershipSql = (
 type DerivedValues = Pick<typeof expense.$inferSelect, "cost"> & {
   projectNames: ExpenseJointAllocationRow["projectName"];
   spendingCategoryNames: ExpenseJointAllocationRow["spendingCategoryName"];
-  missing: ExpenseJointAllocationRow["categoryIncomplete"] | null;
-  evidence: Array<
-    [
-      ExpenseJointAllocationRow["spendingCategoryId"],
-      ExpenseSpendingAllocationRow["amount"],
-      ExpenseSpendingAllocationRow["incomplete"],
-    ]
-  > | null;
 };
 
 /** A plain-root sort/projection cannot join. PostgreSQL evaluates this grouped
@@ -161,17 +145,13 @@ export function expenseDerivedValueSql<K extends keyof DerivedValues>(
   const read =
     field === "cost"
       ? "costs"
-      : field === "missing" || field === "evidence"
-        ? "categoryEvidence"
-        : field === "spendingCategoryNames"
-          ? "categoryNames"
-          : "names";
+      : field === "spendingCategoryNames"
+        ? "categoryNames"
+        : "names";
   const values = sql`(SELECT jsonb_object_agg("expenseId", ${sql.identifier(field)})
     FROM (${expenseDerivedReadSql(read, { scope, expenseIds })}) derived_value)`;
-  if (field === "evidence") return sql`${values} -> ${expenseId}::text`;
   const value = sql`${values} ->> ${expenseId}::text`;
   if (field === "cost") return sql`(${value})::float8`;
-  if (field === "missing") return sql`(${value})::boolean`;
   return sql`${value}`;
 }
 

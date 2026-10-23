@@ -1,8 +1,5 @@
 import {
   dataExceptionReason,
-  dataCheck,
-  dataCheckExemptible,
-  dataQualityExceptionEntities,
   dataQualityStatus,
   relatedDataQualityEntities,
   scoredEntities,
@@ -100,33 +97,18 @@ describe("data-quality predicate grouping", () => {
   );
 });
 
-/** The manifest and the SQL registry must describe the same checks. */
+/** Check coverage is typed by `defineStoredEntityChecks`; links come from the manifest. */
 describe("data-quality registry", () => {
-  it.each(scoredEntities)("%s binds exactly its declared checks", (entity) => {
-    const entry = entryFor(entity);
-    expect(entry.entity).toBe(entity);
-    expect(Object.keys(entry.checks).sort()).toEqual(
-      [...checksOf(entity)].sort(),
-    );
-    expect(Object.keys(entry.related ?? {}).sort()).toEqual(
-      [...relatedDataQualityEntities[entity]].sort(),
-    );
-  });
-
-  // An exception is keyed by the check's evidence fingerprint, so every check
-  // of an exception-bearing entity must declare its inputs.
-  it.each(
-    scoredEntities.filter((entity) => dataQualityExceptionEntities[entity]),
-  )("%s declares fingerprint inputs for every check", (entity) => {
-    const entry = entryFor(entity);
-    expect(
-      Object.entries(entry.checks).flatMap(([check, binding]) =>
-        binding.fingerprint || !dataCheckExemptible[dataCheck.parse(check)]
-          ? []
-          : [check],
-      ),
-    ).toEqual([]);
-  });
+  it.each(scoredEntities)(
+    "%s binds exactly its declared roll-ups",
+    (entity) => {
+      const entry = entryFor(entity);
+      expect(entry.entity).toBe(entity);
+      expect(Object.keys(entry.related ?? {}).sort()).toEqual(
+        [...relatedDataQualityEntities[entity]].sort(),
+      );
+    },
+  );
 
   it("registers every scored entity and nothing else", () => {
     expect(Object.keys(dataQualityEntries).sort()).toEqual(
@@ -168,26 +150,27 @@ describe("calculateDataQualityScore", () => {
 });
 
 /**
- * Postgres has no common-subexpression elimination: every inlined copy of a
- * correlated predicate is planned again (one list once planned ~0.5 GB). The
- * score and status read each check's `expected`, `missing` and exception
- * lookup once, from one state column per check.
+ * List reads never re-run check or waiver SQL: score and status come only from
+ * published rows through primary-key lookups.
  */
-describe("score and status evaluate each predicate once", () => {
+describe("score and status read only published quality rows", () => {
   it.each([
     ["scoreSql", scoreSql],
     ["statusSql", statusSql],
     [
       "statusCondition",
-      (entity: "product") => statusCondition(entity, "complete"),
+      (entity: "vendor") => statusCondition(entity, "complete"),
     ],
   ] as const)("%s", (_, build) => {
-    const rendered = render(build("product"));
-    const exemptible = checksOf("product").filter(
-      (check) => dataCheckExemptible[check],
-    ).length;
-    expect(rendered.split('FROM "DataException"').length - 1).toBe(exemptible);
-    expect(rendered.split("OFFSET 0").length - 1).toBe(1);
+    const sources = [...render(build("vendor")).matchAll(/FROM "(\w+)"/gu)].map(
+      ([, table]) => table,
+    );
+    expect(sources.length).toBeGreaterThan(0);
+    expect(
+      sources.every(
+        (table) => table === "EntityQuality" || table === "EntityQualityCheck",
+      ),
+    ).toBe(true);
   });
 
   it("sorts records without a score after every scored record", () => {
@@ -208,7 +191,8 @@ describe("aliased evaluation", () => {
   it("renders a related row's check against the alias, not the base table", () => {
     const related = alias(product, "dq_r");
     const rendered = render(gapCondition("product", "product_brand", related));
-    expect(rendered).toContain('"dq_r"."brandId"');
+    expect(rendered).toContain('"dq_r"."id"');
+    expect(rendered).toContain('"EntityQualityCheck"');
     expect(rendered).not.toContain('"Product"."brandId"');
     expect(getTableName(related)).toBe("dq_r");
   });
@@ -224,8 +208,10 @@ describe("purchase import expectations", () => {
   it("uses check inputs, not target timestamps, to keep an exception active", () => {
     const productSql = render(gapCondition("product", "product_brand"));
     const purchaseSql = render(gapCondition("purchase", "paperwork_mismatch"));
-    expect(productSql).toContain("to_jsonb");
-    expect(purchaseSql).toContain("to_jsonb");
+    expect(productSql).toContain('"EntityQualityCheck"');
+    expect(productSql).not.toContain("to_jsonb");
+    expect(purchaseSql).toContain('"EntityQualityCheck"');
+    expect(purchaseSql).not.toContain("to_jsonb");
     expect(productSql).not.toContain('"updatedAt"');
     expect(purchaseSql).not.toContain('"updatedAt"');
   });
@@ -247,7 +233,8 @@ describe("dataQualityFilterPredicates", () => {
     });
     expect(predicates).toHaveLength(2);
     const gaps = render(predicates[1]!);
-    expect(gaps).toContain('"Purchase"."orderId" IS NULL');
+    expect(gaps).toContain('"EntityQualityCheck"');
+    expect(gaps).not.toContain('"Purchase"."orderId" IS NULL');
     expect(gaps).toContain('FROM "Product" "dq_r"');
     expect(gaps).not.toContain("not_a_check");
   });

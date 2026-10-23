@@ -16,6 +16,15 @@ import {
  * the score is null. `complete_with_exceptions`: no unresolved gap, but at
  * least one is satisfied only by an accepted exception.
  */
+/** Persisted check outcomes; waivers apply only while a check has a gap. */
+export const entityQualityCheckState = z.enum([
+  "pass",
+  "gap",
+  "waived",
+  "not_applicable",
+]);
+export type EntityQualityCheckState = z.infer<typeof entityQualityCheckState>;
+
 export const dataQualityStatus = z.enum([
   "complete",
   "complete_with_exceptions",

@@ -23,6 +23,7 @@ import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolv
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { requireActor } from "~/server/http/request-context";
 import { captureBackgroundQueue } from "~/server/testing/background-queue";
+import { publishQualityFixtures } from "~/server/testing/quality.fixtures";
 import {
   createImageFixture,
   makeExpenseInput,
@@ -332,6 +333,8 @@ describe("MCP catalog", () => {
       name: "Catalog widget",
       barcode: "012345678905",
     });
+    // Orphaned Products read the published quality check.
+    await publishQualityFixtures(ctx.db, "product");
     // Detector rows carry Date timestamps; the action publishes their JSON.
     expect(
       await call("activity_read", {

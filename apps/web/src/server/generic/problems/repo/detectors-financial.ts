@@ -14,7 +14,8 @@ import { alias } from "drizzle-orm/pg-core";
 
 import type { Database } from "~/server/db";
 import { getDb } from "~/server/db/helpers";
-import { financialTransaction, financialAccount } from "~/server/db/schema";
+import { financialAccount } from "~/server/db/schema";
+import { allocationIntegrityDefectSql } from "~/server/domains/financial-transaction/repo/financial-allocation-integrity";
 import { transactionImportMembers } from "~/server/domains/transaction-import/repo/transaction-import-membership";
 import { gapCondition } from "~/server/generic/data-quality/repo/sql";
 
@@ -162,8 +163,9 @@ async function queryAllocationDefects(
         sql`, `,
       )})`
     : sql``;
+  // Live, not the published check: a raw allocation edit must surface without a refresh.
   const diagnosticWhere = options.defectsOnly
-    ? sql` AND ${gapCondition("financialTransaction", "financial_transaction_allocation_integrity", alias(financialTransaction, "ft"))}`
+    ? sql` AND ${allocationIntegrityDefectSql("ft")}`
     : sql``;
   const result = await getDb(db).execute<AllocationDefectRow>(sql`
     SELECT

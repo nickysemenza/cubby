@@ -301,6 +301,50 @@ describe("product list price footer", () => {
 describe("product list staged projections", () => {
   const ctx = withTestDb();
 
+  it("keeps USDA and pricing enrichment query work constant across page sizes", async () => {
+    const products = await Promise.all(
+      [1, 2, 3].map((index) =>
+        createProductIdentityFixture(
+          ctx.db,
+          makeProductInput({
+            name: `Synthetic budget ${index}`,
+            fdc_id: 123456 + index,
+            price: index,
+          }),
+          ctx.actor,
+        ),
+      ),
+    );
+    const usda: Pick<USDAClient, "findFoodsBatch"> = {
+      findFoodsBatch: async (inputs) => inputs.map(() => null),
+    };
+    const read = (pageSize: number) =>
+      countTestDbQueries(() =>
+        listProductsRead(
+          ctx.db,
+          { ids: products.map((row) => row.id) },
+          [{ orderBy: "name", direction: "asc" }],
+          { pageIndex: 0, pageSize },
+          "page",
+          usda,
+          selectedListProjection("product", ["food", "pricing"]),
+        ),
+      );
+    const one = await read(1);
+    const page = await read(3);
+    expect(one.result.data).toHaveLength(1);
+    expect(page.result.data).toHaveLength(3);
+    expect(page.queryCount).toBe(one.queryCount);
+    expect(
+      page.statements.filter((statement) =>
+        statement.startsWith('select "id" from "Product" where'),
+      ),
+    ).toEqual([]);
+    expect(page.result.data.map((row) => row.id)).toEqual(
+      products.map((row) => row.id),
+    );
+  });
+
   // A shared relations loader must not admit external work for an unused food binding.
   it("does not prefetch USDA for selected stock fields, but joins food reads", async () => {
     const item = await createProductIdentityFixture(

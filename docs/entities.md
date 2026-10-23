@@ -425,9 +425,7 @@ stock evidence through the shared read context. One grouped inventory/location
 relation preserves the canonical absent, mixed-unit and installed-stock rules;
 record-scoped queue and ordinary Product reads retain indexed scalar lookups.
 Unsupported evidence fields fall back to their canonical reads, and unused
-relations are omitted. Catalog quality filters pass an explicit read context even
-without a joined relation, so Product price membership uses shared bulk evidence;
-an absent context retains bounded scalar price reads after paging.
+relations are omitted. Catalog quality filters read published quality rows.
 Positive-stock applicability guards resolve unavailable stock to false before
 kit or ledger-quantity reads; the underlying quantity stays null.
 
@@ -447,8 +445,7 @@ refund evidence for reconciliation). Allocation alone skips financial aggregates
 settlement alone skips vendor reconciliation inputs. Images, quality, category
 summaries, references and coverage stay with explicit full-detail readers.
 Settlement predicates use existence checks when they only need to know whether
-live evidence is present. Exception fingerprints include raw comparison totals;
-equal rounded cents alone do not establish fingerprint compatibility.
+live evidence is present.
 Run report headers select purpose/status; non-import Runs skip import detail,
 and standalone timelines select public operation metadata without result bodies.
 Full import slots share their detail and its operation evidence within the batch.
@@ -2275,7 +2272,7 @@ transaction as the save. A best-effort queue wake is sent after commit; a lost
 wake leaves the intent available to app-open and cron. Those signals wake the shared
 Job drain. Reads serve persisted projections and never initiate repairs.
 
-The five `refresh.family` Jobs cover search, recipes, conversions, embeddings
+The six `refresh.family` Jobs cover quality, search, recipes, conversions, embeddings
 and direct orphan cleanup. Each family scans current sources with a resumable
 cursor. Search, conversion and embedding-admission pages contain at most 25
 sources; recipe preparation processes one recipe and its authoritative closure.
@@ -2505,6 +2502,55 @@ and emit no migration.
 
 ## Data quality
 
+Shipment is the first stored-quality kind. Its batch loader reconciles current
+observations once, then shares `reconcileShipmentTimeline`,
+`shipmentEventSummary` and `shipmentMilestones` with the tracking report.
+Chronology intentionally follows `shipmentMilestones`: conflicting exact delivery
+times and reversed exact carrier-possession/delivery milestones are defects.
+The retired SQL rule also inferred ordering conflicts from coarse calendar-day
+intervals and other movement kinds; those no longer establish a defect. Missing
+or coarse timing still affects the dates/span checks without inventing instants.
+
+Every scored entity registers one `defineStoredEntityChecks` entry
+(`generic/data-quality/repo/stored-registry.ts`): a versioned TypeScript
+evaluator whose single batch loader produces the records consumed by pure
+shared `qualityCheck` builders (`required`, `observed`, `hasRelated`,
+`hasImage`, `when`). Its type requires a function for every declared check.
+Declarations in `packages/schemas` own check identity, weight, caps and
+placement. The shared `data-quality-score.ts` formula owns stored scores.
+
+Related-row facts are loaded once per ID page; soft-deleted Recipes,
+Ingredients, Products, Purchases, attachments and Images do not count. Cookbook covers, Vendor logos and
+Location description prerequisites use the shared displayability predicate.
+Recipe total publications and Location AI-description changes enroll quality
+refresh because Meal cost completeness and Location descriptions read them.
+
+`EntityQuality` stores a nullable score, rules version and computation time;
+`EntityQualityCheck` stores pass, gap, waived or not_applicable for each check.
+Both have kind-checked composite FKs to `Entity`; they are derived identity
+metadata, not graph relationships. Entity itself has no quality columns.
+Lists, filters, score sorts and related rollups consume published outcomes. A
+missing publication is unassessed. `loadDataQualities`
+defaults to live evaluation for record and detail reads; list pages and the Work
+queue pass `"stored"`. Lazy explanations evaluate the same TypeScript functions
+live without publishing repairs. SQL predicates (`generic/data-quality/repo/sql.ts`)
+are indexed per-row lookups on published rows; the status predicate derives
+the same status as the TypeScript core from those check states.
+
+The `quality` refresh family is enrolled by the existing `recordChange` owner.
+Its identity pages contain at most 25 records and share the routine Job's
+cutoff, token and generation validation. Every pass evaluates current inputs,
+backfills missing rows and replaces outcomes when they or the entity's
+`rulesVersion` change. Publication rechecks the prepared verdicts in its
+transaction. Tombstones are scanned for cleanup; authoritative removal also
+retires both tables in its transaction under the quality Job lock. Reads never
+repair stored quality.
+
+A waiver (`DataException`) records entity, check, reason and note. It turns
+that check's gap into `waived` until the member clears it; input changes never
+reopen it. Waivers recorded before this model, including ones whose evidence
+had since changed, were carried through the migration and are active.
+
 Compact entity facts, including board cards, use the shared quality value and lazy field explanation; they never summarize the quality object as a field count.
 
 Scored entities receive a shared, unscored display-image check by default.
@@ -2517,56 +2563,113 @@ qualify. Existing weighted image checks still own their domain requirements.
 Entities without applicable weighted checks remain unassessed when the image
 check passes; an absent image supplies the unresolved 99 cap.
 
-Product price checks share catalog price evidence for filtering and a scoped
-numeric projection for quality hydration. Applicability, missing-value checks,
-and exception fingerprints read the same projection during hydration. Both
-projections reuse the kit-pricing rules used by scalar prices and list totals;
-zero remains a known price and an absent derived price remains null.
-Scalar quality reads keep price evidence correlated to the requested Product;
-page enrichment must not evaluate service/category subplans for the catalog.
-Composite reads can supply statement-local presence evidence through the same
-quality-filter context used by the list scaffold and Product filters. The Work
-queue registers one materialized price relation when a compiled predicate
-requests it; standalone filters retain their closed predicates. Numeric
-fingerprints keep the canonical scalar or joined value, so sharing presence
-does not change exception identity.
+Product uses stored TypeScript checks at rules version 1. One loader reads a
+bounded Product ID page's identity, category liveness, inventory, acquisition,
+external identifier, orphan-retention and displayability facts, then delegates
+one batched price read to `loadProductPricing`. The existing kit-pricing rules
+remain authoritative: zero is known, ancestors contribute weighted acquisition
+prices, misc: buckets and service Products (whose category feature is a service) have no
+price expectation, service Products also have no identifier expectation, and
+unstocked historical
+Products are never charged a missing-price gap. Checks perform no I/O.
+
+Product lists, dataStatus/dataGap filters, score sorts, Research saved views,
+related Purchase rollups and Work queue research branches read published
+`EntityQuality`/`EntityQualityCheck` rows. The Work queue no longer registers a
+Product price CTE. Non-quality price-presence views, including optional misc
+bucket valuations, retain live pricing semantics; quality applicability cannot
+stand in for price presence. Product, Expense, inventory, brand/vendor, category, kit and
+attachment writers register source changes through the existing transactional
+`recordChange` owner (including audit logging); image integrity updates do too.
+The broad quality pass recomputes affected Products, including kit descendants,
+without mutation-time dependent traversal. Reads leave old publications intact
+until the pass completes.
+
+Email uses stored TypeScript checks at rules version 1. A single loader reads
+only its ID page's classification, retained-text/attachment presence, current
+preview, owner review, accepted/link evidence and completed same-member Mail
+import membership. The checks retain current-checksum review and preview rules,
+settled automated negatives, live Purchase/account ownership fences, and JSON
+source containment (including explicit null). Bodies are never selected for
+quality evaluation. List quality facets/counts, score sorts and the Email Work
+queue branch read stored outcomes; no mailbox-wide acceptance or review relation
+runs on those reads. Missing publications stay unassessed until refresh.
+
+Email metadata, original/attachment persistence, candidate/classification
+observations, email Assessment/Feedback, linked Purchase writes and Mail import
+Run/source-roster changes enroll the existing quality family transactionally.
+Run source changes enroll quality even when other families ignore Run execution
+metadata; progress-only projections still enroll no family. Old publications
+remain readable until refresh, and member waivers survive evidence changes.
+
+Expense uses stored TypeScript checks at rules version 1. One page-scoped
+loader reads its scalar fields, shared allocation/category completeness,
+product-expectation policy and display-image presence. Existing SQL domain
+helpers inside that loader retain sibling allocation weights, inherited
+Purchase/Project/category precedence, liveness and rounding. The pure checks
+preserve incurred-only cost/category/quantity rules, known zero costs and
+product expectations on planned merchandise.
+
+Expense list quality, filters, score sorting and Work queue research read
+published outcomes through indexed per-row stored lookups, which stay valid
+under any FROM clause, including Work queue branches.
+Problems detectors have no direct Expense quality predicate;
+their independent financial invariants retain their existing domain owners.
+Expense, Purchase, Project, vendor and category edits enroll broad quality intent
+through transactional audit registration; allocation/settlement links and
+attachments use their existing source-change registrations. The family scans
+current Expenses, including descendants affected by inherited inputs, without
+mutation-time dependent traversal. Reads never repair stale outcomes. Member
+waivers remain durable when these inputs change.
 
 A Product's `commodity` flag marks interchangeable goods with no single
-listing. It removes the brand, Identifier and Amazon ASIN checks from the
-Product's applicable set rather than recording an exception, and it is a
-deliberate member decision, never inferred from an unknown or Generic Brand.
-Only applicability reads it; those checks' fingerprints are unchanged, so
-clearing the flag reopens the gaps while existing exceptions keep their
-evidence.
+listing. It removes brand, Identifier and Amazon ASIN checks from applicability;
+it is a deliberate member decision, never inferred from an unknown or Generic
+Brand. Waivers remain active across input changes, passing checks and
+commodity toggles until explicitly cleared. Exception mutation responses
+evaluate the saved decision live without publishing a repair.
+Stored predicates are closed per-row lookups on the
+`EntityQualityCheck`/`EntityQuality` primary keys, so footer sums and custom FROM
+clauses never reference an unbound join alias.
 
-Purchase paperwork-mismatch predicates share one vendor-Expense aggregate for
-the total, line count and unpriced count. The reconciliation module owns their
-common live vendor-line scope and numeric sum. Bulk reads (list quality
-filters and score sorts, Work queue branches) join one Purchase quality
-relation that groups Expense and settlement-allocation inputs once per
-statement instead of a correlated scalar per row and check; the reconciliation
-verdict filters read it through the same context when a caller binds it.
-Exception fingerprints retain the same scalar evidence and rounding, so the
-optimized verdict does not reopen an accepted mismatch. Custom list row
-selects apply the scaffold's quality join from the page clauses. A Work queue
-statement shares each relation as one MATERIALIZED CTE; a record-scoped read
-keeps the record-level predicates, since a whole-entity relation cannot be
-narrowed to the one requested record.
-Checks read a bound relation's column through `qualityReadColumn`
-(`data-quality/repo/registry.ts`) and fall back to their record-level SQL.
-`filter-read-parity.integration.test.ts` pins every bulk relation's checks,
-statuses and read-aware verdicts to the record-level SQL.
+Purchase uses stored TypeScript checks at rules version 1. One batch loader
+scopes Expense and settlement-allocation aggregates to the current ID page,
+reusing the existing evidence and settlement policy owners. Paperwork compares
+vendor lines only, including planned vendor lines; settlement compares every
+incurred Expense, including reimbursements, with posted or outstanding evidence.
+Known zero costs, cent tolerance and posted-refund explanations are preserved.
+The checks perform no I/O.
+
+Purchase lists, quality filters, score sorts, Research and reconciliation Work
+queue branches, Problems membership and related Product rollups read published
+quality rows. Independent detail reconciliation continues to show current money
+and evidence. Purchase, Expense, settlement allocation, FinancialTransaction,
+attachment and vendor writers enroll the quality family through transactional
+`recordChange` (including audit registration). The broad pass evaluates changed
+inputs without mutation-time dependent traversal; reads never repair outcomes.
+All Purchase waivers, including paperwork, settlement amount, party and tender
+comparisons, remain durable across input changes until explicitly cleared.
+
+FinancialAccount, FinancialTransaction, Run and Task use stored TypeScript
+checks at rules version 1. Each loader scopes its reads to one ID page. The
+FinancialTransaction loader reuses the signed allocation and Purchase evidence
+policy owners; Task reuses declared trade inheritance and checks its own date
+window. Run batches immutable generic target receipts and live photo membership,
+including required skip reasons. FinancialAccount retains cash self-evidence,
+source aliases and live settlement references as claim evidence. Published rows own list filters and score
+sorts; record reads evaluate live without publishing. FinancialTransaction
+waivers remain accepted across changed input until explicitly cleared.
+
+Audited financial/account/task writes and source-record import changes enroll
+quality transactionally. Run creation, terminal step transitions and photo
+completion register source changes; step progress remains projection metadata.
+Derived-refresh Run telemetry registers projection changes so a quality pass
+cannot invalidate itself while recording its own progress.
 
 An Email's completed-import check matches a live, completed Mail import Run
-owned by the same member with the original in its source list. Bulk filtering,
-score sorting, and bounded hydration join a shared, deduplicated Email quality
-relation before evaluating the check, so ordinary join planning can spill rather
-than rescanning a source set per Email when a hashed SubPlan exceeds memory.
-The relation also carries the Email's linked state, evaluated once for the
-checks that read it. The data-quality registry owns both the relation and the
-predicate context; list reads and Work queue counts use the same binding. Plain lists and counts
-join no quality relation unless quality filtering or score sorting needs it.
-Single-record predicates retain JSON containment. Historical source JSON allows
+owned by the same member with the original in its source list. The Email
+loader evaluates this once per ID page; list filters, score sorting and Work
+queue counts read the published outcome. Source checks retain JSON containment. Historical source JSON allows
 extra fields, excludes missing keys and malformed source arrays, and distinguishes
 an explicit JSON null from an absent key.
 
@@ -2592,8 +2695,7 @@ actionable checks of their own; absence of checks does not mean 100.
 
 Every live Vendor expects a displayable logo, including vendors with no
 purchases or accounts. Its missing-logo gap appears once in the Work queue as
-shared Research work. An evidence-bound `unavailable` exception still closes
-that gap. The logo coverage meter counts all live vendors. Order-evidence and
+shared Research work. An `unavailable` waiver closes that gap. The logo coverage meter counts all live vendors. Order-evidence and
 website checks retain their purchase-based applicability.
 
 Run uses the shared quality score, filters, sorting, and explanation. Its
@@ -2628,8 +2730,7 @@ applicability, and exceptions retain the shared record-level calculation.
 The Research queue ([terminology](guide/terminology.md#purchase-research)) is no table: it is the
 `research-queue` saved views on Product, Purchase, Expense and Vendor, which filter
 `dataGaps` to the checks research can close and sort by `dataQuality`
-ascending. A `DataException` bound to the evidence fingerprint removes an item
-until its inputs change.
+ascending. A durable `DataException` closes the gap until explicitly cleared.
 
 The dedicated `/work-queue` page combines those predicates with interactive
 Problems, Email attention, findings and account work. It derives a filterable
@@ -2748,35 +2849,29 @@ message maps, `dataCheckPresentation` (satisfied labels and ownership), `dataQua
 `dataQualityExceptionEntities`, and `scoredEntities`; `data-quality.ts`
 composes the public schema from that leaf.
 
-Every declared check id needs exactly one binding in the web registry
-(`apps/web/src/server/generic/data-quality/repo/checks/<entity>.ts`), typechecked two
-ways: `entries.ts`'s `satisfies` against the generated per-entity check
-union, and the registry unit test. A `CheckBinding<T>` supplies
-`expected?(t)` (omitted = always expected), `missing(t)`, and
-`fingerprint?(t)` — required exactly when the entity has exceptions, and the
-inputs are whatever that check actually reads, never `updatedAt` (see
-`docs/agents/domain-rules.md`). `t` is the entity's own table or an
-`alias()` of it, so a related roll-up evaluates the same binding the related
-entity's own list uses.
+Every declared check id needs exactly one function in the web registry
+(`apps/web/src/server/generic/data-quality/repo/checks/<entity>.ts`), typechecked
+by `defineStoredEntityChecks` against the generated per-entity check union.
+`related` links take the entity's own table or an `alias()` of it, so a roll-up
+reads the related entity's published check states.
 
 `sql.ts` builds every predicate as one parenthesized group so callers can
 safely embed it under `NOT` or beside `OR` — a bare conjunction once emptied
 a production worklist; the unit test asserts the shape.
-`expected`/`missing`/`fingerprint` combine into a live-gap condition (expected,
-missing, not covered by an active exception) and the score:
+Each check yields pass, gap, waived or not applicable, and the score is:
 `100 × satisfied expected weight / expected weight`, limited by the lowest
 `scoreCap` of an applicable unresolved check. A cap also applies to an
 unscored integrity diagnostic: supporting evidence cannot turn a known defect
 into perfect quality. Any unresolved check also caps at 99, so a rounded
 display cannot show 100 while a gap remains. Caps belong in the declaration, alongside importance
-weights; domain applicability and validity stay in the existing typed SQL
-bindings. No applicable weighted evidence and no active cap produces a nullable
-score and **Not assessed**, never an automatic 100. SQL sorting puts unassessed
-records last in either direction and uses the same arithmetic as hydration.
+weights; domain applicability and validity stay in each entity's check
+functions. No applicable weighted evidence and no active cap produces a nullable
+score and **Not assessed**, never an automatic 100. SQL sorting reads the
+published score and puts unassessed records last in either direction.
 
 Active exceptions remain accepted evidence for score arithmetic, but an otherwise
 complete record is **Complete with exceptions**, visibly distinct from fully
-satisfied evidence. Stale exceptions reopen their gaps. Every weighted missing
+satisfied evidence. Waivers never reopen. Every weighted missing
 check must be closable through supported data entry or an allowed exception;
 optional planning fields and operational inactivity are not universal
 completeness requirements. Actual zero or negative costs remain valid.
@@ -2800,17 +2895,16 @@ diagnostic, so recorded identity can earn points without purchase history.
 Core identity, classification, usable evidence, and financial consistency matter
 more than optional imagery and descriptions. Score explanations name deductions
 and applicable caps. Related gaps remain separate from the owner's score and
-must not propagate through recursive relationship chains. The score is unindexed — a correlated `EXISTS`
-per check per row — which is fine at household scale. `related` roll-ups add
-an `EXISTS` against an aliased related table using that entity's own
-bindings; `generic/list/repo/list.ts` binds the resulting filters and sort for every
+must not propagate through recursive relationship chains. Filters and the score
+sort read published rows by primary key. `related` roll-ups add an `EXISTS`
+against an aliased related table that reads its published check states;
+`generic/list/repo/list.ts` binds the resulting filters and sort for every
 scored entity's list in one place.
 
 Durable "not available" exceptions (`data_exception.set_exception`/
 `data_exception.clear_exception`) live in the `DataException` table, keyed by an
 `Entity(id, kind)` FK, for every entity whose declaration sets `exceptions`.
-Enabling it requires fingerprint inputs for every check and an allowed-reason
-list per check (`EXCEPTION_REASONS` in `generic/data-quality/repo/exception-reasons.ts`, exposed on each
+Enabling it requires an allowed-reason list per check (`EXCEPTION_REASONS` in `generic/data-quality/repo/exception-reasons.ts`, exposed on each
 explained check as `exceptionReasons`). An
 exception goes with its entity when the entity is removed or merged away.
 
@@ -2818,9 +2912,9 @@ Recording a finding requires a nonblank explanation of what was checked and
 what was found; include source references where available. Explanation notes render
 Markdown source links in web and Apple controls. Those controls
 never substitute the reason label for that explanation. Existing reason choices,
-evidence fingerprints, audit history and scoring remain shared across entities.
+audit history and scoring remain shared across entities.
 Clearing removes the finding and reopens its gap; it does not block a later
-source-backed finding. Changes to the fingerprint evidence make a finding stale.
+source-backed finding. Evidence changes never reopen a finding.
 
 Reference read surfaces display effective resolution, while editors retain the
 stored assignment baseline. Quality cells retain their semantic null state in

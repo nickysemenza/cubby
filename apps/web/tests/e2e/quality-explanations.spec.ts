@@ -9,7 +9,7 @@ import { expect, test } from "./support/e2e-test";
 
 // Required native capability tests own explanation loading/retry, bounded
 // evidence, formatting and viewport/focus. This journey owns the real write.
-test("a person accepts a data gap as an exception from the explanation and clears it", async ({
+test("a person accepts a data gap as an exception that survives evidence changes, then clears it", async ({
   page,
   baseURL,
 }) => {
@@ -67,12 +67,11 @@ test("a person accepts a data gap as an exception from the explanation and clear
     { headers: { Origin: baseURL! } },
   );
   expect(changed.ok(), await changed.text()).toBeTruthy();
+  // Waivers never reopen: the recorded decision remains after the evidence changes.
   await reloadAuthenticatedPage(page, row);
   await expect(async () => {
     if (!(await popover.isVisible())) await trigger.click();
-    await expect(check).toContainText(
-      "Evidence changed since this exception was recorded",
-    );
+    await expect(check).toContainText("Recorded as");
   }).toPass();
   await expect(
     check.getByRole("button", { name: "Clear exception" }),

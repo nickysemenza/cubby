@@ -31,10 +31,6 @@ import {
   projectionRows,
   unitWeighted,
 } from "~/server/domains/product/repo/kit-projection";
-import {
-  qualityReadColumn,
-  type QualityReadContext,
-} from "~/server/generic/data-quality/repo/registry";
 
 import { serviceProductSqlText } from "./service-category";
 
@@ -413,8 +409,8 @@ export const loadIngredientIdsForProducts = async (
 const PROJECTED_DERIVED_PRICE = `CASE WHEN bool_or(${serviceProductSqlText("ka.target")}) THEN NULL ELSE round((${PROJECTED_KNOWN_COST} / NULLIF(${PROJECTED_KNOWN_UNITS}, 0))::numeric, 2)::double precision END`;
 
 /**
- * Correlated SQL for Product root-list sorting and aggregation (filtering goes
- * through {@link derivedPriceFilterSql}). `productAlias` must be the query's
+ * Correlated SQL for Product root-list sorting and aggregation.
+ * `productAlias` must be the query's
  * known SQL alias (RQB uses `product`).
  *
  * The twin of {@link loadProductPricing}, and no longer a restatement of it: the
@@ -460,30 +456,13 @@ const groupedProductPriceSql = (
   FROM kit_anc ka LEFT JOIN kit_own ko ON ko."productId" = ka."productId"
   GROUP BY ka.target`;
 
-/** Numeric evidence for bounded quality hydration; an omitted scope shares catalog work. */
-export const productPriceEvidenceSql = (ids?: SQL): SQL => {
-  if (ids === undefined)
-    return groupedProductPriceSql(kitSeedForProductIds([], true));
-  return sql`${kitAncestorCteSql(sql`SELECT kp."id", kp."id", 1::numeric, 1::numeric, 0 FROM "Product" kp WHERE kp."id" = ANY(${uuidArrayParam(ids)})`)}
-    SELECT ka.target AS "entityId", ${sql.raw(PROJECTED_DERIVED_PRICE)} AS "derivedPrice"
-    ${sql.raw(PRICING_PROJECTION_FROM)} GROUP BY ka.target`;
-};
-
-/** A closed membership predicate: callers need no derived-table alias in their FROM. */
+/** Explicit price-presence filters remain closed predicates with their own price evidence. */
 export const hasDerivedProductPriceSql = (
   productId: AnyColumn,
-  context?: QualityReadContext,
-): SQL => {
-  if (context?.hasDerivedValue)
-    return context.hasDerivedValue("derivedPrice", productId);
-  const bulk = qualityReadColumn(context, "derivedPrice");
-  return bulk
-    ? sql`${bulk} IS NOT NULL`
-    : sql`${productId} IN (
-  SELECT price_evidence."entityId" FROM (${productPriceEvidenceSql()}) price_evidence
+): SQL => sql`${productId} IN (
+  SELECT price_evidence."entityId" FROM (${groupedProductPriceSql(kitSeedForProductIds([], true))}) price_evidence
   WHERE price_evidence."derivedPrice" IS NOT NULL
 )`;
-};
 
 const productPriceSumSql = (whereClause: SQL | undefined): SQL<number> => {
   const condition = whereClause ?? sql`TRUE`;
@@ -508,15 +487,3 @@ export const loadProductPriceSum = async (
   );
   return rows[0]?.priceSum ?? 0;
 };
-
-/**
- * Numeric scalar for exception fingerprints and callers evaluating one Product.
- * Keep the interpolated column: Drizzle rewrites it to the enclosing alias.
- * Acquisition predicates, kit weights, and rounding share the batch definitions.
- */
-export const derivedPriceFilterSql = (productId: AnyColumn) =>
-  sql`(${kitAncestorCteSql(
-    sql`SELECT ${productId}, ${productId}, 1::numeric, 1::numeric, 0`,
-  )}
-      SELECT ${sql.raw(PROJECTED_DERIVED_PRICE)}
-      ${sql.raw(PRICING_PROJECTION_FROM)})`;

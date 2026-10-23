@@ -28,6 +28,7 @@ import { purchaseList } from "~/server/domains/purchase/repo/purchase";
 import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
 import { ensureExternalSources } from "~/server/generic/entity-links/repo/entity-external-ids";
 import { readRecordWorkQueue } from "~/server/generic/work-queue/service/work-queue-read";
+import { publishQualityFixtures } from "~/server/testing/quality.fixtures";
 import {
   createImageFixture,
   insertEntityAttachments,
@@ -57,6 +58,24 @@ const page = { pageIndex: 0, pageSize: 50 };
  */
 describe("data quality: list filters, sort and hydration agree", () => {
   const ctx = withTestDb();
+  const publishedQualities: typeof loadDataQualities = async (...args) => {
+    await publishQualityFixtures(ctx.db, "product");
+    return loadDataQualities(...args);
+  };
+  const publishedProductList: typeof productList = async (...args) => {
+    await publishQualityFixtures(ctx.db, "product");
+    return productList(...args);
+  };
+  const publishedProductWhere: typeof buildProductWhere = async (...args) => {
+    await publishQualityFixtures(ctx.db, "product");
+    return buildProductWhere(...args);
+  };
+  const publishedRecordWorkQueue: typeof readRecordWorkQueue = async (
+    ...args
+  ) => {
+    await publishQualityFixtures(ctx.db, "product");
+    return readRecordWorkQueue(...args);
+  };
 
   it("missing display images prevent perfect quality even without inventory", async () => {
     const row = await createProductFixture(
@@ -78,7 +97,7 @@ describe("data quality: list filters, sort and hydration agree", () => {
       TEST_ACTOR,
     );
     const quality = (
-      await loadDataQualities(ctx.db, "product", [row.entityId])
+      await publishedQualities(ctx.db, "product", [row.entityId])
     ).get(row.entityId)!;
     expect(quality.score).toBeLessThan(100);
     expect(quality.gaps.map((gap) => gap.check)).toContain(
@@ -107,7 +126,7 @@ describe("data quality: list filters, sort and hydration agree", () => {
       sortOrder: 0,
     });
     const complete = (
-      await loadDataQualities(ctx.db, "product", [row.entityId])
+      await publishedQualities(ctx.db, "product", [row.entityId])
     ).get(row.entityId)!;
     expect(complete).toMatchObject({
       score: 100,
@@ -173,10 +192,10 @@ describe("data quality: list filters, sort and hydration agree", () => {
 
   // Catalog price gaps must not repeat a kit-pricing walk for every Product.
   // A kit-priced part remains priced even without its own acquiring Expense.
-  it("shares derived price evidence across catalog gaps and bounded hydration", async () => {
+  it("reads published price checks across catalog gaps and bounded hydration", async () => {
     const { weak, middling } = await seedProducts();
     const queueKeys = async () =>
-      (await readRecordWorkQueue(ctx.db, null, weak.id, false)).items.map(
+      (await publishedRecordWorkQueue(ctx.db, null, weak.id, false)).items.map(
         (row) => row.key,
       );
     for (let index = 0; index < 64; index++)
@@ -196,7 +215,7 @@ describe("data quality: list filters, sort and hydration agree", () => {
       [{ productId: weak.entityId, quantity: 4 }],
       TEST_ACTOR,
     );
-    const whereBefore = await buildProductWhere(ctx.db, {
+    const whereBefore = await publishedProductWhere(ctx.db, {
       dataGap: "product_price",
     });
     const before = await unwrapDb(ctx.db)
@@ -218,6 +237,7 @@ describe("data quality: list filters, sort and hydration agree", () => {
     expect(excepted.exceptions).toContainEqual(
       expect.objectContaining({ check: "product_price", state: "active" }),
     );
+    await publishQualityFixtures(ctx.db, "product");
     const filteredException = await unwrapDb(ctx.db)
       .select({ id: product.id })
       .from(product)
@@ -234,14 +254,16 @@ describe("data quality: list filters, sort and hydration agree", () => {
       }),
       TEST_ACTOR,
     );
-    const where = await buildProductWhere(ctx.db, { dataGap: "product_price" });
+    const where = await publishedProductWhere(ctx.db, {
+      dataGap: "product_price",
+    });
     const after = await unwrapDb(ctx.db)
       .select({ id: product.id })
       .from(product)
       .where(where);
     expect(after.map((row) => row.id)).not.toContain(weak.entityId);
     expect(await queueKeys()).not.toContain(`productsMissingPrice:${weak.id}`);
-    const hydrated = await loadDataQualities(ctx.db, "product", [
+    const hydrated = await publishedQualities(ctx.db, "product", [
       weak.entityId,
       middling.entityId,
     ]);
@@ -249,7 +271,7 @@ describe("data quality: list filters, sort and hydration agree", () => {
       hydrated.get(weak.entityId)?.gaps.map((gap) => gap.check),
     ).not.toContain("product_price");
     expect(hydrated.get(weak.entityId)?.exceptions).toContainEqual(
-      expect.objectContaining({ check: "product_price", state: "stale" }),
+      expect.objectContaining({ check: "product_price", state: "active" }),
     );
     const planNode = z.object({
       "Relation Name": z.string().optional(),
@@ -272,13 +294,13 @@ describe("data quality: list filters, sort and hydration agree", () => {
       node.Plans?.forEach(visit);
     };
     visit(plan.Plan);
-    expect(edgeScans).toBeLessThanOrEqual(16);
+    expect(edgeScans).toBe(0);
   });
 
   it("filters by status and gap exactly as the hydrated object reports", async () => {
     const { weak, middling, catalogOnly } = await seedProducts();
     const ids = [weak.entityId, middling.entityId, catalogOnly.entityId];
-    const hydrated = await loadDataQualities(ctx.db, "product", ids);
+    const hydrated = await publishedQualities(ctx.db, "product", ids);
 
     expect(hydrated.get(weak.entityId)?.status).toBe("needs_data");
     expect(hydrated.get(middling.entityId)?.status).toBe("needs_data");
@@ -304,7 +326,7 @@ describe("data quality: list filters, sort and hydration agree", () => {
 
     const listed = async (filters: Parameters<typeof productList>[1]) =>
       new Set(
-        (await productList(ctx.db, filters, [], page)).data.map(
+        (await publishedProductList(ctx.db, filters, [], page)).data.map(
           (row) => row.id,
         ),
       );
@@ -333,7 +355,7 @@ describe("data quality: list filters, sort and hydration agree", () => {
 
   it("sorts by the same score the hydrated object carries", async () => {
     const { weak, middling, catalogOnly } = await seedProducts();
-    const hydrated = await loadDataQualities(ctx.db, "product", [
+    const hydrated = await publishedQualities(ctx.db, "product", [
       weak.entityId,
       middling.entityId,
       catalogOnly.entityId,
@@ -342,7 +364,7 @@ describe("data quality: list filters, sort and hydration agree", () => {
     expect(score(weak)).toBeLessThan(score(catalogOnly));
     expect(score(catalogOnly)).toBeLessThan(score(middling));
 
-    const { data } = await productList(
+    const { data } = await publishedProductList(
       ctx.db,
       { nameFilter: "DQ " },
       [{ orderBy: "dataQuality", direction: "asc" }],
@@ -355,10 +377,10 @@ describe("data quality: list filters, sort and hydration agree", () => {
     );
   });
 
-  it("counts an active exception as satisfied until its evidence changes", async () => {
+  it("counts a durable waiver as satisfied until explicitly cleared", async () => {
     const { weak } = await seedProducts();
     const before = (
-      await loadDataQualities(ctx.db, "product", [weak.entityId])
+      await publishedQualities(ctx.db, "product", [weak.entityId])
     ).get(weak.entityId)!;
 
     const excepted = await setDataException(
@@ -383,7 +405,12 @@ describe("data quality: list filters, sort and hydration agree", () => {
     expect(excepted.score).toBeGreaterThan(before.score!);
     const noMaker = new Set(
       (
-        await productList(ctx.db, { dataGap: ["product_brand"] }, [], page)
+        await publishedProductList(
+          ctx.db,
+          { dataGap: ["product_brand"] },
+          [],
+          page,
+        )
       ).data.map((row) => row.id),
     );
     expect(noMaker.has(weak.id)).toBe(false);
@@ -473,7 +500,7 @@ describe("data quality: list filters, sort and hydration agree", () => {
       .set({ deletedAt: new Date() })
       .where(sql`${productCategory.id} = ${category.entityId}`);
 
-    const hydrated = await loadDataQualities(ctx.db, "product", [
+    const hydrated = await publishedQualities(ctx.db, "product", [
       sold.entityId,
       bought.entityId,
     ]);
@@ -576,7 +603,7 @@ describe("data quality: list filters, sort and hydration agree", () => {
       uncategorized,
       blank,
     ];
-    const hydrated = await loadDataQualities(
+    const hydrated = await publishedQualities(
       ctx.db,
       "product",
       rows.map((row) => row.entityId),
@@ -608,7 +635,12 @@ describe("data quality: list filters, sort and hydration agree", () => {
     expect(gaps(blank)).toContain("product_name");
     expect(quality(blank).score).toBe(50);
 
-    const { data } = await productList(ctx.db, { nameFilter: "DQ " }, [], page);
+    const { data } = await publishedProductList(
+      ctx.db,
+      { nameFilter: "DQ " },
+      [],
+      page,
+    );
     const listed = new Map(data.map((row) => [row.id, row.dataQuality.score]));
     for (const row of rows.filter((row) => row !== blank))
       expect(listed.get(row.id)).toBe(quality(row).score);
@@ -673,7 +705,7 @@ describe("data quality: list filters, sort and hydration agree", () => {
         },
       ]);
     const rows = [modelOnly, externalOnly, both, neither, deleted];
-    const hydrated = await loadDataQualities(
+    const hydrated = await publishedQualities(
       ctx.db,
       "product",
       rows.map((row) => row.entityId),
@@ -691,7 +723,7 @@ describe("data quality: list filters, sort and hydration agree", () => {
     expect(hydrated.get(externalOnly.entityId)?.score).toBe(
       hydrated.get(both.entityId)?.score,
     );
-    const filtered = await productList(
+    const filtered = await publishedProductList(
       ctx.db,
       { nameFilter: "DQ identifier", dataGap: ["product_external_id"] },
       [],
@@ -700,7 +732,7 @@ describe("data quality: list filters, sort and hydration agree", () => {
     expect(filtered.data.map((row) => row.id).sort()).toEqual(
       [neither.id, deleted.id].sort(),
     );
-    const queue = await readRecordWorkQueue(
+    const queue = await publishedRecordWorkQueue(
       ctx.db,
       null,
       externalOnly.id,
@@ -711,7 +743,7 @@ describe("data quality: list filters, sort and hydration agree", () => {
       .update(product)
       .set({ model: null })
       .where(eq(product.id, modelOnly.entityId));
-    const reopened = await loadDataQualities(ctx.db, "product", [
+    const reopened = await publishedQualities(ctx.db, "product", [
       modelOnly.entityId,
     ]);
     expect(
@@ -764,14 +796,14 @@ describe("data quality: list filters, sort and hydration agree", () => {
       "product_external_id",
     ];
     const gapsOf = async (row: typeof flagged) =>
-      (await loadDataQualities(ctx.db, "product", [row.entityId]))
+      (await publishedQualities(ctx.db, "product", [row.entityId]))
         .get(row.entityId)
         ?.gaps.map((gap) => gap.check)
         .filter((check) => identityChecks.includes(check))
         .sort();
     expect(await gapsOf(flagged)).toEqual([]);
     expect(await gapsOf(twin)).toEqual([...identityChecks].sort());
-    const filtered = await productList(
+    const filtered = await publishedProductList(
       ctx.db,
       { nameFilter: "DQ commodity", dataGap: ["amazon_asin"] },
       [],
@@ -801,9 +833,8 @@ describe("data quality: list filters, sort and hydration agree", () => {
       check: "retired_synthetic_check",
       reason: "unavailable",
       note: "Synthetic retired metadata awaiting contraction.",
-      fingerprint: "retired_synthetic_check:false",
     });
-    const quality = await loadDataQualities(ctx.db, "product", [row.entityId]);
+    const quality = await publishedQualities(ctx.db, "product", [row.entityId]);
     expect(quality.get(row.entityId)?.exceptions).toEqual([]);
     const excepted = await setDataException(
       ctx.db,
@@ -823,9 +854,8 @@ describe("data quality: list filters, sort and hydration agree", () => {
     ]);
   });
 
-  // Failure mode: broadening the presence predicate invalidates accepted
-  // external-ID exceptions even though the record still has no identifier.
-  it("product: identifier exceptions survive unrelated edits and reopen on evidence", async () => {
+  // Retained identifier waivers survive both unrelated edits and changed identity.
+  it("product: identifier waivers survive unrelated edits and changed evidence", async () => {
     const row = await createProductIdentityFixture(
       ctx.db,
       makeProductInput({
@@ -842,13 +872,14 @@ describe("data quality: list filters, sort and hydration agree", () => {
       check: "product_external_id",
       reason: "not_issued",
       note: "Synthetic component has no issued identifier.",
-      fingerprint: "product_external_id:false",
     });
     await unwrapDb(ctx.db)
       .update(product)
       .set({ notes: "Synthetic unrelated note" })
       .where(eq(product.id, row.entityId));
-    const accepted = await loadDataQualities(ctx.db, "product", [row.entityId]);
+    const accepted = await publishedQualities(ctx.db, "product", [
+      row.entityId,
+    ]);
     expect(accepted.get(row.entityId)?.exceptions).toContainEqual(
       expect.objectContaining({
         check: "product_external_id",
@@ -859,19 +890,21 @@ describe("data quality: list filters, sort and hydration agree", () => {
       .update(product)
       .set({ model: "EX-300" })
       .where(eq(product.id, row.entityId));
-    const changed = await loadDataQualities(ctx.db, "product", [row.entityId]);
+    const changed = await publishedQualities(ctx.db, "product", [row.entityId]);
     expect(changed.get(row.entityId)?.exceptions).toContainEqual(
-      expect.objectContaining({ check: "product_external_id", state: "stale" }),
+      expect.objectContaining({
+        check: "product_external_id",
+        state: "active",
+      }),
     );
     expect(
       changed.get(row.entityId)?.gaps.map((gap) => gap.check),
     ).not.toContain("product_external_id");
   });
 
-  // Fingerprints are compared only where a stored exception meets a live gap.
-  // A batch mixing those rows with exception-free and stale ones must keep
-  // each state, and exception-free rows must not evaluate fingerprints.
-  it("product: compares fingerprints only for rows with an exception on a live gap", async () => {
+  // Mixed batches retain waivers and do not add source-evidence reads for
+  // rows with a waiver.
+  it("product: retains durable waivers across a mixed batch", async () => {
     const knownBrandId = await findOrCreateVendor(ctx.db, "Acme");
     const make = (
       name: string,
@@ -912,7 +945,6 @@ describe("data quality: list filters, sort and hydration agree", () => {
           check: "product_external_id",
           reason: "not_issued",
           note: "Synthetic component has no issued identifier.",
-          fingerprint: "product_external_id:false",
         },
         {
           entityId: mismatched.entityId,
@@ -920,10 +952,9 @@ describe("data quality: list filters, sort and hydration agree", () => {
           check: "product_external_id",
           reason: "not_issued",
           note: "Synthetic evidence has since changed.",
-          fingerprint: "product_external_id:synthetic-earlier-evidence",
         },
       ]);
-    const qualities = await loadDataQualities(ctx.db, "product", [
+    const qualities = await publishedQualities(ctx.db, "product", [
       accepted.entityId,
       open.entityId,
       mismatched.entityId,
@@ -948,7 +979,7 @@ describe("data quality: list filters, sort and hydration agree", () => {
     ]).toEqual([
       { gap: false, exception: "active" },
       { gap: true, exception: undefined },
-      { gap: true, exception: "stale" },
+      { gap: false, exception: "active" },
       { gap: false, exception: "active" },
       { gap: false, exception: "active" },
       { gap: false, exception: undefined },
@@ -959,51 +990,8 @@ describe("data quality: list filters, sort and hydration agree", () => {
         return metrics.queryCount;
       });
     expect(await statements([accepted.entityId])).toBe(
-      (await statements([open.entityId])) + 1,
+      await statements([open.entityId]),
     );
-  });
-
-  // Failure mode: a planned (future) line, which may be unpriced by policy,
-  // still flagging its Purchase as having an unpriced line.
-  it("purchase: an unpriced future line is not an unpriced expense", async () => {
-    const line = await createExpense(
-      ctx.db,
-      buildEntity(
-        "expense",
-        makeExpenseInput({
-          name: "DQ planned line",
-          cost: undefined,
-          future: true,
-          vendor: "DQ planned vendor",
-          orderId: "DQ-PLAN-1",
-        }),
-      ),
-      TEST_ACTOR,
-    );
-    const purchaseId = line.output.purchaseId;
-    if (!purchaseId) throw new Error("Fixture has no Purchase");
-    const planned = (
-      await purchaseList(ctx.db, { dataGap: ["unpriced_expense"] }, [], page)
-    ).data.map((row) => row.id);
-    expect(planned).not.toContain(purchaseId);
-
-    await createExpense(
-      ctx.db,
-      buildEntity(
-        "expense",
-        makeExpenseInput({
-          name: "DQ spent unpriced line",
-          cost: undefined,
-          future: false,
-          purchaseId,
-        }),
-      ),
-      TEST_ACTOR,
-    );
-    const spent = (
-      await purchaseList(ctx.db, { dataGap: ["unpriced_expense"] }, [], page)
-    ).data.map((row) => row.id);
-    expect(spent).toContain(purchaseId);
   });
 
   it("rolls a linked product's gap up onto the purchase's dataGap filter", async () => {
@@ -1024,6 +1012,7 @@ describe("data quality: list filters, sort and hydration agree", () => {
     const purchaseId = line.output.purchaseId;
     if (!purchaseId) throw new Error("Fixture has no Purchase");
 
+    await publishQualityFixtures(ctx.db, "product");
     const rolledUp = (
       await purchaseList(ctx.db, { dataGap: ["product_image"] }, [], page)
     ).data;

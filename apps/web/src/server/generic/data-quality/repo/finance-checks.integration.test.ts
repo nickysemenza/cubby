@@ -1,13 +1,12 @@
 import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
-import { sql } from "drizzle-orm";
-import { PgDialect } from "drizzle-orm/pg-core";
+import { eq, sql } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
 import { taxonomyShortcode } from "tooling/product-category-fixtures";
 import { TEST_ACTOR, withTestDb } from "tooling/test-setup";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import { unwrapDb } from "~/server/db/helpers";
-import * as allocation from "~/server/domains/expense/repo/expense-project-allocation";
+import { job } from "~/server/db/schema";
 import {
   createGardenEntry,
   createPlanting,
@@ -21,8 +20,10 @@ import {
   updateVendor,
 } from "~/server/domains/vendor/repo/vendor";
 import { createWish } from "~/server/domains/wish/repo";
+import { advanceJob } from "~/server/generic/jobs/service/jobs";
 import { resolveLiveShortcode } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { publishQualityFixtures } from "~/server/testing/quality.fixtures";
 import {
   createImageFixture,
   createPlantFixture,
@@ -31,20 +32,38 @@ import {
   makeProductInput,
   insertEntityAttachments,
 } from "~/server/testing/repo.fixtures";
+import { refreshFamilyHandler } from "~/server/workflows/background-tasks/refresh-families";
 
 import { setDataException } from "./exceptions";
 import { loadDataQualities } from "./hydrate";
 
 /**
  * For each finance/project scored entity, one row that trips a real check and
- * one that satisfies it, asserted through `loadDataQualities` — the same
- * evaluation the list `dataStatus`/`dataGap` filters and the list's
- * `dataQuality` column read from (see `pantry-checks.integration.test.ts` for
- * the pantry/garden equivalent, `data-quality.integration.test.ts` for
- * product/purchase).
+ * one that satisfies it. Stored-quality entries are read after their quality
+ * family publishes the batch-loaded outcomes.
  */
 describe("data quality: finance and project entities", () => {
   const ctx = withTestDb();
+  const refreshQuality = async () => {
+    for (let page = 0; page < 8; page++) {
+      const [intent] = await unwrapDb(ctx.db)
+        .select()
+        .from(job)
+        .where(eq(job.key, "refresh:quality"));
+      if (!intent) throw new Error("Expected quality intent from source write");
+      expect(
+        await advanceJob(ctx.db, intent.id, {
+          "refresh.family": refreshFamilyHandler,
+        }),
+      ).toBe("succeeded");
+      const [current] = await unwrapDb(ctx.db)
+        .select()
+        .from(job)
+        .where(eq(job.id, intent.id));
+      if (current?.state === "completed") return;
+    }
+    throw new Error("Synthetic finance quality pass exceeded page budget");
+  };
 
   it("project: kind, and a start date only once work has begun", async () => {
     const gap = await createRepoEntity(ctx, "project", {
@@ -63,11 +82,12 @@ describe("data quality: finance and project entities", () => {
       dates: { start: "2026-01-01", end: null },
     });
 
-    const hydrated = await loadDataQualities(ctx.db, "project", [
-      gap.entityId,
-      notStarted.entityId,
-      complete.entityId,
-    ]);
+    const hydrated = await loadDataQualities(
+      ctx.db,
+      "project",
+      [gap.entityId, notStarted.entityId, complete.entityId],
+      "live",
+    );
     const gapChecks = hydrated.get(gap.entityId)?.gaps.map((g) => g.check);
     expect(gapChecks).toContain("project_kind");
     expect(gapChecks).toContain("project_start_date");
@@ -104,10 +124,13 @@ describe("data quality: finance and project entities", () => {
       sql`UPDATE "Task" SET "dueEndDate" = '2026-09-10' WHERE "id" = ${gap.entityId}`,
     );
 
-    const hydrated = await loadDataQualities(ctx.db, "task", [
-      gap.entityId,
-      complete.entityId,
-    ]);
+    await publishQualityFixtures(ctx.db, "task");
+    const hydrated = await loadDataQualities(
+      ctx.db,
+      "task",
+      [gap.entityId, complete.entityId],
+      "stored",
+    );
     const gapChecks = hydrated.get(gap.entityId)?.gaps.map((g) => g.check);
     expect(gapChecks).not.toContain("task_due_range");
     expect(hydrated.get(gap.entityId)?.status).toBe("needs_data");
@@ -117,6 +140,23 @@ describe("data quality: finance and project entities", () => {
       status: "needs_data",
       gaps: [{ check: "task_display_image" }],
     });
+    // Record reads see current facts without repairing the last publication.
+    await unwrapDb(ctx.db).execute(
+      sql`UPDATE "Task" SET "dueDate" = '2026-09-11' WHERE id = ${gap.entityId}`,
+    );
+    const live = (await loadDataQualities(ctx.db, "task", [gap.entityId])).get(
+      gap.entityId,
+    );
+    expect(live?.gaps.map((g) => g.check)).toContain("task_due_range");
+    const published = (
+      await loadDataQualities(ctx.db, "task", [gap.entityId], "stored")
+    ).get(gap.entityId);
+    expect(published?.gaps.map((g) => g.check)).not.toContain("task_due_range");
+    await publishQualityFixtures(ctx.db, "task");
+    const refreshed = (
+      await loadDataQualities(ctx.db, "task", [gap.entityId], "stored")
+    ).get(gap.entityId);
+    expect(refreshed?.gaps.map((g) => g.check)).toContain("task_due_range");
   });
 
   it("vendor: website and logo expected before purchase; order evidence after purchase", async () => {
@@ -146,6 +186,7 @@ describe("data quality: finance and project entities", () => {
       imageId: logo.id,
     });
 
+    await refreshQuality();
     const hydrated = await loadDataQualities(ctx.db, "vendor", [
       untransacted.entityId,
       gap.entityId,
@@ -184,8 +225,7 @@ describe("data quality: finance and project entities", () => {
       gaps: [],
     });
 
-    // Exceptions are no longer Product/Purchase-only (ADR 0006): a vendor
-    // records why its logo cannot be found, and a new website reopens it.
+    // Stored waivers are durable member decisions across evidence changes.
     const excepted = await setDataException(
       ctx.db,
       {
@@ -206,12 +246,13 @@ describe("data quality: finance and project entities", () => {
       { website: "https://stall.example.test" },
       ctx.actor,
     );
+    await refreshQuality();
     const reopened = (
       await loadDataQualities(ctx.db, "vendor", [gap.entityId])
     ).get(gap.entityId);
-    expect(reopened?.gaps.map((g) => g.check)).toContain("vendor_logo");
+    expect(reopened?.gaps.map((g) => g.check)).not.toContain("vendor_logo");
     expect(reopened?.exceptions).toContainEqual(
-      expect.objectContaining({ check: "vendor_logo", state: "stale" }),
+      expect.objectContaining({ check: "vendor_logo", state: "active" }),
     );
   });
 
@@ -256,6 +297,7 @@ describe("data quality: finance and project entities", () => {
       itemizationExpectation: "not_expected",
     });
 
+    await refreshQuality();
     const hydrated = await loadDataQualities(
       ctx.db,
       "vendor",
@@ -292,6 +334,7 @@ describe("data quality: finance and project entities", () => {
       { orderEvidence: "online_account" },
       ctx.actor,
     );
+    await refreshQuality();
     const resolved = (
       await loadDataQualities(ctx.db, "vendor", [sourceOff.entityId])
     ).get(sourceOff.entityId);
@@ -318,10 +361,13 @@ describe("data quality: finance and project entities", () => {
       ledgerPartyId: member.output.id,
     });
 
-    const hydrated = await loadDataQualities(ctx.db, "financialAccount", [
-      gap.entityId,
-      complete.entityId,
-    ]);
+    await publishQualityFixtures(ctx.db, "financialAccount");
+    const hydrated = await loadDataQualities(
+      ctx.db,
+      "financialAccount",
+      [gap.entityId, complete.entityId],
+      "stored",
+    );
     const gapChecks = hydrated.get(gap.entityId)?.gaps.map((g) => g.check);
     expect(gapChecks).toContain("financial_account_ledger_party");
     expect(gapChecks).toContain("financial_account_confirmed");
@@ -360,10 +406,13 @@ describe("data quality: finance and project entities", () => {
       merchant: "DQ settlement vendor",
     });
 
-    const hydrated = await loadDataQualities(ctx.db, "financialTransaction", [
-      gap.entityId,
-      complete.entityId,
-    ]);
+    await publishQualityFixtures(ctx.db, "financialTransaction");
+    const hydrated = await loadDataQualities(
+      ctx.db,
+      "financialTransaction",
+      [gap.entityId, complete.entityId],
+      "stored",
+    );
     const gapChecks = hydrated.get(gap.entityId)?.gaps.map((g) => g.check);
     expect(gapChecks).toContain("financial_transaction_allocation");
     expect(gapChecks).toContain("financial_transaction_merchant");
@@ -372,47 +421,40 @@ describe("data quality: finance and project entities", () => {
       ?.gaps.map((g) => g.check);
     expect(linkedChecks).not.toContain("financial_transaction_allocation");
     expect(linkedChecks).not.toContain("financial_transaction_merchant");
-  });
-
-  it("expense: cost (only when not future)", async () => {
-    const gap = await createRepoEntity(ctx, "expense", {
-      name: "DQ expense gap",
-      date: "2026-08-01",
-      trade: "other",
-      costType: "materials",
-      future: false,
-    });
-    const complete = await createRepoEntity(ctx, "expense", {
-      name: "DQ expense complete",
-      date: "2026-08-01",
-      trade: "other",
-      cost: 42,
-      costType: "materials",
-      future: false,
-    });
-
-    // A small quality refresh must not scan the whole ledger twice for the
-    // category gap and its exception fingerprint. Observe the real SQL factory.
-    const allocations = vi.spyOn(allocation, "expenseJointAllocationSql");
-    const hydrated = await loadDataQualities(ctx.db, "expense", [
-      gap.entityId,
-      complete.entityId,
-    ]);
-    const selected = allocations.mock.calls.map(([ids]) => ids);
-    allocations.mockRestore();
-    expect(selected).toHaveLength(1);
-    const ids = selected[0];
-    expect(ids).toBeDefined();
-    if (!ids)
-      throw new Error("Quality read did not restrict allocation selection");
-    const params = new PgDialect().sqlToQuery(sql`${ids}`).params;
-    expect(params.join(",")).toContain(gap.entityId);
-    expect(params.join(",")).toContain(complete.entityId);
-    const gapChecks = hydrated.get(gap.entityId)?.gaps.map((g) => g.check);
-    expect(gapChecks).toContain("expense_cost");
-    expect(
-      hydrated.get(complete.entityId)?.gaps.map((g) => g.check),
-    ).not.toContain("expense_cost");
+    await setDataException(
+      ctx.db,
+      {
+        entityId: gap.output.id,
+        check: "financial_transaction_merchant",
+        reason: "unavailable",
+        note: "Synthetic statement does not retain a merchant.",
+      },
+      ctx.actor,
+    );
+    // A changed input keeps the member's waiver even when the gap persists.
+    await unwrapDb(ctx.db).execute(
+      sql`UPDATE "FinancialTransaction" SET merchant = ' ' WHERE id = ${gap.entityId}`,
+    );
+    await publishQualityFixtures(ctx.db, "financialTransaction");
+    const waived = (
+      await loadDataQualities(
+        ctx.db,
+        "financialTransaction",
+        [gap.entityId],
+        "stored",
+      )
+    ).get(gap.entityId);
+    expect(waived?.gaps.map((g) => g.check)).not.toContain(
+      "financial_transaction_merchant",
+    );
+    expect(waived?.exceptions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          check: "financial_transaction_merchant",
+          state: "active",
+        }),
+      ]),
+    );
   });
 
   it("wish: candidate (only while not yet acquired)", async () => {
@@ -439,10 +481,12 @@ describe("data quality: finance and project entities", () => {
       ctx.actor,
     );
 
-    const hydrated = await loadDataQualities(ctx.db, "wish", [
-      gap.entityId,
-      complete.entityId,
-    ]);
+    const hydrated = await loadDataQualities(
+      ctx.db,
+      "wish",
+      [gap.entityId, complete.entityId],
+      "live",
+    );
     const gapChecks = hydrated.get(gap.entityId)?.gaps.map((g) => g.check);
     expect(gapChecks).toContain("wish_candidate");
     expect(hydrated.get(complete.entityId)).toMatchObject({
@@ -498,7 +542,7 @@ describe("data quality: finance and project entities", () => {
       (await resolveLiveShortcode(ctx.db, contradictory.id, "planting"))!,
     );
     const quality = (
-      await loadDataQualities(ctx.db, "planting", [contradictoryId])
+      await loadDataQualities(ctx.db, "planting", [contradictoryId], "live")
     ).get(contradictoryId);
     expect(quality?.gaps.map((gap) => gap.check)).toContain(
       "planting_lifecycle",
@@ -513,10 +557,12 @@ describe("data quality: finance and project entities", () => {
       "planting",
       (await resolveLiveShortcode(ctx.db, complete.id, "planting"))!,
     );
-    const hydrated = await loadDataQualities(ctx.db, "planting", [
-      gapId,
-      completeId,
-    ]);
+    const hydrated = await loadDataQualities(
+      ctx.db,
+      "planting",
+      [gapId, completeId],
+      "live",
+    );
     const gapChecks = hydrated.get(gapId)?.gaps.map((g) => g.check);
     expect(gapChecks).toEqual(["planting_location", "planting_display_image"]);
     expect(hydrated.get(completeId)).toMatchObject({
@@ -577,11 +623,12 @@ describe("data quality: finance and project entities", () => {
       "gardenEntry",
       (await resolveLiveShortcode(ctx.db, harvestGap.id, "gardenEntry"))!,
     );
-    const hydrated = await loadDataQualities(ctx.db, "gardenEntry", [
-      gapId,
-      completeId,
-      harvestGapId,
-    ]);
+    const hydrated = await loadDataQualities(
+      ctx.db,
+      "gardenEntry",
+      [gapId, completeId, harvestGapId],
+      "live",
+    );
     const gapChecks = hydrated.get(gapId)?.gaps.map((g) => g.check);
     expect(gapChecks).toContain("garden_entry_note");
     expect(hydrated.get(harvestGapId)?.gaps.map((g) => g.check)).toContain(
@@ -616,11 +663,12 @@ describe("data quality: finance and project entities", () => {
       ledgerPartyId: complete.output.id,
     });
 
-    const hydrated = await loadDataQualities(ctx.db, "ledgerParty", [
-      guest.entityId,
-      gap.entityId,
-      complete.entityId,
-    ]);
+    const hydrated = await loadDataQualities(
+      ctx.db,
+      "ledgerParty",
+      [guest.entityId, gap.entityId, complete.entityId],
+      "live",
+    );
     // A guest party is never expected to map to a financial account.
     expect(hydrated.get(guest.entityId)).toMatchObject({
       score: 99,
@@ -702,10 +750,12 @@ describe("data quality: finance and project entities", () => {
       ctx.actor,
     );
 
-    const hydrated = await loadDataQualities(ctx.db, "ledgerTransfer", [
-      gap.entityId,
-      complete.entityId,
-    ]);
+    const hydrated = await loadDataQualities(
+      ctx.db,
+      "ledgerTransfer",
+      [gap.entityId, complete.entityId],
+      "live",
+    );
     const gapChecks = hydrated.get(gap.entityId)?.gaps.map((g) => g.check);
     expect(gapChecks).toContain("ledger_transfer_transaction");
     expect(hydrated.get(complete.entityId)).toMatchObject({

@@ -176,13 +176,13 @@ describe("standard progressive list composition", () => {
   });
   // Regression: the image list hydrated quality inside its core read, so a
   // failed quality lookup failed the whole list. Image quality alone reads
-  // ImageSighting (the sighting check); core and media never do.
+  // published EntityQualityCheck rows; core and media never do.
   it("reads image core and media while image quality is unavailable", async () => {
     await seedReferenceUniverse(ctx.db);
     const context = buildKernelContext(ctx.db);
     const operation = ENTITY_LIST_READ_OPERATIONS.image;
     await getDb(ctx.db).execute(
-      sql`ALTER TABLE "ImageSighting" RENAME TO "UnavailableImageSighting"`,
+      sql`ALTER TABLE "EntityQualityCheck" RENAME TO "UnavailableEntityQualityCheck"`,
     );
     try {
       const base = await operation.base(context, {
@@ -205,7 +205,7 @@ describe("standard progressive list composition", () => {
       );
     } finally {
       await getDb(ctx.db).execute(
-        sql`ALTER TABLE "UnavailableImageSighting" RENAME TO "ImageSighting"`,
+        sql`ALTER TABLE "UnavailableEntityQualityCheck" RENAME TO "EntityQualityCheck"`,
       );
     }
   });

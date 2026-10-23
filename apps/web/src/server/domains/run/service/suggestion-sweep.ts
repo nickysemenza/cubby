@@ -37,7 +37,7 @@ import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { entityCommandSchema } from "~/server/entity-kernel/contracts";
 import { fieldReviewIdentity } from "~/server/generic/assessment/repo/field-assessment-review";
 import { latestFieldWrite } from "~/server/generic/audit-log/repo/field-write";
-import { resolveLiveShortcode } from "~/server/generic/shortcode/repo/shortcode-resolver";
+import { resolveLiveShortcodes } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { canonicalJson } from "~/server/lib/canonical-json";
 import { launchWorkflowRun } from "~/server/workflows/runs/lifecycle";
 
@@ -267,8 +267,13 @@ export async function rosterSuggestionTargets(
     const items = z.array(sweepListRowSchema).parse(listed.items);
     rowsSeen += items.length;
     totalCount = listed.meta.totalCount;
+    const recordIds = await resolveLiveShortcodes(
+      db,
+      items.map((row) => row.id),
+      input.entity,
+    );
     for (const row of items) {
-      const recordId = await resolveLiveShortcode(db, row.id, input.entity);
+      const recordId = recordIds.get(row.id);
       if (!recordId) continue;
       const basis = Object.fromEntries(
         Object.entries(row).map(([key, value]) => [key, basisValueOf(value)]),

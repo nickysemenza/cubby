@@ -264,46 +264,6 @@ export const settlementConflictSql = (
     AND coalesce(NOT (${account}.id = ANY((${purchasePayingAccountIdsSql(aliases.purchase)})::uuid[])), false))`;
 };
 
-const conflictingAllocationsSql = (
-  select: SQL,
-  kind: SettlementConflictKind,
-  purchase: string,
-) => sql`(
-  SELECT ${select} FROM "FinancialTransactionAllocation" conflict_alloc
-  JOIN "FinancialTransaction" conflict_tx
-    ON conflict_tx.id = conflict_alloc."transactionId"
-    AND ${settlementTransactionSql(sql.raw("conflict_tx"))}
-  JOIN "FinancialAccount" conflict_account
-    ON conflict_account.id = conflict_tx."accountId"
-  WHERE conflict_alloc."purchaseId" = ${sql.raw(purchase)}.id
-    AND conflict_alloc."deletedAt" IS NULL
-    AND ${settlementConflictSql(kind, {
-      purchase,
-      account: "conflict_account",
-      transaction: "conflict_tx",
-    })}
-)`;
-
-/** A live settlement allocation on the purchase carries a conflict of `kind`. */
-export const purchaseSettlementConflictSql = (
-  kind: SettlementConflictKind,
-  purchase: string,
-) => sql`EXISTS ${conflictingAllocationsSql(sql`1`, kind, purchase)}`;
-
-/**
- * The conflicting transactions, so an exception recorded for one charge
- * reopens when another conflicting charge is allocated.
- */
-export const purchaseSettlementConflictFingerprintSql = (
-  kind: SettlementConflictKind,
-  purchase: string,
-) =>
-  conflictingAllocationsSql(
-    sql`array_agg(conflict_tx.id ORDER BY conflict_tx.id)`,
-    kind,
-    purchase,
-  );
-
 /**
  * Conflicts an allocation of one charge onto each purchase would carry, for
  * write guards and candidate ranking. Purchases with none are omitted.

@@ -166,6 +166,7 @@ describe("financial transaction itemization verdict", () => {
 
       await charge(7, []);
 
+      // Verdicts are live: no quality publication precedes this read.
       const all = await verdicts();
       expect(all.get("charge 7 0 posted")).toBe("bare");
       expect(all.get("charge 100 1 posted")).toBe("lump");

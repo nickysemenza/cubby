@@ -1,27 +1,64 @@
-import { sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 
-import { ledgerTransfer } from "~/server/db/retained-tables";
+import type { Database, DrizzleTransaction } from "~/server/db";
+import { notDeleted, unwrapDb, uuidArrayParam } from "~/server/db/helpers";
+import {
+  financialTransaction,
+  ledgerTransfer,
+} from "~/server/db/retained-tables";
+import { entityDisplayImagePresenceSql } from "~/server/entity-kernel/repo/entity-display-image";
+import { qualityCheck } from "~/server/generic/data-quality/repo/builders";
+import { defineStoredEntityChecks } from "~/server/generic/data-quality/repo/stored-registry";
 
-import { defineEntityChecks } from "../registry";
+/** Bump when the rules or their declared scoring metadata change. */
+const LEDGER_TRANSFER_QUALITY_RULES_VERSION = 1;
 
-type LedgerTransfer = typeof ledgerTransfer;
+type LedgerTransferQualityRecord = Awaited<
+  ReturnType<typeof loadLedgerTransferQualityRecords>
+>[number];
 
-// A voided transaction never moved money, so it evidences nothing.
-const hasLiveTransaction = (t: LedgerTransfer) => sql`EXISTS (
-  SELECT 1 FROM "FinancialTransaction" dq_lt_ft
-  WHERE dq_lt_ft."ledgerTransferId" = ${t.id} AND dq_lt_ft."deletedAt" IS NULL
-    AND dq_lt_ft."status" <> 'void'
-)`;
-
-export const ledgerTransferChecks = defineEntityChecks({
+export const ledgerTransferChecks = defineStoredEntityChecks({
   entity: "ledgerTransfer",
   table: ledgerTransfer,
+  rulesVersion: LEDGER_TRANSFER_QUALITY_RULES_VERSION,
+  load: loadLedgerTransferQualityRecords,
   checks: {
-    ledger_transfer_transaction: {
-      // A hand-to-hand cash transfer has no statement to evidence it; that
-      // is a reasoned exception, not a reason to stop expecting evidence.
-      missing: (t) => sql`NOT ${hasLiveTransaction(t)}`,
-      fingerprint: (t) => [hasLiveTransaction(t)],
-    },
+    ledgertransfer_display_image: qualityCheck.hasImage,
+    ledger_transfer_transaction: qualityCheck.hasRelated(
+      (record: LedgerTransferQualityRecord) => record.transactions,
+    ),
   },
 });
+
+async function loadLedgerTransferQualityRecords(
+  db: Database | DrizzleTransaction,
+  ids: readonly string[],
+) {
+  if (!ids.length) return [];
+  return unwrapDb(db)
+    .select({
+      id: ledgerTransfer.id,
+      shortcode: ledgerTransfer.shortcode,
+      transactions: sql<string[]>`coalesce(
+        array_agg(${financialTransaction.id}) FILTER (WHERE ${financialTransaction.id} IS NOT NULL),
+        ARRAY[]::uuid[]
+      )`,
+      hasDisplayImage: sql<boolean>`bool_or(${entityDisplayImagePresenceSql("ledgerTransfer", sql`${ledgerTransfer.id}`)})`,
+    })
+    .from(ledgerTransfer)
+    .leftJoin(
+      financialTransaction,
+      and(
+        eq(financialTransaction.ledgerTransferId, ledgerTransfer.id),
+        notDeleted(financialTransaction),
+        sql`${financialTransaction.status} <> 'void'`,
+      ),
+    )
+    .where(
+      and(
+        notDeleted(ledgerTransfer),
+        sql`${ledgerTransfer.id} = ANY(${uuidArrayParam(ids)})`,
+      ),
+    )
+    .groupBy(ledgerTransfer.id, ledgerTransfer.shortcode);
+}

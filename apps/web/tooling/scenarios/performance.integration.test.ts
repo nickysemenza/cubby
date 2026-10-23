@@ -1,3 +1,4 @@
+import { dataQuality } from "@cubby/schemas/data-quality";
 import { auditLogEntryOut } from "@cubby/schemas/audit";
 import { runStatus } from "@cubby/schemas/run-fields";
 import { workQueueHouseholdInput } from "@cubby/schemas/work-queue";
@@ -8,7 +9,11 @@ import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-u
 import { readWorkQueue } from "~/server/generic/work-queue/service/work-queue-read";
 import { countTestDbQueries, withTestDb } from "../test-setup";
 import { seedPerformanceCorpus } from "./performance";
-import { run } from "~/server/db/schema";
+import { listShipmentsRead } from "~/server/domains/shipment/repo/entity-repository";
+import { advanceJob } from "~/server/generic/jobs/service/jobs";
+import { refreshFamilyHandler } from "~/server/workflows/background-tasks/refresh-families";
+import { eq } from "drizzle-orm";
+import { job, run } from "~/server/db/schema";
 import { loadRunDetail } from "~/server/domains/purchase-import/repo/run-service";
 
 // Failure modes: scale adds disconnected filler instead of kit/ledger fanout;
@@ -35,6 +40,8 @@ it("seeds connected performance history readable by the real Work queue", async 
   const result = await getDb(ctx.db).execute(sql`SELECT
     (SELECT count(*)::int FROM "Product") AS products,
     (SELECT count(*)::int FROM "Expense") AS expenses,
+    (SELECT count(*)::int FROM "Shipment") AS shipments,
+    (SELECT count(*)::int FROM "ShipmentObservation") AS shipment_events,
     (SELECT count(*)::int FROM "Email") AS emails,
     (SELECT count(*)::int FROM "Run") AS runs,
     (SELECT count(*)::int FROM "EntityLink" WHERE kind = 'productComponent') AS kit_edges,
@@ -59,6 +66,8 @@ it("seeds connected performance history readable by the real Work queue", async 
   expect(result.rows[0]).toMatchObject({
     products: 12,
     expenses: 24,
+    shipments: 2,
+    shipment_events: 3,
     emails: 16,
     runs: 12,
     kit_edges: 6,
@@ -72,8 +81,8 @@ it("seeds connected performance history readable by the real Work queue", async 
     cleared_markers: 4,
     outcomes: 10,
     dispatched_images: 0,
-    searchable: 50,
-    created_audits: 57,
+    searchable: 52,
+    created_audits: 59,
     cost: 200,
     run_routed_purchases: 1,
     allocations: 1,
@@ -98,6 +107,32 @@ it("seeds connected performance history readable by the real Work queue", async 
       completedAt: "2026-01-15T12:01:00.000Z",
     }),
   ]);
+  // Each advance publishes one page; the seed spans several scored kinds.
+  for (let page = 0; ; page++) {
+    const [qualityIntent] = await getDb(ctx.db)
+      .select()
+      .from(job)
+      .where(eq(job.key, "refresh:quality"));
+    if (!qualityIntent) throw new Error("Missing quality refresh intent");
+    if (qualityIntent.state === "completed") break;
+    if (page === 50) throw new Error("Quality pass exceeded page budget");
+    await advanceJob(ctx.db, qualityIntent.id, {
+      "refresh.family": refreshFamilyHandler,
+    });
+  }
+  const parcels = await countTestDbQueries(() =>
+    listShipmentsRead(
+      ctx.db,
+      { dataStatus: ["needs_data"] },
+      [{ orderBy: "dataQuality", direction: "asc" }],
+      { pageIndex: 0, pageSize: 25 },
+      { kind: "selected", fields: ["dataQuality"], groups: ["quality"] },
+    ),
+  );
+  expect(parcels.result.count).toBe(1);
+  expect(dataQuality.parse(parcels.result.data[0]?.dataQuality).score).toBe(25);
+  // One bounded page hydrates stored checks; no source predicate is re-run per row.
+  expect(parcels.queryCount).toBeLessThan(12);
   const queue = await readWorkQueue(
     ctx.db,
     null,

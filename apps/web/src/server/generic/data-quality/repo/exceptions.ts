@@ -12,7 +12,6 @@ import { isAuditableEntity } from "@cubby/schemas/entity-manifest";
 import { ENTITY_NOT_FOUND_REASON } from "@cubby/schemas/identifiers";
 import { parseShortcode } from "@cubby/shared";
 import { and, eq, inArray, sql } from "drizzle-orm";
-import { z } from "zod";
 
 import type { Database } from "~/server/db";
 import { withTransaction } from "~/server/db/helpers";
@@ -22,30 +21,22 @@ import {
   computeChanges,
   logAuditEntry,
 } from "~/server/generic/audit-log/repo/audit-log";
+import { recordChange } from "~/server/generic/changes/repo/change";
 import { exceptionReasonsFor } from "~/server/generic/data-quality/repo/exception-reasons";
 import { liveQualityRow } from "~/server/generic/data-quality/repo/registry";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
+import { storedEntryFor } from "./entries";
 import { loadDataQualities } from "./hydrate";
-import { checksOf, entryFor, fingerprintSql, gapCondition } from "./sql";
-
-const probeRow = z.object({
-  fingerprint: z.string(),
-  applies: z.boolean(),
-});
+import { checksOf, entryFor } from "./sql";
+import { evaluateLiveQuality } from "./stored";
 
 const storedException = (row: {
   check: string;
   reason: string;
   note: string;
-  fingerprint: string;
 }) =>
-  dataException.parse({
-    check: row.check,
-    reason: row.reason,
-    note: row.note,
-    fingerprint: row.fingerprint,
-  });
+  dataException.parse({ check: row.check, reason: row.reason, note: row.note });
 
 const mutateException = async (
   db: Database,
@@ -81,18 +72,14 @@ const mutateException = async (
   const table = entryFor(entityKind).table;
 
   await withTransaction(db, async (tx) => {
-    // `execute`, not the select builder: a single-table select renders its
-    // selected columns unqualified, and the check's correlated subqueries
-    // would then self-join (docs/agents/domain-rules.md).
-    const probe = await tx.execute(sql`SELECT
-  ${fingerprintSql(entityKind, input.check, table)} AS "fingerprint",
-  ${gapCondition(entityKind, input.check, table)} AS "applies"
-FROM ${table}
-WHERE ${table.id} = ${id} AND ${liveQualityRow(table)}
-LIMIT 1
-FOR UPDATE`);
-    const currentRow = probeRow.safeParse(probe.rows[0]);
-    if (!currentRow.success) {
+    // Lock the record so concurrent waiver edits serialize on it.
+    const locked = await tx.execute(
+      sql`SELECT 1 FROM ${table} WHERE ${table.id} = ${id} AND ${liveQualityRow(table)} FOR UPDATE`,
+    );
+    const [live] = locked.rows.length
+      ? await evaluateLiveQuality(tx, storedEntryFor(entityKind), [id])
+      : [];
+    if (!live) {
       throw createAppError(
         ENTITY_NOT_FOUND_REASON[entityKind],
         `${entityKind} not found: ${input.entityId}`,
@@ -110,13 +97,14 @@ FOR UPDATE`);
         )
         .orderBy(dataExceptionRecord.check)
     ).map(storedException);
-    const currentFingerprint = currentRow.data.fingerprint;
     if ("reason" in input) {
-      const currentlyActive = current.some(
-        (item) =>
-          item.check === input.check && item.fingerprint === currentFingerprint,
-      );
-      if (!currentlyActive && !currentRow.data.applies) {
+      // An existing waiver may be edited; a new one needs a current gap.
+      const state = live.checks[input.check];
+      const waivable =
+        current.some((item) => item.check === input.check) ||
+        state === "gap" ||
+        state === "waived";
+      if (!waivable) {
         throw createAppError(
           "CONSTRAINT_VIOLATION",
           `${input.check} is not an active ${entityKind} data gap.`,
@@ -124,8 +112,6 @@ FOR UPDATE`);
       }
     }
     const now = new Date();
-    // Other exceptions retain their own evidence snapshot. Updating this row's
-    // exception metadata is not evidence changing for a different check.
     const retained = current.filter((item) => item.check !== input.check);
     if ("reason" in input) {
       const note = input.note.trim();
@@ -137,14 +123,12 @@ FOR UPDATE`);
           check: input.check,
           reason: input.reason,
           note,
-          fingerprint: currentFingerprint,
         })
         .onConflictDoUpdate({
           target: [dataExceptionRecord.entityId, dataExceptionRecord.check],
           set: {
             reason: input.reason,
             note,
-            fingerprint: currentFingerprint,
             updatedAt: now,
           },
         });
@@ -166,13 +150,14 @@ FOR UPDATE`);
               check: input.check,
               reason: input.reason,
               note: input.note.trim(),
-              fingerprint: currentFingerprint,
             },
           ]
         : retained;
     await tx.execute(
       sql`UPDATE ${table} SET "updatedAt" = ${now} WHERE ${table.id} = ${id}`,
     );
+    // A waiver changes the published check state; enroll the quality family.
+    await recordChange(tx, { kind: "source", categories: [entityKind] });
     const changes = computeChanges(
       { dataExceptions: current },
       { dataExceptions: next },
@@ -188,7 +173,10 @@ FOR UPDATE`);
     }
   });
 
-  const quality = (await loadDataQualities(db, entityKind, [id])).get(id);
+  // The mutation response reflects the saved decision without repairing publication.
+  const quality = (await loadDataQualities(db, entityKind, [id], "live")).get(
+    id,
+  );
   if (!quality) {
     throw new Error(`Data quality was not loaded for ${input.entityId}`);
   }

@@ -3,16 +3,21 @@ import { describe, expect, it } from "vitest";
 
 import { setDataException } from "~/server/generic/data-quality/repo/exceptions";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { publishQualityFixtures } from "~/server/testing/quality.fixtures";
 
-import { purchaseList } from "./purchase";
+import { purchaseList as readPurchaseList } from "./purchase";
 
 // The `purchasesNotReconciling` Problem filters `reconciliation=mismatch`. That
 // worklist must be the `paperwork_mismatch` gap (declared binding), so a
 // recorded `expected_mismatch` exception removes a purchase from it.
 // Shared aggregates must retain zero and signed totals, cent tolerance, vendor
-// line liveness and null-cost counts without changing exception fingerprints.
+// line liveness and null-cost counts while waivers remain durable.
 describe("purchase reconciliation=mismatch filter", () => {
   const ctx = withTestDb();
+  const purchaseList: typeof readPurchaseList = async (...args) => {
+    await publishQualityFixtures(ctx.db, "purchase");
+    return readPurchaseList(...args);
+  };
 
   const makePurchase = async (
     label: string,
@@ -91,6 +96,10 @@ describe("purchase reconciliation=mismatch filter", () => {
 // (`display.labelPath`) so no client re-derives the verdict.
 describe("purchase list display labels", () => {
   const ctx = withTestDb();
+  const purchaseList: typeof readPurchaseList = async (...args) => {
+    await publishQualityFixtures(ctx.db, "purchase");
+    return readPurchaseList(...args);
+  };
 
   it("composes the expense count, reconciliation verdict and settlement status", async () => {
     const vendor = await insertWithShortcode(ctx.db, "vendor", {

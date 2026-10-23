@@ -264,7 +264,7 @@ export default defineEntity(
               "Products whose identity, image or category research could improve, weakest first",
             // The Research queue (terminology): a Burn-down session works these with
             // its own browser and writes Sources. "Searched, not available" is a
-            // DataException on the gap, so it leaves until new evidence appears.
+            // DataException on the gap, so it leaves until the waiver is cleared.
             filters: [
               {
                 id: "dataGaps",

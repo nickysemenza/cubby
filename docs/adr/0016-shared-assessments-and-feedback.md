@@ -113,6 +113,17 @@ retrieve candidates independently of name/model gates. Verified variant facts
 carry evidence rather than being inferred from a title. Reads query stored
 assessments and current projections without discovery/model calls.
 
+## Scoped review reads
+
+Suggestions lists/counts and record-scoped Automatic Decisions intersect the same
+family-declared references. Admission uses a typed scope (families, status, Run)
+rather than caller-supplied SQL aliases. Primary-reference hits skip JSON graph
+construction; secondary references retain the declared family expansion, including
+UUID and shortcode matching. For record-scoped automatic history, materialize the
+matched identities before checking application and member Feedback. Broad entity
+scopes use one join so the identity barrier does not duplicate full-table work.
+The existing family/active/status and Feedback assessment indexes serve both paths.
+
 ## Cutover preservation
 
 One owner controls the production cutover. An early expansion/copy is not the

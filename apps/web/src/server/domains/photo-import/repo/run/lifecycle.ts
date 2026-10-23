@@ -35,6 +35,7 @@ import {
   schedulePhotoRunImageProcessing,
   startGuardedPhotoCoordinator,
 } from "~/server/domains/purchase-import/repo/run-service";
+import { recordChange } from "~/server/generic/changes/repo/change";
 
 /**
  * A description waiting for a capable device is not settled either; matches
@@ -339,6 +340,7 @@ async function updatePhotoRunInput<T>(
         .returning({ id: runTable.id });
       if (!won) return false;
       await changed.after?.(tx);
+      await recordChange(tx, { kind: "source", categories: ["run"] });
       return true;
     });
     if (swapped) return changed.result;

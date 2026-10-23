@@ -15,10 +15,11 @@ import {
 } from "~/server/db/schema";
 import { syntheticRetainedMail } from "~/server/domains/purchase-import/service/gmail/retained-mail.fixtures";
 import { startImportRunFixture } from "~/server/domains/purchase-import/service/import-run.fixtures";
-import { getPurchaseByShortcode } from "~/server/domains/purchase/repo/purchase";
+import { getPurchaseByShortcode as readPurchaseByShortcode } from "~/server/domains/purchase/repo/purchase";
 import { purchasePaymentAccountsRelationAdapter } from "~/server/domains/purchase/repo/purchase-payment-accounts";
 import { listPurchaseSettlementCandidates } from "~/server/domains/purchase/repo/purchase-settlement-candidates";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { publishQualityFixtures } from "~/server/testing/quality.fixtures";
 
 import { applyFinancialSettlementAllocation } from "./financial-settlement-allocation";
 import { updateFinancialTransaction } from "./financial-transaction";
@@ -29,6 +30,12 @@ import { updateFinancialTransaction } from "./financial-transaction";
  */
 describe("settlement conflicts", () => {
   const ctx = withTestDb();
+  const getPurchaseByShortcode: typeof readPurchaseByShortcode = async (
+    ...args
+  ) => {
+    await publishQualityFixtures(ctx.db, "purchase");
+    return readPurchaseByShortcode(...args);
+  };
 
   async function world() {
     const buyer = await insertWithShortcode(ctx.db, "ledgerParty", {

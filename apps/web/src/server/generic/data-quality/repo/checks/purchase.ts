@@ -1,151 +1,44 @@
+import {
+  financialTransactionStatus,
+  purchaseSettlementKinds,
+} from "@cubby/schemas/financial-transaction";
+import { expenseCreateInput } from "@cubby/schemas/project";
 import { RECONCILIATION_TOLERANCE } from "@cubby/schemas/purchase";
-import { vendorOrderEvidence } from "@cubby/schemas/vendor-import-fields";
 import { cents } from "@cubby/shared";
-import { getTableName, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 
+import type { Database, DrizzleTransaction } from "~/server/db";
+import { notDeleted, unwrapDb, uuidArrayParam } from "~/server/db/helpers";
 import { actualExpenseSql } from "~/server/db/helpers/predicates";
-import { sqlEnumConstant } from "~/server/db/helpers/query";
-import { purchase } from "~/server/db/schema";
+import { purchase, vendor } from "~/server/db/schema";
 import {
-  postedRefundTotalSql,
-  purchaseFinancialComparisonTotalSql,
-  purchaseFinancialMismatchRawSql,
-  purchaseQualityFilterReadSql,
-  settleableExpenseTotalSql,
-  settleableUnpricedExpenseCountSql,
-  settlementReferenceAbsentSql,
-  vendorExpenseTotalSql,
-  vendorExpenseCountSql,
-  vendorUnpricedExpenseCountSql,
-  vendorExpenseAggregateSql,
+  postedRefundPredicate,
+  settlementReferencePredicate,
 } from "~/server/domains/financial-transaction/repo/financial-reconciliation";
-import {
-  purchaseSettlementConflictFingerprintSql,
-  purchaseSettlementConflictSql,
-} from "~/server/domains/financial-transaction/repo/settlement-conflicts";
+import { settlementConflictSql } from "~/server/domains/financial-transaction/repo/settlement-conflicts";
 import {
   purchaseItemizationExpectationSql,
-  purchaseEvidenceFingerprintSql,
   purchaseHasItemizationSql,
-  purchaseItemizationLineFactsSql,
   purchaseHasPrimaryDocumentSql,
-  effectivePurchaseItemizationExpectationSql,
 } from "~/server/domains/purchase/repo/purchase-evidence-policy";
-import {
-  defineEntityChecks,
-  qualityReadColumn,
-  type QualityReadContext,
-} from "~/server/generic/data-quality/repo/registry";
+import { entityDisplayImagePresenceSql } from "~/server/entity-kernel/repo/entity-display-image";
+import { qualityCheck } from "~/server/generic/data-quality/repo/builders";
+import { defineStoredEntityChecks } from "~/server/generic/data-quality/repo/stored-registry";
 
-type Purchase = typeof purchase;
+/** Bump when the rules or their declared scoring metadata change. */
+export const PURCHASE_QUALITY_RULES_VERSION = 1;
+type PurchaseQualityRecord = Awaited<
+  ReturnType<typeof loadPurchaseQualityRecords>
+>[number];
+const vendorRole = expenseCreateInput.shape.economicRole.parse("vendor");
+const observed = qualityCheck.observed<PurchaseQualityRecord>;
+const when = qualityCheck.when<PurchaseQualityRecord>;
 
-/** The quoted alias the reconciliation raw-SQL helpers correlate on. */
-const aliasOf = (t: Purchase) => `"${getTableName(t)}"`;
-
-const expectation = (t: Purchase) =>
-  purchaseItemizationExpectationSql(getTableName(t));
-const expectsItemization = (t: Purchase) =>
-  sql`(${effectivePurchaseItemizationExpectationSql(getTableName(t))} = 'required')`;
-const hasPrimaryDocument = (t: Purchase) =>
-  purchaseHasPrimaryDocumentSql(getTableName(t));
-const hasItemization = (t: Purchase, context?: QualityReadContext) =>
-  purchaseHasItemizationSql(getTableName(t), (fact) =>
-    qualityReadColumn(context, fact),
-  );
-// An imported order that carried an order id (`sourceOrderKey`'s `/order/`
-// form) expects its Purchase to keep one, whatever the source kind; an
-// orderless receipt or statement booking does not.
-const expectsOrderId = (t: Purchase) => sql`EXISTS (
-  SELECT 1 FROM "ImportSourceOrder" dq_order
-  WHERE dq_order."purchaseId" = ${t.id} AND dq_order."orderKey" LIKE '%/order/%'
-)`;
-
-// A vendor declared to have no orders (a shared-expense settle-up container)
-// has no member account to record.
-const expectsVendorAccount = (t: Purchase) => sql`NOT EXISTS (
-  SELECT 1 FROM "Vendor" dq_vendor
-  WHERE dq_vendor.id = ${t.vendorId}
-    AND dq_vendor."deletedAt" IS NULL
-    AND dq_vendor."orderEvidence" = ${sqlEnumConstant(vendorOrderEvidence, "not_expected")}
-)`;
-
-const hasExpenses = (t: Purchase, context?: QualityReadContext) => {
-  const count = qualityReadColumn(context, "expenseCount");
-  return count
-    ? sql`${count} > 0`
-    : sql`EXISTS (
-  SELECT 1 FROM "Expense" dq_e
-  WHERE dq_e."purchaseId" = ${t.id} AND dq_e."deletedAt" IS NULL
-)`;
-};
-
-const expenseCount = (t: Purchase) => sql`(
-  SELECT count(*)::int FROM "Expense" dq_e
-  WHERE dq_e."purchaseId" = ${t.id} AND dq_e."deletedAt" IS NULL
-)`;
-
-// A future (planned, not yet spent) line may be unpriced, as `expense_cost`
-// already allows on the line itself.
-const unpricedExpenseCount = (t: Purchase) => sql`(
-  SELECT count(*)::int FROM "Expense" dq_e
-  WHERE dq_e."purchaseId" = ${t.id} AND dq_e."deletedAt" IS NULL AND dq_e."cost" IS NULL
-    AND ${sql.raw(actualExpenseSql("dq_e"))}
-)`;
-
-const expenseCents = (t: Purchase) =>
-  sql`floor((${sql.raw(vendorExpenseTotalSql(aliasOf(t)))} * 100)::numeric + 0.5)`;
-const vendorExpenseCount = (t: Purchase) =>
-  sql.raw(vendorExpenseCountSql(aliasOf(t)));
-const vendorUnpricedExpenseCount = (t: Purchase) =>
-  sql.raw(vendorUnpricedExpenseCountSql(aliasOf(t)));
-
-const moneyCents = (value: ReturnType<typeof sql>) =>
-  sql`CASE WHEN ${value} IS NULL THEN NULL ELSE floor((${value} * 100)::numeric + 0.5) END`;
-
-const statedCents = (t: Purchase) => moneyCents(sql`${t.statedTotal}`);
-const refundCents = (t: Purchase) =>
-  moneyCents(sql.raw(postedRefundTotalSql(aliasOf(t))));
-
-const tolerance = sql.raw(String(cents(RECONCILIATION_TOLERANCE)));
-
-/**
- * Mirrors `reconcilePurchase`: stated total present, at least one line (a
- * lineless purchase is `empty_expenses`, not a mismatch — without this the
- * `dataGap=` filter disagreed with the hydrated object it filters), the
- * delta beyond tolerance, and posted refunds not fully explaining it.
- */
-const paperworkMismatch = (t: Purchase, context?: QualityReadContext) => {
-  const vendorTotal = qualityReadColumn(context, "vendorTotal");
-  if (vendorTotal) {
-    const delta = sql`(floor((${vendorTotal} * 100)::numeric + 0.5) - floor((${t.statedTotal} * 100)::numeric + 0.5))`;
-    return sql`(${t.statedTotal} IS NOT NULL
-      AND ${qualityReadColumn(context, "vendorCount")} > 0
-      AND abs(${delta}) > ${tolerance}
-      AND NOT (${qualityReadColumn(context, "vendorUnpricedCount")} = 0
-        AND ${delta} < ${sql.raw(`-${cents(RECONCILIATION_TOLERANCE)}`)}
-        AND floor((${qualityReadColumn(context, "postedRefundTotal")} * 100)::numeric + 0.5) = ${delta}))`;
-  }
-  const delta = sql`(floor((dq_paperwork.total * 100)::numeric + 0.5) - floor((${t.statedTotal} * 100)::numeric + 0.5))`;
-  const fullyPriced = sql`dq_paperwork."unpricedCount" = 0`;
-  const refundAdjusted = sql`(${fullyPriced} AND ${delta} < ${sql.raw(`-${cents(RECONCILIATION_TOLERANCE)}`)}
-    AND floor((${sql.raw(postedRefundTotalSql(aliasOf(t)))} * 100)::numeric + 0.5) = ${delta})`;
-  return sql`(${t.statedTotal} IS NOT NULL
-    AND EXISTS (SELECT 1
-      FROM (${sql.raw(vendorExpenseAggregateSql(aliasOf(t)))}) dq_paperwork
-      WHERE dq_paperwork."expenseCount" > 0
-        AND abs(${delta}) > ${tolerance}
-        AND NOT ${refundAdjusted}))`;
-};
-
-export const purchaseChecks = defineEntityChecks({
+export const purchaseChecks = defineStoredEntityChecks({
   entity: "purchase",
   table: purchase,
-  filterRead: () => sql`SELECT settlement.*,
-    COALESCE(lines."hasUnclassified", false) AS "hasUnclassified",
-    COALESCE(lines."hasUnlinkedRequired", false) AS "hasUnlinkedRequired"
-  FROM (${purchaseQualityFilterReadSql()}) settlement
-  LEFT JOIN (${purchaseItemizationLineFactsSql()}) lines
-    ON lines."purchaseId" = settlement."entityId"`,
+  rulesVersion: PURCHASE_QUALITY_RULES_VERSION,
+  load: loadPurchaseQualityRecords,
   related: {
     product: (t, productId) => sql`EXISTS (
       SELECT 1 FROM "Expense" dq_pe
@@ -155,120 +48,137 @@ export const purchaseChecks = defineEntityChecks({
     )`,
   },
   checks: {
-    purchase_vendor_account: {
-      expected: expectsVendorAccount,
-      missing: (t) => sql`${t.vendorAccountId} IS NULL`,
-      fingerprint: (t) => [
-        expectsVendorAccount(t),
-        sql`${t.vendorId}`,
-        sql`${t.vendorAccountId}`,
-      ],
-    },
-    purchase_date: {
-      missing: (t) => sql`${t.date} IS NULL`,
-      fingerprint: (t) => [sql`${t.date}`],
-    },
-    order_id: {
-      // A statement booking or orderless receipt has no vendor order identity
-      // to invent. Browser-order provenance establishes that one was expected.
-      expected: expectsOrderId,
-      missing: (t) => sql`${t.orderId} IS NULL`,
-      fingerprint: (t) => [expectsOrderId(t), sql`${t.orderId}`],
-    },
-    stated_total: {
-      expected: hasPrimaryDocument,
-      missing: (t) => sql`${t.statedTotal} IS NULL`,
-      fingerprint: (t) => [hasPrimaryDocument(t), statedCents(t)],
-    },
-    empty_expenses: {
-      missing: (t, context) => sql`NOT ${hasExpenses(t, context)}`,
-      fingerprint: (t) => [expenseCount(t)],
-    },
-    purchase_spending_category_origin: {
-      expected: (t) => sql`${t.spendingCategoryId} IS NOT NULL`,
-      missing: (t) => sql`${t.spendingCategoryOrigin} = 'legacy'`,
-      fingerprint: (t) => [
-        sql`${t.spendingCategoryId}`,
-        sql`${t.spendingCategoryOrigin}`,
-      ],
-    },
-    purchase_itemization_expectation: {
-      missing: (t) => sql`${expectation(t)} = 'unknown'`,
-      fingerprint: (t) => [expectation(t)],
-    },
-    purchase_itemization: {
-      // Not gated on having lines: a receipt photo on an empty Purchase reaches
-      // the Research queue only through this gap (`empty_expenses` is not in
-      // that view).
-      expected: expectsItemization,
-      missing: (t, context) => sql`NOT ${hasItemization(t, context)}`,
-      // Document presence is already part of the evidence fingerprint; the
-      // inputs stay unchanged so accepted exceptions do not reopen.
-      fingerprint: (t) => [
-        purchaseEvidenceFingerprintSql(getTableName(t)),
-        hasItemization(t),
-      ],
-    },
-    unpriced_expense: {
-      missing: (t, context) =>
-        sql`${qualityReadColumn(context, "settleableUnpricedCount") ?? unpricedExpenseCount(t)} > 0`,
-      fingerprint: (t) => [unpricedExpenseCount(t)],
-    },
-    paperwork_mismatch: {
-      missing: paperworkMismatch,
-      fingerprint: (t) => [
-        statedCents(t),
-        expenseCents(t),
-        vendorExpenseCount(t),
-        vendorUnpricedExpenseCount(t),
-        refundCents(t),
-      ],
-    },
-    settlement_reference: {
-      missing: (t, context) => {
-        const present = qualityReadColumn(context, "hasSettlementReference");
-        return present
-          ? sql`NOT ${present}`
-          : sql.raw(settlementReferenceAbsentSql(aliasOf(t)));
-      },
-      fingerprint: (t) => [
-        sql`NOT (${sql.raw(settlementReferenceAbsentSql(aliasOf(t)))})`,
-      ],
-    },
-    settlement_mismatch: {
-      // Settlement evidence and the expense ledger can both be correct while
-      // a source leaves a small residual; the raw verdict stays a financial
-      // fact and only a reasoned exception removes it from the worklist.
-      missing: (t, context) => {
-        const settleable = qualityReadColumn(context, "settleableTotal");
-        if (!settleable)
-          return sql`(${sql.raw(purchaseFinancialMismatchRawSql(aliasOf(t)))})`;
-        // purchaseFinancialMismatchRawSql over the precomputed inputs.
-        return sql`(${qualityReadColumn(context, "settleableUnpricedCount")} = 0
-          AND ${qualityReadColumn(context, "hasSettlement")}
-          AND floor(${qualityReadColumn(context, "comparisonTotal")} * 100 + 0.5)
-            IS DISTINCT FROM floor((${settleable}) * 100 + 0.5))`;
-      },
-      // Same inputs, in the same order, as the stored fingerprints written by
-      // `purchaseFinancialMismatchFingerprintRawSql`.
-      fingerprint: (t) => [
-        sql`(${sql.raw(purchaseFinancialMismatchRawSql(aliasOf(t)))})`,
-        sql.raw(purchaseFinancialComparisonTotalSql(aliasOf(t))),
-        sql.raw(settleableExpenseTotalSql(aliasOf(t))),
-        sql.raw(settleableUnpricedExpenseCountSql(aliasOf(t))),
-      ],
-    },
-    settlement_party_conflict: {
-      missing: (t) => purchaseSettlementConflictSql("party", aliasOf(t)),
-      fingerprint: (t) => [
-        purchaseSettlementConflictFingerprintSql("party", aliasOf(t)),
-      ],
-    },
-    settlement_tender_conflict: {
-      missing: (t) => purchaseSettlementConflictSql("tender", aliasOf(t)),
-      fingerprint: (t) => [
-        purchaseSettlementConflictFingerprintSql("tender", aliasOf(t)),
-      ],
-    },
+    purchase_vendor_account: when(
+      (r) => r.orderEvidence !== "not_expected",
+      observed((r) => r.vendorAccountId !== null),
+    ),
+    purchase_date: observed((r) => r.date !== null),
+    order_id: when(
+      (r) => r.expectsOrderId,
+      observed((r) => r.orderId !== null),
+    ),
+    stated_total: when(
+      (r) => r.hasPrimaryDocument,
+      observed((r) => r.statedTotal !== null),
+    ),
+    empty_expenses: observed((r) => r.expenseCount > 0),
+    purchase_spending_category_origin: when(
+      (r) => r.spendingCategoryId !== null,
+      observed((r) => r.spendingCategoryOrigin !== "legacy"),
+    ),
+    purchase_itemization_expectation: observed(
+      (r) => r.expectation !== "unknown",
+    ),
+    // A receipt on an empty Purchase still needs extraction, regardless of policy.
+    purchase_itemization: when(
+      (r) => r.hasPrimaryDocument || r.expectation === "required",
+      observed((r) => r.hasItemization),
+    ),
+    unpriced_expense: observed((r) => r.settleableUnpricedCount === 0),
+    paperwork_mismatch: observed((r) => {
+      if (r.statedTotal === null || r.vendorCount === 0) return true;
+      const delta = cents(r.vendorTotal) - cents(r.statedTotal);
+      return (
+        Math.abs(delta) <= cents(RECONCILIATION_TOLERANCE) ||
+        (r.vendorUnpricedCount === 0 &&
+          delta < -cents(RECONCILIATION_TOLERANCE) &&
+          cents(r.postedRefundTotal) === delta)
+      );
+    }),
+    settlement_reference: observed((r) => r.hasSettlementReference),
+    settlement_mismatch: observed(
+      (r) =>
+        r.settleableUnpricedCount > 0 ||
+        !r.hasSettlement ||
+        cents(r.comparisonTotal) === cents(r.settleableTotal),
+    ),
+    settlement_party_conflict: observed((r) => !r.partyConflict),
+    settlement_tender_conflict: observed((r) => !r.tenderConflict),
+    purchase_display_image: observed((r) => r.hasDisplayImage),
   },
 });
+
+async function loadPurchaseQualityRecords(
+  db: Database | DrizzleTransaction,
+  ids: readonly string[],
+) {
+  if (!ids.length) return [];
+  // The page owns both grouped scans. List and queue reads consume only the
+  // published checks, never these ledger/settlement inputs.
+  const expenses = sql`(SELECT qe."purchaseId",
+    count(*)::int AS "expenseCount",
+    count(*) FILTER (WHERE qe."cost" IS NULL AND ${sql.raw(actualExpenseSql("qe"))})::int AS "settleableUnpricedCount",
+    coalesce(sum(qe."cost") FILTER (WHERE ${sql.raw(actualExpenseSql("qe"))}), 0)::double precision AS "settleableTotal",
+    coalesce(sum(qe."cost"::numeric) FILTER (WHERE qe."economicRole" = ${vendorRole}), 0)::double precision AS "vendorTotal",
+    count(*) FILTER (WHERE qe."economicRole" = ${vendorRole})::int AS "vendorCount",
+    count(*) FILTER (WHERE qe."economicRole" = ${vendorRole} AND qe."cost" IS NULL)::int AS "vendorUnpricedCount"
+    FROM "Expense" qe
+    WHERE qe."deletedAt" IS NULL AND qe."purchaseId" = ANY(${uuidArrayParam(ids)})
+    GROUP BY qe."purchaseId") quality_expenses`;
+  const kinds = sql.join(
+    purchaseSettlementKinds.map((kind) => sql`${kind}`),
+    sql`, `,
+  );
+  const aliases = { purchase: "qp", account: "qfa", transaction: "qft" };
+  const settles = sql`qft.kind IN (${kinds}) AND qft.status <> ${financialTransactionStatus.enum.void}`;
+  const settlements = sql`(SELECT qa."purchaseId",
+    coalesce(bool_or(${settles}), false) AS "hasSettlement",
+    (CASE WHEN bool_or(qft.kind IN (${kinds}) AND qft.status IN (${financialTransactionStatus.enum.expected}, ${financialTransactionStatus.enum.pending}))
+      THEN coalesce(sum(qa.amount) FILTER (WHERE ${settles}), 0)
+      ELSE coalesce(sum(qa.amount) FILTER (WHERE qft.kind IN (${kinds}) AND qft.status = ${financialTransactionStatus.enum.posted}), 0)
+    END)::double precision AS "comparisonTotal",
+    coalesce(sum(qa.amount) FILTER (WHERE ${sql.raw(postedRefundPredicate("qft"))}), 0)::double precision AS "postedRefundTotal",
+    coalesce(bool_or(qfa.id IS NOT NULL AND ${sql.raw(settlementReferencePredicate("qft", "qfa"))}), false) AS "hasSettlementReference",
+    coalesce(bool_or(${settlementConflictSql("party", aliases)}) FILTER (WHERE ${settles}), false) AS "partyConflict",
+    coalesce(bool_or(${settlementConflictSql("tender", aliases)}) FILTER (WHERE ${settles}), false) AS "tenderConflict"
+    FROM "FinancialTransactionAllocation" qa
+    JOIN "FinancialTransaction" qft ON qft.id = qa."transactionId" AND qft."deletedAt" IS NULL
+    JOIN "Purchase" qp ON qp.id = qa."purchaseId" AND qp."deletedAt" IS NULL
+    -- includes-deleted: conflict evidence retains the allocated account; reference coverage requires liveness.
+    LEFT JOIN "FinancialAccount" qfa ON qfa.id = qft."accountId"
+    WHERE qa."deletedAt" IS NULL AND qa."purchaseId" = ANY(${uuidArrayParam(ids)})
+    GROUP BY qa."purchaseId") quality_settlements`;
+  return unwrapDb(db)
+    .select({
+      id: purchase.id,
+      shortcode: purchase.shortcode,
+      vendorAccountId: purchase.vendorAccountId,
+      date: purchase.date,
+      orderId: purchase.orderId,
+      statedTotal: purchase.statedTotal,
+      spendingCategoryId: purchase.spendingCategoryId,
+      spendingCategoryOrigin: purchase.spendingCategoryOrigin,
+      orderEvidence: vendor.orderEvidence,
+      expectsOrderId: sql<boolean>`EXISTS (SELECT 1 FROM "ImportSourceOrder" dq_order
+      WHERE dq_order."purchaseId" = ${purchase.id} AND dq_order."orderKey" LIKE '%/order/%')`,
+      expectation: sql<string>`${purchaseItemizationExpectationSql("Purchase")}`,
+      hasPrimaryDocument: sql<boolean>`${purchaseHasPrimaryDocumentSql("Purchase")}`,
+      hasItemization: sql<boolean>`${purchaseHasItemizationSql("Purchase")}`,
+      expenseCount: sql<number>`coalesce(quality_expenses."expenseCount", 0)`,
+      settleableUnpricedCount: sql<number>`coalesce(quality_expenses."settleableUnpricedCount", 0)`,
+      settleableTotal: sql<number>`coalesce(quality_expenses."settleableTotal", 0)`,
+      vendorTotal: sql<number>`coalesce(quality_expenses."vendorTotal", 0)`,
+      vendorCount: sql<number>`coalesce(quality_expenses."vendorCount", 0)`,
+      vendorUnpricedCount: sql<number>`coalesce(quality_expenses."vendorUnpricedCount", 0)`,
+      hasSettlement: sql<boolean>`coalesce(quality_settlements."hasSettlement", false)`,
+      comparisonTotal: sql<number>`coalesce(quality_settlements."comparisonTotal", 0)`,
+      postedRefundTotal: sql<number>`coalesce(quality_settlements."postedRefundTotal", 0)`,
+      hasSettlementReference: sql<boolean>`coalesce(quality_settlements."hasSettlementReference", false)`,
+      partyConflict: sql<boolean>`coalesce(quality_settlements."partyConflict", false)`,
+      tenderConflict: sql<boolean>`coalesce(quality_settlements."tenderConflict", false)`,
+      hasDisplayImage: sql<boolean>`${entityDisplayImagePresenceSql("purchase", sql`${purchase.id}`)}`,
+    })
+    .from(purchase)
+    .leftJoin(vendor, and(eq(vendor.id, purchase.vendorId), notDeleted(vendor)))
+    .leftJoin(expenses, sql`quality_expenses."purchaseId" = ${purchase.id}`)
+    .leftJoin(
+      settlements,
+      sql`quality_settlements."purchaseId" = ${purchase.id}`,
+    )
+    .where(
+      and(
+        notDeleted(purchase),
+        sql`${purchase.id} = ANY(${uuidArrayParam(ids)})`,
+      ),
+    );
+}

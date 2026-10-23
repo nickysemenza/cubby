@@ -1,6 +1,5 @@
 import {
   type LocationShortcode,
-  type ProductId,
   parseEntityId,
   parseShortcodeFor,
 } from "@cubby/schemas/identifiers";
@@ -14,7 +13,7 @@ import type {
   LocationOut,
   LocationType,
 } from "@cubby/schemas/location";
-import { UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
+import { parseShortcode, UNSPECIFIED_MANUFACTURER } from "@cubby/shared";
 import {
   and,
   arrayOverlaps,
@@ -87,7 +86,7 @@ export const getLocationsByShortcodes = async (
 };
 
 /**
- * Every live location, scored as a put-away destination for `productId`.
+ * Every live location, scored as a put-away destination for `productCode`.
  *
  * The consumer is the AI location suggester: the model reads the *names* and
  * the ancestor chain (a PACKOUT wall plate belongs on the PACKOUT Wall), and
@@ -128,22 +127,26 @@ export interface LocationPutAwayCandidate {
 
 export const getLocationPutAwayCandidates = async (
   db: Database,
-  productId: ProductId,
+  productCode: string,
 ): Promise<LocationPutAwayCandidate[]> => {
+  const parsed = parseShortcode(productCode);
+  if (!parsed || parsed.type !== "product") return [];
   const dbClient = getDb(db);
 
   const [source] = await dbClient
     .select({
+      id: product.id,
       tags: product.tags,
       brandName: productBrandNameSql(product.brandId),
       categoryId: product.categoryId,
       category: categorySummarySql(sql`${product.categoryId}`),
     })
     .from(product)
-    .where(and(eq(product.id, productId), notDeleted(product)))
+    .where(and(eq(product.shortcode, parsed.shortcode), notDeleted(product)))
     .limit(1);
   if (!source) return [];
 
+  const productId = source.id;
   const otherProduct = ne(product.id, productId);
   // An empty tag array would render as `tags && '{}'`, which matches nothing
   // but still costs a parameter; say `false` outright instead. Same for the
