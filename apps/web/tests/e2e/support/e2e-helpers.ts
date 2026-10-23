@@ -583,7 +583,9 @@ export async function createProduct(
   name: string,
   opts: { brandName?: string } = {},
 ) {
-  await page.goto("/products?create=true");
+  await page.goto(
+    `/products?create=true&searchQuery=${encodeURIComponent(name)}`,
+  );
   await waitForFormHydration(page);
   const dialog = page.getByRole("dialog");
   await dialog.getByRole("textbox", { name: "Name", exact: true }).fill(name);
