@@ -14,16 +14,15 @@ import { and, eq } from "drizzle-orm";
 import type { Database } from "~/server/db";
 import { getDb, notDeleted } from "~/server/db/helpers";
 import { email } from "~/server/db/schema";
-import { recordShipmentEvidence } from "~/server/domains/shipment/repo/evidence";
-import { createAppError } from "~/server/errors/app-error";
-import { lookupShortcodes } from "~/server/generic/shortcode/repo/shortcode-resolver";
-
 import {
   loadImportScope,
   readUnchangedMailSource,
   retainedMailSource,
-} from "./import-scope";
-import { assertMailSourceIdentityReady } from "./mail-source-identity";
+} from "~/server/domains/purchase-import/repo/import-scope";
+import { assertMailSourceIdentityReady } from "~/server/domains/purchase-import/repo/mail-source-identity";
+import { recordShipmentEvidence } from "~/server/domains/shipment/repo/evidence";
+import { createAppError } from "~/server/errors/app-error";
+import { lookupShortcodes } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 /** The order writer already owns the transaction; verify the original again inside it. */
 export async function recordImportedShipmentEvidence(
