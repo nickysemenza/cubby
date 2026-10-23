@@ -24,6 +24,15 @@ failures without paying a fresh install for every static check. One status
 context, `CI passed`, owns the merge gate. [Journeys](#journeys) live in their
 own workflow.
 
+Each Vitest and Playwright shard, including the optional purchase-import lane,
+has a top-level restore-or-build web step before running tests. Shards remain
+independent and use the existing Nx `build-cf` cache, including its source
+provenance. The test commands retain their build ensure for standalone use;
+after the explicit build it verifies the existing output. Build preparation
+now runs even when the subsequent test target replays a cached pass.
+`Test report` and `CI passed` use `ubuntu-slim`; reporting installs dependencies
+and merges blobs without building the app or installing browsers.
+
 ## Journeys
 
 Simulator journeys live in `journeys.yaml`, outside the merge gate. The
