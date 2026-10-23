@@ -463,7 +463,10 @@ Unknown, obsolete and otherwise applicable stamps still end the prefix, even
 when a member switch is paused. Import-scoped work keeps regeneration and fresh
 individual admission.
 Automatic financial application still admits only the original ready prefix,
-sequentially. Unscoped label passes may complete consecutive no-action receipts
+sequentially. Charges already skipped by the current label page do not split its
+ready receipt prefix; they admit no effect and retain their skipped outcome.
+Failed, unfinished and applicable-rule charges still stop it.
+Unscoped label passes may complete consecutive no-action receipts
 in bounded transactions: lock the exact receipts, verify their charge/evidence,
 active pending state and absent rule descriptors, then clear only the proven
 prefix through the projection writer. A missing, replaced or rule-bearing receipt
