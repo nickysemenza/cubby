@@ -45,13 +45,11 @@ import {
   resolveProductBrand,
   resolveProductBrandName,
 } from "~/server/domains/vendor/repo/product-brand";
-import {
-  resolveEntityIdentity,
-  recordMergeRedirects,
-} from "~/server/entity-kernel/repo/entity-identity";
+import { resolveEntityIdentity } from "~/server/entity-kernel/repo/entity-identity";
 import { createAppError } from "~/server/errors/app-error";
 import { logAuditEntries } from "~/server/generic/audit-log/repo/audit-log";
 import { recordDerivedRefreshRoots } from "~/server/generic/derived-refresh/repo/capture.boundary";
+import { finalizeMerge } from "~/server/generic/merge/repo/core";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { canonicalJson, jsonSnapshot } from "~/server/lib/canonical-json";
@@ -95,7 +93,7 @@ export async function canonicalShipment(
     .where(
       and(eq(shipment.id, parseEntityId("shipment", id)), notDeleted(shipment)),
     )
-    .for("share")
+    .for("update")
     .limit(1);
   if (!row) return refuse("The Shipment is no longer available.");
   return row;
@@ -269,6 +267,17 @@ async function assertShipmentAssociation(
     await assertPurchaseSourceOwner(db, purchaseId, ownerId);
 }
 
+async function automaticPurchaseAssociation(
+  db: Database,
+  row: typeof shipment.$inferSelect,
+  purchaseId: PurchaseId | null,
+) {
+  if (row.purchaseAssociationReviewed || row.purchaseId || !purchaseId)
+    return row.purchaseId;
+  await assertShipmentAssociation(db, row.id, purchaseId);
+  return purchaseId;
+}
+
 export async function recordShipmentEvidence(
   db: Database,
   raw: RecordShipmentEvidenceInput,
@@ -304,7 +313,7 @@ export async function recordShipmentEvidence(
       const packageKey =
         packet.sourceShipmentKey ??
         packet.shipmentId ??
-        `${carrier.code ?? packet.carrierName ?? "unknown"}:${number}`;
+        `${packet.carrierId ?? packet.carrierName ?? "unknown"}:${number}`;
       let row = packet.shipmentId
         ? await canonicalShipment(tdb, packet.shipmentId)
         : undefined;
@@ -343,6 +352,7 @@ export async function recordShipmentEvidence(
           .select()
           .from(shipment)
           .where(and(eq(shipment.purchaseId, purchaseId), notDeleted(shipment)))
+          .for("update")
           .then((rows) =>
             rows.filter(
               (candidate) =>
@@ -405,6 +415,11 @@ export async function recordShipmentEvidence(
           },
         ]);
       } else {
+        const acceptedPurchaseId = await automaticPurchaseAssociation(
+          tdb,
+          row,
+          purchaseId,
+        );
         const refs = [...row.extraTrackingNumbers, ...extraTrackingNumbers];
         if (
           number &&
@@ -421,9 +436,7 @@ export async function recordShipmentEvidence(
         await database
           .update(shipment)
           .set({
-            purchaseId: row.purchaseAssociationReviewed
-              ? row.purchaseId
-              : (row.purchaseId ?? purchaseId),
+            purchaseId: acceptedPurchaseId,
             extraTrackingNumbers: uniqueRefs,
           })
           .where(eq(shipment.id, row.id));
@@ -685,20 +698,16 @@ export async function mergeShipment(
       .update(shipmentSourcePackage)
       .set({ shipmentId: target.id })
       .where(eq(shipmentSourcePackage.shipmentId, source.id));
-    await getDb(tdb)
-      .update(shipment)
-      .set({ deletedAt: new Date() })
-      .where(eq(shipment.id, source.id));
-    await logAuditEntries(tdb, actor, [
-      {
-        entityKind: "shipment",
-        entityId: source.id,
-        action: "update",
-        changes: { mergedInto: { from: null, to: target.shortcode } },
-      },
-    ]);
     await withTransaction(tdb, (tx) =>
-      recordMergeRedirects(tx, target.id, [source.id]),
+      finalizeMerge(tx, {
+        entity: "shipment",
+        table: shipment,
+        keepId: target.id,
+        loserIds: [source.id],
+        removal: "soft",
+        actor,
+        survivorChanges: { mergedFrom: { from: null, to: source.shortcode } },
+      }),
     );
     await recordDerivedRefreshRoots(tdb, [
       { entityKind: "shipment", entityId: source.id },

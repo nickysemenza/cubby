@@ -59,7 +59,8 @@ export async function repointShipmentCarrierReferences(
   const rows = await tx
     .select()
     .from(shipment)
-    .where(and(notDeleted(shipment), references(codes)));
+    .where(and(notDeleted(shipment), references(codes)))
+    .for("update");
   for (const row of rows) {
     const updated = row.extraTrackingNumbers.map((reference) =>
       reference.carrierId && codes.includes(reference.carrierId)

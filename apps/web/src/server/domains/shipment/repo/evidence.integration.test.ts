@@ -22,6 +22,7 @@ import {
   memberImportWorld,
   retainedMailFixture,
 } from "~/server/domains/purchase-import/operations/order-import.fixtures";
+import { mergeVendors } from "~/server/domains/vendor/repo/vendor";
 
 import {
   recordShipmentEvidence,
@@ -263,6 +264,56 @@ describe("Shipment retained evidence", () => {
     expect(await getDb(ctx.db).select().from(shipment)).toEqual([]);
     const result = await recordShipmentEvidence(ctx.db, input, ctx.actor);
     expect(result.shipmentIds).toHaveLength(1);
+    const otherMember = await createRepoIdentity(ctx, "ledgerParty", {
+      name: "Synthetic other member",
+      kind: "member",
+    });
+    const seller = await createRepoIdentity(ctx, "vendor", {
+      name: "Synthetic other seller",
+    });
+    const account = await createRepoIdentity(ctx, "vendorAccount", {
+      vendorId: seller.output.id,
+      ledgerPartyId: otherMember.output.id,
+    });
+    const order = await createRepoIdentity(ctx, "purchase", {
+      vendorId: seller.output.id,
+      vendorAccountId: account.output.id,
+    });
+    await expect(
+      recordShipmentEvidence(
+        ctx.db,
+        {
+          ...capture("foreign-attachment", [
+            { ...packet(), shipmentId: result.shipmentIds[0]! },
+          ]),
+          purchaseId: order.output.id,
+        },
+        ctx.actor,
+      ),
+    ).rejects.toThrow(/different members/);
+  });
+
+  it("keeps source package identity stable through a carrier Vendor merge", async () => {
+    const carrier = await createRepoIdentity(ctx, "vendor", {
+      name: "Synthetic old carrier",
+    });
+    const keeper = await createRepoIdentity(ctx, "vendor", {
+      name: "Synthetic canonical carrier",
+    });
+    const input = capture("carrier-identity", [
+      { ...packet(), carrierId: carrier.output.id, sourceShipmentKey: null },
+    ]);
+    const first = await recordShipmentEvidence(ctx.db, input, ctx.actor);
+    await mergeVendors(
+      ctx.db,
+      { keepId: keeper.output.id, mergeIds: [carrier.output.id] },
+      ctx.actor,
+    );
+    const replay = await recordShipmentEvidence(ctx.db, input, ctx.actor);
+    expect(replay.shipmentIds).toEqual(first.shipmentIds);
+    expect(await getDb(ctx.db).select().from(shipmentObservation)).toHaveLength(
+      1,
+    );
   });
 
   it("associates unmatched packages without creating Purchase or Expense records", async () => {
