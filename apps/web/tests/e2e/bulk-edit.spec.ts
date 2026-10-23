@@ -35,17 +35,22 @@ import { expect, test } from "./support/e2e-test";
 test("task board multi-select bulk-edits status without touching other fields", async ({
   page,
 }) => {
-  const suffix = Date.now();
-  const taskOneName = `e2e bulk task one ${suffix}`;
-  const taskTwoName = `e2e bulk task two ${suffix}`;
-  const taskOne = await seedTaskPrerequisite(page, { name: taskOneName });
-  const taskTwo = await seedTaskPrerequisite(page, { name: taskTwoName });
+  const prefix = uniqueName(test.info(), "e2e bulk task");
+  const taskNames = [`${prefix} one`, `${prefix} two`];
+  const tasks = await createEntityFixtures(
+    page,
+    "task",
+    taskNames.map((name) => ({ name, trade: "other" })),
+  );
 
   // Cold form initialization must not recurse through the combobox store
   // while slower rendering leaves ordinary form updates in flight.
-  await gotoAuthenticatedPage(page, "/tasks");
+  await gotoAuthenticatedPage(
+    page,
+    `/tasks?name=${encodeURIComponent(prefix)}`,
+  );
 
-  for (const name of [taskOneName, taskTwoName]) {
+  for (const name of taskNames) {
     const row = page.getByRole("row").filter({ hasText: name });
     await row.getByRole("checkbox", { name: "Select row" }).click();
   }
@@ -68,7 +73,7 @@ test("task board multi-select bulk-edits status without touching other fields", 
   await dialog.getByRole("button", { name: "Update", exact: true }).click();
   await expect(dialog).not.toBeVisible();
 
-  for (const task of [taskOne, taskTwo]) {
+  for (const task of tasks) {
     const updated = await entityApi(page.request).get("task", task.id, {});
     expect(await updated.json()).toMatchObject({
       status: "done",
@@ -245,14 +250,13 @@ test("plantings list bulk-edits status finished plus a date in one write", async
   });
 });
 
-async function openBulkEdit(page: Page, path: string, rowNames: string[]) {
-  await gotoAuthenticatedPage(page, path);
+async function openBulkEdit(page: Page, rowNames: string[]) {
   for (const name of rowNames) {
     await page
       .getByRole("row")
       .filter({ hasText: name })
       .getByRole("checkbox", { name: "Select row" })
-      .click();
+      .check();
   }
   await page
     .locator("[data-bulk-action-bar]")
@@ -284,7 +288,8 @@ test("an unchecked checkbox writes false, while leaving it unchanged writes noth
     return stockTrackedOut.parse(await response.json()).stockTracked;
   };
 
-  let dialog = await openBulkEdit(page, path, [name]);
+  await gotoAuthenticatedPage(page, path);
+  let dialog = await openBulkEdit(page, [name]);
   const tracked = dialog.getByRole("checkbox", {
     name: "Stock tracked",
     exact: true,
@@ -301,7 +306,7 @@ test("an unchecked checkbox writes false, while leaving it unchanged writes noth
   await expect.poll(readStockTracked).toBe(false);
 
   // A dirtied value, then "Leave unchanged", returns the dialog to pristine.
-  dialog = await openBulkEdit(page, path, [name]);
+  dialog = await openBulkEdit(page, [name]);
   const modes = dialog.getByRole("group", { name: "Stock tracked change" });
   await modes.getByRole("button", { name: "Set value", exact: true }).click();
   await tracked.click();
@@ -333,7 +338,8 @@ test("a nullable reference is set through its picker and then cleared", async ({
     return locationOut.parse(await response.json()).locationId;
   };
 
-  let dialog = await openBulkEdit(page, path, [cropName]);
+  await gotoAuthenticatedPage(page, path);
+  let dialog = await openBulkEdit(page, [cropName]);
   const picker = dialog.getByRole("combobox", {
     name: "Location",
     exact: true,
@@ -345,7 +351,7 @@ test("a nullable reference is set through its picker and then cleared", async ({
   await expect(dialog).not.toBeVisible();
   await expect.poll(readLocation).toBe(bed.id);
 
-  dialog = await openBulkEdit(page, path, [cropName]);
+  dialog = await openBulkEdit(page, [cropName]);
   await dialog
     .getByRole("group", { name: "Location change" })
     .getByRole("button", { name: "Clear", exact: true })
@@ -371,11 +377,11 @@ test("a selection holding a paid expense refuses to clear the date", async ({
     lineBasis: "item_line",
   });
 
-  const dialog = await openBulkEdit(
+  await gotoAuthenticatedPage(
     page,
     `/expenses?q=${encodeURIComponent("e2e bulk")}`,
-    [paidName, freeName],
   );
+  const dialog = await openBulkEdit(page, [paidName, freeName]);
   await expect(
     dialog.getByRole("button", { name: "Date unknown", exact: true }),
   ).toBeDisabled();
