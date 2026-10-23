@@ -5,13 +5,13 @@ import {
   type collectionTagSetInput,
 } from "@cubby/schemas/collection";
 import type { ActorContext } from "@cubby/schemas/context";
-import { parseEntityRef } from "@cubby/schemas/identifiers";
 import type { z } from "zod";
 
 import { collectionContract } from "~/contracts/collection.contract";
 import type { Database } from "~/server/db";
-import { runMutationSideEffectsForEntities } from "~/server/entity-kernel/repo/mutation-side-effects";
+import { withTransactionDatabase } from "~/server/db/helpers";
 import { createAppError } from "~/server/errors/app-error";
+import { recordChange } from "~/server/generic/changes/repo/change";
 import {
   getCollectionDetail,
   getCollectionMatrix,
@@ -49,31 +49,23 @@ export async function readCollectionDetail(
   return detail;
 }
 
-const runCollectionEffects = async (
-  context: CollectionWorkflowContext,
-  entity: Awaited<ReturnType<typeof setCollectionAssignment>>,
-) =>
-  runMutationSideEffectsForEntities(context.db, [
-    {
-      action: "updated",
-      entity: parseEntityRef<"product" | "location">(
-        entity.entityKind,
-        entity.entityId,
-      ),
-      source:
-        entity.entityKind === "product" ? "product.update" : "location.update",
-    },
-  ]);
-
 export const setCollectionMembership = bindWorkflow(
   workflow<CollectionWorkflowContext, z.output<typeof collectionTagSetInput>>(
     "collection.membership.set",
   )
     .commit("assigned", async ({ context }, { input }) =>
-      setCollectionAssignment(context.db, context.actorContext, input),
-    )
-    .effect("effects", async ({ context }, { assigned }) =>
-      runCollectionEffects(context, assigned),
+      withTransactionDatabase(context.db, async (db) => {
+        const assigned = await setCollectionAssignment(
+          db,
+          context.actorContext,
+          input,
+        );
+        await recordChange(db, {
+          kind: "source",
+          categories: [assigned.entityKind],
+        });
+        return assigned;
+      }),
     )
     .output(({ input }) => ({
       collection: input.collection,
@@ -86,13 +78,21 @@ export const createCollection = bindWorkflow(
     "collection.create",
   )
     .commit("assigned", async ({ context }, { input }) =>
-      setCollectionAssignment(context.db, context.actorContext, {
-        ...input,
-        assigned: true,
+      withTransactionDatabase(context.db, async (db) => {
+        const assigned = await setCollectionAssignment(
+          db,
+          context.actorContext,
+          {
+            ...input,
+            assigned: true,
+          },
+        );
+        await recordChange(db, {
+          kind: "source",
+          categories: [assigned.entityKind],
+        });
+        return assigned;
       }),
-    )
-    .effect("effects", async ({ context }, { assigned }) =>
-      runCollectionEffects(context, assigned),
     )
     .call("summaries", async ({ context }) => listCollections(context.db))
     .output(({ input, summaries }) => {

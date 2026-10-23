@@ -52,28 +52,24 @@ type BeforeCommitEffect = (tx: DrizzleTransaction) => Promise<void>;
 type BeforeCommitEntry = {
   effect: BeforeCommitEffect;
   phase: "validation" | "fence" | "capture" | "publication";
-  changedKeys: readonly string[];
+  /** One enrollment per outer transaction, including released savepoints. */
+  key?: string;
 };
 const beforeCommitQueues = new WeakMap<object, BeforeCommitEntry[]>();
 
-/** Includes released savepoints; a rolled-back child never reaches its parent. */
-export const pendingTransactionChanges = (
-  db: Database | RepositoryQueryTransaction,
-): string[] => {
-  const seen = new Set<object>();
-  const keys: string[] = [];
-  let current: Database | RepositoryQueryTransaction | undefined = db;
-  while (current) {
-    const queue = beforeCommitQueues.get(current);
-    if (queue && !seen.has(queue)) {
-      seen.add(queue);
-      keys.push(...queue.flatMap((entry) => entry.changedKeys));
-    }
-    current = transactionParents.get(
-      "rollback" in current ? current : getDb(current),
-    );
-  }
-  return keys;
+const enrollBeforeCommit = (
+  queue: BeforeCommitEntry[],
+  entry: BeforeCommitEntry,
+) => {
+  if (
+    entry.key !== undefined &&
+    queue.some(
+      (existing) =>
+        existing.key === entry.key && existing.phase === entry.phase,
+    )
+  )
+    return;
+  queue.push(entry);
 };
 
 /** Metadata follows all business writes, including successfully released savepoints. */
@@ -82,15 +78,15 @@ export const runBeforeCommit = async (
   effect: BeforeCommitEffect,
   options: {
     phase?: "validation" | "fence" | "capture" | "publication";
-    changedKeys?: readonly string[];
+    key?: string;
   } = {},
 ): Promise<void> => {
   const pending = beforeCommitQueues.get(db);
   if (pending) {
-    pending.push({
+    enrollBeforeCommit(pending, {
       effect,
       phase: options.phase ?? "capture",
-      changedKeys: options.changedKeys ?? [],
+      key: options.key,
     });
     return;
   }
@@ -262,7 +258,8 @@ const withTransactionAttempts = async <T>(
       continue;
     }
     // Commit succeeded: effect failures must never enter the replay catch.
-    if (parentBefore) parentBefore.push(...before);
+    if (parentBefore)
+      for (const entry of before) enrollBeforeCommit(parentBefore, entry);
     const parent = afterCommitQueues.get(db);
     const parentChanges = committedChanges.get(db);
     if (parentChanges) {

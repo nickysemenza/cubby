@@ -778,15 +778,10 @@ export default defineEntity({
       displaySourceOverrides: [
         {
           relationPath: ["entries"],
-          priority: 1,
           ordering: "newest",
-          identityEvidence: false,
         },
         {
           relationPath: ["source-product"],
-          priority: 2,
-          ordering: "declared",
-          identityEvidence: false,
         },
       ],
       ingress: [

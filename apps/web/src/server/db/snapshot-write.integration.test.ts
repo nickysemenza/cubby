@@ -9,7 +9,7 @@ import {
   withSnapshotWriteDatabase,
 } from "~/server/db/helpers";
 import { job, product } from "~/server/db/schema";
-import { captureDerivedRefresh } from "~/server/generic/derived-refresh/repo/capture";
+import { recordChange } from "~/server/generic/changes/repo/change";
 import { captureBackgroundQueue } from "~/server/testing/background-queue";
 import {
   createProductFixture,
@@ -54,9 +54,7 @@ describe("snapshot write recovery", () => {
           publications.push(attempt);
         });
         if (attempt === 1) await replaceJobGeneration();
-        await captureDerivedRefresh(tx, [
-          { entityKind: "product", entityId: subject.entityId },
-        ]);
+        await recordChange(tx, { kind: "source", categories: ["product"] });
       },
       { isolationLevel: "serializable" },
     );
@@ -99,9 +97,7 @@ describe("snapshot write recovery", () => {
               .where(eq(product.id, evidence.entityId));
             await replaceJobGeneration();
           }
-          await captureDerivedRefresh(tx, [
-            { entityKind: "product", entityId: subject.entityId },
-          ]);
+          await recordChange(tx, { kind: "source", categories: ["product"] });
         },
         { isolationLevel: "serializable" },
       ),
@@ -115,7 +111,7 @@ describe("snapshot write recovery", () => {
   });
 
   it("bounds repeated serialization failures to three attempts", async () => {
-    const subject = await fixture();
+    await fixture();
     let attempts = 0;
     const publications: number[] = [];
     await expect(
@@ -131,9 +127,7 @@ describe("snapshot write recovery", () => {
             publications.push(attempt);
           });
           await replaceJobGeneration();
-          await captureDerivedRefresh(tx, [
-            { entityKind: "product", entityId: subject.entityId },
-          ]);
+          await recordChange(tx, { kind: "source", categories: ["product"] });
         },
         { isolationLevel: "repeatable read" },
       ),
@@ -143,7 +137,7 @@ describe("snapshot write recovery", () => {
   });
 
   it("does not retry a caller-owned snapshot transaction", async () => {
-    const subject = await fixture();
+    await fixture();
     let attempts = 0;
     await expect(
       withTransactionDatabase(
@@ -158,9 +152,10 @@ describe("snapshot write recovery", () => {
                 .from(job)
                 .where(eq(job.key, "refresh:search"));
               await replaceJobGeneration();
-              await captureDerivedRefresh(tx, [
-                { entityKind: "product", entityId: subject.entityId },
-              ]);
+              await recordChange(tx, {
+                kind: "source",
+                categories: ["product"],
+              });
             },
             { isolationLevel: "serializable" },
           ),

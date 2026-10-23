@@ -27,6 +27,7 @@ import {
   projectListRows,
 } from "~/entity/model/list-read-schema";
 import type { Database, DrizzleTransaction } from "~/server/db";
+import { inheritedFieldOfColumn } from "~/server/db/computed/effective-field";
 import {
   resolveEntityDisplayImageLists,
   withDisplayImages,
@@ -36,7 +37,8 @@ import type { ListProjection } from "~/server/generic/list/repo/list-contracts";
 import { lookupEntityReferences } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { traceListGroup } from "~/server/observability/list-read-tracing";
 
-import { ListContext } from "./field-compiler";
+import { ListContext, derivedFieldsOf } from "./field-compiler";
+import { loadRelationProjection } from "./relation-projection";
 
 export const wantsListGroup = (
   projection: ListProjection,
@@ -296,35 +298,71 @@ export function listReadPlan<Row>(
       .filter((field) => field.reference !== null)
       .flatMap((field) => [field.key, field.column]),
   );
-  const references = Object.entries(options.references ?? {}).map(
-    ([key, instruction]) => {
-      claim(key);
-      if (instruction.kind === "public")
-        return { key, instruction, target: null };
-      const stored = storage.find(
-        (field) => field.key === key || field.column === key,
+  const inferred: NonNullable<ListReadOptions<Row>["references"]> = {};
+  const derived = derivedFieldsOf(entity);
+  for (const field of model?.fields ?? []) {
+    const key = field.readKey ?? field.key;
+    const stored = storage.find((candidate) => candidate.key === field.key);
+    const via = derived[field.key];
+    if (
+      !field.reference ||
+      field.reference.multiple ||
+      written.has(key) ||
+      (stored && inheritedFieldOfColumn(entity, stored.column) !== null) ||
+      !Object.hasOwn(schema.shape, key) ||
+      !(
+        stored?.reference ||
+        (via?.shape === "via" && !via.many && via.terminal.kind === "record")
+      )
+    )
+      continue;
+    const label = field.display.labelPath;
+    inferred[key] = {
+      kind: "lookup",
+      missing: field.nullable ? "null" : "error",
+      ...(label && Object.hasOwn(schema.shape, label) && !written.has(label)
+        ? { name: label }
+        : {}),
+    };
+  }
+  for (const [key, instruction] of Object.entries(options.references ?? {}))
+    inferred[key] =
+      instruction.kind === "public"
+        ? instruction
+        : { ...inferred[key], ...instruction };
+  const references = Object.entries(inferred).map(([key, instruction]) => {
+    claim(key);
+    if (instruction.kind === "public")
+      return { key, instruction, target: null };
+    const declared = model?.fields.find(
+      (field) => field.key === key || field.readKey === key,
+    );
+    const stored = storage.find(
+      (field) => field.key === (declared?.key ?? key) || field.column === key,
+    );
+    const target = shortcodeEntities.find(
+      (candidate) =>
+        candidate === (stored?.reference ?? declared?.reference?.entity),
+    );
+    if (!target)
+      throw new Error(
+        `List reference has no declared target: ${entity}.${key}`,
       );
-      const declared = model?.fields.find(
-        (field) => field.key === key || field.readKey === key,
-      );
-      const target = shortcodeEntities.find(
-        (candidate) =>
-          candidate === (stored?.reference ?? declared?.reference?.entity),
-      );
-      if (!target)
+    if (instruction.name) claim(instruction.name);
+    if (instruction.emoji) claim(instruction.emoji);
+    for (const consumer of instruction.consumers ?? [])
+      if (!Object.hasOwn(schema.shape, consumer))
         throw new Error(
-          `List reference has no declared target: ${entity}.${key}`,
+          `Unknown list reference consumer: ${entity}.${consumer}`,
         );
-      if (instruction.name) claim(instruction.name);
-      if (instruction.emoji) claim(instruction.emoji);
-      for (const consumer of instruction.consumers ?? [])
-        if (!Object.hasOwn(schema.shape, consumer))
-          throw new Error(
-            `Unknown list reference consumer: ${entity}.${consumer}`,
-          );
-      return { key, instruction, target };
-    },
-  );
+    return {
+      key,
+      instruction,
+      target,
+      column: stored?.column ?? key,
+      via: derived[declared?.key ?? key],
+    };
+  });
   const wanted = (projection: ListProjection, key: string): boolean => {
     switch (projection.kind) {
       case "full":
@@ -384,6 +422,34 @@ export function listReadPlan<Row>(
           instruction.emoji,
           ...(instruction.consumers ?? []),
         ].some((output) => output !== undefined && wanted(projection, output));
+      // Materialize only demanded to-one relation UUIDs; public values still go
+      // through the same canonical resolver as stored foreign keys.
+      await Promise.all(
+        references.map(async (reference) => {
+          if (!referenceWanted(reference.key, reference.instruction)) return;
+          if (
+            "via" in reference &&
+            reference.via?.shape === "via" &&
+            !reference.via.many &&
+            reference.via.terminal.kind === "record" &&
+            reference.target !== null
+          ) {
+            const related = await loadRelationProjection(
+              db,
+              entity,
+              reference.via,
+              reference.target,
+              sources.map(({ identity }) => identity.id),
+            );
+            for (const { source, identity } of sources)
+              source[reference.key] = related.get(identity.id) ?? null;
+          } else if ("column" in reference && reference.column !== undefined) {
+            for (const { source } of sources)
+              if (!Object.hasOwn(source, reference.key))
+                source[reference.key] = source[reference.column];
+          }
+        }),
+      );
       const [qualities, images, links] = await Promise.all([
         isScored(entity) && wantsListGroup(projection, "quality")
           ? loadDataQualities(

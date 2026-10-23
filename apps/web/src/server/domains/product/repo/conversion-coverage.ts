@@ -7,15 +7,12 @@ import { z } from "zod";
 import { type Database } from "~/server/db/database";
 import { notDeleted } from "~/server/db/helpers/predicates";
 import { type RepositoryQueryTransaction as DrizzleTransaction } from "~/server/db/repository-access.boundary";
-import {
-  repositoryQueries as getDb,
-  repositoryChanged,
-} from "~/server/db/repository-access.boundary";
+import { repositoryQueries as getDb } from "~/server/db/repository-access.boundary";
 import {
   product,
   productConversionCoverage,
 } from "~/server/db/retained-tables";
-import { recordDerivedRefreshRoots } from "~/server/generic/derived-refresh/repo/capture.boundary";
+import { recordChange } from "~/server/generic/changes/repo/change";
 
 const PRODUCT_CONVERSION_COVERAGE_ENGINE_VERSION = "conversion-coverage-v1";
 const productConversionCoverageStatusSchema = z.enum(["ready", "unavailable"]);
@@ -163,7 +160,11 @@ export const writeProductConversionCoverageProjection = async (
       setWhere: sql`(${productConversionCoverage.coverageTier}, ${productConversionCoverage.coveredKinds}, ${productConversionCoverage.applicableKinds}, ${productConversionCoverage.islandCount}, ${productConversionCoverage.status}, ${productConversionCoverage.engineVersion}) IS DISTINCT FROM (excluded."coverageTier", excluded."coveredKinds", excluded."applicableKinds", excluded."islandCount", excluded."status", excluded."engineVersion") OR ${productConversionCoverage.computedAt} < now() - interval '7 days'`,
     })
     .returning({ id: productConversionCoverage.productId });
-  if (changed.length) await repositoryChanged(db, ["product", "problems"]);
+  if (changed.length)
+    await recordChange(db, {
+      kind: "projection",
+      categories: ["product", "problems"],
+    });
 };
 
 /** Kit and ingredient effects converge through the broad conversions pass. */
@@ -171,13 +172,8 @@ export const markProductConversionCoverageInputStale = async (
   db: Database | DrizzleTransaction,
   productIds: readonly ProductId[],
 ): Promise<void> => {
-  await recordDerivedRefreshRoots(
-    db,
-    productIds.map((entityId) => ({
-      entityKind: "product",
-      entityId,
-    })),
-  );
+  if (productIds.length)
+    await recordChange(db, { kind: "source", categories: ["product"] });
 };
 
 /** Products a broad pass covers; `createdBefore` is its frozen cutoff. */

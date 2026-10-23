@@ -10,7 +10,7 @@ import * as schema from "~/server/db/schema";
 import { saveMealFood } from "~/server/domains/meal/repo/food";
 import { getDb } from "~/server/db/helpers";
 import { requireActor } from "~/server/http/request-context";
-import { runMutationSideEffects } from "~/server/entity-kernel/repo/mutation-side-effects";
+import { drainDerivedRefreshFrontier } from "~/server/testing/background-queue";
 import { createTestRequestContext } from "~/server/testing/request-context";
 import { drainRecipeRefreshJobs } from "~/server/testing/background-queue";
 import { householdDaysFromNow, householdLocalDate } from "~/lib/household-date";
@@ -48,13 +48,8 @@ export async function seedCookbookSourcePrerequisite(page: Page, name: string) {
     },
     context.actorContext,
   );
-  // The import workflow refreshes the search document after the write; the
-  // cookbook list's search filter reads it.
-  await runMutationSideEffects(db, {
-    action: "updated",
-    entity: { entity: "cookbook", id: result.entityId },
-    source: "cookbook.upsert",
-  });
+  // The writer enrolled its source change; finish the persisted projection for search.
+  await drainDerivedRefreshFrontier(db);
   return result.output;
 }
 

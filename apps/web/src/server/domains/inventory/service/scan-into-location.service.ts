@@ -34,7 +34,6 @@ import {
   markInventoryEntryVerified,
 } from "~/server/domains/inventory/repo/scan";
 import { findOrCreateByCode } from "~/server/domains/product/repo/write/product-orchestration";
-import { runMutationSideEffects } from "~/server/entity-kernel/repo/mutation-side-effects";
 import { createAppError } from "~/server/errors/app-error";
 import {
   isUniqueViolation,
@@ -125,11 +124,7 @@ export async function scanAtLocation(
       );
     }
     await markInventoryEntryVerified(db, entryId, actor);
-    await runMutationSideEffects(db, {
-      action: "updated",
-      entity: { entity: "inventory", id: entryId },
-      source: "inventory.scanAtLocation",
-    });
+
     return {
       outcome: "confirmed",
       product: productOut,
@@ -144,7 +139,7 @@ export async function scanAtLocation(
   // exists either way, and confirming it is exactly what the second scan meant.
   return await runWithConflictRecovery<ScanAtLocationOut>(
     async () => {
-      const entry = await insertInventoryEntry(
+      await insertInventoryEntry(
         db,
         {
           productId,
@@ -154,11 +149,7 @@ export async function scanAtLocation(
         },
         actor,
       );
-      await runMutationSideEffects(db, {
-        action: "created",
-        entity: { entity: "inventory", id: entry.id },
-        source: "inventory.scanAtLocation",
-      });
+
       return {
         outcome: "added" as const,
         product: productOut,
@@ -243,11 +234,6 @@ export async function resolveScanStrays(
   }
 
   const moved = await moveInventoryEntries(db, { items }, actor);
-  await runMutationSideEffects(db, {
-    action: "updated",
-    entity: { entity: "location", id: targetLocationId },
-    source: "inventory.resolveScanStrays",
-  });
 
   return {
     moved: moved.length,

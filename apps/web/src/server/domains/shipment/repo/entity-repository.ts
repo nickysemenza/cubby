@@ -1,16 +1,15 @@
-import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
 import {
   shipmentOut,
   type ShipmentFilters,
   type ShipmentOut,
 } from "@cubby/schemas/shipment";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { notDeleted, unwrapDb } from "~/server/db/helpers";
 import type { ListReadIntent } from "~/server/db/helpers/query";
-import { shipment, purchase, vendor } from "~/server/db/schema";
+import { shipment } from "~/server/db/schema";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import {
   createEntityReader,
@@ -32,54 +31,14 @@ export const buildShipmentWhere = (filters: ShipmentFilters = {}) =>
   scaffold.where(filters);
 const shipmentRead = {
   media: true,
-  bindings: (bind) => [
-    bind
-      .batch(async ({ db, rows }) => {
-        const ids = rows.flatMap((row) =>
-          row.purchaseId ? [row.purchaseId] : [],
-        );
-        const sellers = ids.length
-          ? await unwrapDb(db)
-              .select({
-                purchaseId: purchase.id,
-                code: vendor.shortcode,
-                name: vendor.name,
-              })
-              .from(purchase)
-              .innerJoin(vendor, eq(purchase.vendorId, vendor.id))
-              .where(
-                and(
-                  inArray(purchase.id, ids),
-                  notDeleted(purchase),
-                  notDeleted(vendor),
-                ),
-              )
-          : [];
-        return new Map(sellers.map((seller) => [seller.purchaseId, seller]));
-      })
-      .fields(
-        shipmentOut.pick({ vendorId: true, vendorName: true }),
-        (row, sellers) => {
-          const seller = row.purchaseId
-            ? sellers.get(row.purchaseId)
-            : undefined;
-          return {
-            vendorId: seller ? parseShortcodeFor("vendor", seller.code) : null,
-            vendorName: seller?.name ?? null,
-          };
-        },
-      ),
-  ],
   references: {
     purchaseId: {
       kind: "lookup",
-      name: "purchaseName",
       missing: "null",
       includeDeleted: true,
     },
     carrierId: {
       kind: "lookup",
-      name: "carrierName",
       missing: "null",
       includeDeleted: true,
     },

@@ -5,7 +5,7 @@ import type {
   EntityArtifacts,
   SourceRef,
 } from "../declarations.ts";
-import { entityProjectionMaps } from "./index.ts";
+import { entityProjectionMaps } from "./capabilities.ts";
 import { browserRoutes } from "./routes.ts";
 
 const importLine = (ref: SourceRef) =>

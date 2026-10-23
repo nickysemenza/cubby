@@ -62,7 +62,6 @@ import { inspectImageFile } from "~/server/domains/image/repo/image-integrity";
 import { imageDescriptionInputFingerprint } from "~/server/domains/image/service/image-description.service";
 import { hasMeaningfulPngTransparency } from "~/server/domains/image/service/image-transparency";
 import { reserveImageAnalysisInput } from "~/server/generic/activity/repo/activity-input";
-import { refreshDirectImageOwnerSearchDocuments } from "~/server/generic/search/repo/search-document";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 /**
@@ -171,8 +170,6 @@ export async function completeCompanionImageProcessingResult(
     return { adopted: false };
   }
   const completion = await completeImageProcessingJob(db, prepared.input);
-  if (completion.adopted && prepared.searchImageId)
-    await refreshDirectImageOwnerSearchDocuments(db, prepared.searchImageId);
   return { adopted: completion.adopted };
 }
 
@@ -295,7 +292,6 @@ async function prepareCompanionCompletion(
     return verifiedDerivative
       ? {
           input: { result, verifiedDerivative },
-          searchImageId: null,
         }
       : null;
   }
@@ -306,7 +302,6 @@ async function prepareCompanionCompletion(
     return prepareAppleDescriptionCompletion(db, result, result.outcome);
   return {
     input: { result },
-    searchImageId: null,
   };
 }
 
@@ -388,7 +383,6 @@ async function prepareAppleDescriptionCompletion(
         }),
       },
     },
-    searchImageId: context.imageId,
   };
 }
 

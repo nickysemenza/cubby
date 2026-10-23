@@ -21,10 +21,10 @@ import {
   uuidArrayParam,
   withTransactionOn,
 } from "~/server/db/helpers";
-import { repositoryChanged } from "~/server/db/repository-access.boundary";
 import { expenseDerivedReadSql } from "~/server/domains/expense/repo/expense-derived-read";
 import { effectiveExpenseTradeSql } from "~/server/domains/expense/repo/expense-inheritance";
 import { loadSelectedDescriptions } from "~/server/domains/image/repo/image-description-selection";
+import { recordChange } from "~/server/generic/changes/repo/change";
 import { lockRefreshFamily } from "~/server/generic/derived-refresh/repo/families";
 import {
   getEmbeddingTextsForRefs,
@@ -104,60 +104,6 @@ async function loadDirectImageSearchText(
     values.set(key, [values.get(key), text].filter(Boolean).join("\n"));
   }
   return values;
-}
-
-/**
- * Direct owners of one image, including the Image search document itself.
- * The generated gallery bindings are the only relationship source here, so
- * display fallbacks and borrowed images cannot become indexed evidence.
- */
-export async function findDirectImageSearchOwnerRefs(
-  db: Database | DrizzleTransaction,
-  imageId: string,
-): Promise<SearchableEntityRef[]> {
-  const searchable = new Set<string>(searchableEntities);
-  const result = await unwrapDb(db).execute<{
-    entityKind: SearchableEntity;
-    entityId: string;
-  }>(sql`
-    ${sql.join(
-      [
-        ...(searchable.has("image")
-          ? [
-              sql`SELECT 'image'::text AS "entityKind", id::text AS "entityId" FROM "Image"
-            WHERE id = ${imageId}::uuid AND "deletedAt" IS NULL`,
-            ]
-          : []),
-        sql`SELECT e."kind" AS "entityKind", attachment."entityId"::text AS "entityId"
-          FROM "EntityAttachment" attachment
-          JOIN "Entity" e ON e."id" = attachment."entityId" AND e."deletedAt" IS NULL
-          WHERE attachment."imageId" = ${imageId}::uuid AND attachment."deletedAt" IS NULL`,
-      ],
-      sql` UNION ALL `,
-    )}
-  `);
-  return result.rows.filter((row) => searchable.has(row.entityKind));
-}
-
-/** Refresh docs and semantic work after an analysis/correction changes text. */
-export async function refreshDirectImageOwnerSearchDocuments(
-  db: Database,
-  imageId: string,
-): Promise<void> {
-  const { captureDerivedRefresh } =
-    await import("~/server/generic/derived-refresh/repo/capture");
-  await captureDerivedRefresh(db, [{ entityKind: "image", entityId: imageId }]);
-}
-
-/** Refresh image owners captured before an attachment edge is removed. */
-export async function refreshCapturedImageSearchOwnerRefs(
-  db: Database,
-  refs: SearchableEntityRef[],
-  source: string,
-): Promise<void> {
-  const { refreshDerivedSearchRefs } =
-    await import("~/server/entity-kernel/repo/mutation-side-effects");
-  await refreshDerivedSearchRefs(db, refs, source);
 }
 
 /** Internal query boundary for the search service's indexed retrieval SQL. */
@@ -681,7 +627,10 @@ async function markSearchDocumentMissing(
     RETURNING "entityId"
   `);
   if (changed.rows.length)
-    await repositoryChanged(db, ["search", "relatedData", "problems"]);
+    await recordChange(db, {
+      kind: "projection",
+      categories: ["search", "relatedData", "problems"],
+    });
   return { status: "missing", entityKind, entityId };
 }
 
@@ -735,7 +684,10 @@ async function upsertSearchDocumentBatch(
     RETURNING "entityKind"
   `);
   if (changed.rows.length)
-    await repositoryChanged(db, ["search", "relatedData", "problems"]);
+    await recordChange(db, {
+      kind: "projection",
+      categories: ["search", "relatedData", "problems"],
+    });
   return entries.map(({ source }) => ({
     status: "upserted",
     entityKind: source.entityKind,

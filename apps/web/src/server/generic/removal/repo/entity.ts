@@ -31,8 +31,8 @@
  *    post-delete queries; several sites call `touchUpdatedAt` or
  *    `syncChangedEffectivePrices`. Those run in the caller's own transaction,
  *    which `withTransactionOn` guarantees this call joins.
- *  - **Staleness dispatch.** Zero of the removal paths do it here; it is the
- *    router's job, via `runMutationSideEffects`.
+ *  - **Refresh intent.** Audit writes and the entity kernel register source
+ *    changes in the caller's transaction; broad Jobs own derived cleanup.
  */
 
 import type { ActorContext } from "@cubby/schemas/context";

@@ -123,7 +123,6 @@ async function stockTrackingFor(
 }
 
 const categoryRead = {
-  references: { parentId: { kind: "lookup", missing: "null" } },
   bindings: (bind) => {
     const tracking = bind.batch(({ db, rows }) => stockTrackingFor(db, rows));
     const connections = bind.batch(async ({ db }) => {

@@ -100,13 +100,16 @@ describe("catalog-driven invalidation", () => {
     expect(untagged.state.isInvalidated).toBe(false);
   });
 
-  it("chooses an entity write's fan-out from its input", async () => {
+  it("refreshes Vendor and its Product readers from the entity write input", async () => {
     const { wrapper, cacheQuery } = mountedClient();
     const vendors = cacheQuery("vendors", {
       meta: { cacheTags: [["vendor", "options"]] },
     });
     const products = cacheQuery("products", {
       meta: { cacheTags: [["product", "search"]] },
+    });
+    const foods = cacheQuery("foods", {
+      meta: { cacheTags: [["usda-food"]] },
     });
 
     await runMutation(wrapper, entityMutation.mutate, {
@@ -116,6 +119,8 @@ describe("catalog-driven invalidation", () => {
     });
 
     expect(vendors.state.isInvalidated).toBe(true);
-    expect(products.state.isInvalidated).toBe(false);
+    // Product reads embed the declared Vendor brand label.
+    expect(products.state.isInvalidated).toBe(true);
+    expect(foods.state.isInvalidated).toBe(false);
   });
 });

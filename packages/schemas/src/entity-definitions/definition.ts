@@ -1894,10 +1894,7 @@ const buildMetadataSchemas = () => {
   const imageDisplaySourceMetadataSchema = z
     .object({
       relationPath: imageRelationPathSchema,
-      priority: z.number().int().nonnegative(),
-      ordering: z.enum(["declared", "newest", "oldest"]),
-      /** Display fallbacks are borrowed; they are never identity evidence. */
-      identityEvidence: z.boolean({ error: "must be a boolean" }),
+      ordering: z.enum(["declared", "newest", "oldest"]).default("declared"),
     })
     .strict();
   const imageVisualEvidenceMetadataSchema = z
@@ -2135,7 +2132,15 @@ const buildMetadataSchemas = () => {
         routing,
       }) => ({
         storage,
-        displaySources: displaySourceOverrides ?? displaySources ?? [],
+        displaySources: (displaySourceOverrides ?? displaySources ?? []).map(
+          (source, index) => ({
+            ...source,
+            // Directly owned images reserve rank zero in the shared resolver.
+            priority: index + 1,
+            // Borrowed display imagery can never become identity evidence.
+            identityEvidence: false,
+          }),
+        ),
         ingress,
         routing,
       }),
@@ -2717,10 +2722,6 @@ const buildMetadataSchemas = () => {
       module: "~/server/generic/search/repo/search-document",
       export: "getSearchDocumentEmbeddingText",
     },
-    dependentRefresh: {
-      module: "~/server/entity-kernel/repo/mutation-side-effects",
-      export: "runMutationSideEffects",
-    },
   };
 
   const entityExtensionsMetadataSchema = z
@@ -2780,7 +2781,6 @@ const buildMetadataSchemas = () => {
                 .object({
                   projection: sourceRefMetadataSchema.nullable(),
                   semanticText: sourceRefMetadataSchema.nullable(),
-                  dependentRefresh: sourceRefMetadataSchema.nullable(),
                 })
                 .strict(),
             ])
@@ -2788,7 +2788,6 @@ const buildMetadataSchemas = () => {
             .default({
               projection: null,
               semanticText: null,
-              dependentRefresh: null,
             }),
           /** `(context, input) => EntityTimelineOut` for `capabilities.timeline: "custom"`. */
           timeline: sourceRefMetadataSchema.nullable().optional().default(null),

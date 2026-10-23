@@ -1,9 +1,7 @@
-import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
 import { entityMutationItem } from "@cubby/schemas/entity-mutation";
 import {
   ENTITY_LABEL,
   ENTITY_NOT_FOUND_REASON,
-  parseEntityRef,
 } from "@cubby/schemas/identifiers";
 import {
   EMPTY_MUTATION_SIDE_EFFECTS,
@@ -23,10 +21,7 @@ import { z } from "zod";
 
 import { listReadFields } from "~/entity/model/list-read-schema";
 import { deleteStoredObjects } from "~/server/clients/s3";
-import {
-  pendingTransactionChanges,
-  withTransactionDatabase,
-} from "~/server/db/helpers";
+import { withTransactionDatabase } from "~/server/db/helpers";
 import { runAfterCommit } from "~/server/db/helpers/core";
 import {
   canUpdateColumns,
@@ -49,15 +44,9 @@ import {
   isShortcodeEntity,
   resolveEntityIdentity,
 } from "~/server/entity-kernel/repo/entity-identity";
-import {
-  isMutationSideEffectRef,
-  type MutationSideEffectEvent,
-  runMutationSideEffectsForEntities,
-  runMutationSideEffects,
-} from "~/server/entity-kernel/repo/mutation-side-effects";
 import { AppError, createAppError } from "~/server/errors/app-error";
 import { findPgError } from "~/server/errors/db-errors";
-import { captureDerivedRefresh } from "~/server/generic/derived-refresh/repo/capture";
+import { recordChange } from "~/server/generic/changes/repo/change";
 import { withListGroupBy } from "~/server/generic/list/repo/list";
 import { listTotalLabels } from "~/server/generic/list/repo/list-display-labels";
 import { withChildCounts } from "~/server/generic/list/repo/list-read-adapters";
@@ -124,34 +113,16 @@ const aggregates = (
   groups: ListGroupSummary[] | undefined,
 ) => ({ sums, totalLabels: listTotalLabels(entity, sums), groups });
 
-const sideEffectEventFor = <
-  E extends EntityKernelEntity,
-  S extends EntityBindingSchemas,
->(
-  binding: EntityKernelCoreBinding<E, S>,
-  action: "created" | "updated",
-  entityId: EntityInternalId<E>,
-  source: string,
-): MutationSideEffectEvent | null => {
-  // Binding lookup erases the entity/id correlation; restore it at this
-  // boundary before routing to the subset that has side effects.
-  const entityRef = parseEntityRef<ShortcodeEntity>(binding.entity, entityId);
-  if (!binding.sideEffects || !isMutationSideEffectRef(entityRef)) return null;
-  return { action, entity: entityRef, source };
-};
-
 /**
  * Commit authoritative writes and durable refresh capture together.
  */
-const writeWithRefreshCapture = async <
+const writeWithChange = async <
   E extends EntityKernelEntity,
   S extends EntityBindingSchemas,
   TResult extends { entityId: EntityInternalId<E> },
 >(
   context: EntityKernelContext,
-  _binding: EntityKernelCoreBinding<E, S>,
-  _action: "created" | "updated",
-  _source: string,
+  binding: EntityKernelCoreBinding<E, S>,
   write: (context: EntityKernelContext) => Promise<TResult>,
 ): Promise<TResult> => {
   // Every declared write, including identity-only entities, uses the transaction-bound context.
@@ -171,8 +142,11 @@ const writeWithRefreshCapture = async <
           recipeCosting: context.services.recipeCosting.bindTo(transactionDb),
         },
       });
-      // The repository's audit writer captured durable refresh intent in this
-      // transaction. Broad refresh passes run in the background.
+      // Known source intent is unconditional; the transaction key coalesces audit writes.
+      await recordChange(transactionDb, {
+        kind: "source",
+        categories: [binding.entity],
+      });
       return result;
     },
   );
@@ -189,24 +163,6 @@ const deleteDetachedObjects = (
   context: EntityKernelContext,
   keys: string[] | undefined,
 ) => runAfterCommit(context.db, () => deleteStoredObjects(keys ?? []));
-
-/** Post-commit effects: embedding tasks, AI refreshes, the problem-count mark. */
-const runSideEffects = async <
-  E extends EntityKernelEntity,
-  S extends EntityBindingSchemas,
->(
-  ctx: EntityKernelContext,
-  binding: EntityKernelCoreBinding<E, S>,
-  action: "created" | "updated",
-  entityId: EntityInternalId<E>,
-  source: string,
-): Promise<void> => {
-  const event = sideEffectEventFor(binding, action, entityId, source);
-  if (!event) return;
-  await runMutationSideEffects(ctx.db, event, undefined, {
-    captured: true,
-  });
-};
 
 type MutationReadDemand<Read extends boolean> = Read extends true
   ? { fields: readonly string[] }
@@ -273,105 +229,72 @@ const buildUpdateOperation = <
         };
       })
       .commit("updated", async ({ context }, { validated }) =>
-        writeWithRefreshCapture(
-          context,
-          binding,
-          "updated",
-          `${binding.entity}.update`,
-          async (writeContext) => {
-            const previousEmoji = await recordEmojiBeforeUpdate(
-              writeContext.db,
-              binding.entity,
-              z.string().parse(validated.id),
-              validated.data,
-            );
-            const data = Object.assign(
-              {},
-              validated.data,
-              Object.fromEntries(
-                await resolveCollectionPatches(
-                  writeContext,
-                  binding,
-                  validated.id,
-                  validated.data,
+        writeWithChange(context, binding, async (writeContext) => {
+          const previousEmoji = await recordEmojiBeforeUpdate(
+            writeContext.db,
+            binding.entity,
+            z.string().parse(validated.id),
+            validated.data,
+          );
+          const data = Object.assign(
+            {},
+            validated.data,
+            Object.fromEntries(
+              await resolveCollectionPatches(
+                writeContext,
+                binding,
+                validated.id,
+                validated.data,
+              ),
+            ),
+          );
+          const updated = await validated.run(
+            writeContext,
+            validated.id,
+            parseSchema(
+              presentSchema<S["updateInput"]>(binding.schemas.updateInput),
+              repositoryRecordInput(binding.entity, data),
+            ),
+          );
+          await writeRecordEmoji(
+            writeContext.db,
+            binding.entity,
+            updated.entityId,
+            validated.data,
+          );
+          await auditRecordEmoji(
+            writeContext.db,
+            writeContext.actorContext,
+            binding.entity,
+            updated.entityId,
+            previousEmoji,
+            validated.data,
+          );
+          const receipt = await readMutationReceiptFields(
+            writeContext.db,
+            binding.entity,
+            updated.entityId,
+            validated.submittedFields,
+          );
+          return {
+            ...updated,
+            output: {
+              id: receipt.item.id,
+              ...Object.fromEntries(
+                Object.entries(receipt.item).filter(
+                  ([key]) =>
+                    key !== "id" &&
+                    validated.submittedFields.includes(key) &&
+                    (!validated.responseFields ||
+                      validated.responseFields.includes(key)),
                 ),
               ),
-            );
-            const changesBefore = pendingTransactionChanges(writeContext.db);
-            const updated = await validated.run(
-              writeContext,
-              validated.id,
-              parseSchema(
-                presentSchema<S["updateInput"]>(binding.schemas.updateInput),
-                repositoryRecordInput(binding.entity, data),
-              ),
-            );
-            await writeRecordEmoji(
-              writeContext.db,
-              binding.entity,
-              updated.entityId,
-              validated.data,
-            );
-            await auditRecordEmoji(
-              writeContext.db,
-              writeContext.actorContext,
-              binding.entity,
-              updated.entityId,
-              previousEmoji,
-              validated.data,
-            );
-            const receipt = await readMutationReceiptFields(
-              writeContext.db,
-              binding.entity,
-              updated.entityId,
-              validated.submittedFields,
-            );
-            // Older commands in the same batch may already name this root.
-            // Only a new enrollment from this update replaces its fallback.
-            const rootKey = `entity:${binding.entity}:${updated.entityId}`;
-            const captures = (keys: readonly string[]) =>
-              keys.filter((key) => key === rootKey).length;
-            if (
-              validated.submittedFields.length > 0 &&
-              captures(pendingTransactionChanges(writeContext.db)) ===
-                captures(changesBefore)
-            )
-              await captureDerivedRefresh(writeContext.db, [
-                {
-                  entityKind: binding.entity,
-                  entityId: updated.entityId,
-                  changedFields: validated.submittedFields,
-                },
-              ]);
-            return {
-              ...updated,
-              output: {
-                id: receipt.item.id,
-                ...Object.fromEntries(
-                  Object.entries(receipt.item).filter(
-                    ([key]) =>
-                      key !== "id" &&
-                      validated.submittedFields.includes(key) &&
-                      (!validated.responseFields ||
-                        validated.responseFields.includes(key)),
-                  ),
-                ),
-              },
-            };
-          },
-        ),
+            },
+          };
+        }),
       )
       .effect("storage", async ({ context }, { updated }) =>
         deleteDetachedObjects(context, updated.detachedImageKeys),
-      )
-      .effect("sideEffects", async ({ context }, { updated }) =>
-        runSideEffects(
-          context,
-          binding,
-          "updated",
-          updated.entityId,
-          `${binding.entity}.update`,
-        ),
       )
       .output(({ validated, updated }) => {
         const item = entityMutationItem.parse(updated.output);
@@ -611,60 +534,45 @@ const buildEntityOperations = <
           };
         })
         .commit("created", async ({ context }, { validated }) =>
-          writeWithRefreshCapture(
-            context,
-            binding,
-            "created",
-            `${binding.entity}.create`,
-            async (writeContext) => {
-              const created = await validated.run(
-                writeContext,
-                parseSchema(
-                  presentSchema<S["createInput"]>(binding.schemas.createInput),
-                  repositoryRecordInput(binding.entity, validated.data),
-                ),
-              );
-              await writeRecordEmoji(
-                writeContext.db,
-                binding.entity,
-                created.entityId,
-                validated.data,
-              );
-              const receipt = await readMutationReceiptFields(
-                writeContext.db,
-                binding.entity,
-                created.entityId,
-                validated.submittedFields,
-              );
-              return {
-                ...created,
-                output: {
-                  id: receipt.item.id,
-                  ...Object.fromEntries(
-                    Object.entries(receipt.item).filter(
-                      ([key]) =>
-                        key !== "id" &&
-                        validated.submittedFields.includes(key) &&
-                        (!validated.responseFields ||
-                          validated.responseFields.includes(key)),
-                    ),
+          writeWithChange(context, binding, async (writeContext) => {
+            const created = await validated.run(
+              writeContext,
+              parseSchema(
+                presentSchema<S["createInput"]>(binding.schemas.createInput),
+                repositoryRecordInput(binding.entity, validated.data),
+              ),
+            );
+            await writeRecordEmoji(
+              writeContext.db,
+              binding.entity,
+              created.entityId,
+              validated.data,
+            );
+            const receipt = await readMutationReceiptFields(
+              writeContext.db,
+              binding.entity,
+              created.entityId,
+              validated.submittedFields,
+            );
+            return {
+              ...created,
+              output: {
+                id: receipt.item.id,
+                ...Object.fromEntries(
+                  Object.entries(receipt.item).filter(
+                    ([key]) =>
+                      key !== "id" &&
+                      validated.submittedFields.includes(key) &&
+                      (!validated.responseFields ||
+                        validated.responseFields.includes(key)),
                   ),
-                },
-              };
-            },
-          ),
+                ),
+              },
+            };
+          }),
         )
         .effect("storage", async ({ context }, { created }) =>
           deleteDetachedObjects(context, created.detachedImageKeys),
-        )
-        .effect("sideEffects", async ({ context }, { created }) =>
-          runSideEffects(
-            context,
-            binding,
-            "created",
-            created.entityId,
-            `${binding.entity}.create`,
-          ),
         )
         .output(({ validated, created }) => {
           const item = entityMutationItem.parse(created.output);
@@ -765,34 +673,11 @@ const buildEntityOperations = <
                     binding.repository.updatePolicy,
                   )
                 ) {
-                  const result = await updateColumns(
+                  await updateColumns(
                     writeContext,
                     binding.entity,
                     validated.ids,
                     validated.data,
-                  );
-                  const events = result.updatedIds.flatMap(
-                    (id): MutationSideEffectEvent[] => {
-                      const ref = parseEntityRef<ShortcodeEntity>(
-                        binding.entity,
-                        id,
-                      );
-                      return isMutationSideEffectRef(ref)
-                        ? [
-                            {
-                              action: "updated",
-                              entity: ref,
-                              source: `${binding.entity}.bulkUpdate`,
-                            },
-                          ]
-                        : [];
-                    },
-                  );
-                  await runMutationSideEffectsForEntities(
-                    db,
-                    events,
-                    undefined,
-                    { captured: true },
                   );
                 } else {
                   for (const id of validated.ids) {
@@ -817,6 +702,10 @@ const buildEntityOperations = <
                     await updateRow(writeContext, { id, data });
                   }
                 }
+                await recordChange(db, {
+                  kind: "source",
+                  categories: [binding.entity],
+                });
                 return {
                   updatedReferences: validated.ids.map((id) => ({
                     entity: binding.entity,

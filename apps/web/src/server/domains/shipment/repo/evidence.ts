@@ -48,7 +48,7 @@ import {
 import { resolveEntityIdentity } from "~/server/entity-kernel/repo/entity-identity";
 import { createAppError } from "~/server/errors/app-error";
 import { logAuditEntries } from "~/server/generic/audit-log/repo/audit-log";
-import { recordDerivedRefreshRoots } from "~/server/generic/derived-refresh/repo/capture.boundary";
+import { recordChange } from "~/server/generic/changes/repo/change";
 import { finalizeMerge } from "~/server/generic/merge/repo/core";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
@@ -565,9 +565,7 @@ export async function recordShipmentEvidence(
             },
           });
       }
-      await recordDerivedRefreshRoots(tdb, [
-        { entityKind: "shipment", entityId: row.id },
-      ]);
+      await recordChange(tdb, { kind: "source", categories: ["shipment"] });
     }
     return {
       shipmentIds: [...new Set(shipmentIds)],
@@ -604,9 +602,7 @@ export async function associateShipment(
         changes: { purchaseId: { from: row.purchaseId, to: purchaseId } },
       },
     ]);
-    await recordDerivedRefreshRoots(tdb, [
-      { entityKind: "shipment", entityId: row.id },
-    ]);
+    await recordChange(tdb, { kind: "source", categories: ["shipment"] });
     return { shipmentId: parseShortcodeFor("shipment", row.shortcode) };
   });
 }
@@ -709,10 +705,7 @@ export async function mergeShipment(
         survivorChanges: { mergedFrom: { from: null, to: source.shortcode } },
       }),
     );
-    await recordDerivedRefreshRoots(tdb, [
-      { entityKind: "shipment", entityId: source.id },
-      { entityKind: "shipment", entityId: target.id },
-    ]);
+    await recordChange(tdb, { kind: "source", categories: ["shipment"] });
     return { shipmentId: parseShortcodeFor("shipment", target.shortcode) };
   });
 }
@@ -777,10 +770,7 @@ export async function reassignShipmentEvidence(
         },
       },
     ]);
-    await recordDerivedRefreshRoots(tdb, [
-      { entityKind: "shipment", entityId: target.id },
-      { entityKind: "shipment", entityId: binding.shipmentId },
-    ]);
+    await recordChange(tdb, { kind: "source", categories: ["shipment"] });
     return { shipmentId: parseShortcodeFor("shipment", target.shortcode) };
   });
 }

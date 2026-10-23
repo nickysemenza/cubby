@@ -83,7 +83,7 @@ import {
 import { attachPurchaseProducts } from "~/server/domains/purchase/repo/purchase-products";
 import { classificationAllowsField } from "~/server/domains/spending-category/repo/classification-field-policy";
 import { createAppError } from "~/server/errors/app-error";
-import { captureDerivedRefresh } from "~/server/generic/derived-refresh/repo/capture";
+import { recordChange } from "~/server/generic/changes/repo/change";
 import { validateProductPolicy } from "~/server/generic/inheritance/repo/inheritance-validation";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
@@ -1623,13 +1623,7 @@ export async function importVendorOrder(
           notes: sql`concat_ws(E'\n\n', nullif(${purchase.notes}, ''), ${research}::text)`,
         })
         .where(eq(purchase.id, purchaseId));
-      await captureDerivedRefresh(tx, [
-        {
-          entityKind: "purchase",
-          entityId: purchaseId,
-          changedFields: ["notes"],
-        },
-      ]);
+      await recordChange(tx, { kind: "source", categories: ["purchase"] });
     }
 
     const findingIds: string[] = [];

@@ -1,5 +1,6 @@
 import { buildNutrition } from "@cubby/schemas/nutrition";
 import { eq } from "drizzle-orm";
+import { createRepoEntity } from "tooling/factories/repo";
 import { taxonomyShortcode } from "tooling/product-category-fixtures";
 import { countTestDbQueries, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
@@ -16,6 +17,8 @@ import {
   mealListRead,
 } from "~/server/domains/meal/repo/crud";
 import { listProductCategoriesRead } from "~/server/domains/product-category/repo/product-category";
+import { listShipmentsRead } from "~/server/domains/shipment/repo/entity-repository";
+import { recordShipmentEvidence } from "~/server/domains/shipment/repo/evidence";
 import { findOrCreateVendor } from "~/server/domains/vendor/repo/vendor";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import {
@@ -25,6 +28,103 @@ import {
 
 describe("progressive list readers", () => {
   const ctx = withTestDb();
+
+  it("hydrates declared Shipment seller paths only for demanded relation outputs", async () => {
+    const seller = await createRepoEntity(ctx, "vendor", {
+      name: "Synthetic projection seller",
+    });
+    const order = await createRepoEntity(ctx, "purchase", {
+      vendorId: seller.output.id,
+    });
+    const evidence = await recordShipmentEvidence(
+      ctx.db,
+      {
+        source: {
+          kind: "tracking_page",
+          url: "https://tracking.example/projection",
+          externalKey: "projection-parcel",
+          capturedAt: "2026-06-06T09:00:00Z",
+          content: "Synthetic projection tracking evidence",
+        },
+        purchaseId: order.output.id,
+        shipments: ["projection-one", "projection-two"].map((key) => ({
+          shipmentId: null,
+          sourceShipmentKey: key,
+          distinctPackageEvidence: null,
+          carrierId: null,
+          carrierName: null,
+          trackingNumber: key,
+          extraTrackingNumbers: [],
+          purpose: "outbound",
+          observations: [
+            {
+              sourceEventKey: key,
+              kind: "carrier_possession",
+              time: { kind: "instant", value: "2026-06-03T09:00:00Z" },
+              rawStatus: "Synthetic pickup",
+              location: null,
+              carrierId: null,
+              carrierName: null,
+              trackingNumber: key,
+            },
+          ],
+        })),
+      },
+      ctx.actor,
+    );
+    const parcelCode = evidence.shipmentIds[0];
+    const pagination = { pageIndex: 0, pageSize: 500 };
+    const read = (
+      projection: Parameters<typeof listShipmentsRead>[4],
+      intent: "page" | "count" = "page",
+    ) => listShipmentsRead(ctx.db, {}, [], pagination, projection, intent);
+    const base = await countTestDbQueries(() => read({ kind: "base" }));
+    // Core Purchase IDs still need canonical public-ID resolution; the seller is deferred.
+    expect(base.tables).not.toContain("Vendor");
+    const count = await countTestDbQueries(() =>
+      read({ kind: "base" }, "count"),
+    );
+    expect(count.tables).not.toContain("Purchase");
+    expect(count.tables).not.toContain("Vendor");
+    const full = await read({ kind: "full" });
+    const selected = await countTestDbQueries(() =>
+      read({
+        kind: "selected",
+        fields: ["vendorId", "vendorName"],
+        groups: ["relations"],
+      }),
+    );
+    const enrichment = await read({
+      kind: "enrichment",
+      groups: ["relations"],
+    });
+    const expected = {
+      vendorId: seller.output.id,
+      vendorName: seller.output.name,
+    };
+    for (const page of [full, selected.result, enrichment])
+      expect(page.data.find((row) => row.id === parcelCode)).toMatchObject(
+        expected,
+      );
+    expect(selected.result.data.find((row) => row.id === parcelCode)).toEqual({
+      id: parcelCode,
+      ...expected,
+    });
+    // Selection/count plus one path batch and one canonical target-label batch.
+    expect(selected.queryCount).toBe(4);
+    const empty = await countTestDbQueries(() =>
+      listShipmentsRead(
+        ctx.db,
+        { search: "Synthetic nonexistent projection parcel" },
+        [],
+        pagination,
+        { kind: "enrichment", groups: ["relations"] },
+      ),
+    );
+    expect(empty.result.data).toEqual([]);
+    expect(empty.tables).not.toContain("Purchase");
+    expect(empty.tables).not.toContain("Vendor");
+  });
 
   it("resolves category reference features without derived catalog, quality or media reads", async () => {
     const pagination = { pageIndex: 0, pageSize: 500 };

@@ -247,6 +247,17 @@ unsupported capabilities. Generated files are never committed:
 `pnpm check:clean` proves a generate run leaves the tree unchanged. Typecheck
 verifies declaration types and referenced exports.
 
+Artifact emitters project the same compiled declarations. Browser field and
+inspector descriptor types live in `packages/schemas/src/entity-projection-types.ts`,
+with field metadata derived from the declaration schema; generated files emit
+literal maps and re-export those types. Shared schema binding behavior lives in
+ordinary typed code rather than generator strings. HTTP and MCP exposure project
+one kernel capability owner; MCP remains an explicit subset.
+
+The generated summary also lists read dependents from declared reference fields,
+derived paths and image fallback paths. Notifications add those consumers' cache
+roots without recursively applying their mutation ripples or scheduling Jobs.
+
 Progressive list enrichment reuses one exported error schema across entities,
 so OpenAPI and Swift emit one shared error type while each entity retains its
 own successful enrichment shape. Base-list responses likewise share one
@@ -828,6 +839,11 @@ displayable images before related images, filters unavailable files, and
 deduplicates by image ID. Web and native clients render the first result and do
 not derive their own cover.
 
+Declare display sources in preference order. Array position compiles to
+priority after directly owned images; ordering defaults to `declared`, with explicit `newest` or
+`oldest` when needed. Borrowed display imagery always compiles with
+`identityEvidence: false`. Visual-evidence ranking remains a separate contract.
+
 Shipment reads use this same resolver and defer `displayImages` in the list
 media group, including when the Shipment has no eligible related image.
 Its declared fallback order is directly attached Purchase images, Purchase
@@ -835,10 +851,17 @@ Product images, seller Vendor images, then carrier Vendor images. Seller Vendor
 is read from the linked Purchase and supports list sorting and filtering without
 duplicating that association on Shipment.
 
+List readers infer stored reference outputs from field references and label
+paths. To-one record-valued derived paths hydrate through compiled traversal in
+bounded page batches, using the canonical public-ID and label resolver. Explicit
+bindings and missing/deleted-reference policies override defaults. To-many,
+inherited and domain-enriched values retain their existing projection owners.
+Base, count and empty reads skip unrequested relation hydration.
+
 `extensions.ports` is the explicit seam map for entity-wide behavior the
 compiler must not infer: the kernel repository binding, entity label and
 shortcode resolver, filter declaration, and search-document
-projection/text/refresh hooks. Each entry is a
+projection/text hooks. Each entry is a
 `{ module, export }` source reference or `null` when that port is intentionally
 absent or remains a workflow-only seam. Mutable relationships declare their
 typed item schema, repository adapter, source, and browser/MCP exposure on the
@@ -846,7 +869,7 @@ relationship itself. The generated inspector projects these references as
 client-safe data; generated server bindings import executable adapters.
 Repository closures still own transactions and service injection.
 For entities using the shared search-document behavior, `ports.search: "document"`
-selects the standard projection, semantic text, and dependent refresh bindings;
+selects the standard projection and semantic text bindings;
 use explicit references when an entity needs a different implementation.
 Search presentation branches use current shared kind values; retired kind names
 must not survive as label conditions in SQL.
@@ -1526,8 +1549,8 @@ All generic entity work enters through `executeEntity(context, command)` in
 - capability checks and normalized pagination/sorting;
 - baseline get/list/create/update/bulkUpdate/delete/merge/search commands;
 - declared attach/detach relation families;
-- in-transaction dirty-root capture, then post-commit object cleanup and
-  best-effort queue wake-ups; paged background work refreshes projections,
+- transaction-owned source-change registration, then post-commit object cleanup
+  and best-effort queue wake-ups; paged background work refreshes projections,
   embeddings and derived invalidations, with periodic repair for lost wake-ups;
 - one normalized delete result with public references and affected-edge data.
 
@@ -1550,10 +1573,10 @@ the write. Normal write bodies expose one final-output reader through
 projected create/update readers. A declared writer without that capability is
 refused when bindings load. Mandatory mutation snapshots and domain work run
 before the final reader; requesting a reference skips only response hydration.
-Explicit unchanged writes still capture broad refresh intent, while unchanged
-inputs preserve existing review eligibility. The fallback checks this update's
-transaction enrollments, including released savepoints, rather than optional
-audit-receipt collection; audited writes do not receive a second fallback capture.
+Explicit unchanged writes still register source changes, while unchanged
+inputs preserve existing review eligibility. Audited writes and explicit
+unchanged writes use the same registration owner; there is no kernel fallback
+based on audit counts or pending capture counts.
 Publication fences lock and reread the authoritative target, declared basis,
 direct references and backing rows. They do not rewrite an input revision or
 read corpus epochs. Each connection endpoint owns discovery for its own snapshot;
@@ -2222,7 +2245,18 @@ The five `refresh.family` Jobs cover search, recipes, conversions, embeddings
 and direct orphan cleanup. Each family scans current sources with a resumable
 cursor. Search, conversion and embedding-admission pages contain at most 25
 sources; recipe preparation processes one recipe and its authoritative closure.
-Ordinary writes capture fixed family intent instead of traversing dependents.
+`recordChange(tx, change)` is the shared registration owner. Source changes
+collect notification categories and enroll fixed family intent once per outer
+transaction. Successful savepoints merge their registrations; rolled-back
+savepoints discard them. Writers register inside the transaction that saves the
+source. Registering later on a pooled handle cannot make the earlier save
+atomic with Job intent. Projection publications use the same owner to notify
+readers without restarting every family. Image-description adoption explicitly
+invalidates the existing search family in its publication transaction; changed
+search documents retain their existing embedding admission owner. Family intent
+is deduplicated across source and projection registrations; the manifest is not a dependency scheduler.
+
+Ordinary writes enroll fixed family intent instead of traversing dependents.
 Inheritance-changing edits and financial settlement conflicts still validate
 their affected authoritative facts transactionally. These domain invariants do
 not authorize synchronous derived fanout.

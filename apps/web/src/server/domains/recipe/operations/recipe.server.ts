@@ -50,7 +50,6 @@ import {
   type EntityKernelContext,
   executeEntityAs,
 } from "~/server/entity-kernel";
-import { runMutationSideEffects } from "~/server/entity-kernel/repo/mutation-side-effects";
 import { createAppError } from "~/server/errors/app-error";
 import {
   bindShortcodeResolver,
@@ -100,13 +99,6 @@ export const duplicateWorkflow = bindWorkflow(
         entity: { entityKind: "recipe", entityId },
       });
     })
-    .effect("background", async ({ context }, { entityId }) =>
-      runMutationSideEffects(context.db, {
-        action: "created",
-        entity: { entity: "recipe", id: entityId },
-        source: "recipe.duplicate",
-      }),
-    )
     .output(({ duplicated }) => ({
       ...duplicated,
       sideEffects: EMPTY_MUTATION_SIDE_EFFECTS,

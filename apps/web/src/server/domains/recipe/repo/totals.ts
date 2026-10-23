@@ -1,11 +1,10 @@
+import type { IngredientId, RecipeId } from "@cubby/schemas/identifiers";
 /**
  * Persistence + invalidation for precomputed recipe cost and nutrition totals.
  * Totals live in the `Recipe.totals` jsonb; `totalsComputedAt IS NULL` marks a
  * row stale. Marking is event-driven (recipe/product writes); recompute is done
  * by the broad recipes Job. See recipe-costing.ts.
  */
-
-import type { IngredientId, RecipeId } from "@cubby/schemas/identifiers";
 import { toStoredTotals } from "@cubby/schemas/nutrition";
 import type { StoredRecipeTotals } from "@cubby/schemas/recipe-shared";
 import { and, count, eq, inArray, sql } from "drizzle-orm";
@@ -17,7 +16,6 @@ import {
   repositoryQueries as unwrapDb,
   repositoryTransaction as withTransaction,
   repositoryTransactionOn as withTransactionOn,
-  repositoryChanged,
 } from "~/server/db/repository-access.boundary";
 import {
   ingredient,
@@ -25,7 +23,7 @@ import {
   recipeSection,
   recipeSectionIngredient,
 } from "~/server/db/retained-tables";
-import { scheduleRefreshFamilies } from "~/server/generic/derived-refresh/repo/families";
+import { recordChange } from "~/server/generic/changes/repo/change";
 import { assertCurrentJob } from "~/server/generic/jobs/repo/execution";
 import { TraceNames, withTrace } from "~/server/observability/tracing";
 
@@ -70,7 +68,7 @@ const updateRecipeTotalsBatch = async (
     RETURNING (previous.totals IS DISTINCT FROM v.totals OR previous.stale) AS changed
   `);
   if (changed.rows.some((row) => row.changed))
-    await repositoryChanged(db, ["recipe"]);
+    await recordChange(db, { kind: "projection", categories: ["recipe"] });
 };
 
 /**
@@ -99,7 +97,7 @@ const markRecipeTotalsFresh = async (
     RETURNING previous.stale AS changed
   `);
   if (changed.rows.some((row) => row.changed))
-    await repositoryChanged(db, ["recipe"]);
+    await recordChange(db, { kind: "projection", categories: ["recipe"] });
 };
 
 /** Persist stale totals and refresh intent together, including standalone callers. */
@@ -111,7 +109,7 @@ export const markRecipesStale = async (
   await withTransactionOn(db, async (tx) => {
     await unwrapDb(tx).execute(sql`UPDATE ${recipe} SET "totalsComputedAt"=NULL
       WHERE ${inArray(recipe.id, ids)} AND ${notDeleted(recipe)}`);
-    await scheduleRefreshFamilies(tx, { invalidate: true });
+    await recordChange(tx, { kind: "source", categories: ["recipe"] });
   });
 };
 

@@ -1087,9 +1087,6 @@ Rules:
         displaySources: [
           {
             relationPath: ["product"],
-            priority: 1,
-            ordering: "declared",
-            identityEvidence: false,
           },
         ],
         ingress: [

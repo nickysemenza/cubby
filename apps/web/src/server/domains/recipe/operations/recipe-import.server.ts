@@ -93,11 +93,6 @@ import {
   cookbookRunInput,
   ensureRun,
 } from "~/server/domains/run/repo/ensure-run";
-import {
-  mutationEvents,
-  runMutationSideEffects,
-  runMutationSideEffectsForEntities,
-} from "~/server/entity-kernel/repo/mutation-side-effects";
 import { appErrorFromUnknown, createAppError } from "~/server/errors/app-error";
 import { bindShortcodeResolver } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import type { AuthenticatedStartOperationContext } from "~/server/operation-runtime/start-operation.server";
@@ -166,13 +161,6 @@ const insertImport = bindWorkflow(
         },
       ),
     )
-    .effect("sideEffects", ({ context }, { imported }) =>
-      runMutationSideEffects(context.operation.db, {
-        action: "updated",
-        entity: { entity: "recipe", id: imported.id },
-        source: "recipe.import",
-      }),
-    )
     .output(({ imported }) => ({
       id: parseShortcodeFor("recipe", imported.shortcode),
     })),
@@ -227,13 +215,6 @@ export const upsertCookbookWorkflow = bindWorkflow(
     })
     .commit("upserted", ({ context }, { input, actor, coverImageId }) =>
       upsertCookbook(context.db, { ...input, coverImageId }, actor),
-    )
-    .effect("sideEffects", ({ context }, { upserted }) =>
-      runMutationSideEffects(context.db, {
-        action: "updated",
-        entity: { entity: "cookbook", id: upserted.entityId },
-        source: "cookbook.upsert",
-      }),
     )
     .effect("isbnLink", async ({ context }, { input, upserted }) => {
       if (!input.isbn) return undefined;
@@ -460,19 +441,6 @@ const cookbookImportDefinition = defineBulkWorkflow({
           })
         : 0;
     })
-    .effect("sideEffects", async ({ context }, { input }) => {
-      const recipeIds = input.succeeded.map(({ result }) => result.recipeId);
-      if (recipeIds.length === 0) return;
-      await runMutationSideEffectsForEntities(
-        context.db,
-        mutationEvents(
-          "recipe",
-          "updated",
-          recipeIds,
-          "recipe.importCookbookStream",
-        ),
-      );
-    })
     .output(({ input }): ImportSummary => ({
       succeeded: input.succeeded.filter(({ result }) => result.event.ok).length,
       failed:
@@ -665,20 +633,6 @@ const notionImportDefinition = defineBulkWorkflow({
           })
         : Promise.resolve(0);
     })
-    .effect("sideEffects", ({ context }, { input }) => {
-      const recipeIds = input.succeeded.map(({ result }) => result.recipeId);
-      return recipeIds.length
-        ? runMutationSideEffectsForEntities(
-            context.db,
-            mutationEvents(
-              "recipe",
-              "updated",
-              recipeIds,
-              "recipe.importNotionSyncStream",
-            ),
-          )
-        : Promise.resolve();
-    })
     .output(({ input }): NotionSummary => ({
       succeeded: input.succeeded.filter(({ result }) => result.event.ok).length,
       failed:
@@ -732,17 +686,6 @@ export const deleteCookbookWorkflow = bindWorkflow(
     )
     .effect("storage", (_, { deleted }) =>
       deleteStoredObjects(deleted.detachedImageKeys),
-    )
-    .effect("sideEffects", ({ context }, { deleted }) =>
-      runMutationSideEffectsForEntities(
-        context.db,
-        mutationEvents(
-          "recipe",
-          "deleted",
-          deleted.deletedRecipeIds,
-          "recipe.deleteCookbook",
-        ),
-      ),
     )
     .output(({ deleted }) => ({
       deletedRecipes: deleted.deletedRecipeIds.length,
@@ -858,10 +801,6 @@ async function refinalizeStrandedRecipes(
   const stranded = await getStaleCookbookRecipeIds(context.db, cookbookId);
   if (stranded.length === 0) return;
   await context.services.recipeCosting.dispatchRecompute(stranded, { source });
-  await runMutationSideEffectsForEntities(
-    context.db,
-    mutationEvents("recipe", "updated", stranded, source),
-  );
 }
 
 /** `importCookbookWorkflow` for one bounded call: counts, raw errors and what is still missing. */

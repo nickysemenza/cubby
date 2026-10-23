@@ -1276,9 +1276,7 @@ export default defineEntity(
         displaySources: [
           {
             relationPath: ["meals"],
-            priority: 1,
             ordering: "newest",
-            identityEvidence: false,
           },
         ],
         ingress: [

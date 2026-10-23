@@ -129,7 +129,6 @@ export default defineEntity({
         },
       },
       {
-        display: { detail: false, list: false },
         key: "spendingCategoryName",
         kind: "text",
         nullable: true,
@@ -201,7 +200,10 @@ export default defineEntity({
         nullable: true,
         reference: { entity: "spendingCategory" },
         control: { kind: "specialized", renderer: "entity-select" },
-        display: { columnGroup: "Spending policy" },
+        display: {
+          columnGroup: "Spending policy",
+          labelPath: "spendingCategoryName",
+        },
         // `blocked` keeps the category unresolved: an explicit None.
         resolution: {
           inherit: {
@@ -270,7 +272,11 @@ export default defineEntity({
         nullable: true,
         reference: { entity: "productCategory" },
         control: { kind: "specialized", renderer: "entity-select" },
-        display: { columnGroup: "Classification", listHidden: true },
+        display: {
+          columnGroup: "Classification",
+          listHidden: true,
+          labelPath: "parentName",
+        },
         validation: {
           read: productCategoryShortcode.nullable(),
           create: productCategoryShortcode.nullable().default(null),
@@ -508,7 +514,6 @@ Rules:
         },
       },
       {
-        display: { detail: false, list: false },
         key: "parentName",
         kind: "text",
         nullable: true,
@@ -878,9 +883,6 @@ Rules:
       displaySourceOverrides: [
         {
           relationPath: ["products"],
-          priority: 0,
-          ordering: "declared",
-          identityEvidence: false,
         },
       ],
     },

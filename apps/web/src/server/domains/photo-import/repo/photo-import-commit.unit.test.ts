@@ -1,4 +1,5 @@
 import { shortcode } from "@cubby/schemas/identifiers";
+import { testEntityId } from "@cubby/schemas/testing";
 import { describe, expect, it, vi } from "vitest";
 
 import type { PhotoImportCommitInput } from "~/contracts/photo-import.contract";
@@ -72,7 +73,7 @@ const adapter: PhotoImportRouteAdapter = {
   validate: vi.fn(async () => undefined),
   apply: vi.fn(async () => ({
     createdDestinations: [],
-    sideEffectEvents: [],
+    changes: [],
   })),
 };
 
@@ -99,14 +100,57 @@ const portsFor = (
     activateImages: vi.fn(async () => (status === "PENDING" ? 1 : 0)),
     persistAnalysis: vi.fn(async () => undefined),
     withTransaction: async (_db, operation) => operation(database),
-    captureRefresh: vi.fn(async () => undefined),
-    runSideEffects: vi.fn(async () => undefined),
+    recordChange: vi.fn(async () => undefined),
+    registerLocationImageChange: vi.fn(async () => undefined),
     applyProvenance: vi.fn(async () => undefined),
     ...overrides,
   };
 };
 
 describe("photo import atomic commit", () => {
+  it("enrolls source changes and Location analysis before the import transaction exits", async () => {
+    let inTransaction = false;
+    const ports = portsFor("PENDING", {
+      withTransaction: async (_db, operation) => {
+        inTransaction = true;
+        try {
+          return await operation(database);
+        } finally {
+          inTransaction = false;
+        }
+      },
+      recordChange: vi.fn(async (db) => {
+        expect(db).toBe(database);
+        expect(inTransaction).toBe(true);
+      }),
+      registerLocationImageChange: vi.fn(async (db) => {
+        expect(db).toBe(database);
+        expect(inTransaction).toBe(true);
+      }),
+    });
+    await commitPhotoImport(
+      context,
+      input(),
+      {
+        ...adapter,
+        apply: async () => ({
+          createdDestinations: [],
+          changes: [
+            {
+              entity: {
+                entity: "location",
+                id: testEntityId("location", "photo-destination"),
+              },
+              locationImagesChanged: true,
+            },
+          ],
+        }),
+      },
+      ports,
+    );
+    expect(ports.recordChange).toHaveBeenCalledOnce();
+    expect(ports.registerLocationImageChange).toHaveBeenCalledOnce();
+  });
   it("keeps new images pending until the exact final activation", async () => {
     const ports = portsFor("PENDING");
     const result = await commitPhotoImport(context, input(), adapter, ports);
@@ -165,7 +209,6 @@ describe("photo import atomic commit", () => {
     await expect(
       commitPhotoImport(context, input(), adapter, withRollback),
     ).rejects.toThrow("expected 1");
-    expect(withRollback.runSideEffects).not.toHaveBeenCalled();
   });
 
   it("rejects a retry loser before route writes when preflight state changed", async () => {

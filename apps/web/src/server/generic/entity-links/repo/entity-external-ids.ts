@@ -1,3 +1,4 @@
+import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
 /**
  * The one seam for `EntityExternalId` and its `ExternalSource` registry.
  *
@@ -11,8 +12,6 @@
  * Every source slug is registered before it is written: `ensureExternalSources`
  * is the only door, and the FKs on every `source` column hold it to that.
  */
-
-import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
 import type { EntityExternalIdKind } from "@cubby/schemas/external-id";
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import {
@@ -38,7 +37,7 @@ import {
   type RepositoryQueryTransaction,
 } from "~/server/db/repository-access.boundary";
 import { createAppError } from "~/server/errors/app-error";
-import { recordContextRefresh } from "~/server/generic/derived-refresh/repo/capture.boundary";
+import { recordChange } from "~/server/generic/changes/repo/change";
 
 type Db = RepositoryQueryInput;
 
@@ -250,9 +249,10 @@ export async function replaceSettlementRefs(
       );
   if (added.length === 0) {
     if (removed.length)
-      await recordContextRefresh(tx, "EntityExternalId", [
-        { entityKind: "financialTransaction", entityId: transactionId },
-      ]);
+      await recordChange(tx, {
+        kind: "source",
+        categories: ["financialTransaction"],
+      });
     return;
   }
   await ensureExternalSources(
@@ -269,9 +269,10 @@ export async function replaceSettlementRefs(
       isPrimary: null,
     })),
   );
-  await recordContextRefresh(tx, "EntityExternalId", [
-    { entityKind: "financialTransaction", entityId: transactionId },
-  ]);
+  await recordChange(tx, {
+    kind: "source",
+    categories: ["financialTransaction"],
+  });
 }
 
 /**
@@ -333,7 +334,10 @@ export async function setSingleExternalId(
             eq(entityExternalId.externalId, value.externalId),
           ),
         );
-      await recordContextRefresh(tx, "EntityExternalId", [owner]);
+      await recordChange(tx, {
+        kind: "source",
+        categories: [owner.entityKind],
+      });
     }
     return;
   }
@@ -349,7 +353,11 @@ export async function setSingleExternalId(
         ),
       );
   if (!value) {
-    if (current) await recordContextRefresh(tx, "EntityExternalId", [owner]);
+    if (current)
+      await recordChange(tx, {
+        kind: "source",
+        categories: [owner.entityKind],
+      });
     return;
   }
   await assertExternalIdAvailable(tx, { ...slot, ...value }, owner.entityId);
@@ -363,7 +371,7 @@ export async function setSingleExternalId(
     url: value.url,
     isPrimary: true,
   });
-  await recordContextRefresh(tx, "EntityExternalId", [owner]);
+  await recordChange(tx, { kind: "source", categories: [owner.entityKind] });
 }
 
 /**

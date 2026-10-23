@@ -1,5 +1,6 @@
 import type { BackgroundTaskInput } from "@cubby/schemas/background-tasks";
 import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
+import type { EntityRef } from "@cubby/schemas/identifiers";
 import {
   expenseCreateInput,
   projectCreateInput,
@@ -37,6 +38,7 @@ import {
 } from "~/server/domains/project/repo/crud";
 import { createTask } from "~/server/domains/task/repo/crud";
 import { executeEntity } from "~/server/entity-kernel";
+import { recordChange } from "~/server/generic/changes/repo/change";
 import {
   getEntityEmbeddingDeletedAtForRef,
   seedEntityEmbedding,
@@ -56,13 +58,19 @@ import {
 } from "~/server/testing/repo.fixtures";
 
 import {
-  runMutationSideEffects as captureSideEffects,
-  type MutationSideEffectEvent,
-  type MutationSideEffectPorts,
+  registerLocationImageChange,
+  type LocationImageChangePorts,
 } from "./mutation-side-effects";
 
+type MutationSideEffectEvent = {
+  action: "created" | "updated" | "deleted";
+  entity: EntityRef;
+  source: string;
+  locationImagesChanged?: boolean;
+};
+
 /** Capture only external AI intent; derived search publication uses its real Job. */
-function capturingPorts(): MutationSideEffectPorts & {
+function capturingPorts(): LocationImageChangePorts & {
   published: BackgroundTaskInput[][];
 } {
   const published: BackgroundTaskInput[][] = [];
@@ -75,6 +83,24 @@ function capturingPorts(): MutationSideEffectPorts & {
 }
 
 const drain = (db: Database) => drainDerivedRefreshFrontier(db);
+
+async function captureSideEffects(
+  db: Database,
+  event: MutationSideEffectEvent,
+  ports = capturingPorts(),
+) {
+  await recordChange(db, { kind: "source", categories: [event.entity.entity] });
+  if (
+    event.entity.entity === "location" &&
+    event.locationImagesChanged &&
+    event.action !== "deleted"
+  )
+    await registerLocationImageChange(
+      db,
+      { locationId: event.entity.id },
+      ports,
+    );
+}
 
 async function runMutationSideEffects(
   db: Database,

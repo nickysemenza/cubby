@@ -17,11 +17,8 @@ import {
   createProductWriteActions,
   createProductReceiptActions,
 } from "~/server/domains/product/repo/write/product-writes";
-import {
-  mutationEvents,
-  runMutationSideEffectsForEntities,
-} from "~/server/entity-kernel/repo/mutation-side-effects";
 import { defineRepository } from "~/server/entity-kernel/repo/repository";
+import { recordChange } from "~/server/generic/changes/repo/change";
 import {
   bindShortcodeResolver,
   resolveLiveShortcodes,
@@ -52,12 +49,10 @@ async function linkedProductIngredientIds(db: Database, shortcodes: string[]) {
 }
 
 /**
- * `sideEffects: false` prevents duplicate generic fan-out: Product writes own
- * UPC image import and recipe re-costing. They still receive the kernel's
+ * Product writes own UPC image import and recipe re-costing. They receive the kernel's
  * transaction-bound context, and publications wait for its commit.
  */
 export const productRepository = defineRepository("product", {
-  sideEffects: false,
   updatePolicy: { recordFields: ["price", "fdc_id", "labelNutrition", "kind"] },
   lifecycle: {
     delete: PRODUCT_DELETE_EDGE_POLICY,
@@ -150,10 +145,7 @@ export const productRepository = defineRepository("product", {
     const { detachedImageKeys, deletedImageShortcodes, ingredientIds } =
       await deleteProducts(ctx.db, ids, ctx.actorContext);
     await Promise.all([
-      runMutationSideEffectsForEntities(
-        ctx.db,
-        mutationEvents("product", "deleted", ids, "product.delete"),
-      ),
+      recordChange(ctx.db, { kind: "source", categories: ["product"] }),
       ctx.services.recipeCosting.recomputeForIngredients(ingredientIds, {
         source: "product.delete",
       }),
@@ -175,20 +167,7 @@ export const productRepository = defineRepository("product", {
       ]);
       const summary = await mergeProducts(ctx.db, input, ctx.actorContext);
       await Promise.all([
-        runMutationSideEffectsForEntities(ctx.db, [
-          ...mutationEvents(
-            "product",
-            "updated",
-            [summary.keepEntityId],
-            "product.merge",
-          ),
-          ...mutationEvents(
-            "product",
-            "deleted",
-            summary.deletedEntityIds,
-            "product.merge",
-          ),
-        ]),
+        recordChange(ctx.db, { kind: "source", categories: ["product"] }),
         ctx.services.recipeCosting.recomputeForIngredients(ingredientIds, {
           source: "product.merge",
           entity: { entityKind: "product", entityId: summary.keepEntityId },

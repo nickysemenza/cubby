@@ -302,11 +302,10 @@ export default defineEntity({
         kind: "identifier",
         reference: { entity: "ledgerParty" },
         labelOverride: "Owner",
-        display: { list: false },
+        display: { list: false, labelPath: "ledgerPartyName" },
         validation: readOnly(ledgerPartyShortcode),
       },
       {
-        display: { detail: false, list: false },
         key: "ledgerPartyName",
         kind: "text",
         nullable: true,

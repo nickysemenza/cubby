@@ -35,7 +35,7 @@ import {
   computeChanges,
   logAuditEntries,
 } from "~/server/generic/audit-log/repo/audit-log";
-import { captureDerivedRefresh } from "~/server/generic/derived-refresh/repo/capture";
+import { recordChange } from "~/server/generic/changes/repo/change";
 import { resolveAllOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 type PatchTable = PgTable & {
@@ -214,17 +214,7 @@ export async function bulkPatchEntities<
         : [];
     });
     await logAuditEntries(tx, actor, auditEntries);
-    const audited = new Set(auditEntries.map((entry) => entry.entityId));
-    await captureDerivedRefresh(
-      tx,
-      before
-        .filter((row) => !audited.has(row.id))
-        .map((row) => ({
-          entityKind: spec.entity,
-          entityId: row.id,
-          changedFields: fields,
-        })),
-    );
+    await recordChange(tx, { kind: "source", categories: [spec.entity] });
     return {
       updatedIds: before.map((row) => parseEntityId(spec.entity, row.id)),
       updatedShortcodes: before.map((row) =>

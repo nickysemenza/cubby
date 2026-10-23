@@ -167,7 +167,7 @@ export default defineEntity({
         nullable: true,
         reference: { entity: "ingredient" },
         control: { kind: "specialized", renderer: "entity-select" },
-        display: { list: false },
+        display: { list: false, labelPath: "ingredientName" },
         validation: {
           read: ingredientShortcode.nullable(),
           create: ingredientShortcode.nullable().default(null),
@@ -234,7 +234,6 @@ export default defineEntity({
         },
       },
       {
-        display: { detail: false, list: false },
         key: "ingredientName",
         kind: "text",
         nullable: true,
@@ -496,15 +495,10 @@ export default defineEntity({
       displaySourceOverrides: [
         {
           relationPath: ["products"],
-          priority: 1,
-          ordering: "declared",
-          identityEvidence: false,
         },
         {
           relationPath: ["plantings", "entries"],
-          priority: 2,
           ordering: "newest",
-          identityEvidence: false,
         },
       ],
     },

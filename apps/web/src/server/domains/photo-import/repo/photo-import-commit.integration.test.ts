@@ -238,7 +238,6 @@ describe("photo import transaction", () => {
         storageStatus: "available" as const,
         verifiedAt: new Date(),
       }),
-      runSideEffects: async () => {},
     };
 
     await expect(
@@ -363,7 +362,7 @@ describe("photo import transaction", () => {
       context,
       input,
       manifestPhotoImportRouteAdapter,
-      { ...productionPhotoImportCommitPorts, runSideEffects: async () => {} },
+      productionPhotoImportCommitPorts,
     );
 
     expect(receipt.committedPhotoIds).toEqual([staged.shortcode]);
@@ -458,7 +457,6 @@ describe("photo import transaction", () => {
           storageStatus: "available" as const,
           verifiedAt: new Date(),
         }),
-        runSideEffects: async () => {},
       },
     );
 

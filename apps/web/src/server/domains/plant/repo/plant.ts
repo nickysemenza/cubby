@@ -93,9 +93,6 @@ type PlantRow = typeof plant.$inferSelect;
 const scaffold = listScaffold("plant", plant);
 
 const plantReadOptions = {
-  references: {
-    ingredientId: { kind: "lookup", name: "ingredientName", missing: "null" },
-  },
   bindings: (bind) => [
     bind(plantOut.pick({ gardenGuideKey: true, displayName: true }), (row) => ({
       gardenGuideKey: resolveGardenGuideKey(row.gardenGuideKey),

@@ -11,7 +11,7 @@ import {
   type SourceRef,
 } from "../declarations.ts";
 import { sourceRefImports } from "./filters.ts";
-import { entityProjectionMaps } from "./index.ts";
+import { entityProjectionMaps } from "./capabilities.ts";
 import { renderRecord } from "./record.ts";
 import { resolvedPrimarySearch } from "./shared.ts";
 

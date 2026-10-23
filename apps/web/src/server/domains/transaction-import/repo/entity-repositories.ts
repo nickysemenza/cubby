@@ -101,7 +101,6 @@ const sourceRead = {
   media: true,
   references: {
     source: { kind: "public" },
-    accountId: { kind: "lookup", name: "accountName", missing: "null" },
     batchId: { kind: "lookup", missing: "error", includeDeleted: true },
     withdrawalImportId: {
       kind: "lookup",

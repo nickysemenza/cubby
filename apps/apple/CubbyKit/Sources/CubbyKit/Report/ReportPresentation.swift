@@ -116,8 +116,16 @@ public struct ReportPresentation: Hashable, Sendable {
         }
     }
 
-    /// A record-bearing row: the server's words, a thumbnail, toned badges, an instant the
-    /// client prints in its own locale, and the record the row opens.
+    /// Precision-aware report time, retaining unrecognized wire values for diagnostics.
+    public enum RecordTime: Hashable, Sendable {
+        case instant(Date)
+        case date(String)
+        case local(String, timezone: String?)
+        case unknown(receiptAt: Date?)
+        case unsupported(JSONValue)
+    }
+
+    /// A server-composed record row and its navigation, evidence and commands.
     public struct RecordRow: Hashable, Sendable, Identifiable {
         public var id: Int
         public let entity: EntityKey?
@@ -126,6 +134,7 @@ public struct ReportPresentation: Hashable, Sendable {
         public let trailing: String?
         public let imageURL: URL?
         public let at: Date?
+        public var time: RecordTime? = nil
         /// The list of other records this row summarises, opened from the trailing figure.
         public let listLink: ListLink?
         /// Verbs offered on this row only; the server decides when one applies.
@@ -252,6 +261,7 @@ public struct ReportPresentation: Hashable, Sendable {
         public let text: String
         public let tone: Tone?
         public var ref: Ref? = nil
+        public var url: URL? = nil
     }
 
     public struct ListLink: Hashable, Sendable {
@@ -269,6 +279,7 @@ public struct ReportPresentation: Hashable, Sendable {
         public var filmstrip = false
         /// Ordered stages drawn on a rail with a state dot per row, nearest source first.
         public var timeline = false
+        public var disclosureLabel: String? = nil
         public let title: String?
         public let rows: [RecordRow]
         public let empty: String
@@ -409,7 +420,7 @@ public struct ReportPresentation: Hashable, Sendable {
                         Bar(
                             label: $0.label, value: $0.value, text: text($0.value, money: money),
                             tone: $0.tone.flatMap { Tone(rawValue: $0.rawValue) },
-                            ref: $0.ref.map { Ref(entity: $0.entity.rawValue, id: $0.id) })
+                            ref: $0.ref.map { Ref(entity: $0.entity, id: $0.id) })
                     },
                     marker: chart.marker, caption: chart.caption))
         case .table(let table):
@@ -419,7 +430,7 @@ public struct ReportPresentation: Hashable, Sendable {
                     rows: table.rows.map { row in
                         Table.Row(
                             id: row.id, cells: row.cells,
-                            ref: row.ref.map { Ref(entity: $0.entity.rawValue, id: $0.id) })
+                            ref: row.ref.map { Ref(entity: $0.entity, id: $0.id) })
                     },
                     empty: table.empty, truncated: table.truncated ?? false))
         case .schedule(let schedule):
@@ -452,6 +463,7 @@ public struct ReportPresentation: Hashable, Sendable {
         return Records(
             filmstrip: records.presentation == .filmstrip,
             timeline: records.presentation == .timeline,
+            disclosureLabel: records.disclosureLabel,
             title: records.title,
             rows: records.rows.enumerated().map { index, row in
                 RecordRow(
@@ -459,6 +471,17 @@ public struct ReportPresentation: Hashable, Sendable {
                     recordID: row.id, title: row.title,
                     trailing: row.trailing, imageURL: row.imageUrl.flatMap(URL.init(string:)),
                     at: row.at.flatMap(DatePresentation.parse),
+                    time: row.time.map { time -> RecordTime in
+                        switch time {
+                        case .instant(let value):
+                            return .instant(value.value)
+                        case .date(let value): return .date(value.value)
+                        case .local(let value): return .local(value.value, timezone: value.timezone)
+                        case .unknown(let value):
+                            return .unknown(receiptAt: value.receiptAt)
+                        case .unrecognized(let raw): return .unsupported(raw)
+                        }
+                    },
                     listLink: row.listLink.flatMap { link in
                         EntityKey(rawValue: link.entity).map {
                             ListLink(entity: $0, filters: link.filters)
@@ -478,7 +501,8 @@ public struct ReportPresentation: Hashable, Sendable {
                     lines: (row.lines ?? []).map {
                         Line(
                             text: $0.text, tone: $0.tone.flatMap { Tone(rawValue: $0.rawValue) },
-                            ref: $0.ref.map { Ref(entity: $0.entity.rawValue, id: $0.id) })
+                            ref: $0.ref.map { Ref(entity: $0.entity, id: $0.id) },
+                            url: $0.url.flatMap(URL.init(string:)))
                     },
                     detailLabel: row.detail?.label, detailText: row.detail?.text,
                     externalLinkLabel: row.externalLink?.label,

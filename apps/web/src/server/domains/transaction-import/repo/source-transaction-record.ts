@@ -46,7 +46,7 @@ import {
 } from "~/server/entity-kernel/repo/entity-identity-writer";
 import { createAppError } from "~/server/errors/app-error";
 import { logAuditEntries } from "~/server/generic/audit-log/repo/audit-log";
-import { recordContextRefresh } from "~/server/generic/derived-refresh/repo/capture.boundary";
+import { recordChange } from "~/server/generic/changes/repo/change";
 import { ensureExternalSources } from "~/server/generic/entity-links/repo/entity-external-ids";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { canonicalJson, jsonSnapshot } from "~/server/lib/canonical-json";
@@ -1004,7 +1004,7 @@ export async function recordSourceTransactionRecords(
           observedAt,
         );
       if (novel.length || revised.length || withdrawn)
-        await recordContextRefresh(tx, "SourceTransactionRecord", []);
+        await recordChange(tx, { kind: "source", categories: [] });
       const afterRows = await unwrapDb(tx)
         .select()
         .from(sourceTransactionRecord)
@@ -1347,7 +1347,7 @@ export async function updateSourceTransactionRecords(
       updated,
     );
     if (updated.length)
-      await recordContextRefresh(tx, "SourceTransactionRecord", []);
+      await recordChange(tx, { kind: "source", categories: [] });
     return { affected: updated.length };
   });
 }

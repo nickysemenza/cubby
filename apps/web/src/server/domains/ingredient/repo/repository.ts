@@ -8,15 +8,12 @@ import { z } from "zod";
 
 import { getIngredientByID as getIngredientDetail } from "~/server/domains/ingredient/repo/ingredient-with-food";
 import {
-  mutationEvents,
-  runMutationSideEffectsForEntities,
-} from "~/server/entity-kernel/repo/mutation-side-effects";
-import {
   asActor,
   defineRepository,
   listOn,
   listReadOn,
 } from "~/server/entity-kernel/repo/repository";
+import { recordChange } from "~/server/generic/changes/repo/change";
 import {
   bindShortcodeResolver,
   resolveLiveShortcode,
@@ -80,10 +77,7 @@ export const ingredientRepository = defineRepository("ingredient", {
   delete: async (ctx, shortcodes) => {
     const ids = await ingredientShortcodes.all(ctx.db, shortcodes);
     await deleteIngredients(ctx.db, ids, ctx.actorContext);
-    await runMutationSideEffectsForEntities(
-      ctx.db,
-      mutationEvents("ingredient", "deleted", ids, "ingredient.delete"),
-    );
+    await recordChange(ctx.db, { kind: "source", categories: ["ingredient"] });
   },
   merge: {
     input: ingredientMergeInput,
@@ -103,15 +97,10 @@ export const ingredientRepository = defineRepository("ingredient", {
           entity: { entityKind: "ingredient", entityId },
         },
       );
-      await runMutationSideEffectsForEntities(
-        ctx.db,
-        mutationEvents(
-          "ingredient",
-          "deleted",
-          summary.deletedEntityIds,
-          "ingredient.merge",
-        ),
-      );
+      await recordChange(ctx.db, {
+        kind: "source",
+        categories: ["ingredient"],
+      });
       return {
         output: {
           ingredient: await getIngredientByID(ctx.db, entityId),

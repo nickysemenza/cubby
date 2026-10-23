@@ -1,5 +1,4 @@
-import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
-import { ENTITY_LABEL, parseEntityRef } from "@cubby/schemas/identifiers";
+import { ENTITY_LABEL } from "@cubby/schemas/identifiers";
 import { EMPTY_MUTATION_SIDE_EFFECTS } from "@cubby/schemas/mutation-side-effects";
 import { searchableEntitySchema } from "@cubby/schemas/search";
 import { z } from "zod";
@@ -8,11 +7,6 @@ import { generatedEntityRelationListResultSchema } from "~/entity/generated/enti
 import { deleteStoredObjects } from "~/server/clients/s3";
 import { withTransactionDatabase } from "~/server/db/helpers";
 import { runAfterCommit } from "~/server/db/helpers/core";
-import {
-  isMutationSideEffectRef,
-  type MutationSideEffectEvent,
-  runMutationSideEffects,
-} from "~/server/entity-kernel/repo/mutation-side-effects";
 import { createAppError } from "~/server/errors/app-error";
 import {
   ENTITY_KERNEL_BINDINGS,
@@ -23,6 +17,7 @@ import {
   executeGeneratedRelationMutation,
   listGeneratedRelation,
 } from "~/server/generated/entity-relation-bindings.gen";
+import { recordChange } from "~/server/generic/changes/repo/change";
 import {
   findRelatedSearchHits,
   findSearchHits,
@@ -80,7 +75,24 @@ const executeMerge = bindWorkflow(
       return { binding, operation };
     })
     .commit("merged", async ({ context }, { input, owner }) =>
-      owner.operation.execute(context, input.data),
+      withTransactionDatabase(context.db, async (db) => {
+        const merged = await owner.operation.execute(
+          {
+            ...context,
+            db,
+            services: {
+              ...context.services,
+              recipeCosting: context.services.recipeCosting.bindTo(db),
+            },
+          },
+          input.data,
+        );
+        await recordChange(db, {
+          kind: "source",
+          categories: [owner.binding.entity],
+        });
+        return merged;
+      }),
     )
     // Inside a caller's transaction the R2 delete waits for its commit.
     .effect("storage", async ({ context }, { merged }) =>
@@ -88,22 +100,6 @@ const executeMerge = bindWorkflow(
         deleteStoredObjects(merged.detachedImageKeys),
       ),
     )
-    .effect("sideEffects", async ({ context }, { owner, merged }) => {
-      const entityRef = merged.entityId
-        ? parseEntityRef<ShortcodeEntity>(owner.binding.entity, merged.entityId)
-        : null;
-      if (
-        entityRef &&
-        owner.binding.sideEffects &&
-        isMutationSideEffectRef(entityRef)
-      ) {
-        await runMutationSideEffects(context.db, {
-          action: "updated",
-          entity: entityRef,
-          source: `${owner.binding.entity}.merge`,
-        });
-      }
-    })
     .output(({ input, merged }) =>
       entityBrowserMutationResultSchema.parse({
         action: input.action,
@@ -118,7 +114,7 @@ const executeMerge = bindWorkflow(
 /**
  * The kernel `resolve` action over the declared `capabilities.resolve`. A
  * creating resolve runs in one kernel-owned transaction with the created
- * rows' projections; their post-commit effects follow the commit.
+ * source change registration.
  */
 export const resolveEntity = async (
   ctx: EntityKernelContext,
@@ -135,33 +131,20 @@ export const resolveEntity = async (
       "CONSTRAINT_VIOLATION",
       `${ENTITY_LABEL[entity]} resolve never creates rows; create the missing ${ENTITY_LABEL[entity]} explicitly or pick a candidate.`,
     );
-  const source = `${entity}.resolve`;
-  const createdEvents = (
-    resolved: Awaited<ReturnType<typeof resolveNames>>,
-  ): MutationSideEffectEvent[] =>
-    ENTITY_KERNEL_BINDINGS[entity].sideEffects
-      ? [
-          ...new Set(
-            resolved.flatMap(({ row }) => (row?.created ? [row.id] : [])),
-          ),
-        ].flatMap((id) => {
-          const ref = parseEntityRef<ShortcodeEntity>(entity, id);
-          return isMutationSideEffectRef(ref)
-            ? [{ action: "created" as const, entity: ref, source }]
-            : [];
-        })
-      : [];
   const resolved = command.create
     ? await withTransactionDatabase(ctx.db, async (transactionDb) => {
         const rows = await resolveNames(transactionDb, entity, requests, {
           create: true,
           actor: ctx.actorContext,
         });
+        if (rows.some(({ row }) => row?.created))
+          await recordChange(transactionDb, {
+            kind: "source",
+            categories: [entity],
+          });
         return rows;
       })
     : await resolveNames(ctx.db, entity, requests, { create: false });
-  for (const event of createdEvents(resolved))
-    await runMutationSideEffects(ctx.db, event, undefined, { captured: true });
   return entityResolveResultSchema.parse({
     action: "resolve",
     entity,

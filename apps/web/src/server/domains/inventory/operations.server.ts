@@ -28,6 +28,7 @@ import type { z } from "zod";
 
 import { inventoryContract } from "~/contracts/inventory.contract";
 import type { Database } from "~/server/db";
+import { withTransactionDatabase } from "~/server/db/helpers";
 import { recomputeRecipesForPriceAffectedProducts } from "~/server/domains/expense/repo/price-affected-recipes";
 import {
   addInventoryEntries,
@@ -50,11 +51,8 @@ import {
 import { findDuplicateUniqueProducts } from "~/server/domains/product/repo/analytics";
 import { discardFromInventoryEntries } from "~/server/domains/product/repo/discard";
 import type { RecipeCostingService } from "~/server/domains/recipe/repo/recipe-costing";
-import {
-  mutationEvents,
-  runMutationSideEffectsForEntities,
-} from "~/server/entity-kernel/repo/mutation-side-effects";
 import { createAppError } from "~/server/errors/app-error";
+import { recordChange } from "~/server/generic/changes/repo/change";
 import {
   bindShortcodeResolver,
   lookupShortcodes,
@@ -84,19 +82,16 @@ const inventoryMutation = <
         resolve(context.db, input),
       )
       .commit("written", async ({ context }, { input, resolved }) =>
-        write(context.db, context.actorContext, input, resolved),
-      )
-      .effect("entityIds", async ({ context }, { written }) =>
-        inventoryShortcodes.all(
-          context.db,
-          written.items.map((item) => item.id),
-        ),
-      )
-      .effect("sideEffectsRun", async ({ context }, { entityIds }) =>
-        runMutationSideEffectsForEntities(
-          context.db,
-          mutationEvents("inventory", "updated", entityIds, name),
-        ),
+        withTransactionDatabase(context.db, async (db) => {
+          const written = await write(
+            db,
+            context.actorContext,
+            input,
+            resolved,
+          );
+          await recordChange(db, { kind: "source", categories: ["inventory"] });
+          return written;
+        }),
       )
       .output(({ written }) => ({
         ...written,
@@ -253,46 +248,31 @@ export const bulkDiscardInventoryWorkflow = bindWorkflow(
       return resolvedEntries;
     })
     .commit("result", async ({ context }, { input, resolvedEntries }) => {
-      return await discardFromInventoryEntries(
-        context.db,
-        {
-          items: input.items.map((item) => ({
-            inventoryEntryId: parseEntityId(
-              "inventory",
-              resolvedEntries.get(item.inventoryEntryId)!,
-            ),
-            quantity: item.quantity,
-          })),
-          trade: input.trade,
-          date: input.date,
-          reason: input.reason,
-        },
-        context.actorContext,
-      );
+      return withTransactionDatabase(context.db, async (db) => {
+        const result = await discardFromInventoryEntries(
+          db,
+          {
+            items: input.items.map((item) => ({
+              inventoryEntryId: parseEntityId(
+                "inventory",
+                resolvedEntries.get(item.inventoryEntryId)!,
+              ),
+              quantity: item.quantity,
+            })),
+            trade: input.trade,
+            date: input.date,
+            reason: input.reason,
+          },
+          context.actorContext,
+        );
+        await recordChange(db, {
+          kind: "source",
+          categories: ["expense", "inventory"],
+        });
+        return result;
+      });
     })
     .effect("sideEffectsRun", async ({ context }, { result }) => {
-      await runMutationSideEffectsForEntities(
-        context.db,
-        result.items.flatMap((line) => [
-          ...mutationEvents(
-            "expense",
-            "created",
-            [line.expenseId],
-            "inventory.bulkDiscard",
-          ),
-          // An entry that emptied was soft-deleted; one that was drawn down was
-          // updated. Reporting the wrong one leaves a removed row in the search
-          // index.
-          ...(line.inventory
-            ? mutationEvents(
-                "inventory",
-                line.inventory.removed ? "deleted" : "updated",
-                [line.inventory.entryId],
-                "inventory.bulkDiscard",
-              )
-            : []),
-        ]),
-      );
       await recomputeRecipesForPriceAffectedProducts(
         context.db,
         context.services.recipeCosting,
@@ -474,39 +454,19 @@ const reconcileSessionWorkflow = bindWorkflow(
     .commit(
       "result",
       async ({ context: { db, actorContext } }, { resolvedInput }) => {
-        return await reconcileLocationSession(db, resolvedInput, actorContext);
-      },
-    )
-    .effect(
-      "survivingEntityIds",
-      async ({ context: { db } }, { result: { items } }) => {
-        return await inventoryShortcodes.all(
-          db,
-          items.map((entry) => entry.id),
-        );
-      },
-    )
-    .effect(
-      "sideEffectsRun",
-      async (
-        { context: { db } },
-        { result: { removedIds, recomputeNeeded }, survivingEntityIds },
-      ) => {
-        if (!recomputeNeeded) return;
-        await runMutationSideEffectsForEntities(db, [
-          ...mutationEvents(
-            "inventory",
-            "updated",
-            survivingEntityIds,
-            "inventory.reconcileSession",
-          ),
-          ...mutationEvents(
-            "inventory",
-            "deleted",
-            removedIds,
-            "inventory.reconcileSession",
-          ),
-        ]);
+        return withTransactionDatabase(db, async (transactionDb) => {
+          const result = await reconcileLocationSession(
+            transactionDb,
+            resolvedInput,
+            actorContext,
+          );
+          if (result.recomputeNeeded)
+            await recordChange(transactionDb, {
+              kind: "source",
+              categories: ["inventory"],
+            });
+          return result;
+        });
       },
     )
     .output(({ result: { items } }) => ({
@@ -560,38 +520,36 @@ async function setOwnership(
   context: InventoryMutationContext,
   input: z.output<typeof setInventoryOwnershipInput>,
 ) {
-  const id = await inventoryShortcodes.one(context.db, input.inventoryEntryId);
-  const ids = await setInventoryOwnership(
-    context.db,
-    id,
-    input.ownership,
-    input.quantity,
-    context.actorContext,
-  );
-  await runMutationSideEffectsForEntities(
-    context.db,
-    mutationEvents("inventory", "updated", ids, "inventory.setOwnership"),
-  );
-  return { entries: await inventoryCodesForIds(context.db, ids) };
+  return withTransactionDatabase(context.db, async (db) => {
+    const id = await inventoryShortcodes.one(db, input.inventoryEntryId);
+    const ids = await setInventoryOwnership(
+      db,
+      id,
+      input.ownership,
+      input.quantity,
+      context.actorContext,
+    );
+    await recordChange(db, { kind: "source", categories: ["inventory"] });
+    return { entries: await inventoryCodesForIds(db, ids) };
+  });
 }
 
 async function confirmOwnership(
   context: InventoryMutationContext,
   input: z.output<typeof confirmInventoryOwnershipInput>,
 ) {
-  const id = await inventoryShortcodes.one(context.db, input.inventoryEntryId);
-  const ids = await confirmInventoryOwnership(
-    context.db,
-    id,
-    input.evidenceFingerprint,
-    input.quantity,
-    context.actorContext,
-  );
-  await runMutationSideEffectsForEntities(
-    context.db,
-    mutationEvents("inventory", "updated", ids, "inventory.confirmOwnership"),
-  );
-  return { entries: await inventoryCodesForIds(context.db, ids) };
+  return withTransactionDatabase(context.db, async (db) => {
+    const id = await inventoryShortcodes.one(db, input.inventoryEntryId);
+    const ids = await confirmInventoryOwnership(
+      db,
+      id,
+      input.evidenceFingerprint,
+      input.quantity,
+      context.actorContext,
+    );
+    await recordChange(db, { kind: "source", categories: ["inventory"] });
+    return { entries: await inventoryCodesForIds(db, ids) };
+  });
 }
 
 export async function receiveExpenseInventoryWorkflow(
@@ -599,18 +557,14 @@ export async function receiveExpenseInventoryWorkflow(
   actor: ActorContext,
   input: InventoryReceiveExpenseInput,
 ) {
-  const received = await receiveExpenseInventory(db, input, actor);
-  const ids = await inventoryShortcodes.all(db, [received.item.id]);
-  await runMutationSideEffectsForEntities(
-    db,
-    mutationEvents(
-      "inventory",
-      input.action.kind === "create" ? "created" : "updated",
-      ids,
-      "inventory.receiveExpense",
-    ),
-  );
-  return { ...received, sideEffects: EMPTY_MUTATION_SIDE_EFFECTS };
+  return withTransactionDatabase(db, async (transactionDb) => {
+    const received = await receiveExpenseInventory(transactionDb, input, actor);
+    await recordChange(transactionDb, {
+      kind: "source",
+      categories: ["inventory"],
+    });
+    return { ...received, sideEffects: EMPTY_MUTATION_SIDE_EFFECTS };
+  });
 }
 
 export const inventoryHandlers = implementOperationDomain(inventoryContract, {

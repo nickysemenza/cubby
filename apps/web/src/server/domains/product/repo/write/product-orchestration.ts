@@ -55,7 +55,6 @@ import {
 } from "~/server/domains/product/repo/write/scan-code";
 import type { RecipeCostingService } from "~/server/domains/recipe/repo/recipe-costing";
 import { resolveProductBrandName } from "~/server/domains/vendor/repo/product-brand";
-import { runMutationSideEffects } from "~/server/entity-kernel/repo/mutation-side-effects";
 import { AppError, createAppError } from "~/server/errors/app-error";
 import {
   isUniqueViolation,
@@ -148,11 +147,6 @@ export async function createProductWithReadSideEffects<
     input,
     actor,
   );
-  await runMutationSideEffects(services.db, {
-    action: "created",
-    entity: { entity: "product", id: entityId },
-    source: "product.create",
-  });
 
   const warnings = input.barcode
     ? await importCoverPhoto(
@@ -201,11 +195,7 @@ export async function updateProductWithReadSideEffects<
     data,
     actor,
   );
-  await runMutationSideEffects(services.db, {
-    action: "updated",
-    entity: { entity: "product", id: id },
-    source: "product.update",
-  });
+
   const ingredientShortcodes = uniq(
     [previous?.ingredient?.id, result.ingredient?.id].filter(
       (ingredientId): ingredientId is NonNullable<typeof ingredientId> =>
@@ -267,11 +257,6 @@ export async function applyUpcDataWithSideEffects(
   const priceChanged = data.price !== undefined;
   if (Object.keys(data).length > 0) {
     await services.product.updateProduct(input.id, data, actor);
-    await runMutationSideEffects(services.db, {
-      action: "updated",
-      entity: { entity: "product", id: input.id },
-      source: "product.applyUpcData",
-    });
   }
 
   // PDF manuals share the images relation — a manual-only product still has
@@ -416,17 +401,9 @@ export async function findOrCreateByUPC(
   if (existing) return matched(existing);
 
   const emitCreated = async (
-    {
-      output: product,
-      entityId,
-    }: { output: ProductTopLevelOut; entityId: ProductId },
+    { output: product }: { output: ProductTopLevelOut; entityId: ProductId },
     warnings: readonly string[] = [],
   ): Promise<FindOrCreateByUPCResult> => {
-    await runMutationSideEffects(db, {
-      action: "created",
-      entity: { entity: "product", id: entityId },
-      source: "product.findOrCreateByUPC",
-    });
     return {
       product,
       created: true,
@@ -547,17 +524,9 @@ async function findOrCreateByISBN(
   if (existing) return matched(existing);
 
   const emitCreated = async (
-    {
-      output: product,
-      entityId,
-    }: { output: ProductTopLevelOut; entityId: ProductId },
+    { output: product }: { output: ProductTopLevelOut; entityId: ProductId },
     warnings: readonly string[],
   ): Promise<FindOrCreateByUPCResult> => {
-    await runMutationSideEffects(db, {
-      action: "created",
-      entity: { entity: "product", id: entityId },
-      source: "product.findOrCreateByCode",
-    });
     return {
       product,
       created: true,
@@ -581,11 +550,7 @@ async function findOrCreateByISBN(
           { barcode: canonicalGtin },
           actor,
         );
-        await runMutationSideEffects(db, {
-          action: "updated",
-          entity: { entity: "product", id: shelved },
-          source: "product.findOrCreateByCode",
-        });
+
         return matched(attached);
       }
       const identity = external ? externalIdentity(external) : null;

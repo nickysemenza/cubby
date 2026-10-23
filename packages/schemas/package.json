@@ -229,7 +229,9 @@
     "./ai-evaluation": "./src/ai-evaluation.ts",
     "./assessment": "./src/assessment.ts",
     "./decision-step": "./src/decision-step.ts",
-    "./entity-mutation": "./src/entity-mutation.ts"
+    "./entity-mutation": "./src/entity-mutation.ts",
+    "./entity-projection-types": "./src/entity-projection-types.ts",
+    "./entity-schema-bindings": "./src/entity-schema-bindings.ts"
   },
   "scripts": {
     "typecheck": "node ../../scripts/ensure.ts generate && node ../../scripts/tsc.ts --noEmit",

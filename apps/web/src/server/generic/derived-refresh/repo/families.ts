@@ -32,6 +32,19 @@ export async function lockRefreshFamily(
     .for("update");
 }
 
+/** Explicit projection dependencies reuse the same durable family Job. */
+export async function invalidateRefreshFamily(
+  db: RepositoryQueryInput,
+  family: RefreshFamily,
+) {
+  await enqueueJob(db, {
+    key: `refresh:${family}`,
+    kind: "refresh.family",
+    input: { family },
+    invalidate: true,
+  });
+}
+
 /** Every edit captures a broad pass in its own transaction. No dependency graph is scheduled. */
 export async function scheduleRefreshFamilies(
   db: RepositoryQueryInput,
@@ -43,8 +56,7 @@ export async function scheduleRefreshFamilies(
       kind: "refresh.family",
       input: { family },
     };
-    if (options.invalidate)
-      await enqueueJob(db, { ...input, invalidate: true });
+    if (options.invalidate) await invalidateRefreshFamily(db, family);
     else await repeatJob(db, input, REFRESH_INTERVAL_MS);
   }
 }

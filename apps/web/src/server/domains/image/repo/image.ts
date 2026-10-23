@@ -44,10 +44,7 @@ import {
 import { oneOrManyValues } from "@cubby/schemas/pagination";
 import { photoRunImageState } from "@cubby/schemas/photo-import-run";
 import type { PurchaseDocumentKind } from "@cubby/schemas/purchase";
-import {
-  searchableEntitySchema,
-  type SearchableEntityRef,
-} from "@cubby/schemas/search";
+import { searchableEntitySchema } from "@cubby/schemas/search";
 import {
   and,
   asc,
@@ -155,6 +152,7 @@ import {
 import { createAppError } from "~/server/errors/app-error";
 import { retireAssessmentTargetsTx } from "~/server/generic/assessment/repo/assessment-state";
 import { logAuditEntry } from "~/server/generic/audit-log/repo/audit-log";
+import { recordChange } from "~/server/generic/changes/repo/change";
 import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
 import { softDeleteEntitySearchArtifactsTx } from "~/server/generic/embedding/repo/entity-embedding-cleanup";
 import { shortcodeIdsSql } from "~/server/generic/list/repo/field-compiler";
@@ -163,11 +161,6 @@ import { listScaffold } from "~/server/generic/list/repo/list";
 import type { ListProjection } from "~/server/generic/list/repo/list-contracts";
 import { type ListReadOptions } from "~/server/generic/list/repo/list-projection";
 import { completeListReader } from "~/server/generic/list/repo/list-read-adapters";
-import {
-  findDirectImageSearchOwnerRefs,
-  refreshCapturedImageSearchOwnerRefs,
-  refreshDirectImageOwnerSearchDocuments,
-} from "~/server/generic/search/repo/search-document";
 import {
   lookupEntityReferences,
   resolveAllPresent,
@@ -383,27 +376,13 @@ export const attachExistingImageToEntity = async (
         },
       });
     }
+    await recordChange(tx, {
+      kind: "source",
+      categories: ["image", "relatedData"],
+    });
     return { reused };
   });
-  // The gallery association changes the direct owner set of the image's
-  // description and correction text. Refresh after commit so search only sees
-  // a live attachment.
-  await refreshDirectImageOwnerSearchDocuments(db, imageId);
   return attached;
-};
-
-/**
- * Project a just-inserted Image (and its direct owners) and queue the
- * embedding. Image repository writes opt out of kernel side effects
- * (`sideEffects: false`), so without this an upload is invisible to
- * the maintenance embeddings step, which only repairs already-projected documents.
- */
-const projectNewImage = async (db: Database, imageId: string) => {
-  await refreshCapturedImageSearchOwnerRefs(
-    db,
-    await findDirectImageSearchOwnerRefs(db, imageId),
-    "image.upload",
-  );
 };
 
 export const createPendingImageRecord = async (
@@ -438,23 +417,28 @@ export const createPendingImageRecord = async (
 ) => {
   // `insertWithShortcode`, not a bare insert: Image now carries a public `IMG-`
   // id, and minting is what turns a row into something addressable.
-  const created = await insertWithShortcode(db, "image", {
-    key,
-    filename,
-    size,
-    contentType,
-    status: "PENDING",
-    perceptualHash,
-    sourceFingerprint,
-    width,
-    height,
-    source,
-    sourcePageUrl,
-    sourceAssetUrl,
-    sourceName,
+  return withTransaction(db, async (tx) => {
+    const created = await insertWithShortcode(tx, "image", {
+      key,
+      filename,
+      size,
+      contentType,
+      status: "PENDING",
+      perceptualHash,
+      sourceFingerprint,
+      width,
+      height,
+      source,
+      sourcePageUrl,
+      sourceAssetUrl,
+      sourceName,
+    });
+    await recordChange(tx, {
+      kind: "source",
+      categories: ["image", "relatedData"],
+    });
+    return created;
   });
-  await projectNewImage(db, created.id);
-  return created;
 };
 
 type UploadedImageParams = {
@@ -493,14 +477,19 @@ const insertUploadedImageRecord = async (
     status: "UPLOADED",
   });
 
-/** Database-only: inside a transaction use {@link insertUploadedImageRecord} and project after commit. */
+/** Persist an uploaded image and its source intent together. */
 export const createUploadedImageRecord = async (
   db: Database,
   params: UploadedImageParams,
 ) => {
-  const created = await insertUploadedImageRecord(db, params);
-  await projectNewImage(db, created.id);
-  return created;
+  return withTransaction(db, async (tx) => {
+    const created = await insertUploadedImageRecord(tx, params);
+    await recordChange(tx, {
+      kind: "source",
+      categories: ["image", "relatedData"],
+    });
+    return created;
+  });
 };
 
 export const getImageHashIndex = async (
@@ -1762,7 +1751,6 @@ export const cullPendingImages = async (
         count: 0,
         deletedIds: [],
         deletedKeys: [],
-        affectedOwnerSearchRefs: [],
       };
     }
 
@@ -1773,14 +1761,8 @@ export const cullPendingImages = async (
       count: deleted.deletedIds.length,
       deletedIds: deleted.deletedIds,
       deletedKeys: deleted.deletedKeys,
-      affectedOwnerSearchRefs: deleted.affectedOwnerSearchRefs,
     };
   });
-  await refreshCapturedImageSearchOwnerRefs(
-    db,
-    result.affectedOwnerSearchRefs,
-    "image.cull",
-  );
   return {
     count: result.count,
     deletedIds: result.deletedIds,
@@ -2010,10 +1992,6 @@ type DeletedImages = {
   deletedKeys: string[];
 };
 
-type DeletedImagesTx = DeletedImages & {
-  affectedOwnerSearchRefs: SearchableEntityRef[];
-};
-
 /**
  * Hard-delete image rows and return their R2 keys so the caller can drop the
  * objects too.
@@ -2036,14 +2014,8 @@ export const deleteImages = async (
 ): Promise<DeletedImages> => {
   if (imageIds.length === 0)
     return { deletedIds: [], deletedShortcodes: [], deletedKeys: [] };
-  const { affectedOwnerSearchRefs, ...deleted } = await withTransaction(
-    db,
-    (tx) => deleteImagesTx(tx, imageIds),
-  );
-  await refreshCapturedImageSearchOwnerRefs(
-    db,
-    affectedOwnerSearchRefs,
-    "image.delete",
+  const deleted = await withTransaction(db, (tx) =>
+    deleteImagesTx(tx, imageIds),
   );
   return deleted;
 };
@@ -2060,13 +2032,12 @@ export const deleteImages = async (
 const deleteImagesTx = async (
   tx: DrizzleTransaction,
   imageIds: string[],
-): Promise<DeletedImagesTx> => {
+): Promise<DeletedImages> => {
   if (imageIds.length === 0)
     return {
       deletedIds: [],
       deletedShortcodes: [],
       deletedKeys: [],
-      affectedOwnerSearchRefs: [],
     };
 
   const rows = await fetchExistingImages(tx, imageIds);
@@ -2075,17 +2046,9 @@ const deleteImagesTx = async (
       deletedIds: [],
       deletedShortcodes: [],
       deletedKeys: [],
-      affectedOwnerSearchRefs: [],
     };
 
   const ids = rows.map((row) => row.id);
-  const affectedOwnerSearchRefs: SearchableEntityRef[] = [];
-  for (const id of ids) {
-    const refs = await findDirectImageSearchOwnerRefs(tx, id);
-    affectedOwnerSearchRefs.push(
-      ...refs.filter((ref) => ref.entityKind !== "image"),
-    );
-  }
   const derivatives = await tx
     .select({ id: imageDerivative.id, key: imageDerivative.key })
     .from(imageDerivative)
@@ -2135,6 +2098,10 @@ const deleteImagesTx = async (
   await retireAssessmentTargetsTx(tx, "image", ids);
   await tombstoneEntityIdentities(tx, ids);
   await tx.delete(image).where(inArray(image.id, ids));
+  await recordChange(tx, {
+    kind: "source",
+    categories: ["image", "relatedData"],
+  });
 
   await touchUpdatedAt(
     tx,
@@ -2151,7 +2118,6 @@ const deleteImagesTx = async (
       ...rows.map((row) => row.key),
       ...derivatives.map((row) => row.key),
     ],
-    affectedOwnerSearchRefs,
   };
 };
 
@@ -2285,13 +2251,12 @@ export const detachImagesFromEntity = async (
 export const reapUnreferencedImages = async (
   tx: DrizzleTransaction,
   imageIds: string[],
-): Promise<DeletedImagesTx> => {
+): Promise<DeletedImages> => {
   if (imageIds.length === 0)
     return {
       deletedIds: [],
       deletedShortcodes: [],
       deletedKeys: [],
-      affectedOwnerSearchRefs: [],
     };
   const referenced = await findReferencedImageIds(tx, imageIds);
   return await deleteImagesTx(
@@ -3200,11 +3165,12 @@ export const createOrReuseAttachedImage = async (
           ),
         );
     }
+    await recordChange(tx, {
+      kind: "source",
+      categories: ["image", "relatedData"],
+    });
     return { row, reused: false };
   });
-  // After commit, so the queued embedding never races an uncommitted row; the
-  // refresh covers both the new Image document and the owner it now feeds.
-  if (!attached.reused) await projectNewImage(db, attached.row.id);
   return attached;
 };
 

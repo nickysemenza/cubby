@@ -18,7 +18,6 @@ import { z } from "zod";
 
 import { type Database } from "~/server/db/database";
 import { updateManyAndReturn } from "~/server/db/helpers/crud";
-import { repositoryChanged } from "~/server/db/repository-access.boundary";
 import {
   type RepositoryQueryInput,
   type RepositoryQueryTransaction as DrizzleTransaction,
@@ -29,6 +28,7 @@ import {
   assessmentState,
   feedback,
 } from "~/server/db/retained-tables";
+import { recordChange } from "~/server/generic/changes/repo/change";
 import { canonicalJson, jsonSnapshot } from "~/server/lib/canonical-json";
 
 /**
@@ -201,12 +201,15 @@ export async function transitionAssessmentStates(
   if (updated.length !== changes.length)
     throw new Error("Locked AssessmentState disappeared during transition");
   if (updated.length)
-    await repositoryChanged(db, [
-      "ai",
-      "suggestions",
-      "problems",
-      ...updated.map((row) => row.entity),
-    ]);
+    await recordChange(db, {
+      kind: "projection",
+      categories: [
+        "ai",
+        "suggestions",
+        "problems",
+        ...updated.map((row) => row.entity),
+      ],
+    });
   return updated;
 }
 
@@ -247,14 +250,17 @@ export async function insertPublishedAssessmentStates(
             : value.suggestedValue,
       })),
     );
-  await repositoryChanged(db, [
-    ...new Set([
-      "ai",
-      "suggestions",
-      "problems",
-      ...values.map((value) => value.entity),
-    ]),
-  ]);
+  await recordChange(db, {
+    kind: "projection",
+    categories: [
+      ...new Set([
+        "ai",
+        "suggestions",
+        "problems",
+        ...values.map((value) => value.entity),
+      ]),
+    ],
+  });
 }
 
 /**
@@ -281,7 +287,10 @@ export async function openAssessmentState(
     [{ id: opened.id, patch: projectionColumns(opened) }],
     cause,
   );
-  await repositoryChanged(db, ["ai", "suggestions", "problems", opened.entity]);
+  await recordChange(db, {
+    kind: "projection",
+    categories: ["ai", "suggestions", "problems", opened.entity],
+  });
   return opened;
 }
 

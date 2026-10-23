@@ -8,7 +8,7 @@ import {
   countImagesMissingSearchDocument,
   selectImageIdsMissingSearchDocument,
 } from "~/server/domains/image/repo/image";
-import { refreshDerivedSearchRefs } from "~/server/entity-kernel/repo/mutation-side-effects";
+import { recordChange } from "~/server/generic/changes/repo/change";
 
 /**
  * Project and queue embeddings for live images that never got a SearchDocument.
@@ -36,11 +36,7 @@ export async function backfillImageSearchDocuments(
     batches += 1;
     scanned += ids.length;
     afterId = ids.at(-1);
-    await refreshDerivedSearchRefs(
-      db,
-      ids.map((entityId) => ({ entityKind: "image" as const, entityId })),
-      "maintenance.backfill-image-search",
-    );
+    await recordChange(db, { kind: "source", categories: ["image"] });
   }
 
   const remaining = await countImagesMissingSearchDocument(db);

@@ -51,8 +51,28 @@ never revive them. Provider/cache code imports control errors and execution
 context from pure `generic/jobs/errors.ts` and `context.ts` leaves; it must not
 import database runtime merely to read execution context.
 
-Broad family saves record Job intent without sending a wake for each save; the
-minute cron or another due-Job drain picks it up.
+Authoritative writers call `recordChange` inside the save transaction. Its
+`source` variant collects existing cache-category hints and enrolls one keyed
+before-commit callback per family and outer transaction, in the existing family
+order. Released savepoints merge those registrations; rolled-back savepoints
+discard them. Audit writes and explicit kernel registrations share the same
+keys, so repeated writes advance each family only once. Run-only history
+changes notify readers without restarting the families.
+
+The `projection` variant collects cache-category hints and accepts explicit
+downstream family requests. Search, embeddings,
+recipe totals, coverage and AI publications do not restart all broad families. Image-description adoption explicitly enrolls the search family
+in the same publication transaction. Source and projection requests share
+per-family enrollment keys and one after-commit wake.
+Explicit downstream work, including search's embedding admission, remains with
+its existing owner and lock order. Capture roots, field scopes and audit payload
+copies are not scheduling inputs; no topic tables, revision clocks or graph
+traversal are required. Real Location image changes also enroll their two
+analysis Jobs inside the image save or photo-import transaction. Projection
+publications cannot recursively request those Jobs.
+
+One best-effort wake follows the outer commit. The minute cron, app-open signal
+or another due-Job drain recovers a lost wake from the committed Job intent.
 Each drain selects fair batches in one SQL window query, interleaving kinds
 least recently claimed first by each Job's `lastClaimedAt`; enqueues and
 invalidations are not service. Priority

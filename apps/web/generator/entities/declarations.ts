@@ -1,3 +1,4 @@
+import type { GeneratedEntityFieldModel } from "@cubby/schemas/entity-projection-types";
 import type { CompiledEntityListFields } from "./list-fields.ts";
 import type { ChildTableMetadata } from "@cubby/schemas/compiler/entity-definitions/child-definition";
 import { readdir } from "node:fs/promises";
@@ -8,10 +9,8 @@ import { modulesChildren } from "@cubby/schemas/compiler/child-tables/modules";
 import { validatePredicateBaseline } from "./predicate-baseline.ts";
 import type {
   CompiledEntityPresentation,
-  DisplayFormat,
   EntityDeclarationMetadata,
   EntityFieldModelMetadata,
-  EntityFieldControlKind,
   EntityFieldKind,
   EntityStorageDefaultKind,
 } from "@cubby/schemas/entity-definitions/definition";
@@ -150,7 +149,6 @@ export type EntityPorts = Readonly<{
   search: Readonly<{
     projection: SourceRef | null;
     semanticText: SourceRef | null;
-    dependentRefresh: SourceRef | null;
   }>;
   timeline: SourceRef | null;
 }>;
@@ -169,47 +167,6 @@ export type RelationMutation = Readonly<{
   audiences: readonly ("browser" | "mcp")[];
 }>;
 type OperationOwner = "kernel" | "workflow" | null;
-type EntityFieldControl = Readonly<{
-  kind: EntityFieldControlKind;
-  renderer: string | null;
-  options:
-    | readonly Readonly<{
-        value: string;
-        label: string;
-        color: string;
-        role: "status" | "category";
-        glyph: Readonly<{ phosphor: string; sfSymbol: string }>;
-        description?: string;
-      }>[]
-    | null;
-  /** Pairs with the next consecutive `"half"` field on one row. */
-  width: "half" | null;
-  placeholder: string | null;
-  initial:
-    | "today"
-    | Readonly<{ value: string | number | boolean | null }>
-    | null;
-  /** `null` derives required-ness from the create schema. */
-  required: boolean | null;
-  suggest: Readonly<{
-    basis: readonly string[];
-    backedBy?: readonly Readonly<
-      { column: string } | { entity: string; column: string; via: string }
-    >[];
-    rules?: readonly string[];
-    allowNone: boolean;
-    mode: "fill" | "prune";
-    reviewRequired: boolean;
-  }> | null;
-}>;
-type EntityFieldProvenance = Readonly<{
-  kind: "reference" | "relation" | "derived";
-  sources: readonly Readonly<{
-    entity: string | null;
-    label: string | null;
-    relation: string | null;
-  }>[];
-}>;
 type EntityFieldResolutionValue =
   | string
   | number
@@ -220,110 +177,25 @@ type EntityFieldResolutionValue =
 interface EntityFieldResolutionObject {
   readonly [key: string]: EntityFieldResolutionValue;
 }
-export type EntityField = Readonly<{
-  key: string;
-  kind: EntityFieldKind;
-  dateRange: {
-    readonly start: string;
-    readonly end: string;
-    readonly semantics: "deadline" | "period";
-  } | null;
-  nullable: boolean;
-  label: string;
-  description: string | null;
-  readKey: string | null;
-  reference: Readonly<{
-    entity: string;
-    multiple: boolean;
-    scope: readonly Readonly<{
-      sourceField: string;
-      targetField: string;
-    }>[];
-    filters: readonly Readonly<{ field: string; values: readonly string[] }>[];
-  }> | null;
-  provenance: EntityFieldProvenance | null;
-  collection?: Readonly<{
-    key: "value" | readonly string[];
-    readPath?: string;
-    primary?: Readonly<{ key: string; scope: readonly string[] }>;
-  }>;
-  explanation: Readonly<{
-    ruleId: string;
-    version: number;
-    description: string;
-    readPath?: string;
-    resolver:
-      | "field"
-      | "productValuation"
-      | "imageRepresentation"
-      | "imageCapture"
-      | "productQuantity"
-      | "recipeTotals"
-      | "locationValuation"
-      | "merchantVendorInference"
-      | "expenseAttribution";
-    projections?: Readonly<{
-      list?: string;
-      detail?: string;
-      summary?: string;
+type ProjectedEntityField = GeneratedEntityFieldModel<string>["fields"][number];
+export type EntityField = Readonly<
+  Omit<ProjectedEntityField, "requiredOnCreate" | "resolution"> & {
+    resolution: Readonly<{
+      reset?: Readonly<Record<string, EntityFieldResolutionValue>>;
+      none: Readonly<Record<string, EntityFieldResolutionValue>> | null;
+      redundancy: "eligible" | "intentional";
+      confirm: Readonly<Record<string, EntityFieldResolutionValue>> | null;
+      labels: Readonly<{ none?: string; unresolved?: string }> | null;
+      inherit?: EntityFieldInherit;
+    }> | null;
+    validation: Readonly<{
+      read: z.ZodType | null;
+      create: z.ZodType | null;
+      update: z.ZodType | null;
     }>;
-    sourceDependencies?: readonly Readonly<{ path: string; label: string }>[];
-  }> | null;
-  resolution: Readonly<{
-    reset?: Readonly<Record<string, EntityFieldResolutionValue>>;
-    none: Readonly<Record<string, EntityFieldResolutionValue>> | null;
-    redundancy: "eligible" | "intentional";
-    confirm: Readonly<Record<string, EntityFieldResolutionValue>> | null;
-    labels: Readonly<{ none?: string; unresolved?: string }> | null;
-    inherit?: EntityFieldInherit;
-  }> | null;
-  control: EntityFieldControl | null;
-  display: Readonly<{
-    list: boolean;
-    detail: boolean;
-    columnId: string | null;
-    standard: "name" | "image" | null;
-    detailOrder: number | null;
-    listOrder: number | null;
-    width: "xs" | "sm" | "md" | "lg" | null;
-    readPath: string | null;
-    labelPath: string | null;
-    emptyLabel?: EntityFieldModelMetadata["fields"][number]["display"]["emptyLabel"];
-    detailLabelPath?: string | null;
-    itemsPath?: string | null;
-    format: DisplayFormat | null;
-    renderer: Readonly<{
-      list: string | null;
-      detail: string | null;
-    }> | null;
-    mobile: Readonly<{
-      slot: string;
-      priority: number;
-      interactive?: boolean;
-    }> | null;
-    listHidden: boolean;
-    valueOptions:
-      | readonly Readonly<{
-          value: string;
-          label: string;
-          color?: string;
-          role?: "status" | "category";
-          glyph?: Readonly<{ phosphor: string; sfSymbol: string }>;
-        }>[]
-      | null;
-    referencePreviewLimit: number | null;
-    columnLabel: string | null;
-    columnGroup?: string;
-    columnBar?: boolean;
-    preview: boolean;
-  }>;
-  validation: Readonly<{
-    read: z.ZodType | null;
-    create: z.ZodType | null;
-    update: z.ZodType | null;
-  }>;
-}>;
-/** A field's declared fallback chain (`resolution.inherit`). */
+  }
+>;
+
 type EntityFieldInherit = Readonly<{
   mode?: Readonly<{
     field: string;

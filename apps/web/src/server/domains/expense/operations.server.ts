@@ -39,10 +39,6 @@ import {
 import { matchExpenses } from "~/server/domains/expense/repo/match";
 import { loadEffectiveInventoryOwnershipById } from "~/server/domains/inventory/repo/ownership";
 import { confirmInventoryExpenseBeneficiary } from "~/server/domains/inventory/repo/ownership-mutations";
-import {
-  mutationEvents,
-  runMutationSideEffectsForEntities,
-} from "~/server/entity-kernel/repo/mutation-side-effects";
 import { listAll } from "~/server/generic/list/repo/list-all";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { TraceNames } from "~/server/observability/tracing";
@@ -285,15 +281,7 @@ async function confirmInventoryBeneficiary(
     input.evidenceFingerprint,
     context.actorContext,
   );
-  await runMutationSideEffectsForEntities(
-    context.db,
-    mutationEvents(
-      "expense",
-      "updated",
-      [expenseId],
-      "expense.confirmInventoryBeneficiary",
-    ),
-  );
+
   return { expenseId: input.expenseId, ...result };
 }
 

@@ -1,12 +1,12 @@
 import type {
   ReportBlock,
   ReportRecordRow,
+  ReportTime,
 } from "@cubby/schemas/entity-report";
 import type { ShipmentObservationInput } from "@cubby/schemas/shipment-evidence";
 import { inArray } from "drizzle-orm";
 
 import { formatTimestamp } from "~/lib/date-format";
-import { formatDateSpan } from "~/lib/date-span";
 import type { Database } from "~/server/db";
 import { getDb } from "~/server/db/helpers";
 import { email } from "~/server/db/schema";
@@ -26,19 +26,30 @@ const eventLabels = {
   unknown: "Unknown",
 } satisfies Record<ShipmentObservationInput["kind"], string>;
 
-const timeLabel = (event: ShipmentObservationInput, reportedAt?: string) => {
-  switch (event.time.kind) {
-    case "unknown":
-      return reportedAt
-        ? `${formatTimestamp(reportedAt)} (Email received; event time unknown)`
-        : "Time unknown";
-    case "local":
-      return `${event.time.value} (${event.time.timezone ?? "timezone unknown"})`;
-    case "date":
-      return `${formatDateSpan(event.time.value, null)} (date only)`;
-    case "instant":
-      return formatTimestamp(event.time.value);
+const eventTime = (
+  event: ShipmentObservationInput,
+  receiptAt?: string,
+): ReportTime =>
+  event.time.kind === "unknown"
+    ? { kind: "unknown", ...(receiptAt ? { receiptAt } : {}) }
+    : event.time;
+
+const sourceLines = (
+  rows: Awaited<ReturnType<typeof readShipmentTimeline>>["observations"],
+): NonNullable<ReportRecordRow["lines"]> => {
+  const lines = new Map<
+    string,
+    NonNullable<ReportRecordRow["lines"]>[number]
+  >();
+  for (const { source } of rows) {
+    if (source.kind === "email")
+      lines.set(source.emailId, {
+        text: source.emailId,
+        ref: { entity: "email", id: source.emailId },
+      });
+    else lines.set(source.url, { text: "Carrier tracking", url: source.url });
   }
+  return [...lines.values()];
 };
 
 export async function shipmentTrackingReport(
@@ -74,96 +85,70 @@ export async function shipmentTrackingReport(
       kind: "records",
       presentation: "timeline",
       empty: "No tracking observations recorded.",
-      rows: report.timeline
-        .map((row): ReportRecordRow => {
-          const sources = row.observationIds.flatMap((id) => {
-            const observation = observations.get(id);
-            return observation ? [observation] : [];
-          });
-          const reportedAt = sources
-            .flatMap((source) => {
-              const received = reportingTime(source);
-              return received ? [received] : [];
-            })
-            .sort()[0];
-          const at =
-            row.event.time.kind === "instant"
-              ? row.event.time.value
-              : row.event.time.kind === "unknown"
-                ? reportedAt
-                : undefined;
-          const page = sources.find(
-            (source) => source.source.kind === "tracking_page",
-          )?.source;
-          return {
-            entity: null,
-            id: null,
-            key: row.observationIds.join(":"),
-            title: row.event.rawStatus,
-            trailing: at ? null : timeLabel(row.event),
-            ...(at ? { at } : {}),
-            showRelativeTime: true,
-            state: {
-              kind: row.event.kind === "exception" ? "warning" : "done",
+      // Preserve the reconciler's ordering; receipt fallbacks are not carrier event times.
+      rows: report.timeline.map((row): ReportRecordRow => {
+        const sources = row.observationIds.flatMap((id) => {
+          const observation = observations.get(id);
+          return observation ? [observation] : [];
+        });
+        const reportedAt = sources
+          .flatMap((source) => {
+            const receipt = reportingTime(source);
+            return receipt ? [receipt] : [];
+          })
+          .sort()[0];
+        return {
+          entity: null,
+          id: null,
+          key: row.observationIds.join(":"),
+          title: row.event.rawStatus,
+          trailing: null,
+          time: eventTime(row.event, reportedAt),
+          state: {
+            kind: row.event.kind === "exception" ? "warning" : "done",
+            label: eventLabels[row.event.kind],
+          },
+          badges: [
+            {
               label: eventLabels[row.event.kind],
+              tone: row.event.kind === "exception" ? "warning" : "muted",
             },
-            badges: [
-              {
-                label: eventLabels[row.event.kind],
-                tone: row.event.kind === "exception" ? "warning" : "muted",
-              },
-            ],
-            lines: [
-              ...(row.event.location ? [{ text: row.event.location }] : []),
-              ...(row.event.time.kind === "unknown" && reportedAt
-                ? [{ text: "Email received; event time unknown" }]
-                : []),
-              ...sources.flatMap((source) =>
-                source.source.kind === "email"
-                  ? [{ text: source.source.emailId }]
-                  : [],
-              ),
-            ],
-            ...(page?.kind === "tracking_page"
-              ? { externalLink: { label: "Carrier tracking", url: page.url } }
-              : {}),
-          } satisfies ReportRecordRow;
-        })
-        .sort(
-          (a, b) =>
-            (a.at ? Date.parse(a.at) : Infinity) -
-            (b.at ? Date.parse(b.at) : Infinity),
-        ),
+          ],
+          lines: [
+            ...(row.event.location ? [{ text: row.event.location }] : []),
+            ...sourceLines(sources),
+          ],
+        };
+      }),
     },
     {
-      kind: "table",
-      title: "Retained observations",
-      columns: ["When", "Status", "Report", "Source", "History"],
+      kind: "records",
+      disclosureLabel: `Retained observations (${report.observations.length})`,
       empty: "No source evidence recorded.",
-      rows: report.observations.map((row) => ({
-        id: row.observationId,
-        cells: [
-          timeLabel(row, reportingTime(row)),
-          eventLabels[row.kind],
-          row.rawStatus,
-          row.source.kind === "email" ? row.source.emailId : row.source.url,
-          `${row.superseded ? "Superseded · " : ""}First seen ${formatTimestamp(row.firstSeenAt)} · Last seen ${formatTimestamp(row.lastSeenAt)}`,
+      rows: report.observations.map((row): ReportRecordRow => ({
+        entity: null,
+        id: null,
+        key: row.observationId,
+        title: row.rawStatus,
+        trailing: null,
+        time: eventTime(row, reportingTime(row)),
+        badges: [
+          {
+            label: eventLabels[row.kind],
+            tone: row.kind === "exception" ? "warning" : "muted",
+          },
+          ...(row.superseded
+            ? [{ label: "Superseded", tone: "muted" as const }]
+            : []),
         ],
-        ...(row.source.kind === "email"
-          ? {
-              presentation: {
-                "3": {
-                  kind: "links",
-                  links: [
-                    {
-                      label: row.source.emailId,
-                      href: `/emails/${row.source.emailId}`,
-                    },
-                  ],
-                },
-              },
-            }
-          : {}),
+        lines: [
+          ...(row.location ? [{ text: row.location }] : []),
+          ...sourceLines([row]),
+          {
+            text: `First seen ${formatTimestamp(row.firstSeenAt)} · Last seen ${formatTimestamp(row.lastSeenAt)}`,
+            tone: "muted",
+          },
+        ],
       })),
     },
   ];

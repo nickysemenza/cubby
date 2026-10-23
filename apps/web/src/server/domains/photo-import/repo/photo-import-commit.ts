@@ -1,5 +1,5 @@
 import type { ActorContext } from "@cubby/schemas/context";
-import type { ImageId, UserId } from "@cubby/schemas/identifiers";
+import type { EntityRef, ImageId, UserId } from "@cubby/schemas/identifiers";
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import type { ImageSightingReportFields } from "@cubby/schemas/image-sighting";
 
@@ -30,12 +30,9 @@ import {
 } from "~/server/domains/photo-import/repo/photo-import";
 import { finalizeImportedImages } from "~/server/domains/photo-import/repo/photo-import-finalize";
 import type { EntityKernelContext } from "~/server/entity-kernel";
-import {
-  captureMutationEvent,
-  runMutationSideEffectsForEntities,
-  type MutationSideEffectEvent,
-} from "~/server/entity-kernel/repo/mutation-side-effects";
+import { registerLocationImageChange } from "~/server/entity-kernel/repo/mutation-side-effects";
 import { createAppError } from "~/server/errors/app-error";
+import { recordChange } from "~/server/generic/changes/repo/change";
 import { publishBackgroundTasks } from "~/server/workflows/background-tasks/publish";
 
 /** A staged image's bytes/dimensions checked against its row, independent of any caller-specific payload. */
@@ -71,9 +68,14 @@ const isOwnDeviceProvenance = (
   source: PhotoImportCommitInput["images"][number]["analysis"]["provenance"]["source"],
 ): boolean => source === "photoLibrary" || source === "camera";
 
+export type PhotoImportChange = {
+  entity: EntityRef;
+  locationImagesChanged?: boolean;
+};
+
 export interface PhotoImportRouteCommitResult {
   createdDestinations: PhotoImportCommitResult["createdDestinations"];
-  sideEffectEvents: MutationSideEffectEvent[];
+  changes: PhotoImportChange[];
 }
 
 /**
@@ -103,8 +105,8 @@ export interface PhotoImportCommitPorts {
   activateImages: typeof activateImportImages;
   persistAnalysis: typeof persistLocalImageAnalysis;
   withTransaction: typeof withPhotoImportTransaction;
-  captureRefresh: typeof captureMutationEvent;
-  runSideEffects: typeof runMutationSideEffectsForEntities;
+  recordChange: typeof recordChange;
+  registerLocationImageChange: typeof registerLocationImageChange;
   /** Injectable so a unit test can stub the DB writes `applyImportProvenance`
    * makes directly (outside every other port's mediation) without a real
    * transaction-bound Drizzle client. */
@@ -120,9 +122,9 @@ export const productionPhotoImportCommitPorts: PhotoImportCommitPorts = {
   activateImages: activateImportImages,
   persistAnalysis: persistLocalImageAnalysis,
   withTransaction: withPhotoImportTransaction,
-  captureRefresh: captureMutationEvent,
+  recordChange,
   applyProvenance: applyImportProvenance,
-  runSideEffects: runMutationSideEffectsForEntities,
+  registerLocationImageChange,
 };
 
 type PhotoImportItem = PhotoImportCommitInput["images"][number];
@@ -439,7 +441,6 @@ export async function commitPhotoImport(
   // before any route write, so only one request can consume a PENDING image.
   const verified = await verifyCommitImages(context, input, ports);
   const imageCodes = [...new Set(input.images.map((item) => item.imageId))];
-  let sideEffectEvents: MutationSideEffectEvent[] = [];
 
   const result = await ports.withTransaction(
     context.db,
@@ -485,7 +486,6 @@ export async function commitPhotoImport(
         input,
         imagesByCode,
       );
-      sideEffectEvents = applied.sideEffectEvents;
       await ports.applyProvenance(
         transactionDb,
         transactionContext.actorContext.userId,
@@ -493,8 +493,19 @@ export async function commitPhotoImport(
         lockedVerified,
         transactionContext.actorContext,
       );
-      for (const event of sideEffectEvents) {
-        await ports.captureRefresh(transactionDb, event);
+      await ports.recordChange(transactionDb, {
+        kind: "source",
+        categories: [
+          "image",
+          ...applied.changes.map((change) => change.entity.entity),
+        ],
+      });
+      for (const change of applied.changes) {
+        if (change.locationImagesChanged && change.entity.entity === "location")
+          await ports.registerLocationImageChange(transactionDb, {
+            locationId: change.entity.id,
+            runId: transactionContext.actorContext.runId ?? undefined,
+          });
       }
       await finalizeImportedImages(transactionDb, {
         pending: lockedVerified.map(({ row, integrity }) => ({
@@ -543,8 +554,5 @@ export async function commitPhotoImport(
     },
   );
 
-  await ports.runSideEffects(context.db, sideEffectEvents, undefined, {
-    captured: true,
-  });
   return result;
 }

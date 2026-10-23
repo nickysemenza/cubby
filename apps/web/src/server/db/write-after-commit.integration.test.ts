@@ -22,6 +22,7 @@ import {
   entityKernelContextSchema,
   executeEntity,
 } from "~/server/entity-kernel";
+import { recordChange } from "~/server/generic/changes/repo/change";
 import { resolveLiveShortcode } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import {
   createImageFixture,
@@ -31,10 +32,8 @@ import {
 import { createTestRequestContext } from "~/server/testing/request-context";
 
 /**
- * Writers the kernel does not wrap in its own write transaction — plant bulk
- * patches and the location adapter (`sideEffects: false`) — own their
- * transaction and side effects. Each publication is observed from a second
- * connection at the moment it is sent: a consumer woken before the commit
+ * Observe generic bulk saves and Location image follow-ups from a second
+ * connection at the moment a wake is sent. A consumer woken before commit
  * reads the pre-write row.
  */
 describe("repository writes publish after their commit", () => {
@@ -101,6 +100,52 @@ describe("repository writes publish after their commit", () => {
     );
     return published;
   };
+
+  it("coalesces source changes across savepoints and leaves family generations unchanged for projections", async () => {
+    await recordChange(ctx.db, { kind: "source", categories: ["task"] });
+    const generations = () =>
+      getDb(ctx.db)
+        .select({ id: job.id, generation: job.generation })
+        .from(job)
+        .where(eq(job.kind, "refresh.family"))
+        .orderBy(job.id);
+    const before = await generations();
+    const published = recordingQueue();
+    await withTransactionDatabase(ctx.db, async (outer) => {
+      // A rolled-back first registration must not consume the deduplication key.
+      await expect(
+        withTransactionDatabase(outer, async (inner) => {
+          await recordChange(inner, {
+            kind: "source",
+            categories: ["product"],
+          });
+          throw new Error("Synthetic savepoint rollback");
+        }),
+      ).rejects.toThrow("Synthetic savepoint rollback");
+      await withTransactionDatabase(outer, async (inner) => {
+        await recordChange(inner, { kind: "source", categories: ["task"] });
+        await recordChange(inner, { kind: "source", categories: ["task"] });
+      });
+      await recordChange(outer, { kind: "source", categories: ["project"] });
+      await recordChange(outer, {
+        kind: "projection",
+        categories: ["image"],
+        refresh: ["search"],
+      });
+      expect(published).toEqual([]);
+    });
+    expect(await generations()).toEqual(
+      before.map((row) => ({ ...row, generation: row.generation + 1 })),
+    );
+    expect(published).toHaveLength(1);
+    const afterSource = await generations();
+    await recordChange(ctx.db, {
+      kind: "projection",
+      categories: ["search", "relatedData"],
+    });
+    expect(await generations()).toEqual(afterSource);
+    expect(published).toHaveLength(1);
+  });
 
   it("bulk-updates plants and publishes durable refresh wakeups after commit", async () => {
     const first = await createPlantFixture(

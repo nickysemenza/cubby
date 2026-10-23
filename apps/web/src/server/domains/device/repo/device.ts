@@ -88,12 +88,7 @@ type DeviceRow = typeof device.$inferSelect;
 
 const scaffold = listScaffold("device", device);
 
-const deviceRead = {
-  references: {
-    ledgerPartyId: { kind: "lookup", name: "ledgerPartyName", missing: "null" },
-    productId: { kind: "lookup", name: "productName", missing: "null" },
-  },
-} satisfies ListReadOptions<DeviceRow>;
+const deviceRead = {} satisfies ListReadOptions<DeviceRow>;
 const devicePlan = listReadPlan<DeviceRow>("device", deviceRead);
 const hydrate = async (
   db: Database | DrizzleTransaction,

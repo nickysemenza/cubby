@@ -27,10 +27,10 @@ import {
   updateExpense,
 } from "~/server/domains/expense/repo/crud";
 import { lockFinancialEvidenceKeys } from "~/server/domains/financial-transaction/repo/financial-evidence";
-import { refreshDerivedSearchRefs } from "~/server/entity-kernel/repo/mutation-side-effects";
 import { isBlockedRefusal } from "~/server/errors/app-error";
 import { assertAutomaticRuleOn } from "~/server/generic/assessment/repo/automatic-rule-runtime";
 import { ruleBase } from "~/server/generic/assessment/repo/automatic-rules";
+import { recordChange } from "~/server/generic/changes/repo/change";
 import { settlementRefsFor } from "~/server/generic/entity-links/repo/entity-external-ids";
 
 import {
@@ -443,15 +443,10 @@ export async function reconcileFinancialEvidenceCorrection(
         );
       }
       await refreshAutomaticBookingFingerprint(txDb, input.transactionId);
-      await refreshDerivedSearchRefs(
-        txDb,
-        [
-          { entityKind: "financialTransaction", entityId: row.id },
-          { entityKind: "purchase", entityId: line.purchaseId },
-          { entityKind: "expense", entityId: line.id },
-        ],
-        "financialTransaction.correctEvidence",
-      );
+      await recordChange(txDb, {
+        kind: "source",
+        categories: ["financialTransaction", "purchase", "expense"],
+      });
       return {
         status: "corrected",
         reason: input.amount === null ? "source_withdrawn" : "amount_changed",

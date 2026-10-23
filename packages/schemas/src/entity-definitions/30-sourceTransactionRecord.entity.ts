@@ -289,7 +289,7 @@ export default defineEntity({
         kind: "identifier",
         nullable: true,
         reference: { entity: "financialAccount" },
-        display: { columnGroup: "Reconciliation" },
+        display: { columnGroup: "Reconciliation", labelPath: "accountName" },
         validation: {
           read: shortcodeSchema("financialAccount").nullable(),
           create: null,

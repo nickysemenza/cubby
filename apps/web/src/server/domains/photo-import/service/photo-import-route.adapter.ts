@@ -36,15 +36,12 @@ import {
   type EntityKernelContext,
 } from "~/server/entity-kernel";
 import { ENTITY_KERNEL_ENTITIES } from "~/server/entity-kernel/contracts";
-import {
-  isMutationSideEffectRef,
-  type MutationSideEffectEvent,
-} from "~/server/entity-kernel/repo/mutation-side-effects";
 import { createAppError } from "~/server/errors/app-error";
 import { ENTITY_KERNEL_BINDINGS } from "~/server/generated/entity-kernel-bindings.gen";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 import type {
+  PhotoImportChange,
   PhotoImportRouteAdapter,
   PhotoImportRouteCommitResult,
 } from "../repo/photo-import-commit";
@@ -85,7 +82,6 @@ const validateDestinationCode = (route: Route, code: string): void => {
 };
 
 interface RuntimeCreateBinding {
-  sideEffects: boolean;
   schemas: { createInput: z.ZodType | null };
   repository: {
     create?: (
@@ -191,7 +187,7 @@ const createDestination = async (
   context: EntityKernelContext,
   route: Route,
   body: CreateBody,
-): Promise<{ id: string; event: MutationSideEffectEvent | null }> => {
+): Promise<{ id: string; event: PhotoImportChange }> => {
   const binding = runtimeCreateBinding(route.targetEntity);
   if (!binding.schemas.createInput || !binding.repository.create) {
     throw createAppError(
@@ -205,14 +201,10 @@ const createDestination = async (
   );
   const id = z.object({ id: z.string() }).parse(result.output).id;
   const ref = parseEntityRef(targetEntityFor(route), result.entityId);
-  const event =
-    binding.sideEffects && isMutationSideEffectRef(ref)
-      ? ({
-          action: "created",
-          entity: ref,
-          source: "photoImport.commit",
-        } satisfies MutationSideEffectEvent)
-      : null;
+  const event = {
+    entity: ref,
+    locationImagesChanged: ref.entity === "location" || undefined,
+  };
   return { id, event };
 };
 
@@ -426,18 +418,14 @@ const sideEffectForExistingDestination = async (
   context: EntityKernelContext,
   route: Route,
   code: string,
-): Promise<MutationSideEffectEvent | null> => {
+): Promise<PhotoImportChange> => {
   const target = targetEntityFor(route);
   const id = await resolveOrThrow(context.db, target, code);
   const ref = parseEntityRef(target, id);
-  return isMutationSideEffectRef(ref)
-    ? {
-        action: "updated",
-        entity: ref,
-        source: "photoImport.commit",
-        locationImagesChanged: route.targetEntity === "location" || undefined,
-      }
-    : null;
+  return {
+    entity: ref,
+    locationImagesChanged: route.targetEntity === "location" || undefined,
+  };
 };
 
 const applyPlan = async (
@@ -447,7 +435,7 @@ const applyPlan = async (
   const destinations = new Map<string, string>();
   const createdDestinations: PhotoImportRouteCommitResult["createdDestinations"] =
     [];
-  const events: MutationSideEffectEvent[] = [];
+  const events: PhotoImportChange[] = [];
   for (const draft of input.creates) {
     const route = routeFor(draft.routeId);
     const item = bindingItemForDraft(input, draft.draftId);
@@ -561,12 +549,12 @@ const applyPlan = async (
   const uniqueEvents = [
     ...new Map(
       events.map((event) => [
-        `${event.action}:${event.entity.entity}:${event.entity.id}`,
+        `${event.entity.entity}:${event.entity.id}`,
         event,
       ]),
     ).values(),
   ];
-  return { createdDestinations, sideEffectEvents: uniqueEvents };
+  return { createdDestinations, changes: uniqueEvents };
 };
 
 export const manifestPhotoImportRouteAdapter: PhotoImportRouteAdapter = {

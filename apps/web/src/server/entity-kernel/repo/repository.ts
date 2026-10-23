@@ -80,6 +80,7 @@ import {
   computeChanges,
   logAuditEntry,
 } from "~/server/generic/audit-log/repo/audit-log";
+import { recordChange } from "~/server/generic/changes/repo/change";
 import type {
   ListProjection,
   ListReadPage,
@@ -484,8 +485,6 @@ export interface RepositorySpec<
   listSummary?: EntityRepository<E, SchemasFor<E>>["listSummary"];
   createRead?: EntityRepository<E, SchemasFor<E>>["createRead"];
   updateRead?: EntityRepository<E, SchemasFor<E>>["updateRead"];
-  /** `false` when writes have no projections or dependents to refresh. */
-  sideEffects?: boolean;
   updatePolicy?: { recordFields: readonly string[] };
   get: (
     ctx: EntityKernelContext,
@@ -710,6 +709,12 @@ export function defineRepository<
             },
             ids,
           );
+          // Keep change intent inside the snapshot owner so isolation and
+          // serialization retries cover deletion and its required work together.
+          await recordChange(transactionDb, {
+            kind: "source",
+            categories: [entity],
+          });
           return result;
         },
       );
@@ -733,7 +738,6 @@ export function defineRepository<
 
   return {
     entity,
-    sideEffects: spec.sideEffects ?? true,
     lifecycle,
     repository,
     mergeOperation,

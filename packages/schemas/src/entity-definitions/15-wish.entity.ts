@@ -411,9 +411,6 @@ export default defineEntity({
       displaySourceOverrides: [
         {
           relationPath: ["candidates"],
-          priority: 0,
-          ordering: "declared",
-          identityEvidence: false,
         },
       ],
       ingress: [

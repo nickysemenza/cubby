@@ -31,6 +31,8 @@ struct RecordRowView: View {
             ForEach(Array(row.lines.enumerated()), id: \.offset) { _, line in
                 if let ref = line.ref, let entity = EntityKey(rawValue: ref.entity) {
                     NavigationLink(line.text, value: Route.entityDetail(entity, id: ref.id))
+                } else if let url = line.url {
+                    Link(line.text, destination: url)
                 } else {
                     Text(line.text).foregroundStyle(line.tone?.color ?? Color.primary)
                         .textSelection(.enabled)
@@ -38,7 +40,28 @@ struct RecordRowView: View {
             }
         } rail: {
             if row.listLink == nil, let trailing = row.trailing, !trailing.isEmpty { Text(trailing) }
-            if let at = row.at {
+            if let time = row.time {
+                switch time {
+                case .instant(let date): DateDisplay(date: date)
+                case .date(let value):
+                    Text("\(DatePresentation.plainDate(value)?.absolute ?? value) (date only)")
+                case .local(let value, let timezone): Text("\(value) (\(timezone ?? "timezone unknown"))")
+                case .unknown(let receipt):
+                    VStack(alignment: .trailing) {
+                        Text("Event time unknown")
+                        if let receipt {
+                            HStack {
+                                Text("Email received"); DateDisplay(date: receipt)
+                            }
+                        }
+                    }
+                case .unsupported(let raw):
+                    VStack(alignment: .trailing) {
+                        Text("Unsupported time")
+                        Text(String(describing: raw)).font(.caption.monospaced()).textSelection(.enabled)
+                    }
+                }
+            } else if let at = row.at {
                 DateDisplay(date: at)
             }
         } supplement: {
@@ -366,6 +389,14 @@ struct RecordsBlockView: View {
     }
 
     var body: some View {
+        if let label = records.disclosureLabel {
+            DisclosureGroup(label) { content }
+        } else {
+            content
+        }
+    }
+
+    private var content: some View {
         VStack(alignment: .leading, spacing: FieldGuideTokens.Space.sm) {
             if let title = records.title {
                 HStack {

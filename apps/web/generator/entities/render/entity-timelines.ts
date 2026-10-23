@@ -1,6 +1,6 @@
 import { compactLiteral, generatedHeader } from "../../artifacts.ts";
 import type { CompiledEntity, EntityArtifacts } from "../declarations.ts";
-import { entityProjectionMaps } from "./index.ts";
+import { entityProjectionMaps } from "./capabilities.ts";
 
 /**
  * `entity-timelines.gen.ts`: the roster of entities with a timeline

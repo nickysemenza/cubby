@@ -615,6 +615,13 @@ describe("image execution history conservation", () => {
       resultSchemaRevision: 1,
       inputFingerprint: "test-input",
     };
+    const familyGenerations = () =>
+      getDb(ctx.db)
+        .select({ key: durableJob.key, generation: durableJob.generation })
+        .from(durableJob)
+        .where(eq(durableJob.kind, "refresh.family"))
+        .orderBy(durableJob.key);
+    const before = await familyGenerations();
     const outcome = {
       kind: "describe_image" as const,
       status: "completed" as const,
@@ -676,5 +683,11 @@ describe("image execution history conservation", () => {
         .from(aiAnalysis)
         .where(eq(aiAnalysis.entityId, source.id)),
     ).toHaveLength(1);
+    expect(await familyGenerations()).toEqual(
+      before.map((row) => ({
+        ...row,
+        generation: row.generation + (row.key === "refresh:search" ? 1 : 0),
+      })),
+    );
   });
 });

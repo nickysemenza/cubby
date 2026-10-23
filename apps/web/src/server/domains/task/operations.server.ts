@@ -5,50 +5,39 @@ import type { z } from "zod";
 
 import { taskContract } from "~/contracts/task.contract";
 import type { Database } from "~/server/db";
+import { withTransactionDatabase } from "~/server/db/helpers";
 import { listActionableTasks } from "~/server/domains/task/repo/actionable";
 import { reorderTasks } from "~/server/domains/task/repo/crud";
 import { taskList } from "~/server/domains/task/repo/lookup";
 import { getTaskSummary } from "~/server/domains/task/repo/summary";
 import { getTaskTimeline } from "~/server/domains/task/repo/timeline";
-import { runMutationSideEffectsForEntities } from "~/server/entity-kernel/repo/mutation-side-effects";
+import { recordChange } from "~/server/generic/changes/repo/change";
 import { listAll } from "~/server/generic/list/repo/list-all";
-import { resolveAllPresent } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { implementOperationDomain } from "~/server/operation-runtime/operation-domain.server";
 import { bindWorkflow, workflow } from "~/server/workflows/runtime";
 
 /**
  * `task.bulkReorder` stays bespoke — it is positional, not a field patch, so
- * it is in no `capabilities.bulkUpdate` field mask. The side-effect fan-out
- * every task bulk write used to share lives with the kernel's
- * `task.bulkUpdate` now; this is the one caller left needing it here.
+ * it is in no `capabilities.bulkUpdate` field mask. It enrolls source intent
+ * inside its own transaction, like the kernel's scalar bulk updates.
  */
 type ReorderInput = z.output<typeof taskBulkReorderInput>;
 type ReorderContext = { db: Database; actorContext: ActorContext };
 const bulkReorderWorkflow = bindWorkflow(
   workflow<ReorderContext, ReorderInput>("task.bulkReorder")
     .commit("items", async ({ context }, { input }) =>
-      reorderTasks(
-        context.db,
-        taskBulkReorderInput.parse(input),
-        context.actorContext,
-      ),
-    )
-    .effect("entityIds", async ({ context }, { items }) =>
-      resolveAllPresent(
-        context.db,
-        "task",
-        items.map((item) => item.id),
-      ),
-    )
-    .effect("sideEffectsRun", async ({ context }, { entityIds }) =>
-      runMutationSideEffectsForEntities(
-        context.db,
-        entityIds.map((id) => ({
-          action: "updated",
-          entity: { entity: "task", id },
-          source: "task.bulkReorder",
-        })),
-      ),
+      withTransactionDatabase(context.db, async (transactionDb) => {
+        const result = await reorderTasks(
+          transactionDb,
+          taskBulkReorderInput.parse(input),
+          context.actorContext,
+        );
+        await recordChange(transactionDb, {
+          kind: "source",
+          categories: ["task"],
+        });
+        return result;
+      }),
     )
     .output(({ items }) => ({
       items,

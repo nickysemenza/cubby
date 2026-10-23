@@ -919,7 +919,7 @@ type TaskQueryClient = DrizzleClient | DrizzleTransaction;
  * Live subtasks of `ids`, carrying both `id` and `parentTaskId` for
  * `deleteTasks`' one-level cascade expansion.
  */
-export const liveSubtasks = (dbc: TaskQueryClient, ids: TaskId[]) =>
+const liveSubtasks = (dbc: TaskQueryClient, ids: TaskId[]) =>
   dbc.query.task.findMany({
     where: and(inArray(task.parentTaskId, ids), notDeleted(task)),
     columns: { id: true, shortcode: true, parentTaskId: true },

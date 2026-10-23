@@ -41,12 +41,11 @@ import type { Database, DrizzleTransaction } from "~/server/db";
 import { oauthClient } from "~/server/db/auth.schema";
 import { EDGE_KEY_TARGET_ENTITY } from "~/server/db/entity-incoming-edges";
 import { eqAny, unwrapDb } from "~/server/db/helpers";
-import { repositoryChanged } from "~/server/db/repository-access.boundary";
 import { auditLog } from "~/server/db/schema";
 import { resolveEntityDisplayImages } from "~/server/entity-kernel/repo/entity-display-image";
 import { identityShortcodes } from "~/server/entity-kernel/repo/entity-identity";
 import { captureAuditId } from "~/server/generic/audit-log/repo/audit-receipts";
-import { captureDerivedRefresh } from "~/server/generic/derived-refresh/repo/capture";
+import { recordChange } from "~/server/generic/changes/repo/change";
 import type { RemovalAuditEntry } from "~/server/generic/removal/repo/core";
 import {
   type EntityRef,
@@ -285,23 +284,10 @@ export async function logAuditEntry(
     .returning({ id: auditLog.id });
   if (inserted) {
     captureAuditId(inserted.id);
-    await repositoryChanged(db, [entry.entityKind, "auditLog"]);
-    await captureDerivedRefresh(db, [
-      {
-        auditId: inserted.id,
-        entityKind: entry.entityKind,
-        entityId: entry.entityId,
-        changedFields: entry.changes ? Object.keys(entry.changes) : undefined,
-        scopes: collectChangeRefs(
-          entry.entityKind,
-          // Match jsonb's stored representation: nested repository audit
-          // inputs can still contain Date values before serialization.
-          entry.changes
-            ? readStoredChanges(JSON.parse(JSON.stringify(entry.changes)))
-            : null,
-        ).map((ref) => ({ entityKind: ref.entity, entityId: ref.id })),
-      },
-    ]);
+    await recordChange(db, {
+      kind: "source",
+      categories: [entry.entityKind, "auditLog"],
+    });
   }
 }
 
@@ -330,27 +316,12 @@ export async function logAuditEntries(
     .returning({
       id: auditLog.id,
       entityKind: auditLog.entityKind,
-      entityId: auditLog.entityId,
-      changes: auditLog.changes,
     });
   for (const row of inserted) captureAuditId(row.id);
-  await repositoryChanged(db, [
-    ...inserted.map((row) => row.entityKind),
-    "auditLog",
-  ]);
-  await captureDerivedRefresh(
-    db,
-    inserted.map((row) => ({
-      auditId: row.id,
-      entityKind: row.entityKind,
-      entityId: row.entityId,
-      changedFields: row.changes ? Object.keys(row.changes) : undefined,
-      scopes: collectChangeRefs(
-        row.entityKind,
-        row.changes ? readStoredChanges(row.changes) : null,
-      ).map((ref) => ({ entityKind: ref.entity, entityId: ref.id })),
-    })),
-  );
+  await recordChange(db, {
+    kind: "source",
+    categories: [...inserted.map((row) => row.entityKind), "auditLog"],
+  });
 }
 
 /**

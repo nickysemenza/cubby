@@ -49,6 +49,34 @@ struct ReportPresentationTests {
         #expect(records.rows.first?.lines.first?.ref == .init(entity: "project", id: "PRJ-2345"))
     }
 
+    @Test func precisionTimesAndEvidenceRemainDistinct() throws {
+        let json = #"""
+            {"blocks":[{"kind":"records","disclosureLabel":"Retained observations (6)","empty":"None","rows":[
+              {"entity":null,"id":null,"title":"Instant","trailing":null,"time":{"kind":"instant","value":"2026-01-05T17:30:00Z"}},
+              {"entity":null,"id":null,"title":"Date","trailing":null,"time":{"kind":"date","value":"2026-01-05"}},
+              {"entity":null,"id":null,"title":"Local","trailing":null,"time":{"kind":"local","value":"09:30","timezone":"America/Chicago"}},
+              {"entity":null,"id":null,"title":"Unknown zone","trailing":null,"time":{"kind":"local","value":"09:30","timezone":null}},
+              {"entity":null,"id":null,"title":"Receipt","trailing":null,"time":{"kind":"unknown","receiptAt":"2026-01-05T18:00:00Z"},
+               "lines":[{"text":"Fixture Email","ref":{"entity":"email","id":"EML-2345"}},{"text":"Carrier tracking","url":"https://example.com/tracking/fixture"}]},
+              {"entity":null,"id":null,"title":"Unknown","trailing":null,"time":{"kind":"unknown"}}
+            ]}]}
+            """#
+        let decoded = try JSONDecoder.cubby().decode(EntityReportOut.self, from: Data(json.utf8))
+        guard case .records(let records) = ReportPresentation(decoded).blocks[0] else {
+            Issue.record("Expected evidence records"); return
+        }
+        #expect(records.disclosureLabel == "Retained observations (6)")
+        #expect(records.rows[0].time == .instant(DatePresentation.parse("2026-01-05T17:30:00Z")!))
+        #expect(records.rows[1].time == .date("2026-01-05"))
+        #expect(records.rows[2].time == .local("09:30", timezone: "America/Chicago"))
+        #expect(records.rows[3].time == .local("09:30", timezone: nil))
+        #expect(records.rows[4].at == nil)
+        #expect(records.rows[4].time == .unknown(receiptAt: DatePresentation.parse("2026-01-05T18:00:00Z")))
+        #expect(records.rows[4].lines[0].ref == .init(entity: "email", id: "EML-2345"))
+        #expect(records.rows[4].lines[1].url?.absoluteString == "https://example.com/tracking/fixture")
+        #expect(records.rows[5].time == .unknown(receiptAt: nil))
+    }
+
     private static let json = #"""
         {"blocks":[
           {"kind":"stats","figures":[

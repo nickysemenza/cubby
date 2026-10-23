@@ -12,7 +12,7 @@ import { and, eq, sql } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
 import { insertSettlementTransaction } from "tooling/settlement-fixtures";
 import { withTestDb, countTestDbQueries } from "tooling/test-setup";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
 import type { Database } from "~/server/db";
@@ -23,8 +23,10 @@ import {
   expense,
   image,
   purchase,
+  run,
 } from "~/server/db/schema";
 import { getExpenseByShortcode } from "~/server/domains/expense/repo/crud";
+import * as expenseLineRole from "~/server/domains/expense/service/expense-line-role";
 import {
   linkExpensesToPurchaseWorkflow,
   splitExpenseWorkflow,
@@ -139,6 +141,90 @@ const page = { pageIndex: 0, pageSize: 100 };
 
 describe("purchase application workflows", () => {
   const ctx = withTestDb();
+  it("keeps classification ownership committed when a split is refused", async () => {
+    const { output: original } = await createRepoEntity(
+      ctx,
+      "expense",
+      makeExpenseInput({
+        name: "Synthetic classification source",
+        cost: 10,
+        vendor: "Synthetic split supplies",
+        orderId: "SYNTHETIC-SPLIT-REFUSAL",
+      }),
+    );
+    const context = requireActor(
+      createTestRequestContext(ctx.db, {
+        auth: { userId: ctx.actor.userId },
+      }),
+    );
+    const existingRuns = new Set(
+      (await getDb(ctx.db).select({ id: run.id }).from(run)).map(
+        (row) => row.id,
+      ),
+    );
+    let durableRunIds: string[] = [];
+    const classifier = expenseLineRole.expenseLineRoleClassifier(
+      async (input) => {
+        // A separate pool read models the usage writer's visibility during inference.
+        durableRunIds = (await getDb(ctx.db).select({ id: run.id }).from(run))
+          .map((row) => row.id)
+          .filter((id) => !existingRuns.has(id));
+        return {
+          answers: {
+            selection: {
+              type: "choice",
+              choice: "none",
+              confidence: 1,
+              probabilities: Object.fromEntries(
+                Object.keys(input.questions.selection.criteria).map((key) => [
+                  key,
+                  key === "none" ? 1 : 0,
+                ]),
+              ),
+            },
+          },
+        };
+      },
+    );
+    const override = vi
+      .spyOn(expenseLineRole, "expenseLineRoleClassifier")
+      .mockReturnValue(classifier);
+    try {
+      await expect(
+        splitExpenseWorkflow(
+          context,
+          splitExpenseInput.parse({
+            expenseId: original.id,
+            parts: [
+              {
+                name: "Synthetic classified part",
+                cost: 3,
+                costType: "materials",
+                trade: "other",
+              },
+              {
+                name: "Synthetic explicit part",
+                lineKind: "principal",
+                cost: 4,
+                costType: "materials",
+                trade: "other",
+              },
+            ],
+          }),
+        ),
+      ).rejects.toThrow(
+        "Split parts must conserve the original expense amount exactly.",
+      );
+    } finally {
+      override.mockRestore();
+    }
+    expect(durableRunIds).toHaveLength(1);
+    const retainedRuns = await getDb(ctx.db).select({ id: run.id }).from(run);
+    expect(retainedRuns.map((row) => row.id)).toEqual(
+      expect.arrayContaining(durableRunIds),
+    );
+    expect((await expenseByShortcode(ctx.db, original.id)).cost).toBe(10);
+  });
   it("preserves expense amounts and product links through link, split, and merge", async () => {
     const context = requireActor(
       createTestRequestContext(ctx.db, {

@@ -1,3 +1,4 @@
+import type { EntityRef } from "@cubby/schemas/entity";
 /**
  * Server-side recipe cost/calorie rollup. Computes the same totals the client
  * used to (reusing `calculateTotals` + the ingredient USDA enrichment) and
@@ -9,8 +10,6 @@
  * flag describes the persisted projection. A transactional broad Job refreshes
  * it; page reads serve stored totals. Queue messages are wakeups only.
  */
-
-import type { EntityRef } from "@cubby/schemas/entity";
 import {
   type IngredientId,
   type RecipeId,
@@ -66,7 +65,7 @@ import {
 } from "~/server/domains/recipe/repo/totals";
 import type { UsdaFoodBatchPort } from "~/server/domains/usda-food/repo/usda-helpers";
 import { createAppError } from "~/server/errors/app-error";
-import { captureDerivedRefresh } from "~/server/generic/derived-refresh/repo/capture";
+import { recordChange } from "~/server/generic/changes/repo/change";
 import { resolveAllPresent } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { TraceNames, withTrace } from "~/server/observability/tracing";
 
@@ -445,13 +444,10 @@ export class RecipeCostingService {
           "ingredient.count": uniqueIngredientIds.length,
           "refresh.source": metadata.source ?? "recipe-costing",
         });
-        await captureDerivedRefresh(
-          this.db,
-          uniqueIngredientIds.map((entityId) => ({
-            entityKind: "ingredient",
-            entityId,
-          })),
-        );
+        await recordChange(this.db, {
+          kind: "source",
+          categories: ["ingredient"],
+        });
       },
     );
   }

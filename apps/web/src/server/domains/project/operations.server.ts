@@ -14,6 +14,7 @@ import type { z } from "zod";
 
 import { projectContract } from "~/contracts/project.contract";
 import type { Database } from "~/server/db";
+import { withTransactionDatabase } from "~/server/db/helpers";
 import { createProjectFromTasks } from "~/server/domains/project/repo/create-from-tasks";
 import { projectDashboardSummary } from "~/server/domains/project/repo/dashboard-summary";
 import { getProjectDependencyGraph } from "~/server/domains/project/repo/dependency-graph";
@@ -26,11 +27,8 @@ import {
   suggestProjectTools,
 } from "~/server/domains/project/repo/tools";
 import { projectTreePage } from "~/server/domains/project/repo/tree";
-import {
-  mutationEvents,
-  runMutationSideEffectsForEntities,
-} from "~/server/entity-kernel/repo/mutation-side-effects";
 import { createAppError } from "~/server/errors/app-error";
+import { recordChange } from "~/server/generic/changes/repo/change";
 import {
   resolveAllOrThrow,
   resolveOrThrow,
@@ -46,23 +44,18 @@ type ToolUsageInput = z.output<typeof projectToolUsageSetInput>;
 const createFromTasksWorkflow = bindWorkflow(
   workflow<MutationContext, CreateFromTasksInput>("project.createFromTasks")
     .commit("created", async ({ context }, { input }) =>
-      createProjectFromTasks(context.db, input, context.actor),
-    )
-    .effect("effects", async ({ context }, { created }) =>
-      runMutationSideEffectsForEntities(context.db, [
-        ...mutationEvents(
-          "project",
-          "created",
-          [created.projectEntityId],
-          "project.createFromTasks",
-        ),
-        ...mutationEvents(
-          "task",
-          "updated",
-          created.taskEntityIds,
-          "project.createFromTasks",
-        ),
-      ]),
+      withTransactionDatabase(context.db, async (transactionDb) => {
+        const result = await createProjectFromTasks(
+          transactionDb,
+          input,
+          context.actor,
+        );
+        await recordChange(transactionDb, {
+          kind: "source",
+          categories: ["project", "task"],
+        });
+        return result;
+      }),
     )
     .output(({ created }) => created.output),
 );
