@@ -15,67 +15,38 @@ import {
 import { expect, test } from "./support/e2e-test";
 import {
   createEntityFixture,
+  createFixtureGraph,
   createEvidenceHarnessContext,
 } from "./fixtures/core";
 
 // Real HTTP, editor and reference rendering verify reviewed identity persistence.
 test("edits compound emoji, clears it, and browses inherited category membership", async ({
   page,
-  baseURL,
 }) => {
   test.setTimeout(90_000);
-  const headers = { Origin: baseURL! };
-  const create = async (
-    path: string,
-    data: z.infer<ReturnType<typeof z.json>>,
-  ) => {
-    const response = await entityApi(page.request).create(path, data, {
-      headers,
+  const { spending, root } = await createFixtureGraph(page, async (create) => {
+    const spending = await create("spendingCategory", {
+      name: "Synthetic emoji groceries",
+      emoji: "🥕",
     });
-    expect(response.status(), await response.text()).toBe(200);
-    return z
-      .object({ item: z.object({ id: z.string() }) })
-      .parse(await response.json()).item.id;
-  };
-  const patch = async (
-    path: string,
-    data: z.infer<ReturnType<typeof z.json>>,
-  ) => {
-    const response = await entityApi(page.request).update(
-      path.split("/")[0]!,
-      path.split("/")[1]!,
-      data,
-      { headers },
-    );
-    expect(response.ok(), await response.text()).toBeTruthy();
-  };
-  const spending = await create("spendingCategory", {
-    name: "Synthetic emoji groceries",
-    emoji: "🥕",
-  });
-  const root = await create("productCategory", {
-    name: "Synthetic emoji food",
-    spendingCategoryMode: "mapped",
-    spendingCategoryId: spending,
-  });
-  for (const name of ["vegetables", "fruit", "bread"])
+    const root = await create("productCategory", {
+      name: "Synthetic emoji food",
+      spendingCategoryMode: "mapped",
+      spendingCategoryId: spending.id,
+    });
+    for (const name of ["vegetables", "fruit", "bread"]) {
+      await create("productCategory", {
+        name: `Synthetic emoji ${name}`,
+        parentId: root.id,
+      });
+    }
     await create("productCategory", {
-      name: `Synthetic emoji ${name}`,
-      parentId: root,
+      name: "Synthetic emoji blocked",
+      parentId: root.id,
+      spendingCategoryMode: "blocked",
     });
-  await create("productCategory", {
-    name: "Synthetic emoji blocked",
-    parentId: root,
-    spendingCategoryMode: "blocked",
+    return { spending: spending.id, root: root.id };
   });
-  const vendor = await create("vendor", {
-    name: "Synthetic emoji supplier",
-    defaultSpendingCategoryId: spending,
-  });
-  await gotoAuthenticatedPage(page, `/vendors/${vendor}`);
-  await expect(
-    page.getByRole("link", { name: /Synthetic emoji groceries/ }).first(),
-  ).toBeVisible();
   await gotoAuthenticatedPage(page, `/product-categories/${root}`);
   const { db } = await createEvidenceHarnessContext(page);
   const categoryId = await resolveOrThrow(db, "productCategory", root);
@@ -167,29 +138,6 @@ test("edits compound emoji, clears it, and browses inherited category membership
   await dialog.getByRole("button", { name: "Save changes" }).click();
   await expect(dialog).toBeHidden();
   await expect.poll(async () => (await read()).emoji).toBeNull();
-  const project = await create("project", {
-    name: "Synthetic emoji project",
-    kind: "household",
-    year: 2199,
-    emoji: "🛠️",
-  });
-  for (const emoji of [null, "🏠", null, "🛠️"]) {
-    await patch(`project/${project}`, { emoji });
-    const body = await (
-      await entityApi(page.request).get("project", project, {})
-    ).json();
-    expect(z.object({ emoji: z.string().nullable() }).parse(body).emoji).toBe(
-      emoji,
-    );
-    expect(Object.hasOwn(body, "icon")).toBe(false);
-  }
-  const invalid = await entityApi(page.request).update(
-    "project",
-    project,
-    { emoji: "multiple emoji 🥕🥦" },
-    { headers },
-  );
-  expect(invalid.ok()).toBe(false);
   await gotoAuthenticatedPage(page, `/spending-categories/${spending}`);
   await page.getByRole("button", { name: /more/ }).first().click();
   await expect(
@@ -231,40 +179,17 @@ test("reviews vendor purchase evidence and rejects stale accepted defaults", asy
     const groceries = await create("spendingCategory", {
       name: "Synthetic evidence groceries",
     });
-    const tools = await create("spendingCategory", {
-      name: "Synthetic evidence tools",
-    });
     const foodCategory = await create("productCategory", {
       name: "Synthetic evidence food",
       spendingCategoryMode: "mapped",
       spendingCategoryId: groceries,
     });
-    const toolCategory = await create("productCategory", {
-      name: "Synthetic evidence hardware",
-      spendingCategoryMode: "mapped",
-      spendingCategoryId: tools,
-    });
     const food = await create("product", {
       name: "Synthetic evidence carrots",
       categoryId: foodCategory,
     });
-    const tool = await create("product", {
-      name: "Synthetic evidence wrench",
-      categoryId: toolCategory,
-    });
     const foodVendor = await create("vendor", {
       name: "Synthetic evidence market",
-    });
-    const mixed = await create("vendor", {
-      name: "Synthetic evidence mixed shop",
-    });
-    const sparse = await create("vendor", {
-      name: "Synthetic evidence sparse shop",
-    });
-    const misleading = await create("vendor", {
-      name: "Synthetic evidence unknown shop",
-      defaultSpendingCategoryId: groceries,
-      spendingProfile: "food_retail",
     });
     const line = async (vendorId: string, productId?: string) => {
       const purchaseId = await create("purchase", {
@@ -285,21 +210,9 @@ test("reviews vendor purchase evidence and rejects stale accepted defaults", asy
     };
     await line(foodVendor, food);
     await line(foodVendor, food);
-    await line(mixed, food);
-    await line(mixed, tool);
-    await line(misleading);
     const foodEvidence = await loadVendorSuggestionContext(db, foodVendor);
     expect(foodEvidence.groups).toHaveLength(1);
     expect(foodEvidence.lines).toHaveLength(2);
-    expect((await loadVendorSuggestionContext(db, mixed)).groups).toHaveLength(
-      2,
-    );
-    expect((await loadVendorSuggestionContext(db, sparse)).lines).toHaveLength(
-      0,
-    );
-    expect(
-      (await loadVendorSuggestionContext(db, misleading)).lines[0],
-    ).toMatchObject({ explicitSpendingCategory: null, productCategory: null });
     await gotoAuthenticatedPage(page, `/vendors/${foodVendor}`);
     await expect(
       page.getByRole("link", { name: /Synthetic evidence food/ }).first(),

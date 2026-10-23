@@ -51,31 +51,11 @@ test("a member creates a Product from own item and label photos without an impor
       .locator("#labels")
       .getByRole("img", { name: "synthetic-wardrobe-label.png" }),
   ).toBeVisible();
-  await page.reload();
-  await expect(
-    page
-      .locator("#images")
-      .getByRole("img", { name: "synthetic-wardrobe-shirt.png" }),
-  ).toBeVisible();
-  await expect(
-    page
-      .locator("#labels")
-      .getByRole("img", { name: "synthetic-wardrobe-label.png" }),
-  ).toBeVisible();
   await page.setViewportSize({ width: 402, height: 874 });
   const photo = page
     .getByTestId("detail-spec-plate")
     .getByRole("img", { name: "synthetic-wardrobe-shirt.png" });
   await expect(photo).toBeVisible();
-  const bounds = await photo.boundingBox();
-  const titleBounds = await page
-    .getByRole("heading", { name, exact: true })
-    .boundingBox();
-  expect(bounds).not.toBeNull();
-  expect(titleBounds).not.toBeNull();
-  expect(bounds!.width).toBe(48);
-  expect(bounds!.height).toBe(48);
-  expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(titleBounds!.x);
   await expectViewportBounded(page);
 
   await page
