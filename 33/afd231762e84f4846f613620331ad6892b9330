@@ -1,0 +1,29 @@
+apps/web/src/server/generic/assessment/repo/automatic-decisions.ts
+  s_c21400fba7a125::t_fb110ebe5d884d 43
+apps/web/src/server/generic/assessment/repo/review-families.ts
+  s_c21400fba7a125::t_d139095a662749 7,21-34,39,46-50,60-94,244,265,285-292,324,339-344,346-358,360-370,372,451-629,632,636-638
+apps/web/src/server/generic/assessment/repo/review-query-bakeoff.integration.test.ts
+  s_c21400fba7a125::t_852df00b82e25a 1-308
+apps/web/src/server/generic/assessment/repo/suggestion-families.ts
+  s_c21400fba7a125::t_97247c575bcbf8 61-64,646
+apps/web/src/server/generic/assessment/repo/suggestion-list.ts
+  s_c21400fba7a125::t_c809e7e2000920 235-240
+docs/adr/0016-shared-assessments-and-feedback.md
+  s_c21400fba7a125::t_9588285e089335 116-132
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "33afd231762e84f4846f613620331ad6892b9330",
+  "prompts": {},
+  "sessions": {
+    "s_c21400fba7a125": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a16a72-4f47-7a60-9771-96d0347cb8d7",
+        "model": "gpt-6.1-sol"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
