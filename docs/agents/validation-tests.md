@@ -62,6 +62,11 @@ kernel also creates their SearchDocument. A raw row insert can appear in the
 initial picker list and disappear when typed search resolves. For typed search,
 use the picker helper's query/code option to wait for the actual search response
 before selecting the record.
+Dense-header browser coverage resizes one populated detail page across desktop,
+constrained desktop and phone widths, then drives the shared action/editor dialogs
+once on the phone. Do not repeat full navigation or seed an unrelated Product list
+for header coverage; category navigation stays in the emoji/category journey.
+
 The all-matching bulk-edit browser owner uses a one-row page with two matching
 Tasks and one outside its filter. Hold the next-page response until admission;
 read back both matching writes and the untouched outside row. Filling the default
