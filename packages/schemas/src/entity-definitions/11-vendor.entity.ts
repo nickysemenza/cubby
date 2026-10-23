@@ -518,14 +518,18 @@ export default defineEntity({
             {
               value: "online_account",
               label: "Online account",
+              glyph: { phosphor: "Globe", sfSymbol: "globe" },
             },
             {
               value: "receipt_only",
               label: "Receipt only",
+              glyph: { phosphor: "Receipt", sfSymbol: "receipt" },
             },
             {
               value: "not_expected",
               label: "Not expected",
+              color: "neutral-status",
+              glyph: { phosphor: "MinusCircle", sfSymbol: "minus.circle" },
             },
           ],
         },
@@ -534,7 +538,6 @@ export default defineEntity({
           columnLabel: "Evidence",
           optionRole: "category",
           optionColor: "domain-finance",
-          optionGlyph: { phosphor: "Receipt", sfSymbol: "receipt" },
         },
         validation: {
           read: vendorOrderEvidence.nullable(),

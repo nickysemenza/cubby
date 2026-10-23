@@ -108,10 +108,12 @@ export default defineEntity({
             {
               value: "ios",
               label: "iOS",
+              glyph: { phosphor: "DeviceMobile", sfSymbol: "iphone" },
             },
             {
               value: "macos",
               label: "macOS",
+              glyph: { phosphor: "Laptop", sfSymbol: "laptopcomputer" },
             },
           ],
         },
@@ -119,7 +121,6 @@ export default defineEntity({
           columnGroup: "Device",
           optionRole: "category",
           optionColor: "neutral-status",
-          optionGlyph: { phosphor: "DeviceMobile", sfSymbol: "iphone" },
         },
         validation: {
           read: devicePlatform,

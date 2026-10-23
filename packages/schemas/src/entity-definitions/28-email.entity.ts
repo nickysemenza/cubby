@@ -1,3 +1,4 @@
+import type { ColorToken, EnumIcon } from "@cubby/shared/enum-palette";
 import { z } from "zod";
 import {
   EMAIL_LINK_STATE_LABEL,
@@ -20,6 +21,38 @@ import {
 import { defineEntity } from "./definition.js";
 import { labelField } from "./label-field";
 
+type OptionPresentation = { color: ColorToken; glyph?: EnumIcon };
+
+const RELEVANCE_PRESENTATION = {
+  related: { color: "positive" },
+  unrelated: { color: "neutral-status" },
+  uncertain: {
+    color: "warning",
+    glyph: { phosphor: "Question", sfSymbol: "questionmark.circle" },
+  },
+} satisfies Record<z.infer<typeof mailboxClassification>, OptionPresentation>;
+
+const STATUS_PRESENTATION = {
+  pending: { color: "warning" },
+  researching: {
+    color: "info",
+    glyph: { phosphor: "MagnifyingGlass", sfSymbol: "magnifyingglass" },
+  },
+  completed: { color: "positive" },
+  blocked: {
+    color: "destructive",
+    glyph: { phosphor: "WarningCircle", sfSymbol: "exclamationmark.circle" },
+  },
+  deleted: {
+    color: "neutral-status",
+    glyph: { phosphor: "Trash", sfSymbol: "trash" },
+  },
+  excluded: {
+    color: "neutral-status",
+    glyph: { phosphor: "MinusCircle", sfSymbol: "minus.circle" },
+  },
+} satisfies Record<z.infer<typeof emailStatus>, OptionPresentation>;
+
 const readOnly = <T extends z.ZodTypeAny>(read: T) => ({
   read,
   create: null,
@@ -32,6 +65,7 @@ const EMAIL_SCOPE_REASON =
 const relevanceOptions = mailboxClassification.options.map((value) => ({
   value,
   label: MAILBOX_CLASSIFICATION_LABEL[value],
+  ...RELEVANCE_PRESENTATION[value],
 }));
 const stageOptions = mailboxClassificationStage.options.map((value) => ({
   value,
@@ -40,6 +74,7 @@ const stageOptions = mailboxClassificationStage.options.map((value) => ({
 const statusOptions = emailStatus.options.map((value) => ({
   value,
   label: value[0]!.toUpperCase() + value.slice(1),
+  ...STATUS_PRESENTATION[value],
 }));
 
 const linkStateOptions = [
@@ -73,18 +108,22 @@ const importOutcomeOptions = [
   {
     value: "imported",
     label: "Imported",
+    color: "positive",
   },
   {
     value: "importing",
     label: "Importing",
+    color: "info",
   },
   {
     value: "failed",
     label: "Import failed",
+    color: "destructive",
   },
   {
     value: "not_imported",
     label: "Not imported",
+    color: "neutral-status",
   },
 ] satisfies {
   value: string;
@@ -235,9 +274,8 @@ export default defineEntity({
         display: {
           columnGroup: "Review",
           labelPath: "relevanceLabel",
-          optionRole: "category",
-          optionColor: "domain-finance",
-          optionGlyph: { phosphor: "Link", sfSymbol: "link" },
+          optionRole: "status",
+          optionColor: "neutral-status",
         },
         validation: readOnly(mailboxClassification.nullable()),
       },
@@ -274,9 +312,8 @@ export default defineEntity({
         display: {
           columnGroup: "Review",
           columnLabel: "Relevance",
-          optionRole: "category",
-          optionColor: "domain-finance",
-          optionGlyph: { phosphor: "Link", sfSymbol: "link" },
+          optionRole: "status",
+          optionColor: "neutral-status",
         },
         provenance: {
           kind: "derived",
@@ -317,9 +354,8 @@ export default defineEntity({
         control: { kind: "select", options: statusOptions },
         display: {
           columnGroup: "Import",
-          optionRole: "category",
-          optionColor: "domain-finance",
-          optionGlyph: { phosphor: "Envelope", sfSymbol: "envelope" },
+          optionRole: "status",
+          optionColor: "neutral-status",
         },
         validation: readOnly(emailStatus),
       },
@@ -482,12 +518,8 @@ export default defineEntity({
         display: {
           columnGroup: "Import",
           listHidden: true,
-          optionRole: "category",
-          optionColor: "domain-finance",
-          optionGlyph: {
-            phosphor: "FileArrowDown",
-            sfSymbol: "square.and.arrow.down",
-          },
+          optionRole: "status",
+          optionColor: "neutral-status",
         },
         validation: readOnly(emailImportOutcome),
       },

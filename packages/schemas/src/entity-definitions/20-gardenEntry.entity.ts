@@ -137,11 +137,14 @@ export default defineEntity({
             {
               value: "note",
               label: "Note",
+              glyph: { phosphor: "NotePencil", sfSymbol: "square.and.pencil" },
               description: "A note, observation, or photo record",
             },
             {
               value: "harvest",
               label: "Harvest",
+              color: "positive",
+              glyph: { phosphor: "Basket", sfSymbol: "basket" },
               description: "A record of gathered produce",
             },
           ],
@@ -150,10 +153,6 @@ export default defineEntity({
           columnGroup: "Observation",
           optionRole: "category",
           optionColor: "domain-house",
-          optionGlyph: {
-            phosphor: "NotePencil",
-            sfSymbol: "square.and.pencil",
-          },
         },
         validation: {
           read: gardenEntryKind,
