@@ -100,7 +100,7 @@ test("Run evidence uses native bearer cookies and confines the hosted experiment
   const response = await context.request.post("/api/native-workspace/session", {
     headers: { Authorization: `Bearer ${decodeURIComponent(cookie!.value)}` },
   });
-  expect(response.status()).toBe(204);
+  expect(response.status(), await response.text()).toBe(204);
   expect(response.headers()["set-cookie"]).toContain("HttpOnly");
   expect(response.headers()["cache-control"]).toContain("no-store");
   expect((await context.cookies()).map((entry) => entry.name)).toEqual([

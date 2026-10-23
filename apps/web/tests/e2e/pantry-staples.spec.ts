@@ -63,8 +63,11 @@ test("usually-on-hand ingredients appear in planning without inventory", async (
   });
   await expect(staples.getByRole("link", { name, exact: true })).toBeVisible();
   await expect(
-    staples.getByText(/^10\s*g$/).filter({ visible: true }),
-  ).toBeVisible();
+    staples
+      .getByRole("row")
+      .filter({ has: page.getByRole("link", { name, exact: true }) })
+      .locator('[data-cell-col="need"]'),
+  ).toHaveText(/^10\s*g$/);
   await expect(staples.getByRole("checkbox")).toHaveCount(0);
   await reloadAuthenticatedPage(page);
   await expect(staples.getByRole("link", { name, exact: true })).toBeVisible();
