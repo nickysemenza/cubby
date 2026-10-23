@@ -69,196 +69,41 @@ async function evidenceLine(
   });
 }
 
-test("purchase product roles survive deduplication, Open all, and inverse navigation", async ({
-  page,
-}, testInfo) => {
-  const name = uniqueName(testInfo, "Synthetic relationship roles");
-  const { purchase, mixed, linked } = await createFixtureGraph(
-    page,
-    async (create) => {
-      const vendor = await create("vendor", {
-        name: `${name} vendor`,
-      });
-      const purchase = await create("purchase", {
-        vendorId: vendor.id,
-        orderId: `${name} order`,
-        date: "2026-01-05",
-      });
-      const mixed = await create("product", { name: `${name} mixed` });
-      const linked = await create("product", {
-        name: `${name} linked`,
-      });
-      const planned = await create("product", {
-        name: `${name} planned`,
-      });
-      const unknown = await create("product", {
-        name: `${name} unknown`,
-      });
-      const adjusted = await create("product", {
-        name: `${name} adjusted`,
-      });
-      for (const line of [
-        { cost: 20, productQuantity: 1 },
-        { cost: -5, productQuantity: 0 },
-        { cost: -10, productQuantity: -1 },
-        { cost: 0, productQuantity: -1 },
-        { cost: 25, productQuantity: 1, future: true },
-      ])
-        await create("expense", {
-          date: "2026-01-05",
-          costType: "materials",
-          trade: "other",
-          lineKind: "principal",
-          lineBasis: "item_line",
-          name: `${name} mixed line`,
-          productId: mixed.id,
-          purchaseId: purchase.id,
-          ...line,
-        });
-      await create("expense", {
-        date: "2026-01-05",
-        costType: "materials",
-        trade: "other",
-        lineKind: "principal",
-        lineBasis: "item_line",
-        name: `${name} planned line`,
-        productId: planned.id,
-        purchaseId: purchase.id,
-        cost: 25,
-        productQuantity: 1,
-        future: true,
-      });
-      await create("expense", {
-        date: "2026-01-05",
-        costType: "materials",
-        trade: "other",
-        lineKind: "principal",
-        lineBasis: "item_line",
-        name: `${name} unknown line`,
-        productId: unknown.id,
-        purchaseId: purchase.id,
-        cost: null,
-        productQuantity: null,
-      });
-      await create("expense", {
-        date: "2026-01-05",
-        costType: "materials",
-        trade: "other",
-        lineKind: "principal",
-        lineBasis: "item_line",
-        name: `${name} adjustment line`,
-        productId: adjusted.id,
-        purchaseId: purchase.id,
-        cost: -5,
-        productQuantity: 0,
-      });
-      return { purchase, mixed, linked };
-    },
-  );
-  await linkProducts(page, purchase.id, [mixed.id, linked.id]);
-
-  await gotoAuthenticatedPage(page, `/purchases/${purchase.id}#work`);
-  const products = page.locator("#products");
-  await expect(
-    products.getByRole("heading", { level: 3, name: "Products", exact: true }),
-  ).toBeVisible();
-  await expect(
-    recordRows(products).filter({ has: page.locator('a[href^="/products/"]') }),
-  ).toHaveCount(5);
-  const mixedRow = recordRows(products).filter({ hasText: `${name} mixed` });
-  for (const role of [
-    "Acquired",
-    "Exited",
-    "Discarded",
-    "Price adjusted",
-    "Planned",
-  ])
-    await expect(mixedRow.getByText(role, { exact: true })).toBeVisible();
-  await expect(
-    recordRows(products)
-      .filter({ hasText: `${name} linked` })
-      .getByText("Linked", { exact: true }),
-  ).toBeVisible();
-  const plannedRow = recordRows(products).filter({
-    hasText: `${name} planned`,
-  });
-  await expect(plannedRow.getByText("Planned", { exact: true })).toBeVisible();
-  await expect(plannedRow.getByText("Acquired", { exact: true })).toHaveCount(
-    0,
-  );
-  await expect(products.getByText("Sale", { exact: true })).toHaveCount(0);
-
-  const openAll = products.getByLabel("Open all products", { exact: true });
-  await openAll.evaluate((element) =>
-    element.scrollIntoView({ block: "center" }),
-  );
-  await openAll.click();
-  await expect(page).toHaveURL(/\/connections\?/);
-  // Direct rows only: each row's path chips are nested list items.
-  await expect(
-    page
-      .getByRole("list", { name: "Products list", exact: true })
-      .locator(":scope > li"),
-  ).toHaveCount(5);
-  await expect(
-    recordRows(page)
-      .filter({ hasText: `${name} unknown` })
-      .getByText("Unknown movement", { exact: true }),
-  ).toBeVisible();
-  const adjustmentRow = recordRows(page).filter({
-    hasText: `${name} adjusted`,
-  });
-  await expect(
-    adjustmentRow.getByText("Price adjusted", { exact: true }),
-  ).toBeVisible();
-  await expect(adjustmentRow.getByText("Exited", { exact: true })).toHaveCount(
-    0,
-  );
-  await page.getByRole("link", { name: `${name} mixed`, exact: true }).click();
-  await expect(page).toHaveURL(new RegExp(`/products/${mixed.id}`));
-  const purchases = page.locator("#purchases");
-  await expect(
-    purchases.getByRole("heading", {
-      level: 3,
-      name: "Purchases",
-      exact: true,
-    }),
-  ).toBeVisible();
-  await expect(
-    recordRows(purchases).filter({
-      has: page.locator('a[href^="/purchases/"]'),
-    }),
-  ).toHaveCount(1);
-  for (const role of [
-    "Acquired",
-    "Exited",
-    "Discarded",
-    "Price adjusted",
-    "Planned",
-  ])
-    await expect(purchases.getByText(role, { exact: true })).toBeVisible();
-});
-
 test("phone relationship rows keep planned and explicit link evidence separate", async ({
   page,
 }, testInfo) => {
   await page.setViewportSize({ width: 390, height: 844 });
   const name = uniqueName(testInfo, "Synthetic phone evidence");
-  const vendor = await createFixture(page, "vendor", { name });
-  const purchase = await createFixture(page, "purchase", {
-    vendorId: vendor.id,
-    orderId: `${name} order`,
-    date: "2026-01-05",
-  });
-  const product = await seedProductPrerequisite(page, { name: `${name} item` });
-  await evidenceLine(page, {
-    name: `${name} future line`,
-    productId: product.id,
-    purchaseId: purchase.id,
-    cost: 25,
-    productQuantity: 1,
-    future: true,
-  });
+  const { purchase, product } = await createFixtureGraph(
+    page,
+    async (create) => {
+      const vendor = await create("vendor", { name });
+      const purchase = await create("purchase", {
+        vendorId: vendor.id,
+        orderId: `${name} order`,
+        date: "2026-01-05",
+      });
+      const brand = await create("vendor", { name: "E2E fixture" });
+      const product = await create("product", {
+        name: `${name} item`,
+        brandId: brand.id,
+      });
+      await create("expense", {
+        date: "2026-01-05",
+        costType: "materials",
+        trade: "other",
+        lineKind: "principal",
+        lineBasis: "item_line",
+        name: `${name} future line`,
+        productId: product.id,
+        purchaseId: purchase.id,
+        cost: 25,
+        productQuantity: 1,
+        future: true,
+      });
+      return { purchase, product };
+    },
+  );
   await linkProducts(page, purchase.id, [product.id]);
   await gotoAuthenticatedPage(page, `/purchases/${purchase.id}#work`);
   const products = page.locator("#products");

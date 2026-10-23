@@ -730,6 +730,17 @@ to assert header position costs a full browser journey for a presentation detail
 Shared responsive capabilities do not establish sticky behavior; verify that
 visual detail during relevant layout work instead.
 
+Purchase/Product relationship permutations belong in
+`purchase-products.integration.test.ts`'s live-expense/explicit-evidence union case:
+combined movement roles, deduplication, deleted-row handling, paging and both
+relation directions. The phone relationship journey retains planned/explicit-link
+presentation and Open all navigation, with its Vendor, brand, Product, Purchase
+and future Expense committed as one prerequisite graph. The separate desktop
+read-only role matrix is removed: it repeated those stored semantics and shared
+rendering without a member write. Desktop combined-role and direct inverse-page
+composition are deliberate browser coverage gaps; the phone route and real SQL
+relation consumers remain.
+
 Product ownership overviews keep the three movement states, ownership guidance
 and their supporting sections. Build each acquired/exited state in one fixture
 graph; uncertain ownership keeps its explicit Product link before the future
