@@ -337,8 +337,10 @@ export default defineConfig(async ({ command }) => {
           minify: true,
           rolldownOptions: {
             onLog: failOnUndefinedImport,
-            output: { keepNames: true },
-          },
+            // ASCII source avoids widening whole Worker script strings to
+            // two-byte storage for a few Unicode literals. Values stay Unicode.
+            output: { keepNames: true, charset: "ascii" },
+          } satisfies NonNullable<BuildEnvironmentOptions["rolldownOptions"]>,
         },
       },
     },
