@@ -142,7 +142,7 @@ test("linked Expense categories display their readable label and transaction exp
   );
 
   await page.keyboard.press("Escape");
-  await row.locator('[data-cell-col="itemizationExpectation"]').hover();
+  await row.locator('[data-cell-col="itemizationCoverage"]').hover();
   const expectationExplanation = row.getByRole("button", {
     name: "How itemization is determined",
     exact: true,
