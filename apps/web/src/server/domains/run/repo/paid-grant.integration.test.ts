@@ -79,6 +79,36 @@ describe("fresh paid grant lineage reads", () => {
     });
   });
 
+  it.each([false, true])(
+    "stops before a predecessor already included as a parent (earlier ancestor: %s)",
+    async (earlier) => {
+      const [current, middle, parent, ancestor] = await Promise.all(
+        Array.from({ length: 4 }, create),
+      );
+      await getDb(ctx.db)
+        .update(run)
+        .set({
+          parentRunId: parent!,
+          predecessorRunId: earlier ? middle! : parent!,
+        })
+        .where(eq(run.id, current!));
+      await getDb(ctx.db)
+        .update(run)
+        .set({ predecessorRunId: parent! })
+        .where(eq(run.id, middle!));
+      await getDb(ctx.db)
+        .update(run)
+        .set({ parentRunId: ancestor! })
+        .where(eq(run.id, parent!));
+      await grant(current!, 1, 1);
+      await grant(parent!, 2, 2);
+      await grant(ancestor!, 3, 3);
+      expect(await readPaidGrant(ctx.db, current!)).toMatchObject({
+        paidOverBudgetUsd: 2,
+      });
+    },
+  );
+
   it("retains the fifty-Run traversal boundary", async () => {
     const ids: RunId[] = [];
     for (let index = 0; index < 51; index++) ids.push(await create());

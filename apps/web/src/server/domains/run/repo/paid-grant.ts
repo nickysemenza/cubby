@@ -47,16 +47,19 @@ const MAX_LINEAGE = 50;
  */
 export async function readPaidGrant(db: Database, runId: RunId) {
   // Follow only predecessors; each visited Run contributes its direct parent.
-  // Keep the old traversal bound and cycle fence while reading the grant fresh.
+  // Parents also enter the visited fence: a later predecessor already in that
+  // scope must not contribute its own parent. Grants are still read fresh.
   const scope = sql`WITH RECURSIVE lineage AS (
     SELECT ${runId}::uuid AS id, ARRAY[${runId}::uuid] AS visited, 0 AS depth
     UNION ALL
     SELECT current_run."predecessorRunId",
-           lineage.visited || current_run."predecessorRunId", lineage.depth + 1
+           lineage.visited || array_remove(ARRAY[current_run."parentRunId", current_run."predecessorRunId"], NULL),
+           lineage.depth + 1
     FROM lineage JOIN ${run} current_run ON current_run.id = lineage.id
     WHERE lineage.depth + 1 < ${MAX_LINEAGE}
       AND current_run."predecessorRunId" IS NOT NULL
       AND NOT (current_run."predecessorRunId" = ANY(lineage.visited))
+      AND current_run."predecessorRunId" IS DISTINCT FROM current_run."parentRunId"
   )
   SELECT id FROM lineage
   UNION

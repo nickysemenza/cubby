@@ -147,7 +147,9 @@ retains only found roots. Missing roots and failed reads remain retryable.
 Funding windows, quota status, paid grants and budget admission are still read
 fresh for each call; origin reuse does not authorize spending. Paid-grant reads
 resolve the bounded predecessor chain, each direct parent and the latest grant
-in one statement; they do not traverse parent ancestry or cache authorization.
+in one statement. Direct parents join the visited fence, so a later predecessor
+already in that scope stops traversal before contributing its own parent. Reads
+do not traverse parent ancestry or cache authorization.
 
 Amended 2026-10-19: both free sources are capped resources the household
 shares with its own use. The Claude credit is a $200 monthly allowance; $5
