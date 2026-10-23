@@ -1,0 +1,19 @@
+apps/web/src/server/domains/task/repo/helpers.ts
+  s_ac53497fa5527a::t_819f6031f4bc78 22,26-28,30-33
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "5d495c31d779263e6c83bed9041afc667de05b28",
+  "prompts": {},
+  "sessions": {
+    "s_ac53497fa5527a": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a16afa-a25a-79f2-b36f-a10e302719c1",
+        "model": "gpt-6-luna"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
