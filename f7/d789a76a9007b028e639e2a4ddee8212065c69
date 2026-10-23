@@ -1,0 +1,21 @@
+apps/web/src/server/domains/financial-transaction/repo/financial-transaction.ts
+  s_0cc53fa46ecbd7::t_0cbad38ffb48a8 55,441-442
+apps/web/src/server/generic/problems/repo/detectors-financial.ts
+  s_0cc53fa46ecbd7::t_f0da4332fad803 17-18,166,168
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "f7d789a76a9007b028e639e2a4ddee8212065c69",
+  "prompts": {},
+  "sessions": {
+    "s_0cc53fa46ecbd7": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2e7ff6fb-224e-42e0-a270-a92fc1131a0c",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
