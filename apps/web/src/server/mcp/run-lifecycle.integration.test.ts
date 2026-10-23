@@ -388,10 +388,14 @@ describe("Mail import switch and discovery through MCP", () => {
     const set = await call("ai_funding", {
       action: "set_credit_budget",
       creditLimitUsd: 7.5,
+      planLimitUsd: 4,
+      paidLimitUsd: 3,
     });
     expect(set.isError).not.toBe(true);
     expect(set.structuredContent).toMatchObject({
       credit: { limitUsd: 7.5, state: "available" },
+      plan: { limitUsd: 4 },
+      paid: { limitUsd: 3 },
     });
     expect(creditRefusal).toBeNull();
     expect((await call("run", { action: "set_credit_budget" })).isError).toBe(

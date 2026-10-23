@@ -138,7 +138,7 @@ relevance fallback and the Mail import Runs it starts:
    `subscriber_credit` usage, default $1.50 per six-hour window, member-editable)
    has room and Anthropic does not refuse.
 2. The ChatGPT plan, while connected, not quota-refused, and the window's plan
-   budget (standard cost of `plan` usage, $2) has room.
+   budget (standard cost of `plan` usage, default $2) has room.
 3. Paid models within the paid budget ($1 per window).
 4. Otherwise the Run pauses and resumes when the next window starts.
 
@@ -170,3 +170,7 @@ the same Run grant and window-scoped allowance.
 Considered: pausing interactive work too (rejected: rare interactive work stays
 interactive); a scheduled six-hour cron for resume (rejected: frequent crons
 must not wake Neon; the egress Durable Object holds one alarm instead).
+
+All three six-hour window budgets are member-editable inline in the AI funding
+table in Settings. Saved limits apply to admission and funding status; existing
+stored credit-only settings retain the default plan and paid limits.

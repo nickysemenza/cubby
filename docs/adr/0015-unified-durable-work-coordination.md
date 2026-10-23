@@ -138,7 +138,8 @@ Minute cron admits `ai-refresh.activate` once per observed deployment occurrence
 fenced to the gateway DO's current version and the transactionally recorded
 occurrence. A → B → A rollback creates a new occurrence while preserving policy
 generations. Per-fetch observation and deployment epoch alarms are removed;
-member automatic-rule switches stay independent.
+member automatic-rule switches stay independent. Deployment observations and
+Mail import settings use separate AppSettings records.
 
 ## Consequences
 

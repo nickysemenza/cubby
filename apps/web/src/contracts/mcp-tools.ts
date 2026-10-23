@@ -1080,7 +1080,7 @@ export const MCP_TOOLS = defineMcpTools({
       set_credit_budget: mcpAction({
         op: aiFundingContract.ops.setCreditBudget,
         description:
-          "Set the household Claude subscriber-credit budget per six-hour window (creditLimitUsd, standard API cost; default $1.50). Background work past it moves to the ChatGPT plan (its own $2 budget), then pays within the paid budget. Also clears a recorded Claude credit refusal, and work paused for free capacity retries now. Returns ai_funding_read.status.",
+          "Set household AI budgets per six-hour window: creditLimitUsd (Claude standard API cost), planLimitUsd (ChatGPT standard API cost, default $2), and paidLimitUsd (charged cost, default $1). Background work moves from credit to plan, then paid within these limits. Also clears a recorded Claude credit refusal, and work paused for free capacity retries now. Returns ai_funding_read.status.",
       }),
       reset_credit_refusal: mcpAction({
         op: aiFundingContract.ops.resetCreditRefusal,

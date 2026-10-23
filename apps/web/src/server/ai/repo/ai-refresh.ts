@@ -193,7 +193,7 @@ export async function saveAiDiscoveryCursor(
 }
 
 // Infrastructure observation, independent of the member's automatic-rule switch.
-const DEPLOYMENT_SETTINGS_ID = "00000000-0000-4000-8000-000000000076";
+const DEPLOYMENT_SETTINGS_ID = "00000000-0000-4000-8000-000000000079";
 const deploymentObservation = z.object({
   version: z.string(),
   occurrence: z.number().int().positive(),

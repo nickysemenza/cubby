@@ -56,14 +56,14 @@ async function readAiBudgetSettings(db: Database): Promise<AiBudgetSettings> {
     .where(eq(appSettings.id, SETTINGS_ID));
   return row
     ? aiBudgetSettings.parse(row.metadata)
-    : { creditLimitUsd: DEFAULT_CREDIT_BUDGET_USD };
+    : aiBudgetSettings.parse({ creditLimitUsd: DEFAULT_CREDIT_BUDGET_USD });
 }
 
 export async function setCreditBudget(
   db: Database,
-  creditLimitUsd: number,
+  settings: AiBudgetSettings,
 ): Promise<AiBudgetSettings> {
-  const metadata = aiBudgetSettings.parse({ creditLimitUsd });
+  const metadata = aiBudgetSettings.parse(settings);
   await getDb(db)
     .insert(appSettings)
     .values({ id: SETTINGS_ID, metadata })
@@ -112,11 +112,11 @@ export async function readAiBudget(
       spentUsd: Math.max(0, row?.credit ?? 0),
     },
     plan: {
-      limitUsd: PLAN_BUDGET_LIMIT_USD,
+      limitUsd: settings.planLimitUsd,
       spentUsd: Math.max(0, row?.plan ?? 0),
     },
     paid: {
-      limitUsd: AI_BUDGET_LIMIT_USD,
+      limitUsd: settings.paidLimitUsd,
       spentUsd: Math.max(0, row?.paid ?? 0),
     },
   };

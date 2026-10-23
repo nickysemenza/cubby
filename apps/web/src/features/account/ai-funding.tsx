@@ -1,8 +1,11 @@
 import { CHATGPT_USAGE_URL } from "@cubby/schemas/chatgpt";
-import type { AiFundingStatus } from "@cubby/schemas/mail-import-settings";
+import type {
+  AiBudgetSettings,
+  AiFundingStatus,
+} from "@cubby/schemas/mail-import-settings";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 
 import { useActionMutation } from "~/entity/hooks/use-action-mutation";
 import { aiFunding } from "~/integrations/tanstack-query/generated/catalog/aiFunding.gen";
@@ -88,7 +91,7 @@ export const aiFundingStatusQuery = () => ({
 type FundingRow = {
   id: string;
   source: string;
-  window: string;
+  window: ReactNode;
   state: string;
 };
 
@@ -104,8 +107,8 @@ export function AiFundingSettings() {
   };
   const setCredit = useActionMutation({
     mutationFn: () => aiFunding.setCreditBudget.mutationOptions(),
-    success: "Claude credit budget updated",
-    error: "Couldn't update the Claude credit budget",
+    success: "AI budgets updated",
+    error: "Couldn't update AI budgets",
     onSuccess: replace,
   });
   const retry = useActionMutation({
@@ -115,31 +118,6 @@ export function AiFundingSettings() {
     onSuccess: replace,
   });
   const budget = status.data;
-  const rows: FundingRow[] = budget
-    ? [
-        {
-          id: "credit",
-          source: "Claude credit",
-          window: `${usd(budget.credit.spentUsd)} of ${usd(budget.credit.limitUsd)}`,
-          state: creditLabel(budget),
-        },
-        {
-          id: "plan",
-          source: "ChatGPT plan",
-          window: `${usd(budget.plan.spentUsd)} of ${usd(budget.plan.limitUsd)}`,
-          state: planLabel(budget),
-        },
-        {
-          id: "paid",
-          source: "Paid",
-          window: `${usd(budget.paid.spentUsd)} of ${usd(budget.paid.limitUsd)}`,
-          state:
-            budget.paid.spentUsd >= budget.paid.limitUsd
-              ? "budget spent"
-              : "within budget",
-        },
-      ]
-    : [];
   return (
     <div className="space-y-3">
       <p className="text-xs text-muted-foreground">
@@ -154,27 +132,11 @@ export function AiFundingSettings() {
         {budget ? (
           <>
             <Stack gap="sm">
-              <StaticTable
-                rows={rows}
-                rowKey={(row) => row.id}
-                cellClassName="tabular-nums"
-                columns={[
-                  {
-                    id: "source",
-                    header: "Funding",
-                    cell: (row) => row.source,
-                  },
-                  {
-                    id: "window",
-                    header: "This window",
-                    cell: (row) => row.window,
-                  },
-                  {
-                    id: "state",
-                    header: "State",
-                    cell: (row) => row.state,
-                  },
-                ]}
+              <FundingBudgetEditor
+                key={`${budget.credit.limitUsd}:${budget.plan.limitUsd}:${budget.paid.limitUsd}`}
+                budget={budget}
+                pending={setCredit.isPending}
+                onSave={(settings) => setCredit.mutate(settings)}
               />
               <p className="text-xs text-muted-foreground">
                 Budgets reset {clock(budget.windowEnd)}.
@@ -230,12 +192,6 @@ export function AiFundingSettings() {
                 ChatGPT plan: {budget.plan.reason}
               </p>
             ) : null}
-            <CreditBudgetEditor
-              key={budget.credit.limitUsd}
-              limitUsd={budget.credit.limitUsd}
-              pending={setCredit.isPending}
-              onSave={(creditLimitUsd) => setCredit.mutate({ creditLimitUsd })}
-            />
           </>
         ) : null}
       </Stack>
@@ -243,50 +199,96 @@ export function AiFundingSettings() {
   );
 }
 
-export function CreditBudgetEditor({
-  limitUsd,
+export function FundingBudgetEditor({
+  budget,
   pending,
   onSave,
 }: {
-  limitUsd: number;
+  budget: AiFundingStatus;
   pending: boolean;
-  onSave: (limitUsd: number) => void;
+  onSave: (settings: AiBudgetSettings) => void;
 }) {
-  const [draft, setDraft] = useState(String(limitUsd));
-  const value = Number(draft);
-  const valid = draft.trim() !== "" && Number.isFinite(value) && value >= 0;
+  const [draft, setDraft] = useState({
+    credit: String(budget.credit.limitUsd),
+    plan: String(budget.plan.limitUsd),
+    paid: String(budget.paid.limitUsd),
+  });
+  const valid = Object.values(draft).every(
+    (value) =>
+      value.trim() !== "" &&
+      Number.isFinite(Number(value)) &&
+      Number(value) >= 0 &&
+      Number(value) <= 100,
+  );
+  const changed =
+    draft.credit !== String(budget.credit.limitUsd) ||
+    draft.plan !== String(budget.plan.limitUsd) ||
+    draft.paid !== String(budget.paid.limitUsd);
+  const rows: FundingRow[] = (
+    [
+      { id: "credit", source: "Claude credit", state: creditLabel(budget) },
+      { id: "plan", source: "ChatGPT plan", state: planLabel(budget) },
+      {
+        id: "paid",
+        source: "Paid",
+        state:
+          budget.paid.spentUsd >= budget.paid.limitUsd
+            ? "budget spent"
+            : "within budget",
+      },
+    ] satisfies { id: keyof typeof draft; source: string; state: string }[]
+  ).map((row) => ({
+    ...row,
+    window: (
+      <Row align="center" gap="sm">
+        <span>{usd(budget[row.id].spentUsd)} of $</span>
+        <Input
+          aria-label={`${row.source} budget per window`}
+          type="number"
+          inputMode="decimal"
+          min={0}
+          max={100}
+          step={0.5}
+          value={draft[row.id]}
+          disabled={pending}
+          onChange={(event) =>
+            setDraft({ ...draft, [row.id]: event.target.value })
+          }
+          className="h-7 w-20 tabular-nums"
+        />
+      </Row>
+    ),
+  }));
   return (
     <form
-      className="flex items-center gap-2 text-sm"
+      className="space-y-2"
       onSubmit={(event) => {
         event.preventDefault();
-        if (valid) onSave(value);
+        if (valid && changed && !pending)
+          onSave({
+            creditLimitUsd: Number(draft.credit),
+            planLimitUsd: Number(draft.plan),
+            paidLimitUsd: Number(draft.paid),
+          });
       }}
     >
-      <label htmlFor="credit-budget" className="text-muted-foreground">
-        Claude credit budget per window
-      </label>
-      <span className="text-muted-foreground" aria-hidden>
-        $
-      </span>
-      <Input
-        id="credit-budget"
-        type="number"
-        inputMode="decimal"
-        min={0}
-        max={100}
-        step={0.5}
-        value={draft}
-        onChange={(event) => setDraft(event.target.value)}
-        className="h-7 w-20 tabular-nums"
+      <StaticTable
+        rows={rows}
+        rowKey={(row) => row.id}
+        cellClassName="tabular-nums"
+        columns={[
+          { id: "source", header: "Funding", cell: (row) => row.source },
+          { id: "window", header: "This window", cell: (row) => row.window },
+          { id: "state", header: "State", cell: (row) => row.state },
+        ]}
       />
       <Button
         type="submit"
         size="sm"
         variant="outline"
-        disabled={pending || !valid || value === limitUsd}
+        disabled={pending || !valid || !changed}
       >
-        Save
+        Save budgets
       </Button>
     </form>
   );
@@ -295,7 +297,7 @@ export function CreditBudgetEditor({
 /**
  * The one-Run paid grant. Within the paid budget one confirmation resumes the
  * Run; once the window's paid budget is spent a second confirmation names the
- * amount past it (one more paid budget).
+ * amount past it (between $1 and $10).
  */
 export function PaidRunButton({
   label,
@@ -311,7 +313,8 @@ export function PaidRunButton({
   const [step, setStep] = useState<"closed" | "paid" | "over">("closed");
   const paid = budget?.paid;
   const spent = paid ? paid.spentUsd >= paid.limitUsd : false;
-  const overAmount = paid?.limitUsd ?? 1;
+  // One-Run grants must stay positive and within the command’s $10 cap.
+  const overAmount = Math.min(10, Math.max(1, paid?.limitUsd ?? 1));
   return (
     <>
       <Button
