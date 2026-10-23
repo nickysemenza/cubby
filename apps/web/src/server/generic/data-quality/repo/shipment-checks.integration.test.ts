@@ -404,16 +404,17 @@ describe("Shipment evidence quality", () => {
         observationId: timeline.observations.find(
           (o) => o.kind === "delivered",
         )!.observationId,
-        patch: { time: { kind: "unknown" } },
+        // Same-day delivery leaves only the span gap.
+        patch: { time: instant("2026-06-01T12:00:00Z") },
       },
       ctx.actor,
     );
     expect((await stored()).score).toBe(100);
     expect(
       (await loadQualityBreakdown(ctx.db, "shipment", parcel.code)).score,
-    ).toBe(80);
+    ).toBe(90);
     await refresh();
-    expect((await stored()).score).toBe(80);
+    expect((await stored()).score).toBe(90);
     // An older version is stale even when the check states are unchanged.
     await unwrapDb(ctx.db)
       .update(entityQuality)
@@ -426,7 +427,7 @@ describe("Shipment evidence quality", () => {
       .from(entityQuality)
       .where(eq(entityQuality.entityId, parcel.row.id));
     expect(quality).toMatchObject({
-      score: 80,
+      score: 90,
       rulesVersion: SHIPMENT_QUALITY_RULES_VERSION,
     });
     // Waivers are durable member decisions and survive later evidence edits.
@@ -440,10 +441,10 @@ describe("Shipment evidence quality", () => {
     expect((await stored()).gaps.map((gap) => gap.check)).toContain(
       "shipment_span",
     );
-    expect((await stored()).score).toBe(80);
+    expect((await stored()).score).toBe(90);
     await invalidateRefreshFamily(ctx.db, "quality");
     await refresh();
-    expect((await stored()).score).toBe(90);
+    expect((await stored()).score).toBe(100);
     await editShipmentObservation(
       ctx.db,
       {
@@ -452,17 +453,15 @@ describe("Shipment evidence quality", () => {
           await readShipmentTimeline(ctx.db, parcel.code)
         ).observations.find((o) => o.kind === "delivered" && !o.superseded)!
           .observationId,
-        patch: {
-          time: { kind: "local", value: "Synthetic afternoon", timezone: null },
-        },
+        patch: { time: instant("2026-06-01T15:00:00Z") },
       },
       ctx.actor,
     );
     expect(
       (await loadQualityBreakdown(ctx.db, "shipment", parcel.code)).score,
-    ).toBe(90);
+    ).toBe(100);
     await refresh();
-    expect((await stored()).score).toBe(90);
+    expect((await stored()).score).toBe(100);
     expect((await stored()).exceptions).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ check: "shipment_span", state: "active" }),
@@ -507,7 +506,7 @@ describe("Shipment evidence quality", () => {
               observationId: timeline.observations.find(
                 (o) => o.kind === "delivered",
               )!.observationId,
-              patch: { time: { kind: "unknown" } },
+              patch: { time: instant("2026-06-01T12:00:00Z") },
             },
             ctx.actor,
           );
@@ -522,6 +521,6 @@ describe("Shipment evidence quality", () => {
       (
         await loadDataQualities(ctx.db, "shipment", [parcel.row.id], "stored")
       ).get(parcel.row.id)?.score,
-    ).toBe(80);
+    ).toBe(90);
   });
 });

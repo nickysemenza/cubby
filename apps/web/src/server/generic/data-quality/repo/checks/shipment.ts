@@ -1,3 +1,7 @@
+import {
+  datedShipmentEventTime,
+  type ShipmentObservationInput,
+} from "@cubby/schemas/shipment-evidence";
 import { and, eq, sql } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
@@ -49,8 +53,9 @@ const movement = (event: { kind: string }) =>
     "out_for_delivery",
     "delivery_attempt",
   ].includes(event.kind);
-const dated = (event: { time: { kind: string } }) =>
-  event.time.kind === "instant" || event.time.kind === "date";
+// A local clock with a calendar date counts as dated without inventing an instant.
+const dated = (event: { time: ShipmentObservationInput["time"] }) =>
+  datedShipmentEventTime.safeParse(event.time).success;
 
 async function loadShipmentQualityRecords(
   db: Database | DrizzleTransaction,
