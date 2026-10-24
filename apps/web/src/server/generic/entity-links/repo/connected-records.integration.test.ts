@@ -25,6 +25,158 @@ import { loadRelatedBranch } from "./related-view";
 describe("complete connected record tables", () => {
   const ctx = withTestDb();
 
+  it("connects split card settlements to itemized and explicit products and vendors in both directions", async () => {
+    const firstVendor = await createRepoEntity(ctx, "vendor", {
+      name: "Synthetic tools",
+    });
+    const secondVendor = await createRepoEntity(ctx, "vendor", {
+      name: "Synthetic supplies",
+    });
+    const first = await createRepoEntity(ctx, "purchase", {
+      vendorId: firstVendor.output.id,
+    });
+    const second = await createRepoEntity(ctx, "purchase", {
+      vendorId: secondVendor.output.id,
+    });
+    const explicit = await createProductIdentityFixture(
+      ctx.db,
+      makeProductInput({ name: "Synthetic drill" }),
+      ctx.actor,
+    );
+    const itemized = await createProductIdentityFixture(
+      ctx.db,
+      makeProductInput({ name: "Synthetic fasteners" }),
+      ctx.actor,
+    );
+    await attachPurchaseProducts(
+      ctx.db,
+      first.entityId,
+      [explicit.entityId],
+      ctx.actor,
+    );
+    await createExpense(
+      ctx.db,
+      makeExpenseInput({
+        name: "Synthetic line",
+        purchaseId: second.output.id,
+        productId: itemized.id,
+      }),
+      ctx.actor,
+    );
+    // Two evidence paths to one product must not duplicate its connected row.
+    await attachPurchaseProducts(
+      ctx.db,
+      second.entityId,
+      [itemized.entityId],
+      ctx.actor,
+    );
+    const account = await createRepoEntity(ctx, "financialAccount", {
+      name: "Synthetic card",
+      identity: { kind: "credit_card", issuer: null, network: "visa" },
+    });
+    const transaction = await createRepoEntity(ctx, "financialTransaction", {
+      accountId: account.output.id,
+      kind: "purchase",
+      status: "posted",
+      postedDate: "2026-10-01",
+      amount: 30,
+      merchant: "Synthetic tools",
+      purchaseId: null,
+      allocations: [
+        { purchaseId: first.output.id, amount: 10 },
+        { purchaseId: second.output.id, amount: 20 },
+      ],
+    });
+    const unrelated = await createRepoEntity(ctx, "financialTransaction", {
+      accountId: account.output.id,
+      kind: "purchase",
+      status: "posted",
+      postedDate: "2026-10-01",
+      amount: 30,
+      merchant: "Synthetic tools",
+      purchaseId: null,
+    });
+    const source = {
+      entityKind: "financialTransaction" as const,
+      entityId: transaction.output.id,
+    };
+    const products = await getConnectedRecords(ctx.db, {
+      source,
+      viewKey: "entity:product",
+    });
+    expect(products.items.map((item) => item.target.entityId).sort()).toEqual(
+      [explicit.id, itemized.id].sort(),
+    );
+    expect(
+      products.items.find((item) => item.target.entityId === explicit.id)
+        ?.paths,
+    ).toEqual(
+      expect.arrayContaining([
+        expect.arrayContaining([
+          expect.objectContaining({
+            entityKind: "purchase",
+            entityId: first.output.id,
+          }),
+        ]),
+      ]),
+    );
+    expect(
+      products.items
+        .find((item) => item.target.entityId === itemized.id)
+        ?.paths.map((path) => path.map((node) => node.entityKind)),
+    ).toEqual(
+      expect.arrayContaining([
+        ["financialTransaction", "purchase", "expense", "product"],
+        ["financialTransaction", "purchase", "product"],
+      ]),
+    );
+    const context = await getConnectedRecordsPreview(ctx.db, {
+      source,
+      scope: "context",
+    });
+    expect(
+      context.views.find((view) => view.targetEntity === "product")?.totalCount,
+    ).toBe(2);
+    expect(
+      context.views.find((view) => view.targetEntity === "vendor")?.totalCount,
+    ).toBe(2);
+    const vendors = await getConnectedRecords(ctx.db, {
+      source,
+      viewKey: "entity:vendor",
+    });
+    expect(vendors.items.map((item) => item.target.entityId).sort()).toEqual(
+      [firstVendor.output.id, secondVendor.output.id].sort(),
+    );
+    for (const record of [
+      { entityKind: "product" as const, entityId: explicit.id },
+      { entityKind: "product" as const, entityId: itemized.id },
+      { entityKind: "vendor" as const, entityId: firstVendor.output.id },
+      { entityKind: "vendor" as const, entityId: secondVendor.output.id },
+    ]) {
+      const reverse = await getConnectedRecords(ctx.db, {
+        source: record,
+        viewKey: "entity:financialTransaction",
+      });
+      expect(reverse.items.map((item) => item.target.entityId)).toEqual([
+        transaction.output.id,
+      ]);
+    }
+    const unlinked = await getConnectedRecordsPreview(ctx.db, {
+      source: {
+        entityKind: "financialTransaction",
+        entityId: unrelated.output.id,
+      },
+    });
+    expect(
+      unlinked.views
+        .filter(
+          (view) =>
+            view.targetEntity === "vendor" || view.targetEntity === "product",
+        )
+        .every((view) => view.totalCount === 0),
+    ).toBe(true);
+  });
+
   it("queries sources without a soft-delete column", async () => {
     const page = await getConnectedRecords(ctx.db, {
       source: { entityKind: "run", entityId: "RUN-EXAMPLE" },

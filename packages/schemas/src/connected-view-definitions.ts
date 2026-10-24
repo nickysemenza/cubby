@@ -44,6 +44,12 @@ export interface ConnectedView {
 export const curatedConnectionViews = {
   product: [
     {
+      key: "settlement-transactions",
+      title: "Settlement transactions",
+      target: "financialTransaction",
+      routes: [["purchases", "financial-transactions"]],
+    },
+    {
       key: "purchase-projects",
       title: "Purchase projects",
       target: "project",
@@ -342,6 +348,12 @@ export const curatedConnectionViews = {
   ],
   vendor: [
     {
+      key: "settlement-transactions",
+      title: "Settlement transactions",
+      target: "financialTransaction",
+      routes: [["purchases", "financial-transactions"]],
+    },
+    {
       key: "inventory",
       title: "Stock from purchased products",
       target: "inventory",
@@ -418,6 +430,18 @@ export const curatedConnectionViews = {
     },
   ],
   financialTransaction: [
+    {
+      key: "settlement-vendors",
+      title: "Purchase vendors",
+      target: "vendor",
+      routes: [["purchase", "vendor"]],
+    },
+    {
+      key: "settlement-products",
+      title: "Purchase products",
+      target: "product",
+      routes: [["purchase", "products"]],
+    },
     {
       key: "projects",
       title: "Projects",
