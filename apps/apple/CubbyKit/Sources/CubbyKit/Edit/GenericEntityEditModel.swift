@@ -505,7 +505,7 @@ public final class GenericEntityEditModel {
 
     private func seedCreateDraft(prefill: [String: JSONValue]) {
         var seeded: [String: JSONValue] = [:]
-        for field in editableFields(in: original) {
+        for field in visibleFields {
             if let value = prefill[field.key] {
                 seeded[field.key] = value
             } else if field.initial == "today", field.kind == .date,
