@@ -35,6 +35,12 @@ extension FieldDescriptor {
         return nil
     }
 
+    /// A derived allocation is meaningful even when this field cannot be assigned manually.
+    public func displayApplicabilityRefusal(in raw: JSONValue) -> String? {
+        if raw["fieldResolutions"]?[key]?["mode"]?.stringValue == "allocated" { return nil }
+        return applicabilityRefusal(in: raw)
+    }
+
     /// The text the detail record carries for this field (`display.detailLabelPath`): a
     /// server-composed sentence, possibly spanning lines. `nil` when the field declares none or the
     /// record has nothing to say.

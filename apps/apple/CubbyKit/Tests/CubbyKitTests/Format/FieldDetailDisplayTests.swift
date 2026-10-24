@@ -12,6 +12,17 @@ struct FieldDetailDisplayTests {
         try #require(EntityCatalog[entity].field(key))
     }
 
+    @Test func allocatedValuesRemainReadableWhenAssignmentIsRefused() throws {
+        let category = try field(.expense, "spendingCategoryId")
+        let raw: JSONValue = [
+            "lineKind": "shipping",
+            "fieldResolutions": ["spendingCategoryId": ["mode": "allocated"]],
+        ]
+        #expect(category.applicabilityRefusal(in: raw) != nil)
+        #expect(category.displayApplicabilityRefusal(in: raw) == nil)
+        #expect(category.displayApplicabilityRefusal(in: ["lineKind": "shipping"]) != nil)
+    }
+
     @Test func accountApplicabilityReadsNestedClassifierAndRefusesMissingValues() throws {
         for key in ["network", "primaryCardholderId", "authorizedUsers"] {
             let descriptor = try field(.financialAccount, key)

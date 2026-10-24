@@ -14,7 +14,10 @@ import type {
   AssessmentReviewOut,
 } from "@cubby/schemas/assessment";
 import type { BatchOut } from "@cubby/schemas/batch";
-import { classificationFieldRefusal } from "@cubby/schemas/classification-field-policy";
+import {
+  classificationFieldRefusal,
+  classificationFieldDisplayRefusal,
+} from "@cubby/schemas/classification-field-policy";
 import type { Entity } from "@cubby/schemas/entity";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
@@ -1989,7 +1992,19 @@ export function RecordFieldSuggestion(props: RecordFieldSuggestionProps) {
     scope && props.record !== null && typeof props.record === "object"
       ? classificationFieldRefusal(scope.entity, props.record, props.field)
       : null;
-  if (refusal) return <NotApplicableField reason={refusal} />;
+  if (refusal)
+    return scope &&
+      props.record !== null &&
+      typeof props.record === "object" &&
+      classificationFieldDisplayRefusal(
+        scope.entity,
+        props.record,
+        props.field,
+      ) === null ? (
+      props.children
+    ) : (
+      <NotApplicableField reason={refusal} />
+    );
   const field = scope
     ? findEntityField(scope.entity, props.field)?.key
     : undefined;

@@ -1,4 +1,4 @@
-import { classificationFieldRefusal } from "@cubby/schemas/classification-field-policy";
+import { classificationFieldDisplayRefusal } from "@cubby/schemas/classification-field-policy";
 import { entitySchema, type EntityRef } from "@cubby/schemas/entity";
 import type { DetailSummarySlot } from "@cubby/schemas/entity-detail-summary";
 import {
@@ -409,7 +409,7 @@ export function DetailSummary<E extends GenericDetailEntity>({
                       </dt>
                       <dd className="min-w-0 break-words">
                         {(absent || value === null) &&
-                        classificationFieldRefusal(
+                        classificationFieldDisplayRefusal(
                           entity,
                           record,
                           field.key,

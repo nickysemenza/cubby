@@ -276,7 +276,7 @@ struct FieldsSectionView: View {
     }
 
     private func isInteractive(_ field: FieldDescriptor) -> Bool {
-        guard field.applicabilityRefusal(in: row.raw) == nil else { return false }
+        guard field.displayApplicabilityRefusal(in: row.raw) == nil else { return false }
         return field.reference != nil || field.detailRenderer == .recipeSource
             || field.format == "external-link"
             || FieldResolutionPresentation(raw: row.raw, field: field)?.isInherited == true
@@ -291,7 +291,7 @@ struct FieldsSectionView: View {
 
     @ViewBuilder
     private func macWideField(_ field: FieldDescriptor) -> some View {
-        if field.applicabilityRefusal(in: row.raw) != nil {
+        if field.displayApplicabilityRefusal(in: row.raw) != nil {
             fieldRowWithResolutionActions(field)
         } else if field.controlKind == .textarea,
             let value = EntityFieldValue.text(in: row.raw, field: field, surface: "detail")
@@ -317,7 +317,7 @@ struct FieldsSectionView: View {
 
     @ViewBuilder
     private func macGridValue(_ field: FieldDescriptor) -> some View {
-        if let reason = field.applicabilityRefusal(in: row.raw) {
+        if let reason = field.displayApplicabilityRefusal(in: row.raw) {
             inapplicableValue(field, reason: reason)
         } else if let reference = EntityFieldValue.reference(in: row.raw, field: field) {
             VStack(alignment: .leading, spacing: 2) {
@@ -396,7 +396,7 @@ struct FieldsSectionView: View {
             guard let field = descriptor.field(key), key != descriptor.titleField, key != "id" else {
                 return nil
             }
-            if field.applicabilityRefusal(in: row.raw) != nil { return field }
+            if field.displayApplicabilityRefusal(in: row.raw) != nil { return field }
             if NativePresentationCoverage.unsupportedDetail(field) != nil { return nil }
             if field.detailRenderer == .expenseSpendingCategory
                 || field.detailRenderer == .spendingCategorySummary
@@ -419,7 +419,7 @@ struct FieldsSectionView: View {
 
     @ViewBuilder
     private func fieldRow(_ field: FieldDescriptor) -> some View {
-        if let reason = field.applicabilityRefusal(in: row.raw) {
+        if let reason = field.displayApplicabilityRefusal(in: row.raw) {
             LabeledContent(field.label) { inapplicableValue(field, reason: reason) }
         } else if field.reference?.multiple == true {
             RecordReferenceList(

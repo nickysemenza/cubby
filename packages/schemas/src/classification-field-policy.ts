@@ -208,3 +208,21 @@ export function classificationFieldDependencies(
       : [],
   );
 }
+
+/** Assignment refusal does not hide a server-resolved allocation's read-only value. */
+export function classificationFieldDisplayRefusal<TRecord extends object>(
+  entity: string,
+  record: TRecord,
+  field: string,
+): string | null {
+  const mode = classificationValue(
+    {
+      classifier: "fieldResolutions",
+      readPath: `fieldResolutions.${field}.mode`,
+    },
+    record,
+  );
+  return mode === "allocated"
+    ? null
+    : classificationFieldRefusal(entity, record, field);
+}

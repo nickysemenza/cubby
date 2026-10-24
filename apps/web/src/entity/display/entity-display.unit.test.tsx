@@ -180,7 +180,8 @@ describe("declared entity displays", () => {
   it("keeps allocated category links when the scalar resolution is null", () => {
     const harness = createBrowserTestHarness();
     const record = {
-      lineKind: "principal",
+      id: "EXP-4K7M",
+      lineKind: "shipping",
       spendingCategoryId: null,
       spendingCategoryName: null,
       fieldResolutions: {
@@ -210,7 +211,7 @@ describe("declared entity displays", () => {
         },
       ],
     };
-    render(
+    const view = render(
       <>
         {renderDetailFieldValue(
           "expense",
@@ -228,6 +229,26 @@ describe("declared entity displays", () => {
       "href",
       "/spending-categories/SPC-4K7M",
     );
+    view.unmount();
+    const save = vi.fn();
+    const columns = createEntityDisplayColumns(
+      "expense",
+      createCubbyColumnHelper<typeof record>(),
+      undefined,
+      { only: ["spendingCategoryId"], onSaveField: save },
+    );
+    const [projection] = columns.visit((column) => ({
+      value: renderRowCell(column.cell, record),
+      writable: column.meta?.cellData?.canWrite?.(record),
+    }));
+    if (!projection) throw new Error("Missing allocated category column");
+    render(<>{projection.value}</>, { wrapper: harness.wrapper });
+    expect(screen.getByRole("link", { name: "Supplies" })).toBeVisible();
+    expect(
+      screen.queryByRole("button", { name: "Edit spending category" }),
+    ).toBeNull();
+    expect(projection.writable).toBe(false);
+    expect(save).not.toHaveBeenCalled();
     harness.dispose();
   });
   it("links shortcodes in editable product notes beside a working edit control", async () => {

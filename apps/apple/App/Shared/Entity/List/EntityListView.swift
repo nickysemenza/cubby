@@ -1153,7 +1153,7 @@ struct EntityListView: View {
         _ field: FieldDescriptor, row: EntityRow, fact: EntityRowPresentation.Fact?
     ) -> some View {
         Group {
-            if let reason = field.applicabilityRefusal(in: row.raw) {
+            if let reason = field.displayApplicabilityRefusal(in: row.raw) {
                 Text("—").foregroundStyle(.tertiary)
                     .help(reason)
                     .focusable()

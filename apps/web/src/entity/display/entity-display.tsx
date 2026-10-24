@@ -1,5 +1,8 @@
 import type { AuditEntityKind } from "@cubby/schemas/audit";
-import { classificationFieldRefusal } from "@cubby/schemas/classification-field-policy";
+import {
+  classificationFieldRefusal,
+  classificationFieldDisplayRefusal,
+} from "@cubby/schemas/classification-field-policy";
 import { amount as amountSchema } from "@cubby/schemas/codec";
 import {
   storedDateRangeSchema,
@@ -709,7 +712,7 @@ export function renderDetailFieldValue<TRecord extends object>(
   record: TRecord,
   field: DisplayField,
 ): ReactNode {
-  const refusal = classificationFieldRefusal(entity, record, field.key);
+  const refusal = classificationFieldDisplayRefusal(entity, record, field.key);
   if (refusal) return <NotApplicableField reason={refusal} />;
   if (field.kind === "dateRange") return renderDateRangeValue(record, field);
   const emptyLabel = resolutionEmptyLabel(entity, record, field, true);
@@ -1199,7 +1202,10 @@ export function EntityBasicInfo<TRecord extends object>({
       layout="list"
       facts={fields.flatMap<Fact>((field) => {
         const refusal = classificationFieldRefusal(entity, record, field.key);
-        if (refusal)
+        if (
+          refusal &&
+          classificationFieldDisplayRefusal(entity, record, field.key) !== null
+        )
           return [
             {
               label: field.label,
@@ -1210,7 +1216,7 @@ export function EntityBasicInfo<TRecord extends object>({
         const override = overrides[field.key]?.(record);
         const rendered = override ?? {
           value:
-            onAdd && isAddableEmpty(entity, record, field) ? (
+            !refusal && onAdd && isAddableEmpty(entity, record, field) ? (
               <AddFactValue label={field.label} onAdd={onAdd} />
             ) : (
               renderDetailFieldValue(entity, record, field)
@@ -1253,7 +1259,11 @@ export function EntityBasicInfo<TRecord extends object>({
             ...rendered,
             value: decoratedValue,
             caption: resolution ? (
-              <FieldResolutionBadge record={record} field={field.key} />
+              <FieldResolutionBadge
+                record={record}
+                field={field.key}
+                interactive={!refusal}
+              />
             ) : undefined,
             anchor: quality
               ? `${quality.prefix}-field-${field.key}`
@@ -1437,7 +1447,19 @@ function renderEditableField<TRecord extends object>(
   spanValue?: ReactNode,
 ): ReactNode {
   const refusal = classificationFieldRefusal(entity, record, field.key);
-  if (refusal) return <NotApplicableField reason={refusal} />;
+  if (refusal) {
+    const readField = entityDisplayFields(entity, surface).find(
+      (candidate) => candidate.key === field.key,
+    );
+    if (
+      readField &&
+      classificationFieldDisplayRefusal(entity, record, field.key) === null
+    )
+      return surface === "detail"
+        ? renderDetailFieldValue(entity, record, readField)
+        : renderCompactFieldValue(entity, record, readField);
+    return <NotApplicableField reason={refusal} />;
+  }
   const { key, control } = field;
   const format = field.display.format;
   const resolution = fieldResolutionFor(record, field.key);
@@ -1613,13 +1635,22 @@ export function editableFieldOverrides<TRecord extends { id: string }, TResult>(
   const fields = entityDisplayFields(entity, "detail");
   return Object.fromEntries(
     keys.map((key) => {
+      const field = fields.find((candidate) => candidate.key === key);
       const refusal = classificationFieldRefusal(entity, record, key);
       if (refusal)
         return [
           key,
-          () => ({ value: <NotApplicableField reason={refusal} /> }),
+          () => ({
+            value:
+              field &&
+              classificationFieldDisplayRefusal(entity, record, key) ===
+                null ? (
+                renderDetailFieldValue(entity, record, field)
+              ) : (
+                <NotApplicableField reason={refusal} />
+              ),
+          }),
         ] as const;
-      const field = fields.find((candidate) => candidate.key === key);
       if (!field?.control || field.readKey === null) {
         throw new Error(`${entity}.${key} has no editable scalar control`);
       }
@@ -1951,11 +1982,19 @@ export function createEntityDisplayColumns<TRecord extends object>(
             context.row.original,
             field.key,
           );
-          return refusal ? (
-            <NotApplicableField reason={refusal} />
-          ) : (
-            flexRender(renderCell, context)
-          );
+          if (refusal)
+            return classificationFieldDisplayRefusal(
+              entity,
+              context.row.original,
+              field.key,
+            ) === null ? (
+              renderCompactFieldValue(entity, context.row.original, field, {
+                singleLine: true,
+              })
+            ) : (
+              <NotApplicableField reason={refusal} />
+            );
+          return flexRender(renderCell, context);
         };
         addColumn(decorated);
       };
