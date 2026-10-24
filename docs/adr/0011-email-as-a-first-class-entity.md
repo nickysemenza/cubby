@@ -292,8 +292,10 @@ Assessment or certifies previously discarded content.
 Explicit relevance correction requires a root database for preparation. Provider
 retrieval, complete-original capture and object uploads run before the application
 transaction. Each upload has a durable reservation, locked while staging bytes.
-Preparation rechecks owner, connected account and reviewed checksum after retrieval
-before staging. Publication repeats those checks under the existing parent locks,
+Preparation binds the connected auth-account row identity, then rechecks owner,
+that same account incarnation and reviewed checksum after retrieval before staging.
+Disconnect/reconnect to a different account row refuses the preparation even when
+member/provider/mailbox fields match; token refresh on the same row is allowed. Publication repeats those checks under the existing parent locks,
 then adopts staged references using DB-only writers in the caller's transaction.
 Cleaned reservations cannot be published or recreate their objects.
 

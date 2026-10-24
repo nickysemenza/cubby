@@ -74,19 +74,20 @@ async function correctionOwner(
     .limit(1);
   if (!reference)
     throw new Error("No live Gmail Email matches this correction.");
-  const email = await exactMemberEmail(
+  const ownership = await exactMemberEmail(
     db,
     { mailboxId: reference.mailboxId, messageId: reference.messageId },
     actor,
     lock,
   );
+  const { email } = ownership;
   if (email.id !== reference.id || email.checksum !== input.expectedChecksum)
     throw new Error("Email correction checksum or original identity changed.");
   if (await deferClassificationRefresh(db, "classification_only", email))
     throw new Error(
       "Email correction refuses an admitted or ambiguous Run assignment; its original stays frozen.",
     );
-  return email;
+  return ownership;
 }
 async function observedRead<T>(
   db: Database,
@@ -206,6 +207,7 @@ async function cleanNewCorrectionKeys(
 type PreparationDetails = {
   input: CorrectEmailRelevanceInput;
   actorUserId: ActorContext["userId"];
+  connectedAccountId: string;
   email: OwnedEmail;
   normalized: GmailNormalizedMessage;
   checksum: string;
@@ -246,7 +248,7 @@ export async function prepareEmailRelevanceCorrection(
       "Email correction preparation requires a root database outside the application transaction",
     );
   const input = correctEmailRelevanceInput.parse(rawInput);
-  const email = await correctionOwner(db, input, actor);
+  const { email, connectedAccountId } = await correctionOwner(db, input, actor);
   const provider = await observedRead(db, email, () =>
     gmailProviderForUser(db, actor.userId, email.mailboxId),
   );
@@ -277,15 +279,17 @@ export async function prepareEmailRelevanceCorrection(
   });
   // Refuse changes already visible after retrieval before staging external bytes;
   // publication repeats this check under the domain's parent locks.
-  const current = await correctionOwner(db, input, actor);
+  const { email: current, connectedAccountId: currentAccountId } =
+    await correctionOwner(db, input, actor);
   if (
     current.id !== email.id ||
+    currentAccountId !== connectedAccountId ||
     current.ledgerPartyId !== email.ledgerPartyId ||
     current.mailboxId !== email.mailboxId ||
     current.messageId !== email.messageId
   )
     throw new Error(
-      "Email correction original owner or mailbox identity changed during retrieval.",
+      "Email correction original owner, connected account or mailbox identity changed during retrieval.",
     );
   const uploadKeys = await reserveGmailAttachmentUploads(db, {
     orderMailId: email.orderMailId,
@@ -320,6 +324,7 @@ export async function prepareEmailRelevanceCorrection(
     preparationDetails.set(prepared, {
       input,
       actorUserId: actor.userId,
+      connectedAccountId,
       email,
       normalized,
       checksum,
@@ -369,17 +374,26 @@ export async function publishPreparedEmailRelevanceCorrection(
   const details = verifiedPreparation(prepared);
   if (details.actorUserId !== actor.userId)
     throw new Error("Email correction preparation authority does not match");
-  const { input, email, normalized, checksum, originalCapture, uploads } =
-    details;
-  const current = await correctionOwner(db, input, actor, "update");
+  const {
+    input,
+    email,
+    connectedAccountId,
+    normalized,
+    checksum,
+    originalCapture,
+    uploads,
+  } = details;
+  const { email: current, connectedAccountId: currentAccountId } =
+    await correctionOwner(db, input, actor, "update");
   if (
     current.id !== email.id ||
+    currentAccountId !== connectedAccountId ||
     current.ledgerPartyId !== email.ledgerPartyId ||
     current.mailboxId !== email.mailboxId ||
     current.messageId !== email.messageId
   )
     throw new Error(
-      "Email correction original owner or mailbox identity changed during retrieval.",
+      "Email correction original owner, connected account or mailbox identity changed during retrieval.",
     );
   await snapshotStoredEmailPrediction(tx, current);
   await saveMailboxMetadata(db, {

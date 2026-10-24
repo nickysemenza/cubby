@@ -209,6 +209,83 @@ describe("member-only exact original relevance correction", () => {
     };
     return { ...f, review };
   }
+  async function replaceConnectedAccount() {
+    await getDb(ctx.db).delete(account).where(eq(account.accountId, mailboxId));
+    await getDb(ctx.db).insert(account).values({
+      id: crypto.randomUUID(),
+      accountId: mailboxId,
+      providerId: "google",
+      userId: ctx.actor.userId,
+      updatedAt: new Date(),
+    });
+  }
+  it("refuses a reconnected account incarnation visible after provider retrieval", async () => {
+    const f = await fixture();
+    const before = await evidence();
+    f.getMessage.mockImplementationOnce(async () => {
+      await replaceConnectedAccount();
+      return f.message();
+    });
+    await expect(
+      correctEmailRelevance(ctx.db, f.input, ctx.actor),
+    ).rejects.toThrow("identity changed during retrieval");
+    expect(await evidence()).toEqual(before);
+    expect(f.put).not.toHaveBeenCalled();
+  });
+  it("refuses account replacement after staging and cleans only its unadopted bytes", async () => {
+    const f = await fixture();
+    const before = await evidence();
+    const prepared = await prepareEmailRelevanceCorrection(
+      ctx.db,
+      f.input,
+      ctx.actor,
+    );
+    await replaceConnectedAccount();
+    await expect(
+      withEmailRelevancePreparation(ctx.db, prepared, (value) =>
+        withTransaction(ctx.db, (tx) =>
+          publishPreparedEmailRelevanceCorrection(
+            databaseForTransaction(tx),
+            value,
+            ctx.actor,
+          ),
+        ),
+      ),
+    ).rejects.toThrow("identity changed during retrieval");
+    expect(await evidence()).toEqual(before);
+    expect(f.objects.size).toBe(0);
+  });
+  it("preserves a prepared correction across credential refresh on the same account row", async () => {
+    const f = await fixture();
+    const prepared = await prepareEmailRelevanceCorrection(
+      ctx.db,
+      f.input,
+      ctx.actor,
+    );
+    await getDb(ctx.db)
+      .update(account)
+      .set({
+        accessToken: "synthetic-refreshed-access-token",
+        updatedAt: new Date(),
+      })
+      .where(eq(account.accountId, mailboxId));
+    await expect(
+      withEmailRelevancePreparation(ctx.db, prepared, (value) =>
+        withTransaction(ctx.db, (tx) =>
+          publishPreparedEmailRelevanceCorrection(
+            databaseForTransaction(tx),
+            value,
+            ctx.actor,
+          ),
+        ),
+      ),
+    ).resolves.toMatchObject({
+      classification: "related",
+      originalAvailable: true,
+    });
+    expect(f.objects.size).toBe(1);
+    expect(f.getMessage).toHaveBeenCalledTimes(1);
+  });
   it("retains command Feedback and raw retrieval failure when preparation fails", async () => {
     const f = await sharedReviewFixture();
     const [before] = await getDb(ctx.db)
