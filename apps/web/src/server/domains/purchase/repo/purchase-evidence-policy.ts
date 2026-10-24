@@ -1,6 +1,7 @@
 import { expenseLineKindSchema } from "@cubby/schemas/expense-line-kind";
 import type { FieldResolutions } from "@cubby/schemas/field-resolution";
 import { fieldResolutionsSchema } from "@cubby/schemas/field-resolution";
+import { financialTransactionStatus } from "@cubby/schemas/financial-transaction-fields";
 import { primaryPurchaseDocumentKinds } from "@cubby/schemas/purchase";
 import { itemizationExpectation } from "@cubby/schemas/purchase-evidence-policy";
 import type {
@@ -287,10 +288,11 @@ export const purchaseCoverageSql = (
   )`;
 };
 
+/** Coverage follows booking eligibility; a provider posting label is optional. */
 export const financialTransactionRequiresBookingSql = (
   alias: string,
 ): SQL => sql`(
-  ${column(alias, "status")} = 'posted'
+  ${column(alias, "status")} IN (${sqlEnumConstant(financialTransactionStatus, financialTransactionStatus.enum.observed)}, ${sqlEnumConstant(financialTransactionStatus, financialTransactionStatus.enum.pending)}, ${sqlEnumConstant(financialTransactionStatus, financialTransactionStatus.enum.posted)})
   AND ${column(alias, "ledgerTransferId")} IS NULL
   AND (${column(alias, "kind")} IN ('purchase', 'refund', 'adjustment', 'fee', 'interest')
     OR (${column(alias, "kind")} = 'income' AND EXISTS (

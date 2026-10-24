@@ -574,6 +574,8 @@ describe("member actionable Work queue", () => {
         })
         .from(runFinding)
         .where(eq(runFinding.ledgerPartyId, payer.id));
+    // The fixture stays unchanged throughout these reads; publish derived quality once.
+    await publishAllQualityFixtures(ctx.db);
     const beforeStaleFindings = await retainedStaleFindings();
     const retainedAllocations = await getDb(ctx.db)
       .select()
@@ -583,7 +585,7 @@ describe("member actionable Work queue", () => {
       source: "research" | "problem" | "reconciliation" | "finding",
       query: string,
     ) => {
-      const response = await callMcpTool(
+      const response = await callCurrentMcpTool(
         createMcpServer(),
         "activity_read",
         { action: "for_member", source, query, pageSize: 1 },
@@ -612,7 +614,7 @@ describe("member actionable Work queue", () => {
       expect
         .soft(await read(payerUserId, "research", id))
         .toMatchObject({ items: [], meta: { totalCount: 0 } });
-      const unresolved = await readWorkQueue(
+      const unresolved = await readCurrentWorkQueue(
         ctx.db,
         sourceOwner.id,
         workQueueHouseholdInput.parse({
@@ -658,7 +660,7 @@ describe("member actionable Work queue", () => {
         .toMatchObject({ items: [], meta: { totalCount: 0 } });
     }
     for (const target of [sourceExpense.id, otherSourcePurchase.shortcode]) {
-      const unresolved = await readWorkQueue(
+      const unresolved = await readCurrentWorkQueue(
         ctx.db,
         sourceOwner.id,
         workQueueHouseholdInput.parse({
