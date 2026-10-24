@@ -2590,6 +2590,8 @@ Both have kind-checked composite FKs to `Entity`; they are derived identity
 metadata, not graph relationships. Entity itself has no quality columns.
 Hydration consumes the named check states directly for both published and live
 evaluations; check order is not an intermediate row encoding.
+Quality consumers use `storedEntryFor` in `entries.ts` as the single
+erased-table registry accessor; SQL builders do not wrap or re-export it.
 Lists, filters, score sorts and related rollups consume published outcomes. A
 missing publication is unassessed. `loadDataQualities`
 defaults to live evaluation for record and detail reads; list pages and the Work

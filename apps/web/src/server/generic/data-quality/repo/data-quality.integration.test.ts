@@ -45,10 +45,11 @@ import {
 } from "~/server/testing/repo.fixtures";
 
 import { qualityCheck } from "./builders";
+import { storedEntryFor } from "./entries";
 import { clearDataException, setDataException } from "./exceptions";
 import { loadDataQualities } from "./hydrate";
 import type { ScoredTable } from "./registry";
-import { entryFor, scoreSql, statusSql } from "./sql";
+import { scoreSql, statusSql } from "./sql";
 
 const page = { pageIndex: 0, pageSize: 50 };
 
@@ -137,7 +138,7 @@ describe("data quality: list filters, sort and hydration agree", () => {
     );
     const scores = await unwrapDb(ctx.db)
       .execute(sql`SELECT ${scoreSql("product")} AS score
-      FROM ${entryFor("product").table} WHERE ${entryFor("product").table.id} = ${row.entityId}`);
+      FROM ${storedEntryFor("product").table} WHERE ${storedEntryFor("product").table.id} = ${row.entityId}`);
     expect(Number(scores.rows[0]?.score)).toBe(quality.score);
     await expect(
       setDataException(
@@ -1091,7 +1092,7 @@ describe("data quality: score and status SQL planning", () => {
     };
     const used: Record<string, number> = {};
     for (const entity of scoredEntities) {
-      const t = entryFor(entity).table;
+      const t = storedEntryFor(entity).table;
       used[`${entity} score`] = await plannerKb(scoreSql(entity, t), t);
       used[`${entity} status`] = await plannerKb(statusSql(entity, t), t);
     }

@@ -10,13 +10,12 @@ import { describe, expect, it } from "vitest";
 
 import { product } from "~/server/db/schema";
 
-import { dataQualityEntries } from "./entries";
+import { dataQualityEntries, storedEntryFor } from "./entries";
 import { calculateDataQualityScore } from "./hydrate";
 import {
   checksOf,
   dataQualityFilterPredicates,
   dataQualitySortResolver,
-  entryFor,
   filterableChecks,
   gapCondition,
   relatedGapCondition,
@@ -102,7 +101,7 @@ describe("data-quality registry", () => {
   it.each(scoredEntities)(
     "%s binds exactly its declared roll-ups",
     (entity) => {
-      const entry = entryFor(entity);
+      const entry = storedEntryFor(entity);
       expect(entry.entity).toBe(entity);
       expect(Object.keys(entry.related ?? {}).sort()).toEqual(
         [...relatedDataQualityEntities[entity]].sort(),
@@ -225,7 +224,7 @@ describe("purchase import expectations", () => {
 
 describe("dataQualityFilterPredicates", () => {
   it("accepts one-or-many values and routes related checks to the roll-up", () => {
-    const table = entryFor("purchase").table;
+    const table = storedEntryFor("purchase").table;
     expect(filterableChecks("purchase")).toContain("product_image");
     const predicates = dataQualityFilterPredicates("purchase", table, {
       dataStatus: ["needs_data"],
@@ -241,7 +240,7 @@ describe("dataQualityFilterPredicates", () => {
 
   it("emits nothing for filters that name no data-quality field", () => {
     expect(
-      dataQualityFilterPredicates("product", entryFor("product").table, {
+      dataQualityFilterPredicates("product", storedEntryFor("product").table, {
         nameFilter: "x",
       }),
     ).toEqual([]);
