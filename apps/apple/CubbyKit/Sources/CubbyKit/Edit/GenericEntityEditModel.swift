@@ -287,6 +287,7 @@ public final class GenericEntityEditModel {
     /// optional text left out), every other field as drafted.
     private func wireDraft() -> [String: JSONValue] {
         draft.reduce(into: [:]) { wire, entry in
+            if descriptor.field(entry.key)?.applicabilityRefusal(in: applicabilityRecord) != nil { return }
             if let state = CollectionEdit.decode(entry.value), let field = descriptor.field(entry.key),
                 let collection = field.collection
             {
@@ -468,7 +469,7 @@ public final class GenericEntityEditModel {
         let original = JSONValue.object(stored)
         self.original = original
         var seeded: [String: JSONValue] = [:]
-        for field in visibleFields {
+        for field in editableFields(in: original) {
             if let value = original[field.key] {
                 seeded[field.key] =
                     field.collection?.primary != nil && value.arrayValue != nil
@@ -504,7 +505,7 @@ public final class GenericEntityEditModel {
 
     private func seedCreateDraft(prefill: [String: JSONValue]) {
         var seeded: [String: JSONValue] = [:]
-        for field in visibleFields {
+        for field in editableFields(in: original) {
             if let value = prefill[field.key] {
                 seeded[field.key] = value
             } else if field.initial == "today", field.kind == .date,

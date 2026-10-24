@@ -19,6 +19,9 @@ test("explains inapplicable account fields without offering edits", async ({
   });
   await expect(explanations.first()).toBeVisible();
   await explanations.first().focus();
+  await page.keyboard.press("Shift+Tab");
+  await page.keyboard.press("Tab");
+  await expect(explanations.first()).toBeFocused();
   await expect(page.getByRole("tooltip")).toContainText(
     "Only applies to credit-card accounts.",
   );
