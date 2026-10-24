@@ -3,7 +3,7 @@ import type { ActorContext } from "@cubby/schemas/context";
 import type { EmailReclassifyOutcome } from "@cubby/schemas/email-actions";
 import { emailCandidateSource } from "@cubby/schemas/email-candidates";
 import type { EmailClassificationConflict } from "@cubby/schemas/email-observations";
-import type { EmailOriginalCapture } from "@cubby/schemas/email-observations";
+import type { EmailClassificationPublicationEvidence } from "@cubby/schemas/email-observations";
 import { ledgerPartyId } from "@cubby/schemas/identifiers";
 import {
   MAILBOX_RESEARCH_VERSION,
@@ -13,6 +13,11 @@ import {
   type MailboxClassificationDecision,
 } from "@cubby/schemas/mailbox-research";
 
+import {
+  preparingAiInputs,
+  preparingWithoutProviders,
+  withAiInputs,
+} from "~/server/ai/evaluation-inputs";
 import type { Database } from "~/server/db";
 import { hasAcceptedEmailAssociation } from "~/server/domains/email/repo/email";
 import { originalChecksum } from "~/server/domains/purchase-import/repo/gmail/checksum";
@@ -252,7 +257,7 @@ async function observeClassification(
   unchanged: boolean,
   call: GmailClassificationCall | null,
   calls: (GmailClassificationCall | null)[] = [],
-  originalCapture?: EmailOriginalCapture,
+  publicationEvidence?: EmailClassificationPublicationEvidence,
 ) {
   if (!prior) return;
   // A reused verdict records nothing new unless it now contradicts a Purchase.
@@ -301,7 +306,7 @@ async function observeClassification(
       },
     },
     undefined,
-    originalCapture ? { originalCapture } : undefined,
+    publicationEvidence,
   );
 }
 
@@ -616,32 +621,39 @@ async function acquireEligible(
     else if (call.operation === "mailbox-relevance") relevanceCall = call;
   });
   const transientAttachments = new Map<string, string>();
-  const decision = await classifyMessage(
-    unchanged ||
-      (input.refreshStage === "mailbox-relevance" &&
-        prior?.checksum === checksum)
-      ? prior
-      : null,
-    input.searchActor
-      ? async () => ({
-          classification: "uncertain",
-          stage: "rule",
-          reason: "Awaiting classification",
-        })
-      : async () =>
-          (await routeGmailMessage(message, normalized, ports.triage)).decision,
-    input.searchActor
-      ? null
-      : () =>
-          interpretMailRelevance(
-            provider,
-            normalized,
-            ports.relevance,
-            gmailOriginalComplete(message, normalized),
-            (sourceKey, encoded) =>
-              transientAttachments.set(sourceKey, encoded),
-          ),
+  const classification = await withAiInputs(
+    preparingAiInputs(),
+    () =>
+      classifyMessage(
+        unchanged ||
+          (input.refreshStage === "mailbox-relevance" &&
+            prior?.checksum === checksum)
+          ? prior
+          : null,
+        input.searchActor
+          ? async () => ({
+              classification: "uncertain",
+              stage: "rule",
+              reason: "Awaiting classification",
+            })
+          : async () =>
+              (await routeGmailMessage(message, normalized, ports.triage))
+                .decision,
+        input.searchActor
+          ? null
+          : () =>
+              interpretMailRelevance(
+                provider,
+                normalized,
+                ports.relevance,
+                gmailOriginalComplete(message, normalized),
+                (sourceKey, encoded) =>
+                  transientAttachments.set(sourceKey, encoded),
+              ),
+      ),
+    { providerFree: preparingWithoutProviders() },
   );
+  const decision = classification.result;
   if (
     await deferClassificationRefresh(
       db,
@@ -724,7 +736,15 @@ async function acquireEligible(
                   relevanceCall,
                 ),
                 [triageCall, relevanceCall],
-                originalCapture,
+                {
+                  originalCapture,
+                  ...(classification.inputs.length > 0 && {
+                    logicalInputCapture: {
+                      version: "gmail-logical-inputs-v1",
+                      inputs: classification.inputs,
+                    },
+                  }),
+                },
               );
           publication.observationId = observation?.id ?? null;
           if (publication.evaluation)

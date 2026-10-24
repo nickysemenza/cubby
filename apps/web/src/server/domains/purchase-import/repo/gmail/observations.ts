@@ -6,8 +6,8 @@ import {
 import {
   emailClassificationObservationInput,
   emailRetrievalFailureInput,
-  emailOriginalCapture,
-  type EmailOriginalCapture,
+  emailClassificationPublicationEvidence,
+  type EmailClassificationPublicationEvidence,
 } from "@cubby/schemas/email-observations";
 import { parseEntityId, runEntityId } from "@cubby/schemas/identifiers";
 import { sha256Hex } from "@cubby/shared/sha256";
@@ -118,12 +118,13 @@ export async function recordEmailClassificationObservation(
   db: Database,
   input: z.input<typeof emailClassificationObservationInput>,
   actor?: ActorContext,
-  publication?: { originalCapture: EmailOriginalCapture },
+  publication?: EmailClassificationPublicationEvidence,
 ) {
   const parsed = emailClassificationObservationInput.parse(input);
-  const capture = publication
-    ? emailOriginalCapture.parse(publication.originalCapture)
-    : null;
+  const suppliedEvidence = emailClassificationPublicationEvidence.parse(
+    publication ?? {},
+  );
+  const capture = suppliedEvidence.originalCapture;
   return withTransaction(db, async (tx) => {
     const [initial] = await tx
       .select()
@@ -177,15 +178,14 @@ export async function recordEmailClassificationObservation(
       )
       .limit(1);
     if (previous && sameClassificationObservation(previous, parsed)) {
-      if (!capture) return previous;
       const retained = await ensureEmailAssessment(
         databaseForTransaction(tx),
         previous.id,
       );
-      const evidence = z
-        .object({ originalCapture: emailOriginalCapture.optional() })
-        .safeParse(retained.evidence);
-      if (evidence.success && isEqual(evidence.data.originalCapture, capture))
+      const evidence = emailClassificationPublicationEvidence.safeParse(
+        retained.evidence,
+      );
+      if (evidence.success && isEqual(evidence.data, suppliedEvidence))
         return previous;
       // A new capture is a new immutable observation, never a retrofit of historical proof.
     }
@@ -205,7 +205,7 @@ export async function recordEmailClassificationObservation(
     const assessment = await ensureEmailAssessment(
       databaseForTransaction(tx),
       observation.id,
-      capture ?? undefined,
+      suppliedEvidence,
     );
     await recordFeedback(databaseForTransaction(tx), {
       assessmentId: assessment.id,

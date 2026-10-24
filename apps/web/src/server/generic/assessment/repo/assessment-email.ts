@@ -1,4 +1,4 @@
-import type { EmailOriginalCapture } from "@cubby/schemas/email-observations";
+import type { EmailClassificationPublicationEvidence } from "@cubby/schemas/email-observations";
 import { eq } from "drizzle-orm";
 
 import { type Database } from "~/server/db/database";
@@ -37,7 +37,7 @@ export async function recordEmailClassificationApplication(
 export async function ensureEmailAssessment(
   db: Database,
   predictionId: string,
-  originalCapture?: EmailOriginalCapture,
+  publication?: EmailClassificationPublicationEvidence,
 ) {
   const [existing] = await getDb(db)
     .select({
@@ -83,7 +83,7 @@ export async function ensureEmailAssessment(
     evidence: {
       checksum: row.checksum,
       provenance: row.provenance,
-      ...(originalCapture && { originalCapture }),
+      ...publication,
     },
   });
 }

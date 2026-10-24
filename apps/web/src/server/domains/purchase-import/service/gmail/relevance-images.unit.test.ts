@@ -1,7 +1,13 @@
 /** Failures: remote receipt pixels never reach the model, tracking pixels cause
  * downloads, a detail retry downloads again, or missing pixels authorize a negative. */
+import { runEntityId } from "@cubby/schemas/identifiers";
+import { fromPartial } from "@total-typescript/shoehorn";
 import { describe, expect, it, vi } from "vitest";
 
+import { withAiInputs } from "~/server/ai/evaluation-inputs";
+import { MAILBOX_RELEVANCE_FEATURE } from "~/server/ai/policy/features";
+import { runStructuredFeature } from "~/server/ai/run-feature";
+import type { Database } from "~/server/db";
 import { ModelImageInputError } from "~/server/domains/image-processing/service/model-image";
 
 import { normalizeMessage } from "../../repo/gmail/normalize";
@@ -425,4 +431,53 @@ describe("bounded Email image evidence", () => {
     expect(failed.reason).toContain("503");
     expect(failed.reason).toContain("Synthetic outage");
   });
+});
+
+it("captures ordered relevance requests before detail mutation and retains provider identity", async () => {
+  const capture = async (messageId: string) => {
+    const ports = imagePorts();
+    ports.prepareImage.mockImplementation(async (_bytes, detail) => ({
+      bytes:
+        detail === "detail"
+          ? Buffer.concat([bytes, Buffer.from("detail")])
+          : bytes,
+      mimeType: "image/png",
+    }));
+    return withAiInputs(
+      true,
+      () =>
+        interpretMailRelevance(
+          provider,
+          { ...original, mail: { ...original.mail, messageId } },
+          async (request) => {
+            await expect(
+              runStructuredFeature(MAILBOX_RELEVANCE_FEATURE, request, {
+                db: fromPartial<Database>({}),
+                runId: runEntityId.parse(
+                  "11111111-2222-4333-8444-555555555555",
+                ),
+                operation: "mailbox-relevance",
+              }),
+            ).rejects.toThrow(
+              "Only field selection supports input-only preparation",
+            );
+            return {
+              classification: "unrelated",
+              imageReadability: "needs_detail",
+            };
+          },
+          true,
+          undefined,
+          ports,
+        ),
+      { providerFree: true },
+    );
+  };
+  const first = await capture("synthetic-one");
+  const replay = await capture("synthetic-one");
+  const different = await capture("synthetic-two");
+  expect(first.inputs).toHaveLength(2);
+  expect(first.inputs[0]?.fingerprint).not.toBe(first.inputs[1]?.fingerprint);
+  expect(replay.inputs).toEqual(first.inputs);
+  expect(different.inputs).not.toEqual(first.inputs);
 });

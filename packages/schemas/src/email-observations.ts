@@ -1,4 +1,4 @@
-import { aiProvenance } from "./ai-evaluation";
+import { aiProvenance, capturedFieldInput } from "./ai-evaluation";
 import { z } from "zod";
 import { ledgerPartyId } from "./identifier-fields.js";
 import {
@@ -51,6 +51,19 @@ export const emailOriginalCapture = z.discriminatedUnion("status", [
   }),
 ]);
 export type EmailOriginalCapture = z.infer<typeof emailOriginalCapture>;
+
+/** Declared logical requests, not answering-model or provider-wire attestations. */
+export const emailLogicalInputCapture = z.object({
+  version: z.literal("gmail-logical-inputs-v1"),
+  inputs: z.array(capturedFieldInput).min(1),
+});
+export const emailClassificationPublicationEvidence = z.object({
+  originalCapture: emailOriginalCapture.optional(),
+  logicalInputCapture: emailLogicalInputCapture.optional(),
+});
+export type EmailClassificationPublicationEvidence = z.infer<
+  typeof emailClassificationPublicationEvidence
+>;
 
 export const emailClassificationOperation = z.enum([
   "mailbox-triage",

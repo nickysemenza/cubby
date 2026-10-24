@@ -1,5 +1,6 @@
 /** Predictions remain immutable after member labels; accepted content survives
  * contradictory predictions, and retrieval failures never invent classifications. */
+import { emailClassificationPublicationEvidence } from "@cubby/schemas/email-observations";
 import { eq } from "drizzle-orm";
 import {
   listFeedbackByKind,
@@ -8,6 +9,7 @@ import {
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import { withAiInputs } from "~/server/ai/evaluation-inputs";
 import { getDb } from "~/server/db/helpers";
 import {
   emailClassificationObservation,
@@ -17,6 +19,7 @@ import {
 } from "~/server/db/schema";
 import { orderMailEvent } from "~/server/db/schema";
 import { readRetainedMail } from "~/server/domains/mail/repo/retained-mail";
+import { productionMailTriage } from "~/server/domains/purchase-import/service/gmail/triage-model";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { publishAssessment } from "~/server/generic/assessment/repo/assessment";
 import { ensureEmailAssessment } from "~/server/generic/assessment/repo/assessment-email";
@@ -237,7 +240,18 @@ describe("immutable Email observations", () => {
         mailboxId: "synthetic-staged-mailbox",
         messageIds: ["synthetic-staged-message"],
         storage,
-        triage: async () => "related",
+        triage: async (content) => {
+          await withAiInputs(
+            true,
+            () =>
+              productionMailTriage(
+                ctx.db,
+                "11111111-2222-4333-8444-555555555555",
+              )(content),
+            { providerFree: true },
+          );
+          return "related";
+        },
       },
     );
     const [observation] = await getDb(ctx.db)
@@ -246,7 +260,13 @@ describe("immutable Email observations", () => {
     if (!observation) throw new Error("Synthetic staged observation missing");
     expect(
       (await ensureEmailAssessment(ctx.db, observation.id)).evidence,
-    ).toMatchObject({ originalCapture: { status: "complete" } });
+    ).toMatchObject({
+      originalCapture: { status: "complete" },
+      logicalInputCapture: {
+        version: "gmail-logical-inputs-v1",
+        inputs: [expect.objectContaining({ operation: "mailbox-triage" })],
+      },
+    });
     expect(fetched).toBe(1);
   });
   it("keeps new original proof immutable and rejects a different publication binding", async () => {
@@ -299,6 +319,58 @@ describe("immutable Email observations", () => {
         })
       ).id,
     ).toBe(captured.id);
+    const logicalInputCapture = {
+      version: "gmail-logical-inputs-v1",
+      inputs: [
+        {
+          feature: "mailbox-triage",
+          promptVersion: "synthetic-v1",
+          operation: "mailbox-triage",
+          model: "synthetic-model",
+          fingerprint: "a".repeat(64),
+        },
+      ],
+    } satisfies NonNullable<
+      import("@cubby/schemas/email-observations").EmailClassificationPublicationEvidence["logicalInputCapture"]
+    >;
+    // Presence changes are new observations; neither source nor request proof is inherited.
+    for (const publication of [
+      { originalCapture, logicalInputCapture },
+      { logicalInputCapture },
+      {},
+      { originalCapture },
+    ]) {
+      const before = await ensureEmailAssessment(ctx.db, captured.id);
+      const next = await recordEmailClassificationObservation(
+        ctx.db,
+        input,
+        undefined,
+        publication,
+      );
+      expect(next.id).not.toBe(captured.id);
+      expect(
+        (
+          await recordEmailClassificationObservation(
+            ctx.db,
+            input,
+            undefined,
+            publication,
+          )
+        ).id,
+      ).toBe(next.id);
+      const retained = await ensureEmailAssessment(ctx.db, next.id);
+      const proof = emailClassificationPublicationEvidence.parse(
+        retained.evidence,
+      );
+      expect(retained.evidence).toMatchObject(publication);
+      expect("originalCapture" in proof).toBe("originalCapture" in publication);
+      expect("logicalInputCapture" in proof).toBe(
+        "logicalInputCapture" in publication,
+      );
+      expect(
+        (await ensureEmailAssessment(ctx.db, captured.id)).evidence,
+      ).toEqual(before.evidence);
+    }
     await expect(
       recordEmailClassificationObservation(ctx.db, input, undefined, {
         originalCapture: {
@@ -315,7 +387,7 @@ describe("immutable Email observations", () => {
         .select()
         .from(emailClassificationObservation)
         .where(eq(emailClassificationObservation.emailId, mail.id)),
-    ).toHaveLength(2);
+    ).toHaveLength(6);
     expect(
       (
         await getDb(ctx.db)

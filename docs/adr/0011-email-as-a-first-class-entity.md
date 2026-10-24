@@ -287,6 +287,20 @@ intent fencing and DB-only publication contracts. A later capture creates a new
 observation when its proof differs; it never retrofits an immutable historical
 Assessment or certifies previously discarded content.
 
+### Logical classification input capture
+
+New ingest classification publications also retain `gmail-logical-inputs-v1`:
+ordered shared AI input metadata and fingerprints captured before cache or
+transport execution, including relevance detail retries. This records declared
+logical requests, independently of original capture and actual answering-model
+provenance. It does not attest complete provider wire inputs or grant correction
+authority. Provider identifiers present in the actual input remain significant.
+Rule-only and custom classifiers that emit no inputs retain no logical proof.
+
+Observation reuse compares both evidence components, including their absence.
+Changed or newly missing proof creates a new observation without modifying the
+previous Assessment. No historical capture is inferred or backfilled.
+
 ### Relevance correction preparation and publication
 
 Explicit relevance correction requires a root database for preparation. Provider
