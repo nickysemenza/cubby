@@ -74,12 +74,22 @@ export async function equivalentFieldCorrections(
   const readIdentity = fieldCorrectionIdentityReader(db);
   const left = await readIdentity(source.subject, source.evidence);
   const right = await readIdentity(target.subject, target.evidence);
-  const keys = new Set(
-    [left.storedKey, left.canonicalKey].filter((key) => key !== null),
+  const scope = assessmentSubjects.field.safeParse(source.subject);
+  const targetScope = assessmentSubjects.field.safeParse(target.subject);
+  if (
+    !scope.success ||
+    !targetScope.success ||
+    scope.data.entity !== targetScope.data.entity ||
+    scope.data.field !== targetScope.data.field
+  )
+    return false;
+  const expanded = await resolveFieldCorrectionIdentities(
+    db,
+    fieldCorrectionIdentityKeys(left),
+    scope.data,
   );
-  return [right.storedKey, right.canonicalKey].some(
-    (key) => key !== null && keys.has(key),
-  );
+  const keys = new Set(expanded.keys);
+  return fieldCorrectionIdentityKeys(right).some((key) => keys.has(key));
 }
 
 const application = alias(feedback, "correction_application");
@@ -172,7 +182,7 @@ export async function readConfirmedCorrection(
 }
 
 /** Scope discovery to the field; only hash-proven identities gain normalized aliases. */
-export async function readFieldCorrectionSources(
+export async function resolveFieldCorrectionIdentities(
   db: Database,
   key: string | readonly string[],
   scope?: { entity: string; field: string },
@@ -233,9 +243,21 @@ export async function readFieldCorrectionSources(
             changed = true;
           }
   }
-  return candidatesWithIdentity
-    .filter((candidate) => candidate.keys.some((key) => keys.has(key)))
-    .map((candidate) => candidate.source);
+  return {
+    keys: [...keys].sort(),
+    sources: candidatesWithIdentity
+      .filter((candidate) => candidate.keys.some((key) => keys.has(key)))
+      .map((candidate) => candidate.source),
+  };
+}
+
+/** Authority consumers and identity consumers share the same retained proof expansion. */
+export async function readFieldCorrectionSources(
+  db: Database,
+  key: string | readonly string[],
+  scope?: { entity: string; field: string },
+) {
+  return (await resolveFieldCorrectionIdentities(db, key, scope)).sources;
 }
 
 /** Skip input preparation when this field has never had confirmed correction authority. */
@@ -341,11 +363,12 @@ export async function correctionTargetIds(
     .orderBy(asc(assessment.id))
     .limit(input.limit);
   const targets = [];
-  const keys = new Set(
-    typeof input.correctionKey === "string"
-      ? [input.correctionKey]
-      : input.correctionKey,
+  const expanded = await resolveFieldCorrectionIdentities(
+    db,
+    input.correctionKey,
+    input,
   );
+  const keys = new Set(expanded.keys);
   const readIdentity = fieldCorrectionIdentityReader(db);
   for (const row of scanned) {
     const identity = await readIdentity(row.subject, row.evidence);

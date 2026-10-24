@@ -66,7 +66,10 @@ import {
   correctionTargetIds,
 } from "~/server/generic/assessment/repo/correction-sources";
 import { fieldCorrectionIdentity } from "~/server/generic/assessment/repo/field-assessment-review";
-import { lockFieldCorrectionKey } from "~/server/generic/assessment/repo/field-correction-lock";
+import {
+  lockFieldCorrectionKey,
+  lockFieldCorrectionScope,
+} from "~/server/generic/assessment/repo/field-correction-lock";
 import { publishFieldCorrectionQuestion } from "~/server/generic/assessment/repo/field-correction-publication";
 import { fieldCorrectionRepair } from "~/server/generic/assessment/repo/field-correction-repair";
 import { fieldInputFingerprint } from "~/server/generic/assessment/repo/field-input-fence";
@@ -447,6 +450,76 @@ describe("confirmed correction propagation", () => {
       kind: "correction",
       decision: { status: "conflict" },
     });
+  });
+
+  async function retiredLegacyBridge(
+    question: Awaited<ReturnType<typeof preparedQuestion>>,
+  ) {
+    const proving = await legacyQuestion(question);
+    await reviewAssessment(ctx.db, kernelCtx(ctx), {
+      assessmentId: proving.prediction.id,
+      operationId: crypto.randomUUID(),
+      verdict: "wrong",
+      intent: "apply",
+      correction: { present: true, value: taxonomyShortcode("food") },
+    });
+    await executeEntityAs(kernelCtx(ctx), "update", {
+      entity: "product",
+      id: proving.product.id,
+      data: { categoryId: taxonomyShortcode("books") },
+    });
+    return proving;
+  }
+
+  it("applies and re-corrects opaque authority through retired proof to canonical targets", async () => {
+    const question = await preparedQuestion();
+    const bridge = await retiredLegacyBridge(question);
+    const target = await propose({ correctionKey: question.correctionKey });
+    const root = await confirmKey(
+      bridge.correctionKey,
+      taxonomyShortcode("food"),
+    );
+    await drain();
+    expect(await productCategoryId(ctx.db, target.product.id)).toBe(
+      taxonomyId("food"),
+    );
+    await executeEntityAs(kernelCtx(ctx), "update", {
+      entity: "product",
+      id: root.product.id,
+      data: { categoryId: taxonomyShortcode("books") },
+    });
+    await confirmKey(bridge.correctionKey, taxonomyShortcode("tools"));
+    await drain();
+    expect(await productCategoryId(ctx.db, target.product.id)).toBe(
+      taxonomyId("tools"),
+    );
+    const future = await productFixture(ctx, "Synthetic classification item");
+    const output = await suggestFields(
+      ctx.db,
+      question.runId,
+      { ...question.input, entityId: future.id },
+      question.ports,
+    );
+    const outcome = output.outcomes?.categoryId;
+    if (outcome?.kind !== "correction")
+      throw new Error("No correction outcome");
+    expect(outcome.decision).toMatchObject({
+      status: "confirmed",
+      value: taxonomyShortcode("tools"),
+    });
+    await publishFieldCorrectionQuestion(ctx.db, {
+      entity: "product",
+      recordId: future.entityId,
+      field: "categoryId",
+      currentValue: null,
+      outcome,
+      provenance: question.provenance,
+      runId: null,
+    });
+    await drain();
+    expect(await productCategoryId(ctx.db, future.id)).toBe(
+      taxonomyId("tools"),
+    );
   });
 
   it("advances history cursors through nonmatching field candidates", async () => {
@@ -845,67 +918,72 @@ describe("confirmed correction propagation", () => {
     });
   });
 
-  it("holds a snapshot predating a conflicting correction", async () => {
-    await activateAiRefresh(ctx.db, "synthetic-disabled-refresh", {
-      enabled: false,
-      startDiscovery: false,
-    });
-    const question = await preparedQuestion();
-    const root = await confirmKey(
-      question.correctionKey,
-      taxonomyShortcode("food"),
-    );
-    const proposed = await propose({ correctionKey: question.correctionKey });
-    const source = await readConfirmedCorrection(
-      ctx.db,
-      root.result.feedbackId,
-    );
-    const target = await readCorrectionTarget(ctx.db, proposed.prediction.id);
-    if (!source || !target)
-      throw new Error("Missing synthetic correction inputs");
-    const input = { source, target };
-    const prepared = await fieldCorrectionRepair.prepare(ctx.db, input);
-    if (prepared.status !== "ready") throw new Error(prepared.reason);
-    expect(
-      await getDb(ctx.db)
-        .select({ key: assessmentCorrectionLock.key })
-        .from(assessmentCorrectionLock)
-        .where(eq(assessmentCorrectionLock.key, question.correctionKey)),
-    ).toHaveLength(1);
-    // Exclude incidental shared Job contention from the authority serialization proof.
-    await getDb(ctx.db).update(job).set({ state: "failed" });
-    const started = Promise.withResolvers<void>();
-    const release = Promise.withResolvers<void>();
-    const applying = withSnapshotWriteDatabase(
-      ctx.db,
-      async (db) => {
-        await getDb(db)
-          .select({ id: assessmentState.id })
-          .from(assessmentState)
-          .where(eq(assessmentState.id, source.assessmentId));
-        started.resolve();
-        await release.promise;
-        return fieldCorrectionRepair.apply(
-          db,
-          input,
-          prepared.plan,
-          systemActor(),
-        );
-      },
-      { isolationLevel: "serializable" },
-    );
-    await started.promise;
-    try {
-      await confirmKey(question.correctionKey, taxonomyShortcode("books"));
-    } finally {
-      release.resolve();
-    }
-    expect(await applying).toMatchObject({
-      status: "held",
-      reason: "Equivalent evidence has conflicting member corrections",
-    });
-    expect(await productCategoryId(ctx.db, proposed.product.id)).toBeNull();
-  });
+  it.each([false, true])(
+    "holds a snapshot predating a conflicting correction (retained alias: %s)",
+    async (retainedAlias) => {
+      await activateAiRefresh(ctx.db, "synthetic-disabled-refresh", {
+        enabled: false,
+        startDiscovery: false,
+      });
+      const question = await preparedQuestion();
+      const bridge = retainedAlias ? await retiredLegacyBridge(question) : null;
+      const rootKey = bridge?.correctionKey ?? question.correctionKey;
+      const root = await confirmKey(
+        question.correctionKey,
+        taxonomyShortcode("food"),
+      );
+      const proposed = await propose({ correctionKey: question.correctionKey });
+      const source = await readConfirmedCorrection(
+        ctx.db,
+        root.result.feedbackId,
+      );
+      const target = await readCorrectionTarget(ctx.db, proposed.prediction.id);
+      if (!source || !target)
+        throw new Error("Missing synthetic correction inputs");
+      const input = { source, target };
+      const prepared = await fieldCorrectionRepair.prepare(ctx.db, input);
+      if (prepared.status !== "ready") throw new Error(prepared.reason);
+      expect(
+        await getDb(ctx.db)
+          .select({ key: assessmentCorrectionLock.key })
+          .from(assessmentCorrectionLock)
+          .where(eq(assessmentCorrectionLock.key, question.correctionKey)),
+      ).toHaveLength(1);
+      // Exclude incidental shared Job contention from the authority serialization proof.
+      await getDb(ctx.db).update(job).set({ state: "failed" });
+      const started = Promise.withResolvers<void>();
+      const release = Promise.withResolvers<void>();
+      const applying = withSnapshotWriteDatabase(
+        ctx.db,
+        async (db) => {
+          await getDb(db)
+            .select({ id: assessmentState.id })
+            .from(assessmentState)
+            .where(eq(assessmentState.id, source.assessmentId));
+          started.resolve();
+          await release.promise;
+          return fieldCorrectionRepair.apply(
+            db,
+            input,
+            prepared.plan,
+            systemActor(),
+          );
+        },
+        { isolationLevel: "serializable" },
+      );
+      await started.promise;
+      try {
+        await confirmKey(rootKey, taxonomyShortcode("books"));
+      } finally {
+        release.resolve();
+      }
+      expect(await applying).toMatchObject({
+        status: "held",
+        reason: "Equivalent evidence has conflicting member corrections",
+      });
+      expect(await productCategoryId(ctx.db, proposed.product.id)).toBeNull();
+    },
+  );
 
   it("locks legacy and canonical predecessor identities before correction publication", async () => {
     const question = await preparedQuestion();
@@ -923,6 +1001,7 @@ describe("confirmed correction propagation", () => {
     const ready = Promise.withResolvers<void>();
     const release = Promise.withResolvers<void>();
     const member = withTransactionDatabase(ctx.db, async (db) => {
+      await lockFieldCorrectionScope(db, "product", "categoryId");
       await lockFieldCorrectionKey(db, target.correctionKey);
       await getDb(db)
         .select({ id: assessmentState.id })
@@ -997,6 +1076,7 @@ describe("confirmed correction propagation", () => {
     const ready = Promise.withResolvers<void>();
     const release = Promise.withResolvers<void>();
     const member = withTransactionDatabase(ctx.db, async (db) => {
+      await lockFieldCorrectionScope(db, "product", "categoryId");
       await lockFieldCorrectionKey(db, key);
       ready.resolve();
       await release.promise;

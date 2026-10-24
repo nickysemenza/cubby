@@ -20,7 +20,7 @@ import {
 } from "~/server/generic/assessment/repo/correction-sources";
 import { correctionAlreadyRecorded } from "~/server/generic/assessment/repo/correction-work";
 import { fieldCorrectionIdentityKeys } from "~/server/generic/assessment/repo/field-assessment-review";
-import { lockFieldCorrectionKey } from "~/server/generic/assessment/repo/field-correction-lock";
+import { lockFieldCorrectionIdentities } from "~/server/generic/assessment/repo/field-correction-lock";
 import {
   resolveFieldCorrection,
   supportsFieldCorrection,
@@ -290,17 +290,14 @@ export const fieldCorrectionRepair: CorrectionRepairAdapter<
       input.target.subject,
       input.target.evidence,
     );
-    for (const lockKey of [
-      ...new Set([
-        identity.storedKey,
-        identity.canonicalKey,
-        targetIdentity.storedKey,
-        targetIdentity.canonicalKey,
-      ]),
-    ]
-      .filter((value) => value !== null)
-      .sort())
-      await lockFieldCorrectionKey(db, lockKey);
+    await lockFieldCorrectionIdentities(
+      db,
+      assessmentSubjects.field.parse(input.source.subject),
+      [
+        ...fieldCorrectionIdentityKeys(identity),
+        ...fieldCorrectionIdentityKeys(targetIdentity),
+      ],
+    );
     // Serialize source supersession and target writes using one canonical order.
     // A source decision cannot commit between this validation and its consequence.
     const subjects = await getDb(db)

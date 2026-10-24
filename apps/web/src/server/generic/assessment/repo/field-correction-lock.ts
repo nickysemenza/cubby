@@ -7,7 +7,10 @@ import {
   assessment,
   assessmentState,
 } from "~/server/db/schema";
-import { fieldCorrectionIdentityReader } from "~/server/generic/assessment/repo/correction-sources";
+import {
+  fieldCorrectionIdentityReader,
+  resolveFieldCorrectionIdentities,
+} from "~/server/generic/assessment/repo/correction-sources";
 
 /** Replacement and member review share key-before-record/projection ordering. */
 export async function lockFieldCorrectionKeysForField(
@@ -19,6 +22,7 @@ export async function lockFieldCorrectionKeysForField(
     keys: readonly (string | null)[];
   },
 ) {
+  await lockFieldCorrectionScope(db, input.entity, input.field);
   const prior = await getDb(db)
     .select({ evidence: assessment.evidence })
     .from(assessment)
@@ -37,8 +41,40 @@ export async function lockFieldCorrectionKeysForField(
     keys.add(identity.storedKey);
     keys.add(identity.canonicalKey);
   }
-  for (const key of [...keys].filter((key) => key !== null).sort())
-    await lockFieldCorrectionKey(db, key);
+  await lockExpandedFieldCorrectionIdentities(
+    db,
+    input,
+    [...keys].filter((key) => key !== null),
+  );
+}
+
+/** The field gate stabilizes alias discovery, including proof committed on another record. */
+export async function lockFieldCorrectionScope(
+  db: Database,
+  entity: string,
+  field: string,
+) {
+  await lockFieldCorrectionKey(db, `field-correction-scope:${entity}:${field}`);
+}
+
+/** One lock identity contract for member confirmation and every automatic consequence. */
+export async function lockFieldCorrectionIdentities(
+  db: Database,
+  scope: { entity: string; field: string },
+  keys: readonly string[],
+) {
+  await lockFieldCorrectionScope(db, scope.entity, scope.field);
+  return lockExpandedFieldCorrectionIdentities(db, scope, keys);
+}
+
+async function lockExpandedFieldCorrectionIdentities(
+  db: Database,
+  scope: { entity: string; field: string },
+  keys: readonly string[],
+) {
+  const expanded = await resolveFieldCorrectionIdentities(db, keys, scope);
+  for (const key of expanded.keys) await lockFieldCorrectionKey(db, key);
+  return expanded.keys;
 }
 
 /** Must run inside the caller's write transaction, before source/target row locks. */

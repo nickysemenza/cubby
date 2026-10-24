@@ -3762,8 +3762,15 @@ member actor, original target application and actual effects; successful replay
 precedes stale-state checks. Serializable Job publication commits writes, outcomes
 and cursor together through transaction-bound domain writers.
 Field confirmation, automatic admission, correction-question publication and
-repair first update the same durable `AssessmentCorrectionLock` input key in
-their caller-owned transaction. The physical row update forces an older
+repair first update a shared entity/field gate in `AssessmentCorrectionLock`,
+then resolve the retained proof expansion and update its sorted raw and canonical
+keys before record/projection locks. The gate stabilizes discovery when a proof
+or an opaque correction commits on another record; assessment-local keys alone
+cannot fence the expanded authority. The household's bounded correction volume
+uses this field-level serialization instead of a separate alias registry.
+Discovery, history selection, repair and prior-effect lineage share that same
+proof expansion, including retired roots as identity proof without granting them
+current correction authority. The physical row update forces an older
 serializable snapshot to retry if another record confirms conflicting authority;
 an advisory lock or unrelated refresh Job contention cannot supply this fence.
 The lock table stores no correction authority or application history.

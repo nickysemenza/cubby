@@ -48,7 +48,7 @@ import {
 } from "~/server/generic/assessment/repo/assessment-state";
 import { readFieldCorrectionIdentity } from "~/server/generic/assessment/repo/correction-sources";
 import { fieldCorrectionIdentityKeys } from "~/server/generic/assessment/repo/field-assessment-review";
-import { lockFieldCorrectionKey } from "~/server/generic/assessment/repo/field-correction-lock";
+import { lockFieldCorrectionIdentities } from "~/server/generic/assessment/repo/field-correction-lock";
 import { resolveFieldCorrection } from "~/server/generic/assessment/repo/field-correction-resolver";
 import { fieldInputFingerprint } from "~/server/generic/assessment/repo/field-input-fence";
 import {
@@ -730,12 +730,11 @@ async function settleReview(
       const correctionKey =
         identity && (identity.canonicalKey ?? identity.storedKey);
       if (correctionKey) {
-        for (const key of [
-          ...new Set([identity?.storedKey, identity?.canonicalKey]),
-        ]
-          .filter((key) => key != null)
-          .sort())
-          await lockFieldCorrectionKey(transactionDb, key);
+        await lockFieldCorrectionIdentities(
+          transactionDb,
+          assessmentSubjects.field.parse(prediction.subject),
+          identity ? fieldCorrectionIdentityKeys(identity) : [],
+        );
         if (
           automatic &&
           (
