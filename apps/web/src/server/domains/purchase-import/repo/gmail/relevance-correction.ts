@@ -23,6 +23,7 @@ import { runAfterCommit } from "~/server/db/helpers/core";
 import { email as emailTable, orderMailAttachment } from "~/server/db/schema";
 import { originalChecksum } from "~/server/domains/purchase-import/repo/gmail/checksum";
 import { normalizeMessage } from "~/server/domains/purchase-import/repo/gmail/normalize";
+import { captureGmailOriginal } from "~/server/domains/purchase-import/repo/gmail/original-capture";
 import {
   GmailApiError,
   type GmailNormalizedMessage,
@@ -39,7 +40,6 @@ import {
   recordEmailRetrievalFailure,
   snapshotStoredEmailPrediction,
 } from "./observations";
-import { captureGmailOriginal } from "./original-capture";
 import {
   saveMailboxMetadata,
   upsertOrderMail,
