@@ -83,6 +83,61 @@ const record = (
 describe("statement row ledger", () => {
   const ctx = withTestDb();
 
+  it.each(["positioned", "historical"])(
+    "refuses introducing a provider identity over retained %s collection evidence",
+    async (positionRetention) => {
+      const original = rowInput();
+      await record(ctx.db, ctx.actor, [original]);
+      if (positionRetention === "historical") {
+        // Older imports did not retain file positions; content cannot assign a new provider identity.
+        await getDb(ctx.db)
+          .update(sourceTransactionRecord)
+          .set({ rowPosition: null });
+      }
+      const before = await getDb(ctx.db).select().from(sourceTransactionRecord);
+      for (const dryRun of [true, false]) {
+        await expect(
+          record(
+            ctx.db,
+            ctx.actor,
+            [
+              {
+                ...original,
+                providerTransactionId: "synthetic-new-provider-id",
+              },
+            ],
+            {},
+            dryRun,
+          ),
+        ).rejects.toThrow("retained collection");
+      }
+      expect(
+        await getDb(ctx.db).select().from(sourceTransactionRecord),
+      ).toEqual(before);
+      expect(
+        await getDb(ctx.db).select().from(transactionImportRecord),
+      ).toHaveLength(1);
+    },
+  );
+
+  it("retains a distinct positioned occurrence when a later chunk supplies its provider ID", async () => {
+    const original = rowInput();
+    await record(ctx.db, ctx.actor, [original]);
+    await record(ctx.db, ctx.actor, [
+      {
+        ...original,
+        rowPosition: 2,
+        providerTransactionId: "synthetic-independent-id",
+      },
+    ]);
+    const rows = await getDb(ctx.db).select().from(sourceTransactionRecord);
+    expect(rows).toHaveLength(2);
+    expect(new Set(rows.map((row) => row.chargeKey)).size).toBe(2);
+    expect(
+      await getDb(ctx.db).select().from(transactionImportRecord),
+    ).toHaveLength(2);
+  });
+
   it("refuses new unpositioned observations before creating evidence collections", async () => {
     for (const dryRun of [true, false]) {
       await expect(
