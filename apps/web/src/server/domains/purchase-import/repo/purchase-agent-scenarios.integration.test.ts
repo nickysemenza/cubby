@@ -1093,7 +1093,7 @@ describe("current purchase-agent system boundaries", () => {
       process.env.BETTER_AUTH_SECRET || "e2e-test-secret",
     );
     const response = await fetch(
-      `${scenario.origin}/api/v1/maintenance/requestCatchUp`,
+      `${scenario.origin}/api/operations/maintenance.requestCatchUp`,
       {
         method: "POST",
         headers: {
@@ -1101,12 +1101,12 @@ describe("current purchase-agent system boundaries", () => {
           origin: scenario.origin,
           "content-type": "application/json",
         },
-        body: JSON.stringify({}),
+        body: JSON.stringify({ operation: "maintenance.requestCatchUp" }),
       },
     );
     expect({ status: response.status, body: await response.json() }).toEqual({
       status: 200,
-      body: { status: "queued" },
+      body: { ok: true, data: { status: "queued" } },
     });
 
     const mailRuns = () =>

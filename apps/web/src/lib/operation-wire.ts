@@ -16,12 +16,8 @@ export type Json<T> = T extends string | number | boolean | null | undefined
         ? { [K in keyof T]: Json<T[K]> }
         : T;
 
-/**
- * `input` and `output` are JSON bodies. `query` is a URL query string as the
- * router receives it: one string per key, or an array for a repeated key, so
- * numbers, booleans and lists are coerced from their text form.
- */
-export type WireIo = "input" | "output" | "query";
+/** The input and output value encoded inside an operation envelope. */
+export type WireIo = "input" | "output";
 
 export class WireSchemaError extends Error {
   constructor(
@@ -30,18 +26,6 @@ export class WireSchemaError extends Error {
   ) {
     super(`${message} at ${path.length ? path.join(".") : "<root>"}`);
     this.name = "WireSchemaError";
-  }
-}
-
-/**
- * A query projection was refused because the input is not flat. Kept apart
- * from a plain WireSchemaError so a transport decision can never swallow a
- * real schema bug: callers decide GET vs POST with `isFlatQueryInput` first.
- */
-export class QueryProjectionError extends WireSchemaError {
-  constructor(message: string, path: readonly string[]) {
-    super(message, path);
-    this.name = "QueryProjectionError";
   }
 }
 
@@ -67,41 +51,6 @@ const passThrough: ReadonlySet<string> = new Set<string>([
   "unknown",
   "enum",
   "template_literal",
-]);
-
-// Numbers and booleans arrive as text on a query string, so they get coercing
-// projections instead of passing through.
-const queryPassThrough = new Set<string>([
-  "string",
-  "null",
-  "any",
-  "unknown",
-  "enum",
-  "template_literal",
-]);
-
-const wrapperTypes = new Set<string>([
-  "optional",
-  "nullable",
-  "nonoptional",
-  "readonly",
-  "default",
-  "prefault",
-  "catch",
-]);
-
-const queryScalarTypes = new Set<string>([
-  "string",
-  "number",
-  "int",
-  "boolean",
-  "enum",
-  "literal",
-  "template_literal",
-  "null",
-  "any",
-  "unknown",
-  "date",
 ]);
 
 const unsupported = new Set<string>([
@@ -328,192 +277,13 @@ const handlers = new Map<string, NodeHandler>([
   ["pipe", visitPipe],
 ]);
 
-/** A query leaf: one text value the router can hand over as a string. */
-const isQueryScalar = (schema: z.ZodType): boolean => {
-  const def = defOf(schema);
-  if (wrapperTypes.has(def.type))
-    return def.innerType instanceof z.ZodType && isQueryScalar(def.innerType);
-  if (def.type === "union") return (def.options ?? []).every(isQueryScalar);
-  if (def.type === "pipe")
-    return def.out instanceof z.ZodType && isQueryScalar(def.out);
-  return queryScalarTypes.has(def.type);
-};
-
-/** The `[S, array(S)]` union `oneOrMany`-style filters are built from. */
-const oneOrManyOption = (def: WalkableDef): z.ZodType | undefined => {
-  const [single, many] = def.options ?? [];
-  if (
-    def.options?.length === 2 &&
-    single instanceof z.ZodType &&
-    many instanceof z.ZodType &&
-    defOf(many).type === "array" &&
-    defOf(many).element === single
-  )
-    return single;
-  return undefined;
-};
-
-/** A query list: repeated keys carrying scalars. */
-const isQueryList = (schema: z.ZodType): boolean => {
-  const def = defOf(schema);
-  if (wrapperTypes.has(def.type))
-    return def.innerType instanceof z.ZodType && isQueryList(def.innerType);
-  if (def.type === "array")
-    return def.element instanceof z.ZodType && isQueryScalar(def.element);
-  if (def.type === "union") {
-    const single = oneOrManyOption(def);
-    return single !== undefined && isQueryScalar(single);
-  }
-  if (def.type === "pipe")
-    return def.out instanceof z.ZodType && isQueryList(def.out);
-  return false;
-};
-
-/**
- * Whether an input wire schema can travel as query parameters: no input, a
- * scalar (carried as `?input=`), or an object whose every field is a scalar
- * or a list of scalars. Anything structured needs a JSON body. This is the
- * one authority the router and the registry generator use for GET vs POST.
- */
-export const isFlatQueryInput = (wire: z.ZodType): boolean => {
-  const def = defOf(wire);
-  if (def.type === "null" || def.type === "undefined") return true;
-  if (def.type === "object")
-    return Object.values(def.shape ?? {}).every(
-      (field) => isQueryScalar(field) || isQueryList(field),
-    );
-  return isQueryScalar(wire);
-};
-
-/**
- * `?flag=true` and `?flag=false` next to a real boolean. `z.coerce.boolean()`
- * is not usable here: it reads the text "false" as true.
- */
-const queryBoolean = () =>
-  z.codec(z.union([z.boolean(), z.enum(["true", "false"])]), z.boolean(), {
-    decode: (value) => value === true || value === "true",
-    encode: (value) => value,
-  });
-
-/**
- * One `?key=a` or several `?key=a&key=b`: the router hands over a string for
- * one occurrence and an array for repeats, and the domain wants a list.
- */
-const oneOrManyQuery = (element: z.ZodType) =>
-  z.codec(z.union([element, z.array(element)]), z.array(element), {
-    decode: (value) => (Array.isArray(value) ? value : [value]),
-    encode: (value) => value,
-  });
-
-const visitQueryNumber: NodeHandler = ({ schema }) =>
-  rebuild(schema, { coerce: true });
-
-const literalKind = (
-  values: NonNullable<WalkableDef["values"]>,
-): "number" | "boolean" | "string" | "mixed" => {
-  if (values.every((value) => z.number().safeParse(value).success))
-    return "number";
-  if (values.every((value) => z.boolean().safeParse(value).success))
-    return "boolean";
-  if (values.every((value) => z.string().safeParse(value).success))
-    return "string";
-  return "mixed";
-};
-
-// A literal number or boolean still arrives as text; the literal check runs
-// on the coerced value.
-const visitQueryLiteral: NodeHandler = (visit) => {
-  const literal = visitLiteral(visit);
-  switch (literalKind(visit.def.values ?? [])) {
-    case "number":
-      // SAFETY: every literal value is a number, so the literal's input is a
-      // number: what the coercing number schema feeds it.
-      return z.coerce.number().pipe(literal as z.ZodType<unknown, number>);
-    case "boolean":
-      // SAFETY: every literal value is a boolean, so the literal's input is a
-      // boolean: what the query boolean codec decodes to.
-      return queryBoolean().pipe(literal as z.ZodType<unknown, boolean>);
-    case "string":
-      return literal;
-    case "mixed":
-      throw new QueryProjectionError(
-        "Query literals must be all strings, all numbers or all booleans",
-        visit.path,
-      );
-  }
-};
-
-const visitQueryBoolean: NodeHandler = () => queryBoolean();
-
-// Query strings cannot carry null, and a default is re-applied by the domain
-// schema after the route validates, so both become plain optionals.
-const visitQueryOptional: NodeHandler = ({ def, child }) =>
-  child(def.innerType, "innerType").optional();
-
-const visitQueryArray: NodeHandler = ({ def, path, child }) => {
-  const element = child(def.element, "[]");
-  if (!isQueryScalar(element))
-    throw new QueryProjectionError("Query lists carry scalars only", path);
-  return oneOrManyQuery(element);
-};
-
-const visitQueryUnion: NodeHandler = ({ schema, def, path, child }) => {
-  const single = oneOrManyOption(def);
-  if (single) return oneOrManyQuery(child(single, "|0"));
-  const options = (def.options ?? []).map((option, index) =>
-    child(option, `|${index}`),
-  );
-  if (!options.every(isQueryScalar))
-    throw new QueryProjectionError("Query unions carry scalars only", path);
-  return rebuild(schema, { options });
-};
-
-const visitQueryObject: NodeHandler = (visit) => {
-  if (visit.path.length > 0)
-    throw new QueryProjectionError(
-      "Query parameters cannot nest objects",
-      visit.path,
-    );
-  const object = visitObject(visit);
-  // An unknown query key is a typo, never data: the root is strict.
-  return defOf(object).catchall instanceof z.ZodType
-    ? object
-    : rebuild(object, { catchall: z.never() });
-};
-
-const queryHandlers = new Map<string, NodeHandler>([
-  ["literal", visitQueryLiteral],
-  ["date", visitDate],
-  ["number", visitQueryNumber],
-  ["int", visitQueryNumber],
-  ["boolean", visitQueryBoolean],
-  ["optional", visitWrapper],
-  ["nonoptional", visitWrapper],
-  ["readonly", visitWrapper],
-  ["nullable", visitQueryOptional],
-  ["default", visitQueryOptional],
-  ["prefault", visitQueryOptional],
-  ["catch", visitQueryOptional],
-  ["object", visitQueryObject],
-  ["array", visitQueryArray],
-  ["union", visitQueryUnion],
-  ["pipe", visitPipe],
-]);
-
 function walk(schema: z.ZodType, io: WireIo, path: string[]): z.ZodType {
   const cached = memo.get(schema)?.[io];
   if (cached) return cached;
   const def = defOf(schema);
-  const isQuery = io === "query";
-  if ((isQuery ? queryPassThrough : passThrough).has(def.type))
-    return remember(schema, io, schema);
-  const handler = (isQuery ? queryHandlers : handlers).get(def.type);
+  if (passThrough.has(def.type)) return remember(schema, io, schema);
+  const handler = handlers.get(def.type);
   if (!handler) {
-    if (isQuery && handlers.has(def.type))
-      throw new QueryProjectionError(
-        `Query parameters cannot carry a ${def.type}`,
-        path,
-      );
     throw new WireSchemaError(
       unsupported.has(def.type)
         ? `Unsupported wire schema type ${def.type}`
@@ -532,7 +302,7 @@ function walk(schema: z.ZodType, io: WireIo, path: string[]): z.ZodType {
 /**
  * Project a domain schema onto the JSON wire. Outputs describe what a JSON
  * response body carries (Dates as ISO strings); inputs describe what a JSON
- * request body or query carries and still parse into the domain input type.
+ * request body carries and still parse into the domain input type.
  */
 export function toWire<S extends z.ZodType>(
   schema: S,
@@ -542,17 +312,11 @@ export function toWire<S extends z.ZodType>(
   schema: S,
   io: "input",
 ): z.ZodType<Json<z.input<S>>, Json<z.input<S>>>;
-export function toWire<S extends z.ZodType>(
-  schema: S,
-  io: "query",
-): z.ZodType<Json<z.input<S>>, Json<z.input<S>>>;
 export function toWire(schema: z.ZodType, io: WireIo): z.ZodType;
 export function toWire(schema: z.ZodType, io: WireIo): z.ZodType {
   // SAFETY: the walker maps exactly the node types the `Json<T>` type maps —
   // Date -> ISO string and nothing else changes shape — so the overloads are
-  // the truthful static view of the returned runtime schema. The query
-  // projection additionally accepts the text form of every value, and its
-  // coercions still admit the JSON form the static type spells.
+  // the truthful static view of the returned runtime schema.
   return walk(schema, io, []);
 }
 

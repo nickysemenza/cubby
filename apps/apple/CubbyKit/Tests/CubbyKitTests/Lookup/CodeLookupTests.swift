@@ -8,10 +8,10 @@ import Testing
 /// can be shown to resolve with no request at all.
 final class StubLookupService: LookupService, Sendable {
     let products: Mutex<[String: [EntityRow]]>
-    let catalog: Mutex<[String: UpcLookupOutput]>
+    let catalog: Mutex<[String: UpcLookupOutputValue]>
     let calls = Mutex<[String]>([])
 
-    init(products: [String: [EntityRow]] = [:], catalog: [String: UpcLookupOutput] = [:]) {
+    init(products: [String: [EntityRow]] = [:], catalog: [String: UpcLookupOutputValue] = [:]) {
         self.products = Mutex(products)
         self.catalog = Mutex(catalog)
     }
@@ -21,12 +21,9 @@ final class StubLookupService: LookupService, Sendable {
         return products.withLock { $0[gtin] ?? [] }
     }
 
-    func lookupUPC(_ upc: String) async throws -> UpcLookupOutput {
+    func lookupUPC(_ upc: String) async throws -> UpcLookupOutputValue? {
         calls.withLock { $0.append("upc:\(upc)") }
-        guard let hit = catalog.withLock({ $0[upc] }) else {
-            throw CubbyAPIError(status: 404, operationID: "upc.lookup", detail: nil)
-        }
-        return hit
+        return catalog.withLock { $0[upc] }
     }
 }
 
@@ -36,7 +33,7 @@ struct CodeLookupTests {
         EntityRow(id: id, title: title, subtitle: nil, imageURL: nil, raw: .object(["id": .string(id)]))
     }
 
-    private static let bulbs = UpcLookupOutput(
+    private static let bulbs = UpcLookupOutputValue(
         upc: "00012345678905", name: "LED bulbs", manufacturer: nil, brand: nil, category: nil,
         description: nil,
         priceDollars: nil, imageUrl: nil, source: .upcitemdb, cached: false)

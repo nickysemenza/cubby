@@ -113,6 +113,7 @@ test("task list selection delete shows the impact preview, then removes the rows
   await cdp.send("Emulation.setCPUThrottlingRate", { rate: 1 });
   for (const task of tasks) {
     const gone = await entityApi(page.request).get("task", task.id, {});
-    expect(gone.status()).toBe(404);
+    expect(gone.status()).toBe(200);
+    expect(gone.parsedBody).toBeNull();
   }
 });

@@ -20,7 +20,6 @@ export const sourceTransactionRecordContract = defineContract(
       exposure: "view",
       note: "Read-only preview of a Suggestions review draft",
       readPolicy: "strong",
-      transport: "post",
       input: statementSuggestionPreviewInput,
       output: statementSuggestionPreviewOut,
     }),

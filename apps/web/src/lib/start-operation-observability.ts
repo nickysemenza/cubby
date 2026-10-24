@@ -33,6 +33,7 @@ export type StartOperationDefinition<
 > = {
   readonly id: Id;
   readonly kind: RegisteredStartOperationKind<Id>;
+  readonly exposure?: "capability" | "view" | "internal";
   readonly entities: readonly string[];
   readonly productPhases: readonly ProductDetailPhase[];
 };
@@ -79,6 +80,7 @@ export const startOperationDefinition = <Id extends StartOperationId>(
   return {
     id: operation,
     kind: registeredStartOperationKind(operation),
+    ...("exposure" in registered ? { exposure: registered.exposure } : {}),
     entities: "entities" in registered ? registered.entities : [],
     productPhases:
       "productPhases" in registered ? registered.productPhases : [],

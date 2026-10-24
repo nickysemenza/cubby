@@ -403,7 +403,7 @@ final class ImageDiagnosticsCompareModel {
         loading = false
     }
 
-    private static func fetchStored(id: ImageCode, client: CubbyClient) async -> ImageAnalysisOutput? {
+    private static func fetchStored(id: ImageCode, client: CubbyClient) async -> ImageAnalysisOutputValue? {
         try? await client.imageAnalysis(id)
     }
 
@@ -441,7 +441,7 @@ final class ImageDiagnosticsCompareModel {
     }
 
     private func reconcile(
-        id: ImageCode, detail: ImageWithEntity, stored: ImageAnalysisOutput?,
+        id: ImageCode, detail: ImageWithEntity, stored: ImageAnalysisOutputValue?,
         deviceAnalysis: PhotoLocalAnalysis, client: CubbyClient
     ) async {
         let isStale = stored.map { $0.analysisVersion < PhotoLocalAnalysis.currentVersion } ?? true
@@ -457,7 +457,7 @@ final class ImageDiagnosticsCompareModel {
             }
             return
         }
-        let payload = ImageAnalysisOutput(
+        let payload = ImageAnalysisOutputValue(
             analysisVersion: PhotoLocalAnalysis.currentVersion, analyzedAt: deviceAnalysis.analyzedAt,
             sha256: deviceAnalysis.sha256, capturedAt: deviceAnalysis.capturedAt,
             contentType: deviceAnalysis.contentType, width: deviceAnalysis.width,

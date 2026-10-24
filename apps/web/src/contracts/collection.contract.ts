@@ -21,7 +21,6 @@ export const collectionContract = defineContract(
   "collection",
   {
     referenceDetail: query({
-      native: "Collection by reference",
       input: smartCollectionReferenceInput,
       output: smartCollectionDetailOut,
       cache: {

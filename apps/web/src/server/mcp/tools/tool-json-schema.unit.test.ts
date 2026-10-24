@@ -4,7 +4,7 @@ import { fromPartial } from "@total-typescript/shoehorn";
 import { describe, expect, it } from "vitest";
 import { type JSONType, z } from "zod";
 
-import { toWire } from "~/lib/http-api/wire";
+import { toWire } from "~/lib/operation-wire";
 import {
   MCP_TOOL_BINDINGS,
   MCP_TOOL_DECLARATIONS,

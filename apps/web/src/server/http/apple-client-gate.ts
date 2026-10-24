@@ -1,9 +1,7 @@
 import { APPLE_CLIENT_COMPATIBILITY_VERSION } from "@cubby/shared/apple-client-version";
 
-// The oldest native app build the HTTP API accepts writes from is the version
-// this checkout's app ships. An older build's write could carry a field whose
-// meaning changed; the gate turns that into one actionable message. Its reads
-// still run and fail per screen if a shape changed.
+// Old builds can break when the shared operation wire changes. The compatibility
+// gate keeps those builds from submitting writes with an obsolete input shape.
 
 /**
  * `ClientIdentity.userAgent` in CubbyKit: `<product>/<version> (<platform>; <install>)`.
@@ -44,7 +42,7 @@ export function appleClientUpdateRequired(
   return { current, minimum: APPLE_CLIENT_COMPATIBILITY_VERSION };
 }
 
-/** The same upgrade response serves API calls, hosted documents and Start commands. */
+/** The shared operation route's actionable response for an obsolete Apple write. */
 export function appleClientUpdateError(
   outdated: NonNullable<ReturnType<typeof appleClientUpdateRequired>>,
 ) {

@@ -37,7 +37,6 @@ export const inventoryContract = defineContract(
       description:
         "Receive the selected Purchase Expense quantity into an inventory location. This records stock and may merge it into an existing entry; inspect receiving_context first when the target is unclear.",
       command: { label: "Receive inventory", confirmation: null },
-      native: "Explicit Expense inventory receiving",
       input: inventoryReceiveExpenseInput,
       output: inventoryReceiveExpenseOut,
       invalidates: ["inventory", "product", "purchase", "problems"],
@@ -45,7 +44,6 @@ export const inventoryContract = defineContract(
     receivingContext: query({
       description:
         "Read the purchase and inventory context for a proposed receipt, including existing matching stock. This is a preview; use receive_expense only for items the member confirms arrived.",
-      native: "Expense receiving context",
       input: inventoryReceivingContextInput,
       output: inventoryReceivingContextOut,
     }),
@@ -62,7 +60,6 @@ export const inventoryContract = defineContract(
           { label: "Merged", path: "mergedCount" },
         ],
       },
-      native: "Add to inventory from the hero action",
       input: inventoryBulkAddPayload,
       output: inventoryBulkAddOut,
       invalidates: ["inventory"],
@@ -89,7 +86,6 @@ export const inventoryContract = defineContract(
         "Move inventory entries to per-item destination locations in one atomic call. Each item names an entry and where it should end up, so one call can fan a location out across many, consolidate many into one, or both. Omit an item's quantity to move the whole entry; include it for a partial move, and list one entry twice to split it across destinations. Entries merge into an existing entry for the same product at the destination. The source location is not asked for — an entry already knows where it is.",
       destructive: true,
       command: { label: "Move inventory", confirmation: null },
-      native: "Accept inventory placement recommendation",
       input: moveInventoryEntriesPayload,
       output: inventoryWithLocationAndProductListAndSideEffectsOut,
       invalidates: ["inventory"],
@@ -97,15 +93,13 @@ export const inventoryContract = defineContract(
     reconcileSession: mutation({
       description:
         "Commit a physical shelf audit of one location: the expected entry ids, the snapshot read before counting, and a resolution per entry. Only when the member counted that shelf.",
-      native: "Audit reconcile",
       input: reconcileSessionPayload,
       output: inventoryWithLocationAndProductListAndSideEffectsOut,
       invalidates: ["inventory"],
     }),
     scanAtLocation: mutation({
-      exposure: "internal",
+      exposure: "view",
       note: "Native barcode capture",
-      native: "Capture",
       input: scanAtLocationInput,
       output: scanAtLocationOut,
       invalidates: ["inventory"],
@@ -113,7 +107,6 @@ export const inventoryContract = defineContract(
     resolveScanStrays: mutation({
       description:
         "Move inventory entries a scan found out of place into targetLocationId (whole entries unless quantity is given).",
-      native: "Strays sheet",
       input: resolveScanStraysInput,
       output: resolveScanStraysOut,
       invalidates: ["inventory"],
@@ -122,13 +115,11 @@ export const inventoryContract = defineContract(
     findDuplicates: query({
       exposure: "view",
       readPolicy: "strong",
-      native: "Audit duplicate badge",
       input: inventoryFindDuplicatesInput,
       output: inventoryDuplicateUniqueProductsOut,
     }),
     locationSnapshot: query({
       exposure: "view",
-      native: "Ownership-aware inventory snapshot",
       input: inventoryLocationSnapshotInput,
       output: inventoryLocationSnapshotOut,
     }),
@@ -136,7 +127,6 @@ export const inventoryContract = defineContract(
       exposure: "view",
       note: "entity.update on inventory ownershipMode and ownerLedgerPartyId",
       command: { label: "Set ownership", confirmation: null },
-      native: "Set inventory owner",
       input: setInventoryOwnershipInput,
       output: inventoryOwnershipMutationOut,
       invalidates: ["inventory"],
@@ -145,7 +135,6 @@ export const inventoryContract = defineContract(
       description:
         "Confirm an inventory entry's inherited owner using the evidenceFingerprint its ownership context returned; quantity confirms part of the entry.",
       command: { label: "Confirm ownership", confirmation: null },
-      native: "Confirm inherited inventory owner",
       input: confirmInventoryOwnershipInput,
       output: inventoryOwnershipMutationOut,
       invalidates: ["inventory"],

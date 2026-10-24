@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { spendingClassificationReviewInput } from "./spending-classification-review";
 
 describe("native spending classification reset requests", () => {
-  // Swift Codable omits nil properties, including required-nullable OpenAPI fields.
+  // Swift Codable omits nil properties, including required-nullable wire fields.
   it.each([
     {
       action: "productCategory",

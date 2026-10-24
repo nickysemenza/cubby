@@ -57,7 +57,7 @@
         "src/lib/sentry-cf-shim.ts!",
         "src/integrations/**/*.{ts,tsx}!",
         "src/contracts/index.ts!",
-        // The `<entity>ListItem` exports name the OpenAPI components; the
+        // The `<entity>ListItem` exports name the generated client models; the
         // generator reads them, nothing in the web app does.
         "src/entity/generated/entity-lists.gen.ts!",
         // Type-only port existence checks; nothing imports them by design.

@@ -59,7 +59,6 @@ export const purchaseContract = defineContract(
       exposure: "capability",
       description:
         "Rank possible Purchase matches for the supplied settlement evidence. This is read-only; confirm the paperwork and transaction before allocating settlement.",
-      native: "Review statement activity near a Purchase",
       input: purchaseSettlementCandidatesInput,
       output: purchaseSettlementCandidatesOut,
       cache: { tags: [["purchase"], ["financialTransaction"]] },
@@ -71,8 +70,6 @@ export const purchaseContract = defineContract(
      */
     suggestSettlementMatch: mutation({
       note: "A person asks for a tie-break; agents keep the deterministic candidates",
-      native:
-        "Ask for an advisory ordering of equally ranked statement charges",
       input: purchaseSettlementSuggestInput,
       output: purchaseSettlementSuggestOut,
     }),
@@ -83,8 +80,6 @@ export const purchaseContract = defineContract(
      */
     checkSettlementAllocation: query({
       note: "Allocation form check; the write validates on its own",
-      native: "Validate settlement allocation rows before saving",
-      transport: "post",
       input: purchaseSettlementAllocationCheckInput,
       output: purchaseSettlementAllocationCheckOut,
       cache: { tags: [] },
@@ -94,14 +89,12 @@ export const purchaseContract = defineContract(
       description:
         "Re-parent existing Expenses onto ONE existing purchase — e.g. one plumbing transaction that spans both rough-in and fixtures. Only rewrites `purchaseId` on the given expenses: no cost/trade/costType/project changes, and the target purchase's identity (vendorId/orderId/date/statedTotal/documents) stays untouched aside from gaining those expenses. NOT for payment schedules: a contractor's progress payments are separate transactions and therefore separate purchases; use the Project rollup for that view. Refuses when `purchaseId` is not a live purchase.",
       command: { label: "Attach expenses", confirmation: null },
-      native: "Attach expenses to a Purchase",
       input: linkExpensesToPurchaseInput,
       output: purchaseOut,
       invalidates: ["purchase"],
     }),
     split: mutation({
       command: { label: "Split expense", confirmation: null },
-      native: "Split an Expense into parts filed under its Purchase",
       input: splitExpenseInput,
       output: splitExpenseOut,
       invalidates: ["expense"],
@@ -112,37 +105,29 @@ export const purchaseContract = defineContract(
      * an attribution choice). Both clients consult it; `split` re-checks on write.
      */
     splitStart: query({
-      native:
-        "Start splitting an Expense: the starting parts and the confirmation",
       input: purchaseSplitStartInput,
       output: purchaseSplitStartOut,
       cache: { tags: [["expense"]] },
     }),
     checkSplit: query({
-      native: "Validate typed split parts before saving",
-      transport: "post",
       input: purchaseSplitCheckInput,
       output: purchaseSplitCheckOut,
       cache: { tags: [] },
     }),
     /** Expenses worth attaching to a Purchase for a scope and search, already worded. */
     linkExpenseCandidates: query({
-      native: "List expenses that can be attached to a Purchase",
       input: purchaseLinkExpensesCandidatesInput,
       output: purchaseLinkExpensesCandidatesOut,
       cache: { tags: [["expense"], ["purchase"]] },
     }),
     /** Whether a selection can be attached and what it does to the Purchase's expense total. */
     checkLinkExpenses: query({
-      native: "Validate an expense selection before attaching it to a Purchase",
-      transport: "post",
       input: purchaseLinkExpensesCheckInput,
       output: purchaseLinkExpensesCheckOut,
       cache: { tags: [] },
     }),
     /** Products worth attaching to a Purchase: a search minus what is already attached. */
     linkProductCandidates: query({
-      native: "List products that can be attached to a Purchase",
       input: purchaseLinkProductsCandidatesInput,
       output: purchaseLinkProductsCandidatesOut,
       cache: { tags: [["product"], ["purchase"]] },
@@ -150,7 +135,6 @@ export const purchaseContract = defineContract(
     attachProducts: mutation({
       note: "entity.link on purchase products",
       command: { label: "Attach products", confirmation: null },
-      native: "Attach products to a Purchase",
       input: purchaseAttachProductsInput,
       output: relationMutationOut,
       invalidates: ["purchaseProduct"],

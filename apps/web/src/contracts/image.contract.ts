@@ -27,23 +27,20 @@ export const imageContract = defineContract(
   "image",
   {
     recordSightings: mutation({
-      exposure: "internal",
+      exposure: "view",
       note: "Photos-library sighting sync",
-      native: "Bounded, replay-safe library sighting pages",
       input: imageRecordSightingsInput,
       output: imageRecordSightingsOut,
       invalidates: ["image"],
     }),
     analysis: query({
       note: "Native photo diagnostics",
-      native: "Native photo diagnostics",
       input: z.object({ id: z.string() }),
       output: localPhotoAnalysisSchema.nullable(),
       cache: { tags: [] },
     }),
     recordAnalysis: mutation({
-      exposure: "internal",
-      native: "Native photo diagnostics backfill",
+      exposure: "view",
       // A fresh instance (not `localPhotoAnalysisSchema`): see the builder's
       // doc comment in photo-import.contract.ts — reusing the same object here
       // would collapse the commit contract's inlined per-image analysis field
@@ -64,7 +61,6 @@ export const imageContract = defineContract(
       exposure: "capability",
       description:
         "Attach an existing uploaded image without re-uploading it. Galleries append and restore detached links; specify role cover for a Cookbook or logo for a Vendor to replace the current singular image. Repeating the current attachment is idempotent.",
-      native: "Attach an existing image to a record from its Used by section",
       input: imageAttachExistingInput,
       output: imageAttachExistingOutput,
       invalidates: ["image"],
@@ -81,16 +77,14 @@ export const imageContract = defineContract(
       cache: { profile: "stable" },
     }),
     hashIndex: query({
-      exposure: "internal",
+      exposure: "view",
       note: "Native deduplication index",
-      native: "Native photo deduplication index",
       input: z.undefined(),
       output: imageHashIndexSchema,
       cache: { tags: [] },
     }),
     setPerceptualHashes: mutation({
-      exposure: "internal",
-      native: "Native legacy photo hash repair",
+      exposure: "view",
       input: setPerceptualHashesInputSchema,
       output: setPerceptualHashesOutputSchema,
     }),

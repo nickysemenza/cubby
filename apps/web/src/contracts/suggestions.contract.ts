@@ -31,7 +31,6 @@ export const suggestionsContract = defineContract(
       input: automaticDecisionListInput,
       output: automaticDecisionListOut,
       readPolicy: "strong",
-      transport: "post",
       cache: { profile: "stable", tags: [["suggestions"]] },
     }),
     recordCounts: query({
@@ -40,7 +39,6 @@ export const suggestionsContract = defineContract(
       input: suggestionRecordCountsInput,
       output: suggestionRecordCountsOut,
       readPolicy: "strong",
-      transport: "post",
       cache: {
         profile: "stable",
         tags: [["suggestions"], ["sourceTransactionRecord"], ["connections"]],
@@ -52,7 +50,6 @@ export const suggestionsContract = defineContract(
       input: suggestionListInput,
       output: suggestionListOut,
       readPolicy: "strong",
-      transport: "post",
       cache: {
         profile: "stable",
         tags: [["suggestions"], ["sourceTransactionRecord"], ["connections"]],
@@ -64,7 +61,6 @@ export const suggestionsContract = defineContract(
       input: suggestionCountsInput,
       output: suggestionCountsOut,
       readPolicy: "strong",
-      transport: "post",
       cache: {
         profile: "stable",
         tags: [["suggestions"], ["sourceTransactionRecord"], ["connections"]],

@@ -31,7 +31,6 @@ export const taskContract = defineContract(
     bulkReorder: mutation({
       note: "Board drag ordering",
       command: { label: "Reorder tasks", confirmation: null },
-      native: "Task board ordering",
       input: schemas.taskBulkReorderInput,
       output: schemas.taskBulkMutationOut,
       invalidates: ["task"],

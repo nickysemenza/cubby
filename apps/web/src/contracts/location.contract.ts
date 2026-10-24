@@ -28,7 +28,6 @@ export const locationContract = defineContract(
   "location",
   {
     makeTree: query({
-      native: "Audit scope picker",
       input: z.undefined(),
       output: infLocationListOut,
       cache: { profile: "browse" },
@@ -41,7 +40,6 @@ export const locationContract = defineContract(
     }),
     ensureGlobalUnknown: mutation({
       note: "The audit's relocate target",
-      native: "Audit relocate target",
       input: z.undefined(),
       output: infLocation,
       invalidates: ["location"],

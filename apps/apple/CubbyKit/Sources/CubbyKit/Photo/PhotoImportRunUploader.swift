@@ -753,7 +753,8 @@ public actor PhotoImportRunUploader {
             try Task.checkCancellation()
             let analysis = try await analyze(
                 PhotoAnalysisInput(id: photo.id, file: photo.file, provenance: photo.provenance))
-            _ = try await client.recordImageAnalysis(entry.imageID, ImageAnalysisOutput(analysis))
+            _ = try await client.recordImageAnalysis(
+                entry.imageID, ImageAnalysisOutputValue(analysis))
             analyzedIDs.insert(photo.id)
             try saveCheckpoint()
             analysisFailures.remove(photo.id)

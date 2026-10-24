@@ -1,73 +1,152 @@
-import type { AppRouter } from "@ts-rest/core";
 import { z } from "zod";
 
-import { httpMetadataSchema } from "../../src/lib/http-api/router.ts";
-import { checkHttpRoutes, httpRoutes } from "../../src/lib/http-api/routes.ts";
+import type { LoadedContract } from "../start-operations/collect.ts";
 import {
   discriminatorOf,
+  toWire,
   wireProjection,
   wireRegistry,
-} from "../../src/lib/http-api/wire.ts";
-import { pascal } from "./schema-names.ts";
+} from "../../src/lib/operation-wire.ts";
 
 export interface NativeOperation {
   id: string;
-  method: string;
-  path: string;
-  input: "object" | "wrapped" | "none" | "null";
-  query?: string;
+  input: "none" | "null" | "body";
   body?: string;
   output: string;
 }
 
-/** JSON Schema is a model description here, not an HTTP/OpenAPI document. */
+/** JSON Schema components used by the Apple client generator. */
 export interface NativeContract {
   operations: readonly NativeOperation[];
   models: Readonly<Record<string, z.core.JSONSchema.JSONSchema>>;
   records: readonly string[];
 }
 
-/**
- * Collect the native interface from the same projected declarations the HTTP
- * handler uses. Keep optionality and nullability intact; Swift owns their codecs.
- */
-export function collectNativeContract(
-  router: AppRouter,
-  named: ReadonlyMap<string, z.ZodType> = new Map(),
-  records: ReadonlyMap<string, z.ZodType> = new Map(),
-): NativeContract {
-  checkHttpRoutes(router);
-  const registries = {
-    input: z.registry<{ id: string }>(),
-    output: z.registry<{ id: string }>(),
-    query: z.registry<{ id: string }>(),
-  };
-  for (const [name, schema] of named) {
-    const output = wireProjection(schema, "output");
-    const input = wireProjection(schema, "input");
-    const query = wireProjection(schema, "query");
-    for (const io of ["input", "output", "query"] as const) {
-      const projected =
-        io === "input" ? input : io === "query" ? query : output;
-      if (projected !== undefined && !registries[io].has(projected)) {
-        const id =
-          io === "input" && output !== undefined && input !== output
-            ? `${name}${name.endsWith("Input") ? "Request" : "Input"}`
-            : name;
-        registries[io].add(projected, { id });
+const hasNoInput = (schema: z.ZodType): boolean => {
+  let current = schema;
+  while (
+    [
+      "optional",
+      "default",
+      "prefault",
+      "catch",
+      "readonly",
+      "nonoptional",
+    ].includes(current._zod.def.type)
+  ) {
+    // SAFETY: the wrapper kinds accepted here all expose their child schema as innerType.
+    const inner = (current._zod.def as { innerType?: z.ZodType }).innerType;
+    if (!inner) return false;
+    current = inner;
+  }
+  return current._zod.def.type === "undefined";
+};
+
+const isNullInput = (schema: z.ZodType): boolean =>
+  schema._zod.def.type === "null";
+
+const createRegistries = () => ({
+  input: z.registry<{ id: string }>(),
+  output: z.registry<{ id: string }>(),
+});
+
+type NativeRegistries = ReturnType<typeof createRegistries>;
+
+const projectContractSchemas = (
+  contracts: readonly LoadedContract[],
+  operationIds?: ReadonlySet<string>,
+) => {
+  for (const { contract } of contracts) {
+    for (const [member, definition] of Object.entries(contract.ops)) {
+      if (definition.kind === "subscription") continue;
+      const id = `${contract.domain}.${member}`;
+      if (operationIds && !operationIds.has(id)) continue;
+      const sourceInput = definition.operationWire?.input ?? definition.input;
+      const sourceOutput =
+        definition.operationWire?.output ?? definition.output;
+      if (
+        !(sourceInput instanceof z.ZodType) ||
+        !(sourceOutput instanceof z.ZodType)
+      )
+        throw new Error(
+          `${id}: operation input and output must be Zod schemas`,
+        );
+      const input =
+        definition.nativeModels?.input === "json" ? z.json() : sourceInput;
+      if (!hasNoInput(input)) {
+        try {
+          toWire(input, "input");
+        } catch (error) {
+          throw new Error(`${id}: unsupported input wire shape`, {
+            cause: error,
+          });
+        }
+      }
+      let output =
+        definition.nativeModels?.output === "json" ? z.json() : sourceOutput;
+      if (definition.operationWire?.nullable) output = output.nullable();
+      try {
+        toWire(output, "output");
+      } catch (error) {
+        throw new Error(`${id}: unsupported output wire shape`, {
+          cause: error,
+        });
       }
     }
   }
-  for (const [id, schema] of records) {
-    if (!registries.output.has(schema)) registries.output.add(schema, { id });
+};
+
+const registerNamedSchemas = (
+  named: ReadonlyMap<string, z.ZodType>,
+  registries: NativeRegistries,
+) => {
+  for (const [name, schema] of named) {
+    // This row's `missing` child and a nested union's missing arm both claim
+    // RowDiagnosticMissing; leave the row's child names operation-scoped.
+    if (name === "RowDiagnostic") continue;
+    const input = wireProjection(schema, "input");
+    const output = wireProjection(schema, "output");
+    for (const io of ["input", "output"] as const) {
+      const projected = io === "input" ? input : output;
+      if (projected === undefined || registries[io].has(projected)) continue;
+      const id =
+        io === "input" && output !== undefined && input !== output
+          ? `${name}${name.endsWith("Input") ? "Request" : "Input"}`
+          : name;
+      registries[io].add(projected, { id });
+    }
   }
+};
+
+const registerRecordSchemas = (
+  records: ReadonlyMap<string, z.ZodType>,
+  registry: NativeRegistries["output"],
+) => {
+  for (const [id, schema] of records) {
+    const projected = toWire(schema, "output");
+    if (!registry.has(projected)) registry.add(projected, { id });
+  }
+};
+
+/**
+ * Collect every query and mutation from the operation contracts. The model
+ * registry follows the same `toWire` projection used by JSON-facing tools:
+ * dates become ISO strings and unsupported shapes fail with their operation id.
+ */
+export function collectNativeContract(
+  contracts: readonly LoadedContract[],
+  records: ReadonlyMap<string, z.ZodType> = new Map(),
+  named: ReadonlyMap<string, z.ZodType> = new Map(),
+  operationIds?: readonly string[],
+): NativeContract {
+  const registries = createRegistries();
+  const allowedOperations =
+    operationIds === undefined ? undefined : new Set(operationIds);
   const register = (
-    schema: unknown,
-    io: "input" | "output" | "query",
+    schema: z.ZodType,
+    io: "input" | "output",
     fallback: string,
   ): string => {
-    if (!(schema instanceof z.ZodType))
-      throw new Error(`${fallback}: expected a projected Zod schema`);
     const registry = registries[io];
     const id =
       registry.get(schema)?.id ??
@@ -77,71 +156,80 @@ export function collectNativeContract(
     if (!registry.has(schema)) registry.add(schema, { id });
     return `${io}/${id}`;
   };
-  let errorSchema: z.ZodType | undefined;
-  const json = z.json();
-  const operations = httpRoutes(router)
-    .map((route): NativeOperation => {
-      const metadata = httpMetadataSchema.parse(route.metadata);
-      if (/[:{}]/u.test(route.path))
+
+  projectContractSchemas(contracts, allowedOperations);
+  registerNamedSchemas(named, registries);
+  registerRecordSchemas(records, registries.output);
+
+  const operations: NativeOperation[] = [];
+  for (const { contract } of contracts) {
+    for (const [member, definition] of Object.entries(contract.ops)) {
+      if (definition.kind === "subscription") continue;
+      const id = `${contract.domain}.${member}`;
+      if (allowedOperations && !allowedOperations.has(id)) continue;
+      const name = id
+        .split(".")
+        .map((part) => part[0]!.toUpperCase() + part.slice(1))
+        .join("");
+      const sourceInput = definition.operationWire?.input ?? definition.input;
+      const sourceOutput =
+        definition.operationWire?.output ?? definition.output;
+      if (
+        !(sourceInput instanceof z.ZodType) ||
+        !(sourceOutput instanceof z.ZodType)
+      )
         throw new Error(
-          `${metadata.operation}: native paths cannot contain parameters`,
+          `${id}: operation input and output must be Zod schemas`,
         );
-      if (route.headers !== undefined)
-        throw new Error(
-          `${metadata.operation}: native custom request headers require an explicit transport change`,
-        );
-      const name = metadata.operation.split(".").map(pascal).join("");
-      const operation: NativeOperation = {
-        id: metadata.operation,
-        method: route.method,
-        path: route.path,
-        input: metadata.input ?? "object",
-        output: register(
-          metadata.nativeModels?.output === "json"
-            ? json
-            : route.responses[200],
-          "output",
-          metadata.nativeModels?.output === "json"
-            ? "NativeJSON"
-            : `${name}Output`,
-        ),
-      };
-      if (route.query instanceof z.ZodType)
-        operation.query = register(route.query, "query", `${name}Query`);
-      if ("body" in route && route.body instanceof z.ZodType)
-        operation.body = register(
-          metadata.nativeModels?.input === "json" ? json : route.body,
-          "input",
-          metadata.nativeModels?.input === "json"
-            ? "NativeJSON"
-            : `${name}Input`,
-        );
-      for (const [status, schema] of Object.entries(route.responses)) {
-        if (Number(status) >= 400) {
-          if (
-            !(schema instanceof z.ZodType) ||
-            (errorSchema !== undefined && errorSchema !== schema)
-          )
-            throw new Error(
-              `${operation.id}: error status ${status} differs from the shared native error contract`,
-            );
-          errorSchema = schema;
-          register(schema, "output", "ApiError");
-        } else if (status !== "200")
-          throw new Error(
-            `${operation.id}: unsupported native success status ${status}`,
+
+      const inputSchema =
+        definition.nativeModels?.input === "json" ? z.json() : sourceInput;
+      let input: NativeOperation["input"] = "body";
+      let body: string | undefined;
+      if (hasNoInput(inputSchema)) input = "none";
+      else if (isNullInput(inputSchema)) input = "null";
+      else {
+        try {
+          body = register(
+            toWire(inputSchema, "input"),
+            "input",
+            `${name}Input`,
           );
+        } catch (error) {
+          throw new Error(`${id}: unsupported input wire shape`, {
+            cause: error,
+          });
+        }
       }
-      return operation;
-    })
-    .sort((left, right) => left.id.localeCompare(right.id));
+
+      let outputSchema =
+        definition.nativeModels?.output === "json" ? z.json() : sourceOutput;
+      if (definition.operationWire?.nullable)
+        outputSchema = outputSchema.nullable();
+      let output: string;
+      try {
+        output = register(
+          toWire(outputSchema, "output"),
+          "output",
+          `${name}Output`,
+        );
+      } catch (error) {
+        throw new Error(`${id}: unsupported output wire shape`, {
+          cause: error,
+        });
+      }
+      operations.push({ id, input, ...(body ? { body } : {}), output });
+    }
+  }
+  operations.sort((left, right) => left.id.localeCompare(right.id));
   if (new Set(operations.map(({ id }) => id)).size !== operations.length)
-    throw new Error("Native operation identities must be unique");
+    throw new Error("Operation identities must be unique");
+
   const models: Record<string, z.core.JSONSchema.JSONSchema> = {};
-  for (const io of ["input", "output", "query"] as const) {
+  for (const io of ["input", "output"] as const) {
     const emitted = z.toJSONSchema(registries[io], {
       target: "draft-2020-12",
-      io: io === "query" ? "output" : io,
+      io,
       reused: "ref",
       uri: (id) => `native://${io}/${id}`,
       override: ({ zodSchema, jsonSchema }) => {
@@ -156,8 +244,9 @@ export function collectNativeContract(
   return {
     operations,
     models,
-    records: [...records].map(
-      ([id, schema]) => `output/${registries.output.get(schema)?.id ?? id}`,
-    ),
+    records: [...records].map(([id, schema]) => {
+      const projected = toWire(schema, "output");
+      return `output/${registries.output.get(projected)?.id ?? id}`;
+    }),
   };
 }

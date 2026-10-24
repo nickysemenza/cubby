@@ -22,6 +22,7 @@ import { scheduleImageProcessingJobs } from "~/server/domains/image-processing/s
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { createEvidenceHarnessContext } from "./fixtures/core";
 import { expect, test } from "./support/e2e-test";
+import { browserOperationPath } from "~/lib/browser-operation-path";
 
 const original = readFileSync(
   new URL("./fixtures/synthetic-white.avif", import.meta.url),
@@ -72,12 +73,13 @@ test("companion normalization preserves originals and rejects stale or corrupt r
     },
   });
   async function post(path: string, input: CompanionRequest) {
-    const response = await request.post(`/api/v1/imageProcessing/${path}`, {
+    const operation = `imageProcessing.${path}`;
+    const response = await request.post(browserOperationPath(operation), {
       headers: { Origin: workerOrigin },
-      data: input,
+      data: { operation, input },
     });
     expect(response.ok(), await response.text()).toBe(true);
-    return response.json();
+    return response.json().then((envelope) => envelope.data);
   }
   async function seed() {
     const key = `synthetic/${randomUUID()}.avif`;

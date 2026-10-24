@@ -5,10 +5,8 @@ import Testing
 
 @Suite("Open response decoding")
 struct OpenResponseDecodingTests {
-    /// Regression: the OpenAPI emitter used to close every output object, so the generated
-    /// `init(from:)` called `ensureNoAdditionalProperties` and an installed build rejected any
-    /// response the server had gained a field on. A response body must decode with a key this
-    /// build has never heard of.
+    /// Regression: generated Codable models used to reject unknown keys on output objects.
+    /// A response body must decode with a key this build has never heard of.
     @Test("a response with an unknown key still decodes")
     func unknownResponseKeyIsIgnored() throws {
         let body = """

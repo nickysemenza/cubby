@@ -619,6 +619,7 @@ describe("MCP catalog", () => {
       "proposals",
       "run_context",
     ]);
+    expect(actionsOf("search_read")).toEqual(["similar", "describe"]);
   });
 
   // Failure modes: the outer action hides the writer's choice; omission or

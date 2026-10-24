@@ -22,7 +22,7 @@ export function renderNativeCommands(
         )
           return [];
         const operation = operations.get(id)!;
-        if (!operation.body || operation.query)
+        if (operation.input !== "body" || !operation.body)
           throw new Error(`${id}: native commands require a JSON body`);
         return [{ id, definition, command: definition.command }];
       }),

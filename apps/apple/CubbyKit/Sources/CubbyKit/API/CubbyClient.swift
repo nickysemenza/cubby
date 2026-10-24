@@ -2,7 +2,7 @@ import CubbyAPI
 import Foundation
 import HTTPTypes
 
-/// The single typed path into `/api/v1`. Every operation the app, the widgets, and the CLI use is
+/// The single typed path into `/api/operations`. Every operation the app, the widgets, and the CLI use is
 /// a named method here; nothing loosely-typed survives (`CubbyDebugClient` exists only for the
 /// CLI's `call` escape hatch).
 ///
@@ -29,7 +29,11 @@ public actor CubbyClient {
     // MARK: - Products
 
     public func product(_ id: ProductCode) async throws -> ProductDetail {
-        return try await EntityCatalog[.product].getRow(client: self, id: id.rawValue).decoded()
+        guard let row = try await EntityCatalog[.product].getRow(client: self, id: id.rawValue) else {
+            throw DecodingError.dataCorrupted(
+                .init(codingPath: [], debugDescription: "Product detail returned null"))
+        }
+        return try row.decoded()
     }
 
     /// Find-or-create by a raw scanned code, resolved server-side: an ISBN becomes a book, a
@@ -84,7 +88,7 @@ public actor CubbyClient {
     ) async throws -> FieldExplanationOutput {
         let entityKind = subject.entity
         return try await native_fieldExplanation_explain(
-            query: .init(
+            body: .init(
                 entityKind: entityKind, entityId: subject.id, field: field,
                 surface: .init(rawValue: surface))
         )
@@ -159,30 +163,31 @@ public actor CubbyClient {
     /// One image with its owning records through the kernel `get` every entity shares. The
     /// detail read is a superset of the photo views' `ImageWithEntity`, which it projects to.
     public func imageDetail(id: String) async throws -> ImageWithEntity {
-        return try await EntityCatalog[.image].getRow(client: self, id: id).decoded()
+        guard let row = try await EntityCatalog[.image].getRow(client: self, id: id) else {
+            throw DecodingError.dataCorrupted(
+                .init(codingPath: [], debugDescription: "Image detail returned null"))
+        }
+        return try row.decoded()
     }
 
     /// One row by id, or `nil` when the server does not have it.
     public func row(_ descriptor: EntityDescriptor, id: String) async throws -> EntityRow? {
-        do {
-            let raw: JSONValue
-            switch descriptor.key.nativeReadKind {
-            case .usdaFood:
-                guard let fdcID = Int(id) else {
-                    throw EntityFilterError.invalidValue(
-                        parameter: "id", value: id, expected: "a numeric FDC ID")
-                }
-                raw = try usdaFoodJSON(
-                    try await native_usdaFood_detail(query: .init(id: fdcID)))
-            case .kernel:
-                raw = try await descriptor.getRow(client: self, id: id)
-            case .unavailable:
-                throw EntityOperationError.unsupported(descriptor.key, .get)
+        switch descriptor.key.nativeReadKind {
+        case .usdaFood:
+            guard let fdcID = Int(id) else {
+                throw EntityFilterError.invalidValue(
+                    parameter: "id", value: id, expected: "a numeric FDC ID")
             }
+            guard let food = try await native_usdaFood_detail(body: .init(id: fdcID)) else {
+                return nil
+            }
+            let raw = try usdaFoodJSON(food)
             return descriptor.row(from: raw)
-        } catch {
-            if let error = error as? CubbyAPIError, error.status == 404 { return nil }
-            throw error
+        case .kernel:
+            guard let raw = try await descriptor.getRow(client: self, id: id) else { return nil }
+            return descriptor.row(from: raw)
+        case .unavailable:
+            throw EntityOperationError.unsupported(descriptor.key, .get)
         }
     }
 
@@ -207,7 +212,7 @@ public actor CubbyClient {
         -> EntityConnectionsOut
     {
         return try await native_entity_connections(
-            query: .init(id: id, operation: previewDelete ? .delete : nil)
+            body: .init(id: id, operation: previewDelete ? .delete : nil)
         )
     }
 
@@ -230,10 +235,10 @@ public actor CubbyClient {
         offset: Int = 0, limit: Int = 50
     ) async throws -> JSONValue {
         guard
-            let entity = EntityRelationQueryEntity.allCases.first(where: {
+            let entity = EntityRelationInputEntity.allCases.first(where: {
                 $0.rawValue == source.entity.rawValue
             }),
-            let relationKey = EntityRelationQueryRelation.allCases.first(where: { $0.rawValue == relation })
+            let relationKey = EntityRelationInputRelation.allCases.first(where: { $0.rawValue == relation })
         else {
             throw DecodingError.dataCorrupted(
                 .init(
@@ -243,7 +248,7 @@ public actor CubbyClient {
         }
         return try JSONValue(
             encoding: try await native_entity_relation(
-                query: .init(
+                body: .init(
                     entity: entity, relation: relationKey, id: source.id,
                     offset: offset, limit: limit, targetIds: targetIDs)
             ))
@@ -293,7 +298,7 @@ public actor CubbyClient {
     public func recommendations(for source: EntityRef) async throws -> EntityRecommendationsOut {
         return  // `recommendations.forEntity` declares its own copy of the entity enum; match by raw value.
             try await native_recommendations_forEntity(
-                query: .init(
+                body: .init(
                     entityKind: .init(rawValue: source.entityKind.rawValue)!, entityId: source.entityId)
             )
     }
@@ -435,19 +440,13 @@ public actor CubbyClient {
 
     /// Household-wide audit entries, newest first. The opaque cursor is passed back unchanged.
     public func auditHistory(cursor: String? = nil, limit: Int = 50) async throws -> AuditLogListOut {
-        return try await native_auditLog_list(query: .init(limit: Double(limit), cursor: cursor))
+        return try await native_auditLog_list(body: .init(limit: Double(limit), cursor: cursor))
     }
 
     /// The device-run local analysis persisted at import time (`photo-local-analysis`), or `nil`
-    /// when none has been recorded yet (`image.analysis` turns a `null` result into a 404, per
-    /// `router.ts`'s nullable-output convention — the same shape `row(_:id:)` above unwraps).
-    public func imageAnalysis(_ id: ImageCode) async throws -> ImageAnalysisOutput? {
-        do {
-            return try await native_image_analysis(query: .init(id: id.rawValue))
-        } catch {
-            if let error = error as? CubbyAPIError, error.status == 404 { return nil }
-            throw error
-        }
+    /// when none has been recorded yet. Null is a successful operation result.
+    public func imageAnalysis(_ id: ImageCode) async throws -> ImageAnalysisOutputValue? {
+        return try await native_image_analysis(body: .init(id: id.rawValue))
     }
 
     /// Backfills a device-run analysis onto an already-uploaded image. The server re-checks
@@ -455,7 +454,7 @@ public actor CubbyClient {
     /// analysis does not describe the row's current bytes; this wrapper only marshals the value —
     /// the request declaration owns its analysis input type; fields are projected explicitly from
     /// the output so server-side enrichment cannot leak into the write.
-    public func recordImageAnalysis(_ id: ImageCode, _ analysis: ImageAnalysisOutput) async throws
+    public func recordImageAnalysis(_ id: ImageCode, _ analysis: ImageAnalysisOutputValue) async throws
         -> Bool
     {
         return try await native_image_recordAnalysis(
@@ -493,7 +492,8 @@ public actor CubbyClient {
     /// payload's `attachments` carry full bodies (URLs included); only the id is projected out
     /// here because that is all this call is for.
     public func imageIDs(_ descriptor: EntityDescriptor, id: String) async throws -> [ImageCode] {
-        return descriptor.row(from: try await descriptor.getRow(client: self, id: id))?.imageIDs ?? []
+        guard let raw = try await descriptor.getRow(client: self, id: id) else { return [] }
+        return descriptor.row(from: raw)?.imageIDs ?? []
     }
 
     public func markUploaded(_ id: ImageCode) async throws {
@@ -553,14 +553,14 @@ public actor CubbyClient {
     /// that a row timestamp cannot cover.
     public func inventorySnapshot(at location: LocationCode) async throws -> RecountSnapshot {
         let output = try await native_inventory_locationSnapshot(
-            query: .init(locationId: location, placement: .stock)
+            body: .init(locationId: location, placement: .stock)
         )
         return RecountSnapshot(rows: output.items.map(RecountRow.init), token: output.snapshotToken)
     }
 
     /// Products stocked in more than one location, for the Duplicate badge.
     public func findDuplicates() async throws -> Set<ProductCode> {
-        return Set(try await native_inventory_findDuplicates(query: .init()).map(\.id))
+        return Set(try await native_inventory_findDuplicates(body: .init()).map(\.id))
     }
 
     /// Commits one bin's recount. Throws a `CubbyAPIError` with `isStaleInventory` when the bin
@@ -662,19 +662,15 @@ public actor CubbyClient {
         var query = SearchQueryInput(
             query: trimmed, limit: min(max(limit, 1), SearchHit.maxLimit)
         )
-        // `search.find`'s query declares its own searchable-entity enum, so catalog keys are
+        // `search.find`'s body declares its own searchable-entity enum, so catalog keys are
         // matched into it by raw value; a key it has not heard of is dropped rather than sent. Hits
         // name their entity by raw string (`SearchHit.key` is nil for an undeclared kind).
-        query.entityKinds = (kinds ?? EntityCatalog.intentExposed.map(\.key)).compactMap {
-            let kind = $0.rawValue
-            return QuerySearchableEntity.allCases.first { $0.rawValue == kind }
-        }
-        return try await native_search_find(query: query)
+        query.entityKinds = (kinds ?? EntityCatalog.intentExposed.map(\.key)).map(\.rawValue)
+        return try await native_search_find(body: query)
     }
 
     public func requestCatchUp() async throws {
-        // The server's `z.undefined()` mutation input still rejects a missing body (400
-        // "expected object"); the spec marks the body optional, so send an empty object.
+        // This operation declares no input, so its shared envelope omits the input key.
         _ = try await native_maintenance_requestCatchUp()
     }
 
@@ -719,12 +715,12 @@ public actor CubbyClient {
         -> [(ReportSlot, EntityReportOut)]
     {
         let wanted = slots
-        let out = try await native_entityReport_getMany(query: .init(slots: wanted, id: id))
+        let out = try await native_entityReport_getMany(body: .init(slots: wanted, id: id))
         return out.reports.map { ($0.slot, $0.report) }
     }
 
-    public func lookupUPC(_ upc: String) async throws -> UpcLookupOutput {
-        return try await native_upc_lookup(query: .init(upc: upc))
+    public func lookupUPC(_ upc: String) async throws -> UpcLookupOutputValue? {
+        return try await native_upc_lookup(body: .init(upc: upc))
     }
 
     // MARK: - Internals

@@ -145,8 +145,7 @@ struct GenericEntityEditModelTests {
         let recorder = Recorder()
         EditStub.handler.withLock { handler in
             handler = { request in
-                let data = (try? Self.requestBody(request)) ?? Data()
-                let fields = (try? JSONDecoder().decode([String: JSONValue].self, from: data)) ?? [:]
+                let fields = StubNetworking.operationFields(of: request)
                 recorder.seen.withLock {
                     $0.append(Seen(method: request.httpMethod, path: request.url?.path ?? "", body: fields))
                 }
@@ -154,22 +153,6 @@ struct GenericEntityEditModelTests {
             }
         }
         return recorder
-    }
-
-    nonisolated private static func requestBody(_ request: URLRequest) throws -> Data {
-        if let body = request.httpBody { return body }
-        let stream = try #require(request.httpBodyStream)
-        stream.open()
-        defer { stream.close() }
-        var data = Data()
-        var buffer = [UInt8](repeating: 0, count: 4096)
-        while true {
-            let count = stream.read(&buffer, maxLength: buffer.count)
-            if count < 0 { throw stream.streamError ?? URLError(.cannotDecodeRawData) }
-            if count == 0 { break }
-            data.append(contentsOf: buffer.prefix(count))
-        }
-        return data
     }
 
     // Mutation receipts carry identity and submitted scalars; detail refresh is separate.
@@ -385,7 +368,7 @@ struct GenericEntityEditModelTests {
         let requests = seen.requests
         #expect(requests.count == 1)
         #expect(requests.first?.method == "POST")
-        #expect(requests.first?.path == "/api/v1/entity/mutate")
+        #expect(requests.first?.path == "/api/operations/entity.mutate")
         #expect(
             requests.first?.body == [
                 "action": "update", "entity": "product", "id": "PRD-2345",
@@ -408,7 +391,7 @@ struct GenericEntityEditModelTests {
         #expect(model.savedID == "LOC-9ABC")
         let requests = seen.requests
         #expect(requests.first?.method == "POST")
-        #expect(requests.first?.path == "/api/v1/entity/mutate")
+        #expect(requests.first?.path == "/api/operations/entity.mutate")
         #expect(
             requests.first?.body == [
                 "action": "create", "entity": "location", "data": ["name": "Bin 9", "type": "area"],

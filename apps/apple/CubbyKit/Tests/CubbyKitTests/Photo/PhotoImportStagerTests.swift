@@ -20,12 +20,14 @@ private final class PhotoImportStagerStub: URLProtocol, @unchecked Sendable {
         }
         switch handler(request) {
         case .success(let (status, data)):
+            let responseData = StubNetworking.operationResponseData(
+                request: request, status: status, data: data)
             let response = HTTPURLResponse(
                 url: request.url!, statusCode: status, httpVersion: "HTTP/1.1",
                 headerFields: ["Content-Type": "application/json"]
             )!
             client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
-            client?.urlProtocol(self, didLoad: data)
+            client?.urlProtocol(self, didLoad: responseData)
             client?.urlProtocolDidFinishLoading(self)
         case .failure(let error):
             client?.urlProtocol(self, didFailWithError: error)
@@ -55,9 +57,7 @@ private final class RequestScript: @unchecked Sendable {
 
     var handler: PhotoImportStagerStub.Handler {
         { [self] request in
-            let fields =
-                (try? JSONDecoder().decode(
-                    [String: JSONValue].self, from: Self.body(of: request))) ?? [:]
+            let fields = StubNetworking.operationFields(of: request)
             seen.withLock { $0.append((request.url?.path ?? "", fields)) }
             return queue.withLock { pending in
                 guard !pending.isEmpty else { return .success((500, Data("{}".utf8))) }
@@ -66,22 +66,6 @@ private final class RequestScript: @unchecked Sendable {
         }
     }
 
-    /// The OpenAPI Darwin transport writes the request body via a bound stream asynchronously;
-    /// `httpBody` is empty until it's read this way (mirrors `ClientQueryTests.requestBody`).
-    private static func body(of request: URLRequest) -> Data {
-        if let body = request.httpBody, !body.isEmpty { return body }
-        guard let stream = request.httpBodyStream else { return Data() }
-        stream.open()
-        defer { stream.close() }
-        var data = Data()
-        var buffer = [UInt8](repeating: 0, count: 4096)
-        while true {
-            let count = stream.read(&buffer, maxLength: buffer.count)
-            if count <= 0 { break }
-            data.append(contentsOf: buffer.prefix(count))
-        }
-        return data
-    }
 }
 
 @Suite("PhotoImportTransaction recovery", .serialized)
@@ -173,7 +157,7 @@ struct PhotoImportStagerTests {
 
         let requests = script.seen.withLock { $0 }
         #expect(requests.count == 3)
-        #expect(requests[1].path.hasSuffix("/stage"))
+        #expect(requests[1].path == "/api/operations/photoImport.stage")
         let commitImages = try #require(requests[2].fields["images"]?.arrayValue)
         #expect(commitImages.count == 1)
         #expect(commitImages[0]["imageId"]?.stringValue == "IMG-NEW")
@@ -209,7 +193,9 @@ struct PhotoImportStagerTests {
         script.push(status: 200, json: commitSuccessResponse(imageID: "IMG-2"))
         let committed = try await transaction.commit([first])
         #expect(committed == ["c1"])
-        let stagePaths = script.seen.withLock { $0 }.filter { $0.path.hasSuffix("/stage") }
+        let stagePaths = script.seen.withLock { $0 }.filter {
+            $0.path == "/api/operations/photoImport.stage"
+        }
         #expect(stagePaths.count == 2)
     }
 

@@ -55,7 +55,7 @@ extension FilterDescriptor: Identifiable {
 }
 
 extension SavedView {
-    /// The generator expands column filters into query parameters, including nullable presence.
+    /// The generator expands column filters into operation inputs, including nullable presence.
     public var filterState: EntityFilterState { EntityFilterState(filters: filters) }
 
     public var sortParameter: String? {

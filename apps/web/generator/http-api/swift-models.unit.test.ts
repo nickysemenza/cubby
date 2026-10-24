@@ -1,23 +1,32 @@
-import { initContract } from "@ts-rest/core";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
+import type {
+  ContractMember,
+  LoadedContract,
+} from "../start-operations/collect.ts";
 import { collectNativeContract } from "./native-contract.ts";
 import { renderSwiftModels } from "./swift-models.ts";
 
-const render = (output: z.ZodType) =>
-  renderSwiftModels(
-    collectNativeContract(
-      initContract().router({
-        read: {
-          method: "GET",
-          path: "/example/read",
-          metadata: { operation: "example.read" },
-          responses: { 200: output },
+const render = (output: z.ZodType) => {
+  const contract: LoadedContract[] = [
+    {
+      exportName: "exampleContract",
+      module: "~/contracts/example",
+      contract: {
+        domain: "example",
+        ops: {
+          read: {
+            kind: "query",
+            input: z.undefined(),
+            output,
+          } satisfies ContractMember,
         },
-      }),
-    ),
-  );
+      },
+    },
+  ];
+  return renderSwiftModels(collectNativeContract(contract));
+};
 
 describe("native model generation guards", () => {
   it("rejects enum values whose Swift case names would collide", () => {
@@ -70,9 +79,25 @@ describe("native model generation guards", () => {
     expect(source).toContain("container.decode(MaybeText.self");
   });
 
-  it("requires an explicit projection for heterogeneous tuples", () => {
-    expect(() => render(z.tuple([z.string(), z.number()]))).toThrow(
-      /tuple requires an explicit native projection/u,
-    );
+  it("generates fixed tuple models that preserve the array wire shape", () => {
+    const source = render(z.tuple([z.string(), z.number()]))
+      .artifacts.map((artifact) => artifact.source)
+      .join("\n");
+
+    expect(source).toContain("public struct ExampleReadOutput");
+    expect(source).toContain("public var `element1`: String");
+    expect(source).toContain("public var `element2`: Double");
+    expect(source).toContain("unkeyedContainer()");
+    expect(source).toContain("Expected exactly 2 tuple elements");
+  });
+
+  it("generates tuple rest values as trailing array elements", () => {
+    const source = render(z.tuple([z.string()]).rest(z.number()))
+      .artifacts.map((artifact) => artifact.source)
+      .join("\n");
+
+    expect(source).toContain("public var `element1`: String");
+    expect(source).toContain("public var `rest`: [Double]");
+    expect(source).toContain("while !container.isAtEnd");
   });
 });

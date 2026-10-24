@@ -428,7 +428,7 @@ focused file or the last failed selection:
 
 ```sh
 pnpm --dir apps/web build:cf
-pnpm --dir apps/web test:e2e tests/e2e/http-api.spec.ts --workers=2
+pnpm --dir apps/web test:e2e tests/e2e/browser-operation-dispatch.spec.ts --workers=2
 pnpm --dir apps/web test:e2e --last-failed
 pnpm --dir apps/web test:e2e:affected
 pnpm --dir apps/web test:e2e:watch

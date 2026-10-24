@@ -61,10 +61,9 @@ test("placement acceptance follows the surviving stock row after merging", async
     ).location.id,
   ).toBe(fixture.target.id);
   expect(
-    (
-      await entityApi(page.request).get("inventory", fixture.source.id, {})
-    ).status(),
-  ).toBe(404);
+    (await entityApi(page.request).get("inventory", fixture.source.id, {}))
+      .parsedBody,
+  ).toBeNull();
   await expect(
     page.getByText(`${name} workshop`, { exact: true }).first(),
   ).toBeVisible();

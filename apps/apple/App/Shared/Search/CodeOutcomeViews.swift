@@ -54,7 +54,7 @@ struct ProductMatchesPanel: View {
 struct UnknownCodePanel: View {
     /// The GTIN-14 the code is stored as.
     let code: String
-    let catalog: UpcLookupOutput?
+    let catalog: UpcLookupOutputValue?
     var creating = false
     let onCreate: () -> Void
     let onStock: () -> Void
@@ -114,7 +114,7 @@ struct UnknownCodePanel: View {
     ScrollView {
         UnknownCodePanel(
             code: "00012345678905",
-            catalog: UpcLookupOutput(
+            catalog: UpcLookupOutputValue(
                 upc: "00012345678905", name: "LED bulbs, 4-pack", manufacturer: "Acme", brand: nil,
                 category: nil,
                 description: nil, priceDollars: nil, imageUrl: nil, source: .upcitemdb, cached: false),

@@ -18,7 +18,7 @@
  *   conventions (a 1.1 MB `assets/cjs-*.js` chunk) beside the ESM copies the
  *   SDK already uses. vite.config.ts sets `buildTimeInstrumentation: false`;
  *   `findSentryOrchestrionInjection` fails the build if it comes back.
- * - Generated tables and contract schemas (entity-field-model.gen, OpenAPI
+ * - Generated tables and contract schemas (entity-field-model.gen, generated operation
  *   documents) needed by one route family: import them where used.
  */
 

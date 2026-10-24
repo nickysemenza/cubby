@@ -6,7 +6,7 @@ public protocol LookupService: Sendable {
     /// Existing products carrying this barcode (any GTIN spelling). Never creates.
     func products(matchingBarcode gtin: String) async throws -> [EntityRow]
     /// What the upstream barcode catalog knows, for a code Cubby has never seen.
-    func lookupUPC(_ upc: String) async throws -> UpcLookupOutput
+    func lookupUPC(_ upc: String) async throws -> UpcLookupOutputValue?
 }
 
 extension CubbyClient: LookupService {}
@@ -19,7 +19,7 @@ public enum LookupOutcome: Sendable, Hashable {
     case products([EntityRow], code: String)
     /// A well-formed barcode or ISBN no product carries; `catalog` is the upstream lookup when
     /// it answered, so the caller can offer "create" with a name and picture.
-    case unknownCode(String, catalog: UpcLookupOutput?)
+    case unknownCode(String, catalog: UpcLookupOutputValue?)
     /// Not a code at all — run it through text search.
     case text(String)
 }

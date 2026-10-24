@@ -39,7 +39,6 @@ export const upcContract = defineContract(
   "upc",
   {
     lookup: query({
-      native: "Capture barcode lookup",
       input: upcLookupInput,
       output: productLookupResponseSchema.nullable(),
     }),

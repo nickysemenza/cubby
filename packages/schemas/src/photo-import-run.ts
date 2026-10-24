@@ -726,7 +726,7 @@ export const photoRunReviewResponse = z.object({
 export type PhotoRunReview = z.infer<typeof photoRunReviewResponse>;
 
 // Native upload side of a photo-inventory run. These live here rather than in
-// the web contract so the OpenAPI document names them after their exports.
+// the web contract so generated client models keep their exported names.
 export const photoImportCreateRunInput = z.object({
   ledgerPartyId: ledgerPartyShortcode.optional(),
   notes: z.string().max(2_000).optional(),

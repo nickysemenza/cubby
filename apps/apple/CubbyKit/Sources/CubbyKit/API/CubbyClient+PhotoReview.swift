@@ -8,13 +8,13 @@ extension CubbyClient {
     }
 
     public func photoCandidateGroups(runID: String) async throws -> [String: PhotoCandidateGroupResult] {
-        let response = try await native_photoImport_candidatesBatch(query: .init(runId: runID))
+        let response = try await native_photoImport_candidatesBatch(body: .init(runId: runID))
         return Dictionary(uniqueKeysWithValues: response.groups.map { ($0.groupKey, $0) })
     }
 
     public func photoEvidence(runID: String, productID: ProductCode) async throws -> PhotoProductEvidence {
         return try await native_photoImport_productEvidence(
-            query: .init(runId: runID, productId: productID)
+            body: .init(runId: runID, productId: productID)
         )
     }
 

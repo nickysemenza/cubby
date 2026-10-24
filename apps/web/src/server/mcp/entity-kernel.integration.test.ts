@@ -17,13 +17,10 @@ import {
   executeEntity,
 } from "~/server/entity-kernel";
 import { refreshSearchDocument } from "~/server/generic/search/repo/search-document";
-import {
-  type AuthPorts,
-  createAuthenticator,
-} from "~/server/http/authenticate";
-import { createHttpApiHandler } from "~/server/http/http-api-handler";
+import { systemPrincipal } from "~/server/http/authenticate";
 import { requireActor } from "~/server/http/request-context";
 import { createMcpServer, listMcpToolCatalog } from "~/server/mcp/server";
+import { createBrowserOperationHandler } from "~/server/operation-runtime/browser-operation-dispatch";
 import { dispatchStartOperation } from "~/server/operation-runtime/start-operation-dispatch.server";
 import {
   createProductFixture,
@@ -238,33 +235,26 @@ describe("MCP entity kernel boundary", () => {
     expect(JSON.stringify(viaMcp.content)).toContain(
       "Filter only: The effective owner is resolved",
     );
-    const http = createHttpApiHandler({
-      authenticate: createAuthenticator(
-        fromPartial<AuthPorts>({
-          getSession: async () => ({
-            response: {
-              user: { id: testUserId("test-user-id") },
-              session: { id: "session-fixture", token: "token" },
-            },
-            headers: new Headers(),
-          }),
-          context: async () =>
-            requireActor(
-              createTestRequestContext(ctx.db, {
-                auth: { userId: testUserId("test-user-id") },
-              }),
-            ),
-        }),
-      ),
+    const apiContext = requireActor(
+      createTestRequestContext(ctx.db, {
+        auth: { userId: testUserId("test-user-id") },
+      }),
+    );
+    const http = createBrowserOperationHandler({
+      authenticate: async () =>
+        systemPrincipal(apiContext, { channel: "cli", credential: "api-key" }),
       dispatch: dispatchStartOperation,
     });
     const viaHttp = await http(
-      new Request("https://cubby.example/api/v1/entity/list", {
+      new Request("https://cubby.example/api/operations/entity.list", {
         method: "POST",
         body: JSON.stringify({
-          entity: command.entity,
-          filters: {},
-          sort: command.sort,
+          operation: "entity.list",
+          input: {
+            entity: command.entity,
+            filters: {},
+            sort: command.sort,
+          },
         }),
         headers: {
           "content-type": "application/json",
@@ -297,12 +287,15 @@ describe("MCP entity kernel boundary", () => {
       JSON.stringify((await callKernel(grouped, entityKernel)).content),
     ).toContain("Tags does not support month buckets");
     const groupedViaHttp = await http(
-      new Request("https://cubby.example/api/v1/entity/list", {
+      new Request("https://cubby.example/api/operations/entity.list", {
         method: "POST",
         body: JSON.stringify({
-          entity: "product",
-          filters: {},
-          groupBy: [{ key: "tags", bucket: "month" as const }],
+          operation: "entity.list",
+          input: {
+            entity: "product",
+            filters: {},
+            groupBy: [{ key: "tags", bucket: "month" as const }],
+          },
         }),
         headers: {
           "content-type": "application/json",

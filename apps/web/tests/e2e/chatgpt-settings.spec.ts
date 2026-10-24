@@ -14,13 +14,20 @@ test("settings explains local authorization and exposes no model selectors", asy
     issue: null,
     welcomeDismissed: false,
   });
-  const host = await request.get("/api/v1/chatgpt/authorizationHost");
-  expect(host.ok()).toBe(true);
-  expect(await host.json()).toMatchObject({ clientId: null });
-  const rejectedConnect = await request.post("/api/v1/chatgpt/connect", {
-    headers: { Authorization: "Bearer invalid-example" },
-    data: {},
+  // A cookie request that can act must name this origin.
+  const host = await request.post("/api/operations/chatgpt.authorizationHost", {
+    headers: { Origin: new URL(status.url()).origin },
+    data: { operation: "chatgpt.authorizationHost" },
   });
+  expect(host.ok()).toBe(true);
+  expect((await host.json()).data).toMatchObject({ clientId: null });
+  const rejectedConnect = await request.post(
+    "/api/operations/chatgpt.connect",
+    {
+      headers: { Authorization: "Bearer invalid-example" },
+      data: { operation: "chatgpt.connect", input: {} },
+    },
+  );
   expect(rejectedConnect.status()).toBe(401);
   const rejectedBearer = await request.get("/api/ai/chatgpt", {
     headers: { Authorization: "Bearer invalid-example" },

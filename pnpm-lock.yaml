@@ -428,12 +428,6 @@ importers:
       '@tanstack/react-virtual':
         specifier: ^3.14.21
         version: 3.14.21(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.1(@types/react@19.3.0)(react@19.3.1))(react@19.3.1)
-      '@ts-rest/core':
-        specifier: 3.53.0-rc.1
-        version: 3.53.0-rc.1(@types/node@26.6.5)
-      '@ts-rest/serverless':
-        specifier: 3.53.0-rc.1
-        version: 3.53.0-rc.1(@ts-rest/core@3.53.0-rc.1(@types/node@26.6.5))
       '@viz-js/viz':
         specifier: ^3.31.0
         version: 3.31.0
@@ -6241,38 +6235,6 @@ packages:
   '@ts-morph/common@0.27.0':
     resolution: {integrity: sha512-Wf29UqxWDpc+i61k3oIOzcUfQt79PIT9y/MWfAGlrkjg6lBC1hwDECLXPVJAhWjiGbfBCxZd65F/LIZF3+jeJQ==}
 
-  '@ts-rest/core@3.53.0-rc.1':
-    resolution: {integrity: sha512-hDMXqKHSys6w+kXFW1Q6EvN8QgRvtXKXJ2TpYByKI4TquaPjiTOv99aLD26X4LNRzdna8Ci1PVyzr0jYZv0oNQ==}
-    peerDependencies:
-      '@types/node': ^18.18.7 || >=20.8.4
-    peerDependenciesMeta:
-      '@types/node':
-        optional: true
-
-  '@ts-rest/serverless@3.53.0-rc.1':
-    resolution: {integrity: sha512-MtwjH3GqGXx4r4Tyqb381JNN5W7tKZt491Yp0OSAxU2cdduJ3s9lNZV4+AFbDTdY+ZyInlQntCIr94+VBSr+TA==}
-    peerDependencies:
-      '@azure/functions': ^4.0.0
-      '@ts-rest/core': 3.53.0-rc.1
-      '@types/aws-lambda': ^8.10.115
-      '@types/azure__functions': '*'
-      '@types/next': '*'
-      '@types/ts-rest__core': '*'
-      next: ^16.4.1
-    peerDependenciesMeta:
-      '@azure/functions':
-        optional: true
-      '@types/aws-lambda':
-        optional: true
-      '@types/azure__functions':
-        optional: true
-      '@types/next':
-        optional: true
-      '@types/ts-rest__core':
-        optional: true
-      next:
-        optional: true
-
   '@tsrs/darwin-arm64@0.16.0-ts7.1.0-dev.20260929':
     resolution: {integrity: sha512-9e7ZeELv0Fq06PL7xr0w7jeU45cd2UcDAejH3uloTPD37Vm6h099u/hAj90CPbY88ky15eXCiKE5hJzqvSvCBA==}
     engines: {node: '>=16.20.0'}
@@ -6947,8 +6909,11 @@ packages:
     resolution: {integrity: sha512-8iUql50EUR+uUcdRQ3HDqa6EVyo3docL8g5WJ3FNcWmu62IbkGUue/pEyLBW8VGKKucTPgqeks4fIU1DA4yowQ==}
     peerDependencies:
       '@types/ajv': '*'
+      ajv: ^8.0.0
     peerDependenciesMeta:
       '@types/ajv':
+        optional: true
+      ajv:
         optional: true
 
   ajv@8.20.0:
@@ -8606,9 +8571,6 @@ packages:
   isexe@3.1.5:
     resolution: {integrity: sha512-6B3tLtFqtQS4ekarvLVMZ+X+VlvQekbe4taUkf/rhVO3d/h0M2rfARm/pXLcPEsjjMsFgrFgSrhQIxcSVrBz8w==}
     engines: {node: '>=18'}
-
-  itty-router@5.0.24:
-    resolution: {integrity: sha512-PXij1qGKtE6jg3dLgrTRdh/Frovl5Wc4Av67sD2xfhDPrgNt4u79++/il8/c/OfZGkhD/8uYJub8tjo+H165rA==}
 
   jiti@2.7.0:
     resolution: {integrity: sha512-AC/7JofJvZGrrneWNaEnJeOLUx+JlGt7tNa0wZiRPT4MY1wmfKjt2+6O2p2uz2+skll8OZZmJMNqeke7kKbNgQ==}
@@ -12978,7 +12940,7 @@ snapshots:
     dependencies:
       '@hono/node-server': 2.1.5(hono@4.13.13)
       ajv: 8.20.0
-      ajv-formats: 3.0.1
+      ajv-formats: 3.0.1(ajv@8.20.0)
       content-type: 1.0.5
       cors: 2.8.6
       cross-spawn: 7.0.6
@@ -13006,7 +12968,7 @@ snapshots:
     dependencies:
       '@hono/node-server': 2.1.5(hono@4.13.13)
       ajv: 8.20.0
-      ajv-formats: 3.0.1
+      ajv-formats: 3.0.1(ajv@8.20.0)
       content-type: 1.0.5
       cors: 2.8.6
       cross-spawn: 7.0.6
@@ -15974,15 +15936,6 @@ snapshots:
       minimatch: 10.2.6
       path-browserify: 1.0.1
 
-  '@ts-rest/core@3.53.0-rc.1(@types/node@26.6.5)':
-    optionalDependencies:
-      '@types/node': 26.6.5
-
-  '@ts-rest/serverless@3.53.0-rc.1(@ts-rest/core@3.53.0-rc.1(@types/node@26.6.5))':
-    dependencies:
-      '@ts-rest/core': 3.53.0-rc.1(@types/node@26.6.5)
-      itty-router: 5.0.24
-
   '@tsrs/darwin-arm64@0.16.0-ts7.1.0-dev.20260929':
     optional: true
 
@@ -16552,8 +16505,8 @@ snapshots:
     optionalDependencies:
       ajv: 8.20.0
 
-  ajv-formats@3.0.1:
-    dependencies:
+  ajv-formats@3.0.1(ajv@8.20.0):
+    optionalDependencies:
       ajv: 8.20.0
 
   ajv@8.20.0:
@@ -18077,8 +18030,6 @@ snapshots:
   isexe@2.0.0: {}
 
   isexe@3.1.5: {}
-
-  itty-router@5.0.24: {}
 
   jiti@2.7.0: {}
 

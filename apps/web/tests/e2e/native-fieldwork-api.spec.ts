@@ -10,7 +10,8 @@ import { scanAtLocationOut } from "@cubby/schemas/scan";
 import type { APIResponse, Page } from "@playwright/test";
 import { z } from "zod";
 
-import { toWire } from "~/lib/http-api/wire";
+import { toWire } from "~/lib/operation-wire";
+import { browserOperationPath } from "~/lib/browser-operation-path";
 
 import { expect, test } from "./support/e2e-test";
 import { uniqueName } from "./support/e2e-helpers";
@@ -19,7 +20,7 @@ import { createEntityFixture } from "./fixtures/core";
 
 // The native app owns scan, recount, sweep, and the location photo pass; the
 // web screens that used to exercise these endpoints are gone. These tests keep
-// the server contracts the app calls observable at the HTTP boundary.
+// the operation contracts the app calls observable at the HTTP boundary.
 // Transaction rollback and refused-placement retries stay in the real-PG
 // command regressions.
 
@@ -36,15 +37,18 @@ async function post(
   path: string,
   data: JsonBody,
 ) {
-  return page.request.post(`/api/v1/${path}`, {
+  const operation = path.replace("/", ".");
+  return page.request.post(browserOperationPath(operation), {
     headers: { Origin: baseURL ?? "" },
-    data,
+    data: { operation, input: data },
   });
 }
 
 async function json(response: APIResponse) {
-  expect(response.status(), await response.text()).toBe(200);
-  return response.json();
+  const text = await response.text();
+  expect(response.status(), text).toBe(200);
+  // Raw envelope: entityApi's json() is already unwrapped.
+  return JSON.parse(text).data;
 }
 
 test("a staged photo and reviewed placement commit one Product with one each", async ({
@@ -182,9 +186,9 @@ test("a recount commits its resolutions against the loaded snapshot and refuses 
   });
 
   const snapshot = await json(
-    await page.request.get(
-      `/api/v1/inventory/locationSnapshot?locationId=${location.id}`,
-    ),
+    await post(page, baseURL, "inventory/locationSnapshot", {
+      locationId: location.id,
+    }),
   );
   const payload = {
     locationId: location.id,

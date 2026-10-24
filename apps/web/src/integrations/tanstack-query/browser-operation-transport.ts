@@ -84,6 +84,7 @@ const postInit = (
 ): RequestInit => {
   const headers = new Headers(headersInit);
   headers.set("content-type", "application/json");
+  headers.set("x-cubby-value-codec", "superjson");
   return {
     method: "POST",
     headers,

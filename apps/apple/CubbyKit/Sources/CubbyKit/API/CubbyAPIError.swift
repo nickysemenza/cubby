@@ -2,8 +2,8 @@ import Foundation
 
 /// The error CubbyKit throws for any HTTP response with status >= 400.
 ///
-/// Every error status in `/api/v1` carries one bare `ApiError` body — there is no `{ok:false}`
-/// envelope. `detail` is `nil` whenever the body isn't that shape (a 502 from an intermediary
+/// Every failed operation carries one bare `ApiError` body — there is no `{ok:false}` envelope.
+/// `detail` is `nil` whenever the body isn't that shape (a 502 from an intermediary
 /// proxy, for example, is usually an HTML error page).
 public struct CubbyAPIError: Error, LocalizedError, Sendable {
     public let status: Int

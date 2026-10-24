@@ -22,11 +22,10 @@ export const maintenanceContract = defineContract(
   "maintenance",
   {
     requestCatchUp: mutation({
-      exposure: "internal",
+      exposure: "view",
       note: "Apple app launch hook",
       input: z.undefined(),
       output: z.object({ status: z.enum(["queued", "recent"]) }),
-      native: "Request background maintenance when the Apple app opens",
     }),
     run: mutation({
       description:

@@ -77,9 +77,8 @@ const validateConnectedViews = (entities: readonly CompiledEntity[]) => {
  * `pnpm generate` writes every generated output; none is committed. The
  * stages run in order because each later stage imports the earlier stages'
  * files from disk (declarations import the shortcode registry; contracts
- * runtime-import `~/entity/generated/*.gen.ts`; the native contract stage imports
- * `http-contract.gen.ts`), so the later stages load only after the earlier
- * ones are written.
+ * runtime-import `~/entity/generated/*.gen.ts`), so the later stages load
+ * only after the earlier ones are written.
  */
 const main = async () => {
   const unknownArguments = process.argv.slice(2);
@@ -169,7 +168,7 @@ const main = async () => {
   await settle(
     await renderDirectNativeArtifacts(
       kernelHttpActionsFor(entities),
-      startOperations.nativeOperations,
+      startOperations.operationIds,
       entityOutputsFor(entities),
     ),
   );

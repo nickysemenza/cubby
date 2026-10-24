@@ -1,9 +1,9 @@
 # CubbyAPI — generated native models
 
-`pnpm generate` derives the native interface directly from Cubby's operation and
-entity declarations, using the same wire projections as the HTTP handler. Only
-operations marked `native:` are included. There is no OpenAPI document or SwiftPM
-code-generation plugin.
+`pnpm generate` derives the native interface directly from every query and
+mutation in Cubby's operation contracts, using the same JSON wire projections
+as the shared operation handler. There is no per-client operation allowlist or
+SwiftPM code-generation plugin.
 
 `apps/web/generator/http-api/native-contract.ts` collects the projected contracts;
 `swift-models.ts` emits plain Codable, Hashable, Sendable Swift models under
@@ -11,14 +11,14 @@ code-generation plugin.
 Handwritten callers name models through CubbyKit's generated `APITypes.swift`.
 Branded identifiers, dates and JSON codecs live in `CubbyAPISupport`.
 
-`NativeOperations.swift` contains payload-returning methods and
-`OperationRoutes.swift` contains their operation identities and routes. One
-`NativeHTTPTransport` owns URLSession requests, authentication snapshots,
-credential rotation, cancellation, diagnostics and request observation. The
-server's existing HTTP paths, JSON payloads and client-update enforcement remain
-the wire contract. Response headers update credentials and the client-update latch
-before body consumption, including interrupted bodies. Flat queries repeat array
-keys and percent-encode literal plus signs for the server query parser.
+`NativeOperations.swift` contains methods for operation ids and
+`OperationCatalog.swift` lists those ids for the CLI. `NativeHTTPTransport` POSTs
+to `/api/operations/{operationId}` with the operation envelope and owns URLSession
+requests, authentication snapshots, credential rotation, cancellation,
+diagnostics and request observation. Responses use `{ok: true, data}`; errors
+use the shared public `ApiError` body. Response headers update credentials and
+the client-update latch before body consumption, including interrupted bodies.
+Nullable output values decode as Output?.
 
 Manifest-driven editors, commands and entity kernel operations send composed
 JSON directly. Their server declarations remain authoritative for validation;

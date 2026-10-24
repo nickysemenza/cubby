@@ -44,30 +44,14 @@ struct SectionActionRunnerTests {
         let recorder = Recorder()
         RunnerStub.handler.withLock { handler in
             handler = { request in
-                let data = (try? Self.requestBody(request)) ?? Data()
                 let seen = Seen(
                     method: request.httpMethod, path: request.url?.path ?? "",
-                    body: (try? JSONDecoder().decode([String: JSONValue].self, from: data)) ?? [:])
+                    body: StubNetworking.operationFields(of: request))
                 recorder.seen.withLock { $0.append(seen) }
                 return answer(seen)
             }
         }
         return recorder
-    }
-
-    nonisolated private static func requestBody(_ request: URLRequest) throws -> Data {
-        if let body = request.httpBody { return body }
-        guard let stream = request.httpBodyStream else { return Data() }
-        stream.open()
-        defer { stream.close() }
-        var data = Data()
-        var buffer = [UInt8](repeating: 0, count: 4096)
-        while true {
-            let count = stream.read(&buffer, maxLength: buffer.count)
-            if count <= 0 { break }
-            data.append(contentsOf: buffer.prefix(count))
-        }
-        return data
     }
 
     // MARK: - Fixtures

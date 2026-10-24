@@ -397,7 +397,7 @@ it.each([false, true])(
               ? { groups: [{ state: "ready" }] }
               : {};
           response.setHeader("content-type", "application/json");
-          response.end(JSON.stringify(body));
+          response.end(JSON.stringify({ ok: true, data: body }));
         },
         (origin) =>
           readPerformance(

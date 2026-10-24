@@ -72,7 +72,7 @@ Start streams   →  cancellable workflow streams
   `mcpToolGroup` sets the generated tool name (split into a `_read` tool when
   the group mixes reads and writes), while each action name comes from its
   member in snake_case. See [MCP exposure](agents/mcp.md#exposure).
-  HTTP `httpWire` projections can narrow unused optional native input fields
+  Operation wire projections can narrow unused client input fields
   without narrowing browser contracts. The calendar's typed window retains date
   limits and kinds; web queries additionally accept source filters. Use
   `safeExtend` when extending a refined schema so its refinements survive.
@@ -530,24 +530,21 @@ runbook. It does not own builds, deployment or local dev startup.
 
 ## Local scripting
 
-Use `cubby call` for local Mac scripts when the operation is in `call --list`.
-It uses the existing host-specific login, sends JSON and returns JSON without
-exposing the saved credential to the calling agent. Build and sign in through
-the [Apple tooling](../apps/apple/README.md#running); then reuse the built
-`apps/apple/CubbyKit/.build/debug/cubby` executable inside loops rather than
-running the build wrapper for each request. Examples below assume that executable
-is on `PATH`.
+Use `cubby call` for local Mac scripts. Its generated catalog lists the
+capability and view operations available over HTTP. Build and sign in through
+the [Apple tooling](../apps/apple/README.md#running), then reuse the built
+`apps/apple/CubbyKit/.build/debug/cubby` executable inside loops. The JSON body
+is the operation input:
 
 ```sh
 cubby auth login
 cubby call --list
 cubby call entity.list --json-body '{"entity":"shipment","filters":{},"pagination":{"pageIndex":0,"pageSize":10}}'
-cubby call shipment.timeline --query shipmentId=SHIP-EXAMPLE
+cubby call shipment.timeline --json-body '{"shipmentId":"SHIP-EXAMPLE"}'
 ```
 
-`--json-body` takes a JSON string; it has no stdin or body-file mode. In Python,
-pass serialized JSON as a subprocess argument rather than interpolating source
-content into shell code:
+In Python, pass serialized JSON as a subprocess argument rather than
+interpolating source content into shell code:
 
 ```python
 import json
@@ -562,100 +559,86 @@ result = subprocess.run(
 shipments = json.loads(result.stdout)
 ```
 
-CLI operation IDs and HTTP routes come from the generated `native:` catalog.
-MCP tool/action names can differ: `shipments.record` maps to `shipment.record`;
-omit the MCP `action` wrapper from the HTTP/CLI input. Check the catalog before
-choosing a transport. An absent CLI operation may require rebuilding after a
-contract change, or may be MCP-only. For example, Gmail `purchase_import.mail_search` currently
-uses MCP. Neither CLI nor curl exposes operations missing from the HTTP contract.
-
 Use curl when a script needs direct HTTP or a JSON body file. Supply an existing
-API key through `CUBBY_API_KEY`; curl does not reuse the CLI's saved login.
-Keep credentials out of transcripts and committed files. MCP OAuth credentials
-are separate from HTTP session credentials.
+API key through `CUBBY_API_KEY`; curl does not reuse the CLI's saved login. Keep
+credentials out of transcripts and committed files. MCP OAuth credentials are
+separate from HTTP session credentials. The request file contains the complete
+envelope:
+
+```json
+{
+  "operation": "entity.list",
+  "input": {
+    "entity": "shipment",
+    "filters": {},
+    "pagination": { "pageIndex": 0, "pageSize": 10 }
+  }
+}
+```
 
 ```sh
-# payload.json contains the same entity.list body shown above.
 curl --fail-with-body --silent --show-error \
-  'https://cubby.nickysemenza.com/api/v1/entity/list' \
+  'https://cubby.nickysemenza.com/api/operations/entity.list' \
   -H "x-api-key: ${CUBBY_API_KEY}" \
   -H 'Content-Type: application/json' \
   --data-binary @payload.json
 ```
 
-Transport choice preserves the operation's ownership, evidence and mutation
-rules. For long imports, save durable checkpoints, verify retained results and
-resume unresolved inputs. Start with serial requests; add concurrency only
-after checking service limits. A failed request is not proof that a write did
-not commit, so reconcile its result before retrying.
+Cookie-authenticated POSTs need a same-origin `Origin`; API keys and bearer
+tokens do not use ambient cookies. Start with serial requests and add
+concurrency only after checking service limits. A failed write is not proof
+that it did not commit, so reconcile its result before retrying.
 
-## Auth and HTTP API
+## Operation transport
 
-Better-Auth (`better-auth/tanstack-start`), with config in
-`apps/web/src/lib/auth.ts` and `auth-client.ts`. In dev,
-`/api/auth/reference` documents every auth endpoint.
+Browser, Apple, CLI and API-key clients call operations through
+`POST /api/operations/{operationId}`. The browser (superjson codec) reaches
+every query and mutation; other clients reach only capability and view
+operations, and MCP only capability operations. Use `view` for operations
+Apple or the CLI call that should stay off MCP; `internal` operations are the
+web UI's own and are absent from the generated Swift and CLI catalog. The
+request envelope is `{operation, input?}`; a success
+is `{ok: true, data}`, including `data: null` for a nullable output. Errors
+return the public `ApiError` body with an HTTP status derived from its code.
+Plain JSON is the default codec. The browser opts into superjson with
+`x-cubby-value-codec: superjson`; the server replies in the declared codec.
+The browser transport settles refusals as results, so superjson refusals are
+`{ok: false, error}` with HTTP 200, except 403 (cross-origin cookie write), 405
+and 426, which carry the same body under their status. Query batches use `batch~` operation paths and stream one result per item as
+NDJSON with HTTP 200.
 
-Every client reaches an operation through one Auth step and one runner.
-`authenticate(request, policy)` (`apps/web/src/server/http/authenticate.ts`)
-reads exactly one credential (`x-api-key`, else `Authorization: Bearer`, else
-the session cookie), refuses one the endpoint's policy does not accept, and
-returns a `Principal` or a `Challenge` (401/403) the adapter renders in its own
-protocol. Browser dispatch, SSR, workflow streams, `/api/v1`, `/api/mcp`, the
-database-changes and image-companion sockets, `/api/ai/chatgpt` and the native
-workspace session exchange all call it; none reads credentials itself.
+`authenticate(request, policy)` in
+`apps/web/src/server/http/authenticate.ts` is the single authentication step.
+The operation route accepts API keys, bearer tokens and session cookies. A
+cookie request with a `Cookie` header must be same-origin for POST; bearer and
+API-key requests are exempt. A superjson request (the browser) authenticates
+under the browser policy, so it audits as `web` and accepts no API key; other
+requests audit as `api`. The runner owns input/output validation and the
+Apple compatibility gate. An outdated `cubby-apple` build can read, but its
+writes receive HTTP 426 with `UPGRADE_REQUIRED` before operation input parsing;
+a changed read response can still break an old build.
 
-- **Principal.** The verified request context (actor and Ledger Party), the
-  channel (`browser`, `native`, `cli`, `mcp`, `system`), the client build from
-  `User-Agent`, an optional Run delegation (purchase agent), and a deadline
-  budget (MCP only). The endpoint fixes the audit channel, so a hosted native
-  WebView on a browser endpoint still audits as `web`.
-- **Same-origin rule.** A cookie request other than a plain `GET`/`HEAD` (a
-  WebSocket upgrade included) must carry this server's `Origin`, or
-  `Sec-Fetch-Site: same-origin` without one; otherwise 403 before the session
-  is read. Bearer tokens and API keys are exempt.
-- **Apple gate.** The runner refuses a write or stream from an outdated
-  `cubby-apple` build with `UPGRADE_REQUIRED` (HTTP 426); its reads still run.
-- **Runner.** `runStartOperation` selects the context (strong reads), parses
-  input and output, applies the principal's budget, marks calendar state dirty
-  and records the freshness write once a household-changing mutation starts,
-  whatever its outcome.
+The MCP adapter remains at `/api/mcp` as an OAuth 2.1 resource server. Its
+generated tools come from capability operations and their descriptions; the
+`describe` action publishes selected action schemas. View and internal
+operations stay off MCP. The hand-authored entity and entity-read tools retain
+their kernel schemas. MCP operating patterns are in [MCP](agents/mcp.md).
 
-- **API keys.** Create a `cubby_` key at `/account/api-keys` and send it as
-  `x-api-key`. A key grants its owner's full access.
-- **Native sign-in.** Native clients sign in with
-  `Origin: cubby-mobile://` and send `Authorization: Bearer <token>`.
-- **Scope.** HTTP carries exactly the contract members flagged `native:`
-  (`apps/web/src/contracts/*.contract.ts`); the browser reaches every
-  operation through the Start transport and agents through MCP.
-- **Entity kernel.** Entity reads and writes are four POST routes with a
-  free-form JSON body the server parses with the entity's own schema (an
-  invalid body is a 400 with `validationIssues`): `/api/v1/entity/detail`
-  (`{entity, shortcode}`, 404 when absent), `/api/v1/entity/list`
-  (`{entity, filters, pagination: {pageIndex, pageSize}, sort?, groupBy?}`;
-  `pageIndex` is 0-based, `sort` is `[{orderBy, direction}]`),
-  `/api/v1/entity/mutate` (`{action: "create" | "update" | "delete", …}`) and
-  `/api/v1/entity/timeline`. Per-entity filter names, kinds and actions for
-  native clients are generated into CubbyKit's `entity-kernel.json`.
-- **Operations.** Other operations use `GET` (flat input) or `POST` (structured
-  input or mutation) on `/api/v1/{domain}/{op}`. Success bodies are the output
-  itself; errors are `ApiError`. Flat GET filters repeat the key
-  (`tag=a&tag=b`) and nothing is JSON-encoded.
-- **Native contract.** The Swift-only interface is derived directly from the declarations
-  and wire projections by `apps/web/generator/http-api/native-contract.ts`. `pnpm generate`
-  emits plain Swift models, payload-returning methods and one route table; URLSession
-  transport and representation rules are owned by the
-  [native pipeline](../apps/apple/CubbyKit/Sources/CubbyAPI/README.md).
-- **Test client.** `createCubbyClient({ baseUrl, apiKey? })` in
-  `apps/web/tests/e2e/support/http-api-client.ts` wraps the generated ts-rest router
-  `apps/web/src/lib/generated/http-contract.gen.ts`.
-- **After changes.** When contracts, declarations or schemas change, run
-  `pnpm generate`. Wire schemas come from `toWire`
-  (`apps/web/src/lib/http-api/wire.ts`).
+The doorbell at `/api/doorbell` has two topics: `household.changed` and
+`imageProcessing.work`. A ring only signals that state may have changed;
+clients read the source of truth through ordinary operations. The Worker edge
+authenticates the WebSocket upgrade, while the Durable Object socket half
+owns subscriber delivery without importing Auth or PostgreSQL.
 
-The MCP endpoint `/api/mcp` is an OAuth 2.1 resource server; clients enrol
-through dynamic client registration. Tools return structured data only; the
-calling agent presents choices such as `usda_food.search` candidates in its own
-conversation. MCP operating patterns are in [MCP](agents/mcp.md).
+OAuth, Better-Auth endpoints, webhooks, workflow streams, signed uploads and
+calendar feeds keep their protocol-specific routes and payloads. They do not
+use the operation envelope.
+
+`pnpm generate` emits the operation registry and Apple models, operation
+methods and catalog from capability and view members. Inputs and outputs use
+the JSON projection in `apps/web/src/lib/operation-wire.ts`; unsupported wire
+shapes fail generation unless the contract states an exclusion. E2E helpers in
+`apps/web/tests/e2e/support/entity-api.ts` send the same operation envelope.
 
 The MCP usage dashboard service receives its catalog and aggregate ports from
 the browser operation adapter. Only the adapter loads the production MCP server;

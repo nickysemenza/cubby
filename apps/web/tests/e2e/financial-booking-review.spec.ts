@@ -135,17 +135,26 @@ test("reviews spending in the browser with stale and replay guards", async ({
     page.getByText("Not expected", { exact: true }).first(),
   ).toBeVisible();
   const replay = await page.request.post(
-    "/api/v1/financialTransaction/commitBooking",
-    { headers, data: review },
+    "/api/operations/financialTransaction.commitBooking",
+    {
+      headers,
+      data: { operation: "financialTransaction.commitBooking", input: review },
+    },
   );
   expect(replay.ok(), await replay.text()).toBeTruthy();
-  expect(financialBookingResult.parse(await replay.json())).toEqual({
+  expect(financialBookingResult.parse((await replay.json()).data)).toEqual({
     ...result,
     replayed: true,
   });
   const altered = await page.request.post(
-    "/api/v1/financialTransaction/commitBooking",
-    { headers, data: { ...review, name: "Synthetic altered approval" } },
+    "/api/operations/financialTransaction.commitBooking",
+    {
+      headers,
+      data: {
+        operation: "financialTransaction.commitBooking",
+        input: { ...review, name: "Synthetic altered approval" },
+      },
+    },
   );
   expect(altered.ok()).toBeFalsy();
   const purchaseResponse = await entityApi(page.request).get(

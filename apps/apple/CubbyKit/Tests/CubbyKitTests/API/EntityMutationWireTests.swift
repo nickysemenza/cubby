@@ -16,9 +16,8 @@ private final class JSONNullStub: URLProtocol, @unchecked Sendable {
     static func session() -> URLSession { StubNetworking.session(protocolClass: self) }
 }
 
-/// A save is one `entity.mutate` POST whose `data` is the composed body itself: a cleared key is
-/// an explicit `null` and an omitted key means "leave as is". These pin the exact bytes a real
-/// save puts on the wire through the shared URLSession transport.
+/// A save is one `entity.mutate` POST with its composed command inside the JSON operation envelope:
+/// a cleared key is an explicit `null` and an omitted key means "leave as is".
 @Suite("Entity mutate wire shape", .serialized)
 struct EntityMutationWireTests {
     private struct Seen: Sendable {
@@ -49,7 +48,12 @@ struct EntityMutationWireTests {
         JSONNullStub.handler.withLock { handler in
             handler = { request in
                 let data = (try? Self.requestBody(request)) ?? Data()
-                let fields = (try? JSONDecoder().decode([String: JSONValue].self, from: data)) ?? [:]
+                let envelope = (try? JSONDecoder().decode(JSONValue.self, from: data)) ?? .null
+                let operation = request.url?.lastPathComponent
+                if envelope["operation"]?.stringValue != operation {
+                    Issue.record("Operation envelope id did not match the request path")
+                }
+                let fields = envelope["input"]?.objectValue ?? [:]
                 seen.withLock {
                     $0.append(
                         Seen(
@@ -115,7 +119,7 @@ struct EntityMutationWireTests {
             }
         }
         let request = try #require(requests.first)
-        #expect(request.path == "/api/v1/entity/mutate")
+        #expect(request.path == "/api/operations/entity.mutate")
         #expect(
             request.body == [
                 "action": "create", "entity": "inventory",
@@ -137,7 +141,7 @@ struct EntityMutationWireTests {
         let request = try #require(requests.first)
         #expect(requests.count == 1)
         #expect(request.method == "POST")
-        #expect(request.path == "/api/v1/entity/mutate")
+        #expect(request.path == "/api/operations/entity.mutate")
         #expect(
             request.body == [
                 "action": "update", "entity": "product", "id": "PRD-2345",
@@ -160,7 +164,7 @@ struct EntityMutationWireTests {
         let request = try #require(requests.first)
         #expect(requests.count == 1)
         #expect(request.method == "POST")
-        #expect(request.path == OperationRoute.all["photoImport.updateDraft"]?.path)
+        #expect(request.path == "/api/operations/photoImport.updateDraft")
         #expect(request.body["brandId"] == .null)
         #expect(request.body["name"] == .string("Canvas shirt"))
     }

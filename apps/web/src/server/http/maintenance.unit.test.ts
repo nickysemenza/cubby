@@ -10,7 +10,11 @@ describe("maintenance mode", () => {
   });
 
   it("answers API and MCP callers with a structured 503", async () => {
-    for (const path of ["/api/v1/entity/list", "/_serverFn/abc", "/mcp"]) {
+    for (const path of [
+      "/api/operations/entity.list",
+      "/_serverFn/abc",
+      "/mcp",
+    ]) {
       const response = maintenanceResponse(
         new Request(`https://cubby.test${path}`),
       );

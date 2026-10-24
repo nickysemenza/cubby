@@ -17,9 +17,15 @@ export async function createNativeEmojiReviewPeer(
       const body = Buffer.concat(chunks);
       if (
         request.method === "POST" &&
-        request.url === "/api/v1/ai/suggestFieldsReview"
+        request.url === "/api/operations/ai.suggestFieldsReview"
       ) {
-        const input = fieldSuggestionsInput.parse(JSON.parse(body.toString()));
+        const envelope = z
+          .object({
+            operation: z.literal("ai.suggestFieldsReview"),
+            input: z.unknown(),
+          })
+          .parse(JSON.parse(body.toString()));
+        const input = fieldSuggestionsInput.parse(envelope.input);
         if (
           input.entity !== "productCategory" ||
           input.entityId !== categoryId ||
@@ -28,8 +34,9 @@ export async function createNativeEmojiReviewPeer(
           throw new Error("Emoji review fixture received an unexpected target");
         response.writeHead(200, { "content-type": "application/json" });
         response.end(
-          JSON.stringify(
-            fieldSuggestionsReviewOut.parse({
+          JSON.stringify({
+            ok: true,
+            data: fieldSuggestionsReviewOut.parse({
               eligibleTargets: ["emoji"],
               suggestions: [
                 {
@@ -48,7 +55,7 @@ export async function createNativeEmojiReviewPeer(
                 },
               ],
             }),
-          ),
+          }),
         );
         return;
       }

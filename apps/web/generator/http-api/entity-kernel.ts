@@ -3,7 +3,7 @@ import { entityTimelineWindowFor } from "@cubby/schemas/entity-timeline";
 import { entityInspectorMetadata } from "@cubby/schemas/compiler/generated/entity-inspector.gen";
 import { entityKeys } from "@cubby/schemas/entity-summary";
 import { ENTITY_SCHEMA_BINDINGS } from "../../src/server/generated/entity-bindings.gen.ts";
-import { toWire } from "../../src/lib/http-api/wire.ts";
+import { toWire } from "../../src/lib/operation-wire.ts";
 import { generatedHeader } from "../artifacts.ts";
 import type { EntityArtifacts } from "../entities/declarations.ts";
 import type { KernelActions } from "../entities/render/index.ts";

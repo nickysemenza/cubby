@@ -62,13 +62,12 @@ struct DebugClientTests {
                 return (
                     200,
                     ["Set-Cookie": "better-auth.session_data=after; Max-Age=300; Path=/"],
-                    Data("{}".utf8)
+                    Data(#"{"ok":true,"data":{}}"#.utf8)
                 )
             }
         }
 
-        let route = try #require(OperationRoute.all["entity.list"])
-        _ = try await client.call(route)
+        _ = try await client.call(operationID: "entity.list")
 
         #expect(
             await credentials.currentState()?.sessionDataCookies == [

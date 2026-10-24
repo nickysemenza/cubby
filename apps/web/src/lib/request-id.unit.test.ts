@@ -127,9 +127,8 @@ describe("request correlation header", () => {
     await expect(
       fetchWithRequestDiagnostics(
         async () =>
-          Response.json(superjson.serialize({ ok: false, error }), {
-            status: 403,
-          }),
+          // The operation route's shape: the bare error, superjson-encoded.
+          Response.json(superjson.serialize(error), { status: 403 }),
         "/api/operations/entity.list",
         { headers: { "x-cubby-operation": "entity.list" } },
       ),

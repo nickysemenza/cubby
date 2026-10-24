@@ -51,7 +51,6 @@ export const purchaseImportContract = defineContract(
         "Product-only repair: sourceOrderId plus attach_only lines bind existing exact item Expenses using productId or newProduct {kind:'new'}. A known original uses an exact owned preparation. For unknown historical extraction, reviewedPreparation {run,stableOrderId} names a fresh preparation of the unchanged retained Email against this Purchase; new review provenance preserves the unknown historical snapshot. Rechecks ownership, original, item, identity and claims; unchanged repeats return alreadyApplied. Changes no money, payments or Inventory.",
       input: commitAcceptedSourceOrderReconciliationInput,
       output: commitAcceptedSourceOrderReconciliationOut,
-      native: "Reviewed existing Expense Product association",
       invalidates: ["expense", "product", "purchase", "runOnly"],
     }),
     correctEmailRelevance: mutation({
@@ -60,7 +59,6 @@ export const purchaseImportContract = defineContract(
       command: { label: "Correct relevance", confirmation: null },
       input: correctEmailRelevanceInput,
       output: correctEmailRelevanceOut,
-      native: "Correct reviewed Email relevance and recover its original",
       invalidates: ["email"],
     }),
     emailImport: mutation({
@@ -73,7 +71,6 @@ export const purchaseImportContract = defineContract(
       },
       input: emailImportInput,
       output: emailImportOut,
-      native: "Explicit selected Email import",
       invalidates: ["email", "runOnly"],
     }),
     /** Link or dismiss one Email for one Purchase (Purchase, Vendor and Email pages). */
@@ -83,7 +80,6 @@ export const purchaseImportContract = defineContract(
       command: { label: "Update Purchase link", confirmation: null },
       input: emailPurchaseDecisionInput,
       output: emailPurchaseDecisionOut,
-      native: "Link or dismiss an Email for a Purchase",
       // Every Emails section reads the Email list, so the list tag refreshes
       // the Purchase, Vendor and account sections together.
       invalidates: ["email"],
@@ -98,7 +94,6 @@ export const purchaseImportContract = defineContract(
       },
       input: reclassifyEmailsInput,
       output: reclassifyEmailsOut,
-      native: "Reclassify selected Emails from their originals",
       invalidates: ["email", "runOnly"],
     }),
     emailPreviewRerun: mutation({
@@ -111,7 +106,6 @@ export const purchaseImportContract = defineContract(
       },
       input: emailAtChecksum,
       output: rerunEmailPreviewOut,
-      native: "Rerun one Email's extraction preview",
       invalidates: ["email", "runOnly"],
     }),
     prepareReconciliation: mutation({
@@ -119,7 +113,6 @@ export const purchaseImportContract = defineContract(
         "Persist a reviewed source-order preview with line bindings, Expenses, party cents, payments, allocations and spend delta. Changes no ledger or stock. Apply a finding with its reviewedFingerprint; changed state refuses. With sourceOrderId it is an optional read-only preview of commit_accepted_reconciliation.",
       input: prepareSourceOrderReconciliationInput,
       output: prepareSourceOrderReconciliationOut,
-      native: "Reviewed source-order reconciliation preview",
       invalidates: ["runOnly"],
     }),
     /** Persist an immutable proposed import; writes no Purchase, Expense, or Product. */
@@ -156,8 +149,6 @@ export const purchaseImportContract = defineContract(
       input: mailImportOutcomesInput,
       output: mailImportOutcomesOut,
       readPolicy: "strong",
-      transport: "post",
-      native: "Read immutable Mail import outcome history",
     }),
     mailRead: query({
       description:

@@ -40,7 +40,9 @@ export function renderSwiftModels(contract: NativeContract): SwiftModels {
     });
     const claimed = declarationSchemas.get(name);
     if (claimed !== undefined && claimed !== fingerprint)
-      throw new Error(`${name}: incompatible structural model name collision`);
+      throw new Error(
+        `${name}: incompatible structural model name collision (${claimed.slice(0, 180)} != ${fingerprint.slice(0, 180)})`,
+      );
     declarationSchemas.set(name, fingerprint);
     return declarations.has(name);
   };
@@ -88,10 +90,7 @@ export function renderSwiftModels(contract: NativeContract): SwiftModels {
   const modelName = (key: string) => {
     const [io, ...parts] = key.split("/");
     const base = parts.map(pascal).join("");
-    const name =
-      io === "query" && base === "SearchableEntity"
-        ? "QuerySearchableEntity"
-        : base;
+    const name = base;
     const existing = owners.get(name);
     if (existing !== undefined && existing !== key) {
       const clean = (schema: Schema | undefined) =>
@@ -136,11 +135,7 @@ export function renderSwiftModels(contract: NativeContract): SwiftModels {
     const override = Object.entries(TYPE_OVERRIDES).find(
       ([name]) => name === base,
     )?.[1];
-    if (
-      override !== undefined &&
-      !pointer &&
-      !(base === "SearchableEntity" && key!.startsWith("query/"))
-    ) {
+    if (override !== undefined && !pointer) {
       references.set(ref, override);
       return override;
     }
@@ -159,9 +154,18 @@ export function renderSwiftModels(contract: NativeContract): SwiftModels {
   const withoutNull = (schema: Schema): NullableSchema => {
     if (Array.isArray(schema.type) && schema.type.includes("null")) {
       const types = schema.type.filter((type) => type !== "null");
-      if (types.length !== 1)
-        throw new Error("Native scalar has multiple non-null types");
-      return { schema: { ...schema, type: types[0] }, nullable: true };
+      if (types.length === 0)
+        return { schema: { ...schema, type: "null" }, nullable: false };
+      if (types.length === 1)
+        return { schema: { ...schema, type: types[0] }, nullable: true };
+      return {
+        schema: {
+          ...schema,
+          type: undefined,
+          anyOf: types.map((type) => ({ type })),
+        },
+        nullable: true,
+      };
     }
     const arms = schema.anyOf ?? schema.oneOf;
     if (arms?.some((arm) => typeof arm === "object" && arm.type === "null")) {
@@ -247,6 +251,47 @@ export function renderSwiftModels(contract: NativeContract): SwiftModels {
     );
     return name;
   };
+  const emitArray = (schema: Schema, name: string): string => {
+    if (schema.maxItems === 0) return "NativeEmptyArray";
+    if (!Array.isArray(schema.prefixItems)) {
+      if (!schema.items || Array.isArray(schema.items))
+        throw new Error(
+          `${name}: tuple requires an explicit native projection`,
+        );
+      return `[${emit(schema.items, `${name}Item`)}]`;
+    }
+    if (
+      schema.items !== false &&
+      (typeof schema.items !== "object" || Array.isArray(schema.items))
+    )
+      throw new Error(`${name}: unsupported tuple item schema`);
+    const fixed = schema.prefixItems.map((item, index) => ({
+      key: `element${index + 1}`,
+      type: emit(item, `${name}Element${index + 1}`),
+    }));
+    const rest =
+      schema.items === false
+        ? undefined
+        : emit(schema.items, `${name}RestItem`);
+    if (fixed.length === 0 && rest !== undefined) return `[${rest}]`;
+    if (claimDeclaration(name, schema)) return name;
+    const fields = [
+      ...fixed,
+      ...(rest === undefined ? [] : [{ key: "rest", type: `[${rest}]` }]),
+    ];
+    const decodeFixed = fixed.map(
+      ({ key, type }) =>
+        `        self.${identifier(key)} = try container.decode(${type}.self)`,
+    );
+    const encodeFixed = fixed.map(
+      ({ key }) => `        try container.encode(self.${identifier(key)})`,
+    );
+    declarations.set(
+      name,
+      `public struct ${name}: Codable, Hashable, Sendable {\n${fields.map(({ key, type }) => `    public var ${identifier(key)}: ${type}`).join("\n")}\n    public init(${fields.map(({ key, type }) => `${identifier(key)}: ${type}`).join(", ")}) {\n${fields.map(({ key }) => `        self.${identifier(key)} = ${identifier(key)}`).join("\n")}\n    }\n    public init(from decoder: any Decoder) throws {\n        var container = try decoder.unkeyedContainer()\n${decodeFixed.join("\n")}\n${rest === undefined ? `        guard container.isAtEnd else { throw DecodingError.dataCorrupted(.init(codingPath: container.codingPath, debugDescription: ${literal(`Expected exactly ${fixed.length} tuple elements`)})) }\n` : `        var values: [${rest}] = []\n        while !container.isAtEnd { values.append(try container.decode(${rest}.self)) }\n        self.rest = values\n`}    }\n    public func encode(to encoder: any Encoder) throws {\n        var container = encoder.unkeyedContainer()\n${encodeFixed.join("\n")}\n${rest === undefined ? "" : "        for value in self.rest { try container.encode(value) }\n"}    }\n}`,
+    );
+    return name;
+  };
   const emitNode = (raw: Schema | boolean, name: string): string => {
     if (raw === true) return "JSONValue";
     if (raw === false) throw new Error(`${name}: impossible schema`);
@@ -284,16 +329,7 @@ export function renderSwiftModels(contract: NativeContract): SwiftModels {
     if (schema.type === "number") return "Double";
     if (schema.type === "boolean") return "Bool";
     if (schema.type === "null") return "JSONNull";
-    if (schema.type === "array") {
-      if (schema.maxItems === 0) return "NativeEmptyArray";
-      if (schema.prefixItems?.length === 1 && schema.items === false)
-        return `[${emit(schema.prefixItems[0]!, `${name}Item`)}]`;
-      if (!schema.items || Array.isArray(schema.items) || schema.prefixItems)
-        throw new Error(
-          `${name}: tuple requires an explicit native projection`,
-        );
-      return `[${emit(schema.items, `${name}Item`)}]`;
-    }
+    if (schema.type === "array") return emitArray(schema, name);
     const variants = schema.oneOf ?? schema.anyOf;
     if (variants) {
       if (claimDeclaration(name, schema)) return name;
@@ -456,7 +492,7 @@ export function renderSwiftModels(contract: NativeContract): SwiftModels {
     );
   };
   for (const operation of contract.operations) {
-    for (const key of [operation.query, operation.body, operation.output])
+    for (const key of [operation.body, operation.output])
       if (key) refType(`native://${key}`);
   }
   for (const key of contract.records) refType(`native://${key}`);
@@ -469,7 +505,7 @@ export function renderSwiftModels(contract: NativeContract): SwiftModels {
     for (const child of dependencies.get(name) ?? []) mark(child, domain);
   };
   for (const operation of contract.operations) {
-    for (const key of [operation.query, operation.body, operation.output]) {
+    for (const key of [operation.body, operation.output]) {
       if (key) mark(refType(`native://${key}`), operation.id.split(".")[0]!);
     }
   }
