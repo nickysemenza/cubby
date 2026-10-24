@@ -150,6 +150,26 @@ describe("member-only exact original relevance correction", () => {
       },
     };
   }
+  it("does not launder malformed provider attachment encoding into complete proof", async () => {
+    const f = await fixture();
+    f.getAttachment.mockResolvedValue({
+      data: `${pdf.toString("base64url")}\n`,
+      size: pdf.length,
+    });
+    await correctEmailRelevance(ctx.db, f.input, ctx.actor);
+    const [resolution] = (
+      await getDb(ctx.db).select().from(emailClassificationObservation)
+    ).filter((row) => row.stage === "resolution");
+    if (!resolution) throw new Error("Synthetic resolution missing");
+    const published = await ensureEmailAssessment(ctx.db, resolution.id);
+    expect(published.evidence).toMatchObject({
+      originalCapture: {
+        status: "incomplete",
+        problem: { reason: "invalid_encoding" },
+      },
+    });
+    expect(f.getAttachment).toHaveBeenCalledTimes(1);
+  });
   it("applies a domain-supported relevance correction through shared review", async () => {
     const f = await fixture();
     await getDb(ctx.db)

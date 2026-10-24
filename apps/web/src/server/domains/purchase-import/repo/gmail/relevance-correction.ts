@@ -9,11 +9,7 @@ import {
   MAIL_ATTACHMENT_MAX_BYTES,
   MAILBOX_RESEARCH_VERSION,
 } from "@cubby/schemas/mailbox-research";
-import {
-  encodeBase64,
-  encodeBase64Url,
-  decodeBase64Url,
-} from "@cubby/shared/base64";
+import { encodeBase64 } from "@cubby/shared/base64";
 import { and, eq } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
@@ -143,6 +139,7 @@ async function correctionAttachmentBytes(
   normalized: GmailNormalizedMessage,
 ) {
   const bytes = new Map<string, string>();
+  const originalPayloads = new Map<string, string>();
   let total = 0;
   for (const attachment of normalized.attachments) {
     const payload = attachment.dataBase64Url
@@ -152,6 +149,9 @@ async function correctionAttachmentBytes(
             provider.getAttachment(email.messageId, attachment.attachmentId!),
           )
         : {};
+    // Capture must inspect acquired encoding, not a normalized storage representation.
+    if (attachment.attachmentId && payload.data !== undefined)
+      originalPayloads.set(attachment.attachmentId, payload.data);
     const decoded = boundedAttachment(attachment, payload);
     if (!decoded.byteLength)
       throw new Error("Email correction attachment has no available bytes.");
@@ -162,7 +162,7 @@ async function correctionAttachmentBytes(
       );
     bytes.set(attachment.sourceKey, encodeBase64(decoded));
   }
-  return bytes;
+  return { bytes, originalPayloads };
 }
 async function cleanNewCorrectionKeys(
   created: Set<string>,
@@ -206,7 +206,7 @@ export async function correctEmailRelevance(
     throw new Error(
       "Email correction original changed from the reviewed checksum proof.",
     );
-  const bytes = await correctionAttachmentBytes(
+  const { bytes, originalPayloads } = await correctionAttachmentBytes(
     db,
     email,
     provider,
@@ -217,19 +217,7 @@ export async function correctEmailRelevance(
     mailboxId: email.mailboxId,
     messageId: email.messageId,
     message,
-    attachmentPayloads: new Map(
-      normalized.attachments.flatMap((attachment) => {
-        const payload = bytes.get(attachment.sourceKey);
-        return attachment.attachmentId && payload !== undefined
-          ? [
-              [
-                attachment.attachmentId,
-                encodeBase64Url(decodeBase64Url(payload)),
-              ],
-            ]
-          : [];
-      }),
-    ),
+    attachmentPayloads: originalPayloads,
   });
   const uploadKeys = await reserveGmailAttachmentUploads(db, {
     orderMailId: email.orderMailId,
