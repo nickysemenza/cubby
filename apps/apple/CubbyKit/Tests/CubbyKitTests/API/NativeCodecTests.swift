@@ -21,7 +21,6 @@ struct NativeCodecTests {
         #expect(try JSONValue(encoding: plan) == wire)
     }
 
-
     @Test func propagatedImageTextRetainsReceiptAuthorityWithoutModelClaims() throws {
         let owner: JSONValue = [
             "kind": "correction",
