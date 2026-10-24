@@ -65,6 +65,7 @@ import {
   expense,
   financialAccount,
   financialTransaction,
+  image,
   product,
   purchase,
   vendor,
@@ -93,6 +94,7 @@ import {
 } from "~/server/domains/transaction-import/repo/statement-charge";
 import { buildVendorWhereClause } from "~/server/domains/vendor/repo/vendor";
 import { resolvePublicEntityDisplayImageLists } from "~/server/entity-kernel/repo/entity-display-image";
+import { pendingImageDescriptionEligibility } from "~/server/generic/assessment/repo/review-families";
 import { reviewableSuggestionSql } from "~/server/generic/assessment/repo/suggestion-review";
 import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
 import type { QualityReadContext } from "~/server/generic/data-quality/repo/registry";
@@ -110,6 +112,8 @@ import {
   type WorkQueueScope,
 } from "~/server/generic/work-queue/repo/work-queue-projection";
 import {
+  workImageOwners,
+  workImageIsShared,
   workExpenseOwners,
   workExpenseSourceOwners,
   workPurchaseOwners,
@@ -439,6 +443,30 @@ async function workQueueProjection(
     FROM "AssessmentState" s WHERE s.family = ${assessmentFamily.enum.transfer_pair}
       AND s.active AND s.status = ${suggestionStatus.enum.pending}
     HAVING count(*) > 0`);
+  if (admits("image"))
+    selections.push(
+      ...workQueueCandidate(scope, {
+        entity: "image",
+        table: sql`${image} CROSS JOIN LATERAL (
+          SELECT count(*)::int AS total FROM "Assessment" a
+          JOIN "AssessmentState" s ON s.id = a.id
+          WHERE s."recordId" = "Image".id AND ${pendingImageDescriptionEligibility()}
+        ) descriptions`,
+        id: sql`"Image".shortcode`,
+        name: sql`"Image".filename`,
+        owners: workImageOwners(sql`"Image".id`),
+        shared: workImageIsShared(sql`"Image".id`),
+        where: sql`"Image"."deletedAt" IS NULL AND descriptions.total > 0`,
+        details: {
+          source: "suggestion",
+          kind: "review",
+          reason: sql`descriptions.total || CASE WHEN descriptions.total = 1 THEN ' pending image description' ELSE ' pending image descriptions' END`,
+          nextAction:
+            "Open this image's Suggestions for current evidence and any held correction reason.",
+        },
+        key: "image-suggestions",
+      }),
+    );
   // One row for the whole family, never one per Suggestion: the Suggestions
   // page is where each is reviewed. A record's own Work counts its own.
   if (scopeAdmitsUnrecorded(scope) || (scope.record && !scope.check)) {

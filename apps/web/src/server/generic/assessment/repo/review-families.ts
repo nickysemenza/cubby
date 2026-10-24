@@ -652,3 +652,13 @@ export async function touchingAssessmentIds(
   );
   return new Set(rows.map((row) => row.id));
 }
+
+/** Pending image admission shared by Suggestions and record-scoped Work summaries.
+ * Callers join immutable Assessment a and current AssessmentState s.
+ */
+export function pendingImageDescriptionEligibility() {
+  return sql`a.family = ${assessmentFamily.enum.image_description} AND a.served
+    AND s.active AND s.status = ${suggestionStatus.enum.pending}
+    AND s.suppression IS NULL AND ${reviewFamilyDeclarations.image_description.actionable}
+    AND EXISTS (SELECT 1 FROM "Image" i WHERE i.id = s."recordId" AND i."deletedAt" IS NULL)`;
+}

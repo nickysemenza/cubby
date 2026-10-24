@@ -13,6 +13,7 @@ import { currentProductPairPolicySql } from "~/server/domains/product/repo/match
 import { getProductMatchQueue } from "~/server/domains/product/repo/match/product-match-review";
 
 import {
+  pendingImageDescriptionEligibility,
   readAssessmentRecordRefs,
   reviewFamilyDeclarations,
 } from "./review-families";
@@ -70,14 +71,14 @@ async function storedKeys(
   }>(sql`
     SELECT a.id, s.fingerprint, a."createdAt", COALESCE((a.judgment->>${assessmentJudgments.product_pair.keyof().enum.conflict})::boolean, false) AS conflict
     FROM "Assessment" a JOIN "AssessmentState" s ON s.id = a.id
-    WHERE a.family = ${family} AND a.served AND s.active AND s.status = ${suggestionStatus.enum.pending} AND s.suppression IS NULL AND ${declaration.actionable}
+    WHERE ${family === "image_description" ? pendingImageDescriptionEligibility() : sql`a.family = ${family} AND a.served AND s.active AND s.status = ${suggestionStatus.enum.pending} AND s.suppression IS NULL AND ${declaration.actionable}`}
       AND ${assessmentIdScope(query.assessmentIds, sql`a.id`)}
       ${query.filters.runId ? sql`AND s."runId" = (SELECT id FROM "Run" WHERE shortcode = ${query.filters.runId})` : sql``}
       ${
         family === "product_pair"
           ? sql`AND ${currentProductPairPolicySql(sql`a.producer`)} AND EXISTS (SELECT 1 FROM "Product" p WHERE p.id = s."recordId" AND p."deletedAt" IS NULL)
         AND EXISTS (SELECT 1 FROM "Product" p WHERE p.id::text = s.data->>'otherId' AND p."deletedAt" IS NULL)`
-          : sql`AND EXISTS (SELECT 1 FROM "Image" i WHERE i.id = s."recordId" AND i."deletedAt" IS NULL)`
+          : sql``
       }`);
   return rows.map((row) => ({
     family,

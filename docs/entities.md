@@ -2885,7 +2885,11 @@ is not offered: a read-time projection cannot know when work appeared.
 filter into every branch, skips field-level suggestion groups and record-less
 diagnostics, and keeps the list's routing; the generic detail page and
 inspector render those rows as a compact Work queue strip and nothing when
-there are none.
+there are none. Pending image descriptions contribute one Work row per live
+Image, using the same served/pending/suppression admission as Suggestions. Its
+count does not establish application freshness or correction authority. The row
+uses the existing original-source image owner/shared routing and opens the
+Image's Suggestions, including held correction evidence; reads schedule nothing.
 
 The browser reuses shared infinite loading, column controls, checkbox selection,
 Copy codes and responsive source-record inspection. Queue keys identify work
