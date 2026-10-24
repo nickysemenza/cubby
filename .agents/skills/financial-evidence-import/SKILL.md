@@ -6,7 +6,7 @@ description: Import financial evidence into Cubby from Monarch MCP or Monarch, M
 # Financial evidence import
 
 Claude and Codex fetch or parse authorized source evidence, normalize it, and
-call Cubby `source_transaction_records` with `action: "record"`. Read the live tool schema
+call Cubby `finance` with `action: "record"`. Read the live tool schema
 and [source-transaction-record.ts](../../../packages/schemas/src/source-transaction-record.ts) before
 building requests. That schema owns field names and batch limits. This skill
 does not write back to Monarch. Pi integration is deferred.
@@ -35,7 +35,9 @@ surfaces. Order and receipt work uses [purchase-import](../purchase-import/SKILL
    fetched occurrences, IDs, signed totals and visibility for every partition,
    including empty ones. Follow real pagination when available. The investigated
    Monarch tool exposed no cursor/offset and capped detailed responses at 20;
-   recheck the current tools. Use basic enumeration plus targeted detail reads,
+   recheck the current tools. A returned continuation such as `next_offset` is
+   usable only when the live request schema accepts it; a response hint alone
+   does not supply a pagination capability. Use basic enumeration plus targeted detail reads,
    subdividing accounts/date windows until all identities can be enumerated.
    A nontruncated flag, a short page, count agreement or signed-total agreement
    alone does not prove completeness. Reconcile actual identity coverage with
