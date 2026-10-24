@@ -13,7 +13,7 @@ export const AUTOMATIC_RULE_KEYS = [
 ] as const;
 
 /** Field policy receipt revision; the field rule is no longer a measured switch. */
-export const FIELD_ASSIGNMENT_REVISION = "2026-10-20.1";
+export const FIELD_ASSIGNMENT_REVISION = "2026-10-24.1";
 
 export const automaticRuleFamily = z.enum(AUTOMATIC_RULE_FAMILIES);
 export type AutomaticRuleFamily = z.infer<typeof automaticRuleFamily>;
