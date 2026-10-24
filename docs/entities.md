@@ -3105,6 +3105,16 @@ so a sibling product on the same order cannot lend this product its project.
 Each surfaced target retains its witnessed, linked path; multiple projects are
 reported together rather than choosing one implied purpose.
 
+FinancialTransaction Product connections follow confirmed purchase allocations
+through either itemized Expenses or explicit purchase–Product links, with inverse
+paths for Product navigation. A split settlement includes products and vendors
+from every allocated Purchase, deduplicating targets while retaining each
+witnessed path. Transaction context highlights purchase Vendors
+and Products; Product and Vendor context exposes settlement Transactions.
+Merchant-label inference remains a suggestion and never creates a confirmed
+Vendor or Product connection. These are related purchase products, not a claim
+that a partial settlement paid for a particular item or a new source of spend.
+
 `recommendations.forEntity` returns a source reference, a source-context
 `basisKey`, and typed groups; discovery works when recommendations or a
 similarity index are unavailable.
