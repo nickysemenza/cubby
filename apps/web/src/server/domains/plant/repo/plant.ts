@@ -17,18 +17,13 @@ import {
   type ResolvePlantsOutput,
   plantOut,
 } from "@cubby/schemas/plant";
-import { and, eq, inArray } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { uniq } from "es-toolkit";
 
 import { householdLocalDate } from "~/lib/household-date";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
-import {
-  buildPartialUpdateValues,
-  notDeleted,
-  unwrapDb,
-  withTransaction,
-} from "~/server/db/helpers";
+import { buildPartialUpdateValues, withTransaction } from "~/server/db/helpers";
 import type { ListReadIntent } from "~/server/db/helpers/query";
 import { plant } from "~/server/db/schema";
 import {
@@ -41,7 +36,10 @@ import {
   type MutationReceipt,
   defineMutationWriter,
 } from "~/server/entity-kernel/repo/repository";
-import { createEntityCrud } from "~/server/entity-kernel/repo/repository";
+import {
+  createEntityCrud,
+  createEntityRowFetcher,
+} from "~/server/entity-kernel/repo/repository";
 import { resolveNames } from "~/server/entity-kernel/resolve";
 import { logAuditEntry } from "~/server/generic/audit-log/repo/audit-log";
 import { listScaffold } from "~/server/generic/list/repo/list";
@@ -143,18 +141,6 @@ export const listPlantsRead = (
 
 export const listPlants = completeListReader(plantOut, listPlantsRead);
 
-const fetchById = async (
-  db: Database | DrizzleTransaction,
-  id: PlantId,
-): Promise<PlantRow | undefined> => {
-  const [row] = await unwrapDb(db)
-    .select()
-    .from(plant)
-    .where(and(eq(plant.id, id), notDeleted(plant)))
-    .limit(1);
-  return row;
-};
-
 type PlantWrite = Omit<Partial<PlantUpdateData>, "ingredientId"> & {
   ingredientId?: IngredientId | null;
 };
@@ -162,8 +148,8 @@ type PlantWrite = Omit<Partial<PlantUpdateData>, "ingredientId"> & {
 const plantCrud = createEntityCrud({
   table: plant,
   entity: "plant",
-  fetchById,
-  fromDB: async (db, row) => (await hydrate(db, [row]))[0]!,
+  fetchById: createEntityRowFetcher(plant),
+  fromDB: async (db, row: PlantRow) => (await hydrate(db, [row]))[0]!,
   toUpdate: (data: PlantWrite) => buildPartialUpdateValues(data),
   auditUpdateFields: [...entityFieldModels.plant.audit],
 });

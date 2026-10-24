@@ -16,17 +16,12 @@ import type {
 } from "@cubby/schemas/identifiers";
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
-import { and, eq, inArray } from "drizzle-orm";
+import { inArray } from "drizzle-orm";
 import { uniq } from "es-toolkit";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
-import {
-  buildPartialUpdateValues,
-  notDeleted,
-  unwrapDb,
-  withTransaction,
-} from "~/server/db/helpers";
+import { buildPartialUpdateValues, withTransaction } from "~/server/db/helpers";
 import type { ListReadIntent } from "~/server/db/helpers/query";
 import { device, imageSighting, runPushRegistration } from "~/server/db/schema";
 import { deriveAndStoreImageCapture } from "~/server/domains/image/repo/image-capture-derivation";
@@ -41,7 +36,10 @@ import {
   listReadOn,
   onDb,
 } from "~/server/entity-kernel/repo/repository";
-import { createEntityCrud } from "~/server/entity-kernel/repo/repository";
+import {
+  createEntityCrud,
+  createEntityRowFetcher,
+} from "~/server/entity-kernel/repo/repository";
 import { logAuditEntry } from "~/server/generic/audit-log/repo/audit-log";
 import { listScaffold } from "~/server/generic/list/repo/list";
 import type { ListProjection } from "~/server/generic/list/repo/list-contracts";
@@ -119,23 +117,11 @@ export const listDevicesRead = (
 
 export const listDevices = completeListReader(deviceOut, listDevicesRead);
 
-const fetchById = async (
-  db: Database | DrizzleTransaction,
-  id: DeviceId,
-): Promise<DeviceRow | undefined> => {
-  const [row] = await unwrapDb(db)
-    .select()
-    .from(device)
-    .where(and(eq(device.id, id), notDeleted(device)))
-    .limit(1);
-  return row;
-};
-
 const deviceCrud = createEntityCrud({
   table: device,
   entity: "device",
-  fetchById,
-  fromDB: async (db, row) => (await hydrate(db, [row]))[0]!,
+  fetchById: createEntityRowFetcher(device),
+  fromDB: async (db, row: DeviceRow) => (await hydrate(db, [row]))[0]!,
   toUpdate: (data: {
     name?: string;
     appVersion?: string | null;

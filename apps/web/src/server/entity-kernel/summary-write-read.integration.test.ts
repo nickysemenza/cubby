@@ -5,7 +5,7 @@ import { withTestDb } from "tooling/test-setup";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { z } from "zod";
 
-import { getDb, unwrapDb } from "~/server/db/helpers";
+import { getDb } from "~/server/db/helpers";
 import { ingredient } from "~/server/db/schema";
 import { findOrCreateIngredient } from "~/server/domains/ingredient/repo/crud";
 import { createInventoryEntry } from "~/server/domains/inventory/repo/crud";
@@ -15,7 +15,10 @@ import {
   executeEntityAs,
 } from "~/server/entity-kernel";
 import { executeEntityMutationRead } from "~/server/entity-kernel/execute";
-import { createEntityCrud } from "~/server/entity-kernel/repo/repository";
+import {
+  createEntityCrud,
+  createEntityRowFetcher,
+} from "~/server/entity-kernel/repo/repository";
 import { createMcpServer } from "~/server/mcp/server";
 import { captureBackgroundQueue } from "~/server/testing/background-queue";
 import {
@@ -308,10 +311,7 @@ describe("summary mutation output demand", () => {
     const crud = createEntityCrud({
       entity: "ingredient",
       table: ingredient,
-      fetchById: (db, id) =>
-        unwrapDb(db).query.ingredient.findFirst({
-          where: eq(ingredient.id, id),
-        }),
+      fetchById: createEntityRowFetcher(ingredient),
       fromDB: () => {
         throw new Error("Unrequested non-Product detail hydration");
       },
@@ -332,6 +332,12 @@ describe("summary mutation output demand", () => {
         columns: { name: true },
       }),
     ).toEqual({ name: "Synthetic renamed ingredient" });
+    await getDb(ctx.db)
+      .update(ingredient)
+      .set({ deletedAt: new Date() })
+      .where(eq(ingredient.id, seeded.id));
+    expect(await crud.getByIDOrNull(ctx.db, seeded.id)).toBeNull();
+    await expect(crud.getByID(ctx.db, seeded.id)).rejects.toThrow("not found");
   });
   it("creates and updates Recipe Ingredient and Location through reference-only MCP commands", async () => {
     const context = entityKernelContextSchema.parse(

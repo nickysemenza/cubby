@@ -13,7 +13,7 @@ import {
   type SpendingCategoryUpdateData,
   type SpendingCategoryFilters,
 } from "@cubby/schemas/spending-category";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, inArray, sql } from "drizzle-orm";
 import { uniq } from "es-toolkit";
 import { z } from "zod";
 
@@ -43,6 +43,7 @@ import {
 } from "~/server/entity-kernel/repo/repository";
 import {
   createEntityCrud,
+  createEntityRowFetcher,
   defineRepository,
   asActor,
   onDb,
@@ -208,15 +209,8 @@ export const readSpendingCategories = listRead;
 const crud = createEntityCrud({
   table: spendingCategory,
   entity: "spendingCategory",
-  fetchById: async (db, id) =>
-    (
-      await unwrapDb(db)
-        .select()
-        .from(spendingCategory)
-        .where(and(eq(spendingCategory.id, id), notDeleted(spendingCategory)))
-        .limit(1)
-    )[0],
-  fromDB: async (db, row) =>
+  fetchById: createEntityRowFetcher(spendingCategory),
+  fromDB: async (db, row: Row) =>
     spendingCategoryOut.parse((await hydrate(db, [row], { kind: "full" }))[0]),
   toUpdate: (
     data: Omit<SpendingCategoryUpdateData, "parentId"> & {

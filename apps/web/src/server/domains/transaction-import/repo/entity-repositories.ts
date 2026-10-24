@@ -30,6 +30,7 @@ import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import {
   asActor,
   createEntityReader,
+  createEntityRowFetcher,
   defineMutationWriter,
   type MutationReceipt,
   defineRepository,
@@ -331,19 +332,7 @@ const sourceReader = createEntityReader<
   ReaderDb
 >({
   entity: "sourceTransactionRecord",
-  fetchById: async (db, id) =>
-    (
-      await unwrapDb(db)
-        .select()
-        .from(sourceTransactionRecord)
-        .where(
-          and(
-            eq(sourceTransactionRecord.id, id),
-            notDeleted(sourceTransactionRecord),
-          ),
-        )
-        .limit(1)
-    )[0],
+  fetchById: createEntityRowFetcher(sourceTransactionRecord),
   fromDB: async (db, row) =>
     sourceTransactionRecordOut.parse(
       (
@@ -361,14 +350,7 @@ const importReader = createEntityReader<
   ReaderDb
 >({
   entity: "transactionImport",
-  fetchById: async (db, id) =>
-    (
-      await unwrapDb(db)
-        .select()
-        .from(transactionImport)
-        .where(and(eq(transactionImport.id, id), notDeleted(transactionImport)))
-        .limit(1)
-    )[0],
+  fetchById: createEntityRowFetcher(transactionImport),
   fromDB: async (db, row) =>
     transactionImportOut.parse(
       (

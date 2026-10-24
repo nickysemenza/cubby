@@ -81,7 +81,10 @@ and retain their behavior checks; passing the helper's own tests proves only tha
 - Kernel commands: `executeEntity` / `executeEntityAs`
   (`apps/web/src/server/entity-kernel/execute.ts`).
 - Repositories: `defineRepository`, `createEntityReader`, `createEntityCrud`
-  (`server/entity-kernel/repo/repository.ts`), `declaredFilterPredicates` /
+  (`server/entity-kernel/repo/repository.ts`). `createEntityRowFetcher(table)`
+  owns full stored-row reads by ID with the live-row predicate; audited updates
+  use the same selection. Keep custom projections and relation-loaded fetches
+  in their owning repository. `declaredFilterPredicates` /
   `listScaffold` (`server/generic/list/repo/list.ts`; public rows go through `read`,
   explicit repository-only selections through `raw`,
   passing its own `where`, `orderBy`, plain `select`, relation `load`, or joined

@@ -26,6 +26,7 @@ import {
 } from "~/server/entity-kernel/repo/repository";
 import {
   createEntityReader,
+  createEntityRowFetcher,
   listReadOn,
 } from "~/server/entity-kernel/repo/repository";
 import { listScaffold } from "~/server/generic/list/repo/list";
@@ -170,14 +171,7 @@ const reader = createEntityReader<
   Database | DrizzleTransaction
 >({
   entity: "run",
-  fetchById: async (db, id) => {
-    const [row] = await unwrapDb(db)
-      .select()
-      .from(runTable)
-      .where(and(eq(runTable.id, id), notDeleted(runTable)))
-      .limit(1);
-    return row;
-  },
+  fetchById: createEntityRowFetcher(runTable),
   fromDB: async (db, row) => (await hydrate(db, [row]))[0]!,
 });
 

@@ -69,7 +69,10 @@ import {
   listReadOn,
   onDb,
 } from "~/server/entity-kernel/repo/repository";
-import { createEntityCrud } from "~/server/entity-kernel/repo/repository";
+import {
+  createEntityCrud,
+  createEntityRowFetcher,
+} from "~/server/entity-kernel/repo/repository";
 import { logAuditEntry } from "~/server/generic/audit-log/repo/audit-log";
 import { hierarchyDescendantsSql } from "~/server/generic/list/repo/hierarchy";
 import { listScaffold } from "~/server/generic/list/repo/list";
@@ -460,15 +463,8 @@ export const listProductCategories = completeListReader(
 const crud = createEntityCrud({
   table: productCategory,
   entity: "productCategory",
-  fetchById: async (db, id) => {
-    const [row] = await unwrapDb(db)
-      .select()
-      .from(productCategory)
-      .where(and(eq(productCategory.id, id), notDeleted(productCategory)))
-      .limit(1);
-    return row;
-  },
-  fromDB: async (db, row) => (await hydrate(db, [row]))[0]!,
+  fetchById: createEntityRowFetcher(productCategory),
+  fromDB: async (db, row: CategoryRow) => (await hydrate(db, [row]))[0]!,
   toUpdate: (values: Partial<typeof productCategory.$inferInsert>) => values,
   auditUpdateFields: [...entityFieldModels.productCategory.audit],
 });
