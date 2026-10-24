@@ -1,4 +1,5 @@
 import {
+  financialBookingInput,
   financialSpendingAdvice,
   financialSpendingSource,
 } from "@cubby/schemas/financial-booking";
@@ -18,6 +19,7 @@ import {
   expense,
   purchase,
   financialAccount,
+  ledgerParty,
   financialTransaction as transactionTable,
   financialTransactionAllocation,
   spendingCategory,
@@ -25,6 +27,10 @@ import {
 } from "~/server/db/schema";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
+import {
+  previewFinancialBooking,
+  commitFinancialBooking,
+} from "./financial-booking";
 import {
   previewFinancialSpending,
   commitFinancialSpending,
@@ -39,15 +45,24 @@ import { updateFinancialTransaction } from "./financial-transaction";
 // refund silently passes; unknown posting status blocks classified spending.
 describe("shared spending booking", () => {
   const ctx = withTestDb();
-  async function fixture() {
+  async function fixture(sharedCard = false) {
     const owner = await createRepoIdentity(ctx, "ledgerParty", {
       name: "Synthetic spending member",
       kind: "member",
     });
+    const household = sharedCard
+      ? await createRepoIdentity(ctx, "ledgerParty", {
+          name: "Synthetic shared funds",
+          kind: "household",
+        })
+      : null;
     const account = await createRepoIdentity(ctx, "financialAccount", {
       name: "Synthetic spending account",
-      identity: { kind: "cash" },
-      ledgerPartyId: owner.output.id,
+      identity: sharedCard
+        ? { kind: "credit_card", issuer: "Example Bank", network: "visa" }
+        : { kind: "cash" },
+      ledgerPartyId: household?.output.id ?? owner.output.id,
+      primaryCardholderId: sharedCard ? owner.output.id : null,
       provisional: false,
     });
     const vendor = await createRepoIdentity(ctx, "vendor", {
@@ -81,6 +96,329 @@ describe("shared spending booking", () => {
     });
     return { owner, account, vendor, category, transaction, advice };
   }
+  it.each(["spending", "direct"] as const)(
+    "books a household card's sole live member once through %s booking",
+    async (writer) => {
+      const { owner, account, transaction, vendor, category, advice } =
+        await fixture(true);
+      const request = { transactionId: transaction.output.id, advice };
+      const page = await prepareFinancialSpendingPage(ctx.db, {
+        accountIds: [account.entityId],
+        transactionIds: [transaction.entityId],
+      });
+      const cached = await countTestDbQueries(() =>
+        previewFinancialSpending(ctx.db, request, undefined, page),
+      );
+      expect(cached.tables).not.toContain("LedgerParty");
+      const plan = await previewFinancialSpending(ctx.db, request);
+      expect(cached.result).toEqual(plan);
+      expect(plan).toMatchObject({
+        status: "ready",
+        purchaserId: owner.output.id,
+      });
+      const direct = await previewFinancialBooking(
+        ctx.db,
+        financialBookingInput.parse({
+          transactionId: transaction.output.id,
+          vendorId: vendor.output.id,
+          spendingCategoryId: category.id,
+        }),
+      );
+      expect(direct).toMatchObject({
+        purchaserId: owner.output.id,
+        funderName: "Synthetic shared funds",
+      });
+      const commit =
+        writer === "spending"
+          ? () => commitFinancialSpending(ctx.db, plan, ctx.actor)
+          : () => commitFinancialBooking(ctx.db, direct, ctx.actor);
+      const booked = await commit();
+      expect(booked).toMatchObject({ replayed: false });
+      expect(await commit()).toMatchObject({ replayed: true });
+      expect(
+        await getDb(ctx.db).select({ cost: expense.cost }).from(expense),
+      ).toEqual([{ cost: 42.5 }]);
+      expect(
+        await getDb(ctx.db)
+          .select({ purchaser: purchase.purchaserOverrideId })
+          .from(purchase),
+      ).toEqual([{ purchaser: owner.entityId }]);
+    },
+  );
+  it.each([
+    [null, null, false],
+    ["2026-05-04", "2026-05-10", false],
+    ["2026-04-01", "2026-05-04", false],
+    [null, "2026-05-03", true],
+    ["2026-05-05", null, true],
+  ] as const)(
+    "uses inclusive sole-access bounds %s through %s (ready=%s)",
+    async (validFrom, validTo, ready) => {
+      const { owner, account, transaction, vendor, category, advice } =
+        await fixture(true);
+      const other = await createRepoIdentity(ctx, "ledgerParty", {
+        name: "Synthetic authorized member",
+        kind: "member",
+      });
+      await getDb(ctx.db)
+        .update(financialAccount)
+        .set({
+          authorizedUsers: [
+            { ledgerPartyId: other.output.id, validFrom, validTo },
+          ],
+        })
+        .where(eq(financialAccount.id, account.entityId));
+      const request = { transactionId: transaction.output.id, advice };
+      const page = await prepareFinancialSpendingPage(ctx.db, {
+        accountIds: [account.entityId],
+        transactionIds: [transaction.entityId],
+      });
+      const plan = await previewFinancialSpending(ctx.db, request);
+      expect(
+        await previewFinancialSpending(ctx.db, request, undefined, page),
+      ).toEqual(plan);
+      expect(plan.status).toBe(ready ? "ready" : "review_required");
+      const direct = await previewFinancialBooking(
+        ctx.db,
+        financialBookingInput.parse({
+          transactionId: transaction.output.id,
+          vendorId: vendor.output.id,
+          spendingCategoryId: category.id,
+        }),
+      ).then(
+        (review) => ({ purchaserId: review.purchaserId }),
+        (error: unknown) => ({
+          error: error instanceof Error ? error.message : String(error),
+        }),
+      );
+      const held = { error: expect.stringMatching(/live member purchaser/) };
+      expect(direct).toEqual(ready ? { purchaserId: owner.output.id } : held);
+    },
+  );
+  it("uses the projected posting date for sole access when the charge date is absent", async () => {
+    const { owner, account, transaction, vendor, category, advice } =
+      await fixture(true);
+    await updateFinancialTransaction(
+      ctx.db,
+      transaction.output.id,
+      {
+        transactionDate: null,
+        postedDate: "2026-05-04",
+      },
+      ctx.actor,
+    );
+    await getDb(ctx.db)
+      .update(financialAccount)
+      .set({
+        authorizedUsers: [
+          {
+            ledgerPartyId: owner.output.id,
+            validFrom: "2026-05-05",
+            validTo: null,
+          },
+        ],
+      })
+      .where(eq(financialAccount.id, account.entityId));
+    const request = { transactionId: transaction.output.id, advice };
+    expect((await previewFinancialSpending(ctx.db, request)).status).toBe(
+      "ready",
+    );
+    const page = await prepareFinancialSpendingPage(ctx.db, {
+      accountIds: [account.entityId],
+      transactionIds: [transaction.entityId],
+      sources: [{ amount: 42.5, postedDate: "2026-05-05" }],
+    });
+    const attachment = {
+      settlementRef: {
+        source: "synthetic-bank",
+        externalId: "synthetic-posted-source",
+      },
+      fields: { postedDate: "2026-05-05" },
+    };
+    const projected = await previewFinancialSpending(
+      ctx.db,
+      request,
+      attachment,
+    );
+    expect(projected.status).toBe("review_required");
+    expect(
+      await previewFinancialSpending(ctx.db, request, attachment, page),
+    ).toEqual(projected);
+    await expect(
+      previewFinancialBooking(
+        ctx.db,
+        financialBookingInput.parse({
+          transactionId: transaction.output.id,
+          vendorId: vendor.output.id,
+          spendingCategoryId: category.id,
+        }),
+        { postedDate: "2026-05-05" },
+      ),
+    ).rejects.toThrow(/live member purchaser/);
+  });
+  it("preserves live member owner precedence over shared card access", async () => {
+    const { owner, account, transaction, vendor, category, advice } =
+      await fixture(true);
+    const other = await createRepoIdentity(ctx, "ledgerParty", {
+      name: "Synthetic other holder",
+      kind: "member",
+    });
+    await getDb(ctx.db)
+      .update(financialAccount)
+      .set({
+        ledgerPartyId: owner.entityId,
+        primaryCardholderId: other.entityId,
+        authorizedUsers: [
+          { ledgerPartyId: owner.output.id, validFrom: null, validTo: null },
+        ],
+      })
+      .where(eq(financialAccount.id, account.entityId));
+    expect(
+      await previewFinancialSpending(ctx.db, {
+        transactionId: transaction.output.id,
+        advice,
+      }),
+    ).toMatchObject({ status: "ready", purchaserId: owner.output.id });
+    const direct = await previewFinancialBooking(
+      ctx.db,
+      financialBookingInput.parse({
+        transactionId: transaction.output.id,
+        vendorId: vendor.output.id,
+        spendingCategoryId: category.id,
+      }),
+    );
+    expect(direct.purchaserId).toBe(owner.output.id);
+    expect(
+      await commitFinancialBooking(ctx.db, direct, ctx.actor),
+    ).toMatchObject({ replayed: false });
+    expect(
+      await commitFinancialBooking(ctx.db, direct, ctx.actor),
+    ).toMatchObject({ replayed: true });
+    expect(
+      await getDb(ctx.db).select({ cost: expense.cost }).from(expense),
+    ).toEqual([{ cost: 42.5 }]);
+  });
+  it.each([
+    "missing",
+    "deleted",
+    "nonmember",
+    "provisional",
+    "deleted-account",
+    "noncard",
+  ] as const)("holds a shared card with %s authority", async (state) => {
+    const { owner, account, transaction, vendor, category, advice } =
+      await fixture(true);
+    if (state === "deleted" || state === "nonmember")
+      await getDb(ctx.db)
+        .update(ledgerParty)
+        .set(
+          state === "deleted" ? { deletedAt: new Date() } : { kind: "guest" },
+        )
+        .where(eq(ledgerParty.id, owner.entityId));
+    else
+      await getDb(ctx.db)
+        .update(financialAccount)
+        .set(
+          state === "missing"
+            ? { primaryCardholderId: null }
+            : state === "provisional"
+              ? { provisional: true }
+              : state === "noncard"
+                ? { identity: { kind: "cash" } }
+                : { deletedAt: new Date() },
+        )
+        .where(eq(financialAccount.id, account.entityId));
+    const spending = await previewFinancialSpending(ctx.db, {
+      transactionId: transaction.output.id,
+      advice,
+    }).then(
+      (plan) => plan.status,
+      (error: unknown) =>
+        error instanceof Error ? error.message : String(error),
+    );
+    const missingAccount = expect.stringMatching(/no longer live/);
+    expect(spending).toEqual(
+      state === "deleted-account" ? missingAccount : "review_required",
+    );
+    await expect(
+      previewFinancialBooking(
+        ctx.db,
+        financialBookingInput.parse({
+          transactionId: transaction.output.id,
+          vendorId: vendor.output.id,
+          spendingCategoryId: category.id,
+        }),
+      ),
+    ).rejects.toThrow(/live member purchaser/);
+    expect(await getDb(ctx.db).select().from(expense)).toEqual([]);
+  });
+  it.each(["access", "holder"] as const)(
+    "refuses changed sole-card %s before commit and accepted-plan replay",
+    async (state) => {
+      const { owner, account, transaction, vendor, category, advice } =
+        await fixture(true);
+      const request = { transactionId: transaction.output.id, advice };
+      const plan = await previewFinancialSpending(ctx.db, request);
+      expect(plan.status).toBe("ready");
+      const direct = await previewFinancialBooking(
+        ctx.db,
+        financialBookingInput.parse({
+          transactionId: transaction.output.id,
+          vendorId: vendor.output.id,
+          spendingCategoryId: category.id,
+        }),
+      );
+      const change = () =>
+        state === "access"
+          ? getDb(ctx.db)
+              .update(financialAccount)
+              .set({
+                authorizedUsers: [
+                  {
+                    ledgerPartyId: owner.output.id,
+                    validFrom: null,
+                    validTo: null,
+                  },
+                ],
+              })
+              .where(eq(financialAccount.id, account.entityId))
+          : getDb(ctx.db)
+              .update(ledgerParty)
+              .set({ deletedAt: new Date() })
+              .where(eq(ledgerParty.id, owner.entityId));
+      const restore = () =>
+        state === "access"
+          ? getDb(ctx.db)
+              .update(financialAccount)
+              .set({ authorizedUsers: [] })
+              .where(eq(financialAccount.id, account.entityId))
+          : getDb(ctx.db)
+              .update(ledgerParty)
+              .set({ deletedAt: null })
+              .where(eq(ledgerParty.id, owner.entityId));
+      await change();
+      await expect(
+        commitFinancialSpending(ctx.db, plan, ctx.actor),
+      ).rejects.toThrow(/changed|review/i);
+      await expect(
+        commitFinancialBooking(ctx.db, direct, ctx.actor),
+      ).rejects.toThrow(/changed|review|not found/i);
+      expect(await getDb(ctx.db).select().from(expense)).toEqual([]);
+      await restore();
+      await commitFinancialSpending(
+        ctx.db,
+        await previewFinancialSpending(ctx.db, request),
+        ctx.actor,
+      );
+      await change();
+      await expect(
+        commitFinancialSpending(ctx.db, plan, ctx.actor),
+      ).rejects.toThrow(/changed|review/i);
+      expect(
+        await getDb(ctx.db).select({ cost: expense.cost }).from(expense),
+      ).toEqual([{ cost: 42.5 }]);
+    },
+  );
   it("keeps complete spending previews identical with page-loaded receipt graphs", async () => {
     const { account, vendor, transaction, advice, category } = await fixture();
     for (const [date, cost] of [

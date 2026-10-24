@@ -31,6 +31,11 @@ import {
 } from "~/server/db/schema";
 import { createExpense } from "~/server/domains/expense/repo/crud";
 import { spendingClassificationRevision } from "~/server/domains/expense/repo/expense-category-resolution";
+import {
+  accountPurchaserKey,
+  financialAccountPurchaser,
+  loadAccountPurchaserProofs,
+} from "~/server/domains/financial-account/repo/purchaser";
 import { lockFinancialEvidenceKeys } from "~/server/domains/financial-transaction/repo/financial-evidence";
 import { createPurchase } from "~/server/domains/purchase/repo/purchase";
 import { resolveNames } from "~/server/entity-kernel/resolve";
@@ -288,20 +293,23 @@ export async function previewFinancialBooking(
     where: (account, { eq }) => eq(account.id, row.accountId),
     with: { ledgerParty: true },
   });
+  const date = row.transactionDate ?? row.postedDate;
+  const purchaserProof =
+    account && !financialAccountPurchaser(account, undefined)
+      ? (
+          await loadAccountPurchaserProofs(db, [
+            { accountId: account.id, date },
+          ])
+        ).get(accountPurchaserKey(account.id, date))
+      : undefined;
   if (!purchaseId && !input.purchaserId) {
-    if (
-      account?.ledgerParty?.kind !== "member" ||
-      account.ledgerParty.deletedAt ||
-      account.deletedAt ||
-      account.provisional
-    )
+    const purchaser =
+      account && financialAccountPurchaser(account, purchaserProof);
+    if (!purchaser)
       return fail(
         "Choose a live member purchaser before creating a bare Purchase.",
       );
-    input.purchaserId = parseShortcodeFor(
-      "ledgerParty",
-      account.ledgerParty.shortcode,
-    );
+    input.purchaserId = parseShortcodeFor("ledgerParty", purchaser.shortcode);
   }
   const decision = {
     ...input,
@@ -317,6 +325,7 @@ export async function previewFinancialBooking(
     graph,
     allocations,
     account,
+    purchaserProof,
     category,
     classificationRevision: await spendingClassificationRevision(db),
   });

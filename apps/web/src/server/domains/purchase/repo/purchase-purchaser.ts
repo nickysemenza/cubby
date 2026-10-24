@@ -2,6 +2,7 @@ import type { LedgerPartyShortcode } from "@cubby/schemas/identifiers";
 import { ledgerPartyKind } from "@cubby/schemas/ledger-party";
 import { type SQL, sql } from "drizzle-orm";
 
+import { soleCardAccessSql } from "~/server/domains/financial-account/repo/purchaser";
 import {
   purchaseMailMembersSql,
   purchaseMembersSql,
@@ -46,11 +47,8 @@ const purchasePurchasersSql = (purchases: SQL) => sql`
   ), paying AS (
     -- A paying card is a live account with a positive allocation; its holder
     -- alone uses it when no authorized user's period covers the order date.
-    SELECT settled.*, settled.holder IS NOT NULL AND settled.date IS NOT NULL AND NOT EXISTS (
-      SELECT 1 FROM jsonb_array_elements(settled."authorizedUsers") membership
-      WHERE (membership->>'validFrom' IS NULL OR (membership->>'validFrom')::date <= settled.date)
-        AND (membership->>'validTo' IS NULL OR settled.date <= (membership->>'validTo')::date)
-    ) AS sole
+    SELECT settled.*, settled.holder IS NOT NULL AND
+      ${soleCardAccessSql(sql`settled."authorizedUsers"`, sql`settled.date`)} AS sole
     FROM settled
     WHERE settled.amount > 0 AND settled.account_deleted_at IS NULL
   ), cards AS (
