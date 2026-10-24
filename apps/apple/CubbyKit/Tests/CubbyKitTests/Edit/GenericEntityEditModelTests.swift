@@ -221,7 +221,8 @@ struct GenericEntityEditModelTests {
     @Test func acknowledgingSavedCategoryPreservesNewerDraftAndSiblingChanges() throws {
         let model = GenericEntityEditModel(
             descriptor: EntityCatalog[.expense], mode: .update(id: "EXP-4K7M"),
-            client: try makeClient(), original: ["lineKind": "principal", "spendingCategoryId": .null, "notes": "Saved note"])
+            client: try makeClient(),
+            original: ["lineKind": "principal", "spendingCategoryId": .null, "notes": "Saved note"])
         model.draft["notes"] = .string("Unsaved sibling")
         model.draft["spendingCategoryId"] = .string("SPC-8K7M")
         model.acknowledgeSavedField(
@@ -235,7 +236,8 @@ struct GenericEntityEditModelTests {
     @Test func acknowledgedCategoryDoesNotReplayOnLaterSiblingSave() throws {
         let model = GenericEntityEditModel(
             descriptor: EntityCatalog[.expense], mode: .update(id: "EXP-4K7M"),
-            client: try makeClient(), original: ["lineKind": "principal", "spendingCategoryId": .null, "notes": "Saved note"])
+            client: try makeClient(),
+            original: ["lineKind": "principal", "spendingCategoryId": .null, "notes": "Saved note"])
         model.draft["notes"] = .string("Unsaved sibling")
         model.acknowledgeSavedField(
             "spendingCategoryId", value: .string("SPC-4K7M"), reviewedDraftValue: .null)
