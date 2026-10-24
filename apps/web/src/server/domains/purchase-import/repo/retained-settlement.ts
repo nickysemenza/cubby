@@ -42,6 +42,7 @@ import {
 } from "~/server/domains/financial-transaction/repo/financial-transaction-allocations";
 import {
   purchasePayingAccountIdsSql,
+  purchaseRefundAccountIdsSql,
   transactionSettlementConflicts,
 } from "~/server/domains/financial-transaction/repo/settlement-conflicts";
 import {
@@ -350,9 +351,11 @@ async function settleableCharges(
   const [paying] = needsStoredAccount
     ? await tx
         .select({
-          ids: sql<
-            string[] | null
-          >`${purchasePayingAccountIdsSql('"Purchase"')}`,
+          ids: sql<string[] | null>`${
+            input.payments.every((payment) => payment.amount < 0)
+              ? purchaseRefundAccountIdsSql('"Purchase"')
+              : purchasePayingAccountIdsSql('"Purchase"')
+          }`,
         })
         .from(purchase)
         .where(eq(purchase.id, input.purchaseId))

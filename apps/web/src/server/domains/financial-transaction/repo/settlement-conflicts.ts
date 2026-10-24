@@ -227,6 +227,20 @@ export const purchasePayingAccountIdsSql = (purchaseAlias: string) => {
 )`;
 };
 
+/** Refund evidence names its destination independently of original paying-account links. */
+export const purchaseRefundAccountIdsSql = (purchaseAlias: string) => {
+  const purchase = sql.raw(purchaseAlias);
+  return sql`(
+    SELECT array_agg(DISTINCT resolved.account_id)
+    FROM (
+      SELECT ${evidenceAccountSql(sql.raw("refund_evidence"), purchase)} AS account_id
+      FROM "PurchasePaymentEvidence" refund_evidence
+      WHERE refund_evidence."purchaseId" = ${purchase}.id AND refund_evidence.amount < 0
+    ) resolved
+    HAVING bool_and(resolved.account_id IS NOT NULL)
+  )`;
+};
+
 /** A live settling transaction: what every settlement read allocates from. */
 export const settlementTransactionSql = (transaction: SQL) => sql`(
   ${transaction}."deletedAt" IS NULL
