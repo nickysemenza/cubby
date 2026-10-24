@@ -430,7 +430,7 @@ async function draftCardholder(
 ) {
   if (primary !== null && identity.kind !== "credit_card")
     throw createAppError(
-      "BAD_REQUEST",
+      "CONSTRAINT_VIOLATION",
       "Card users require a credit-card account.",
     );
   const expression = cardholderCode(
