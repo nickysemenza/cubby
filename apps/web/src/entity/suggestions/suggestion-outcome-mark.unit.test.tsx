@@ -62,7 +62,13 @@ describe("describeOutcome headline copy", () => {
         status: "conflict",
         correctionKey: "synthetic-key",
         revision: "synthetic-revision",
-        sourceFeedbackIds: ["00000000-0000-4000-8000-000000000001"],
+        sources: [
+          {
+            sourceFeedbackId: "00000000-0000-4000-8000-000000000001",
+            sourceApplicationFeedbackId: "00000000-0000-4000-8000-000000000002",
+            value: null,
+          },
+        ],
       },
     };
     expect(describeOutcome({ outcome })).toBe(

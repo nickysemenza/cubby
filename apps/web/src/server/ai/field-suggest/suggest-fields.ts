@@ -1197,9 +1197,11 @@ export async function suggestFields(
                   status: "conflict" as const,
                   correctionKey: key,
                   revision: correction.revision,
-                  sourceFeedbackIds: correction.sources.map(
-                    (source) => source.feedbackId,
-                  ),
+                  sources: correction.sources.map((source) => ({
+                    sourceFeedbackId: source.feedbackId,
+                    sourceApplicationFeedbackId: source.applicationFeedbackId,
+                    value: source.correctedValue,
+                  })),
                 };
           suggestions[target] = null;
           outcomes[target] = {

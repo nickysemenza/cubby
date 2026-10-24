@@ -46,6 +46,9 @@ import {
   transitionAssessmentState,
   transitionAssessmentStates,
 } from "~/server/generic/assessment/repo/assessment-state";
+import { fieldCorrectionKey } from "~/server/generic/assessment/repo/correction-sources";
+import { lockFieldCorrectionKey } from "~/server/generic/assessment/repo/field-correction-lock";
+import { resolveFieldCorrection } from "~/server/generic/assessment/repo/field-correction-resolver";
 import { fieldInputFingerprint } from "~/server/generic/assessment/repo/field-input-fence";
 import {
   acceptSuggestion,
@@ -517,7 +520,7 @@ async function settleReview(
   let prediction:
     | Pick<
         typeof assessment.$inferSelect,
-        "id" | "family" | "subject" | "judgment" | "producer"
+        "id" | "family" | "subject" | "judgment" | "producer" | "evidence"
       >
     | undefined;
   if (input.assessmentId)
@@ -528,6 +531,7 @@ async function settleReview(
         subject: assessment.subject,
         judgment: assessment.judgment,
         producer: assessment.producer,
+        evidence: assessment.evidence,
       })
       .from(assessment)
       .where(eq(assessment.id, input.assessmentId))
@@ -713,6 +717,21 @@ async function settleReview(
             "Application receipt does not match this command outcome",
           );
         return priorOutcome;
+      }
+      const correctionKey =
+        prediction.family === "field"
+          ? fieldCorrectionKey(prediction.evidence)
+          : null;
+      if (correctionKey) {
+        await lockFieldCorrectionKey(transactionDb, correctionKey);
+        if (
+          automatic &&
+          (await resolveFieldCorrection(transactionDb, correctionKey)).kind !==
+            "none"
+        )
+          throw new Error(
+            "A confirmed member correction requires correction propagation",
+          );
       }
       if (input.application?.kind === "saved_field") {
         await acknowledgeSavedField(transactionDb, context, prediction, {

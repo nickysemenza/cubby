@@ -566,7 +566,15 @@ export const confirmedFieldDecision = z.discriminatedUnion("status", [
     status: z.literal("conflict"),
     correctionKey: z.string(),
     revision: z.string(),
-    sourceFeedbackIds: z.array(assessmentChildHandle).min(1),
+    sources: z
+      .array(
+        z.object({
+          sourceFeedbackId: assessmentChildHandle,
+          sourceApplicationFeedbackId: assessmentChildHandle,
+          value: z.json(),
+        }),
+      )
+      .min(1),
   }),
 ]);
 

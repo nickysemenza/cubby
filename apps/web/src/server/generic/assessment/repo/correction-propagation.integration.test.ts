@@ -25,6 +25,7 @@ import {
 } from "~/server/db/helpers";
 import {
   assessmentState,
+  assessmentCorrectionLock,
   feedback,
   job,
   auditLog,
@@ -366,6 +367,61 @@ describe("confirmed correction propagation", () => {
     expect(await productCategoryId(ctx.db, target.id)).toBeNull();
   });
 
+  it("keeps a current conflict visible when an obsolete confirmed publication replays", async () => {
+    const question = await preparedQuestion();
+    await confirmKey(question.correctionKey, taxonomyShortcode("food"));
+    const target = await productFixture(ctx, "Synthetic classification item");
+    const first = await suggestFields(
+      ctx.db,
+      question.runId,
+      { ...question.input, entityId: target.id },
+      question.ports,
+    );
+    const original = first.outcomes?.categoryId;
+    if (original?.kind !== "correction")
+      throw new Error("Missing synthetic authority");
+    const publish = (outcome: typeof original) =>
+      publishFieldCorrectionQuestion(ctx.db, {
+        entity: "product",
+        recordId: target.entityId,
+        field: "categoryId",
+        currentValue: null,
+        outcome,
+        provenance: question.provenance,
+        runId: null,
+      });
+    const old = await publish(original);
+    await confirmKey(question.correctionKey, taxonomyShortcode("books"));
+    const next = await suggestFields(
+      ctx.db,
+      question.runId,
+      { ...question.input, entityId: target.id },
+      question.ports,
+    );
+    const conflict = next.outcomes?.categoryId;
+    if (
+      conflict?.kind !== "correction" ||
+      conflict.decision.status !== "conflict"
+    )
+      throw new Error("Missing synthetic conflict");
+    const current = await publish(conflict);
+    await expect(publish(original)).rejects.toThrow(
+      "Correction authority changed during inference",
+    );
+    const rows = await getDb(ctx.db)
+      .select()
+      .from(assessmentState)
+      .where(inArray(assessmentState.id, [old.id, current.id]));
+    expect(rows.find((row) => row.id === old.id)).toMatchObject({
+      active: false,
+      status: "superseded",
+    });
+    expect(rows.find((row) => row.id === current.id)).toMatchObject({
+      active: true,
+      status: "pending",
+    });
+  });
+
   it("refuses a correction question when the target changes after preparation", async () => {
     const question = await preparedQuestion();
     await confirmKey(question.correctionKey, taxonomyShortcode("food"));
@@ -473,6 +529,10 @@ describe("confirmed correction propagation", () => {
   });
 
   it("holds a snapshot predating a conflicting correction", async () => {
+    await activateAiRefresh(ctx.db, "synthetic-disabled-refresh", {
+      enabled: false,
+      startDiscovery: false,
+    });
     const question = await preparedQuestion();
     const root = await confirmKey(
       question.correctionKey,
@@ -489,12 +549,23 @@ describe("confirmed correction propagation", () => {
     const input = { source, target };
     const prepared = await fieldCorrectionRepair.prepare(ctx.db, input);
     if (prepared.status !== "ready") throw new Error(prepared.reason);
+    expect(
+      await getDb(ctx.db)
+        .select({ key: assessmentCorrectionLock.key })
+        .from(assessmentCorrectionLock)
+        .where(eq(assessmentCorrectionLock.key, question.correctionKey)),
+    ).toHaveLength(1);
+    // Exclude incidental shared Job contention from the authority serialization proof.
+    await getDb(ctx.db).update(job).set({ state: "failed" });
     const started = Promise.withResolvers<void>();
     const release = Promise.withResolvers<void>();
     const applying = withSnapshotWriteDatabase(
       ctx.db,
       async (db) => {
-        await getDb(db).select({ id: job.id }).from(job).limit(1);
+        await getDb(db)
+          .select({ id: assessmentState.id })
+          .from(assessmentState)
+          .where(eq(assessmentState.id, source.assessmentId));
         started.resolve();
         await release.promise;
         return fieldCorrectionRepair.apply(
@@ -849,54 +920,58 @@ describe("confirmed correction propagation", () => {
     );
   });
 
-  it("repairs prior propagated effects after another confirmed correction while preserving member edits", async () => {
-    const historical = await propose({ automatic: true });
-    const protectedTarget = await propose({ automatic: true });
-    const source = await correct();
-    await drain();
-    expect(await productCategoryId(ctx.db, historical.product.id)).toBe(
-      taxonomyId("food"),
-    );
-    await executeEntityAs(kernelCtx(ctx), "update", {
-      entity: "product",
-      id: protectedTarget.product.id,
-      data: { categoryId: taxonomyShortcode("books") },
-    });
-    const protectedFingerprint = await fieldInputFingerprint(
-      ctx.db,
-      "product",
-      protectedTarget.product.entityId,
-      "categoryId",
-    );
-    await executeEntityAs(kernelCtx(ctx), "update", {
-      entity: "product",
-      id: source.product.id,
-      data: { categoryId: taxonomyShortcode("tools") },
-    });
-    await reviewAssessment(ctx.db, kernelCtx(ctx), {
-      assessmentId: source.prediction.id,
-      operationId: crypto.randomUUID(),
-      verdict: "wrong",
-      intent: "apply",
-      correction: { present: true, value: taxonomyShortcode("tools") },
-      application: { kind: "saved_field", recordId: source.product.id },
-    });
-    await drain();
-    expect(await productCategoryId(ctx.db, historical.product.id)).toBe(
-      taxonomyId("tools"),
-    );
-    expect(await productCategoryId(ctx.db, protectedTarget.product.id)).toBe(
-      taxonomyId("books"),
-    );
-    expect(
-      await fieldInputFingerprint(
+  it.each([true, false])(
+    "repairs prior propagated effects (originally automatic: %s) while preserving member edits",
+    async (automatic) => {
+      const historical = await propose({ automatic });
+      const correctedValue = automatic ? taxonomyShortcode("tools") : null;
+      const protectedTarget = await propose({ automatic: true });
+      const source = await correct();
+      await drain();
+      expect(await productCategoryId(ctx.db, historical.product.id)).toBe(
+        taxonomyId("food"),
+      );
+      await executeEntityAs(kernelCtx(ctx), "update", {
+        entity: "product",
+        id: protectedTarget.product.id,
+        data: { categoryId: taxonomyShortcode("books") },
+      });
+      const protectedFingerprint = await fieldInputFingerprint(
         ctx.db,
         "product",
         protectedTarget.product.entityId,
         "categoryId",
-      ),
-    ).toBe(protectedFingerprint);
-  });
+      );
+      await executeEntityAs(kernelCtx(ctx), "update", {
+        entity: "product",
+        id: source.product.id,
+        data: { categoryId: correctedValue },
+      });
+      await reviewAssessment(ctx.db, kernelCtx(ctx), {
+        assessmentId: source.prediction.id,
+        operationId: crypto.randomUUID(),
+        verdict: "wrong",
+        intent: "apply",
+        correction: { present: true, value: correctedValue },
+        application: { kind: "saved_field", recordId: source.product.id },
+      });
+      await drain();
+      expect(await productCategoryId(ctx.db, historical.product.id)).toBe(
+        automatic ? taxonomyId("tools") : null,
+      );
+      expect(await productCategoryId(ctx.db, protectedTarget.product.id)).toBe(
+        taxonomyId("books"),
+      );
+      expect(
+        await fieldInputFingerprint(
+          ctx.db,
+          "product",
+          protectedTarget.product.entityId,
+          "categoryId",
+        ),
+      ).toBe(protectedFingerprint);
+    },
+  );
 
   it("ignores a deleted correction source for later equivalent proposals", async () => {
     const source = await correct();

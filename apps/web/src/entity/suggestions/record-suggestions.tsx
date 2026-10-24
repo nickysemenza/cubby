@@ -64,6 +64,7 @@ import type { StandardEntity } from "~/entity/entity-contracts";
 import { entityDetailFor } from "~/entity/entity-detail";
 import { readReferenceField } from "~/entity/entity-references";
 import { generatedBrowserCrudEntities } from "~/entity/generated/entity-routes.gen";
+import { CorrectionAuthorityEvidence } from "~/entity/suggestions/correction-authority-evidence";
 import { entityRipple } from "~/integrations/tanstack-query/cache-tags";
 import { ai } from "~/integrations/tanstack-query/generated/catalog/ai.gen";
 import { assessment } from "~/integrations/tanstack-query/generated/catalog/assessment.gen";
@@ -2120,6 +2121,12 @@ function StoredSuggestionField({
           targetInputFingerprint: null,
           decision: suggestion.correctionAuthority,
         }}
+        review={
+          <CorrectionAuthorityEvidence
+            decision={suggestion.correctionAuthority}
+            renderValue={renderValue}
+          />
+        }
       />
     );
     return surface === "cell" ? (

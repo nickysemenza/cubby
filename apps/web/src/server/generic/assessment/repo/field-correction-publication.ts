@@ -8,10 +8,12 @@ import { and, eq, ne } from "drizzle-orm";
 import { z } from "zod";
 
 import type { Database } from "~/server/db";
-import { withTransactionDatabase } from "~/server/db/helpers";
+import { getDb, withTransactionDatabase } from "~/server/db/helpers";
 import { assessmentState } from "~/server/db/schema";
 import { publishAssessment } from "~/server/generic/assessment/repo/assessment";
 import { transitionAssessmentStates } from "~/server/generic/assessment/repo/assessment-state";
+import { lockFieldCorrectionKey } from "~/server/generic/assessment/repo/field-correction-lock";
+import { resolveFieldCorrection } from "~/server/generic/assessment/repo/field-correction-resolver";
 import {
   fieldInputFingerprint,
   fenceFieldInputsAtCommit,
@@ -31,6 +33,7 @@ export async function publishFieldCorrectionQuestion(
   },
 ) {
   return withTransactionDatabase(db, async (tx) => {
+    await lockFieldCorrectionKey(tx, input.outcome.decision.correctionKey);
     const fingerprint = await fieldInputFingerprint(
       tx,
       input.entity,
@@ -41,6 +44,9 @@ export async function publishFieldCorrectionQuestion(
     if (fingerprint !== input.outcome.targetInputFingerprint)
       throw new Error("Correction target changed during inference");
     const decision = input.outcome.decision;
+    const current = await resolveFieldCorrection(tx, decision.correctionKey);
+    if (current.kind === "none" || current.revision !== decision.revision)
+      throw new Error("Correction authority changed during inference");
     const value = decision.status === "confirmed" ? decision.value : null;
     const provenance = {
       dependencies: input.provenance.dependencies,
@@ -103,6 +109,16 @@ export async function publishFieldCorrectionQuestion(
         },
       },
     );
+    const [state] = await getDb(tx)
+      .select({
+        active: assessmentState.active,
+        status: assessmentState.status,
+      })
+      .from(assessmentState)
+      .where(eq(assessmentState.id, result.id))
+      .limit(1);
+    // An immutable replay never reactivates history or retires a newer question.
+    if (!state?.active || state.status !== "pending") return result;
     // One current question owns the field. Preserve the old prediction and
     // receipts, while preventing its queued correction from competing with this one.
     await transitionAssessmentStates(

@@ -3738,6 +3738,12 @@ Propagation records a separate automatic receipt linking the root member Feedbac
 member actor, original target application and actual effects; successful replay
 precedes stale-state checks. Serializable Job publication commits writes, outcomes
 and cursor together through transaction-bound domain writers.
+Field confirmation, automatic admission, correction-question publication and
+repair first update the same durable `AssessmentCorrectionLock` input key in
+their caller-owned transaction. The physical row update forces an older
+serializable snapshot to retry if another record confirms conflicting authority;
+an advisory lock or unrelated refresh Job contention cannot supply this fence.
+The lock table stores no correction authority or application history.
 Later confirmed corrections can repair an earlier propagated effect only while
 its captured post-application fingerprint still matches. Repeated equivalent
 authority settles against that receipt without another field write, including

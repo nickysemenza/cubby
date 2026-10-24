@@ -18,6 +18,7 @@ import {
   readConfirmedCorrection,
 } from "~/server/generic/assessment/repo/correction-sources";
 import { correctionAlreadyRecorded } from "~/server/generic/assessment/repo/correction-work";
+import { lockFieldCorrectionKey } from "~/server/generic/assessment/repo/field-correction-lock";
 import {
   resolveFieldCorrection,
   supportsFieldCorrection,
@@ -262,6 +263,13 @@ export const fieldCorrectionRepair: CorrectionRepairAdapter<
     plan,
     actor,
   ): Promise<SuggestionCorrectionOutcome> => {
+    const key = fieldCorrectionKey(input.source.evidence);
+    if (!key)
+      return {
+        status: "held",
+        reason: "Complete correction inputs are unavailable",
+      };
+    await lockFieldCorrectionKey(db, key);
     // Serialize source supersession and target writes using one canonical order.
     // A source decision cannot commit between this validation and its consequence.
     const subjects = await getDb(db)
