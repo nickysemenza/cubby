@@ -712,6 +712,15 @@ production outcomes.
 
 ## Reviewing statement outcomes
 
+The shared Suggestions list and counts accept retained source observations and
+TransactionImports in `recordIds`. Source scope follows the charge identity
+across revisions, and collection scope uses retained membership rather than
+first ownership. Multiple observations of one charge return one proposal.
+These reads expose served proposals only: an empty result does not establish
+complete source coverage or reconciliation, and listing does not refresh or
+validate an application. Preview and acceptance retain their current-evidence
+guards. Source scoping changes no overlap or financial identity decisions.
+
 Suggestions is the reconciliation workspace: Pending proposals, optional Automatic
 decisions audit, and Automatic rules. Source transaction records is the generic
 imported-evidence browser; Transaction imports shows the retained collections.

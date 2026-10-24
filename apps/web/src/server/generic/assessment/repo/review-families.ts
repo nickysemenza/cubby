@@ -38,6 +38,8 @@ import type { Database } from "~/server/db";
 import { hasTextSql } from "~/server/db/computed/text-whitespace";
 import { unwrapDb, uuidArrayParam } from "~/server/db/helpers";
 import { assessment, assessmentState, feedback, run } from "~/server/db/schema";
+import { chargeKeyOf } from "~/server/domains/transaction-import/repo/statement-charge";
+import { transactionImportMembers } from "~/server/domains/transaction-import/repo/transaction-import-membership";
 import {
   EMAIL_APPLICATION_RECEIPT,
   EMAIL_OBSERVATION_RECEIPT,
@@ -155,6 +157,17 @@ function statementRecords(requested?: readonly string[]) {
     if (includes(entity))
       parts.push(sql`jsonb_build_array(${ref(sql`${entity}`, id)})`);
   };
+  // A proposal belongs to the charge, including retained predecessors and later memberships.
+  const sourceScope = sql`observed.source = s.data->>${financialTransactionSourceRef.keyof().enum.source}
+    AND ${chargeKeyOf("observed")} = s.data->>'chargeKey' AND observed."deletedAt" IS NULL`;
+  if (includes(entities.sourceTransactionRecord))
+    parts.push(sql`COALESCE((SELECT jsonb_agg(${ref(sql`${entities.sourceTransactionRecord}`, sql`observed.id::text`)})
+      FROM "SourceTransactionRecord" observed WHERE ${sourceScope}), '[]'::jsonb)`);
+  if (includes(entities.transactionImport))
+    parts.push(sql`COALESCE((SELECT jsonb_agg(DISTINCT ${ref(sql`${entities.transactionImport}`, sql`member."importId"::text`)})
+      FROM "SourceTransactionRecord" observed
+      JOIN ${transactionImportMembers} member ON member."statementRowId" = observed.id
+      WHERE ${sourceScope}), '[]'::jsonb)`);
   add(entities.financialAccount, sql`s.data->>'accountId'`);
   add(
     entities.financialTransaction,
