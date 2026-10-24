@@ -43,7 +43,10 @@ import { product, task } from "~/server/db/schema";
 import { syncEntityImages } from "~/server/domains/image/repo/entity-image-sync";
 import { resolveMemberAssignee } from "~/server/domains/ledger-party/repo/ledger-party-reference";
 import { dbTaskToAPI } from "~/server/domains/task/repo/helpers";
-import { createEntityReader } from "~/server/entity-kernel/repo/repository";
+import {
+  createEntityReader,
+  createEntityRowFetcher,
+} from "~/server/entity-kernel/repo/repository";
 import { createAppError } from "~/server/errors/app-error";
 import {
   type AuditEntryInput,
@@ -127,10 +130,7 @@ export type TaskMutationHooks = {
   beforeUpdate?: (tx: DrizzleTransaction, id: TaskId) => Promise<void>;
 };
 
-const fetchTaskRow = (db: Database, id: TaskId) =>
-  getDb(db).query.task.findFirst({
-    where: and(eq(task.id, id), notDeleted(task)),
-  });
+const fetchTaskRow = createEntityRowFetcher(task);
 
 const fetchTaskWithProject = (db: Database, id: TaskId) =>
   getDb(db).query.task.findFirst({

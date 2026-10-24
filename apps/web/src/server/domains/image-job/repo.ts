@@ -8,15 +8,16 @@ import {
   imageJobOut,
 } from "@cubby/schemas/image-job";
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
-import { and, eq, sql } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
-import { notDeleted, unwrapDb } from "~/server/db/helpers";
+import { unwrapDb } from "~/server/db/helpers";
 import type { ListReadIntent } from "~/server/db/helpers/query";
 import { imageProcessingJob } from "~/server/db/schema";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import {
   createEntityReader,
+  createEntityRowFetcher,
   defineRepository,
 } from "~/server/entity-kernel/repo/repository";
 import { listScaffold } from "~/server/generic/list/repo/list";
@@ -219,14 +220,7 @@ const reader = createEntityReader<
   Database | DrizzleTransaction
 >({
   entity: "imageJob",
-  fetchById: async (db, id) => {
-    const [row] = await unwrapDb(db)
-      .select()
-      .from(imageProcessingJob)
-      .where(and(eq(imageProcessingJob.id, id), notDeleted(imageProcessingJob)))
-      .limit(1);
-    return row;
-  },
+  fetchById: createEntityRowFetcher(imageProcessingJob),
   fromDB: async (db, row) =>
     imageJobOut.parse((await hydrateRead(db, [row], { kind: "full" }))[0]),
 });

@@ -8,13 +8,10 @@ import {
   type ShipmentOut,
   type ShipmentUpdateData,
 } from "@cubby/schemas/shipment";
-import { and, eq } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
   buildPartialUpdateValues,
-  notDeleted,
-  unwrapDb,
   withTransactionDatabase,
 } from "~/server/db/helpers";
 import type { ListReadIntent } from "~/server/db/helpers/query";
@@ -28,6 +25,7 @@ import { shipmentEventSummary } from "~/server/domains/shipment/repo/timeline";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import {
   createEntityCrud,
+  createEntityRowFetcher,
   defineRepository,
   defineMutationWriter,
   asActor,
@@ -118,14 +116,7 @@ const reader = createEntityCrud<
 >({
   table: shipment,
   entity: "shipment",
-  fetchById: async (db, id) =>
-    (
-      await unwrapDb(db)
-        .select()
-        .from(shipment)
-        .where(and(eq(shipment.id, id), notDeleted(shipment)))
-        .limit(1)
-    )[0],
+  fetchById: createEntityRowFetcher(shipment),
   fromDB: async (db, row) =>
     shipmentOut.parse(
       (await plan.read(db, [row], { kind: "full" }, undefined, "live"))[0],

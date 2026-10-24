@@ -102,6 +102,27 @@ import {
 
 type ReaderDb = Database | DrizzleTransaction;
 
+/** A full-row entity read and audited update share the same live-row selection. */
+type LiveEntityTable = PgTable & { id: AnyColumn; deletedAt: AnyColumn };
+
+/** Full stored rows only; relation-loaded and custom projections keep their own fetcher. */
+export const createEntityRowFetcher =
+  <T extends LiveEntityTable>(table: T) =>
+  async (
+    db: ReaderDb,
+    id: string,
+  ): Promise<InferSelectModel<T> | undefined> => {
+    // SAFETY: every accepted concrete PgTable has a full column selection.
+    const rows = await repositoryQueries(db)
+      .select(getTableColumns(table))
+      .from(table as PgTable)
+      .where(and(eq(table.id, id), notDeleted(table)))
+      .limit(1);
+    // SAFETY: the explicit projection contains exactly this table's stored columns.
+    const [row] = rows as InferSelectModel<T>[];
+    return row;
+  };
+
 interface EntityReaderConfig<
   TRow,
   TOut,
@@ -184,11 +205,8 @@ export function createEntityReader<
 /* Audited column update                                                       */
 /* -------------------------------------------------------------------------- */
 
-/** A soft-deletable table the audited update can write by id. */
-type CrudTable = PgTable & { id: AnyColumn; deletedAt: AnyColumn };
-
 interface EntityCrudConfig<
-  TTable extends CrudTable,
+  TTable extends LiveEntityTable,
   TRow extends object,
   TOut,
   TUpdate,
@@ -273,7 +291,7 @@ type RelationSnapshot<TKey extends string> = Partial<
 
 /** {@link createEntityReader} plus the diff-audited column update. */
 export function createEntityCrud<
-  TTable extends CrudTable,
+  TTable extends LiveEntityTable,
   TRow extends object,
   TOut,
   TUpdate,
@@ -283,6 +301,7 @@ export function createEntityCrud<
   config: EntityCrudConfig<TTable, TRow, TOut, TUpdate, E, TRelKey>,
 ): EntityCrud<TOut, TUpdate, E> {
   const reader = createEntityReader<TRow, TOut, E, ReaderDb>(config);
+  const fetchStoredRow = createEntityRowFetcher(config.table);
   function update(
     db: ReaderDb,
     id: EntityId<E>,
@@ -311,14 +330,7 @@ export function createEntityCrud<
   ): Promise<TOut | TResult> {
     return withTransactionOn(db, async (tx) => {
       await config.prepare?.(tx, id, data);
-      // SAFETY: every accepted concrete PgTable has a full column selection.
-      const rows = await repositoryQueries(tx)
-        .select(getTableColumns(config.table))
-        .from(config.table as PgTable)
-        .where(and(eq(config.table.id, id), notDeleted(config.table)))
-        .limit(1);
-      // SAFETY: the explicit full table projection returns its inferred row.
-      const [before] = rows as InferSelectModel<TTable>[];
+      const before = await fetchStoredRow(tx, id);
       if (!before) {
         throw createAppError(
           ENTITY_NOT_FOUND_REASON[config.entity],

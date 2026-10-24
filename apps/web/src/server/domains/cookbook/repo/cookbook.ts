@@ -53,7 +53,6 @@ import {
   databaseForTransaction,
   getDb,
   notDeleted,
-  unwrapDb,
   updateAndReturn,
   withTransaction,
 } from "~/server/db/helpers";
@@ -80,7 +79,10 @@ import {
   type MutationReceipt,
   defineMutationWriter,
 } from "~/server/entity-kernel/repo/repository";
-import { createEntityCrud } from "~/server/entity-kernel/repo/repository";
+import {
+  createEntityCrud,
+  createEntityRowFetcher,
+} from "~/server/entity-kernel/repo/repository";
 import {
   replaceSingularAttachment,
   singularAttachmentImageIds,
@@ -454,15 +456,8 @@ type CookbookEdit = CookbookUpdateInput & { productId?: ProductId | null };
 const cookbookCrud = createEntityCrud({
   table: cookbook,
   entity: "cookbook",
-  fetchById: async (db, id) =>
-    (
-      await unwrapDb(db)
-        .select()
-        .from(cookbook)
-        .where(and(eq(cookbook.id, id), notDeleted(cookbook)))
-        .limit(1)
-    )[0],
-  fromDB: (_db, row) => row,
+  fetchById: createEntityRowFetcher(cookbook),
+  fromDB: (_db, row: typeof cookbook.$inferSelect) => row,
   toUpdate: (data: CookbookEdit) => buildPartialUpdateValues(data),
   auditUpdateFields: ["name", "author", "subjects", "productId"],
   // The live title is unique, so a taken title is refused up front naming the
