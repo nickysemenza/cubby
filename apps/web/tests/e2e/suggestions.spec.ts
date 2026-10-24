@@ -712,7 +712,7 @@ test("Find suggestions estimates a Sweep before it starts, then follows its Step
   await status.getByRole("link").first().click();
   await expect(page).toHaveURL(/\/runs\/RUN-/);
   await expect(
-    page.getByRole("heading", { name: "Steps", exact: true }),
+    page.getByRole("heading", { name: "Execution steps", exact: true }),
   ).toBeVisible();
 });
 

@@ -61,8 +61,11 @@ test("Mail import exposes its persisted counts in the shared Run detail", async 
   );
   await gotoAuthenticatedPage(page, `/runs/${id}`);
   await expect(
-    page.getByRole("heading", { name: "Counts", exact: true }),
+    page.getByRole("heading", { name: "Import counts", exact: true }),
   ).toBeVisible();
+  await page
+    .getByRole("button", { name: "Import counts", exact: true })
+    .click();
   const counts = page.locator("#import-stats");
   await expect(
     counts.getByText("Targets", { exact: true }).locator(".."),
