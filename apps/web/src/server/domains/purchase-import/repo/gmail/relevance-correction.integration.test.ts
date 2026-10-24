@@ -7,6 +7,7 @@ import { withTestDb } from "tooling/test-setup";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import * as choices from "~/server/ai/decision-model";
+import { withConnection } from "~/server/db";
 import { account } from "~/server/db/auth.schema";
 import {
   getDb,
@@ -25,6 +26,7 @@ import {
   run,
   image,
   feedback,
+  imageProcessingOrphan,
 } from "~/server/db/schema";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
@@ -43,6 +45,7 @@ import {
   publishPreparedEmailRelevanceCorrection,
   discardPreparedEmailRelevanceCorrection,
   withEmailRelevancePreparation,
+  EmailCorrectionCleanupError,
 } from "./relevance-correction";
 import { GmailApiError, type GmailMessage, type GmailProvider } from "./types";
 
@@ -291,6 +294,126 @@ describe("member-only exact original relevance correction", () => {
     expect(
       await getDb(ctx.db).select().from(emailRetrievalFailure),
     ).toHaveLength(1);
+  });
+  it("does not hide failed preparation cleanup behind a concurrent successful receipt", async () => {
+    const f = await sharedReviewFixture();
+    f.remove.mockRejectedValue(
+      new Error("Synthetic first attempt cleanup failed"),
+    );
+    f.put.mockImplementationOnce(async (key, bytes) => {
+      f.objects.set(key, bytes);
+      await reviewAssessment(ctx.db, kernelCtx(ctx), f.review);
+      throw new Error("Synthetic first upload failed after concurrent success");
+    });
+    await expect(
+      reviewAssessment(ctx.db, kernelCtx(ctx), f.review),
+    ).rejects.toBeInstanceOf(EmailCorrectionCleanupError);
+    const events = await getDb(ctx.db)
+      .select()
+      .from(feedback)
+      .where(eq(feedback.assessmentId, f.review.assessmentId));
+    expect(
+      events.filter(
+        (event) =>
+          event.operationId === `command-application:${f.review.operationId}`,
+      ),
+    ).toHaveLength(1);
+    expect(
+      await getDb(ctx.db).select().from(imageProcessingOrphan),
+    ).toHaveLength(1);
+    expect(f.objects.size).toBe(2);
+    expect(
+      (
+        await getDb(ctx.db)
+          .select()
+          .from(emailTable)
+          .where(eq(emailTable.id, f.email.id))
+      )[0]?.classificationStage,
+    ).toBe("resolution");
+  });
+  it("keeps verified preparation content module-private and its identity immutable", async () => {
+    const f = await fixture();
+    const prepared = await prepareEmailRelevanceCorrection(
+      ctx.db,
+      f.input,
+      ctx.actor,
+    );
+    expect("details" in prepared).toBe(false);
+    expect(Object.isFrozen(prepared)).toBe(true);
+    expect(() =>
+      Object.defineProperty(prepared, "emailId", {
+        value: "synthetic-other-owner",
+      }),
+    ).toThrow(/not extensible/u);
+    expect(JSON.stringify(prepared)).toBe("{}");
+    await withTransaction(ctx.db, (tx) =>
+      publishPreparedEmailRelevanceCorrection(
+        databaseForTransaction(tx),
+        prepared,
+        ctx.actor,
+      ),
+    );
+    expect(
+      (await getDb(ctx.db).select().from(orderMail))[0]?.content,
+    ).toMatchObject({ bodyText: "Synthetic reviewed original body" });
+  });
+  it("serializes every deletion and attempts failed keys on a single-connection root", async () => {
+    const f = await fixture();
+    const original = f.message();
+    const payload = original.payload;
+    if (!payload?.parts)
+      throw new Error("Synthetic multipart original missing");
+    const changed: GmailMessage = {
+      ...original,
+      payload: {
+        ...payload,
+        parts: [
+          ...payload.parts,
+          {
+            partId: "second-pdf",
+            mimeType: "application/pdf",
+            filename: "second-synthetic.pdf",
+            body: {
+              attachmentId: "second-synthetic-attachment",
+              size: pdf.length,
+            },
+          },
+        ],
+      },
+    };
+    f.setMessage(changed);
+    const input = {
+      ...f.input,
+      reviewedChecksum: await originalChecksum(
+        normalizeMessage(mailboxId, changed),
+      ),
+    };
+    let active = 0;
+    let maximum = 0;
+    let attempted = 0;
+    f.remove.mockImplementation(async () => {
+      attempted += 1;
+      active += 1;
+      maximum = Math.max(maximum, active);
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      active -= 1;
+      throw new Error("Synthetic per-key cleanup failure");
+    });
+    await withConnection(ctx.db, async (single) => {
+      const prepared = await prepareEmailRelevanceCorrection(
+        single,
+        input,
+        ctx.actor,
+      );
+      await expect(
+        discardPreparedEmailRelevanceCorrection(single, prepared),
+      ).rejects.toBeInstanceOf(EmailCorrectionCleanupError);
+    });
+    expect(attempted).toBe(2);
+    expect(maximum).toBe(1);
+    expect(
+      await getDb(ctx.db).select().from(imageProcessingOrphan),
+    ).toHaveLength(2);
   });
   it("publishes prepared evidence with provider and storage PUT tripwires", async () => {
     const f = await fixture();

@@ -167,49 +167,72 @@ async function correctionAttachmentBytes(
   }
   return { bytes, originalPayloads };
 }
+export class EmailCorrectionCleanupError extends AggregateError {}
+
+async function discardCorrectionKeys(db: Database, keys: Iterable<string>) {
+  const failures: unknown[] = [];
+  // A root may be a single physical connection; each deletion retains its own
+  // transaction lock until storage settles, before starting the next one.
+  for (const key of keys) {
+    try {
+      await discardMailAttachmentUpload(
+        db,
+        key,
+        productionOrderMailAttachmentStorage,
+      );
+    } catch (error) {
+      failures.push(error);
+    }
+  }
+  return failures;
+}
 async function cleanNewCorrectionKeys(
   db: Database,
   created: Set<string>,
   error: Error,
 ): Promise<never> {
-  const cleanup = await Promise.allSettled(
-    [...created].map((key) =>
-      discardMailAttachmentUpload(
-        db,
-        key,
-        productionOrderMailAttachmentStorage,
-      ),
-    ),
-  );
-  const failures = cleanup.flatMap((result) =>
-    result.status === "rejected" ? [result.reason] : [],
-  );
+  const failures = await discardCorrectionKeys(db, created);
   if (failures.length) {
     const diagnostics = [error, ...failures]
       .map((value) => (value instanceof Error ? value.message : String(value)))
       .join("\n");
-    throw new AggregateError([error, ...failures], diagnostics);
+    throw new EmailCorrectionCleanupError([error, ...failures], diagnostics, {
+      cause: error,
+    });
   }
   throw error;
 }
 
+type PreparationDetails = {
+  input: CorrectEmailRelevanceInput;
+  actorUserId: ActorContext["userId"];
+  email: OwnedEmail;
+  normalized: GmailNormalizedMessage;
+  checksum: string;
+  originalCapture: EmailOriginalCapture;
+  uploads: ReadonlyMap<string, { key: string; checksum: string }>;
+};
+const preparationDetails = new WeakMap<
+  EmailRelevancePreparation,
+  PreparationDetails
+>();
 class EmailRelevancePreparation {
-  // A provider-verified in-memory capability, never a model or wire payload.
-  #verified = true;
-  constructor(
-    readonly details: {
-      input: CorrectEmailRelevanceInput;
-      actorUserId: ActorContext["userId"];
-      email: OwnedEmail;
-      normalized: GmailNormalizedMessage;
-      checksum: string;
-      originalCapture: EmailOriginalCapture;
-      uploads: ReadonlyMap<string, { key: string; checksum: string }>;
-    },
-  ) {}
-  verified() {
-    return this.#verified;
+  // Expose only an immutable identity; verified content never leaves this module.
+  #emailId: OwnedEmail["id"];
+  constructor(details: PreparationDetails) {
+    this.#emailId = details.email.id;
+    preparationDetails.set(this, details);
+    Object.freeze(this);
   }
+  get emailId() {
+    return this.#emailId;
+  }
+}
+function verifiedPreparation(prepared: EmailRelevancePreparation) {
+  const details = preparationDetails.get(prepared);
+  if (!details)
+    throw new Error("Email correction preparation authority does not match");
+  return details;
 }
 export type PreparedEmailRelevanceCorrection = EmailRelevancePreparation;
 
@@ -317,22 +340,15 @@ export async function discardPreparedEmailRelevanceCorrection(
   db: Database,
   prepared: PreparedEmailRelevanceCorrection,
 ) {
-  const results = await Promise.allSettled(
-    [...prepared.details.uploads.values()].map(({ key }) =>
-      discardMailAttachmentUpload(
-        db,
-        key,
-        productionOrderMailAttachmentStorage,
-      ),
-    ),
-  );
-  const errors = results.flatMap((result) =>
-    result.status === "rejected" ? [result.reason] : [],
+  const errors = await discardCorrectionKeys(
+    db,
+    [...verifiedPreparation(prepared).uploads.values()].map(({ key }) => key),
   );
   if (errors.length)
-    throw new AggregateError(
+    throw new EmailCorrectionCleanupError(
       errors,
       "Prepared Email attachment cleanup failed",
+      { cause: errors[0] },
     );
 }
 
@@ -347,14 +363,11 @@ export async function publishPreparedEmailRelevanceCorrection(
     throw new Error(
       "Prepared Email correction publication requires a transaction",
     );
-  if (
-    !(prepared instanceof EmailRelevancePreparation) ||
-    !prepared.verified() ||
-    prepared.details.actorUserId !== actor.userId
-  )
+  const details = verifiedPreparation(prepared);
+  if (details.actorUserId !== actor.userId)
     throw new Error("Email correction preparation authority does not match");
   const { input, email, normalized, checksum, originalCapture, uploads } =
-    prepared.details;
+    details;
   const current = await correctionOwner(db, input, actor, "update");
   if (
     current.id !== email.id ||

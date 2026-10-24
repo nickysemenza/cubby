@@ -302,10 +302,15 @@ replay → preparation → transactional replay/publication. A preparation failu
 retains Feedback and raw retrieval diagnostics without an application receipt or
 routing change. A successful application replays without consulting Gmail; a
 concurrent successful receipt can also settle an invocation whose preparation
-failed. Publication and cleanup failures remain errors and do not imply rollback.
+failed, provided cleanup succeeded. Cleanup failures cannot be hidden by a
+concurrent receipt. Publication and cleanup failures remain errors and do not imply rollback.
 Routing, observation and command application receipt remain atomic. Unused or failed
 staging is discarded only through exact reservation/reference ownership checks;
-failed deletion retains the reservation for the existing cleaner.
+failed deletion retains the reservation for the existing cleaner. Cleanup attempts
+keys sequentially, including on a root bound to one physical connection, and
+collects failures without stopping the remaining attempts. Prepared handles expose
+only immutable Email identity; verified content, actor/source bindings and staged
+references remain module-private and cannot be replaced by caller or model data.
 
 This boundary supplies no automatic propagation authority, effect selector or
 cross-Email identity rule. Those domain contracts remain required before Email

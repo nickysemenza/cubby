@@ -96,6 +96,63 @@ function emailRelevanceApplication(
     reason: input.reason ?? "Member reviewed the Assessment",
   });
 }
+
+/** Command Feedback is durable before this provider-preparation boundary. */
+async function prepareAndApplyEmailReview(
+  db: Database,
+  context: EntityKernelContext,
+  prediction: Pick<typeof assessment.$inferSelect, "id" | "subject">,
+  input: Review,
+  executeApplication: (
+    prepared: PreparedEmailRelevanceCorrection | null,
+  ) => Promise<z.infer<typeof assessmentReviewOut>>,
+) {
+  // Preserve command Feedback first, then replay before any external preparation.
+  const hasReceipt = async () => {
+    const [receipt] = await getDb(db)
+      .select({ id: feedback.id })
+      .from(feedback)
+      .where(
+        and(
+          eq(feedback.assessmentId, prediction.id),
+          eq(feedback.operationId, `command-application:${input.operationId}`),
+        ),
+      )
+      .limit(1);
+    return Boolean(receipt);
+  };
+  if (await hasReceipt()) return executeApplication(null);
+  const subject = assessmentSubjects.email_relevance.parse(prediction.subject);
+  const correction = emailRelevanceApplication(subject, input);
+  const [source] = await getDb(db)
+    .select({ code: email.shortcode })
+    .from(email)
+    .where(eq(email.id, parseEntityId("email", subject.recordId)))
+    .limit(1);
+  if (!source) throw new Error("Email no longer exists");
+  const {
+    prepareEmailRelevanceCorrection,
+    withEmailRelevancePreparation,
+    EmailCorrectionCleanupError,
+  } =
+    await import("~/server/domains/purchase-import/repo/gmail/relevance-correction");
+  let prepared: PreparedEmailRelevanceCorrection;
+  try {
+    prepared = await prepareEmailRelevanceCorrection(
+      db,
+      { id: parseShortcodeFor("email", source.code), ...correction },
+      context.actorContext,
+    );
+  } catch (error) {
+    // A committed receipt cannot conceal a failed cleanup from this invocation.
+    if (error instanceof EmailCorrectionCleanupError) throw error;
+    // Another invocation may have committed while this one's provider preparation failed.
+    if (await hasReceipt()) return executeApplication(null);
+    throw error;
+  }
+  return withEmailRelevancePreparation(db, prepared, executeApplication);
+}
+
 type Handler = {
   subject: z.ZodType;
   target: z.ZodType;
@@ -157,7 +214,7 @@ const assessmentFamilies = {
     transactionBound: false,
     actions: ["correct", "wrong", "uncertain"],
     apply: async (db, context, state, _input, _automatic, preparedEmail) => {
-      if (!preparedEmail || preparedEmail.details.email.id !== state.recordId)
+      if (!preparedEmail || preparedEmail.emailId !== state.recordId)
         throw new Error("Email review requires its source-bound preparation");
       const { publishPreparedEmailRelevanceCorrection } =
         await import("~/server/domains/purchase-import/repo/gmail/relevance-correction");
@@ -853,49 +910,13 @@ async function settleReview(
     };
     if (prediction.family !== "email_relevance")
       return executeApplication(null);
-    // Preserve command Feedback first, then replay before any external preparation.
-    const hasReceipt = async () => {
-      const [receipt] = await getDb(db)
-        .select({ id: feedback.id })
-        .from(feedback)
-        .where(
-          and(
-            eq(feedback.assessmentId, prediction.id),
-            eq(
-              feedback.operationId,
-              `command-application:${input.operationId}`,
-            ),
-          ),
-        )
-        .limit(1);
-      return Boolean(receipt);
-    };
-    if (await hasReceipt()) return executeApplication(null);
-    const subject = assessmentSubjects.email_relevance.parse(
-      prediction.subject,
+    return prepareAndApplyEmailReview(
+      db,
+      context,
+      prediction,
+      input,
+      executeApplication,
     );
-    const correction = emailRelevanceApplication(subject, input);
-    const [source] = await getDb(db)
-      .select({ code: email.shortcode })
-      .from(email)
-      .where(eq(email.id, parseEntityId("email", subject.recordId)))
-      .limit(1);
-    if (!source) throw new Error("Email no longer exists");
-    const { prepareEmailRelevanceCorrection, withEmailRelevancePreparation } =
-      await import("~/server/domains/purchase-import/repo/gmail/relevance-correction");
-    let prepared: PreparedEmailRelevanceCorrection;
-    try {
-      prepared = await prepareEmailRelevanceCorrection(
-        db,
-        { id: parseShortcodeFor("email", source.code), ...correction },
-        context.actorContext,
-      );
-    } catch (error) {
-      // Another invocation may have committed while this one's provider preparation failed.
-      if (await hasReceipt()) return executeApplication(null);
-      throw error;
-    }
-    return withEmailRelevancePreparation(db, prepared, executeApplication);
   }
   const writeHistory = async (transactionDb: Database) => {
     const [state] = await getDb(transactionDb)
