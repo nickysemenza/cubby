@@ -347,6 +347,7 @@ describe("source claim identity round trip", () => {
           network: "visa",
         },
         primaryCardholderId: null,
+        primaryCardholderMode: "inherit",
         authorizedUsers: [],
         fundingPeriods: [],
         cardNumbers: [],

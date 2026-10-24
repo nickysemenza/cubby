@@ -1431,9 +1431,12 @@ it.each(["network", "primaryCardholderId"])(
       overrides,
       { only: [key] },
     );
-    const [column] = columns.visit((column) => column);
-    if (!column) throw new Error("Expected account field column");
-    render(<>{renderRowCell(column.cell, record)}</>);
+    const [projection] = columns.visit((column) => ({
+      value: renderRowCell(column.cell, record),
+      data: column.meta?.cellData,
+    }));
+    if (!projection) throw new Error("Expected account field column");
+    render(<>{projection.value}</>);
     expect(screen.getByRole("note")).toBeVisible();
     expect(screen.queryByRole("button")).toBeNull();
     await runPastePlan({
@@ -1445,7 +1448,7 @@ it.each(["network", "primaryCardholderId"])(
         },
       ],
       rows: [record],
-      columnCellData: [column.meta?.cellData ?? null],
+      columnCellData: [projection.data ?? null],
       formatError: String,
     });
     expect(save).not.toHaveBeenCalled();
