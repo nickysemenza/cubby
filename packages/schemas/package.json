@@ -204,6 +204,7 @@
     "./statement-suggestion": "./src/statement-suggestion.ts",
     "./transfer-pair-suggestion": "./src/transfer-pair-suggestion.ts",
     "./suggestion-list": "./src/suggestion-list.ts",
+    "./suggestion-correction": "./src/suggestion-correction.ts",
     "./automatic-rule": "./src/automatic-rule.ts",
     "./automatic-decision": "./src/automatic-decision.ts",
     "./assessment-review-family": "./src/assessment-review-family.ts",

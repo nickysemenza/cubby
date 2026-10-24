@@ -102,6 +102,10 @@ the existing current-evidence rules: eligible field questions can be reassessed,
 while an unchanged rejected answer is withheld from automatic application.
 An unchanged rejected statement suggestion remains rejected. Changed evidence
 may produce a new suggestion; there is no historical correction pass.
+Shared correction coordination explicitly holds semantic repair for
+`statement_transaction` and `transfer_pair`; these families have no supported
+ready plan. Source amount/withdrawal correction requires its own current source
+proof and never grants authority for kind/category changes or transfer re-pairing.
 
 Mail preparation validates source kind, owned original identity and exact
 checksums before any paid attribution or relationship judgment. Admission
