@@ -193,6 +193,62 @@ describe("immutable Email observations", () => {
       ).toEqual([]);
     }
   });
+  it("captures external bytes obtained by existing retention staging", async () => {
+    const party = await insertWithShortcode(ctx.db, "ledgerParty", {
+      name: "Synthetic staged member",
+      kind: "member",
+      userId: ctx.actor.userId,
+    });
+    let fetched = 0;
+    const payload = Buffer.from("Synthetic staged bytes");
+    await ingestGmailMessages(
+      ctx.db,
+      {
+        ...gmail,
+        getMessage: async (id) => ({
+          id,
+          payload: {
+            mimeType: "multipart/mixed",
+            parts: [
+              {
+                mimeType: "text/plain",
+                body: {
+                  data: Buffer.from("Synthetic receipt").toString("base64url"),
+                },
+              },
+              {
+                mimeType: "application/pdf",
+                filename: "synthetic.pdf",
+                body: {
+                  attachmentId: "synthetic-attachment",
+                  size: payload.length,
+                },
+              },
+            ],
+          },
+        }),
+        getAttachment: async () => {
+          fetched += 1;
+          return { data: payload.toString("base64url"), size: payload.length };
+        },
+      },
+      {
+        ledgerPartyId: party.id,
+        mailboxId: "synthetic-staged-mailbox",
+        messageIds: ["synthetic-staged-message"],
+        storage,
+        triage: async () => "related",
+      },
+    );
+    const [observation] = await getDb(ctx.db)
+      .select()
+      .from(emailClassificationObservation);
+    if (!observation) throw new Error("Synthetic staged observation missing");
+    expect(
+      (await ensureEmailAssessment(ctx.db, observation.id)).evidence,
+    ).toMatchObject({ originalCapture: { status: "complete" } });
+    expect(fetched).toBe(1);
+  });
   it("keeps new original proof immutable and rejects a different publication binding", async () => {
     const party = await insertWithShortcode(ctx.db, "ledgerParty", {
       name: "Synthetic capture member",

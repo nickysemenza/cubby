@@ -269,7 +269,7 @@ member resolution, since a reviewed Purchase link is relevance evidence.
 
 ### Complete original capture
 
-New Gmail classification publications retain a versioned `gmail-original-v1`
+New Gmail ingest and explicit relevance-correction publications retain a versioned `gmail-original-v1`
 manifest separately from the existing normalized message checksum. It binds the
 owner, mailbox and provider message identity and captures ordered MIME structure,
 all text alternatives, headers (including Content-ID), attachment descriptors and

@@ -9,7 +9,11 @@ import {
   MAIL_ATTACHMENT_MAX_BYTES,
   MAILBOX_RESEARCH_VERSION,
 } from "@cubby/schemas/mailbox-research";
-import { encodeBase64 } from "@cubby/shared/base64";
+import {
+  encodeBase64,
+  encodeBase64Url,
+  decodeBase64Url,
+} from "@cubby/shared/base64";
 import { and, eq } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
@@ -39,6 +43,7 @@ import {
   recordEmailRetrievalFailure,
   snapshotStoredEmailPrediction,
 } from "./observations";
+import { captureGmailOriginal } from "./original-capture";
 import {
   saveMailboxMetadata,
   upsertOrderMail,
@@ -207,6 +212,25 @@ export async function correctEmailRelevance(
     provider,
     normalized,
   );
+  const originalCapture = await captureGmailOriginal({
+    ledgerPartyId: email.ledgerPartyId,
+    mailboxId: email.mailboxId,
+    messageId: email.messageId,
+    message,
+    attachmentPayloads: new Map(
+      normalized.attachments.flatMap((attachment) => {
+        const payload = bytes.get(attachment.sourceKey);
+        return attachment.attachmentId && payload !== undefined
+          ? [
+              [
+                attachment.attachmentId,
+                encodeBase64Url(decodeBase64Url(payload)),
+              ],
+            ]
+          : [];
+      }),
+    ),
+  });
   const uploadKeys = await reserveGmailAttachmentUploads(db, {
     orderMailId: email.orderMailId,
     attachments: normalized.attachments,
@@ -284,6 +308,7 @@ export async function correctEmailRelevance(
           classificationVersion: MAILBOX_RESEARCH_VERSION,
         },
         actor,
+        { originalCapture },
       );
       await getDb(txDb)
         .update(emailTable)

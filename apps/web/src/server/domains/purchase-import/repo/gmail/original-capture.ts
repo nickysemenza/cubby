@@ -15,7 +15,7 @@ import type { GmailMessage, GmailMessagePart } from "./types";
 
 /** Capture every MIME part before normalization discards alternative bodies; never fetch missing bytes. */
 export async function captureGmailOriginal(input: {
-  ledgerPartyId: string;
+  ledgerPartyId: EmailOriginalCapture["binding"]["ledgerPartyId"];
   mailboxId: string;
   messageId: string;
   message: GmailMessage;
@@ -62,7 +62,7 @@ export async function captureGmailOriginal(input: {
     if (
       encoded === undefined &&
       fetched === undefined &&
-      !(part.parts?.length || size === 0)
+      !(!part.body?.attachmentId && (part.parts?.length || size === 0))
     )
       return { reason: "missing_payload", part: path };
     let bytes = new Uint8Array();

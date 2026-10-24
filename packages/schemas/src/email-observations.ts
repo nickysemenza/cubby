@@ -1,5 +1,6 @@
 import { aiProvenance } from "./ai-evaluation";
 import { z } from "zod";
+import { ledgerPartyId } from "./identifier-fields.js";
 import {
   mailboxClassification,
   mailboxClassificationStage,
@@ -8,7 +9,7 @@ import {
 const originalDigest = z.string().regex(/^[a-f0-9]{64}$/u);
 const originalBinding = z.object({
   provider: z.literal("gmail"),
-  ledgerPartyId: z.guid(),
+  ledgerPartyId,
   mailboxId: z.string().min(1),
   messageId: z.string().min(1),
   threadId: z.string().nullable(),

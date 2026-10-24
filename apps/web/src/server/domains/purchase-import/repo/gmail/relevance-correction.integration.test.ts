@@ -357,6 +357,22 @@ describe("member-only exact original relevance correction", () => {
         rawChecksum: f.input.reviewedChecksum,
         content: { bodyText: "Synthetic reviewed original body" },
       });
+      const resolution = after.predictions.find(
+        (prediction) => prediction.stage === "resolution",
+      );
+      if (!resolution) throw new Error("Synthetic resolution missing");
+      expect(
+        (await ensureEmailAssessment(ctx.db, resolution.id)).evidence,
+      ).toMatchObject({
+        originalCapture: {
+          status: "complete",
+          binding: {
+            ledgerPartyId: f.email.ledgerPartyId,
+            mailboxId,
+            messageId,
+          },
+        },
+      });
       expect(after.predictions).toHaveLength(2);
       expect(after.predictions).toEqual(
         expect.arrayContaining([

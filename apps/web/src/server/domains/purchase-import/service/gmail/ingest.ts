@@ -4,6 +4,7 @@ import type { EmailReclassifyOutcome } from "@cubby/schemas/email-actions";
 import { emailCandidateSource } from "@cubby/schemas/email-candidates";
 import type { EmailClassificationConflict } from "@cubby/schemas/email-observations";
 import type { EmailOriginalCapture } from "@cubby/schemas/email-observations";
+import { ledgerPartyId } from "@cubby/schemas/identifiers";
 import {
   MAILBOX_RESEARCH_VERSION,
   mailboxClassification,
@@ -658,8 +659,18 @@ async function acquireEligible(
     normalized,
     transientAttachments,
   );
+  let uploadKeys: ReadonlyMap<string, string> = new Map();
+  if (retain)
+    uploadKeys = await stageGmailAttachments(
+      db,
+      provider,
+      identity,
+      normalized,
+      prior?.orderMailId ?? null,
+      transientAttachments,
+    );
   const originalCapture = await captureGmailOriginal({
-    ledgerPartyId: input.ledgerPartyId,
+    ledgerPartyId: ledgerPartyId.parse(input.ledgerPartyId),
     mailboxId: identity.mailboxId,
     messageId: identity.messageId,
     message,
@@ -672,16 +683,7 @@ async function acquireEligible(
       }),
     ),
   });
-  let uploadKeys: ReadonlyMap<string, string> = new Map();
-  if (retain)
-    uploadKeys = await stageGmailAttachments(
-      db,
-      provider,
-      identity,
-      normalized,
-      prior?.orderMailId ?? null,
-      transientAttachments,
-    );
+
   const createdKeys = new Set<string>();
   let committed = false;
   try {

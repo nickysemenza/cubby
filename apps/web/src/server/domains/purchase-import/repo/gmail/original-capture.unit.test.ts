@@ -1,3 +1,4 @@
+import { ledgerPartyId } from "@cubby/schemas/identifiers";
 import { encodeBase64Url } from "@cubby/shared/base64";
 import { describe, expect, it } from "vitest";
 
@@ -6,7 +7,7 @@ import { normalizeMessage } from "./normalize";
 import { captureGmailOriginal } from "./original-capture";
 import type { GmailMessage, GmailMessagePart } from "./types";
 
-const owner = "11111111-2222-f333-0444-555555555555";
+const owner = ledgerPartyId.parse("11111111-2222-4333-8444-555555555555");
 const text = (value: string): GmailMessagePart => ({
   mimeType: "text/plain",
   body: {
@@ -37,6 +38,27 @@ const capture = (
   });
 
 describe("complete Gmail original capture", () => {
+  it("requires referenced parent bytes even when children are complete", async () => {
+    const original = message([text("Synthetic child")]);
+    original.payload = {
+      ...original.payload,
+      mimeType: "multipart/mixed",
+      body: { attachmentId: "synthetic-parent-bytes" },
+    };
+    expect(await capture(original)).toMatchObject({
+      status: "incomplete",
+      problem: { reason: "missing_payload", part: "0" },
+    });
+    expect(
+      await capture(
+        original,
+        new Map([
+          ["synthetic-parent-bytes", encodeBase64Url("Synthetic parent")],
+        ]),
+      ),
+    ).toMatchObject({ status: "complete" });
+  });
+
   it("separates distinct provider bindings from the same complete literal MIME capture", async () => {
     const original = message([text("Synthetic original")]);
     const left = await capture(original);
