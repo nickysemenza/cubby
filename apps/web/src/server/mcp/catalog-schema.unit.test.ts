@@ -704,6 +704,8 @@ describe("MCP catalog schemas", () => {
       "suggestions_read.automatic_decisions.recordIds",
       "suggestions_read.list.recordIds",
       "suggestions.review.operationId",
+      // Preview consumes the same opaque Assessment review handle as acceptance.
+      "finance_read.preview_suggestion.assessmentId",
       "suggestions.review.assessmentId",
       "suggestions.review_batch.items[].operationId",
       "suggestions.review_batch.items[].assessmentId",
