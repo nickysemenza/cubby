@@ -282,6 +282,9 @@ type RecordedMember = Pick<
   | "rowPosition"
   | "externalId"
   | "providerTransactionId"
+  | "providerAccountId"
+  | "accountDescriptor"
+  | "deletedAt"
 >;
 
 function retainedCollectionObservation({
@@ -412,6 +415,7 @@ async function prepareStatementObservations(
             row.rowPosition,
           )
         : undefined;
+    let retainedProvider: RecordedMember | undefined;
     if (row.providerTransactionId) {
       const predecessors = previousProviderRows.filter((prior) => {
         if (prior.providerTransactionId !== row.providerTransactionId)
@@ -467,9 +471,32 @@ async function prepareStatementObservations(
           "This provider identity has ambiguous historical account evidence; resolve its charge identity before importing a revision.",
         );
       if (keys[0]) chargeKey = keys[0];
+      const retained = priorMembers.filter(
+        (prior) =>
+          prior.providerTransactionId === row.providerTransactionId &&
+          prior.providerAccountId === providerAccountId &&
+          (providerAccountId !== null ||
+            prior.chargeKey === chargeKey ||
+            normalizedAlias(prior.accountDescriptor) ===
+              normalizedAlias(row.accountDescriptor)),
+      );
+      [retainedProvider] = retained;
+      if (
+        retained.length > 1 ||
+        (retainedProvider &&
+          (retainedProvider.deletedAt !== null ||
+            retainedProvider.chargeKey !== chargeKey))
+      )
+        throw createAppError(
+          "CONSTRAINT_VIOLATION",
+          "A retained provider identity must identify one live observation in its original charge scope.",
+        );
     }
+    // Historical provider members can have frozen v2 identities. Reuse their
+    // membership; the full immutable-evidence comparison below still applies.
     let externalId =
-      row.providerTransactionId && chargeKey !== undefined
+      retainedProvider?.externalId ??
+      (row.providerTransactionId && chargeKey !== undefined
         ? `v3:${await sha256Hex(
             canonicalJson({
               chargeKey,
@@ -491,7 +518,7 @@ async function prepareStatementObservations(
               input.import.fingerprint,
               row.rowPosition,
             )
-          : undefined;
+          : undefined);
     // A newly supplied provider ID cannot silently give retained ID-less evidence another charge owner.
     if (
       row.providerTransactionId &&
@@ -741,6 +768,9 @@ export async function recordSourceTransactionRecords(
               externalId: sourceTransactionRecord.externalId,
               providerTransactionId:
                 sourceTransactionRecord.providerTransactionId,
+              providerAccountId: sourceTransactionRecord.providerAccountId,
+              accountDescriptor: sourceTransactionRecord.accountDescriptor,
+              deletedAt: sourceTransactionRecord.deletedAt,
             })
             .from(transactionImportRecord)
             .innerJoin(
