@@ -87,6 +87,7 @@ export const repositoryOwners = [
   "src/server/domains/purchase-import/repo/agent-auth.ts",
   "src/server/domains/purchase-import/repo/gmail/reclassification-receipt.ts",
   "src/server/domains/financial-transaction/repo/financial-evidence.ts",
+  "src/server/domains/financial-account/repo/purchaser.ts",
   "src/server/domains/expense/repo/attribution-defaults.ts",
   "src/server/domains/expense/repo/expense-category-resolution.ts",
   "src/server/db/external-id-schema.ts",

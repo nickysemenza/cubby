@@ -19,8 +19,16 @@ as posted. Transfers, card payments and ordinary income remain settlement-only.
 Booking links recorded Expenses or creates one bare Purchase and one lump
 Expense. Purchases created from bank evidence have no invented itemization,
 order identifier or printed total. New bare Purchases use the account's live
-member owner as purchaser; household-only or missing purchaser evidence needs
-review. Funding attribution remains its own dated contract.
+member owner as purchaser. Without a live member owner, a confirmed live credit
+card may use its live primary member cardholder when no authorized-user interval
+covers the charge date (or posting date when the charge date is absent). Both
+interval bounds are inclusive; future and expired access does not prevent sole
+use. Missing, deleted or nonmember primary holders and active authorized access
+need review. Provisional or deleted accounts never supply automatic purchaser
+authority. Purchase inheritance and booking share the sole-access predicate;
+page previews batch holder proof, and commits recheck current holder and access
+evidence. Accepted spending-plan replay rechecks purchaser authority before its
+no-op. Funding attribution remains its own dated contract.
 
 Transaction booking and evidence coverage use those same observed, pending and
 posted states. Supported unbooked spending remains a booking gap before posting;

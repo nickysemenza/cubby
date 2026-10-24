@@ -34,6 +34,11 @@ import {
   effectiveExpenseSpendingCategoriesSql,
   effectiveExpenseSpendingCategorySql,
 } from "~/server/domains/expense/repo/expense-category-resolution";
+import {
+  accountPurchaserKey,
+  financialAccountPurchaser,
+  loadAccountPurchaserProofs,
+} from "~/server/domains/financial-account/repo/purchaser";
 import { lockFinancialEvidenceKeys } from "~/server/domains/financial-transaction/repo/financial-evidence";
 import {
   planPurchaseRetainedSettlement,
@@ -86,13 +91,8 @@ function spendingBlocker(input: {
   categoryHistoryReviewed?: boolean;
 }) {
   const { facts, advice, category, history } = input;
-  if (
-    !facts.account.ledgerParty ||
-    facts.account.ledgerParty.kind !== "member" ||
-    facts.account.ledgerParty.deletedAt ||
-    facts.account.provisional
-  )
-    return "A confirmed member account owner is required before booking spending.";
+  if (!facts.purchaser)
+    return "A confirmed member account owner or sole member cardholder is required before booking spending.";
   if (
     !(facts.source.transactionDate ?? facts.source.postedDate) ||
     !facts.source.sourceRefs.length
@@ -219,6 +219,17 @@ export async function prepareFinancialSpendingPage(
     allocationsByTransaction.set(allocation.transactionId, existing);
   }
   const sources = [...(input.sources ?? []), ...transactions];
+  const purchaserProofs = await loadAccountPurchaserProofs(
+    db,
+    accounts.flatMap((account) =>
+      financialAccountPurchaser(account, undefined)
+        ? []
+        : sources.map((source) => ({
+            accountId: account.id,
+            date: source.transactionDate ?? source.postedDate ?? null,
+          })),
+    ),
+  );
   const dates = sources
     .flatMap((source) => source.transactionDate ?? source.postedDate ?? [])
     .sort();
@@ -254,6 +265,7 @@ export async function prepareFinancialSpendingPage(
     references,
     allocations: allocationsByTransaction,
     accounts: accountsById,
+    purchaserProofs,
     transactions: transactionsById,
     // Promise caching coalesces concurrent identical reads without extending
     // their lifetime beyond this advisory page. Commit rebuilds without it.
@@ -358,6 +370,12 @@ async function spendingFacts(
   db: Database,
   request: Request,
   page?: FinancialSpendingPage,
+  projection?: Partial<
+    Pick<
+      z.infer<typeof financialSpendingSource>,
+      "amount" | "status" | "postedDate"
+    >
+  >,
 ) {
   const row = request.transactionId
     ? page
@@ -389,6 +407,7 @@ async function spendingFacts(
   const source = row
     ? financialSpendingSource.parse({
         ...row,
+        ...projection,
         accountId: account.shortcode,
         sourceRefs: page
           ? [...(page.references.get(row.id) ?? [])]
@@ -400,6 +419,16 @@ async function spendingFacts(
       a.source.localeCompare(b.source) ||
       a.externalId.localeCompare(b.externalId),
   );
+  const date = source.transactionDate ?? source.postedDate;
+  const purchaserProof = financialAccountPurchaser(account, undefined)
+    ? undefined
+    : (
+        page?.purchaserProofs ??
+        (await loadAccountPurchaserProofs(db, [
+          { accountId: account.id, date },
+        ]))
+      ).get(accountPurchaserKey(account.id, date));
+  const purchaser = financialAccountPurchaser(account, purchaserProof);
   const allocations = row
     ? page
       ? (page.allocations.get(row.id) ?? [])
@@ -414,7 +443,15 @@ async function spendingFacts(
   const graphs = [];
   for (const allocation of allocations)
     graphs.push(await spendingGraph(db, allocation.purchaseId, page));
-  return { row, source, account, allocations, graphs };
+  return {
+    row,
+    source,
+    account,
+    purchaserProof,
+    purchaser,
+    allocations,
+    graphs,
+  };
 }
 
 /** Capacity includes other settlements and effective categories, not just a signed line. */
@@ -974,6 +1011,7 @@ async function discoverSpendingEvidence(
     policy: FINANCIAL_SPENDING_POLICY,
     source,
     advice,
+    purchaserProof: facts.purchaserProof,
     account: {
       ...account,
       createdAt: undefined,
@@ -1122,14 +1160,10 @@ export async function previewFinancialSpending(
   page?: FinancialSpendingPage,
 ): Promise<FinancialSpendingPlan> {
   const request = spendingRequestBoundary.parse(raw);
-  const facts = await spendingFacts(db, request, page);
+  const facts = await spendingFacts(db, request, page, attachment?.fields);
   // Preview an impending reference attachment without duplicating its charge.
   // Commit still requires that reference to exist in retained evidence.
   if (attachment && facts.row) {
-    facts.source = financialSpendingSource.parse({
-      ...facts.source,
-      ...attachment.fields,
-    });
     facts.source.sourceRefs = await settlementRefsIncluding(
       db,
       facts.row.id,
@@ -1258,7 +1292,7 @@ async function prepareReadySpending(
 ): Promise<FinancialSpendingPlan> {
   const { facts, category, vendor, advice, candidateEvidence, strong, basis } =
     evidence;
-  const { row, source, account } = facts;
+  const { row, source } = facts;
   const review = (reason: string): FinancialSpendingPlan => ({
     ...basis,
     status: "review_required",
@@ -1349,7 +1383,7 @@ async function prepareReadySpending(
     ...basis,
     status: "ready",
     effect,
-    purchaserId: account.ledgerParty!.shortcode,
+    purchaserId: facts.purchaser!.shortcode,
     vendorId: vendor?.shortcode ?? null,
     vendorName: vendor?.name ?? advice!.vendorName,
     spendingCategoryId: category!.shortcode,
@@ -1406,7 +1440,7 @@ export async function commitFinancialSpending(
               })
             : identity?.row;
           if (
-            facts.account.ledgerParty?.shortcode !== plan.purchaserId ||
+            facts.purchaser?.shortcode !== plan.purchaserId ||
             !acceptedVendor ||
             facts.graphs.some(
               (graph) =>
@@ -1415,7 +1449,7 @@ export async function commitFinancialSpending(
             (plan.purchaseId && !fresh.purchaseIds.includes(plan.purchaseId))
           )
             return refuse(
-              "The accepted spending identity changed; review its account owner and Purchase Vendor.",
+              "The accepted spending identity changed; review its purchaser authority and Purchase Vendor.",
             );
         }
         return { purchaseIds: fresh.purchaseIds, replayed: true };
