@@ -7,7 +7,7 @@ import {
   purchaseSettlementKinds,
 } from "@cubby/schemas/financial-transaction";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
-import { sql } from "drizzle-orm";
+import { sql, type SQL } from "drizzle-orm";
 
 import { type Database } from "~/server/db/database";
 import { type RepositoryQueryTransaction as DrizzleTransaction } from "~/server/db/repository-access.boundary";
@@ -31,6 +31,8 @@ type CandidateRow = {
   lastSeenDate: string | null;
 };
 
+const MIN_MERCHANT_SUPPORT = 2;
+
 const inferenceFromCandidates = (
   candidates: MerchantVendorCandidate[],
 ): MerchantVendorInference => {
@@ -40,40 +42,28 @@ const inferenceFromCandidates = (
   const [candidate] = candidates;
   return merchantVendorInference.parse({
     status:
-      candidate!.supportingTransactionCount >= 2
+      candidate!.supportingTransactionCount >= MIN_MERCHANT_SUPPORT
         ? "suggested"
         : "insufficient_history",
     candidates,
   });
 };
 
-/**
- * Load advisory Vendor evidence for a whole page in one query.
- *
- * The first grouping deliberately collapses each historical transaction to one
- * Vendor. Several allocations to Purchases from that Vendor remain one vote;
- * a transaction spanning Vendors fails the HAVING clause and casts no vote.
- */
-export async function merchantVendorInferences(
-  db: Database | DrizzleTransaction,
-  merchants: readonly string[],
-): Promise<Map<string, MerchantVendorInference>> {
-  const merchantKeys = [
-    ...new Set(merchants.map(normalizeMerchant).filter(Boolean)),
-  ];
-  const result = new Map<string, MerchantVendorInference>();
-  for (const key of merchantKeys) result.set(key, noInference());
-  if (merchantKeys.length === 0) return result;
+/** A lone supported candidate is safe for a decorative fallback, never a write. */
+export const suggestedMerchantVendorCandidatesSql = (keys: SQL): SQL => sql`
+  SELECT candidates.* FROM (
+    SELECT history.*, count(*) OVER (PARTITION BY "merchantKey") AS "candidateCount"
+    FROM (${merchantVendorCandidatesSql(keys)}) history
+  ) candidates
+  WHERE "candidateCount" = 1 AND "supportingTransactionCount" >= ${MIN_MERCHANT_SUPPORT}`;
 
-  const keys = sql.join(
-    merchantKeys.map((key) => sql`${key}`),
-    sql`, `,
-  );
+/** Shared history query for advisory labels and batched display-image fallbacks. */
+function merchantVendorCandidatesSql(keys: SQL): SQL {
   const settlementKinds = sql.join(
     purchaseSettlementKinds.map((kind) => sql`${kind}`),
     sql`, `,
   );
-  const queried = await unwrapDb(db).execute<CandidateRow>(sql`
+  return sql`
     WITH transaction_vendor AS (
       SELECT
         ft.id AS "transactionId",
@@ -111,7 +101,34 @@ export async function merchantVendorInferences(
       count(DISTINCT "transactionId") DESC,
       max("lastSeenDate") DESC NULLS LAST,
       "vendorName" ASC
-  `);
+  `;
+}
+
+/**
+ * Load advisory Vendor evidence for a whole page in one query.
+ *
+ * The first grouping deliberately collapses each historical transaction to one
+ * Vendor. Several allocations to Purchases from that Vendor remain one vote;
+ * a transaction spanning Vendors fails the HAVING clause and casts no vote.
+ */
+export async function merchantVendorInferences(
+  db: Database | DrizzleTransaction,
+  merchants: readonly string[],
+): Promise<Map<string, MerchantVendorInference>> {
+  const merchantKeys = [
+    ...new Set(merchants.map(normalizeMerchant).filter(Boolean)),
+  ];
+  const result = new Map<string, MerchantVendorInference>();
+  for (const key of merchantKeys) result.set(key, noInference());
+  if (merchantKeys.length === 0) return result;
+
+  const keys = sql.join(
+    merchantKeys.map((key) => sql`${key}`),
+    sql`, `,
+  );
+  const queried = await unwrapDb(db).execute<CandidateRow>(
+    merchantVendorCandidatesSql(keys),
+  );
 
   const candidatesByMerchant = new Map<string, MerchantVendorCandidate[]>();
   for (const row of queried.rows) {

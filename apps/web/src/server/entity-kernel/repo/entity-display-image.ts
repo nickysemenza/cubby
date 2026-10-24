@@ -37,6 +37,7 @@ import { z } from "zod";
 
 import { getR2PublicUrl } from "~/server/clients/r2-public-url";
 import type { Database, DrizzleTransaction } from "~/server/db";
+import { sourceTransactionSettlements } from "~/server/db/computed/source-transaction-settlement-sql";
 import { notDeleted, unwrapDb } from "~/server/db/helpers";
 import { mapImages } from "~/server/db/helpers/transform";
 import { entityAttachment, image } from "~/server/db/schema";
@@ -47,6 +48,7 @@ import {
 } from "~/server/domains/image-processing/repo/image-processing";
 import { displayableImageSql } from "~/server/domains/image/repo/image-displayability";
 import { hydrateImageReadProjection } from "~/server/domains/image/repo/image-read-projection";
+import { suggestedMerchantVendorCandidatesSql } from "~/server/domains/vendor/repo/merchant-vendor-inference";
 import { previousShortcodesFor } from "~/server/entity-kernel/repo/entity-identity";
 import {
   compileTraversal,
@@ -325,7 +327,7 @@ const displaySourceBranch = (
     usesExpenseProjectRelation: traversal.usesExpenseProjectRelation,
     inheritedRelations: traversal.inheritedRelations,
     branch: sql`
-        SELECT i.key, i.shortcode, ${source.priority} AS priority,
+        SELECT i.key, i.shortcode, ${source.priority}::integer AS priority,
                ${displayGroupColumns(groups)},
                ${sortOrder} AS "sortOrder", ${createdAt} AS "createdAt", i.id AS "imageId"
         FROM ${sql.raw(`"${traversal.rootTable}"`)} s
@@ -338,7 +340,7 @@ const displaySourceBranch = (
   };
 };
 
-const DISPLAY_BRANCHES: readonly DisplayBranch[] = [
+const DECLARED_DISPLAY_BRANCHES: readonly DisplayBranch[] = [
   ...allEntities.flatMap((entity) => {
     const branch = directStorageBranch(entity);
     return branch === null
@@ -357,6 +359,65 @@ const DISPLAY_BRANCHES: readonly DisplayBranch[] = [
     ...displaySourceBranch(source, index),
   })),
 ];
+
+// Accepted evidence wins; a uniquely supported merchant logo is a later visual fallback.
+const DISPLAY_BRANCHES: readonly DisplayBranch[] = [
+  ...DECLARED_DISPLAY_BRANCHES,
+  ...DECLARED_DISPLAY_BRANCHES.filter(
+    ({ entity }) => entity === "financialTransaction",
+  ).map((transactionBranch): DisplayBranch => ({
+    ...transactionBranch,
+    entity: "sourceTransactionRecord",
+    branch: sql`
+        SELECT media.*
+        FROM (${sourceTransactionSettlements}) accepted
+        JOIN LATERAL (
+          SELECT candidate.*
+          FROM (SELECT ${entitySchema.enum.financialTransaction}::text AS "entityKind",
+                       accepted."transaction" AS "entityId") refs
+          JOIN LATERAL (${transactionBranch.branch}) candidate ON true
+        ) media ON true
+        WHERE refs."entityKind" = ${entitySchema.enum.sourceTransactionRecord}
+          AND accepted."record" = refs."entityId"`,
+  })),
+  {
+    entity: "sourceTransactionRecord",
+    usesExpenseProjectRelation: false,
+    inheritedRelations: [],
+    branch: sql`
+      SELECT candidate.key, candidate.shortcode,
+             ${DISPLAY_SOURCES.length + 1}::integer AS priority,
+             ${displayGroupColumns([])}, candidate."sortOrder", candidate."createdAt", candidate."imageId"
+      FROM "SourceTransactionRecord" record
+      JOIN source_merchant_vendors merchant
+        ON merchant."merchantKey" = btrim(regexp_replace(lower(record.merchant), '\\s+', ' ', 'g'))
+      JOIN "Vendor" seller ON seller.shortcode = merchant."vendorShortcode" AND seller."deletedAt" IS NULL
+      JOIN LATERAL (
+        SELECT ${entitySchema.enum.vendor}::text AS "entityKind", seller.id AS "entityId"
+      ) vendor_ref ON true
+      JOIN LATERAL (
+        SELECT candidate.*
+        FROM (SELECT vendor_ref.*) refs
+        JOIN LATERAL (${directStorageBranch("vendor")}) candidate ON true
+      ) candidate ON true
+      WHERE refs."entityKind" = ${entitySchema.enum.sourceTransactionRecord}
+        AND record.id = refs."entityId" AND record."deletedAt" IS NULL`,
+  },
+];
+
+/** One history scan for all source-record merchants requested by this image batch. */
+const sourceMerchantImagesSql = (enabled: boolean): SQL => {
+  if (!enabled) return sql``;
+  const merchantKeys = sql`
+    SELECT btrim(regexp_replace(lower(record.merchant), '\\s+', ' ', 'g'))
+    FROM "SourceTransactionRecord" record
+    JOIN refs ON refs."entityId" = record.id
+      AND refs."entityKind" = ${entitySchema.enum.sourceTransactionRecord}
+    WHERE record."deletedAt" IS NULL AND record.merchant IS NOT NULL`;
+  return sql`, source_merchant_vendors AS MATERIALIZED (
+    ${suggestedMerchantVendorCandidatesSql(merchantKeys)}
+  )`;
+};
 
 /** Filter/order mixed lists by the same direct and borrowed media as thumbnails. */
 export const entityDisplayImagePresenceSql = (entity: Entity, id: SQL): SQL => {
@@ -383,6 +444,7 @@ export const entityDisplayImagePresenceSql = (entity: Entity, id: SQL): SQL => {
   return sql`EXISTS (
     WITH refs AS (SELECT ${entity}::text AS "entityKind", ${id} AS "entityId")
     ${expenseRelation}
+    ${sourceMerchantImagesSql(entity === "sourceTransactionRecord")}
     ${inheritedRelations}
     SELECT 1 FROM refs JOIN LATERAL (
       ${sql.join(branches, sql` UNION ALL `)}
@@ -468,6 +530,7 @@ async function resolveDisplayImageListsFromSqlRefs(
   const result = await unwrapDb(db).execute(sql`
     WITH ${refsSql}
     ${expenseProjectRelation}
+    ${sourceMerchantImagesSql(sourceTypes.has("sourceTransactionRecord"))}
     ${inheritedRelationsSql(selectedBranches)}
     SELECT refs."entityKind", refs."entityId"::text AS "entityId", refs."refKey", (
       SELECT COALESCE(

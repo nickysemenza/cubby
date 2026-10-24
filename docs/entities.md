@@ -862,6 +862,11 @@ The centralized resolver in
 `apps/web/src/server/entity-kernel/repo/entity-display-image.ts` composes these
 paths breadth first in one SQL read. Direct displayable images come first,
 then directly related images in declaration order, then deeper fallbacks.
+Source transaction records reuse the accepted-settlement relation to borrow the
+linked FinancialTransaction’s canonical images, including Purchase and Vendor
+fallbacks. When those yield no image, a unique supported merchant inference
+may supply the Vendor logo as a decorative fallback. Ambiguous or insufficient
+history never supplies a logo, and the fallback does not accept a match.
 Each path visits a subject kind once, so reciprocal Recipe/Meal and Task/Project
 policies terminate. Each relationship retains its declared newest/oldest ordering
 before nested relationships and attachment order. Unavailable files, PDFs,
