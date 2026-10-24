@@ -50,8 +50,8 @@ struct EntityGraphExplorerTests {
                 reference: .init(entity: .purchase, id: "PUR-\($0)"), label: "Fixture order \($0)")
         }
         let parallel = EntityGraphEdge(
-            id: "parallel", source: root, target: purchase, relationshipKey: "secondary",
-            label: "Other evidence", sourceKey: "fixture.secondary", provenance: [])
+            relationshipKey: "secondary", label: "Other evidence", sourceKey: "fixture.secondary",
+            provenance: [], id: "parallel", source: root, target: purchase)
         let graph = EntityGraphExplorer.merge(
             initial, page: .init(nodes: extra, edges: [parallel], branches: [], truncated: false), root: root)
         #expect(graph.nodes.count == 500)
@@ -96,8 +96,8 @@ struct EntityGraphExplorerTests {
     private func fixture(root: EntityRef, members: [EntityRef], total: Int? = nil) -> EntityGraph {
         let edges = members.map {
             EntityGraphEdge(
-                id: "\(root.stableKey)>\($0.stableKey)", source: root, target: $0, relationshipKey: "members",
-                label: "Connected records", sourceKey: "fixture.members", provenance: [])
+                relationshipKey: "members", label: "Connected records", sourceKey: "fixture.members",
+                provenance: [], id: "\(root.stableKey)>\($0.stableKey)", source: root, target: $0)
         }
         return .init(
             root: root,
