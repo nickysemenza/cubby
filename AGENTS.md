@@ -6,6 +6,8 @@
   [owning doc](docs/README.md#ownership-and-pruning) in the same change.
 - Reuse existing coverage. For test choice, checks, or delivery, load only the
   relevant [validation section](docs/agents/validation.md#entry-points).
+  Before any TypeScript typecheck, load the
+  [tsrs compiler entry points](docs/agents/validation-quality.md#quality-and-local-diagnostics).
 - Work directly by default. Before delegation or selecting independent review,
   load [model routing](docs/agents/model-routing.md). Preserve explicit user
   model choices and the current main session; keep edits disjoint.
