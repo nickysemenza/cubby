@@ -16,6 +16,7 @@ import { format } from "date-fns";
 import { useId, useMemo, useState } from "react";
 import { toast } from "sonner";
 
+import { renderSuggestedListFieldValue } from "~/entity/display/entity-display";
 import { fieldEnumOptions } from "~/entity/display/enum-field-display";
 import { entities, entityDetailParams } from "~/entity/entities";
 import { buildRecordComboboxItem } from "~/entity/picker/combobox-builders";
@@ -294,6 +295,14 @@ export function AddToMeal({
                     clearable
                   />
                   <FieldSuggestionHint
+                    renderValue={(value) =>
+                      renderSuggestedListFieldValue(
+                        "meal",
+                        { id: "" },
+                        "mealType",
+                        value,
+                      )
+                    }
                     suggestion={suggestions.mealType ?? null}
                     applied={false}
                     currentValue={mealType}
@@ -324,6 +333,14 @@ export function AddToMeal({
                     label="kind"
                   />
                   <FieldSuggestionHint
+                    renderValue={(value) =>
+                      renderSuggestedListFieldValue(
+                        "meal",
+                        { id: "" },
+                        "mealKind",
+                        value,
+                      )
+                    }
                     suggestion={suggestions.mealKind ?? null}
                     applied={false}
                     currentValue={mealKind}

@@ -52,7 +52,7 @@ describe("inline suggestion review", () => {
         currentValue={null}
         questionKey="synthetic-correction"
         onApply={() => {}}
-        renderCorrectionValue={() => "Readable category"}
+        renderValue={() => "Readable category"}
         outcome={{
           kind: "correction",
           targetInputFingerprint: null,
