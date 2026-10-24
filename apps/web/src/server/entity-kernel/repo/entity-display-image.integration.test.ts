@@ -10,6 +10,7 @@ import { getR2PublicUrl } from "~/server/clients/r2-public-url";
 import { getDb } from "~/server/db/helpers";
 import {
   entityAttachment,
+  financialTransaction,
   image,
   imageDerivative,
   product,
@@ -31,6 +32,7 @@ import {
 } from "~/server/domains/image-processing/repo/image-processing";
 import { createUploadedImageRecord } from "~/server/domains/image/repo/image";
 import { hydrateImageReadProjection } from "~/server/domains/image/repo/image-read-projection";
+import { createFinancialEvidenceFixture } from "~/server/domains/transaction-import/repo/source-transaction-record.fixtures";
 import { createVendor } from "~/server/domains/vendor/repo/vendor";
 import { createWish, updateWish, wishList } from "~/server/domains/wish/repo";
 import {
@@ -70,6 +72,58 @@ import {
 // index never collides across tests.
 describe("entity display image resolver", () => {
   const ctx = withTestDb();
+
+  it("borrows a source record logo only through live accepted evidence in one batch", async () => {
+    const { record } = await createFinancialEvidenceFixture(ctx.db);
+    const ref = {
+      entityKind: "sourceTransactionRecord",
+      entityId: record.shortcode,
+    } as const;
+    const key = entityRefKey(ref.entityKind, ref.entityId);
+    expect(
+      (await resolvePublicEntityDisplayImages(ctx.db, [ref])).get(key),
+    ).toBeUndefined();
+    const logo = await makeImage();
+    const seller = await createRepoEntity(ctx, "vendor", {
+      name: "Synthetic linked seller",
+    });
+    await insertEntityAttachments(ctx.db, {
+      entityId: seller.entityId,
+      role: "logo",
+      imageId: logo.id,
+    });
+    const purchase = await createRepoEntity(ctx, "purchase", {
+      vendorId: seller.output.id,
+      date: "2026-01-01",
+    });
+    const account = await createRepoEntity(ctx, "financialAccount", {
+      name: "Synthetic linked account",
+    });
+    const transaction = await createRepoEntity(ctx, "financialTransaction", {
+      accountId: account.output.id,
+      kind: "purchase",
+      status: "posted",
+      amount: 1,
+      postedDate: "2026-01-01",
+      sourceRefs: [{ source: record.source, externalId: record.externalId }],
+      allocations: [{ purchaseId: purchase.output.id, amount: 1 }],
+    });
+    const measured = await countTestDbQueries(() =>
+      resolvePublicEntityDisplayImages(ctx.db, [ref]),
+    );
+    expect(measured.result.get(key)).toEqual({
+      url: getR2PublicUrl(logo.key),
+      representations: expectedRepresentations(logo.key),
+    });
+    expect(measured.queryCount).toBe(1);
+    await getDb(ctx.db)
+      .update(financialTransaction)
+      .set({ deletedAt: new Date() })
+      .where(eq(financialTransaction.id, transaction.entityId));
+    expect(
+      (await resolvePublicEntityDisplayImages(ctx.db, [ref])).get(key),
+    ).toBeUndefined();
+  });
 
   it("keeps images already resolved by a repository list", async () => {
     const record = await createProductIdentityFixture(

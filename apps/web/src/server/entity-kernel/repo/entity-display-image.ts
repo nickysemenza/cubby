@@ -37,6 +37,7 @@ import { z } from "zod";
 
 import { getR2PublicUrl } from "~/server/clients/r2-public-url";
 import type { Database, DrizzleTransaction } from "~/server/db";
+import { sourceTransactionSettlements } from "~/server/db/computed/source-transaction-settlement-sql";
 import { notDeleted, unwrapDb } from "~/server/db/helpers";
 import { mapImages } from "~/server/db/helpers/transform";
 import { entityAttachment, image } from "~/server/db/schema";
@@ -325,7 +326,7 @@ const displaySourceBranch = (
     usesExpenseProjectRelation: traversal.usesExpenseProjectRelation,
     inheritedRelations: traversal.inheritedRelations,
     branch: sql`
-        SELECT i.key, i.shortcode, ${source.priority} AS priority,
+        SELECT i.key, i.shortcode, ${source.priority}::integer AS priority,
                ${displayGroupColumns(groups)},
                ${sortOrder} AS "sortOrder", ${createdAt} AS "createdAt", i.id AS "imageId"
         FROM ${sql.raw(`"${traversal.rootTable}"`)} s
@@ -338,7 +339,7 @@ const displaySourceBranch = (
   };
 };
 
-const DISPLAY_BRANCHES: readonly DisplayBranch[] = [
+const DECLARED_DISPLAY_BRANCHES: readonly DisplayBranch[] = [
   ...allEntities.flatMap((entity) => {
     const branch = directStorageBranch(entity);
     return branch === null
@@ -355,6 +356,29 @@ const DISPLAY_BRANCHES: readonly DisplayBranch[] = [
   ...DISPLAY_SOURCES.map((source, index) => ({
     entity: source.entity,
     ...displaySourceBranch(source, index),
+  })),
+];
+
+// Source records use the same accepted-evidence relation as their reader. Merchant
+// inference is intentionally excluded; every borrowed cover requires a real link.
+const DISPLAY_BRANCHES: readonly DisplayBranch[] = [
+  ...DECLARED_DISPLAY_BRANCHES,
+  ...DECLARED_DISPLAY_BRANCHES.filter(
+    ({ entity }) => entity === "financialTransaction",
+  ).map((transactionBranch): DisplayBranch => ({
+    ...transactionBranch,
+    entity: "sourceTransactionRecord",
+    branch: sql`
+        SELECT media.*
+        FROM (${sourceTransactionSettlements}) accepted
+        JOIN LATERAL (
+          SELECT candidate.*
+          FROM (SELECT ${entitySchema.enum.financialTransaction}::text AS "entityKind",
+                       accepted."transaction" AS "entityId") refs
+          JOIN LATERAL (${transactionBranch.branch}) candidate ON true
+        ) media ON true
+        WHERE refs."entityKind" = ${entitySchema.enum.sourceTransactionRecord}
+          AND accepted."record" = refs."entityId"`,
   })),
 ];
 

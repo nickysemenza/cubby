@@ -2,6 +2,7 @@ import { entitySummary } from "@cubby/schemas/entity-summary";
 import type { WorkQueueRow } from "@cubby/schemas/work-queue";
 import { Link } from "@tanstack/react-router";
 
+import { EntityPill } from "~/entity/components/entity-pill";
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { entities, isBrowserRoutedEntity } from "~/entity/entities";
 import { cn } from "~/lib/utils";
@@ -62,7 +63,16 @@ export function WorkRowLink({
         title={row.name}
         className={cn(LINK_CLASS, className)}
       >
-        {row.name}
+        {row.entity && row.id ? (
+          <EntityPill
+            entity={row.entity}
+            id={row.id}
+            name={row.name}
+            displayImage={null}
+          />
+        ) : (
+          row.name
+        )}
       </Link>
     );
   if (row.entity === null || row.id === null)
@@ -76,7 +86,12 @@ export function WorkRowLink({
       </Link>
     );
   return isBrowserRoutedEntity(row.entity) ? (
-    <EntityRefLink entity={row.entity} id={row.id} name={row.name} bare />
+    <EntityRefLink
+      entity={row.entity}
+      id={row.id}
+      name={row.name}
+      className={cn("max-w-full min-w-0", className)}
+    />
   ) : (
     <span className={cn("truncate font-medium", className)}>{row.name}</span>
   );

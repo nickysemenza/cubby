@@ -295,3 +295,8 @@ for all loaded entries. The shared app provider collects otherwise-uncovered
 mounted references into the same chunked resolver. Pills register references,
 never own a query. Explicit collection batches retain ownership and seeded null
 results remain authoritative. Records with no eligible image retain their mark.
+
+Home Meals and record-backed work rows use `EntityRefLink` pills with collection-owned
+image batches. Queue review links retain their Suggestions destination. Source
+transaction records borrow canonical images through accepted transaction evidence.
+A merchant label or suggested Vendor alone does not supply a logo.
