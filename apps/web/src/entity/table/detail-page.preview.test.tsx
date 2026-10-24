@@ -1,5 +1,5 @@
 import { CircleIcon } from "@phosphor-icons/react/dist/csr/Circle";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it } from "vitest";
 import { page } from "vitest/browser";
 
@@ -112,4 +112,32 @@ it("keeps all record sections open while jumping between groups", async () => {
   expect(screen.getByRole("textbox", { name: "Review draft" })).toHaveValue(
     "Unsaved review",
   );
+});
+
+it("defers folded execution evidence and opens it through the section index", async () => {
+  await page.viewport(1280, 900);
+  render(
+    <DetailSections
+      rawData={{}}
+      sections={[
+        {
+          id: "execution-log",
+          placement: "primary",
+          title: "Execution log",
+          icon: CircleIcon,
+          workspace: "evidence",
+          collapsed: true,
+          content: <p>Recorded execution evidence</p>,
+        },
+      ]}
+    />,
+    { wrapper: harness.wrapper },
+  );
+  expect(screen.queryByText("Recorded execution evidence")).toBeNull();
+  fireEvent.click(
+    within(
+      await screen.findByRole("navigation", { name: "Section index" }),
+    ).getByRole("link", { name: /^Execution log$/ }),
+  );
+  expect(await screen.findByText("Recorded execution evidence")).toBeVisible();
 });

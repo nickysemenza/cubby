@@ -24,6 +24,34 @@ the static reference usable. Completion is a stored status, not a claim that
 every target succeeded. Scheduling cadence and start controls remain in their
 existing owners; the catalog does not infer them from the trigger category.
 
+## Review a Run
+
+Run detail leads with its purpose, recorded outcomes and actionable work. Photo
+review, purchase findings, prepared orders and Assessment review keep their own
+domain tools within the same record workspace. Items and outcomes is an inline
+searchable table: a row opens evidence beside the list (a sheet on phones),
+while its record name opens the source record. Input-target status, published
+recommendations and actual record changes remain separate facts.
+
+Review tables start at Needs attention when supported decisions exist, otherwise
+Results. Results includes processing, skipped, blocked and completed items;
+completion never implies every item succeeded. Execution steps, diagnostics,
+transcripts and usage follow the work and start folded. Section links open the
+corresponding evidence without replacing the workspace.
+
+Live updates refresh existing values without reordering admitted rows or closing
+the inspector. New items wait behind Show new items. A resolved item stays in the
+current attention view until the member refreshes that view. Filters and explicit
+selection define batch scope: selected rows take precedence; otherwise only ready
+items matching the current view apply. The impact summary precedes the write.
+Unsupported or stale decisions cannot become writes just by opening the inspector;
+review actions come from the shared domain queue and retain its fingerprints.
+
+Completed Runs retain evidence, changes, supported corrections and existing retry
+controls. A retry keeps its execution lineage rather than rewriting the original
+Run's history. Table views and selection are session state, not another stored
+work ledger.
+
 ## Shared work, different ways to complete it
 
 The Work queue, a record's work section, and a Run's progress should explain

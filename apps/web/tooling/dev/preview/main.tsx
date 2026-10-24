@@ -1,3 +1,4 @@
+import "~/fonts.css";
 import "~/styles.css";
 
 import { IconContext } from "@phosphor-icons/react/dist/lib/context";
@@ -22,8 +23,6 @@ import {
   Provider,
 } from "~/integrations/tanstack-query/root-provider";
 import { installFeatures } from "~/features/registry";
-import { RunWorkspacePrototype } from "~/features/run/run-workspace.prototype";
-import { overrideStartDispatch } from "~/integrations/tanstack-query/start-transport";
 import { Picker } from "~/ui/combobox/picker";
 import { ErrorDetailsDialogHost } from "~/ui/feedback/error-details-dialog";
 import { Label } from "~/ui/primitives/label";
@@ -40,18 +39,6 @@ import {
 } from "./fixtures";
 
 installFeatures();
-
-const runPrototype =
-  new URLSearchParams(window.location.search).get("prototype") === "run";
-if (runPrototype) {
-  // The real shell schedules catch-up on mount. No prototype operation reaches
-  // the server, including shell maintenance and navigation-count reads.
-  overrideStartDispatch(async (operation) => {
-    if (operation === "maintenance.requestCatchUp")
-      return { ok: true, data: {} };
-    throw new Error(`Synthetic Run preview does not dispatch ${operation}`);
-  });
-}
 
 /**
  * Dev-only fixture preview, served by `tooling/dev/worker.ts` at
@@ -151,10 +138,6 @@ function PreviewToolbar({
 }
 
 function PreviewPage() {
-  return runPrototype ? <RunWorkspacePrototype /> : <ListPreviewPage />;
-}
-
-function ListPreviewPage() {
   const { entity, state } = previewSearchSchema.parse(
     useSearch({ strict: false }),
   );

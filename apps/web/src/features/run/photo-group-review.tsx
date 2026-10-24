@@ -122,6 +122,11 @@ import {
   toGroupInput,
   type ProposalEdit,
 } from "./photo-review-model";
+import {
+  PhotoReviewEmpty,
+  PhotoReviewScopeControls,
+  usePhotoReviewScope,
+} from "./photo-review-scope";
 import { loadPhotoRunCandidateChunks } from "./photo-run-candidates";
 
 type ReviewSubmission = ReviewPhotoGroupsAction & { onSaved?: () => void };
@@ -3463,19 +3468,24 @@ export function PhotoGroupReview({
   query: ReturnType<typeof usePhotoRunReview>;
 }) {
   const [session] = useState(() => new PhotoReviewDraftSession());
+  const proposals = query.data?.review.proposals;
+  const reviewView = usePhotoReviewScope({ proposals, getName: proposalName });
+  const {
+    admitted,
+    visible: visibleProposals,
+    ready,
+    filteredReady,
+  } = reviewView;
   const draft = useSyncExternalStore(
     session.subscribe,
     session.getSnapshot,
     session.getSnapshot,
   );
   const queryClient = useQueryClient();
-  const candidates = usePhotoRunCandidates(
-    runId,
-    query.data?.review.proposals ?? NO_PROPOSALS,
-  );
+  const candidates = usePhotoRunCandidates(runId, proposals ?? NO_PROPOSALS);
   const groupSections = useMemo(
     () =>
-      (query.data?.review.proposals ?? []).map((proposal) => {
+      visibleProposals.map((proposal) => {
         const Icon =
           photoNavGlyphs[proposal.product.kind][
             proposal.state !== "proposed"
@@ -3492,7 +3502,7 @@ export function PhotoGroupReview({
           content: null,
         };
       }),
-    [query.data?.review.proposals],
+    [visibleProposals],
   );
   useIndexedSubsections("photo-batch", groupSections);
   const action = useReviewAction(runId);
@@ -3561,24 +3571,6 @@ export function PhotoGroupReview({
             )
             .map((item) => item.groupKey),
         );
-        if (
-          groupKeys.length === 1 &&
-          result.results.some(
-            (item) =>
-              item.outcome === "committed" || item.outcome === "replayed",
-          )
-        ) {
-          const next = result.proposals.find(
-            (item) =>
-              item.state === "proposed" && !groupKeys.includes(item.groupKey),
-          );
-          if (next)
-            requestAnimationFrame(() =>
-              document
-                .getElementById(`photo-group-${next.groupKey}`)
-                ?.scrollIntoView({ block: "start" }),
-            );
-        }
       } catch (error) {
         showErrorToast(error);
       }
@@ -3598,14 +3590,14 @@ export function PhotoGroupReview({
           detail:
             query.data.lifecycle.dispatchError ??
             (query.data.lifecycle.failedImageIds.length
-              ? "Retry failed descriptions above, or explicitly continue without those photos. Their originals are retained."
+              ? "Retry failed descriptions below, or explicitly continue without those photos. Their originals are retained."
               : "Review the ungrouped photos below and use a photo’s menu to propose a group. Existing approved items are retained."),
         }
       : query.data.lifecycle.processor === "external"
         ? {
             title: "Waiting for your Claude/Codex session to propose groups.",
             detail:
-              "Use the handoff above once descriptions are ready, or use a photo’s menu to create a group yourself.",
+              "Use the grouping control below once descriptions are ready, or use a photo’s menu to create a group yourself.",
           }
         : query.data.lifecycle.processor === "cubby"
           ? {
@@ -3634,11 +3626,10 @@ export function PhotoGroupReview({
       productsById.set(proposal.committedProduct.id, proposal);
   }
   const resultProducts = [...productsById.values()];
-  const ready = proposed.filter((proposal) => !proposal.blockedReason);
   const selectedBatch = ready.filter((proposal) =>
     draft.selected.has(proposal.groupKey),
   );
-  const applyingBatch = draft.selected.size ? selectedBatch : ready;
+  const applyingBatch = draft.selected.size ? selectedBatch : filteredReady;
   const groupByImage = new Map<string, string>();
   for (const proposal of review.proposals)
     for (const entry of [...proposal.images, ...proposal.skip]) {
@@ -3656,7 +3647,7 @@ export function PhotoGroupReview({
     <PhotoDraftContext value={session}>
       <PhotoCandidatesContext value={candidates}>
         <Stack gap="lg">
-          {results.length > 0 ? (
+          {results.length > 0 && !reviewView.attention ? (
             <Section
               headingAs="h2"
               title="Import results"
@@ -3736,9 +3727,10 @@ export function PhotoGroupReview({
             title="Photo review"
             caption={`${proposed.length} to review · ${settled.length} settled · ${review.unassignedImageIds.length} photos not in a group`}
           >
+            <PhotoReviewScopeControls review={reviewView} />
             {proposed.length > 0 ? (
               <PhotoRunDestination
-                defaults={query.data?.defaults}
+                defaults={query.data.defaults}
                 disabled={busy}
                 onChange={(defaults) =>
                   defaultsCommand.mutate(
@@ -3762,13 +3754,16 @@ export function PhotoGroupReview({
                     ? "Saved"
                     : "Changes save when you leave a field."}
             </output>
-            {proposed.some((group) => group.blockedReason) ? (
+            {visibleProposals.some(
+              (group) => group.state === "proposed" && group.blockedReason,
+            ) ? (
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={() => {
-                  const attention = proposed.filter(
-                    (group) => group.blockedReason,
+                  const attention = visibleProposals.filter(
+                    (group) =>
+                      group.state === "proposed" && group.blockedReason,
                   );
                   const previous = attention.findIndex(
                     (group) => group.groupKey === nextAttention.current,
@@ -3797,15 +3792,17 @@ export function PhotoGroupReview({
               >
                 <span className="text-xs text-muted-foreground">
                   {applyingBatch.length
-                    ? `On apply: ${applyingBatch.filter((group) => group.product.kind === "create").length} new Products · ${applyingBatch.filter((group) => group.product.kind === "existing").length} existing Products matched · ${applyingBatch.reduce((sum, group) => sum + (group.inventory?.quantity ?? 0), 0)} stock units to add · ${applyingBatch.filter((group) => !group.inventory).length} groups with no stock change.`
-                    : "Select resolved items to apply together. Unresolved items stay in review."}
+                    ? `${draft.selected.size ? "Selected items" : "Ready items in this view"} — On apply: ${applyingBatch.filter((group) => group.product.kind === "create").length} new Products · ${applyingBatch.filter((group) => group.product.kind === "existing").length} existing Products matched · ${applyingBatch.reduce((sum, group) => sum + (group.inventory?.quantity ?? 0), 0)} stock units to add · ${applyingBatch.filter((group) => !group.inventory).length} groups with no stock change.`
+                    : "No ready items in this scope. Unresolved items stay in review."}
                 </span>
                 <Row gap="sm" wrap>
                   <Button
                     variant="outline"
-                    disabled={busy || ready.length === 0}
+                    disabled={busy || filteredReady.length === 0}
                     onClick={() =>
-                      session.select(ready.map((proposal) => proposal.groupKey))
+                      session.select(
+                        filteredReady.map((proposal) => proposal.groupKey),
+                      )
                     }
                   >
                     Select all resolved items
@@ -3861,12 +3858,22 @@ export function PhotoGroupReview({
               )
             ) : null}
           </Section>
-          {review.proposals.length > 0 ? (
+          <PhotoReviewEmpty
+            total={review.proposals.length}
+            visible={visibleProposals.length}
+          />
+          {admitted.length > 0 ? (
             <div className="min-w-0">
               <div className="min-w-0 space-y-6">
-                {review.proposals.map((selected, index) => (
+                {/* Hidden editors stay mounted so filtering preserves unsaved drafts. */}
+                {admitted.map((selected, index) => (
                   <div
                     key={selected.groupKey}
+                    hidden={
+                      !visibleProposals.some(
+                        (item) => item.groupKey === selected.groupKey,
+                      )
+                    }
                     id={`photo-group-${selected.groupKey}`}
                     className="scroll-mt-20"
                     data-detail-section

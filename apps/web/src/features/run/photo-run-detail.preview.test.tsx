@@ -894,6 +894,7 @@ it("keeps a dirty field through refresh and saves it before approval", async () 
 
   rejectName = false;
   await userEvent.click(approve);
+  await userEvent.click(screen.getByRole("button", { name: /^Results · 1$/ }));
   await waitFor(() =>
     expect(screen.getByLabelText("Products from this import")).toBeVisible(),
   );

@@ -2,6 +2,7 @@ import type {
   ColumnFiltersState,
   ColumnVisibilityState,
   OnChangeFn,
+  RowSelectionState,
   RowData,
 } from "@tanstack/react-table";
 import { useMemo } from "react";
@@ -24,6 +25,7 @@ export function useLocalTable<T extends RowData>({
   onColumnFiltersChange,
   rowContentVersion,
   totalCount = rows.length,
+  selection,
 }: {
   rows: readonly T[];
   columns: CubbyColumnCollection<T>;
@@ -34,6 +36,10 @@ export function useLocalTable<T extends RowData>({
   rowContentVersion?: unknown;
   /** A larger source total suppresses local counts that could imply full coverage. */
   totalCount?: number;
+  selection?: {
+    rowSelection: RowSelectionState;
+    onRowSelectionChange: OnChangeFn<RowSelectionState>;
+  };
 }) {
   const data = useMemo(() => [...rows], [rows]);
   const searchableColumns = useMemo(() => {
@@ -72,7 +78,7 @@ export function useLocalTable<T extends RowData>({
     data,
     columns: tableColumns,
     getRowId,
-    enableRowSelection: false,
+    enableRowSelection: Boolean(selection),
     meta: {
       defaultLayout,
       primarySearch,
@@ -84,7 +90,13 @@ export function useLocalTable<T extends RowData>({
       columnPinning: defaultLayout.columnPinning,
       columnVisibility: defaultLayout.columnVisibility,
     },
-    ...(columnFilters ? { state: { columnFilters } } : {}),
+    state: {
+      ...(columnFilters ? { columnFilters } : {}),
+      ...(selection ? { rowSelection: selection.rowSelection } : {}),
+    },
+    ...(selection
+      ? { onRowSelectionChange: selection.onRowSelectionChange }
+      : {}),
     ...(onColumnFiltersChange ? { onColumnFiltersChange } : {}),
   });
 }

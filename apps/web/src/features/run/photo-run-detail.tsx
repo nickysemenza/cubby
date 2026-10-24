@@ -257,6 +257,12 @@ export function PhotoImportRunView({ run }: { run: RunDetail }) {
   const failed = review.data?.lifecycle?.failedImageIds ?? [];
   return (
     <Stack gap="lg">
+      <PhotoGroupReview
+        key={run.publicId}
+        runId={run.publicId}
+        query={review}
+        hasAgent={runHasAgent(run)}
+      />
       <PhotoRunProgress run={run} review={review.data}>
         {review.data?.lifecycle.phase === "waiting_for_upload" ? (
           <Stack gap="sm">
@@ -367,12 +373,6 @@ export function PhotoImportRunView({ run }: { run: RunDetail }) {
           </StatusText>
         ) : null}
       </PhotoRunProgress>
-      <PhotoGroupReview
-        key={run.publicId}
-        runId={run.publicId}
-        query={review}
-        hasAgent={runHasAgent(run)}
-      />
     </Stack>
   );
 }

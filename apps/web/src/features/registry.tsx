@@ -105,6 +105,7 @@ const isLiveRun = (run: { status: string }) =>
 const runReportSlot = (
   report: RunReportSlotId,
   applies?: (run: RunOut) => boolean,
+  collapsed = false,
 ): PresentationCoverage<DetailSlot<"run">> =>
   slot(
     () =>
@@ -112,16 +113,16 @@ const runReportSlot = (
         default: m.runReportSlots[report],
       })),
     applies,
+    collapsed,
   );
 
 type SlotModule<T> = Promise<{ default: T }>;
 const slot = <E extends GenericDetailEntity>(
   load: () => SlotModule<DetailSlotComponent<E>>,
   applies?: (record: DetailRecordOf<E>) => boolean,
+  collapsed = false,
 ): PresentationCoverage<DetailSlot<E>> =>
-  implemented(
-    applies ? { component: lazy(load), applies } : { component: lazy(load) },
-  );
+  implemented({ component: lazy(load), applies, collapsed });
 
 /** Reports share one renderer on every entity; only the declared slot changes. */
 const reportSlot = <E extends GenericDetailEntity>(report: ReportSlot) =>
@@ -286,6 +287,7 @@ const detailSlots = {
     steps: slot(
       () => named(import("~/features/run/run-detail"), "RunStepsDetail"),
       (run) => isStepRunPurpose(run.purpose),
+      true,
     ),
     decisions: slot(
       () => named(import("~/features/run/run-detail"), "RunDecisions"),
@@ -294,8 +296,9 @@ const detailSlots = {
     diagnostics: slot(
       () => named(import("~/features/run/run-detail"), "RunDiagnostics"),
       (run) => isExecutedRunPurpose(run.purpose),
+      true,
     ),
-    "live-progress": runReportSlot("live-progress"),
+    "live-progress": runReportSlot("live-progress", undefined, true),
     "import-controls": slot(
       () =>
         named(
@@ -304,10 +307,11 @@ const detailSlots = {
         ),
       isImportRun,
     ),
-    "import-stats": runReportSlot("import-stats", isImportRun),
+    "import-stats": runReportSlot("import-stats", isImportRun, true),
     "import-progress-live": runReportSlot(
       "import-progress-live",
       (run) => isImportRun(run) && isLiveRun(run),
+      true,
     ),
     "import-agent-live": slot(
       () =>
@@ -319,7 +323,10 @@ const detailSlots = {
     ),
     "import-purchases": runReportSlot("import-purchases", isImportRun),
     "import-findings": runReportSlot("import-findings", isImportRun),
-    "import-targets": runReportSlot("import-targets", isImportRun),
+    "import-targets": slot(
+      () => named(import("~/features/run/run-targets"), "RunTargets"),
+      (run) => run.purpose !== "photo_inventory",
+    ),
     "import-prepared-orders": runReportSlot(
       "import-prepared-orders",
       isImportRun,
@@ -327,6 +334,7 @@ const detailSlots = {
     "import-progress-stopped": runReportSlot(
       "import-progress-stopped",
       (run) => isImportRun(run) && !isLiveRun(run),
+      true,
     ),
     "import-agent-stopped": slot(
       () =>
@@ -335,9 +343,10 @@ const detailSlots = {
           "RunImportAgentStopped",
         ),
       isImportRun,
+      true,
     ),
-    "import-timeline": runReportSlot("import-timeline"),
-    "import-debug-log": runReportSlot("import-debug-log"),
+    "import-timeline": runReportSlot("import-timeline", undefined, true),
+    "import-debug-log": runReportSlot("import-debug-log", undefined, true),
     suggestions: slot(
       () => named(import("~/features/run/slots"), "RunSuggestions"),
       (run) => run.purpose === "suggestion_sweep",
@@ -350,7 +359,7 @@ const detailSlots = {
         ),
       (run) => run.purpose === "photo_inventory",
     ),
-    "ai-usage": runReportSlot("ai-usage"),
+    "ai-usage": runReportSlot("ai-usage", undefined, true),
     changes: slot(() => named(import("~/features/run/slots"), "RunChanges")),
   },
   image: {
