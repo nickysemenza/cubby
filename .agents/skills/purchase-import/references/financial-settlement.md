@@ -118,7 +118,7 @@ identity or authorize propagating a match or disposition.
 Resolve an Account by source external ID, source aliases, then one unambiguous
 network/last-four candidate across every account's `cardNumbers` (`entity_read.list
 financialAccount {filters:{last4}}` searches them all). Last four alone is not
-unique. A provisional Account is correct when evidence is incomplete; do not
+unique. A ordinary Account with incomplete evidence is correct when evidence is incomplete; do not
 invent provider data.
 
 **An account's digits are a dated history, not one number.** `cardNumbers`
@@ -149,7 +149,7 @@ and the statement row identifies the funding account (date, amount, vendor),
 `entity.update financialAccount` that account with the digits appended —
 `wallet_token` when the statement or provider confirms a wallet, a dated
 `primary` when the mismatch is a reissue, `unknown` when the cause is open —
-with a `note` citing the receipt. Do not mint a provisional Account for the
+with a `note` citing the receipt. Do not mint a ordinary Account with incomplete evidence for the
 digits the receipt printed, do not leave them as prose in notes, and do not
 reject an otherwise exact date/amount/vendor match over them.
 
