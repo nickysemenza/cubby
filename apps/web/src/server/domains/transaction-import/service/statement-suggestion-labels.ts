@@ -1020,7 +1020,9 @@ async function runStatementLabelBatch(
         ...entry,
         computed: computed[index]!,
       })),
-      STATEMENT_PUBLISH_CONCURRENCY,
+      // Scoped checkpoint writes share this Job's progress row. Serializing
+      // these DB-only writes avoids exhausting snapshot retries on our own page.
+      input.scope ? 1 : STATEMENT_PUBLISH_CONCURRENCY,
       async (entry) => {
         const { current, target, computed } = entry;
         if (skipped.has(chargeId(current.charge))) return;

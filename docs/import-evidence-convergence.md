@@ -585,6 +585,8 @@ Scope follows regeneration and is checked again inside automatic review's serial
 write admission, so valid fresh evidence for another account cannot authorize an effect.
 Scoped checkpoints and label publications also recheck the live resolver inside their
 serializable write transactions, including batch fallback and committed receipt recovery.
+Scoped checkpoint retention runs sequentially within a label page because every new
+checkpoint updates the same Job progress row. Model preparation remains batched.
 An out-of-scope result preserves existing evidence and paid checkpoints without publishing
 or acknowledging that target. Background calls without scope retain their ordinary path.
 Both no-action-prefix and ordinary receipt completion recheck that same scope inside
