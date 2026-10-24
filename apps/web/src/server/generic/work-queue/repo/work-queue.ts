@@ -188,6 +188,20 @@ const gapViewFilters = (
   const gapView = workQueueGapViews.find((view) => view.entity === entity);
   if (!gapView) throw new Error(`Work queue has no gap view for ${entity}`);
   const filters = viewFilters(entity, gapView.view);
+  if (scope.record?.entity === entity && scope.record.quality) {
+    const checks = new Set<string>(
+      workQueueGapChecks(gapView).filter(
+        (check) => !scope.check || scope.check.includes(check),
+      ),
+    );
+    const quality = scope.record.quality;
+    const missing = [...quality.gaps, ...quality.relatedGaps].some((gap) =>
+      checks.has(gap.check),
+    );
+    // Record strips use current evidence for both admission and counts. Broad
+    // queues retain indexed published predicates; this read publishes nothing.
+    return missing ? { ...filters, dataGap: undefined } : null;
+  }
   if (!scope.check) return filters;
   const requested = new Set(scope.check);
   const checks = workQueueGapChecks(gapView).filter((check) =>
@@ -717,18 +731,24 @@ async function stateRowQuality<E extends ScoredEntity & ShortcodeEntity>(
   db: Database,
   entity: E,
   rows: WorkQueueRow[],
+  record?: WorkQueueScope["record"],
 ) {
   const ids = await resolveLiveShortcodes(
     db,
     rows.flatMap((item) => (item.id ? [item.id] : [])),
     entity,
   );
+  const liveId =
+    record?.entity === entity && record.quality
+      ? ids.get(record.id)
+      : undefined;
   const qualities = await loadDataQualities(
     db,
     entity,
-    [...ids.values()],
+    [...ids.values()].filter((id) => id !== liveId),
     "stored",
   );
+  if (liveId && record?.quality) qualities.set(liveId, record.quality);
   for (const item of rows) {
     const id = item.id ? ids.get(item.id) : undefined;
     const quality = id ? qualities.get(id) : undefined;
@@ -752,10 +772,14 @@ async function stateRowQuality<E extends ScoredEntity & ShortcodeEntity>(
   }
 }
 
-async function stateRowQualities(db: Database, items: WorkQueueRow[]) {
+async function stateRowQualities(
+  db: Database,
+  items: WorkQueueRow[],
+  record?: WorkQueueScope["record"],
+) {
   for (const entity of scoredEntities) {
     const rows = items.filter((item) => item.entity === entity);
-    if (rows.length > 0) await stateRowQuality(db, entity, rows);
+    if (rows.length > 0) await stateRowQuality(db, entity, rows, record);
   }
 }
 
@@ -1020,7 +1044,7 @@ async function queryWorkQueue(
       items: workQueueOutSchema.shape.items,
     })
     .parse(result.rows[0]);
-  await stateRowQualities(db, row.items);
+  await stateRowQualities(db, row.items, record);
   const contexts = await loadWorkContexts(db, row.items, actor);
   for (const item of row.items) {
     item.explanations = projectWorkExplanations(item, contexts.get(item.key));
@@ -1073,6 +1097,20 @@ export async function readRecordWorkQueueWith(
 ) {
   const parsed = parseShortcode(id);
   if (!parsed) throw new Error(`Work queue record ${id} is not a shortcode`);
+  const record: NonNullable<WorkQueueScope["record"]> = {
+    entity: parsed.type,
+    id: parsed.shortcode,
+  };
+  const entity = scoredEntities.find((kind) => kind === parsed.type);
+  if (entity) {
+    const entityId = (
+      await resolveLiveShortcodes(db, [parsed.shortcode], entity)
+    ).get(parsed.shortcode);
+    if (entityId)
+      record.quality = (
+        await loadDataQualities(db, entity, [entityId], "live")
+      ).get(entityId);
+  }
   return queryWorkQueue(
     db,
     problemSelections,
@@ -1082,7 +1120,7 @@ export async function readRecordWorkQueueWith(
       sort: [{ orderBy: "kind", direction: "asc" }],
     }),
     memberOnly,
-    { entity: parsed.type, id: parsed.shortcode },
+    record,
     actor,
   );
 }

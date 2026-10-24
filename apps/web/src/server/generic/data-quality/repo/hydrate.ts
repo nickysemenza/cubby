@@ -374,8 +374,9 @@ WHERE ${t.id} = ANY(${uuidArrayParam(ids)}) AND ${liveQualityRow(t)}
 /**
  * Real, computed `DataQuality` for live rows of one entity, keyed by id. A
  * requested id that is deleted or unknown is absent from the map. Record
- * reads evaluate stored-mode checks live; list pages and the Work queue pass
- * `"stored"` so displayed quality matches the published rows they sort by.
+ * reads, including record-scoped Work strips, evaluate stored-mode checks
+ * live; list pages and population Work queues pass `"stored"` so displayed
+ * quality matches the published rows they sort by.
  */
 export const loadDataQualities = async <E extends ScoredEntity>(
   db: Database | DrizzleTransaction,
