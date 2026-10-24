@@ -130,7 +130,7 @@ describe("connection discovery source freshness", () => {
       });
     },
   );
-  it("preserves batch order and changes only the edited source fingerprint", async () => {
+  it("batches source reads by kind, preserves order and changes only the edited fingerprint", async () => {
     const first = await createRepoIdentity(ctx, "task", {
       name: "Synthetic first batch source",
       trade: "other",
@@ -158,6 +158,7 @@ describe("connection discovery source freshness", () => {
       connectionSourceFingerprints(ctx.db, sources),
     );
     expect(batch.result).toEqual(singles);
+    expect(batch.queryCount).toBe(2);
     const empty = await countTestDbQueries(() =>
       connectionSourceFingerprints(ctx.db, []),
     );

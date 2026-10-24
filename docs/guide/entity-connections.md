@@ -65,9 +65,11 @@ Product and Location QR labels; the published pattern advertises canonical codes
 connection exports in the schema module keep their original meaning.
 
 `connectionSourceFingerprints(db, sources)` returns fingerprints in input order,
-including duplicate sources. It shares each broad target-corpus hash once per
-kind within that call and retains no cache across pages. Per-source candidate
-and recommendation evidence is still read separately. Evaluation and publication
+including duplicate sources. It loads each source's connection-relevant row in
+one query per entity kind within that call and retains no cache across pages.
+The source fingerprint hashes the same projected row as single-source reads;
+batching preserves existing provenance. Per-source candidate and recommendation
+evidence is still read separately. Evaluation and publication
 fences continue to use a fresh `connectionSourceFingerprint(db, source)`; a page
 estimate does not authorize publishing against old evidence.
 
