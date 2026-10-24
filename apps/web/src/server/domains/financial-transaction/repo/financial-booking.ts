@@ -33,6 +33,7 @@ import { createExpense } from "~/server/domains/expense/repo/crud";
 import { spendingClassificationRevision } from "~/server/domains/expense/repo/expense-category-resolution";
 import {
   accountPurchaserKey,
+  confirmedHouseholdCard,
   financialAccountPurchaser,
   loadAccountPurchaserProofs,
 } from "~/server/domains/financial-account/repo/purchaser";
@@ -305,11 +306,13 @@ export async function previewFinancialBooking(
   if (!purchaseId && !input.purchaserId) {
     const purchaser =
       account && financialAccountPurchaser(account, purchaserProof);
-    if (!purchaser)
+    if (!purchaser && !(account && confirmedHouseholdCard(account)))
       return fail(
-        "Choose a live member purchaser before creating a bare Purchase.",
+        "Choose a live member purchaser or confirm a household credit card before creating a bare Purchase.",
       );
-    input.purchaserId = parseShortcodeFor("ledgerParty", purchaser.shortcode);
+    input.purchaserId = purchaser
+      ? parseShortcodeFor("ledgerParty", purchaser.shortcode)
+      : null;
   }
   const decision = {
     ...input,
@@ -331,6 +334,7 @@ export async function previewFinancialBooking(
   });
   return financialBookingPreview.parse({
     ...decision,
+    purchaserSnapshot: await digestValue({ account, purchaserProof }),
     snapshot,
     accountName: account?.name ?? "Account",
     funderName: account?.ledgerParty?.name ?? null,
@@ -351,6 +355,25 @@ async function replayBooking(db: Database, review: FinancialBookingPreview) {
     return fail(
       "This transaction already has a different reviewed booking. Review its existing Expenses.",
     );
+  const account = await getDb(db).query.financialAccount.findFirst({
+    where: (account, { eq }) => eq(account.id, row.accountId),
+    with: { ledgerParty: true },
+  });
+  const date = row.transactionDate ?? row.postedDate;
+  const purchaserProof =
+    account && !financialAccountPurchaser(account, undefined)
+      ? (
+          await loadAccountPurchaserProofs(db, [
+            { accountId: account.id, date },
+          ])
+        ).get(accountPurchaserKey(account.id, date))
+      : undefined;
+  // Unknown remains unknown across access/owner changes; compare its proof too.
+  if (
+    review.purchaserSnapshot !==
+    (await digestValue({ account, purchaserProof }))
+  )
+    return fail("The approved account or purchaser evidence changed.");
   const allocations = await getDb(
     db,
   ).query.financialTransactionAllocation.findMany({

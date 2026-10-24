@@ -18,17 +18,32 @@ as null on evidence and observed on the FinancialTransaction, never fabricated
 as posted. Transfers, card payments and ordinary income remain settlement-only.
 Booking links recorded Expenses or creates one bare Purchase and one lump
 Expense. Purchases created from bank evidence have no invented itemization,
-order identifier or printed total. New bare Purchases use the account's live
-member owner as purchaser. Without a live member owner, a confirmed live credit
-card may use its live primary member cardholder when no authorized-user interval
-covers the charge date (or posting date when the charge date is absent). Both
-interval bounds are inclusive; future and expired access does not prevent sole
-use. Missing, deleted or nonmember primary holders and active authorized access
-need review. Provisional or deleted accounts never supply automatic purchaser
-authority. Purchase inheritance and booking share the sole-access predicate;
-page previews batch holder proof, and commits recheck current holder and access
-evidence. Accepted spending-plan replay rechecks purchaser authority before its
-no-op. Funding attribution remains its own dated contract.
+order identifier or printed total. New bare Purchases preserve a live member
+account owner as purchaser, otherwise use the live primary member of a confirmed
+household credit card only when no authorized-user period includes the spending
+date (transaction date, then posted date). Otherwise-supported spending on a live,
+non-provisional, household-owned credit card books with an unknown individual
+purchaser, including shared access or missing primary-cardholder evidence. A
+household is never stored as a member purchaser override. Missing/deleted owners,
+guest owners, provisional/deleted accounts and household bank accounts remain
+guarded. Explicit member choices and an existing Purchase's overrides and
+inherited receipt/order/member evidence remain authoritative. Funding attribution
+remains its own dated contract.
+
+Spending policy `2026-10-24.2` makes ready-plan `purchaserId` nullable in place;
+statement label policy `2026-10-24.1` invalidates prior eligibility checkpoints.
+regenerate native schemas and reconnect cached MCP clients for this wire change.
+Apple compatibility version `2.68.0` rejects older writes that cannot return the
+required purchaser proof with an approval.
+Approval snapshots include account authority, dated access and holder evidence.
+Ready plans and direct booking previews retain a separate `purchaserSnapshot`
+for replay validation of that evidence even when both old and new
+individual purchaser values are null; changed or absent proof requires fresh
+review. Retained older proposals remain readable without that proof, but cannot
+commit or replay as accepted ready plans.
+
+Purchase inheritance and booking share the sole-access predicate; page previews
+batch holder proof and commits recheck current holder and access evidence.
 
 Transaction booking and evidence coverage use those same observed, pending and
 posted states. Supported unbooked spending remains a booking gap before posting;
