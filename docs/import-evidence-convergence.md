@@ -711,6 +711,13 @@ production outcomes.
 Suggestions is the reconciliation workspace: Pending proposals, optional Automatic
 decisions audit, and Automatic rules. Source transaction records is the generic
 imported-evidence browser; Transaction imports shows the retained collections.
+Each import's reconciliation report separates retained-observation match states
+from booking coverage for its distinct matched Financial Transactions. Charge
+matching includes retained revisions outside the selected collection; repeated
+observations do not multiply its transaction counts. Collections can overlap,
+so their figures are not additive. Unmatched evidence is outside the booking
+denominator, and recorded booking proves neither balanced settlement, source
+completeness nor itemization.
 Filter the declared evidence projection by account, amount, date and match state
 as needed. Several observations can describe the same charge.
 

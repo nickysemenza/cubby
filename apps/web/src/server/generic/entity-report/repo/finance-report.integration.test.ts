@@ -1,12 +1,19 @@
 import type { ReportBlock } from "@cubby/schemas/entity-report";
 import type { ProjectId, PurchaseId } from "@cubby/schemas/identifiers";
+import { recordSourceTransactionRecordsInput } from "@cubby/schemas/source-transaction-record";
 import { eq } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb, countTestDbQueries } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { getDb } from "~/server/db/helpers";
-import { purchase as purchaseTable } from "~/server/db/schema";
+import {
+  purchase as purchaseTable,
+  sourceTransactionRecord,
+  transactionImport,
+  transactionImportRecord,
+} from "~/server/db/schema";
+import { recordSourceTransactionRecords } from "~/server/domains/transaction-import/repo/source-transaction-record";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 import { buildEntityReport, buildEntityReports } from ".";
@@ -74,6 +81,149 @@ describe("finance entity reports", () => {
       async () => null,
       ctx.actor,
     ).then((result) => result.blocks);
+
+  it("separates retained observations from distinct matched transaction booking", async () => {
+    const account = await createRepoEntity(ctx, "financialAccount", {
+      name: "Synthetic report cash",
+      identity: { kind: "cash" },
+      sourceAliases: [
+        {
+          source: "synthetic-bank",
+          alias: "Synthetic report cash",
+          externalAccountId: "synthetic-account",
+        },
+      ],
+    });
+    const input = recordSourceTransactionRecordsInput.parse({
+      import: {
+        source: "synthetic-bank",
+        label: "synthetic-report.csv",
+        fingerprint: "synthetic-report-first",
+        observedAt: "2026-09-02T00:00:00Z",
+        rowCountDeclared: 5,
+      },
+      rows: [25, 40, 12, 5, 9].map((amount, index) => ({
+        rowPosition: index + 1,
+        providerTransactionId: `synthetic-record-${index}`,
+        providerAccountId: "synthetic-account",
+        accountDescriptor: "Synthetic report cash",
+        statementDate: "2026-09-01",
+        providerAmount: -amount,
+        rawDescription: `SYNTHETIC REPORT ${index}`,
+      })),
+    });
+    const first = await recordSourceTransactionRecords(
+      ctx.db,
+      input,
+      ctx.actor,
+    );
+    if (!first.batchId) throw new Error("Expected a retained synthetic import");
+    const originals = await getDb(ctx.db)
+      .select()
+      .from(sourceTransactionRecord)
+      .where(eq(sourceTransactionRecord.batchId, first.batchId));
+    const original = originals.find(
+      (row) => row.providerTransactionId === "synthetic-record-0",
+    );
+    if (!original)
+      throw new Error("Expected the original synthetic observation");
+    const revised = await recordSourceTransactionRecords(
+      ctx.db,
+      recordSourceTransactionRecordsInput.parse({
+        import: {
+          ...input.import,
+          fingerprint: "synthetic-report-revision",
+          observedAt: "2026-09-03T00:00:00Z",
+          rowCountDeclared: 1,
+        },
+        rows: [{ ...input.rows[0], providerData: { revision: 2 } }],
+      }),
+      ctx.actor,
+    );
+    if (!revised.batchId)
+      throw new Error("Expected a retained synthetic revision");
+    const revision = await getDb(
+      ctx.db,
+    ).query.sourceTransactionRecord.findFirst({
+      where: eq(sourceTransactionRecord.batchId, revised.batchId),
+    });
+    const collection = await getDb(ctx.db).query.transactionImport.findFirst({
+      where: eq(transactionImport.id, first.batchId),
+    });
+    if (!revision || !collection)
+      throw new Error("Expected retained synthetic evidence");
+    // Historical membership can retain several revisions of one charge; intake
+    // refuses that shape for new collections, so model the preserved roster here.
+    await getDb(ctx.db)
+      .insert(transactionImportRecord)
+      .values({ importId: first.batchId, statementRowId: revision.id });
+    const vendor = await createRepoEntity(ctx, "vendor", {
+      name: "Synthetic report shop",
+    });
+    const purchase = await createRepoEntity(ctx, "purchase", {
+      vendorId: vendor.output.id,
+      date: "2026-09-01",
+    });
+    await createRepoEntity(ctx, "expense", {
+      purchaseId: purchase.output.id,
+      name: "Synthetic booked service",
+      cost: 12,
+      date: "2026-09-01",
+      costType: "services",
+      trade: "other",
+      lineKind: "principal",
+      lineBasis: "allocation",
+    });
+    for (const row of originals.filter(
+      (row) => row.providerTransactionId !== "synthetic-record-4",
+    )) {
+      const retained = row.id === original.id ? revision : row;
+      await createRepoEntity(ctx, "financialTransaction", {
+        accountId: account.output.id,
+        amount: row.amount,
+        kind:
+          row.providerTransactionId === "synthetic-record-1"
+            ? "account_transfer"
+            : row.providerTransactionId === "synthetic-record-3"
+              ? "other"
+              : "purchase",
+        status: "observed",
+        transactionDate: "2026-09-01",
+        purchaseId:
+          row.providerTransactionId === "synthetic-record-2"
+            ? purchase.output.id
+            : null,
+        sourceRefs: [
+          { source: retained.source, externalId: retained.externalId },
+        ],
+      });
+    }
+    const blocks = await report(
+      "transactionImport.reconciliation-summary",
+      collection.shortcode,
+    );
+    expect(stats(blocks)?.figures).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ label: "Matched", value: 5 }),
+        expect.objectContaining({ label: "Unmatched", value: 1 }),
+      ]),
+    );
+    expect(
+      blocks.find(
+        (block) =>
+          block.kind === "stats" &&
+          block.title === "Matched transaction booking",
+      ),
+    ).toMatchObject({
+      figures: expect.arrayContaining([
+        { label: "Unbooked", value: 1, format: "count" },
+        { label: "Partly booked", value: 0, format: "count" },
+        { label: "Booked", value: 1, format: "count" },
+        { label: "Not required", value: 1, format: "count" },
+        { label: "Unclassified", value: 1, format: "count" },
+      ]),
+    });
+  });
 
   it("allocates a purchase's whole expense total across its project groups", async () => {
     const [kitchen, garden] = await Promise.all([
