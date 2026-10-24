@@ -165,6 +165,13 @@ read-only outside intake. Provider facts and memberships change only through
 recording source evidence. The [evidence lifecycle](../../../docs/import-evidence-convergence.md#financial-evidence-entities)
 owns create/merge restrictions and deletion guards.
 
+Before reviewing a statement Suggestion, use `finance_read.preview_suggestion`
+with its listed assessment ID, expected fingerprint and declared application.
+Inspect the current financial, Purchase/Expense, vendor and settlement effects.
+A stale refusal requires fresh evidence and review; listing or stored clean
+status does not grant acceptance authority. Preview writes nothing, and explicit
+Suggestions review validates the application again.
+
 ## Completion
 
 Report account/date/visibility partitions with expected, fetched and recorded

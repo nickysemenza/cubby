@@ -114,6 +114,8 @@ const DECLARED_UUID_OUTPUT_PATHS = new Set([
   "suggestions_read.items[].evidence.acceptanceReceipt.auditIds[]",
   "suggestions_read.items[].evidence.id",
   "suggestions_read.items[].evidence.review.assessmentId",
+  // A draft preview echoes the same Assessment child-row handle for explicit review.
+  "finance_read.assessmentId",
   "suggestions.assessmentId",
   "suggestions.items[].assessmentId",
   "suggestions.feedbackId",

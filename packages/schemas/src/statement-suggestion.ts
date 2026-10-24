@@ -197,12 +197,16 @@ export type StatementTransactionApplication = z.infer<
 >;
 
 export const statementSuggestionPreviewInput = z.strictObject({
-  assessmentId: z.uuid(),
+  assessmentId: z
+    .uuid()
+    .describe(
+      "Opaque Assessment review handle from suggestions_read.list; not a household entity shortcode.",
+    ),
   expectedFingerprint: z.string().min(1),
   application: statementTransactionApplication,
 });
 export const statementSuggestionPreviewOut = z.object({
-  assessmentId: z.uuid(),
+  assessmentId: statementSuggestionPreviewInput.shape.assessmentId,
   fingerprint: z.string(),
   action: statementTransactionAction,
   kind: kind.nullable(),

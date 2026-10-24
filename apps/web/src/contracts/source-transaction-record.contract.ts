@@ -17,8 +17,8 @@ export const sourceTransactionRecordContract = defineContract(
   "sourceTransactionRecord",
   {
     previewSuggestion: query({
-      exposure: "view",
-      note: "Read-only preview of a Suggestions review draft",
+      description:
+        "Preview a statement Suggestions review draft against current evidence without writing. Pass the listed assessmentId, expectedFingerprint and declared application. Returns current transaction, Purchase/Expense, vendor and settlement effects or refuses stale/unsupported evidence. A successful preview does not apply the draft; explicit Suggestions review revalidates it again.",
       readPolicy: "strong",
       input: statementSuggestionPreviewInput,
       output: statementSuggestionPreviewOut,

@@ -752,7 +752,8 @@ Filter the declared evidence projection by account, amount, date and match state
 as needed. Several observations can describe the same charge.
 
 Statement review shows Source, Proposed result and Evidence. The read-only
-`sourceTransactionRecord.previewSuggestion` revalidates the Assessment fingerprint and live
+`sourceTransactionRecord.previewSuggestion` (MCP `finance_read.preview_suggestion`)
+revalidates the Assessment fingerprint and live
 charge before projecting a draft through the same action gates and spending
 planner as acceptance. It writes no aliases or records. The preview identifies
 transaction changes, vendor reuse/creation and alias effects, Purchase/Expense
