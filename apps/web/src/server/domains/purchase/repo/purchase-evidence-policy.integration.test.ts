@@ -1,3 +1,4 @@
+import type { FinancialTransactionStatus } from "@cubby/schemas/financial-transaction-fields";
 import type { VendorId } from "@cubby/schemas/identifiers";
 import { itemizationExpectation } from "@cubby/schemas/purchase-evidence-policy";
 import { sql } from "drizzle-orm";
@@ -331,39 +332,47 @@ describe("purchase evidence policy", () => {
       spendingCategoryId: category.shortcode,
     });
   });
-  it("uses transaction itemization policy before a Purchase allocation exists", async () => {
-    const account = await createRepoEntity(ctx, "financialAccount", {
-      name: "Policy fixture cash",
-      identity: { kind: "cash" },
-    });
-    const transaction = await createRepoEntity(ctx, "financialTransaction", {
-      accountId: account.output.id,
-      amount: 25,
-      kind: "purchase",
-      status: "posted",
-      postedDate: "2026-09-01",
-      itemizationExpectation: "not_expected",
-    });
-    const read = async () =>
-      (
-        await unwrapDb(ctx.db).execute(
-          sql`SELECT ${financialTransactionCoverageSql("t")} AS coverage FROM "FinancialTransaction" t WHERE id = ${transaction.entityId}`,
-        )
-      ).rows[0]?.coverage;
-    expect(await read()).toMatchObject({
-      booking: "missing",
-      document: "not_expected",
-      itemization: "not_expected",
-    });
-    await unwrapDb(ctx.db).execute(
-      sql`UPDATE "FinancialTransaction" SET "itemizationExpectation" = 'required' WHERE id = ${transaction.entityId}`,
-    );
-    expect(await read()).toMatchObject({
-      booking: "missing",
-      document: "not_expected",
-      itemization: "missing",
-    });
-  });
+  it.each([
+    "posted",
+    "pending",
+    "observed",
+  ] satisfies FinancialTransactionStatus[])(
+    "uses %s transaction itemization policy before a Purchase allocation exists",
+    async (status) => {
+      const account = await createRepoEntity(ctx, "financialAccount", {
+        name: "Policy fixture cash",
+        identity: { kind: "cash" },
+      });
+      const transaction = await createRepoEntity(ctx, "financialTransaction", {
+        accountId: account.output.id,
+        amount: 25,
+        kind: "purchase",
+        status,
+        transactionDate: "2026-09-01",
+        postedDate: status === "posted" ? "2026-09-01" : null,
+        itemizationExpectation: "not_expected",
+      });
+      const read = async () =>
+        (
+          await unwrapDb(ctx.db).execute(
+            sql`SELECT ${financialTransactionCoverageSql("t")} AS coverage FROM "FinancialTransaction" t WHERE id = ${transaction.entityId}`,
+          )
+        ).rows[0]?.coverage;
+      expect(await read()).toMatchObject({
+        booking: "missing",
+        document: "not_expected",
+        itemization: "not_expected",
+      });
+      await unwrapDb(ctx.db).execute(
+        sql`UPDATE "FinancialTransaction" SET "itemizationExpectation" = 'required' WHERE id = ${transaction.entityId}`,
+      );
+      expect(await read()).toMatchObject({
+        booking: "missing",
+        document: "not_expected",
+        itemization: "missing",
+      });
+    },
+  );
 
   it("scores required transaction evidence and goods identity while excluding optional evidence", async () => {
     const { purchase, category } = await fixture();

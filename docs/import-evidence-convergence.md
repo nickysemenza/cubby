@@ -22,6 +22,13 @@ order identifier or printed total. New bare Purchases use the account's live
 member owner as purchaser; household-only or missing purchaser evidence needs
 review. Funding attribution remains its own dated contract.
 
+Transaction booking and evidence coverage use those same observed, pending and
+posted states. Supported unbooked spending remains a booking gap before posting;
+expected or void transactions, transfers and ordinary income remain outside that
+requirement. Stored quality flags adopt policy changes through the existing
+quality refresh owner; a coverage-policy change starts no financial Sweep or
+booking work.
+
 The financial spending planner and booking writer are shared by direct finance
 commands, statement create/attach/supersede, matched-transaction `book`, and
 import convergence. Current evidence and the complete allocation graph are
