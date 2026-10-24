@@ -716,7 +716,12 @@ paths. Media limits and payloads belong to `server/ai/decision-model.ts` and
 Image description consumers select confirmed corrections first, then the current
 preferred cloud result, then the newest available source-matching observation.
 A newer Apple observation does not displace a preferred cloud description;
-observations for replaced image content are historical evidence only.
+observations for replaced image content are historical evidence only. Both direct and
+batch confirmation readers require the live Image hash to match the immutable
+Assessment subject/fingerprint and its current projection. Replaced or deleted
+content hides the old confirmation from current descriptions while retaining its
+confirmed value, original prediction and application receipts. Current-content
+display does not itself grant cross-image propagation authority.
 
 Identification retains visual composition separately from identity scope.
 Multiple related views, parts, or life stages may support one catalog identity;
