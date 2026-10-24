@@ -209,6 +209,7 @@ struct GenericEntityEditModelTests {
 
     @Test func inheritedReadDoesNotBecomeStoredDraftOrUnchangedPatch() throws {
         let original: JSONValue = [
+            "lineKind": "principal",
             "spendingCategoryId": "SPC-4K7M",
             "fieldResolutions": [
                 "spendingCategoryId": [
