@@ -876,7 +876,7 @@ test("distinguishes attach and create and exposes saved photo evidence", async (
   ).toHaveCount(0);
   await expect(
     attach
-      .locator(".decision-steps-media")
+      .getByRole("region", { name: "Photo evidence", exact: true })
       .getByText("No description analysis retained."),
   ).toHaveCount(1);
   await expect(
@@ -1138,7 +1138,9 @@ test("keeps a noisy care label to meaningful checks and linked purchase evidence
     page.getByRole("heading", { name: "Photo review" }),
   );
   const card = page.locator("#photo-group-g1");
-  const label = card.locator(".decision-steps-media").getByLabel("Label text");
+  const label = card
+    .getByRole("region", { name: "Photo evidence", exact: true })
+    .getByLabel("Label text");
   await expect(label).toContainText("C33223");
   await expect(label).toHaveText(
     /^MEN'S · 9M · C33223 · MADE IN VIETNAM · Bather and Manmade$/,

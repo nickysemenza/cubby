@@ -1646,6 +1646,7 @@ export async function getImageProcessingReadProjection(
       ? {
           description: correction.description,
           confirmedAt: correction.confirmedAt.toISOString(),
+          owner: correction.owner,
         }
       : null,
   };

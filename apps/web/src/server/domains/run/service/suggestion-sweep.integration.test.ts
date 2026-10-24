@@ -63,6 +63,48 @@ describe("persisted Suggestion sweeps", () => {
 
   // Without an automatic Run model pin, inferring served status from the Run
   // hid the answer and published its history as unserved.
+  it("keeps principal Expense context eligible for Project inference", async () => {
+    await insertWithShortcode(ctx.db, "project", {
+      name: "Synthetic garden supplies",
+    });
+    const expense = await expenseFixture(ctx.db, "Synthetic garden supplies");
+    let calls = 0;
+    await startSuggestionSweep(
+      ctx.db,
+      {
+        entity: "expense",
+        fields: ["projectId"],
+        filters: { ids: [expense.shortcode] },
+      },
+      {
+        context: kernelCtx(ctx),
+        suggestPorts: {
+          recordUsage: false,
+          decisionPort: async (request) => {
+            calls++;
+            const keys = Object.keys(request.questions.selection.criteria);
+            return {
+              answers: {
+                selection: {
+                  type: "choice",
+                  choice: "none",
+                  confidence: 0.9,
+                  probabilities: Object.fromEntries(
+                    keys.map((key) => [
+                      key,
+                      key === "none" ? 0.9 : 0.1 / Math.max(1, keys.length - 1),
+                    ]),
+                  ),
+                },
+              },
+            };
+          },
+        },
+      },
+    );
+    expect(calls).toBeGreaterThan(0);
+  });
+
   it("keeps the answer visible without a Run model pin", async () => {
     const item = await productFixture(ctx, "Synthetic input-routed item");
     const started = await startSuggestionSweep(

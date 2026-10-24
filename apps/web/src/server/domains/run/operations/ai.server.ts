@@ -399,6 +399,19 @@ export const inferFieldAssessments = async (
             evidence: z.json().parse({
               basis: input.basis,
               inputs,
+              dependencies,
+              ...(correctionKey
+                ? {
+                    correctionRecipe: {
+                      version: "field-correction-v2",
+                      entity: input.entity,
+                      field,
+                      basis: input.basis,
+                      inputs,
+                      dependencies,
+                    },
+                  }
+                : {}),
               proposal: suggestion ?? null,
               correctionKey,
             }),

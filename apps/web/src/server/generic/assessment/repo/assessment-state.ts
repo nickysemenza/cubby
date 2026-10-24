@@ -281,7 +281,14 @@ export async function openAssessmentState(
 ) {
   const [opened] = await getDb(db)
     .insert(assessmentState)
-    .values(input.values)
+    .values({
+      ...input.values,
+      // Saved-field None receipts obey the same JSON-null invariant as publication.
+      suggestedValue:
+        input.values.suggestedValue === null
+          ? sql`'null'::jsonb`
+          : input.values.suggestedValue,
+    })
     .onConflictDoNothing({ target: assessmentState.id })
     .returning();
   if (!opened)

@@ -1,17 +1,12 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 
+import { capturedFieldInput } from "@cubby/schemas/ai-evaluation";
 import { sha256Hex } from "@cubby/shared/sha256";
 import { z } from "zod";
 
 import type { AiFeature } from "./policy/features";
 
-const capturedInput = z.object({
-  feature: z.string(),
-  promptVersion: z.string(),
-  operation: z.string(),
-  model: z.string(),
-  fingerprint: z.string(),
-});
+const capturedInput = capturedFieldInput;
 export type CapturedInput = z.infer<typeof capturedInput>;
 const scope = new AsyncLocalStorage<{
   prepareOnly: boolean;
@@ -54,7 +49,7 @@ export async function captureAiInput(
 export async function withAiInputs<T>(
   prepareOnly: boolean,
   work: () => Promise<T>,
-  options: { providerFree?: boolean } = {},
+  options: { providerFree?: boolean; captureToParent?: boolean } = {},
 ) {
   const parent = scope.getStore();
   const store = {
@@ -64,6 +59,11 @@ export async function withAiInputs<T>(
     inputs: new Array<CapturedInput>(),
   };
   const result = await scope.run(store, work);
-  parent?.inputs.push(...store.inputs);
+  if (options.captureToParent !== false) parent?.inputs.push(...store.inputs);
   return { result, inputs: store.inputs, incomplete: store.incomplete };
+}
+
+/** A provider-free decision replaces inference only after its authority is resolved. */
+export function adoptPreparedAiInputs(inputs: readonly CapturedInput[]) {
+  scope.getStore()?.inputs.push(...inputs);
 }

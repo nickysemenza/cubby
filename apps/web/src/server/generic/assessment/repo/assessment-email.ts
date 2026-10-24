@@ -1,3 +1,4 @@
+import type { EmailClassificationPublicationEvidence } from "@cubby/schemas/email-observations";
 import { eq } from "drizzle-orm";
 
 import { type Database } from "~/server/db/database";
@@ -36,9 +37,14 @@ export async function recordEmailClassificationApplication(
 export async function ensureEmailAssessment(
   db: Database,
   predictionId: string,
+  publication?: EmailClassificationPublicationEvidence,
 ) {
   const [existing] = await getDb(db)
-    .select({ id: assessment.id, judgment: assessment.judgment })
+    .select({
+      id: assessment.id,
+      judgment: assessment.judgment,
+      evidence: assessment.evidence,
+    })
     .from(assessment)
     .where(eq(assessment.publicationKey, `email-observation:${predictionId}`))
     .limit(1);
@@ -74,6 +80,10 @@ export async function ensureEmailAssessment(
           }
         : null,
     fingerprint: row.checksum,
-    evidence: { checksum: row.checksum, provenance: row.provenance },
+    evidence: {
+      checksum: row.checksum,
+      provenance: row.provenance,
+      ...publication,
+    },
   });
 }

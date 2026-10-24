@@ -10,6 +10,10 @@ import {
   setAutomaticRuleInput,
 } from "@cubby/schemas/automatic-rule";
 import {
+  enrollSuggestionCorrectionsInput,
+  enrollSuggestionCorrectionsOut,
+} from "@cubby/schemas/suggestion-correction";
+import {
   acceptCleanSuggestionsInput,
   acceptCleanSuggestionsOut,
   suggestionCountsInput,
@@ -65,6 +69,17 @@ export const suggestionsContract = defineContract(
         profile: "stable",
         tags: [["suggestions"], ["sourceTransactionRecord"], ["connections"]],
       },
+    }),
+    enrollCorrections: mutation({
+      description:
+        "Preview bounded historical field or image-description correction enrollment (family field or image_description, dryRun defaults true). Scans member correction candidates by opaque Feedback cursor; receiptBackedRoots is not proof of current applicability. Only on explicit instruction, dryRun false durably enrolls this page for automatic repair with current family authority/member-intent checks. Preserves completed Jobs and receipts; repeated enrollment does not reset work. No financial families, model work or rule changes. Continue with returned after until done, even when receiptBackedRoots is zero.",
+      command: {
+        label: "Enroll retained corrections",
+        confirmation: null,
+      },
+      input: enrollSuggestionCorrectionsInput,
+      output: enrollSuggestionCorrectionsOut,
+      invalidates: ["suggestions"],
     }),
     acceptClean: mutation({
       exposure: "view",

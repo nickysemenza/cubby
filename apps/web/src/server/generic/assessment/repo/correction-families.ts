@@ -10,6 +10,7 @@ import {
   statementTransactionCorrectionRepair,
   transferPairCorrectionRepair,
 } from "~/server/domains/financial-transaction/repo/financial-suggestion-correction";
+import { imageDescriptionCorrectionRepair } from "~/server/domains/image/repo/image-suggestion-correction";
 import type { CorrectionRepairAdapter } from "~/server/generic/assessment/correction-repair";
 import { fieldCorrectionRepair } from "~/server/generic/assessment/repo/field-correction-repair";
 import type { ReviewFamily } from "~/server/generic/assessment/repo/review-families";
@@ -56,9 +57,7 @@ export const correctionRepairFamilies = {
   field: register(fieldCorrectionRepair),
   statement_transaction: register(statementTransactionCorrectionRepair),
   transfer_pair: register(transferPairCorrectionRepair),
-  image_description: register(
-    heldAdapter("Image corrections need a content-bound propagation adapter"),
-  ),
+  image_description: register(imageDescriptionCorrectionRepair),
   email_relevance: register(
     heldAdapter(
       "Email correction propagation requires current owned-original routing proof",

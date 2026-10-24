@@ -5,6 +5,38 @@ import Testing
 
 @Suite("Direct native codecs")
 struct NativeCodecTests {
+    @Test func propagatedImageTextRetainsReceiptAuthorityWithoutModelClaims() throws {
+        let owner: JSONValue = [
+            "kind": "correction",
+            "effectId": "00000000-0000-4000-8000-000000000001",
+            "sourceFeedbackId": "00000000-0000-4000-8000-000000000002",
+            "sourceApplicationFeedbackId": "00000000-0000-4000-8000-000000000003",
+            "sourceActorUserId": "synthetic-member",
+            "targetAssessmentId": "00000000-0000-4000-8000-000000000004",
+            "originalApplicationFeedbackId": .null,
+            "priorCorrectionApplicationFeedbackId": .null,
+        ]
+        let raw: JSONValue = [
+            "description": "Synthetic corrected image",
+            "authority": "correction",
+            "correction": owner,
+            "analysis": .null,
+            "claims": [],
+            "missingReason": .null,
+        ]
+        let selected: SelectedImageDescriptionEvidence = try raw.decoded()
+        #expect(selected.authority == .correction)
+        #expect(selected.analysis == nil)
+        #expect(selected.claims.isEmpty)
+        #expect(try JSONValue(encoding: selected)["correction"] == owner)
+        let confirmation: ImageDescriptionConfirmationOwner = try owner.decoded()
+        guard case .correction = confirmation else {
+            Issue.record("Automatic image correction was interpreted as direct member confirmation")
+            return
+        }
+        #expect(try JSONValue(encoding: confirmation) == owner)
+    }
+
     @Test func optionalNullableRoundTripPreservesAllThreeStates() throws {
         let base: JSONValue = ["operationId": "synthetic-operation", "verdict": "accept"]
         let absent: AssessmentReviewInput = try base.decoded()

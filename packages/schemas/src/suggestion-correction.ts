@@ -63,3 +63,29 @@ export type SuggestionCorrectionPlan = z.infer<typeof suggestionCorrectionPlan>;
 export type SuggestionCorrectionOutcome = z.infer<
   typeof suggestionCorrectionOutcome
 >;
+
+export const retainedCorrectionEnrollmentFamily = z.enum([
+  "field",
+  "image_description",
+]);
+
+/** Explicit bounded enrollment; preview never creates durable work. */
+export const enrollSuggestionCorrectionsInput = z
+  .object({
+    family: retainedCorrectionEnrollmentFamily,
+    dryRun: z.boolean().default(true),
+    after: assessmentChildHandle.nullable().default(null),
+    limit: z.number().int().min(1).max(100).default(25),
+  })
+  .strict();
+
+export const enrollSuggestionCorrectionsOut = z.object({
+  family: retainedCorrectionEnrollmentFamily,
+  dryRun: z.boolean(),
+  scanned: z.number().int().nonnegative(),
+  receiptBackedRoots: z.number().int().nonnegative(),
+  /** Matching durable history intents, including already-enrolled work. */
+  enrolledRoots: z.number().int().nonnegative(),
+  after: assessmentChildHandle.nullable(),
+  done: z.boolean(),
+});

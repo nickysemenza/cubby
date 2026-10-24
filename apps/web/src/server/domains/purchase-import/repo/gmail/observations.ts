@@ -6,6 +6,8 @@ import {
 import {
   emailClassificationObservationInput,
   emailRetrievalFailureInput,
+  emailClassificationPublicationEvidence,
+  type EmailClassificationPublicationEvidence,
 } from "@cubby/schemas/email-observations";
 import { parseEntityId, runEntityId } from "@cubby/schemas/identifiers";
 import { sha256Hex } from "@cubby/shared/sha256";
@@ -116,8 +118,13 @@ export async function recordEmailClassificationObservation(
   db: Database,
   input: z.input<typeof emailClassificationObservationInput>,
   actor?: ActorContext,
+  publication?: EmailClassificationPublicationEvidence,
 ) {
   const parsed = emailClassificationObservationInput.parse(input);
+  const suppliedEvidence = emailClassificationPublicationEvidence.parse(
+    publication ?? {},
+  );
+  const capture = suppliedEvidence.originalCapture;
   return withTransaction(db, async (tx) => {
     const [initial] = await tx
       .select()
@@ -151,6 +158,15 @@ export async function recordEmailClassificationObservation(
       .limit(1);
     if (!email || email.ledgerPartyId !== initial.ledgerPartyId)
       throw new Error("Email classification observation ownership changed");
+    if (
+      capture &&
+      (capture.binding.ledgerPartyId !== email.ledgerPartyId ||
+        capture.binding.mailboxId !== email.mailboxId ||
+        capture.binding.messageId !== email.messageId)
+    )
+      throw new Error(
+        "Email original capture does not match its publication owner and original",
+      );
     await snapshotStoredEmailPrediction(tx, email);
     const [previous] = await tx
       .select()
@@ -161,8 +177,18 @@ export async function recordEmailClassificationObservation(
         desc(emailClassificationObservation.id),
       )
       .limit(1);
-    if (previous && sameClassificationObservation(previous, parsed))
-      return previous;
+    if (previous && sameClassificationObservation(previous, parsed)) {
+      const retained = await ensureEmailAssessment(
+        databaseForTransaction(tx),
+        previous.id,
+      );
+      const evidence = emailClassificationPublicationEvidence.safeParse(
+        retained.evidence,
+      );
+      if (evidence.success && isEqual(evidence.data, suppliedEvidence))
+        return previous;
+      // A new capture is a new immutable observation, never a retrofit of historical proof.
+    }
     const [observation] = await tx
       .insert(emailClassificationObservation)
       .values({
@@ -179,6 +205,7 @@ export async function recordEmailClassificationObservation(
     const assessment = await ensureEmailAssessment(
       databaseForTransaction(tx),
       observation.id,
+      suppliedEvidence,
     );
     await recordFeedback(databaseForTransaction(tx), {
       assessmentId: assessment.id,

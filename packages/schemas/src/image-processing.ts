@@ -1,5 +1,6 @@
 import { imageRepresentations } from "./image-summary";
 import { imageShortcode } from "./identifier-fields";
+import { assessmentChildHandle } from "./assessment-reference";
 import { z } from "zod";
 import {
   imageProcessingJobKind,
@@ -288,14 +289,46 @@ export const imageDescriptionAnalysis = z.object({
   createdAt: isoDateTime,
   preferred: z.boolean(),
 });
+export const imageDescriptionCorrectionOwner = z.object({
+  kind: z.literal("correction"),
+  effectId: z.uuid(),
+  sourceFeedbackId: assessmentChildHandle,
+  sourceApplicationFeedbackId: assessmentChildHandle,
+  sourceActorUserId: z.string().min(1),
+  targetAssessmentId: assessmentChildHandle,
+  originalApplicationFeedbackId: assessmentChildHandle.nullable(),
+  priorCorrectionApplicationFeedbackId: assessmentChildHandle.nullable(),
+});
+
+/** Ownership of one selected text effect; model analyses remain separate evidence. */
+export const imageDescriptionConfirmationOwner = z.discriminatedUnion("kind", [
+  z.object({
+    kind: z.literal("member"),
+    effectId: z.uuid(),
+    commandFeedbackId: assessmentChildHandle,
+    actorUserId: z.string().min(1),
+  }),
+  imageDescriptionCorrectionOwner,
+]);
+
+export const imageDescriptionCorrectionReceipt = z.object({
+  kind: z.literal("image_description"),
+  recordId: z.uuid(),
+  contentHash: z.string().min(1),
+  description: z.string(),
+  owner: imageDescriptionCorrectionOwner,
+});
+
 export const imageDescriptionCorrection = z.object({
   description: z.string(),
   confirmedAt: isoDateTime,
+  owner: imageDescriptionConfirmationOwner.nullable().default(null),
 });
 
 export const selectedImageDescriptionEvidence = z.object({
   description: z.string().nullable(),
-  authority: z.enum(["model", "member", "missing"]),
+  authority: z.enum(["model", "member", "correction", "missing"]),
+  correction: imageDescriptionCorrectionOwner.nullable().default(null),
   analysis: z
     .object({
       provider: z.string().nullable(),
@@ -318,13 +351,19 @@ export function selectImageDescriptionEvidence(
     preferred: boolean;
     result: ImageDescriptionResult;
   }[],
-  correction: { description: string } | null,
+  correction:
+    | (Pick<z.infer<typeof imageDescriptionCorrection>, "description"> &
+        Partial<Pick<z.infer<typeof imageDescriptionCorrection>, "owner">>)
+    | null,
   sourceContentHash: string | null,
 ): z.infer<typeof selectedImageDescriptionEvidence> {
   if (correction)
     return {
       description: correction.description,
-      authority: "member",
+      authority:
+        correction.owner?.kind === "correction" ? "correction" : "member",
+      correction:
+        correction.owner?.kind === "correction" ? correction.owner : null,
       analysis: null,
       claims: [],
       missingReason: null,
@@ -347,6 +386,7 @@ export function selectImageDescriptionEvidence(
     return {
       description: null,
       authority: "missing",
+      correction: null,
       analysis: null,
       claims: [],
       missingReason:
@@ -355,6 +395,7 @@ export function selectImageDescriptionEvidence(
   return {
     description: selected.result.description,
     authority: "model",
+    correction: null,
     analysis: {
       provider: selected.provider,
       model: selected.model,

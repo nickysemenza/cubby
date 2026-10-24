@@ -1,5 +1,5 @@
 import { parseEntityId } from "@cubby/schemas/identifiers";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { taxonomyId } from "tooling/product-category-fixtures";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
@@ -10,6 +10,7 @@ import {
   image,
   imageProcessingJob,
   productCategory,
+  product as productTable,
 } from "~/server/db/schema";
 import { persistImageProcessingSubmission } from "~/server/domains/image-processing/repo/image-processing-submission";
 import { createUploadedImageRecord } from "~/server/domains/image/repo/image";
@@ -19,7 +20,10 @@ import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-re
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import { insertEntityAttachments } from "~/server/testing/repo.fixtures";
 
-import { getProductClassificationEvidence } from "./product-classification-evidence";
+import {
+  getProductClassificationEvidence,
+  productClassificationEvidenceSql,
+} from "./product-classification-evidence";
 
 const ctx = withTestDb();
 describe("retained classification evidence", () => {
@@ -111,6 +115,11 @@ describe("retained classification evidence", () => {
       contentType: "image/jpeg",
       size: 64,
     });
+    for (const source of [photo, label])
+      await getDb(ctx.db)
+        .update(image)
+        .set({ sha256: "a".repeat(64) })
+        .where(eq(image.id, source.id));
     await insertEntityAttachments(ctx.db, [
       {
         entityId: product.id,
@@ -134,7 +143,9 @@ describe("retained classification evidence", () => {
           feature: "image-description",
           model: "synthetic",
           promptVersion: "test",
-          inputFingerprint: "original-item",
+          inputFingerprint: JSON.stringify({
+            sourceContentHash: "a".repeat(64),
+          }),
           result: { description: "Blue jacket with long sleeves" },
         },
         {
@@ -143,7 +154,9 @@ describe("retained classification evidence", () => {
           feature: "image-description",
           model: "synthetic",
           promptVersion: "test",
-          inputFingerprint: "original-label",
+          inputFingerprint: JSON.stringify({
+            sourceContentHash: "a".repeat(64),
+          }),
           result: { description: "Uncertain fabric lettering" },
         },
       ]);
@@ -160,6 +173,19 @@ describe("retained classification evidence", () => {
       "label: Label confirms 100% cotton [confirmed correction]",
     );
     expect(before).not.toContain("Uncertain fabric lettering");
+    // Relational extras rewrite column chunks to the outer Product alias.
+    // The nested confirmation proof must preserve its own table references.
+    const relational = await getDb(ctx.db).query.product.findFirst({
+      where: eq(productTable.id, product.id),
+      columns: { id: true },
+      extras: {
+        classificationEvidence: productClassificationEvidenceSql(
+          sql`${productTable.id}`,
+        ).as("classificationEvidence"),
+      },
+    });
+    expect(relational?.classificationEvidence).toBe(before);
+
     await getDb(ctx.db)
       .update(productCategory)
       .set({ name: "Wearables", updatedAt: new Date(Date.now() + 1000) })
@@ -168,5 +194,13 @@ describe("retained classification evidence", () => {
       before,
     );
     expect(await getDb(ctx.db).select().from(imageProcessingJob)).toEqual([]);
+    await getDb(ctx.db)
+      .update(image)
+      .set({ sha256: "b".repeat(64) })
+      .where(eq(image.id, label.id));
+    const changed = await getProductClassificationEvidence(ctx.db, product.id);
+    expect(changed).not.toContain("Label confirms 100% cotton");
+    expect(changed).not.toContain("Uncertain fabric lettering");
+    expect(changed).toContain("Blue jacket with long sleeves");
   });
 });

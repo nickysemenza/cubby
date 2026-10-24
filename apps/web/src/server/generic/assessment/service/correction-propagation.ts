@@ -8,17 +8,20 @@ import { z } from "zod";
 
 import { systemActor } from "~/server/domains/run/repo/ensure-run";
 import { recordFeedback } from "~/server/generic/assessment/repo/assessment";
-import { correctionRepairFamilies } from "~/server/generic/assessment/repo/correction-families";
 import {
-  correctionTargetIds,
-  fieldCorrectionKey,
-  readConfirmedCorrection,
-  readCorrectionTarget,
-  readFieldCorrectionSources,
-} from "~/server/generic/assessment/repo/correction-sources";
+  correctionSourcesForTarget,
+  correctionTargetsForSource,
+} from "~/server/generic/assessment/repo/correction-discovery";
+import { correctionRepairFamilies } from "~/server/generic/assessment/repo/correction-families";
 import {
   correctionAlreadyRecorded,
   correctionOperationId,
+} from "~/server/generic/assessment/repo/correction-receipt";
+import {
+  readConfirmedCorrection,
+  readCorrectionTarget,
+} from "~/server/generic/assessment/repo/correction-sources";
+import {
   correctionWorkInput,
   enqueueCorrectionWork,
 } from "~/server/generic/assessment/repo/correction-work";
@@ -42,8 +45,9 @@ export const correctionPropagationHandler = defineJobHandler(
         page: { done: true },
         publish: async (tx) => {
           const target = await readCorrectionTarget(tx, targetId);
-          const key = target && fieldCorrectionKey(target.evidence);
-          const sources = key ? await readFieldCorrectionSources(tx, key) : [];
+          const sources = target
+            ? await correctionSourcesForTarget(tx, target)
+            : [];
           for (const source of sources)
             if (source.assessmentId !== targetId)
               await enqueueCorrectionWork(tx, source.feedbackId, targetId);
@@ -62,21 +66,21 @@ export const correctionPropagationHandler = defineJobHandler(
           },
         },
       };
-    const key = fieldCorrectionKey(source.evidence);
     const cursor =
       claim.cursor === null
         ? { after: null }
         : cursorSchema.parse(claim.cursor);
-    const targets = input.targetAssessmentId
-      ? [{ id: input.targetAssessmentId }]
-      : key && source.family === "field"
-        ? await correctionTargetIds(db, {
-            sourceAssessmentId: source.assessmentId,
-            correctionKey: key,
-            after: cursor.after,
-            limit: PAGE_SIZE,
-          })
-        : [{ id: source.assessmentId }];
+    const page = input.targetAssessmentId
+      ? {
+          targets: [{ id: input.targetAssessmentId }],
+          after: cursor.after,
+          done: true,
+        }
+      : await correctionTargetsForSource(db, source, {
+          after: cursor.after,
+          limit: PAGE_SIZE,
+        });
+    const targets = page.targets;
     const prepared: {
       plan: z.infer<typeof suggestionCorrectionPlan>;
       repair: Awaited<ReturnType<typeof correctionRepairFamilies.field>>;
@@ -90,14 +94,11 @@ export const correctionPropagationHandler = defineJobHandler(
         repair: await correctionRepairFamilies[source.family](db, plan),
       });
     }
-    const after = targets.at(-1)?.id ?? cursor.after;
+    const after = page.after;
     return {
       isolationLevel: "serializable",
       page: {
-        done:
-          Boolean(input.targetAssessmentId) ||
-          !key ||
-          targets.length < PAGE_SIZE,
+        done: page.done,
         cursor: { after },
       },
       publish: async (tx) => {

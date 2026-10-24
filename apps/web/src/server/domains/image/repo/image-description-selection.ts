@@ -3,22 +3,17 @@ import {
   selectImageDescriptionEvidence,
   type selectedImageDescriptionEvidence,
 } from "@cubby/schemas/image-processing";
-import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import type { z } from "zod";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { notDeleted, unwrapDb } from "~/server/db/helpers";
-import {
-  aiAnalysis,
-  image,
-  assessmentState,
-  assessment,
-} from "~/server/db/schema";
+import { aiAnalysis, image } from "~/server/db/schema";
 import {
   isCurrentPreferredImageDescription,
   parseImageDescriptionInputFingerprint,
 } from "~/server/domains/image-processing/repo/description-policy";
-import { currentImageDescriptionConfirmation } from "~/server/generic/assessment/repo/assessment-image";
+import { readImageDescriptionConfirmations } from "~/server/generic/assessment/repo/assessment-image";
 
 /** Source-fenced descriptions and confirmed corrections are loaded in batches. */
 export async function loadSelectedDescriptionEvidence(
@@ -52,20 +47,9 @@ export async function loadSelectedDescriptionEvidence(
       ),
     )
     .orderBy(desc(aiAnalysis.createdAt));
-  const corrections = await unwrapDb(db)
-    .select({
-      shortcode: image.shortcode,
-      description: sql<string>`${assessmentState.confirmedValue}->>'value'`,
-    })
-    .from(assessmentState)
-    .innerJoin(image, eq(image.id, assessmentState.recordId))
-    .innerJoin(assessment, eq(assessment.id, assessmentState.id))
-    .where(
-      and(
-        inArray(image.shortcode, shortcodes),
-        currentImageDescriptionConfirmation(),
-      ),
-    );
+  const corrections = await readImageDescriptionConfirmations(db, {
+    shortcodes,
+  });
   const correctionsByImage = new Map(
     corrections.map((entry) => [entry.shortcode, entry]),
   );

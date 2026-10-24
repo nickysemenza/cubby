@@ -103,6 +103,7 @@ const actionCapability = {
   "suggestions.review": "member_decision",
   "suggestions.review_batch": "member_decision",
   "suggestions.set_rule": "member_decision",
+  "suggestions.enroll_corrections": "member_decision",
   "collection.create": "member_decision",
   "collection.set": "member_decision",
   "finance.commit_booking": "member_decision",

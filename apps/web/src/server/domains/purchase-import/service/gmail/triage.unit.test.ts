@@ -2,10 +2,13 @@
  * decision or hide omitted evidence; HTML alone forces `uncertain`; escaping, Unicode or
  * transport headers push the view past the decision model's request gate. */
 import * as recipebridge from "@cubby/recipebridge/worker";
+import { fromPartial } from "@total-typescript/shoehorn";
 import { describe, expect, it, vi } from "vitest";
 
 import { decisionChoiceFitsContext } from "~/server/ai/decision-model";
+import { withAiInputs } from "~/server/ai/evaluation-inputs";
 import { mailTriagePrompt } from "~/server/ai/policy/prompts/mail";
+import type { Database } from "~/server/db";
 
 import { normalizeMessage } from "../../repo/gmail/normalize";
 import type { GmailMessage, GmailMessagePart } from "../../repo/gmail/types";
@@ -15,6 +18,7 @@ import {
   summarizeEmailFixtures,
 } from "./email-html.fixtures";
 import { routeGmailMessage } from "./triage";
+import { productionMailTriage } from "./triage-model";
 
 const part = (body: string, mimeType = "text/plain"): GmailMessagePart => ({
   mimeType,
@@ -583,4 +587,34 @@ describe("transient Gmail triage", () => {
       stage: "decision",
     });
   });
+});
+
+// Real request preparation proves what provider identities do (and do not) enter triage.
+it("captures actual triage inputs independently of provider bindings", async () => {
+  const capture = async (id: string, body: string) => {
+    const raw = { ...message(body), id };
+    return withAiInputs(
+      true,
+      () =>
+        routeGmailMessage(
+          raw,
+          normalizeMessage(`synthetic-mailbox-${id}`, raw),
+          productionMailTriage(
+            fromPartial<Database>({}),
+            "11111111-2222-4333-8444-555555555555",
+          ),
+        ),
+      { providerFree: true },
+    );
+  };
+  const first = await capture("synthetic-one", "Synthetic order confirmation");
+  const second = await capture("synthetic-two", "Synthetic order confirmation");
+  const changed = await capture(
+    "synthetic-two",
+    "Synthetic unrelated newsletter",
+  );
+  expect(first.inputs).toHaveLength(1);
+  expect(second.inputs).toEqual(first.inputs);
+  expect(changed.inputs).not.toEqual(first.inputs);
+  expect(first.incomplete).toBe(false);
 });

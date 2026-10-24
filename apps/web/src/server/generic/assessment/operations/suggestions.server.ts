@@ -3,6 +3,7 @@ import {
   listAutomaticRules,
   setAutomaticRule,
 } from "~/server/generic/assessment/repo/automatic-rule-runtime";
+import { enrollSuggestionCorrections } from "~/server/generic/assessment/repo/correction-enrollment";
 import {
   acceptCleanSuggestions,
   listSuggestionPage,
@@ -21,6 +22,8 @@ export const suggestionsHandlers = implementOperationDomain(
     recordCounts: (context, input) => suggestionRecordCounts(context.db, input),
     list: (context, input) => listSuggestionPage(context.db, input),
     counts: (context, input) => suggestionCountsByFamily(context.db, input),
+    enrollCorrections: (context, input) =>
+      enrollSuggestionCorrections(context.db, input),
     acceptClean: (context, input) =>
       acceptCleanSuggestions(context.db, context, input),
     rules: (context) => listAutomaticRules(context.db),
