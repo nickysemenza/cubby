@@ -63,6 +63,7 @@ export const inventoryListLocationOut = locationListRefOut;
 export type InventoryListLocationOut = z.infer<typeof inventoryListLocationOut>;
 
 export const inventoryDetailProductOut = z.object({
+  displayImages: displayImagesField.default([]),
   ...productInventoryEmbedFields,
   images: z.array(imageOut),
   externalIds: z.array(externalIdOut),

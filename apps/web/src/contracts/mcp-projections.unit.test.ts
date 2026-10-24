@@ -59,12 +59,13 @@ const labelImage = mock(productAttachmentImageOut, {
 });
 
 describe("product MCP response projection", () => {
-  it("preserves all attachments and their evidence while only item images supply a cover", () => {
+  it("preserves attachments while using only the canonical selected identity", () => {
     const product = mock(productTopLevelOut, {
       seed: 4,
       overrides: {
         id: testShortcode("product", "PRD-PROJ"),
         brandId: testShortcode("vendor", "VEN-BRAND"),
+        coverImageUrl: itemImage.url,
         images: [itemImage, itemPdf],
         labelImages: [labelImage],
       },
@@ -79,6 +80,13 @@ describe("product MCP response projection", () => {
       coverImageUrl: itemImage.url,
     });
 
+    expect(
+      slimProduct({
+        ...product,
+        images: [],
+        coverImageUrl: "https://images.example.test/brand.png",
+      }).coverImageUrl,
+    ).toBe("https://images.example.test/brand.png");
     const detail = slimProductDetail(product);
     expect(detail).toMatchObject({
       brandId: product.brandId,

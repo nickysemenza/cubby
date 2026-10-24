@@ -2,9 +2,9 @@ import type { WishCandidateOut } from "@cubby/schemas/wish";
 
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import {
-  ProductImageSummariesProvider,
-  useHydratedProductImages,
-} from "~/entity/presentation/product-image-summaries";
+  EntityDisplayImagesProvider,
+  useEntityDisplayImage,
+} from "~/entity/entity-media/entity-display-images";
 import { ImageThumbnail } from "~/entity/table/image-thumbnail";
 import { formatCurrency } from "~/lib/number-format";
 import { Row } from "~/ui/layout";
@@ -14,11 +14,15 @@ import type { EntityDetailFieldRenderers } from "./index";
 
 /**
  * One candidate alternative. Its own component because
- * `useHydratedProductImages` is a hook and cannot be called inside the
+ * `useEntityDisplayImage` is a hook and cannot be called inside the
  * candidates `.map`.
  */
 function WishCandidateRow({ candidate }: { candidate: WishCandidateOut }) {
-  const images = useHydratedProductImages(candidate.id);
+  const image = useEntityDisplayImage({
+    entityKind: "product",
+    entityId: candidate.id,
+  });
+  const images = image ? [image] : [];
   return (
     <div className="p-2">
       <Row align="center" justify="between" gap="sm">
@@ -68,15 +72,17 @@ export const wishDetailFields = {
           No specific products yet — this is an open-ended idea.
         </span>
       ) : (
-        <ProductImageSummariesProvider
-          productIds={wish.candidates.map((candidate) => candidate.id)}
+        <EntityDisplayImagesProvider
+          refs={wish.candidates
+            .map((candidate) => candidate.id)
+            .map((entityId) => ({ entityKind: "product", entityId }))}
         >
           <div className="divide-y border">
             {wish.candidates.map((candidate) => (
               <WishCandidateRow key={candidate.id} candidate={candidate} />
             ))}
           </div>
-        </ProductImageSummariesProvider>
+        </EntityDisplayImagesProvider>
       ),
   }),
 } satisfies EntityDetailFieldRenderers<"wish">;

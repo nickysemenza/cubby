@@ -140,6 +140,7 @@ export const mapPlantingItems = (
       return [
         {
           kind: "planting" as const,
+          displayImages: [],
           id: parseShortcodeFor("planting", row.shortcode),
           milestone,
           title: plantingDisplayName({

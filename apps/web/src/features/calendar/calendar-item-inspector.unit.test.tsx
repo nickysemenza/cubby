@@ -33,7 +33,7 @@ const expense: Extract<CalendarItem, { kind: "expense" }> = {
   trade: "other",
   projectName: null,
   productName: "Souper Cubes",
-  coverImageUrl: null,
+  displayImages: [],
 };
 
 const savedExpense: ExpenseOut = expenseOut.parse({
@@ -200,6 +200,7 @@ describe("EditableCalendarItem", () => {
   it("keeps plantings read-only with a full-record route", () => {
     const planting: Extract<CalendarItem, { kind: "planting" }> = {
       kind: "planting",
+      displayImages: [],
       id: testShortcode("planting", "PLT-3B2C"),
       milestone: "sowed",
       title: "Tomato · Brandywine",

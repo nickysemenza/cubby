@@ -199,6 +199,10 @@ it("batches otherwise-uncovered mounted references and leaves declared collectio
   );
   const { result, unmount } = renderHook(
     () => ({
+      preloaded: useEntityDisplayImage(
+        { entityKind: "product", entityId: "PRD-PRELOADED" },
+        { url: "https://images.example/preloaded.jpg" },
+      ),
       noCover: useEntityDisplayImage({
         entityKind: "email",
         entityId: "EML-NOCOVER",
@@ -216,6 +220,7 @@ it("batches otherwise-uncovered mounted references and leaves declared collectio
     expect(result.current.declared?.url).toContain("borrowed-cover"),
   );
   expect(result.current.noCover).toBeNull();
+  expect(result.current.preloaded?.url).toContain("preloaded.jpg");
   expect(transport).toHaveBeenCalledTimes(2);
   expect(
     transport.mock.calls

@@ -3,6 +3,7 @@ import { useDraggable } from "@dnd-kit/core";
 import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
 import { DotsSixVerticalIcon } from "@phosphor-icons/react/dist/csr/DotsSixVertical";
 
+import { useEntityDisplayImage } from "~/entity/entity-media/entity-display-images";
 import { LocationIcon } from "~/entity/presentation/location-icons";
 import { resolveLocationPrimaryVisual } from "~/entity/presentation/location-visual-resolver";
 import { cn } from "~/lib/utils";
@@ -46,7 +47,11 @@ export function ArrangeLocationCard({
   });
   const count = locationItemCount(node);
   const childCount = node.childCount ?? node.children?.length ?? 0;
-  const cover = resolveLocationPrimaryVisual(node).image;
+  const cover =
+    useEntityDisplayImage(
+      { entityKind: "location", entityId: node.id },
+      node.displayImages ? (node.displayImages[0] ?? null) : undefined,
+    ) ?? resolveLocationPrimaryVisual(node).image;
   return (
     <Row align="center" gap="tight" className="min-w-0">
       <Row

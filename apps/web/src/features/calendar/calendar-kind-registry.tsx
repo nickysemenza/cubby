@@ -3,7 +3,6 @@ import {
   type CalendarItem,
   type CalendarItemKind,
 } from "@cubby/schemas/calendar";
-import type { Entity } from "@cubby/schemas/entity";
 import {
   MEAL_KIND_LABELS,
   MEAL_TYPE_LABELS,
@@ -70,9 +69,6 @@ type CalendarKindSpec<K extends CalendarItemKind> = {
   // never called with one in practice.
   create?: (date?: string) => EntityEditDialogRequest;
   icon: (item: ItemOf<K>) => Icon;
-  cover: (
-    item: ItemOf<K>,
-  ) => { entity: Entity; fit: "contain" | "cover"; url: string } | undefined;
   metadata: (item: ItemOf<K>, today?: string) => string;
   compactBadge?: (item: ItemOf<K>) => CalendarBadge | undefined;
   richBadge?: (item: ItemOf<K>) => CalendarBadge | undefined;
@@ -91,10 +87,6 @@ const calendarKindRegistry = {
   meal: {
     create: (date) => mealCaptureRequest({ date }),
     icon: (item) => mealTypeIcon(item.mealType),
-    cover: (item) =>
-      item.coverImageUrl
-        ? { entity: "recipe", fit: "cover", url: item.coverImageUrl }
-        : undefined,
     // Time first, the way an agenda reads. It is the slot's canonical hour, not
     // a stored one — the same map the ICS feed places the event at, so a chip
     // here and the event in a subscribed calendar always agree.
@@ -145,10 +137,6 @@ const calendarKindRegistry = {
   task: {
     create: (date) => taskCaptureRequest({ date }),
     icon: () => KIND_ICONS.task,
-    cover: (item) =>
-      item.coverImageUrl
-        ? { entity: "product", fit: "contain", url: item.coverImageUrl }
-        : undefined,
     metadata: (item) =>
       [item.projectName, item.subjectProductName, TRADE_LABELS[item.trade]]
         .filter(Boolean)
@@ -176,10 +164,6 @@ const calendarKindRegistry = {
   expense: {
     create: (date) => expenseCaptureRequest({ date, future: true }),
     icon: () => KIND_ICONS.expense,
-    cover: (item) =>
-      item.coverImageUrl
-        ? { entity: "product", fit: "contain", url: item.coverImageUrl }
-        : undefined,
     metadata: (item) =>
       [
         item.vendor,
@@ -235,7 +219,6 @@ const calendarKindRegistry = {
   project: {
     create: (date) => projectCaptureRequest({ date }),
     icon: (_item) => KIND_ICONS.project,
-    cover: (_item) => undefined,
     metadata: (item, today) =>
       [
         PROJECT_STATUS_LABELS[item.status],
@@ -264,7 +247,6 @@ const calendarKindRegistry = {
     // No `create`: a planting only ever starts from the Garden surface — see
     // the optional-field note on `CalendarKindSpec.create`.
     icon: () => KIND_ICONS.planting,
-    cover: () => undefined,
     metadata: (item) =>
       [
         CALENDAR_PLANTING_MILESTONE_LABELS[item.milestone],
@@ -296,7 +278,6 @@ function calendarItemPresentationFor<K extends CalendarItemKind>(
     // The kind and the entity are the same thing here — see CalendarKindSpec.
     entity: item.kind,
     icon: spec.icon(item),
-    cover: spec.cover(item),
     metadata: spec.metadata(item, today || undefined),
     compactBadge: spec.compactBadge?.(item),
     richBadge: spec.richBadge?.(item),

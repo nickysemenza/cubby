@@ -23,10 +23,10 @@ export function EntityPill({
   emoji?: string | null;
   fallback?: ReactNode;
 }) {
-  const resolvedImage = useEntityDisplayImage({
-    entityKind: entity,
-    entityId: id,
-  });
+  const resolvedImage = useEntityDisplayImage(
+    { entityKind: entity, entityId: id },
+    displayImage ?? undefined,
+  );
   return (
     <RecordPill
       name={name}

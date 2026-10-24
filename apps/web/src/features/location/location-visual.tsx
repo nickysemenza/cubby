@@ -3,6 +3,7 @@ import type { InfLocation } from "@cubby/schemas/location";
 import { Link } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 
+import { useEntityDisplayImage } from "~/entity/entity-media/entity-display-images";
 import { locationChildGroupLabel } from "~/lib/location-child-label";
 import { cn } from "~/lib/utils";
 import { Badge } from "~/ui/primitives/badge";
@@ -42,7 +43,14 @@ function SourceLink({
   location: InfLocation;
   children: ReactNode;
 }) {
-  const visual = resolveLocationVisual(location);
+  const image = useEntityDisplayImage(
+    {
+      entityKind: "location",
+      entityId: location.id,
+    },
+    location.displayImages ? (location.displayImages[0] ?? null) : undefined,
+  );
+  const visual = resolveLocationVisual(location, image);
   if (visual.primarySource === "product" && location.product) {
     return (
       <Link
@@ -55,11 +63,17 @@ function SourceLink({
       </Link>
     );
   }
-  if (visual.primarySource === "location" && visual.primaryImage) {
+  const ownPhoto = location.images.find(
+    (owned) =>
+      owned.url ===
+      (visual.primaryImage?.representations?.original ??
+        visual.primaryImage?.url),
+  );
+  if (visual.primarySource === "location" && ownPhoto) {
     return (
       <Link
         to="/images/$shortcode"
-        params={{ shortcode: visual.primaryImage.id }}
+        params={{ shortcode: ownPhoto.id }}
         aria-label={`Open photo of ${location.name}`}
         className="block size-full focus-visible:ring-2 focus-visible:ring-primary focus-visible:outline-none"
       >
@@ -77,13 +91,18 @@ function PrimaryImage({
   location: InfLocation;
   displayWidth: number;
 }) {
-  const visual = resolveLocationVisual(location);
+  const image = useEntityDisplayImage(
+    {
+      entityKind: "location",
+      entityId: location.id,
+    },
+    location.displayImages ? (location.displayImages[0] ?? null) : undefined,
+  );
+  const visual = resolveLocationVisual(location, image);
   const sourceLabel =
     visual.primarySource === "product"
       ? `Product image of ${location.product?.name ?? location.name}`
-      : visual.primarySource === "child"
-        ? `Compartment photo inside ${location.name}`
-        : `Photo of ${location.name}`;
+      : `Photo of ${location.name}`;
 
   return (
     <Image
@@ -106,7 +125,14 @@ function ChildContactSheet({
   location: InfLocation;
   interactive: boolean;
 }) {
-  const visual = resolveLocationVisual(location);
+  const image = useEntityDisplayImage(
+    {
+      entityKind: "location",
+      entityId: location.id,
+    },
+    location.displayImages ? (location.displayImages[0] ?? null) : undefined,
+  );
+  const visual = resolveLocationVisual(location, image);
   if (visual.childVisuals.length === 0) return null;
 
   return (
@@ -151,7 +177,14 @@ function LocationVisualMedia({
   variant,
   interactive,
 }: Pick<LocationVisualProps, "location" | "variant" | "interactive">) {
-  const visual = resolveLocationVisual(location);
+  const image = useEntityDisplayImage(
+    {
+      entityKind: "location",
+      entityId: location.id,
+    },
+    location.displayImages ? (location.displayImages[0] ?? null) : undefined,
+  );
+  const visual = resolveLocationVisual(location, image);
   const hasIdentity =
     visual.primarySource === "location" || visual.primarySource === "product";
   const hasChildren = visual.childVisuals.length > 0;
@@ -218,7 +251,14 @@ export function LocationVisual({
   interactive = false,
   showChildCount = true,
 }: LocationVisualProps) {
-  const visual = resolveLocationVisual(location);
+  const image = useEntityDisplayImage(
+    {
+      entityKind: "location",
+      entityId: location.id,
+    },
+    location.displayImages ? (location.displayImages[0] ?? null) : undefined,
+  );
+  const visual = resolveLocationVisual(location, image);
 
   if (variant === "compact") {
     return (

@@ -27,14 +27,10 @@ type ProductSelect = typeof product.$inferSelect & { brandName: string | null };
 
 /**
  * The identity product joined onto a location — the SKU the location IS.
- * Only the columns the wire shape needs, plus the cover image.
+ * Only identity columns; canonical media is prepared separately for the location.
  */
 export type LocationIdentityProductRow = ProductSelect & {
   category: ProductCategorySummary | null;
-  images?: Array<{
-    image: MappableImageRecord;
-    deletedAt?: Date | null;
-  }>;
 };
 
 export type LocationListDB = LocationSelect & {

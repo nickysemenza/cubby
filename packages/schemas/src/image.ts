@@ -157,34 +157,6 @@ export const partitionEntityFiles = <T extends { contentType: string }>(
   documents: files.filter(isDocumentFile),
 });
 
-/**
- * First displayable image among ordered candidate sources, else null.
- *
- * Entities whose thumbnail falls back to a linked entity's photo (a location to
- * the SKU it IS, an ingredient to the products it maps to) all share exactly
- * this much: "walk the sources in order, take the first displayable one". The
- * cascade ORDER is the entity's own business, so each owns a resolver that
- * spells out its sources and delegates the walk here — don't grow this into a
- * per-entity switch.
- *
- * Accepts bare images and arrays interchangeably so a resolver can mix a single
- * `coverImage` with an `images[]` without pre-flattening.
- */
-export const firstDisplayableImage = <T extends DisplayableFile>(
-  ...sources: Array<T | T[] | null | undefined>
-): T | null => {
-  for (const source of sources) {
-    if (!source) continue;
-    const found = Array.isArray(source)
-      ? source.find(isDisplayableImageFile)
-      : isDisplayableImageFile(source)
-        ? source
-        : undefined;
-    if (found) return found;
-  }
-  return null;
-};
-
 export const createInputImages = z.object({
   pendingImageIds: z.array(imageShortcode).optional(),
 });

@@ -85,13 +85,14 @@ const location = (
 
 const containerLocation = (overrides: Partial<InfLocation> = {}) =>
   location("AAAA", "Abrasives box", null, {
+    displayImages: [image("product")],
     product: {
       id: testShortcode("product", "PRD-AAAA"),
       name: "Two drawer tool box",
       brandName: "Example",
       model: "EX-2",
       category: categorySummaryFixture("storage"),
-      coverImage: image("product"),
+
       price: 50,
     },
     children: [
@@ -131,7 +132,10 @@ describe("LocationVisual", () => {
   it("uses an own location photo ahead of the product cover", () => {
     renderVisual(
       <LocationVisual
-        location={containerLocation({ images: [image("own")] })}
+        location={containerLocation({
+          images: [image("own")],
+          displayImages: [image("own")],
+        })}
         variant="hero"
         interactive
       />,

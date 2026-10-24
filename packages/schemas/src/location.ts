@@ -5,7 +5,7 @@ import { numericRangeFields } from "./base-entity";
 import { money } from "./money";
 import { mutationSideEffectsSchema } from "./mutation-side-effects";
 import { locationShortcode } from "./identifiers";
-import { firstDisplayableImage, type ImageOut, imageOut } from "./image";
+import { imageOut } from "./image";
 import { createPaginatedResponseSchema, presenceFilter } from "./pagination";
 import {
   locationRefOut,
@@ -105,33 +105,13 @@ export type LocationValuationSummaryOut = z.infer<
 /**
  * The SKU a location IS, embedded on every location read.
  *
- * Carries `category` and `coverImage` because they drive the location's own
- * visual identity: the category icon is the glyph a linked location renders at
- * small sizes (its `type` is null), and the cover is its thumbnail. `price` is
+ * Carries `category` for the linked location’s category glyph. Canonical
+ * display images own the location thumbnail. `price` is
  * what the container-valuation bucket rolls up.
  */
 export type LocationIdentityProductOut = z.infer<
   typeof locationIdentityProductOut
 >;
-
-/**
- * The image that represents a location: its own first displayable photo, else
- * the cover of the SKU it IS.
- *
- * `locationIdentityProductOut.coverImage` was built for exactly this fallback
- * and had no reader until this existed — every location surface resolved only
- * `images`, so a bin that IS a photographed tote rendered the empty placeholder.
- *
- * Structurally typed rather than taking a `LocationOut`, so the list row, the
- * detail read, and the hover-card view-model all satisfy it.
- */
-export const locationCoverImage = (loc: {
-  images: ImageOut[];
-  product: { coverImage: ImageOut | null } | null;
-}): ImageOut | null =>
-  // `mapLocationIdentityProduct` filters the cover too, but a caller may hand
-  // us one from somewhere else; the predicate is the contract, not the mapper.
-  firstDisplayableImage<ImageOut>(loc.images, loc.product?.coverImage);
 
 export const locationOutFields = locationDefinition.readSchemas.output.shape;
 

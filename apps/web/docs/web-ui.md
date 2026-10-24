@@ -301,3 +301,23 @@ image batches. Queue review links retain their Suggestions destination. Source
 transaction records borrow canonical images through accepted transaction evidence.
 A unique supported merchant suggestion supplies a later decorative Vendor logo
 fallback; ambiguous and insufficient history retain the semantic mark.
+
+Calendar grids, span chips, agenda rows and the day sheet share one display-image
+provider for the loaded range. The server resolves `displayImages` for every item type in one range batch;
+the grid and day sheet seed the shared context from that response.
+Compact span rows show a small thumbnail when available; missing images retain
+the kind icon. Opening the day sheet does not create a separate image query.
+
+All record identity imagery uses the canonical resolver. Raw attachment galleries,
+Product image summaries, nested identity-product photos, and direct logo/cover
+joins must not select a second identity image. URL-only picker projections remain
+serializers of canonical results. Location trees carry canonical media for the
+whole loaded tree; child photo contact sheets remain explicit compartment evidence
+and never become a parent identity fallback. Recipe heroes and comparisons, Wish
+candidates, Arrange, tools, and Location contents use the same image context.
+`useEntityDisplayImage` accepts a known canonical seed so a projected image or
+explicit no-image result does not register another request with the shell batch.
+
+The same contract applies to native typed consumers: Location lists read the
+tree’s canonical media, and recount Products receive canonical media in the
+shared inventory read batch. Neither client reconstructs identity from galleries.

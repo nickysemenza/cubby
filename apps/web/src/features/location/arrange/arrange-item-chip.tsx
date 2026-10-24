@@ -9,7 +9,7 @@ import { PackageIcon } from "@phosphor-icons/react/dist/csr/Package";
 import { Link } from "@tanstack/react-router";
 import { useMemo } from "react";
 
-import { useHydratedProductImages } from "~/entity/presentation/product-image-summaries";
+import { useEntityDisplayImage } from "~/entity/entity-media/entity-display-images";
 import { cn } from "~/lib/utils";
 import { tryFormatAmount } from "~/ui/text/format-amount";
 
@@ -35,7 +35,11 @@ export function ArrangeItemChip({
   sourceLocationId,
   roots,
 }: ArrangeItemChipProps) {
-  const images = useHydratedProductImages(item.productId);
+  const image = useEntityDisplayImage({
+    entityKind: "product",
+    entityId: item.productId,
+  });
+  const images = image ? [image] : [];
 
   const drag = useMemo<ItemDragData>(
     () => ({
