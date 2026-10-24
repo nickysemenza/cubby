@@ -120,18 +120,9 @@ const NON_ENTITY_FK_TARGETS = {
  * once its edge becomes graph-visible.
  */
 const NON_GRAPH_ENTITY_FK_EXEMPTIONS = {
-  "ShipmentSourceCapture.emailId": {
-    classification: "metadata",
-    reason: "retained shipping Email provenance, not a separate graph record",
-  },
   "ShipmentSourcePackage.shipmentId": {
     classification: "ownership",
     reason: "source package identity owned by its accepted Shipment",
-  },
-  "ShipmentObservation.shipmentId": {
-    classification: "ownership",
-    reason:
-      "tracking evidence owned by a Shipment and shown in its shared report",
   },
   "Job.runId": {
     classification: "metadata",

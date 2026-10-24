@@ -167,6 +167,15 @@ const relationshipMutationSchema = z.object({
   audiences: z.array(z.enum(["browser", "mcp"])).min(1),
 });
 
+/** A witnessed logical step, shared by graph edges and connected-record trails. */
+export const relationshipWitnessSchema = z.object({
+  relationshipKey: z.string(),
+  label: z.string(),
+  sourceKey: z.string(),
+  provenance: z.array(z.string()),
+});
+export type RelationshipWitness = z.infer<typeof relationshipWitnessSchema>;
+
 export const entityRelationshipSchema = z.object({
   key: z.string().min(1),
   label: z.string().min(1),

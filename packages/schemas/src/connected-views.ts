@@ -1,17 +1,35 @@
+import { mapRecord } from "@cubby/shared";
 import type { Entity } from "./entity";
 import {
   allEntities,
   entityManifest,
-  relationshipByKey,
+  entityInspectorMetadata,
 } from "./entity-manifest";
-import type { RelationshipPathStep } from "./entity-integrity";
+import type {
+  RelationshipPathStep,
+  RelationshipWitness,
+} from "./entity-integrity";
 import {
-  connectedViews,
+  connectedViewsFor,
+  relationshipsFor as resolveRelationships,
+  relationshipSources,
+  type RelationshipCatalog,
   derivedConnectedRelationship,
   type DerivedConnectedRelationship,
 } from "./connected-view-definitions";
 
-export { connectedViews } from "./connected-view-definitions";
+export { relationshipSources };
+export { connectedViews as curatedConnectedViews } from "./connected-view-definitions";
+const relationshipCatalog: RelationshipCatalog = allEntities.map((key) => ({
+  key,
+  plural: entityInspectorMetadata[key].plural ?? key,
+  relationships: entityManifest[key].relationships,
+}));
+export const relationshipsFor = (source: Entity) =>
+  resolveRelationships(relationshipCatalog, source);
+export const connectedViews = mapRecord(allEntities, (source) =>
+  connectedViewsFor(relationshipCatalog, source),
+);
 export type {
   ConnectedView,
   ConnectedViewKey,
@@ -22,6 +40,7 @@ export interface ConnectedPathVariant {
   steps: readonly RelationshipPathStep[];
   target: Entity;
   derived?: DerivedConnectedRelationship;
+  witnesses: readonly { stepCount: number; witness: RelationshipWitness }[];
 }
 
 /** Expand named multi-source relations into the physical paths the server can query. */
@@ -30,10 +49,18 @@ export function connectedPathVariants(
   route: readonly string[],
 ): ConnectedPathVariant[] {
   let current = source;
-  let variants: readonly (readonly RelationshipPathStep[])[] = [[]];
+  let variants: readonly ConnectedPathVariant[] = [
+    { steps: [], target: source, witnesses: [] },
+  ];
   for (const [index, key] of route.entries()) {
-    const relationship = relationshipByKey(current, key);
-    if (relationship.provenance.kind === "derived") {
+    const relationship = relationshipsFor(current).find(
+      (item) => item.key === key,
+    );
+    if (!relationship)
+      throw new Error(`Unknown relationship ${current}.${key}`);
+    const primary = relationship.sources[0];
+    if (!primary) throw new Error(`No source for ${current}.${key}`);
+    if (primary.provenance.kind === "derived") {
       const derived = derivedConnectedRelationship(current, key);
       if (
         index !== route.length - 1 ||
@@ -41,25 +68,54 @@ export function connectedPathVariants(
         derived.target !== relationship.target
       )
         throw new Error(`Unsupported derived connection ${current}.${key}`);
-      return variants.map((steps) => ({
-        steps,
+      return variants.map((variant) => ({
+        ...variant,
+        witnesses: [
+          ...variant.witnesses,
+          {
+            stepCount: variant.steps.length,
+            witness: {
+              relationshipKey: key,
+              label: relationship.label,
+              sourceKey: primary.key,
+              provenance: [
+                `derived:${primary.provenance.kind === "derived" ? primary.provenance.filter : key}`,
+              ],
+            },
+          },
+        ],
         target: relationship.target,
         derived,
       }));
     }
-    const sources = [
-      relationship.provenance,
-      ...relationship.sources.map((item) => item.provenance),
-    ].filter(
-      (item): item is Extract<typeof item, { kind: "local-path" }> =>
-        item.kind === "local-path",
+    const sources = relationship.sources.flatMap((item) =>
+      item.provenance.kind === "local-path"
+        ? [{ ...item, provenance: item.provenance }]
+        : [],
     );
     variants = variants.flatMap((prefix) =>
-      sources.map((item) => [...prefix, ...item.steps]),
+      sources.map((item) => ({
+        steps: [...prefix.steps, ...item.provenance.steps],
+        target: relationship.target,
+        witnesses: [
+          ...prefix.witnesses,
+          {
+            stepCount: prefix.steps.length + item.provenance.steps.length,
+            witness: {
+              relationshipKey: key,
+              label: item.label,
+              sourceKey: item.key,
+              provenance: item.provenance.steps.map(
+                (step) => `${step.direction}:${step.edge}`,
+              ),
+            },
+          },
+        ],
+      })),
     );
     current = relationship.target;
   }
-  return variants.map((steps) => ({ steps, target: current }));
+  return [...variants];
 }
 
 /** Validate the catalog in generation and tests, before any page can request it. */
@@ -71,7 +127,13 @@ export function validateConnectedViews(): void {
         throw new Error(`Duplicate connected view ${source}.${view.key}`);
       seen.add(view.key);
       for (const route of view.routes) {
-        if (route.length < ("evidence" in view && view.evidence ? 1 : 2))
+        if (
+          route.length <
+          (("evidence" in view && view.evidence) ||
+          view.key.startsWith("entity:")
+            ? 1
+            : 2)
+        )
           throw new Error(
             `Indirect view ${source}.${view.key} needs at least two relationships`,
           );

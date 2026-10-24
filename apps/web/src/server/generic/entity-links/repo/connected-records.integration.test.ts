@@ -1,4 +1,3 @@
-import { connectedViews } from "@cubby/schemas/connected-views";
 import { eq } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
@@ -212,9 +211,6 @@ describe("complete connected record tables", () => {
       source,
       limit: 1,
     });
-    expect(preview.views.map((view) => view.viewKey)).toEqual(
-      connectedViews.plant.map((view) => view.key),
-    );
     const purchases = preview.views.find(
       (view) => view.viewKey === "purchases",
     );

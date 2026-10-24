@@ -16,7 +16,10 @@ import {
   LIST_PRESENTATION_CHOICES,
   WAYFINDING_DOMAINS,
 } from "@cubby/schemas/entity-definitions/definition";
-import { connectedViews } from "@cubby/schemas/compiler/connected-view-definitions";
+import {
+  connectedViewsFor,
+  type RelationshipCatalog,
+} from "@cubby/schemas/compiler/connected-view-definitions";
 import {
   COLLECTION_ACTION_SCOPES,
   COLLECTION_ACTIONS,
@@ -578,11 +581,12 @@ const presentationJSON = (
   entity: string,
   presentation: CompiledEntity["inspector"],
   filterDescriptors: CompiledEntity["filterDescriptors"],
+  catalog: RelationshipCatalog,
 ) => {
   const { detail, list, edit } = presentation;
-  // SAFETY: entity is a compiled declaration key, and the exhaustive connected-view roster covers every declaration key.
-  const entityConnectedViews =
-    connectedViews[entity as keyof typeof connectedViews];
+  const source = catalog.find((entry) => entry.key === entity)?.key;
+  if (!source) throw new Error(`Missing relationship catalog entry ${entity}`);
+  const entityConnectedViews = connectedViewsFor(catalog, source);
   return {
     detailVariant: detail.variant,
     heroChip: detail.hero.chip ?? null,
@@ -627,12 +631,14 @@ const presentationJSON = (
     detailSections: detail.sections.map((section) =>
       detailSectionJSON(entity, section),
     ),
-    connectedViews: entityConnectedViews.map((view) => ({
-      key: view.key,
-      title: view.title,
-      target: view.target,
-      evidence: "evidence" in view ? view.evidence : false,
-    })),
+    connectedViews: entityConnectedViews
+      .filter((view) => view.preview !== false)
+      .map((view) => ({
+        key: view.key,
+        title: view.title,
+        target: view.target,
+        evidence: view.evidence ?? false,
+      })),
     listViews: list.views.map((view) => listViewJSON(entity, view)),
     listTotals: list.totals.map((total) => ({
       id: total.id,
@@ -686,6 +692,7 @@ const entityJSON = (
   entity: CompiledEntity,
   entityKey: EntityKeyLookup,
   entityForPrefix: EntityForPrefix,
+  catalog: RelationshipCatalog,
 ): ManifestWire<"EntityDescriptor"> => {
   if (entity.route === null) {
     throw new Error(
@@ -754,6 +761,7 @@ const entityJSON = (
       entity.key,
       entity.inspector,
       entity.filterDescriptors,
+      catalog,
     ),
   };
 };
@@ -796,6 +804,17 @@ const checkCatalogKeys = (entities: readonly CompiledEntity[]) => {
 export const renderSwiftEntityCatalog = (
   entities: readonly CompiledEntity[],
 ): EntityArtifacts[] => {
+  // SAFETY: compilation validates entity keys, targets, provenance and sources
+  // against the declaration bundle before this renderer runs. Keep this pure
+  // projection independent of generated runtime schemas for clean bootstraps.
+  const catalog = entities.map((entity) => ({
+    key: entity.key,
+    plural: entity.inspector.plural ?? entity.inspector.singular,
+    relationships: entity.relations.map((relation) => ({
+      ...relation,
+      sources: relation.sources ?? [],
+    })),
+  })) as RelationshipCatalog;
   const used = (values: readonly string[]) => [...new Set(values)].sort();
   const rendererIds = (surface: "control" | "list" | "detail") =>
     used(
@@ -994,7 +1013,7 @@ export const renderSwiftEntityCatalog = (
     },
   ];
   const descriptors = entities.map((entity) =>
-    entityJSON(entity, entityKey, entityForPrefix),
+    entityJSON(entity, entityKey, entityForPrefix, catalog),
   );
   for (const descriptor of descriptors)
     assertManifestWire("EntityDescriptor", descriptor);

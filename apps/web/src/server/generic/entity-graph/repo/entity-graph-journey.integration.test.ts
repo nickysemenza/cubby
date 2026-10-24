@@ -9,6 +9,7 @@ import { upsertCookbook } from "~/server/domains/cookbook/repo/cookbook";
 import { createExpense } from "~/server/domains/expense/repo/crud";
 import { upsertCookbookRecipe } from "~/server/domains/recipe/repo/crud";
 import { createVendor } from "~/server/domains/vendor/repo/vendor";
+import { getConnectedRecords } from "~/server/generic/entity-links/repo/connected-records";
 import {
   createIngredientFixture as createIngredient,
   createInventoryFixture as createInventory,
@@ -302,5 +303,17 @@ describe("entity graph cross-entity journey", () => {
       }),
     );
     expect(inverseEdge).toEqual(firstEdge);
+    const connections = await getConnectedRecords(ctx.db, {
+      source: { entityKind: "location", entityId: first.id },
+      viewKey: "entity:location",
+    });
+    expect(connections.items.map((item) => item.target.entityId)).toEqual([
+      second.id,
+    ]);
+    expect(
+      connections.items[0]?.paths.map(
+        (path) => path.at(-1)?.via?.relationshipKey,
+      ),
+    ).toEqual(expect.arrayContaining(["parent", "children"]));
   });
 });

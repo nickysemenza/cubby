@@ -56,6 +56,9 @@ export default defineEntity({
       },
     },
     detail: {
+      omitRelations: {
+        "tracking-emails": "Shown with witnessed paths in Connected records.",
+      },
       summary: [
         {
           kind: "records",
@@ -447,6 +450,41 @@ export default defineEntity({
     ],
   },
   relations: [
+    {
+      key: "tracking-emails",
+      label: "Tracking evidence",
+      target: "email",
+      cardinality: "many",
+      provenance: {
+        kind: "local-path",
+        steps: [
+          { edge: "ShipmentObservation.shipmentId", direction: "incoming" },
+          {
+            edge: "ShipmentObservationCapture.observationId",
+            direction: "incoming",
+          },
+          {
+            edge: "ShipmentObservationCapture.captureId",
+            direction: "outgoing",
+          },
+          { edge: "ShipmentSourceCapture.emailId", direction: "outgoing" },
+        ],
+      },
+      inverse: {
+        steps: [
+          { edge: "ShipmentSourceCapture.emailId", direction: "incoming" },
+          {
+            edge: "ShipmentObservationCapture.captureId",
+            direction: "incoming",
+          },
+          {
+            edge: "ShipmentObservationCapture.observationId",
+            direction: "outgoing",
+          },
+          { edge: "ShipmentObservation.shipmentId", direction: "outgoing" },
+        ],
+      },
+    },
     {
       key: "purchase",
       label: "Purchase",

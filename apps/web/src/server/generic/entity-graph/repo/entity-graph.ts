@@ -1,4 +1,8 @@
 import {
+  relationshipsFor as graphRelationshipsFor,
+  relationshipSources as localSources,
+} from "@cubby/schemas/connected-views";
+import {
   entityRefKey,
   type Entity,
   type EntityRef,
@@ -11,11 +15,7 @@ import {
   type EntityGraphOutput,
 } from "@cubby/schemas/entity-graph";
 import type { RelationshipProvenance } from "@cubby/schemas/entity-integrity";
-import {
-  allEntities,
-  entityInspectorMetadata,
-  entityManifest,
-} from "@cubby/schemas/entity-manifest";
+import { allEntities, entityManifest } from "@cubby/schemas/entity-manifest";
 import { entitySummary } from "@cubby/schemas/entity-summary";
 import { is, sql } from "drizzle-orm";
 import { PgColumn } from "drizzle-orm/pg-core";
@@ -55,22 +55,6 @@ type EntityGraphReadOptions = {
   isImageHydrationDeadline?: (error: EntityGraphReadError) => boolean;
 };
 
-type LocalSource = {
-  key: string;
-  label: string;
-  provenance: RelationshipProvenance;
-};
-
-type GraphRelationship = {
-  key: string;
-  label: string;
-  target: Entity;
-  sources: readonly LocalSource[];
-  reverseEdge?: boolean;
-  canonicalRelationshipKey?: string;
-  canonicalLabel?: string;
-};
-
 const pathDescription = (provenance: RelationshipProvenance): string[] =>
   provenance.kind === "local-path"
     ? provenance.steps.map((step) => `${step.direction}:${step.edge}`)
@@ -79,32 +63,6 @@ const pathDescription = (provenance: RelationshipProvenance): string[] =>
       : provenance.kind === "derived"
         ? [`derived:${provenance.filter}`]
         : provenance.sourceColumns.map((column) => `external:${column}`);
-
-const localSources = (
-  relationship: (typeof entityManifest)[Entity]["relationships"][number],
-): readonly LocalSource[] => [
-  {
-    key: relationship.sourceKey ?? "direct",
-    label: relationship.label,
-    provenance: relationship.provenance,
-  },
-  ...relationship.sources.map((source) => ({
-    key: source.key,
-    label: source.label,
-    provenance: source.provenance,
-  })),
-];
-
-const samePath = (
-  left: readonly { edge: string; direction: string }[],
-  right: readonly { edge: string; direction: string }[],
-) =>
-  left.length === right.length &&
-  left.every(
-    (step, index) =>
-      step.edge === right[index]?.edge &&
-      step.direction === right[index]?.direction,
-  );
 
 type LocalPath = Extract<RelationshipProvenance, { kind: "local-path" }>;
 const pathKey = (path: LocalPath) => pathDescription(path).join("|");
@@ -175,81 +133,6 @@ const canonicalEdge = (
     provenance: pathDescription(descriptor.path),
   };
 };
-
-/**
- * The manifest declares a reverse path where it is useful. It need not repeat
- * that path as a second relationship definition, so graph reads surface it as
- * a directional relationship of the current root (Cookbook -> Recipes is the
- * important example).
- */
-const graphRelationshipsFor = (
-  source: Entity,
-): readonly GraphRelationship[] => [
-  ...entityManifest[source].relationships.map((relationship) => ({
-    key: relationship.key,
-    label: relationship.label,
-    target: relationship.target,
-    sources: localSources(relationship),
-  })),
-  ...allEntities.flatMap((candidate) =>
-    entityManifest[candidate].relationships.flatMap((relationship) => {
-      if (relationship.target !== source) return [];
-      const sources = [
-        {
-          key: relationship.sourceKey ?? "direct",
-          label: relationship.label,
-          inverse: "inverse" in relationship ? relationship.inverse : undefined,
-        },
-        ...relationship.sources.map((named) => ({
-          key: named.key,
-          label: named.label,
-          inverse: named.inverse,
-        })),
-      ].flatMap((named) => {
-        const inverse = named.inverse;
-        // Check every local source of the declared relation, not just its
-        // primary provenance: a two-source relation declared on both sides
-        // (e.g. meal.eaters / ledgerParty.meals) only dedupes against its
-        // primary path here, so the secondary (named) source's inverse would
-        // otherwise leak through as a stray `inverse:*` branch.
-        return inverse &&
-          !entityManifest[source].relationships.some(
-            (declared) =>
-              declared.target === candidate &&
-              localSources(declared).some(
-                (local) =>
-                  local.provenance.kind === "local-path" &&
-                  samePath(local.provenance.steps, inverse.steps),
-              ),
-          )
-          ? [
-              {
-                key: `inverse:${named.key}`,
-                label: named.label,
-                provenance: {
-                  kind: "local-path" as const,
-                  steps: inverse.steps,
-                },
-              },
-            ]
-          : [];
-      });
-      return sources.length === 0
-        ? []
-        : [
-            {
-              key: `inverse:${candidate}.${relationship.key}`,
-              label: entityInspectorMetadata[candidate].plural ?? candidate,
-              target: candidate,
-              sources,
-              reverseEdge: true,
-              canonicalRelationshipKey: relationship.key,
-              canonicalLabel: relationship.label,
-            },
-          ];
-    }),
-  ),
-];
 
 const labelOverrides = new Map(Object.entries(LABEL_COLUMN_OVERRIDES));
 
@@ -384,6 +267,7 @@ export async function readEntityGraph(
     const rootTable = entityManifest[rootEntity].dbTable;
     if (!rootTable) continue;
     await options.beforeQuery?.();
+    // Append-only roots have no deletedAt column; liveness belongs to the manifest.
     const rootRows = await unwrapDb(db).execute(sql`
       SELECT "id" AS "dbId", "shortcode" AS "id", ${labelSql(rootEntity, "")} AS "label",
         ${metadataFor(rootEntity, "")} AS "metadata"
@@ -392,7 +276,7 @@ export async function readEntityGraph(
         requestedRoots.map((root) => sql`${root.entityId}`),
         sql`, `,
       )})
-        AND "deletedAt" IS NULL
+        ${entityManifest[rootEntity].softDelete ? sql`AND "deletedAt" IS NULL` : sql``}
     `);
     const liveRoots = z
       .object({
@@ -459,7 +343,7 @@ export async function readEntityGraph(
               liveRoots.map((root) => sql`${root.ref.entityId}`),
               sql`, `,
             )})
-              AND s."deletedAt" IS NULL
+              ${entityManifest[rootEntity].softDelete ? sql`AND s."deletedAt" IS NULL` : sql``}
         `;
     });
     await options.beforeQuery?.();

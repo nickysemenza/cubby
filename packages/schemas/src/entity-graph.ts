@@ -1,3 +1,4 @@
+import { relationshipWitnessSchema } from "./entity-integrity";
 import { z } from "zod";
 import { parseShortcode } from "@cubby/shared";
 
@@ -49,16 +50,11 @@ export const entityGraphNodeSchema = entityRefSchema.extend({
 });
 export type EntityGraphNode = z.infer<typeof entityGraphNodeSchema>;
 
-export const entityGraphEdgeSchema = z.object({
+export const entityGraphEdgeSchema = relationshipWitnessSchema.extend({
   /** Stable physical-path identity, shared by forward and inverse expansions. */
   id: z.string(),
   source: entityRefSchema,
   target: entityRefSchema,
-  relationshipKey: z.string(),
-  label: z.string(),
-  /** The named manifest source that produced this edge. */
-  sourceKey: z.string(),
-  provenance: z.array(z.string()),
 });
 export type EntityGraphEdge = z.infer<typeof entityGraphEdgeSchema>;
 

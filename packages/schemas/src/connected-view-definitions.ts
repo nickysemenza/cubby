@@ -1,4 +1,13 @@
 import type { Entity } from "./entity";
+import {
+  relationshipsFor,
+  type RelationshipCatalog,
+} from "./relationship-paths";
+export {
+  relationshipsFor,
+  relationshipSources,
+  type RelationshipCatalog,
+} from "./relationship-paths";
 
 /** Typed hooks for derived terminal relationships; physical routes need no hook. */
 const derivedConnectedRelationships = [
@@ -23,6 +32,8 @@ export interface ConnectedView {
   target: Entity;
   /** Related documents supplement citations; they do not verify field values. */
   evidence?: boolean;
+  /** Alias routes stay addressable without duplicating a target group in previews. */
+  preview?: false;
   /** Each route follows named, directional manifest relationships. */
   routes: readonly (readonly string[])[];
 }
@@ -696,3 +707,46 @@ export const connectedViews = {
 
 export type ConnectedViewKey<E extends Entity = Entity> =
   (typeof connectedViews)[E][number]["key"];
+
+/** Direct logical connections are automatic; only meaningful indirect routes need curation. */
+export function connectedViewsFor(
+  catalog: RelationshipCatalog,
+  source: Entity,
+): readonly ConnectedView[] {
+  const grouped = new Map<Entity, ConnectedView>();
+  for (const relationship of relationshipsFor(catalog, source)) {
+    if (
+      !relationship.sources.some(
+        (item) => item.provenance.kind === "local-path",
+      )
+    )
+      continue;
+    const previous = grouped.get(relationship.target);
+    grouped.set(relationship.target, {
+      key: `entity:${relationship.target}`,
+      title:
+        catalog.find((entry) => entry.key === relationship.target)?.plural ??
+        relationship.target,
+      target: relationship.target,
+      routes: [...(previous?.routes ?? []), [relationship.key]],
+    });
+  }
+  const aliases: ConnectedView[] = [];
+  for (const curated of connectedViews[source]) {
+    const previous = grouped.get(curated.target);
+    if (!previous) {
+      grouped.set(curated.target, curated);
+      continue;
+    }
+    grouped.set(curated.target, {
+      ...previous,
+      evidence:
+        previous.evidence ||
+        ("evidence" in curated && curated.evidence) ||
+        false,
+      routes: [...previous.routes, ...curated.routes],
+    });
+    aliases.push({ ...curated, preview: false });
+  }
+  return [...grouped.values(), ...aliases];
+}

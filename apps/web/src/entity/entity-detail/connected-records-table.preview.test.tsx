@@ -1,4 +1,4 @@
-import { render } from "@testing-library/react";
+import { fireEvent, render } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it } from "vitest";
 import { page } from "vitest/browser";
 
@@ -71,21 +71,18 @@ it("contains long connection evidence inside a narrow relation column", async ()
     { wrapper: harness.wrapper },
   );
   const cell = getByTestId("connection-cell");
+  const toggle = cell.querySelector("button");
+  if (!(toggle instanceof HTMLElement)) throw new Error("missing path toggle");
+  expect(toggle.getBoundingClientRect().right).toBeLessThanOrEqual(
+    cell.getBoundingClientRect().right + 1,
+  );
+  fireEvent.click(toggle);
   const path = cell.querySelector("ol");
   if (!(path instanceof HTMLElement))
     throw new Error("missing connection evidence");
   expect(path.getBoundingClientRect().right).toBeLessThanOrEqual(
     cell.getBoundingClientRect().right + 1,
   );
-  // Intermediate records read by kind; their long names stay in the title.
-  expect(path.textContent).toBe("Purchase→Product");
-  // A second path is a toggle on the trail's own line, not a line below it.
-  const toggle = cell.querySelector("button");
-  if (!(toggle instanceof HTMLElement)) throw new Error("missing path toggle");
-  expect(toggle.getBoundingClientRect().top).toBeLessThan(
-    path.getBoundingClientRect().bottom,
-  );
-  expect(toggle.getBoundingClientRect().right).toBeLessThanOrEqual(
-    cell.getBoundingClientRect().right + 1,
-  );
+  expect(cell.querySelector('a[href="/purchases/PUR-TEST"]')).not.toBeNull();
+  expect(cell.querySelector('a[href="/products/PRD-OTHER"]')).not.toBeNull();
 });

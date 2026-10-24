@@ -1,3 +1,4 @@
+import { relationshipWitnessSchema } from "./entity-integrity";
 import { z } from "zod";
 
 import { entityGraphRootSchema } from "./entity-graph";
@@ -18,6 +19,8 @@ export const connectedPathNodeSchema = z.object({
   entityKind: entitySchema,
   entityId: z.string(),
   label: z.string(),
+  /** Logical step arriving at this node; storage-only joins stay internal. */
+  via: relationshipWitnessSchema.optional(),
 });
 export type ConnectedPathNode = z.infer<typeof connectedPathNodeSchema>;
 
@@ -38,6 +41,8 @@ export type ConnectedRecordsOutput = z.infer<
 
 export const connectedRecordsPreviewInputSchema = z.object({
   source: entityGraphRootSchema,
+  /** Full detail groups or the curated headline routes, using the same resolver. */
+  scope: z.enum(["connections", "context"]).default("connections"),
   /** Rows per view; each view also reports its complete count. */
   limit: z.number().int().min(1).max(10).default(3),
 });
