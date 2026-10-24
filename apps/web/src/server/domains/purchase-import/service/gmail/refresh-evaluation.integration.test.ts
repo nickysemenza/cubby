@@ -11,9 +11,10 @@ import { getDb, withTransactionDatabase } from "~/server/db/helpers";
 import {
   aiEvaluation,
   email,
+  ledgerParty,
   emailClassificationObservation,
 } from "~/server/db/schema";
-import { systemActor } from "~/server/domains/run/repo/ensure-run";
+import { ensureRun, systemActor } from "~/server/domains/run/repo/ensure-run";
 import {
   discoverAiRefresh,
   executeAiRefreshTarget,
@@ -213,15 +214,14 @@ describe("Email prompt refresh publication", () => {
       name: "Synthetic retry metadata",
       kind: "member",
     });
-    const owner = await insertWithShortcode(ctx.db, "run", {
+    await getDb(ctx.db)
+      .update(ledgerParty)
+      .set({ userId: ctx.actor.userId })
+      .where(eq(ledgerParty.id, party.entityId));
+    const ownerId = await ensureRun(ctx.db, ctx.actor, {
       purpose: "mail_discovery",
       trigger: "manual",
       status: "running",
-      ledgerPartyId: party.entityId,
-      actorUserId: ctx.actor.userId,
-      actorName: "Synthetic scope owner",
-      actorEmail: "synthetic@example.invalid",
-      actorLedgerPartyShortcode: party.output.id,
       input: {
         mailboxId: "synthetic-retry-metadata",
         scopedQueries: [],
@@ -255,7 +255,7 @@ describe("Email prompt refresh publication", () => {
           messageId: item.messageId,
           executionPolicy: "classification_only",
           expected: item,
-          runId: owner.id,
+          runId: ownerId,
         },
         async (_db, _current, publication) => {
           calls += 1;
