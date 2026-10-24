@@ -1,3 +1,4 @@
+import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import { describe, expect, it } from "vitest";
 
 import { classificationAllowsField } from "~/server/domains/spending-category/repo/classification-field-policy";
@@ -34,4 +35,13 @@ describe("credit-card field applicability", () => {
         ),
       ).toBe(true);
   });
+});
+
+it("limits the primary-cardholder picker to member parties", () => {
+  const field = entityFieldModels.financialAccount.fields.find(
+    (field) => field.key === "primaryCardholderId",
+  );
+  expect(field?.reference?.filters).toEqual([
+    { field: "kind", values: ["member"] },
+  ]);
 });

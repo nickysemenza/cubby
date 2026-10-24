@@ -33,6 +33,7 @@ import {
   EntityFilterLink,
 } from "~/entity/components/entity-ref-link";
 import { ReferencePreview } from "~/entity/components/reference-preview";
+import { referenceScopeFor } from "~/entity/editing/reference-scope";
 import {
   fieldQualityChecks,
   useFieldQuality,
@@ -1641,6 +1642,7 @@ export function editableFieldOverrides<TRecord extends { id: string }, TResult>(
                   await mutate({ id: record.id, data: { [key]: id } });
                 }}
                 SearchProvider={referenceEntitySearch(target)}
+                scope={referenceScopeFor(field.reference, record)}
                 label={target}
                 clearable={field.nullable}
                 trigger="pencil"
@@ -2145,6 +2147,7 @@ export function createEntityDisplayColumns<TRecord extends object>(
                 value={getItem(row.original)}
                 onSave={(id) => save(row.original, id)}
                 SearchProvider={referenceEntitySearch(referenceEntity)}
+                scope={referenceScopeFor(field.reference, row.original)}
                 label={referenceEntity}
                 clearable={field.nullable}
                 trigger="pencil"

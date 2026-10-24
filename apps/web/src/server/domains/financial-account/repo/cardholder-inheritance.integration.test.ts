@@ -127,6 +127,29 @@ describe("account cardholder inheritance", () => {
       }),
     ).rejects.toThrow(/primary cardholder/i);
   });
+  it("rejects a household as an explicit primary cardholder", async () => {
+    const household = await createRepoEntity(ctx, "ledgerParty", {
+      kind: "household",
+      name: "Synthetic household",
+    });
+    const card = await createRepoEntity(ctx, "financialAccount", {
+      identity: { kind: "credit_card", network: null },
+    });
+    await expect(
+      executeEntity(kernelCtx(ctx), {
+        entity: "financialAccount",
+        action: "update",
+        id: card.output.id,
+        data: { primaryCardholderId: household.output.id },
+      }),
+    ).rejects.toThrow(/live member ledger party/);
+    await expect(
+      createRepoEntity(ctx, "financialAccount", {
+        identity: { kind: "credit_card", network: null },
+        primaryCardholderId: household.output.id,
+      }),
+    ).rejects.toThrow(/live member ledger party/);
+  });
   it("does not inherit card-only fields on bank accounts", async () => {
     const owner = await createRepoEntity(ctx, "ledgerParty", {
       kind: "member",

@@ -75,7 +75,9 @@ per-entity code as possible.
 Before adding an inherited value or override, trace an existing field through its
 stored intent, effective read, `fieldResolutions` provenance, and declared
 `resolution` actions. Reuse that contract for edits, Use inherited, and explicit
-None where supported. Domain rules supply the fallback; the generic framework
+None where supported. Reference candidate filters and dependent scopes apply in capture forms, inline detail editors, and table cells through the same picker provider; an inline editor must not widen a declared member-only roster.
+
+Domain rules supply the fallback; the generic framework
 owns its presentation and assignment intent. Generic form controls alone do not
 establish reuse of the resolution framework.
 

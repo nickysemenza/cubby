@@ -37,6 +37,7 @@ export interface EditableEntityCellProps<TId extends string> {
   onSave: (id: TId | null) => Promise<void>;
   /** WithLocationSearch / WithIngredientSearch / ... — injected so unit tests can stub it. */
   SearchProvider: (props: SearchProviderProps<TId>) => React.ReactNode;
+  scope?: SearchProviderProps<TId>["scope"];
   /** Combobox placeholder noun, e.g. "location", "ingredient". */
   label: PickerEntity;
   /** Allow saving null (clear the relation). Without it, an empty selection is a no-op cancel. */
@@ -71,6 +72,7 @@ export function EditableEntityCell<TId extends string>({
   value,
   onSave,
   SearchProvider,
+  scope,
   label,
   clearable,
   filterItems,
@@ -93,6 +95,7 @@ export function EditableEntityCell<TId extends string>({
         value={value}
         onSave={onSave}
         SearchProvider={SearchProvider}
+        scope={scope}
         label={label}
         clearable={clearable}
         filterItems={filterItems}
@@ -176,6 +179,7 @@ function EditableEntityEditor<TId extends string>({
   value,
   onSave,
   SearchProvider,
+  scope,
   label,
   clearable,
   filterItems,
@@ -186,6 +190,7 @@ function EditableEntityEditor<TId extends string>({
   value: ComboboxItem<TId> | null;
   onSave: (id: TId | null) => Promise<void>;
   SearchProvider: (props: SearchProviderProps<TId>) => React.ReactNode;
+  scope?: SearchProviderProps<TId>["scope"];
   label: PickerEntity;
   clearable?: boolean;
   filterItems?: (item: ComboboxItem<TId>) => boolean;
@@ -233,7 +238,7 @@ function EditableEntityEditor<TId extends string>({
             isPending && "pointer-events-none opacity-50",
           )}
         >
-          <SearchProvider>
+          <SearchProvider scope={scope}>
             {({
               items,
               onSearchChange,

@@ -81,7 +81,7 @@ attribution journey.
 ## Card access, purchaser, and funding dates
 
 A credit card's `primaryCardholderId` identifies its primary member independently
-of funding and the inventory-owner default. It inherits the live member `ledgerPartyId` on credit cards until an explicit member or None overrides it. Reset restores live inheritance; household and guest parties supply no default. Existing member selections remain explicit. `authorizedUsers`
+of funding and the inventory-owner default. It inherits the live member `ledgerPartyId` on credit cards until an explicit member or None overrides it. Reset restores live inheritance; household and guest parties supply no default. Existing member selections remain explicit. Primary-cardholder pickers and writes admit only live member parties; the household and guests are never eligible. `authorizedUsers`
 records member memberships with inclusive `validFrom`/`validTo` dates (null is an
 open endpoint). History details link each Ledger Party beside its date bounds on both web and
 Apple clients. Every non-cash account can name a provider through

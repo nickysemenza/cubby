@@ -331,7 +331,10 @@ export default defineEntity({
           },
           labels: { unresolved: "No member cardholder", none: "None" },
         },
-        reference: { entity: "ledgerParty" },
+        reference: {
+          entity: "ledgerParty",
+          filters: [{ field: "kind", values: ["member"] }],
+        },
         control: {
           kind: "specialized",
           renderer: "entity-select",

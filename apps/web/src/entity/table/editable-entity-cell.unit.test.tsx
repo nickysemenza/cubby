@@ -384,3 +384,23 @@ describe("EditableEntityCell", () => {
     expect(screen.queryByText("Garage")).not.toBeInTheDocument();
   });
 });
+
+it("passes the declared member scope to the reference picker", async () => {
+  let captured: SearchProviderProps<string>["scope"];
+  const ScopedSearch = (props: SearchProviderProps<string>) => {
+    captured = props.scope;
+    return StubSearchProvider(props);
+  };
+  render(
+    <EditableEntityCell
+      value={null}
+      onSave={vi.fn()}
+      SearchProvider={ScopedSearch}
+      scope={{ kind: ["member"] }}
+      label="ledgerParty"
+      renderValue={renderValue}
+    />,
+  );
+  enterEditMode();
+  await waitFor(() => expect(captured).toEqual({ kind: ["member"] }));
+});
