@@ -1,0 +1,27 @@
+apps/web/src/lib/request-id.ts
+  s_f1ac5eb353befe::t_90fcf5cead83d3 126-128,134-135
+apps/web/src/lib/request-id.unit.test.ts
+  s_f1ac5eb353befe::t_0b5bdcda944807 130-131
+apps/web/src/server/operation-runtime/browser-operation-dispatch.ts
+  s_f1ac5eb353befe::t_9d5768db26225e 11,189-195
+apps/web/src/server/operation-runtime/browser-operation-dispatch.unit.test.ts
+  s_f1ac5eb353befe::t_ae3199665ed9a5 6-10,66-72,74-77,79,82-83
+docs/development.md
+  s_f1ac5eb353befe::t_2c7bd63414835f 610-612
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.10",
+  "base_commit_sha": "47bcfe5eb7c209ebb35e9e0ccaeb2c3cadb794e7",
+  "prompts": {},
+  "sessions": {
+    "s_f1ac5eb353befe": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "a229dffd-cbfc-4ada-b803-ecb84a02290e",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "nicky <nicky@cloudflare.com>"
+    }
+  }
+}
