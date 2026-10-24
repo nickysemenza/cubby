@@ -53,7 +53,7 @@ env:
 jobs:
   plan:
     name: Plan
-    runs-on: ubuntu-slim
+    runs-on: [self-hosted, celesto-micro]
     timeout-minutes: 5
     outputs:
       # Nightly and manual runs start every filtered lane.

@@ -30,16 +30,19 @@ independent and use the existing Nx `build-cf` cache, including its source
 provenance. The test commands retain their build ensure for standalone use;
 after the explicit build it verifies the existing output. Build preparation
 now runs even when the subsequent test target replays a cached pass.
-`Test report` trials Celesto's ephemeral Linux x64 Micro runner through
+`Plan` and `Test report` trial Celesto's ephemeral Linux x64 Micro runner through
 `runs-on: [self-hosted, celesto-micro]`; Celesto hosts the machine, while
 `self-hosted` is GitHub's label for runners outside its hosted fleet.
 Reporting installs dependencies and merges blobs without building the app or
 installing browsers. It stays outside `CI passed`, which uses `ubuntu-slim`.
 The repository must be enabled in the Celesto GitHub App and linked to a
-workspace with usable Micro credit before reporting can start. A queued runner
+workspace with usable Micro credit before either job can start. Plan filters
+changed paths and feeds the required merge gate and native lanes, so unavailable
+Celesto capacity or credit now blocks CI completion. The Micro trial allows only
+one retained sandbox at a time, which can serialize these jobs across PRs. A queued runner
 is not bounded by the job's execution timeout. Compare queue time, install and
 merge duration, report publication, and billed runtime before expanding the
-trial; it does not measure build/test performance. Revert the report job to
+trial; it does not measure build/test performance. Revert both jobs to
 `ubuntu-slim` to end the trial. Required build/test lanes keep their existing
 runners. Standard GitHub-hosted runners are free for this public repository,
 so this trial evaluates compatibility and turnaround rather than cost savings.
