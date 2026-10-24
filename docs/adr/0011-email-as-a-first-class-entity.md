@@ -355,3 +355,26 @@ references remain module-private and cannot be replaced by caller or model data.
 This boundary supplies no automatic propagation authority, effect selector or
 cross-Email identity rule. Those domain contracts remain required before Email
 correction repair becomes supported.
+
+### Email evidence outer write scope
+
+`withEmailEvidenceWrite` owns a DB-only serializable root transaction and takes
+one physical `AssessmentCorrectionLock` write before domain work. Callers must
+replace the actual outer transaction entry, before Job, Run, Purchase, source
+claim, Original, Email or projection locks. Calling it inside an existing
+transaction is refused; nested writers carry the supplied capability instead.
+The scope retries aborted snapshots through the existing database helper, never
+committed writes whose after-commit notification failed.
+
+The private registered capability is valid only for that live transaction and
+its active savepoints, including before-commit publication. Construction,
+property copying, unrelated transactions, expired savepoints and later reuse of
+the same physical connection confer no scope. A second root opened while the
+scope is active is refused; provider and storage IO remain outside the boundary.
+The scope serializes writes only and supplies no member or source-proof authority.
+
+This primitive is not yet adopted by production Email writers. Complete outer
+entry coverage, accepted-evidence finance/shipment integration, current-effect
+selection and distinct-Email equivalence remain prerequisites. Email correction
+adapters remain held; adding this scope does not authorize financial commands,
+historical enrollment or production application.

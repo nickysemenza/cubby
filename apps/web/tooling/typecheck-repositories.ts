@@ -16,6 +16,7 @@ import { dirname, join, relative, resolve } from "node:path";
 export const repositoryOwners = [
   "src/server/db/job-schema.ts",
   "src/server/db/assessment-correction-lock-schema.ts",
+  "src/server/generic/assessment/repo/correction-lock.ts",
   "src/server/db/entity-quality-schema.ts",
   "src/server/lib/canonical-json.ts",
   "src/server/db/computed/product-classification-evidence.ts",
@@ -62,6 +63,7 @@ export const repositoryOwners = [
   "src/server/generic/assessment/repo/assessment.ts",
   "src/server/generic/assessment/repo/correction-receipt.ts",
   "src/server/domains/purchase-import/repo/email-review-intent.ts",
+  "src/server/domains/purchase-import/repo/email-evidence-write-scope.ts",
   "src/server/generic/problems/repo/detectors-vendor.ts",
   "src/server/generic/problems/repo/detectors-purchase.ts",
   "src/server/generic/problems/repo/reparse.ts",
