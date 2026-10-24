@@ -122,6 +122,12 @@ jobs:
         uses: ./.github/actions/setup-node-with-deps
         with:
           wasm: restore
+      - name: Install Swift signature verification prerequisite
+        run: |
+          privilege=()
+          if [[ "$EUID" != 0 ]]; then privilege=(sudo); fi
+          "${privilege[@]}" apt-get update
+          "${privilege[@]}" apt-get install -y --no-install-recommends gnupg
       - name: Install Swift for native formatting
         uses: swift-actions/setup-swift@364295d9c23900ce04d4e5cc708387921b4e50f9 # v3
         with:

@@ -44,7 +44,8 @@ runner is not bounded by its execution timeout, and unavailable capacity or
 credit blocks the merge gate. Moving jobs off GitHub frees its runner slots,
 but does not guarantee Celesto capacity.
 
-Setup installs Rust for WASM cache misses, Swift for Linux native formatting,
+Setup installs Rust for WASM cache misses, GnuPG for verified Swift installation,
+Swift for Linux native formatting,
 and Chromium system dependencies even when its browser archive is cached.
 It also restores `/dev/fd` when absent on Linux: Bash process substitution in
 the WASM installer requires that link to `/proc/self/fd` on minimal images.
