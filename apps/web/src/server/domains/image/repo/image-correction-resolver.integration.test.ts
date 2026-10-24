@@ -2,8 +2,12 @@ import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { getDb } from "~/server/db/helpers";
-import { image } from "~/server/db/schema";
+import { getDb, withSnapshotWriteDatabase } from "~/server/db/helpers";
+import { image, assessmentState, feedback } from "~/server/db/schema";
+import {
+  lockImageCorrectionContent,
+  lockImageCorrectionRecord,
+} from "~/server/domains/image/repo/image-correction-lock";
 import { resolveImageCorrection } from "~/server/domains/image/repo/image-correction-resolver";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
 import { publishAssessment } from "~/server/generic/assessment/repo/assessment";
@@ -19,6 +23,7 @@ describe("image correction authority", () => {
   async function question(
     key: string,
     existing?: Pick<typeof image.$inferSelect, "id" | "sha256">,
+    contentHash: string | null = hash,
   ) {
     const picture =
       existing ??
@@ -36,10 +41,10 @@ describe("image correction authority", () => {
         kind: "image_description",
         entity: "image",
         recordId: picture.id,
-        contentHash: hash,
+        contentHash,
       },
       judgment: "Synthetic model prose",
-      fingerprint: hash,
+      fingerprint: contentHash,
       producer: null,
       evidence: null,
     });
@@ -84,6 +89,19 @@ describe("image correction authority", () => {
           assessmentId: applied.prediction.id,
         },
       ],
+    });
+    expect(
+      (
+        await getDb(ctx.db)
+          .select({ data: assessmentState.data })
+          .from(assessmentState)
+          .where(eq(assessmentState.id, applied.prediction.id))
+      )[0]?.data,
+    ).toMatchObject({
+      confirmationOwner: {
+        kind: "member",
+        commandFeedbackId: applied.result.feedbackId,
+      },
     });
     await getDb(ctx.db)
       .update(image)
@@ -134,4 +152,53 @@ describe("image correction authority", () => {
       kind: "none",
     });
   });
+  it.each([false, true])(
+    "invalidates a consequence's older snapshot when member history commits (hash-less publication: %s)",
+    async (hashless) => {
+      const target = await question(
+        "protected-history",
+        undefined,
+        hashless ? null : hash,
+      );
+      const started = Promise.withResolvers<void>();
+      const release = Promise.withResolvers<void>();
+      let attempts = 0;
+      const consequence = withSnapshotWriteDatabase(
+        ctx.db,
+        async (db) => {
+          attempts++;
+          await getDb(db)
+            .select({ id: assessmentState.id })
+            .from(assessmentState)
+            .where(eq(assessmentState.id, target.prediction.id));
+          if (attempts === 1) {
+            started.resolve();
+            await release.promise;
+          }
+          await lockImageCorrectionContent(db, hash);
+          await lockImageCorrectionRecord(db, target.picture.id);
+          return getDb(db)
+            .select({ operationId: feedback.operationId })
+            .from(feedback)
+            .where(eq(feedback.assessmentId, target.prediction.id));
+        },
+        { isolationLevel: "serializable" },
+      );
+      await started.promise;
+      try {
+        await reviewAssessment(ctx.db, kernelCtx(ctx), {
+          assessmentId: target.prediction.id,
+          operationId: "synthetic:protected-history",
+          verdict: "wrong",
+          intent: "history",
+        });
+      } finally {
+        release.resolve();
+      }
+      expect(await consequence).toContainEqual({
+        operationId: "synthetic:protected-history",
+      });
+      expect(attempts).toBeGreaterThan(1);
+    },
+  );
 });

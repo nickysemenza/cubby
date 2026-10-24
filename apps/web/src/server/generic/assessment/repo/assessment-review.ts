@@ -36,6 +36,11 @@ import {
   purchase,
   image,
 } from "~/server/db/schema";
+import {
+  lockImageDescriptionSubject,
+  withImageCorrectionIntent,
+} from "~/server/domains/image/repo/image-correction-lock";
+import { writeImageDescriptionConfirmation } from "~/server/domains/image/repo/image-description-confirmation";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import {
   assertApplicationReceipt,
@@ -56,7 +61,6 @@ import {
   acceptSuggestion,
   applyFieldCorrection,
 } from "~/server/generic/assessment/repo/suggestion-review";
-import { recordChange } from "~/server/generic/changes/repo/change";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 import { isReviewFamily, type ReviewFamily } from "./review-families";
@@ -110,7 +114,7 @@ type Handler = {
   ) => Promise<string | null>;
   apply: (
     db: Database,
-    context: EntityKernelContext,
+    context: EntityKernelContext & { reviewFeedbackId: string },
     state: typeof assessmentState.$inferSelect,
     input: Review,
     automatic: AutomaticReview | null,
@@ -254,8 +258,15 @@ const assessmentFamilies = {
     subject: assessmentSubjects.image_description,
     target: assessmentProjectionTargets.image_description,
     transactionBound: true,
+    isolationLevel: "serializable",
+    lockForApply: async (db, prediction) => {
+      await lockImageDescriptionSubject(
+        db,
+        assessmentSubjects.image_description.parse(prediction.subject),
+      );
+    },
     actions: ["correct", "wrong", "uncertain"],
-    apply: async (db, _context, state, input) => {
+    apply: async (db, context, state, input) => {
       const correction = input.correction.present
         ? input.correction
         : {
@@ -264,32 +275,12 @@ const assessmentFamilies = {
           };
       if (typeof correction.value !== "string")
         throw new Error("Confirmed image description must be text");
-      const [source] = await getDb(db)
-        .select({ hash: image.sha256 })
-        .from(image)
-        .where(and(eq(image.id, state.recordId), notDeleted(image)))
-        .for("update")
-        .limit(1);
-      if (!source || state.fingerprint !== source.hash)
-        throw new Error("Image evidence changed before confirmation");
-      const cause = { kind: "image_description_confirmed" };
-      await transitionAssessmentStates(
-        db,
-        and(
-          eq(assessmentState.family, "image_description"),
-          eq(assessmentState.recordId, state.recordId),
-          sql`${assessmentState.id} <> ${state.id}`,
-        ),
-        { confirmedValue: null },
-        cause,
-      );
-      await transitionAssessmentState(
-        db,
-        state.id,
-        { confirmedValue: correction, status: "applied" },
-        cause,
-      );
-      await recordChange(db, { kind: "source", categories: ["image"] });
+      await writeImageDescriptionConfirmation(db, state, correction.value, {
+        kind: "member",
+        effectId: crypto.randomUUID(),
+        commandFeedbackId: context.reviewFeedbackId,
+        actorUserId: context.actorContext.userId,
+      });
     },
   },
   product_pair: {
@@ -661,18 +652,26 @@ async function settleReview(
         "A corrected Transaction suggestion must apply the corrected action",
       );
   }
-  const event = await recordFeedback(db, {
-    ...input,
-    assessmentId: prediction.id,
-    authority,
-    actorUserId: context.actorContext.userId,
-    metadata: {
-      kind: "assessment_review",
-      application: input.application ?? null,
-      expectedFingerprint: input.expectedFingerprint ?? null,
-      ...(automatic && { rule: automatic.rule }),
-    },
-  });
+  const imageSubject =
+    prediction.family === "image_description"
+      ? assessmentSubjects.image_description.parse(prediction.subject)
+      : null;
+  const writeReview = (transactionDb: Database) =>
+    recordFeedback(transactionDb, {
+      ...input,
+      assessmentId: prediction.id,
+      authority,
+      actorUserId: context.actorContext.userId,
+      metadata: {
+        kind: "assessment_review",
+        application: input.application ?? null,
+        expectedFingerprint: input.expectedFingerprint ?? null,
+        ...(automatic && { rule: automatic.rule }),
+      },
+    });
+  const event = imageSubject
+    ? await withImageCorrectionIntent(db, imageSubject, writeReview)
+    : await writeReview(db);
   if (input.intent === "draft") {
     return {
       assessmentId: prediction.id,
@@ -796,7 +795,7 @@ async function settleReview(
         family.target.parse(state);
         const applicationResult = await family.apply(
           transactionDb,
-          { ...context, db: transactionDb },
+          { ...context, db: transactionDb, reviewFeedbackId: event.id },
           state,
           input,
           automatic,
@@ -860,7 +859,7 @@ async function settleReview(
       ? withSnapshotWriteDatabase(db, apply, { isolationLevel: "serializable" })
       : withTransactionDatabase(db, apply);
   }
-  const status = await withTransactionDatabase(db, async (transactionDb) => {
+  const writeHistory = async (transactionDb: Database) => {
     const [state] = await getDb(transactionDb)
       .select()
       .from(assessmentState)
@@ -920,7 +919,10 @@ async function settleReview(
       return nextStatus;
     }
     return state?.status ?? "historical";
-  });
+  };
+  const status = imageSubject
+    ? await withImageCorrectionIntent(db, imageSubject, writeHistory)
+    : await withTransactionDatabase(db, writeHistory);
   return {
     assessmentId: prediction.id,
     feedbackId: event.id,

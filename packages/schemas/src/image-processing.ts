@@ -1,5 +1,6 @@
 import { imageRepresentations } from "./image-summary";
 import { imageShortcode } from "./identifier-fields";
+import { assessmentChildHandle } from "./assessment-reference";
 import { z } from "zod";
 import {
   imageProcessingJobKind,
@@ -292,6 +293,26 @@ export const imageDescriptionCorrection = z.object({
   description: z.string(),
   confirmedAt: isoDateTime,
 });
+
+/** Ownership of one selected text effect; model analyses remain separate evidence. */
+export const imageDescriptionConfirmationOwner = z.discriminatedUnion("kind", [
+  z.object({
+    kind: z.literal("member"),
+    effectId: z.uuid(),
+    commandFeedbackId: assessmentChildHandle,
+    actorUserId: z.string().min(1),
+  }),
+  z.object({
+    kind: z.literal("correction"),
+    effectId: z.uuid(),
+    sourceFeedbackId: assessmentChildHandle,
+    sourceApplicationFeedbackId: assessmentChildHandle,
+    sourceActorUserId: z.string().min(1),
+    targetAssessmentId: assessmentChildHandle,
+    originalApplicationFeedbackId: assessmentChildHandle.nullable(),
+    priorCorrectionApplicationFeedbackId: assessmentChildHandle.nullable(),
+  }),
+]);
 
 export const selectedImageDescriptionEvidence = z.object({
   description: z.string().nullable(),

@@ -2,11 +2,8 @@ import { and, eq } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
 import { getDb } from "~/server/db/helpers";
-import {
-  assessmentCorrectionLock,
-  assessment,
-  assessmentState,
-} from "~/server/db/schema";
+import { assessment, assessmentState } from "~/server/db/schema";
+import { lockCorrectionKey } from "~/server/generic/assessment/repo/correction-lock";
 import {
   fieldCorrectionIdentityReader,
   resolveFieldCorrectionIdentities,
@@ -54,7 +51,7 @@ export async function lockFieldCorrectionScope(
   entity: string,
   field: string,
 ) {
-  await lockFieldCorrectionKey(db, `field-correction-scope:${entity}:${field}`);
+  await lockCorrectionKey(db, `field-correction-scope:${entity}:${field}`);
 }
 
 /** One lock identity contract for member confirmation and every automatic consequence. */
@@ -73,16 +70,6 @@ async function lockExpandedFieldCorrectionIdentities(
   keys: readonly string[],
 ) {
   const expanded = await resolveFieldCorrectionIdentities(db, keys, scope);
-  for (const key of expanded.keys) await lockFieldCorrectionKey(db, key);
+  for (const key of expanded.keys) await lockCorrectionKey(db, key);
   return expanded.keys;
-}
-
-/** Must run inside the caller's write transaction, before source/target row locks. */
-export async function lockFieldCorrectionKey(db: Database, key: string) {
-  // A physical update is intentional: a lock alone cannot invalidate an older
-  // serializable snapshot when a conflicting root commits on another record.
-  await getDb(db)
-    .insert(assessmentCorrectionLock)
-    .values({ key })
-    .onConflictDoUpdate({ target: assessmentCorrectionLock.key, set: { key } });
 }

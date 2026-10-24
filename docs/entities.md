@@ -3804,6 +3804,18 @@ do not establish reusable authority. This resolver does not apply a correction o
 replace an image analysis: claims, nutrition and cutout eligibility remain model
 outputs. Image repair/enrollment and consumer provenance remain held until their
 domain application contract is implemented.
+Image member Feedback, including history-only grades and refused apply intent,
+commits under the shared physical content-key fence. Confirmation acquires that
+fence, then a record-intent fence, before its Image or projection locks and uses snapshot retries. The record fence protects current content even when a member reviews an older or hash-less publication. Its review
+event remains durable separately from a later refused application. The same key is reserved
+for future automatic text consequences, so different Images with identical bytes
+cannot confirm conflicting authority outside that serialization boundary.
+One image-domain writer clears prior holders and records typed confirmation
+ownership in the selected projection. Direct member ownership names its command
+Feedback and actor; automatic ownership is reserved for a root command/application,
+target Assessment, prior effect receipt and original application lineage. Each
+effect has a distinct identity, so restored text cannot substitute for unchanged
+effect proof. New member projection events name their command as the cause.
 
 ### Automatic semantic classification
 

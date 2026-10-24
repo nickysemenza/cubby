@@ -59,6 +59,7 @@ import {
 import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
 import { listAutomaticDecisions } from "~/server/generic/assessment/repo/automatic-decisions";
 import { applyAutomaticRules } from "~/server/generic/assessment/repo/automatic-rule-runtime";
+import { lockCorrectionKey } from "~/server/generic/assessment/repo/correction-lock";
 import {
   readConfirmedCorrection,
   readFieldCorrectionSources,
@@ -66,10 +67,7 @@ import {
   correctionTargetIds,
 } from "~/server/generic/assessment/repo/correction-sources";
 import { fieldCorrectionIdentity } from "~/server/generic/assessment/repo/field-assessment-review";
-import {
-  lockFieldCorrectionKey,
-  lockFieldCorrectionScope,
-} from "~/server/generic/assessment/repo/field-correction-lock";
+import { lockFieldCorrectionScope } from "~/server/generic/assessment/repo/field-correction-lock";
 import { publishFieldCorrectionQuestion } from "~/server/generic/assessment/repo/field-correction-publication";
 import { fieldCorrectionRepair } from "~/server/generic/assessment/repo/field-correction-repair";
 import { fieldInputFingerprint } from "~/server/generic/assessment/repo/field-input-fence";
@@ -1002,7 +1000,7 @@ describe("confirmed correction propagation", () => {
     const release = Promise.withResolvers<void>();
     const member = withTransactionDatabase(ctx.db, async (db) => {
       await lockFieldCorrectionScope(db, "product", "categoryId");
-      await lockFieldCorrectionKey(db, target.correctionKey);
+      await lockCorrectionKey(db, target.correctionKey);
       await getDb(db)
         .select({ id: assessmentState.id })
         .from(assessmentState)
@@ -1077,7 +1075,7 @@ describe("confirmed correction propagation", () => {
     const release = Promise.withResolvers<void>();
     const member = withTransactionDatabase(ctx.db, async (db) => {
       await lockFieldCorrectionScope(db, "product", "categoryId");
-      await lockFieldCorrectionKey(db, key);
+      await lockCorrectionKey(db, key);
       ready.resolve();
       await release.promise;
       await getDb(db)

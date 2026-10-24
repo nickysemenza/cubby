@@ -1,6 +1,8 @@
 import { assessmentSubjects } from "@cubby/schemas/assessment";
+import { imageDescriptionConfirmationOwner } from "@cubby/schemas/image-processing";
 import type { SuggestionCorrectionSource } from "@cubby/schemas/suggestion-correction";
 import { and, eq, inArray, isNull } from "drizzle-orm";
+import { z } from "zod";
 
 import type { Database } from "~/server/db";
 import { getDb } from "~/server/db/helpers";
@@ -28,6 +30,7 @@ export async function resolveImageCorrection(
     .select({
       id: assessmentState.id,
       correction: assessmentState.confirmedValue,
+      data: assessmentState.data,
     })
     .from(assessmentState)
     .innerJoin(assessment, eq(assessment.id, assessmentState.id))
@@ -43,12 +46,27 @@ export async function resolveImageCorrection(
         isNull(assessmentState.suppression),
       ),
     );
-  const byId = new Map(current.map((row) => [row.id, row.correction]));
+  const byId = new Map(current.map((row) => [row.id, row]));
   const sources = candidates.filter((source) => {
     const subject = assessmentSubjects.image_description.safeParse(
       source.subject,
     );
-    const correction = byId.get(source.assessmentId);
+    const row = byId.get(source.assessmentId);
+    const correction = row?.correction;
+    const ownership = z
+      .object({
+        confirmationOwner: imageDescriptionConfirmationOwner.optional(),
+      })
+      .safeParse(row?.data ?? {});
+    if (!ownership.success) return false;
+    const owner = ownership.data.confirmationOwner;
+    if (
+      owner &&
+      (owner.kind !== "member" ||
+        owner.commandFeedbackId !== source.feedbackId ||
+        owner.actorUserId !== source.actorUserId)
+    )
+      return false;
     return (
       subject.success &&
       subject.data.contentHash === contentHash &&
