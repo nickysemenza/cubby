@@ -8,11 +8,17 @@ import type { z } from "zod";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { notDeleted, unwrapDb } from "~/server/db/helpers";
-import { aiAnalysis, image, assessmentState } from "~/server/db/schema";
+import {
+  aiAnalysis,
+  image,
+  assessmentState,
+  assessment,
+} from "~/server/db/schema";
 import {
   isCurrentPreferredImageDescription,
   parseImageDescriptionInputFingerprint,
 } from "~/server/domains/image-processing/repo/description-policy";
+import { currentImageDescriptionConfirmation } from "~/server/generic/assessment/repo/assessment-image";
 
 /** Source-fenced descriptions and confirmed corrections are loaded in batches. */
 export async function loadSelectedDescriptionEvidence(
@@ -53,13 +59,11 @@ export async function loadSelectedDescriptionEvidence(
     })
     .from(assessmentState)
     .innerJoin(image, eq(image.id, assessmentState.recordId))
+    .innerJoin(assessment, eq(assessment.id, assessmentState.id))
     .where(
       and(
         inArray(image.shortcode, shortcodes),
-        notDeleted(image),
-        eq(assessmentState.active, true),
-        eq(assessmentState.family, "image_description"),
-        sql`${assessmentState.confirmedValue} @> ${JSON.stringify({ present: true })}::jsonb`,
+        currentImageDescriptionConfirmation(),
       ),
     );
   const correctionsByImage = new Map(

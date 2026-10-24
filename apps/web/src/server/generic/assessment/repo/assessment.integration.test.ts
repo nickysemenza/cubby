@@ -9,7 +9,9 @@ import {
   assessmentState,
   feedback,
   auditLog,
+  image,
 } from "~/server/db/schema";
+import { loadSelectedDescriptionEvidence } from "~/server/domains/image/repo/image-description-selection";
 import {
   kernelCtx,
   productFixture,
@@ -295,6 +297,75 @@ describe("shared Assessment history", () => {
         )
       )?.confirmedAt,
     ).toEqual(confirmedAt);
+  });
+
+  it("fences confirmed descriptions to current image content in direct and batch readers", async () => {
+    const picture = await insertWithShortcode(ctx.db, "image", {
+      key: "synthetic/content-fence.jpg",
+      filename: "content-fence.jpg",
+      size: 1,
+      contentType: "image/jpeg",
+      sha256: "a".repeat(64),
+    });
+    const prediction = await publishAssessment(ctx.db, {
+      publicationKey: "synthetic:content-fenced-description",
+      family: "image_description",
+      subject: {
+        kind: "image_description",
+        entity: "image",
+        recordId: picture.id,
+        contentHash: picture.sha256,
+      },
+      judgment: "Original description",
+      fingerprint: picture.sha256,
+      producer: null,
+      evidence: null,
+    });
+    await reviewAssessment(ctx.db, kernelCtx(ctx), {
+      assessmentId: prediction.id,
+      operationId: "synthetic:confirm-description",
+      verdict: "wrong",
+      intent: "apply",
+      correction: { present: true, value: "Confirmed description" },
+    });
+    const readDirect = () =>
+      readConfirmedDescription(ctx.db, parseEntityId("image", picture.id));
+    const readBatch = async () =>
+      (await loadSelectedDescriptionEvidence(ctx.db, [picture.shortcode])).get(
+        picture.shortcode,
+      );
+    expect((await readDirect())?.description).toBe("Confirmed description");
+    expect((await readBatch())?.description).toBe("Confirmed description");
+    const retained = await getDb(ctx.db)
+      .select()
+      .from(feedback)
+      .where(eq(feedback.assessmentId, prediction.id));
+    await getDb(ctx.db)
+      .update(image)
+      .set({ sha256: "b".repeat(64) })
+      .where(eq(image.id, picture.id));
+    expect(await readDirect()).toBeNull();
+    expect((await readBatch())?.description ?? null).toBeNull();
+    expect(
+      await getDb(ctx.db)
+        .select()
+        .from(feedback)
+        .where(eq(feedback.assessmentId, prediction.id)),
+    ).toEqual(retained);
+    expect(
+      (
+        await getDb(ctx.db)
+          .select()
+          .from(assessmentState)
+          .where(eq(assessmentState.id, prediction.id))
+      )[0]?.confirmedValue,
+    ).toEqual({ present: true, value: "Confirmed description" });
+    await getDb(ctx.db)
+      .update(image)
+      .set({ sha256: "a".repeat(64), deletedAt: new Date() })
+      .where(eq(image.id, picture.id));
+    expect(await readDirect()).toBeNull();
+    expect((await readBatch())?.description ?? null).toBeNull();
   });
 
   // Public history must never impersonate a private domain-application receipt.
