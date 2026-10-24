@@ -1,9 +1,9 @@
-import { assessmentFamily } from "@cubby/schemas/assessment";
 import { entitySchema } from "@cubby/schemas/entity-core";
 import type { ProductId } from "@cubby/schemas/identifiers";
 import { productImagePurpose } from "@cubby/schemas/image";
 import { type SQL, sql } from "drizzle-orm";
 
+import { currentImageDescriptionConfirmation } from "~/server/db/computed/image-description-confirmation";
 import {
   repositoryQueries as unwrapDb,
   type RepositoryQueryInput,
@@ -20,9 +20,9 @@ export const productClassificationEvidenceSql = (
     SELECT string_agg(concat(COALESCE(pi."purpose", ${productImagePurpose.enum.item}), ': ',
       COALESCE(correction."description", analysis."result"->>'description', ''),
       CASE WHEN correction."description" IS NOT NULL THEN ' [confirmed correction]' ELSE '' END), E'\n' ORDER BY pi."sortOrder", pi."createdAt")
-    FROM "EntityAttachment" pi JOIN "Image" i ON i."id" = pi."imageId" AND i."deletedAt" IS NULL
-    LEFT JOIN LATERAL (SELECT c."confirmedValue"->>'value' AS description FROM "AssessmentState" c WHERE c."recordId" = i."id" AND c.family = ${assessmentFamily.enum.image_description} AND c.active AND c."confirmedValue" @> ${JSON.stringify({ present: true })}::jsonb ORDER BY c."createdAt" DESC LIMIT 1) correction ON true
-    LEFT JOIN LATERAL (SELECT a."result" FROM "AiAnalysis" a WHERE a."entityKind" = ${entitySchema.enum.image} AND a."entityId" = i."id" AND a."feature" = 'image-description' AND a."deletedAt" IS NULL ORDER BY a."createdAt" DESC LIMIT 1) analysis ON true
+    FROM "EntityAttachment" pi JOIN "Image" ON "Image"."id" = pi."imageId" AND "Image"."deletedAt" IS NULL
+    LEFT JOIN LATERAL (SELECT "AssessmentState"."confirmedValue"->>'value' AS description FROM "AssessmentState" JOIN "Assessment" ON "Assessment".id = "AssessmentState".id WHERE "AssessmentState"."recordId" = "Image"."id" AND ${currentImageDescriptionConfirmation()} ORDER BY "AssessmentState"."createdAt" DESC LIMIT 1) correction ON true
+    LEFT JOIN LATERAL (SELECT a."result" FROM "AiAnalysis" a WHERE a."entityKind" = ${entitySchema.enum.image} AND a."entityId" = "Image"."id" AND a."feature" = 'image-description' AND a."deletedAt" IS NULL AND CASE WHEN pg_input_is_valid(a."inputFingerprint", ${"jsonb"}) THEN a."inputFingerprint"::jsonb->>'sourceContentHash' ELSE NULL END = "Image".sha256 ORDER BY a."createdAt" DESC LIMIT 1) analysis ON true
     WHERE pi."entityId" = ${productId} AND pi."deletedAt" IS NULL
   ), '')
 )`;

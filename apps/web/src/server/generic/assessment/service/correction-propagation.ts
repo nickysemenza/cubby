@@ -1,7 +1,4 @@
-import {
-  assessmentChildHandle,
-  assessmentSubjects,
-} from "@cubby/schemas/assessment";
+import { assessmentChildHandle } from "@cubby/schemas/assessment";
 import {
   suggestionCorrectionOutcome,
   suggestionCorrectionPlan,
@@ -11,21 +8,23 @@ import { z } from "zod";
 
 import { systemActor } from "~/server/domains/run/repo/ensure-run";
 import { recordFeedback } from "~/server/generic/assessment/repo/assessment";
-import { correctionRepairFamilies } from "~/server/generic/assessment/repo/correction-families";
 import {
-  correctionTargetIds,
-  readFieldCorrectionIdentity,
-  readConfirmedCorrection,
-  readCorrectionTarget,
-  readFieldCorrectionSources,
-} from "~/server/generic/assessment/repo/correction-sources";
+  correctionSourcesForTarget,
+  correctionTargetsForSource,
+} from "~/server/generic/assessment/repo/correction-discovery";
+import { correctionRepairFamilies } from "~/server/generic/assessment/repo/correction-families";
 import {
   correctionAlreadyRecorded,
   correctionOperationId,
+} from "~/server/generic/assessment/repo/correction-receipt";
+import {
+  readConfirmedCorrection,
+  readCorrectionTarget,
+} from "~/server/generic/assessment/repo/correction-sources";
+import {
   correctionWorkInput,
   enqueueCorrectionWork,
 } from "~/server/generic/assessment/repo/correction-work";
-import { fieldCorrectionIdentityKeys } from "~/server/generic/assessment/repo/field-assessment-review";
 import { isReviewFamily } from "~/server/generic/assessment/repo/review-families";
 import { defineJobHandler } from "~/server/generic/jobs/service/jobs";
 
@@ -46,24 +45,9 @@ export const correctionPropagationHandler = defineJobHandler(
         page: { done: true },
         publish: async (tx) => {
           const target = await readCorrectionTarget(tx, targetId);
-          const identity =
-            target &&
-            (await readFieldCorrectionIdentity(
-              tx,
-              target.subject,
-              target.evidence,
-            ));
-          const key = identity && (identity.canonicalKey ?? identity.storedKey);
-          const scope =
-            target && assessmentSubjects.field.safeParse(target.subject).data;
-          const sources =
-            key && scope
-              ? await readFieldCorrectionSources(
-                  tx,
-                  identity ? fieldCorrectionIdentityKeys(identity) : [],
-                  scope,
-                )
-              : [];
+          const sources = target
+            ? await correctionSourcesForTarget(tx, target)
+            : [];
           for (const source of sources)
             if (source.assessmentId !== targetId)
               await enqueueCorrectionWork(tx, source.feedbackId, targetId);
@@ -82,13 +66,6 @@ export const correctionPropagationHandler = defineJobHandler(
           },
         },
       };
-    const identity = await readFieldCorrectionIdentity(
-      db,
-      source.subject,
-      source.evidence,
-    );
-    const key = identity.canonicalKey ?? identity.storedKey;
-    const scope = assessmentSubjects.field.safeParse(source.subject).data;
     const cursor =
       claim.cursor === null
         ? { after: null }
@@ -99,20 +76,10 @@ export const correctionPropagationHandler = defineJobHandler(
           after: cursor.after,
           done: true,
         }
-      : key && scope && source.family === "field"
-        ? await correctionTargetIds(db, {
-            sourceAssessmentId: source.assessmentId,
-            correctionKey: fieldCorrectionIdentityKeys(identity),
-            entity: scope.entity,
-            field: scope.field,
-            after: cursor.after,
-            limit: PAGE_SIZE,
-          })
-        : {
-            targets: [{ id: source.assessmentId }],
-            after: cursor.after,
-            done: true,
-          };
+      : await correctionTargetsForSource(db, source, {
+          after: cursor.after,
+          limit: PAGE_SIZE,
+        });
     const targets = page.targets;
     const prepared: {
       plan: z.infer<typeof suggestionCorrectionPlan>;

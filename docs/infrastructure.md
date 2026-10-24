@@ -722,6 +722,15 @@ Assessment subject/fingerprint and its current projection. Replaced or deleted
 content hides the old confirmation from current descriptions while retaining its
 confirmed value, original prediction and application receipts. Current-content
 display does not itself grant cross-image propagation authority.
+Propagated text additionally requires its automatic effect receipt and typed root
+ownership to match the selected holder. Direct status and batch evidence retain
+that ownership; web photo evidence and native Image detail distinguish it from
+a direct member confirmation and expose the source application receipt behind
+evidence disclosure. Native status reload clears prior current descriptions
+before fetching, so a failed refresh cannot retain an unverified confirmation.
+The composable classification reader shares the content/effect proof and excludes
+model observations that cannot prove the current image hash. Model job results,
+claims and cutout outputs remain independent retained observations.
 
 Identification retains visual composition separately from identity scope.
 Multiple related views, parts, or life stages may support one catalog identity;

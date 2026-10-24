@@ -13,12 +13,12 @@ import { assessmentState, feedback } from "~/server/db/schema";
 import { systemActor } from "~/server/domains/run/repo/ensure-run";
 import type { CorrectionRepairAdapter } from "~/server/generic/assessment/correction-repair";
 import { transitionAssessmentState } from "~/server/generic/assessment/repo/assessment-state";
+import { correctionAlreadyRecorded } from "~/server/generic/assessment/repo/correction-receipt";
 import {
   equivalentFieldCorrections,
   readFieldCorrectionIdentity,
   readConfirmedCorrection,
 } from "~/server/generic/assessment/repo/correction-sources";
-import { correctionAlreadyRecorded } from "~/server/generic/assessment/repo/correction-work";
 import { fieldCorrectionIdentityKeys } from "~/server/generic/assessment/repo/field-assessment-review";
 import { lockFieldCorrectionIdentities } from "~/server/generic/assessment/repo/field-correction-lock";
 import {

@@ -3785,7 +3785,7 @@ with its reason in the shared row summary. Automatic history shows applied field
 corrections and holds on prior automatic assignments. This adds no confirmation
 prompt or second queue. Every review family declares its repair policy, but
 registration is not support: financial semantics, transfers, Product merges,
-mail routing/links/import outcomes, image descriptions and recommendation subtypes
+mail routing/links/import outcomes and recommendation subtypes
 currently retain explicit holds pending domain-specific implementation. Broader
 semantic applicability and remaining domain-specific inference integration
 remain tracked by [#3189](https://github.com/nickysemenza/cubby/issues/3189).
@@ -3802,13 +3802,18 @@ timestamp order nor model confidence selects a winner. History-only grades,
 replaced/deleted content and confirmations without a matching application receipt
 do not establish reusable authority. This resolver does not apply a correction or
 replace an image analysis: claims, nutrition and cutout eligibility remain model
-outputs. Image repair/enrollment and consumer provenance remain held until their
-domain application contract is implemented.
+outputs. Untouched pending model descriptions support text correction; applied
+history requires an unchanged receipt-bound propagated holder. Unattributed or
+unsupported applied confirmations stay held. The coordinator enrolls bounded
+history for new corrections and durably resolves roots after future model
+publication commits. Existing completed image history Jobs are not reset: a
+separate bounded enrollment operation for retained roots remains an operational
+prerequisite before historical completion can be claimed.
 Image member Feedback, including history-only grades and refused apply intent,
 commits under the shared physical content-key fence. Confirmation acquires that
 fence, then a record-intent fence, before its Image or projection locks and uses snapshot retries. The record fence protects current content even when a member reviews an older or hash-less publication. Its review
 event remains durable separately from a later refused application. The same key is reserved
-for future automatic text consequences, so different Images with identical bytes
+for automatic text consequences, so different Images with identical bytes
 cannot confirm conflicting authority outside that serialization boundary.
 One image-domain writer clears prior holders and records typed confirmation
 ownership in the selected projection. Direct member ownership names its command
@@ -3816,6 +3821,14 @@ Feedback and actor; automatic ownership is reserved for a root command/applicati
 target Assessment, prior effect receipt and original application lineage. Each
 effect has a distinct identity, so restored text cannot substitute for unchanged
 effect proof. New member projection events name their command as the cause.
+Direct and batch prose readers verify propagated holders against the same
+automatic outcome receipts, loaded once per requested page. They expose correction
+authority and root provenance without model analysis or claims; an equal later
+model proposal is retired against the existing holder rather than taking ownership.
+Historical repair, future enrollment, re-correction and replay share that domain
+adapter. Held pending rows retain reasons and corrected text in Suggestions with
+only correction/dismissal actions, while applied consequences enter Automatic
+decisions. This does not complete other held families or historical enrollment.
 
 ### Automatic semantic classification
 

@@ -1,18 +1,35 @@
-import { eq } from "drizzle-orm";
+import { parseEntityId } from "@cubby/schemas/identifiers";
+import { imageDescriptionCorrectionOwner } from "@cubby/schemas/image-processing";
+import { and, eq, inArray } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
+import { z } from "zod";
 
+import { getProductClassificationEvidence } from "~/server/db/computed/product-classification-evidence";
 import { getDb, withSnapshotWriteDatabase } from "~/server/db/helpers";
-import { image, assessmentState, feedback } from "~/server/db/schema";
+import { image, assessmentState, feedback, job } from "~/server/db/schema";
+import { getImageProcessingReadProjection } from "~/server/domains/image-processing/repo/image-processing";
 import {
   lockImageCorrectionContent,
   lockImageCorrectionRecord,
 } from "~/server/domains/image/repo/image-correction-lock";
 import { resolveImageCorrection } from "~/server/domains/image/repo/image-correction-resolver";
+import { loadSelectedDescriptionEvidence } from "~/server/domains/image/repo/image-description-selection";
+import { imageDescriptionCorrectionRepair } from "~/server/domains/image/repo/image-suggestion-correction";
+import { systemActor } from "~/server/domains/run/repo/ensure-run";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
 import { publishAssessment } from "~/server/generic/assessment/repo/assessment";
+import { readConfirmedDescription } from "~/server/generic/assessment/repo/assessment-image";
 import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
+import {
+  readConfirmedCorrection,
+  readCorrectionTarget,
+} from "~/server/generic/assessment/repo/correction-sources";
+import { enqueueCorrectionWork } from "~/server/generic/assessment/repo/correction-work";
+import { correctionPropagationHandler } from "~/server/generic/assessment/service/correction-propagation";
+import { advanceJob } from "~/server/generic/jobs/service/jobs";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { insertEntityAttachments } from "~/server/testing/repo.fixtures";
 
 // Failure modes: a grade or stale confirmation becomes reusable authority;
 // timestamps choose a winner among contradictory corrections of identical bytes.
@@ -45,7 +62,13 @@ describe("image correction authority", () => {
       },
       judgment: "Synthetic model prose",
       fingerprint: contentHash,
-      producer: null,
+      producer: {
+        kind: "model",
+        model: "synthetic",
+        revision: "1",
+        runId: null,
+        evaluationId: null,
+      },
       evidence: null,
     });
     return { picture, prediction };
@@ -66,6 +89,333 @@ describe("image correction authority", () => {
     });
     return { ...entry, result };
   }
+
+  async function drain() {
+    for (let page = 0; page < 10; page++) {
+      const pending = await getDb(ctx.db)
+        .select()
+        .from(job)
+        .where(
+          and(
+            eq(job.kind, "assessment.correction"),
+            inArray(job.state, ["queued", "retry_wait"]),
+          ),
+        );
+      if (!pending.length) return;
+      for (const work of pending)
+        expect(
+          await advanceJob(ctx.db, work.id, {
+            "assessment.correction": correctionPropagationHandler,
+          }),
+        ).toBe("succeeded");
+    }
+    throw new Error("Synthetic image correction jobs did not finish");
+  }
+
+  it.each(["historical", "future"])(
+    "enrolls %s model descriptions and preserves correction precedence after later model publication",
+    async (timing) => {
+      const historical =
+        timing === "historical" ? await question("historical-model") : null;
+      const root = await correct(
+        "enrollment-root",
+        "Synthetic corrected image",
+      );
+      if (!historical) await drain();
+      const target = historical ?? (await question("future-model"));
+      await drain();
+      expect(
+        (
+          await getDb(ctx.db)
+            .select()
+            .from(assessmentState)
+            .where(eq(assessmentState.id, target.prediction.id))
+        )[0]?.confirmedValue,
+      ).toEqual({ present: true, value: "Synthetic corrected image" });
+      const late = await question("late-model", target.picture);
+      await drain();
+      expect(
+        (
+          await getDb(ctx.db)
+            .select()
+            .from(assessmentState)
+            .where(eq(assessmentState.id, late.prediction.id))
+        )[0]?.status,
+      ).toBe("superseded");
+      expect(
+        await readConfirmedDescription(
+          ctx.db,
+          parseEntityId("image", target.picture.id),
+        ),
+      ).toMatchObject({
+        description: "Synthetic corrected image",
+        owner: { kind: "correction", sourceFeedbackId: root.result.feedbackId },
+      });
+    },
+  );
+
+  it("settles two pending publications on one Image prepared in the same history page", async () => {
+    const first = await question("same-page-first");
+    const second = await question("same-page-second", first.picture);
+    await correct("same-page-root", "Synthetic shared correction");
+    await drain();
+    const states = await getDb(ctx.db)
+      .select()
+      .from(assessmentState)
+      .where(
+        inArray(assessmentState.id, [
+          first.prediction.id,
+          second.prediction.id,
+        ]),
+      );
+    expect(states.map((state) => state.status).sort()).toEqual([
+      "applied",
+      "superseded",
+    ]);
+    const outcomes = await getDb(ctx.db)
+      .select({ receipt: feedback.receipt })
+      .from(feedback)
+      .where(
+        and(
+          inArray(feedback.assessmentId, [
+            first.prediction.id,
+            second.prediction.id,
+          ]),
+          eq(feedback.authority, "automatic"),
+        ),
+      );
+    expect(outcomes).toHaveLength(2);
+    expect(
+      outcomes
+        .map(
+          (row) => z.object({ status: z.string() }).parse(row.receipt).status,
+        )
+        .sort(),
+    ).toEqual(["applied", "unchanged"]);
+  });
+
+  it("applies and re-corrects untouched model text with durable automatic receipts, then replays without replacing the newer effect", async () => {
+    const target = await question("automatic-target");
+    const product = await insertWithShortcode(ctx.db, "product", {
+      name: "Synthetic corrected image product",
+    });
+    await insertEntityAttachments(ctx.db, {
+      entityId: product.id,
+      imageId: target.picture.id,
+      purpose: "item",
+    });
+    const root = await correct("automatic-root", "Synthetic apples");
+    const source = await readConfirmedCorrection(
+      ctx.db,
+      root.result.feedbackId,
+    );
+    const original = await readCorrectionTarget(ctx.db, target.prediction.id);
+    if (!source || !original)
+      throw new Error("Missing synthetic correction inputs");
+    const input = { source, target: original };
+    const prepared = await imageDescriptionCorrectionRepair.prepare(
+      ctx.db,
+      input,
+    );
+    if (prepared.status !== "ready") throw new Error(prepared.reason);
+    await enqueueCorrectionWork(
+      ctx.db,
+      source.feedbackId,
+      target.prediction.id,
+    );
+    await drain();
+    const first = (
+      await getDb(ctx.db)
+        .select()
+        .from(assessmentState)
+        .where(eq(assessmentState.id, target.prediction.id))
+    )[0];
+    expect(first).toMatchObject({
+      status: "applied",
+      confirmedValue: { present: true, value: "Synthetic apples" },
+      data: {
+        confirmationOwner: {
+          kind: "correction",
+          sourceFeedbackId: source.feedbackId,
+        },
+      },
+    });
+    const [code] = await getDb(ctx.db)
+      .select({ shortcode: image.shortcode })
+      .from(image)
+      .where(eq(image.id, target.picture.id));
+    if (!code) throw new Error("Missing synthetic image shortcode");
+    expect(
+      (await loadSelectedDescriptionEvidence(ctx.db, [code.shortcode])).get(
+        code.shortcode,
+      ),
+    ).toMatchObject({
+      description: "Synthetic apples",
+      authority: "correction",
+      correction: { sourceFeedbackId: source.feedbackId },
+      claims: [],
+      analysis: null,
+    });
+    expect(
+      await readConfirmedDescription(
+        ctx.db,
+        parseEntityId("image", target.picture.id),
+      ),
+    ).toMatchObject({
+      owner: { kind: "correction", sourceFeedbackId: source.feedbackId },
+    });
+    expect(
+      (
+        await getImageProcessingReadProjection(
+          ctx.db,
+          parseEntityId("image", target.picture.id),
+        )
+      ).correction,
+    ).toMatchObject({
+      owner: { kind: "correction", sourceFeedbackId: source.feedbackId },
+    });
+    expect(
+      await getProductClassificationEvidence(ctx.db, product.id),
+    ).toContain("Synthetic apples");
+    const replacement = await correct(
+      "automatic-replacement",
+      "Synthetic model prose",
+      root.picture,
+    );
+    await enqueueCorrectionWork(
+      ctx.db,
+      replacement.result.feedbackId,
+      target.prediction.id,
+    );
+    await drain();
+    const changed = (
+      await getDb(ctx.db)
+        .select()
+        .from(assessmentState)
+        .where(eq(assessmentState.id, target.prediction.id))
+    )[0];
+    expect(changed?.confirmedValue).toEqual({
+      present: true,
+      value: "Synthetic model prose",
+    });
+    expect(
+      await withSnapshotWriteDatabase(
+        ctx.db,
+        (db) =>
+          imageDescriptionCorrectionRepair.apply(
+            db,
+            input,
+            prepared.plan,
+            systemActor(),
+          ),
+        { isolationLevel: "serializable" },
+      ),
+    ).toMatchObject({ status: "applied" });
+    expect(
+      (
+        await getDb(ctx.db)
+          .select()
+          .from(assessmentState)
+          .where(eq(assessmentState.id, target.prediction.id))
+      )[0],
+    ).toEqual(changed);
+    expect(
+      await getDb(ctx.db)
+        .select()
+        .from(feedback)
+        .where(
+          and(
+            eq(feedback.assessmentId, target.prediction.id),
+            eq(feedback.authority, "automatic"),
+          ),
+        ),
+    ).toHaveLength(2);
+    const ownership = z
+      .object({ confirmationOwner: imageDescriptionCorrectionOwner })
+      .parse(changed?.data);
+    await getDb(ctx.db)
+      .update(assessmentState)
+      .set({
+        data: {
+          confirmationOwner: {
+            ...ownership.confirmationOwner,
+            effectId: crypto.randomUUID(),
+          },
+        },
+      })
+      .where(eq(assessmentState.id, target.prediction.id));
+    expect(
+      await readConfirmedDescription(
+        ctx.db,
+        parseEntityId("image", target.picture.id),
+      ),
+    ).toBeNull();
+    expect(
+      (await loadSelectedDescriptionEvidence(ctx.db, [code.shortcode])).get(
+        code.shortcode,
+      )?.authority ?? "missing",
+    ).toBe("missing");
+    expect(
+      await getProductClassificationEvidence(ctx.db, product.id),
+    ).not.toContain("Synthetic model prose");
+  });
+
+  it("holds explicit target member intent and conflicting identical-content roots without assigning text", async () => {
+    const target = await question("held-target");
+    const root = await correct("held-root", "Synthetic apples");
+    await reviewAssessment(ctx.db, kernelCtx(ctx), {
+      assessmentId: target.prediction.id,
+      operationId: "synthetic:target-intent",
+      verdict: "wrong",
+      intent: "history",
+    });
+    await enqueueCorrectionWork(
+      ctx.db,
+      root.result.feedbackId,
+      target.prediction.id,
+    );
+    await drain();
+    expect(
+      (
+        await getDb(ctx.db)
+          .select()
+          .from(assessmentState)
+          .where(eq(assessmentState.id, target.prediction.id))
+      )[0]?.confirmedValue,
+    ).toBeNull();
+    const untouched = await question("conflict-target");
+    await correct("conflicting-root", "Synthetic pears");
+    await enqueueCorrectionWork(
+      ctx.db,
+      root.result.feedbackId,
+      untouched.prediction.id,
+    );
+    await drain();
+    expect(
+      (
+        await getDb(ctx.db)
+          .select()
+          .from(assessmentState)
+          .where(eq(assessmentState.id, untouched.prediction.id))
+      )[0]?.confirmedValue,
+    ).toBeNull();
+    expect(
+      (
+        await getDb(ctx.db)
+          .select()
+          .from(feedback)
+          .where(
+            and(
+              eq(feedback.assessmentId, untouched.prediction.id),
+              eq(feedback.authority, "automatic"),
+            ),
+          )
+      )[0]?.receipt,
+    ).toMatchObject({
+      status: "held",
+      reason: "Identical image content has conflicting member corrections",
+    });
+  });
 
   it("requires committed application and drops changed or deleted content", async () => {
     const graded = await question("grade-only");

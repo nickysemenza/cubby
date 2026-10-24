@@ -5,9 +5,9 @@ import { and, eq, inArray, isNull } from "drizzle-orm";
 import { z } from "zod";
 
 import type { Database } from "~/server/db";
+import { currentImageDescriptionConfirmation } from "~/server/db/computed/image-description-confirmation";
 import { getDb } from "~/server/db/helpers";
 import { assessment, assessmentState, image } from "~/server/db/schema";
-import { currentImageDescriptionConfirmation } from "~/server/generic/assessment/repo/assessment-image";
 import { readImageCorrectionSources } from "~/server/generic/assessment/repo/correction-sources";
 
 type ImageCorrectionResolution =

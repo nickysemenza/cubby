@@ -174,7 +174,9 @@ export async function publishAssessments(
         return state ? [{ ...state, id: row.id, family: row.family }] : [];
       }),
     );
-    const correctionTargets = inserted.filter((row) => row.family === "field");
+    const correctionTargets = inserted.filter(
+      (row) => row.family === "field" || row.family === "image_description",
+    );
     if (correctionTargets.length) {
       await recordAssessmentChange(transactionDb, {
         kind: "publications",

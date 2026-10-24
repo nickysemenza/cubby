@@ -702,9 +702,30 @@ function GroupEvidence({
               <div className="text-muted-foreground">
                 {photo.descriptionEvidence?.authority === "member" ? (
                   <span className="font-medium text-foreground">Yours · </span>
+                ) : photo.descriptionEvidence?.authority === "correction" ? (
+                  <span className="font-medium text-foreground">
+                    From your correction ·{" "}
+                  </span>
                 ) : null}
                 <ClampedText>{description}</ClampedText>
               </div>
+            ) : null}
+            {photo.descriptionEvidence?.correction ? (
+              <Disclosure summary="Correction evidence">
+                <p>
+                  Applied from your confirmed description for identical image
+                  content.
+                </p>
+                <p>
+                  Application receipt:{" "}
+                  <code>
+                    {
+                      photo.descriptionEvidence.correction
+                        .sourceApplicationFeedbackId
+                    }
+                  </code>
+                </p>
+              </Disclosure>
             ) : null}
             {claims.length ? (
               <Disclosure summary="Claims" meta={claims.length}>

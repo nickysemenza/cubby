@@ -21,6 +21,7 @@ struct ImageEntityDetailView: View {
                 PhotoTab(
                     detail: detail, appModel: appModel, onChanged: { Task { await load() } },
                     preferredAnalysis: processing.preferred,
+                    confirmation: processing.confirmation,
                     history: processing.entries,
                     totalAnalyses: processing.total,
                     showingAllAnalyses: $showingAllAnalyses
@@ -88,7 +89,8 @@ struct ImageEntityDetailView: View {
                 CopyDiagnosticsButton {
                     ImageDetailDiagnostics(
                         id: id.rawValue, preferredRepresentation: detail?.representations?.preferred,
-                        preferredDescription: processing.preferred?.result.description,
+                        preferredDescription: processing.confirmation?.description
+                            ?? processing.preferred?.result.description,
                         serverSha256: diagnostics.server?.identity.sha256,
                         deviceSha256: diagnostics.device?.identity.sha256,
                         serverPerceptualHash: diagnostics.server?.identity.perceptualHash,
@@ -131,6 +133,7 @@ private struct PhotoTab: View {
     /// Reloads the image after a verb on its sections changed it.
     let onChanged: () -> Void
     let preferredAnalysis: ImageDescriptionAnalysis?
+    let confirmation: ImageDescriptionCorrection?
     let history: [ImageAnalysisHistoryEntry]
     let totalAnalyses: Int
     @Binding var showingAllAnalyses: Bool
@@ -168,7 +171,23 @@ private struct PhotoTab: View {
         }.detailContentsAnchor("compare-representations")
         LabeledContent("Image", value: detail.id.rawValue)
         ContinuousDetailSection(title: "Preferred description") {
-            if let analysis = preferredAnalysis {
+            if let confirmation {
+                Text(confirmation.description)
+                switch confirmation.owner {
+                case .some(.correction(let owner)):
+                    LabeledContent("Authority", value: "Automatic correction")
+                        .font(.caption)
+                    DisclosureGroup("Correction evidence") {
+                        Text("Applied from your confirmed description for identical image content.")
+                        LabeledContent("Application receipt", value: owner.sourceApplicationFeedbackId)
+                            .font(.caption.monospaced()).textSelection(.enabled)
+                    }
+                case .some(.member), .none:
+                    LabeledContent("Authority", value: "Your confirmation").font(.caption)
+                case .some(.unrecognized):
+                    Text("Unrecognized confirmation authority").foregroundStyle(.secondary)
+                }
+            } else if let analysis = preferredAnalysis {
                 Text(analysis.result.description)
                 LabeledContent("Provider", value: "\(analysis.provider) · \(analysis.model)")
                     .font(.caption)
@@ -242,6 +261,7 @@ private struct PhotoTab: View {
 private final class ImageProcessingHistoryModel {
     private(set) var analyses: [ImageDescriptionAnalysis] = []
     private(set) var currentAnalyses: [ImageDescriptionAnalysis] = []
+    private(set) var confirmation: ImageDescriptionCorrection?
     private(set) var unparsed: [UnparsedImageAnalysis] = []
     private(set) var total = 0
     private(set) var nextCursor: String?
@@ -259,12 +279,18 @@ private final class ImageProcessingHistoryModel {
         guard !loading else { return }
         loading = true
         defer { loading = false }
+        if reset {
+            currentAnalyses = []
+            confirmation = nil
+        }
         do {
             let page = try await client.imageAnalyses(
                 .init(id: id, cursor: reset ? nil : nextCursor, limit: reset ? 10 : 20))
             if reset {
                 do {
-                    currentAnalyses = try await client.imageProcessingStatus(.init(id: id)).analyses
+                    let current = try await client.imageProcessingStatus(.init(id: id))
+                    currentAnalyses = current.analyses
+                    confirmation = current.correction
                 } catch {
                     Diagnostics.report(error, context: "photos.imageProcessingStatus")
                 }

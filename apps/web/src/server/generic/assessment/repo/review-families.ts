@@ -8,6 +8,7 @@ import {
   type AssessmentFamily,
 } from "@cubby/schemas/assessment";
 import { assessmentReviewFamilies } from "@cubby/schemas/assessment-review-family";
+import { SYSTEM_USER_ID } from "@cubby/schemas/context";
 import { entityRefKey } from "@cubby/schemas/entity";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import { shortcodeEntities } from "@cubby/schemas/entity-manifest";
@@ -16,6 +17,7 @@ import { financialTransactionSourceRef } from "@cubby/schemas/financial-transact
 import { parseEntityRef } from "@cubby/schemas/identifiers";
 import { mailboxClassificationStage } from "@cubby/schemas/mailbox-research";
 import { statementTransactionAction } from "@cubby/schemas/statement-suggestion";
+import { CORRECTION_OUTCOME_RECEIPT_KIND } from "@cubby/schemas/suggestion-correction";
 import { suggestionRecordRef } from "@cubby/schemas/suggestion-list";
 import { parseShortcode } from "@cubby/shared";
 import {
@@ -255,6 +257,16 @@ export const reviewFamilyDeclarations = {
     records: one,
     primaryOnly: true,
     actionable: sql`jsonb_typeof(a.judgment) = 'string' AND ${hasTextSql(sql`a.judgment #>> '{}'`)}`,
+    audit: exists(
+      feedbackForAssessment(
+        and(
+          eq(receipt.authority, "automatic"),
+          eq(receipt.actorUserId, SYSTEM_USER_ID),
+          eq(receipt.intent, "history"),
+          eq(receiptKind, CORRECTION_OUTCOME_RECEIPT_KIND),
+        ),
+      ),
+    ),
   },
   statement_transaction: {
     ...assessmentReviewFamilies.statement_transaction,
