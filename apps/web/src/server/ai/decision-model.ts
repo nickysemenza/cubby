@@ -171,12 +171,33 @@ function parseDecisionResponse(
   );
 }
 
-async function requestDecision(
+function requestDecision(
   input: DecisionQuestionsInput,
   ctx: AiRunContext,
   feature: AiDecisionFeature,
   applicationCacheStatus: ApplicationCacheStatus,
 ): Promise<DecisionQuestionsResponse> {
+  const startedAt = performance.now();
+  const selector = getDecisionModelConfig(feature.model).selector;
+  const questionKeys = Object.keys(input.questions);
+  const body = JSON.stringify(selector ? { ...input, model: selector } : input);
+  // Suspended async frames retain their parameters even after the last use.
+  // Keep combined evidence out of that frame; only the retry body must survive.
+  return sendDecisionRequest(
+    { body, questionKeys, startedAt },
+    ctx,
+    feature,
+    applicationCacheStatus,
+  );
+}
+
+async function sendDecisionRequest(
+  request: { body: string; questionKeys: readonly string[]; startedAt: number },
+  ctx: AiRunContext,
+  feature: AiDecisionFeature,
+  applicationCacheStatus: ApplicationCacheStatus,
+): Promise<DecisionQuestionsResponse> {
+  const { body: requestBody, questionKeys, startedAt } = request;
   const metadata: GatewayMetadata = {
     feature: feature.feature,
     operation: ctx.operation,
@@ -199,13 +220,6 @@ async function requestDecision(
     },
   });
 
-  const startedAt = performance.now();
-  const selector = getDecisionModelConfig(feature.model).selector;
-  // Response validation must not retain combined evidence beside its retry body.
-  const questionKeys = Object.keys(input.questions);
-  const requestBody = JSON.stringify(
-    selector ? { ...input, model: selector } : input,
-  );
   const controller = new AbortController();
   const deadline = setTimeout(() => {
     controller.abort(
