@@ -418,14 +418,15 @@ Generated output is never committed; web and Apple jobs generate it during
 `Validation`'s `generate` gate checks that declarations generate cleanly,
 including the direct native contract and Swift codecs.
 
-The `lanes` job is one static matrix: four E2E shards and two Vitest shards.
+The `lanes` job is one static matrix with doubled browser and Vitest sharding.
+The workflow owns the shard counts; worker counts per runner stay unchanged.
 Browser shards run alone, so no companion check waits behind one. Every
 failure still fails the job and `CI passed`, and each Nx target retains its own
 cache key.
 
-Each entry uses one standard runner with PostgreSQL and IntegreSQL service
+Each entry uses one Celesto runner with PostgreSQL and IntegreSQL service
 containers.
-`Vitest (n/2)` runs the `vitest-ci` target: one Vitest run of every merge-gate
+Each Vitest shard runs the `vitest-ci` target: one Vitest run of every merge-gate
 project (`unit`, `mcp-contract`, `ui`, `capability`, `scripts`,
 `packages`, `integration`, `integration-workerd` and `workers`), split by file
 with `CUBBY_VITEST_SHARD`. Vitest assigns files to shards by path hash, so the
@@ -436,7 +437,7 @@ drift check against disposable scratch databases, which runs despite a test
 failure. Service-backed projects (`integration`, `integration-workerd`,
 `capability`, `workers`) retry a failed test once on CI; Node unit, tooling and
 package projects never retry.
-Desktop Chromium runs as four Playwright shards (two workers each) through the
+Desktop Chromium runs as Playwright shards (two workers each) through the
 `e2e` target, each building the Worker with the run's source commit and branch
 provenance. Phone-web and WebKit browser coverage was removed from PR CI and the
 Playwright suite; native checks remain separate. There is no coverage mode.
@@ -582,11 +583,11 @@ The `main` ruleset requires only `CI passed`, from GitHub Actions. Keep `strict`
 a green non-conflicting branch need not rebase, allow administrator bypasses,
 and do not require human review.
 
-Optimize readiness across four concurrent PRs on the existing hosted plan.
-The Linux `lanes` matrix sets no `max-parallel`, so its six entries run
-concurrently; validation and short control jobs are additional demand, and
+Optimize readiness across concurrent PRs within the Celesto workspace limits.
+The Linux `lanes` matrix sets no `max-parallel`, so all entries can run
+concurrently when capacity permits; validation and short control jobs are additional demand, and
 optional work has repository-level limits. Standalone browser shards pay
-setup four times to shorten the slowest lane; this does not reserve
+setup on every runner to shorten the slowest lane; this does not reserve
 account-wide capacity or guarantee fairness against unrelated repositories.
 
 Use the Actions job timeline to distinguish created-to-start waiting, setup,

@@ -188,28 +188,44 @@ jobs:
         include:
           # Browser shards run alone: a companion check behind a shard
           # serializes the slowest lane's wall time.
-          - name: E2E tests (desktop 1/4)
+          - name: E2E tests (desktop 1/8)
             browser: desktop-1
-            run: CUBBY_E2E_SHARD=1/4 pnpm exec nx run @cubby/web:e2e --outputStyle=stream
-          - name: E2E tests (desktop 2/4)
+            run: CUBBY_E2E_SHARD=1/8 pnpm exec nx run @cubby/web:e2e --outputStyle=stream
+          - name: E2E tests (desktop 2/8)
             browser: desktop-2
-            run: CUBBY_E2E_SHARD=2/4 pnpm exec nx run @cubby/web:e2e --outputStyle=stream
-          - name: E2E tests (desktop 3/4)
+            run: CUBBY_E2E_SHARD=2/8 pnpm exec nx run @cubby/web:e2e --outputStyle=stream
+          - name: E2E tests (desktop 3/8)
             browser: desktop-3
-            run: CUBBY_E2E_SHARD=3/4 pnpm exec nx run @cubby/web:e2e --outputStyle=stream
-          - name: E2E tests (desktop 4/4)
+            run: CUBBY_E2E_SHARD=3/8 pnpm exec nx run @cubby/web:e2e --outputStyle=stream
+          - name: E2E tests (desktop 4/8)
             browser: desktop-4
-            run: CUBBY_E2E_SHARD=4/4 pnpm exec nx run @cubby/web:e2e --outputStyle=stream
-          # Every Vitest project (unit, UI, component browser, tooling,
-          # packages, PostgreSQL, workerd), split by file. Each shard's blob
-          # feeds the merged report.
-          - name: Vitest (1/2)
+            run: CUBBY_E2E_SHARD=4/8 pnpm exec nx run @cubby/web:e2e --outputStyle=stream
+          - name: E2E tests (desktop 5/8)
+            browser: desktop-5
+            run: CUBBY_E2E_SHARD=5/8 pnpm exec nx run @cubby/web:e2e --outputStyle=stream
+          - name: E2E tests (desktop 6/8)
+            browser: desktop-6
+            run: CUBBY_E2E_SHARD=6/8 pnpm exec nx run @cubby/web:e2e --outputStyle=stream
+          - name: E2E tests (desktop 7/8)
+            browser: desktop-7
+            run: CUBBY_E2E_SHARD=7/8 pnpm exec nx run @cubby/web:e2e --outputStyle=stream
+          - name: E2E tests (desktop 8/8)
+            browser: desktop-8
+            run: CUBBY_E2E_SHARD=8/8 pnpm exec nx run @cubby/web:e2e --outputStyle=stream
+          # Every Vitest project is split by file; all blobs feed the report.
+          - name: Vitest (1/4)
             vitest: "1"
-            run: CUBBY_VITEST_SHARD=1/2 pnpm exec nx run @cubby/web:vitest-ci --outputStyle=stream
-          - name: Vitest (2/2)
+            run: CUBBY_VITEST_SHARD=1/4 pnpm exec nx run @cubby/web:vitest-ci --outputStyle=stream
+          - name: Vitest (2/4)
             vitest: "2"
-            run: CUBBY_VITEST_SHARD=2/2 pnpm exec nx run @cubby/web:vitest-ci --outputStyle=stream
+            run: CUBBY_VITEST_SHARD=2/4 pnpm exec nx run @cubby/web:vitest-ci --outputStyle=stream
             db-check: true
+          - name: Vitest (3/4)
+            vitest: "3"
+            run: CUBBY_VITEST_SHARD=3/4 pnpm exec nx run @cubby/web:vitest-ci --outputStyle=stream
+          - name: Vitest (4/4)
+            vitest: "4"
+            run: CUBBY_VITEST_SHARD=4/4 pnpm exec nx run @cubby/web:vitest-ci --outputStyle=stream
     services: &test-databases
       postgres:
         image: mirror.gcr.io/pgvector/pgvector@sha256:ac08538c6f8b9904c33c8224c5e5706dbe760aca29db1d096972b4052c22a75d
