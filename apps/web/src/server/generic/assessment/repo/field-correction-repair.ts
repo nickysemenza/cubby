@@ -17,7 +17,10 @@ import {
   fieldCorrectionKey,
   readFieldCorrectionSources,
 } from "~/server/generic/assessment/repo/correction-sources";
-import { fieldInputFingerprint } from "~/server/generic/assessment/repo/field-input-fence";
+import {
+  fieldInputFingerprint,
+  fieldInputFingerprintIfLive,
+} from "~/server/generic/assessment/repo/field-input-fence";
 import {
   confirmedFieldFillRefusal,
   writePropagatedFieldCorrection,
@@ -54,13 +57,17 @@ export async function isCurrentFieldCorrection(
     state.recordId,
     state.field,
   );
-  const currentFingerprint = await fieldInputFingerprint(
+  const currentFingerprint = await fieldInputFingerprintIfLive(
     db,
     state.entity,
     state.recordId,
     state.field,
   );
-  if (receipt.data.appliedInputFingerprint !== currentFingerprint) return false;
+  if (
+    currentFingerprint === null ||
+    receipt.data.appliedInputFingerprint !== currentFingerprint
+  )
+    return false;
   if (latest) return receipt.data.auditIds.includes(latest.id);
   return (
     receipt.data.auditIds.length === 0 &&

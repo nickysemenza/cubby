@@ -3675,7 +3675,9 @@ The same coordinator scans prior matching Assessments in bounded Job pages and
 handles later publications through durable publication work that resolves authority
 after the proposal commits, so an overlapping history scan cannot miss enrollment.
 Source authority includes an immutable applied field fingerprint and write revision;
-audit timestamps alone do not establish the latest committed decision.
+audit timestamps alone do not establish the latest committed decision. Deleted
+source subjects supply no current correction authority; retained history does not
+block subsequent proposal processing.
 Pending proposals are retired even when an explicit-null correction needs no value change.
 Existing applicable corrections withhold the model's
 automatic answer while correction work resolves it. Historical repair requires

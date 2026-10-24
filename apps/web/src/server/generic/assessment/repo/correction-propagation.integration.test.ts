@@ -1,4 +1,4 @@
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, notInArray } from "drizzle-orm";
 import {
   taxonomyId,
   taxonomyShortcode,
@@ -18,7 +18,7 @@ import {
   productFixture,
   productCategoryId,
 } from "~/server/domains/run/service/suggestion-sweep.fixtures";
-import { executeEntityAs } from "~/server/entity-kernel";
+import { executeEntity, executeEntityAs } from "~/server/entity-kernel";
 import { publishFieldAssessment } from "~/server/generic/assessment/repo/assessment";
 import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
 import { listAutomaticDecisions } from "~/server/generic/assessment/repo/automatic-decisions";
@@ -30,6 +30,7 @@ import {
 import { fieldInputFingerprint } from "~/server/generic/assessment/repo/field-input-fence";
 import { listSuggestionPage } from "~/server/generic/assessment/repo/suggestion-list";
 import { correctionPropagationHandler } from "~/server/generic/assessment/service/correction-propagation";
+import { latestFieldWrite } from "~/server/generic/audit-log/repo/field-write";
 import { advanceJob } from "~/server/generic/jobs/service/jobs";
 
 describe("confirmed correction propagation", () => {
@@ -391,9 +392,36 @@ describe("confirmed correction propagation", () => {
     );
   });
 
+  it("ignores a deleted correction source for later equivalent proposals", async () => {
+    const source = await correct();
+    await executeEntity(kernelCtx(ctx), {
+      action: "delete",
+      entity: "product",
+      ids: [source.product.id],
+    });
+    const future = await propose();
+    await getDb(ctx.db)
+      .update(assessmentState)
+      .set({ confidence: 0.99 })
+      .where(eq(assessmentState.id, future.prediction.id));
+    expect(
+      (await applyAutomaticRules(ctx.db, [future.prediction.id])).applied,
+    ).toEqual([future.prediction.id]);
+    await drain();
+    expect(await productCategoryId(ctx.db, future.product.id)).toBe(
+      taxonomyId("tools"),
+    );
+  });
+
   it("holds a restored source value even when later audit writes sort before its receipt", async () => {
     const target = await propose();
     const source = await correct();
+    const root = await readConfirmedCorrection(
+      ctx.db,
+      source.result.feedbackId,
+    );
+    const originalAuditIds = root?.fieldApplicationReceipt?.auditIds ?? [];
+    expect(originalAuditIds.length).toBeGreaterThan(0);
     await executeEntityAs(kernelCtx(ctx), "update", {
       entity: "product",
       id: source.product.id,
@@ -412,8 +440,16 @@ describe("confirmed correction propagation", () => {
         and(
           eq(auditLog.entityId, source.product.entityId),
           eq(auditLog.action, "update"),
+          notInArray(auditLog.id, originalAuditIds),
         ),
       );
+    const latest = await latestFieldWrite(
+      ctx.db,
+      "product",
+      source.product.entityId,
+      "categoryId",
+    );
+    expect(originalAuditIds).toContain(latest?.id);
     await drain();
     expect(await productCategoryId(ctx.db, target.product.id)).toBeNull();
   });
