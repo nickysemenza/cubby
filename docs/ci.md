@@ -24,10 +24,11 @@ failures without paying a fresh install for every static check. One status
 context, `CI passed`, owns the merge gate. [Journeys](#journeys) live in their
 own workflow.
 
-The required test matrix splits its existing shards evenly between GitHub and
-Celesto: half the browser shards use GitHub Ubuntu and half use Celesto XL;
-half the Vitest shards use GitHub Ubuntu and half use Celesto XL. The workflow
-owns exact assignments and counts. GitHub browser shards use two workers;
+The required test matrix uses Celesto XL for one browser shard and one Vitest
+shard; the remaining shards use GitHub Ubuntu. Four concurrent XL requests
+left a shard queued for nearly six minutes in the fresh-run experiment, so
+the workflow limits Celesto demand to two jobs per run. The workflow owns
+exact assignments and counts. GitHub browser shards use two workers;
 Celesto XL browser shards trial four workers against their eight vCPUs.
 Each shard restores or builds its own web output through Nx before testing;
 there is no shared-build producer or artifact dependency. The existing build
@@ -37,10 +38,10 @@ in parallel; a compatible completed build can replay from the remote cache.
 Plan, reporting and the final gate use GitHub's `ubuntu-slim`. Validation,
 optional jobs and Apple jobs also stay on GitHub; Rust retains its ARM runner.
 Deployment and other workflows retain their existing runners. This limits a
-normal PR to four heavy Celesto jobs, spreading demand across both providers
+normal PR to two heavy Celesto jobs, spreading demand across both providers
 without making native lane selection wait for Celesto admission. Celesto
 browser shards trial XL with additional workers to use the larger machine;
-this is an experiment, not a measured speedup.
+full-run speed still depends on admission, setup and the slowest required lane.
 
 Celesto hosts its machines; `self-hosted` is GitHub's label for runners outside
 its hosted fleet. Enable the repository in the Celesto GitHub App and link it
