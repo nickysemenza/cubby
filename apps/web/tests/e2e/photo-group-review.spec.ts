@@ -464,6 +464,7 @@ test("suggests an existing variant and previews every merge decision for a creat
       const review = await page.request.post(
         "/api/operations/photoImport.review",
         {
+          headers: { Origin: new URL(page.url()).origin },
           data: {
             operation: "photoImport.review",
             input: { runId: seed.runId },

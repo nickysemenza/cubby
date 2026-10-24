@@ -109,12 +109,33 @@ const parseEnvelope = (value: unknown) => {
 const parseBody = async (request: Request, codec: ValueCodec) =>
   decode(await request.json(), codec);
 
+/** Browser statuses that are not answered as an ordinary refusal result. */
+const BROWSER_HTTP_REFUSALS = new Set<number>([
+  StatusCodes.FORBIDDEN,
+  StatusCodes.METHOD_NOT_ALLOWED,
+  StatusCodes.UPGRADE_REQUIRED,
+]);
+
+/**
+ * Plain JSON clients (Apple, CLI, scripts) read the bare error under its HTTP
+ * status. The browser transport settles refusals as `{ ok: false }` results,
+ * so the superjson codec keeps 200 except for a cross-origin write, a wrong
+ * method, or the hosted workspace's 426 update prompt.
+ */
 const errorResponse = (
   error: PublicStartOperationError,
   codec: ValueCodec,
   extraHeaders?: HeadersInit,
   status = statusForCode(error.code),
-) => jsonResponse(error, status, codec, extraHeaders);
+) =>
+  codec === "superjson"
+    ? jsonResponse(
+        { ok: false, error },
+        BROWSER_HTTP_REFUSALS.has(status) ? status : StatusCodes.OK,
+        codec,
+        extraHeaders,
+      )
+    : jsonResponse(error, status, codec, extraHeaders);
 
 const isBatchBody = (value: unknown): value is { batch: unknown[] } =>
   typeof value === "object" &&
@@ -213,6 +234,12 @@ export function createBrowserOperationHandler(options?: {
 
       const body = await parseBody(request, codec);
       const pathname = new URL(request.url).pathname;
+      // Internal operations are the web UI's own plumbing: the browser codec
+      // reaches them, while Apple, CLI and API-key clients see only
+      // capability and view operations.
+      const reachable = (id: string) =>
+        codec === "superjson" ||
+        startOperationDefinitionFor(id)?.exposure !== "internal";
 
       if (isBatchBody(body)) {
         const batch = z
@@ -226,7 +253,7 @@ export function createBrowserOperationHandler(options?: {
           batch.some(
             ({ operation }) =>
               startOperationDefinitionFor(operation)?.kind !== "query" ||
-              startOperationDefinitionFor(operation)?.exposure === "internal",
+              !reachable(operation),
           )
         )
           throw new z.ZodError([
@@ -281,7 +308,7 @@ export function createBrowserOperationHandler(options?: {
       const envelope = parseEnvelope(body);
       operation = envelope.operation;
       z.literal(browserOperationPath(envelope.operation)).parse(pathname);
-      if (startOperationDefinitionFor(operation)?.exposure === "internal")
+      if (!reachable(operation))
         return errorResponse(
           publicError("NOT_FOUND", "Operation not found", requestId, operation),
           codec,

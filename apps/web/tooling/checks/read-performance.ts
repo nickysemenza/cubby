@@ -169,9 +169,9 @@ export async function readPerformance(
     };
     if (body !== undefined)
       options.body = JSON.stringify(
-        isOperation ? { operation, input: body } : body,
+        isOperation ? { operation: path, input: body } : body,
       );
-    else if (isOperation) options.body = JSON.stringify({ operation });
+    else if (isOperation) options.body = JSON.stringify({ operation: path });
     const response = await fetch(new URL(operationPath, origin), options);
     const firstResponseMs = performance.now() - started;
     if (!response.ok)
@@ -227,14 +227,18 @@ export async function readPerformance(
     const started = performance.now();
     const measurements: typeof requests = [];
     const read = async (path: string, body?: ReadInput, method = "POST") => {
-      const operation = mode === "complete" ? "resource.list" : path;
+      // Artifacts keep the bare kernel verb (`listBase`) they always recorded.
+      const operation =
+        mode === "complete"
+          ? "resource.list"
+          : (path.split(".").at(-1) ?? path);
       if (sample >= 0) {
         const metadataInput = unparsedStartOperationDataSchema.safeParse(body);
         requestedReads.push({
           entity,
           operation,
           shape: metadataInput.success
-            ? requestedReadMetadata(operation, metadataInput.data)
+            ? requestedReadMetadata(path, metadataInput.data)
             : null,
         });
       }

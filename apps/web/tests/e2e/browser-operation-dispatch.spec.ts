@@ -58,8 +58,8 @@ test("browser dispatch preserves superjson dates and gates outdated Apple writes
     );
     expect(write.status()).toBe(426);
     expect(superjson.deserialize(await write.json())).toMatchObject({
-      code: "UPGRADE_REQUIRED",
-      reason: "CLIENT_UPDATE_REQUIRED",
+      ok: false,
+      error: { code: "UPGRADE_REQUIRED", reason: "CLIENT_UPDATE_REQUIRED" },
     });
 
     const mismatch = await page.request.post(
@@ -72,10 +72,11 @@ test("browser dispatch preserves superjson dates and gates outdated Apple writes
         headers: { ...outdatedHeaders, "User-Agent": "cubby-cli/1.0.0" },
       },
     );
-    expect(mismatch.status()).toBe(400);
+    // The browser codec settles refusals as results, not HTTP errors.
+    expect(mismatch.status()).toBe(200);
     expect(superjson.deserialize(await mismatch.json())).toMatchObject({
-      code: "BAD_REQUEST",
-      reason: "INVALID_INPUT",
+      ok: false,
+      error: { code: "BAD_REQUEST", reason: "INVALID_INPUT" },
     });
 
     const retired = await page.request.post("/api/browser/dispatch", {

@@ -122,7 +122,7 @@ describe("shared operation route", () => {
     expect(run).not.toHaveBeenCalled();
   });
 
-  it("does not expose internal operations over HTTP", async () => {
+  it("exposes internal operations only to the browser codec", async () => {
     const run = vi.fn(async () => ({ ok: true as const, data: null as never }));
     const handle = createBrowserOperationHandler({
       authenticate: async () => principal(),
@@ -141,5 +141,21 @@ describe("shared operation route", () => {
     expect(response.status).toBe(404);
     expect(await response.json()).toMatchObject({ code: "NOT_FOUND" });
     expect(run).not.toHaveBeenCalled();
+
+    // The web UI's own plumbing stays reachable through the browser codec.
+    const browser = await handle(
+      new Request(
+        `https://cubby.example${browserOperationPath("calendar.getCredential")}`,
+        {
+          method: "POST",
+          headers: { "x-cubby-value-codec": "superjson" },
+          body: JSON.stringify(
+            superjson.serialize({ operation: "calendar.getCredential" }),
+          ),
+        },
+      ),
+    );
+    expect(browser.status).toBe(200);
+    expect(run).toHaveBeenCalledOnce();
   });
 });

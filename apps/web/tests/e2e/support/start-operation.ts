@@ -25,20 +25,23 @@ export async function startOperation(
     requestOrigins.set(request, origin);
   }
   const response = await request.post(browserOperationPath(operation), {
-    headers: { Origin: await origin, "Content-Type": "application/json" },
+    headers: {
+      Origin: await origin,
+      "Content-Type": "application/json",
+      "x-cubby-value-codec": "superjson",
+    },
     data: JSON.stringify(superjson.serialize({ operation, input })),
   });
+  const value = superjson.deserialize(
+    superJsonResultSchema.parse(JSON.parse(await response.text())),
+  );
   const envelope = z
     .object({
       ok: z.boolean(),
       data: z.unknown().optional(),
       error: z.unknown().optional(),
     })
-    .parse(
-      superjson.deserialize(
-        superJsonResultSchema.parse(JSON.parse(await response.text())),
-      ),
-    );
+    .parse(value);
   const body = envelope.ok ? envelope.data : envelope.error;
   return {
     body,

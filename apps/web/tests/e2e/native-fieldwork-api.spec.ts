@@ -45,8 +45,10 @@ async function post(
 }
 
 async function json(response: APIResponse) {
-  expect(response.status(), await response.text()).toBe(200);
-  return response.json().then((envelope) => envelope.data);
+  const text = await response.text();
+  expect(response.status(), text).toBe(200);
+  // Raw envelope: entityApi's json() is already unwrapped.
+  return JSON.parse(text).data;
 }
 
 test("a staged photo and reviewed placement commit one Product with one each", async ({

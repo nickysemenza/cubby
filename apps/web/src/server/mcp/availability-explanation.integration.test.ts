@@ -35,7 +35,7 @@ describe("availability explanations through MCP", () => {
         auth: { userId: ctx.actor.userId },
       }),
     );
-    const call = (action: "set_exception" | "clear_exception", note?: string) =>
+    const call = (action: "set" | "clear", note?: string) =>
       callMcpTool(
         createMcpServer(),
         "data_exception",
@@ -43,20 +43,18 @@ describe("availability explanations through MCP", () => {
           action: `${action}_exception`,
           entityId: saved.id,
           check: "product_brand",
-          ...(action === "set_exception"
-            ? { reason: "unavailable", note }
-            : {}),
+          ...(action === "set" ? { reason: "unavailable", note } : {}),
         },
         mcpContext,
       );
     const before = (
       await loadDataQualities(ctx.db, "product", [saved.entityId])
     ).get(saved.entityId)!;
-    expect((await call("set_exception", " ")).isError).toBe(true);
+    expect((await call("set", " ")).isError).toBe(true);
     const note =
       "Checked [synthetic catalog](https://example.test/catalog); no brandName is available.";
     const accepted = dataQuality.parse(
-      (await call("set_exception", note)).structuredContent,
+      (await call("set", note)).structuredContent,
     );
     expect(accepted.score).toBeGreaterThan(before.score!);
     expect(accepted.gaps.map((gap) => gap.check)).not.toContain(
@@ -65,12 +63,10 @@ describe("availability explanations through MCP", () => {
     expect(accepted.exceptions).toContainEqual(
       expect.objectContaining({ note, state: "active" }),
     );
-    const cleared = dataQuality.parse(
-      (await call("clear_exception")).structuredContent,
-    );
+    const cleared = dataQuality.parse((await call("clear")).structuredContent);
     expect(cleared.score).toBe(before.score);
     expect(cleared.gaps.map((gap) => gap.check)).toContain("product_brand");
-    await call("set_exception", note);
+    await call("set", note);
     await getDb(ctx.db)
       .update(product)
       .set({

@@ -1106,7 +1106,7 @@ describe("current purchase-agent system boundaries", () => {
     );
     expect({ status: response.status, body: await response.json() }).toEqual({
       status: 200,
-      body: { status: "queued" },
+      body: { ok: true, data: { status: "queued" } },
     });
 
     const mailRuns = () =>

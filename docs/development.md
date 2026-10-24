@@ -591,16 +591,20 @@ that it did not commit, so reconcile its result before retrying.
 
 ## Operation transport
 
-Browser, Apple, CLI and API-key clients call capability and view operations
-through `POST /api/operations/{operationId}`. Internal operations are not
-reachable over HTTP. Use `view` for HTTP operations such as Apple-only calls
-that should stay off MCP; reserve `internal` for server-only operations. The
+Browser, Apple, CLI and API-key clients call operations through
+`POST /api/operations/{operationId}`. The browser (superjson codec) reaches
+every query and mutation; other clients reach only capability and view
+operations, and MCP only capability operations. Use `view` for operations
+Apple or the CLI call that should stay off MCP; `internal` operations are the
+web UI's own and are absent from the generated Swift and CLI catalog. The
 request envelope is `{operation, input?}`; a success
 is `{ok: true, data}`, including `data: null` for a nullable output. Errors
 return the public `ApiError` body with an HTTP status derived from its code.
 Plain JSON is the default codec. The browser opts into superjson with
 `x-cubby-value-codec: superjson`; the server replies in the declared codec.
-Query batches use `batch~` operation paths and stream one result per item as
+The browser transport settles refusals as results, so superjson refusals are
+`{ok: false, error}` with HTTP 200, except 403 (cross-origin cookie write), 405
+and 426, which carry the same body under their status. Query batches use `batch~` operation paths and stream one result per item as
 NDJSON with HTTP 200.
 
 `authenticate(request, policy)` in
