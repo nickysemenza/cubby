@@ -821,6 +821,29 @@ describe("Automatic rules", () => {
 // Failure: automatic policy overwrites a populated member field.
 describe("automatic field assignments", () => {
   const ctx = withTestDb();
+  it.each([0.849, 0.85, 0.88])(
+    "fills an untouched empty category only at high confidence (%s)",
+    async (confidence) => {
+      const item = await productFixture(ctx, "Synthetic unclassified product");
+      const sweep = await startSuggestionSweep(
+        ctx.db,
+        {
+          entity: "product",
+          fields: ["categoryId"],
+          filters: { ids: [item.id] },
+        },
+        { context: kernelCtx(ctx), ...categoryPorts(confidence) },
+      );
+      const [state] = await getDb(ctx.db)
+        .select()
+        .from(assessmentState)
+        .where(eq(assessmentState.runId, sweep.id));
+      expect(state?.status).toBe(confidence >= 0.85 ? "applied" : "pending");
+      expect(await productCategoryId(ctx.db, item.id)).toBe(
+        confidence >= 0.85 ? taxonomyId("food") : null,
+      );
+    },
+  );
   // Failure: stored NULL hides a populated effective value derived from order evidence.
   it("preserves Vendor itemization inherited from online order evidence", async () => {
     const merchant = (

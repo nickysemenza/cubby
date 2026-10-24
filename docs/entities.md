@@ -3807,9 +3807,12 @@ mail routing/links/import outcomes and recommendation subtypes
 currently retain explicit holds pending domain-specific implementation. Broader
 semantic applicability and remaining domain-specific inference integration
 remain tracked by [#3189](https://github.com/nickysemenza/cubby/issues/3189).
-Ordinary automatic field additions still require the existing 95% policy and
-current-evidence/member-intent checks; propagated corrections do not invent a
-model confidence or lower that threshold.
+Ordinary automatic field additions use the same high-confidence boundary shown
+to members (85% or above), with a clear winner and current-evidence/member-intent
+checks. Only declared fill fields qualify; review-required fields and populated
+member values remain protected. Preview and persisted application share that
+threshold. Propagated corrections use receipt authority, never invented model
+confidence. This field policy does not change financial acceptance rules.
 
 Image correction authority is text-only and scoped to identical retained content
 hashes. Its provider-free resolver admits only successful command-bound member

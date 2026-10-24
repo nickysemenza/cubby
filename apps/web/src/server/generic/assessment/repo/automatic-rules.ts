@@ -62,7 +62,7 @@ export const AUTOMATIC_RULES = {
     execution: "field_policy",
     family: "field",
     description:
-      "Fill an empty declared assignment field at 95% confidence with current evidence and a clear winner, preserving member decisions.",
+      "Fill an empty declared assignment field at high confidence with current evidence and a clear winner, preserving member decisions.",
     revision: () => FIELD_ASSIGNMENT_REVISION,
     match: (facts) =>
       facts.kind === "addition" &&
