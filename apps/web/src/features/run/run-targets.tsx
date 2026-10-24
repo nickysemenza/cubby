@@ -149,7 +149,7 @@ export function RunTargetsTable({ rows }: { rows: readonly RunTarget[] }) {
             header: "Record",
             size: 260,
             meta: attachCubbyColumnMeta<RunTarget>({
-              mobile: { slot: "title", priority: 0 },
+              mobile: { slot: "title", priority: 0, renderTitle: true },
             }),
             cell: ({ row }) => <TargetLink target={row.original} />,
           }),

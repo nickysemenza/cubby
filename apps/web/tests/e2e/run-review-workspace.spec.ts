@@ -99,7 +99,7 @@ test("a completed enrichment Run keeps attention, outcomes and source evidence a
     .getByRole("button")
     .filter({ hasText: "Synthetic review lamp" })
     .first()
-    .click();
+    .press("Enter");
   await expect(
     page.getByRole("dialog", { name: "Run target evidence" }),
   ).toBeVisible();
