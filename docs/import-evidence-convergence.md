@@ -44,6 +44,10 @@ commit or replay as accepted ready plans.
 
 Purchase inheritance and booking share the sole-access predicate; page previews
 batch holder proof and commits recheck current holder and access evidence.
+When settlement links an existing receipt, sole-card inheritance requires sole
+access on both the receipt/order date and charge date (posted date fallback).
+A shared charge therefore preserves known receipt-member evidence across
+different dates; settlement never freezes that derived value into an override.
 
 Transaction booking and evidence coverage use those same observed, pending and
 posted states. Supported unbooked spending remains a booking gap before posting;

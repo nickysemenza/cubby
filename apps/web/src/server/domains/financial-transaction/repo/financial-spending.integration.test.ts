@@ -27,6 +27,7 @@ import {
   vendor as vendorTable,
 } from "~/server/db/schema";
 import { updateFinancialAccount } from "~/server/domains/financial-account/repo";
+import { getPurchaseByID } from "~/server/domains/purchase/repo/purchase";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 import {
@@ -515,6 +516,85 @@ describe("shared spending booking", () => {
           .select({ purchaserOverrideId: purchase.purchaserOverrideId })
           .from(purchase),
       ).toEqual([{ purchaserOverrideId: null }]);
+      expect(
+        await getDb(ctx.db).select({ cost: expense.cost }).from(expense),
+      ).toEqual([{ cost: 42.5 }]);
+    },
+  );
+  it.each([
+    ["spending", false],
+    ["direct", true],
+  ] as const)(
+    "preserves a known receipt purchaser across different dates through %s settlement and exact replay (posted-only=%s)",
+    async (writer, postedOnly) => {
+      const { transaction, advice, vendor, category, other } =
+        await householdCard(true);
+      if (postedOnly)
+        await updateFinancialTransaction(
+          ctx.db,
+          transaction.output.id,
+          {
+            transactionDate: null,
+            postedDate: "2026-05-04",
+          },
+          ctx.actor,
+        );
+      const vendorAccount = await createRepoIdentity(ctx, "vendorAccount", {
+        vendorId: vendor.output.id,
+        ledgerPartyId: other.output.id,
+      });
+      const receipt = await createRepoIdentity(ctx, "purchase", {
+        vendorId: vendor.output.id,
+        vendorAccountId: vendorAccount.output.id,
+        date: "2026-05-03",
+        statedTotal: 42.5,
+      });
+      await createRepoIdentity(ctx, "expense", {
+        purchaseId: receipt.output.id,
+        name: "Synthetic receipt line",
+        cost: 42.5,
+        date: "2026-05-03",
+        trade: "other",
+        spendingCategoryId: category.id,
+      });
+      const expected = {
+        purchaserId: other.output.id,
+        purchaserOverrideId: null,
+      };
+      expect(await getPurchaseByID(ctx.db, receipt.entityId)).toMatchObject(
+        expected,
+      );
+      const plan = await previewFinancialSpending(ctx.db, {
+        transactionId: transaction.output.id,
+        purchaseId: receipt.output.id,
+        advice,
+      });
+      expect(plan).toMatchObject({
+        status: "ready",
+        effect: "link_existing",
+        purchaserId: null,
+      });
+      const direct = await previewFinancialBooking(
+        ctx.db,
+        financialBookingInput.parse({
+          transactionId: transaction.output.id,
+          purchaseId: receipt.output.id,
+          spendingCategoryId: category.id,
+        }),
+      );
+      expect(direct.action).toBe("link_existing");
+      const commit =
+        writer === "spending"
+          ? () => commitFinancialSpending(ctx.db, plan, ctx.actor)
+          : () => commitFinancialBooking(ctx.db, direct, ctx.actor);
+      expect(await commit()).toMatchObject({ replayed: false });
+      expect(await getPurchaseByID(ctx.db, receipt.entityId)).toMatchObject(
+        expected,
+      );
+      expect(await commit()).toMatchObject({ replayed: true });
+      expect(await getPurchaseByID(ctx.db, receipt.entityId)).toMatchObject(
+        expected,
+      );
       expect(
         await getDb(ctx.db).select({ cost: expense.cost }).from(expense),
       ).toEqual([{ cost: 42.5 }]);
