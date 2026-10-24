@@ -261,12 +261,11 @@ const evaluateRow = (
   const checks = checksOf(entity);
   const targetId = parseShortcodeFor(entity, row.shortcode);
   const expectedChecks: DataCheck[] = [];
-  const rawGaps: Array<Omit<DataQualityGap, "check"> & { check: DataCheck }> =
-    [];
+  const gaps: Array<Omit<DataQualityGap, "check"> & { check: DataCheck }> = [];
   checks.forEach((check) => {
     if (isExpected(row, check)) expectedChecks.push(check);
     if (row.checks[check] !== "gap") return;
-    rawGaps.push({
+    gaps.push({
       check,
       facet: dataCheckFacet[check],
       kind: dataCheckKind[check],
@@ -289,7 +288,6 @@ const evaluateRow = (
   const activeChecks = new Set(
     checks.filter((check) => row.checks[check] === "waived"),
   );
-  const gaps = rawGaps.filter((gap) => !activeChecks.has(gap.check));
   const terms = qualityTerms(
     expectedChecks,
     gaps.map((gap) => gap.check),
