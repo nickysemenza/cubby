@@ -24,6 +24,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
 import { createEntityMutationPort } from "~/entity/editing/use-entity-commands";
+import { entityPreviewQueryOptions } from "~/entity/entity-query";
 import { installFeatures } from "~/features/registry";
 import { rippleFor } from "~/integrations/tanstack-query/cache-tags";
 import { ai } from "~/integrations/tanstack-query/generated/catalog/ai.gen";
@@ -52,6 +53,74 @@ installFeatures();
 let harness: ReturnType<typeof createBrowserTestHarness>;
 beforeEach(() => {
   harness = createBrowserTestHarness();
+});
+
+it("links live detail proposals and alternatives through the canonical field renderer", async () => {
+  const record = {
+    id: testShortcode("task", "proposal"),
+    name: "Synthetic task",
+    projectId: null,
+  };
+  const proposedId = testShortcode("project", "proposed");
+  const alternativeId = testShortcode("project", "alternative");
+  for (const { projectId, name } of [
+    { projectId: proposedId, name: "Synthetic proposed project" },
+    { projectId: alternativeId, name: "Synthetic alternative project" },
+  ]) {
+    harness.queryClient.setQueryDefaults(
+      entityPreviewQueryOptions("project", projectId).queryKey,
+      { staleTime: Infinity },
+    );
+    harness.queryClient.setQueryData(
+      entityPreviewQueryOptions("project", projectId).queryKey,
+      { id: projectId, name },
+    );
+  }
+  render(
+    <RecordSuggestionsProvider
+      entity="task"
+      records={[record]}
+      fieldKeys={["projectId"]}
+      storedSuggestionOperations={emptyStoredSuggestionOperations}
+      operations={{
+        suggestFields: ai.suggestFields.withTransport(async () => ({
+          suggestions: {
+            projectId: {
+              value: proposedId,
+              label: "Synthetic proposed project",
+              confidence: "high",
+              probability: 0.97,
+              detail: null,
+              reasoning: "",
+              operation: "set",
+              removals: [],
+              alternatives: [
+                {
+                  value: alternativeId,
+                  label: "Synthetic alternative project",
+                  detail: null,
+                  probability: 0.03,
+                },
+              ],
+            },
+          },
+          outcomes: {},
+        })),
+      }}
+    >
+      <RecordFieldSuggestion record={record} field="projectId">
+        Not recorded
+      </RecordFieldSuggestion>
+    </RecordSuggestionsProvider>,
+    { wrapper: harness.wrapper },
+  );
+  expect(
+    await screen.findByRole("link", { name: "Synthetic proposed project" }),
+  ).toHaveAttribute("href", `/projects/${proposedId}`);
+  fireEvent.click(screen.getByRole("button", { name: "Review" }));
+  expect(
+    await screen.findByRole("link", { name: "Synthetic alternative project" }),
+  ).toHaveAttribute("href", `/projects/${alternativeId}`);
 });
 afterEach(() => {
   harness.dispose();
@@ -1427,8 +1496,7 @@ describe("record suggestions", () => {
     );
 
     const errorSpy = vi.spyOn(toast, "error").mockImplementation(() => "");
-    await screen.findByText("Electrical");
-    fireEvent.click(screen.getByRole("button", { name: "Accept" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Accept" }));
     const alert = await screen.findByRole("alert");
     expect(alert).toHaveTextContent("Suggestion inputs changed");
     expect(calls).toBe(1);
@@ -1574,8 +1642,7 @@ describe("record suggestions", () => {
       { wrapper: harness.wrapper },
     );
 
-    await screen.findByText("Electrical");
-    fireEvent.click(screen.getByRole("button", { name: "Accept" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Accept" }));
     expect(
       await screen.findByRole("dialog", { name: "Edit Task" }),
     ).toBeInTheDocument();

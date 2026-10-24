@@ -1,6 +1,7 @@
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { FieldValues, Path, UseFormReturn } from "react-hook-form";
 
+import { renderSuggestedListFieldValue } from "~/entity/display/entity-display";
 import { Button } from "~/ui/primitives/button";
 
 import { FieldSuggestionHint } from "./field-suggestion-hint";
@@ -117,6 +118,18 @@ function AutoSuggestHint({
   const context = useFieldSuggestionContext();
   return (
     <FieldSuggestionHint
+      renderValue={
+        context
+          ? (value, label) =>
+              renderSuggestedListFieldValue(
+                context.entity,
+                { id: context.entityId ?? "" },
+                field,
+                value,
+                label,
+              )
+          : undefined
+      }
       currentLabel={currentLabel ?? result.currentLabel}
       currentValue={result.currentValue}
       questionKey={result.questionKey}

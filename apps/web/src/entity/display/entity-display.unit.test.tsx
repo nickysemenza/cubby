@@ -17,6 +17,7 @@ import {
   EntityDisplayImagesProvider,
   entityDisplayImageKey,
 } from "~/entity/entity-media/entity-display-images";
+import { entityPreviewQueryOptions } from "~/entity/entity-query";
 import { useStandardColumns } from "~/entity/hooks/use-standard-columns";
 import { installFeatures } from "~/features/registry";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
@@ -38,9 +39,109 @@ import {
   EntityBasicInfo,
   entitySectionFields,
   renderDetailFieldValue,
+  renderSuggestedListFieldValue,
 } from "./entity-display";
 
 installFeatures();
+
+it("renders proposed text and None independently of the current resolved value", () => {
+  const record = {
+    id: "TSK-4K7M",
+    trade: "plumbing",
+    fieldResolutions: {
+      trade: {
+        mode: "inherit",
+        storedValue: null,
+        value: "plumbing",
+        fallbackValue: "plumbing",
+        source: "project",
+        sourceEntity: null,
+        matchesFallback: true,
+        canReset: false,
+      },
+    },
+  };
+  const view = render(
+    <>
+      {renderSuggestedListFieldValue(
+        "task",
+        record,
+        "trade",
+        "cabinetry",
+        "Stale label",
+      )}
+    </>,
+  );
+  expect(screen.getByText("Cabinetry")).toBeVisible();
+  expect(screen.queryByText("Plumbing")).toBeNull();
+  view.rerender(
+    <>
+      {renderSuggestedListFieldValue(
+        "task",
+        record,
+        "trade",
+        null,
+        "Stale label",
+      )}
+    </>,
+  );
+  expect(screen.getByText("—")).toBeVisible();
+  view.rerender(
+    <>
+      {renderSuggestedListFieldValue(
+        "task",
+        record,
+        "name",
+        "Synthetic replacement",
+      )}
+    </>,
+  );
+  expect(screen.getByText("Synthetic replacement")).toBeVisible();
+});
+
+it("renders proposed multiple references without borrowing current nested records", async () => {
+  const harness = createBrowserTestHarness();
+  const proposedIds = ["TSK-4K7M", "TSK-7M4K"];
+  for (const [index, id] of proposedIds.entries()) {
+    harness.queryClient.setQueryDefaults(
+      entityPreviewQueryOptions("task", id).queryKey,
+      { staleTime: Infinity },
+    );
+    harness.queryClient.setQueryData(
+      entityPreviewQueryOptions("task", id).queryKey,
+      { id, name: `Synthetic dependency ${index + 1}` },
+    );
+  }
+  const record = {
+    id: "TSK-2M4K",
+    blockedByIds: ["TSK-3M4K"],
+    blockedBy: [{ id: "TSK-3M4K", name: "Old dependency" }],
+  };
+  const view = render(
+    <>
+      {renderSuggestedListFieldValue(
+        "task",
+        record,
+        "blockedByIds",
+        proposedIds,
+      )}
+    </>,
+    { wrapper: harness.wrapper },
+  );
+  for (const [index, id] of proposedIds.entries()) {
+    expect(
+      await screen.findByRole("link", {
+        name: `Synthetic dependency ${index + 1}`,
+      }),
+    ).toHaveAttribute("href", `/tasks/${id}`);
+  }
+  view.rerender(
+    <>{renderSuggestedListFieldValue("task", record, "blockedByIds", [])}</>,
+  );
+  expect(screen.getByText("—")).toBeVisible();
+  expect(screen.queryByRole("link")).toBeNull();
+  harness.dispose();
+});
 
 /**
  * Narrows a column's `cell` to a callable renderer taking only `{ row }` —
