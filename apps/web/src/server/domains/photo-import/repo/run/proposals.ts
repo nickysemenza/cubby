@@ -18,6 +18,8 @@ import {
 import { selectImageDescriptionEvidence } from "@cubby/schemas/image-processing";
 import { inventoryOwnershipMode } from "@cubby/schemas/inventory-ownership";
 import {
+  storedPhotoRunInput,
+  type PhotoRunDefaults,
   photoRunImageState,
   photoGroupReview,
   photoRunImageCommitReceipt,
@@ -100,6 +102,7 @@ import {
 } from "~/server/domains/photo-import/repo/run/photo-group-steps";
 import { getProductCoverImageUrlsByProductIds } from "~/server/domains/product/repo/crud";
 import { assertRunCapability } from "~/server/domains/purchase-import/repo/capabilities";
+import { recordChange } from "~/server/generic/changes/repo/change";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { currentMemberLedgerParty } from "~/server/http/member-login";
 
@@ -166,6 +169,7 @@ async function loadRun(db: Database, runShortcode: string) {
       shortcode: runTable.shortcode,
       purpose: runTable.purpose,
       status: runTable.status,
+      input: runTable.input,
     })
     .from(runTable)
     .where(eq(runTable.shortcode, runShortcodeSchema.parse(runShortcode)))
@@ -176,6 +180,7 @@ async function loadRun(db: Database, runShortcode: string) {
     id: runEntityId.parse(row.id),
     shortcode: runShortcodeSchema.parse(row.shortcode),
     status: runStatus.parse(row.status),
+    input: storedPhotoRunInput.parse(row.input ?? null),
   };
 }
 type LoadedRun = Awaited<ReturnType<typeof loadRun>>;
@@ -660,6 +665,63 @@ export async function listPhotoGroupProposals(
   return buildList(db, await loadRun(db, runShortcode));
 }
 
+export async function readPhotoRunDefaults(db: Database, publicId: string) {
+  return (await loadRun(db, publicId)).input?.defaults ?? null;
+}
+
+/** A batch destination fills missing receive decisions; member exceptions stay intact. */
+export async function setPhotoRunDefaults(
+  db: Database,
+  publicId: string,
+  defaults: PhotoRunDefaults,
+) {
+  return withTransactionDatabase(db, async (txDb) => {
+    const run = await loadRun(txDb, publicId);
+    const [locked] = await getDb(txDb)
+      .select({ input: runTable.input, status: runTable.status })
+      .from(runTable)
+      .where(eq(runTable.id, run.id))
+      .for("update");
+    if (!locked || !["running", "needs_review"].includes(locked.status))
+      throw new Error("This photo run is no longer open for review");
+    const locationId = defaults.locationId
+      ? await resolveOrThrow(txDb, "location", defaults.locationId)
+      : null;
+    const input = storedPhotoRunInput.parse(locked?.input ?? null) ?? {
+      kind: "photo_inventory" as const,
+      processor: null,
+      batches: [],
+    };
+    await getDb(txDb)
+      .update(runTable)
+      .set({ input: { ...input, defaults }, updatedAt: new Date() })
+      .where(eq(runTable.id, run.id));
+    if (locationId) {
+      const rows = await loadProposalRows(txDb, run.id);
+      for (const row of rows) {
+        // An explicit reference/count/historical choice or destination is never overwritten.
+        if (
+          row.state !== "proposed" ||
+          row.images.length === 0 ||
+          row.inventory ||
+          row.review?.stockIntent !== "receive"
+        )
+          continue;
+        await getDb(txDb)
+          .update(photoGroupProposal)
+          .set({
+            inventoryLocationId: locationId,
+            inventory: { quantity: 1, mode: "create" },
+            origin: "member",
+            updatedAt: new Date(),
+          })
+          .where(eq(photoGroupProposal.id, row.id));
+      }
+    }
+    await recordChange(txDb, { kind: "source", categories: ["run"] });
+  });
+}
+
 /** Review and lifecycle use the same current image evidence within one read. */
 export async function readPhotoRunReview(db: Database, runShortcode: string) {
   const run = await loadRun(db, runShortcode);
@@ -668,7 +730,7 @@ export async function readPhotoRunReview(db: Database, runShortcode: string) {
     processing,
     buildList(db, run, processing),
   ]);
-  return { images, review };
+  return { images, review, defaults: run.input?.defaults ?? null };
 }
 
 type ResolvedGroup = {
@@ -887,10 +949,14 @@ export async function proposePhotoGroups(
         );
     }
     const [locked] = await getDb(txDb)
-      .select({ dispatchEventId: runTable.dispatchEventId })
+      .select({
+        dispatchEventId: runTable.dispatchEventId,
+        input: runTable.input,
+      })
       .from(runTable)
       .where(eq(runTable.id, run.id))
       .for("update");
+    run.input = storedPhotoRunInput.parse(locked?.input ?? null);
     // Generation fence: a coordinator writes only for the dispatch generation
     // its delegation was signed with. Admitting a new upload batch replaces
     // that generation, so a superseded coordinator — even one still running
@@ -997,13 +1063,26 @@ export async function proposePhotoGroups(
             group.product.kind === "create"
               ? group.product.create.name
               : group.groupKey,
-          stockIntent: group.inventory ? "receive" : "evidence",
+          stockIntent: group.inventory
+            ? "receive"
+            : (run.input?.defaults?.stockIntent ?? "evidence"),
         }),
         unresolvedReason: concerns.join("\n") || null,
         candidateScopeImageIds: [...lineage],
         resolvedConcerns,
         confirmation: null,
       };
+      if (
+        group.review.stockIntent === "receive" &&
+        group.images.length > 0 &&
+        !group.inventory &&
+        run.input?.defaults?.locationId
+      )
+        group.inventory = {
+          locationId: run.input.defaults.locationId,
+          quantity: 1,
+          mode: "create",
+        };
       resolved.push(await resolveGroup(txDb, run, group, runImages.byCode));
     }
 

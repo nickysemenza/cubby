@@ -83,7 +83,7 @@ function derivePhotoRunLifecycle(
   // semantics, where a missing job never blocked.
   const inFlight = pending.filter((image) =>
     image.describe === null
-      ? run.input !== null
+      ? run.input?.processor != null
       : DESCRIPTION_IN_FLIGHT.has(image.describe),
   );
   const failedImageIds = pending
@@ -128,7 +128,7 @@ function derivePhotoRunLifecycle(
   return {
     processor,
     phase,
-    plannedImageCount: run.input
+    plannedImageCount: run.input?.processor
       ? run.input.batches.reduce((sum, batch) => sum + batch.imageCount, 0)
       : null,
     openBatchCount,
@@ -176,7 +176,7 @@ async function loadPhotoRun(db: Database, publicId: string) {
 
 /** One read of everything the lifecycle derives from. */
 export async function readPhotoRunSnapshot(db: Database, publicId: string) {
-  const [run, { images, review }] = await Promise.all([
+  const [run, { images, review, defaults }] = await Promise.all([
     loadPhotoRun(db, publicId),
     readPhotoRunReview(db, publicId),
   ]);
@@ -184,6 +184,7 @@ export async function readPhotoRunSnapshot(db: Database, publicId: string) {
     run,
     images,
     review,
+    defaults,
     lifecycle: derivePhotoRunLifecycle(run, images, review.proposals),
   };
 }
@@ -314,7 +315,7 @@ async function updatePhotoRunInput<T>(
 ): Promise<T> {
   for (let attempt = 0; attempt < 5; attempt += 1) {
     const run = await loadPhotoRun(db, publicId);
-    if (!run.input)
+    if (!run.input?.processor)
       throw new Error(
         `Photo run ${publicId} predates per-Run grouping choice; start a new run`,
       );

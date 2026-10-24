@@ -339,9 +339,13 @@ with nothing to report fold into one "N checks passing" line after the groups.
 
 Specialist workflows such as photo review, import, calendar, Gantt, camera, reconciliation, and matrices keep their task-specific controls inside the shared frame. Preserve status wording and raw diagnostics where the product contract requires them.
 
-Photo review keeps a Label media slot even without a label photo: show Missing,
-or Unreadable when analysis completed without readable text. Pending/failed/skipped
-analysis stays explicit. Do not repeat absence beside every form field; use
+Photo review shows item and label media together when both exist, without an empty
+label tile for items that have no label. Show Unreadable when a retained label
+completed analysis without readable text. Pending/failed/skipped analysis and skip
+reasons stay explicit. Ready identity details remain folded; genuine concerns or
+missing inventory destinations expand for attention. Run defaults collect storage
+location once; an explicit batch apply shows Product and stock effects and does not
+overwrite item exceptions. Do not repeat absence beside every form field; use
 Not shown on label only where a field comparison needs it. Evidence compares
 the current saved Product: comparison marks and name-derived values use saved
 fields too, independently of pending Product changes. New-product comparisons

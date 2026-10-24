@@ -33,7 +33,7 @@ export function photoGroupSteps(input: {
     : input.concern;
   const inventoryBlock =
     input.stockIntent === "receive" && input.inventoryMissing
-      ? "A receive decision requires Inventory and a live Location"
+      ? "Choose a storage location before adding this item to inventory"
       : null;
   const blockedReason = settled
     ? null
@@ -57,14 +57,14 @@ export function photoGroupSteps(input: {
     {
       key: "identity",
       label: input.kind === "existing" ? "Right one?" : "Details",
-      status: productBlock ? "blocked" : "needs_input",
+      status: productBlock ? "blocked" : identityBlock ? "needs_input" : "done",
       summary: identityBlock,
       action: input.kind === "create" ? "create" : "change",
       blockedReason: productBlock,
     },
     {
       key: "ownership",
-      label: "Own it now?",
+      label: "Inventory",
       status:
         productBlock || identityBlock
           ? "blocked"

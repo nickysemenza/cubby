@@ -12,6 +12,10 @@ review stop, and run identity used by the import-run agent, Codex, and Claude.
 A household member uploads photos through the Cubby iOS/macOS app (the
 `PhotoImportRunUploader` path) into a `photo_inventory` `Run`
 (`RUN-…`) — agents read the run and propose groups for human approval.
+`defaults` carries the capture intent (`receive`, `evidence`, or `historical`) and
+optional storage `locationId` from the native app. A new belongings import defaults
+to `receive`; uploading never receives stock. Read these shared defaults before
+proposing groups, and preserve explicit per-item exceptions.
 `ledgerPartyId` names the one member whose belongings the run is; a run never
 mixes household members' items, so every group's owner defaults to that same
 party. Free-text `notes` gives context such as a location by time window
@@ -121,14 +125,20 @@ and never blocks apply.
 Only `receive` includes `inventory`: a whole-number quantity, real location,
 and ownership. Omit both ownership fields to use the Run member, or pass
 `ownershipMode: "explicit"` and `ownerPartyId` (null means household stock).
-Never use the retired `person` value. Resolve the location from the Run's notes
-or ask; never invent a holding location. Notes that say where items are stored
+Never use the retired `person` value. Use the Run's structured default location first, then resolve per-item location
+exceptions from its notes. If owned items lack a location, keep `receive`, omit
+`inventory`, and leave destination selection to the shared run control on web;
+do not repeat the same location question for every item or invent a holding location. Notes that say where items are stored
 ("stored in bedroom closet") mean the pictured items are owned and kept there:
 propose `receive` into that Location for each item, not `evidence`, unless the
 photos or member say it is counted, historical, or only a reference. Historical or sold items and stock
 already counted attach evidence without receiving anything; historical intent
-does not record a sale. If receiving is intended but ownership/location is
-unresolved, keep an explicit `unresolvedReason` and ask before approval.
+does not record a sale. If ownership is genuinely ambiguous, retain an explicit `unresolvedReason`.
+A missing receive destination is already a server-projected blocker; the member
+chooses it once on web before approval. A Product with inventory evidence is not
+automatically another physical copy: use `counted` if these photos show the
+already-recorded item, and leave an explicit concern when that distinction
+cannot be resolved. Stock is added only for a proposed new physical item.
 Never downgrade an intended receive to `evidence` because an `inventory`
 payload was refused: the run page then defaults to reference-only and hides the
 destination. Member ownership needs no ownership fields, so drop
