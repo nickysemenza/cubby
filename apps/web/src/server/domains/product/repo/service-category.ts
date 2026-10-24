@@ -2,14 +2,11 @@ import { SERVICE_PRODUCT_FEATURES } from "@cubby/schemas/product-category-fields
 import { sql, type SQL } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 
-import { effectiveFieldSql } from "~/server/db/computed/effective-field";
+import { categoryFeatureInSql } from "~/server/domains/product-category/repo/category-feature";
 
-/** Use the same nearest-live-ancestor feature as the category summary. */
+/** Use the canonical category set, preserving nearest-live-ancestor decisions. */
 export const serviceCategorySql = (categoryId: SQL): SQL<boolean> =>
-  sql<boolean>`COALESCE(${effectiveFieldSql("productCategory", "feature", { id: categoryId })} IN (${sql.join(
-    SERVICE_PRODUCT_FEATURES.map((feature) => sql`${feature}`),
-    sql`, `,
-  )}), false)`;
+  categoryFeatureInSql(categoryId, SERVICE_PRODUCT_FEATURES);
 
 export const serviceProductIdSql = (id: SQL): SQL<boolean> =>
   sql<boolean>`COALESCE((SELECT ${serviceCategorySql(sql`service_product."categoryId"`)} FROM "Product" service_product WHERE service_product."id" = ${id} AND service_product."deletedAt" IS NULL), false)`;

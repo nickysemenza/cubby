@@ -3504,6 +3504,10 @@ ProductCategory's inherited `feature` also distinguishes service accounting:
 Bind Services on a category ancestor to cover utilities, insurance and similar
 categories; there is no per-Product service switch and category names do not
 control behavior. A child with its own different feature overrides the ancestor.
+Pricing, quantity and ownership SQL share `serviceCategorySql`, which delegates
+to the canonical `categoryFeatureInSql` set predicate. The declaration owns
+nearest live ancestors, depth and cycle guards; the Product predicate retains
+its native live-row check. No separate service membership catalog is stored.
 
 Actual Expenses retain their amounts and quantities (usage, seats or other
 source units). Service quantities do not accumulate acquired stock, establish
