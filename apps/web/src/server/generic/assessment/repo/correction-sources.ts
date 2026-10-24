@@ -7,7 +7,7 @@ import {
   suggestionCorrectionSource,
   suggestionCorrectionTarget,
   correctionAuthorityReceiptKinds,
-  retainedCorrectionEnrollmentFamily,
+  enrollSuggestionCorrectionsInput,
 } from "@cubby/schemas/suggestion-correction";
 import { CORRECTION_OUTCOME_RECEIPT_KIND } from "@cubby/schemas/suggestion-correction";
 import { and, asc, eq, gt, inArray, or, sql, type SQL } from "drizzle-orm";
@@ -401,11 +401,7 @@ export async function correctionTargetIds(
 /** Cursor advances over candidates, including refused or incomplete applications. */
 export async function retainedCorrectionEnrollmentPage(
   db: Database,
-  input: {
-    family: z.infer<typeof retainedCorrectionEnrollmentFamily>;
-    after: string | null;
-    limit: number;
-  },
+  input: Omit<z.infer<typeof enrollSuggestionCorrectionsInput>, "dryRun">,
 ) {
   const candidates = await getDb(db)
     .select({ id: feedback.id })
