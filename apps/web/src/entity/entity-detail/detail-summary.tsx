@@ -1,3 +1,4 @@
+import { classificationFieldRefusal } from "@cubby/schemas/classification-field-policy";
 import { entitySchema, type EntityRef } from "@cubby/schemas/entity";
 import type { DetailSummarySlot } from "@cubby/schemas/entity-detail-summary";
 import {
@@ -407,7 +408,12 @@ export function DetailSummary<E extends GenericDetailEntity>({
                         {field.label}
                       </dt>
                       <dd className="min-w-0 break-words">
-                        {absent || value === null
+                        {(absent || value === null) &&
+                        classificationFieldRefusal(
+                          entity,
+                          record,
+                          field.key,
+                        ) === null
                           ? "Not recorded"
                           : renderDetailFieldValue(entity, record, field)}
                       </dd>
