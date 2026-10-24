@@ -183,6 +183,7 @@ type Handler = {
     input: Review,
     automatic: AutomaticReview | null,
     preparedEmail: PreparedEmailRelevanceCorrection | null,
+    emailScope: EmailEvidenceWriteScope | null,
   ) => Promise<z.infer<typeof assessmentReviewOut>["applicationResult"] | void>;
 };
 /** Each family validates its own subject and uses its transaction-bound domain mutation. */
@@ -219,7 +220,17 @@ const assessmentFamilies = {
     target: assessmentProjectionTargets.email_relevance,
     transactionBound: false,
     actions: ["correct", "wrong", "uncertain"],
-    apply: async (db, context, state, _input, _automatic, preparedEmail) => {
+    apply: async (
+      db,
+      context,
+      state,
+      _input,
+      _automatic,
+      preparedEmail,
+      emailScope,
+    ) => {
+      if (!emailScope)
+        throw new Error("Email application requires its outer write scope");
       if (!preparedEmail || preparedEmail.emailId !== state.recordId)
         throw new Error("Email review requires its source-bound preparation");
       const { publishPreparedEmailRelevanceCorrection } =
@@ -228,6 +239,7 @@ const assessmentFamilies = {
         db,
         preparedEmail,
         context.actorContext,
+        emailScope,
       );
     },
   },
@@ -743,7 +755,10 @@ async function settleReview(
     const executeApplication = (
       preparedEmail: PreparedEmailRelevanceCorrection | null,
     ) => {
-      const apply = async (transactionDb: Database) => {
+      const apply = async (
+        transactionDb: Database,
+        applicationScope: EmailEvidenceWriteScope | null,
+      ) => {
         const outcome: z.infer<typeof assessmentReviewOut> = {
           assessmentId: prediction.id,
           feedbackId: event.id,
@@ -862,6 +877,7 @@ async function settleReview(
             input,
             automatic,
             preparedEmail,
+            applicationScope,
           );
           if (applicationResult) outcome.applicationResult = applicationResult;
           if (!family.transactionBound)
@@ -920,12 +936,16 @@ async function settleReview(
       return withEmailReviewBoundary(
         db,
         prediction,
-        (scopedDb) =>
-          "isolationLevel" in family && family.isolationLevel === "serializable"
-            ? withSnapshotWriteDatabase(scopedDb, apply, {
+        (scopedDb, scope) => {
+          const attempt = (transactionDb: Database) =>
+            apply(transactionDb, scope);
+          return "isolationLevel" in family &&
+            family.isolationLevel === "serializable"
+            ? withSnapshotWriteDatabase(scopedDb, attempt, {
                 isolationLevel: "serializable",
               })
-            : withTransactionDatabase(scopedDb, apply),
+            : withTransactionDatabase(scopedDb, attempt);
+        },
         emailScope,
       );
     };

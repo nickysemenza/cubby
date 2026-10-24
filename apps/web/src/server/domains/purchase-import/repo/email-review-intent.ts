@@ -204,13 +204,16 @@ async function reviewFrontier(
 export async function withEmailReviewBoundary<T>(
   db: Database,
   input: ReviewSubject,
-  action: (transactionDb: Database) => Promise<T>,
+  action: (
+    transactionDb: Database,
+    scope: EmailEvidenceWriteScope | null,
+  ) => Promise<T>,
   scope?: EmailEvidenceWriteScope,
 ): Promise<T> {
-  if (!relevantReview(input)) return action(db);
+  if (!relevantReview(input)) return action(db, null);
   if (scope !== undefined) {
     assertEmailEvidenceScope(db, scope);
-    return action(db);
+    return action(db, scope);
   }
   return withEmailEvidenceWrite(db, action);
 }

@@ -425,3 +425,20 @@ keep their existing transaction owners. Batch review continues item-by-item.
 This does not establish complete protecting-event coverage or enforce a prepared
 frontier against later intent; current-effect ownership and the remaining domain
 entry points are still required before Email propagation can be enabled.
+
+### Prepared relevance publication scope
+
+Prepared relevance publication requires a live Email evidence capability before
+its owner/account/Run/Email lock sequence; a transaction alone is insufficient.
+Direct member correction acquires the root scope after provider/storage
+preparation and passes the capability to publication. Shared review forwards its
+already acquired application capability. Neither path acquires a late gate in
+nested writers, performs provider work inside retryable publication, nor derives
+source-proof authority from the capability.
+
+Existing private preparation, account/routing freshness, canonical shared replay
+and reservation cleanup contracts remain in force. A capability from another or
+expired transaction refuses before evidence changes. Direct correction remains a
+protected local action, not a reusable shared root. Its durable initiating intent,
+complete protecting-event frontier and selected-effect ownership are still open
+prerequisites; this scope adoption does not enable Email propagation.

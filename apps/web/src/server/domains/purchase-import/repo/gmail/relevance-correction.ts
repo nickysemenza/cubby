@@ -19,7 +19,6 @@ import {
   getDb,
   notDeleted,
   withTransaction,
-  databaseForTransaction,
   isTransaction,
 } from "~/server/db/helpers";
 import { email as emailTable } from "~/server/db/schema";
@@ -27,6 +26,11 @@ import {
   lockMailAttachmentUpload,
   discardMailAttachmentUpload,
 } from "~/server/domains/mail/repo/mail-attachment-uploads";
+import {
+  assertEmailEvidenceScope,
+  withEmailEvidenceWrite,
+  type EmailEvidenceWriteScope,
+} from "~/server/domains/purchase-import/repo/email-evidence-write-scope";
 import { originalChecksum } from "~/server/domains/purchase-import/repo/gmail/checksum";
 import { normalizeMessage } from "~/server/domains/purchase-import/repo/gmail/normalize";
 import { captureGmailOriginal } from "~/server/domains/purchase-import/repo/gmail/original-capture";
@@ -373,12 +377,14 @@ export async function publishPreparedEmailRelevanceCorrection(
   db: Database,
   prepared: PreparedEmailRelevanceCorrection,
   actor: ActorContext,
+  scope: EmailEvidenceWriteScope,
 ): Promise<CorrectEmailRelevanceOut> {
   const tx = getDb(db);
   if (!isTransaction(tx))
     throw new Error(
       "Prepared Email correction publication requires a transaction",
     );
+  assertEmailEvidenceScope(db, scope);
   const details = verifiedPreparation(prepared);
   if (details.actorUserId !== actor.userId)
     throw new Error("Email correction preparation authority does not match");
@@ -498,11 +504,12 @@ export async function correctEmailRelevance(
 ): Promise<CorrectEmailRelevanceOut> {
   const prepared = await prepareEmailRelevanceCorrection(db, input, actor);
   return withEmailRelevancePreparation(db, prepared, (value) =>
-    withTransaction(db, (tx) =>
+    withEmailEvidenceWrite(db, (transactionDb, scope) =>
       publishPreparedEmailRelevanceCorrection(
-        databaseForTransaction(tx),
+        transactionDb,
         value,
         actor,
+        scope,
       ),
     ),
   );

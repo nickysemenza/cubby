@@ -37,6 +37,7 @@ import { ensureEmailAssessment } from "~/server/generic/assessment/repo/assessme
 import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
+import { withEmailEvidenceWrite } from "../email-evidence-write-scope";
 import { productionOrderMailAttachmentStorage } from "./attachment-storage";
 import { originalChecksum } from "./checksum";
 import { normalizeMessage } from "./normalize";
@@ -246,12 +247,8 @@ describe("member-only exact original relevance correction", () => {
     await replaceConnectedAccount();
     await expect(
       withEmailRelevancePreparation(ctx.db, prepared, (value) =>
-        withTransaction(ctx.db, (tx) =>
-          publishPreparedEmailRelevanceCorrection(
-            databaseForTransaction(tx),
-            value,
-            ctx.actor,
-          ),
+        withEmailEvidenceWrite(ctx.db, (tx, scope) =>
+          publishPreparedEmailRelevanceCorrection(tx, value, ctx.actor, scope),
         ),
       ),
     ).rejects.toThrow("identity changed during retrieval");
@@ -274,12 +271,8 @@ describe("member-only exact original relevance correction", () => {
       .where(eq(account.accountId, mailboxId));
     await expect(
       withEmailRelevancePreparation(ctx.db, prepared, (value) =>
-        withTransaction(ctx.db, (tx) =>
-          publishPreparedEmailRelevanceCorrection(
-            databaseForTransaction(tx),
-            value,
-            ctx.actor,
-          ),
+        withEmailEvidenceWrite(ctx.db, (tx, scope) =>
+          publishPreparedEmailRelevanceCorrection(tx, value, ctx.actor, scope),
         ),
       ),
     ).resolves.toMatchObject({
@@ -358,12 +351,8 @@ describe("member-only exact original relevance correction", () => {
       .from(emailClassificationObservation);
     await expect(
       withEmailRelevancePreparation(ctx.db, prepared, (value) =>
-        withTransaction(ctx.db, (tx) =>
-          publishPreparedEmailRelevanceCorrection(
-            databaseForTransaction(tx),
-            value,
-            ctx.actor,
-          ),
+        withEmailEvidenceWrite(ctx.db, (tx, scope) =>
+          publishPreparedEmailRelevanceCorrection(tx, value, ctx.actor, scope),
         ),
       ),
     ).rejects.toThrow(
@@ -567,20 +556,17 @@ describe("member-only exact original relevance correction", () => {
       },
     ]);
     await expect(
-      withTransaction(ctx.db, (tx) =>
+      withEmailEvidenceWrite(ctx.db, (tx, scope) =>
         publishPreparedEmailRelevanceCorrection(
-          databaseForTransaction(tx),
+          tx,
           reconstructed,
           ctx.actor,
+          scope,
         ),
       ),
     ).rejects.toThrow("preparation authority does not match");
-    await withTransaction(ctx.db, (tx) =>
-      publishPreparedEmailRelevanceCorrection(
-        databaseForTransaction(tx),
-        prepared,
-        ctx.actor,
-      ),
+    await withEmailEvidenceWrite(ctx.db, (tx, scope) =>
+      publishPreparedEmailRelevanceCorrection(tx, prepared, ctx.actor, scope),
     );
     expect(
       (await getDb(ctx.db).select().from(orderMail))[0]?.content,
@@ -644,6 +630,31 @@ describe("member-only exact original relevance correction", () => {
       await getDb(ctx.db).select().from(imageProcessingOrphan),
     ).toHaveLength(2);
   });
+  it("refuses a correction capability from another transaction before changing evidence", async () => {
+    const f = await fixture();
+    const prepared = await prepareEmailRelevanceCorrection(
+      ctx.db,
+      f.input,
+      ctx.actor,
+    );
+    const before = await evidence();
+    await withEmailEvidenceWrite(ctx.db, async (_db, scope) => {
+      await expect(
+        withTransaction(ctx.db, (tx) =>
+          publishPreparedEmailRelevanceCorrection(
+            databaseForTransaction(tx),
+            prepared,
+            ctx.actor,
+            scope,
+          ),
+        ),
+      ).rejects.toThrow("not active for this transaction");
+    });
+    expect(await evidence()).toEqual(before);
+    await discardPreparedEmailRelevanceCorrection(ctx.db, prepared);
+    expect(f.objects.size).toBe(0);
+  });
+
   it("publishes prepared evidence with provider and storage PUT tripwires", async () => {
     const f = await fixture();
     const prepared = await prepareEmailRelevanceCorrection(
@@ -658,12 +669,8 @@ describe("member-only exact original relevance correction", () => {
       new Error("Unexpected publication attachment IO"),
     );
     f.put.mockRejectedValue(new Error("Unexpected publication storage IO"));
-    await withTransaction(ctx.db, (tx) =>
-      publishPreparedEmailRelevanceCorrection(
-        databaseForTransaction(tx),
-        prepared,
-        ctx.actor,
-      ),
+    await withEmailEvidenceWrite(ctx.db, (tx, scope) =>
+      publishPreparedEmailRelevanceCorrection(tx, prepared, ctx.actor, scope),
     );
     await discardPreparedEmailRelevanceCorrection(ctx.db, prepared);
     expect(f.getMessage).toHaveBeenCalledTimes(1);
@@ -683,12 +690,8 @@ describe("member-only exact original relevance correction", () => {
     expect(f.objects.size).toBe(0);
     const before = await evidence();
     await expect(
-      withTransaction(ctx.db, (tx) =>
-        publishPreparedEmailRelevanceCorrection(
-          databaseForTransaction(tx),
-          prepared,
-          ctx.actor,
-        ),
+      withEmailEvidenceWrite(ctx.db, (tx, scope) =>
+        publishPreparedEmailRelevanceCorrection(tx, prepared, ctx.actor, scope),
       ),
     ).rejects.toThrow("reservation expired");
     expect(await evidence()).toEqual(before);
@@ -705,11 +708,12 @@ describe("member-only exact original relevance correction", () => {
     );
     await expect(
       withEmailRelevancePreparation(ctx.db, prepared, (prepared) =>
-        withTransaction(ctx.db, async (tx) => {
+        withEmailEvidenceWrite(ctx.db, async (tx, scope) => {
           await publishPreparedEmailRelevanceCorrection(
-            databaseForTransaction(tx),
+            tx,
             prepared,
             ctx.actor,
+            scope,
           );
           throw new Error("Synthetic caller receipt failure");
         }),
