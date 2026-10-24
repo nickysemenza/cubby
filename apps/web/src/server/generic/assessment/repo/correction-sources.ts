@@ -181,6 +181,21 @@ export async function readConfirmedCorrection(
   return source ?? null;
 }
 
+/** Identical image bytes bound candidate authority; live confirmation is checked by the image domain. */
+export async function readImageCorrectionSources(
+  db: Database,
+  contentHash: string,
+) {
+  return confirmedSources(
+    db,
+    and(
+      eq(assessment.family, "image_description"),
+      sql`${assessment.subject}->>${assessmentSubjects.image_description.keyof().enum.contentHash} = ${contentHash}`,
+      eq(assessment.fingerprint, contentHash),
+    ),
+  );
+}
+
 /** Scope discovery to the field; only hash-proven identities gain normalized aliases. */
 export async function resolveFieldCorrectionIdentities(
   db: Database,

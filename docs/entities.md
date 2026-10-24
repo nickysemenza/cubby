@@ -3793,6 +3793,18 @@ Ordinary automatic field additions still require the existing 95% policy and
 current-evidence/member-intent checks; propagated corrections do not invent a
 model confidence or lower that threshold.
 
+Image correction authority is text-only and scoped to identical retained content
+hashes. Its provider-free resolver admits only successful command-bound member
+corrections whose live Image, immutable subject/fingerprint and current applied
+confirmation still agree. A replacement confirmation retires the prior holder's
+authority. Distinct current roots with different text remain a conflict; neither
+timestamp order nor model confidence selects a winner. History-only grades,
+replaced/deleted content and confirmations without a matching application receipt
+do not establish reusable authority. This resolver does not apply a correction or
+replace an image analysis: claims, nutrition and cutout eligibility remain model
+outputs. Image repair/enrollment and consumer provenance remain held until their
+domain application contract is implemented.
+
 ### Automatic semantic classification
 
 Automatic semantic classification uses the same declared Decision features:
