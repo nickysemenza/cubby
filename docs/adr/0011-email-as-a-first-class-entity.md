@@ -106,6 +106,9 @@ for import while disabled; explicit selected imports remain available. Automatic
 admission locks and rechecks the setting before claiming sources. Disabling the
 switch does not cancel, pause or discard existing Runs or their progress.
 Classification completion queues catch-up; the switch still owns admission.
+A full 50-source admission page commits its next catch-up Job with the source
+claims, draining larger retained backlogs without waiting for another app open.
+A switch-off race that admits nothing creates no continuation.
 
 Pi/Luna/Sol authorization remains separate. Classification and import are
 separate operations, allowing members to assess Relevance before import.

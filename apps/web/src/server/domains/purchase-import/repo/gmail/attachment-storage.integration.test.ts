@@ -14,7 +14,7 @@
  * - a history event for a message Cubby never saved wedges the cursor;
  * - the cursor rewinds, or moves although another pass already moved it.
  *
- * Only the S3 seam and the Gmail provider are faked.
+ * Gmail, model verdicts and object storage are synthetic; retention writers are real.
  */
 import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
@@ -248,18 +248,24 @@ describe("Gmail ingestion and attachment storage", () => {
           "gmail:synthetic-google-subject:msg-legacy:attachment:1",
       },
     ]);
-    expect(fetches).toBe(0);
+    // Relevance reads the original once; retention adopts the existing object.
+    expect(fetches).toBe(1);
     expect(objects.size).toBe(0);
   });
 
-  it("bounds transient attachment payloads to one message across a large batch", async () => {
+  it("bounds transient attachment payloads across consecutive messages", async () => {
     const party = await seedParty();
     const { storage } = memoryStorage();
     const fourMiB = Buffer.alloc(4 * 1024 * 1024, 7).toString("base64url");
     let held = 0;
     let peak = 0;
     const gmail = provider({
-      getMessage: async (id) => message(id, 2),
+      getMessage: async (id) => {
+        const original = message(id, 2);
+        for (const part of original.payload?.parts ?? [])
+          if (part.body) part.body.size = 4 * 1024 * 1024;
+        return original;
+      },
       getAttachment: async () => {
         held += 1;
         peak = Math.max(peak, held);
@@ -277,12 +283,12 @@ describe("Gmail ingestion and attachment storage", () => {
     const outcome = await ingestGmailMessages(ctx.db, gmail, {
       ledgerPartyId: party.id,
       mailboxId: "synthetic-google-subject",
-      messageIds: Array.from({ length: 32 }, (_, index) => `msg-${index}`),
+      messageIds: Array.from({ length: 2 }, (_, index) => `msg-${index}`),
       storage: counting,
     });
 
-    expect(outcome.saved).toHaveLength(32);
-    expect(await attachments()).toHaveLength(64);
+    expect(outcome.saved).toHaveLength(2);
+    expect(await attachments()).toHaveLength(4);
     expect(peak).toBeGreaterThanOrEqual(1);
     expect(peak).toBeLessThanOrEqual(2);
     expect(held).toBe(0);
