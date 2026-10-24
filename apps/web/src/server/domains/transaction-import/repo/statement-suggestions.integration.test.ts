@@ -25,6 +25,7 @@ import { z } from "zod";
 
 import { AiBudgetExhaustedError } from "~/server/ai/budget";
 import type { DecisionPort } from "~/server/ai/decision-model";
+import * as decisionModel from "~/server/ai/decision-model";
 import { coordinatedGatewayRequest } from "~/server/ai/gateway-egress-client";
 import { activateAiRefresh } from "~/server/ai/repo/ai-refresh";
 import * as cfEnv from "~/server/cf-env";
@@ -3177,6 +3178,242 @@ describe("statement Transaction suggestions", () => {
     },
   );
 
+  // The allowance must bound prompt preparation too, while keeping the exact
+  // candidate roster and the earliest untouched charge available to replay.
+  it("bounds saturated label preparation and replays the untouched suffix", async () => {
+    const account = (await card(ctx)).output;
+    await createRepoIdentity(ctx, "financialTransaction", {
+      accountId: account.id,
+      kind: "purchase",
+      status: "posted",
+      amount: 42.5,
+      postedDate: "2026-05-05",
+      rawDescription: "SYNTHETIC BOUNDED CANDIDATE",
+      sourceRefs: [],
+    });
+    await record(ctx, [
+      rowInput({
+        providerTransactionId: "synthetic-bounded-first",
+        rawDescription: "SYNTHETIC BOUNDED FIRST",
+      }),
+      rowInput({
+        providerTransactionId: "synthetic-bounded-suffix",
+        rawDescription: "SYNTHETIC BOUNDED SUFFIX",
+      }),
+    ]);
+    await generate(ctx);
+    const runId = await ensureRun(ctx.db, ctx.actor, { purpose: "background" });
+    const before = await statementSuggestionsRepo.suggestionsNeedingLabels(
+      ctx.db,
+      2,
+    );
+    const seen: string[] = [];
+    const answer = answering({ kind: "purchase", counterparty: "business" });
+    const port: DecisionPort = async (request) => {
+      seen.push(JSON.stringify(request));
+      return answer(request);
+    };
+    const fits = vi.spyOn(decisionModel, "decisionChoiceFitsContext");
+    try {
+      const first = await labelStatementSuggestions(ctx.db, {
+        runId,
+        port,
+        decisionLimit: 1,
+      });
+      expect(first).toMatchObject({
+        completed: 0,
+        failed: [],
+        labels: { generated: 1 },
+      });
+      expect(fits).toHaveBeenCalledTimes(1);
+      expect(first.next).toMatchObject({
+        id: before[0]!.cursorId,
+        inclusive: true,
+      });
+      const partial = await statementSuggestionsRepo.suggestionsNeedingLabels(
+        ctx.db,
+        2,
+      );
+      expect(partial[0]!.checkpoint!.judgment.candidates).toMatchObject([
+        { label: { same: "same", confidence: "high" } },
+      ]);
+      expect(partial[1]!.checkpoint).toBeNull();
+      expect(partial[1]!.judgment).toEqual(before[1]!.judgment);
+      fits.mockClear();
+      const second = await labelStatementSuggestions(ctx.db, {
+        runId,
+        port,
+        after: first.next,
+        decisionLimit: 3,
+      });
+      expect(second).toMatchObject({
+        completed: 1,
+        labelled: 1,
+        failed: [],
+        labels: { generated: 3, reused: 1 },
+      });
+      expect(fits).toHaveBeenCalledTimes(2);
+      expect(second.next).toMatchObject({
+        id: before[1]!.cursorId,
+        inclusive: true,
+      });
+      const suffix = await statementSuggestionsRepo.suggestionsNeedingLabels(
+        ctx.db,
+        2,
+      );
+      expect(suffix).toHaveLength(1);
+      expect(suffix[0]!.checkpoint).toBeNull();
+      expect(suffix[0]!.judgment.candidates).toHaveLength(1);
+      const last = await labelStatementSuggestions(ctx.db, {
+        runId,
+        port,
+        after: second.next,
+        decisionLimit: 4,
+      });
+      expect(last).toMatchObject({ completed: 1, failed: [], next: null });
+      expect(seen).toHaveLength(6);
+      expect(new Set(seen).size).toBe(6);
+      expect(
+        await labelStatementSuggestions(ctx.db, { runId, port }),
+      ).toMatchObject({
+        completed: 0,
+        labelled: 0,
+        failed: [],
+        next: null,
+      });
+      expect(seen).toHaveLength(6);
+    } finally {
+      fits.mockRestore();
+    }
+  });
+
+  it("reuses checkpoint-only labels after admission is exhausted", async () => {
+    await card(ctx);
+    await record(ctx, [
+      rowInput({ providerTransactionId: "synthetic-admission-first" }),
+      rowInput({ providerTransactionId: "synthetic-checkpoint-only" }),
+    ]);
+    await generate(ctx);
+    const before = await statementSuggestionsRepo.suggestionsNeedingLabels(
+      ctx.db,
+      2,
+    );
+    const saved = before[1]!;
+    const charge = assessmentSubjects.statement_transaction.parse(
+      saved.subject,
+    );
+    const [proposal] = await buildChargeProposals(ctx.db, [charge]);
+    const judgment = structuredClone(proposal!.judgment);
+    judgment.create!.votes.label = "other";
+    judgment.create!.counterparty.label = "business";
+    await statementSuggestionsRepo.recordStatementLabelCheckpoint(ctx.db, {
+      charge,
+      evidenceFingerprint: saved.evidenceFingerprint,
+      checkpoint: {
+        revision: STATEMENT_LABEL_REVISION,
+        model: null,
+        models: [],
+        judgment,
+        kind: true,
+        counterparty: true,
+        spending: true,
+      },
+    });
+    const outcome = await labelStatementSuggestions(ctx.db, {
+      runId: await ensureRun(ctx.db, ctx.actor, { purpose: "background" }),
+      port: answering({ kind: "other", counterparty: "business" }),
+      decisionLimit: 1,
+    });
+    expect(outcome).toMatchObject({
+      labelled: 1,
+      completed: 0,
+      failed: [],
+      labels: { reused: 3 },
+    });
+    expect(outcome.next).toMatchObject({
+      id: before[0]!.cursorId,
+      inclusive: true,
+    });
+    const resumed = await labelStatementSuggestions(ctx.db, {
+      runId: await ensureRun(ctx.db, ctx.actor, { purpose: "background" }),
+      port: answering({ kind: "other", counterparty: "business" }),
+      after: outcome.next,
+    });
+    expect(resumed).toMatchObject({ completed: 2, failed: [], next: null });
+  });
+
+  it("keeps context-overflow defaults free before the last admitted question", async () => {
+    await card(ctx);
+    await record(ctx, [
+      rowInput({
+        providerTransactionId: "synthetic-overflow-charge",
+        rawDescription: "synthetic oversized evidence ".repeat(40_000),
+      }),
+    ]);
+    await generate(ctx);
+    await record(
+      ctx,
+      [rowInput({ providerTransactionId: "synthetic-fitting-charge" })],
+      {
+        fingerprint: "synthetic-fitting-import",
+      },
+    );
+    await generate(ctx);
+    const before = await statementSuggestionsRepo.suggestionsNeedingLabels(
+      ctx.db,
+      2,
+    );
+    const overflowing = before.find(
+      (row) => (row.judgment.create?.rawDescription?.length ?? 0) > 32_000,
+    );
+    expect(overflowing).toBeDefined();
+    if (!overflowing) return;
+    await statementSuggestionsRepo.recordStatementLabelCheckpoint(ctx.db, {
+      charge: assessmentSubjects.statement_transaction.parse(
+        overflowing.subject,
+      ),
+      evidenceFingerprint: overflowing.evidenceFingerprint,
+      checkpoint: {
+        revision: STATEMENT_LABEL_REVISION,
+        model: null,
+        models: [],
+        judgment: overflowing.judgment,
+        kind: false,
+        counterparty: false,
+        spending: true,
+      },
+    });
+    // Freeze historical cursor order so the real overflow precedes fitting work.
+    await getDb(ctx.db)
+      .update(assessmentState)
+      .set({ createdAt: new Date("2026-01-01T00:00:00Z") })
+      .where(eq(assessmentState.id, overflowing.id));
+    const fits = vi.spyOn(decisionModel, "decisionChoiceFitsContext");
+    const port = vi.fn(answering({ kind: "other", counterparty: "business" }));
+    try {
+      const outcome = await labelStatementSuggestions(ctx.db, {
+        runId: await ensureRun(ctx.db, ctx.actor, { purpose: "background" }),
+        port,
+        decisionLimit: 1,
+      });
+      expect(fits.mock.results.some((result) => result.value === false)).toBe(
+        true,
+      );
+      expect(port).toHaveBeenCalledTimes(1);
+      expect(outcome.failed).toEqual([]);
+      expect(outcome.labels).toMatchObject({ generated: 3, reused: 1 });
+      const saved = await statementSuggestionsRepo.suggestionsNeedingLabels(
+        ctx.db,
+        2,
+      );
+      expect(saved.map((row) => row.checkpoint)).toMatchObject([
+        { kind: true, counterparty: false },
+      ]);
+    } finally {
+      fits.mockRestore();
+    }
+  });
+
   it("does not persist empty checkpoints when no label questions are admitted", async () => {
     await card(ctx);
     await record(ctx, [rowInput()]);
@@ -3185,11 +3422,18 @@ describe("statement Transaction suggestions", () => {
     const port: DecisionPort = async () => {
       throw new Error("A zero-question budget must not admit model work");
     };
-    const normal = await labelStatementSuggestions(ctx.db, {
-      runId,
-      port,
-      decisionLimit: 0,
-    });
+    const fits = vi.spyOn(decisionModel, "decisionChoiceFitsContext");
+    let normal: Awaited<ReturnType<typeof labelStatementSuggestions>>;
+    try {
+      normal = await labelStatementSuggestions(ctx.db, {
+        runId,
+        port,
+        decisionLimit: 0,
+      });
+      expect(fits).not.toHaveBeenCalled();
+    } finally {
+      fits.mockRestore();
+    }
     expect(normal).toMatchObject({
       labelled: 0,
       completed: 0,
