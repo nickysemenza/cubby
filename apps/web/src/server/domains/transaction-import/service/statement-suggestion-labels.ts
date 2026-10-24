@@ -479,6 +479,7 @@ async function completeNoActionTargets(
     failedCharges: ReadonlySet<string>;
     completed: Set<string>;
     unfinished: Set<string>;
+    scope?: StatementSuggestionScope;
   },
 ) {
   const window = [];
@@ -503,7 +504,11 @@ async function completeNoActionTargets(
     window.push({ assessmentId, charge: next.charge, evidenceFingerprint });
     positions.push(index);
   }
-  const settled = await completeNoActionStatementPrefix(db, window);
+  const settled = await completeNoActionStatementPrefix(
+    db,
+    window,
+    input.scope,
+  );
   const through = settled ? positions[settled - 1]! + 1 : 0;
   for (const next of input.targets.slice(0, through)) {
     const key = chargeId(next.charge);
@@ -540,8 +545,7 @@ async function applyPublishedStatementLabels(
   // Model work may finish out of order; effects admit only the original
   // ready prefix. Later publications keep their receipts for durable resume.
   const applied = new Set<string>();
-  const settledReceipts: string[] = [];
-  const settledCharges: string[] = [];
+  const settlementTargets: (typeof targets)[number][] = [];
   const rebuild = new Set<string>();
   // A prior-round completion is resolved unless changed evidence required publication again.
   const awaitsPublication = (key: string) =>
@@ -571,7 +575,8 @@ async function applyPublishedStatementLabels(
     }
     try {
       // Import-scoped application regenerates first and may introduce rules.
-      // Only an unscoped, freshly locked no-rule prefix can bypass admission.
+      // A freshly locked no-rule prefix can bypass rule admission without
+      // import authority; its receipt completion still enforces the full scope.
       const settled = importId
         ? 0
         : await completeNoActionTargets(db, {
@@ -585,6 +590,7 @@ async function applyPublishedStatementLabels(
             failedCharges,
             completed,
             unfinished,
+            scope,
           });
       if (settled) {
         targetIndex += settled - 1;
@@ -614,10 +620,7 @@ async function applyPublishedStatementLabels(
       }
       // Newly published rows replaced the selected row; clear the active
       // receipt only after this charge's ordered application has settled.
-      settledReceipts.push(receipts.get(key)!);
-      settledCharges.push(key);
-      target.row.applicationPending = false;
-      unfinished.delete(target.row.cursorId);
+      settlementTargets.push(target);
       if (outcome.applied.length) applied.add(key);
     } catch (error) {
       fail(target.charge, error);
@@ -625,9 +628,25 @@ async function applyPublishedStatementLabels(
       applicationBlocked = true;
     }
   }
-  await completeStatementApplications(db, settledReceipts);
-  for (const key of settledCharges) completed.add(key);
-  return { applied, rebuild };
+  const settled = new Set(
+    await completeStatementApplications(
+      db,
+      settlementTargets.map((target) => receipts.get(chargeId(target.charge))!),
+      scope,
+    ),
+  );
+  const excluded = new Set<string>();
+  for (const target of settlementTargets) {
+    const key = chargeId(target.charge);
+    if (!settled.has(receipts.get(key)!)) {
+      excluded.add(key);
+      continue;
+    }
+    completed.add(key);
+    target.row.applicationPending = false;
+    unfinished.delete(target.row.cursorId);
+  }
+  return { applied, rebuild, excluded };
 }
 
 /**
@@ -1015,6 +1034,7 @@ async function runStatementLabelBatch(
             charge: current.charge,
             evidenceFingerprint: target.expected,
             checkpoint: result.checkpoint,
+            scope: input.scope,
           };
           const retainProgress = async () => {
             // A deferred/zero-budget charge has no new answers to persist.
@@ -1024,8 +1044,13 @@ async function runStatementLabelBatch(
               db,
               checkpointInput,
             );
-            if (saved === "settled") {
+            if (saved === "settled" || saved === "out_of_scope") {
               skipped.add(chargeId(current.charge));
+              if (saved === "out_of_scope") {
+                skippedIds.push(target.row.id);
+                unfinished.delete(target.row.cursorId);
+                stale++;
+              }
               return false;
             }
             if (saved === "moved")
@@ -1103,6 +1128,7 @@ async function runStatementLabelBatch(
       publishCompleteStatementLabels(
         db,
         complete.map((item) => item.input),
+        input.scope,
       ),
     );
     for (const item of complete) {
@@ -1116,6 +1142,11 @@ async function runStatementLabelBatch(
         if (!outcome) {
           skipped.add(key);
           unfinished.delete(target.row.cursorId);
+          const result = outcomes.get(key);
+          if (result?.kind === "resolved" && result.reason === "out_of_scope") {
+            skippedIds.push(target.row.id);
+            stale++;
+          }
           continue;
         }
         if (outcome.origin === "published") labelled.add(key);
@@ -1129,22 +1160,32 @@ async function runStatementLabelBatch(
       }
     }
     await admitTargets();
-    const { applied, rebuild } = await time("statement_application", () =>
-      applyPublishedStatementLabels(db, {
-        targets,
-        receipts,
-        published,
-        skipped,
-        failedCharges,
-        completed,
-        unfinished,
-        scope: input.scope,
-        reconsidered: new Set(
-          ready.map(({ current }) => chargeId(current.charge)),
-        ),
-        fail,
-      }),
+    const { applied, rebuild, excluded } = await time(
+      "statement_application",
+      () =>
+        applyPublishedStatementLabels(db, {
+          targets,
+          receipts,
+          published,
+          skipped,
+          failedCharges,
+          completed,
+          unfinished,
+          scope: input.scope,
+          reconsidered: new Set(
+            ready.map(({ current }) => chargeId(current.charge)),
+          ),
+          fail,
+        }),
     );
+    for (const target of targets) {
+      const key = chargeId(target.charge);
+      if (!excluded.has(key)) continue;
+      skipped.add(key);
+      skippedIds.push(target.row.id);
+      unfinished.delete(target.row.cursorId);
+      stale++;
+    }
     if (rebuild.size && round === MAX_LABEL_ROUNDS - 1) {
       const remaining = targets.filter((target) =>
         rebuild.has(chargeId(target.charge)),

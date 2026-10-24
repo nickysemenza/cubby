@@ -45,6 +45,7 @@ import {
   runAfterCommit,
   unwrapDb,
   withTransactionDatabase,
+  withSnapshotWriteDatabase,
 } from "~/server/db/helpers";
 import { assessmentState, financialTransaction } from "~/server/db/schema";
 import {
@@ -1871,21 +1872,39 @@ export type StatementLabelPublicationResult =
         applicationOrder: z.infer<typeof statementApplicationOrder> | null;
       };
     }
-  | { kind: "resolved"; reason: Exclude<PublishOutcome, "published"> }
+  | {
+      kind: "resolved";
+      reason: Exclude<PublishOutcome, "published"> | "out_of_scope";
+    }
   | { kind: "failed"; error: unknown };
 
 /** New writes and recovery use the same locks, evidence fences and receipt owner. */
 async function publishCompleteLabelBatch(
   db: Database,
   entries: readonly CompleteStatementLabelPublication[],
+  scope?: StatementSuggestionScope,
 ): Promise<Map<string, StatementLabelPublicationResult>> {
-  return withTransactionDatabase(db, async (tx) => {
+  const publish = async (tx: Database) => {
     await assertWorkflowEffect(tx);
     const { charges, prior, current } = await lockChargePublicationInputs(
       tx,
       entries.map((entry) => entry.proposal),
     );
     const outcomes = new Map<string, StatementLabelPublicationResult>();
+    const scopedIds = scope
+      ? await statementLabelTargetsInScope(
+          tx,
+          scope,
+          [...prior.values()].flatMap((history) =>
+            history
+              .filter(
+                (row) =>
+                  row.active && row.status === suggestionStatus.enum.pending,
+              )
+              .map((row) => row.id),
+          ),
+        )
+      : null;
     const publications: Array<{
       entry: CompleteStatementLabelPublication;
       history: ChargePublicationHistory[];
@@ -1896,6 +1915,19 @@ async function publishCompleteLabelBatch(
       const { proposal } = entry;
       const id = chargeId(proposal.charge);
       const history = prior.get(id) ?? [];
+      // Check the live resolver before publication and receipt recovery, not
+      // merely the account retained on the previously admitted Assessment.
+      const pending = history.filter(
+        (row) => row.active && row.status === suggestionStatus.enum.pending,
+      );
+      if (
+        scopedIds &&
+        pending.length &&
+        !pending.some((row) => scopedIds.has(row.id))
+      ) {
+        outcomes.set(id, { kind: "resolved", reason: "out_of_scope" });
+        continue;
+      }
       const checkpoint = statementLabelCheckpoint.parse(entry.checkpoint);
       if (
         checkpoint.revision !== STATEMENT_LABEL_REVISION ||
@@ -2074,13 +2106,17 @@ async function publishCompleteLabelBatch(
       assessmentIds: retirementIds,
     });
     return outcomes;
-  });
+  };
+  return scope
+    ? withSnapshotWriteDatabase(db, publish, { isolationLevel: "serializable" })
+    : withTransactionDatabase(db, publish);
 }
 
 /** Isolate failed entries without replaying a committed publication as a new write. */
 export async function publishCompleteStatementLabels(
   db: Database,
   entries: readonly CompleteStatementLabelPublication[],
+  scope?: StatementSuggestionScope,
 ): Promise<Map<string, StatementLabelPublicationResult>> {
   if (
     new Set(entries.map((entry) => chargeId(entry.proposal.charge))).size !==
@@ -2098,7 +2134,11 @@ export async function publishCompleteStatementLabels(
     STATEMENT_PUBLISH_CONCURRENCY,
     async (batch) => {
       try {
-        for (const [id, outcome] of await publishCompleteLabelBatch(db, batch))
+        for (const [id, outcome] of await publishCompleteLabelBatch(
+          db,
+          batch,
+          scope,
+        ))
           outcomes.set(id, outcome);
         return;
       } catch (error) {
@@ -2110,9 +2150,11 @@ export async function publishCompleteStatementLabels(
       for (const entry of batch) {
         const id = chargeId(entry.proposal.charge);
         try {
-          for (const [key, outcome] of await publishCompleteLabelBatch(db, [
-            entry,
-          ]))
+          for (const [key, outcome] of await publishCompleteLabelBatch(
+            db,
+            [entry],
+            scope,
+          ))
             outcomes.set(key, outcome);
         } catch (error) {
           if (isWorkflowInterrupted(error)) throw error;
@@ -2695,15 +2737,37 @@ export async function recordStatementLabelCheckpoint(
     charge: ChargeRef;
     evidenceFingerprint: string;
     checkpoint: StatementLabelCheckpoint;
+    scope?: StatementSuggestionScope;
   },
-): Promise<"saved" | "settled" | "moved"> {
+): Promise<"saved" | "settled" | "moved" | "out_of_scope"> {
   const checkpoint = statementLabelCheckpoint.parse(input.checkpoint);
-  return withTransactionDatabase(db, async (tx) => {
+  const save = async (
+    tx: Database,
+  ): Promise<"saved" | "settled" | "moved" | "out_of_scope"> => {
     const owner = currentJobExecution();
     const progress = owner
       ? await lockJobProgress(tx, owner.claim)
       : async () => {};
     await assertWorkflowEffect(tx);
+    if (input.scope) {
+      const { rows } = await unwrapDb(tx).execute<{ id: string }>(sql`
+        SELECT s.id FROM "AssessmentState" s WHERE ${pendingSuggestion()}
+          AND ${suggestionField("source")} = ${input.charge.source}
+          AND ${suggestionField("chargeKey")} = ${input.charge.chargeKey}
+          AND ${suggestionField("evidenceFingerprint")} = ${input.evidenceFingerprint}
+      `);
+      if (
+        rows.length &&
+        !(
+          await statementLabelTargetsInScope(
+            tx,
+            input.scope,
+            rows.map((row) => row.id),
+          )
+        ).size
+      )
+        return "out_of_scope";
+    }
     let gainedAnswers = false;
     const answerIds = (value: StatementLabelCheckpoint | null) =>
       new Set([
@@ -2808,20 +2872,31 @@ export async function recordStatementLabelCheckpoint(
     LIMIT 1
   `);
     return settled.length ? "settled" : "moved";
-  });
+  };
+  return input.scope
+    ? withSnapshotWriteDatabase(db, save, { isolationLevel: "serializable" })
+    : withTransactionDatabase(db, save);
 }
 
 /** Clear only the receipt whose application settled; a replacement owns its own receipt. */
 export async function completeStatementApplications(
   db: Database,
   assessmentIds: readonly string[],
+  scope?: StatementSuggestionScope,
 ) {
-  if (!assessmentIds.length) return;
-  await withTransactionDatabase(db, async (tx) => {
+  if (!assessmentIds.length) return [];
+  const complete = async (tx: Database) => {
     await assertWorkflowEffect(tx);
+    // Completion mutates durable receipt/cursor state even when no financial
+    // rule applied. Its write admission must retain the original selection.
+    const scoped = scope
+      ? await statementLabelTargetsInScope(tx, scope, assessmentIds)
+      : null;
+    const admitted = assessmentIds.filter((id) => !scoped || scoped.has(id));
+    if (!admitted.length) return [];
     await transitionAssessmentStates(
       tx,
-      inArray(assessmentState.id, [...assessmentIds]),
+      inArray(assessmentState.id, admitted),
       (row) => {
         const {
           applicationPending: _pending,
@@ -2832,13 +2907,19 @@ export async function completeStatementApplications(
       },
       { kind: "statement_application_completed" },
     );
-  });
+    return admitted;
+  };
+  return scope
+    ? withSnapshotWriteDatabase(db, complete, {
+        isolationLevel: "serializable",
+      })
+    : withTransactionDatabase(db, complete);
 }
 
 export const STATEMENT_APPLICATION_PREFIX_LIMIT =
   JOB_PAGE_LIMITS.suggestionsPerPage;
 
-/** A locked unscoped publication without applicable rule stamps cannot admit an automatic effect.
+/** A locked publication without import authority or applicable rule stamps cannot admit an automatic effect.
  * Only the original consecutive prefix is resolved; callers must apply a
  * boundary charge after releasing these locks and reread the remaining suffix.
  */
@@ -2849,7 +2930,9 @@ export async function completeNoActionStatementPrefix(
     charge: ChargeRef;
     evidenceFingerprint: string;
   }[],
+  scope?: StatementSuggestionScope,
 ) {
+  if (scope?.importId) return 0;
   const window = entries.slice(0, STATEMENT_APPLICATION_PREFIX_LIMIT);
   if (!window.length) return 0;
   if (new Set(window.map((entry) => entry.assessmentId)).size !== window.length)
@@ -2882,7 +2965,7 @@ export async function completeNoActionStatementPrefix(
     )
     .limit(1);
   if (!candidate) return 0;
-  return withTransactionDatabase(db, async (tx) => {
+  const complete = async (tx: Database) => {
     await assertWorkflowEffect(tx);
     const rows = await getDb(tx)
       .select({
@@ -2904,12 +2987,20 @@ export async function completeNoActionStatementPrefix(
       .orderBy(assessmentState.id)
       .for("update");
     const byId = new Map(rows.map((row) => [row.id, row]));
+    const scoped = scope
+      ? await statementLabelTargetsInScope(
+          tx,
+          scope,
+          rows.map((row) => row.id),
+        )
+      : null;
     const settled: string[] = [];
     for (const entry of window) {
       const row = byId.get(entry.assessmentId);
       const data = stateData.safeParse(row?.data);
       if (
         !row ||
+        (scoped && !scoped.has(entry.assessmentId)) ||
         row.family !== assessmentFamily.enum.statement_transaction ||
         !row.active ||
         row.status !== suggestionStatus.enum.pending ||
@@ -2924,9 +3015,13 @@ export async function completeNoActionStatementPrefix(
         break;
       settled.push(entry.assessmentId);
     }
-    await completeStatementApplications(tx, settled);
-    return settled.length;
-  });
+    return (await completeStatementApplications(tx, settled, scope)).length;
+  };
+  return scope
+    ? withSnapshotWriteDatabase(db, complete, {
+        isolationLevel: "serializable",
+      })
+    : withTransactionDatabase(db, complete);
 }
 
 /**
@@ -2982,11 +3077,10 @@ export async function suggestionsNeedingLabels(
 ) {
   const selected: Awaited<ReturnType<typeof statementLabelCandidates>> = [];
   let cursor = after;
+  // A nearly full output page must not turn a sparse suffix into one preview
+  // per excluded candidate. Extra admitted rows retain their native positions.
+  const scanLimit = Math.min(limit, STATEMENT_SUGGESTION_PAGE);
   while (selected.length < limit) {
-    const scanLimit = Math.min(
-      limit - selected.length,
-      STATEMENT_SUGGESTION_PAGE,
-    );
     const candidates = await statementLabelCandidates(
       db,
       scanLimit,
@@ -3001,7 +3095,9 @@ export async function suggestionsNeedingLabels(
         )
       : null;
     selected.push(
-      ...candidates.filter((row) => !admitted || admitted.has(row.id)),
+      ...candidates
+        .filter((row) => !admitted || admitted.has(row.id))
+        .slice(0, limit - selected.length),
     );
     const last = candidates.at(-1);
     if (!last || candidates.length < scanLimit) break;

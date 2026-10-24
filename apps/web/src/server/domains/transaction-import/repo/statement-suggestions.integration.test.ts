@@ -1,6 +1,10 @@
 import { readFileSync } from "node:fs";
 
-import { assessmentSubjects } from "@cubby/schemas/assessment";
+import {
+  assessmentSubjects,
+  assessmentFamily,
+  assessmentProducer,
+} from "@cubby/schemas/assessment";
 import { financialSpendingAdvice } from "@cubby/schemas/financial-booking";
 import type { FinancialTransactionKind } from "@cubby/schemas/financial-transaction";
 import {
@@ -644,6 +648,371 @@ describe("statement Transaction suggestions", () => {
     } finally {
       preview.mockRestore();
     }
+  });
+
+  it.each(["ordinary", "shortcut", "resumed ordinary", "resumed shortcut"])(
+    "fences %s receipt completion under its original scope",
+    async (mode) => {
+      const account = (await card(ctx)).output;
+      const other = (
+        await createRepoIdentity(ctx, "financialAccount", {
+          name: "Synthetic receipt completion account",
+          identity: { kind: "credit_card", issuer: null, network: "visa" },
+        })
+      ).output;
+      const imported = await record(ctx, [
+        rowInput({
+          providerTransactionId: "synthetic-receipt-completion-scope",
+        }),
+      ]);
+      await generate(ctx);
+      if (mode.startsWith("resumed")) {
+        const publications = await Promise.all(
+          (await completeLabelPublications(ctx)).map(async (entry) => {
+            const judgment = structuredClone(entry.proposal.judgment);
+            if (judgment.create) judgment.create.counterparty.label = "person";
+            const proposal = await labelledProposal(entry.proposal, judgment);
+            return {
+              ...entry,
+              proposal,
+              checkpoint: { ...entry.checkpoint, judgment: proposal.judgment },
+            };
+          }),
+        );
+        await statementSuggestionsRepo.publishCompleteStatementLabels(
+          ctx.db,
+          publications,
+        );
+      }
+      const [source] = (await listSourceTransactionRecords(ctx.db, {})).data;
+      if (!source)
+        throw new Error("Synthetic receipt completion source missing");
+      let before: typeof assessmentState.$inferSelect | undefined;
+      const move = async (assessmentId: string) => {
+        if (before) return;
+        [before] = await getDb(ctx.db)
+          .select()
+          .from(assessmentState)
+          .where(eq(assessmentState.id, assessmentId));
+        await updateSourceTransactionRecords(
+          ctx.db,
+          {
+            selector: {
+              source: source.source,
+              externalIds: [source.externalId],
+            },
+            data: { accountId: other.id },
+          },
+          ctx.actor,
+        );
+      };
+      const shortcut = mode.endsWith("shortcut");
+      const prefix = statementSuggestionsRepo.completeNoActionStatementPrefix;
+      const complete = statementSuggestionsRepo.completeStatementApplications;
+      const prefixSpy = vi
+        .spyOn(statementSuggestionsRepo, "completeNoActionStatementPrefix")
+        .mockImplementation(async (...args) => {
+          const [entry] = args[1];
+          if (shortcut && entry) await move(entry.assessmentId);
+          return prefix(...args);
+        });
+      const completeSpy = vi
+        .spyOn(statementSuggestionsRepo, "completeStatementApplications")
+        .mockImplementation(async (...args) => {
+          const [id] = args[1];
+          if (!shortcut && id) await move(id);
+          return complete(...args);
+        });
+      try {
+        const scope = {
+          accountIds: [
+            await resolveOrThrow(ctx.db, "financialAccount", account.id),
+          ],
+          since: "2026-05-01",
+          // Import admission selects the ordinary zero-applicable-rule path.
+          ...(!shortcut && { importId: imported.batchId }),
+        };
+        const outcome = await labelStatementSuggestions(ctx.db, {
+          scope,
+          port: answering({ kind: "purchase", counterparty: "person" }),
+        });
+        if (!before)
+          throw new Error(
+            "Synthetic receipt completion boundary was not reached",
+          );
+        expect(outcome).toMatchObject({
+          completed: 0,
+          stale: 1,
+          failed: [],
+          next: null,
+        });
+        expect(z.record(z.string(), z.json()).parse(before.data)).toMatchObject(
+          { applicationPending: true, applicationOrder: expect.any(Object) },
+        );
+        const [after] = await getDb(ctx.db)
+          .select()
+          .from(assessmentState)
+          .where(eq(assessmentState.id, before.id));
+        expect(after?.data).toEqual(before.data);
+        expect(after?.createdAt).toEqual(before.createdAt);
+        expect(
+          await statementSuggestionsRepo.suggestionsNeedingLabels(ctx.db, 1),
+        ).toMatchObject([{ id: before.id, applicationPending: true }]);
+        expect(await getDb(ctx.db).select().from(financialTransaction)).toEqual(
+          [],
+        );
+        expect(await getDb(ctx.db).select().from(expense)).toEqual([]);
+      } finally {
+        prefixSpy.mockRestore();
+        completeSpy.mockRestore();
+      }
+    },
+  );
+
+  it("keeps scoped label scan batches full behind a nearly full output page", async () => {
+    const account = (await card(ctx)).output;
+    await createRepoIdentity(ctx, "financialAccount", {
+      name: "Synthetic scan exclusion",
+      identity: { kind: "credit_card", issuer: null, network: "visa" },
+      sourceAliases: [
+        {
+          source: "monarch",
+          alias: "Excluded scan card",
+          externalAccountId: null,
+        },
+      ],
+    });
+    await record(
+      ctx,
+      Array.from({ length: 69 }, (_, index) =>
+        rowInput({
+          providerTransactionId: `synthetic-full-scan-${index}`,
+          rawDescription: `SYNTHETIC FULL SCAN ${index}`,
+          providerAmount: -100 - index,
+          ...(index >= 32 &&
+            index < 67 && { accountDescriptor: "Excluded scan card" }),
+        }),
+      ),
+    );
+    await generate(ctx);
+    // The supported publications exist; only their historical cursor positions
+    // are arranged to put a long excluded suffix behind 32 admitted rows.
+    await getDb(ctx.db).execute(sql`UPDATE "AssessmentState" SET "createdAt" =
+      '2026-01-01'::timestamp + ((data->>'amount')::int - 100) * interval '1 second'
+      WHERE family = ${assessmentFamily.enum.statement_transaction}`);
+    const scope = {
+      accountIds: [
+        await resolveOrThrow(ctx.db, "financialAccount", account.id),
+      ],
+    };
+    const preview = vi.spyOn(
+      statementPreview,
+      "previewFinancialTransactionImport",
+    );
+    try {
+      const page = await statementSuggestionsRepo.suggestionsNeedingLabels(
+        ctx.db,
+        33,
+        null,
+        scope,
+      );
+      const batches = preview.mock.calls.map(([, input]) => input.rows.length);
+      expect(batches.length).toBeLessThanOrEqual(3);
+      expect(batches).not.toContain(1);
+      expect(page.map((row) => row.judgment.create?.rawDescription)).toEqual([
+        ...Array.from(
+          { length: 32 },
+          (_, index) => `SYNTHETIC FULL SCAN ${index}`,
+        ),
+        "SYNTHETIC FULL SCAN 67",
+      ]);
+      const last = page.at(-1);
+      if (!last) throw new Error("Synthetic full scan cursor missing");
+      expect(
+        (
+          await statementSuggestionsRepo.suggestionsNeedingLabels(
+            ctx.db,
+            1,
+            { createdAt: last.createdAt, id: last.cursorId },
+            scope,
+          )
+        ).map((row) => row.judgment.create?.rawDescription),
+      ).toEqual(["SYNTHETIC FULL SCAN 68"]);
+      expect(
+        (
+          await statementSuggestionsRepo.suggestionsNeedingLabels(
+            ctx.db,
+            1,
+            { createdAt: last.createdAt, id: last.cursorId, inclusive: true },
+            scope,
+          )
+        )[0]?.id,
+      ).toBe(last.id);
+    } finally {
+      preview.mockRestore();
+    }
+  });
+
+  it.each(["checkpoint", "publication", "publication fallback"])(
+    "fences statement scope inside %s write admission",
+    async (phase) => {
+      const account = (await card(ctx)).output;
+      const other = (
+        await createRepoIdentity(ctx, "financialAccount", {
+          name: "Synthetic label write race account",
+          identity: { kind: "credit_card", issuer: null, network: "visa" },
+        })
+      ).output;
+      const imported = await record(ctx, [
+        rowInput({ providerTransactionId: "synthetic-label-write-race" }),
+      ]);
+      await generate(ctx);
+      const [source] = (await listSourceTransactionRecords(ctx.db, {})).data;
+      const [before] = await statementSuggestionsRepo.suggestionsNeedingLabels(
+        ctx.db,
+        1,
+      );
+      if (!source || !before)
+        throw new Error("Synthetic label write race missing");
+      let moved = false;
+      const move = async () => {
+        if (moved) return;
+        moved = true;
+        await updateSourceTransactionRecords(
+          ctx.db,
+          {
+            selector: {
+              source: source.source,
+              externalIds: [source.externalId],
+            },
+            data: { accountId: other.id },
+          },
+          ctx.actor,
+        );
+      };
+      const checkpoint =
+        statementSuggestionsRepo.recordStatementLabelCheckpoint;
+      const publish = statementSuggestionsRepo.publishCompleteStatementLabels;
+      const publishAssessments = assessmentRepo.publishAssessments;
+      const checkpointSpy = vi
+        .spyOn(statementSuggestionsRepo, "recordStatementLabelCheckpoint")
+        .mockImplementation(async (...args) => {
+          if (phase === "checkpoint") await move();
+          return checkpoint(...args);
+        });
+      const publicationSpy = vi
+        .spyOn(statementSuggestionsRepo, "publishCompleteStatementLabels")
+        .mockImplementation(async (...args) => {
+          if (phase === "publication") await move();
+          return publish(...args);
+        });
+      const batchSpy = vi
+        .spyOn(assessmentRepo, "publishAssessments")
+        .mockImplementation(async (...args) => {
+          if (phase === "publication fallback" && !moved) {
+            await move();
+            throw new Error("Synthetic batch failure before scoped fallback");
+          }
+          return publishAssessments(...args);
+        });
+      try {
+        const result = await labelStatementSuggestions(ctx.db, {
+          scope: {
+            importId: imported.batchId,
+            accountIds: [
+              await resolveOrThrow(ctx.db, "financialAccount", account.id),
+            ],
+            since: "2026-05-01",
+          },
+          port: answering({ kind: "other", counterparty: "business" }),
+          ...(phase === "checkpoint" && { decisionLimit: 1 }),
+        });
+        expect(moved).toBe(true);
+        expect(result).toMatchObject({ labelled: 0, completed: 0, failed: [] });
+        const [retained] = await getDb(ctx.db)
+          .select()
+          .from(assessmentState)
+          .where(eq(assessmentState.id, before.id));
+        expect(
+          z.record(z.string(), z.json()).parse(retained?.data)
+            .labelCheckpoint ?? null,
+        ).toBeNull();
+        expect(
+          await getDb(ctx.db)
+            .select({ id: assessment.id })
+            .from(assessment)
+            .where(
+              sql`${assessment.producer}->>${"kind"} = ${assessmentProducer.shape.kind.enum.model}`,
+            ),
+        ).toEqual([]);
+      } finally {
+        checkpointSpy.mockRestore();
+        publicationSpy.mockRestore();
+        batchSpy.mockRestore();
+      }
+    },
+  );
+
+  it("fences recovered statement labels under their original scope", async () => {
+    const account = (await card(ctx)).output;
+    const other = (
+      await createRepoIdentity(ctx, "financialAccount", {
+        name: "Synthetic recovery scope account",
+        identity: { kind: "credit_card", issuer: null, network: "visa" },
+      })
+    ).output;
+    const imported = await record(ctx, [
+      rowInput({ providerTransactionId: "synthetic-recovery-scope" }),
+    ]);
+    await generate(ctx);
+    const entries = await completeLabelPublications(ctx);
+    const [entry] = entries;
+    const [source] = (await listSourceTransactionRecords(ctx.db, {})).data;
+    if (!entry || !source)
+      throw new Error("Synthetic recovered scope fixture missing");
+    const published =
+      await statementSuggestionsRepo.publishCompleteStatementLabels(
+        ctx.db,
+        entries,
+      );
+    const receipt = published.get(
+      statementSuggestionsRepo.chargeId(entry.proposal.charge),
+    );
+    if (receipt?.kind !== "ready")
+      throw new Error("Synthetic publication receipt missing");
+    const before = await getDb(ctx.db)
+      .select()
+      .from(assessmentState)
+      .where(eq(assessmentState.id, receipt.receipt.assessmentId));
+    await updateSourceTransactionRecords(
+      ctx.db,
+      {
+        selector: { source: source.source, externalIds: [source.externalId] },
+        data: { accountId: other.id },
+      },
+      ctx.actor,
+    );
+    const recovered =
+      await statementSuggestionsRepo.publishCompleteStatementLabels(
+        ctx.db,
+        entries,
+        {
+          importId: imported.batchId,
+          accountIds: [
+            await resolveOrThrow(ctx.db, "financialAccount", account.id),
+          ],
+          since: "2026-05-01",
+        },
+      );
+    expect(
+      recovered.get(statementSuggestionsRepo.chargeId(entry.proposal.charge)),
+    ).toEqual({ kind: "resolved", reason: "out_of_scope" });
+    expect(
+      await getDb(ctx.db)
+        .select()
+        .from(assessmentState)
+        .where(eq(assessmentState.id, receipt.receipt.assessmentId)),
+    ).toEqual(before);
   });
 
   it.each(["regeneration", "application"])(
