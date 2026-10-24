@@ -314,19 +314,20 @@ describe("durable Mail attachment upload reservations", () => {
         .where(eq(imageProcessingOrphan.key, key)),
     ).toEqual([]);
   });
-  it("refuses an unrooted raw transaction before an original PUT", async () => {
+  it("refuses an unrooted raw transaction before provider lookup or PUT", async () => {
     const f = await fixture();
     await expect(
       getDb(ctx.db).transaction(async (tx) =>
         correctEmailRelevance(databaseForTransaction(tx), f.input, ctx.actor),
       ),
     ).rejects.toThrow(
-      "Mail attachment upload reservation requires a rooted durable database",
+      "Email correction preparation requires a root database outside the application transaction",
     );
+    expect(providers.gmailProviderForUser).not.toHaveBeenCalled();
     expect(f.put).not.toHaveBeenCalled();
     expect(f.objects.size).toBe(0);
   });
-  it("refuses a rooted single-connection outer transaction before PUT because its reservation would roll back", async () => {
+  it("refuses an already-open rooted transaction before provider lookup or PUT", async () => {
     const f = await fixture();
     await expect(
       withConnection(ctx.db, (single) =>
@@ -340,8 +341,9 @@ describe("durable Mail attachment upload reservations", () => {
         }),
       ),
     ).rejects.toThrow(
-      "Mail attachment upload reservation requires an independent durable connection",
+      "Email correction preparation requires a root database outside the application transaction",
     );
+    expect(providers.gmailProviderForUser).not.toHaveBeenCalled();
     expect(f.put).not.toHaveBeenCalled();
     expect(f.objects.size).toBe(0);
     expect(await getDb(ctx.db).select().from(imageProcessingOrphan)).toEqual(

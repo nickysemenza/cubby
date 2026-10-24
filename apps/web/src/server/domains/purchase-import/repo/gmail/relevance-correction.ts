@@ -5,11 +5,13 @@ import {
   type CorrectEmailRelevanceInput,
   type CorrectEmailRelevanceOut,
 } from "@cubby/schemas/email-actions";
+import type { EmailOriginalCapture } from "@cubby/schemas/email-observations";
 import {
   MAIL_ATTACHMENT_MAX_BYTES,
   MAILBOX_RESEARCH_VERSION,
 } from "@cubby/schemas/mailbox-research";
 import { encodeBase64 } from "@cubby/shared/base64";
+import { sha256Hex } from "@cubby/shared/sha256";
 import { and, eq } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
@@ -18,10 +20,13 @@ import {
   notDeleted,
   withTransaction,
   databaseForTransaction,
+  isTransaction,
 } from "~/server/db/helpers";
-import { runAfterCommit } from "~/server/db/helpers/core";
-import { email as emailTable, orderMailAttachment } from "~/server/db/schema";
-import { discardMailAttachmentUpload } from "~/server/domains/mail/repo/mail-attachment-uploads";
+import { email as emailTable } from "~/server/db/schema";
+import {
+  lockMailAttachmentUpload,
+  discardMailAttachmentUpload,
+} from "~/server/domains/mail/repo/mail-attachment-uploads";
 import { originalChecksum } from "~/server/domains/purchase-import/repo/gmail/checksum";
 import { normalizeMessage } from "~/server/domains/purchase-import/repo/gmail/normalize";
 import { captureGmailOriginal } from "~/server/domains/purchase-import/repo/gmail/original-capture";
@@ -32,10 +37,7 @@ import {
 } from "~/server/domains/purchase-import/repo/gmail/types";
 
 import { deferClassificationRefresh } from "./admitted-source";
-import {
-  productionOrderMailAttachmentStorage,
-  type OrderMailAttachmentStorage,
-} from "./attachment-storage";
+import { productionOrderMailAttachmentStorage } from "./attachment-storage";
 import {
   recordEmailClassificationObservation,
   recordEmailRetrievalFailure,
@@ -44,7 +46,7 @@ import {
 import {
   saveMailboxMetadata,
   upsertOrderMail,
-  storeOrderMailAttachment,
+  publishStagedOrderMailAttachment,
   reserveGmailAttachmentUploads,
 } from "./persistence";
 import { gmailProviderForUser } from "./provider";
@@ -191,12 +193,36 @@ async function cleanNewCorrectionKeys(
   throw error;
 }
 
-/** Explicit member correction of reviewed evidence; never import admission. */
-export async function correctEmailRelevance(
+class EmailRelevancePreparation {
+  // A provider-verified in-memory capability, never a model or wire payload.
+  #verified = true;
+  constructor(
+    readonly details: {
+      input: CorrectEmailRelevanceInput;
+      actorUserId: ActorContext["userId"];
+      email: OwnedEmail;
+      normalized: GmailNormalizedMessage;
+      checksum: string;
+      originalCapture: EmailOriginalCapture;
+      uploads: ReadonlyMap<string, { key: string; checksum: string }>;
+    },
+  ) {}
+  verified() {
+    return this.#verified;
+  }
+}
+export type PreparedEmailRelevanceCorrection = EmailRelevancePreparation;
+
+/** Provider/storage preparation must precede the caller's application transaction. */
+export async function prepareEmailRelevanceCorrection(
   db: Database,
   rawInput: CorrectEmailRelevanceInput,
   actor: ActorContext,
-): Promise<CorrectEmailRelevanceOut> {
+): Promise<PreparedEmailRelevanceCorrection> {
+  if (isTransaction(getDb(db)))
+    throw new Error(
+      "Email correction preparation requires a root database outside the application transaction",
+    );
   const input = correctEmailRelevanceInput.parse(rawInput);
   const email = await correctionOwner(db, input, actor);
   const provider = await observedRead(db, email, () =>
@@ -227,112 +253,214 @@ export async function correctEmailRelevance(
     message,
     attachmentPayloads: originalPayloads,
   });
+  // Refuse changes already visible after retrieval before staging external bytes;
+  // publication repeats this check under the domain's parent locks.
+  const current = await correctionOwner(db, input, actor);
+  if (
+    current.id !== email.id ||
+    current.ledgerPartyId !== email.ledgerPartyId ||
+    current.mailboxId !== email.mailboxId ||
+    current.messageId !== email.messageId
+  )
+    throw new Error(
+      "Email correction original owner or mailbox identity changed during retrieval.",
+    );
   const uploadKeys = await reserveGmailAttachmentUploads(db, {
     orderMailId: email.orderMailId,
     attachments: normalized.attachments,
     payloads: bytes,
   });
-  const created = new Set<string>();
-  let committed = false;
+  const uploads = new Map<string, { key: string; checksum: string }>();
   try {
-    return await withTransaction(db, async (tx) => {
-      const txDb = databaseForTransaction(tx);
-      await runAfterCommit(txDb, async () => {
-        committed = true;
-      });
-      const current = await correctionOwner(txDb, input, actor, "update");
-      if (
-        current.id !== email.id ||
-        current.ledgerPartyId !== email.ledgerPartyId ||
-        current.mailboxId !== email.mailboxId ||
-        current.messageId !== email.messageId
-      )
-        throw new Error(
-          "Email correction original owner or mailbox identity changed during retrieval.",
+    for (const attachment of normalized.attachments) {
+      const key = uploadKeys.get(attachment.sourceKey);
+      if (!key) continue;
+      const encoded = bytes.get(attachment.sourceKey);
+      if (!encoded)
+        throw new Error("Prepared Email attachment has no verified bytes");
+      const payload = Buffer.from(encoded, "base64");
+      await withTransaction(db, async (tx) => {
+        await lockMailAttachmentUpload(tx, key);
+        await productionOrderMailAttachmentStorage.put(
+          key,
+          payload,
+          attachment.mimeType,
         );
-      const originals = current.orderMailId
-        ? await getDb(txDb)
-            .select()
-            .from(orderMailAttachment)
-            .where(eq(orderMailAttachment.orderMailId, current.orderMailId))
-        : [];
-      const protectedKeys = new Set(
-        originals.flatMap((row) =>
-          row.pendingObjectKey ? [row.pendingObjectKey] : [],
-        ),
-      );
-      const storage: OrderMailAttachmentStorage = {
-        ...productionOrderMailAttachmentStorage,
-        put: async (key, payload, contentType) => {
-          if (!protectedKeys.has(key)) created.add(key);
-          await productionOrderMailAttachmentStorage.put(
-            key,
-            payload,
-            contentType,
-          );
-        },
-      };
-      await snapshotStoredEmailPrediction(tx, current);
-      await saveMailboxMetadata(txDb, {
-        ledgerPartyId: current.ledgerPartyId,
-        mail: normalized.mail,
-        checksum,
-        executionPolicy: current.executionPolicy ?? "classification_only",
       });
-      const orderMailId = await upsertOrderMail(
-        txDb,
-        current.ledgerPartyId,
-        normalized.mail,
-        checksum,
-      );
-      for (const attachment of normalized.attachments)
-        await storeOrderMailAttachment(txDb, {
-          orderMailId,
-          attachment,
-          storage,
-          uploadKey: uploadKeys.get(attachment.sourceKey),
-          fetchData: async () => bytes.get(attachment.sourceKey),
-        });
-      await recordEmailClassificationObservation(
-        txDb,
-        {
-          emailId: current.id,
-          checksum,
-          classification: input.classification,
-          stage: "resolution",
-          reason: input.reason,
-          classificationVersion: MAILBOX_RESEARCH_VERSION,
-        },
-        actor,
-        { originalCapture },
-      );
-      await getDb(txDb)
-        .update(emailTable)
-        .set({
-          checksum,
-          classification: input.classification,
-          classificationStage: "resolution",
-          classificationReason: input.reason,
-          classificationVersion: MAILBOX_RESEARCH_VERSION,
-          contentClearedAt: null,
-          updatedAt: new Date(),
-        })
-        .where(eq(emailTable.id, current.id));
-      return correctEmailRelevanceOut.parse({
-        id: input.id,
-        checksum,
-        classification: input.classification,
-        originalAvailable: true,
+      uploads.set(attachment.sourceKey, {
+        key,
+        checksum: await sha256Hex(payload),
       });
+    }
+    return new EmailRelevancePreparation({
+      input,
+      actorUserId: actor.userId,
+      email,
+      normalized,
+      checksum,
+      originalCapture,
+      uploads,
     });
   } catch (error) {
-    if (committed) throw error;
     return cleanNewCorrectionKeys(
       db,
-      created,
+      new Set(uploadKeys.values()),
       error instanceof Error
         ? error
         : new Error(String(error), { cause: error }),
     );
   }
+}
+
+/** Cleanup cannot remove adopted bytes, even after publication or an ambiguous commit. */
+export async function discardPreparedEmailRelevanceCorrection(
+  db: Database,
+  prepared: PreparedEmailRelevanceCorrection,
+) {
+  const results = await Promise.allSettled(
+    [...prepared.details.uploads.values()].map(({ key }) =>
+      discardMailAttachmentUpload(
+        db,
+        key,
+        productionOrderMailAttachmentStorage,
+      ),
+    ),
+  );
+  const errors = results.flatMap((result) =>
+    result.status === "rejected" ? [result.reason] : [],
+  );
+  if (errors.length)
+    throw new AggregateError(
+      errors,
+      "Prepared Email attachment cleanup failed",
+    );
+}
+
+/** DB-only publication: the caller owns transaction isolation, receipt and retry. */
+export async function publishPreparedEmailRelevanceCorrection(
+  db: Database,
+  prepared: PreparedEmailRelevanceCorrection,
+  actor: ActorContext,
+): Promise<CorrectEmailRelevanceOut> {
+  const tx = getDb(db);
+  if (!isTransaction(tx))
+    throw new Error(
+      "Prepared Email correction publication requires a transaction",
+    );
+  if (
+    !(prepared instanceof EmailRelevancePreparation) ||
+    !prepared.verified() ||
+    prepared.details.actorUserId !== actor.userId
+  )
+    throw new Error("Email correction preparation authority does not match");
+  const { input, email, normalized, checksum, originalCapture, uploads } =
+    prepared.details;
+  const current = await correctionOwner(db, input, actor, "update");
+  if (
+    current.id !== email.id ||
+    current.ledgerPartyId !== email.ledgerPartyId ||
+    current.mailboxId !== email.mailboxId ||
+    current.messageId !== email.messageId
+  )
+    throw new Error(
+      "Email correction original owner or mailbox identity changed during retrieval.",
+    );
+  await snapshotStoredEmailPrediction(tx, current);
+  await saveMailboxMetadata(db, {
+    ledgerPartyId: current.ledgerPartyId,
+    mail: normalized.mail,
+    checksum,
+    executionPolicy: current.executionPolicy ?? "classification_only",
+  });
+  const orderMailId = await upsertOrderMail(
+    db,
+    current.ledgerPartyId,
+    normalized.mail,
+    checksum,
+  );
+  for (const { key } of [...uploads.values()].sort((left, right) =>
+    left.key.localeCompare(right.key),
+  ))
+    await lockMailAttachmentUpload(db, key);
+  for (const attachment of normalized.attachments) {
+    const upload = uploads.get(attachment.sourceKey);
+    await publishStagedOrderMailAttachment(db, {
+      orderMailId,
+      attachment,
+      staged: upload ?? null,
+    });
+  }
+  await recordEmailClassificationObservation(
+    db,
+    {
+      emailId: current.id,
+      checksum,
+      classification: input.classification,
+      stage: "resolution",
+      reason: input.reason,
+      classificationVersion: MAILBOX_RESEARCH_VERSION,
+    },
+    actor,
+    { originalCapture },
+  );
+  await tx
+    .update(emailTable)
+    .set({
+      checksum,
+      classification: input.classification,
+      classificationStage: "resolution",
+      classificationReason: input.reason,
+      classificationVersion: MAILBOX_RESEARCH_VERSION,
+      contentClearedAt: null,
+      updatedAt: new Date(),
+    })
+    .where(eq(emailTable.id, current.id));
+  return correctEmailRelevanceOut.parse({
+    id: input.id,
+    checksum,
+    classification: input.classification,
+    originalAvailable: true,
+  });
+}
+
+export async function withEmailRelevancePreparation<T>(
+  db: Database,
+  prepared: PreparedEmailRelevanceCorrection,
+  publish: (prepared: PreparedEmailRelevanceCorrection) => Promise<T>,
+): Promise<T> {
+  let result: T;
+  try {
+    result = await publish(prepared);
+  } catch (error) {
+    try {
+      await discardPreparedEmailRelevanceCorrection(db, prepared);
+    } catch (cleanup) {
+      throw new AggregateError(
+        [error, cleanup],
+        "Email correction publication and cleanup failed",
+        { cause: cleanup },
+      );
+    }
+    throw error;
+  }
+  await discardPreparedEmailRelevanceCorrection(db, prepared);
+  return result;
+}
+
+/** Explicit member correction of reviewed evidence; never import admission. */
+export async function correctEmailRelevance(
+  db: Database,
+  input: CorrectEmailRelevanceInput,
+  actor: ActorContext,
+): Promise<CorrectEmailRelevanceOut> {
+  const prepared = await prepareEmailRelevanceCorrection(db, input, actor);
+  return withEmailRelevancePreparation(db, prepared, (value) =>
+    withTransaction(db, (tx) =>
+      publishPreparedEmailRelevanceCorrection(
+        databaseForTransaction(tx),
+        value,
+        actor,
+      ),
+    ),
+  );
 }

@@ -8,7 +8,11 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import * as choices from "~/server/ai/decision-model";
 import { account } from "~/server/db/auth.schema";
-import { getDb } from "~/server/db/helpers";
+import {
+  getDb,
+  withTransaction,
+  databaseForTransaction,
+} from "~/server/db/helpers";
 import {
   email as emailTable,
   emailClassificationObservation,
@@ -20,6 +24,7 @@ import {
   aiUsage,
   run,
   image,
+  feedback,
 } from "~/server/db/schema";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
@@ -32,7 +37,13 @@ import { originalChecksum } from "./checksum";
 import { normalizeMessage } from "./normalize";
 import { recordEmailClassificationObservation } from "./observations";
 import * as providers from "./provider";
-import { correctEmailRelevance } from "./relevance-correction";
+import {
+  correctEmailRelevance,
+  prepareEmailRelevanceCorrection,
+  publishPreparedEmailRelevanceCorrection,
+  discardPreparedEmailRelevanceCorrection,
+  withEmailRelevancePreparation,
+} from "./relevance-correction";
 import { GmailApiError, type GmailMessage, type GmailProvider } from "./types";
 
 const mailboxId = "synthetic-correction-mailbox";
@@ -169,6 +180,191 @@ describe("member-only exact original relevance correction", () => {
       },
     });
     expect(f.getAttachment).toHaveBeenCalledTimes(1);
+  });
+  async function sharedReviewFixture() {
+    const f = await fixture();
+    await getDb(ctx.db)
+      .update(emailTable)
+      .set({ checksum: f.input.reviewedChecksum })
+      .where(eq(emailTable.id, f.email.id));
+    const observation = await recordEmailClassificationObservation(ctx.db, {
+      emailId: f.email.id,
+      checksum: f.input.reviewedChecksum,
+      classification: "related",
+      stage: "decision",
+      reason: "Synthetic reviewed prediction",
+      classificationVersion: "synthetic",
+      model: "typesafe/jev",
+    });
+    const prediction = await ensureEmailAssessment(ctx.db, observation.id);
+    const review = {
+      assessmentId: prediction.id,
+      operationId: "synthetic-prepared-review",
+      verdict: "wrong" as const,
+      intent: "apply" as const,
+      correction: { present: true as const, value: "uncertain" },
+    };
+    return { ...f, review };
+  }
+  it("retains command Feedback and raw retrieval failure when preparation fails", async () => {
+    const f = await sharedReviewFixture();
+    const [before] = await getDb(ctx.db)
+      .select()
+      .from(emailTable)
+      .where(eq(emailTable.id, f.email.id));
+    f.getMessage.mockRejectedValue(
+      new GmailApiError({
+        message: "Synthetic preparation unavailable",
+        status: 503,
+      }),
+    );
+    await expect(
+      reviewAssessment(ctx.db, kernelCtx(ctx), f.review),
+    ).rejects.toThrow("Synthetic preparation unavailable");
+    const events = await getDb(ctx.db)
+      .select()
+      .from(feedback)
+      .where(eq(feedback.assessmentId, f.review.assessmentId));
+    expect(
+      events.find((event) => event.operationId === f.review.operationId),
+    ).toMatchObject({ intent: "apply", authority: "member", verdict: "wrong" });
+    expect(
+      events.find(
+        (event) =>
+          event.operationId === `command-application:${f.review.operationId}`,
+      ),
+    ).toBeUndefined();
+    expect(
+      (
+        await getDb(ctx.db)
+          .select()
+          .from(emailTable)
+          .where(eq(emailTable.id, f.email.id))
+      )[0],
+    ).toEqual(before);
+    expect(await getDb(ctx.db).select().from(emailRetrievalFailure)).toEqual([
+      expect.objectContaining({
+        httpStatus: 503,
+        error: "Synthetic preparation unavailable",
+      }),
+    ]);
+    expect(f.put).not.toHaveBeenCalled();
+  });
+  it("replays a successful shared application without consulting an unavailable provider", async () => {
+    const f = await sharedReviewFixture();
+    const first = await reviewAssessment(ctx.db, kernelCtx(ctx), f.review);
+    f.factory.mockRejectedValue(
+      new Error("Synthetic provider unavailable after success"),
+    );
+    expect(await reviewAssessment(ctx.db, kernelCtx(ctx), f.review)).toEqual(
+      first,
+    );
+    expect(f.factory).toHaveBeenCalledTimes(1);
+    expect(f.getMessage).toHaveBeenCalledTimes(1);
+    expect(f.put).toHaveBeenCalledTimes(1);
+  });
+  it("returns a concurrent canonical success when its own preparation fails", async () => {
+    const f = await sharedReviewFixture();
+    f.getMessage.mockImplementationOnce(async () => {
+      await reviewAssessment(ctx.db, kernelCtx(ctx), f.review);
+      throw new GmailApiError({
+        message:
+          "Synthetic first attempt retrieval failed after concurrent success",
+        status: 503,
+      });
+    });
+    expect(
+      await reviewAssessment(ctx.db, kernelCtx(ctx), f.review),
+    ).toMatchObject({ applied: true });
+    expect(f.getMessage).toHaveBeenCalledTimes(2);
+    expect(f.put).toHaveBeenCalledTimes(1);
+    const events = await getDb(ctx.db)
+      .select()
+      .from(feedback)
+      .where(eq(feedback.assessmentId, f.review.assessmentId));
+    expect(
+      events.filter(
+        (event) =>
+          event.operationId === `command-application:${f.review.operationId}`,
+      ),
+    ).toHaveLength(1);
+    expect(
+      await getDb(ctx.db).select().from(emailRetrievalFailure),
+    ).toHaveLength(1);
+  });
+  it("publishes prepared evidence with provider and storage PUT tripwires", async () => {
+    const f = await fixture();
+    const prepared = await prepareEmailRelevanceCorrection(
+      ctx.db,
+      f.input,
+      ctx.actor,
+    );
+    f.getMessage.mockRejectedValue(
+      new Error("Unexpected publication provider IO"),
+    );
+    f.getAttachment.mockRejectedValue(
+      new Error("Unexpected publication attachment IO"),
+    );
+    f.put.mockRejectedValue(new Error("Unexpected publication storage IO"));
+    await withTransaction(ctx.db, (tx) =>
+      publishPreparedEmailRelevanceCorrection(
+        databaseForTransaction(tx),
+        prepared,
+        ctx.actor,
+      ),
+    );
+    await discardPreparedEmailRelevanceCorrection(ctx.db, prepared);
+    expect(f.getMessage).toHaveBeenCalledTimes(1);
+    expect(f.getAttachment).toHaveBeenCalledTimes(1);
+    expect(f.put).toHaveBeenCalledTimes(1);
+    expect(f.remove).not.toHaveBeenCalled();
+    expect(f.objects.size).toBe(1);
+  });
+  it("refuses cleaned preparations without recreating their objects or routing", async () => {
+    const f = await fixture();
+    const prepared = await prepareEmailRelevanceCorrection(
+      ctx.db,
+      f.input,
+      ctx.actor,
+    );
+    await discardPreparedEmailRelevanceCorrection(ctx.db, prepared);
+    expect(f.objects.size).toBe(0);
+    const before = await evidence();
+    await expect(
+      withTransaction(ctx.db, (tx) =>
+        publishPreparedEmailRelevanceCorrection(
+          databaseForTransaction(tx),
+          prepared,
+          ctx.actor,
+        ),
+      ),
+    ).rejects.toThrow("reservation expired");
+    expect(await evidence()).toEqual(before);
+    expect(f.put).toHaveBeenCalledTimes(1);
+    expect(f.objects.size).toBe(0);
+  });
+  it("rolls back publication and discards only unadopted staged bytes", async () => {
+    const f = await fixture();
+    const before = await evidence();
+    const prepared = await prepareEmailRelevanceCorrection(
+      ctx.db,
+      f.input,
+      ctx.actor,
+    );
+    await expect(
+      withEmailRelevancePreparation(ctx.db, prepared, (prepared) =>
+        withTransaction(ctx.db, async (tx) => {
+          await publishPreparedEmailRelevanceCorrection(
+            databaseForTransaction(tx),
+            prepared,
+            ctx.actor,
+          );
+          throw new Error("Synthetic caller receipt failure");
+        }),
+      ),
+    ).rejects.toThrow("Synthetic caller receipt failure");
+    expect(await evidence()).toEqual(before);
+    expect(f.objects.size).toBe(0);
   });
   it("applies a domain-supported relevance correction through shared review", async () => {
     const f = await fixture();

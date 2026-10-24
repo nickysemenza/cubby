@@ -286,3 +286,27 @@ correction propagation remains held pending current-effect ownership, complete
 intent fencing and DB-only publication contracts. A later capture creates a new
 observation when its proof differs; it never retrofits an immutable historical
 Assessment or certifies previously discarded content.
+
+### Relevance correction preparation and publication
+
+Explicit relevance correction requires a root database for preparation. Provider
+retrieval, complete-original capture and object uploads run before the application
+transaction. Each upload has a durable reservation, locked while staging bytes.
+Preparation rechecks owner, connected account and reviewed checksum after retrieval
+before staging. Publication repeats those checks under the existing parent locks,
+then adopts staged references using DB-only writers in the caller's transaction.
+Cleaned reservations cannot be published or recreate their objects.
+
+Shared review preserves validation → durable member command Feedback → canonical
+replay → preparation → transactional replay/publication. A preparation failure
+retains Feedback and raw retrieval diagnostics without an application receipt or
+routing change. A successful application replays without consulting Gmail; a
+concurrent successful receipt can also settle an invocation whose preparation
+failed. Publication and cleanup failures remain errors and do not imply rollback.
+Routing, observation and command application receipt remain atomic. Unused or failed
+staging is discarded only through exact reservation/reference ownership checks;
+failed deletion retains the reservation for the existing cleaner.
+
+This boundary supplies no automatic propagation authority, effect selector or
+cross-Email identity rule. Those domain contracts remain required before Email
+correction repair becomes supported.

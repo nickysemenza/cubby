@@ -41,6 +41,7 @@ import {
   withImageCorrectionIntent,
 } from "~/server/domains/image/repo/image-correction-lock";
 import { writeImageDescriptionConfirmation } from "~/server/domains/image/repo/image-description-confirmation";
+import type { PreparedEmailRelevanceCorrection } from "~/server/domains/purchase-import/repo/gmail/relevance-correction";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import {
   assertApplicationReceipt,
@@ -118,6 +119,7 @@ type Handler = {
     state: typeof assessmentState.$inferSelect,
     input: Review,
     automatic: AutomaticReview | null,
+    preparedEmail: PreparedEmailRelevanceCorrection | null,
   ) => Promise<z.infer<typeof assessmentReviewOut>["applicationResult"] | void>;
 };
 /** Each family validates its own subject and uses its transaction-bound domain mutation. */
@@ -154,30 +156,14 @@ const assessmentFamilies = {
     target: assessmentProjectionTargets.email_relevance,
     transactionBound: false,
     actions: ["correct", "wrong", "uncertain"],
-    apply: async (db, context, state, input) => {
-      const [prediction] = await getDb(db)
-        .select({ subject: assessment.subject })
-        .from(assessment)
-        .where(eq(assessment.id, state.id))
-        .limit(1);
-      const subject = assessmentSubjects.email_relevance.parse(
-        prediction?.subject,
-      );
-      const correction = emailRelevanceApplication(subject, input);
-      const [source] = await getDb(db)
-        .select({ code: email.shortcode })
-        .from(email)
-        .where(eq(email.id, parseEntityId("email", subject.recordId)))
-        .limit(1);
-      if (!source) throw new Error("Email no longer exists");
-      const { correctEmailRelevance } =
+    apply: async (db, context, state, _input, _automatic, preparedEmail) => {
+      if (!preparedEmail || preparedEmail.details.email.id !== state.recordId)
+        throw new Error("Email review requires its source-bound preparation");
+      const { publishPreparedEmailRelevanceCorrection } =
         await import("~/server/domains/purchase-import/repo/gmail/relevance-correction");
-      await correctEmailRelevance(
+      await publishPreparedEmailRelevanceCorrection(
         db,
-        {
-          id: parseShortcodeFor("email", source.code),
-          ...correction,
-        },
+        preparedEmail,
         context.actorContext,
       );
     },
@@ -687,14 +673,190 @@ async function settleReview(
       status: "applied",
       applied: true,
     };
-    const apply = async (transactionDb: Database) => {
-      // Serialize generic commands without taking projection locks ahead of the
-      // domain's parent locks. Receipt and mutation commit in the same boundary.
-      await getDb(transactionDb).execute(
-        sql`SELECT pg_advisory_xact_lock(hashtextextended(${`assessment-review:${prediction.id}`},0))`,
-      );
-      const [receipt] = await getDb(transactionDb)
-        .select()
+    const executeApplication = (
+      preparedEmail: PreparedEmailRelevanceCorrection | null,
+    ) => {
+      const apply = async (transactionDb: Database) => {
+        // Serialize generic commands without taking projection locks ahead of the
+        // domain's parent locks. Receipt and mutation commit in the same boundary.
+        await getDb(transactionDb).execute(
+          sql`SELECT pg_advisory_xact_lock(hashtextextended(${`assessment-review:${prediction.id}`},0))`,
+        );
+        const [receipt] = await getDb(transactionDb)
+          .select()
+          .from(feedback)
+          .where(
+            and(
+              eq(feedback.assessmentId, prediction.id),
+              eq(
+                feedback.operationId,
+                `command-application:${input.operationId}`,
+              ),
+            ),
+          )
+          .limit(1);
+        if (receipt) {
+          assertApplicationReceipt(receipt, event, "assessment_application");
+          const priorOutcome = assessmentReviewOut.parse(receipt.receipt);
+          if (
+            !isEqual(
+              { ...priorOutcome, applicationResult: undefined },
+              { ...outcome, applicationResult: undefined },
+            )
+          )
+            throw new Error(
+              "Application receipt does not match this command outcome",
+            );
+          return priorOutcome;
+        }
+        const identity =
+          prediction.family === "field"
+            ? await readFieldCorrectionIdentity(
+                transactionDb,
+                prediction.subject,
+                prediction.evidence,
+              )
+            : null;
+        const correctionKey =
+          identity && (identity.canonicalKey ?? identity.storedKey);
+        if (correctionKey) {
+          await lockFieldCorrectionIdentities(
+            transactionDb,
+            assessmentSubjects.field.parse(prediction.subject),
+            identity ? fieldCorrectionIdentityKeys(identity) : [],
+          );
+          if (
+            automatic &&
+            (
+              await resolveFieldCorrection(
+                transactionDb,
+                identity ? fieldCorrectionIdentityKeys(identity) : [],
+                assessmentSubjects.field.parse(prediction.subject),
+              )
+            ).kind !== "none"
+          )
+            throw new Error(
+              "A confirmed member correction requires correction propagation",
+            );
+        }
+        if (input.application?.kind === "saved_field") {
+          await acknowledgeSavedField(transactionDb, context, prediction, {
+            recordId: input.application.recordId,
+            operationId: input.operationId,
+            correction: input.correction,
+            commandFeedback: event,
+          });
+        } else {
+          if (prediction.family === "field") {
+            const { assertConnectionFieldFresh } =
+              await import("~/server/domains/connection/repo/field-connections");
+            await assertConnectionFieldFresh(transactionDb, prediction.id);
+          }
+          if ("lockForApply" in family && family.lockForApply)
+            await family.lockForApply(transactionDb, prediction);
+          const query = getDb(transactionDb)
+            .select()
+            .from(assessmentState)
+            .where(eq(assessmentState.id, prediction.id))
+            .limit(1);
+          const [state] = family.transactionBound
+            ? await query.for("update")
+            : await query;
+          if (!state?.active || state.status === "superseded")
+            throw new Error(
+              "Assessment evidence is stale; request a fresh assessment before applying",
+            );
+          if (
+            state.status === "applied" ||
+            (prediction.family === "field" && state.status !== "pending")
+          )
+            throw new Error(
+              "Assessment already resolved by another command; request a fresh assessment",
+            );
+          if (
+            input.expectedFingerprint !== undefined &&
+            input.expectedFingerprint !==
+              ("currentFingerprint" in family && family.currentFingerprint
+                ? await family.currentFingerprint(transactionDb, state)
+                : state.fingerprint)
+          )
+            throw new Error("Assessment evidence fingerprint changed");
+          family.target.parse(state);
+          const applicationResult = await family.apply(
+            transactionDb,
+            { ...context, db: transactionDb, reviewFeedbackId: event.id },
+            state,
+            input,
+            automatic,
+            preparedEmail,
+          );
+          if (applicationResult) outcome.applicationResult = applicationResult;
+          if (!family.transactionBound)
+            await transitionAssessmentStates(
+              transactionDb,
+              and(
+                eq(assessmentState.id, state.id),
+                eq(assessmentState.active, true),
+              ),
+              { status: "applied" },
+              { kind: "assessment_applied", feedbackId: event.id },
+            );
+        }
+        let fieldApplicationReceipt: z.infer<
+          typeof suggestionAcceptanceReceipt
+        > | null = null;
+        if (
+          prediction.family === "field" &&
+          authority === "member" &&
+          input.correction.present
+        ) {
+          const [field] = await getDb(transactionDb)
+            .select()
+            .from(assessmentState)
+            .where(eq(assessmentState.id, prediction.id))
+            .limit(1);
+          if (!field)
+            throw new Error("Corrected field application has no saved lineage");
+          fieldApplicationReceipt = {
+            ...suggestionAcceptanceReceipt.parse(field.acceptanceReceipt),
+            appliedInputFingerprint: await fieldInputFingerprint(
+              transactionDb,
+              field.entity,
+              field.recordId,
+              field.field,
+            ),
+          };
+        }
+        await recordFeedback(transactionDb, {
+          assessmentId: prediction.id,
+          operationId: `command-application:${input.operationId}`,
+          verdict: "ungraded",
+          intent: "apply",
+          authority,
+          actorUserId: context.actorContext.userId,
+          receipt: outcome,
+          metadata: {
+            kind: "assessment_application",
+            commandFeedbackId: event.id,
+            ...(fieldApplicationReceipt && { fieldApplicationReceipt }),
+            ...(automatic && { rule: automatic.rule }),
+          },
+        });
+        return outcome;
+      };
+      return "isolationLevel" in family &&
+        family.isolationLevel === "serializable"
+        ? withSnapshotWriteDatabase(db, apply, {
+            isolationLevel: "serializable",
+          })
+        : withTransactionDatabase(db, apply);
+    };
+    if (prediction.family !== "email_relevance")
+      return executeApplication(null);
+    // Preserve command Feedback first, then replay before any external preparation.
+    const hasReceipt = async () => {
+      const [receipt] = await getDb(db)
+        .select({ id: feedback.id })
         .from(feedback)
         .where(
           and(
@@ -706,158 +868,34 @@ async function settleReview(
           ),
         )
         .limit(1);
-      if (receipt) {
-        assertApplicationReceipt(receipt, event, "assessment_application");
-        const priorOutcome = assessmentReviewOut.parse(receipt.receipt);
-        if (
-          !isEqual(
-            { ...priorOutcome, applicationResult: undefined },
-            { ...outcome, applicationResult: undefined },
-          )
-        )
-          throw new Error(
-            "Application receipt does not match this command outcome",
-          );
-        return priorOutcome;
-      }
-      const identity =
-        prediction.family === "field"
-          ? await readFieldCorrectionIdentity(
-              transactionDb,
-              prediction.subject,
-              prediction.evidence,
-            )
-          : null;
-      const correctionKey =
-        identity && (identity.canonicalKey ?? identity.storedKey);
-      if (correctionKey) {
-        await lockFieldCorrectionIdentities(
-          transactionDb,
-          assessmentSubjects.field.parse(prediction.subject),
-          identity ? fieldCorrectionIdentityKeys(identity) : [],
-        );
-        if (
-          automatic &&
-          (
-            await resolveFieldCorrection(
-              transactionDb,
-              identity ? fieldCorrectionIdentityKeys(identity) : [],
-              assessmentSubjects.field.parse(prediction.subject),
-            )
-          ).kind !== "none"
-        )
-          throw new Error(
-            "A confirmed member correction requires correction propagation",
-          );
-      }
-      if (input.application?.kind === "saved_field") {
-        await acknowledgeSavedField(transactionDb, context, prediction, {
-          recordId: input.application.recordId,
-          operationId: input.operationId,
-          correction: input.correction,
-          commandFeedback: event,
-        });
-      } else {
-        if (prediction.family === "field") {
-          const { assertConnectionFieldFresh } =
-            await import("~/server/domains/connection/repo/field-connections");
-          await assertConnectionFieldFresh(transactionDb, prediction.id);
-        }
-        if ("lockForApply" in family && family.lockForApply)
-          await family.lockForApply(transactionDb, prediction);
-        const query = getDb(transactionDb)
-          .select()
-          .from(assessmentState)
-          .where(eq(assessmentState.id, prediction.id))
-          .limit(1);
-        const [state] = family.transactionBound
-          ? await query.for("update")
-          : await query;
-        if (!state?.active || state.status === "superseded")
-          throw new Error(
-            "Assessment evidence is stale; request a fresh assessment before applying",
-          );
-        if (
-          state.status === "applied" ||
-          (prediction.family === "field" && state.status !== "pending")
-        )
-          throw new Error(
-            "Assessment already resolved by another command; request a fresh assessment",
-          );
-        if (
-          input.expectedFingerprint !== undefined &&
-          input.expectedFingerprint !==
-            ("currentFingerprint" in family && family.currentFingerprint
-              ? await family.currentFingerprint(transactionDb, state)
-              : state.fingerprint)
-        )
-          throw new Error("Assessment evidence fingerprint changed");
-        family.target.parse(state);
-        const applicationResult = await family.apply(
-          transactionDb,
-          { ...context, db: transactionDb, reviewFeedbackId: event.id },
-          state,
-          input,
-          automatic,
-        );
-        if (applicationResult) outcome.applicationResult = applicationResult;
-        if (!family.transactionBound)
-          await transitionAssessmentStates(
-            transactionDb,
-            and(
-              eq(assessmentState.id, state.id),
-              eq(assessmentState.active, true),
-            ),
-            { status: "applied" },
-            { kind: "assessment_applied", feedbackId: event.id },
-          );
-      }
-      let fieldApplicationReceipt: z.infer<
-        typeof suggestionAcceptanceReceipt
-      > | null = null;
-      if (
-        prediction.family === "field" &&
-        authority === "member" &&
-        input.correction.present
-      ) {
-        const [field] = await getDb(transactionDb)
-          .select()
-          .from(assessmentState)
-          .where(eq(assessmentState.id, prediction.id))
-          .limit(1);
-        if (!field)
-          throw new Error("Corrected field application has no saved lineage");
-        fieldApplicationReceipt = {
-          ...suggestionAcceptanceReceipt.parse(field.acceptanceReceipt),
-          appliedInputFingerprint: await fieldInputFingerprint(
-            transactionDb,
-            field.entity,
-            field.recordId,
-            field.field,
-          ),
-        };
-      }
-      await recordFeedback(transactionDb, {
-        assessmentId: prediction.id,
-        operationId: `command-application:${input.operationId}`,
-        verdict: "ungraded",
-        intent: "apply",
-        authority,
-        actorUserId: context.actorContext.userId,
-        receipt: outcome,
-        metadata: {
-          kind: "assessment_application",
-          commandFeedbackId: event.id,
-          ...(fieldApplicationReceipt && { fieldApplicationReceipt }),
-          ...(automatic && { rule: automatic.rule }),
-        },
-      });
-      return outcome;
+      return Boolean(receipt);
     };
-    return "isolationLevel" in family &&
-      family.isolationLevel === "serializable"
-      ? withSnapshotWriteDatabase(db, apply, { isolationLevel: "serializable" })
-      : withTransactionDatabase(db, apply);
+    if (await hasReceipt()) return executeApplication(null);
+    const subject = assessmentSubjects.email_relevance.parse(
+      prediction.subject,
+    );
+    const correction = emailRelevanceApplication(subject, input);
+    const [source] = await getDb(db)
+      .select({ code: email.shortcode })
+      .from(email)
+      .where(eq(email.id, parseEntityId("email", subject.recordId)))
+      .limit(1);
+    if (!source) throw new Error("Email no longer exists");
+    const { prepareEmailRelevanceCorrection, withEmailRelevancePreparation } =
+      await import("~/server/domains/purchase-import/repo/gmail/relevance-correction");
+    let prepared: PreparedEmailRelevanceCorrection;
+    try {
+      prepared = await prepareEmailRelevanceCorrection(
+        db,
+        { id: parseShortcodeFor("email", source.code), ...correction },
+        context.actorContext,
+      );
+    } catch (error) {
+      // Another invocation may have committed while this one's provider preparation failed.
+      if (await hasReceipt()) return executeApplication(null);
+      throw error;
+    }
+    return withEmailRelevancePreparation(db, prepared, executeApplication);
   }
   const writeHistory = async (transactionDb: Database) => {
     const [state] = await getDb(transactionDb)
