@@ -696,12 +696,13 @@ export async function buildChargeProposals(
   const { rows: acceptedRows } = matchedByCharge.size
     ? await unwrapDb(db).execute<{
         shortcode: string;
+        accountId: string;
         amount: number;
         status: typeof financialTransaction.$inferSelect.status;
         transactionDate: string | null;
         postedDate: string | null;
       }>(sql`
-    SELECT ft.shortcode, ft.amount, ft.status, ft."transactionDate"::text AS "transactionDate", ft."postedDate"::text AS "postedDate" FROM "FinancialTransaction" ft
+    SELECT ft.shortcode, ft."accountId", ft.amount, ft.status, ft."transactionDate"::text AS "transactionDate", ft."postedDate"::text AS "postedDate" FROM "FinancialTransaction" ft
     WHERE ft."deletedAt" IS NULL AND ft.shortcode IN (${sql.join(
       [...matchedByCharge.values()].map((code) => sql`${code}`),
       sql`,`,
@@ -726,6 +727,15 @@ export async function buildChargeProposals(
           chargeId(charge),
           canonical.externalId,
         ]),
+      ),
+      settlementAccountHints: new Map(
+        grouped.flatMap(({ charge }) => {
+          const code = matchedByCharge.get(chargeId(charge));
+          const settled = code ? accepted.get(code) : undefined;
+          return settled
+            ? [[chargeId(charge), settled.accountId] as const]
+            : [];
+        }),
       ),
       accountHints: new Map(
         grouped.flatMap(({ charge, observations: rows }) => {
@@ -838,7 +848,10 @@ export async function buildChargeProposals(
     const priorTransaction = matchedCode
       ? accepted.get(matchedCode)
       : undefined;
-    const reviewReason = sourceCorrectionReason(priorTransaction, canonical);
+    const reviewReason =
+      priorTransaction && priorTransaction.accountId !== accountId
+        ? "The source account conflicts with the accepted transaction account; review the account evidence."
+        : sourceCorrectionReason(priorTransaction, canonical);
     const effectiveStatus = canonical.providerStatus ?? "observed";
     const statementAmount = row.proposed.amount;
     const candidates: StatementTransactionCandidate[] =
