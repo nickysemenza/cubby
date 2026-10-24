@@ -239,9 +239,10 @@ One association resolver serves hydration, linked filters, counts and related
 records. It distinguishes accepted import associations, active lifecycle links,
 dismissed candidates and mailbox-scoped thread context.
 
-Classification-only mode is persisted and enforced at classification and
-admission boundaries, including retries and continuation Runs. A successful
-classification does not make an Email eligible for import. Predictions are
+Discovery execution policy is persisted across retries and continuation Runs;
+classification-only Runs still run the complete classifier. Classification
+records relevance without claiming an import source. New unattended import
+admission checks the current automatic-import switch independently. Predictions are
 immutable and tied to the message checksum, stage, model/version and usage
 where known. Historical overwritten predictions and missing cost attribution
 remain unknown; a fresh evaluation never claims to reconstruct them.
