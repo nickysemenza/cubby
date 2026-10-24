@@ -18,6 +18,7 @@ import {
   purchase as purchaseTable,
   run,
 } from "~/server/db/schema";
+import { queueSearchClassification } from "~/server/domains/purchase-import/repo/gmail/reclassify-state";
 import { startAgentRunFixture } from "~/server/domains/purchase-import/service/import-run.fixtures";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
@@ -33,6 +34,55 @@ describe("Email review report", () => {
   const ctx = withTestDb();
   // Navigation failures: accepted aliases/attachments or lifecycle evidence vanish;
   // dismissed candidates become purchases; thread collisions or other owners leak.
+  it("links a funding-paused classifier before it has any prediction", async () => {
+    const party = await insertWithShortcode(ctx.db, "ledgerParty", {
+      name: "Synthetic classification owner",
+      kind: "member",
+      userId: ctx.actor.userId,
+    });
+    const email = await insertWithShortcode(ctx.db, "email", {
+      ledgerPartyId: party.id,
+      mailboxId: "synthetic-classification-mailbox",
+      messageId: "synthetic-pending-classification",
+      checksum: "a".repeat(64),
+      classification: "uncertain",
+      status: "pending",
+    });
+    const classifier = await queueSearchClassification(
+      ctx.db,
+      ctx.actor,
+      email,
+    );
+    await getDb(ctx.db)
+      .update(run)
+      .set({
+        status: "paused_auth",
+        failureCode: "execution_limit",
+        dispatchError: "Synthetic funding window exhausted",
+      })
+      .where(eq(run.id, classifier.id));
+    const blocks = await emailReviewReport(
+      ctx.db,
+      email.shortcode,
+      null,
+      ctx.actor,
+    );
+    const pipeline = blocks.find(
+      (block) => block.kind === "records" && block.title === "Email pipeline",
+    );
+    if (pipeline?.kind !== "records") throw new Error("Email pipeline missing");
+    expect(
+      pipeline.rows.find((row) => row.title === "Decision model"),
+    ).toMatchObject({
+      entity: "run",
+      id: classifier.shortcode,
+      state: { kind: "warning", label: "Paused" },
+      lines: expect.arrayContaining([
+        expect.objectContaining({ text: "Synthetic funding window exhausted" }),
+      ]),
+    });
+  });
+
   it("navigates accepted families and lifecycle purchases without promoting dismissed or mailbox thread context", async () => {
     const party = await insertWithShortcode(ctx.db, "ledgerParty", {
       name: "Synthetic navigation owner",

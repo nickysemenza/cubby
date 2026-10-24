@@ -132,17 +132,14 @@ const scopedQueriesPending = (
       )
     : queries.length > 0;
 
-/** The member's switch gates every pass; a continuation needs remaining coverage. */
+/** Discovery always classifies connected mail; continuations need remaining coverage. */
 async function discoveryAllowed(
   db: Database,
   target: Pick<
     GmailSyncTarget,
     "ledgerPartyId" | "mailboxId" | "scopedQueries"
   >,
-  continuation = false,
 ) {
-  if (!(await mailImportEnabled(db, target.mailboxId))) return false;
-  if (!continuation) return true;
   const { coverage } = await loadGmailCursor(db, {
     ledgerPartyId: target.ledgerPartyId,
     mailboxId: target.mailboxId,
@@ -271,13 +268,6 @@ export async function startMailDiscovery(
       "Selected discovery mailbox is not connected to this member.",
     );
   for (const target of selected) {
-    if (!(await discoveryAllowed(db, target))) {
-      if (requested)
-        throw new Error(
-          "Mail import is off for this mailbox; turn it on in Settings first.",
-        );
-      continue;
-    }
     const waiting = await fundingPausedDiscovery(db, target, "paused_auth");
     if (waiting) {
       if (!options.paidGrant) {
@@ -306,7 +296,9 @@ export async function startMailDiscovery(
             emailAuditVersion: 1,
             mailboxId: target.mailboxId,
             scopedQueries: target.scopedQueries,
-            executionPolicy: "import",
+            executionPolicy: (await mailImportEnabled(db, target.mailboxId))
+              ? "import"
+              : "classification_only",
           },
           progress: {
             attempt: 0,
@@ -497,6 +489,7 @@ export async function saveMailDiscoveryBatch(
         ledgerPartyId: claimed.ledgerPartyId,
         userId: claimed.row.actorUserId,
         parentRunId: claimed.row.id,
+        automatic: true,
         mailboxId: claimed.input.mailboxId,
         messageIds: ingested.orderMailIds.slice(offset, offset + 50),
       });
@@ -631,15 +624,11 @@ export async function continueMailDiscovery(
   let nextRunId = existing?.id;
   if (!nextRunId) {
     if (
-      !(await discoveryAllowed(
-        db,
-        {
-          ledgerPartyId: previous.ledgerPartyId,
-          mailboxId: input.mailboxId,
-          scopedQueries: input.scopedQueries,
-        },
-        true,
-      ))
+      !(await discoveryAllowed(db, {
+        ledgerPartyId: previous.ledgerPartyId,
+        mailboxId: input.mailboxId,
+        scopedQueries: input.scopedQueries,
+      }))
     )
       return;
     try {

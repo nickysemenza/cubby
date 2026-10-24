@@ -69,9 +69,11 @@ checksums, replay, money conservation and unresolved-identity review still apply
 
 ## Connect and converge evidence
 
-1. Connect Google with read-only Gmail access and turn Mail import on for the
-   mailbox (`run.set_mail_import`, only on the member's instruction). Daily
-   discovery then searches known Vendors' verified senders and website domains
+1. Connect Google with read-only Gmail access. Discovery and classification
+   continue independently of automatic import. Turn Mail import on for the
+   mailbox (`run.set_mail_import`, only on the member's instruction) to admit
+   new unattended imports; enabling queues immediate catch-up. Turning it off
+   leaves explicit imports and existing Run controls available. Discovery searches known Vendors' verified senders and website domains
    and unmatched transaction merchants, and reads new mail from all senders,
    excluding Spam and Trash; there is no all-of-Gmail crawl. The decision model
    routes relevant mail and escalates uncertainty to the relevance model; each

@@ -6,10 +6,10 @@ import { decisionChoiceFitsContext } from "~/server/ai/decision-model";
 import { mailTriagePrompt } from "~/server/ai/policy/prompts/mail";
 import { getDb } from "~/server/db/helpers";
 import { email as emailTable, orderMail, run } from "~/server/db/schema";
+import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 import type { GmailProvider } from "../../repo/gmail/types";
-import { syntheticMailImportRun } from "../../service/gmail/execution.fixtures";
 import { ingestGmailMessages } from "../../service/gmail/ingest";
 
 const message =
@@ -74,9 +74,15 @@ describe("Gmail classification stage and reason", () => {
       triage,
       relevance,
       runId: relevance
-        ? await syntheticMailImportRun(ctx.db, ctx.actor, {
-            ledgerPartyId: party.id,
-            mailboxId: "synthetic-mailbox",
+        ? await ensureRun(ctx.db, ctx.actor, {
+            purpose: "mail_discovery",
+            status: "running",
+            trigger: "manual",
+            input: {
+              mailboxId: "synthetic-mailbox",
+              scopedQueries: [],
+              executionPolicy: "classification_only",
+            },
           })
         : undefined,
       storage,
@@ -166,10 +172,17 @@ describe("Gmail classification stage and reason", () => {
         " Receipt details at the end.";
       const triage = vi.fn(async (_content: string) => verdict);
       expect(
-        await classify(`partial-${verdict}`, message(body), triage),
+        await classify(
+          `partial-${verdict}`,
+          message(body),
+          triage,
+          verdict === "uncertain"
+            ? async () => ({ classification: "uncertain" })
+            : undefined,
+        ),
       ).toMatchObject({
         classification: verdict,
-        stage: "decision",
+        stage: verdict === "uncertain" ? "model" : "decision",
       });
       expect(triage).toHaveBeenCalledOnce();
       expect(

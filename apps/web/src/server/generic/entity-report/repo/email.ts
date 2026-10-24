@@ -20,7 +20,7 @@ import {
   mailboxClassification,
 } from "@cubby/schemas/mailbox-research";
 import { mailResearchRunInput, runWorkLabel } from "@cubby/schemas/run-fields";
-import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { groupBy } from "es-toolkit";
 
 import { operationCommandRequest } from "~/contracts/define";
@@ -34,6 +34,8 @@ import type { Database } from "~/server/db";
 import { getDb, notDeleted } from "~/server/db/helpers";
 import {
   aiUsage,
+  aiEvaluation,
+  aiEvaluationRequest,
   emailCandidateObservation,
   emailClassificationObservation,
   feedback,
@@ -51,6 +53,7 @@ import {
   emailFeedbackHasClassificationSql,
 } from "~/server/domains/email/repo/email-sql";
 import { hasRetainedEmailImportContent } from "~/server/domains/purchase-import/repo/email-content";
+import { mailImportEnabled } from "~/server/domains/purchase-import/repo/mail-import-settings";
 import { runRowState } from "~/server/generic/collection/repo/collection-items";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
@@ -269,6 +272,7 @@ function stageRow(
   email: typeof emailTable.$inferSelect,
   latest: Observation | undefined,
   decidedBy: (typeof automatedStages)[number] | null,
+  classifier?: typeof run.$inferSelect,
 ): ReportRecordRow {
   const step = stageStep[stage];
   if (latest)
@@ -280,6 +284,20 @@ function stageRow(
       at: latest.createdAt,
       conflict: latest.conflict,
     });
+  if (classifier)
+    return pipelineRow(
+      step,
+      IMPORT_RUN_STATE[runRowState(classifier.status) ?? "done"],
+      {
+        entity: "run",
+        id: classifier.shortcode,
+        lines: [
+          `${classifier.shortcode} · ${classifier.status}`,
+          classifier.dispatchError,
+        ],
+        at: classifier.endedAt ?? classifier.startedAt,
+      },
+    );
   const order = automatedStages.indexOf(stage);
   if (decidedBy && automatedStages.indexOf(decidedBy) > order)
     return pipelineRow(step, "Ran", {
@@ -293,7 +311,7 @@ function stageRow(
     lines:
       stage === "model" && email.classification === "uncertain"
         ? [
-            "Classification-only discovery skips the relevance model; Reclassify runs it.",
+            "Uncertain mail waits for relevance classification; inspect its Run for progress or a funding pause.",
           ]
         : [],
   });
@@ -515,6 +533,7 @@ function importRow(
   shortcode: EmailShortcode,
   costs: Awaited<ReturnType<typeof loadImportCosts>>,
   canImport: boolean,
+  automaticImport: boolean,
 ) {
   const { importRun, usage } = costs;
   const estimate =
@@ -574,7 +593,9 @@ function importRow(
     });
   return pipelineRow("Import Run", "Not reached", {
     lines: [
-      "Related Email imports automatically when Mail import is enabled for its mailbox.",
+      automaticImport
+        ? "Awaiting automatic import."
+        : "Awaiting import — automatic import is off. Classification continues; you can import this Email explicitly.",
       ...estimate,
     ],
     commands: [
@@ -912,6 +933,30 @@ export async function emailReviewReport(
     email.classification === "related" &&
     current &&
     !["deleted", "excluded", "researching"].includes(email.status);
+  const [classifier] =
+    email.classification === "uncertain"
+      ? await client
+          .select({ owner: run })
+          .from(aiEvaluationRequest)
+          .innerJoin(
+            aiEvaluation,
+            eq(aiEvaluation.id, aiEvaluationRequest.evaluationId),
+          )
+          .innerJoin(run, eq(run.id, aiEvaluationRequest.runId))
+          .where(
+            and(
+              eq(aiEvaluation.executionKind, "mail_reclassify"),
+              sql`${aiEvaluation.target}->>'recordId' = ${email.id}`,
+              sql`${aiEvaluation.snapshot}->>'checksum' IS NOT DISTINCT FROM ${email.checksum}`,
+              eq(run.ledgerPartyId, email.ledgerPartyId),
+              notDeleted(run),
+              isNull(aiEvaluationRequest.cancelledAt),
+            ),
+          )
+          .orderBy(desc(run.startedAt), desc(run.id))
+          .limit(1)
+      : [];
+  const automaticImport = await mailImportEnabled(db, email.mailboxId);
   const associations = await readEmailAssociations(db, code, actor);
   // Per-stage results for the current original, newest first.
   const currentPredictions = predictions.filter(
@@ -926,6 +971,7 @@ export async function emailReviewReport(
   const footer = await runMembership(client, email, [
     ...predictions.map((item) => item.runId),
     ...candidates.map((item) => item.runId),
+    classifier?.owner.id ?? null,
   ]);
   const awaitingAcceptance =
     email.classificationStage !== "resolution" &&
@@ -947,6 +993,12 @@ export async function emailReviewReport(
             email,
             currentPredictions.find((item) => item.stage === stage),
             decidedBy,
+            stage ===
+              (currentPredictions.some((item) => item.stage === "decision")
+                ? "model"
+                : "decision")
+              ? classifier?.owner
+              : undefined,
           ),
         ),
         memberRow(
@@ -962,7 +1014,7 @@ export async function emailReviewReport(
           candidates.find((item) => item.preview.checksum === email.checksum),
           current,
         ),
-        importRow(email, shortcode, costs, canImport),
+        importRow(email, shortcode, costs, canImport, automaticImport),
         purchaseRow(email, associations.purchases),
       ],
       empty: "No pipeline steps.",

@@ -117,64 +117,53 @@ describe("persisted production Gmail decision telemetry", () => {
       );
     },
   );
-  it("persists the actual relevance feature only after its authorized production call", async () => {
-    const f = await fixture(true);
-    vi.spyOn(models, "selectDecisionModel").mockReturnValue(
-      "@cf/cloudflare/clef",
-    );
-    vi.spyOn(choices, "runDecisionChoice").mockResolvedValue(result(2));
-    const relevance = vi
-      .spyOn(structured, "runStructuredFeature")
-      .mockResolvedValue({
-        classification: "unrelated",
-        reason: "Synthetic relevance verdict",
+  it.each([false, true])(
+    "persists relevance fallback with import policy %s",
+    async (importPolicy) => {
+      const f = await fixture(importPolicy);
+      vi.spyOn(models, "selectDecisionModel").mockReturnValue(
+        "@cf/cloudflare/clef",
+      );
+      vi.spyOn(choices, "runDecisionChoice").mockResolvedValue(result(2));
+      const relevance = vi
+        .spyOn(structured, "runStructuredFeature")
+        .mockResolvedValue({
+          classification: "unrelated",
+          reason: "Synthetic relevance verdict",
+        });
+      await ingestGmailMessages(ctx.db, f.provider, {
+        ...f.input,
+        messageIds: ["relevance-model"],
       });
-    await ingestGmailMessages(ctx.db, f.provider, {
-      ...f.input,
-      messageIds: ["relevance-model"],
-    });
-    expect(relevance).toHaveBeenCalledWith(
-      MAILBOX_RELEVANCE_FEATURE,
-      expect.anything(),
-      expect.objectContaining({
-        runId: f.runId,
-        operation: "mailbox-relevance",
-      }),
-    );
-    expect(
-      await getDb(ctx.db).select().from(emailClassificationObservation),
-    ).toMatchObject([
-      {
-        model: MAILBOX_RELEVANCE_FEATURE.model,
-        promptVersion: MAILBOX_RELEVANCE_FEATURE.promptVersion,
-        operation: "mailbox-relevance",
-        stage: "model",
-        classification: "unrelated",
-      },
-    ]);
-  });
-  it("keeps incomplete-original rules and no-Run caller judgment telemetry unknown without model calls", async () => {
+      expect(relevance).toHaveBeenCalledWith(
+        MAILBOX_RELEVANCE_FEATURE,
+        expect.anything(),
+        expect.objectContaining({
+          runId: f.runId,
+          operation: "mailbox-relevance",
+        }),
+      );
+      expect(
+        await getDb(ctx.db).select().from(emailClassificationObservation),
+      ).toMatchObject([
+        {
+          model: MAILBOX_RELEVANCE_FEATURE.model,
+          promptVersion: MAILBOX_RELEVANCE_FEATURE.promptVersion,
+          operation: "mailbox-relevance",
+          stage: "model",
+          classification: "unrelated",
+        },
+      ]);
+    },
+  );
+  it("queues member-search classification without fabricating model telemetry", async () => {
     const f = await fixture();
     const runner = vi.spyOn(choices, "runDecisionChoice");
     const relevance = vi.spyOn(structured, "runStructuredFeature");
-    const provider = {
-      ...f.provider,
-      getMessage: async (id: string) => ({
-        id,
-        payload: {
-          mimeType: "text/plain",
-          body: { data: Buffer.from("x").toString("base64url"), size: 2 },
-        },
-      }),
-    };
-    await ingestGmailMessages(ctx.db, provider, {
-      ...f.input,
-      messageIds: ["incomplete-original-rule"],
-    });
     await ingestGmailMessages(ctx.db, f.provider, {
       ...f.input,
       runId: undefined,
-      callerJudges: true,
+      searchActor: ctx.actor,
       messageIds: ["member-rule"],
     });
     expect(runner).not.toHaveBeenCalled();
@@ -182,14 +171,7 @@ describe("persisted production Gmail decision telemetry", () => {
     const observations = await getDb(ctx.db)
       .select()
       .from(emailClassificationObservation);
-    expect(observations).toHaveLength(2);
-    for (const observation of observations)
-      expect(observation).toMatchObject({
-        model: null,
-        promptVersion: null,
-        operation: null,
-        stage: "rule",
-      });
+    expect(observations).toHaveLength(0);
   });
   it("isolates actual model metadata while concurrent message decisions complete in reverse order", async () => {
     const f = await fixture();

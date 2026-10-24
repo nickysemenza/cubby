@@ -48,6 +48,8 @@ export async function wakeJobs(
 
 function taskKey(task: BackgroundTaskInput) {
   switch (task.kind) {
+    case "maintenance.purchase-discovery":
+      return task.kind;
     case "image-processing.wakeup":
       return `image-processing:${task.jobId}`;
     case "entity-embedding.refresh":

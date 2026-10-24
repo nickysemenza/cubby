@@ -63,7 +63,7 @@ export const purchaseImportContract = defineContract(
     }),
     emailImport: mutation({
       description:
-        "Start Luna import for up to 50 selected Emails, each by its `id` (EML- code) and exact checksum as purchase_import.mail_search and purchase_import_read.mail_read return them, without a dollar allowance. An Email already linked to exactly one Purchase imports into that Purchase. Ownership, evidence and review gates still apply. An existing automatic admission retains its original authority. Automatic discovery remains classification-only; no other Email is admitted. Other paid models need their own authorization.",
+        "Start Luna import for up to 50 selected Emails, each by its `id` (EML- code) and exact checksum as purchase_import.mail_search and purchase_import_read.mail_read return them, without a dollar allowance. An Email already linked to exactly one Purchase imports into that Purchase. Ownership, evidence and review gates still apply. An existing automatic admission retains its original authority. Automatic import admission follows the mailbox switch; selected imports do not enable it. Other paid models need their own authorization.",
       command: {
         label: "Import Email",
         confirmation: null,
@@ -168,7 +168,7 @@ export const purchaseImportContract = defineContract(
     /** Scoped live Gmail search for a missing original. */
     mailSearch: mutation({
       description:
-        "Search the member's connected Gmail (Gmail search syntax; Spam and Trash are always excluded) to recover a missing original, e.g. by order number. Without a Mail import Run no paid classification runs: every match is retained as an `uncertain` candidate you settle with `purchase_import.mail_resolve` (`unrelated` disposes of it). Under Pi's Mail import Run matches are classified like discovery. Searching never advances mailbox coverage. Page with `nextPageToken`. With several connected mailboxes, pass `mailboxId`.",
+        "Search the member's connected Gmail (Gmail search syntax; Spam and Trash are always excluded) to recover a missing original, e.g. by order number. Member searches atomically queue normal classification for new matches in resumable Runs; pending results remain uncertain until those Jobs run. Under Pi's Mail import Run matches are classified in that Run. Disabling automatic import never skips classification. Searching never advances mailbox coverage. Page with `nextPageToken`. With several connected mailboxes, pass `mailboxId`.",
       input: mailSearchInput,
       output: mailSearchOut,
     }),

@@ -58,7 +58,7 @@ describe("immutable Email observations", () => {
       mailboxId: "synthetic-link-mailbox",
       messageIds: ["synthetic-link-message"],
       storage,
-      callerJudges: true,
+      searchActor: ctx.actor,
     });
     const [mail] = await getDb(ctx.db).select().from(emailTable);
     if (!mail?.orderMailId) throw new Error("Synthetic retained Email missing");
@@ -202,6 +202,7 @@ describe("immutable Email observations", () => {
       messageIds: ["synthetic-message"],
       storage,
       triage: async () => "uncertain" as const,
+      relevance: async () => ({ classification: "uncertain" as const }),
     };
     await ingestGmailMessages(ctx.db, gmail, input);
     const [email] = await getDb(ctx.db).select().from(emailTable);
@@ -233,13 +234,13 @@ describe("immutable Email observations", () => {
     ).toEqual([
       expect.objectContaining({
         applicationVerified: true,
-        decision: { classification: "uncertain", stage: "decision" },
+        decision: { classification: "uncertain", stage: "model" },
       }),
     ]);
     expect(prediction).toMatchObject({
       emailId: email.id,
       classification: "uncertain",
-      stage: "decision",
+      stage: "model",
       checksum: email.checksum,
       runId: null,
       model: null,
@@ -293,7 +294,7 @@ describe("immutable Email observations", () => {
       };
       await ingestGmailMessages(ctx.db, gmail, {
         ...input,
-        callerJudges: true,
+        searchActor: ctx.actor,
       });
       const [original] = await readRetainedMail(ctx.db, {
         ledgerPartyIds: [fixture.party.id],

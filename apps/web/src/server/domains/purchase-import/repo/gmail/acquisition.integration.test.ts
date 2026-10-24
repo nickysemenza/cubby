@@ -82,7 +82,7 @@ describe("Gmail acquisition retention and replay", () => {
       ledgerPartyId: party.id,
       mailboxId: "google-one",
     });
-  it("keeps uncertain attachment content without relevance escalation on classification-only retries", async () => {
+  it("runs relevance fallback and discards unrelated content on classification-only retries", async () => {
     const party = await member();
     const runId = await ensureRun(ctx.db, ctx.actor, {
       purpose: "mail_discovery",
@@ -108,19 +108,19 @@ describe("Gmail acquisition retention and replay", () => {
     };
     await ingestGmailMessages(ctx.db, provider(), input);
     await ingestGmailMessages(ctx.db, provider(), input);
-    expect(relevance).not.toHaveBeenCalled();
+    expect(relevance).toHaveBeenCalledOnce();
     const [email] = await getDb(ctx.db).select().from(emailTable);
     expect(email).toMatchObject({
-      classification: "uncertain",
-      classificationStage: "decision",
+      classification: "unrelated",
+      classificationStage: "model",
       executionPolicy: "classification_only",
       sender: "shared@platform.example",
       subject: "Synthetic notice",
       receivedAt: new Date("2026-09-01T00:00:00.000Z"),
     });
-    expect(await getDb(ctx.db).select().from(orderMail)).toHaveLength(1);
+    expect(await getDb(ctx.db).select().from(orderMail)).toHaveLength(0);
     expect(await getDb(ctx.db).select().from(orderMailAttachment)).toHaveLength(
-      1,
+      0,
     );
   });
   it("keeps unrelated headers and original identity while discarding body and attachment bytes", async () => {
@@ -248,6 +248,7 @@ describe("Gmail acquisition retention and replay", () => {
         messageIds: ["unknown-headers"],
         storage,
         triage: async () => "unrelated",
+        relevance: async () => ({ classification: "uncertain" }),
       },
     );
     expect((await getDb(ctx.db).select().from(emailTable))[0]).toMatchObject({

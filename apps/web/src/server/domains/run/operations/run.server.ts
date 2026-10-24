@@ -9,7 +9,7 @@ import type { z } from "zod";
 import { runContract } from "~/contracts/run.contract";
 import { listAiUsageForRun } from "~/server/ai/repo/ai-usage";
 import { account } from "~/server/db/auth.schema";
-import { getDb } from "~/server/db/helpers";
+import { getDb, withTransactionDatabase } from "~/server/db/helpers";
 import { oauthRefreshToken, run as runTable } from "~/server/db/schema";
 import { startMailDiscovery } from "~/server/domains/purchase-import/operations/gmail/discovery";
 import { commitPurchaseImport } from "~/server/domains/purchase-import/operations/import-orders";
@@ -191,7 +191,21 @@ export const runHandlers = implementOperationDomain(runContract, {
       throw new Error(
         `Mailbox ${input.mailboxId} is not connected to this member.`,
       );
-    await setMailImport(context.db, input);
+    await withTransactionDatabase(context.db, async (tx) => {
+      await setMailImport(tx, input);
+      await (
+        await import("~/server/workflows/background-tasks/publish")
+      ).publishBackgroundTasks(
+        tx,
+        [
+          {
+            kind: "maintenance.purchase-discovery",
+            requestedAt: new Date().toISOString(),
+          },
+        ],
+        { source: "mail-import-setting" },
+      );
+    });
     return mailImportStatusFor(context);
   },
   discoverMail: async (context, input) => {

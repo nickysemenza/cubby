@@ -173,7 +173,7 @@ describe("automatic Mail import switch", () => {
     });
   });
 
-  it("discovers only with the switch on, imports, and replays an active launch", async () => {
+  it("classifies with import off, queues catch-up on enabling, and replays active discovery", async () => {
     await seed();
     await insertWithShortcode(ctx.db, "vendor", {
       name: "Synthetic Verified Vendor",
@@ -184,17 +184,25 @@ describe("automatic Mail import switch", () => {
       name: "Synthetic Unresearched Vendor",
     });
     expect(await invoke("discoverMail", { mailboxId })).toMatchObject({
-      ok: false,
+      ok: true,
     });
-    expect(await startMailDiscovery(ctx.db)).toEqual({
-      started: 0,
-      running: 0,
-    });
+    const [classification] = await getDb(ctx.db)
+      .select()
+      .from(run)
+      .where(eq(run.purpose, "mail_discovery"));
     expect(
-      await getDb(ctx.db).select().from(job).where(eq(job.kind, "run.execute")),
-    ).toEqual([]);
+      mailboxDiscoveryInput.parse(classification?.input).executionPolicy,
+    ).toBe("classification_only");
+    await getDb(ctx.db).delete(job).where(eq(job.kind, "run.execute"));
+    await getDb(ctx.db).delete(run);
 
     await invoke("setMailImport", { mailboxId, enabled: true });
+    expect(
+      await getDb(ctx.db)
+        .select()
+        .from(job)
+        .where(eq(job.kind, "maintenance.purchase-discovery")),
+    ).toMatchObject([{ state: "queued" }]);
     expect(
       await invoke("discoverMail", { mailboxId: "synthetic-foreign-mailbox" }),
     ).toMatchObject({ ok: false });
@@ -230,7 +238,7 @@ describe("automatic Mail import switch", () => {
     await getDb(ctx.db).delete(run);
     await invoke("setMailImport", { mailboxId, enabled: false });
     expect(await startMailDiscovery(ctx.db)).toEqual({
-      started: 0,
+      started: 1,
       running: 0,
     });
   });

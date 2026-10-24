@@ -309,7 +309,24 @@ describe("Mail import switch and discovery through MCP", () => {
           mailboxId,
         })
       ).isError,
-    ).toBe(true);
+    ).not.toBe(true);
+    const [classificationOnly] = await getDb(ctx.db)
+      .select()
+      .from(runTable)
+      .where(eq(runTable.purpose, "mail_discovery"));
+    expect(
+      mailboxDiscoveryInput.parse(classificationOnly?.input).executionPolicy,
+    ).toBe("classification_only");
+    if (!classificationOnly)
+      throw new Error("Expected classifier discovery Run");
+    await getDb(ctx.db)
+      .update(runTable)
+      .set({ status: "completed", endedAt: new Date() })
+      .where(eq(runTable.id, classificationOnly.id));
+    await getDb(ctx.db)
+      .update(job)
+      .set({ state: "completed" })
+      .where(eq(job.key, `run:${classificationOnly.id}`));
     const enabled = await call("run", enable());
     expect(enabled.isError).not.toBe(true);
     expect(enabled.structuredContent).toMatchObject({
@@ -325,7 +342,7 @@ describe("Mail import switch and discovery through MCP", () => {
     const [discovery] = await getDb(ctx.db)
       .select()
       .from(runTable)
-      .where(eq(runTable.purpose, "mail_discovery"));
+      .where(eq(runTable.status, "running"));
     expect(mailboxDiscoveryInput.parse(discovery?.input)).toMatchObject({
       mailboxId,
       executionPolicy: "import",

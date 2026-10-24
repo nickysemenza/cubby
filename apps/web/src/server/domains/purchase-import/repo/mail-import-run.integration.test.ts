@@ -34,12 +34,14 @@ import {
   kernelRequestContext,
 } from "~/server/testing/mcp-test-utils";
 import { createTestRequestContext } from "~/server/testing/request-context";
+import { discoverPurchases } from "~/server/workflows/catch-up";
 
 import { readMailImportOutcomes, settleMail } from "../operations/mail-tool";
 import { retainedMailFixture } from "../operations/order-import.fixtures";
 import { reconcileSettledRun } from "../operations/run-review";
 import { startAgentRunFixture } from "../service/import-run.fixtures";
 import { writeOutcomeReceipts } from "../service/run-outcome.fixtures";
+import * as gmailProvider from "./gmail/provider";
 import { importPendingEmails, startMailImport } from "./mail-import-run";
 import { setMailImport } from "./mail-import-settings";
 import { transferMailRunSources } from "./mail-run-membership";
@@ -83,6 +85,32 @@ describe("mail research admission", () => {
     if (!mail) throw new Error("Synthetic mail fixture did not persist");
     return { party, mail };
   }
+  it("rechecks the automatic switch at admission without stopping explicit or admitted work", async () => {
+    const { party, mail } = await source();
+    const input = {
+      ledgerPartyId: party.id,
+      userId: ctx.actor.userId,
+      mailboxId: mail.mailboxId,
+      messageIds: [mail.id],
+    };
+    expect(
+      await startMailImport(ctx.db, { ...input, automatic: true }),
+    ).toEqual([]);
+    await setMailImport(ctx.db, { mailboxId: mail.mailboxId, enabled: true });
+    const admitted = await startMailImport(ctx.db, {
+      ...input,
+      automatic: true,
+    });
+    expect(admitted).toHaveLength(1);
+    await setMailImport(ctx.db, { mailboxId: mail.mailboxId, enabled: false });
+    expect(
+      await startMailImport(ctx.db, { ...input, automatic: true }),
+    ).toEqual([]);
+    const replayed = await startMailImport(ctx.db, input);
+    expect(replayed[0]?.runId).toBe(admitted[0]?.runId);
+    expect(replayed[0]?.status).toBe("running");
+  });
+
   // Admission freezes the Mail population before any of its targets finish.
   it("reports the known Mail import total while its roster is active", async () => {
     const { party, mail } = await source();
@@ -162,6 +190,68 @@ describe("mail research admission", () => {
       .from(emailTable)
       .where(eq(emailTable.orderMailId, excluded.id));
     expect(excludedEmail?.runId).toBeNull();
+  });
+
+  it("queues continuation when enabling import has more than one admission page", async () => {
+    const { party } = await source();
+    await getDb(ctx.db).insert(account).values({
+      id: crypto.randomUUID(),
+      accountId: "synthetic-mailbox",
+      providerId: "google",
+      userId: ctx.actor.userId,
+      updatedAt: new Date(),
+    });
+    await setMailImport(ctx.db, {
+      mailboxId: "synthetic-mailbox",
+      enabled: true,
+    });
+    for (let index = 0; index < 50; index += 1)
+      await retainedMailFixture(ctx.db, {
+        ledgerPartyId: party.id,
+        mailboxId: "synthetic-mailbox",
+        messageId: `synthetic-backlog-${index}`,
+        checksum: "b".repeat(64),
+      });
+    const configured = vi
+      .spyOn(gmailProvider, "gmailOAuthConfigured")
+      .mockReturnValue(true);
+    try {
+      await discoverPurchases(ctx.db);
+      expect(
+        await getDb(ctx.db)
+          .select()
+          .from(job)
+          .where(eq(job.kind, "maintenance.purchase-discovery")),
+      ).toMatchObject([{ state: "queued" }]);
+      let owners = await getDb(ctx.db)
+        .select()
+        .from(run)
+        .where(eq(run.purpose, "mail_import"));
+      expect(
+        owners.flatMap(
+          (owner) => mailResearchRunInput.parse(owner.input).sources,
+        ),
+      ).toHaveLength(50);
+      await discoverPurchases(ctx.db);
+      owners = await getDb(ctx.db)
+        .select()
+        .from(run)
+        .where(eq(run.purpose, "mail_import"));
+      const sources = owners.flatMap(
+        (owner) => mailResearchRunInput.parse(owner.input).sources,
+      );
+      expect(sources).toHaveLength(51);
+      expect(new Set(sources.map((item) => item.orderMailId)).size).toBe(51);
+      await discoverPurchases(ctx.db);
+      expect(
+        await getDb(ctx.db)
+          .select()
+          .from(run)
+          .where(eq(run.purpose, "mail_import")),
+      ).toHaveLength(owners.length);
+    } finally {
+      configured.mockRestore();
+    }
   });
 
   // Historical ownership blocks and contentless shells must not consume the
