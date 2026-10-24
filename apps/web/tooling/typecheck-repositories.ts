@@ -14,6 +14,7 @@ import { execFileSync } from "node:child_process";
 import { dirname, join, relative, resolve } from "node:path";
 
 export const repositoryOwners = [
+  "src/server/generic/entity-report/repo/run-results.ts",
   "src/server/db/job-schema.ts",
   "src/server/db/assessment-correction-lock-schema.ts",
   "src/server/generic/assessment/repo/correction-lock.ts",

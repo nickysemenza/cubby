@@ -1,5 +1,7 @@
+import { auditEntitySchema } from "@cubby/schemas/audit";
+import { entityRefKey } from "@cubby/schemas/entity";
 import type { EntityReportOut } from "@cubby/schemas/entity-report";
-import { runShortcode } from "@cubby/schemas/identifiers";
+import { parseEntityRef, runShortcode } from "@cubby/schemas/identifiers";
 import type { RunOut } from "@cubby/schemas/run";
 import {
   hasImportRunReports,
@@ -19,10 +21,13 @@ import {
 } from "~/server/domains/purchase-import/repo/run-service";
 import { getRunLiveProgress } from "~/server/domains/run/repo/run-progress";
 import { readRunSteps } from "~/server/domains/run/repo/run-step";
+import { identityShortcodes } from "~/server/entity-kernel/repo/entity-identity";
 import { createEntityReader } from "~/server/entity-kernel/repo/repository";
 import { suggestionCountsByFamily } from "~/server/generic/assessment/repo/suggestion-list";
 import { getAuditLog } from "~/server/generic/audit-log/repo/audit-log";
+import { runResultsBlocks } from "~/server/generic/entity-report/repo/run-results";
 import { listRunJobs } from "~/server/generic/jobs/repo/job-diagnostics";
+import { lookupEntityLabels } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { isStepRunPurpose } from "~/server/workflows/runs/contract";
 
 import { reportDependency, type ReportExecution } from "./dependency";
@@ -108,6 +113,9 @@ const runProgress = reportDependency(async (execution) => {
   const { code } = await execution.read(runBase);
   return getRunLiveProgress(execution.request.db, code);
 });
+const runSteps = reportDependency(async (execution) =>
+  readRunSteps(execution.request.db, await execution.read(runId)),
+);
 const runLog = reportDependency(async (execution) => {
   const { code } = await execution.read(runBase);
   return loadRunLog(execution.request.db, code);
@@ -160,6 +168,47 @@ const importSlot = (slot: Parameters<typeof importReportBlocks>[0]) =>
   });
 
 export const RUN_REPORTS = {
+  "run.results": runSlot(async (execution) => {
+    const db = execution.request.db;
+    const blocks = await runResultsBlocks(
+      execution.request.db,
+      await execution.read(runId),
+      execution.request.id,
+      await execution.read(runSteps),
+    );
+    const refs = blocks.flatMap((block) =>
+      block.kind === "records"
+        ? block.rows.flatMap((row) =>
+            row.entity && row.id
+              ? [parseEntityRef(auditEntitySchema.parse(row.entity), row.id)]
+              : [],
+          )
+        : [],
+    );
+    const [names, identities] = await Promise.all([
+      lookupEntityLabels(db, refs),
+      identityShortcodes(
+        db,
+        refs.map((ref) => ref.id),
+      ),
+    ]);
+    for (const block of blocks) {
+      if (block.kind !== "records") continue;
+      for (const row of block.rows) {
+        if (!row.entity || !row.id) continue;
+        const ref = parseEntityRef(auditEntitySchema.parse(row.entity), row.id);
+        const identity = identities.get(ref.id);
+        row.title =
+          names.get(entityRefKey(ref.entity, ref.id)) ??
+          identity?.shortcode ??
+          ref.entity;
+        const deleted = row.badges?.some((badge) => badge.label === "Deleted");
+        row.entity = identity?.shortcode && !deleted ? ref.entity : null;
+        row.id = identity?.shortcode && !deleted ? identity.shortcode : null;
+      }
+    }
+    return { blocks };
+  }),
   "run.steps": runSlot(async (execution) => {
     const { code, status, purpose, input } = await execution.read(runBase);
     if (!isStepRunPurpose(purpose)) return { blocks: [] };
@@ -169,10 +218,7 @@ export const RUN_REPORTS = {
         code,
         purpose,
         status,
-        steps: await readRunSteps(
-          execution.request.db,
-          await execution.read(runId),
-        ),
+        steps: await execution.read(runSteps),
       }),
     };
   }),

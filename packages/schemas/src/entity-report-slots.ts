@@ -49,6 +49,7 @@ export const reportSlots = [
   "expense.settlement",
   // A Run's detail: steps, progress, findings, transcript, log, AI usage and changes.
   "run.steps",
+  "run.results",
   "run.live-progress",
   "run.import-stats",
   "run.import-progress-live",

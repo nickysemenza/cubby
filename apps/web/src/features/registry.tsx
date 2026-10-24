@@ -281,6 +281,7 @@ const detailSlots = {
     ),
   },
   run: {
+    results: runReportSlot("results"),
     // Progress, usage and changes are server-composed report slots; `runReportSlot` is their one
     // component (`features/run/slots.tsx`). Steps, Decisions and Diagnostics are web's richer
     // fills of the `run.steps`, `run.decisions` and `run.diagnostics` reports native draws.
@@ -326,7 +327,7 @@ const detailSlots = {
     "import-findings": runReportSlot("import-findings", isImportRun),
     "import-targets": slot(
       () => named(import("~/features/run/run-targets"), "RunTargets"),
-      (run) => run.purpose !== "photo_inventory",
+      isImportRun,
     ),
     "import-prepared-orders": runReportSlot(
       "import-prepared-orders",

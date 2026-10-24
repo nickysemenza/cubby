@@ -93,12 +93,6 @@ export default defineEntity({
         },
         {
           kind: "fields",
-          id: "results",
-          title: "Results",
-          fields: ["ordersSeen", "imported", "updated", "skipped"],
-        },
-        {
-          kind: "fields",
           id: "failure",
           title: "Needs attention",
           fields: ["failureCode", "dispatchError"],
@@ -185,6 +179,12 @@ export default defineEntity({
           workspace: "work",
           title: "Photos",
           placement: "full",
+        },
+        {
+          kind: "slot",
+          id: "results",
+          workspace: "work",
+          title: "Results",
         },
         {
           kind: "slot",

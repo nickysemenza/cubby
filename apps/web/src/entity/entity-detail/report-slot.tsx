@@ -405,6 +405,7 @@ export const LIVE_REPORT_POLL_MS = 3_000;
  * them. The paged and large ones (usage, log) read on their own and do not poll.
  */
 const RUN_BATCH_SLOTS = [
+  "run.results",
   "run.live-progress",
   "run.import-stats",
   "run.import-progress-live",
