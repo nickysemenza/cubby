@@ -1814,6 +1814,7 @@ function ResolvedFieldSuggestion({
   source,
   prune,
   surface,
+  renderValue,
   children,
 }: {
   context: RecordSuggestionsCtx;
@@ -1822,6 +1823,7 @@ function ResolvedFieldSuggestion({
   source: FieldSuggestionSource;
   prune: boolean;
   surface: "inline" | "cell";
+  renderValue?: (value: JsonValue) => ReactNode;
   children: ReactNode;
 }) {
   const snapshot = useRef({ row, field });
@@ -1901,6 +1903,7 @@ function ResolvedFieldSuggestion({
             )}
             apply={apply}
             dismiss={dismiss}
+            renderValue={renderValue}
           >
             {children}
           </LiveSuggestionCell>
@@ -1939,12 +1942,14 @@ function ResolvedFieldSuggestion({
         notice={usesInheritedValue ? "Uses the inherited value" : undefined}
         alternative={source.basisMode === "provided"}
         outcome={row.outcomes[field]}
-        renderCorrectionValue={(value) =>
+        renderValue={(value, label) =>
+          renderValue?.(value) ??
           renderSuggestedListFieldValue(
             context.entity,
             row.record,
             field,
             value,
+            label,
           )
         }
         surface={surface}
@@ -2092,6 +2097,7 @@ function BoundRecordFieldSuggestion({
       source={source}
       prune={fieldModel?.control?.suggest?.mode === "prune"}
       surface={surface}
+      renderValue={renderValue}
     >
       {children}
     </ResolvedFieldSuggestion>
@@ -2204,6 +2210,7 @@ function LiveSuggestionCell({
   inline,
   apply,
   dismiss,
+  renderValue,
   children,
 }: {
   context: RecordSuggestionsCtx;
@@ -2216,6 +2223,7 @@ function LiveSuggestionCell({
   inline: boolean;
   apply: () => Promise<void>;
   dismiss: () => Promise<void>;
+  renderValue?: (value: JsonValue) => ReactNode;
   children: ReactNode;
 }) {
   const actions = useSuggestionActions(
@@ -2255,12 +2263,24 @@ function LiveSuggestionCell({
       reasoning={suggestion.reasoning}
       runnerUp={
         runnerUp
-          ? { label: runnerUp.label, probability: runnerUp.probability }
+          ? {
+              label:
+                renderValue?.(runnerUp.value) ??
+                renderSuggestedListFieldValue(
+                  context.entity,
+                  record,
+                  field,
+                  runnerUp.value,
+                  runnerUp.label,
+                ),
+              probability: runnerUp.probability,
+            }
           : null
       }
       provenance={{ model: null, runId: null, at: null }}
       inline={inline}
       pending={pending}
+      renderValue={renderValue}
       accept={apply}
       reject={actions.dismiss}
       onCorrected={actions.dismiss}

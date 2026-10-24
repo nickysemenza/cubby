@@ -645,18 +645,25 @@ export function renderSuggestedListFieldValue<TRecord extends { id: string }>(
   value: z.infer<ReturnType<typeof z.json>>,
   label?: string,
 ): ReactNode {
+  if (value === null || value === "") return <NoneValue />;
   const field = entityFieldModels[entity].fields.find(
     (candidate) => candidate.key === fieldKey,
   );
   if (!field) return String(value ?? "—");
   const readKey = field.readKey ?? field.key;
+  // A proposal must not inherit the current value's resolved projection,
+  // nested reference labels, allocations, or field resolution.
+  const proposedRecord = {
+    id: record.id,
+    [field.key]: value,
+    [readKey]: value,
+  };
   // A domain renderer (a category's full-path pill) wins over the generic
   // reference link. It sees only the proposed value: the row's own resolved
   // projection describes the current value, not this one.
-  const domain = compactFieldRendererFor(entity, fieldKey)?.(
-    { [field.key]: value, [readKey]: value },
-    { label },
-  );
+  const domain = compactFieldRendererFor(entity, fieldKey)?.(proposedRecord, {
+    label,
+  });
   if (domain !== undefined) return domain;
   const referenceId = z.string().safeParse(value);
   if (field.reference && referenceId.success) {
@@ -667,13 +674,15 @@ export function renderSuggestedListFieldValue<TRecord extends { id: string }>(
       <EntityRefLink entity={entityKind} id={referenceId.data} name={label} />
     );
   }
-  if (label) return <span className="min-w-0 truncate">{label}</span>;
-  return renderCompactFieldValue(
-    entity,
-    { ...record, [readKey]: value },
-    field,
-    { singleLine: true },
-  );
+  if (
+    label &&
+    !field.reference?.multiple &&
+    !enumFieldOptions(entity, field).some((option) => option.value === value)
+  )
+    return <span className="min-w-0 truncate">{label}</span>;
+  return renderCompactFieldValue(entity, proposedRecord, field, {
+    singleLine: true,
+  });
 }
 
 /** What a `display.labelPath` / `detailLabelPath` read may carry: text, or a `[]` projection of text. */

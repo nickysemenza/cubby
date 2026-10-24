@@ -94,6 +94,14 @@ missing records and failed reads remain explicit, with raw error diagnostics.
 Inventory and cookbook shortcodes retain their individual detail destinations;
 legacy UUID audit references keep their unlinked/index fallback.
 Visual rules live in [DESIGN.md](../DESIGN.md#controls-and-suggestions).
+Suggestion proposals, alternatives, and correction evidence use the canonical
+suggested-field renderer on detail pages and in table reviews. References keep
+their record links and domain pills; plain text and explicit None retain their
+own presentation. Proposed values never borrow the current record's resolved
+values, reference labels, or allocations. Declared enum options retain their
+canonical labels and pills even when a suggestion supplies a display label.
+Acceptance controls keep their existing interaction; linked review values navigate
+to their records.
 Record picker builders add up to two declared metadata values as a searchable
 secondary line. Trailing picker figures use their content width, capped at
 7.5rem, so compact counts do not reserve a full metadata column and squeeze

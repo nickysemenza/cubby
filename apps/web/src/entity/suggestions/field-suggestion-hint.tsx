@@ -24,6 +24,7 @@ export function FieldSuggestionHint({
   surface = "line",
   autoFilled = false,
   quiet = false,
+  renderValue,
 }: {
   suggestion: FieldSuggestion | null;
   applied: boolean;
@@ -38,6 +39,7 @@ export function FieldSuggestionHint({
   autoFilled?: boolean;
   /** See `SuggestionReview`'s `quiet`: only an actionable proposal renders. */
   quiet?: boolean;
+  renderValue?: Parameters<typeof SuggestionReview>[0]["renderValue"];
 }) {
   if (applied && quiet) return null;
   if (applied) {
@@ -81,6 +83,7 @@ export function FieldSuggestionHint({
       surface={surface}
       autoFilled={autoFilled}
       quiet={quiet}
+      renderValue={renderValue}
     />
   );
 }
