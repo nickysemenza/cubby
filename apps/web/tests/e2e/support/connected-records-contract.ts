@@ -65,18 +65,18 @@ export async function plantTaskConnection(page: Page) {
   await page
     .getByRole("heading", { level: 2, name: "Relations", exact: true })
     .scrollIntoViewIfNeeded();
-  // One grouped section reads every curated view; each row carries its hops.
+  // One grouped section exposes declared connections and expandable witnessed paths.
   const section = page.locator("#connected-records");
   await expect(section).toBeVisible();
   const taskRow = section
     .getByRole("listitem")
     .filter({ has: page.getByRole("link", { name: taskName }) });
   await expect(taskRow.first()).toBeVisible();
-  await expect(taskRow.first().getByText("2 hops")).toBeVisible();
-  // Intermediate records read by kind and still open their record.
-  await expect(
-    taskRow.first().getByRole("link", { name: "Planting", exact: true }),
-  ).toHaveAttribute("href", `/plantings/${planting.id}`);
+  await taskRow.first().getByRole("button", { name: /^Via / }).click();
+  const plantingLink = taskRow
+    .first()
+    .locator(`a[href="/plantings/${planting.id}"]`);
+  await expect(plantingLink).toBeVisible();
   await expect(
     section.getByRole("link", { name: `Connection project ${suffix}` }).first(),
   ).toBeVisible();
