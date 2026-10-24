@@ -193,6 +193,41 @@ describe("EntityReportSlot records", () => {
     );
   });
 
+  it("keeps the summary preview short without hiding coverage warnings", () => {
+    render(
+      <CompactSummaryReport
+        blocks={[
+          {
+            kind: "records",
+            empty: "No records",
+            totalCount: 3,
+            rows: ["First", "Second", "Third"].map((title) => ({
+              entity: null,
+              id: null,
+              title,
+              trailing: null,
+            })),
+          },
+          {
+            kind: "note",
+            text: "Routine calculation background.",
+            tone: "muted",
+          },
+          { kind: "note", text: "One amount is unpriced.", tone: "warning" },
+        ]}
+      />,
+      { wrapper: harness.wrapper },
+    );
+    expect(screen.getByText("First")).toBeVisible();
+    expect(screen.getByText("Second")).toBeVisible();
+    expect(screen.queryByText("Third")).toBeNull();
+    expect(screen.queryByText("Routine calculation background.")).toBeNull();
+    expect(screen.getByText("One amount is unpriced.")).toBeVisible();
+    fireEvent.click(screen.getByRole("button", { name: "Show more" }));
+    expect(screen.getByText("Third")).toBeVisible();
+    expect(screen.getByText("Routine calculation background.")).toBeVisible();
+  });
+
   // A diagnostic link must stay navigable without sending a report command.
   it("keeps compact report coverage notes and table labels while omitting workflow controls", () => {
     render(

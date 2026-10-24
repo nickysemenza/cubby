@@ -94,7 +94,7 @@ export function MonthlySpendChart({
       <div
         className={cn(
           "relative mt-1.5 flex gap-[3px]",
-          compact ? "h-16" : "h-30",
+          compact ? "h-10" : "h-30",
         )}
       >
         <div

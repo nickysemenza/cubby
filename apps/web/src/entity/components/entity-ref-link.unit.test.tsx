@@ -99,10 +99,8 @@ describe("EntityRefLink with entity data", () => {
     expect(link.querySelector("svg")).toBeNull();
   });
 
-  // An explicit `null` means "intentionally render the mark". Falling back to
-  // the surrounding provider's image (as the chip variant does for an omitted
-  // prop) would make every explicit-null call site start showing covers.
-  it("keeps an explicit null image even inside a display-image provider", () => {
+  // Placeholder nulls must not suppress a canonical transitive cover.
+  it("fills an explicit null placeholder from the canonical display-image provider", () => {
     renderLink(
       <EntityDisplayImagesProvider
         refs={[]}
@@ -114,7 +112,7 @@ describe("EntityRefLink with entity data", () => {
 
     expect(
       screen.getByRole("link", { name: "Test product" }).querySelector("img"),
-    ).toBeNull();
+    ).toHaveAttribute("src", "https://images.example/seeded.jpg");
   });
 
   it.each([
@@ -186,6 +184,28 @@ describe("EntityRefLink with entity data", () => {
 });
 
 describe("EntityRefLink record identity", () => {
+  it("uses the same canonical image for audit pills even with a null placeholder", () => {
+    renderLink(
+      <EntityDisplayImagesProvider
+        refs={[]}
+        seeded={seededProductImage("PRD-AUDIT")}
+      >
+        <EntityAuditLink
+          entityKind="product"
+          entityId="PRD-AUDIT"
+          name="Synthetic audit product"
+          displayImage={null}
+          layout="row"
+        />
+      </EntityDisplayImagesProvider>,
+    );
+    expect(
+      screen
+        .getByRole("link", { name: /Synthetic audit product/ })
+        .querySelector("img"),
+    ).toHaveAttribute("src", "https://images.example/seeded.jpg");
+  });
+
   it("falls back to the provider's canonical image when none is passed", () => {
     renderLink(
       <EntityDisplayImagesProvider

@@ -13,6 +13,7 @@ import type {
   AuditLogSession,
 } from "~/entity/audit-log/audit-log-list";
 import { EntityAuditLink } from "~/entity/components/entity-ref-link";
+import { EntityDisplayImagesProvider } from "~/entity/entity-media/entity-display-images";
 import { cursorQueryOptions } from "~/integrations/tanstack-query/cursor-query-options";
 import { auditLog } from "~/integrations/tanstack-query/generated/catalog/auditLog.gen";
 import { authClient } from "~/lib/auth-client";
@@ -170,41 +171,51 @@ function ChangesByDay({
 
   const today = householdLocalDate(new Date());
   return (
-    <div className="pt-0.5">
-      <dl className={`${GUTTER} gap-y-2`}>
-        {days.map(({ day, groups }) => (
-          <Fragment key={day}>
-            <dt className="text-xs/4.5">
-              <span className="font-semibold text-foreground">
-                {dayLabel(day, today)}
-              </span>
-              <DayAge day={day} today={today} />
-            </dt>
-            <dd className="min-w-0">
-              <ul aria-label={dayLabel(day, today)}>
-                {groups.map((group) => (
-                  <ChangeLine key={group[0]?.entryKey} group={group} />
-                ))}
-              </ul>
-            </dd>
-          </Fragment>
-        ))}
-      </dl>
-      {activity.hasNextPage ? (
-        <div className={`${GUTTER} pt-2`}>
-          <button
-            type="button"
-            onClick={() =>
-              void activity.fetchNextPage({ cancelRefetch: false })
-            }
-            disabled={activity.isFetchingNextPage}
-            className="col-start-2 justify-self-start rounded-sm text-xs text-link outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring disabled:text-muted-foreground max-md:min-h-11 max-sm:col-start-1"
-          >
-            {activity.isFetchingNextPage ? "Loading…" : "Show older"}
-          </button>
-        </div>
-      ) : null}
-    </div>
+    <EntityDisplayImagesProvider
+      refs={(
+        activity.data?.pages.flatMap((page) => page.entries) ?? []
+      ).flatMap((entry) =>
+        entry.entityId
+          ? [{ entityKind: entry.entityKind, entityId: entry.entityId }]
+          : [],
+      )}
+    >
+      <div className="pt-0.5">
+        <dl className={`${GUTTER} gap-y-2`}>
+          {days.map(({ day, groups }) => (
+            <Fragment key={day}>
+              <dt className="text-xs/4.5">
+                <span className="font-semibold text-foreground">
+                  {dayLabel(day, today)}
+                </span>
+                <DayAge day={day} today={today} />
+              </dt>
+              <dd className="min-w-0">
+                <ul aria-label={dayLabel(day, today)}>
+                  {groups.map((group) => (
+                    <ChangeLine key={group[0]?.entryKey} group={group} />
+                  ))}
+                </ul>
+              </dd>
+            </Fragment>
+          ))}
+        </dl>
+        {activity.hasNextPage ? (
+          <div className={`${GUTTER} pt-2`}>
+            <button
+              type="button"
+              onClick={() =>
+                void activity.fetchNextPage({ cancelRefetch: false })
+              }
+              disabled={activity.isFetchingNextPage}
+              className="col-start-2 justify-self-start rounded-sm text-xs text-link outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring disabled:text-muted-foreground max-md:min-h-11 max-sm:col-start-1"
+            >
+              {activity.isFetchingNextPage ? "Loading…" : "Show older"}
+            </button>
+          </div>
+        ) : null}
+      </div>
+    </EntityDisplayImagesProvider>
   );
 }
 
@@ -243,14 +254,14 @@ function ChangeLine({ group }: { group: AuditEntry[] }) {
   const fields = summary?.shown.map((field) => humanize(field.field));
   return (
     <li className="flex min-w-0 items-baseline justify-between gap-3 text-sm/4.5">
-      <span className="flex min-w-0 items-baseline gap-1">
+      <span className="grid min-w-0 flex-1 grid-cols-1 items-center gap-x-3 sm:grid-cols-[minmax(0,1fr)_8rem]">
         {entry.entityId ? (
           <EntityAuditLink
             entityKind={entry.entityKind}
             entityId={entry.entityId}
             name={entry.entityName}
             displayImage={null}
-            compact
+            layout="row"
           />
         ) : null}
         <span className="min-w-0 truncate text-muted-foreground">

@@ -19,7 +19,6 @@ import {
   type EntityDetailParams,
   type EntityDetailRoute,
 } from "~/entity/entities";
-import { useEntityDisplayImage } from "~/entity/entity-media/entity-display-images";
 import {
   hoverPreviewEntities,
   type HoverPreviewEntity,
@@ -278,11 +277,6 @@ export function ChipRefLink({
   const identityCell = useIdentityCell();
   const identity = bare ?? identityCell;
   const label = name ?? id;
-  const providedImage = useEntityDisplayImage({
-    entityKind: entity,
-    entityId: id,
-  });
-  const image = displayImage === undefined ? providedImage : displayImage;
   const content = identity ? (
     <span className="min-w-0 truncate">{label}</span>
   ) : (
@@ -290,7 +284,7 @@ export function ChipRefLink({
       entity={entity}
       id={id}
       name={label}
-      displayImage={image}
+      displayImage={displayImage ?? null}
       emoji={emoji}
       fallback={fallback}
     />
@@ -299,7 +293,7 @@ export function ChipRefLink({
     <PreviewRefLink
       entity={entity}
       id={id}
-      displayImage={image}
+      displayImage={displayImage ?? null}
       showIdentityMark={false}
       className={tableLinkVariants({
         tone: identity ? "identity" : undefined,
@@ -342,6 +336,8 @@ type AuditRefLinkProps = {
   name?: string | null;
   displayImage: ImageUrlSummary | null;
   compact?: boolean;
+  /** Fluid identity with an aligned code column; codes stack on phones. */
+  layout?: "inline" | "row";
   className?: string;
 };
 
@@ -363,6 +359,7 @@ export function AuditRefLink({
   name,
   displayImage,
   compact,
+  layout = "inline",
   className: classNameProp,
 }: AuditRefLinkProps) {
   const label = entityLabel(entityKind);
@@ -394,6 +391,8 @@ export function AuditRefLink({
     // the reader is aiming at, not the 20px of text inside it.
     "inline-flex min-h-11 min-w-0 items-center gap-2 text-sm font-medium text-primary sm:min-h-0",
     compact && "max-w-48 sm:max-w-72",
+    layout === "row" &&
+      "grid w-full max-w-full grid-cols-1 justify-items-start gap-x-3 sm:grid-cols-[minmax(0,1fr)_7rem] sm:[&_[data-entity-pill]>span:last-child]:truncate",
     classNameProp,
   );
 
@@ -405,7 +404,7 @@ export function AuditRefLink({
     );
   }
 
-  return (
+  const link = (
     <Link
       to={entities[entityKind].routes.detail}
       params={entityDetailParams(entityId)}
@@ -414,6 +413,14 @@ export function AuditRefLink({
     >
       {content}
     </Link>
+  );
+  return layout === "row" ? (
+    <Tooltip>
+      <TooltipTrigger render={link} />
+      <TooltipContent>{title}</TooltipContent>
+    </Tooltip>
+  ) : (
+    link
   );
 }
 

@@ -6,11 +6,12 @@ import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { cursorQueryOptions } from "~/integrations/tanstack-query/cursor-query-options";
 import { entityReport } from "~/integrations/tanstack-query/generated/catalog/entityReport.gen";
 import { DateDisplay } from "~/ui/common/date-display";
+import { DenseCellContext } from "~/ui/common/stacked-value";
 import { EmptyState } from "~/ui/feedback/empty-state";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Section } from "~/ui/layout";
 
-import { HomeList, HomeRow, HomeRowsLoading } from "./home-list";
+import { HomeList, HomeRowsLoading } from "./home-list";
 
 /** Home's preloaded task briefing: the generic `task.briefing` collection report. */
 const taskBriefingReportInput = {
@@ -101,24 +102,36 @@ export function TodayAttention() {
       ) : (
         <HomeList label="Next tasks">
           {rows.map((item) => (
-            <HomeRow
+            <li
               key={item.id ?? item.title}
-              trailing={
-                item.trailing ? (
-                  // Muted until the deadline passes; overdue paints its own tone.
-                  <span className="text-xs text-muted-foreground">
-                    <DateDisplay start={item.trailing} stacked={false} due />
-                  </span>
-                ) : null
-              }
+              className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-start gap-x-3 gap-y-1 border-b border-border py-2 text-sm"
             >
-              {item.id ? (
-                <EntityRefLink entity="task" id={item.id} name={item.title} />
-              ) : (
-                <span className="truncate">{item.title}</span>
-              )}
-              <BriefingProjectLine line={item.lines?.[0]} />
-            </HomeRow>
+              <div className="min-w-0 space-y-1">
+                <DenseCellContext.Provider value={{ linksTo: null }}>
+                  {item.id ? (
+                    <EntityRefLink
+                      entity="task"
+                      id={item.id}
+                      name={item.title}
+                      className="max-w-full"
+                    />
+                  ) : (
+                    <span className="block truncate">{item.title}</span>
+                  )}
+                  <div className="min-w-0 text-xs text-muted-foreground">
+                    <BriefingProjectLine line={item.lines?.[0]} />
+                  </div>
+                </DenseCellContext.Provider>
+              </div>
+              {item.trailing ? (
+                <DateDisplay
+                  start={item.trailing}
+                  stacked
+                  due
+                  className="text-right text-xs text-muted-foreground"
+                />
+              ) : null}
+            </li>
           ))}
         </HomeList>
       )}
