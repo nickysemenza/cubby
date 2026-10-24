@@ -149,10 +149,10 @@ function prepareLabelledJudgment(
     spendingAdvice?: SpendingAdvicePort;
     usage: DecisionChoiceArgs["usage"];
     checkpoint: StatementLabelCheckpoint | null;
-    reserve(
-      questions: readonly DecisionChoiceArgs[],
-      additional?: number,
-    ): () => boolean;
+    admission: {
+      available(): boolean;
+      reserve(): boolean;
+    };
   },
 ) {
   const previous =
@@ -161,6 +161,9 @@ function prepareLabelledJudgment(
       canonicalJson(statementLabelSubject(current.judgment))
       ? input.checkpoint
       : null;
+  // Keep an untouched suffix for the next page without cloning its judgments
+  // or rendering fresh prompts. Compatible checkpoints can still finish here.
+  if (!previous && !input.admission.available()) return null;
   const judgment: StatementTransactionJudgment = structuredClone(
     current.judgment,
   );
@@ -227,6 +230,7 @@ function prepareLabelledJudgment(
   const statement = statementLabelSubject(judgment);
   for (const candidate of judgment.candidates) {
     if (candidate.label !== null) continue;
+    if (!input.admission.available()) break;
     const prompt = STATEMENT_CHARGE_IDENTITY_FEATURE.prompt(
       JSON.stringify({
         statement,
@@ -247,6 +251,7 @@ function prepareLabelledJudgment(
       port: input.port,
       usage: input.usage,
     };
+    if (!input.admission.reserve()) continue;
     const model = decisionModelFor(args);
     decisions.push({
       args,
@@ -266,6 +271,7 @@ function prepareLabelledJudgment(
   // answers and of each other. Enqueue them with the whole page's questions.
   for (const part of ["kind", "counterparty"] as const) {
     if (!judgment.create || checkpoint[part]) continue;
+    if (!input.admission.available()) break;
     const feature =
       part === "kind"
         ? STATEMENT_TRANSACTION_KIND_FEATURE
@@ -294,6 +300,7 @@ function prepareLabelledJudgment(
       port: input.port,
       usage: input.usage,
     };
+    if (!input.admission.reserve()) continue;
     decisions.push({
       args,
       apply(result) {
@@ -303,16 +310,13 @@ function prepareLabelledJudgment(
       },
     });
   }
-  // Only context-fitting questions spend the page allowance. Reserve a whole
-  // charge synchronously, so a small allowance completes earlier charges first.
+  // Reserve spending before preparing the next charge, preserving the original
+  // identity/kind/counterparty/spending order. Context defaults reserve nothing.
   const spendingReserved =
     !checkpoint.spending && needsSpendingAdvice(judgment);
-  const reserved = input.reserve(
-    decisions.map((decision) => decision.args),
-    Number(spendingReserved),
-  );
+  const spendingAdmitted = spendingReserved && input.admission.reserve();
   return {
-    decisions: decisions.filter(() => reserved()),
+    decisions,
     retainError,
     judgment,
     classify() {
@@ -351,7 +355,7 @@ function prepareLabelledJudgment(
         !checkpoint.spending &&
         !errors.length &&
         waitingUntil === null &&
-        (spendingReserved ? reserved() : input.reserve([], 1)())
+        (spendingReserved ? spendingAdmitted : input.admission.reserve())
       ) {
         try {
           const spending = await withAiInputs(false, () =>
@@ -724,26 +728,13 @@ async function runStatementLabelBatch(
     input.decisionLimit ?? JOB_PAGE_LIMITS.maxDecisionQuestionsPerPage,
     JOB_PAGE_LIMITS.maxDecisionQuestionsPerPage,
   );
-  const reserve = (
-    questions: readonly DecisionChoiceArgs[],
-    additional = 0,
-  ) => {
-    const admitted = questions.map(() => {
-      if (decisionsLeft <= 0) {
-        return false;
-      }
+  const admission = {
+    available: () => decisionsLeft > 0,
+    reserve() {
+      if (decisionsLeft <= 0) return false;
       decisionsLeft--;
       return true;
-    });
-    for (let index = 0; index < additional; index++) {
-      const allowed = decisionsLeft > 0;
-      if (allowed) decisionsLeft--;
-      admitted.push(allowed);
-    }
-    let index = 0;
-    return () => {
-      return admitted[index++] ?? false;
-    };
+    },
   };
   const unfinished = new Set<string>();
   const retainUnfinished = (row: (typeof page)[number]) => {
@@ -853,22 +844,34 @@ async function runStatementLabelBatch(
     });
     // Model work holds no publish transaction. All started decisions settle
     // before checkpoint/publication, whose separate DB fan-out stays at four.
-    const prepared = ready.map(({ current, target }) => {
-      try {
-        return {
-          status: "fulfilled" as const,
-          value: prepareLabelledJudgment(db, current, {
-            port: input.port,
-            spendingAdvice: input.spendingAdvice,
-            usage,
-            checkpoint: target.row.checkpoint,
-            reserve,
-          }),
-        };
-      } catch (reason) {
-        return { status: "rejected" as const, reason };
-      }
-    });
+    const preparations = await time("statement_label_preparation", async () =>
+      ready
+        .map((entry) => {
+          // Failed preparation started no model work; restore this charge's
+          // reservations so later charges retain the same admission opportunity.
+          const allowanceBeforePreparation = decisionsLeft;
+          try {
+            const value = prepareLabelledJudgment(db, entry.current, {
+              port: input.port,
+              spendingAdvice: input.spendingAdvice,
+              usage,
+              checkpoint: entry.target.row.checkpoint,
+              admission,
+            });
+            if (!value) {
+              retainUnfinished(entry.target.row);
+              return null;
+            }
+            return { entry, result: { status: "fulfilled" as const, value } };
+          } catch (reason) {
+            decisionsLeft = allowanceBeforePreparation;
+            return { entry, result: { status: "rejected" as const, reason } };
+          }
+        })
+        .filter((result) => result !== null),
+    );
+    const prepared = preparations.map(({ result }) => result);
+    const preparedReady = preparations.map(({ entry }) => entry);
     const decisions = prepared.flatMap((result) =>
       result.status === "fulfilled"
         ? result.value.decisions.map((decision) => ({
@@ -971,7 +974,7 @@ async function runStatementLabelBatch(
       }
     >();
     await forEachConcurrently(
-      ready.map((entry, index) => ({
+      preparedReady.map((entry, index) => ({
         ...entry,
         computed: computed[index]!,
       })),
@@ -1068,7 +1071,7 @@ async function runStatementLabelBatch(
         }
       },
     );
-    const complete = ready.flatMap(({ current }) => {
+    const complete = preparedReady.flatMap(({ current }) => {
       const item = publications.get(chargeId(current.charge));
       return item ? [item] : [];
     });

@@ -504,9 +504,17 @@ independent charges. Label pages default to 32 suggestions, retaining the shared
 512-suggestion ceiling for explicit callers. Identity questions remain batched;
 merchant/spending preparation runs in waves of at most 32, with field questions
 batched within each wave. The default page admits one spending wave instead of
-serializing behind four wave barriers. RunStep page samples retain selection, discovery,
-decision, spending-fact, spending, publication and ordered-application wall times
-plus database metrics. Ordered application includes no-action prefix validation
+serializing behind four wave barriers. A single page allowance admits fresh
+context-fitting questions incrementally in identity/kind/counterparty/spending
+order, reserving spending before the next charge. Compatible checkpoint answers
+remain eligible after the allowance is exhausted. Out-of-context defaults consume
+no allowance; once none remains, unrendered questions wait for the next page.
+Untouched charges retain their complete candidate population and inclusive cursor;
+they receive no empty checkpoint, skipped outcome or completion. Started work
+settles before publication. RunStep page samples retain selection, discovery,
+label preparation (prompt rendering and judgment cloning), decision,
+spending-fact, spending, publication and ordered-application wall times plus
+database metrics. Ordered application includes no-action prefix validation
 and receipt settlement; it must not be mistaken for unmeasured model latency.
 Cooperative pages stop admitting new spending work
 after 20 seconds, settle started work, and save partial answers before yielding.

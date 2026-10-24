@@ -392,6 +392,33 @@ import dependencies, and predicate/index alignment. Extend existing projection,
 report-dependency, transport, and measurement tools. Keep workload-specific
 query decisions with their owning domain; share evidence collection and parsing.
 
+The explicit statement-label experiment runs real preparation, publication and
+receipt settlement through synthetic PostgreSQL fixtures and deterministic
+Decision ports. Run it with
+`pnpm --dir apps/web exec vitest run --config tooling/checks/statement-label-benchmark.config.ts`.
+It requires the existing local PostgreSQL service on port 55432 and generated
+declarations/WASM. It creates fresh, uniquely named databases and retains them;
+it does not reset existing databases, start services, or call providers. Results
+and optional CPU profiles go under ignored `artifacts/statement-label-benchmark/`.
+`CUBBY_BENCH_SIZES` selects page sizes (default `8,32,64,128`),
+`CUBBY_BENCH_CANDIDATES` selects same-amount candidates per charge (0–128),
+and `CUBBY_BENCH_BYTES` selects synthetic description padding (0–16000 bytes).
+Use `CUBBY_BENCH_KIND=purchase CUBBY_BENCH_ADVICE=decision-port` for real
+merchant/category preparation with a synthetic 16-category roster; default
+injected advice isolates statement preparation. `CUBBY_BENCH_PROFILE=1` enables
+Node CPU sampling. Setup, initial page and checkpoint replay are separate.
+Heap samples are Node phase-boundary observations, not Worker heap measurements
+or exact allocation peaks. Query-active intervals include client/network work;
+they do not measure PostgreSQL server CPU. Provider funding, cache and Job-claim
+admission, queue gaps and production throughput need their owning runtime checks.
+
+The existing statement service regressions can also run with fresh retained
+synthetic databases through
+`pnpm --dir apps/web exec vitest run --config tooling/checks/statement-label-regressions.config.ts -t 'bounds saturated|checkpoint-only|context-overflow|does not persist empty'`.
+This entrypoint substitutes only the test-database fixture, rejects fetch traffic,
+and does not reset databases or start services. The ordinary integration suite
+owns these same regression cases; use its normal harness for general coverage.
+
 ## Explicit local diagnostics
 
 `pnpm check` remains available for repository-wide static validation.
