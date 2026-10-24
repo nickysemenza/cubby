@@ -28,6 +28,7 @@ import {
   withSnapshotWriteDatabase,
 } from "~/server/db/helpers";
 import {
+  assessment,
   assessmentState,
   assessmentCorrectionLock,
   feedback,
@@ -82,7 +83,7 @@ describe("confirmed correction propagation", () => {
   const key = "synthetic-complete-decision-inputs";
 
   async function propose(
-    options: { automatic?: boolean; correctionKey?: string } = {},
+    options: { automatic?: boolean; correctionKey?: string | null } = {},
   ) {
     const product = await productFixture(ctx, "Synthetic classification item");
     const manifest = await producingAiManifest(ctx.db);
@@ -107,7 +108,8 @@ describe("confirmed correction propagation", () => {
           model: "typesafe/jev",
         },
         data: {
-          correctionKey: options.correctionKey ?? key,
+          correctionKey:
+            options.correctionKey === undefined ? key : options.correctionKey,
           liveInputFingerprint: await fieldInputFingerprint(
             ctx.db,
             "product",
@@ -1252,6 +1254,172 @@ describe("confirmed correction propagation", () => {
     expect(await productCategoryId(ctx.db, target.id)).toBe(taxonomyId("food"));
   });
 
+  it.each([taxonomyShortcode("food"), null])(
+    "exposes held correction %s without reusable input proof as a passive history attempt",
+    async (value) => {
+      const source = await propose({ correctionKey: null });
+      const result = await reviewAssessment(ctx.db, kernelCtx(ctx), {
+        assessmentId: source.prediction.id,
+        operationId: "synthetic-incomplete-correction",
+        verdict: "wrong",
+        correction: { present: true, value },
+        intent: "apply",
+      });
+      expect(
+        await readConfirmedCorrection(ctx.db, result.feedbackId),
+      ).not.toBeNull();
+      await drain();
+      const outcomes = await getDb(ctx.db)
+        .select()
+        .from(feedback)
+        .where(
+          eq(
+            feedback.operationId,
+            `correction:${result.feedbackId}:${source.prediction.id}`,
+          ),
+        );
+      expect(outcomes).toHaveLength(1);
+      expect(outcomes[0]?.receipt).toMatchObject({
+        status: "held",
+        reason: "Complete decision inputs are not equivalent",
+      });
+      const pending = await listSuggestionPage(ctx.db, {
+        recordIds: [source.product.id],
+      });
+      const automatic = await listAutomaticDecisions(ctx.db, {
+        recordIds: [source.product.id],
+      });
+      expect(pending.meta.totalCount).toBe(0);
+      expect(automatic.totalCount).toBe(1);
+      expect(automatic.items[0]?.applicationVerified).toBe(false);
+      expect(automatic.items[0]?.correctionAttempt).toMatchObject({
+        sourceFeedbackId: result.feedbackId,
+        outcome: {
+          status: "held",
+          reason: "Complete decision inputs are not equivalent",
+        },
+      });
+      expect(await productCategoryId(ctx.db, source.product.id)).toBe(
+        value === null ? null : taxonomyId("food"),
+      );
+      const unrelated = await productFixture(ctx, "Synthetic unrelated record");
+      expect(
+        (await listAutomaticDecisions(ctx.db, { recordIds: [unrelated.id] }))
+          .totalCount,
+      ).toBe(0);
+      const before = await getDb(ctx.db).select().from(feedback);
+      const jobsBefore = await getDb(ctx.db).select().from(job);
+      await listAutomaticDecisions(ctx.db, { recordIds: [source.product.id] });
+      expect(await getDb(ctx.db).select().from(feedback)).toEqual(before);
+      expect(await getDb(ctx.db).select().from(job)).toEqual(jobsBefore);
+      const attempt = automatic.items[0]?.correctionAttempt;
+      if (!attempt)
+        throw new Error("Synthetic correction attempt was not returned");
+      await getDb(ctx.db)
+        .update(feedback)
+        .set({ actorUserId: systemActor().userId })
+        .where(eq(feedback.id, attempt.sourceApplicationFeedbackId));
+      expect(
+        (
+          await listAutomaticDecisions(ctx.db, {
+            recordIds: [source.product.id],
+          })
+        ).totalCount,
+      ).toBe(0);
+      await getDb(ctx.db)
+        .update(feedback)
+        .set({ actorUserId: ctx.actor.userId })
+        .where(eq(feedback.id, attempt.sourceApplicationFeedbackId));
+      await getDb(ctx.db)
+        .update(feedback)
+        .set({ actorUserId: ctx.actor.userId })
+        .where(
+          eq(
+            feedback.operationId,
+            `correction:${result.feedbackId}:${source.prediction.id}`,
+          ),
+        );
+      expect(
+        (
+          await listAutomaticDecisions(ctx.db, {
+            recordIds: [source.product.id],
+          })
+        ).totalCount,
+      ).toBe(0);
+    },
+  );
+
+  it("reads retained GUID handles and pages by the recorded attempt date", async () => {
+    const source = await propose({ correctionKey: null });
+    const result = await reviewAssessment(ctx.db, kernelCtx(ctx), {
+      assessmentId: source.prediction.id,
+      operationId: "synthetic-retained-correction",
+      verdict: "wrong",
+      correction: { present: true, value: taxonomyShortcode("food") },
+      intent: "apply",
+    });
+    await drain();
+    const confirmed = await readConfirmedCorrection(ctx.db, result.feedbackId);
+    if (!confirmed)
+      throw new Error("Synthetic member application was not retained");
+    const sourceFeedbackId = "11111111-2222-f333-0444-555555555555";
+    const sourceApplicationFeedbackId = "11111111-2222-f333-0444-666666666666";
+    await getDb(ctx.db)
+      .update(feedback)
+      .set({ id: sourceFeedbackId })
+      .where(eq(feedback.id, result.feedbackId));
+    await getDb(ctx.db)
+      .update(feedback)
+      .set({
+        id: sourceApplicationFeedbackId,
+        metadata: sql`${feedback.metadata} || ${JSON.stringify({ commandFeedbackId: sourceFeedbackId })}::jsonb`,
+      })
+      .where(eq(feedback.id, confirmed.applicationFeedbackId));
+    await getDb(ctx.db)
+      .update(feedback)
+      .set({
+        operationId: `correction:${sourceFeedbackId}:${source.prediction.id}`,
+        metadata: sql`${feedback.metadata} || ${JSON.stringify({ sourceFeedbackId, sourceApplicationFeedbackId })}::jsonb`,
+        createdAt: new Date("2026-10-24T01:00:00.000Z"),
+      })
+      .where(
+        eq(
+          feedback.operationId,
+          `correction:${result.feedbackId}:${source.prediction.id}`,
+        ),
+      );
+    const later = await propose({ automatic: true });
+    await getDb(ctx.db)
+      .update(assessment)
+      .set({ createdAt: new Date("2026-01-01T00:00:00.000Z") })
+      .where(eq(assessment.id, source.prediction.id));
+    await getDb(ctx.db)
+      .update(assessment)
+      .set({ createdAt: new Date("2026-02-01T00:00:00.000Z") })
+      .where(eq(assessment.id, later.prediction.id));
+    const first = await listAutomaticDecisions(ctx.db, {
+      recordIds: [source.product.id, later.product.id],
+      limit: 1,
+    });
+    expect(first.totalCount).toBe(2);
+    expect(first.items[0]).toMatchObject({
+      id: source.prediction.id,
+      applicationVerified: false,
+      correctionAttempt: {
+        sourceFeedbackId,
+        sourceApplicationFeedbackId,
+        createdAt: "2026-10-24T01:00:00.000Z",
+      },
+    });
+    const second = await listAutomaticDecisions(ctx.db, {
+      recordIds: [source.product.id, later.product.id],
+      limit: 1,
+      offset: 1,
+    });
+    expect(second.items[0]?.id).toBe(later.prediction.id);
+    expect(second.items[0]?.applicationVerified).toBe(true);
+  });
+
   it("repairs an untouched automatic assignment and an equivalent future weak proposal, once", async () => {
     const historical = await propose({ automatic: true });
     const original = await getDb(ctx.db)
@@ -1372,6 +1540,16 @@ describe("confirmed correction propagation", () => {
         }),
       ]),
     );
+    const history = await listAutomaticDecisions(ctx.db, {
+      recordIds: [target.product.id],
+    });
+    expect(history.totalCount).toBe(1);
+    expect(history.items[0]?.applicationVerified).toBe(false);
+    expect(history.items[0]?.correction).toBeNull();
+    expect(history.items[0]?.correctionAttempt?.outcome).toEqual({
+      status: "held",
+      reason: "Equivalent evidence has conflicting member corrections",
+    });
     const queue = await listSuggestionPage(ctx.db, {
       family: "field",
       recordIds: [target.product.id],

@@ -46,6 +46,7 @@ import {
   EMAIL_APPLICATION_RECEIPT,
   EMAIL_OBSERVATION_RECEIPT,
 } from "~/server/generic/assessment/repo/assessment-email";
+import { correctionOutcomeExists } from "~/server/generic/assessment/repo/correction-receipt";
 import { lookupShortcodes } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 const reviewAssessment = alias(assessment, "a");
@@ -368,6 +369,7 @@ export const automaticAssessmentCandidate = and(
     ),
   ),
   or(
+    correctionOutcomeExists(sql`${reviewAssessment.id}`),
     inArray(
       reviewAssessment.family,
       Object.entries(reviewFamilyDeclarations).flatMap(
@@ -382,6 +384,7 @@ export const automaticAssessmentCandidate = and(
 )!;
 
 export const automaticFamilyEligibility = or(
+  correctionOutcomeExists(sql`${reviewAssessment.id}`),
   ...Object.entries(reviewFamilyDeclarations).flatMap(
     ([family, declaration]) =>
       "audit" in declaration

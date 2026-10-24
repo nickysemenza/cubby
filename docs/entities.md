@@ -3781,8 +3781,20 @@ explicit None. The original proposal value never substitutes for current effect
 proof when correcting an automatic consequence again.
 
 Pending held field work stays in the existing Suggestions family and Work link,
-with its reason in the shared row summary. Automatic history shows applied field
-corrections and holds on prior automatic assignments. This adds no confirmation
+with its reason in the shared row summary. Automation history also admits
+canonical correction attempts independently of the target's pending/applied
+status or an original automatic rule. This includes holds on a member-applied
+source whose retained inputs cannot establish reusable equivalence. Admission
+requires the automatic outcome's exact operation identity and bound member
+application, actor and corrected value. Its latest recorded attempt includes
+root command/application and outcome receipt provenance; it is historical
+evidence, not a fresh eligibility check. Held attempts have no review action and
+are never labelled as applied results. Verification requires an actual automatic
+application rule receipt or the family's application proof; admission of a held
+attempt supplies neither. Pagination orders by the displayed attempt time,
+falling back to the original Assessment time when there is no correction attempt.
+Reads schedule or apply nothing.
+This adds no confirmation
 prompt or second queue. Every review family declares its repair policy, but
 registration is not support: financial semantics, transfers, Product merges,
 mail routing/links/import outcomes and recommendation subtypes
