@@ -727,7 +727,7 @@ async function acquireEligible(
     const value = (await publishGmailEvidence<GmailAcquisitionOutcome>(
       db,
       publication,
-      async (tx, current) => {
+      async (tx, current, { recordObservation }) => {
         await saveMailboxMetadata(tx, metadata);
         const observation = input.searchActor
           ? null
@@ -751,9 +751,7 @@ async function acquireEligible(
                 }),
               },
             );
-        publication.observationId = observation?.id ?? null;
-        if (publication.evaluation)
-          publication.evaluation.observationId = observation?.id ?? null;
+        recordObservation(observation?.id ?? null);
         const reclassified =
           input.reclassify && current
             ? await reclassifyPublication(

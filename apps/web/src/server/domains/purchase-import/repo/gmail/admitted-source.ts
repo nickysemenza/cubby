@@ -13,6 +13,11 @@ import {
 } from "~/server/db/helpers";
 import { email as emailTable, ledgerParty, run } from "~/server/db/schema";
 import { readRetainedMail } from "~/server/domains/mail/repo/retained-mail";
+import {
+  assertEmailEvidenceScope,
+  withEmailEvidenceWrite,
+  type EmailEvidenceWriteScope,
+} from "~/server/domains/purchase-import/repo/email-evidence-write-scope";
 import { HISTORICAL_MAIL_SOURCE_IDENTITY_VERSION } from "~/server/domains/purchase-import/repo/mail-source-identity";
 
 /** Refresh does not transfer, repair or readmit an assigned import source. */
@@ -82,6 +87,11 @@ export function emailPublicationChanged(
   );
 }
 
+type GmailPublicationContext = {
+  scope: EmailEvidenceWriteScope;
+  recordObservation: (id: string | null) => void;
+};
+
 /** Provider/model IO is complete. Admission wins before this publication boundary. */
 export async function publishGmailEvidence<T>(
   db: Database,
@@ -107,10 +117,21 @@ export async function publishGmailEvidence<T>(
   publish: (
     tx: Database,
     current: typeof emailTable.$inferSelect | null,
+    publication: GmailPublicationContext,
   ) => Promise<T>,
+  scope?: EmailEvidenceWriteScope,
 ): Promise<T | null> {
-  const commitEvidence = async (tx: DrizzleTransaction) => {
-    const evaluation = input.evaluation;
+  const initialObservationId =
+    input.observationId ?? input.evaluation?.observationId ?? null;
+  const commitEvidence = async (
+    tx: DrizzleTransaction,
+    scope: EmailEvidenceWriteScope,
+  ) => {
+    assertEmailEvidenceScope(databaseForTransaction(tx), scope);
+    let observationId = initialObservationId;
+    const evaluation = input.evaluation
+      ? { ...input.evaluation, observationId }
+      : undefined;
     const guarded = evaluation
       ? await (
           await import("~/server/ai/repo/ai-evaluation")
@@ -135,6 +156,7 @@ export async function publishGmailEvidence<T>(
           await import("~/server/domains/email/repo/discovery-email-audit")
         ).recordDiscoveryEmailReceipt(databaseForTransaction(tx), {
           ...input,
+          observationId,
           outcome: reason,
         });
       if (!evaluation || !guarded) return null;
@@ -260,13 +282,19 @@ export async function publishGmailEvidence<T>(
       ))
     )
       return decline("frozen", current ?? null);
-    const result = await publish(txDb, current ?? null);
+    const result = await publish(txDb, current ?? null, {
+      scope,
+      recordObservation: (id) => {
+        observationId = id;
+        if (evaluation) evaluation.observationId = id;
+      },
+    });
     if (input.recordHandlingReceipt !== false)
       await (
         await import("~/server/domains/email/repo/discovery-email-audit")
       ).recordDiscoveryEmailReceipt(txDb, {
         ...input,
-        observationId: input.observationId ?? evaluation?.observationId,
+        observationId,
         outcome: evaluation?.removed ? "removed" : undefined,
       });
     if (evaluation)
@@ -293,13 +321,12 @@ export async function publishGmailEvidence<T>(
       );
     return result;
   };
-  // Only refresh evaluations use the activation fence. Ordinary ingestion and
-  // member reclassification retain their existing isolation and retry contract.
-  return withTransaction(
-    db,
-    commitEvidence,
-    input.evaluation && !input.evaluation.reclassification
-      ? { isolationLevel: "serializable" }
-      : undefined,
+  if (scope !== undefined) {
+    // An existing owner must prove its gate; never acquire one after its locks.
+    assertEmailEvidenceScope(db, scope);
+    return withTransaction(db, (tx) => commitEvidence(tx, scope));
+  }
+  return withEmailEvidenceWrite(db, (transactionDb, ownedScope) =>
+    withTransaction(transactionDb, (tx) => commitEvidence(tx, ownedScope)),
   );
 }

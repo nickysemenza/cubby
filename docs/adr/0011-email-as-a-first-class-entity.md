@@ -373,9 +373,22 @@ the same physical connection confer no scope. A second root opened while the
 scope is active is refused; provider and storage IO remain outside the boundary.
 The scope serializes writes only and supplies no member or source-proof authority.
 
-This primitive is not yet adopted by production Email writers. Complete outer
-entry coverage, accepted-evidence finance/shipment integration, current-effect
-selection and distinct-Email equivalence remain prerequisites. Email correction
+Gmail evidence publication adopts this scope before evaluation/Job, owner, Run
+and Email locks. Ordinary ingestion, explicit reclassification, refresh, removed
+source receipts and extraction-preview publication share this entry. Nested
+callers must supply the existing live capability; unscoped transaction facades
+are refused instead of taking a late gate. The publication callback receives the
+same capability for nested domain writers. Concurrent Gmail publications now
+serialize at this one household gate and use the owned snapshot retry contract.
+Provider and storage preparation stays outside it; after-commit failures never
+replay committed writes. Publication observation metadata belongs to each attempt:
+the callback reports it through the scoped publication context instead of
+mutating the retained input. Aborted attempts cannot supply later handling or
+evaluation receipts with an abandoned observation handle.
+
+This is partial outer-entry coverage. Member intent/application, link/import,
+Run controls, Original maintenance, accepted-evidence finance/shipment integration,
+current-effect selection and distinct-Email equivalence remain prerequisites. Email correction
 adapters remain held; adding this scope does not authorize financial commands,
 historical enrollment or production application.
 
