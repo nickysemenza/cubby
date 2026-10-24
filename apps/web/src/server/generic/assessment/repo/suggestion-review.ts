@@ -419,6 +419,23 @@ async function writeSuggestionValue(
   );
 }
 
+/** Reuse the field writer without rewriting the original Assessment or its receipt. */
+export async function writePropagatedFieldCorrection(
+  db: Database,
+  context: EntityKernelContext,
+  row: Pick<
+    z.infer<typeof suggestionRowSchema>,
+    "entity" | "recordId" | "field" | "financeReviewFingerprint"
+  >,
+  value: z.infer<ReturnType<typeof z.json>>,
+) {
+  const { auditIds } = await withAuditReceipts(() =>
+    writeSuggestionValue(db, context, row, value),
+  );
+  await fenceFieldInputsAtCommit(db, row.entity, row.recordId, row.field);
+  return { auditIds };
+}
+
 async function applySuggestionValue(
   db: Database,
   context: EntityKernelContext,
@@ -472,6 +489,7 @@ async function automaticFieldFillRefusal(
   db: Database,
   context: EntityKernelContext,
   row: typeof suggestionTable.$inferSelect,
+  authority: "model" | "confirmed_correction" = "model",
 ) {
   const entity = fieldSuggestionsInput.shape.entity.parse(row.entity);
   const policy = entityFieldByKey(entity, row.field)?.control?.suggest;
@@ -482,10 +500,12 @@ async function automaticFieldFillRefusal(
     row.kind !== "addition" ||
     policy?.mode !== "fill" ||
     requiresSuggestionReview(entity, row.field) ||
-    row.confidence < SUGGESTION_AUTO_APPLY_THRESHOLD ||
+    (authority === "model" &&
+      row.confidence < SUGGESTION_AUTO_APPLY_THRESHOLD) ||
     !empty(row.currentValue) ||
     empty(row.suggestedValue) ||
-    (row.runnerUpConfidence !== null &&
+    (authority === "model" &&
+      row.runnerUpConfidence !== null &&
       row.confidence - row.runnerUpConfidence < 0.1)
   )
     return `Field ${row.entity}.${row.field} is not eligible for automatic fill`;
@@ -555,6 +575,15 @@ async function automaticFieldFillRefusal(
   )
     return "Automatic fill preserves a rejected value";
   return null;
+}
+
+/** Confirmed correction authority replaces model certainty, never field or member safeguards. */
+export async function confirmedFieldFillRefusal(
+  db: Database,
+  context: EntityKernelContext,
+  row: typeof suggestionTable.$inferSelect,
+) {
+  return automaticFieldFillRefusal(db, context, row, "confirmed_correction");
 }
 
 /** Read-only preflight; acceptance repeats all checks inside its write fence. */

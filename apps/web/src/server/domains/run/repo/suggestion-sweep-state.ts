@@ -46,6 +46,7 @@ export const jsonValue = (value: unknown): SuggestionValue =>
   suggestionValueSchema.parse(value);
 export const sweepSuggestionSchema = z.object({
   reviewKey: z.string().nullable().optional(),
+  correctionKey: z.string().nullable().optional(),
   kind: z.enum(["addition", "correction"]),
   currentValue: suggestionValueSchema,
   suggestedValue: suggestionValueSchema,
@@ -316,6 +317,7 @@ export async function saveSweepSuggestions(
               served: entry.served,
               liveInputFingerprint,
               reviewKey: entry.reviewKey ?? null,
+              correctionKey: entry.correctionKey ?? null,
             },
             status: "pending",
           },

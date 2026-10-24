@@ -63,7 +63,10 @@ import { executeEntity } from "~/server/entity-kernel";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { entityCommandSchema } from "~/server/entity-kernel/contracts";
 import { applyAutomaticRules } from "~/server/generic/assessment/repo/automatic-rule-runtime";
-import { fieldReviewIdentity } from "~/server/generic/assessment/repo/field-assessment-review";
+import {
+  fieldCorrectionIdentity,
+  fieldReviewIdentity,
+} from "~/server/generic/assessment/repo/field-assessment-review";
 import {
   fieldInputFingerprint,
   fenceFieldInputsAtCommit,
@@ -130,6 +133,7 @@ const fieldSnapshot = z.object({
 });
 const fieldResult = z.object({
   reviewKey: z.string().nullable().optional(),
+  correctionKey: z.string().nullable().optional(),
   output: fieldSuggestionsOut,
   provenance: aiProvenance,
 });
@@ -981,6 +985,14 @@ export async function executeAiRefreshTarget(
         output: evaluated.result,
         provenance,
         reviewKey,
+        correctionKey: await fieldCorrectionIdentity({
+          entity: snapshot.entity,
+          field: snapshot.field,
+          basis: snapshot.basis,
+          inputs: evaluated.inputs,
+          dependencies: provenance.dependencies,
+          incomplete: evaluated.incomplete,
+        }),
       });
       if (!result.success) throw result.error;
       if (
@@ -1032,6 +1044,7 @@ export async function executeAiRefreshTarget(
               {
                 ...entry,
                 reviewKey: saved.reviewKey,
+                correctionKey: saved.correctionKey,
                 model: saved.provenance.model ?? entry.model,
               },
             ]

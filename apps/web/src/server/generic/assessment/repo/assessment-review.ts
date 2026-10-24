@@ -1,3 +1,4 @@
+import { suggestionAcceptanceReceipt } from "@cubby/schemas/ai-evaluation";
 import {
   assessmentReviewInput,
   assessmentReviewBatchInput,
@@ -45,6 +46,7 @@ import {
   transitionAssessmentState,
   transitionAssessmentStates,
 } from "~/server/generic/assessment/repo/assessment-state";
+import { fieldInputFingerprint } from "~/server/generic/assessment/repo/field-input-fence";
 import {
   acceptSuggestion,
   applyFieldCorrection,
@@ -774,6 +776,31 @@ async function settleReview(
             { kind: "assessment_applied", feedbackId: event.id },
           );
       }
+      let fieldApplicationReceipt: z.infer<
+        typeof suggestionAcceptanceReceipt
+      > | null = null;
+      if (
+        prediction.family === "field" &&
+        authority === "member" &&
+        input.correction.present
+      ) {
+        const [field] = await getDb(transactionDb)
+          .select()
+          .from(assessmentState)
+          .where(eq(assessmentState.id, prediction.id))
+          .limit(1);
+        if (!field)
+          throw new Error("Corrected field application has no saved lineage");
+        fieldApplicationReceipt = {
+          ...suggestionAcceptanceReceipt.parse(field.acceptanceReceipt),
+          appliedInputFingerprint: await fieldInputFingerprint(
+            transactionDb,
+            field.entity,
+            field.recordId,
+            field.field,
+          ),
+        };
+      }
       await recordFeedback(transactionDb, {
         assessmentId: prediction.id,
         operationId: `command-application:${input.operationId}`,
@@ -785,6 +812,7 @@ async function settleReview(
         metadata: {
           kind: "assessment_application",
           commandFeedbackId: event.id,
+          ...(fieldApplicationReceipt && { fieldApplicationReceipt }),
           ...(automatic && { rule: automatic.rule }),
         },
       });

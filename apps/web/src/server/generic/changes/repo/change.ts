@@ -1,3 +1,4 @@
+import type { Database } from "~/server/db/database";
 import { recordCommittedChanges } from "~/server/db/helpers/core";
 import {
   repositoryBeforeCommit,
@@ -11,6 +12,18 @@ import {
   invalidateRefreshFamily,
   type RefreshFamily,
 } from "~/server/generic/derived-refresh/repo/families";
+
+/** Assessment saves register durable correction intent through the same composition boundary. */
+export async function recordAssessmentChange(
+  db: Database,
+  change:
+    | { kind: "publications"; ids: readonly string[] }
+    | { kind: "application"; receiptId: string },
+): Promise<void> {
+  const { recordCorrectionWork } =
+    await import("~/server/generic/assessment/repo/correction-work");
+  await recordCorrectionWork(db, change);
+}
 
 /** Projection publications notify readers without restarting authoritative refresh. */
 export type RepositoryChange =

@@ -11,6 +11,7 @@ import {
   parentTransactionDatabase,
   withTransaction,
   withTransactionDatabase,
+  withSnapshotWriteDatabase,
   runAfterCommit,
   runBeforeCommit,
 } from "~/server/db/helpers/core";
@@ -89,4 +90,12 @@ export function repositoryTransactionDatabase<T>(
   config?: PgTransactionConfig,
 ): Promise<T> {
   return withTransactionDatabase(db, run, config);
+}
+
+/** DB-only Job publications that must revalidate one serializable snapshot. */
+export function repositorySnapshotWriteDatabase<T>(
+  db: Database,
+  run: (transactionDb: Database) => Promise<T>,
+): Promise<T> {
+  return withSnapshotWriteDatabase(db, run, { isolationLevel: "serializable" });
 }

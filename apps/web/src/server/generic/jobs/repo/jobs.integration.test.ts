@@ -42,6 +42,34 @@ import {
 // interrupted or superseded workers from acknowledging somebody else's work.
 describe("durable jobs", () => {
   const ctx = withTestDb();
+  it("opens serializable isolation before a snapshot-dependent Job publication", async () => {
+    const work = await enqueueJob(ctx.db, {
+      key: "synthetic-snapshot-publication",
+      kind: "synthetic.snapshot",
+      input: {},
+    });
+    expect(
+      await advanceJob(ctx.db, work.id, {
+        "synthetic.snapshot": {
+          prepare: async () => ({
+            isolationLevel: "serializable",
+            page: { done: true },
+            publish: async (tx) => {
+              const result = await getDb(tx).execute<{ isolation: string }>(
+                sql`SELECT current_setting('transaction_isolation') AS isolation`,
+              );
+              return { isolation: result.rows[0]?.isolation ?? "missing" };
+            },
+          }),
+        },
+      }),
+    ).toBe("succeeded");
+    const [saved] = await getDb(ctx.db)
+      .select()
+      .from(job)
+      .where(eq(job.id, work.id));
+    expect(saved?.result).toEqual({ isolation: "serializable" });
+  });
   const enqueue = (key: string) =>
     enqueueJob(ctx.db, {
       key,

@@ -1,10 +1,17 @@
 import { z } from "zod";
+import { suggestionAcceptanceReceipt } from "./ai-evaluation";
 
 import {
   assessmentChildHandle,
   assessmentFamily,
   assessmentSubject,
 } from "./assessment";
+
+export const correctionAuthorityReceiptKinds = z.enum([
+  "assessment_application",
+  "saved_field",
+]);
+export const CORRECTION_OUTCOME_RECEIPT_KIND = "assessment_correction";
 
 /** A correction is reusable authority only after its member application committed. */
 export const suggestionCorrectionSource = z.object({
@@ -18,6 +25,8 @@ export const suggestionCorrectionSource = z.object({
   actorUserId: z.string().min(1),
   applicationFeedbackId: assessmentChildHandle,
   applicationReceipt: z.json(),
+  /** Exact audited field application; never reconstructed from a mutable projection. */
+  fieldApplicationReceipt: suggestionAcceptanceReceipt.nullable().default(null),
 });
 
 export const suggestionCorrectionTarget = z.object({

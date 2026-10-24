@@ -3644,7 +3644,8 @@ Email link decisions remain ordinary history. Report incorrect records Wrong
 Feedback through the existing family path, without applying a correction or
 pausing automation. Applied effects remain; affected records link to their domain
 actions. Feedback participates in supported later reassessment without promising
-historical record repair. Wrong and corrected decisions remain in the audit.
+universal historical record repair. Confirmed field corrections have the exact-input
+propagation described below. Wrong and corrected decisions remain in the audit.
 Legacy Email predictions without application receipts are included with
 **Unverified application**, even if they disagree with the Email's current relevance.
 New ingestion records observation and application receipts atomically with routing;
@@ -3659,6 +3660,47 @@ page's Decisions tab catalogs every decision's basis, options, rules and
 rendered request (`ai.decisionCatalog`) with a Jev/Clef Try panel. The
 household's Work has one row per Suggestion family linking into the page,
 and a Sweep Run's detail links to its own.
+
+Applied member field corrections enroll `assessment.correction` work in the same
+transaction as their command-bound application receipt. An apply intent alone,
+a draft, a history-only grade, or an automatic consequence supplies no reusable
+member authority. Explicit corrected null remains distinct from no correction.
+The first supported scope is identical complete pre-decision inputs for eligible
+descriptive fill fields: raw basis, ordered request fingerprints, canonical roster
+identities, served model and policy dependencies. Record identity and proposed
+answer are not part of that equivalence key. Missing historical keys are not
+reconstructed from current data; fuzzy similarity does not authorize repair.
+
+The same coordinator scans prior matching Assessments in bounded Job pages and
+handles later publications through durable publication work that resolves authority
+after the proposal commits, so an overlapping history scan cannot miss enrollment.
+Source authority includes an immutable applied field fingerprint and write revision;
+audit timestamps alone do not establish the latest committed decision.
+Pending proposals are retired even when an explicit-null correction needs no value change.
+Existing applicable corrections withhold the model's
+automatic answer while correction work resolves it. Historical repair requires
+the original automatic application receipt, its unchanged audited field write,
+and current post-application evidence. Explicit member decisions, including an
+unchanged save or an intervening change and restoration, protect the target.
+Conflicting current corrections remain held; recency alone never chooses one.
+Original Assessments, confidence and application receipts remain unchanged.
+Propagation records a separate automatic receipt linking the root member Feedback,
+member actor, original target application and actual effects; successful replay
+precedes stale-state checks. Serializable Job publication commits writes, outcomes
+and cursor together through transaction-bound domain writers.
+
+Pending held field work stays in the existing Suggestions family and Work link,
+with its reason in the shared row summary. Automatic history shows applied field
+corrections and holds on prior automatic assignments. This adds no confirmation
+prompt or second queue. Every review family declares its repair policy, but
+registration is not support: financial semantics, transfers, Product merges,
+mail routing/links/import outcomes, image descriptions and recommendation subtypes
+currently retain explicit holds pending domain-specific implementation. Broader
+semantic applicability and future-inference integration before model execution
+remain tracked by [#3189](https://github.com/nickysemenza/cubby/issues/3189).
+Ordinary automatic field additions still require the existing 95% policy and
+current-evidence/member-intent checks; propagated corrections do not invent a
+model confidence or lower that threshold.
 
 ### Automatic semantic classification
 

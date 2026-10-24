@@ -8,12 +8,14 @@ import {
   automaticDecisionListOut,
   automaticDecisionRow,
 } from "@cubby/schemas/automatic-decision";
+import { correctionAuthorityReceiptKinds } from "@cubby/schemas/suggestion-correction";
 import { sql } from "drizzle-orm";
 import { z } from "zod";
 
 import type { Database } from "~/server/db";
 import { unwrapDb, uuidArrayParam } from "~/server/db/helpers";
 import { automaticApplicationRule } from "~/server/generic/assessment/repo/assessment";
+import { readCorrectionOutcomes } from "~/server/generic/assessment/repo/correction-outcomes";
 import { resolveShortcodes } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 import {
@@ -61,7 +63,7 @@ export async function listAutomaticDecisions(
   const from = sql`FROM "Assessment" a JOIN "AssessmentState" s ON s.id = a.id
     LEFT JOIN LATERAL (SELECT f.id, f.verdict, f."createdAt" FROM "Feedback" f
       WHERE f."assessmentId" = a.id AND f.authority = ${feedbackAuthority.enum.member} AND f."operationId" <> ${"decision"}
-        AND f.metadata->>${"kind"} IS DISTINCT FROM 'assessment_application'
+        AND f.metadata->>${"kind"} IS DISTINCT FROM ${correctionAuthorityReceiptKinds.enum.assessment_application}
       ORDER BY f."createdAt" DESC, f.id DESC LIMIT 1) latest ON true`;
   const total = await unwrapDb(db).execute<{ count: number }>(
     sql`SELECT count(*)::int AS count ${from} WHERE ${where}`,
@@ -86,21 +88,33 @@ export async function listAutomaticDecisions(
     db,
     rows.map((row) => row.id),
   );
+  const corrections = await readCorrectionOutcomes(
+    db,
+    rows.map((row) => row.id),
+  );
   const items = rows.map((row) => {
     const family = assessmentFamily.parse(row.family);
     if (!isReviewFamily(family))
       throw new Error(`${family} Assessments are not automatic decisions`);
     const declaration = reviewFamilyDeclarations[family];
+    const correction = corrections.get(row.id);
+    const originalSummary =
+      "summarize" in declaration
+        ? declaration.summarize(z.json().parse(row.judgment))
+        : declaration.label;
+    const summary =
+      correction?.outcome.status === "applied"
+        ? `Automatically corrected to ${JSON.stringify(correction.correctedValue)}`
+        : correction?.outcome.status === "held"
+          ? `${originalSummary}. Automatic correction held: ${correction.outcome.reason}`
+          : originalSummary;
     return automaticDecisionRow.parse({
       id: row.id,
       family,
       records: records.get(row.id) ?? [],
       decision: row.judgment,
       applicationVerified: row.applicationVerified,
-      summary:
-        "summarize" in declaration
-          ? declaration.summarize(z.json().parse(row.judgment))
-          : declaration.label,
+      summary,
       createdAt: new Date(row.createdAt).toISOString(),
       fingerprint: row.fingerprint,
       automaticRule: row.automaticRule,
