@@ -306,8 +306,10 @@ The host job runs the automatically generated
 simulator. The aggregate package scheme includes all CubbyKit tests and the CLI
 product; the library-only `CubbyKit` scheme has no test action. The command uses
 `-onlyUsePackageVersionsFromResolvedFile` to keep the committed package pins.
-Its `xcode-host-v1` cache stores `apps/apple/CubbyKit/.build`, including the
-Xcode compilation cache under `.build/xcode`. Package checkouts use the shared
+Its `xcode-host-v2` cache stores only
+`apps/apple/CubbyKit/.build/xcode/CompilationCache.noindex`. SwiftPM build
+outputs under `.build` belong to the local CLI build and are not restored by
+the Xcode host-test job. Package checkouts use the shared
 `apps/apple/SourcePackages` clone cache that the simulator job saves. Xcode's
 `Build` and `Logs` directories are excluded: tests rebuild products from cached
 compiler results rather than restoring timestamp-sensitive objects and test

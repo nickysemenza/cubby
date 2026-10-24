@@ -321,8 +321,6 @@ jobs:
     env:
       # The restore and save steps must name the same paths.
       HOST_BUILD_CACHE_PATHS: |
-        apps/apple/CubbyKit/.build/*
-        !apps/apple/CubbyKit/.build/xcode
         apps/apple/CubbyKit/.build/xcode/CompilationCache.noindex
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -339,10 +337,10 @@ jobs:
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: ${{ env.HOST_BUILD_CACHE_PATHS }}
-          key: xcode-host-v1-${{ runner.os }}-${{ steps.apple.outputs.toolchain-hash }}-${{ hashFiles('apps/apple/CubbyKit/Package.resolved') }}-${{ hashFiles('apps/apple/CubbyKit/**', '!apps/apple/CubbyKit/.build/**') }}
+          key: xcode-host-v2-${{ runner.os }}-${{ steps.apple.outputs.toolchain-hash }}-${{ hashFiles('apps/apple/CubbyKit/Package.resolved') }}-${{ hashFiles('apps/apple/CubbyKit/**', '!apps/apple/CubbyKit/.build/**') }}
           restore-keys: |
-            xcode-host-v1-${{ runner.os }}-${{ steps.apple.outputs.toolchain-hash }}-${{ hashFiles('apps/apple/CubbyKit/Package.resolved') }}-
-            xcode-host-v1-${{ runner.os }}-${{ steps.apple.outputs.toolchain-hash }}-
+            xcode-host-v2-${{ runner.os }}-${{ steps.apple.outputs.toolchain-hash }}-${{ hashFiles('apps/apple/CubbyKit/Package.resolved') }}-
+            xcode-host-v2-${{ runner.os }}-${{ steps.apple.outputs.toolchain-hash }}-
       - name: Run CubbyKit host tests
         run: pnpm exec nx run apple:host-tests --outputStyle=stream
       # Publish only successful builds: exact-key cache entries are immutable.
