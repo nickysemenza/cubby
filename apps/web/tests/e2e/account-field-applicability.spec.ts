@@ -17,6 +17,7 @@ test("explains inapplicable account fields without offering edits", async ({
   const explanations = page.getByRole("note", {
     name: "Not applicable. Only applies to credit-card accounts.",
   });
+  await expect(explanations).toHaveCount(4);
   await expect(explanations.first()).toBeVisible();
   await explanations.first().focus();
   await page.keyboard.press("Shift+Tab");
