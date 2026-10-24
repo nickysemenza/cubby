@@ -179,11 +179,11 @@ jobs:
             run: CUBBY_E2E_SHARD=2/4 pnpm exec nx run @cubby/web:e2e --outputStyle=stream
           - name: E2E tests (desktop 3/4)
             browser: desktop-3
-            runner: [self-hosted, celesto-large]
+            runner: [self-hosted, celesto-xl]
             run: CUBBY_E2E_SHARD=3/4 pnpm exec nx run @cubby/web:e2e --outputStyle=stream
           - name: E2E tests (desktop 4/4)
             browser: desktop-4
-            runner: [self-hosted, celesto-large]
+            runner: [self-hosted, celesto-xl]
             run: CUBBY_E2E_SHARD=4/4 pnpm exec nx run @cubby/web:e2e --outputStyle=stream
           # Every Vitest project is split by file; all blobs feed the report.
           - name: Vitest (1/4)

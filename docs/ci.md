@@ -25,7 +25,7 @@ context, `CI passed`, owns the merge gate. [Journeys](#journeys) live in their
 own workflow.
 
 The required test matrix splits its existing shards evenly between GitHub and
-Celesto: half the browser shards use GitHub Ubuntu and half use Celesto Large;
+Celesto: half the browser shards use GitHub Ubuntu and half use Celesto XL;
 half the Vitest shards use GitHub Ubuntu and half use Celesto XL. The workflow
 owns exact assignments and counts. Per-runner worker counts stay unchanged.
 Each shard restores or builds its own web output through Nx before testing;
@@ -37,7 +37,10 @@ Plan, reporting and the final gate use GitHub's `ubuntu-slim`. Validation,
 optional jobs and Apple jobs also stay on GitHub; Rust retains its ARM runner.
 Deployment and other workflows retain their existing runners. This limits a
 normal PR to four heavy Celesto jobs, spreading demand across both providers
-without making native lane selection wait for Celesto admission.
+without making native lane selection wait for Celesto admission. Celesto
+browser shards trial XL at the existing worker count to isolate whether
+additional CPU/memory reduces execution time; this is an experiment, not a
+measured speedup.
 
 Celesto hosts its machines; `self-hosted` is GitHub's label for runners outside
 its hosted fleet. Enable the repository in the Celesto GitHub App and link it
