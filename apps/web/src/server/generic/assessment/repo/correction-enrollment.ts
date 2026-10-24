@@ -7,8 +7,8 @@ import type { z } from "zod";
 import type { Database } from "~/server/db";
 import { withTransactionDatabase } from "~/server/db/helpers";
 
-import { imageCorrectionEnrollmentPage } from "./correction-sources";
-import { enrollRetainedImageCorrection } from "./correction-work";
+import { retainedCorrectionEnrollmentPage } from "./correction-sources";
+import { enrollRetainedCorrection } from "./correction-work";
 
 /** Enrollment is explicit; ordinary reads never initiate historical repair. */
 export async function enrollSuggestionCorrections(
@@ -16,10 +16,14 @@ export async function enrollSuggestionCorrections(
   input: z.infer<typeof enrollSuggestionCorrectionsInput>,
 ) {
   const enroll = async (transactionDb: Database) => {
-    const page = await imageCorrectionEnrollmentPage(transactionDb, input);
+    const page = await retainedCorrectionEnrollmentPage(transactionDb, input);
     if (!input.dryRun)
       for (const source of page.sources)
-        await enrollRetainedImageCorrection(transactionDb, source.feedbackId);
+        await enrollRetainedCorrection(
+          transactionDb,
+          source.feedbackId,
+          input.family,
+        );
     return enrollSuggestionCorrectionsOut.parse({
       family: input.family,
       dryRun: input.dryRun,

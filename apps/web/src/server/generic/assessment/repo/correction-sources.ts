@@ -7,6 +7,7 @@ import {
   suggestionCorrectionSource,
   suggestionCorrectionTarget,
   correctionAuthorityReceiptKinds,
+  retainedCorrectionEnrollmentFamily,
 } from "@cubby/schemas/suggestion-correction";
 import { CORRECTION_OUTCOME_RECEIPT_KIND } from "@cubby/schemas/suggestion-correction";
 import { and, asc, eq, gt, inArray, or, sql, type SQL } from "drizzle-orm";
@@ -398,9 +399,13 @@ export async function correctionTargetIds(
 }
 
 /** Cursor advances over candidates, including refused or incomplete applications. */
-export async function imageCorrectionEnrollmentPage(
+export async function retainedCorrectionEnrollmentPage(
   db: Database,
-  input: { after: string | null; limit: number },
+  input: {
+    family: z.infer<typeof retainedCorrectionEnrollmentFamily>;
+    after: string | null;
+    limit: number;
+  },
 ) {
   const candidates = await getDb(db)
     .select({ id: feedback.id })
@@ -408,7 +413,7 @@ export async function imageCorrectionEnrollmentPage(
     .innerJoin(assessment, eq(assessment.id, feedback.assessmentId))
     .where(
       and(
-        eq(assessment.family, "image_description"),
+        eq(assessment.family, input.family),
         eq(assessment.served, true),
         eq(feedback.authority, "member"),
         eq(feedback.intent, "apply"),

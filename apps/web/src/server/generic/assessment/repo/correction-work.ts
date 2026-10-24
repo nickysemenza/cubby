@@ -2,6 +2,7 @@ import {
   assessmentChildHandle,
   assessmentSubjects,
 } from "@cubby/schemas/assessment";
+import type { retainedCorrectionEnrollmentFamily } from "@cubby/schemas/suggestion-correction";
 import { eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 
@@ -54,12 +55,17 @@ export async function enqueueCorrectionWork(
 }
 
 /** A distinct fixed revision preserves completed pre-adapter history and receipts. */
-export async function enrollRetainedImageCorrection(
+export async function enrollRetainedCorrection(
   db: Database,
   sourceFeedbackId: string,
+  family: z.infer<typeof retainedCorrectionEnrollmentFamily>,
 ) {
+  const revision = {
+    field: "field-identity-v2",
+    image_description: "image-description-v1",
+  }[family];
   await enqueueCorrectionIntent(db, {
-    key: `assessment-correction-history:image-description-v1:${sourceFeedbackId}`,
+    key: `assessment-correction-history:${revision}:${sourceFeedbackId}`,
     sourceFeedbackId,
     targetAssessmentId: null,
   });

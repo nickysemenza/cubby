@@ -3821,14 +3821,18 @@ history requires an unchanged receipt-bound propagated holder. Unattributed or
 unsupported applied confirmations stay held. The coordinator enrolls bounded
 history for new corrections and durably resolves roots after future model
 publication commits. Existing completed image history Jobs are not reset: a
-separate bounded `suggestions.enrollCorrections` operation previews retained
-member correction candidates by Feedback cursor (`dryRun: true` by default).
+separate bounded `suggestions.enrollCorrections` operation supports `field` and
+`image_description` and previews retained member correction candidates by Feedback cursor (`dryRun: true` by default).
 Its cursor and correction provenance expose opaque Assessment/Feedback child
 handles and effect receipt identities, never entity UUIDs. Its receipt-backed
 root count does not establish current applicability. Explicit
-`dryRun: false` creates fixed-version, deduplicated image history intents without
+`dryRun: false` creates fixed-version, deduplicated family history intents without
 resetting any old Job or outcome; the adapter still rechecks authority and member
 intent before text changes. Continue scanned pages even when no root qualifies.
+Field enrollment uses the fixed `field-identity-v2` revision to discover previously
+unvisited targets after identity-proof changes. Existing per-root/target outcomes,
+including holds, remain replayed; enrollment does not authorize their retry or
+replace historical receipts. Image enrollment retains its original fixed key.
 This operation is not automatically invoked at deployment. Separately authorized
 enrollment and verified outcomes remain operational prerequisites before
 historical completion can be claimed.

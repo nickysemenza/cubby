@@ -72,9 +72,9 @@ export const suggestionsContract = defineContract(
     }),
     enrollCorrections: mutation({
       description:
-        "Preview bounded historical image-description correction enrollment (family image_description, dryRun defaults true). Scans member correction candidates by opaque Feedback cursor; receiptBackedRoots is not proof of current applicability. Only on explicit instruction, dryRun false durably enrolls this page for automatic text-only repair with current authority/member-intent checks. Preserves completed Jobs and receipts; repeated enrollment does not reset work. No financial families, model work or rule changes. Continue with returned after until done, even when receiptBackedRoots is zero.",
+        "Preview bounded historical field or image-description correction enrollment (family field or image_description, dryRun defaults true). Scans member correction candidates by opaque Feedback cursor; receiptBackedRoots is not proof of current applicability. Only on explicit instruction, dryRun false durably enrolls this page for automatic repair with current family authority/member-intent checks. Preserves completed Jobs and receipts; repeated enrollment does not reset work. No financial families, model work or rule changes. Continue with returned after until done, even when receiptBackedRoots is zero.",
       command: {
-        label: "Enroll retained image corrections",
+        label: "Enroll retained corrections",
         confirmation: null,
       },
       input: enrollSuggestionCorrectionsInput,

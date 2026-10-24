@@ -3,6 +3,7 @@ import {
   fieldSuggestionContextKeys,
 } from "@cubby/schemas/field-suggestion";
 import { runEntityId } from "@cubby/schemas/identifiers";
+import { enrollSuggestionCorrectionsInput } from "@cubby/schemas/suggestion-correction";
 import { and, eq, inArray, notInArray, sql } from "drizzle-orm";
 import { driveAiWork } from "tooling/ai-work";
 import {
@@ -60,6 +61,7 @@ import {
 import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
 import { listAutomaticDecisions } from "~/server/generic/assessment/repo/automatic-decisions";
 import { applyAutomaticRules } from "~/server/generic/assessment/repo/automatic-rule-runtime";
+import { enrollSuggestionCorrections } from "~/server/generic/assessment/repo/correction-enrollment";
 import { lockCorrectionKey } from "~/server/generic/assessment/repo/correction-lock";
 import {
   readConfirmedCorrection,
@@ -167,6 +169,55 @@ describe("confirmed correction propagation", () => {
       "Synthetic correction work failed to finish its bounded pages",
     );
   }
+
+  it("explicitly enrolls retained field roots without resetting completed history", async () => {
+    const target = await propose({ automatic: true });
+    const root = await correct();
+    await getDb(ctx.db)
+      .update(job)
+      .set({
+        state: "completed",
+        result: { status: "held", reason: "Synthetic old identity scan" },
+      })
+      .where(eq(job.kind, "assessment.correction"));
+    const original = await getDb(ctx.db).select().from(job);
+    const preview = enrollSuggestionCorrectionsInput.parse({ family: "field" });
+    expect(await enrollSuggestionCorrections(ctx.db, preview)).toMatchObject({
+      family: "field",
+      dryRun: true,
+      receiptBackedRoots: 1,
+      enrolledRoots: 0,
+    });
+    expect(await getDb(ctx.db).select().from(job)).toEqual(original);
+    const apply = { ...preview, dryRun: false };
+    await enrollSuggestionCorrections(ctx.db, apply);
+    await enrollSuggestionCorrections(ctx.db, apply);
+    const enrolled = await getDb(ctx.db).select().from(job);
+    expect(enrolled).toHaveLength(original.length + 1);
+    expect(
+      enrolled.find((row) => !original.some((old) => old.id === row.id)),
+    ).toMatchObject({
+      key: `assessment-correction-history:field-identity-v2:${root.result.feedbackId}`,
+      state: "queued",
+      input: {
+        sourceFeedbackId: root.result.feedbackId,
+        targetAssessmentId: null,
+      },
+    });
+    await drain();
+    expect(await productCategoryId(ctx.db, target.product.id)).toBe(
+      taxonomyId("food"),
+    );
+    for (const old of original.filter(
+      (row) => row.kind === "assessment.correction",
+    ))
+      expect(
+        (await getDb(ctx.db).select().from(job).where(eq(job.id, old.id)))[0],
+      ).toEqual(old);
+    const completed = await getDb(ctx.db).select().from(job);
+    await enrollSuggestionCorrections(ctx.db, apply);
+    expect(await getDb(ctx.db).select().from(job)).toEqual(completed);
+  });
 
   async function preparedQuestion(
     basis: Record<string, string | null> = {

@@ -64,10 +64,15 @@ export type SuggestionCorrectionOutcome = z.infer<
   typeof suggestionCorrectionOutcome
 >;
 
+export const retainedCorrectionEnrollmentFamily = z.enum([
+  "field",
+  "image_description",
+]);
+
 /** Explicit bounded enrollment; preview never creates durable work. */
 export const enrollSuggestionCorrectionsInput = z
   .object({
-    family: z.literal("image_description"),
+    family: retainedCorrectionEnrollmentFamily,
     dryRun: z.boolean().default(true),
     after: assessmentChildHandle.nullable().default(null),
     limit: z.number().int().min(1).max(100).default(25),
@@ -75,7 +80,7 @@ export const enrollSuggestionCorrectionsInput = z
   .strict();
 
 export const enrollSuggestionCorrectionsOut = z.object({
-  family: z.literal("image_description"),
+  family: retainedCorrectionEnrollmentFamily,
   dryRun: z.boolean(),
   scanned: z.number().int().nonnegative(),
   receiptBackedRoots: z.number().int().nonnegative(),
