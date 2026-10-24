@@ -26,6 +26,13 @@ const eventLabels = {
   unknown: "Unknown",
 } satisfies Record<ShipmentObservationInput["kind"], string>;
 
+const observationLabel = (event: ShipmentObservationInput) =>
+  event.timeBasis === "estimate"
+    ? event.kind === "delivered"
+      ? "Estimated delivery"
+      : `Estimated: ${eventLabels[event.kind].toLowerCase()}`
+    : eventLabels[event.kind];
+
 const eventTime = (
   event: ShipmentObservationInput,
   receiptAt?: string,
@@ -110,16 +117,24 @@ export async function shipmentTrackingReport(
           trailing: null,
           time: eventTime(row.event, reportedAt),
           state: {
-            kind: row.event.kind === "exception" ? "warning" : "done",
-            label: eventLabels[row.event.kind],
+            kind:
+              row.event.timeBasis === "estimate"
+                ? "not_reached"
+                : row.event.kind === "exception"
+                  ? "warning"
+                  : "done",
+            label: observationLabel(row.event),
           },
           badges: [
             {
-              label: eventLabels[row.event.kind],
+              label: observationLabel(row.event),
               tone: row.event.kind === "exception" ? "warning" : "muted",
             },
           ],
           lines: [
+            ...(row.event.timeBasis === "notification_received"
+              ? [{ text: "Notification received", tone: "muted" as const }]
+              : []),
             ...(row.event.location ? [{ text: row.event.location }] : []),
             ...sourceLines(sources),
           ],
@@ -139,7 +154,7 @@ export async function shipmentTrackingReport(
         time: eventTime(row, reportingTime(row)),
         badges: [
           {
-            label: eventLabels[row.kind],
+            label: observationLabel(row),
             tone: row.kind === "exception" ? "warning" : "muted",
           },
           ...(row.superseded
@@ -147,6 +162,9 @@ export async function shipmentTrackingReport(
             : []),
         ],
         lines: [
+          ...(row.timeBasis === "notification_received"
+            ? [{ text: "Notification received", tone: "muted" as const }]
+            : []),
           ...(row.location ? [{ text: row.location }] : []),
           ...sourceLines([row]),
           {

@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import { shipmentEvidence } from "./shipment-evidence";
+import {
+  shipmentEvidence,
+  retainedShipmentEvidence,
+} from "./shipment-evidence";
 import { mailResolveInput } from "./mailbox-research";
 
 import {
@@ -29,6 +32,7 @@ describe("purchase import contracts", () => {
       {
         sourceEventKey: null,
         kind: "vendor_shipped",
+        timeBasis: "stated_event",
         time: { kind: "local", value: "2026-10-20T10:30", timezone: null },
         rawStatus: "Your first package has shipped",
         location: null,
@@ -65,6 +69,17 @@ describe("purchase import contracts", () => {
     expect(shipmentEvidence.safeParse(retained.shipments[0]).success).toBe(
       false,
     );
+  });
+
+  it("keeps historical observation JSON literal while requiring provenance for fresh packets", () => {
+    const historical = {
+      ...packet,
+      observations: packet.observations.map(
+        ({ timeBasis: _basis, ...event }) => event,
+      ),
+    };
+    expect(retainedShipmentEvidence.parse(historical)).toEqual(historical);
+    expect(shipmentEvidence.safeParse(historical).success).toBe(false);
   });
 
   it("normalizes structured package evidence without inventing a timezone or whole-order delivery", () => {

@@ -33,6 +33,8 @@ replay preserves the stored member classification.
 Every observation needs a calendar date. Prefer the stated event time; when
 none is stated, use the source notification's calendar date at date-only precision.
 Retain whether the wording is an estimate, notification or completed scan.
+Use the extraction contract's required `timeBasis`; shared timelines label
+notification dates and estimates separately from stated carrier event dates.
 
 For vendor, carrier or Shop package observations, read the complete retained
 Email, then call `shipments.record` with `source: {kind: "email", emailId:
@@ -112,6 +114,44 @@ Historical replay is separately requested through the existing `purchase_import.
 selection and retained-original workflow, using the same shipment packets and
 writer. Old accepted extraction booleans remain literal historical evidence;
 replay needs actual package facts from the original.
+
+### Audit a shipment backfill
+
+Freeze the expected Email and batch populations before writing. Preserve each
+original read's requested byte offset, source/checksum and representation.
+Earlier compact pages can legitimately report `truncated` while `nextOffset`
+continues; assess the completed sequence, not every page independently. If its
+final compact page still lost evidence, recover all HTML pages interactively.
+HTML fragments can remain marked truncated even when their combined byte
+coverage is complete. Match the source/checksum across both representations.
+Recover HTML when compact responses omit links, images or structured data even
+if their body text reports complete; tracking evidence can live in those parts.
+
+For reproducible offline checks, run the maintained audit with a private JSON
+manifest and report path:
+
+```sh
+pnpm --dir apps/web exec tsx tooling/shipment-evidence-audit.ts /absolute/private-manifest.json /absolute/private-report.json
+```
+
+`shipmentEvidenceAuditInput` beside that entrypoint owns the manifest: expected
+batch/Email IDs, original pages with requested offsets, per-batch write receipts,
+source dispositions (with resolution receipts for linked outcomes), verified carrier-name resolutions and before/after timelines. Missing originals, batches,
+readbacks or dispositions fail the audit. An unresolved disposition retains its
+concrete evidence gap. The audit verifies byte coverage and observation-level
+readback/preservation, including distinct occurrences, refreshed capture membership and automatic or reviewed revision lineage;
+A linked Email without a package event need not invent one; its resolution receipt
+still has to verify the Purchase link. The audit does not certify semantic extraction or package
+identity. Review literal status/date excerpts and carrier/Purchase/package
+identity independently before writing.
+
+An Email already appearing on a package is not proof that every observation
+was recorded. Compare individual observations and stable source event keys;
+replay through the shared writer and preserve reviewed revisions. Resolve
+tracking reuse with carrier and Purchase evidence. A unique tracking-only
+roster match does not authorize correcting a Shipment target. Record supported
+packages even with a null Purchase; create an incomplete Purchase only through
+the existing order-import evidence workflow when order identity is established.
 
 ## Interpret purchase mail
 

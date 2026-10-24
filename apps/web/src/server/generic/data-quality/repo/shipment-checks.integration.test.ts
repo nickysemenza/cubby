@@ -100,6 +100,7 @@ describe("Shipment evidence quality", () => {
             purpose: options.purpose ?? "incoming",
             observations: observations.map((observation, index) => ({
               ...observation,
+              timeBasis: observation.timeBasis ?? "stated_event",
               time: datedShipmentEventTime.safeParse(observation.time).success
                 ? observation.time
                 : day("2026-06-01"),
@@ -242,6 +243,16 @@ describe("Shipment evidence quality", () => {
     const cases = [
       { events: [shipped, delivered], score: 100, gaps: [] },
       {
+        events: [shipped, { ...delivered, timeBasis: "estimate" as const }],
+        score: 25,
+        gaps: [
+          "shipment_events",
+          "shipment_delivered",
+          "shipment_span",
+          "shipment_dates",
+        ],
+      },
+      {
         events: [delivered],
         score: 25,
         gaps: [
@@ -368,7 +379,9 @@ describe("Shipment evidence quality", () => {
         [...parcel.sample.gaps].sort(),
       );
       const timeline = await readShipmentTimeline(ctx.db, parcel.code);
-      const summary = shipmentEventSummary(timeline.timeline);
+      const summary = shipmentEventSummary(
+        timeline.timeline.filter(({ event }) => event.timeBasis !== "estimate"),
+      );
       const raw = evaluated.result.find((row) => row.id === parcel.row.id)!;
       expect(raw.checks.shipment_events).toBe(
         summary.eventCount >= 2 ? "pass" : "gap",

@@ -11,12 +11,17 @@ import {
   reassignShipmentEvidenceInput,
   editShipmentObservationInput,
   shipmentObservationInput,
+  retainedShipmentEvidence,
+  datedShipmentEventTime,
   type RecordShipmentEvidenceInput,
   type ShipmentEvidence,
 } from "@cubby/schemas/shipment-evidence";
+import { shipmentPurpose } from "@cubby/schemas/shipment-fields";
 import { sha256Hex } from "@cubby/shared/sha256";
 import { and, desc, eq, isNull, sql } from "drizzle-orm";
+import { z } from "zod";
 
+import { householdLocalDate } from "~/lib/household-date";
 import type { Database } from "~/server/db";
 import {
   getDb,
@@ -62,6 +67,36 @@ const refuse = (message: string): never => {
 const canonical = (value: unknown) => canonicalJson(jsonSnapshot.parse(value));
 const normalizeNumber = (value: string) =>
   value.replaceAll(/\s/g, "").toUpperCase();
+
+// Pending preparations retain their literal provenance. This private Email ingress
+// still requires dated observations and shares all source/identity/write enforcement.
+const retainedRecordInput = z.strictObject({
+  ...recordShipmentEvidenceInput.shape,
+  source: recordShipmentEvidenceInput.shape.source.options[0],
+  shipments: z
+    .array(
+      retainedShipmentEvidence.safeExtend({
+        purpose: shipmentPurpose,
+        observations: z
+          .array(
+            shipmentObservationInput
+              .extend({ time: datedShipmentEventTime })
+              .refine(
+                (event) =>
+                  event.timeBasis !== "notification_received" ||
+                  event.time.kind === "date",
+                "Notification fallback uses its calendar date at date-only precision.",
+              ),
+          )
+          .min(1)
+          .max(500),
+      }),
+    )
+    .min(1)
+    .max(50),
+});
+type ShipmentWriterInput = Omit<RecordShipmentEvidenceInput, "shipments"> &
+  Pick<z.infer<typeof retainedRecordInput>, "shipments">;
 
 // Intake and explicit corrections share this transaction lock: replay cannot race a package merge.
 async function lockShipmentWrites(db: Database) {
@@ -113,6 +148,23 @@ async function carrierReference(
     !identity.canonicalDeletedAt
       ? parseShortcodeFor("vendor", identity.canonicalShortcode)
       : (code ?? (await resolveProductBrandName(db, name)));
+  if (code && carrierCode && name?.trim()) {
+    const [claimed] = await getDb(db)
+      .select({ name: vendor.name, aliases: vendor.aliases })
+      .from(vendor)
+      .where(and(eq(vendor.shortcode, carrierCode), notDeleted(vendor)))
+      .for("share");
+    const literal = name.trim().toLowerCase();
+    if (
+      claimed &&
+      ![claimed.name, ...claimed.aliases].some(
+        (value) => value.trim().toLowerCase() === literal,
+      )
+    )
+      return refuse(
+        "Carrier reference and literal carrier name disagree; verify the Vendor identity or its alias.",
+      );
+  }
   return {
     code: carrierCode,
     id: carrierCode
@@ -142,7 +194,7 @@ async function purchaseReference(
 
 async function sourceCapture(
   db: Database,
-  input: RecordShipmentEvidenceInput,
+  input: Pick<ShipmentWriterInput, "source">,
   actor: ActorContext,
 ) {
   const source = input.source;
@@ -151,6 +203,7 @@ async function sourceCapture(
   let sourceKey: string;
   let checksum: string;
   let originalContent: RetainedMail["content"] | null = null;
+  let notificationDate: string | null = null;
   if (source.kind === "email") {
     emailId = await resolveOrThrow(db, "email", source.emailId);
     const [message] = await getDb(db)
@@ -199,6 +252,9 @@ async function sourceCapture(
     }
     ownerId = original.ledgerPartyId;
     originalContent = original.content;
+    notificationDate = original.receivedAt
+      ? householdLocalDate(original.receivedAt)
+      : null;
     sourceKey = `email:${emailId}`;
     checksum = source.checksum;
   } else {
@@ -222,6 +278,12 @@ async function sourceCapture(
         : source.content,
     );
     if (source.kind === "sms_export") {
+      notificationDate =
+        source.sentAt.kind === "instant"
+          ? householdLocalDate(new Date(source.sentAt.value))
+          : source.sentAt.kind === "date" || source.sentAt.kind === "local"
+            ? source.sentAt.value.slice(0, 10)
+            : null;
       const prior = await getDb(db)
         .select({ checksum: shipmentSourceCapture.checksum })
         .from(shipmentSourceCapture)
@@ -249,7 +311,7 @@ async function sourceCapture(
     })
     .returning();
   if (!capture) throw new Error("Shipment source capture was not retained.");
-  return { capture, sourceKey, ownerId };
+  return { capture, sourceKey, ownerId, notificationDate };
 }
 
 async function assertPurchaseSourceOwner(
@@ -307,16 +369,45 @@ export async function recordShipmentEvidence(
   raw: RecordShipmentEvidenceInput,
   actor: ActorContext,
 ) {
-  const input = recordShipmentEvidenceInput.parse(raw);
+  return writeShipmentEvidence(
+    db,
+    recordShipmentEvidenceInput.parse(raw),
+    actor,
+  );
+}
+
+/** Only retained order extraction ingestion uses this boundary; public records require provenance. */
+export async function recordRetainedShipmentEvidence(
+  db: Database,
+  raw: z.input<typeof retainedRecordInput>,
+  actor: ActorContext,
+) {
+  return writeShipmentEvidence(db, retainedRecordInput.parse(raw), actor);
+}
+
+async function writeShipmentEvidence(
+  db: Database,
+  input: ShipmentWriterInput,
+  actor: ActorContext,
+) {
   // oxlint-disable-next-line complexity -- Source ownership, package identity and reviewed revisions commit under one shipment lock.
   return withTransactionDatabase(db, async (tdb) => {
     await lockShipmentWrites(tdb);
     const database = getDb(tdb);
-    const { capture, sourceKey, ownerId } = await sourceCapture(
-      tdb,
-      input,
-      actor,
-    );
+    const { capture, sourceKey, ownerId, notificationDate } =
+      await sourceCapture(tdb, input, actor);
+    if (input.source.kind !== "tracking_page")
+      for (const packet of input.shipments)
+        for (const observation of packet.observations)
+          if (
+            observation.timeBasis === "notification_received" &&
+            (notificationDate === null ||
+              observation.time.kind !== "date" ||
+              observation.time.value !== notificationDate)
+          )
+            refuse(
+              "Notification fallback must use the source notification's Los Angeles calendar date.",
+            );
     const purchaseId = await purchaseReference(tdb, input.purchaseId);
     await assertPurchaseSourceOwner(tdb, purchaseId, ownerId);
     const shipmentIds = [];
@@ -489,11 +580,17 @@ export async function recordShipmentEvidence(
         );
         const event = { ...observation, carrierId: eventCarrier.code };
         const fingerprint = await sha256Hex(canonical(observation));
-        const ordinal = occurrences.get(fingerprint) ?? 0;
-        occurrences.set(fingerprint, ordinal + 1);
+        // Provenance was absent in historical JSON. Keep its occurrence identity and
+        // fingerprint intact when the same literal scan is replayed with provenance.
+        const { timeBasis: _timeBasis, ...literalObservation } = observation;
+        const literalFingerprint = await sha256Hex(
+          canonical(literalObservation),
+        );
+        const ordinal = occurrences.get(literalFingerprint) ?? 0;
+        occurrences.set(literalFingerprint, ordinal + 1);
         const occurrenceKey = event.sourceEventKey
           ? `event:${event.sourceEventKey}`
-          : `content:${fingerprint}:${ordinal}`;
+          : `content:${literalFingerprint}:${ordinal}`;
         const sameOccurrence = and(
           eq(shipmentObservation.sourcePackageId, sourcePackage.id),
           eq(shipmentObservation.occurrenceKey, occurrenceKey),
@@ -509,13 +606,16 @@ export async function recordShipmentEvidence(
         const versions = await database
           .select()
           .from(shipmentObservation)
-          .where(
-            and(
-              sameOccurrence,
-              eq(shipmentObservation.fingerprint, fingerprint),
+          .where(sameOccurrence)
+          .orderBy(desc(shipmentObservation.firstSeenAt))
+          .then((rows) =>
+            rows.filter(
+              (version) =>
+                version.fingerprint === fingerprint ||
+                (version.event.timeBasis === undefined &&
+                  version.fingerprint === literalFingerprint),
             ),
-          )
-          .orderBy(desc(shipmentObservation.firstSeenAt));
+          );
         const prior =
           versions.find((version) => version.firstSeenAt <= observedAt) ??
           versions.at(-1);
@@ -660,6 +760,13 @@ export async function editShipmentObservation(
       ...original.event,
       ...input.patch,
     });
+    if (
+      event.timeBasis === "notification_received" &&
+      event.time.kind !== "date"
+    )
+      return refuse(
+        "Notification fallback uses its calendar date at date-only precision.",
+      );
     const carrier = await carrierReference(
       tdb,
       event.carrierId,

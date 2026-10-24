@@ -9,6 +9,7 @@ import {
   commitPurchaseImportInput,
   proposedImportFix,
 } from "@cubby/schemas/purchase-import";
+import { shipmentEvidence } from "@cubby/schemas/shipment-evidence";
 import { testShortcode } from "@cubby/schemas/testing";
 import { sha256Hex } from "@cubby/shared/sha256";
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
@@ -47,6 +48,8 @@ import {
   run,
   runOperation,
   sourceOrderObservation,
+  shipment,
+  shipmentObservation,
 } from "~/server/db/schema";
 import { effectiveExpenseTradeSql } from "~/server/domains/expense/repo/expense-inheritance";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
@@ -1775,47 +1778,84 @@ describe("caller-driven purchase import writes", () => {
     ]);
   });
 
-  it("records the shipping event when its Email creates the Purchase first", async () => {
-    const { party, vendor } = await memberImportWorld(ctx.db, ctx.actor);
-    const mail = await retainedOrderMail(party.id, "shipping-first");
-    const { committed } = await memberImport(ctx.db, ctx.actor, {
-      key: "shipping-first",
-      orders: [
-        {
-          stableOrderId: "shipping-first",
-          vendorId: vendor.shortcode,
-          source: mailSource(mail),
-          extraction: {
-            status: "ready",
-            candidate: candidate("ORDER-ONE", [service()], {
-              sourceEvent: "shipped",
-            }),
+  it.each([true, false])(
+    "records packages when a priced=%s shipping Email creates the Purchase first",
+    async (priced) => {
+      const { party, vendor } = await memberImportWorld(ctx.db, ctx.actor);
+      const mail = await retainedOrderMail(party.id, "shipping-first");
+      const { committed } = await memberImport(ctx.db, ctx.actor, {
+        key: "shipping-first",
+        orders: [
+          {
+            stableOrderId: "shipping-first",
+            vendorId: vendor.shortcode,
+            source: mailSource(mail),
+            extraction: {
+              status: "ready",
+              candidate: candidate("ORDER-ONE", priced ? [service()] : [], {
+                sourceEvent: "shipped",
+                shipments: [
+                  shipmentEvidence.parse({
+                    shipmentId: null,
+                    sourceShipmentKey: "synthetic-shipping-first",
+                    distinctPackageEvidence: null,
+                    carrierId: null,
+                    carrierName: "Synthetic Shipping Carrier",
+                    trackingNumber: "SYN-SHIPPING-FIRST",
+                    extraTrackingNumbers: [],
+                    purpose: "incoming",
+                    observations: [
+                      {
+                        sourceEventKey: null,
+                        kind: "vendor_shipped",
+                        time: { kind: "date", value: "2026-09-20" },
+                        timeBasis: "notification_received",
+                        rawStatus: "Your package has shipped",
+                        location: null,
+                        carrierId: null,
+                        carrierName: "Synthetic Shipping Carrier",
+                        trackingNumber: "SYN-SHIPPING-FIRST",
+                      },
+                    ],
+                  }),
+                ],
+              }),
+            },
           },
+        ],
+        defaultTrade: "other",
+      });
+      const saved = await purchaseByShortcode(committed.items[0]?.purchaseId);
+      const events = await getDb(ctx.db).select().from(orderMailEvent);
+      expect(events.map(({ event }) => event)).toEqual(["shipped"]);
+      const links = await getDb(ctx.db)
+        .select()
+        .from(orderMailCandidateDecision);
+      expect(
+        links.map(({ eventId, purchaseId, evidenceChecksum }) => ({
+          eventId,
+          purchaseId,
+          evidenceChecksum,
+        })),
+      ).toEqual([
+        {
+          eventId: events[0]!.id,
+          purchaseId: saved.id,
+          evidenceChecksum: mail.rawChecksum,
         },
-      ],
-      defaultTrade: "other",
-    });
-    const saved = await purchaseByShortcode(committed.items[0]?.purchaseId);
-    const events = await getDb(ctx.db).select().from(orderMailEvent);
-    expect(events.map(({ event }) => event)).toEqual(["shipped"]);
-    const links = await getDb(ctx.db).select().from(orderMailCandidateDecision);
-    expect(
-      links.map(({ eventId, purchaseId, evidenceChecksum }) => ({
-        eventId,
-        purchaseId,
-        evidenceChecksum,
-      })),
-    ).toEqual([
-      {
-        eventId: events[0]!.id,
-        purchaseId: saved.id,
-        evidenceChecksum: mail.rawChecksum,
-      },
-    ]);
-    expect((await purchaseLines(saved.id)).map(({ cost }) => cost)).toEqual([
-      10,
-    ]);
-  });
+      ]);
+      expect((await purchaseLines(saved.id)).map(({ cost }) => cost)).toEqual(
+        priced ? [10] : [],
+      );
+      expect(await getDb(ctx.db).select().from(shipment)).toMatchObject([
+        { purchaseId: saved.id, trackingNumber: "SYN-SHIPPING-FIRST" },
+      ]);
+      expect(
+        await getDb(ctx.db).select().from(shipmentObservation),
+      ).toHaveLength(1);
+      expect(await getDb(ctx.db).select().from(inventoryEntry)).toEqual([]);
+    },
+  );
 });
 
 describe("shared purchase-import prepare and commit", () => {

@@ -124,7 +124,7 @@ describe("public mail tool", () => {
         sourceShipmentKey: number,
         distinctPackageEvidence: null,
         carrierId: null,
-        carrierName: null,
+        carrierName: "Synthetic Lifecycle Carrier",
         trackingNumber: number,
         extraTrackingNumbers: [],
         purpose: "incoming",
@@ -132,11 +132,12 @@ describe("public mail tool", () => {
           {
             sourceEventKey: null,
             kind,
+            timeBasis: "stated_event",
             time: { kind: "date", value: "2026-10-20" },
             rawStatus: kind,
             location: null,
             carrierId: null,
-            carrierName: null,
+            carrierName: "Synthetic Lifecycle Carrier",
             trackingNumber: number,
           },
         ],
@@ -182,6 +183,43 @@ describe("public mail tool", () => {
       inventoryBefore,
     );
 
+    const later = await retainedMailFixture(ctx.db, {
+      ledgerPartyId: party.id,
+      mailboxId,
+      messageId: "later-package-notice",
+      checksum: "e".repeat(64),
+      bodyText: "Order SYN-SPLIT-101: parcel B delivered.",
+    });
+    const enrichment = mailResolveInput.parse({
+      ...input,
+      messageId: later.messageId,
+      checksum: later.rawChecksum,
+      disposition: {
+        kind: "linked",
+        event: "delivered",
+        purchaseIds: [target.shortcode],
+        shipments: [
+          {
+            purchaseId: target.shortcode,
+            shipments: [packet("SYN-PARCEL-B", "delivered")],
+          },
+        ],
+      },
+    });
+    await resolveMail(ctx.db, enrichment, ctx.actor);
+    await resolveMail(ctx.db, enrichment, ctx.actor);
+    const enriched = await getDb(ctx.db).select().from(shipment);
+    expect(enriched.map((row) => row.id).sort()).toEqual(
+      packages.map((row) => row.id).sort(),
+    );
+    expect(await getDb(ctx.db).select().from(shipmentObservation)).toHaveLength(
+      3,
+    );
+    expect(await getDb(ctx.db).select().from(expense)).toEqual(expensesBefore);
+    expect(await getDb(ctx.db).select().from(inventoryEntry)).toEqual(
+      inventoryBefore,
+    );
+
     const invalid = mailResolveInput.parse({
       ...input,
       disposition: {
@@ -205,7 +243,7 @@ describe("public mail tool", () => {
       /Shipment|shipment/,
     );
     expect(await getDb(ctx.db).select().from(shipmentObservation)).toHaveLength(
-      2,
+      3,
     );
   });
 

@@ -1280,6 +1280,7 @@ async function seedShipmentReferences(
   db: Database,
   codes: ReadonlyMap<string, string>,
 ) {
+  // The generic Vendor fixture supplies a reference, not this source's literal carrier name.
   const carrierId = parseShortcodeFor("vendor", codes.get("VEN-"));
   await recordShipmentEvidence(
     db,
@@ -1298,19 +1299,20 @@ async function seedShipmentReferences(
           sourceShipmentKey: "delete-policy-package",
           distinctPackageEvidence: null,
           carrierId,
-          carrierName: "Synthetic deletion carrier",
+          carrierName: null,
           trackingNumber: "SYNTHETIC-DELETE-PACKAGE",
           extraTrackingNumbers: [],
           purpose: "incoming",
           observations: [
             {
               sourceEventKey: "pickup",
+              timeBasis: "stated_event",
               kind: "carrier_possession",
               time: { kind: "date", value: "2026-06-03" },
               rawStatus: "Collected",
               location: null,
               carrierId,
-              carrierName: "Synthetic deletion carrier",
+              carrierName: null,
               trackingNumber: "SYNTHETIC-DELETE-PACKAGE",
             },
           ],

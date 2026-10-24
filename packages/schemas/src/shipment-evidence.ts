@@ -46,12 +46,19 @@ export const datedShipmentEventTime = shipmentEventTime.refine(
       z.iso.datetime({ local: true }).safeParse(time.value).success),
   "Every shipment event needs a calendar date. Use the source notification date when no separate event date is stated.",
 );
+export const shipmentTimeBasis = z.enum([
+  "stated_event",
+  "notification_received",
+  "estimate",
+]);
 export const shipmentObservationInput = z.strictObject({
   sourceEventKey: text.max(500).nullable(),
   kind: shipmentEventKind,
   time: shipmentEventTime.describe(
     "Every new observation requires a date. Use its stated event time, otherwise the source notification date at date-only precision; estimates remain estimates.",
   ),
+  // Absence is historical uncertainty; parsing retained evidence must not add fields or change hashes.
+  timeBasis: shipmentTimeBasis.optional(),
   rawStatus: text.max(4000),
   location: text.max(500).nullable(),
   carrierId: shortcodeSchema("vendor").nullable(),
@@ -59,6 +66,11 @@ export const shipmentObservationInput = z.strictObject({
   trackingNumber: text.max(300).nullable(),
 });
 export type ShipmentObservationInput = z.infer<typeof shipmentObservationInput>;
+export const newShipmentObservationInput = shipmentObservationInput.extend({
+  timeBasis: shipmentTimeBasis.describe(
+    "stated_event for a completed event's stated date; notification_received when using the notification's date instead; estimate for forecast wording, which never proves completed delivery.",
+  ),
+});
 
 const shipmentEvidenceFields = z.strictObject({
   shipmentId: shortcodeSchema("shipment").nullable(),
@@ -89,7 +101,7 @@ const shipmentEvidenceFields = z.strictObject({
   purpose: shipmentPurpose.describe(
     "Incoming or outgoing relative to the household. Received carrier SMS implies incoming; eBay sales and purchased postage labels are outgoing. Replacement and return details remain in the evidence.",
   ),
-  observations: z.array(shipmentObservationInput).min(1).max(500),
+  observations: z.array(newShipmentObservationInput).min(1).max(500),
 });
 const hasPackageIdentity = (
   value: Pick<
@@ -120,6 +132,7 @@ export type ShipmentEvidence = z.infer<typeof shipmentEvidence>;
 export const retainedShipmentEvidence = shipmentEvidenceFields
   .extend({
     purpose: z.string().min(1),
+    observations: z.array(shipmentObservationInput).min(1).max(500),
   })
   .refine(hasPackageIdentity, packageIdentityIssue);
 export type RetainedShipmentEvidence = z.infer<typeof retainedShipmentEvidence>;
@@ -195,6 +208,16 @@ export const recordShipmentEvidenceInput = z
             message: result.error.issues[0]?.message ?? "Event date required.",
           });
         if (
+          observation.timeBasis === "notification_received" &&
+          observation.time.kind !== "date"
+        )
+          ctx.addIssue({
+            code: "custom",
+            path: ["shipments", i, "observations", j, "time"],
+            message:
+              "Notification fallback uses its calendar date at date-only precision.",
+          });
+        if (
           input.source.kind === "sms_export" &&
           observation.time.kind === "local" &&
           observation.time.timezone !== "America/Los_Angeles"
@@ -247,19 +270,26 @@ export const shipmentReferenceOut = z.object({
 export const shipmentTimelineInput = z.strictObject({
   shipmentId: shortcodeSchema("shipment"),
 });
+const shipmentTimelineSource = z.union([
+  shipmentEvidenceSource.options[0],
+  shipmentEvidenceSource.options[1].omit({ content: true }),
+  smsExportSource.omit({ content: true }),
+]);
 export const shipmentTimelineObservation = shipmentObservationInput.extend({
   observationId: z.string().uuid(),
   sourceCaptureId: z.string().uuid(),
   sourcePackageId: z.string().uuid(),
   captureIds: z.array(z.uuid()),
-  source: z.union([
-    shipmentEvidenceSource.options[0],
-    shipmentEvidenceSource.options[1].omit({ content: true }),
-    smsExportSource.omit({ content: true }),
-  ]),
+  source: shipmentTimelineSource,
+  /** Source identity for every retained capture membership, including refreshed Emails. */
+  captureSources: z
+    .array(z.object({ captureId: z.uuid(), source: shipmentTimelineSource }))
+    .optional(),
   firstSeenAt: z.iso.datetime(),
   lastSeenAt: z.iso.datetime(),
   superseded: z.boolean(),
+  /** Missing only in older saved readbacks; live timelines expose revision lineage. */
+  supersededByObservationId: z.uuid().nullable().optional(),
   memberReviewed: z.boolean(),
 });
 export const shipmentTimelineOut = z.object({

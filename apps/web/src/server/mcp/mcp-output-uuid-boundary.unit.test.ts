@@ -104,6 +104,10 @@ const DECLARED_UUID_OUTPUT_PATHS = new Set([
   "shipments_read.observations[].sourceCaptureId",
   "shipments_read.observations[].sourcePackageId",
   "shipments_read.observations[].captureIds[]",
+  // Supporting captures and revision successors refer to the same internal
+  // evidence rows above; they are readback lineage, not entity identifiers.
+  "shipments_read.observations[].captureSources[].captureId",
+  "shipments_read.observations[].supersededByObservationId",
   "suggestions_read.items[].id",
   "suggestions_read.items[].assessmentId",
   "suggestions_read.items[].evidence.assessmentId",

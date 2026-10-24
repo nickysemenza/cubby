@@ -2,9 +2,9 @@ import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import type {
   RecordShipmentEvidenceInput,
   ShipmentEvidence,
-  ShipmentObservationInput,
 } from "@cubby/schemas/shipment-evidence";
 import { testUserId } from "@cubby/schemas/testing";
+import { sha256Hex } from "@cubby/shared/sha256";
 import { eq } from "drizzle-orm";
 import { createRepoIdentity } from "tooling/factories/repo";
 import { buildKernelContext } from "tooling/scenarios/context";
@@ -30,6 +30,7 @@ import { executeEntity } from "~/server/entity-kernel";
 import { getEntityGraph } from "~/server/generic/entity-graph/repo/entity-graph";
 import { getConnectedRecords } from "~/server/generic/entity-links/repo/connected-records";
 import { shipmentTrackingReport } from "~/server/generic/entity-report/repo/shipment";
+import { canonicalJson, jsonSnapshot } from "~/server/lib/canonical-json";
 
 import {
   recordShipmentEvidence,
@@ -53,6 +54,7 @@ const packet = (number = "EXAMPLE-123"): ShipmentEvidence => ({
     {
       sourceEventKey: "scan-one",
       kind: "carrier_possession",
+      timeBasis: "stated_event",
       time: { kind: "instant", value: "2026-06-03T09:00:00Z" },
       rawStatus: "Synthetic pickup",
       location: null,
@@ -81,6 +83,103 @@ const capture = (
 
 describe("Shipment retained evidence", () => {
   const ctx = withTestDb();
+
+  it("labels notification dates and keeps forecasts out of completed delivery", async () => {
+    const parcel = packet();
+    const scan = parcel.observations[0]!;
+    parcel.observations = [
+      {
+        ...scan,
+        time: { kind: "date", value: "2026-06-03" },
+        timeBasis: "notification_received",
+      },
+      {
+        ...scan,
+        sourceEventKey: "forecast",
+        kind: "delivered",
+        timeBasis: "estimate",
+        rawStatus: "Expected delivery June 7",
+        time: { kind: "date", value: "2026-06-07" },
+      },
+    ];
+    const result = await recordShipmentEvidence(
+      ctx.db,
+      capture("forecast", [parcel]),
+      ctx.actor,
+    );
+    const code = result.shipmentIds[0]!;
+    expect(
+      (await readShipmentTimeline(ctx.db, code)).milestones.deliveredAt,
+    ).toBeNull();
+    const blocks = await shipmentTrackingReport(ctx.db, code);
+    const rows = blocks.flatMap((block) =>
+      block.kind === "records" ? block.rows : [],
+    );
+    expect(
+      rows.some((row) =>
+        row.lines?.some((line) => line.text === "Notification received"),
+      ),
+    ).toBe(true);
+    expect(
+      rows
+        .filter((row) => row.title === "Expected delivery June 7")
+        .every(
+          (row) =>
+            row.badges?.some((badge) => badge.label.startsWith("Estimated")) &&
+            row.state?.kind !== "done",
+        ),
+    ).toBe(true);
+  });
+
+  it("replays historical untagged evidence without changing its fingerprint or reviewed correction", async () => {
+    const parcel = packet();
+    parcel.observations[0]!.sourceEventKey = null;
+    const input = capture("historical-provenance", [parcel]);
+    const first = await recordShipmentEvidence(ctx.db, input, ctx.actor);
+    const code = first.shipmentIds[0]!;
+    const original = (await readShipmentTimeline(ctx.db, code))
+      .observations[0]!;
+    const { timeBasis: _basis, ...literal } = parcel.observations[0]!;
+    const fingerprint = await sha256Hex(
+      canonicalJson(jsonSnapshot.parse(literal)),
+    );
+    const [stored] = await getDb(ctx.db)
+      .select()
+      .from(shipmentObservation)
+      .where(eq(shipmentObservation.id, original.observationId));
+    if (!stored) throw new Error("Synthetic observation missing");
+    const { timeBasis: _storedBasis, ...historicalEvent } = stored.event;
+    await getDb(ctx.db)
+      .update(shipmentObservation)
+      .set({
+        event: historicalEvent,
+        fingerprint,
+        occurrenceKey: `content:${fingerprint}:0`,
+      })
+      .where(eq(shipmentObservation.id, original.observationId));
+    await editShipmentObservation(
+      ctx.db,
+      {
+        shipmentId: code,
+        observationId: original.observationId,
+        patch: { location: "Reviewed synthetic location" },
+      },
+      ctx.actor,
+    );
+    const replay = await recordShipmentEvidence(ctx.db, input, ctx.actor);
+    expect(replay).toMatchObject({
+      insertedObservations: 0,
+      repeatedObservations: 1,
+    });
+    const rows = await getDb(ctx.db).select().from(shipmentObservation);
+    expect(rows).toHaveLength(2);
+    expect(rows.find((row) => row.id === original.observationId)).toMatchObject(
+      { event: historicalEvent, fingerprint },
+    );
+    expect(
+      (await readShipmentTimeline(ctx.db, code)).timeline[0]?.event.location,
+    ).toBe("Reviewed synthetic location");
+  });
 
   it("requires a calendar date for new observations and reviewed time edits", async () => {
     const undated = packet();
@@ -537,6 +636,7 @@ describe("Shipment retained evidence", () => {
       ledgerPartyId: world.party.id,
       messageId: "synthetic-shipment",
       checksum: "a".repeat(64),
+      receivedAt: new Date("2026-09-21T01:00:00Z"),
     });
     const [message] = await getDb(ctx.db)
       .select()
@@ -568,6 +668,15 @@ describe("Shipment retained evidence", () => {
       ),
     ).rejects.toThrow(/changed/);
     expect(await getDb(ctx.db).select().from(shipment)).toEqual([]);
+    const scan = input.shipments[0]?.observations[0];
+    if (!scan) throw new Error("Synthetic scan missing");
+    scan.timeBasis = "notification_received";
+    scan.time = { kind: "date", value: "2026-09-21" };
+    await expect(
+      recordShipmentEvidence(ctx.db, input, ctx.actor),
+    ).rejects.toThrow(/Los Angeles calendar date/);
+    expect(await getDb(ctx.db).select().from(shipment)).toEqual([]);
+    scan.time = { kind: "date", value: "2026-09-20" };
     const result = await recordShipmentEvidence(ctx.db, input, ctx.actor);
     expect(result.shipmentIds).toHaveLength(1);
     const shipmentId = result.shipmentIds[0];
@@ -607,6 +716,19 @@ describe("Shipment retained evidence", () => {
     const seller = await createRepoIdentity(ctx, "vendor", {
       name: "Synthetic other seller",
     });
+    await expect(
+      recordShipmentEvidence(
+        ctx.db,
+        {
+          ...input,
+          shipments: input.shipments.map((parcel) => ({
+            ...parcel,
+            carrierId: parseShortcodeFor("vendor", seller.output.id),
+          })),
+        },
+        ctx.actor,
+      ),
+    ).rejects.toThrow(/Carrier reference and literal carrier name disagree/);
     const account = await createRepoIdentity(ctx, "vendorAccount", {
       vendorId: seller.output.id,
       ledgerPartyId: otherMember.output.id,
@@ -637,7 +759,16 @@ describe("Shipment retained evidence", () => {
       name: "Synthetic canonical carrier",
     });
     const input = capture("carrier-identity", [
-      { ...packet(), carrierId: carrier.output.id, sourceShipmentKey: null },
+      {
+        ...packet(),
+        carrierId: carrier.output.id,
+        carrierName: "Synthetic old carrier",
+        sourceShipmentKey: null,
+        observations: packet().observations.map((event) => ({
+          ...event,
+          carrierName: "Synthetic old carrier",
+        })),
+      },
     ]);
     const first = await recordShipmentEvidence(ctx.db, input, ctx.actor);
     await mergeVendors(
@@ -721,7 +852,7 @@ describe("Shipment retained evidence", () => {
     const changed = {
       ...packet(),
       observations: packet().observations.map(
-        (event): ShipmentObservationInput => ({
+        (event): ShipmentEvidence["observations"][number] => ({
           ...event,
           rawStatus: "Synthetic corrected pickup",
           time: { kind: "instant", value: "2026-06-03T11:00:00Z" },
@@ -769,7 +900,7 @@ describe("Shipment retained evidence", () => {
   });
 
   it("retains multiple identical source occurrences with coarse timestamps", async () => {
-    const occurrence: ShipmentObservationInput = {
+    const occurrence: ShipmentEvidence["observations"][number] = {
       ...packet().observations[0]!,
       sourceEventKey: null,
       time: { kind: "date", value: "2026-06-03" },
@@ -812,6 +943,11 @@ describe("Shipment retained evidence", () => {
     const report = await readShipmentTimeline(ctx.db, first.shipmentIds[0]!);
     expect(report.observations).toHaveLength(1);
     expect(report.observations[0]?.captureIds).toHaveLength(2);
+    expect(report.observations[0]?.captureSources).toHaveLength(2);
+    for (const capture of report.observations[0]?.captureSources ?? []) {
+      expect(capture.source).not.toHaveProperty("content");
+      expect(report.observations[0]?.captureIds).toContain(capture.captureId);
+    }
     const captures = await getDb(ctx.db).select().from(shipmentSourceCapture);
     expect(
       captures.map((row) =>

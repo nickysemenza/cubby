@@ -589,6 +589,13 @@ tokens do not use ambient cookies. Start with serial requests and add
 concurrency only after checking service limits. A failed write is not proof
 that it did not commit, so reconcile its result before retrying.
 
+CLI failures retain the operation, structured API diagnostics and useful raw
+non-JSON response text on stderr; stdout remains the successful JSON result.
+Capture stderr privately when diagnosing an HTTP/intermediary failure. Rebuild
+the CLI after catalog or transport changes; reconnect MCP after breaking tool
+schema changes. These are separate client caches. Do not infer an HTTP failure's
+cause from a status alone or switch credential types to work around it.
+
 ## Operation transport
 
 Browser, Apple, CLI and API-key clients call operations through

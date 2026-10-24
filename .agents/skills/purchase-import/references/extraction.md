@@ -87,8 +87,10 @@ package. Give each source its supported observations with
 Retain the primary `carrierName` and `trackingNumber` verbatim, and explicit
 handoff pairs in `extraTrackingNumbers`. Carrier IDs, when supplied by verified
 lookups, are Vendor `VEN-` codes; otherwise leave `carrierId` null and let the
-writer resolve the literal name using existing Vendor name resolution. Set
-`purpose` means direction relative to the household: incoming, outgoing or
+writer resolve the literal name using existing Vendor name resolution. Supply
+an explicit carrier reference only when the literal name matches that Vendor or
+one of its aliases; a merchant reference cannot stand in for a carrier.
+`purpose` is direction relative to the household: incoming, outgoing or
 unknown. Received carrier SMS defaults to incoming. Member eBay sales and
 purchased shipping/postage labels (including Shippo) are outgoing. An eBay
 purchase is incoming; the vendor name alone does not establish a sale. Keep
@@ -102,11 +104,21 @@ another carrier is transit, not successful delivery to the recipient. For event
 `time`, preserve an offset ISO timestamp as `instant`, a calendar day as `date`,
 a local ISO timestamp as `local` with its stated timezone or null. Every event
 requires a date. When no separate event date is stated, use the source
-notification's calendar date at date-only precision. Preserve its wording as a
-notification or forecast rather than claiming a completed carrier scan. Page
+notification's calendar date at date-only precision. Supply `timeBasis`:
+`stated_event` for a date/time the source assigns to an actual event,
+`notification_received` for that date-only fallback, or `estimate` when the
+date/time itself is a forecast. A forecast retained on its notification day
+uses `notification_received`, an `unknown` event kind and the literal forecast
+wording; it does not assert delivery. Page
 capture time alone does not establish a historical event date; obtain dated
 evidence before recording the event. Preserve conflicting observations and distinct sources.
 One package delivered never establishes whole-order delivery or receives stock.
+
+Fresh observations require provenance. Historical extractions without it remain
+literal evidence: do not fill defaults, rewrite fingerprints or replay them as
+new events merely to add a field. Evidence-backed corrections use reviewed
+observation revisions. First/last dates describe retained observations;
+estimates do not establish completed milestones or shipment quality.
 
 `allShipmentsDelivered` is retained only when decoding old saved extractions.
 New model output uses package evidence. The historical boolean grants no

@@ -65,6 +65,7 @@ describe("progressive list readers", () => {
           observations: [
             {
               sourceEventKey: key,
+              timeBasis: "stated_event",
               kind: "carrier_possession",
               time: { kind: "instant", value: "2026-06-03T09:00:00Z" },
               rawStatus: "Synthetic pickup",
@@ -77,6 +78,7 @@ describe("progressive list readers", () => {
               ? [
                   {
                     sourceEventKey: `${key}-delivery`,
+                    timeBasis: "stated_event",
                     kind: "delivered",
                     time: { kind: "instant", value: "2026-06-05T12:00:00Z" },
                     rawStatus: "Synthetic delivery",

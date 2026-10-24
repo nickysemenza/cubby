@@ -78,6 +78,13 @@ time, and then:
 Add `--timing` to `mac`, `ios`, or `sim` for the full build log and Xcode's task timing
 summary. Without it, each command still prints the wall-clock time of each build/install step.
 
+CLI API failures exit with status 1 and print the HTTP status, operation, server
+code/message, reason, request ID, validation issues and response diagnostics to
+stderr. Non-JSON responses retain their text, including intermediary rejection
+pages. Credential values and labelled request payloads are redacted. A failed
+write is not automatically retried; inspect its diagnostics and verify the
+stored outcome before deciding whether to send it again.
+
 XcodeGen points GUI and command-line app builds at the same checkout-local
 `apps/apple/DerivedData`. Regenerate with `pnpm apple gen` to apply it. Different
 worktrees retain separate build databases/products and package checkouts, so they
