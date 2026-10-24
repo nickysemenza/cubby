@@ -168,9 +168,18 @@ describe("EntityReportSlot records", () => {
       />,
       { wrapper: harness.wrapper },
     );
-    await waitFor(() =>
-      expect(container.querySelectorAll(`img[src="${cover}"]`)).toHaveLength(3),
-    );
+    fireEvent.click(screen.getByRole("button", { name: /^Via / }));
+    await waitFor(() => {
+      for (const href of [
+        "/emails/EML-4K7M",
+        "/purchases/PUR-4K7M",
+        "/vendors/VEN-4K7M",
+      ]) {
+        expect(
+          container.querySelector(`a[href="${href}"] img[src="${cover}"]`),
+        ).not.toBeNull();
+      }
+    });
     const media = calls.filter(
       (call) => call.operation === "entityMedia.displayImages",
     );
