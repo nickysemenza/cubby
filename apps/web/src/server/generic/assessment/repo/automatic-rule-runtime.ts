@@ -20,6 +20,7 @@ import type { Database } from "~/server/db";
 import { getDb, unwrapDb } from "~/server/db/helpers";
 import { assessment, automaticRule } from "~/server/db/schema";
 import { systemActor } from "~/server/domains/run/repo/ensure-run";
+import type { StatementSuggestionScope } from "~/server/domains/transaction-import/repo/statement-input";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { createAppError } from "~/server/errors/app-error";
 import { matchedRulesOf } from "~/server/generic/assessment/repo/assessment";
@@ -261,6 +262,8 @@ export async function applyAutomaticRules(
     onFailure?: (assessmentId: string, message: string) => void;
     /** An import authorizes clean spending plans while their rule is enabled. */
     importClean?: boolean;
+    /** Selection constraints survive regeneration and are rechecked by write admission. */
+    statementScope?: StatementSuggestionScope;
   } = {},
 ): Promise<AutomaticRuleOutcome> {
   const outcome: AutomaticRuleOutcome = { applied: [], refused: [] };
@@ -403,6 +406,7 @@ export async function applyAutomaticRules(
         },
         {
           authority: "automatic",
+          statementScope: options.statementScope,
           rule: {
             key: match.key,
             revision: match.revision,
@@ -440,6 +444,7 @@ export async function applyAutomaticRulesForCharge(
   db: Database,
   charge: { source: string; chargeKey: string },
   importClean = false,
+  statementScope?: StatementSuggestionScope,
 ) {
   const { rows } = await unwrapDb(db).execute<{ id: string }>(sql`
     SELECT id FROM "AssessmentState"
@@ -451,6 +456,6 @@ export async function applyAutomaticRulesForCharge(
   return applyAutomaticRules(
     db,
     rows.map((row) => row.id),
-    { importClean },
+    { importClean, statementScope },
   );
 }

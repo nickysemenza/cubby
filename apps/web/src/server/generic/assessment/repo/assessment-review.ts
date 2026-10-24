@@ -47,6 +47,7 @@ import {
   withEmailReviewBoundary,
 } from "~/server/domains/purchase-import/repo/email-review-intent";
 import type { PreparedEmailRelevanceCorrection } from "~/server/domains/purchase-import/repo/gmail/relevance-correction";
+import type { StatementSuggestionScope } from "~/server/domains/transaction-import/repo/statement-input";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import {
   assertApplicationReceipt,
@@ -83,6 +84,7 @@ type Review = z.infer<typeof assessmentReviewInput>;
 export type AutomaticReview = {
   authority: "automatic";
   rule: { key: AutomaticRuleKey; revision: string; stamp: string };
+  statementScope?: StatementSuggestionScope;
 };
 const automaticReviewInput = assessmentReviewInput.extend({
   operationId: z.string().regex(/^automatic:/),
@@ -517,6 +519,24 @@ export async function reviewAssessment(
         automatic.rule.stamp,
         assessmentId,
       );
+      if (automatic.statementScope) {
+        const { statementLabelTargetsInScope } =
+          await import("~/server/domains/transaction-import/repo/statement-suggestions");
+        // This serializable write boundary must enforce the original selection
+        // even when regeneration published valid evidence for another account.
+        if (
+          !(
+            await statementLabelTargetsInScope(
+              transactionDb,
+              automatic.statementScope,
+              [assessmentId],
+            )
+          ).has(assessmentId)
+        )
+          throw new Error(
+            "Statement charge is outside the automatic application's scope",
+          );
+      }
       return settleReview(
         transactionDb,
         { ...context, db: transactionDb },

@@ -64,6 +64,8 @@ import {
   regenerateCharges,
   STATEMENT_PUBLISH_CONCURRENCY,
   suggestionsNeedingLabels,
+  statementLabelTargetsInScope,
+  type StatementSuggestionScope,
   type LabelCursor,
   recordStatementLabelCheckpoint,
   completeStatementApplications,
@@ -517,7 +519,7 @@ async function completeNoActionTargets(
 async function applyPublishedStatementLabels(
   db: Database,
   input: Parameters<typeof completeNoActionTargets>[1] & {
-    importId: string | null | undefined;
+    scope: StatementSuggestionScope | undefined;
     reconsidered: ReadonlySet<string>;
     fail: (charge: ChargeRef, error: unknown) => void;
   },
@@ -530,10 +532,11 @@ async function applyPublishedStatementLabels(
     failedCharges,
     completed,
     unfinished,
-    importId,
+    scope,
     reconsidered,
     fail,
   } = input;
+  const importId = scope?.importId;
   // Model work may finish out of order; effects admit only the original
   // ready prefix. Later publications keep their receipts for durable resume.
   const applied = new Set<string>();
@@ -587,11 +590,12 @@ async function applyPublishedStatementLabels(
         targetIndex += settled - 1;
         continue;
       }
-      if (importId) await regenerateCharges(db, [target.charge]);
+      if (importId) await regenerateCharges(db, [target.charge], scope);
       const outcome = await applyAutomaticRulesForCharge(
         db,
         target.charge,
         Boolean(importId),
+        scope,
       );
       if (outcome.refused.length) {
         const [fresh] = await buildChargeProposals(db, [target.charge]);
@@ -649,8 +653,8 @@ async function runStatementLabelBatch(
     /** The Run the model calls are accounted to (a Sweep's step). */
     runId?: RunId | null;
     after?: LabelCursor | null;
-    /** Label only this import's charges (an import-scoped Sweep). */
-    importId?: string | null;
+    /** Intersect retained charge identity, date and live resolved account scope. */
+    scope?: StatementSuggestionScope;
   } = {},
 ): Promise<{
   labelled: number;
@@ -693,12 +697,7 @@ async function runStatementLabelBatch(
   );
   const prepareDeadline = Date.now() + 20_000;
   const rows = await time("statement_selection", () =>
-    suggestionsNeedingLabels(
-      db,
-      limit + 1,
-      input.after,
-      input.importId ?? null,
-    ),
+    suggestionsNeedingLabels(db, limit + 1, input.after, input.scope),
   );
   if (!rows.length) return { ...empty, active: true };
   const runId =
@@ -775,12 +774,31 @@ async function runStatementLabelBatch(
   const completed = new Set<string>();
   const labels = { reused: 0, generated: 0 };
   const pauses: AiBudgetExhaustedError[] = [];
+  const admitTargets = async () => {
+    const scope = input.scope;
+    if (!scope || !(scope.importId || scope.since || scope.accountIds?.length))
+      return;
+    const admitted = await statementLabelTargetsInScope(
+      db,
+      scope,
+      targets.map((target) => target.row.id),
+    );
+    for (const target of targets) {
+      const key = chargeId(target.charge);
+      if (admitted.has(target.row.id) || skipped.has(key)) continue;
+      skipped.add(key);
+      skippedIds.push(target.row.id);
+      unfinished.delete(target.row.cursorId);
+      stale++;
+    }
+  };
   type ReadyLabels = {
     target: (typeof targets)[number];
     moved: boolean;
     current: ChargeProposal & { amount: number };
   };
   for (let round = 0; round < MAX_LABEL_ROUNDS && targets.length; round++) {
+    await admitTargets();
     const proposals = await time("statement_discovery", () =>
       buildPage(
         db,
@@ -788,6 +806,7 @@ async function runStatementLabelBatch(
           .filter(
             (target) =>
               !target.row.applicationPending &&
+              !skipped.has(chargeId(target.charge)) &&
               !failedCharges.has(chargeId(target.charge)),
           )
           .map((target) => target.charge),
@@ -797,6 +816,7 @@ async function runStatementLabelBatch(
     const ready = targets.flatMap<ReadyLabels>((target) => {
       if (target.row.applicationPending) return [];
       const key = chargeId(target.charge);
+      if (skipped.has(key)) return [];
       if (failedCharges.has(key)) return [];
       const current = proposals?.get(key);
       const moved = !current || current.evidenceFingerprint !== target.expected;
@@ -973,6 +993,9 @@ async function runStatementLabelBatch(
         retainProgress: () => Promise<boolean>;
       }
     >();
+    // Account mappings can change while provider work runs. Recheck the same
+    // scope before retaining checkpoints or publishing/application receipts.
+    await admitTargets();
     await forEachConcurrently(
       preparedReady.map((entry, index) => ({
         ...entry,
@@ -981,6 +1004,7 @@ async function runStatementLabelBatch(
       STATEMENT_PUBLISH_CONCURRENCY,
       async (entry) => {
         const { current, target, computed } = entry;
+        if (skipped.has(chargeId(current.charge))) return;
         try {
           if (computed.status === "rejected") throw computed.reason;
           const result = computed.value;
@@ -1104,6 +1128,7 @@ async function runStatementLabelBatch(
         fail(current.charge, error);
       }
     }
+    await admitTargets();
     const { applied, rebuild } = await time("statement_application", () =>
       applyPublishedStatementLabels(db, {
         targets,
@@ -1113,7 +1138,7 @@ async function runStatementLabelBatch(
         failedCharges,
         completed,
         unfinished,
-        importId: input.importId,
+        scope: input.scope,
         reconsidered: new Set(
           ready.map(({ current }) => chargeId(current.charge)),
         ),
@@ -1127,6 +1152,7 @@ async function runStatementLabelBatch(
       await regenerateCharges(
         db,
         remaining.map((target) => target.charge),
+        input.scope,
       );
       for (const target of remaining) retainUnfinished(target.row);
     }
@@ -1148,6 +1174,7 @@ async function runStatementLabelBatch(
         await regenerateCharges(
           db,
           targets.map((target) => target.charge),
+          input.scope,
         );
       if (pauses[0] && !input.cooperative) throw pauses[0];
       break;
