@@ -36,6 +36,7 @@ import {
 } from "~/server/domains/expense/repo/expense-category-resolution";
 import {
   accountPurchaserKey,
+  confirmedHouseholdCard,
   financialAccountPurchaser,
   loadAccountPurchaserProofs,
 } from "~/server/domains/financial-account/repo/purchaser";
@@ -91,8 +92,8 @@ function spendingBlocker(input: {
   categoryHistoryReviewed?: boolean;
 }) {
   const { facts, advice, category, history } = input;
-  if (!facts.purchaser)
-    return "A confirmed member account owner or sole member cardholder is required before booking spending.";
+  if (!facts.purchaser && !confirmedHouseholdCard(facts.account))
+    return "A confirmed member-owned account or household credit card is required before booking spending.";
   if (
     !(facts.source.transactionDate ?? facts.source.postedDate) ||
     !facts.source.sourceRefs.length
@@ -1383,7 +1384,11 @@ async function prepareReadySpending(
     ...basis,
     status: "ready",
     effect,
-    purchaserId: facts.purchaser!.shortcode,
+    purchaserId: facts.purchaser?.shortcode ?? null,
+    purchaserSnapshot: await digestValue({
+      account: facts.account,
+      purchaserProof: facts.purchaserProof,
+    }),
     vendorId: vendor?.shortcode ?? null,
     vendorName: vendor?.name ?? advice!.vendorName,
     spendingCategoryId: category!.shortcode,
@@ -1401,6 +1406,10 @@ export async function commitFinancialSpending(
   if (plan.status === "review_required")
     return refuse(`Spending needs review: ${plan.reason}`);
   if (plan.status === "deferred") return null;
+  if (plan.status === "ready" && !plan.purchaserSnapshot)
+    return refuse(
+      "Spending purchaser proof is missing; refresh the booking and review again.",
+    );
   if (!transactionId)
     return refuse(
       "Create the financial transaction before applying its spending plan.",
@@ -1440,7 +1449,12 @@ export async function commitFinancialSpending(
               })
             : identity?.row;
           if (
-            facts.purchaser?.shortcode !== plan.purchaserId ||
+            (facts.purchaser?.shortcode ?? null) !== plan.purchaserId ||
+            plan.purchaserSnapshot !==
+              (await digestValue({
+                account: facts.account,
+                purchaserProof: facts.purchaserProof,
+              })) ||
             !acceptedVendor ||
             facts.graphs.some(
               (graph) =>

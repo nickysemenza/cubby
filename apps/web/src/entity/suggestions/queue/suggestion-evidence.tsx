@@ -137,12 +137,25 @@ function SpendingResultFacts({
         ],
         [
           "Purchaser",
-          <RecordLink
-            key="purchaser"
-            record={{ entity: "ledgerParty", id: plan.purchaserId }}
-          />,
+          plan.purchaseId ? (
+            "Keep existing Purchase purchaser"
+          ) : plan.purchaserId ? (
+            <RecordLink
+              key="purchaser"
+              record={{ entity: "ledgerParty", id: plan.purchaserId }}
+            />
+          ) : (
+            "Unknown"
+          ),
         ],
-        ["Purchaser basis", "Payment-account owner"],
+        [
+          "Purchaser basis",
+          plan.purchaseId
+            ? "Existing Purchase evidence"
+            : plan.purchaserId
+              ? "Member account owner or sole cardholder on the spending date"
+              : "Household card does not identify an individual",
+        ],
         [
           "Payment account",
           <RecordLink

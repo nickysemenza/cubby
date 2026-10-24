@@ -1,6 +1,6 @@
 import { financialAccountIdentityKind } from "@cubby/schemas/financial-account";
 import { ledgerPartyKind } from "@cubby/schemas/ledger-party";
-import { and, eq, sql, type SQL } from "drizzle-orm";
+import { eq, sql, type SQL } from "drizzle-orm";
 
 import type { Database } from "~/server/db/database";
 import { notDeleted } from "~/server/db/helpers/predicates";
@@ -22,7 +22,7 @@ export const soleCardAccessSql = (
 export const accountPurchaserKey = (accountId: string, date: string | null) =>
   `${accountId}:${date ?? ""}`;
 
-/** One query for the page's account/date pairs; no primary-cardholder relation is required. */
+/** Batch raw holder evidence, including invalid holders so null-to-null changes invalidate approval. */
 export async function loadAccountPurchaserProofs(
   db: Database,
   inputs: readonly {
@@ -45,6 +45,8 @@ export async function loadAccountPurchaserProofs(
           primaryCardholder: {
             id: ledgerParty.id,
             shortcode: ledgerParty.shortcode,
+            kind: ledgerParty.kind,
+            deletedAt: ledgerParty.deletedAt,
           },
           soleAccess: soleCardAccessSql(
             sql`${financialAccount.authorizedUsers}`,
@@ -63,16 +65,27 @@ export async function loadAccountPurchaserProofs(
         )
         .leftJoin(
           ledgerParty,
-          and(
-            eq(ledgerParty.id, financialAccount.primaryCardholderId),
-            eq(ledgerParty.kind, ledgerPartyKind.enum.member),
-            notDeleted(ledgerParty),
-          ),
+          eq(ledgerParty.id, financialAccount.primaryCardholderId),
         )
         .where(notDeleted(financialAccount))
     : [];
   return new Map(
     rows.map((row) => [accountPurchaserKey(row.accountId, row.date), row]),
+  );
+}
+
+/** Household-card authority does not identify an individual purchaser. */
+export function confirmedHouseholdCard(
+  account: typeof financialAccount.$inferSelect & {
+    ledgerParty: typeof ledgerParty.$inferSelect | null;
+  },
+): boolean {
+  return (
+    !account.deletedAt &&
+    !account.provisional &&
+    account.identity.kind === financialAccountIdentityKind.enum.credit_card &&
+    account.ledgerParty?.kind === ledgerPartyKind.enum.household &&
+    !account.ledgerParty.deletedAt
   );
 }
 
@@ -92,8 +105,10 @@ export function financialAccountPurchaser(
   )
     return account.ledgerParty;
   if (
-    account.identity.kind === financialAccountIdentityKind.enum.credit_card &&
-    proof?.soleAccess
+    confirmedHouseholdCard(account) &&
+    proof?.soleAccess &&
+    proof.primaryCardholder?.kind === ledgerPartyKind.enum.member &&
+    !proof.primaryCardholder.deletedAt
   )
     return proof.primaryCardholder;
   return null;

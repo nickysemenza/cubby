@@ -5,6 +5,22 @@ import Testing
 
 @Suite("Direct native codecs")
 struct NativeCodecTests {
+    @Test func readySpendingAllowsUnknownPurchaserRoundTrip() throws {
+        let wire: JSONValue = [
+            "request": ["advice": .null, "rejectedPurchaseIds": []],
+            "snapshot": "synthetic-spending", "candidates": [],
+            "status": "ready", "effect": "create_aggregate",
+            "purchaserId": .null, "purchaserSnapshot": "synthetic-purchaser",
+            "vendorId": .null, "vendorName": "Synthetic Orchard",
+            "spendingCategoryId": "SPC-2345", "purchaseId": .null,
+        ]
+        let ready: FinancialSpendingPlanReady = try wire.decoded()
+        #expect(ready.purchaserId == nil)
+        #expect(try JSONValue(encoding: ready)["purchaserId"] == .null)
+        let plan: FinancialSpendingPlan = try wire.decoded()
+        #expect(try JSONValue(encoding: plan) == wire)
+    }
+
     @Test func propagatedImageTextRetainsReceiptAuthorityWithoutModelClaims() throws {
         let owner: JSONValue = [
             "kind": "correction",

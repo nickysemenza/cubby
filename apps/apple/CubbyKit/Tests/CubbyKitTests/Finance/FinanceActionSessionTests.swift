@@ -307,6 +307,7 @@ struct FinanceActionSessionTests {
             "purchaserId": .null, "categoryOverride": .null, "action": "future_action",
             "accountName": "Synthetic account", "funderName": .null, "existingBookedAmount": 0,
             "previouslySettledAmount": 0, "remainingBookedAmount": 15, "snapshot": "synthetic-reviewed",
+            "purchaserSnapshot": "synthetic-purchaser",
             "amount": 15, "date": "2026-10-01", "name": "Synthetic booking",
         ]
         let preview: FinancialBookingPreview = try raw.decoded()

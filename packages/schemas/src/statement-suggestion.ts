@@ -19,7 +19,7 @@ import {
 } from "./financial-booking";
 
 /** Bump with prompt, model-policy or advice eligibility changes; retained votes carry this revision. */
-export const STATEMENT_LABEL_REVISION = "2026-10-21.1";
+export const STATEMENT_LABEL_REVISION = "2026-10-24.1";
 
 export const statementTransactionAction = z.enum([
   "create",

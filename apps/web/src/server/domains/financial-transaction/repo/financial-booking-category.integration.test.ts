@@ -107,8 +107,8 @@ describe("reviewed booking category and refund capacity", () => {
     };
     return { category, purchase, vendor, transaction, line, book, owner };
   }
-  // A bare Purchase must carry a real member purchaser; resolving a live
-  // household party alone does not validate the Purchase override contract.
+  // A purchaser override must identify a live member; household card authority
+  // may allow an unknown individual but never a household override.
   it("defaults a bare Purchase to its live account member and rejects a household purchaser override", async () => {
     const { vendor, transaction, owner } = await fixture();
     const source = await transaction(17);
