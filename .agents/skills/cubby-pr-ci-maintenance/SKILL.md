@@ -19,6 +19,9 @@ for current commands, cheap Git operations, and local versus hosted gates.
    PR, pre-existing, missing local setup, or external infrastructure. Pending
    checks alone do not justify a patch. Compare with the base when causality is
    unclear.
+   Inspect completed failures across the same run, including superseded runs.
+   A newer head's check list omits failures that finish on the old head; carry
+   those failures forward until a fix or current-head results cover them.
 3. If review feedback is in scope, inspect unresolved threads separately from
    CI and verify each concern against the current head. A green check does not
    establish that requested feedback has been addressed; an old unresolved
