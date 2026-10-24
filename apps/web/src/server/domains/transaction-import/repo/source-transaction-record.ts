@@ -492,6 +492,24 @@ async function prepareStatementObservations(
               row.rowPosition,
             )
           : undefined;
+    // A newly supplied provider ID cannot silently give retained ID-less evidence another charge owner.
+    if (
+      row.providerTransactionId &&
+      !priorMembers.some((prior) => prior.externalId === externalId) &&
+      priorMembers.some(
+        (prior) =>
+          prior.providerTransactionId === null &&
+          ((row.rowPosition !== undefined &&
+            prior.rowPosition === row.rowPosition) ||
+            (prior.rowPosition === null &&
+              (prior.legacyExternalId ?? prior.externalId) ===
+                legacyExternalId)),
+      )
+    )
+      throw createAppError(
+        "CONSTRAINT_VIOLATION",
+        "A provider identity overlaps ID-less evidence in this retained collection. Resolve its source identity before replaying.",
+      );
     if (!row.providerTransactionId) {
       const retained = retainedCollectionObservation({
         priorMembers,
