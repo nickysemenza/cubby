@@ -11,6 +11,7 @@ import { getDb } from "~/server/db/helpers";
 import {
   entityAttachment,
   financialTransaction,
+  sourceTransactionRecord,
   image,
   imageDerivative,
   product,
@@ -120,6 +121,93 @@ describe("entity display image resolver", () => {
       .update(financialTransaction)
       .set({ deletedAt: new Date() })
       .where(eq(financialTransaction.id, transaction.entityId));
+    expect(
+      (await resolvePublicEntityDisplayImages(ctx.db, [ref])).get(key),
+    ).toBeUndefined();
+  });
+
+  it("uses a supported unique merchant logo after confirmed images and rejects ambiguity", async () => {
+    const { record } = await createFinancialEvidenceFixture(ctx.db);
+    const merchant = `Synthetic merchant ${crypto.randomUUID()}`;
+    await getDb(ctx.db)
+      .update(sourceTransactionRecord)
+      .set({ merchant })
+      .where(eq(sourceTransactionRecord.id, record.id));
+    const seller = await createRepoEntity(ctx, "vendor", {
+      name: "Synthetic inferred seller",
+    });
+    const logo = await makeImage();
+    await insertEntityAttachments(ctx.db, {
+      entityId: seller.entityId,
+      role: "logo",
+      imageId: logo.id,
+    });
+    const purchase = await createRepoEntity(ctx, "purchase", {
+      vendorId: seller.output.id,
+      date: "2026-01-01",
+    });
+    const account = await createRepoEntity(ctx, "financialAccount", {
+      name: "Synthetic merchant history",
+    });
+    const addHistory = (purchaseId: typeof purchase.output.id) =>
+      createRepoEntity(ctx, "financialTransaction", {
+        accountId: account.output.id,
+        kind: "purchase",
+        status: "posted",
+        amount: 1,
+        postedDate: "2026-01-01",
+        merchant,
+        allocations: [{ purchaseId, amount: 1 }],
+      });
+    const ref = {
+      entityKind: "sourceTransactionRecord",
+      entityId: record.shortcode,
+    } as const;
+    const key = entityRefKey(ref.entityKind, ref.entityId);
+    await addHistory(purchase.output.id);
+    expect(
+      (await resolvePublicEntityDisplayImages(ctx.db, [ref])).get(key),
+    ).toBeUndefined();
+    await addHistory(purchase.output.id);
+    const measured = await countTestDbQueries(() =>
+      resolvePublicEntityDisplayImages(ctx.db, [ref]),
+    );
+    expect(measured.queryCount).toBe(1);
+    expect(measured.result.get(key)?.url).toBe(getR2PublicUrl(logo.key));
+    const presence = await getDb(ctx.db).execute(
+      sql`SELECT ${entityDisplayImagePresenceSql("sourceTransactionRecord", sql`${record.id}::uuid`)} AS present`,
+    );
+    expect(presence.rows).toEqual([{ present: true }]);
+    const otherSeller = await createRepoEntity(ctx, "vendor", {
+      name: "Synthetic competing seller",
+    });
+    const otherLogo = await makeImage();
+    await insertEntityAttachments(ctx.db, {
+      entityId: otherSeller.entityId,
+      role: "logo",
+      imageId: otherLogo.id,
+    });
+    const otherPurchase = await createRepoEntity(ctx, "purchase", {
+      vendorId: otherSeller.output.id,
+      date: "2026-01-01",
+    });
+    const confirmed = await createRepoEntity(ctx, "financialTransaction", {
+      accountId: account.output.id,
+      kind: "purchase",
+      status: "posted",
+      amount: 1,
+      postedDate: "2026-01-01",
+      sourceRefs: [{ source: record.source, externalId: record.externalId }],
+      allocations: [{ purchaseId: otherPurchase.output.id, amount: 1 }],
+    });
+    expect(
+      (await resolvePublicEntityDisplayImages(ctx.db, [ref])).get(key)?.url,
+    ).toBe(getR2PublicUrl(otherLogo.key));
+    await getDb(ctx.db)
+      .update(financialTransaction)
+      .set({ deletedAt: new Date() })
+      .where(eq(financialTransaction.id, confirmed.entityId));
+    await addHistory(otherPurchase.output.id);
     expect(
       (await resolvePublicEntityDisplayImages(ctx.db, [ref])).get(key),
     ).toBeUndefined();

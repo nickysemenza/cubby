@@ -299,4 +299,5 @@ results remain authoritative. Records with no eligible image retain their mark.
 Home Meals and record-backed work rows use `EntityRefLink` pills with collection-owned
 image batches. Queue review links retain their Suggestions destination. Source
 transaction records borrow canonical images through accepted transaction evidence.
-A merchant label or suggested Vendor alone does not supply a logo.
+A unique supported merchant suggestion supplies a later decorative Vendor logo
+fallback; ambiguous and insufficient history retain the semantic mark.
