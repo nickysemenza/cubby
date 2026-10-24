@@ -313,6 +313,16 @@ const vendorBrandedProductCount = correlated<number>(
      WHERE p."brandId" = "Vendor"."id" AND p."deletedAt" IS NULL)`,
 );
 
+// Qualify the outer identity so role predicates also work inside grouped reads.
+const vendorRole = correlated<VendorOut["role"]>(
+  `(SELECT CASE WHEN roles.seller AND roles.brand THEN 'both'
+    WHEN roles.seller THEN 'seller' WHEN roles.brand THEN 'brand' ELSE 'unused' END
+    FROM (SELECT
+      EXISTS (SELECT 1 FROM "Purchase" p WHERE p."vendorId" = "Vendor"."id" AND p."deletedAt" IS NULL) AS seller,
+      EXISTS (SELECT 1 FROM "Product" p WHERE p."brandId" = "Vendor"."id" AND p."deletedAt" IS NULL) AS brand
+    ) roles)`,
+);
+
 const vendorBrandCategoryCount = correlated<number>(
   `(SELECT count(DISTINCT pc.id)::int FROM "Product" p
     JOIN "ProductCategory" pc ON pc.id=p."categoryId" AND pc."deletedAt" IS NULL
@@ -504,6 +514,7 @@ const vendorColumns = {
   notes: vendor.notes,
   createdAt: vendor.createdAt,
   updatedAt: vendor.updatedAt,
+  role: vendorRole,
   purchaseCount: vendorPurchaseCount,
   brandedProductCount: vendorBrandedProductCount,
   brandCategoryCount: vendorBrandCategoryCount,
@@ -569,6 +580,7 @@ type VendorRow = {
   notes: string | null;
   createdAt: Date;
   updatedAt: Date;
+  role: VendorOut["role"];
   purchaseCount: number;
   brandedProductCount: number;
   brandCategoryCount: number;
@@ -669,6 +681,7 @@ const dbVendorToAPI = (row: VendorRow, dataQuality: DataQuality): VendorOut => {
     agentHints,
     agentHintsLabel: agentHintsLabel(agentHints),
     notes: row.notes,
+    role: row.role,
     purchaseCount: Number(row.purchaseCount),
     brandedProductCount: Number(row.brandedProductCount),
     brandCategoryCount: Number(row.brandCategoryCount),
@@ -691,6 +704,7 @@ const dbVendorToAPI = (row: VendorRow, dataQuality: DataQuality): VendorOut => {
 const vendorScaffold = listScaffold("vendor", vendor, {
   derived: {
     spend: vendorSpend,
+    role: vendorRole,
     purchaseCount: vendorPurchaseCount,
     brandedProductCount: vendorBrandedProductCount,
     brandCategoryCount: vendorBrandCategoryCount,
@@ -723,6 +737,7 @@ export const vendorListRead = async (
   projection: ListProjection = { kind: "full" },
 ) => {
   const {
+    role,
     purchaseCount,
     brandedProductCount,
     brandCategoryCount,
@@ -748,6 +763,7 @@ export const vendorListRead = async (
         .select({
           ...core,
           ...listGroupFields(projection, "derived", () => ({
+            role,
             purchaseCount,
             brandedProductCount,
             brandCategoryCount,

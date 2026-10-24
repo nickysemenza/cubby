@@ -36,6 +36,7 @@ import {
   getPurchaseExpenses,
 } from "~/server/domains/purchase/repo/purchase";
 import { loadRelatedPreviews } from "~/server/generic/entity-links/repo/related-view";
+import { withListGroupBy } from "~/server/generic/list/repo/list";
 import { resolveLiveShortcode } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import {
@@ -214,6 +215,56 @@ describe("vendor declared scalar updates", () => {
 
 describe("vendor repository — spend rollup", () => {
   const ctx = withTestDb();
+
+  it("derives exact roles for filtering and grouping and follows deleted references", async () => {
+    const { output: identity, entityId: identityId } = await createRepoEntity(
+      ctx,
+      "vendor",
+      { name: "Synthetic role vendor" },
+    );
+    const read = () =>
+      getVendorByID(ctx.db, parseEntityId("vendor", identityId));
+    expect((await read()).role).toBe("unused");
+    const item = await createProductFixture(
+      ctx.db,
+      makeProductInput({
+        name: "Synthetic role product",
+        brandId: identity.id,
+      }),
+      ctx.actor,
+    );
+    expect((await read()).role).toBe("brand");
+    const { output: order } = await createRepoEntity(ctx, "purchase", {
+      date: "2024-01-15",
+      vendorId: identity.id,
+    });
+    expect((await read()).role).toBe("both");
+    expect(
+      (
+        await vendorList(
+          ctx.db,
+          { search: "Synthetic role vendor", role: ["seller"] },
+          [],
+          page,
+        )
+      ).count,
+    ).toBe(0);
+    const grouped = await vendorList(
+      ctx.db,
+      withListGroupBy(
+        { search: "Synthetic role vendor", role: ["seller", "both"] },
+        [{ key: "role" }],
+      ),
+      [],
+      page,
+    );
+    expect(grouped.data.map((row) => row.role)).toEqual(["both"]);
+    expect(grouped).toMatchObject({ groups: [{ label: "Both", count: 1 }] });
+    await deleteProducts(ctx.db, [item.entityId], ctx.actor);
+    expect((await read()).role).toBe("seller");
+    await deletePurchases(ctx.db, [order.id], ctx.actor);
+    expect((await read()).role).toBe("unused");
+  });
 
   it("separates brand catalog and spend from seller history and coverage", async () => {
     const seller = await findOrCreateVendor(ctx.db, "Synthetic Seller");
