@@ -152,11 +152,6 @@ describe("finance entity reports", () => {
     });
     if (!revision || !collection)
       throw new Error("Expected retained synthetic evidence");
-    // Historical membership can retain several revisions of one charge; intake
-    // refuses that shape for new collections, so model the preserved roster here.
-    await getDb(ctx.db)
-      .insert(transactionImportRecord)
-      .values({ importId: first.batchId, statementRowId: revision.id });
     const vendor = await createRepoEntity(ctx, "vendor", {
       name: "Synthetic report shop",
     });
@@ -198,6 +193,21 @@ describe("finance entity reports", () => {
         ],
       });
     }
+    const before = await report(
+      "transactionImport.reconciliation-summary",
+      collection.shortcode,
+    );
+    expect(stats(before)?.figures).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ label: "Matched", value: 4 }),
+        expect.objectContaining({ label: "Unmatched", value: 1 }),
+      ]),
+    );
+    // Historical membership can retain several revisions of one charge; intake
+    // refuses that shape for new collections, so model the preserved roster here.
+    await getDb(ctx.db)
+      .insert(transactionImportRecord)
+      .values({ importId: first.batchId, statementRowId: revision.id });
     const blocks = await report(
       "transactionImport.reconciliation-summary",
       collection.shortcode,
@@ -223,6 +233,9 @@ describe("finance entity reports", () => {
         { label: "Unclassified", value: 1, format: "count" },
       ]),
     });
+    expect(blocks.filter((block) => block.kind === "stats").at(1)).toEqual(
+      before.filter((block) => block.kind === "stats").at(1),
+    );
   });
 
   it("allocates a purchase's whole expense total across its project groups", async () => {
