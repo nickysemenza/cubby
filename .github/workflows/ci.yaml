@@ -391,7 +391,8 @@ jobs:
     name: Test report
     needs: [validation, lanes]
     if: ${{ !cancelled() }}
-    runs-on: ubuntu-slim
+    # Trial the Micro runner on reporting before moving required build/test lanes.
+    runs-on: [self-hosted, celesto-micro]
     timeout-minutes: 10
     permissions:
       actions: read
