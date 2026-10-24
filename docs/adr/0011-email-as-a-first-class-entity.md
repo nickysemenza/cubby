@@ -297,7 +297,13 @@ that same account incarnation and reviewed checksum after retrieval before stagi
 Disconnect/reconnect to a different account row refuses the preparation even when
 member/provider/mailbox fields match; token refresh on the same row is allowed. Publication repeats those checks under the existing parent locks,
 then adopts staged references using DB-only writers in the caller's transaction.
-Cleaned reservations cannot be published or recreate their objects.
+Cleaned reservations cannot be published or recreate their objects. The same
+source/routing snapshot fence used by Gmail evidence publication is rechecked
+after retrieval and under publication locks. A newer same-original routing
+publication makes older preparation stale even when the reviewed checksum and
+account identity still match. This does not establish a complete member-intent
+frontier: Feedback-only intent changes and routing ABA protection still require
+the separate ownership contract.
 
 Shared review preserves validation → durable member command Feedback → canonical
 replay → preparation → transactional replay/publication. A preparation failure

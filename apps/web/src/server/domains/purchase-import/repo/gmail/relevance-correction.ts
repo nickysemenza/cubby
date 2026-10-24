@@ -36,7 +36,10 @@ import {
   type GmailProvider,
 } from "~/server/domains/purchase-import/repo/gmail/types";
 
-import { deferClassificationRefresh } from "./admitted-source";
+import {
+  deferClassificationRefresh,
+  emailPublicationChanged,
+} from "./admitted-source";
 import { productionOrderMailAttachmentStorage } from "./attachment-storage";
 import {
   recordEmailClassificationObservation,
@@ -291,6 +294,11 @@ export async function prepareEmailRelevanceCorrection(
     throw new Error(
       "Email correction original owner, connected account or mailbox identity changed during retrieval.",
     );
+  // Unchanged bytes do not authorize replacing routing published after preparation.
+  if (emailPublicationChanged(current, email))
+    throw new Error(
+      "Email routing or source changed during correction preparation.",
+    );
   const uploadKeys = await reserveGmailAttachmentUploads(db, {
     orderMailId: email.orderMailId,
     attachments: normalized.attachments,
@@ -394,6 +402,11 @@ export async function publishPreparedEmailRelevanceCorrection(
   )
     throw new Error(
       "Email correction original owner, connected account or mailbox identity changed during retrieval.",
+    );
+  // Unchanged bytes do not authorize replacing routing published after preparation.
+  if (emailPublicationChanged(current, email))
+    throw new Error(
+      "Email routing or source changed during correction preparation.",
     );
   await snapshotStoredEmailPrediction(tx, current);
   await saveMailboxMetadata(db, {

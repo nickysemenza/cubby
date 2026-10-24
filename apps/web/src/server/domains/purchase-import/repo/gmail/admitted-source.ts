@@ -58,7 +58,7 @@ export async function deferClassificationRefresh(
   return (await classificationRefreshDisposition(db, email)) !== "refresh";
 }
 
-function emailPublicationChanged(
+export function emailPublicationChanged(
   current: typeof emailTable.$inferSelect | null,
   expected: typeof emailTable.$inferSelect | null,
 ) {

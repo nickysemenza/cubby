@@ -286,6 +286,99 @@ describe("member-only exact original relevance correction", () => {
     expect(f.objects.size).toBe(1);
     expect(f.getMessage).toHaveBeenCalledTimes(1);
   });
+  it("refuses routing changed during retrieval before staging another upload", async () => {
+    const f = await fixture();
+    await getDb(ctx.db)
+      .update(emailTable)
+      .set({ checksum: f.input.reviewedChecksum })
+      .where(eq(emailTable.id, f.email.id));
+    const input = { ...f.input, expectedChecksum: f.input.reviewedChecksum };
+    f.getMessage.mockImplementationOnce(async () => {
+      await correctEmailRelevance(
+        ctx.db,
+        {
+          ...input,
+          classification: "uncertain",
+          reason: "Synthetic newer correction during retrieval",
+        },
+        ctx.actor,
+      );
+      return f.message();
+    });
+    await expect(
+      prepareEmailRelevanceCorrection(ctx.db, input, ctx.actor),
+    ).rejects.toThrow(
+      "Email routing or source changed during correction preparation",
+    );
+    expect(f.put).toHaveBeenCalledTimes(1);
+    expect(f.objects.size).toBe(1);
+    expect(
+      (
+        await getDb(ctx.db)
+          .select()
+          .from(emailTable)
+          .where(eq(emailTable.id, f.email.id))
+      )[0],
+    ).toMatchObject({
+      classification: "uncertain",
+      classificationReason: "Synthetic newer correction during retrieval",
+    });
+  });
+  it("refuses older prepared routing after a newer same-original correction publishes", async () => {
+    const f = await fixture();
+    // Both corrections review the same retained bytes; checksum equality cannot order them.
+    await getDb(ctx.db)
+      .update(emailTable)
+      .set({ checksum: f.input.reviewedChecksum })
+      .where(eq(emailTable.id, f.email.id));
+    const input = { ...f.input, expectedChecksum: f.input.reviewedChecksum };
+    const prepared = await prepareEmailRelevanceCorrection(
+      ctx.db,
+      input,
+      ctx.actor,
+    );
+    await correctEmailRelevance(
+      ctx.db,
+      {
+        ...input,
+        classification: "uncertain",
+        reason: "Synthetic newer member correction",
+      },
+      ctx.actor,
+    );
+    const [newer] = await getDb(ctx.db)
+      .select()
+      .from(emailTable)
+      .where(eq(emailTable.id, f.email.id));
+    const observations = await getDb(ctx.db)
+      .select()
+      .from(emailClassificationObservation);
+    await expect(
+      withEmailRelevancePreparation(ctx.db, prepared, (value) =>
+        withTransaction(ctx.db, (tx) =>
+          publishPreparedEmailRelevanceCorrection(
+            databaseForTransaction(tx),
+            value,
+            ctx.actor,
+          ),
+        ),
+      ),
+    ).rejects.toThrow(
+      "Email routing or source changed during correction preparation",
+    );
+    expect(
+      (
+        await getDb(ctx.db)
+          .select()
+          .from(emailTable)
+          .where(eq(emailTable.id, f.email.id))
+      )[0],
+    ).toEqual(newer);
+    expect(
+      await getDb(ctx.db).select().from(emailClassificationObservation),
+    ).toEqual(observations);
+    expect(f.objects.size).toBe(1);
+  });
   it("retains command Feedback and raw retrieval failure when preparation fails", async () => {
     const f = await sharedReviewFixture();
     const [before] = await getDb(ctx.db)
