@@ -33,7 +33,7 @@ import { exceptionReasonsFor } from "~/server/generic/data-quality/repo/exceptio
 import { liveQualityRow } from "~/server/generic/data-quality/repo/registry";
 
 import { storedEntryFor } from "./entries";
-import { checksOf, entryFor } from "./sql";
+import { checksOf } from "./sql";
 import {
   evaluateLiveQuality,
   loadPublishedQuality,
@@ -204,7 +204,7 @@ export const loadQualityBreakdown = async (
   entity: ScoredEntity,
   id: string,
 ) => {
-  const entry = entryFor(entity);
+  const entry = storedEntryFor(entity);
   const selected = z
     .array(z.object({ id: z.string() }))
     .parse(
@@ -311,7 +311,7 @@ const loadRelatedIds = async (
   entity: ScoredEntity,
   ids: readonly string[],
 ): Promise<Map<string, Array<{ entity: ScoredEntity; id: string }>>> => {
-  const entry = entryFor(entity);
+  const entry = storedEntryFor(entity);
   const related = new Map<
     string,
     Array<{ entity: ScoredEntity; id: string }>
@@ -320,7 +320,7 @@ const loadRelatedIds = async (
     const link = entry.related?.[target];
     if (!link) throw new Error(`${entity} declares no link to ${target}.`);
     const t = entry.table;
-    const r = entryFor(target).table;
+    const r = storedEntryFor(target).table;
     const result = await unwrapDb(db).execute(sql`SELECT
   ${t.id} AS "ownerId", ${r.id} AS "relatedId"
 FROM ${t}, ${r}

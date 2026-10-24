@@ -21,11 +21,8 @@ import {
   entityDisplayImagePresenceSql,
   resolveEntityDisplayImageLists,
 } from "~/server/entity-kernel/repo/entity-display-image";
-import {
-  entryFor,
-  scoreSql,
-  statusSql,
-} from "~/server/generic/data-quality/repo/sql";
+import { storedEntryFor } from "~/server/generic/data-quality/repo/entries";
+import { scoreSql, statusSql } from "~/server/generic/data-quality/repo/sql";
 import { labelSql } from "~/server/generic/entity-graph/repo/entity-graph";
 
 const scored = (kind: Entity): kind is (typeof scoredEntities)[number] =>
@@ -52,7 +49,9 @@ export function buildEntityRecordsQuery(input: EntityRecordsInput): SQL {
     input.qualityMax !== undefined;
   const earlyImage = input.orderBy === "hasImage" || Boolean(input.image);
   const qualityFor = (kind: Entity) =>
-    scored(kind) ? scoreSql(kind, entryFor(kind).table) : sql`NULL::numeric`;
+    scored(kind)
+      ? scoreSql(kind, storedEntryFor(kind).table)
+      : sql`NULL::numeric`;
   const pageBranches: SQL[] = [];
   const branches = kinds.map((kind) => {
     const table = entityManifest[kind].dbTable;
@@ -68,7 +67,7 @@ export function buildEntityRecordsQuery(input: EntityRecordsInput): SQL {
     const early: SQL[] = [];
     // Status is display-only: evaluate it for the requested page, never the roster.
     const late: SQL[] = [
-      sql`, ${scored(kind) ? statusSql(kind, entryFor(kind).table) : sql`NULL::text`} AS "qualityStatus"`,
+      sql`, ${scored(kind) ? statusSql(kind, storedEntryFor(kind).table) : sql`NULL::text`} AS "qualityStatus"`,
     ];
     for (const [field, needed] of [
       [fields.name, earlyName],

@@ -25,7 +25,6 @@ import {
 } from "~/server/generic/data-quality/repo/registry";
 
 import { dataQualityEntries, storedEntryFor } from "./entries";
-import type { StoredEntityChecks } from "./stored-registry";
 import { storedCheckStateSql, storedScoreSql } from "./stored-sql";
 
 /**
@@ -38,11 +37,6 @@ import { storedCheckStateSql, storedScoreSql } from "./stored-sql";
  * indexed per-row lookups, so they stay valid under any FROM clause.
  */
 const group = (inner: SQL): SQL => sql`(${inner})`;
-
-/** One registry entry, read through the erased-table contract. */
-export const entryFor = (
-  entity: ScoredEntity,
-): StoredEntityChecks<ScoredEntity, ScoredTable> => storedEntryFor(entity);
 
 export const checksOf = (entity: ScoredEntity): readonly DataCheck[] =>
   dataChecksByEntity[entity].options;
@@ -64,7 +58,7 @@ export const activeExceptionSql = (
 export const expectedCondition = (
   entity: ScoredEntity,
   check: DataCheck,
-  t: ScoredTable = entryFor(entity).table,
+  t: ScoredTable = storedEntryFor(entity).table,
 ): SQL =>
   group(
     sql`coalesce(${storedCheckStateSql(entity, check, t)}, ${state("not_applicable")}) <> ${state("not_applicable")}`,
@@ -74,7 +68,7 @@ export const expectedCondition = (
 export const gapCondition = (
   entity: ScoredEntity,
   check: DataCheck,
-  t: ScoredTable = entryFor(entity).table,
+  t: ScoredTable = storedEntryFor(entity).table,
 ): SQL =>
   group(
     sql`coalesce(${storedCheckStateSql(entity, check, t)} = ${state("gap")}, false)`,
@@ -126,13 +120,13 @@ export const statusFromStates = (terms: readonly StateTerm[]): SQL => {
  */
 export const scoreSql = (
   entity: ScoredEntity,
-  t: ScoredTable = entryFor(entity).table,
+  t: ScoredTable = storedEntryFor(entity).table,
 ): SQL => storedScoreSql(entity, t);
 
 /** Authoritative pill tone; a defect cannot be inferred from the numeric score. */
 export const statusSql = (
   entity: ScoredEntity,
-  t: ScoredTable = entryFor(entity).table,
+  t: ScoredTable = storedEntryFor(entity).table,
 ): SQL =>
   statusFromStates(
     checksOf(entity).map((check) => ({
@@ -149,7 +143,7 @@ export const statusSql = (
 export const statusCondition = (
   entity: ScoredEntity,
   status: DataQualityStatus,
-  t: ScoredTable = entryFor(entity).table,
+  t: ScoredTable = storedEntryFor(entity).table,
 ): SQL => group(sql`${statusSql(entity, t)} = ${status}`);
 
 /** The alias a related row is evaluated under inside a roll-up subquery. */
@@ -163,10 +157,10 @@ const RELATED_ALIAS = "dq_r";
 export const relatedGapCondition = (
   entity: ScoredEntity,
   check: DataCheck,
-  t: ScoredTable = entryFor(entity).table,
+  t: ScoredTable = storedEntryFor(entity).table,
 ): SQL => {
   const target = dataCheckEntity[check];
-  const link = entryFor(entity).related?.[target];
+  const link = storedEntryFor(entity).related?.[target];
   if (!link)
     throw new Error(`${entity} does not roll up ${target} data quality.`);
   // The inferred (not erased) entry, so the alias keeps its typed columns.
