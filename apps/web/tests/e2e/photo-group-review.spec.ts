@@ -338,6 +338,7 @@ test("approves two selected photo groups with one reviewed batch action", async 
       .getByRole("navigation", { name: "Section index" })
       .locator('[aria-label="Applied"]'),
   ).toHaveCount(2);
+  await page.getByRole("button", { name: "Results · 2", exact: true }).click();
   await expect(
     page
       .getByLabel("Products from this import")
@@ -381,7 +382,7 @@ test("reviews, approves, and discards proposed photo groups on the photo-invento
     }),
   ).toBeVisible();
   const g1Card = page.locator("[data-photo-group]").filter({
-    has: page.getByRole("heading", { name: "Gray crew t-shirt — M" }),
+    has: page.getByRole("heading", { name: `Gray crew t-shirt — M ${name}` }),
   });
   await expect(g1Card).toBeVisible();
   await expect(g1Card.getByText("Item", { exact: true })).toBeVisible();
@@ -1320,6 +1321,7 @@ test("photo approval follows filtered ready scope and explicit selection overrid
     reviewPhotoGroupsOutput,
   );
   expect(first.results.map((item) => item.groupKey)).toEqual(["g1"]);
+  expect(first.results.map((item) => item.outcome)).toEqual(["committed"]);
   expect(first.proposals.find((item) => item.groupKey === "g2")?.state).toBe(
     "proposed",
   );
@@ -1346,4 +1348,5 @@ test("photo approval follows filtered ready scope and explicit selection overrid
     reviewPhotoGroupsOutput,
   );
   expect(second.results.map((item) => item.groupKey)).toEqual(["g2"]);
+  expect(second.results.map((item) => item.outcome)).toEqual(["committed"]);
 });

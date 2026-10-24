@@ -7,6 +7,7 @@ import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolv
 
 import {
   createEvidenceHarnessContext,
+  ensureMemberParty,
   createEntityFixture,
 } from "./fixtures/core";
 import { gotoAuthenticatedPage } from "./support/e2e-helpers";
@@ -16,6 +17,7 @@ test("a completed enrichment Run keeps attention, outcomes and source evidence a
   page,
 }, testInfo) => {
   const { db, actor } = await createEvidenceHarnessContext(page);
+  await ensureMemberParty(page, "Synthetic Run review");
   const lamp = await createEntityFixture(page, "product", {
     name: "Synthetic review lamp",
   });

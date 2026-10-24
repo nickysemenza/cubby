@@ -499,13 +499,16 @@ export async function seedPhotoGroupReviewRun(
     {
       groupKey: "g1",
       review: {
-        observedName: "Gray crew t-shirt — M",
+        observedName: `Gray crew t-shirt — M ${name}`,
         unresolvedReason: null,
         stockIntent: "receive",
       },
       images: [{ id: itemImage.shortcode, purpose: "item" }],
       skip: [{ id: labelImage.shortcode, reason: "Tag photo needs review" }],
-      product: { kind: "create", create: { name: "Gray crew t-shirt — M" } },
+      product: {
+        kind: "create",
+        create: { name: `Gray crew t-shirt — M ${name}` },
+      },
       inventory: {
         locationId: parseShortcodeFor("location", location.id),
         quantity: 2,
