@@ -54,7 +54,9 @@ test("connections workspace shares dense facts, linked paths, and native handoff
     exact: true,
   });
   await moreContext.click();
-  await expect(moreContext).toHaveAttribute("aria-expanded", "true");
+  await expect(
+    page.getByRole("button", { name: "Less context", exact: true }),
+  ).toHaveAttribute("aria-expanded", "true");
   const context = page.getByRole("region", {
     name: "Purchase projects",
     exact: true,
