@@ -129,7 +129,7 @@ export type DecisionPort = (
 /** The answer in a successful response body, whichever wire shape carries it. */
 function parseDecisionResponse(
   body: string,
-  input: DecisionQuestionsInput,
+  questionKeys: readonly string[],
 ): DecisionQuestionsResponse {
   let decoded: unknown;
   try {
@@ -161,9 +161,8 @@ function parseDecisionResponse(
         : undefined;
   if (
     result &&
-    Object.keys(result.answers).length ===
-      Object.keys(input.questions).length &&
-    Object.keys(input.questions).every((key) => result.answers[key])
+    Object.keys(result.answers).length === questionKeys.length &&
+    questionKeys.every((key) => result.answers[key])
   )
     return result;
   // The raw body carries an unfinished run's state and the API's `errors`.
@@ -202,6 +201,8 @@ async function requestDecision(
 
   const startedAt = performance.now();
   const selector = getDecisionModelConfig(feature.model).selector;
+  // Response validation must not retain combined evidence beside its retry body.
+  const questionKeys = Object.keys(input.questions);
   const requestBody = JSON.stringify(
     selector ? { ...input, model: selector } : input,
   );
@@ -255,7 +256,7 @@ async function requestDecision(
     }
     parsed = parseDecisionResponse(
       await response.text().catch(() => ""),
-      input,
+      questionKeys,
     );
     return parsed;
   } catch (error) {

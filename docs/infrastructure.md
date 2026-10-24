@@ -674,6 +674,10 @@ sets split without dropping candidates. Waiting on another request's cache lease
 does not hold up owned misses. Each upstream batch records usage once and still
 passes through gateway egress admission. Dependent decision phases wait for their
 required answers before starting another batch.
+After serializing a request, transport response validation retains only its
+expected question keys rather than the combined evidence input. The serialized
+body remains identical across throttled retries; response keys still must match
+the complete expected set.
 Finite collections that must prepare evidence or perform dependent choices use
 `settleDecisionWorkItems`. It bounds preparation, releases preparation slots
 while questions wait, and submits compatible cache misses in waves. Each
