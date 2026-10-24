@@ -133,6 +133,10 @@ jobs:
             https://www.swift.org/keys/all-keys.asc | gpg --batch --import
       - name: Install Swift for native formatting
         uses: swift-actions/setup-swift@364295d9c23900ce04d4e5cc708387921b4e50f9 # v3
+        env:
+          # Swift's dependency install includes tzdata on the minimal image.
+          DEBIAN_FRONTEND: noninteractive
+          TZ: Etc/UTC
         with:
           swift-version: "6.2"
       # Independent failures stay red but do not hide the remaining diagnostics.
