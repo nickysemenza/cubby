@@ -5,7 +5,7 @@ import { fromAny, fromPartial } from "@total-typescript/shoehorn";
 import { describe, expect, it } from "vitest";
 
 import type { RunServices } from "./environment";
-import { runAgentTools } from "./tools";
+import { continueMailImportOnYield, runAgentTools } from "./tools";
 
 function fakeApi(): ToolExecutionApi {
   const memos = new Map<string, unknown>();
@@ -23,6 +23,88 @@ const tools = (services: RunServices) =>
     async () => ({ generation: "synthetic-generation", sequence: 1 }),
   );
 describe("run agent tool behavior", () => {
+  it("continues a premature Mail answer with the next durable claim and preserves replay", async () => {
+    let claims = 0;
+    const services: Pick<RunServices, "claimNextWork" | "loadScope"> = {
+      loadScope: async () => ({
+        purpose: "mail_import",
+        agentId: "synthetic-agent",
+        generation: "synthetic-generation",
+      }),
+      claimNextWork: async () => {
+        claims++;
+        return {
+          kind: "email",
+          email: {
+            mailboxId: "synthetic-mailbox",
+            messageId: "synthetic-return",
+          },
+        };
+      },
+    };
+    const api = fakeApi();
+    const first = await continueMailImportOnYield({
+      services,
+      api,
+      context: BACKGROUND_CONTEXT,
+      generation: "synthetic-generation",
+    });
+    expect(first?.continue).toContain("synthetic-return");
+    expect(first?.continue).toContain("resolve this Email unresolved");
+    expect(
+      await continueMailImportOnYield({
+        services,
+        api,
+        context: BACKGROUND_CONTEXT,
+        generation: "synthetic-generation",
+      }),
+    ).toEqual(first);
+    expect(claims).toBe(1);
+  });
+
+  it.each(["none", "stopped"])(
+    "allows settlement when the claim returns %s",
+    async (kind) => {
+      expect(
+        await continueMailImportOnYield({
+          services: {
+            loadScope: async () => ({
+              purpose: "mail_import",
+              agentId: "synthetic-agent",
+              generation: "synthetic-generation",
+            }),
+            claimNextWork: async () => ({ kind }),
+          },
+          api: fakeApi(),
+          context: BACKGROUND_CONTEXT,
+          generation: "synthetic-generation",
+        }),
+      ).toBeUndefined();
+    },
+  );
+
+  it("does not claim work from a superseded generation", async () => {
+    let claims = 0;
+    const result = await continueMailImportOnYield({
+      services: {
+        loadScope: async () => ({
+          purpose: "mail_import",
+          agentId: "synthetic-agent",
+          generation: "replacement-generation",
+        }),
+        claimNextWork: async () => {
+          claims++;
+          return { kind: "email" };
+        },
+      },
+      api: fakeApi(),
+      context: BACKGROUND_CONTEXT,
+      generation: "old-generation",
+    });
+    expect(result).toBeUndefined();
+    expect(claims).toBe(0);
+  });
+
   it("preserves a live v1 tool call's identity and replay checkpoint", () => {
     const input = { assistant: 1, callId: "synthetic-call" };
     const checkpoint = {

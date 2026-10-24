@@ -12,6 +12,20 @@ import { describeMcpActions } from "./tools/progressive-disclosure";
 import { compiledMcpTools } from "./tools/tool-registration";
 
 describe("MCP response policies", () => {
+  it("returns the live action contract with a malformed import instead of leaving the agent to guess", async () => {
+    const result = await callMcpTool(createMcpServer(), "purchase_import", {
+      action: "prepare",
+      input: { orders: [{}] },
+    });
+    expect(result.isError).toBe(true);
+    const text = JSON.stringify(result.content);
+    expect(text).toContain("INVALID_INPUT");
+    expect(text).toContain("inputSchema");
+    expect(text).toContain("stableOrderId");
+    expect(text).toContain("printedGrandTotal");
+    expect(text).toContain("productUrl");
+  });
+
   it("publishes the same page and recipe defaults that handlers apply", () => {
     const tools = compiledMcpTools(MCP_TOOL_BINDINGS, MCP_TOOL_DECLARATIONS);
     for (const [toolName, actionName] of [

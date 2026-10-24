@@ -538,6 +538,16 @@ describe("current purchase-agent system boundaries", () => {
     ): ScriptStep[] => [
       call(`${prefix}-claim`, "claim_next_import_work"),
       { check: `${prefix}-claim`, includes: ambiguous.messageId },
+      // A blocked Email's final answer must yield back to the remaining work,
+      // not settle the batch before this source gets an unresolved outcome.
+      ...(prefix === "partial"
+        ? [
+            {
+              await: ["The Mail import batch still has unfinished work."],
+              text: "This Email has missing facts, so I cannot finish the batch.",
+            },
+          ]
+        : []),
       mcp(`${prefix}-resolve`, "purchase_import", runId, {
         action: "mail_resolve",
         mailboxId,

@@ -168,7 +168,13 @@ pending: nothing here starts Product research.
    (`service/mail-financial-event.ts`, revalidated by
    `repo/mail-financial-event.ts`). New preparations may not
    name the retired `browser_order` source kind; stored rows keep it.
-5. **Settlement**: Pi's settled submission reconciles the Run
+5. **Settlement**: A normal Mail coordinator answer first rechecks runnable
+   work through the leased `claim_next_work` operation. If an Email remains,
+   the generation's yield hook continues with its current claim, preserving
+   the claim result on replay. A source-specific blocker is resolved as
+   `unresolved`, then the coordinator continues the batch; an unavailable
+   escalation does not block unrelated Emails. Explicit Run review, stopped
+   Runs and exhausted rosters still settle. Pi's settled submission reconciles the Run
    (`run-review.ts` `reconcileSettledRun`); the daily cron expires stale Runs
    and destroys settled Runs' transcripts (`run-retirement.ts`), oldest
    first in bounded batches; the destroying call and an immediate follow-up

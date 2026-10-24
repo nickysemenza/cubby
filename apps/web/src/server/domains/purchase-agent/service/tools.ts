@@ -5,6 +5,7 @@ import type { Context, JsonValue } from "@earendil-works/chord";
 import { Type, type TSchema } from "@earendil-works/pi-ai";
 import {
   defineTool,
+  type HookApi,
   type ToolExecutionApi,
   type ToolExecutionResult,
   type ToolRegistration,
@@ -26,7 +27,7 @@ const claimStopped = (output: JsonValue) =>
  * of repeating the effect; the server is idempotent by operation id as well.
  */
 async function step(
-  api: ToolExecutionApi,
+  api: Pick<ToolExecutionApi, "memo">,
   context: Context,
   key: string,
   effect: () => Promise<object | null>,
@@ -35,6 +36,38 @@ async function step(
   if (stored) return stored.value;
   const value = z.json().parse(await effect());
   return (await api.memo(key, { value }, context)).value;
+}
+
+/** A final answer cannot strand an otherwise runnable Mail batch. */
+export async function continueMailImportOnYield({
+  services,
+  api,
+  context,
+  generation,
+}: {
+  services: Pick<RunServices, "claimNextWork" | "loadScope">;
+  api: HookApi;
+  context: Context;
+  generation: string | undefined;
+}) {
+  // A superseded final answer cannot restart the replacement coordinator.
+  if (!generation || (await services.loadScope()).generation !== generation)
+    return undefined;
+  const work = await step(api, context, "mail-yield-work", async () =>
+    services.claimNextWork({
+      operationId: `yield:${await sha256Hex(String(api.taskId))}`,
+    }),
+  );
+  const pending = z
+    .object({
+      kind: z.literal("email"),
+      email: z.object({ mailboxId: z.string(), messageId: z.string() }),
+    })
+    .safeParse(work);
+  if (!pending.success) return undefined;
+  return {
+    continue: `The Mail import batch still has unfinished work. Do not end the batch because one Email is blocked. Correct input validation using the tool's describe action. If this Email cannot be settled and escalation is unavailable, resolve this Email unresolved with the concrete reason, then claim the next Email. Stop only when no runnable Email remains or a blocker affects the entire Run. Call claim_next_import_work for its evidence. Current Email: ${JSON.stringify(pending.data.email)}`,
+  };
 }
 
 function result(
