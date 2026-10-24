@@ -7,6 +7,7 @@ import {
 import superjson from "superjson";
 import { z } from "zod";
 
+import { EntityDisplayImagesProvider } from "~/entity/entity-media/entity-display-images";
 import { showErrorToast } from "~/ui/feedback/error-details";
 
 import {
@@ -166,6 +167,10 @@ export function Provider({
   queryClient: QueryClient;
 }) {
   return (
-    <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    <QueryClientProvider client={queryClient}>
+      <EntityDisplayImagesProvider refs={[]} collectMountedRefs>
+        {children}
+      </EntityDisplayImagesProvider>
+    </QueryClientProvider>
   );
 }

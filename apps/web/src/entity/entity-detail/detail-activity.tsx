@@ -8,6 +8,7 @@ import {
 import { useState } from "react";
 
 import { EntityAuditLink } from "~/entity/components/entity-ref-link";
+import { EntityDisplayImagesProvider } from "~/entity/entity-media/entity-display-images";
 import { formatCalendarDay, formatInstant } from "~/lib/date-format";
 import { dateSpanParts } from "~/lib/date-span";
 import { householdLocalDate } from "~/lib/household-date";
@@ -101,120 +102,130 @@ export function DetailActivity({ entity, id }: { entity: Entity; id: string }) {
           empty="No activity yet."
         />
       ) : (
-        <div className="space-y-2.5" aria-label="Recent changes and spend">
-          {groups.map(({ day, events: dayEvents }) => (
-            <div
-              key={day}
-              className="grid grid-cols-[6rem_minmax(0,1fr)] items-start"
-            >
-              <div>
-                <time
-                  dateTime={day}
-                  className="text-xs/4 font-medium text-foreground-strong tabular-nums"
-                >
-                  {formatCalendarDay(
-                    day,
-                    day.startsWith(today.slice(0, 4))
-                      ? "monthDay"
-                      : "dateShort",
-                  )}
-                </time>
-                <div className="text-xs/4 text-muted-foreground">
-                  {dateSpanParts(day, null, today).relative}
-                </div>
-              </div>
-              <RecordList
-                variant="timeline"
-                aria-label={`${formatCalendarDay(day, "dateShort")} activity`}
+        <EntityDisplayImagesProvider
+          refs={events.flatMap((event) =>
+            event.kind === "record" && event.shortcode
+              ? [{ entityKind: event.entity, entityId: event.shortcode }]
+              : [],
+          )}
+        >
+          <div className="space-y-2.5" aria-label="Recent changes and spend">
+            {groups.map(({ day, events: dayEvents }) => (
+              <div
+                key={day}
+                className="grid grid-cols-[8rem_minmax(0,1fr)] items-start max-sm:grid-cols-1"
               >
-                {dayEvents.map((event) => {
-                  const { title, subtitle } =
-                    event.kind === "change"
-                      ? changeText(event)
-                      : { title: event.title, subtitle: event.subtitle };
-                  const primary =
-                    event.kind === "record" && event.shortcode ? (
-                      <EntityAuditLink
-                        entityKind={event.entity}
-                        entityId={event.shortcode}
-                        name={title}
-                        displayImage={null}
-                        compact
-                      />
-                    ) : (
-                      <span className="font-medium text-foreground-strong">
-                        {title}
-                      </span>
-                    );
-                  return (
-                    <RecordRow
-                      key={event.id}
-                      stacked
-                      leading={
-                        event.kind === "change" ? (
-                          <RecordDot
-                            label={title}
-                            color={
-                              event.title === "update"
-                                ? "var(--action-change)"
-                                : undefined
-                            }
-                            spoken={false}
-                            tone={
-                              event.title === "create"
-                                ? "positive"
-                                : event.title === "delete"
-                                  ? "destructive"
+                <div>
+                  <time
+                    dateTime={day}
+                    className="text-xs/4 font-medium text-foreground-strong tabular-nums"
+                  >
+                    {formatCalendarDay(
+                      day,
+                      day.startsWith(today.slice(0, 4))
+                        ? "monthDay"
+                        : "dateShort",
+                    )}
+                  </time>
+                  <div className="text-xs/4 text-muted-foreground">
+                    {dateSpanParts(day, null, today).relative}
+                  </div>
+                </div>
+                <RecordList
+                  variant="timeline"
+                  aria-label={`${formatCalendarDay(day, "dateShort")} activity`}
+                >
+                  {dayEvents.map((event) => {
+                    const { title, subtitle } =
+                      event.kind === "change"
+                        ? changeText(event)
+                        : { title: event.title, subtitle: event.subtitle };
+                    const primary =
+                      event.kind === "record" && event.shortcode ? (
+                        <EntityAuditLink
+                          entityKind={event.entity}
+                          entityId={event.shortcode}
+                          name={title}
+                          displayImage={null}
+                          layout="row"
+                        />
+                      ) : (
+                        <span className="font-medium text-foreground-strong">
+                          {title}
+                        </span>
+                      );
+                    return (
+                      <RecordRow
+                        key={event.id}
+                        stacked
+                        leading={
+                          event.kind === "change" ? (
+                            <RecordDot
+                              label={title}
+                              color={
+                                event.title === "update"
+                                  ? "var(--action-change)"
                                   : undefined
-                            }
-                          />
-                        ) : undefined
-                      }
-                      primary={
-                        <>
-                          {primary}
-                          {event.kind === "change" && subtitle ? (
-                            <span className="text-xs text-muted-foreground">
-                              {subtitle}
+                              }
+                              spoken={false}
+                              tone={
+                                event.title === "create"
+                                  ? "positive"
+                                  : event.title === "delete"
+                                    ? "destructive"
+                                    : undefined
+                              }
+                            />
+                          ) : undefined
+                        }
+                        primary={
+                          <>
+                            {primary}
+                            {event.kind === "change" && subtitle ? (
+                              <span className="text-xs text-muted-foreground">
+                                {subtitle}
+                              </span>
+                            ) : null}
+                          </>
+                        }
+                        secondary={
+                          event.kind === "record" ? subtitle : undefined
+                        }
+                        trailing={
+                          event.amountCents !== undefined ? (
+                            <span className="font-mono text-foreground-strong tabular-nums">
+                              {formatCurrency(event.amountCents / 100)}
                             </span>
-                          ) : null}
-                        </>
-                      }
-                      secondary={event.kind === "record" ? subtitle : undefined}
-                      trailing={
-                        event.amountCents !== undefined ? (
-                          <span className="font-mono text-foreground-strong tabular-nums">
-                            {formatCurrency(event.amountCents / 100)}
-                          </span>
-                        ) : event.allDay ? undefined : (
-                          <time
-                            dateTime={event.date}
-                            className="font-mono text-xs text-muted-foreground tabular-nums"
-                          >
-                            {formatInstant(event.date, "clock")}
-                          </time>
-                        )
-                      }
-                    />
-                  );
-                })}
-              </RecordList>
-            </div>
-          ))}
-          {activity.hasNextPage ? (
-            <div className="grid grid-cols-[6rem_minmax(0,1fr)]">
-              <span aria-hidden />
-              <RecordList aria-label="Older activity">
-                <RecordMore
-                  label={
-                    activity.isFetchingNextPage ? "Loading…" : "Show older"
-                  }
-                  onClick={() => void activity.fetchNextPage()}
-                />
-              </RecordList>
-            </div>
-          ) : null}
-        </div>
+                          ) : event.allDay ? undefined : (
+                            <time
+                              dateTime={event.date}
+                              className="font-mono text-xs text-muted-foreground tabular-nums"
+                            >
+                              {formatInstant(event.date, "clock")}
+                            </time>
+                          )
+                        }
+                      />
+                    );
+                  })}
+                </RecordList>
+              </div>
+            ))}
+            {activity.hasNextPage ? (
+              <div className="grid grid-cols-[8rem_minmax(0,1fr)] max-sm:grid-cols-1">
+                <span aria-hidden />
+                <RecordList aria-label="Older activity">
+                  <RecordMore
+                    label={
+                      activity.isFetchingNextPage ? "Loading…" : "Show older"
+                    }
+                    onClick={() => void activity.fetchNextPage()}
+                  />
+                </RecordList>
+              </div>
+            ) : null}
+          </div>
+        </EntityDisplayImagesProvider>
       )}
       {isAuditableEntity(entity) ? (
         <ChangeDetails entity={entity} id={id} />

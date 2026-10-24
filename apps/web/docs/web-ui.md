@@ -285,3 +285,13 @@ follows image storage and display bindings, including logo storage; the legacy
 `hasImages` gallery/cover trait does not gate identity imagery. Keep the Images
 section limited to the record's own gallery; borrowed covers do not become
 attachments. A header with a thumbnail omits its duplicate generic title mark.
+
+### Record pill display images
+
+`EntityPill` uses the shared canonical display-image context, including borrowed
+images along declared relationship paths. Collection owners prepare image refs
+for their loaded rows through `EntityDisplayImagesProvider`; audit feeds do this
+for all loaded entries. The shared app provider collects otherwise-uncovered
+mounted references into the same chunked resolver. Pills register references,
+never own a query. Explicit collection batches retain ownership and seeded null
+results remain authoritative. Records with no eligible image retain their mark.

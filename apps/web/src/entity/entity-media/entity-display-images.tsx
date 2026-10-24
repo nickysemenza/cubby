@@ -6,13 +6,26 @@ import {
 import type { ImageUrlSummary } from "@cubby/schemas/image-summary";
 import { useQueries } from "@tanstack/react-query";
 import { chunk } from "es-toolkit";
-import { createContext, type ReactNode, useContext, useMemo } from "react";
+import {
+  createContext,
+  type ReactNode,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 
 import { entityMedia } from "~/integrations/tanstack-query/generated/catalog/entityMedia.gen";
 
 export type EntityDisplayImageMap = EntityDisplayImagesOutput;
 export type EntityDisplayImagesQueryOptions =
   typeof entityMedia.displayImages.queryOptions;
+
+const CoveredImageRefsContext = createContext<ReadonlySet<string>>(new Set());
+const RegisterImageRefContext = createContext<
+  ((ref: EntityRef) => () => void) | null
+>(null);
 
 const EMPTY_IMAGES: EntityDisplayImageMap = {};
 const EntityDisplayImagesContext =
@@ -79,26 +92,87 @@ export function EntityDisplayImagesProvider({
   seeded,
   queryOptions,
   children,
+  collectMountedRefs = false,
 }: {
+  /** App-level fallback; explicit collection refs keep their own batch owner. */
+  collectMountedRefs?: boolean;
   refs: readonly EntityRef[];
   seeded?: EntityDisplayImageMap;
   queryOptions?: EntityDisplayImagesQueryOptions;
   children: ReactNode;
 }) {
   const inherited = useContext(EntityDisplayImagesContext);
+  const inheritedCovered = useContext(CoveredImageRefsContext);
+  const [mounted, setMounted] = useState<
+    ReadonlyMap<string, { ref: EntityRef; count: number }>
+  >(new Map());
+  const register = useCallback((ref: EntityRef) => {
+    const key = entityDisplayImageKey(ref);
+    setMounted((current) =>
+      new Map(current).set(key, {
+        ref,
+        count: (current.get(key)?.count ?? 0) + 1,
+      }),
+    );
+    return () =>
+      setMounted((current) => {
+        const next = new Map(current);
+        const entry = next.get(key);
+        if (entry && entry.count > 1)
+          next.set(key, { ...entry, count: entry.count - 1 });
+        else next.delete(key);
+        return next;
+      });
+  }, []);
+  const coveredKey = [
+    ...refs.map(entityDisplayImageKey),
+    ...Object.keys(seeded ?? EMPTY_IMAGES),
+  ]
+    .sort()
+    .join(",");
+  const covered = useMemo(
+    () =>
+      new Set([...inheritedCovered, ...coveredKey.split(",").filter(Boolean)]),
+    [inheritedCovered, coveredKey],
+  );
   const combinedSeeded = useMemo(
     () => ({ ...inherited, ...(seeded ?? EMPTY_IMAGES) }),
     [inherited, seeded],
   );
-  const images = useEntityDisplayImages(refs, combinedSeeded, queryOptions);
-  return (
-    <EntityDisplayImagesContext.Provider value={images}>
-      {children}
-    </EntityDisplayImagesContext.Provider>
+  const images = useEntityDisplayImages(
+    collectMountedRefs
+      ? [...refs, ...Array.from(mounted.values(), (entry) => entry.ref)]
+      : refs,
+    combinedSeeded,
+    queryOptions,
+  );
+  const content = (
+    <CoveredImageRefsContext.Provider value={covered}>
+      <EntityDisplayImagesContext.Provider value={images}>
+        {children}
+      </EntityDisplayImagesContext.Provider>
+    </CoveredImageRefsContext.Provider>
+  );
+  return collectMountedRefs ? (
+    <RegisterImageRefContext.Provider value={register}>
+      {content}
+    </RegisterImageRefContext.Provider>
+  ) : (
+    content
   );
 }
 
 export function useEntityDisplayImage(ref: EntityRef): ImageUrlSummary | null {
+  const register = useContext(RegisterImageRefContext);
+  const covered = useContext(CoveredImageRefsContext).has(
+    entityDisplayImageKey(ref),
+  );
+  const { entityKind, entityId } = ref;
+  // Collection owners declare their complete batch; only otherwise-uncovered
+  // mounted references join the shell batch. No pill owns a network query.
+  useEffect(() => {
+    if (!covered) return register?.({ entityKind, entityId });
+  }, [register, covered, entityKind, entityId]);
   return (
     useContext(EntityDisplayImagesContext)[entityDisplayImageKey(ref)] ?? null
   );

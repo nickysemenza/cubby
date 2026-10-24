@@ -30,7 +30,7 @@ export type InlineRefLinkProps = {
   bare?: boolean;
   /** Muted context leading the metadata ("1 each" for a stocked location). */
   context?: string;
-  /** Canonical backend-resolved cover; null intentionally renders the mark. */
+  /** Canonical backend-resolved cover; the shared context fills absent images. */
   displayImage?: ImageUrlSummary | null;
 } & (
   | { entity: "ingredient"; data: MinimalEntityData }
