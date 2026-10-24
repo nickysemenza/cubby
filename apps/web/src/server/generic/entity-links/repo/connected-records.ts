@@ -9,9 +9,7 @@ import {
 import type { DerivedConnectedRelationship } from "@cubby/schemas/connected-views";
 import {
   connectedPathVariants,
-  connectedViews,
-  curatedConnectedViews,
-  relationshipsFor,
+  connectionCatalog,
 } from "@cubby/schemas/connected-views";
 import type { Entity } from "@cubby/schemas/entity";
 import type { RelationshipWitness } from "@cubby/schemas/entity-integrity";
@@ -35,20 +33,7 @@ const entityByTable = new Map<string, Entity>(
 );
 
 function resolveConnectedView(source: Entity, viewKey: string) {
-  const view = connectedViews[source].find(
-    (candidate) => candidate.key === viewKey,
-  );
-  if (!view && viewKey.startsWith("relation:")) {
-    const relation = entityManifest[source].relationships.find(
-      (item) => item.key === viewKey.slice(9),
-    );
-    if (relation?.provenance.kind === "derived")
-      return { target: relation.target, routes: [], derived: true as const };
-    const logical = relationshipsFor(source).find(
-      (item) => item.key === viewKey.slice(9),
-    );
-    if (logical) return { target: logical.target, routes: [[logical.key]] };
-  }
+  const view = connectionCatalog.resolve(source, viewKey);
   if (!view) throw new Error(`Unknown connected view ${source}.${viewKey}`);
   return view;
 }
@@ -67,6 +52,7 @@ const nodeExpression = (
 
 export function compiledConnectedRoutes(source: Entity, viewKey: string) {
   const view = resolveConnectedView(source, viewKey);
+  if (view.kind === "derived") return [];
   const variants = view.routes.flatMap((route) =>
     connectedPathVariants(source, route),
   );
@@ -170,31 +156,17 @@ const pageRowSchema = z.object({
   ),
 });
 
-/** Complete, paged records and every witnessed provenance route. */
-export async function getConnectedRecords(
-  db: Database,
-  input: ConnectedRecordsInput,
-): Promise<ConnectedRecordsOutput> {
+/** Shared page query for individual tables and the batched detail preview. */
+function prepareConnectedPage(input: ConnectedRecordsInput) {
   const { source, viewKey } = input;
   const view = resolveConnectedView(source.entityKind, viewKey);
   // A derived relation has no edge path to witness; its list filter is the
   // whole answer, so there is no per-record route evidence to return.
-  if ("derived" in view)
-    return {
-      targetEntity: view.target,
-      totalCount: 0,
-      items: [],
-    };
+  if (view.kind === "derived" || input.targetIds?.length === 0)
+    return { target: view.target, query: null };
   const routes = compiledConnectedRoutes(source.entityKind, viewKey);
   if (routes.length === 0)
     throw new Error(`No routes for ${source.entityKind}.${viewKey}`);
-  if (input.targetIds?.length === 0) {
-    return {
-      targetEntity: view.target,
-      totalCount: 0,
-      items: [],
-    };
-  }
   const rootTable = entityManifest[source.entityKind].dbTable;
   if (!rootTable) throw new Error(`No local table for ${source.entityKind}`);
   const rootLiveness = entityManifest[source.entityKind].softDelete
@@ -219,7 +191,7 @@ export async function getConnectedRecords(
         ${targetFilter}
     `,
   );
-  const result = await unwrapDb(db).execute(sql`
+  const query = sql`
     WITH paths AS (${sql.join(routeQueries, sql` UNION ALL `)}),
       unique_paths AS (
         SELECT DISTINCT "targetId", "targetLabel", "hops", "path" FROM paths
@@ -242,11 +214,15 @@ export async function getConnectedRecords(
       )
     SELECT (SELECT count(*)::int FROM targets) AS "totalCount",
       COALESCE((SELECT jsonb_agg(to_jsonb(page_items) ORDER BY "targetLabel", "targetId") FROM page_items), '[]'::jsonb) AS "items"
-  `);
-  const row = pageRowSchema.parse(result.rows[0]);
+  `;
+  return { target: view.target, query };
+}
+
+function connectedPage(target: Entity, value: unknown): ConnectedRecordsOutput {
+  const row = pageRowSchema.parse(value);
   const items = row.items.map((item) => ({
     target: {
-      entityKind: view.target,
+      entityKind: target,
       entityId: item.targetId,
       label: item.targetLabel,
     } satisfies PathNode,
@@ -254,37 +230,62 @@ export async function getConnectedRecords(
     shortestHops: item.shortestHops,
   }));
   return connectedRecordsOutputSchema.parse({
-    targetEntity: view.target,
+    targetEntity: target,
     totalCount: row.totalCount,
     items,
   });
 }
 
-/** The detail page's one Connected records section: every view's first rows and total. */
+const emptyPage = { totalCount: 0, items: [] };
+const emptyPageQuery = sql`SELECT 0::int AS "totalCount", '[]'::jsonb AS "items"`;
+
+/** Complete, paged records and every witnessed provenance route. */
+export async function getConnectedRecords(
+  db: Database,
+  input: ConnectedRecordsInput,
+): Promise<ConnectedRecordsOutput> {
+  const plan = prepareConnectedPage(input);
+  if (!plan.query) return connectedPage(plan.target, emptyPage);
+  const result = await unwrapDb(db).execute(plan.query);
+  return connectedPage(plan.target, result.rows[0]);
+}
+
+/** Every requested group shares one statement while retaining its own complete count and page. */
 export async function getConnectedRecordsPreview(
   db: Database,
   input: ConnectedRecordsPreviewInput,
 ): Promise<ConnectedRecordsPreviewOutput> {
-  const selected =
-    input.scope === "context"
-      ? curatedConnectedViews[input.source.entityKind]
-      : connectedViews[input.source.entityKind].filter(
-          (view) => view.preview !== false,
+  const views = connectionCatalog.views(input.source.entityKind, input.scope);
+  if (views.length === 0) return { views: [] };
+  const queries = views.map((view, index) => {
+    const { query } = prepareConnectedPage({
+      source: input.source,
+      viewKey: view.key,
+      limit: input.limit ?? 3,
+    });
+    return sql`SELECT ${index}::int AS "viewIndex", page."totalCount", page."items" FROM (${query ?? emptyPageQuery}) page`;
+  });
+  const result = await unwrapDb(db).execute(
+    sql`${sql.join(queries, sql` UNION ALL `)} ORDER BY "viewIndex"`,
+  );
+  const rows = z
+    .array(pageRowSchema.extend({ viewIndex: z.number().int().nonnegative() }))
+    .parse(result.rows);
+  if (rows.length !== views.length)
+    throw new Error("Incomplete connected-record preview");
+  return {
+    views: rows.map((row) => {
+      const view = views[row.viewIndex];
+      if (!view)
+        throw new Error(
+          `Unknown connected-record preview index ${row.viewIndex}`,
         );
-  const views = await Promise.all(
-    selected.map(async (view) => {
-      const page = await getConnectedRecords(db, {
-        source: input.source,
-        viewKey: view.key,
-        limit: input.limit ?? 3,
-      });
       return {
-        ...page,
+        ...connectedPage(view.target, row),
         viewKey: view.key,
         title: view.title,
-        evidence: "evidence" in view ? (view.evidence ?? false) : false,
+        evidence: view.evidence ?? false,
       };
     }),
-  );
-  return { views };
+  };
 }

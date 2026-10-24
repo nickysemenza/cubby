@@ -1,5 +1,5 @@
 import {
-  relationshipsFor as graphRelationshipsFor,
+  connectionCatalog,
   relationshipSources as localSources,
 } from "@cubby/schemas/connected-views";
 import {
@@ -306,12 +306,15 @@ export async function readEntityGraph(
     }
     if (liveRoots.length === 0) continue;
 
-    const relationships = graphRelationshipsFor(rootEntity).filter(
-      (relationship) =>
-        (!input.relationshipKeys ||
-          input.relationshipKeys.includes(relationship.key)) &&
-        (!input.entityKinds || input.entityKinds.includes(relationship.target)),
-    );
+    const relationships = connectionCatalog
+      .relationships(rootEntity)
+      .filter(
+        (relationship) =>
+          (!input.relationshipKeys ||
+            input.relationshipKeys.includes(relationship.key)) &&
+          (!input.entityKinds ||
+            input.entityKinds.includes(relationship.target)),
+      );
     const relationSources = relationships.flatMap((relationship) =>
       relationship.sources.flatMap((source) =>
         source.provenance.kind === "local-path"

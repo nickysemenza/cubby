@@ -1,4 +1,4 @@
-import { connectedViews } from "@cubby/schemas/connected-views";
+import { connectionCatalog } from "@cubby/schemas/connected-views";
 import { allEntities, entityManifest } from "@cubby/schemas/entity-manifest";
 import { entitySummary } from "@cubby/schemas/entity-summary";
 import { expect, it } from "vitest";
@@ -7,7 +7,10 @@ import { compiledConnectedRoutes } from "./connected-records";
 
 it("compiles every curated and existing relation table through local traversals", () => {
   for (const source of allEntities) {
-    for (const view of connectedViews[source]) {
+    for (const view of [
+      ...connectionCatalog.views(source),
+      ...connectionCatalog.views(source, "context"),
+    ]) {
       expect(compiledConnectedRoutes(source, view.key).length).toBeGreaterThan(
         0,
       );

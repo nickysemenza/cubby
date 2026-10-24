@@ -1,4 +1,4 @@
-import { connectedViews } from "@cubby/schemas/connected-views";
+import { connectionCatalog } from "@cubby/schemas/connected-views";
 import type { Entity } from "@cubby/schemas/entity";
 import {
   detailActivityEventSchema,
@@ -49,11 +49,7 @@ function root(entity: Entity, shortcode: string) {
 }
 
 function viewTarget(entity: Entity, viewKey: string): Entity {
-  const target = viewKey.startsWith("relation:")
-    ? entityManifest[entity].relationships.find(
-        (relation) => relation.key === viewKey.slice(9),
-      )?.target
-    : connectedViews[entity].find((view) => view.key === viewKey)?.target;
+  const target = connectionCatalog.resolve(entity, viewKey)?.target;
   if (!target) throw new Error(`Unknown detail view ${entity}.${viewKey}`);
   return target;
 }

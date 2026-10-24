@@ -1,4 +1,3 @@
-import { mapRecord } from "@cubby/shared";
 import type { Entity } from "./entity";
 import {
   allEntities,
@@ -10,8 +9,7 @@ import type {
   RelationshipWitness,
 } from "./entity-integrity";
 import {
-  connectedViewsFor,
-  relationshipsFor as resolveRelationships,
+  createConnectionCatalog,
   relationshipSources,
   type RelationshipCatalog,
   derivedConnectedRelationship,
@@ -19,20 +17,14 @@ import {
 } from "./connected-view-definitions";
 
 export { relationshipSources };
-export { connectedViews as curatedConnectedViews } from "./connected-view-definitions";
 const relationshipCatalog: RelationshipCatalog = allEntities.map((key) => ({
   key,
   plural: entityInspectorMetadata[key].plural ?? key,
   relationships: entityManifest[key].relationships,
 }));
-export const relationshipsFor = (source: Entity) =>
-  resolveRelationships(relationshipCatalog, source);
-export const connectedViews = mapRecord(allEntities, (source) =>
-  connectedViewsFor(relationshipCatalog, source),
-);
+export const connectionCatalog = createConnectionCatalog(relationshipCatalog);
 export type {
   ConnectedView,
-  ConnectedViewKey,
   DerivedConnectedRelationship,
 } from "./connected-view-definitions";
 
@@ -53,9 +45,9 @@ export function connectedPathVariants(
     { steps: [], target: source, witnesses: [] },
   ];
   for (const [index, key] of route.entries()) {
-    const relationship = relationshipsFor(current).find(
-      (item) => item.key === key,
-    );
+    const relationship = connectionCatalog
+      .relationships(current)
+      .find((item) => item.key === key);
     if (!relationship)
       throw new Error(`Unknown relationship ${current}.${key}`);
     const primary = relationship.sources[0];
@@ -122,7 +114,10 @@ export function connectedPathVariants(
 export function validateConnectedViews(): void {
   for (const source of allEntities) {
     const seen = new Set<string>();
-    for (const view of connectedViews[source]) {
+    for (const view of [
+      ...connectionCatalog.views(source),
+      ...connectionCatalog.views(source, "context"),
+    ]) {
       if (seen.has(view.key))
         throw new Error(`Duplicate connected view ${source}.${view.key}`);
       seen.add(view.key);
