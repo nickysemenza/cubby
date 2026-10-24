@@ -20,9 +20,11 @@ import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { getDb } from "~/server/db/helpers";
+import { getDb, withTransactionDatabase } from "~/server/db/helpers";
 import {
   email as emailTable,
+  imageProcessingOrphan,
+  ledgerParty,
   emailRetrievalFailure,
   mailboxCursor,
   orderMail,
@@ -35,10 +37,13 @@ import { syntheticMailImportRun } from "../../service/gmail/execution.fixtures";
 import { ingestGmailMessages as acquireGmailMessages } from "../../service/gmail/ingest";
 import { syntheticRetainedMail } from "../../service/gmail/retained-mail.fixtures";
 import type { OrderMailAttachmentStorage } from "./attachment-storage";
+import { originalChecksum } from "./checksum";
+import { normalizeMessage } from "./normalize";
 import {
   advanceMailboxCursor,
   loadGmailCursor,
   persistGmailEvents,
+  saveMailboxMetadata,
 } from "./persistence";
 import {
   GmailApiError,
@@ -168,6 +173,133 @@ describe("Gmail ingestion and attachment storage", () => {
     const object = objects.get(row?.key ?? "");
     expect(Buffer.from(object?.bytes ?? []).equals(PDF_BYTES)).toBe(true);
     expect(object?.contentType).toBe("application/pdf");
+  });
+
+  it("uploads before retained publication and keeps DB-only adoption afterward", async () => {
+    const party = await seedParty();
+    const { storage, objects } = memoryStorage();
+    let puts = 0;
+    await ingestGmailMessages(ctx.db, provider(), {
+      ledgerPartyId: party.id,
+      mailboxId: "synthetic-google-subject",
+      messageIds: ["msg-staged"],
+      storage: {
+        ...storage,
+        put: async (key, bytes, contentType) => {
+          puts += 1;
+          await withTransactionDatabase(ctx.db, async (db) => {
+            await getDb(db)
+              .select({ id: ledgerParty.id })
+              .from(ledgerParty)
+              .where(eq(ledgerParty.id, party.id))
+              .for("update", { noWait: true });
+          });
+          expect(await getDb(ctx.db).select().from(orderMail)).toHaveLength(0);
+          expect(await attachments()).toHaveLength(0);
+          await storage.put(key, bytes, contentType);
+        },
+      },
+    });
+    expect(puts).toBe(1);
+    expect(objects.size).toBe(1);
+    expect(await attachments()).toHaveLength(1);
+  });
+
+  it("cleans uploaded reservations when newer metadata refuses publication", async () => {
+    const party = await seedParty();
+    const { storage, objects } = memoryStorage();
+    const normalized = normalizeMessage(
+      "synthetic-google-subject",
+      message("msg-raced"),
+    );
+    const outcome = await ingestGmailMessages(ctx.db, provider(), {
+      ledgerPartyId: party.id,
+      mailboxId: "synthetic-google-subject",
+      messageIds: ["msg-raced"],
+      storage: {
+        ...storage,
+        put: async (key, bytes, contentType) => {
+          await storage.put(key, bytes, contentType);
+          await saveMailboxMetadata(ctx.db, {
+            ledgerPartyId: party.id,
+            mail: normalized.mail,
+            checksum: await originalChecksum(normalized),
+            executionPolicy: "classification_only",
+          });
+        },
+      },
+    });
+    expect(outcome.saved).toEqual([]);
+    expect(objects.size).toBe(0);
+    expect(await attachments()).toEqual([]);
+    expect(await getDb(ctx.db).select().from(imageProcessingOrphan)).toEqual(
+      [],
+    );
+  });
+
+  it("retains preparation and cleanup errors while attempting every reserved key", async () => {
+    const party = await seedParty();
+    const { storage } = memoryStorage();
+    const uploadError = new Error("Synthetic partial PUT failure");
+    const cleanupError = new Error("Synthetic deletion failure");
+    let deleted = 0;
+    await expect(
+      ingestGmailMessages(
+        ctx.db,
+        provider({ getMessage: async (id) => message(id, 2) }),
+        {
+          ledgerPartyId: party.id,
+          mailboxId: "synthetic-google-subject",
+          messageIds: ["msg-failed-staging"],
+          storage: {
+            ...storage,
+            put: async () => {
+              throw uploadError;
+            },
+            delete: async () => {
+              deleted += 1;
+              throw cleanupError;
+            },
+          },
+        },
+      ),
+    ).rejects.toSatisfy(
+      (error: unknown) =>
+        error instanceof AggregateError &&
+        error.cause === uploadError &&
+        error.errors.length === 3 &&
+        error.errors[0] === uploadError &&
+        error.errors.slice(1).every((failure) => failure === cleanupError),
+    );
+    expect(deleted).toBe(2);
+    expect(await attachments()).toEqual([]);
+    expect(await getDb(ctx.db).select().from(orderMail)).toEqual([]);
+    expect(
+      await getDb(ctx.db).select().from(imageProcessingOrphan),
+    ).toHaveLength(2);
+  });
+
+  it("preserves metadata-only attachments without inventing uploaded bytes", async () => {
+    const party = await seedParty();
+    const { storage, objects } = memoryStorage();
+    const outcome = await ingestGmailMessages(
+      ctx.db,
+      provider({ getAttachment: async () => ({}) }),
+      {
+        ledgerPartyId: party.id,
+        mailboxId: "synthetic-google-subject",
+        messageIds: ["msg-missing"],
+        storage,
+      },
+    );
+    expect(outcome.saved).toEqual(["msg-missing"]);
+    expect(await attachments()).toEqual([
+      expect.objectContaining({ key: null, checksum: expect.any(String) }),
+    ]);
+    expect(objects.size).toBe(0);
+    expect(await getDb(ctx.db).select().from(imageProcessingOrphan)).toEqual(
+      [],
+    );
   });
 
   it("keeps one row and never refetches stored bytes when a message replays", async () => {

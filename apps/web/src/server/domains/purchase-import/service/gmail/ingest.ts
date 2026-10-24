@@ -20,6 +20,7 @@ import {
 } from "~/server/ai/evaluation-inputs";
 import type { Database } from "~/server/db";
 import { hasAcceptedEmailAssociation } from "~/server/domains/email/repo/email";
+import { discardMailAttachmentUpload } from "~/server/domains/mail/repo/mail-attachment-uploads";
 import { originalChecksum } from "~/server/domains/purchase-import/repo/gmail/checksum";
 import { normalizeMessage } from "~/server/domains/purchase-import/repo/gmail/normalize";
 import { captureGmailOriginal } from "~/server/domains/purchase-import/repo/gmail/original-capture";
@@ -42,10 +43,8 @@ import {
 } from "../../repo/gmail/attachment-storage";
 import { gmailExecutionPolicy } from "../../repo/gmail/execution-policy";
 import {
-  afterPublicationCommit,
   confirmEmailClassification,
   hasRetainedOrderMailContent,
-  pendingAttachmentKeys,
   readMemberClassification,
   restoreOrderMailContent,
 } from "../../repo/gmail/ingest-state";
@@ -61,7 +60,9 @@ import {
   saveEmail,
   saveMailboxMetadata,
   markEmailRemoved,
-  storeOrderMailAttachment,
+  prepareOrderMailAttachment,
+  publishStagedOrderMailAttachment,
+  type PreparedOrderMailAttachment,
   reserveGmailAttachmentUploads,
   upsertOrderMail,
 } from "../../repo/gmail/persistence";
@@ -130,9 +131,7 @@ const retainOriginal = async (
   identity: MessageIdentity,
   normalized: GmailNormalizedMessage,
   checksum: string,
-  storage: OrderMailAttachmentStorage,
-  transientAttachments: ReadonlyMap<string, string>,
-  uploadKeys: ReadonlyMap<string, string>,
+  prepared: ReadonlyMap<string, PreparedOrderMailAttachment>,
 ) => {
   const orderMailId = await upsertOrderMail(
     db,
@@ -140,17 +139,15 @@ const retainOriginal = async (
     normalized.mail,
     checksum,
   );
-  for (const attachment of normalized.attachments)
-    await storeOrderMailAttachment(db, {
+  for (const attachment of normalized.attachments) {
+    const publication = prepared.get(attachment.sourceKey);
+    if (!publication) throw new Error("Attachment preparation is missing");
+    await publishStagedOrderMailAttachment(db, {
       orderMailId,
       attachment,
-      storage,
-      uploadKey: uploadKeys.get(attachment.sourceKey),
-      fetchData: async () =>
-        attachment.dataBase64Url ??
-        transientAttachments.get(attachment.sourceKey) ??
-        undefined,
+      prepared: publication,
     });
+  }
   return orderMailId;
 };
 
@@ -432,6 +429,7 @@ async function stageGmailAttachments(
   normalized: GmailNormalizedMessage,
   orderMailId: string | null,
   transientAttachments: Map<string, string>,
+  storage: OrderMailAttachmentStorage,
 ) {
   for (const attachment of normalized.attachments) {
     if (
@@ -456,11 +454,40 @@ async function stageGmailAttachments(
     if (payload.data)
       transientAttachments.set(attachment.sourceKey, payload.data);
   }
-  return reserveGmailAttachmentUploads(db, {
+  const keys = await reserveGmailAttachmentUploads(db, {
     orderMailId,
     attachments: normalized.attachments,
     payloads: transientAttachments,
   });
+  const prepared = new Map<string, PreparedOrderMailAttachment>();
+  try {
+    for (const attachment of normalized.attachments)
+      prepared.set(
+        attachment.sourceKey,
+        await prepareOrderMailAttachment(db, {
+          attachment,
+          payload:
+            attachment.dataBase64Url ??
+            transientAttachments.get(attachment.sourceKey),
+          uploadKey: keys.get(attachment.sourceKey),
+          storage,
+        }),
+      );
+    return { prepared, keys: new Set(keys.values()) };
+  } catch (error) {
+    const failures = await discardPreparedGmailKeys(
+      db,
+      new Set(keys.values()),
+      storage,
+    );
+    if (failures.length)
+      throw new AggregateError(
+        [error, ...failures],
+        "Attachment preparation and cleanup failed",
+        { cause: error },
+      );
+    throw error;
+  }
 }
 
 function recordUnsavedOutcome(
@@ -478,28 +505,21 @@ type GmailAcquisitionOutcome =
   | { kind: "kept"; reason: ReclassifyKeptReason }
   | { kind: "unrelated" | "blocked" | "skipped" | "confirmed" };
 
-async function cleanNewGmailKeys(
-  createdKeys: Set<string>,
+async function discardPreparedGmailKeys(
+  db: Database,
+  keys: ReadonlySet<string>,
   storage: OrderMailAttachmentStorage,
-  error: Error,
-): Promise<never> {
-  const cleanup = await Promise.allSettled(
-    [...createdKeys].map((key) => storage.delete(key)),
-  );
-  const failures = cleanup.flatMap((result) =>
-    result.status === "rejected" ? [result.reason] : [],
-  );
-  if (failures.length)
-    throw new AggregateError(
-      [error, ...failures],
-      [error, ...failures]
-        .map((value) =>
-          value instanceof Error ? value.message : String(value),
-        )
-        .join("\n"),
-      { cause: error },
-    );
-  throw error;
+): Promise<unknown[]> {
+  const failures: unknown[] = [];
+  // Each deletion retains its reservation lock; roots may share one physical connection.
+  for (const key of keys) {
+    try {
+      await discardMailAttachmentUpload(db, key, storage);
+    } catch (error) {
+      failures.push(error);
+    }
+  }
+  return failures;
 }
 
 function unchangedRetainedOutcome(
@@ -671,208 +691,190 @@ async function acquireEligible(
     normalized,
     transientAttachments,
   );
-  let uploadKeys: ReadonlyMap<string, string> = new Map();
-  if (retain)
-    uploadKeys = await stageGmailAttachments(
-      db,
-      provider,
-      identity,
-      normalized,
-      prior?.orderMailId ?? null,
-      transientAttachments,
-    );
-  const originalCapture = await captureGmailOriginal({
-    ledgerPartyId: ledgerPartyId.parse(input.ledgerPartyId),
-    mailboxId: identity.mailboxId,
-    messageId: identity.messageId,
-    message,
-    attachmentPayloads: new Map(
-      normalized.attachments.flatMap((attachment) => {
-        const bytes = transientAttachments.get(attachment.sourceKey);
-        return attachment.attachmentId && bytes !== undefined
-          ? [[attachment.attachmentId, bytes]]
-          : [];
-      }),
-    ),
-  });
-
-  const createdKeys = new Set<string>();
-  let committed = false;
-  try {
-    return (
-      (await publishGmailEvidence<GmailAcquisitionOutcome>(
+  const staged = retain
+    ? await stageGmailAttachments(
         db,
-        publication,
-        async (tx, current) => {
-          await afterPublicationCommit(tx, async () => {
-            committed = true;
-          });
-          const protectedKeys = new Set(
-            current?.orderMailId
-              ? await pendingAttachmentKeys(tx, current.orderMailId)
-              : [],
-          );
-          const publicationStorage: OrderMailAttachmentStorage = {
-            ...storage,
-            put: async (key, bytes, contentType) => {
-              if (!protectedKeys.has(key)) createdKeys.add(key);
-              await storage.put(key, bytes, contentType);
-            },
-          };
-          await saveMailboxMetadata(tx, metadata);
-          const observation = input.searchActor
-            ? null
-            : await observeClassification(
+        provider,
+        identity,
+        normalized,
+        prior?.orderMailId ?? null,
+        transientAttachments,
+        storage,
+      )
+    : {
+        prepared: new Map<string, PreparedOrderMailAttachment>(),
+        keys: new Set<string>(),
+      };
+  let outcome:
+    | { kind: "success"; value: GmailAcquisitionOutcome }
+    | { kind: "failed"; error: unknown };
+  try {
+    const originalCapture = await captureGmailOriginal({
+      ledgerPartyId: ledgerPartyId.parse(input.ledgerPartyId),
+      mailboxId: identity.mailboxId,
+      messageId: identity.messageId,
+      message,
+      attachmentPayloads: new Map(
+        normalized.attachments.flatMap((attachment) => {
+          const bytes = transientAttachments.get(attachment.sourceKey);
+          return attachment.attachmentId && bytes !== undefined
+            ? [[attachment.attachmentId, bytes]]
+            : [];
+        }),
+      ),
+    });
+
+    const value = (await publishGmailEvidence<GmailAcquisitionOutcome>(
+      db,
+      publication,
+      async (tx, current) => {
+        await saveMailboxMetadata(tx, metadata);
+        const observation = input.searchActor
+          ? null
+          : await observeClassification(
+              tx,
+              input,
+              identity,
+              await readEmail(tx, identity),
+              checksum,
+              decision,
+              unchanged,
+              classificationCallFor(decision.stage, triageCall, relevanceCall),
+              [triageCall, relevanceCall],
+              {
+                originalCapture,
+                ...(classification.inputs.length > 0 && {
+                  logicalInputCapture: {
+                    version: "gmail-logical-inputs-v1",
+                    inputs: classification.inputs,
+                  },
+                }),
+              },
+            );
+        publication.observationId = observation?.id ?? null;
+        if (publication.evaluation)
+          publication.evaluation.observationId = observation?.id ?? null;
+        const reclassified =
+          input.reclassify && current
+            ? await reclassifyPublication(
                 tx,
-                input,
-                identity,
-                await readEmail(tx, identity),
+                current,
                 checksum,
                 decision,
-                unchanged,
-                classificationCallFor(
-                  decision.stage,
-                  triageCall,
-                  relevanceCall,
-                ),
-                [triageCall, relevanceCall],
-                {
-                  originalCapture,
-                  ...(classification.inputs.length > 0 && {
-                    logicalInputCapture: {
-                      version: "gmail-logical-inputs-v1",
-                      inputs: classification.inputs,
-                    },
-                  }),
-                },
-              );
-          publication.observationId = observation?.id ?? null;
-          if (publication.evaluation)
-            publication.evaluation.observationId = observation?.id ?? null;
-          const reclassified =
-            input.reclassify && current
-              ? await reclassifyPublication(
-                  tx,
-                  current,
-                  checksum,
-                  decision,
-                  retain,
-                )
-              : null;
-          if (reclassified) {
-            if (observation && reclassified.kind === "confirmed")
-              await recordEmailClassificationApplication(tx, observation.id);
-            return reclassified;
-          }
-          const recorded = {
-            classificationStage: input.searchActor ? undefined : decision.stage,
-            classificationReason: decision.reason,
-          };
-          if (!retain) {
-            const protectedOriginal = await clearUnrelatedOriginal(
+                retain,
+              )
+            : null;
+        if (reclassified) {
+          if (observation && reclassified.kind === "confirmed")
+            await recordEmailClassificationApplication(tx, observation.id);
+          return reclassified;
+        }
+        const recorded = {
+          classificationStage: input.searchActor ? undefined : decision.stage,
+          classificationReason: decision.reason,
+        };
+        if (!retain) {
+          const protectedOriginal = await clearUnrelatedOriginal(
+            tx,
+            identity,
+            storage,
+          );
+          if (protectedOriginal)
+            return protectOriginalOutcome(
               tx,
               identity,
-              publicationStorage,
+              protectedOriginal,
+              current,
             );
-            if (protectedOriginal)
-              return protectOriginalOutcome(
-                tx,
-                identity,
-                protectedOriginal,
-                current,
-              );
-            await saveEmail(tx, {
-              ...identity,
-              ...recorded,
-              checksum,
-              classification: decision.classification,
-              status:
-                decision.classification === "unrelated"
-                  ? "completed"
-                  : "blocked",
-            });
-            if (observation)
-              await recordEmailClassificationApplication(tx, observation.id);
-            return {
-              kind:
-                decision.classification === "unrelated"
-                  ? "unrelated"
-                  : "blocked",
-            };
-          }
-          // Routing and retained bytes publish together; failed uploads leave the prior source intact.
           await saveEmail(tx, {
             ...identity,
             ...recorded,
             checksum,
             classification: decision.classification,
-            status: "pending",
-            orderMailId: current?.orderMailId,
+            status:
+              decision.classification === "unrelated" ? "completed" : "blocked",
           });
-          const orderMailId = await retainOriginal(
+          if (observation)
+            await recordEmailClassificationApplication(tx, observation.id);
+          return {
+            kind:
+              decision.classification === "unrelated" ? "unrelated" : "blocked",
+          };
+        }
+        // Routing and retained bytes publish together; failed uploads leave the prior source intact.
+        await saveEmail(tx, {
+          ...identity,
+          ...recorded,
+          checksum,
+          classification: decision.classification,
+          status: "pending",
+          orderMailId: current?.orderMailId,
+        });
+        const orderMailId = await retainOriginal(
+          tx,
+          identity,
+          normalized,
+          checksum,
+          staged.prepared,
+        );
+        await saveEmail(tx, {
+          ...identity,
+          ...recorded,
+          checksum,
+          classification: decision.classification,
+          status: "pending",
+          orderMailId,
+        });
+        await restoreOrderMailContent(tx, orderMailId);
+        if (input.searchActor) {
+          const saved = await readEmail(tx, identity);
+          if (!saved) throw new Error("Search Email was not retained");
+          const classifier = await queueSearchClassification(
             tx,
-            identity,
-            normalized,
-            checksum,
-            publicationStorage,
-            transientAttachments,
-            uploadKeys,
+            input.searchActor,
+            saved,
           );
           await saveEmail(tx, {
             ...identity,
-            ...recorded,
             checksum,
-            classification: decision.classification,
+            classification: "uncertain",
             status: "pending",
             orderMailId,
+            classificationReason: `Awaiting classification in ${classifier.shortcode}`,
           });
-          await restoreOrderMailContent(tx, orderMailId);
-          if (input.searchActor) {
-            const saved = await readEmail(tx, identity);
-            if (!saved) throw new Error("Search Email was not retained");
-            const classifier = await queueSearchClassification(
-              tx,
-              input.searchActor,
-              saved,
-            );
-            await saveEmail(tx, {
-              ...identity,
-              checksum,
-              classification: "uncertain",
-              status: "pending",
-              orderMailId,
-              classificationReason: `Awaiting classification in ${classifier.shortcode}`,
-            });
-          }
-          if (observation)
-            await recordEmailClassificationApplication(tx, observation.id);
-          if (input.reclassify && decision.classification === "related")
-            await (
-              await import("~/server/workflows/background-tasks/publish")
-            ).publishBackgroundTasks(
-              tx,
-              [
-                {
-                  kind: "maintenance.purchase-discovery",
-                  requestedAt: new Date().toISOString(),
-                },
-              ],
-              { source: "mail-classified" },
-            );
-          return { kind: "saved", orderMailId };
-        },
-      )) ?? { kind: "skipped" }
-    );
+        }
+        if (observation)
+          await recordEmailClassificationApplication(tx, observation.id);
+        if (input.reclassify && decision.classification === "related")
+          await (
+            await import("~/server/workflows/background-tasks/publish")
+          ).publishBackgroundTasks(
+            tx,
+            [
+              {
+                kind: "maintenance.purchase-discovery",
+                requestedAt: new Date().toISOString(),
+              },
+            ],
+            { source: "mail-classified" },
+          );
+        return { kind: "saved", orderMailId };
+      },
+    )) ?? { kind: "skipped" };
+    outcome = { kind: "success", value };
   } catch (error) {
-    if (committed) throw error;
-    return cleanNewGmailKeys(
-      createdKeys,
-      storage,
-      error instanceof Error
-        ? error
-        : new Error(String(error), { cause: error }),
-    );
+    outcome = { kind: "failed", error };
   }
+  const failures = await discardPreparedGmailKeys(db, staged.keys, storage);
+  if (failures.length) {
+    const errors =
+      outcome.kind === "failed" ? [outcome.error, ...failures] : failures;
+    throw new AggregateError(errors, "Gmail attachment cleanup failed", {
+      cause: outcome.kind === "failed" ? outcome.error : failures[0],
+    });
+  }
+  if (outcome.kind === "failed") throw outcome.error;
+  return outcome.value;
 }
 
 async function relatedEmailPreview(

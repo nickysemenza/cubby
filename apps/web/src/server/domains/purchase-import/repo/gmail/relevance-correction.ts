@@ -430,7 +430,7 @@ export async function publishPreparedEmailRelevanceCorrection(
     await publishStagedOrderMailAttachment(db, {
       orderMailId,
       attachment,
-      staged: upload ?? null,
+      prepared: upload ? { kind: "uploaded", ...upload } : { kind: "retained" },
     });
   }
   await recordEmailClassificationObservation(

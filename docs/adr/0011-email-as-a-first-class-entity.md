@@ -378,3 +378,20 @@ entry coverage, accepted-evidence finance/shipment integration, current-effect
 selection and distinct-Email equivalence remain prerequisites. Email correction
 adapters remain held; adding this scope does not authorize financial commands,
 historical enrollment or production application.
+
+### Gmail ingest attachment preparation
+
+Gmail ingest acquires and uploads missing attachment payloads before its source
+publication transaction. Every PUT holds the exact durable upload reservation;
+publication adopts prepared checksums/keys through DB-only writers and preserves
+current or promoted bytes. Missing payloads retain metadata-only checksum behavior
+and cannot become complete original-capture proof. Source eligibility is rechecked
+after preparation by the existing publication owner.
+
+Every prepared key is subsequently discarded through reservation/reference checks,
+including declined publication, rollback and unused preparation. Adopted keys are
+preserved. Cleanup is sequential for single-connection roots, attempts all keys,
+and retains original publication and cleanup errors. A committed notification
+failure is not rollback and does not authorize deleting referenced objects.
+The former upload-inside-publication writer is removed. This preparation boundary
+precedes Email outer-scope adoption; it does not enable correction propagation.
