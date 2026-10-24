@@ -61,7 +61,7 @@ export async function enqueueCorrectionWork(
 }
 
 /** Enroll only with a committed command-bound member application, never a grade. */
-export async function enqueueConfirmedCorrection(
+async function enqueueConfirmedCorrection(
   db: Database,
   receipt: typeof feedback.$inferSelect,
 ) {
@@ -81,7 +81,7 @@ export async function enqueueConfirmedCorrection(
 }
 
 /** New immutable proposals revisit existing authority; reads never initiate repair. */
-export async function enqueueCorrectionsForPublication(
+async function enqueueCorrectionsForPublication(
   db: Database,
   prediction: typeof assessment.$inferSelect,
 ) {

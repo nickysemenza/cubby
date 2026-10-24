@@ -7,7 +7,7 @@ import type { z } from "zod";
 
 import type { Database } from "~/server/db";
 
-export type CorrectionPreparation<Plan> =
+type CorrectionPreparation<Plan> =
   | { status: "ready"; plan: Plan }
   | { status: "held"; reason: string };
 
