@@ -376,6 +376,15 @@ the application has no financial CSV parser, upload, mapping, preview/commit,
 native file picker or CSV CLI. USDA parsing and expense report exports are
 independent of financial intake.
 
+MCP server guidance routes financial evidence through this intake and the
+financial-evidence-import playbook. Recording evidence delegates downstream
+matching, Suggestions and guarded booking to Cubby; a client does not follow
+intake with a separate transaction-create, attach or Expense-booking sequence.
+The current collection adapter still runs in the client. Cubby-owned provider
+collection and credential integration remain separate prerequisites for
+unattended synchronization; access to a member's connected MCP tools does not
+give the Cubby Worker those credentials or capabilities.
+
 Keep every source observation and original description. Provider identity is
 scoped to its source and account; immutable revisions retain one explicit
 charge key. Provider status is optional metadata. ID-less file occurrences

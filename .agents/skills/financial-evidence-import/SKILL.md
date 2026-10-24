@@ -6,7 +6,7 @@ description: Import financial evidence into Cubby from Monarch MCP or Monarch, M
 # Financial evidence import
 
 Claude and Codex fetch or parse authorized source evidence, normalize it, and
-call Cubby `source_transaction_records` with `action: "record"`. Read the live tool schema
+call Cubby `finance` with `action: "record"`. Read the live tool schema
 and [source-transaction-record.ts](../../../packages/schemas/src/source-transaction-record.ts) before
 building requests. That schema owns field names and batch limits. This skill
 does not write back to Monarch. Pi integration is deferred.

@@ -12,6 +12,7 @@ import type { EntityArtifacts } from "./entities/declarations.ts";
  */
 const PLAYBOOK_SKILLS = [
   "purchase-import",
+  "financial-evidence-import",
   "product-enrichment",
   "cubby-meal-logging",
   "log-household-maintenance",
