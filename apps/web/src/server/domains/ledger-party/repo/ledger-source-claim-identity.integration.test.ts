@@ -3,6 +3,7 @@ import {
   type LedgerSourceClaimInput,
 } from "@cubby/schemas/ledger-transfer";
 import { eq } from "drizzle-orm";
+import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
@@ -335,7 +336,7 @@ describe("source claim identity round trip", () => {
     ).toEqual([read.sourceKey]);
   });
 
-  it("fixes an account's identity kind at creation but lets its other identity fields change", async () => {
+  it("fixes an account's kind at creation but allows network and provider edits", async () => {
     const created = await createFinancialAccount(
       ctx.db,
       {
@@ -367,6 +368,9 @@ describe("source claim identity round trip", () => {
         ctx.actor,
       ),
     ).rejects.toThrow(/fixed at creation/u);
+    const provider = await createRepoEntity(ctx, "vendor", {
+      name: "Synthetic Other Bank",
+    });
     const renamed = await updateFinancialAccount(
       ctx.db,
       id,
@@ -374,11 +378,16 @@ describe("source claim identity round trip", () => {
         identity: {
           kind: "credit_card",
 
-          network: "visa",
+          network: "mastercard",
         },
+        providerVendorId: provider.output.id,
       },
       ctx.actor,
     );
-    expect(renamed.output.identity).toMatchObject({ issuer: "Other Bank" });
+    expect(renamed.output).toMatchObject({
+      identity: { kind: "credit_card", network: "mastercard" },
+      providerVendorId: provider.output.id,
+      providerVendorName: "Synthetic Other Bank",
+    });
   });
 });

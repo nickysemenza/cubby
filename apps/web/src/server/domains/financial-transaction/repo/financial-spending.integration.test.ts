@@ -628,7 +628,6 @@ describe("shared spending booking", () => {
           ? {
               identity: {
                 kind: "bank_account" as const,
-                institution: "Synthetic Bank",
                 accountType: "checking" as const,
               },
               primaryCardholderId: null,

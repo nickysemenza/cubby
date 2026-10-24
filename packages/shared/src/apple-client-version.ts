@@ -4,4 +4,4 @@
  * the runner refuses their writes with HTTP 426. Compatible changes ship in
  * the nightly release. Three numeric components.
  */
-export const APPLE_CLIENT_COMPATIBILITY_VERSION = "2.68.0";
+export const APPLE_CLIENT_COMPATIBILITY_VERSION = "2.69.0";
