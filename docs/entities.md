@@ -2604,11 +2604,13 @@ are indexed per-row lookups on published rows; the status predicate derives
 the same status as the TypeScript core from those check states.
 
 The `quality` refresh family is enrolled by the existing `recordChange` owner.
-Its identity pages contain at most 25 records and share the routine Job's
+Its identity pages contain at most 200 records and share the routine Job's
 cutoff, token and generation validation. Every pass evaluates current inputs,
 backfills missing rows and replaces outcomes when they or the entity's
-`rulesVersion` change. Publication rechecks the prepared verdicts in its
-transaction. Tombstones are scanned for cleanup; authoritative removal also
+`rulesVersion` change. Page preparation calculates exact pending work to avoid idle Runs. Publication
+reevaluates current sources in its transaction, then the publisher compares stored
+outcomes once and returns the authoritative changed IDs for notifications and
+tallies, including retired tombstones and empty/no-op publications. Tombstones are scanned for cleanup; authoritative removal also
 retires both tables in its transaction under the quality Job lock. Reads never
 repair stored quality.
 
