@@ -648,9 +648,11 @@ describe("runDecisionChoice", () => {
     await resetDecisionTransport();
     const { runDecisionChoice: request } = await import("./decision-model");
     const sent: string[] = [];
+    const bodies: string[] = [];
     vi.stubGlobal("fetch", async (_url: string, init?: RequestInit) => {
       const model = sentModel(init);
       sent.push(model);
+      bodies.push(String(init?.body));
       const answer = answerFor("c0", { c0: 0.9, none: 0.1 });
       return sent.length === 1
         ? new Response("Rate limited", { status: 429 })
@@ -666,6 +668,7 @@ describe("runDecisionChoice", () => {
     ]);
     expect(sent).toHaveLength(2);
     expect(sent[1]).toBe(sent[0]);
+    expect(bodies[1]).toBe(bodies[0]);
   });
 
   // Regression: a per-call coin flip split one question across two cache
