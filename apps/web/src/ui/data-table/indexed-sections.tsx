@@ -132,9 +132,7 @@ function SectionCard({
           data-detail-section
           className={cn(
             "scroll-mt-[calc(var(--app-chrome-top)+3rem)] focus:outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
-            // Deferred disclosures already avoid eager work; intrinsic-size
-            // estimates can shift their trigger during pointer activation.
-            section.overflowVisible || section.collapsed
+            section.overflowVisible
               ? "overflow-visible"
               : "[contain-intrinsic-size:auto_320px] [content-visibility:auto]",
             className,

@@ -68,6 +68,9 @@ test("Mail import exposes its persisted counts in the shared Run detail", async 
     exact: true,
   });
   await expect(countsDisclosure).toHaveAttribute("aria-expanded", "false");
+  await expect(
+    page.getByRole("navigation", { name: "Section index", exact: true }),
+  ).toBeVisible();
   await countsDisclosure.click();
   await expect(countsDisclosure).toHaveAttribute("aria-expanded", "true");
   const counts = page.locator("#import-stats");
