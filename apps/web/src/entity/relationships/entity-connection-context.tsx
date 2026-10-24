@@ -11,6 +11,7 @@ import { Section, Disclosure } from "~/ui/layout";
 import {
   ConnectionPaths,
   ConnectionRecordLink,
+  connectionRefs,
   ambiguousConnectionLabels,
 } from "./connection-paths";
 
@@ -64,9 +65,7 @@ function ResolvedContext({
     .filter((view) => view.totalCount > 0)
     .slice(0, 4);
   if (!views.length) return null;
-  const refs = views.flatMap((view) =>
-    view.items.flatMap((item) => item.paths.flat()),
-  );
+  const refs = connectionRefs(views.flatMap((view) => view.items));
   return (
     <EntityDisplayImagesProvider refs={refs}>
       <Section
