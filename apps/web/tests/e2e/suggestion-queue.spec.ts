@@ -192,7 +192,7 @@ test("one queue confirms proposals and records automatic-history feedback", asyn
     "/automatic-decisions?family=mail_import_outcome",
   );
   const audit = page.getByRole("region", {
-    name: "Automatic decisions",
+    name: "Automation history",
     exact: true,
   });
   await expect(audit).toContainText("Synthetic packet");
