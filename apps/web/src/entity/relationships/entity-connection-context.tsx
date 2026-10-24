@@ -1,4 +1,4 @@
-import { connectedViews } from "@cubby/schemas/connected-views";
+import { curatedConnectedViews } from "@cubby/schemas/connected-views";
 import type { Entity } from "@cubby/schemas/entity";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
@@ -20,7 +20,7 @@ export function EntityConnectionContext({
   id: string;
   showOpenLink?: boolean;
 }) {
-  if (!connectedViews[entity].length) return null;
+  if (!curatedConnectedViews[entity].length) return null;
   return (
     <ResolvedContext entity={entity} id={id} showOpenLink={showOpenLink} />
   );
@@ -56,7 +56,13 @@ function ResolvedContext({
       />
     );
   const views = query.data.views
-    .filter((view) => view.totalCount > 0)
+    .filter(
+      (view) =>
+        view.totalCount > 0 &&
+        curatedConnectedViews[entity].some(
+          (curated) => curated.target === view.targetEntity,
+        ),
+    )
     .slice(0, 4);
   if (!views.length) return null;
   const refs = views.flatMap((view) =>

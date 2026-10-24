@@ -27,6 +27,8 @@ import {
 } from "~/server/domains/purchase-import/operations/order-import.fixtures";
 import { mergeVendors } from "~/server/domains/vendor/repo/vendor";
 import { executeEntity } from "~/server/entity-kernel";
+import { getEntityGraph } from "~/server/generic/entity-graph/repo/entity-graph";
+import { getConnectedRecords } from "~/server/generic/entity-links/repo/connected-records";
 import { shipmentTrackingReport } from "~/server/generic/entity-report/repo/shipment";
 
 import {
@@ -568,6 +570,36 @@ describe("Shipment retained evidence", () => {
     expect(await getDb(ctx.db).select().from(shipment)).toEqual([]);
     const result = await recordShipmentEvidence(ctx.db, input, ctx.actor);
     expect(result.shipmentIds).toHaveLength(1);
+    const shipmentId = result.shipmentIds[0];
+    if (!shipmentId) throw new Error("Synthetic Shipment missing");
+    const source = {
+      entityKind: "email",
+      entityId: message.shortcode,
+    } as const;
+    const connected = await getConnectedRecords(ctx.db, {
+      source,
+      viewKey: "entity:shipment",
+    });
+    expect(connected.items.map((item) => item.target.entityId)).toEqual([
+      shipmentId,
+    ]);
+    expect(connected.items[0]?.paths[0]?.at(-1)?.via?.label).toBe(
+      "Tracking evidence",
+    );
+    const reverse = await getConnectedRecords(ctx.db, {
+      source: { entityKind: "shipment", entityId: shipmentId },
+      viewKey: "entity:email",
+    });
+    expect(reverse.items.map((item) => item.target.entityId)).toEqual([
+      message.shortcode,
+    ]);
+    const graph = await getEntityGraph(ctx.db, {
+      roots: [source],
+      entityKinds: ["shipment"],
+    });
+    expect(
+      graph.edges.some((edge) => edge.relationshipKey === "tracking-emails"),
+    ).toBe(true);
     const otherMember = await createRepoIdentity(ctx, "ledgerParty", {
       name: "Synthetic other member",
       kind: "member",

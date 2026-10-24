@@ -61,52 +61,52 @@ describe("record connection evidence", () => {
       />,
       { wrapper: harness.wrapper },
     );
-    const product = screen.getAllByRole("link", { name: "Product" })[0];
-    expect(product).toHaveAttribute("href", "/products/PRD-SEED");
-    expect(product?.closest("[title]")).toHaveAttribute(
-      "title",
-      "Product: Example seeds",
+    expect(screen.queryByRole("link")).not.toBeInTheDocument();
+    fireEvent.click(
+      screen.getByRole("button", { name: "Via Direct connection · 2 paths" }),
     );
-    expect(screen.queryByText("Example order")).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "+1 path" }));
-    expect(screen.getByRole("link", { name: "Expense" })).toHaveAttribute(
-      "href",
-      "/expenses/EXP-TEST",
-    );
+    expect(
+      screen.getAllByRole("link", { name: "Example seeds" })[0],
+    ).toHaveAttribute("href", "/products/PRD-SEED");
+    expect(
+      screen.getByRole("link", { name: "Example expense" }),
+    ).toHaveAttribute("href", "/expenses/EXP-TEST");
+    expect(
+      screen.getAllByRole("link", { name: "Example order" })[0],
+    ).toHaveAttribute("href", "/purchases/PUR-TEST");
   });
 
-  it("names every intermediate record by its kind", () => {
+  it("explains a connection whose evidence passes through storage-only rows", () => {
     render(
       <RecordPaths
         paths={[
           [
-            { entityKind: "vendor", entityId: "VEN-TEST", label: "Example" },
             {
-              entityKind: "product",
-              entityId: "PRD-TEST",
-              label: "Example long product name",
+              entityKind: "email",
+              entityId: "EML-TEST",
+              label: "Synthetic tracking email",
             },
             {
-              entityKind: "expense",
-              entityId: "EXP-TEST",
-              label: "Example long product name",
+              entityKind: "shipment",
+              entityId: "SHIP-TEST",
+              label: "Synthetic parcel",
+              via: {
+                relationshipKey: "tracking-emails",
+                label: "Tracking evidence",
+                sourceKey: "direct",
+                provenance: ["incoming:ShipmentObservation.shipmentId"],
+              },
             },
-            { entityKind: "purchase", entityId: "PUR-TEST", label: "Order" },
           ],
         ]}
       />,
       { wrapper: harness.wrapper },
     );
-    expect(screen.getByRole("link", { name: "Product" })).toHaveAttribute(
-      "href",
-      "/products/PRD-TEST",
+    fireEvent.click(
+      screen.getByRole("button", { name: "Via Tracking evidence" }),
     );
     expect(
-      screen.queryByText("Example long product name"),
-    ).not.toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Expense" })).toHaveAttribute(
-      "href",
-      "/expenses/EXP-TEST",
-    );
+      screen.getByRole("link", { name: "Synthetic parcel" }),
+    ).toHaveAttribute("href", "/shipments/SHIP-TEST");
   });
 });

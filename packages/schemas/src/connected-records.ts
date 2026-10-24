@@ -1,3 +1,4 @@
+import { relationshipWitnessSchema } from "./entity-integrity";
 import { z } from "zod";
 
 import { entityGraphRootSchema } from "./entity-graph";
@@ -18,6 +19,8 @@ export const connectedPathNodeSchema = z.object({
   entityKind: entitySchema,
   entityId: z.string(),
   label: z.string(),
+  /** Logical step arriving at this node; storage-only joins stay internal. */
+  via: relationshipWitnessSchema.optional(),
 });
 export type ConnectedPathNode = z.infer<typeof connectedPathNodeSchema>;
 

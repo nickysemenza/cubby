@@ -14,7 +14,6 @@ import { cn } from "~/lib/utils";
 import {
   RecordFold,
   RecordGroup,
-  RecordHops,
   RecordList,
   type RecordListState,
   RecordMore,
@@ -47,9 +46,6 @@ export function connectionRefs(items: readonly ConnectedItem[]): EntityRef[] {
   );
 }
 
-const kindLabel = (kind: Entity) =>
-  isBrowserRoutedEntity(kind) ? entities[kind].label : kind;
-
 /**
  * One record as a cover-or-icon chip. `kind` names an intermediate record by
  * its entity kind (paths repeat names: an Expense is named after its Product);
@@ -80,51 +76,7 @@ function RecordChip({
   );
 }
 
-function PathTrail({
-  path,
-  compact,
-}: {
-  path: ConnectedPathNode[];
-  compact: boolean;
-}) {
-  const middle = path.slice(1, -1);
-  if (middle.length === 0)
-    return <span className="text-muted-foreground">Direct</span>;
-  return (
-    <ol
-      className={cn(
-        "flex min-w-0 items-center gap-1",
-        compact ? "flex-nowrap overflow-hidden" : "flex-wrap",
-      )}
-    >
-      {middle.map((node, index) => (
-        <li
-          key={path
-            .slice(0, index + 2)
-            .map((part) => `${part.entityKind}:${part.entityId}`)
-            .join("|")}
-          className={cn(
-            "flex min-w-0 items-center gap-1",
-            compact ? "shrink" : "max-w-64",
-          )}
-          title={`${kindLabel(node.entityKind)}: ${node.label}`}
-        >
-          {index > 0 ? (
-            <span aria-hidden="true" className="shrink-0 text-muted-foreground">
-              →
-            </span>
-          ) : null}
-          <RecordChip node={node} kind />
-        </li>
-      ))}
-    </ol>
-  );
-}
-
-/**
- * The records between a source and a target, as one line of chips. `compact`
- * holds a table cell to a single line; otherwise the trail wraps inline.
- */
+/** Every path expands to its actual records and the declared steps between them. */
 export function RecordPaths({
   paths,
   compact = false,
@@ -132,43 +84,44 @@ export function RecordPaths({
   paths: ConnectedItem["paths"];
   compact?: boolean;
 }) {
-  const [showOthers, setShowOthers] = useState(false);
-  const [first, ...other] = paths;
+  const [expanded, setExpanded] = useState(false);
+  const first = paths[0];
   if (!first) return null;
+  const labels = [
+    ...new Set(first.flatMap((node) => (node.via ? [node.via.label] : []))),
+  ];
+  const summary = labels.length ? labels.join(" → ") : "Direct connection";
   return (
-    <div
-      className={cn(
-        "flex max-w-full min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1",
-        // A compact trail sits in a row's evidence line, at its size.
-        compact ? "text-xs" : "text-sm",
-      )}
-    >
-      {compact ? null : (
-        <span className="text-xs text-muted-foreground">via</span>
-      )}
-      {/* A compact trail's zero basis keeps the toggle on its line. */}
-      <div className={cn("min-w-0", compact && "flex-1")}>
-        <PathTrail path={first} compact={compact} />
-      </div>
-      {other.length > 0 ? (
-        <button
-          type="button"
-          aria-expanded={showOthers}
-          className="shrink-0 cursor-pointer text-xs text-muted-foreground hover:text-foreground"
-          onClick={() => setShowOthers(!showOthers)}
-        >
-          +{other.length} {other.length === 1 ? "path" : "paths"}
-        </button>
-      ) : null}
-      {showOthers ? (
-        <ul className="basis-full space-y-1 pl-3">
-          {other.map((path) => (
-            <li
-              key={path
-                .map((node) => `${node.entityKind}:${node.entityId}`)
-                .join("|")}
-            >
-              <PathTrail path={path} compact={compact} />
+    <div className={cn("max-w-full min-w-0", compact ? "text-xs" : "text-sm")}>
+      <button
+        type="button"
+        aria-expanded={expanded}
+        className="max-w-full cursor-pointer truncate text-left text-muted-foreground hover:text-foreground"
+        title={`Via ${summary}`}
+        onClick={() => setExpanded(!expanded)}
+      >
+        Via {summary}
+        {paths.length > 1 ? ` · ${paths.length} paths` : ""}
+      </button>
+      {expanded ? (
+        <ul className="mt-1 space-y-2">
+          {paths.map((path) => (
+            <li key={JSON.stringify(path)}>
+              <ol className="flex flex-wrap items-center gap-1">
+                {path.map((node, index) => (
+                  <li
+                    key={JSON.stringify(path.slice(0, index + 1))}
+                    className="flex max-w-full min-w-0 flex-wrap items-center gap-1"
+                  >
+                    {index > 0 ? (
+                      <span className="text-muted-foreground">
+                        {node.via ? `→ ${node.via.label} →` : "→"}
+                      </span>
+                    ) : null}
+                    <RecordChip node={node} />
+                  </li>
+                ))}
+              </ol>
             </li>
           ))}
         </ul>
@@ -225,8 +178,13 @@ function ConnectedRow({
         </>
       }
       clip={false}
-      secondary={<RecordPaths paths={item.paths} compact />}
-      trailing={<RecordHops count={item.shortestHops} />}
+      facts={[
+        {
+          id: "via",
+          label: "Via",
+          value: <RecordPaths paths={item.paths} compact />,
+        },
+      ]}
     />
   );
 }
@@ -295,6 +253,7 @@ export function ConnectedRecordsTable({
         <RecordList
           // Named like the mobile card lists so record rows read the same.
           aria-label={`${pluralLabel(target)} list`}
+          columns={[{ id: "via", label: "Via" }]}
           state={listState(query, 6)}
           empty="No connected records."
           footer={
@@ -321,7 +280,7 @@ export function ConnectedRecordsTable({
 }
 
 /**
- * The detail page's one Connected records section: each curated view with
+ * The detail page's one Connected records section: each declared target group with
  * results is a group of its first rows, closing with a link to the complete
  * view; views with no results fold into one line.
  */
@@ -354,6 +313,7 @@ export function ConnectedRecordsSection({
     >
       <RecordList
         aria-label="Connected records"
+        columns={[{ id: "via", label: "Via" }]}
         state={listState(query, 4)}
         empty="No connected records."
       >

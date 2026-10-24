@@ -667,7 +667,7 @@ operation does not declare. A server `*Preview` query supplies any
 delete), so web and native show the same verdict. A list/multi-select verb
 (`bulkEdit`) is `ownedElsewhere`, not a plan.
 
-A section or slot can declare `workspace: "overview" | "work" | "evidence"` for browser detail grouping. Relations default to Work, timelines to Evidence, and other sections to Overview. The Relations group holds the generated Connected records section (every entry in `connectedViews`, read through one `entity.connectedRecordsPreview`) ahead of Relationships. Every group and body renders continuously; navigation scrolls to stable sections and preserves mounted drafts. Full detail headings and index entries stay present while loading and after a section becomes empty. The old group fragments remain jump aliases; a real section ID takes precedence if it matches an alias. Explicit jumps add history; scrolling only updates the highlighted entry. Photo comparison grids respond to their own width so the outline cannot squeeze identity evidence into a zero-width column. Apple retains native record fields and native Contents navigation; Connections uses the shared hosted workspace. The Run evidence pilot renders only the shared Evidence group in its isolated hosted surface. Durable transcript and structured logs remain available for every Run purpose; purchase-import predicates apply only to workflow reports. Workspace vocabulary is presentation metadata, separate from SQL enums.
+A section or slot can declare `workspace: "overview" | "work" | "evidence"` for browser detail grouping. Relations default to Work, timelines to Evidence, and other sections to Overview. The Relations group holds the generated Connected records section ahead of Relationships. It reads one `entity.connectedRecordsPreview`: every local-path logical relationship and its inverse, including same-type relationships, plus explicitly curated multi-step routes. Connections group by target entity kind and deduplicate target records while retaining every witnessed explanation; curated route keys remain addressable aliases without duplicate preview groups. Every group and body renders continuously; navigation scrolls to stable sections and preserves mounted drafts. Full detail headings and index entries stay present while loading and after a section becomes empty. The old group fragments remain jump aliases; a real section ID takes precedence if it matches an alias. Explicit jumps add history; scrolling only updates the highlighted entry. Photo comparison grids respond to their own width so the outline cannot squeeze identity evidence into a zero-width column. Apple retains native record fields and native Contents navigation; Connections uses the shared hosted workspace. The Run evidence pilot renders only the shared Evidence group in its isolated hosted surface. Durable transcript and structured logs remain available for every Run purpose; purchase-import predicates apply only to workflow reports. Workspace vocabulary is presentation metadata, separate from SQL enums.
 
 `detail.overviewSections` still emits independent `overview` metadata for web and Swift. On full web detail, sections that set `overview: false` join Evidence unless their declaration explicitly chooses another group. The native Contents outline follows the native record's reading order; all section bodies remain visible.
 
@@ -3063,8 +3063,21 @@ selected-field list readers, once per entity kind. The shared preview roster
 selects facts and status; those canonical reads own money, quantities and
 progress. Graph rendering never computes a separate unit price or spend total.
 The graph's structural metadata stays available to native clients. Detail-page
-context uses populated curated connected views, rather than arbitrary graph
-reachability. Product purchase-project context follows `expenses → project`,
+connections use declared local relationships and curated multi-step routes,
+rather than arbitrary graph reachability. Header context stays limited to target
+groups selected by curated routes. Existing filter-derived relations retain
+their owning filtered tables; external references have no local detail target.
+`relationship-paths.ts` owns the
+shared directional catalog used by table route composition and graph expansion.
+Named routes compose any finite number of logical steps; physical joins remain
+in `compileTraversal`, which checks liveness on intermediate records. Graph
+roots also follow their manifest soft-delete capability; Emails and Runs do
+not acquire a fictitious deleted-at column. Both graph edges and connected
+trails carry the shared relationship witness (key, label, named source and
+physical provenance). Inline Via labels expand to the actual linked records
+and preserve distinct paths to the same target. Retained tracking captures
+connect Shipments and Emails independently of Email review/import status;
+repeated observations do not duplicate the related-record row. Product purchase-project context follows `expenses → project`,
 so a sibling product on the same order cannot lend this product its project.
 Each surfaced target retains its witnessed, linked path; multiple projects are
 reported together rather than choosing one implied purpose.

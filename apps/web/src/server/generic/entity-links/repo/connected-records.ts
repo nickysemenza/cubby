@@ -10,8 +10,10 @@ import type { DerivedConnectedRelationship } from "@cubby/schemas/connected-view
 import {
   connectedPathVariants,
   connectedViews,
+  relationshipsFor,
 } from "@cubby/schemas/connected-views";
 import type { Entity } from "@cubby/schemas/entity";
+import type { RelationshipWitness } from "@cubby/schemas/entity-integrity";
 import { allEntities, entityManifest } from "@cubby/schemas/entity-manifest";
 import { sql, type SQL } from "drizzle-orm";
 import { z } from "zod";
@@ -32,31 +34,34 @@ const entityByTable = new Map<string, Entity>(
 );
 
 function resolveConnectedView(source: Entity, viewKey: string) {
-  if (viewKey.startsWith("relation:")) {
-    const key = viewKey.slice("relation:".length);
-    const relation = entityManifest[source].relationships.find(
-      (candidate) => candidate.key === key,
-    );
-    if (!relation) throw new Error(`Unknown relation view ${source}.${key}`);
-    if (relation.provenance.kind === "derived")
-      return { target: relation.target, routes: [], derived: true as const };
-    return {
-      target: relation.target,
-      routes: [[key]],
-    };
-  }
   const view = connectedViews[source].find(
     (candidate) => candidate.key === viewKey,
   );
+  if (!view && viewKey.startsWith("relation:")) {
+    const relation = entityManifest[source].relationships.find(
+      (item) => item.key === viewKey.slice(9),
+    );
+    if (relation?.provenance.kind === "derived")
+      return { target: relation.target, routes: [], derived: true as const };
+    const logical = relationshipsFor(source).find(
+      (item) => item.key === viewKey.slice(9),
+    );
+    if (logical) return { target: logical.target, routes: [[logical.key]] };
+  }
   if (!view) throw new Error(`Unknown connected view ${source}.${viewKey}`);
   return view;
 }
 
-const nodeExpression = (entity: Entity, alias: string): SQL =>
+const nodeExpression = (
+  entity: Entity,
+  alias: string,
+  via?: RelationshipWitness,
+): SQL =>
   sql`jsonb_build_object(
     'entityKind', ${entity}::text,
     'entityId', ${sql.raw(`${alias}."shortcode"`)},
     'label', ${labelSql(entity, alias)}
+    ${via ? sql`, 'via', ${JSON.stringify(via)}::jsonb` : sql``}
   )`;
 
 export function compiledConnectedRoutes(source: Entity, viewKey: string) {
@@ -72,7 +77,10 @@ export function compiledConnectedRoutes(source: Entity, viewKey: string) {
       );
     }
     distinct.set(
-      variant.steps.map((step) => `${step.direction}:${step.edge}`).join("|") +
+      JSON.stringify(variant.witnesses) +
+        variant.steps
+          .map((step) => `${step.direction}:${step.edge}`)
+          .join("|") +
         (variant.derived
           ? `|${variant.derived.source}.${variant.derived.key}`
           : ""),
@@ -85,17 +93,36 @@ export function compiledConnectedRoutes(source: Entity, viewKey: string) {
       leaf: variant.derived ? "derived_source" : "t",
       to: variant.derived?.source ?? view.target,
     });
-    const nodes: { entity: Entity; alias: string }[] = [
+    const nodes: {
+      entity: Entity;
+      alias: string;
+      via?: RelationshipWitness;
+    }[] = [
       { entity: source, alias: "s" },
-      ...traversal.hops.flatMap((hop) => {
+      ...traversal.hops.flatMap((hop, index) => {
         const entity = entityByTable.get(hop.table);
-        return entity === undefined ? [] : [{ entity, alias: hop.alias }];
+        return entity === undefined
+          ? []
+          : [
+              {
+                entity,
+                alias: hop.alias,
+                via: variant.witnesses.find(
+                  (item) => item.stepCount === index + 1,
+                )?.witness,
+              },
+            ];
       }),
     ];
     const derivedJoin = variant.derived
       ? derivedConnectionJoin(variant.derived, traversal.leafAlias, "t")
       : sql``;
-    if (variant.derived) nodes.push({ entity: view.target, alias: "t" });
+    if (variant.derived)
+      nodes.push({
+        entity: view.target,
+        alias: "t",
+        via: variant.witnesses.at(-1)?.witness,
+      });
     if (nodes.at(-1)?.entity !== view.target) {
       throw new Error(`Connected view ${source}.${viewKey} has no target node`);
     }
@@ -106,7 +133,7 @@ export function compiledConnectedRoutes(source: Entity, viewKey: string) {
       },
       hops: nodes.length - 1,
       path: sql`jsonb_build_array(${sql.join(
-        nodes.map((node) => nodeExpression(node.entity, node.alias)),
+        nodes.map((node) => nodeExpression(node.entity, node.alias, node.via)),
         sql`, `,
       )})`,
     };
@@ -238,19 +265,21 @@ export async function getConnectedRecordsPreview(
   input: ConnectedRecordsPreviewInput,
 ): Promise<ConnectedRecordsPreviewOutput> {
   const views = await Promise.all(
-    connectedViews[input.source.entityKind].map(async (view) => {
-      const page = await getConnectedRecords(db, {
-        source: input.source,
-        viewKey: view.key,
-        limit: input.limit ?? 3,
-      });
-      return {
-        ...page,
-        viewKey: view.key,
-        title: view.title,
-        evidence: "evidence" in view ? view.evidence : false,
-      };
-    }),
+    connectedViews[input.source.entityKind]
+      .filter((view) => view.preview !== false)
+      .map(async (view) => {
+        const page = await getConnectedRecords(db, {
+          source: input.source,
+          viewKey: view.key,
+          limit: input.limit ?? 3,
+        });
+        return {
+          ...page,
+          viewKey: view.key,
+          title: view.title,
+          evidence: view.evidence ?? false,
+        };
+      }),
   );
   return { views };
 }
