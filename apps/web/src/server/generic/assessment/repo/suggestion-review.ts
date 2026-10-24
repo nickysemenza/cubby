@@ -6,7 +6,7 @@ import {
   confirmedFieldDecision,
 } from "@cubby/schemas/ai";
 import { aiProvenance } from "@cubby/schemas/ai-evaluation";
-import { SUGGESTION_AUTO_APPLY_THRESHOLD } from "@cubby/schemas/ai-evaluation";
+import { HIGH_CONFIDENCE_PROBABILITY } from "@cubby/schemas/ai-evaluation";
 import { suggestionAcceptanceReceipt } from "@cubby/schemas/ai-evaluation";
 import { assessmentChildHandle } from "@cubby/schemas/assessment";
 import { entityRefKey } from "@cubby/schemas/entity";
@@ -472,7 +472,7 @@ async function applySuggestionValue(
     reason: options.reason ?? "member_acceptance",
     confidence: options.confidence ?? null,
     threshold:
-      options.mode === "automatic" ? SUGGESTION_AUTO_APPLY_THRESHOLD : null,
+      options.mode === "automatic" ? HIGH_CONFIDENCE_PROBABILITY : null,
   });
   // Capture advances dependency revisions after business writes. Only the
   // mutable projection gets this settled fingerprint; history stays immutable.
@@ -513,8 +513,7 @@ async function automaticFieldFillRefusal(
     row.kind !== "addition" ||
     policy?.mode !== "fill" ||
     requiresSuggestionReview(entity, row.field) ||
-    (authority === "model" &&
-      row.confidence < SUGGESTION_AUTO_APPLY_THRESHOLD) ||
+    (authority === "model" && row.confidence < HIGH_CONFIDENCE_PROBABILITY) ||
     !empty(row.currentValue) ||
     (authority === "model" && empty(row.suggestedValue)) ||
     (authority === "model" &&

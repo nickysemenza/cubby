@@ -3,7 +3,6 @@ import { z } from "zod";
 
 /** Public confidence labels and eligible empty-field filling share one boundary. */
 export const HIGH_CONFIDENCE_PROBABILITY = 0.85;
-export const SUGGESTION_AUTO_APPLY_THRESHOLD = HIGH_CONFIDENCE_PROBABILITY;
 
 export const aiDependencyStamp = z.object({
   feature: z.string().min(1),
