@@ -62,7 +62,7 @@ describe("shared spending booking", () => {
     const account = await createRepoIdentity(ctx, "financialAccount", {
       name: "Synthetic spending account",
       identity: sharedCard
-        ? { kind: "credit_card", issuer: "Example Bank", network: "visa" }
+        ? { kind: "credit_card", network: "visa" }
         : { kind: "cash" },
       ledgerPartyId: household?.output.id ?? owner.output.id,
       primaryCardholderId: sharedCard ? owner.output.id : null,
@@ -628,7 +628,6 @@ describe("shared spending booking", () => {
           ? {
               identity: {
                 kind: "bank_account" as const,
-                institution: "Synthetic Bank",
                 accountType: "checking" as const,
               },
               primaryCardholderId: null,

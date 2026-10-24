@@ -35,7 +35,7 @@ export async function seedSplitSettlementPrerequisite(
   });
   const card = await insertWithShortcode(db, "financialAccount", {
     name: `${name} card`,
-    identity: { kind: "credit_card", issuer: null, network: "visa" },
+    identity: { kind: "credit_card", network: "visa" },
     ledgerPartyId: member.id,
   });
   const transaction = await insertWithShortcode(db, "financialTransaction", {

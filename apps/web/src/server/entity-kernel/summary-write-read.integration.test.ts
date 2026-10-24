@@ -148,7 +148,7 @@ describe("summary mutation output demand", () => {
       createTestRequestContext(ctx.db, { auth: { userId: ctx.actor.userId } }),
     );
     const account = await createRepoEntity(ctx, "financialAccount", {
-      identity: { kind: "credit_card", issuer: null, network: null },
+      identity: { kind: "credit_card", network: null },
     });
     const result = await executeEntityMutationRead(
       context,
@@ -156,12 +156,11 @@ describe("summary mutation output demand", () => {
         action: "update",
         entity: "financialAccount",
         id: account.output.id,
-        data: { issuer: "Synthetic Bank", network: "visa" },
+        data: { network: "visa" },
       },
-      ["id", "issuer", "network"],
+      ["id", "network"],
     );
     expect(result.item).toMatchObject({
-      issuer: "Synthetic Bank",
       network: "visa",
     });
   });

@@ -56,10 +56,10 @@ describe("transfer pairs in the global queue", () => {
         name,
         identity:
           cardPayment && name === destination
-            ? { kind: "credit_card", issuer: null, network: "visa" }
+            ? { kind: "credit_card", network: "visa" }
             : {
                 kind: "bank_account",
-                institution: "Example Bank",
+
                 accountType:
                   name === "Synthetic checking" ? "checking" : "savings",
               },

@@ -46,7 +46,7 @@ export async function seedMacStatementAccount(
       "financialAccount",
       buildEntity("financialAccount", {
         name: "Synthetic Mac Visa 4242",
-        identity: { kind: "credit_card", issuer: null, network: "visa" },
+        identity: { kind: "credit_card", network: "visa" },
         ledgerPartyId: member.shortcode,
         sourceAliases: [
           {

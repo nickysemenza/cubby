@@ -159,8 +159,8 @@ const purchaseMemberSql = (purchase: SQL) =>
  * none or several. Card digits resolve through `cardNumbers` on the UTC charge
  * day (an undated line admits only undated cards, as `cardLastFoursOn`); a
  * stored-value line resolves to the vendor's stored-value account owned by the
- * order's member (`FinancialAccount_provider_owner_key`): the balance is
- * whoever placed the order.
+ * order's member. Multiple balances at one provider remain distinct: only a
+ * single matching account resolves, otherwise explicit payment-account evidence is needed.
  */
 // oxlint-disable-next-line cubby/no-raw-enum-literal-in-sql -- 'kind' is the account identity's JSON discriminator property, not a vocabulary value.
 const evidenceAccountSql = (evidence: SQL, purchase: SQL) => sql`(
@@ -225,6 +225,20 @@ export const purchasePayingAccountIdsSql = (purchaseAlias: string) => {
     )
   END
 )`;
+};
+
+/** Refund evidence names its destination independently of original paying-account links. */
+export const purchaseRefundAccountIdsSql = (purchaseAlias: string) => {
+  const purchase = sql.raw(purchaseAlias);
+  return sql`(
+    SELECT array_agg(DISTINCT resolved.account_id)
+    FROM (
+      SELECT ${evidenceAccountSql(sql.raw("refund_evidence"), purchase)} AS account_id
+      FROM "PurchasePaymentEvidence" refund_evidence
+      WHERE refund_evidence."purchaseId" = ${purchase}.id AND refund_evidence.amount < 0
+    ) resolved
+    HAVING bool_and(resolved.account_id IS NOT NULL)
+  )`;
 };
 
 /** A live settling transaction: what every settlement read allocates from. */

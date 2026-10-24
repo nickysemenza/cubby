@@ -72,7 +72,7 @@ describe("complete connected record tables", () => {
     );
     const account = await createRepoEntity(ctx, "financialAccount", {
       name: "Synthetic card",
-      identity: { kind: "credit_card", issuer: null, network: "visa" },
+      identity: { kind: "credit_card", network: "visa" },
     });
     const transaction = await createRepoEntity(ctx, "financialTransaction", {
       accountId: account.output.id,

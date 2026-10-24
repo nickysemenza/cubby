@@ -157,10 +157,9 @@ export const VENDOR_DELETE_EDGE_POLICY = {
       "Immutable extraction history retains its original subject UUID and tombstone without being repointed.",
   },
   "FinancialAccount.providerVendorId": {
-    code: "block-stored-value-accounts",
+    code: "block-financial-accounts",
     effect: "block",
-    description:
-      "A stored-value account retains the vendor that owes its balance.",
+    description: "A financial account retains its provider organization.",
   },
   "Run.vendorId": {
     code: "block-runs",
@@ -231,10 +230,10 @@ export const VENDOR_MERGE_EDGE_POLICY = {
       "Immutable extraction history retains its original subject UUID and tombstone without being repointed.",
   },
   "FinancialAccount.providerVendorId": {
-    code: "block-stored-value-accounts",
+    code: "block-financial-accounts",
     effect: "block",
     description:
-      "Stored-value accounts must be reassigned explicitly before merging vendors; each provider and owner holds at most one live balance.",
+      "Financial accounts must be reassigned explicitly before merging their provider vendors.",
   },
   "Run.vendorId": {
     code: "repoint-runs",

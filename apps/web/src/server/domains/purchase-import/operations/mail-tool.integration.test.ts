@@ -570,7 +570,7 @@ describe("public mail tool", () => {
         name: "Synthetic partial refund account",
         identity: {
           kind: "credit_card",
-          issuer: "Synthetic bank",
+
           network: "visa",
         },
         ledgerPartyId: party.id,
@@ -765,7 +765,7 @@ describe("public mail tool", () => {
       name: "Synthetic refund account",
       identity: {
         kind: "credit_card",
-        issuer: "Synthetic bank",
+
         network: "amex",
       },
       ledgerPartyId: party.id,

@@ -34,7 +34,7 @@ describe("provisional financial accounts", () => {
   ) =>
     insertWithShortcode(db, "financialAccount", {
       name: label("Card"),
-      identity: { kind: "credit_card", issuer: null, network: "visa" },
+      identity: { kind: "credit_card", network: "visa" },
       provisional: overrides.provisional ?? true,
       sourceAliases: overrides.sourceAliases ?? [],
     });

@@ -8,7 +8,7 @@ test("filters transactions by how well their purchase is itemized", async ({
   await createFixtureGraph(page, async (create) => {
     const { id: accountId } = await create("financialAccount", {
       name: `${tag} card`,
-      identity: { kind: "credit_card", issuer: null, network: "visa" },
+      identity: { kind: "credit_card", network: "visa" },
     });
     const { id: vendorId } = await create("vendor", { name: `${tag} shop` });
     const { id: productId } = await create("product", {

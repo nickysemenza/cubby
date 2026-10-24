@@ -1124,7 +1124,7 @@ still apply; pruning and merging are separate actions. Feedback preserves
 historical application receipts.
 
 Mandatory field review is limited to concrete consequential exceptions declared
-with `reviewRequired`: FinancialAccount issuer/network and sole purchaser establish
+with `reviewRequired`: FinancialAccount provider/network and sole purchaser establish
 financial identity and attribution; Expense line kind changes accounting role; Cookbook and Device Product links
 identify specific owned objects. Ordinary descriptive fields, including record
 emoji and Vendor spending category/itemization, use the common empty-field
@@ -1203,7 +1203,7 @@ The `model.fields` roster owns field kinds, read keys, labels, validation,
 controls, and display membership. `EntityBasicInfo` reads `display.detail`;
 `createEntityDisplayColumns` reads `display.list`. List suggestions target visible
 columns, so a suggestible field must declare list membership to be reviewed
-there. Financial accounts expose issuer, network, and primary cardholder on both
+there. Financial accounts expose provider, network, and primary cardholder on both
 surfaces. A field's
 `display.renderer.list` or `display.renderer.detail` selects a semantic
 renderer while the declaration continues to own membership, labels, ordering,

@@ -75,7 +75,7 @@ describe("dated card attribution", () => {
       {
         identity: {
           kind: "credit_card",
-          issuer: "Example Bank",
+
           network: "visa",
         },
         ledgerPartyId: household.id,
@@ -253,7 +253,7 @@ describe("dated card attribution", () => {
       {
         identity: {
           kind: "credit_card",
-          issuer: "Example Bank",
+
           network: "visa",
         },
         primaryCardholderId: primary.id,
@@ -492,7 +492,7 @@ describe("purchaser filter", () => {
         await createRepoEntity(ctx, "financialAccount", {
           identity: {
             kind: "credit_card",
-            issuer: "Example Bank",
+
             network: "visa",
           },
           ledgerPartyId: holder,
@@ -649,7 +649,7 @@ describe("purchaser filter", () => {
         await createRepoEntity(ctx, "financialAccount", {
           identity: {
             kind: "credit_card",
-            issuer: "Example Bank",
+
             network: "visa",
           },
           ledgerPartyId: household.id,

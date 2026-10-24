@@ -1,6 +1,6 @@
 {
-  "id": "19e4ed38-2331-4b07-9fc4-cb08ddd43c88",
-  "prevId": "d13f661a-f609-4a83-97e0-b96d452bc600",
+  "id": "689840c5-e5a7-4208-a674-be934a15d639",
+  "prevId": "19e4ed38-2331-4b07-9fc4-cb08ddd43c88",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -8351,8 +8351,8 @@
           "method": "btree",
           "with": {}
         },
-        "FinancialAccount_provider_owner_key": {
-          "name": "FinancialAccount_provider_owner_key",
+        "FinancialAccount_providerVendorId_ledgerPartyId_idx": {
+          "name": "FinancialAccount_providerVendorId_ledgerPartyId_idx",
           "columns": [
             {
               "expression": "providerVendorId",
@@ -8367,8 +8367,7 @@
               "nulls": "last"
             }
           ],
-          "isUnique": true,
-          "where": "\"FinancialAccount\".\"providerVendorId\" IS NOT NULL AND \"FinancialAccount\".\"deletedAt\" IS NULL",
+          "isUnique": false,
           "concurrently": false,
           "method": "btree",
           "with": {}
@@ -8464,9 +8463,9 @@
       "uniqueConstraints": {},
       "policies": {},
       "checkConstraints": {
-        "FinancialAccount_providerVendor_stored_value_check": {
-          "name": "FinancialAccount_providerVendor_stored_value_check",
-          "value": "\"FinancialAccount\".\"providerVendorId\" IS NULL OR \"FinancialAccount\".\"identity\"->>'kind' = 'stored_value'"
+        "FinancialAccount_provider_non_cash_check": {
+          "name": "FinancialAccount_provider_non_cash_check",
+          "value": "\"FinancialAccount\".\"providerVendorId\" IS NULL OR \"FinancialAccount\".\"identity\"->>'kind' <> 'cash'"
         }
       },
       "isRLSEnabled": false

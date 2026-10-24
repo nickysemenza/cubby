@@ -62,7 +62,7 @@ describe("reviewed Email financial evidence", () => {
     const makeAccount = (name: string) =>
       insertWithShortcode(ctx.db, "financialAccount", {
         name,
-        identity: { kind: "credit_card", issuer: null, network: "visa" },
+        identity: { kind: "credit_card", network: "visa" },
       });
     const reviewed = await makeAccount("Synthetic reviewed card");
     const current = await makeAccount("Synthetic replacement card");

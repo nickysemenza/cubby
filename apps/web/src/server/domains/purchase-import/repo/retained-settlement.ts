@@ -8,6 +8,7 @@ import {
 } from "@cubby/schemas/financial-transaction";
 import {
   parseEntityId,
+  type FinancialAccountId,
   type LedgerPartyId,
   type PurchaseId,
 } from "@cubby/schemas/identifiers";
@@ -39,7 +40,11 @@ import {
   readAllocations,
   writeAllocationSet,
 } from "~/server/domains/financial-transaction/repo/financial-transaction-allocations";
-import { transactionSettlementConflicts } from "~/server/domains/financial-transaction/repo/settlement-conflicts";
+import {
+  purchasePayingAccountIdsSql,
+  purchaseRefundAccountIdsSql,
+  transactionSettlementConflicts,
+} from "~/server/domains/financial-transaction/repo/settlement-conflicts";
 import {
   matchCompletePaymentSet,
   type SettlementCandidate,
@@ -100,6 +105,7 @@ type RetainedSettlementDiscoveryFacts = Readonly<{
 
 type Charge = SettlementCandidate & {
   kind: ReturnType<typeof financialTransactionKind.parse>;
+  accountId: FinancialAccountId;
 };
 
 export type RetainedSettlementOutcome =
@@ -270,6 +276,7 @@ export async function prepareRetainedSettlementDiscovery(
 async function settleableCharges(
   tx: SettlementReader,
   input: {
+    purchaseId: PurchaseId;
     ledgerPartyId: LedgerPartyId;
     vendorId: string;
     payments: RetainedPayment[];
@@ -286,6 +293,7 @@ async function settleableCharges(
   const rows = await tx
     .select({
       id: financialTransaction.id,
+      accountId: financialTransaction.accountId,
       amount: financialTransaction.amount,
       kind: financialTransaction.kind,
       transactionDate: financialTransaction.transactionDate,
@@ -335,11 +343,33 @@ async function settleableCharges(
       ),
     )
     .orderBy(asc(financialTransaction.id));
+  // A unique charge does not resolve an ambiguous balance. Reuse the same
+  // account-evidence owner as allocation guards, including explicit account links.
+  const needsStoredAccount =
+    rows.some((row) => row.accountIdentity.kind === "stored_value") ||
+    input.additionalCharges?.some((charge) => charge.storedValue);
+  const [paying] = needsStoredAccount
+    ? await tx
+        .select({
+          ids: sql<string[] | null>`${
+            input.payments.every((payment) => payment.amount < 0)
+              ? purchaseRefundAccountIdsSql('"Purchase"')
+              : purchasePayingAccountIdsSql('"Purchase"')
+          }`,
+        })
+        .from(purchase)
+        .where(eq(purchase.id, input.purchaseId))
+        .limit(1)
+    : [];
+  const admitsStoredAccount = (accountId: FinancialAccountId) =>
+    paying?.ids?.includes(accountId) ?? false;
   const stored = rows.flatMap((row) => {
     const date = row.transactionDate ?? row.postedDate;
     const kind = financialTransactionKind.parse(row.kind);
     if (
       !date ||
+      (row.accountIdentity.kind === "stored_value" &&
+        !admitsStoredAccount(row.accountId)) ||
       financialTransactionSettlementViolation({
         linked: true,
         kind,
@@ -350,6 +380,7 @@ async function settleableCharges(
     return [
       {
         id: row.id,
+        accountId: row.accountId,
         amount: row.amount,
         kind,
         occurredAt: new Date(`${date}T12:00:00.000Z`),
@@ -361,7 +392,9 @@ async function settleableCharges(
   return [
     ...stored,
     ...(input.additionalCharges ?? []).filter(
-      (charge) => !stored.some((row) => row.id === charge.id),
+      (charge) =>
+        !stored.some((row) => row.id === charge.id) &&
+        (!charge.storedValue || admitsStoredAccount(charge.accountId)),
     ),
   ];
 }
@@ -541,6 +574,7 @@ async function namesOnlyThisCharge(
   const own = matchCompletePaymentSet(
     toPolicyPayments(payments),
     await settleableCharges(tx, {
+      purchaseId: row.id,
       ledgerPartyId: input.ledgerPartyId,
       vendorId: input.vendorId,
       payments,
@@ -680,6 +714,7 @@ export async function planPurchaseRetainedSettlement(
   // search; an amount alone is coincidence, not evidence.
   if (!payments.some((payment) => payment.chargedAt)) return "no_evidence";
   const charges = await settleableCharges(tx, {
+    purchaseId: input.purchaseId,
     ledgerPartyId: input.ledgerPartyId,
     vendorId: target.vendorId,
     payments,

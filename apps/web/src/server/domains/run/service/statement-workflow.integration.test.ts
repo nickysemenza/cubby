@@ -46,7 +46,7 @@ it("resumes a refused statement Sweep and publishes every batched suggestion", a
   });
   await createRepoEntity(ctx, "financialAccount", {
     name: "Synthetic workflow card",
-    identity: { kind: "credit_card", issuer: null, network: "visa" },
+    identity: { kind: "credit_card", network: "visa" },
     ledgerPartyId: owner.output.id,
     provisional: false,
     sourceAliases: [

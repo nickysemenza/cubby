@@ -166,7 +166,7 @@ test("Linked transactions reference pickers load their rosters", async ({
     "financialAccount",
     {
       name: accountName,
-      identity: { kind: "credit_card", issuer: null, network: "visa" },
+      identity: { kind: "credit_card", network: "visa" },
     },
   );
   const { id: vendorId } = await createEntityFixture(page, "vendor", {

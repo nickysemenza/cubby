@@ -888,6 +888,7 @@ async function discoverSpendingEvidence(
     // UTC noon carries a plain calendar date to the retained-payment matcher.
     const charge = {
       id: row?.id ?? "prospective",
+      accountId: account.id,
       kind: source.kind,
       amount: source.amount,
       occurredAt: new Date(`${date}T12:00:00.000Z`),

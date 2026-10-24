@@ -39,7 +39,7 @@ describe("statement spending review and re-import", () => {
     });
     const account = await createRepoEntity(ctx, "financialAccount", {
       name: "Synthetic statement card",
-      identity: { kind: "credit_card", issuer: null, network: "visa" },
+      identity: { kind: "credit_card", network: "visa" },
       ledgerPartyId: owner.output.id,
       provisional: false,
       sourceAliases: [

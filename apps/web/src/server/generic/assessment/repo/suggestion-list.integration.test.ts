@@ -87,7 +87,7 @@ const record = (
 const card = (ctx: Ctx) =>
   createRepoEntity(ctx, "financialAccount", {
     name: "Synthetic Card",
-    identity: { kind: "credit_card", issuer: null, network: "visa" },
+    identity: { kind: "credit_card", network: "visa" },
     sourceAliases: [
       {
         source: "monarch",

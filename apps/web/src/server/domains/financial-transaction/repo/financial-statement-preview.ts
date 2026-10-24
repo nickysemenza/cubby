@@ -70,8 +70,8 @@ const provisionalAccountFor = (
   const network = networkFromDescriptor(row.account);
   const identity: FinancialAccountIdentity =
     last4 || network
-      ? { kind: "credit_card", issuer: null, network: network ?? "other" }
-      : { kind: "other", institution: null };
+      ? { kind: "credit_card", network: network ?? "other" }
+      : { kind: "other" };
   // A statement labels the account with its current card, so the digits it
   // carries are the primary card as of today, not a dated historical one.
   const cardNumbers: FinancialAccountCardNumber[] = last4
@@ -124,6 +124,7 @@ export async function prepareFinancialStatementPreview(db: Database) {
       cardNumbers: financialAccount.cardNumbers,
       ledgerPartyId: financialAccount.ledgerPartyId,
       vendorName: vendor.name,
+      vendorAliases: vendor.aliases,
     })
     .from(financialAccount)
     .leftJoin(

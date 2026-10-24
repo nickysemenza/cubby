@@ -66,7 +66,7 @@ describe("Sweeps", () => {
   const account = (name: string, alias: string) =>
     createRepoEntity(ctx, "financialAccount", {
       name,
-      identity: { kind: "credit_card", issuer: null, network: "visa" },
+      identity: { kind: "credit_card", network: "visa" },
       sourceAliases: [{ source: "monarch", alias, externalAccountId: null }],
     });
 
