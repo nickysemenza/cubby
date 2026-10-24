@@ -5,7 +5,8 @@ import Observation
 /// (`entityReport.getMany`), so the run loads once per poll however many sections it has.
 public enum RunReportBatch {
     public static let slots: [ReportSlot] = [
-        .runResults, .runSteps, .runLiveProgress, .runImportStats, .runImportProgressLive, .runImportProgressStopped,
+        .runResults, .runSteps, .runLiveProgress, .runImportStats, .runImportProgressLive,
+        .runImportProgressStopped,
         .runImportPurchases, .runImportFindings, .runImportTargets,
         .runImportPreparedOrders, .runImportTimeline,
     ]
