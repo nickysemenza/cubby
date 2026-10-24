@@ -219,9 +219,8 @@ const preparationDetails = new WeakMap<
 class EmailRelevancePreparation {
   // Expose only an immutable identity; verified content never leaves this module.
   #emailId: OwnedEmail["id"];
-  constructor(details: PreparationDetails) {
-    this.#emailId = details.email.id;
-    preparationDetails.set(this, details);
+  constructor(emailId: OwnedEmail["id"]) {
+    this.#emailId = emailId;
     Object.freeze(this);
   }
   get emailId() {
@@ -315,7 +314,10 @@ export async function prepareEmailRelevanceCorrection(
         checksum: await sha256Hex(payload),
       });
     }
-    return new EmailRelevancePreparation({
+    const prepared = new EmailRelevancePreparation(email.id);
+    // Only this successful provider/storage preparation can register authority;
+    // invoking the handle's reachable constructor grants none.
+    preparationDetails.set(prepared, {
       input,
       actorUserId: actor.userId,
       email,
@@ -324,6 +326,7 @@ export async function prepareEmailRelevanceCorrection(
       originalCapture,
       uploads,
     });
+    return prepared;
   } catch (error) {
     return cleanNewCorrectionKeys(
       db,

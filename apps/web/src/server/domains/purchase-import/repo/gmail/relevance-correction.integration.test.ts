@@ -346,6 +346,28 @@ describe("member-only exact original relevance correction", () => {
       }),
     ).toThrow(/not extensible/u);
     expect(JSON.stringify(prepared)).toBe("{}");
+    // A reachable JS constructor must not register caller-provided proof.
+    const reconstructed: Awaited<
+      ReturnType<typeof prepareEmailRelevanceCorrection>
+    > = Reflect.construct(prepared.constructor, [
+      {
+        input: f.input,
+        actorUserId: ctx.actor.userId,
+        email: f.email,
+        normalized: normalizeMessage(mailboxId, f.message()),
+        checksum: f.input.reviewedChecksum,
+        uploads: new Map(),
+      },
+    ]);
+    await expect(
+      withTransaction(ctx.db, (tx) =>
+        publishPreparedEmailRelevanceCorrection(
+          databaseForTransaction(tx),
+          reconstructed,
+          ctx.actor,
+        ),
+      ),
+    ).rejects.toThrow("preparation authority does not match");
     await withTransaction(ctx.db, (tx) =>
       publishPreparedEmailRelevanceCorrection(
         databaseForTransaction(tx),
