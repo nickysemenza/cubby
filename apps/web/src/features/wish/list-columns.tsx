@@ -6,12 +6,12 @@ import { useMemo } from "react";
 
 import { fieldEnumOptions } from "~/entity/display/enum-field-display";
 import { entities, entityDetailParams } from "~/entity/entities";
+import {
+  EntityDisplayImagesProvider,
+  useEntityDisplayImage,
+} from "~/entity/entity-media/entity-display-images";
 import { relationshipFieldProvenance } from "~/entity/fields/field-provenance";
 import { useFilterOptions } from "~/entity/hooks/use-filter-options";
-import {
-  ProductImageSummariesProvider,
-  useHydratedProductImages,
-} from "~/entity/presentation/product-image-summaries";
 import { renderOptionCell } from "~/entity/table/column-helpers";
 import { ImageThumbnail } from "~/entity/table/image-thumbnail";
 import {
@@ -92,7 +92,11 @@ function WishRowCover({ row }: { row: WishRow }) {
 }
 
 function CandidateCover({ productId }: { productId: string }) {
-  const images = useHydratedProductImages(productId);
+  const image = useEntityDisplayImage({
+    entityKind: "product",
+    entityId: productId,
+  });
+  const images = image ? [image] : [];
   return (
     <ImageThumbnail
       images={images}
@@ -366,8 +370,13 @@ function WishCoverProvider({
     [data],
   );
   return (
-    <ProductImageSummariesProvider productIds={candidateProductIds}>
+    <EntityDisplayImagesProvider
+      refs={candidateProductIds.map((entityId) => ({
+        entityKind: "product",
+        entityId,
+      }))}
+    >
       {children}
-    </ProductImageSummariesProvider>
+    </EntityDisplayImagesProvider>
   );
 }

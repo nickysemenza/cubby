@@ -1,3 +1,4 @@
+import { displayImagesField } from "./display-images";
 import { storedDateRangeSchema } from "./date-range";
 import { z } from "zod";
 import { dataQuality } from "./data-quality";
@@ -53,7 +54,8 @@ export type CalendarItemKind = z.infer<typeof calendarItemKind>;
 
 export const calendarInteraction = z.enum(["move", "read-only"]);
 
-const calendarItemDates = {
+const calendarItemBase = {
+  displayImages: displayImagesField.default([]),
   startDate: plainDate,
   endDateExclusive: plainDate,
 };
@@ -63,7 +65,7 @@ export const calendarMealItem = z.object({
   id: mealShortcode,
   title: z.string(),
   name: z.string().nullable(),
-  ...calendarItemDates,
+  ...calendarItemBase,
   interaction: z.literal("move"),
   sortOrder: z.number().int().nullable(),
   // `mealType`/`mealKind`, not `type`/`kind` — `kind` is already this union's
@@ -71,7 +73,6 @@ export const calendarMealItem = z.object({
   mealType: mealTypeSchema.nullable(),
   mealKind: mealKindSchema,
   recipeNames: z.array(z.string()),
-  coverImageUrl: z.url().nullable(),
   mealTotals: nutritionTotals,
   dataQuality: dataQuality.optional(),
 });
@@ -80,7 +81,7 @@ export const calendarTaskItem = z.object({
   kind: z.literal("task"),
   id: taskShortcode,
   title: z.string(),
-  ...calendarItemDates,
+  ...calendarItemBase,
   interaction: z.literal("move"),
   /** Raw nullable task boundaries; start/end above are normalized for layout. */
   due: storedDateRangeSchema.nullable(),
@@ -88,14 +89,13 @@ export const calendarTaskItem = z.object({
   trade: tradeSchema,
   projectName: z.string().nullable(),
   subjectProductName: z.string().nullable(),
-  coverImageUrl: z.url().nullable(),
 });
 
 export const calendarExpenseItem = z.object({
   kind: z.literal("expense"),
   id: expenseShortcode,
   title: z.string(),
-  ...calendarItemDates,
+  ...calendarItemBase,
   interaction: calendarInteraction,
   future: z.boolean(),
   cost: moneyNullable,
@@ -103,14 +103,13 @@ export const calendarExpenseItem = z.object({
   trade: tradeSchema.nullable(),
   projectName: z.string().nullable(),
   productName: z.string().nullable(),
-  coverImageUrl: z.url().nullable(),
 });
 
 export const calendarProjectItem = z.object({
   kind: z.literal("project"),
   id: projectShortcode,
   title: z.string(),
-  ...calendarItemDates,
+  ...calendarItemBase,
   interaction: z.literal("read-only"),
   status: projectStatusSchema,
   projectKind: projectKindSchema.nullable(),
@@ -143,7 +142,7 @@ export const calendarPlantingItem = z.object({
   title: z.string(),
   locationName: z.string().nullable(),
   plannedWindow: z.string().nullable(),
-  ...calendarItemDates,
+  ...calendarItemBase,
   interaction: z.literal("read-only"),
 });
 

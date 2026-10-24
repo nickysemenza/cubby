@@ -58,7 +58,7 @@ function locationMark(node: OutlineNode<LocationOutlineData>) {
       />
     );
   const { location } = node.data;
-  return location.images.length > 0 || location.product?.coverImage ? (
+  return (location.displayImages?.length ?? 0) > 0 ? (
     <LocationVisual
       location={location}
       variant="compact"

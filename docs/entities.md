@@ -867,6 +867,11 @@ linked FinancialTransaction’s canonical images, including Purchase and Vendor
 fallbacks. When those yield no image, a unique supported merchant inference
 may supply the Vendor logo as a decorative fallback. Ambiguous or insufficient
 history never supplies a logo, and the fallback does not accept a match.
+MCP Product projections expose the same canonical cover URL; owned gallery
+cover flags identify a match to that selection rather than choosing another image.
+Calendar range items and Location trees carry this same canonical `displayImages`
+projection. Picker cover/logo URLs serialize the resolver’s result rather than
+querying attachment tables themselves.
 Each path visits a subject kind once, so reciprocal Recipe/Meal and Task/Project
 policies terminate. Each relationship retains its declared newest/oldest ordering
 before nested relationships and attachment order. Unavailable files, PDFs,

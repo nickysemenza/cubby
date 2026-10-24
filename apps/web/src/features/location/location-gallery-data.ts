@@ -8,7 +8,7 @@ const NO_INVENTORY_ITEMS: InventoryItemForTree[] = [];
 
 /**
  * Every distinct product referenced anywhere in a `location.makeTree` forest —
- * the id list Arrange's `ProductImageSummariesProvider` needs to hydrate covers.
+ * the id list the canonical display-image provider needs to resolve identities.
  * The selected-place browser hydrates only its disclosed contents instead.
  */
 export function collectTreeProductIds(locations: InfLocation[]): string[] {

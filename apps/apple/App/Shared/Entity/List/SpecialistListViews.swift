@@ -279,7 +279,7 @@ struct LocationGalleryListView: View {
                 ForEach(locations.filter { type == "all" || $0.type.rawValue == type }, id: \.id) { node in
                     NavigationLink(value: Route.entityDetail(.location, id: node.id.rawValue)) {
                         HStack {
-                            let url = node.images.first.flatMap {
+                            let url = node.displayImages?.first.flatMap {
                                 URL(string: $0.representations?.preferred ?? $0.url)
                             }
                             Thumb(url: url, size: 48, symbol: "shippingbox")

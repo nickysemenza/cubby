@@ -100,3 +100,8 @@ Printed QR label URLs (`/<shortcode>`) still open the record.
 Still deliberately deferred: cross-device pass state, a true offline mutation
 queue, and inventory-entry-without-product photo identity (photo capture reuses
 the `misc:` product convention).
+
+Recount Product thumbnails consume canonical `displayImages` prepared for the
+whole inventory read, including Brand fallbacks and preferred representations.
+Raw Product galleries remain evidence and do not choose the recount cover.
+Native Location lists likewise use the tree’s canonical display-image projection.

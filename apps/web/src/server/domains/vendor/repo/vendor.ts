@@ -1,6 +1,7 @@
 import type { ActorContext } from "@cubby/schemas/context";
 /** Vendor spend is derived only from `SUM(Expense.cost)` through live purchases. */
 import type { DataQuality } from "@cubby/schemas/data-quality";
+import { entityRefKey } from "@cubby/schemas/entity";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 import {
@@ -87,6 +88,7 @@ import {
 import { assertReviewedSpendingClassification } from "~/server/domains/spending-category/repo/spending-classification-review-authorization";
 import { foldVendorAccountsInto } from "~/server/domains/vendor-account/repo/vendor-account";
 import { agentHintsLabel } from "~/server/entity-kernel/repo/detail-display-labels";
+import { resolveEntityDisplayImages } from "~/server/entity-kernel/repo/entity-display-image";
 import { patchEntityRows } from "~/server/entity-kernel/repo/entity-patch";
 import {
   type MutationReceipt,
@@ -904,29 +906,24 @@ export const vendorOptions = async (
 ): Promise<VendorOptionsOut> => {
   const rows = await getDb(db)
     .select({
+      entityId: vendor.id,
       shortcode: vendor.shortcode,
       name: vendor.name,
       count: vendorPurchaseCount,
-      logoKey: image.key,
     })
     .from(vendor)
-    .leftJoin(entityAttachment, vendorLogoAttachment)
-    .leftJoin(
-      image,
-      and(
-        eq(image.id, entityAttachment.imageId),
-        notDeleted(image),
-        displayableImageWhere,
-      ),
-    )
     .where(notDeleted(vendor))
     .orderBy(desc(vendorPurchaseCount), asc(vendor.name));
 
+  const images = await resolveEntityDisplayImages(
+    db,
+    rows.map((row) => ({ entityKind: "vendor", entityId: row.entityId })),
+  );
   return rows.map((row) => ({
     id: parseShortcodeFor("vendor", row.shortcode),
     name: row.name,
     count: Number(row.count),
-    logo: row.logoKey ? { url: getR2PublicUrl(row.logoKey) } : null,
+    logo: images.get(entityRefKey("vendor", row.entityId)) ?? null,
   }));
 };
 

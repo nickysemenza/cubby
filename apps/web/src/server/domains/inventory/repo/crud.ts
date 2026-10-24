@@ -1,5 +1,6 @@
 import type { Amount } from "@cubby/schemas/codec";
 import type { ActorContext } from "@cubby/schemas/context";
+import { entityRefKey } from "@cubby/schemas/entity";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 import { generatedEntitySort } from "@cubby/schemas/entity-sort";
@@ -61,6 +62,7 @@ import {
   effectiveProductPriceSql,
   loadProductPricing,
 } from "~/server/domains/product/repo/pricing";
+import { resolveEntityDisplayImageLists } from "~/server/entity-kernel/repo/entity-display-image";
 import {
   type MutationReceipt,
   defineMutationWriter,
@@ -182,14 +184,27 @@ const inventoryReader = createEntityReader({
   entity: "inventory",
   fetchById: fetchInventoryById,
   fromDB: async (db, row: InventoryEntryDeepDB) => {
-    const [pricing, ownership, dataQualities, locationQualities, valuations] =
-      await Promise.all([
-        loadProductPricing(db, [row.product]),
-        loadInventoryOwnershipTraces(db, [row]),
-        loadDataQualities(db, "inventory", [row.id]),
-        loadDataQualities(db, "location", [row.location.id]),
-        loadInventoryValuations(db, [row]),
-      ]);
+    const [
+      pricing,
+      ownership,
+      dataQualities,
+      locationQualities,
+      valuations,
+      productImages,
+    ] = await Promise.all([
+      loadProductPricing(db, [row.product]),
+      loadInventoryOwnershipTraces(db, [row]),
+      loadDataQualities(db, "inventory", [row.id]),
+      loadDataQualities(db, "location", [row.location.id]),
+      loadInventoryValuations(db, [row]),
+      resolveEntityDisplayImageLists(
+        db,
+        [row].map((entry) => ({
+          entityKind: "product",
+          entityId: entry.product.id,
+        })),
+      ),
+    ]);
     return dbInventoryEntryToAPI(
       row,
       valuations.get(row.id) ?? null,
@@ -198,6 +213,7 @@ const inventoryReader = createEntityReader({
       dataQualities.get(row.id)!,
       locationQualities.get(row.location.id)!,
       ownership.get(row.id),
+      productImages.get(entityRefKey("product", row.product.id)) ?? [],
     );
   },
 });
@@ -614,14 +630,27 @@ const hydrateInventoryEntry = async (
     );
   }
 
-  const [pricing, ownership, dataQualities, locationQualities, valuations] =
-    await Promise.all([
-      loadProductPricing(db, [result.product]),
-      loadInventoryOwnershipTraces(db, [result]),
-      loadDataQualities(db, "inventory", [result.id]),
-      loadDataQualities(db, "location", [result.location.id]),
-      loadInventoryValuations(db, [result]),
-    ]);
+  const [
+    pricing,
+    ownership,
+    dataQualities,
+    locationQualities,
+    valuations,
+    productImages,
+  ] = await Promise.all([
+    loadProductPricing(db, [result.product]),
+    loadInventoryOwnershipTraces(db, [result]),
+    loadDataQualities(db, "inventory", [result.id]),
+    loadDataQualities(db, "location", [result.location.id]),
+    loadInventoryValuations(db, [result]),
+    resolveEntityDisplayImageLists(
+      db,
+      [result].map((entry) => ({
+        entityKind: "product",
+        entityId: entry.product.id,
+      })),
+    ),
+  ]);
   // SAFETY: `result` was just fetched live by id, so its quality was evaluated.
   return dbInventoryEntryToAPI(
     result,
@@ -630,6 +659,7 @@ const hydrateInventoryEntry = async (
     dataQualities.get(result.id)!,
     locationQualities.get(result.location.id)!,
     ownership.get(result.id),
+    productImages.get(entityRefKey("product", result.product.id)) ?? [],
   );
 };
 
@@ -874,25 +904,38 @@ export const getInventoryByLocationIds = async (
     ...relations.inventory.full,
   });
 
-  const [pricing, ownership, dataQualities, locationQualities, valuations] =
-    await Promise.all([
-      loadProductPricing(
-        db,
-        results.map((entry) => entry.product),
-      ),
-      loadInventoryOwnershipTraces(db, results),
-      loadDataQualities(
-        db,
-        "inventory",
-        results.map((entry) => entry.id),
-      ),
-      loadDataQualities(
-        db,
-        "location",
-        results.map((entry) => entry.location.id),
-      ),
-      loadInventoryValuations(db, results),
-    ]);
+  const [
+    pricing,
+    ownership,
+    dataQualities,
+    locationQualities,
+    valuations,
+    productImages,
+  ] = await Promise.all([
+    loadProductPricing(
+      db,
+      results.map((entry) => entry.product),
+    ),
+    loadInventoryOwnershipTraces(db, results),
+    loadDataQualities(
+      db,
+      "inventory",
+      results.map((entry) => entry.id),
+    ),
+    loadDataQualities(
+      db,
+      "location",
+      results.map((entry) => entry.location.id),
+    ),
+    loadInventoryValuations(db, results),
+    resolveEntityDisplayImageLists(
+      db,
+      results.map((entry) => ({
+        entityKind: "product",
+        entityId: entry.product.id,
+      })),
+    ),
+  ]);
   return results.map((entry) =>
     dbInventoryEntryToAPI(
       entry,
@@ -903,6 +946,7 @@ export const getInventoryByLocationIds = async (
       dataQualities.get(entry.id)!,
       locationQualities.get(entry.location.id)!,
       ownership.get(entry.id),
+      productImages.get(entityRefKey("product", entry.product.id)) ?? [],
     ),
   );
 };

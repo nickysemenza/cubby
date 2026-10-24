@@ -1,5 +1,6 @@
 import type { Amount } from "@cubby/schemas/codec";
 import type { ActorContext } from "@cubby/schemas/context";
+import { entityRefKey } from "@cubby/schemas/entity";
 import type {
   InventoryId,
   LedgerPartyId,
@@ -35,6 +36,7 @@ import {
 } from "~/server/domains/inventory/repo/slot";
 import type { InventoryEntryDeepDB } from "~/server/domains/inventory/repo/types";
 import { loadProductPricing } from "~/server/domains/product/repo/pricing";
+import { resolveEntityDisplayImageLists } from "~/server/entity-kernel/repo/entity-display-image";
 import { createAppError } from "~/server/errors/app-error";
 import {
   type AuditEntryInput,
@@ -400,25 +402,38 @@ export const addInventoryEntries = async (
     },
   );
 
-  const [pricing, ownership, dataQualities, locationQualities, valuations] =
-    await Promise.all([
-      loadProductPricing(
-        db,
-        processed.results.map((entry) => entry.product),
-      ),
-      loadInventoryOwnershipTraces(db, processed.results),
-      loadDataQualities(
-        db,
-        "inventory",
-        processed.results.map((entry) => entry.id),
-      ),
-      loadDataQualities(
-        db,
-        "location",
-        processed.results.map((entry) => entry.location.id),
-      ),
-      loadInventoryValuations(db, processed.results),
-    ]);
+  const [
+    pricing,
+    ownership,
+    dataQualities,
+    locationQualities,
+    valuations,
+    productImages,
+  ] = await Promise.all([
+    loadProductPricing(
+      db,
+      processed.results.map((entry) => entry.product),
+    ),
+    loadInventoryOwnershipTraces(db, processed.results),
+    loadDataQualities(
+      db,
+      "inventory",
+      processed.results.map((entry) => entry.id),
+    ),
+    loadDataQualities(
+      db,
+      "location",
+      processed.results.map((entry) => entry.location.id),
+    ),
+    loadInventoryValuations(db, processed.results),
+    resolveEntityDisplayImageLists(
+      db,
+      processed.results.map((entry) => ({
+        entityKind: "product",
+        entityId: entry.product.id,
+      })),
+    ),
+  ]);
   return {
     items: processed.results.map((entry) =>
       dbInventoryEntryToAPI(
@@ -430,6 +445,7 @@ export const addInventoryEntries = async (
         dataQualities.get(entry.id)!,
         locationQualities.get(entry.location.id)!,
         ownership.get(entry.id),
+        productImages.get(entityRefKey("product", entry.product.id)) ?? [],
       ),
     ),
     createdCount: processed.createdCount,
@@ -779,25 +795,38 @@ export const moveInventoryEntries = async (
     },
   );
 
-  const [pricing, ownership, dataQualities, locationQualities, valuations] =
-    await Promise.all([
-      loadProductPricing(
-        db,
-        processedItems.map((entry) => entry.product),
-      ),
-      loadInventoryOwnershipTraces(db, processedItems),
-      loadDataQualities(
-        db,
-        "inventory",
-        processedItems.map((entry) => entry.id),
-      ),
-      loadDataQualities(
-        db,
-        "location",
-        processedItems.map((entry) => entry.location.id),
-      ),
-      loadInventoryValuations(db, processedItems),
-    ]);
+  const [
+    pricing,
+    ownership,
+    dataQualities,
+    locationQualities,
+    valuations,
+    productImages,
+  ] = await Promise.all([
+    loadProductPricing(
+      db,
+      processedItems.map((entry) => entry.product),
+    ),
+    loadInventoryOwnershipTraces(db, processedItems),
+    loadDataQualities(
+      db,
+      "inventory",
+      processedItems.map((entry) => entry.id),
+    ),
+    loadDataQualities(
+      db,
+      "location",
+      processedItems.map((entry) => entry.location.id),
+    ),
+    loadInventoryValuations(db, processedItems),
+    resolveEntityDisplayImageLists(
+      db,
+      processedItems.map((entry) => ({
+        entityKind: "product",
+        entityId: entry.product.id,
+      })),
+    ),
+  ]);
   return processedItems.map((entry) =>
     dbInventoryEntryToAPI(
       entry,
@@ -808,6 +837,7 @@ export const moveInventoryEntries = async (
       dataQualities.get(entry.id)!,
       locationQualities.get(entry.location.id)!,
       ownership.get(entry.id),
+      productImages.get(entityRefKey("product", entry.product.id)) ?? [],
     ),
   );
 };
@@ -1149,25 +1179,38 @@ export const reconcileLocationSession = async (
     },
   );
 
-  const [pricing, ownership, dataQualities, locationQualities, valuations] =
-    await Promise.all([
-      loadProductPricing(
-        db,
-        processed.map((entry) => entry.product),
-      ),
-      loadInventoryOwnershipTraces(db, processed),
-      loadDataQualities(
-        db,
-        "inventory",
-        processed.map((entry) => entry.id),
-      ),
-      loadDataQualities(
-        db,
-        "location",
-        processed.map((entry) => entry.location.id),
-      ),
-      loadInventoryValuations(db, processed),
-    ]);
+  const [
+    pricing,
+    ownership,
+    dataQualities,
+    locationQualities,
+    valuations,
+    productImages,
+  ] = await Promise.all([
+    loadProductPricing(
+      db,
+      processed.map((entry) => entry.product),
+    ),
+    loadInventoryOwnershipTraces(db, processed),
+    loadDataQualities(
+      db,
+      "inventory",
+      processed.map((entry) => entry.id),
+    ),
+    loadDataQualities(
+      db,
+      "location",
+      processed.map((entry) => entry.location.id),
+    ),
+    loadInventoryValuations(db, processed),
+    resolveEntityDisplayImageLists(
+      db,
+      processed.map((entry) => ({
+        entityKind: "product",
+        entityId: entry.product.id,
+      })),
+    ),
+  ]);
   return {
     items: processed.map((entry) =>
       dbInventoryEntryToAPI(
@@ -1179,6 +1222,7 @@ export const reconcileLocationSession = async (
         dataQualities.get(entry.id)!,
         locationQualities.get(entry.location.id)!,
         ownership.get(entry.id),
+        productImages.get(entityRefKey("product", entry.product.id)) ?? [],
       ),
     ),
     removedIds,

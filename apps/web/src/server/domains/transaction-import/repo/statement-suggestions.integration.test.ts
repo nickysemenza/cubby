@@ -424,7 +424,7 @@ describe("statement Transaction suggestions", () => {
       const account = (await card(ctx)).output;
       await createRepoIdentity(ctx, "financialAccount", {
         name: "Synthetic excluded account",
-        identity: { kind: "credit_card", issuer: null, network: "visa" },
+        identity: { kind: "credit_card", network: "visa" },
         sourceAliases: [
           {
             source: "monarch",
@@ -520,7 +520,7 @@ describe("statement Transaction suggestions", () => {
     const account = (await card(ctx)).output;
     await createRepoIdentity(ctx, "financialAccount", {
       name: "Synthetic cursor exclusion",
-      identity: { kind: "credit_card", issuer: null, network: "visa" },
+      identity: { kind: "credit_card", network: "visa" },
       sourceAliases: [
         { source: "monarch", alias: "Excluded Card", externalAccountId: null },
       ],
@@ -657,7 +657,7 @@ describe("statement Transaction suggestions", () => {
       const other = (
         await createRepoIdentity(ctx, "financialAccount", {
           name: "Synthetic receipt completion account",
-          identity: { kind: "credit_card", issuer: null, network: "visa" },
+          identity: { kind: "credit_card", network: "visa" },
         })
       ).output;
       const imported = await record(ctx, [
@@ -773,7 +773,7 @@ describe("statement Transaction suggestions", () => {
     const account = (await card(ctx)).output;
     await createRepoIdentity(ctx, "financialAccount", {
       name: "Synthetic scan exclusion",
-      identity: { kind: "credit_card", issuer: null, network: "visa" },
+      identity: { kind: "credit_card", network: "visa" },
       sourceAliases: [
         {
           source: "monarch",
@@ -860,7 +860,7 @@ describe("statement Transaction suggestions", () => {
       const other = (
         await createRepoIdentity(ctx, "financialAccount", {
           name: "Synthetic label write race account",
-          identity: { kind: "credit_card", issuer: null, network: "visa" },
+          identity: { kind: "credit_card", network: "visa" },
         })
       ).output;
       const imported = await record(ctx, [
@@ -958,7 +958,7 @@ describe("statement Transaction suggestions", () => {
     const other = (
       await createRepoIdentity(ctx, "financialAccount", {
         name: "Synthetic recovery scope account",
-        identity: { kind: "credit_card", issuer: null, network: "visa" },
+        identity: { kind: "credit_card", network: "visa" },
       })
     ).output;
     const imported = await record(ctx, [
@@ -1030,7 +1030,7 @@ describe("statement Transaction suggestions", () => {
           name: "Synthetic race account",
           ledgerPartyId: owner.id,
           provisional: false,
-          identity: { kind: "credit_card", issuer: null, network: "visa" },
+          identity: { kind: "credit_card", network: "visa" },
         })
       ).output;
       const imported = await record(ctx, [
@@ -1102,7 +1102,7 @@ describe("statement Transaction suggestions", () => {
     const other = (
       await createRepoIdentity(ctx, "financialAccount", {
         name: "Synthetic reassigned account",
-        identity: { kind: "credit_card", issuer: null, network: "visa" },
+        identity: { kind: "credit_card", network: "visa" },
       })
     ).output;
     await record(ctx, [rowInput()]);
@@ -1229,7 +1229,7 @@ describe("statement Transaction suggestions", () => {
     const account = (await card(ctx)).output;
     await createRepoIdentity(ctx, "financialAccount", {
       name: "Synthetic public sweep exclusion",
-      identity: { kind: "credit_card", issuer: null, network: "visa" },
+      identity: { kind: "credit_card", network: "visa" },
       sourceAliases: [
         { source: "monarch", alias: "Excluded Card", externalAccountId: null },
       ],

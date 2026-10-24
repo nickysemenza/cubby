@@ -19,7 +19,9 @@ type RecipeTreeRecipe = RecipeOut | RecipeGraphOut;
 export const recipeTreeDisplayImage = (
   recipe: RecipeTreeRecipe,
 ): ImageUrlSummary | null =>
-  "displayImage" in recipe ? recipe.displayImage : (recipe.images[0] ?? null);
+  "displayImage" in recipe
+    ? recipe.displayImage
+    : (recipe.displayImages?.[0] ?? null);
 
 // Inject wasm ports so recipe export remains wasm-free. Root costing is already
 // UI-scaled, so its cumulativeFactor is 1. Sub-recipes are costed at their

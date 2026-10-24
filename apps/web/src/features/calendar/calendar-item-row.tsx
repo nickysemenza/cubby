@@ -1,7 +1,9 @@
 import type { CalendarItem } from "@cubby/schemas/calendar";
+import type { ImageUrlSummary } from "@cubby/schemas/image-summary";
 import { capitalize } from "@cubby/shared";
 
 import { EntityCover } from "~/entity/components/entity-cover";
+import { useEntityDisplayImage } from "~/entity/entity-media/entity-display-images";
 import { formatCurrency } from "~/lib/number-format";
 import { estimateStatusText, formatEstimate } from "~/lib/nutrition-format";
 import { cn } from "~/lib/utils";
@@ -45,20 +47,42 @@ function CalendarItemPresentation({
   item: CalendarItem;
   variant: CalendarItemPresentationVariant;
 }) {
-  if (variant === "month") return <CalendarItemCompact item={item} />;
+  const resolvedImage = useEntityDisplayImage({
+    entityKind: item.kind,
+    entityId: item.id,
+  });
+  const image = resolvedImage ?? item.displayImages[0] ?? null;
+  if (variant === "month")
+    return <CalendarItemCompact item={item} image={image} />;
   // "detail" is the fortnight density: the rich two-line block with a thumbnail
   // shrunk to one line of text, so a 2x7 grid column still fits the title.
-  return <CalendarItemRich item={item} compact={variant === "detail"} />;
+  return (
+    <CalendarItemRich
+      item={item}
+      image={image}
+      compact={variant === "detail"}
+    />
+  );
 }
 
-function CalendarItemCompact({ item }: { item: CalendarItem }) {
+function CalendarItemCompact({
+  item,
+  image,
+}: {
+  item: CalendarItem;
+  image: ImageUrlSummary | null;
+}) {
   const today = useHouseholdToday();
   const presentation = calendarItemPresentation(item, today);
   const Icon = presentation.icon;
   const span = itemSpanLabel(item, today);
   return (
     <>
-      <Icon className="size-3 shrink-0" aria-hidden />
+      {image ? (
+        <EntityCover images={[image]} entity={item.kind} size={18} alt="" />
+      ) : (
+        <Icon className="size-3 shrink-0" aria-hidden />
+      )}
       <span className="min-w-0 flex-1 truncate" title={item.title}>
         {item.title}
       </span>
@@ -92,16 +116,18 @@ function CalendarItemCompact({ item }: { item: CalendarItem }) {
 
 function CalendarItemRich({
   item,
+  image,
   compact = false,
 }: {
   item: CalendarItem;
+  image: ImageUrlSummary | null;
   /** Fortnight density: a thumbnail one line of body text tall, tighter gap. */
   compact?: boolean;
 }) {
   const today = useHouseholdToday();
   const presentation = calendarItemPresentation(item, today);
   const Icon = presentation.icon;
-  const { cover, metadata } = presentation;
+  const { metadata } = presentation;
   const cost = calendarItemCost(item);
   const costLabel = cost;
   return (
@@ -115,10 +141,10 @@ function CalendarItemRich({
           leading kind icon on the title line already carries the entity, and a
           placeholder square would eat a quarter of a fortnight column. */}
       <EntityCover
-        images={cover ? [{ url: cover.url }] : []}
-        entity={cover?.entity ?? presentation.entity}
+        images={image ? [image] : []}
+        entity={presentation.entity}
+        fit="contain"
         size={compact ? 20 : 36}
-        fit={cover?.fit}
         placeholder="none"
         alt=""
       />

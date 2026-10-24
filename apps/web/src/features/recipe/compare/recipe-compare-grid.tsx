@@ -1,3 +1,4 @@
+import { preferredImageUrl } from "@cubby/schemas/image-summary";
 import type {
   MeasureEstimate,
   NutritionTotals,
@@ -10,6 +11,10 @@ import { XIcon } from "@phosphor-icons/react/dist/csr/X";
 import { Link } from "@tanstack/react-router";
 import { type ReactNode, useMemo, useState } from "react";
 
+import {
+  useEntityDisplayImages,
+  entityDisplayImageKey,
+} from "~/entity/entity-media/entity-display-images";
 import {
   RecipeSourceLink,
   sourceLabel,
@@ -204,6 +209,29 @@ export const RecipeCompareGrid: React.FC<{
   compared: ComparedRecipe[];
   onRemove: (recipeId: string) => void;
 }> = ({ compared, onRemove }) => {
+  const seeded = useMemo(
+    () =>
+      Object.fromEntries(
+        compared.flatMap(({ recipe }) =>
+          recipe.displayImages
+            ? [
+                [
+                  entityDisplayImageKey({
+                    entityKind: "recipe",
+                    entityId: recipe.id,
+                  }),
+                  recipe.displayImages[0] ?? null,
+                ],
+              ]
+            : [],
+        ),
+      ),
+    [compared],
+  );
+  const images = useEntityDisplayImages(
+    compared.map((c) => ({ entityKind: "recipe", entityId: c.recipe.id })),
+    seeded,
+  );
   const perRecipe = useMemo(
     () => compared.map((c) => extractRecipeRows(c.costing)),
     [compared],
@@ -304,7 +332,14 @@ export const RecipeCompareGrid: React.FC<{
             />
             {compared.map((c) => {
               const subtitle = sourceLabel(c.recipe.source);
-              const hero = c.recipe.images[0]?.url;
+              const cover =
+                images[
+                  entityDisplayImageKey({
+                    entityKind: "recipe",
+                    entityId: c.recipe.id,
+                  })
+                ];
+              const hero = cover ? preferredImageUrl(cover) : undefined;
               return (
                 <th
                   key={c.recipe.id}

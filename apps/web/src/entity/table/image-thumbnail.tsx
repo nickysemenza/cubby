@@ -1,23 +1,11 @@
 import type { Entity } from "@cubby/schemas/entity";
+import type { ImageUrlSummary } from "@cubby/schemas/image-summary";
 
 import { EntityCover } from "~/entity/components/entity-cover";
 import { ROW_DENSITY } from "~/ui/data-table/density";
 
-/**
- * Deliberately structural, not `DisplayImageSummary` — this renders both a
- * list row's server-resolved `displayImages` (branded `ImageShortcode` id,
- * no `filename`) and a non-list row's own `images[]` (`rowImages`: plain
- * string id, required `filename`, optional `contentType`). No single zod
- * schema covers both, and the branded id would reject the latter.
- */
-interface ImageData {
-  id: string;
-  url: string;
-  filename?: string;
-}
-
 interface ImageThumbnailProps {
-  images: ImageData[];
+  images: Array<ImageUrlSummary & { id?: string; filename?: string }>;
   alt?: string;
   lazyPreview?: boolean;
   /** When provided, shows a colored entity icon instead of a generic image icon */

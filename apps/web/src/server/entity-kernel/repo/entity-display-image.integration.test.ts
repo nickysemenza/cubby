@@ -33,6 +33,15 @@ import {
 } from "~/server/domains/image-processing/repo/image-processing";
 import { createUploadedImageRecord } from "~/server/domains/image/repo/image";
 import { hydrateImageReadProjection } from "~/server/domains/image/repo/image-read-projection";
+import {
+  getInventoryByLocationIds,
+  getInventoryEntryByShortcode,
+} from "~/server/domains/inventory/repo/crud";
+import {
+  getLocationCoverImageUrlsByLocationIds,
+  locationSearch,
+} from "~/server/domains/location/repo/crud";
+import { buildLocationTree } from "~/server/domains/location/repo/tree";
 import { createFinancialEvidenceFixture } from "~/server/domains/transaction-import/repo/source-transaction-record.fixtures";
 import { createVendor } from "~/server/domains/vendor/repo/vendor";
 import { createWish, updateWish, wishList } from "~/server/domains/wish/repo";
@@ -429,6 +438,37 @@ describe("entity display image resolver", () => {
         }),
         ctx.actor,
       );
+      const brandedBin = await createLocationFixture(
+        ctx.db,
+        makeLocationInput({
+          name: "Synthetic branded bin",
+          productId: item.id,
+        }),
+        ctx.actor,
+      );
+      expect(
+        (
+          await getLocationCoverImageUrlsByLocationIds(ctx.db, [
+            brandedBin.entityId,
+          ])
+        ).get(brandedBin.entityId),
+      ).toBe(getR2PublicUrl(logo.key));
+      const picker = await locationSearch(
+        ctx.db,
+        { nameFilter: "Synthetic branded bin" },
+        [],
+        { pageIndex: 0, pageSize: 10 },
+      );
+      expect(picker.data[0]?.coverImage?.id).toBe(logo.shortcode);
+      const tree = await buildLocationTree(ctx.db);
+      const locations = tree.flatMap((root) => [
+        root,
+        ...(root.children ?? []),
+      ]);
+      expect(
+        locations.find((location) => location.id === brandedBin.id)
+          ?.displayImages?.[0]?.id,
+      ).toBe(logo.shortcode);
       const expense = await createRepoEntity(
         ctx,
         "expense",
@@ -447,6 +487,20 @@ describe("entity display image resolver", () => {
           amount: { value: 1, unit: "each" },
         },
         ctx.actor,
+      );
+      const inventoryRead = await getInventoryByLocationIds(ctx.db, [
+        location.entityId,
+      ]);
+      expect(
+        inventoryRead.find((row) => row.id === entry.id)?.product
+          .displayImages[0]?.id,
+      ).toBe(logo.shortcode);
+      const inventoryDetail = await getInventoryEntryByShortcode(
+        ctx.db,
+        entry.id,
+      );
+      expect(inventoryDetail?.product.displayImages[0]?.id).toBe(
+        logo.shortcode,
       );
       const refs = [
         { entityKind: "product" as const, entityId: item.entityId },

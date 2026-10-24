@@ -6,6 +6,7 @@ import { CrosshairIcon } from "@phosphor-icons/react/dist/csr/Crosshair";
 import { DotsSixVerticalIcon } from "@phosphor-icons/react/dist/csr/DotsSixVertical";
 import { useEffect, useRef } from "react";
 
+import { useEntityDisplayImage } from "~/entity/entity-media/entity-display-images";
 import { LocationIcon } from "~/entity/presentation/location-icons";
 import { resolveLocationPrimaryVisual } from "~/entity/presentation/location-visual-resolver";
 import { LocationTreeRow } from "~/features/location/location-tree-row";
@@ -99,7 +100,11 @@ export function ArrangeLocationRow({
     node.inventoryItems?.length ??
     0;
   const childCount = node.childCount ?? node.children?.length ?? 0;
-  const cover = resolveLocationPrimaryVisual(node).image;
+  const cover =
+    useEntityDisplayImage(
+      { entityKind: "location", entityId: node.id },
+      node.displayImages ? (node.displayImages[0] ?? null) : undefined,
+    ) ?? resolveLocationPrimaryVisual(node).image;
 
   return (
     <LocationTreeRow

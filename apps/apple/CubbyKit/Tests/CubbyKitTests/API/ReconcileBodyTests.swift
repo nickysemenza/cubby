@@ -5,7 +5,7 @@ import Testing
 
 @Suite("Reconcile wire shapes")
 struct ReconcileBodyTests {
-    @Test func rowsCarryBarcodesAndTheUploadedCover() throws {
+    @Test func rowsCarryBarcodesAndTheCanonicalCover() throws {
         let rows = try Fixtures.decode(
             [InventoryWithLocationAndProductOut].self, from: "inventory-by-location.json"
         )
@@ -15,8 +15,8 @@ struct ReconcileBodyTests {
         #expect(first.id == InventoryEntryCode("INV-2345"))
         #expect(first.amount == Amount(value: 3, unit: "each"))
         #expect(first.product.barcodes == ["00012345678905", "04006381333931"])
-        // The pending image is not a cover; the uploaded one is.
-        #expect(first.product.coverImageURL?.absoluteString == "https://images.example/cover.jpg")
+        // Identity comes from the server-selected canonical cover, independently of the raw gallery.
+        #expect(first.product.coverImageURL?.absoluteString == "https://images.example/brand-logo.jpg")
         #expect(first.locationID == LocationCode("LOC-5678"))
         #expect(rows[1].product.barcodes.isEmpty)
         #expect(rows[1].product.coverImageURL == nil)

@@ -33,7 +33,10 @@ const entityReadObject = (schema: z.ZodType) => {
 /** Public read decorators; repository schemas remain domain-shaped internally. */
 export function withEntityListMedia<Fields extends z.ZodRawShape>(
   schema: z.ZodObject<Fields>,
-): z.ZodObject<Fields & typeof listMediaFields.shape>;
+): z.ZodObject<
+  Omit<Fields, keyof typeof listMediaFields.shape> &
+    typeof listMediaFields.shape
+>;
 export function withEntityListMedia<S extends z.ZodType>(
   schema: S,
 ): z.ZodType<z.output<S> & z.output<typeof listMediaFields>>;
@@ -43,7 +46,10 @@ export function withEntityListMedia(schema: z.ZodType): z.ZodType {
 
 export function withEntityDetailMedia<Fields extends z.ZodRawShape>(
   schema: z.ZodObject<Fields>,
-): z.ZodObject<Fields & typeof detailMediaFields.shape>;
+): z.ZodObject<
+  Omit<Fields, keyof typeof detailMediaFields.shape> &
+    typeof detailMediaFields.shape
+>;
 export function withEntityDetailMedia<S extends z.ZodType>(
   schema: S,
 ): z.ZodType<z.output<S> & z.output<typeof detailMediaFields>>;

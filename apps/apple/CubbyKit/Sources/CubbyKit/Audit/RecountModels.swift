@@ -63,11 +63,7 @@ public struct RecountRow: Sendable, Hashable, Identifiable {
         for external in out.product.externalIds where external.kind == .gtin14 {
             barcodes.insert(external.externalId)
         }
-        // InventoryDetailProductOut (the recount row's product shape) carries neither
-        // `displayImages` nor `coverImageUrl` — only this status-tagged `images` array. Switch to
-        // `out.product.displayImages.first?.url` once that field lands here, matching the
-        // list-row image ladder in EntityRow.imageURL(from:).
-        let cover = out.product.images.first { $0.status == .uploaded }.flatMap {
+        let cover = out.product.displayImages.first.flatMap {
             URL(string: $0.representations?.preferred ?? $0.url)
         }
         self.init(

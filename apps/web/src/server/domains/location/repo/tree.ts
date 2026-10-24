@@ -9,7 +9,6 @@ import {
   parseShortcodeFor,
   productId as productIdSchema,
 } from "@cubby/schemas/identifiers";
-import { isDisplayableImageFile } from "@cubby/schemas/image";
 import type {
   InfLocation,
   LocationAncestorOut,
@@ -23,14 +22,7 @@ import { stockOnly } from "~/server/db/computed/inventory-placement";
 import { locationAiDescriptionSql } from "~/server/db/computed/location-ai-description";
 import { productBrandNameSql } from "~/server/db/computed/product-brand-sql";
 import { categorySummarySql } from "~/server/db/computed/product-category-sql";
-import {
-  getDb,
-  imageOrder,
-  mapImages,
-  notDeleted,
-  relations,
-  unwrapDb,
-} from "~/server/db/helpers";
+import { getDb, notDeleted, relations, unwrapDb } from "~/server/db/helpers";
 import {
   entityAttachment,
   type image,
@@ -42,6 +34,7 @@ import { hydrateImageReadProjection } from "~/server/domains/image/repo/image-re
 import type { LocationWithParentChild } from "~/server/domains/location/repo/internal-types";
 import { parseLocationType } from "~/server/domains/location/repo/parse-type";
 import { MAX_TREE_DEPTH } from "~/server/domains/location/repo/tree-depth";
+import { resolveEntityDisplayImageLists } from "~/server/entity-kernel/repo/entity-display-image";
 import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
 
 import { buildLocationWithChildren } from "./helpers";
@@ -144,13 +137,6 @@ export const buildLocationTree = async (db: Database, rootId?: LocationId) => {
               "category",
             ),
           },
-          with: {
-            images: {
-              where: notDeleted(entityAttachment),
-              orderBy: imageOrder,
-              with: { image: true },
-            },
-          },
         })
       : Promise.resolve([]);
   const identityProductsPromise = loadIdentityProducts();
@@ -175,6 +161,7 @@ export const buildLocationTree = async (db: Database, rootId?: LocationId) => {
     inventoryByLocationId,
     valuations,
     dataQualities,
+    displayImages,
   ] = await Promise.all([
     identityProductsPromise,
     loadLocationImages(),
@@ -183,21 +170,12 @@ export const buildLocationTree = async (db: Database, rootId?: LocationId) => {
     // An anchored subtree still needs the whole-tree valuation rollup.
     computeLocationValuations(db),
     loadDataQualities(db, "location", locationIds),
+    resolveEntityDisplayImageLists(
+      db,
+      locationIds.map((entityId) => ({ entityKind: "location", entityId })),
+    ),
   ]);
-  const productsById = new Map(
-    identityProducts.map((identityProduct) => [
-      identityProduct.id,
-      {
-        ...identityProduct,
-        // Identity-product cover semantics are displayable-image semantics;
-        // PDFs, failed renders, and missing files cannot occupy the slot.
-        images: identityProduct.images.filter((association) => {
-          const [mapped] = mapImages([association]);
-          return mapped ? isDisplayableImageFile(mapped) : false;
-        }),
-      },
-    ]),
-  );
+  const productsById = new Map(identityProducts.map((row) => [row.id, row]));
 
   const imagesByLocationId = new Map<
     LocationId,
@@ -257,6 +235,7 @@ export const buildLocationTree = async (db: Database, rootId?: LocationId) => {
       false,
       valuations,
       dataQualities,
+      displayImages,
     );
   });
   return hydrateImageReadProjection(db, tree);

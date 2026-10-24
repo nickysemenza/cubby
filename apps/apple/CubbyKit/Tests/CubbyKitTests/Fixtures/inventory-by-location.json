@@ -129,7 +129,13 @@
       ],
       "unitMappings": [],
       "brandId": "VEN-2345",
-      "brandName": "Sample Manufacturer"
+      "brandName": "Sample Manufacturer",
+      "displayImages": [
+        {
+          "id": "IMG-4567",
+          "url": "https://images.example/brand-logo.jpg"
+        }
+      ]
     },
     "location": {
       "id": "LOC-5678",
@@ -205,7 +211,8 @@
       "externalIds": [],
       "unitMappings": [],
       "brandId": "VEN-2345",
-      "brandName": "Other Manufacturer"
+      "brandName": "Other Manufacturer",
+      "displayImages": []
     },
     "location": {
       "id": "LOC-5678",

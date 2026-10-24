@@ -43,9 +43,9 @@ import { match } from "ts-pattern";
 
 import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import {
-  ProductImageSummariesProvider,
-  useHydratedProductImages,
-} from "~/entity/presentation/product-image-summaries";
+  EntityDisplayImagesProvider,
+  useEntityDisplayImage,
+} from "~/entity/entity-media/entity-display-images";
 import type { ToolMatrixSearch } from "~/features/tools/tool-search";
 import { ripple } from "~/integrations/tanstack-query/cache-tags";
 import { project } from "~/integrations/tanstack-query/generated/catalog/project.gen";
@@ -598,7 +598,12 @@ export function ToolMatrixPage({
             Nothing to plot
           </EmptyState>
         ) : (
-          <ProductImageSummariesProvider productIds={productIds}>
+          <EntityDisplayImagesProvider
+            refs={productIds.map((entityId) => ({
+              entityKind: "product",
+              entityId,
+            }))}
+          >
             <div className="overflow-visible">
               <MatrixTable
                 data={data}
@@ -607,7 +612,7 @@ export function ToolMatrixPage({
                 onToggle={toggleCell}
               />
             </div>
-          </ProductImageSummariesProvider>
+          </EntityDisplayImagesProvider>
         )}
         <Row
           align="center"
@@ -660,7 +665,11 @@ function ToolIdentityLink({
 }: {
   row: ProjectToolMatrixOut["rows"][number];
 }) {
-  const images = useHydratedProductImages(row.productId);
+  const image = useEntityDisplayImage({
+    entityKind: "product",
+    entityId: row.productId,
+  });
+  const images = image ? [image] : [];
 
   return (
     <EntityRefLink

@@ -1,3 +1,4 @@
+import { preferredImageUrl } from "@cubby/schemas/image-summary";
 import type { RecipeOut } from "@cubby/schemas/recipe";
 import { ArrowSquareOutIcon } from "@phosphor-icons/react/dist/csr/ArrowSquareOut";
 import { BookBookmarkIcon } from "@phosphor-icons/react/dist/csr/BookBookmark";
@@ -10,6 +11,7 @@ import { Link } from "@tanstack/react-router";
 import { sumBy } from "es-toolkit";
 
 import { EntityFilterLink } from "~/entity/components/entity-ref-link";
+import { useEntityDisplayImage } from "~/entity/entity-media/entity-display-images";
 import { Panel, Row } from "~/ui/layout";
 import { Image } from "~/ui/primitives/image";
 
@@ -87,7 +89,9 @@ interface RecipeHeroProps {
 }
 
 export function RecipeHero({ recipe }: RecipeHeroProps) {
-  const heroImage = recipe.images[0];
+  const heroImage =
+    useEntityDisplayImage({ entityKind: "recipe", entityId: recipe.id }) ??
+    recipe.displayImages?.[0];
   const hasImage = !!heroImage;
 
   // Count total ingredients across all sections
@@ -176,7 +180,7 @@ export function RecipeHero({ recipe }: RecipeHeroProps) {
   return (
     <figure className="my-0 border border-[var(--border)] bg-card p-2">
       <Image
-        src={heroImage.url}
+        src={preferredImageUrl(heroImage)}
         alt={recipe.name}
         displayWidth={800}
         className="h-52 w-full object-cover sm:h-80 md:h-96"

@@ -9,6 +9,7 @@ const projectSpan = (
   endDateExclusive: string,
 ): CalendarItem => ({
   kind: "project",
+  displayImages: [],
   id: testShortcode("project", "PRJ-4K7M"),
   title: "Kitchen Remodel",
   startDate,
@@ -20,6 +21,7 @@ const projectSpan = (
 
 const plantingMilestone: CalendarItem = {
   kind: "planting",
+  displayImages: [],
   id: testShortcode("planting", "PLT-3B2C"),
   milestone: "sowed",
   title: "Tomato · Brandywine",

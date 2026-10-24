@@ -249,6 +249,7 @@ describe("inventory mappers", () => {
         dataQuality: locationDataQuality,
       },
       product: {
+        displayImages: [],
         id: testShortcode("product", "PRD-TEST"),
         images: [],
         externalIds: [

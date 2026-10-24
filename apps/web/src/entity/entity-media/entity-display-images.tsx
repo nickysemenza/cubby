@@ -162,7 +162,10 @@ export function EntityDisplayImagesProvider({
   );
 }
 
-export function useEntityDisplayImage(ref: EntityRef): ImageUrlSummary | null {
+export function useEntityDisplayImage(
+  ref: EntityRef,
+  seeded?: ImageUrlSummary | null,
+): ImageUrlSummary | null {
   const register = useContext(RegisterImageRefContext);
   const covered = useContext(CoveredImageRefsContext).has(
     entityDisplayImageKey(ref),
@@ -171,11 +174,12 @@ export function useEntityDisplayImage(ref: EntityRef): ImageUrlSummary | null {
   // Collection owners declare their complete batch; only otherwise-uncovered
   // mounted references join the shell batch. No pill owns a network query.
   useEffect(() => {
-    if (!covered) return register?.({ entityKind, entityId });
-  }, [register, covered, entityKind, entityId]);
-  return (
-    useContext(EntityDisplayImagesContext)[entityDisplayImageKey(ref)] ?? null
-  );
+    if (!covered && seeded === undefined)
+      return register?.({ entityKind, entityId });
+  }, [register, covered, entityKind, entityId, seeded]);
+  const images = useContext(EntityDisplayImagesContext);
+  const key = entityDisplayImageKey(ref);
+  return Object.hasOwn(images, key) ? (images[key] ?? null) : (seeded ?? null);
 }
 
 export function useEntityDisplayImageMap(): EntityDisplayImageMap {
