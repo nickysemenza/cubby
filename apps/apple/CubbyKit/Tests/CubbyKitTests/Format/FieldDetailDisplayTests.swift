@@ -23,6 +23,35 @@ struct FieldDetailDisplayTests {
         #expect(category.displayApplicabilityRefusal(in: ["lineKind": "shipping"]) != nil)
     }
 
+    @Test func allocatedProjectsKeepTheirNamesWithoutAScalarTarget() throws {
+        let project = try field(.expense, "projectId")
+        let raw: JSONValue = [
+            "lineKind": "fee", "projectId": .null,
+            "projectAllocations": [
+                [
+                    "projectId": "PRJ-2345", "projectName": "Synthetic first project", "amount": 2,
+                    "basis": "positive", "incomplete": false,
+                ],
+                [
+                    "projectId": "PRJ-3456", "projectName": "Synthetic second project", "amount": 3,
+                    "basis": "positive", "incomplete": false,
+                ],
+            ],
+            "fieldResolutions": [
+                "projectId": [
+                    "mode": "allocated", "storedValue": .null, "value": .null, "fallbackValue": .null,
+                    "source": "Principal items", "sourceEntity": .null, "matchesFallback": false,
+                    "canReset": false,
+                ]
+            ],
+        ]
+        #expect(project.applicabilityRefusal(in: raw) != nil)
+        #expect(project.displayApplicabilityRefusal(in: raw) == nil)
+        #expect(
+            FieldResolutionPresentation.allocatedReferenceLabel(in: raw, field: project)
+                == "Synthetic first project, Synthetic second project")
+    }
+
     @Test func accountApplicabilityReadsNestedClassifierAndRefusesMissingValues() throws {
         for key in ["network", "primaryCardholderId", "authorizedUsers"] {
             let descriptor = try field(.financialAccount, key)

@@ -372,7 +372,9 @@ struct FieldsSectionView: View {
     }
 
     private func displayText(_ field: FieldDescriptor) -> String? {
-        let value = EntityFieldValue.text(in: row.raw, field: field, surface: "detail")
+        let value =
+            FieldResolutionPresentation.allocatedReferenceLabel(in: row.raw, field: field)
+            ?? EntityFieldValue.text(in: row.raw, field: field, surface: "detail")
         if summary, value == nil,
             FieldResolutionPresentation.readValue(in: row.raw, field: field, surface: "detail") == .null
         {

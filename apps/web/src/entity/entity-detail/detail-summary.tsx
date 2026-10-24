@@ -1,4 +1,4 @@
-import { classificationFieldDisplayRefusal } from "@cubby/schemas/classification-field-policy";
+import { classificationFieldRefusal } from "@cubby/schemas/classification-field-policy";
 import { entitySchema, type EntityRef } from "@cubby/schemas/entity";
 import type { DetailSummarySlot } from "@cubby/schemas/entity-detail-summary";
 import {
@@ -19,6 +19,7 @@ import {
 } from "~/entity/display/entity-display";
 import { entities, isBrowserRoutedEntity } from "~/entity/entities";
 import { EntityDisplayImagesProvider } from "~/entity/entity-media/entity-display-images";
+import { fieldResolutionFor } from "~/entity/fields/field-resolution";
 import { ConnectionPaths } from "~/entity/relationships/connection-paths";
 import { entityGraph } from "~/integrations/tanstack-query/generated/catalog/entityGraph.gen";
 import { entityReport } from "~/integrations/tanstack-query/generated/catalog/entityReport.gen";
@@ -368,6 +369,7 @@ export function DetailSummary<E extends GenericDetailEntity>({
                 const field = fields.find((field) => field.key === key);
                 return (
                   field &&
+                  fieldResolutionFor(record, field.key)?.mode !== "allocated" &&
                   field.readKey !== null &&
                   readPathValue(
                     record,
@@ -382,6 +384,8 @@ export function DetailSummary<E extends GenericDetailEntity>({
                 {slot.fields.map((key) => {
                   const field = fields.find((field) => field.key === key);
                   if (!field) return null;
+                  const allocated =
+                    fieldResolutionFor(record, field.key)?.mode === "allocated";
                   const absent =
                     field.readKey !== null &&
                     field.display.readPath === null &&
@@ -409,7 +413,8 @@ export function DetailSummary<E extends GenericDetailEntity>({
                       </dt>
                       <dd className="min-w-0 break-words">
                         {(absent || value === null) &&
-                        classificationFieldDisplayRefusal(
+                        !allocated &&
+                        classificationFieldRefusal(
                           entity,
                           record,
                           field.key,

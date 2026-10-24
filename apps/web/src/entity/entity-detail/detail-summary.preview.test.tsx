@@ -58,6 +58,37 @@ const examples = {
       })}
     />
   ),
+  expense: (
+    <DetailSummary
+      entity="expense"
+      record={fromPartial<DetailRecordOf<"expense">>({
+        id: shortcode("EXP-4K7M"),
+        name: "Synthetic shipping allocation",
+        lineKind: "shipping",
+        spendingCategoryId: null,
+        spendingCategoryAllocations: [
+          {
+            spendingCategoryId: shortcode("SPC-4K7M"),
+            spendingCategoryName: "Synthetic allocated supplies",
+            amount: 2,
+            incomplete: false,
+          },
+        ],
+        fieldResolutions: {
+          spendingCategoryId: {
+            mode: "allocated",
+            storedValue: null,
+            value: null,
+            fallbackValue: null,
+            source: "Principal items",
+            sourceEntity: null,
+            matchesFallback: false,
+            canReset: false,
+          },
+        },
+      })}
+    />
+  ),
   purchase: (
     <DetailSummary
       entity="purchase"
@@ -69,7 +100,7 @@ const examples = {
   ),
 };
 
-it.each(["product", "vendor", "purchase"] as const)(
+it.each(["product", "vendor", "purchase", "expense"] as const)(
   "keeps %s summaries compact with readable pills and bounded phone width",
   async (entity) => {
     const harness = createBrowserTestHarness();
@@ -166,6 +197,11 @@ it.each(["product", "vendor", "purchase"] as const)(
             ?.closest("section")
             ?.hasAttribute("hidden") ?? false,
         ).toBe(false);
+        expect(
+          screen.queryAllByRole("link", {
+            name: "Synthetic allocated supplies",
+          }),
+        ).toHaveLength(entity === "expense" ? 1 : 0);
         const frame = screen.getByTestId("summary-frame");
         expect(frame.scrollWidth).toBeLessThanOrEqual(width);
         expect(frame.getBoundingClientRect().height).toBeLessThan(
