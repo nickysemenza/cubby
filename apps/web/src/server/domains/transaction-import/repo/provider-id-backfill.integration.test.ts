@@ -18,6 +18,7 @@ import {
 } from "~/server/db/schema";
 import * as calendar from "~/server/domains/calendar/repo/client";
 import { withAuditReceipts } from "~/server/generic/audit-log/repo/audit-receipts";
+import { requireActor } from "~/server/http/request-context";
 import { createMcpServer } from "~/server/mcp/server";
 import { callMcpTool } from "~/server/testing/mcp-test-utils";
 import { createTestRequestContext } from "~/server/testing/request-context";
@@ -76,7 +77,11 @@ describe("CSV provider ID backfill", () => {
       createMcpServer(),
       action.startsWith("preview_") ? "finance_read" : "finance",
       { action, ...input },
-      createTestRequestContext(ctx.db, { auth: { userId: ctx.actor.userId } }),
+      requireActor(
+        createTestRequestContext(ctx.db, {
+          auth: { userId: ctx.actor.userId },
+        }),
+      ),
     );
 
   async function fixture() {
@@ -591,7 +596,9 @@ describe("CSV provider ID backfill", () => {
       if (fault === "malformed")
         await getDb(ctx.db)
           .update(auditLog)
-          .set({ changes: { providerIdBackfill: { to: "invalid" } } })
+          .set({
+            changes: { providerIdBackfill: { from: null, to: "invalid" } },
+          })
           .where(sql`${auditLog.changes} ? 'providerIdBackfill'`);
       for (const row of [legacyRow, originalRow]) {
         const incoming =
