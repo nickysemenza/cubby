@@ -158,7 +158,7 @@ jobs:
             './**/*.md'
             './**/*.mdx'
 
-  # Split test demand evenly across GitHub and Celesto; each owns fresh services.
+  # Spread test demand across GitHub and Celesto; each owns fresh services.
   lanes:
     name: ${{ matrix.name }}
     runs-on: ${{ matrix.runner }}

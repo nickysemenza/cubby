@@ -63,8 +63,8 @@ branded browser channel. Local headed browser installation remains separate.
 Setup
 also restores `/dev/fd` when absent on Linux: Bash process substitution in the
 WASM installer requires that link to `/proc/self/fd` on minimal images.
-Celesto runs as root, so filesystem permission regressions inject the failing
-syscall rather than rely on chmod restrictions that root bypasses. Celesto test
+Self-hosted images can run as root, so filesystem permission regressions inject
+the failing syscall rather than rely on chmod restrictions that root bypasses. Celesto test
 lanes set their own image identity for Nx result keys; GitHub lanes retain their
 hosted image identity. Increment the Celesto identity when changing its runner
 image contract. Reporting still merges blobs without building the app or
@@ -598,8 +598,8 @@ and do not require human review.
 Optimize readiness across concurrent PRs within both providers' available slots.
 The Linux `lanes` matrix sets no `max-parallel`, so all entries can run
 concurrently when capacity permits; validation and short control jobs are additional demand, and
-optional work has repository-level limits. The browser shard count is reduced from the doubled-shard experiment while
-retaining the expanded Vitest split, and half of each tier uses each provider.
+optional work has repository-level limits. Browser and Vitest tiers each use
+one Celesto job, leaving most shards on GitHub to limit admission pressure.
 Standalone shards pay setup on every runner; this does not reserve
 account-wide capacity or guarantee fairness against unrelated repositories.
 
