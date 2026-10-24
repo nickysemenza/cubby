@@ -44,6 +44,11 @@ import {
   type DecisionPort,
 } from "~/server/ai/decision-model";
 import {
+  adoptPreparedAiInputs,
+  preparingAiInputs,
+  withAiInputs,
+} from "~/server/ai/evaluation-inputs";
+import {
   fieldSuggestSpecFor,
   withFieldSuggestionPreparation,
   type FieldSuggestSpec,
@@ -55,6 +60,11 @@ import {
   type RawBasis,
   type ResolvedBasis,
 } from "~/server/ai/policy/field-suggest";
+import {
+  dependencyStamps,
+  fieldDependencyKeys,
+} from "~/server/ai/policy/refresh-manifest";
+import { producingAiManifest } from "~/server/ai/repo/ai-refresh";
 import { type AiSelectionUsage, runAiSelection } from "~/server/ai/selection";
 import type { Database } from "~/server/db";
 import { resolveDraftExpenseFields } from "~/server/domains/expense/repo/expense-inheritance";
@@ -68,6 +78,13 @@ import { classificationRefusesField } from "~/server/domains/spending-category/r
 import { resolveDraftTaskFields } from "~/server/domains/task/repo/task-project-inheritance";
 import { loadVendorSuggestionContext } from "~/server/domains/vendor/repo/vendor-suggestion-context";
 import { createAppError } from "~/server/errors/app-error";
+import { hasFieldCorrectionSources } from "~/server/generic/assessment/repo/correction-sources";
+import { fieldCorrectionIdentity } from "~/server/generic/assessment/repo/field-assessment-review";
+import {
+  resolveFieldCorrection,
+  supportsFieldCorrection,
+} from "~/server/generic/assessment/repo/field-correction-resolver";
+import { fieldInputFingerprint } from "~/server/generic/assessment/repo/field-input-fence";
 import {
   lookupEntityLabels,
   resolveShortcodes,
@@ -97,6 +114,8 @@ const defaultResolveLabels: LabelResolverPort = async (db, codes) => {
 };
 
 export interface SuggestFieldsPorts {
+  /** Pure model evaluations and isolated unit mechanics may bypass correction lookup. */
+  resolveCorrections?: boolean;
   /** One accounting group per operation within a finite list batch. */
   usageFor?: (operation: string) => AiSelectionUsage;
   decisionPort?: DecisionPort;
@@ -1112,21 +1131,92 @@ export async function suggestFields(
         `suggestFields.${input.entity}.${target}`,
         ports,
       );
-      const { suggestion, rawValue, outcome } = await resolveSpec(
-        db,
-        spec,
-        resolvedBasis,
-        rawBasis,
-        normalizeBasisValue(
-          input.basis[target],
-          basisValueLimitFor(input.entity, target),
-        ),
-        usage,
-        ports?.decisionPort,
-        linkedContext?.subject,
-        ports?.decisionModel,
-        ports?.onTokenUsage,
-      );
+      const resolve = () =>
+        resolveSpec(
+          db,
+          spec,
+          resolvedBasis,
+          rawBasis,
+          normalizeBasisValue(
+            input.basis[target],
+            basisValueLimitFor(input.entity, target),
+          ),
+          usage,
+          ports?.decisionPort,
+          linkedContext?.subject,
+          ports?.decisionModel,
+          ports?.onTokenUsage,
+        );
+      // Registry overrides are isolated mechanics tests with no authoritative database.
+      // Provider-free preparation must not recursively resolve authority or call a provider.
+      if (
+        !preparingAiInputs() &&
+        (ports?.resolveCorrections ?? !ports?.registry) &&
+        supportsFieldCorrection(input.entity, target) &&
+        (await hasFieldCorrectionSources(db, input.entity, target))
+      ) {
+        const record = input.entityId
+          ? (await resolveShortcodes(db, [input.entityId])).get(input.entityId)
+          : null;
+        const targetInputFingerprint =
+          record?.entity === input.entity
+            ? await fieldInputFingerprint(db, input.entity, record.id, target)
+            : null;
+        const prepared = await withAiInputs(true, resolve, {
+          providerFree: true,
+          captureToParent: false,
+        });
+        const manifest = await producingAiManifest(db);
+        const dependencies = dependencyStamps(manifest, [
+          ...fieldDependencyKeys(input.entity, target),
+          ...prepared.inputs.map((call) => call.feature),
+        ]);
+        const key = await fieldCorrectionIdentity({
+          entity: input.entity,
+          field: target,
+          basis: rawInput.basis,
+          inputs: prepared.inputs,
+          dependencies,
+          incomplete: prepared.incomplete,
+        });
+        const correction = key ? await resolveFieldCorrection(db, key) : null;
+        if (key && correction && correction.kind !== "none") {
+          adoptPreparedAiInputs(prepared.inputs);
+          const decision =
+            correction.kind === "confirmed"
+              ? {
+                  status: "confirmed" as const,
+                  correctionKey: key,
+                  revision: correction.revision,
+                  sourceFeedbackId: correction.source.feedbackId,
+                  sourceApplicationFeedbackId:
+                    correction.source.applicationFeedbackId,
+                  value: correction.source.correctedValue,
+                }
+              : {
+                  status: "conflict" as const,
+                  correctionKey: key,
+                  revision: correction.revision,
+                  sourceFeedbackIds: correction.sources.map(
+                    (source) => source.feedbackId,
+                  ),
+                };
+          suggestions[target] = null;
+          outcomes[target] = {
+            kind: "correction",
+            decision,
+            targetInputFingerprint,
+          };
+          resolvedRawByTarget.set(
+            target,
+            decision.status === "confirmed"
+              ? scalarBasisValue(decision.value)
+              : null,
+          );
+          return;
+        }
+      }
+      const { suggestion, rawValue, outcome } = await resolve();
       if (
         suggestion &&
         linkedContext &&

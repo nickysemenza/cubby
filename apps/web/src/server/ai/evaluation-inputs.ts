@@ -54,7 +54,7 @@ export async function captureAiInput(
 export async function withAiInputs<T>(
   prepareOnly: boolean,
   work: () => Promise<T>,
-  options: { providerFree?: boolean } = {},
+  options: { providerFree?: boolean; captureToParent?: boolean } = {},
 ) {
   const parent = scope.getStore();
   const store = {
@@ -64,6 +64,11 @@ export async function withAiInputs<T>(
     inputs: new Array<CapturedInput>(),
   };
   const result = await scope.run(store, work);
-  parent?.inputs.push(...store.inputs);
+  if (options.captureToParent !== false) parent?.inputs.push(...store.inputs);
   return { result, inputs: store.inputs, incomplete: store.incomplete };
+}
+
+/** A provider-free decision replaces inference only after its authority is resolved. */
+export function adoptPreparedAiInputs(inputs: readonly CapturedInput[]) {
+  scope.getStore()?.inputs.push(...inputs);
 }

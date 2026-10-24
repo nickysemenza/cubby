@@ -1,5 +1,8 @@
+import type { FieldSuggestionsInput } from "@cubby/schemas/ai";
 import { suggestionAcceptanceReceipt } from "@cubby/schemas/ai-evaluation";
 import { assessmentSubjects } from "@cubby/schemas/assessment";
+import { entityFieldByKey } from "@cubby/schemas/entity-fields";
+import { requiresSuggestionReview } from "@cubby/schemas/field-suggestion";
 import type { SuggestionCorrectionSource } from "@cubby/schemas/suggestion-correction";
 import { sha256Hex } from "@cubby/shared/sha256";
 import { eq } from "drizzle-orm";
@@ -11,6 +14,17 @@ import { readFieldCorrectionSources } from "~/server/generic/assessment/repo/cor
 import { fieldInputFingerprintIfLive } from "~/server/generic/assessment/repo/field-input-fence";
 import { latestFieldWrite } from "~/server/generic/audit-log/repo/field-write";
 import { canonicalJson } from "~/server/lib/canonical-json";
+
+export function supportsFieldCorrection(
+  entity: FieldSuggestionsInput["entity"],
+  field: string,
+) {
+  return (
+    entityFieldByKey(entity, field)?.control?.suggest?.mode === "fill" &&
+    !requiresSuggestionReview(entity, field) &&
+    !["expense", "purchase", "financialTransaction", "vendor"].includes(entity)
+  );
+}
 
 /** A later member write, including an unchanged save or ABA edit, retires this authority. */
 async function isCurrentFieldCorrection(
@@ -24,7 +38,14 @@ async function isCurrentFieldCorrection(
     .from(assessmentState)
     .where(eq(assessmentState.id, source.assessmentId))
     .limit(1);
-  if (!state) return false;
+  if (
+    !state ||
+    !subject.data.recordId ||
+    subject.data.recordId !== state.recordId ||
+    subject.data.entity !== state.entity ||
+    subject.data.field !== state.field
+  )
+    return false;
   const bound = suggestionAcceptanceReceipt.safeParse(
     source.applicationReceipt,
   );

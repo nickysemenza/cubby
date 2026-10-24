@@ -67,6 +67,7 @@ import {
   fieldCorrectionIdentity,
   fieldReviewIdentity,
 } from "~/server/generic/assessment/repo/field-assessment-review";
+import { publishFieldCorrectionQuestion } from "~/server/generic/assessment/repo/field-correction-publication";
 import {
   fieldInputFingerprint,
   fenceFieldInputsAtCommit,
@@ -961,15 +962,17 @@ export async function executeAiRefreshTarget(
       const provenance = {
         ...prepared.provenance,
         model:
-          [...evaluated.inputs]
-            .reverse()
-            .find(
-              (call) =>
-                call.operation ===
-                `suggestFields.${snapshot.entity}.${snapshot.field}`,
-            )?.model ??
-          snapshot.decisionModelOverride ??
-          null,
+          evaluated.result.outcomes?.[snapshot.field]?.kind === "correction"
+            ? null
+            : ([...evaluated.inputs]
+                .reverse()
+                .find(
+                  (call) =>
+                    call.operation ===
+                    `suggestFields.${snapshot.entity}.${snapshot.field}`,
+                )?.model ??
+              snapshot.decisionModelOverride ??
+              null),
       };
       const reviewKey = await fieldReviewIdentity({
         entity: snapshot.entity,
@@ -1013,6 +1016,23 @@ export async function executeAiRefreshTarget(
       )
         throw new Error("AI evaluation target changed during inference");
       const decision = saved.output.suggestions[snapshot.field];
+      const correctionOutcome = saved.output.outcomes?.[snapshot.field];
+      if (correctionOutcome?.kind === "correction") {
+        await publishFieldCorrectionQuestion(tx, {
+          entity: snapshot.entity,
+          recordId: target.recordId,
+          field: snapshot.field,
+          currentValue: snapshot.currentValue,
+          outcome: correctionOutcome,
+          provenance: saved.provenance,
+          runId: claimed.runId,
+        });
+        return {
+          outcome: "queued",
+          applicationFailures: [],
+          evaluatedOutcome: correctionOutcome,
+        };
+      }
       const model =
         saved.provenance.model ?? snapshot.decisionModelOverride ?? "unknown";
       const entry = decision

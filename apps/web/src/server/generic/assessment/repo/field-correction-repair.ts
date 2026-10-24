@@ -1,9 +1,11 @@
-import { fieldSuggestionsInput } from "@cubby/schemas/ai";
+import { fieldSuggestionsInput, suggestionStatus } from "@cubby/schemas/ai";
 import { suggestionAcceptanceReceipt } from "@cubby/schemas/ai-evaluation";
 import { assessmentSubjects } from "@cubby/schemas/assessment";
-import { entityFieldByKey } from "@cubby/schemas/entity-fields";
-import { requiresSuggestionReview } from "@cubby/schemas/field-suggestion";
-import { and, eq } from "drizzle-orm";
+import {
+  CORRECTION_OUTCOME_RECEIPT_KIND,
+  type SuggestionCorrectionOutcome,
+} from "@cubby/schemas/suggestion-correction";
+import { and, eq, sql, asc, inArray } from "drizzle-orm";
 import { z } from "zod";
 
 import { getDb } from "~/server/db/helpers";
@@ -11,9 +13,19 @@ import { assessmentState, feedback } from "~/server/db/schema";
 import { systemActor } from "~/server/domains/run/repo/ensure-run";
 import type { CorrectionRepairAdapter } from "~/server/generic/assessment/correction-repair";
 import { transitionAssessmentState } from "~/server/generic/assessment/repo/assessment-state";
-import { fieldCorrectionKey } from "~/server/generic/assessment/repo/correction-sources";
-import { resolveFieldCorrection } from "~/server/generic/assessment/repo/field-correction-resolver";
-import { fieldInputFingerprint } from "~/server/generic/assessment/repo/field-input-fence";
+import {
+  fieldCorrectionKey,
+  readConfirmedCorrection,
+} from "~/server/generic/assessment/repo/correction-sources";
+import { correctionAlreadyRecorded } from "~/server/generic/assessment/repo/correction-work";
+import {
+  resolveFieldCorrection,
+  supportsFieldCorrection,
+} from "~/server/generic/assessment/repo/field-correction-resolver";
+import {
+  fieldInputFingerprint,
+  fieldInputFingerprintIfLive,
+} from "~/server/generic/assessment/repo/field-input-fence";
 import {
   confirmedFieldFillRefusal,
   writePropagatedFieldCorrection,
@@ -21,7 +33,18 @@ import {
 import { latestFieldWrite } from "~/server/generic/audit-log/repo/field-write";
 import { canonicalJson } from "~/server/lib/canonical-json";
 
-const fieldRepairPlan = z.object({ inputFingerprint: z.string() });
+const fieldRepairPlan = z.discriminatedUnion("kind", [
+  z.object({
+    kind: z.literal("write"),
+    inputFingerprint: z.string(),
+    priorCorrectionApplicationFeedbackId: z.uuid().nullable(),
+  }),
+  z.object({
+    kind: z.literal("settle"),
+    inputFingerprint: z.string(),
+    applicationFeedbackId: z.uuid(),
+  }),
+]);
 
 export const fieldCorrectionRepair: CorrectionRepairAdapter<
   typeof fieldRepairPlan
@@ -36,14 +59,8 @@ export const fieldCorrectionRepair: CorrectionRepairAdapter<
         reason: "Correction requires a saved field target",
       };
     const entity = fieldSuggestionsInput.shape.entity.parse(target.data.entity);
-    const policy = entityFieldByKey(entity, target.data.field)?.control
-      ?.suggest;
     // Financial fields have reviewed graph effects and belong to their domain adapter.
-    if (
-      policy?.mode !== "fill" ||
-      requiresSuggestionReview(entity, target.data.field) ||
-      ["expense", "purchase", "financialTransaction", "vendor"].includes(entity)
-    )
+    if (!supportsFieldCorrection(entity, target.data.field))
       return {
         status: "held",
         reason: "This field requires its domain correction policy",
@@ -82,7 +99,9 @@ export const fieldCorrectionRepair: CorrectionRepairAdapter<
     if (
       !state ||
       state.suppression ||
-      (!state.active && state.status !== "applied")
+      state.recordId !== target.data.recordId ||
+      state.entity !== target.data.entity ||
+      state.field !== target.data.field
     )
       return { status: "held", reason: "The target is no longer actionable" };
     const [member] = await getDb(db)
@@ -109,13 +128,83 @@ export const fieldCorrectionRepair: CorrectionRepairAdapter<
       state.recordId,
       state.field,
     );
-    const fingerprint = await fieldInputFingerprint(
+    const fingerprint = await fieldInputFingerprintIfLive(
       db,
       entity,
       state.recordId,
       state.field,
     );
-    if (state.status === "applied") {
+    if (fingerprint === null)
+      return { status: "held", reason: "Field target no longer exists" };
+    let priorCorrectionApplicationFeedbackId: string | null = null;
+    const previous = await getDb(db)
+      .select({
+        assessmentId: feedback.assessmentId,
+        metadata: feedback.metadata,
+      })
+      .from(feedback)
+      .innerJoin(assessmentState, eq(assessmentState.id, feedback.assessmentId))
+      .where(
+        and(
+          eq(assessmentState.entity, state.entity),
+          eq(assessmentState.recordId, state.recordId),
+          eq(assessmentState.field, state.field),
+          sql`${feedback.metadata}->>${"kind"} = ${CORRECTION_OUTCOME_RECEIPT_KIND}`,
+          sql`${feedback.receipt}->>'status' = ${suggestionStatus.enum.applied}`,
+        ),
+      )
+      .orderBy(asc(feedback.id));
+    for (const candidate of previous) {
+      const lineage = z
+        .object({ sourceFeedbackId: z.string() })
+        .parse(candidate.metadata);
+      const previousSource = await readConfirmedCorrection(
+        db,
+        lineage.sourceFeedbackId,
+      );
+      if (
+        !previousSource ||
+        fieldCorrectionKey(previousSource.evidence) !== key
+      )
+        continue;
+      const recorded = await correctionAlreadyRecorded(
+        db,
+        lineage.sourceFeedbackId,
+        candidate.assessmentId,
+      );
+      const proof = z
+        .object({ receipt: z.object({ appliedInputFingerprint: z.string() }) })
+        .safeParse(recorded?.receipt);
+      if (
+        recorded &&
+        proof.success &&
+        proof.data.receipt.appliedInputFingerprint === fingerprint
+      ) {
+        if (
+          canonicalJson(previousSource.correctedValue) ===
+          canonicalJson(input.source.correctedValue)
+        )
+          return {
+            status: "ready",
+            plan: {
+              kind: "settle",
+              inputFingerprint: fingerprint,
+              applicationFeedbackId: recorded.id,
+            },
+          };
+        priorCorrectionApplicationFeedbackId = recorded.id;
+        break;
+      }
+    }
+    if (
+      !state.active &&
+      state.status !== "applied" &&
+      !priorCorrectionApplicationFeedbackId
+    )
+      return { status: "held", reason: "The target is no longer actionable" };
+    // Verified untouched automatic consequences can be corrected again;
+    // otherwise require the original automatic application or an empty field.
+    if (!priorCorrectionApplicationFeedbackId && state.status === "applied") {
       const receipt = suggestionAcceptanceReceipt.safeParse(
         state.acceptanceReceipt,
       );
@@ -131,7 +220,7 @@ export const fieldCorrectionRepair: CorrectionRepairAdapter<
           status: "held",
           reason: "The original automatic assignment or its inputs changed",
         };
-    } else {
+    } else if (!priorCorrectionApplicationFeedbackId) {
       const { buildCrudServices } =
         await import("~/server/http/request-context");
       const refusal = await confirmedFieldFillRefusal(
@@ -158,12 +247,55 @@ export const fieldCorrectionRepair: CorrectionRepairAdapter<
           reason: "The empty field or its original evidence changed",
         };
     }
-    return { status: "ready", plan: { inputFingerprint: fingerprint } };
+    return {
+      status: "ready",
+      plan: {
+        kind: "write",
+        inputFingerprint: fingerprint,
+        priorCorrectionApplicationFeedbackId,
+      },
+    };
   },
-  apply: async (db, input, plan, actor) => {
+  apply: async (
+    db,
+    input,
+    plan,
+    actor,
+  ): Promise<SuggestionCorrectionOutcome> => {
+    // Serialize source supersession and target writes using one canonical order.
+    // A source decision cannot commit between this validation and its consequence.
+    const subjects = await getDb(db)
+      .select({
+        entity: assessmentState.entity,
+        recordId: assessmentState.recordId,
+        field: assessmentState.field,
+      })
+      .from(assessmentState)
+      .where(
+        inArray(assessmentState.id, [
+          input.source.assessmentId,
+          input.target.assessmentId,
+        ]),
+      );
+    const records = new Map(
+      subjects.map((subject) => [
+        `${subject.entity}:${subject.recordId}`,
+        subject,
+      ]),
+    );
+    for (const [, subject] of [...records].sort(([left], [right]) =>
+      left.localeCompare(right),
+    ))
+      await fieldInputFingerprintIfLive(
+        db,
+        subject.entity,
+        subject.recordId,
+        subject.field,
+        { lock: true },
+      );
     const prepared = await fieldCorrectionRepair.prepare(db, input);
     if (prepared.status === "held") return prepared;
-    if (prepared.plan.inputFingerprint !== plan.inputFingerprint)
+    if (canonicalJson(prepared.plan) !== canonicalJson(plan))
       return {
         status: "held",
         reason: "Field evidence changed after correction preparation",
@@ -176,19 +308,29 @@ export const fieldCorrectionRepair: CorrectionRepairAdapter<
       .limit(1);
     if (!state)
       return { status: "held", reason: "Field target no longer exists" };
-    const value =
-      state.status === "applied" ? state.suggestedValue : state.currentValue;
-    if (
-      state.status !== "pending" &&
-      canonicalJson(z.json().parse(value)) ===
-        canonicalJson(input.source.correctedValue)
-    )
-      return {
-        status: "unchanged",
-        receipt: { inputFingerprint: plan.inputFingerprint },
-      };
     if (actor.userId !== systemActor().userId)
       throw new Error("Correction propagation requires the system actor");
+    if (plan.kind === "settle") {
+      if (state.status === "pending")
+        await transitionAssessmentState(
+          db,
+          state.id,
+          { status: "superseded", active: false },
+          {
+            kind: "correction_already_applied",
+            feedbackId: input.source.feedbackId,
+          },
+        );
+      return {
+        status: "unchanged",
+        receipt: {
+          inputFingerprint: plan.inputFingerprint,
+          applicationFeedbackId: plan.applicationFeedbackId,
+        },
+      };
+    }
+    // The original projection is immutable decision history, not the current
+    // field value after a propagated correction. Only receipt proof can settle it.
     const { buildCrudServices } = await import("~/server/http/request-context");
     const result = await writePropagatedFieldCorrection(
       db,
@@ -215,8 +357,16 @@ export const fieldCorrectionRepair: CorrectionRepairAdapter<
       receipt: {
         ...result,
         inputFingerprint: plan.inputFingerprint,
+        appliedInputFingerprint: await fieldInputFingerprint(
+          db,
+          state.entity,
+          state.recordId,
+          state.field,
+        ),
         sourceFeedbackId: input.source.feedbackId,
         originalApplicationFeedbackId: input.target.applicationFeedbackId,
+        priorCorrectionApplicationFeedbackId:
+          plan.priorCorrectionApplicationFeedbackId,
       },
     };
   },

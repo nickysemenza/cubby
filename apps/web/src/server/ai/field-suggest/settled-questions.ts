@@ -120,7 +120,7 @@ export const savedAnswerKey = (
 export const isSettledOutcome = (outcome: FieldSuggestionOutcome) =>
   outcome.kind === "evaluated"
     ? outcome.answer === "none"
-    : outcome.reason === "no_signal";
+    : outcome.kind === "skipped" && outcome.reason === "no_signal";
 
 /** The outcome's kind plus every decision input this field's answer read. */
 export const settledSignature = (

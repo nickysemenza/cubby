@@ -2110,6 +2110,27 @@ function StoredSuggestionField({
   surface: "inline" | "cell";
   children: ReactNode;
 }) {
+  if (suggestion.correctionAuthority) {
+    const mark = (
+      <SuggestionOutcomeMark
+        surface={surface}
+        outcome={{
+          kind: "correction",
+          assessmentId: suggestion.assessmentId,
+          targetInputFingerprint: null,
+          decision: suggestion.correctionAuthority,
+        }}
+      />
+    );
+    return surface === "cell" ? (
+      <CellFrame trailing={mark}>{children}</CellFrame>
+    ) : (
+      <>
+        {children}
+        {mark}
+      </>
+    );
+  }
   const runnerUp = suggestion.runnerUpValue;
   return (
     <GhostSuggestionCell

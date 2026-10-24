@@ -3715,8 +3715,18 @@ Historical repair, automatic admission and remembered-question reuse share one
 current-authority resolver. An equivalent confirmed correction or conflict reopens
 a remembered decline under a stable correction-set revision without calling a
 provider or writing from the read. Superseded or deleted source authority no longer
-invalidates that memory. This cache fence does not yet bypass live model execution
-or represent a correction as model confidence.
+invalidates that memory. Eligible field inference prepares complete decision inputs
+without providers and resolves this authority before executing a model or its cache.
+Confirmed corrections and conflicts have their own outcome, including root application
+receipt provenance and explicit null; neither carries a model confidence score.
+Incomplete preparation falls through to ordinary inference without inventing equivalence.
+Only canonical saved-record refresh and Sweep snapshots publish correction questions
+for automatic application. Client-provided form basis may display the correction but
+never supplies automatic-write authority. Publication fences the prepared target
+fingerprint, and the existing correction Job revalidates source authority and member
+ownership before the domain writer. Conflicts remain passive in Suggestions; no
+additional approval prompt or competing queue is introduced. Pure model evaluations
+can disable the inference shortcut without bypassing guarded application checks.
 Existing applicable corrections withhold the model's
 automatic answer while correction work resolves it. Historical repair requires
 the original automatic application receipt, its unchanged audited field write,
@@ -3728,6 +3738,11 @@ Propagation records a separate automatic receipt linking the root member Feedbac
 member actor, original target application and actual effects; successful replay
 precedes stale-state checks. Serializable Job publication commits writes, outcomes
 and cursor together through transaction-bound domain writers.
+Later confirmed corrections can repair an earlier propagated effect only while
+its captured post-application fingerprint still matches. Repeated equivalent
+authority settles against that receipt without another field write, including
+explicit None. The original proposal value never substitutes for current effect
+proof when correcting an automatic consequence again.
 
 Pending held field work stays in the existing Suggestions family and Work link,
 with its reason in the shared row summary. Automatic history shows applied field
@@ -3736,7 +3751,7 @@ prompt or second queue. Every review family declares its repair policy, but
 registration is not support: financial semantics, transfers, Product merges,
 mail routing/links/import outcomes, image descriptions and recommendation subtypes
 currently retain explicit holds pending domain-specific implementation. Broader
-semantic applicability and future-inference integration before model execution
+semantic applicability and remaining domain-specific inference integration
 remain tracked by [#3189](https://github.com/nickysemenza/cubby/issues/3189).
 Ordinary automatic field additions still require the existing 95% policy and
 current-evidence/member-intent checks; propagated corrections do not invent a

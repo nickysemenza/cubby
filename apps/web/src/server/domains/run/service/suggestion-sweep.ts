@@ -1,5 +1,6 @@
 import {
   fieldSuggestionsInput,
+  fieldCorrectionOutcome,
   type FieldSuggestionsInput,
 } from "@cubby/schemas/ai";
 import { aiProvenance } from "@cubby/schemas/ai-evaluation";
@@ -39,6 +40,7 @@ import {
   fieldCorrectionIdentity,
   fieldReviewIdentity,
 } from "~/server/generic/assessment/repo/field-assessment-review";
+import { publishFieldCorrectionQuestion } from "~/server/generic/assessment/repo/field-correction-publication";
 import { latestFieldWrite } from "~/server/generic/audit-log/repo/field-write";
 import { resolveLiveShortcodes } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { canonicalJson } from "~/server/lib/canonical-json";
@@ -110,6 +112,7 @@ const sweepSnapshot = z.object({
   fieldDecisionId: z.uuid().nullable(),
 });
 const sweepResult = z.object({
+  correctionOutcome: fieldCorrectionOutcome.nullable().default(null),
   entries: z.array(sweepSuggestionSchema),
   financeReviewFingerprint: z.string().nullable(),
   diagnostics: z
@@ -150,7 +153,13 @@ async function suggestTarget(
   const decision = decisions.suggestions[input.field];
   if (!decision) {
     const entries: SweepSuggestion[] = [];
-    return { primary: null, entries, financeReviewFingerprint: null };
+    const outcome = decisions.outcomes?.[input.field];
+    return {
+      primary: null,
+      entries,
+      financeReviewFingerprint: null,
+      correctionOutcome: outcome?.kind === "correction" ? outcome : null,
+    };
   }
   const model =
     [...primaryCall.inputs]
@@ -467,8 +476,11 @@ export async function executeSuggestionSweepTarget(
       optionFingerprint:
         manifest[fieldPolicyKey(input.entity, target.field)]
           ?.policyFingerprint ?? "",
-      model:
-        captured.result.primary?.model ?? input.decisionModelOverride ?? null,
+      model: captured.result.correctionOutcome
+        ? null
+        : (captured.result.primary?.model ??
+          input.decisionModelOverride ??
+          null),
     };
     saved = sweepResult.safeParse({ ...captured.result, provenance });
     if (!saved.success) throw saved.error;
@@ -484,6 +496,18 @@ export async function executeSuggestionSweepTarget(
   const result = saved.data;
   await publishAiEvaluation(db, item.id, item.attemptToken, async (tx) => {
     const diagnostics = [...result.diagnostics];
+    if (result.correctionOutcome) {
+      await publishFieldCorrectionQuestion(tx, {
+        entity: input.entity,
+        recordId: target.entityId,
+        field: target.field,
+        currentValue: target.currentValue,
+        outcome: result.correctionOutcome,
+        provenance: result.provenance,
+        runId: item.runId,
+      });
+      return { outcome: "queued", diagnostics };
+    }
     const outcome = await publishSweepSuggestions(
       tx,
       item.runId,

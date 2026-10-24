@@ -1,3 +1,5 @@
+import { basisValueOf } from "@cubby/schemas/field-suggestion";
+import { runEntityId } from "@cubby/schemas/identifiers";
 import { and, eq, inArray, notInArray } from "drizzle-orm";
 import {
   taxonomyId,
@@ -5,14 +7,35 @@ import {
 } from "tooling/product-category-fixtures";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
+import { z } from "zod";
 
+import { decisionCatalogRows } from "~/server/ai/decision-catalog";
+import { withAiInputs } from "~/server/ai/evaluation-inputs";
+import { suggestFields } from "~/server/ai/field-suggest/suggest-fields";
 import {
   dependencyStamps,
   fieldDependencyKeys,
 } from "~/server/ai/policy/refresh-manifest";
 import { producingAiManifest } from "~/server/ai/repo/ai-refresh";
-import { getDb, withTransactionDatabase } from "~/server/db/helpers";
-import { assessmentState, feedback, job, auditLog } from "~/server/db/schema";
+import { activateAiRefresh } from "~/server/ai/repo/ai-refresh";
+import {
+  getDb,
+  withTransactionDatabase,
+  withSnapshotWriteDatabase,
+} from "~/server/db/helpers";
+import {
+  assessmentState,
+  feedback,
+  job,
+  auditLog,
+  aiEvaluation,
+} from "~/server/db/schema";
+import { inferFieldAssessments } from "~/server/domains/run/operations/ai.server";
+import { systemActor } from "~/server/domains/run/repo/ensure-run";
+import {
+  scheduleSavedFieldQuestion,
+  executeAiRefreshTarget,
+} from "~/server/domains/run/service/ai-refresh";
 import {
   kernelCtx,
   productFixture,
@@ -26,12 +49,17 @@ import { applyAutomaticRules } from "~/server/generic/assessment/repo/automatic-
 import {
   readConfirmedCorrection,
   readFieldCorrectionSources,
+  readCorrectionTarget,
 } from "~/server/generic/assessment/repo/correction-sources";
+import { fieldCorrectionIdentity } from "~/server/generic/assessment/repo/field-assessment-review";
+import { publishFieldCorrectionQuestion } from "~/server/generic/assessment/repo/field-correction-publication";
+import { fieldCorrectionRepair } from "~/server/generic/assessment/repo/field-correction-repair";
 import { fieldInputFingerprint } from "~/server/generic/assessment/repo/field-input-fence";
 import { listSuggestionPage } from "~/server/generic/assessment/repo/suggestion-list";
 import { correctionPropagationHandler } from "~/server/generic/assessment/service/correction-propagation";
 import { latestFieldWrite } from "~/server/generic/audit-log/repo/field-write";
 import { advanceJob } from "~/server/generic/jobs/service/jobs";
+import { withJobFixtureExecution } from "~/server/testing/background-queue";
 
 describe("confirmed correction propagation", () => {
   const ctx = withTestDb();
@@ -121,6 +149,435 @@ describe("confirmed correction propagation", () => {
       "Synthetic correction work failed to finish its bounded pages",
     );
   }
+
+  async function preparedQuestion(
+    basis: Record<string, string | null> = {
+      name: "Synthetic classification item",
+      brandName: null,
+      categoryId: null,
+    },
+  ) {
+    const runId = runEntityId.parse("00000000-0000-4000-8000-000000000000");
+    const input = {
+      entity: "product" as const,
+      targets: ["categoryId"],
+      basisMode: "provided" as const,
+      basis,
+    };
+    const ports = {
+      decisionPort: async () => {
+        throw new Error("Confirmed correction called a provider");
+      },
+      recordUsage: false,
+    };
+    const prepared = await withAiInputs(
+      true,
+      () => suggestFields(ctx.db, runId, input, ports),
+      { providerFree: true },
+    );
+    const manifest = await producingAiManifest(ctx.db);
+    const dependencies = dependencyStamps(manifest, [
+      ...fieldDependencyKeys("product", "categoryId"),
+      ...prepared.inputs.map((call) => call.feature),
+    ]);
+    const correctionKey = await fieldCorrectionIdentity({
+      entity: "product",
+      field: "categoryId",
+      basis,
+      inputs: prepared.inputs,
+      dependencies,
+      incomplete: prepared.incomplete,
+    });
+    if (!correctionKey)
+      throw new Error("Synthetic category inputs are incomplete");
+    return {
+      input,
+      runId,
+      ports,
+      correctionKey,
+      provenance: {
+        dependencies,
+        inputFingerprint: "synthetic-prepared-correction",
+        optionFingerprint: correctionKey,
+        model: null,
+      },
+    };
+  }
+
+  async function confirmKey(correctionKey: string, value: string | null) {
+    const source = await propose({ correctionKey });
+    const result = await reviewAssessment(ctx.db, kernelCtx(ctx), {
+      assessmentId: source.prediction.id,
+      operationId: crypto.randomUUID(),
+      verdict: "wrong",
+      intent: "apply",
+      correction: { present: true, value },
+    });
+    return { ...source, result };
+  }
+
+  it.each([taxonomyShortcode("food"), null])(
+    "resolves correction %s before the provider and applies with separate automatic provenance",
+    async (value) => {
+      const question = await preparedQuestion();
+      await confirmKey(question.correctionKey, value);
+      const target = await productFixture(ctx, "Synthetic classification item");
+      const output = await suggestFields(
+        ctx.db,
+        question.runId,
+        { ...question.input, entityId: target.id },
+        question.ports,
+      );
+      const outcome = output.outcomes?.categoryId;
+      expect(output.suggestions.categoryId).toBeNull();
+      expect(outcome).toMatchObject({
+        kind: "correction",
+        decision: { status: "confirmed", value },
+      });
+      expect(outcome).not.toHaveProperty("confidence");
+      if (outcome?.kind !== "correction")
+        throw new Error("No correction outcome");
+      const published = await publishFieldCorrectionQuestion(ctx.db, {
+        entity: "product",
+        recordId: target.entityId,
+        field: "categoryId",
+        currentValue: null,
+        outcome,
+        provenance: question.provenance,
+        runId: null,
+      });
+      expect(published.producer).toMatchObject({ kind: "rule", model: null });
+      await drain();
+      expect(await productCategoryId(ctx.db, target.id)).toBe(
+        value === null ? null : taxonomyId("food"),
+      );
+      const receipts = await getDb(ctx.db)
+        .select()
+        .from(feedback)
+        .where(eq(feedback.assessmentId, published.id));
+      expect(receipts).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            authority: "automatic",
+            intent: "history",
+            receipt: expect.objectContaining({ status: "applied" }),
+          }),
+        ]),
+      );
+      expect(receipts.some((receipt) => receipt.authority === "member")).toBe(
+        false,
+      );
+    },
+  );
+
+  it("settles renewed explicit None authority without another field write", async () => {
+    const question = await preparedQuestion();
+    await confirmKey(question.correctionKey, null);
+    const target = await productFixture(ctx, "Synthetic classification item");
+    const published = [];
+    for (let attempt = 0; attempt < 2; attempt++) {
+      if (attempt === 1) await confirmKey(question.correctionKey, null);
+      const output = await suggestFields(
+        ctx.db,
+        question.runId,
+        { ...question.input, entityId: target.id },
+        question.ports,
+      );
+      const outcome = output.outcomes?.categoryId;
+      if (outcome?.kind !== "correction")
+        throw new Error("Missing synthetic None authority");
+      published.push(
+        await publishFieldCorrectionQuestion(ctx.db, {
+          entity: "product",
+          recordId: target.entityId,
+          field: "categoryId",
+          currentValue: null,
+          outcome,
+          provenance: question.provenance,
+          runId: null,
+        }),
+      );
+      await drain();
+    }
+    const second = published[1];
+    if (!second) throw new Error("Missing repeated synthetic question");
+    const receipts = await getDb(ctx.db)
+      .select()
+      .from(feedback)
+      .where(eq(feedback.assessmentId, second.id));
+    expect(receipts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          authority: "automatic",
+          receipt: expect.objectContaining({ status: "unchanged" }),
+        }),
+      ]),
+    );
+    const [state] = await getDb(ctx.db)
+      .select()
+      .from(assessmentState)
+      .where(eq(assessmentState.id, second.id));
+    expect(state).toMatchObject({ active: false, status: "superseded" });
+    expect(await productCategoryId(ctx.db, target.id)).toBeNull();
+  });
+
+  it("holds conflicting pre-model authority without calling a provider or writing a field", async () => {
+    const question = await preparedQuestion();
+    await confirmKey(question.correctionKey, taxonomyShortcode("food"));
+    await confirmKey(question.correctionKey, taxonomyShortcode("books"));
+    const target = await productFixture(ctx, "Synthetic classification item");
+    const output = await suggestFields(
+      ctx.db,
+      question.runId,
+      { ...question.input, entityId: target.id },
+      question.ports,
+    );
+    const outcome = output.outcomes?.categoryId;
+    expect(outcome).toMatchObject({
+      kind: "correction",
+      decision: { status: "conflict" },
+    });
+    if (outcome?.kind !== "correction") throw new Error("No conflict outcome");
+    await publishFieldCorrectionQuestion(ctx.db, {
+      entity: "product",
+      recordId: target.entityId,
+      field: "categoryId",
+      currentValue: null,
+      outcome,
+      provenance: question.provenance,
+      runId: null,
+    });
+    const queue = await listSuggestionPage(ctx.db, {
+      family: "field",
+      recordIds: [target.id],
+    });
+    expect(queue.items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          columns: expect.objectContaining({ confidence: null }),
+          actions: [
+            { verb: "correct", ownerOnly: false },
+            { verb: "dismiss", ownerOnly: false },
+          ],
+        }),
+      ]),
+    );
+    await drain();
+    expect(await productCategoryId(ctx.db, target.id)).toBeNull();
+  });
+
+  it("refuses a correction question when the target changes after preparation", async () => {
+    const question = await preparedQuestion();
+    await confirmKey(question.correctionKey, taxonomyShortcode("food"));
+    const target = await productFixture(ctx, "Synthetic classification item");
+    const output = await suggestFields(
+      ctx.db,
+      question.runId,
+      { ...question.input, entityId: target.id },
+      question.ports,
+    );
+    const outcome = output.outcomes?.categoryId;
+    if (outcome?.kind !== "correction")
+      throw new Error("No correction outcome");
+    await executeEntityAs(kernelCtx(ctx), "update", {
+      entity: "product",
+      id: target.id,
+      data: { categoryId: taxonomyShortcode("books") },
+    });
+    await expect(
+      publishFieldCorrectionQuestion(ctx.db, {
+        entity: "product",
+        recordId: target.entityId,
+        field: "categoryId",
+        currentValue: null,
+        outcome,
+        provenance: question.provenance,
+        runId: null,
+      }),
+    ).rejects.toThrow("target changed");
+    expect(await productCategoryId(ctx.db, target.id)).toBe(
+      taxonomyId("books"),
+    );
+  });
+
+  it("does not turn a client-provided saved-record basis into automatic-write authority", async () => {
+    const question = await preparedQuestion();
+    await confirmKey(question.correctionKey, taxonomyShortcode("food"));
+    const target = await productFixture(
+      ctx,
+      "Synthetic different canonical evidence",
+    );
+    const output = await inferFieldAssessments(
+      kernelCtx(ctx),
+      {
+        ...question.input,
+        entityId: target.id,
+        savedRecord: true,
+        runKey: crypto.randomUUID(),
+      },
+      question.ports,
+    );
+    expect(output.outcomes?.categoryId).toMatchObject({ kind: "correction" });
+    await drain();
+    expect(await productCategoryId(ctx.db, target.id)).toBeNull();
+    expect(
+      await getDb(ctx.db)
+        .select()
+        .from(assessmentState)
+        .where(eq(assessmentState.recordId, target.entityId)),
+    ).toEqual([]);
+  });
+
+  it("does not double-capture preparation inputs when authority does not match", async () => {
+    const question = await preparedQuestion();
+    await confirmKey(question.correctionKey, taxonomyShortcode("food"));
+    const input = {
+      ...question.input,
+      basis: { ...question.input.basis, name: "Synthetic different input" },
+    };
+    const prepared = await withAiInputs(
+      true,
+      () => suggestFields(ctx.db, question.runId, input, question.ports),
+      { providerFree: true },
+    );
+    let calls = 0;
+    const live = await withAiInputs(false, () =>
+      suggestFields(ctx.db, question.runId, input, {
+        recordUsage: false,
+        decisionPort: async (request) => {
+          calls++;
+          const keys = Object.keys(request.questions.selection.criteria);
+          return {
+            answers: {
+              selection: {
+                type: "choice",
+                choice: "none",
+                confidence: 0.9,
+                probabilities: Object.fromEntries(
+                  keys.map((key) => [
+                    key,
+                    key === "none" ? 0.9 : 0.1 / Math.max(1, keys.length - 1),
+                  ]),
+                ),
+              },
+            },
+          };
+        },
+      }),
+    );
+    expect(calls).toBe(1);
+    expect(live.inputs).toEqual(prepared.inputs);
+    expect(live.result.outcomes?.categoryId).toMatchObject({
+      kind: "evaluated",
+    });
+  });
+
+  it("holds a snapshot predating a conflicting correction", async () => {
+    const question = await preparedQuestion();
+    const root = await confirmKey(
+      question.correctionKey,
+      taxonomyShortcode("food"),
+    );
+    const proposed = await propose({ correctionKey: question.correctionKey });
+    const source = await readConfirmedCorrection(
+      ctx.db,
+      root.result.feedbackId,
+    );
+    const target = await readCorrectionTarget(ctx.db, proposed.prediction.id);
+    if (!source || !target)
+      throw new Error("Missing synthetic correction inputs");
+    const input = { source, target };
+    const prepared = await fieldCorrectionRepair.prepare(ctx.db, input);
+    if (prepared.status !== "ready") throw new Error(prepared.reason);
+    const started = Promise.withResolvers<void>();
+    const release = Promise.withResolvers<void>();
+    const applying = withSnapshotWriteDatabase(
+      ctx.db,
+      async (db) => {
+        await getDb(db).select({ id: job.id }).from(job).limit(1);
+        started.resolve();
+        await release.promise;
+        return fieldCorrectionRepair.apply(
+          db,
+          input,
+          prepared.plan,
+          systemActor(),
+        );
+      },
+      { isolationLevel: "serializable" },
+    );
+    await started.promise;
+    try {
+      await confirmKey(question.correctionKey, taxonomyShortcode("books"));
+    } finally {
+      release.resolve();
+    }
+    expect(await applying).toMatchObject({
+      status: "held",
+      reason: "Equivalent evidence has conflicting member corrections",
+    });
+    expect(await productCategoryId(ctx.db, proposed.product.id)).toBeNull();
+  });
+
+  it("refreshes a saved field through correction work without model execution", async () => {
+    await activateAiRefresh(ctx.db, "synthetic-correction-before-model", {
+      enabled: true,
+      startDiscovery: false,
+    });
+    const target = await productFixture(ctx, "Synthetic classification item");
+    const found = await executeEntity(kernelCtx(ctx), {
+      action: "get",
+      entity: "product",
+      id: target.id,
+      missing: "error",
+    });
+    if (found.action !== "get" || !found.item)
+      throw new Error("Missing synthetic target");
+    const row = z.record(z.string(), z.unknown()).parse(found.item);
+    const policy = decisionCatalogRows().find(
+      (entry) => entry.entity === "product" && entry.field === "categoryId",
+    );
+    if (!policy) throw new Error("Missing synthetic field policy");
+    const basis = Object.fromEntries(
+      [
+        ...new Set([...policy.basis.map((entry) => entry.key), "categoryId"]),
+      ].map((key) => [key, basisValueOf(row[key])]),
+    );
+    const question = await preparedQuestion(basis);
+    await confirmKey(question.correctionKey, taxonomyShortcode("food"));
+    await scheduleSavedFieldQuestion(
+      ctx.db,
+      {
+        kind: "field",
+        entity: "product",
+        recordId: target.entityId,
+        field: "categoryId",
+        assessmentIds: [],
+      },
+      { suggestPorts: question.ports },
+    );
+    const evaluations = await getDb(ctx.db).select().from(aiEvaluation);
+    const evaluation = evaluations.find(
+      (entry) =>
+        z.object({ recordId: z.string().optional() }).parse(entry.target)
+          .recordId === target.entityId,
+    );
+    if (!evaluation) throw new Error("Missing synthetic correction refresh");
+    await withJobFixtureExecution(
+      ctx.db,
+      {
+        key: `ai-evaluation:${evaluation.id}`,
+        kind: "ai.evaluation",
+        input: { evaluationId: evaluation.id },
+      },
+      () =>
+        executeAiRefreshTarget(ctx.db, evaluation.id, {
+          suggestPorts: question.ports,
+        }),
+    );
+    await drain();
+    expect(await productCategoryId(ctx.db, target.id)).toBe(taxonomyId("food"));
+  });
 
   it("repairs an untouched automatic assignment and an equivalent future weak proposal, once", async () => {
     const historical = await propose({ automatic: true });
@@ -390,6 +847,55 @@ describe("confirmed correction propagation", () => {
     expect(await productCategoryId(ctx.db, historical.product.id)).toBe(
       taxonomyId("food"),
     );
+  });
+
+  it("repairs prior propagated effects after another confirmed correction while preserving member edits", async () => {
+    const historical = await propose({ automatic: true });
+    const protectedTarget = await propose({ automatic: true });
+    const source = await correct();
+    await drain();
+    expect(await productCategoryId(ctx.db, historical.product.id)).toBe(
+      taxonomyId("food"),
+    );
+    await executeEntityAs(kernelCtx(ctx), "update", {
+      entity: "product",
+      id: protectedTarget.product.id,
+      data: { categoryId: taxonomyShortcode("books") },
+    });
+    const protectedFingerprint = await fieldInputFingerprint(
+      ctx.db,
+      "product",
+      protectedTarget.product.entityId,
+      "categoryId",
+    );
+    await executeEntityAs(kernelCtx(ctx), "update", {
+      entity: "product",
+      id: source.product.id,
+      data: { categoryId: taxonomyShortcode("tools") },
+    });
+    await reviewAssessment(ctx.db, kernelCtx(ctx), {
+      assessmentId: source.prediction.id,
+      operationId: crypto.randomUUID(),
+      verdict: "wrong",
+      intent: "apply",
+      correction: { present: true, value: taxonomyShortcode("tools") },
+      application: { kind: "saved_field", recordId: source.product.id },
+    });
+    await drain();
+    expect(await productCategoryId(ctx.db, historical.product.id)).toBe(
+      taxonomyId("tools"),
+    );
+    expect(await productCategoryId(ctx.db, protectedTarget.product.id)).toBe(
+      taxonomyId("books"),
+    );
+    expect(
+      await fieldInputFingerprint(
+        ctx.db,
+        "product",
+        protectedTarget.product.entityId,
+        "categoryId",
+      ),
+    ).toBe(protectedFingerprint);
   });
 
   it("ignores a deleted correction source for later equivalent proposals", async () => {

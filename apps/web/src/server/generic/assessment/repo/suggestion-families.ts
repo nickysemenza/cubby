@@ -1,4 +1,4 @@
-import { suggestionStatus } from "@cubby/schemas/ai";
+import { suggestionStatus, confirmedFieldDecision } from "@cubby/schemas/ai";
 import {
   assessmentFamily,
   type assessmentReviewInput,
@@ -248,7 +248,14 @@ const field: SuggestionFamilyPresentation<"field"> = {
     return rows.map((row) => {
       const entity = shortcodeEntity.parse(row.entity);
       const kind = fieldKind.parse(row.kind);
-      const strength = fieldStrength(row.confidence);
+      const authority = confirmedFieldDecision.safeParse(
+        row.correctionAuthority,
+      );
+      const strength = authority.success
+        ? authority.data.status === "confirmed"
+          ? "strong"
+          : "weak"
+        : fieldStrength(row.confidence);
       return {
         family: "field" as const,
         assessmentId: row.id,
@@ -269,7 +276,7 @@ const field: SuggestionFamilyPresentation<"field"> = {
           entity,
           field: row.field,
           kind,
-          confidence: row.confidence,
+          confidence: authority.success ? null : row.confidence,
         },
       };
     });
@@ -296,6 +303,14 @@ const field: SuggestionFamilyPresentation<"field"> = {
           { kind: "value", value: row.suggestedValue },
         ];
         const correction = corrections.get(row.assessmentId);
+        if (row.correctionAuthority)
+          summary.push({
+            kind: "text",
+            text:
+              row.correctionAuthority.status === "confirmed"
+                ? "Uses a confirmed member correction"
+                : "Conflicting member corrections held",
+          });
         if (correction?.outcome.status === "held")
           summary.push({
             kind: "text",
@@ -309,7 +324,10 @@ const field: SuggestionFamilyPresentation<"field"> = {
               family: "field",
               record: { entity: row.entity, id: row.recordId },
               summary,
-              actions: verbs("accept", "correct", "reject", "dismiss"),
+              actions:
+                row.correctionAuthority?.status === "conflict"
+                  ? verbs("correct", "dismiss")
+                  : verbs("accept", "correct", "reject", "dismiss"),
               evidence: row,
             }),
           ],

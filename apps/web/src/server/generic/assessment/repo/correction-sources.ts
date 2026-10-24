@@ -1,10 +1,15 @@
-import { assessmentChildHandle } from "@cubby/schemas/assessment";
+import { suggestionStatus } from "@cubby/schemas/ai";
+import {
+  assessmentChildHandle,
+  assessmentSubjects,
+} from "@cubby/schemas/assessment";
 import {
   suggestionCorrectionSource,
   suggestionCorrectionTarget,
   correctionAuthorityReceiptKinds,
 } from "@cubby/schemas/suggestion-correction";
-import { and, asc, eq, inArray, sql, type SQL } from "drizzle-orm";
+import { CORRECTION_OUTCOME_RECEIPT_KIND } from "@cubby/schemas/suggestion-correction";
+import { and, asc, eq, inArray, or, sql, type SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { z } from "zod";
 
@@ -113,6 +118,26 @@ export async function readFieldCorrectionSources(db: Database, key: string) {
   );
 }
 
+/** Skip input preparation when this field has never had confirmed correction authority. */
+export async function hasFieldCorrectionSources(
+  db: Database,
+  entity: string,
+  field: string,
+) {
+  return (
+    (
+      await confirmedSources(
+        db,
+        and(
+          eq(assessment.family, "field"),
+          sql`${assessment.subject}->>'entity' = ${entity}`,
+          sql`${assessment.subject}->>${assessmentSubjects.field.keyof().enum.field} = ${field}`,
+        ),
+      )
+    ).length > 0
+  );
+}
+
 export async function readCorrectionTarget(db: Database, assessmentId: string) {
   const [row] = await getDb(db)
     .select({ prediction: assessment, state: assessmentState })
@@ -177,7 +202,12 @@ export async function correctionTargetIds(
         eq(assessment.served, true),
         sql`${assessment.id} <> ${input.sourceAssessmentId}::uuid`,
         sql`${assessment.evidence}->>'correctionKey' = ${input.correctionKey}`,
-        inArray(assessmentState.status, ["pending", "applied"]),
+        or(
+          inArray(assessmentState.status, ["pending", "applied"]),
+          sql`EXISTS (SELECT 1 FROM ${feedback} effect WHERE effect."assessmentId"=${assessment.id}
+            AND effect.metadata->>${"kind"}=${CORRECTION_OUTCOME_RECEIPT_KIND}
+            AND effect.receipt->>'status'=${suggestionStatus.enum.applied})`,
+        ),
         input.after ? sql`${assessment.id} > ${input.after}::uuid` : undefined,
       ),
     )
