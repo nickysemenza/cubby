@@ -1093,23 +1093,12 @@ export async function recordSourceTransactionRecords(
 }
 
 /**
- * Find charges recorded twice under two identities.
- *
- * The identity hash covers `rawDescription`, so a charge re-exported after its
- * descriptor firms up — `AMAZON MKTPLACE PMTS` → `AMAZON MKTPL*XD8AR9RG3`,
- * `THE HOME DEPOT #1092` → `THE HOME DEPOT #1092 800-466-3337 CA` — hashes to
- * a SECOND identity for money already recorded, a shape found by hand-writing
- * this self-join against a real Monarch export.
- *
- * Detection, not prevention: the hash is stored externally as a transaction's
- * `settlement_ref` EntityExternalId with no back-reference, so changing what it
- * covers would orphan every ref (`source-transaction-record-identity.ts` says so at
- * length). Reporting, not repair: `(accountDescriptor, statementDate,
- * providerAmount)` also matches genuine same-day same-amount pairs, so a
- * candidate is a question. The remedy stays the explicit, per-row
- * `supersededByExternalId` write.
- *
- * Rows already superseded drop out, so the list shrinks as it is worked.
+ * Report possible overlap between distinct charge keys without establishing
+ * occurrence identity. Equal account/date/amount fields also match genuine
+ * purchases. Shared collection membership normally preserves coexistence, but
+ * historical mixed membership is not proof of independence. Creation order
+ * does not grant predecessor authority; reconciliation needs source evidence
+ * and the existing guarded writer. This query never repairs retained records.
  */
 export async function findSourceTransactionRecordDrift(
   db: Database,
@@ -1135,7 +1124,7 @@ export async function findSourceTransactionRecordDrift(
   if (input.importFingerprint)
     conditions.push(observedInImport(input.importFingerprint));
   const where = and(...conditions)!;
-  // Coexisting rows are distinct purchases even when another export owned one first.
+  // Exclude shared membership by default; this is not proof of historical identity.
   const unsharedPair = sql`NOT EXISTS (
     SELECT 1 FROM ${transactionImportMembers} left_member
     JOIN ${transactionImportMembers} right_member ON right_member."importId" = left_member."importId"

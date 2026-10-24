@@ -37,10 +37,10 @@ export const sourceTransactionRecordContract = defineContract(
       input: sourceTransactionRecordSummaryInput,
       output: sourceTransactionRecordSummaryOut,
     }),
-    /** Charges recorded twice under two identities (descriptor drift). */
+    /** Advisory overlap candidates; equal fields do not establish charge identity. */
     drift: query({
       description:
-        "Charges recorded TWICE under two identities. A row's identity hash covers its raw description, so a charge re-exported after its descriptor firms up (`EXAMPLE STORE PENDING` becoming `EXAMPLE STORE POSTED`) mints a second identity for money already recorded. Groups live, unsuperseded rows by (source, accountDescriptor, statementDate, providerAmount) and returns groups holding more than one, oldest row first so rows[0] is the likeliest predecessor. By default only groups spanning TWO exports are reported: one export speaks one descriptor vocabulary, so two of its own rows differing only in description are two real charges rather than one charge seen twice. Pass includeSameBatch to see them anyway. Still advisory: read the descriptions before acting. Read both records through entity_read, then use entity.update(sourceTransactionRecord) to set `supersededByRowId` on the predecessor to the reviewed successor record ID. Superseded rows drop out, so the list shrinks as it is worked.",
+        "Find possible source-evidence overlap for review, not proven duplicate transactions. Groups live, unsuperseded observations sharing source, accountDescriptor, statementDate and providerAmount when distinct charge keys exist. These fields can also describe genuine identical purchases; neither equality nor creation order establishes predecessor/successor identity. By default a group must contain a pair with no shared collection membership; includeSameBatch also admits groups whose pairs share collections. Historical membership can mix legacy and positioned evidence, so this filter does not prove occurrence identity or completeness. Read retained observations, collection memberships, provider identities/revisions and accepted settlement references before deciding. Preserve genuine occurrences and member decisions; use only a supported guarded reconciliation command after explicit source proof. This read performs no repair, creates no financial records and does not authorize bulk supersession. Truncated results are incomplete.",
       input: findSourceTransactionRecordDriftInput,
       output: findSourceTransactionRecordDriftOut,
     }),

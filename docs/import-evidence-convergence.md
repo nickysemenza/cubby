@@ -385,6 +385,15 @@ workflow computations. `record` owns intake and `previewSuggestion` owns the
 read-only review projection. The former custom list, import roster, update and
 delete APIs have no separate replacement surface.
 
+`finance_read.drift` reports possible overlap between distinct charge keys,
+not proven duplicate money. Equal source/account/date/amount fields and row
+creation order cannot establish occurrence identity or revision direction.
+Its default shared-membership exclusion preserves normal export coexistence;
+historical mixed membership still needs source proof. Inspect retained provider
+identities, revisions, collection memberships and accepted settlement references
+before guarded reconciliation. Truncation and an empty candidate list do not
+prove historical completeness. The read grants no bulk supersession authority.
+
 ## Normalized financial evidence intake
 
 Claude/Codex use the [financial-evidence-import skill](../.agents/skills/financial-evidence-import/SKILL.md)
