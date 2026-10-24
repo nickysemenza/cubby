@@ -41,7 +41,11 @@ import {
   withImageCorrectionIntent,
 } from "~/server/domains/image/repo/image-correction-lock";
 import { writeImageDescriptionConfirmation } from "~/server/domains/image/repo/image-description-confirmation";
-import { withEmailReviewFrontier } from "~/server/domains/purchase-import/repo/email-review-intent";
+import type { EmailEvidenceWriteScope } from "~/server/domains/purchase-import/repo/email-evidence-write-scope";
+import {
+  withEmailReviewFrontier,
+  withEmailReviewBoundary,
+} from "~/server/domains/purchase-import/repo/email-review-intent";
 import type { PreparedEmailRelevanceCorrection } from "~/server/domains/purchase-import/repo/gmail/relevance-correction";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import {
@@ -467,9 +471,16 @@ export async function reviewAssessment(
   context: EntityKernelContext,
   raw: z.input<typeof assessmentReviewInput>,
   automatic?: AutomaticReview,
+  emailScope?: EmailEvidenceWriteScope,
 ) {
   if (!automatic)
-    return settleReview(db, context, assessmentReviewInput.parse(raw), null);
+    return settleReview(
+      db,
+      context,
+      assessmentReviewInput.parse(raw),
+      null,
+      emailScope,
+    );
   const input = automaticReviewInput.parse(raw);
   if (
     !input.assessmentId ||
@@ -499,6 +510,7 @@ export async function reviewAssessment(
         { ...context, db: transactionDb },
         input,
         automatic,
+        emailScope,
       );
     },
     { isolationLevel: "serializable" },
@@ -553,6 +565,7 @@ async function settleReview(
   context: EntityKernelContext,
   input: Review,
   automatic: AutomaticReview | null,
+  emailScope?: EmailEvidenceWriteScope,
 ) {
   const authority = automatic ? "automatic" : "member";
   let prediction:
@@ -716,7 +729,7 @@ async function settleReview(
     });
   const publication = imageSubject
     ? await withImageCorrectionIntent(db, imageSubject, writeReview)
-    : await withEmailReviewFrontier(db, prediction, writeReview);
+    : await withEmailReviewFrontier(db, prediction, writeReview, emailScope);
   const event = publication.event;
   if (input.intent === "draft") {
     return {
@@ -727,16 +740,16 @@ async function settleReview(
     };
   }
   if (input.intent === "apply") {
-    const outcome: z.infer<typeof assessmentReviewOut> = {
-      assessmentId: prediction.id,
-      feedbackId: event.id,
-      status: "applied",
-      applied: true,
-    };
     const executeApplication = (
       preparedEmail: PreparedEmailRelevanceCorrection | null,
     ) => {
       const apply = async (transactionDb: Database) => {
+        const outcome: z.infer<typeof assessmentReviewOut> = {
+          assessmentId: prediction.id,
+          feedbackId: event.id,
+          status: "applied",
+          applied: true,
+        };
         // Serialize generic commands without taking projection locks ahead of the
         // domain's parent locks. Receipt and mutation commit in the same boundary.
         await getDb(transactionDb).execute(
@@ -904,12 +917,17 @@ async function settleReview(
         });
         return outcome;
       };
-      return "isolationLevel" in family &&
-        family.isolationLevel === "serializable"
-        ? withSnapshotWriteDatabase(db, apply, {
-            isolationLevel: "serializable",
-          })
-        : withTransactionDatabase(db, apply);
+      return withEmailReviewBoundary(
+        db,
+        prediction,
+        (scopedDb) =>
+          "isolationLevel" in family && family.isolationLevel === "serializable"
+            ? withSnapshotWriteDatabase(scopedDb, apply, {
+                isolationLevel: "serializable",
+              })
+            : withTransactionDatabase(scopedDb, apply),
+        emailScope,
+      );
     };
     if (prediction.family !== "email_relevance")
       return executeApplication(null);
@@ -984,7 +1002,12 @@ async function settleReview(
   };
   const status = imageSubject
     ? await withImageCorrectionIntent(db, imageSubject, writeHistory)
-    : await withTransactionDatabase(db, writeHistory);
+    : await withEmailReviewBoundary(
+        db,
+        prediction,
+        (scopedDb) => withTransactionDatabase(scopedDb, writeHistory),
+        emailScope,
+      );
   return {
     assessmentId: prediction.id,
     feedbackId: event.id,

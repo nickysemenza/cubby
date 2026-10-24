@@ -1,11 +1,14 @@
 import { emailReviewFrontierReceipt } from "@cubby/schemas/email-observations";
 import { emailId } from "@cubby/schemas/identifiers";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
+import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
+import { z } from "zod";
 
+import { withConnection } from "~/server/db";
 import { getDb, withTransactionDatabase } from "~/server/db/helpers";
-import { assessmentState, feedback } from "~/server/db/schema";
+import { assessmentState, feedback, ledgerParty } from "~/server/db/schema";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
 import {
   publishAssessment,
@@ -14,18 +17,22 @@ import {
 import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
+import { withEmailEvidenceWrite } from "./email-evidence-write-scope";
 import { readEmailProtectingIntent } from "./email-review-intent";
 
 describe("command-bound Email intent frontier", () => {
   const ctx = withTestDb();
   async function fixture() {
-    const owner = await insertWithShortcode(ctx.db, "ledgerParty", {
+    const owner = await createRepoEntity(ctx, "ledgerParty", {
       name: "Synthetic intent member",
       kind: "member",
-      userId: ctx.actor.userId,
     });
+    await getDb(ctx.db)
+      .update(ledgerParty)
+      .set({ userId: ctx.actor.userId })
+      .where(eq(ledgerParty.id, owner.entityId));
     const mail = await insertWithShortcode(ctx.db, "email", {
-      ledgerPartyId: owner.id,
+      ledgerPartyId: owner.entityId,
       provider: "gmail",
       mailboxId: "synthetic-intent-mailbox",
       messageId: crypto.randomUUID(),
@@ -57,6 +64,93 @@ describe("command-bound Email intent frontier", () => {
     } as const;
     return { mail, prediction, publish, input };
   }
+
+  it("refuses member Email review inside an unscoped transaction before retaining intent", async () => {
+    const f = await fixture();
+    await withTransactionDatabase(ctx.db, async (db) => {
+      await expect(
+        reviewAssessment(db, kernelCtx(ctx), f.input),
+      ).rejects.toThrow("root Database");
+    });
+    expect(await getDb(ctx.db).select().from(feedback)).toEqual([]);
+  });
+
+  it("serializes concurrent member command frontiers before Feedback insertion", async () => {
+    const f = await fixture();
+    const newer = await f.publish("synthetic-other-checksum");
+    const entered = Promise.withResolvers<void>();
+    const release = Promise.withResolvers<void>();
+    const first = withEmailEvidenceWrite(ctx.db, async (db, scope) => {
+      const result = await reviewAssessment(
+        db,
+        kernelCtx(ctx),
+        f.input,
+        undefined,
+        scope,
+      );
+      entered.resolve();
+      await release.promise;
+      return result;
+    });
+    await entered.promise;
+    const started = Promise.withResolvers<number>();
+    const second = withConnection(ctx.db, async (connection) => {
+      const pid = z
+        .object({ rows: z.array(z.object({ pid: z.number() })) })
+        .parse(
+          await getDb(connection).execute(sql`SELECT pg_backend_pid() AS pid`),
+        ).rows[0]?.pid;
+      if (!pid) throw new Error("Synthetic review connection missing PID");
+      started.resolve(pid);
+      return reviewAssessment(connection, kernelCtx(ctx), {
+        ...f.input,
+        assessmentId: newer.id,
+        operationId: "synthetic-second-command",
+      });
+    });
+    const pid = await started.promise;
+    try {
+      await expect
+        .poll(
+          async () =>
+            z
+              .object({
+                rows: z.array(z.object({ waiting: z.boolean().nullable() })),
+              })
+              .parse(
+                await getDb(ctx.db).execute(
+                  sql`SELECT wait_event_type = 'Lock' AS waiting FROM pg_stat_activity WHERE pid = ${pid}`,
+                ),
+              ).rows[0]?.waiting,
+          { timeout: 2000 },
+        )
+        .toBe(true);
+      expect(
+        await getDb(ctx.db)
+          .select()
+          .from(feedback)
+          .where(eq(feedback.assessmentId, newer.id)),
+      ).toEqual([]);
+    } finally {
+      release.resolve();
+    }
+    const [a, b] = await Promise.all([first, second]);
+    const events = await getDb(ctx.db).select().from(feedback);
+    const capture = (id: string) =>
+      emailReviewFrontierReceipt.parse(
+        events.find(
+          (event) => event.operationId === `email-review-frontier:${id}`,
+        )?.receipt,
+      ).frontier;
+    expect(capture(a.feedbackId)).toMatchObject({
+      status: "captured",
+      feedbackIds: [a.feedbackId],
+    });
+    expect(capture(b.feedbackId)).toMatchObject({
+      status: "captured",
+      feedbackIds: expect.arrayContaining([a.feedbackId, b.feedbackId]),
+    });
+  });
 
   it("captures retained history with the new command and preserves its exact baseline on replay", async () => {
     const f = await fixture();
@@ -247,11 +341,17 @@ describe("command-bound Email intent frontier", () => {
       ),
     ).toBeUndefined();
     await expect(
-      withTransactionDatabase(ctx.db, async (db) => {
-        await reviewAssessment(db, kernelCtx(ctx), {
-          ...f.input,
-          operationId: "synthetic-aborted-command",
-        });
+      withEmailEvidenceWrite(ctx.db, async (db, scope) => {
+        await reviewAssessment(
+          db,
+          kernelCtx(ctx),
+          {
+            ...f.input,
+            operationId: "synthetic-aborted-command",
+          },
+          undefined,
+          scope,
+        );
         throw new Error("Synthetic abort after capture");
       }),
     ).rejects.toThrow("Synthetic abort after capture");

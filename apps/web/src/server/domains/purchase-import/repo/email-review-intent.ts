@@ -22,6 +22,11 @@ import {
 } from "~/server/db/repository-access.boundary";
 import { assessment, email, feedback } from "~/server/db/retained-tables";
 import {
+  assertEmailEvidenceScope,
+  withEmailEvidenceWrite,
+  type EmailEvidenceWriteScope,
+} from "~/server/domains/purchase-import/repo/email-evidence-write-scope";
+import {
   recordFeedback,
   type recordFeedbackWithInsertion,
 } from "~/server/generic/assessment/repo/assessment";
@@ -195,6 +200,21 @@ async function reviewFrontier(
   };
 }
 
+/** Select only Email review writes; other families retain their own transaction owner. */
+export async function withEmailReviewBoundary<T>(
+  db: Database,
+  input: ReviewSubject,
+  action: (transactionDb: Database) => Promise<T>,
+  scope?: EmailEvidenceWriteScope,
+): Promise<T> {
+  if (!relevantReview(input)) return action(db);
+  if (scope !== undefined) {
+    assertEmailEvidenceScope(db, scope);
+    return action(db);
+  }
+  return withEmailEvidenceWrite(db, action);
+}
+
 /** Atomic command/frontier association only; complete effect ownership and outer fences remain required. */
 export async function withEmailReviewFrontier(
   db: Database,
@@ -202,32 +222,39 @@ export async function withEmailReviewFrontier(
   action: (
     transactionDb: Database,
   ) => ReturnType<typeof recordFeedbackWithInsertion>,
+  scope?: EmailEvidenceWriteScope,
 ) {
   if (!relevantReview(input)) return action(db);
-  return withTransactionDatabase(db, async (transactionDb) => {
-    const publication = await action(transactionDb);
-    const command = publication.event;
-    // Historical retries cannot reconstruct the baseline of the original command.
-    if (!publication.inserted || command.authority !== "member")
-      return publication;
-    const capture = emailReviewFrontierReceipt.parse({
-      version: "email-review-frontier-v1",
-      commandFeedbackId: command.id,
-      frontier: await reviewFrontier(transactionDb, input),
-    });
-    await recordFeedback(transactionDb, {
-      assessmentId: command.assessmentId,
-      operationId: `email-review-frontier:${command.id}`,
-      verdict: "ungraded",
-      authority: "system",
-      actorUserId: null,
-      intent: "history",
-      receipt: capture,
-      metadata: {
-        kind: "email_review_frontier",
-        commandFeedbackId: command.id,
-      },
-    });
-    return publication;
-  });
+  return withEmailReviewBoundary(
+    db,
+    input,
+    (scopedDb) =>
+      withTransactionDatabase(scopedDb, async (transactionDb) => {
+        const publication = await action(transactionDb);
+        const command = publication.event;
+        // Historical retries cannot reconstruct the baseline of the original command.
+        if (!publication.inserted || command.authority !== "member")
+          return publication;
+        const capture = emailReviewFrontierReceipt.parse({
+          version: "email-review-frontier-v1",
+          commandFeedbackId: command.id,
+          frontier: await reviewFrontier(transactionDb, input),
+        });
+        await recordFeedback(transactionDb, {
+          assessmentId: command.assessmentId,
+          operationId: `email-review-frontier:${command.id}`,
+          verdict: "ungraded",
+          authority: "system",
+          actorUserId: null,
+          intent: "history",
+          receipt: capture,
+          metadata: {
+            kind: "email_review_frontier",
+            commandFeedbackId: command.id,
+          },
+        });
+        return publication;
+      }),
+    scope,
+  );
 }

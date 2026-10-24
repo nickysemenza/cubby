@@ -408,3 +408,20 @@ and retains original publication and cleanup errors. A committed notification
 failure is not rollback and does not authorize deleting referenced objects.
 The former upload-inside-publication writer is removed. This preparation boundary
 precedes Email outer-scope adoption; it does not enable correction propagation.
+
+### Shared Email review scope
+
+Shared relevance/link and Email/Purchase connection reviews enter the Email
+scope separately for command/frontier capture, DB-only application and projection
+history. The gate precedes command insertion, application advisory/parent locks
+and history projection locks. Command Feedback still commits before provider
+preparation, so failed retrieval cannot erase member intent. Preparation and
+cleanup stay outside the write scope; an application outcome is rebuilt for each
+transaction attempt rather than retaining abandoned result fields.
+
+DB-only nested reviews must supply an existing live capability. Unscoped
+transaction facades are refused before retaining a command. Other review families
+keep their existing transaction owners. Batch review continues item-by-item.
+This does not establish complete protecting-event coverage or enforce a prepared
+frontier against later intent; current-effect ownership and the remaining domain
+entry points are still required before Email propagation can be enabled.
