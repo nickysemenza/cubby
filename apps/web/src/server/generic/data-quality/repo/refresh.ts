@@ -77,8 +77,7 @@ export const qualityRefreshDriver = {
         // verdicts from the transaction's own reads so a concurrent edit is
         // captured rather than failing the page.
         const current = await prepare(tx);
-        const published = await changedQualityIds(tx, ids, current);
-        await publishQualityRows(tx, ids, current);
+        const published = await publishQualityRows(tx, ids, current);
         if (published.length)
           await recordChange(tx, {
             kind: "projection",
