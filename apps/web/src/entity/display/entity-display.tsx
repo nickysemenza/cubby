@@ -1935,7 +1935,9 @@ export function createEntityDisplayColumns<TRecord extends object>(
         };
         if (meta.cellData) {
           const data = meta.cellData;
-          const allowed = (row: TRecord) =>
+          const allowed = (row: unknown) =>
+            row !== null &&
+            typeof row === "object" &&
             classificationFieldRefusal(entity, row, field.key) === null &&
             data.canWrite?.(row) !== false;
           meta.cellData = { ...data, canWrite: allowed };
