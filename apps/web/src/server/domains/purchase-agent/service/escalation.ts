@@ -233,7 +233,8 @@ export function coordinatorEscalation(input: {
         call.name !== PURCHASE_IMPORT_TOOL ||
         toolArguments.safeParse(call.arguments).data?.action !== "prepare" ||
         result.isError !== true ||
-        heldByAnotherRun(result)
+        heldByAnotherRun(result) ||
+        hasInputContract(result)
       )
         return undefined;
       const current = escalated();
@@ -275,3 +276,18 @@ function heldByAnotherRun(result: ToolExecutionResult) {
 }
 
 export type CoordinatorEscalation = ReturnType<typeof coordinatorEscalation>;
+
+/** Schema repair has an exact next step; a stronger model adds no authority. */
+function hasInputContract(result: ToolExecutionResult) {
+  return (result.output ?? []).some((part) => {
+    if (part.type !== "text") return false;
+    try {
+      return z
+        .object({ recovery: z.literal("input_schema") })
+        .safeParse(JSON.parse(part.text)).success;
+    } catch {
+      // Ordinary diagnostic text is not a schema-recovery record.
+      return false;
+    }
+  });
+}

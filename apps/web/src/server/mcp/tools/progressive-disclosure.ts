@@ -7,6 +7,7 @@ import type {
   ToolArguments,
   ToolExtra,
 } from "~/server/mcp/tools/tool-registration";
+import { publicStartOperationErrorSchema } from "~/server/operation-runtime/start-operation.contract";
 
 const describeInputSchema = z.object({ actions: z.array(z.string()).min(1) });
 
@@ -113,7 +114,7 @@ export function withProgressiveDisclosure(
           return legacy;
         })();
     const runExecution = params._runExecution;
-    return callback(
+    const result = await callback(
       {
         ...body,
         ...(runExecution === undefined ? {} : { _runExecution: runExecution }),
@@ -121,5 +122,36 @@ export function withProgressiveDisclosure(
       },
       extra,
     );
+    // Compact tools hide action fields until describe. An input refusal must
+    // give the caller that contract rather than forcing schema guesses.
+    if (!result.isError || !action || !tool.actions.has(action)) return result;
+    const error = publicStartOperationErrorSchema.safeParse(
+      result._meta?.["cubby/error"],
+    );
+    if (
+      !error.success ||
+      error.data.reason !== "INVALID_INPUT" ||
+      error.data.diagnostics?.stage !== "input"
+    )
+      return result;
+    const visible = await visibleActions?.(extra);
+    if (visible && !visible.has(tool.actions.get(action)!.name)) return result;
+    const contract = describeMcpActions(tool, [action], visible).actions[0]!;
+    return {
+      ...result,
+      content: [
+        ...result.content,
+        {
+          type: "text",
+          text: JSON.stringify({
+            recovery: "input_schema",
+            instruction:
+              "Correct the input using this action contract, then retry. Missing source facts stay unknown; do not invent them or escalate a schema error.",
+            action,
+            inputSchema: contract.inputSchema,
+          }),
+        },
+      ],
+    };
   };
 }

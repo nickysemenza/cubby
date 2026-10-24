@@ -140,8 +140,18 @@ the order envelope contains their stable identities.
 A returned public Run code is for reporting; `_runExecution` keeps the
 delegated `runId`.
 
-On input validation failure, read the reported field path and correct that
-field before another call. An unchanged payload repeats the same failure.
+Before calling an action whose input fields are not in the tool's published
+schema, call that tool with `action: "describe", input: { actions: ["<action>"] }`.
+Use that live schema for the entire payload, including optional/nullable facts;
+do not infer field names from an older example. Only tools whose published
+input offers `_runExecution` accept that envelope.
+
+On input validation failure, use the returned `input_schema` recovery contract
+(or call `describe`) and correct the payload before another call. An unchanged
+payload repeats the same failure. Schema errors are repair work, not a reason
+to escalate. If an Email still cannot be settled and escalation is unavailable,
+resolve that Email `unresolved` with the concrete blocker and claim the next
+Email. A final answer does not settle an Email or finish the batch.
 
 A `prepare` under a new `operationId` that repeats orders this Run already
 prepared (a retried coordinator) returns that earlier preparation, whose

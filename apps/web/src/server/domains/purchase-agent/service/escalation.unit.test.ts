@@ -227,6 +227,28 @@ describe("coordinator escalation", () => {
     expect(configured).toEqual([]);
   });
 
+  it("does not escalate malformed prepares that return their input contract", async () => {
+    const { configured, claim, prepare } = harness();
+    await claim("claim-1");
+    const invalid: ToolExecutionResult = {
+      isError: true,
+      output: [
+        {
+          type: "text",
+          text: JSON.stringify({
+            recovery: "input_schema",
+            action: "prepare",
+            inputSchema: { type: "object" },
+          }),
+        },
+      ],
+    };
+    expect(await prepare("invalid-1", invalid)).toBeUndefined();
+    expect(await prepare("invalid-2", invalid)).toBeUndefined();
+    expect(await prepare("real-refusal-1")).toBeUndefined();
+    expect(configured).toEqual([]);
+  });
+
   it("gives the escalation model one try before an Email is resolved unresolved", async () => {
     const { escalation, configured, claim, resolve } = harness();
     await claim("claim-1");
