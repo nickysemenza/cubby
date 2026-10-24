@@ -1,4 +1,7 @@
 import {
+  providerIdBackfillInput,
+  applyProviderIdBackfillInput,
+  providerIdBackfillOut,
   findSourceTransactionRecordDriftInput,
   findSourceTransactionRecordDriftOut,
   recordSourceTransactionRecordsInput,
@@ -16,6 +19,20 @@ import { defineContract, mutation, query } from "~/contracts/define";
 export const sourceTransactionRecordContract = defineContract(
   "sourceTransactionRecord",
   {
+    previewProviderIdBackfill: query({
+      description:
+        "Preview filling one missing Monarch provider ID on a selected retained original CSV member. Requires the complete original normalized parser occurrence, exact retained fingerprint and complete-file identity/ID occurrence positions from the explicitly authorized local parser. Holds ambiguous source, account, chronology or accepted ownership. Returns an apply guard; writes nothing.",
+      readPolicy: "strong",
+      input: providerIdBackfillInput,
+      output: providerIdBackfillOut,
+    }),
+    backfillProviderId: mutation({
+      description:
+        "Fill only one missing providerTransactionId using the exact previewed original CSV proof and expectedGuard. Preserves frozen identities, evidence, positions, chronology, memberships, decisions and all accepted money/references. Retains a typed audit receipt for exact historical/recovered intake replay. Enqueues no refresh, Run, Job, Sweep or correction work. Repeat only the exact committed proof; changed evidence is held.",
+      input: applyProviderIdBackfillInput,
+      output: providerIdBackfillOut,
+      invalidates: ["sourceTransactionRecord"],
+    }),
     previewSuggestion: query({
       description:
         "Preview a statement Suggestions review draft against current evidence without writing. Pass the listed assessmentId, expectedFingerprint and declared application. Returns current transaction, Purchase/Expense, vendor and settlement effects or refuses stale/unsupported evidence. A successful preview does not apply the draft; explicit Suggestions review revalidates it again.",

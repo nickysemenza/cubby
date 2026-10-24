@@ -299,6 +299,7 @@ export async function logAuditEntries(
   db: Database | DrizzleTransaction,
   actor: ActorContext,
   entries: AuditEntryInput[],
+  publication: "source" | "provider-id-backfill" = "source",
 ): Promise<void> {
   if (entries.length === 0) return;
 
@@ -319,7 +320,8 @@ export async function logAuditEntries(
     });
   for (const row of inserted) captureAuditId(row.id);
   await recordChange(db, {
-    kind: "source",
+    // This evidence-only repair retains receipts and reader hints without Jobs.
+    kind: publication === "provider-id-backfill" ? "projection" : "source",
     categories: [...inserted.map((row) => row.entityKind), "auditLog"],
   });
 }

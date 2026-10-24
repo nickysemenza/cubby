@@ -432,6 +432,35 @@ this guard neither rewrites historical observations nor assigns identifiers from
 content equality. Distinct positioned occurrences remain independent, including
 identical rows delivered in later chunks.
 
+The narrow `finance_read.preview_provider_id_backfill` /
+`finance.backfill_provider_id` command repairs one missing Monarch provider ID
+on one selected retained original-file member. The authorized local CSV parser
+emits the complete original normalized row, raw `Id`, byte fingerprint, physical
+starting position and whole-file identity/ID occurrence positions. Only a unique
+occurrence from the default Monarch parser projection is supported. This is host
+source attestation from the authorized original file, not model feedback or a
+server claim to have read the bytes. Arbitrary hand-transcribed or incomplete
+proof is outside the command's authority.
+
+Preview writes nothing. Apply rechecks the preview guard inside the existing
+source intake lock and a serializable transaction, without retries. It requires
+actual unchanged collection membership/count, the original frozen v1 reference,
+an unpositioned live current head, one proven account, and no competing provider
+charge, chronology, alias or accepted settlement owner. It fills only
+`providerTransactionId` and retains a typed audit receipt; frozen external IDs,
+charge keys, legacy fields, original evidence/positions, chronology, judgments,
+memberships, accepted references and money stay unchanged. It publishes reader
+invalidation without derived refresh, calendar refresh, Run, Job, Sweep or
+correction work. A filled column alone cannot authorize repeat application.
+
+Intake reads the receipt only for the same retained collection. Either the exact
+complete pre-backfill projection or the exact recovered original normalized
+occurrence replays the old external ID and charge key. Partial provider-data,
+position or provider-ID wildcards are not supported. Missing/malformed receipts
+fail closed. Existing current-head rules still protect later revisions,
+withdrawals and deleted newer heads; future provider observations use the
+enriched column and existing account-sensitive predecessor resolution.
+
 A collection owns its immutable observation time, declared count and optional
 account/date/visibility scope. Chunks resume that collection. Membership is
 independent of first ownership, and migration preserves known memberships

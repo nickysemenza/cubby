@@ -1,6 +1,10 @@
 import { sourceTransactionRecordContract } from "~/contracts/source-transaction-record.contract";
 import { withSnapshotWriteDatabase } from "~/server/db/helpers";
 import {
+  previewProviderIdBackfill,
+  backfillProviderId,
+} from "~/server/domains/transaction-import/repo/provider-id-backfill";
+import {
   findSourceTransactionRecordDrift,
   getSourceTransactionRecordSummary,
   recordSourceTransactionRecords,
@@ -12,6 +16,10 @@ import { implementOperationDomain } from "~/server/operation-runtime/operation-d
 export const sourceTransactionRecordHandlers = implementOperationDomain(
   sourceTransactionRecordContract,
   {
+    previewProviderIdBackfill: (context, input) =>
+      previewProviderIdBackfill(context.db, input),
+    backfillProviderId: (context, input) =>
+      backfillProviderId(context.db, input, context.actorContext),
     previewSuggestion: (context, input) =>
       previewStatementSuggestion(context.db, input),
     record: (context, input) =>

@@ -109,6 +109,7 @@ const actionCapability = {
   "finance.commit_booking": "member_decision",
   "finance.commit_booking_correction": "member_decision",
   "finance.record": "generic_mutation",
+  "finance.backfill_provider_id": "member_decision",
   "purchase_import.mail_search": "prepare",
   "purchase_import.correct_email_relevance": "generic_mutation",
   "purchase_import.email_import": "start_run",

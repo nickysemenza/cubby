@@ -596,7 +596,11 @@ export function createStartOperationRunner(runtime: StartOperationRuntime) {
           : options.outputSchema;
         const data = outputSchema.parse(rawOutput);
         throwIfStartOperationAborted(options.request.signal);
-        if (state.mutationStarted) {
+        if (
+          state.mutationStarted &&
+          definition.id !== "sourceTransactionRecord.backfillProviderId"
+        ) {
+          // Provider ID repair publishes its audit/read hints without derived work.
           // Inside a delegated transaction the mark waits for the outer
           // commit; marked earlier, the calendar alarm could publish and clear
           // a snapshot that lacks this write.

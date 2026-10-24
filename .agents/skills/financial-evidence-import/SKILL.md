@@ -147,6 +147,29 @@ data. A file proves its own row count, not exhaustive provider-window coverage.
 Verify currency, account identity and export scope separately. Do not hand-edit
 or transcribe thousands of evidence rows through a model.
 
+### Backfill a retained original Monarch CSV's missing IDs
+
+After explicit authorization to read the original file and repair its missing
+IDs, rerun the local parser with `--provider-id-backfill`. This supports the
+default Monarch `Id` mapping only. Its `providerIdBackfillProofs` preserve the
+complete normalized row and whole-file identity/ID occurrence positions,
+including duplicates; a chunk alone cannot produce this proof. Keep this output
+private with the original file. Use only entries whose two occurrence-position
+lists each contain that row's one physical position. Establish exact retained
+collection source/fingerprint/count and actual selected STR membership first.
+
+For each proven row, add only the selected `recordId` and `collectionId` to its
+parser proof. Call `finance_read.preview_provider_id_backfill`, then repeat
+the exact supported payload through `finance.backfill_provider_id` with its
+`expectedGuard`. The server rechecks account aliases, all provider observations,
+current chronology and every accepted settlement owner. A refusal remains held
+for source/identity review; never substitute model feedback, `verified: true`,
+fabricated positions or a new collection. This command fills only the ID and
+retains an audit receipt; it schedules no reconciliation. Preserve receipts and
+report applied/unchanged/held counts. Original ID-less requests and recovered
+CSV rows replay only through the exact committed receipt, preserving their old
+frozen references and charge keys.
+
 ## Inspect retained evidence
 
 Use `entity_read.list` / `entity_read.search` with

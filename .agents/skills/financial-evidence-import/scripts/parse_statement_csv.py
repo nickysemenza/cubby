@@ -8,6 +8,7 @@ import io
 import json
 import math
 import re
+import unicodedata
 from collections import Counter
 from datetime import date
 from decimal import Decimal, InvalidOperation
@@ -130,6 +131,11 @@ def parse_file(path, args):
     if len(sources) != 1:
         raise ValueError("unsupported or ambiguous CSV schema")
     source = sources[0]
+    if args.provider_id_backfill and (
+        source != "monarch" or "Id" not in headers
+        or args.id_column or args.account_id_column or args.status_column
+    ):
+        raise ValueError("backfill requires the default Monarch Id projection")
     for column in (args.id_column, args.account_id_column, args.status_column):
         if column and column not in headers:
             raise ValueError("configured column missing")
@@ -174,7 +180,7 @@ def parse_file(path, args):
         }
         for offset in range(0, max(1, len(rows)), 500)
     ]
-    return {
+    result = {
         "summary": {
             "source": source,
             "fingerprint": fingerprint,
@@ -190,6 +196,37 @@ def parse_file(path, args):
         },
         "batches": batches,
     }
+    if args.provider_id_backfill:
+        # Count the entire file before emitting any occurrence proof. Match the
+        # frozen v1 identity's canonical fields and JavaScript cents rounding.
+        def canonical(value):
+            # ECMAScript \s includes FEFF (Python str.split does not).
+            whitespace = r"[\u0009-\u000d\u0020\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\ufeff]+"
+            return re.sub(whitespace, " ", unicodedata.normalize("NFKC", value)).strip(" ").lower()
+
+        def identity(row):
+            return (canonical(row["accountDescriptor"]), row["statementDate"],
+                    math.floor(row["providerAmount"] * 100 + 0.5), canonical(row["rawDescription"]))
+
+        identities, provider_ids = {}, {}
+        for row in rows:
+            identities.setdefault(identity(row), []).append(row["rowPosition"])
+            provider_ids.setdefault(row["providerTransactionId"], []).append(row["rowPosition"])
+        result["providerIdBackfillProofs"] = [
+            {
+                "source": source, "fingerprint": fingerprint,
+                "providerTransactionId": row["providerTransactionId"], "originalRow": row,
+                "sourceProof": {
+                    "kind": "authorized_local_csv",
+                    "parser": "financial-evidence-import/parse_statement_csv.py",
+                    "rowCount": len(rows),
+                    "identityPositions": identities[identity(row)],
+                    "providerIdPositions": provider_ids[row["providerTransactionId"]],
+                },
+            }
+            for row in rows if row["providerTransactionId"]
+        ]
+    return result
 
 
 def main():
@@ -201,6 +238,8 @@ def main():
     parser.add_argument("--id-column", help="Attested provider transaction ID column")
     parser.add_argument("--account-id-column", help="Attested provider account ID column")
     parser.add_argument("--status-column", help="Only literal pending/posted is classified")
+    parser.add_argument("--provider-id-backfill", action="store_true",
+                        help="Emit complete-file occurrence proofs for authorized original Monarch ID repair")
     args = parser.parse_args()
     if args.file.resolve() == args.output.resolve():
         parser.error("output must differ from input")

@@ -6,6 +6,7 @@ import {
   financialAccountShortcode,
   financialTransactionShortcode,
   transactionImportShortcode,
+  sourceTransactionRecordShortcode,
 } from "./identifiers";
 import { numericRangeFields, plainDate } from "./base-entity";
 
@@ -16,8 +17,8 @@ import { numericRangeFields, plainDate } from "./base-entity";
  *
  * These are evidence, not decisions. Nothing here resolves an account, links a
  * Purchase, creates a transaction, or declares two rows the same charge — an
- * agent makes every one of those judgments, and only the judgment fields are
- * writable after ingest.
+ * agent makes every one of those judgments. Normal updates expose judgment
+ * fields; the guarded provider-ID repair below retains exact source proof.
  */
 
 export * from "./source-transaction-record-fields";
@@ -147,6 +148,78 @@ export const sourceTransactionRecordInput = z.strictObject({
 });
 export type SourceTransactionRecordInput = z.infer<
   typeof sourceTransactionRecordInput
+>;
+
+/** Complete parser output, without intake's optional/defaulted evidence fields. */
+export const originalCsvOccurrence = sourceTransactionRecordInput.extend({
+  rowPosition: z.number().int().positive(),
+  providerTransactionId: z.string().min(1),
+  providerAccountId: z.string().min(1).nullable(),
+  providerData: z.strictObject({
+    fields: z.record(z.string(), z.string()),
+    csv: z.strictObject({
+      fileSha256: z.string().regex(/^[a-f0-9]{64}$/),
+      sourceAmount: z.string(),
+      sourceSignConvention: z.literal("charges-negative"),
+    }),
+  }),
+  merchant: z.string().nullable(),
+  sourceCategory: z.string().nullable(),
+  providerStatus: sourceTransactionRecordProviderStatus.nullable(),
+  providerNotes: z.string().nullable(),
+});
+
+export const providerIdBackfillInput = z.strictObject({
+  recordId: sourceTransactionRecordShortcode,
+  collectionId: transactionImportShortcode,
+  source: z.literal("monarch"),
+  fingerprint: z.string().regex(/^[a-f0-9]{64}$/),
+  providerTransactionId: z.string().min(1),
+  originalRow: originalCsvOccurrence,
+  sourceProof: z.strictObject({
+    kind: z.literal("authorized_local_csv"),
+    parser: z.literal("financial-evidence-import/parse_statement_csv.py"),
+    rowCount: z.number().int().positive(),
+    identityPositions: z.array(z.number().int().positive()).min(1),
+    providerIdPositions: z.array(z.number().int().positive()).min(1),
+  }),
+});
+export type ProviderIdBackfillInput = z.infer<typeof providerIdBackfillInput>;
+export const applyProviderIdBackfillInput = providerIdBackfillInput.extend({
+  expectedGuard: z.string().regex(/^[a-f0-9]{64}$/),
+});
+
+export const providerIdBackfillOut = z.object({
+  recordId: sourceTransactionRecordShortcode,
+  collectionId: transactionImportShortcode,
+  status: z.enum(["ready", "applied", "unchanged"]),
+  guard: z.string(),
+});
+
+export const sourceObservationProjection = sourceTransactionRecordInput.extend({
+  rowPosition: z.number().int().positive().nullable(),
+  providerTransactionId: z.string().min(1).nullable(),
+  providerAccountId: z.string().min(1).nullable(),
+  providerData: z.json().nullable(),
+  merchant: z.string().nullable(),
+  sourceCategory: z.string().nullable(),
+  providerStatus: sourceTransactionRecordProviderStatus.nullable(),
+  providerNotes: z.string().nullable(),
+});
+
+/** Retained on the selected STR's audit entry; never an identity alias. */
+export const providerIdBackfillReceipt = z.strictObject({
+  kind: z.literal("provider_id_backfill_v1"),
+  guard: z.string().regex(/^[a-f0-9]{64}$/),
+  input: providerIdBackfillInput,
+  before: sourceObservationProjection,
+  externalId: z.string().startsWith("v1:"),
+  chargeKey: z.string(),
+  legacyExternalId: z.string().nullable(),
+  legacyReference: z.string().nullable(),
+});
+export type ProviderIdBackfillReceipt = z.infer<
+  typeof providerIdBackfillReceipt
 >;
 
 export const recordSourceTransactionRecordsInput = z.strictObject({

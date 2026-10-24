@@ -12,7 +12,15 @@ import type {
 import { sourceTransactionRecordMatchState } from "@cubby/schemas/source-transaction-record";
 import { generateShortcode } from "@cubby/shared";
 import { sha256Hex } from "@cubby/shared/sha256";
-import { and, eq, inArray, or, type SQL, sql } from "drizzle-orm";
+import {
+  and,
+  eq,
+  getTableColumns,
+  inArray,
+  or,
+  type SQL,
+  sql,
+} from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
@@ -52,6 +60,13 @@ import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-u
 import { canonicalJson, jsonSnapshot } from "~/server/lib/canonical-json";
 
 import { auditEvidenceRows, evidenceChanges } from "./intake-audit";
+import {
+  observationProjection,
+  readProviderIdBackfillReceipts,
+  receiptMatchesRecord,
+  receiptMatchesReplay,
+  requireBackfillProof,
+} from "./provider-id-backfill-proof";
 import { assertSourceTransactionRecordSupersessionAllowed } from "./source-transaction-record-lifecycle";
 
 // `cs` carries the charge-level state: repeated observations of one charge
@@ -274,15 +289,7 @@ function statementSignWarning(
     : null;
 }
 
-type RecordedMember = Pick<
-  typeof sourceTransactionRecord.$inferSelect,
-  | "id"
-  | "legacyExternalId"
-  | "chargeKey"
-  | "rowPosition"
-  | "externalId"
-  | "providerTransactionId"
->;
+type RecordedMember = typeof sourceTransactionRecord.$inferSelect;
 
 function retainedCollectionObservation({
   priorMembers,
@@ -392,6 +399,7 @@ async function prepareStatementObservations(
       "Every observation must belong to the declared account and date window.",
     );
   const rows = [];
+  const backfills = await readProviderIdBackfillReceipts(tx, priorMembers);
   for (const row of [...input.rows].sort(
     (a, b) => (a.rowPosition ?? 0) - (b.rowPosition ?? 0),
   )) {
@@ -403,6 +411,43 @@ async function prepareStatementObservations(
       originalStatement: row.rawDescription,
     });
     const providerAccountId = row.providerAccountId ?? null;
+    const recovered = priorMembers.filter((member) => {
+      const receipt = backfills.get(member.id);
+      return (
+        receipt &&
+        receipt.input.source === source &&
+        receipt.input.fingerprint === input.import.fingerprint &&
+        receiptMatchesReplay(receipt, row)
+      );
+    });
+    requireBackfillProof(
+      recovered.length <= 1,
+      "The backfill receipt does not identify one retained occurrence.",
+    );
+    const [replayed] = recovered;
+    if (replayed) {
+      const receipt = backfills.get(replayed.id);
+      requireBackfillProof(
+        receipt &&
+          receiptMatchesRecord(receipt, replayed) &&
+          replayed.deletedAt === null,
+        "The retained observation no longer matches its provider ID backfill proof.",
+      );
+      // Compare complete pre-fill/recovered projections above, then replay the
+      // original stored evidence. Chronology below still protects newer heads.
+      rows.push({
+        ...observationProjection(replayed),
+        rowPosition: replayed.rowPosition ?? undefined,
+        source,
+        externalId: replayed.externalId,
+        chargeKey: replayed.chargeKey,
+        legacyExternalId,
+        amount: -replayed.providerAmount,
+        current: true,
+        lastObservedAt: observedAt,
+      });
+      continue;
+    }
     let chargeKey = row.providerTransactionId
       ? `provider:${await sha256Hex(JSON.stringify([source, providerAccountId ?? row.accountDescriptor, row.providerTransactionId]))}`
       : row.rowPosition !== undefined
@@ -733,15 +778,7 @@ export async function recordSourceTransactionRecords(
         );
       const priorMembers = existingBatch
         ? await unwrapDb(tx)
-            .select({
-              id: sourceTransactionRecord.id,
-              legacyExternalId: sourceTransactionRecord.legacyExternalId,
-              chargeKey: sourceTransactionRecord.chargeKey,
-              rowPosition: sourceTransactionRecord.rowPosition,
-              externalId: sourceTransactionRecord.externalId,
-              providerTransactionId:
-                sourceTransactionRecord.providerTransactionId,
-            })
+            .select(getTableColumns(sourceTransactionRecord))
             .from(transactionImportRecord)
             .innerJoin(
               sourceTransactionRecord,
