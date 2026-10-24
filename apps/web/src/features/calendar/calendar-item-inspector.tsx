@@ -1,4 +1,4 @@
-import type { CalendarItem } from "@cubby/schemas/calendar";
+import { calendarItemKey, type CalendarItem } from "@cubby/schemas/calendar";
 import { ArrowSquareOutIcon } from "@phosphor-icons/react/dist/csr/ArrowSquareOut";
 import { Link } from "@tanstack/react-router";
 import { useId, useRef, useState } from "react";
@@ -13,6 +13,7 @@ import { PickerField } from "~/entity/forms/picker-field";
 import { FieldSuggestionProvider } from "~/entity/suggestions/field-suggestion-provider";
 import { formatCurrency } from "~/lib/number-format";
 import { Facts, FactsDensityProvider } from "~/ui/common/facts";
+import { RecordList, RecordRow } from "~/ui/common/record-list";
 import { showErrorToast } from "~/ui/feedback/error-details";
 import { DateRangeField } from "~/ui/forms/date-span-field";
 import {
@@ -53,7 +54,7 @@ function CalendarItemInspector({ handle }: CalendarItemInspectorProps) {
         const item = payload;
         return item ? (
           <CalendarInspectorOverlay
-            key={`${item.kind}:${item.id}`}
+            key={calendarItemKey(item)}
             item={item}
             handle={handle}
             open={open}
@@ -98,8 +99,8 @@ function CalendarInspectorOverlay({
     <PopoverContent
       align="start"
       sideOffset={6}
-      className="w-80 gap-2 p-4"
-      aria-label={`Edit ${item.title}`}
+      className="max-h-[80dvh] w-80 gap-2 overflow-y-auto p-4"
+      aria-label={`${item.interaction === "read-only" ? "View" : "Edit"} ${item.title}`}
     >
       <PopoverHeader className="border-b pb-2">
         <PopoverTitle>{item.title}</PopoverTitle>
@@ -335,7 +336,8 @@ function ReadOnlyCalendarItem({
             {
               label: "Amount",
               value:
-                item.kind === "expense" && item.cost != null
+                (item.kind === "expense" || item.kind === "purchase") &&
+                item.cost != null
                   ? formatCurrency(item.cost)
                   : undefined,
               className: "tabular-nums",
@@ -343,8 +345,55 @@ function ReadOnlyCalendarItem({
           ]}
         />
       </FactsDensityProvider>
+      {item.kind === "purchase" && <PurchaseBreakdown item={item} />}
+      {item.kind === "purchase" && item.evidenceNote && (
+        <p>{item.evidenceNote}</p>
+      )}
       <p className="text-muted-foreground">{reason}</p>
       <OpenFullRecord item={item} />
+    </Stack>
+  );
+}
+
+function PurchaseBreakdown({
+  item,
+}: {
+  item: Extract<CalendarItem, { kind: "purchase" }>;
+}) {
+  return (
+    <Stack gap="sm">
+      {item.cost !== item.ledgerAmount && (
+        <FactsDensityProvider density="compact">
+          <Facts
+            layout="list"
+            facts={[
+              {
+                label: "Recorded spend",
+                value: formatCurrency(item.ledgerAmount),
+                className: "font-mono tabular-nums",
+              },
+            ]}
+          />
+        </FactsDensityProvider>
+      )}
+      <RecordList
+        aria-label="Purchase spending lines"
+        empty="No spending lines recorded."
+      >
+        {item.lines.map((line) => (
+          <RecordRow
+            key={line.id}
+            clip={false}
+            primary={
+              <Link {...entityDetailLink("expense", line.id)}>{line.name}</Link>
+            }
+            secondary={line.productName}
+            trailing={
+              line.cost === null ? "Unknown amount" : formatCurrency(line.cost)
+            }
+          />
+        ))}
+      </RecordList>
     </Stack>
   );
 }

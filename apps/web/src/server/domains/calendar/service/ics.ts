@@ -68,7 +68,8 @@ const FEED_NAMES = {
 } satisfies Record<IcsFeed, string>;
 
 /** Which calendar kinds a given feed publishes. */
-export const kindsForFeed = (feed: IcsFeed): FeedKinds => FEED_KINDS[feed];
+export const kindsForFeed = (feed: IcsFeed): (typeof FEED_KINDS)[IcsFeed] =>
+  FEED_KINDS[feed];
 
 /**
  * Fold one content line to {@link MAX_LINE_OCTETS} octets, continuing with a

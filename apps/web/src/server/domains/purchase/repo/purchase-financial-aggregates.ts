@@ -1,9 +1,8 @@
-import { purchaseSettlementKinds } from "@cubby/schemas/financial-transaction";
 import type { PurchaseId } from "@cubby/schemas/identifiers";
-import { and, eq, inArray, ne, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
-import { notDeleted, unwrapDb } from "~/server/db/helpers";
+import { unwrapDb } from "~/server/db/helpers";
 import {
   financialTransaction,
   financialTransactionAllocation,
@@ -11,6 +10,7 @@ import {
 // Type-only back-edge from that module to this one, so this value import creates
 // no runtime cycle.
 import { postedRefundPredicate } from "~/server/domains/financial-transaction/repo/financial-reconciliation";
+import { liveSettlementAllocationWhere } from "~/server/domains/purchase/repo/settlement-predicates";
 
 export type PurchaseFinancialAggregate = {
   transactionCount: number;
@@ -65,10 +65,7 @@ export async function loadPurchaseFinancialAggregates(
     .where(
       and(
         inArray(financialTransactionAllocation.purchaseId, [...purchaseIds]),
-        notDeleted(financialTransactionAllocation),
-        inArray(financialTransaction.kind, [...purchaseSettlementKinds]),
-        notDeleted(financialTransaction),
-        ne(financialTransaction.status, "void"),
+        liveSettlementAllocationWhere,
       ),
     )
     .groupBy(financialTransactionAllocation.purchaseId);

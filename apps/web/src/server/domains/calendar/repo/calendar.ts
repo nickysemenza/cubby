@@ -1,13 +1,14 @@
 import type {
   CalendarDaySummary,
   CalendarItem,
-  CalendarItemKind,
+  CalendarSourceKind,
   CalendarRangeInput,
   CalendarRangeOut,
   CalendarScheduleOut,
 } from "@cubby/schemas/calendar";
 import {
   calendarSources,
+  calendarItemKey,
   calendarSourceMatches,
 } from "@cubby/schemas/calendar";
 import { entityRefKey } from "@cubby/schemas/entity";
@@ -49,6 +50,7 @@ import {
 } from "~/server/domains/meal/repo/crud";
 import { projectScaffold } from "~/server/domains/project/repo/lookup";
 import { loadProjectDateWindows } from "~/server/domains/project/repo/subtree";
+import { loadPurchaseSpending } from "~/server/domains/purchase/repo/purchase-spending";
 import { getTasksByIDs } from "~/server/domains/task/repo/crud";
 import { effectiveTaskDueDateSql } from "~/server/domains/task/repo/helpers";
 import { dbTaskToAPI } from "~/server/domains/task/repo/helpers";
@@ -81,6 +83,7 @@ const itemOrder = {
   planting: 2,
   meal: 3,
   expense: 4,
+  purchase: 4,
 } as const satisfies Record<CalendarItem["kind"], number>;
 
 /** How an unnamed meal names itself: its slot, or the generic fallback. */
@@ -94,14 +97,17 @@ const mealSlotDelta = (a: CalendarItem, b: CalendarItem): number =>
     ? mealTypeRank(a.mealType) - mealTypeRank(b.mealType)
     : 0;
 
-const sourceTables = { meal, task, expense, project, planting };
+const sourceTables = { meal, task, spending: expense, project, planting };
 const sourceScaffolds = {
   meal: mealScaffold,
   task: taskScaffold,
-  expense: expenseScaffold,
+  spending: expenseScaffold,
   project: projectScaffold,
   planting: plantingScaffold,
-} satisfies Record<CalendarItemKind, NestedListScaffold<CalendarItemKind>>;
+} satisfies Record<
+  CalendarSourceKind,
+  NestedListScaffold<"meal" | "task" | "expense" | "project" | "planting">
+>;
 
 /** Use the source's prepared list population, including derived fields and
  * related scopes, before calendar hydration and date layout. Keep this predicate
@@ -110,7 +116,7 @@ const sourceScaffolds = {
 const calendarSourceWhere = async (
   db: Database,
   input: CalendarRangeInput,
-  kind: CalendarItemKind,
+  kind: CalendarSourceKind,
 ): Promise<SQL> => {
   if (!calendarSourceMatches(kind, input)) return sql`false`;
   const scaffold = sourceScaffolds[kind];
@@ -185,17 +191,18 @@ const loadCalendarExpenses = async (
   input: CalendarRangeInput,
   endInclusive: string,
 ) => {
-  if (!calendarSourceMatches("expense", input)) return [];
-  const condition = await calendarSourceWhere(db, input, "expense");
+  if (!calendarSourceMatches("spending", input)) return [];
+  const condition = await calendarSourceWhere(db, input, "spending");
   const ids = await getDb(db)
     .select({ id: expense.id })
     .from(expense)
     .where(
       and(
         condition,
-        isNotNull(expense[calendarSources.expense.dates[0]]),
-        gte(expense[calendarSources.expense.dates[0]], input.startDate),
-        lte(expense[calendarSources.expense.dates[0]], endInclusive),
+        or(isNull(expense.purchaseId), sql`${expense.future} = true`),
+        isNotNull(expense[calendarSources.spending.dates[0]]),
+        gte(expense[calendarSources.spending.dates[0]], input.startDate),
+        lte(expense[calendarSources.spending.dates[0]], endInclusive),
       ),
     );
   if (!ids.length) return [];
@@ -210,6 +217,51 @@ const loadCalendarExpenses = async (
       ...expenseInheritanceReadExtras(),
     },
   });
+};
+
+const loadCalendarPurchaseItems = async (
+  db: Database,
+  input: CalendarRangeInput,
+): Promise<CalendarItem[]> => {
+  if (!calendarSourceMatches("spending", input)) return [];
+  const filters = input.filters?.spending;
+  const hasFilters =
+    filters &&
+    Object.entries(filters).some(
+      ([key, value]) => value !== undefined && !key.startsWith("includeSub"),
+    );
+  const events = await loadPurchaseSpending(db, {
+    startDate: input.startDate,
+    endDateExclusive: input.endDateExclusive,
+    expenseCondition: hasFilters
+      ? await calendarSourceWhere(db, input, "spending")
+      : undefined,
+  });
+  return events.map((event) => ({
+    kind: "purchase",
+    id: event.purchase.id,
+    title: event.purchase.vendorName ?? event.purchase.title,
+    vendor: event.purchase.vendorName,
+    occurrence: event.occurrence,
+    startDate: event.date,
+    endDateExclusive: shiftPlainDate(event.date, 1),
+    interaction: "read-only",
+    cost: event.amount,
+    ledgerAmount: event.ledgerAmount,
+    basis: event.basis,
+    dateBasis: event.dateBasis,
+    evidenceNote:
+      event.ambiguities.length > 0
+        ? "Some refund evidence could not be matched uniquely. Review the full purchase."
+        : undefined,
+    lines: event.lines.map(({ line }) => ({
+      id: line.id,
+      name: line.name,
+      cost: line.cost,
+      productName: null,
+    })),
+    displayImages: [],
+  }));
 };
 
 const loadCalendarProjects = async (
@@ -392,7 +444,7 @@ const summarizeCalendarDays = (
     ) {
       const summary = days[day];
       if (!summary) continue;
-      summary.itemIds.push(item.id);
+      summary.itemIds.push(calendarItemKey(item));
       if (item.kind === "meal") {
         summary.mealCount += 1;
         mealTotalsByDay[day]?.push(item.mealTotals);
@@ -401,6 +453,9 @@ const summarizeCalendarDays = (
         summary.expenseCount += 1;
         if (item.future) summary.plannedSpend += item.cost ?? 0;
         else summary.actualSpend += item.cost ?? 0;
+      } else if (item.kind === "purchase") {
+        summary.expenseCount += 1;
+        summary.actualSpend += item.ledgerAmount;
       } else if (item.kind === "project") summary.projectCount += 1;
       // Plantings are a read-only calendar decoration, not a planning-load
       // signal — the day summary intentionally has no plantingCount.
@@ -427,12 +482,14 @@ export async function getCalendarRange(
   // the ICS feed asks for meals + tasks (or, for the garden feed, plantings),
   // and the project branch it drops is a whole-tree date fold it would
   // otherwise pay for on every poll.
-  const wants = (kind: CalendarItemKind) => calendarSourceMatches(kind, input);
+  const wants = (kind: CalendarSourceKind) =>
+    calendarSourceMatches(kind, input);
 
   const [
     meals,
     taskRows,
     expenseRows,
+    purchaseItems,
     projectRows,
     plantingRows,
     projectDates,
@@ -440,6 +497,7 @@ export async function getCalendarRange(
     loadCalendarMeals(db, input, endInclusive),
     loadCalendarTasks(db, input, endInclusive),
     loadCalendarExpenses(db, input, endInclusive),
+    loadCalendarPurchaseItems(db, input),
     loadCalendarProjects(db, input),
     calendarSourceWhere(db, input, "planting").then((condition) =>
       loadCalendarPlantings(db, input, endInclusive, condition),
@@ -459,6 +517,7 @@ export async function getCalendarRange(
     ...mapMealItems(meals),
     ...(await mapTaskItems(db, taskRows)),
     ...(await mapExpenseItems(db, expenseRows)),
+    ...purchaseItems,
     ...mapProjectItems(projectRows, projectDates, input),
     ...mapPlantingItems(plantingRows, input),
   ]);

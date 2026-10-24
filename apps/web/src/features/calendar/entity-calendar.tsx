@@ -1,5 +1,11 @@
-import type { CalendarItemKind } from "@cubby/schemas/calendar";
-import { calendarFiltersInput } from "@cubby/schemas/calendar";
+import type {
+  CalendarItemKind,
+  CalendarSourceKind,
+} from "@cubby/schemas/calendar";
+import {
+  calendarFiltersInput,
+  calendarSourceEntity,
+} from "@cubby/schemas/calendar";
 import { useCallback, useMemo } from "react";
 
 import type { ListSlotProps } from "~/entity/entity-list/list-slot-types";
@@ -18,16 +24,20 @@ import { UnifiedCalendar } from "./unified-calendar";
 const REPLACE = { replace: true } as const;
 
 export function entityCalendar(kind: CalendarItemKind) {
-  const kinds = [kind];
-  const specs = calendarEntityFilterSpecs[kind]!;
+  const source: CalendarSourceKind =
+    kind === "expense" || kind === "purchase" ? "spending" : kind;
+  const kinds: CalendarSourceKind[] = [source];
+  const specs = calendarEntityFilterSpecs[source]!;
   return function EntityCalendar({ search, navigate }: ListSlotProps) {
     const period = calendarPeriodParam.parse(search.period) ?? "month";
-    const filterOptions = useDeferredReferenceFilterOptions(kind);
+    const filterOptions = useDeferredReferenceFilterOptions(
+      calendarSourceEntity(source),
+    );
     const filters = useMemo(
       () =>
         calendarFiltersInput.parse({
           filters: {
-            [kind]: buildFiltersFromManifest(
+            [source]: buildFiltersFromManifest(
               specs,
               filterGetterFromSearch(specs, search),
             ),

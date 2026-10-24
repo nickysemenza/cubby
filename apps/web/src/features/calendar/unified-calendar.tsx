@@ -1,8 +1,11 @@
-import type {
-  CalendarDaySummary,
-  CalendarItem,
-  CalendarItemKind,
-  CalendarRangeInput,
+import {
+  calendarItemKey,
+  calendarSourceEntity,
+  type CalendarSourceKind,
+  type CalendarDaySummary,
+  type CalendarItem,
+  type CalendarItemKind,
+  type CalendarRangeInput,
 } from "@cubby/schemas/calendar";
 import type { EntityRef } from "@cubby/schemas/entity";
 import { CaretLeftIcon } from "@phosphor-icons/react/dist/csr/CaretLeft";
@@ -79,7 +82,13 @@ const CALENDAR_ACTIVATION = {
   touchDelayMs: 350,
   touchTolerancePx: 12,
 } as const;
-const ALL_KINDS: CalendarItemKind[] = ["meal", "task", "expense", "project"];
+const CREATE_KINDS = ["meal", "task", "expense", "project"] as const;
+type CreatableKind = (typeof CREATE_KINDS)[number];
+
+function defaultCreateKind(source?: CalendarSourceKind): CreatableKind {
+  const entity = calendarSourceEntity(source ?? "meal");
+  return entity === "planting" ? "task" : entity;
+}
 const NO_ITEMS: CalendarItem[] = [];
 const NO_DAY_SUMMARIES: Record<string, CalendarDaySummary> = {};
 const GRID_PERIOD_OPTIONS = [
@@ -121,8 +130,9 @@ const KIND_LABELS = {
   meal: "Meals",
   task: "Tasks",
   expense: "Expenses",
+  purchase: "Purchases",
   project: "Projects",
-  // Never indexed at runtime: `ALL_KINDS` (this file's day-sheet
+  // Never indexed at runtime: `CREATE_KINDS` (this file's day-sheet
   // creatable-kind list) never includes "planting" — see the `create`-field
   // note on `CalendarKindSpec` in calendar-kind-registry.tsx. Present only so
   // this `satisfies Record<CalendarItemKind, string>` still compiles.
@@ -135,7 +145,7 @@ const KIND_LABELS = {
 // and only `expense` agreed. DESIGN.md sanctions one categorical hue channel
 // (the project Gantt); this is the entity accent ladder, not a second one.
 
-type CreateKind = CalendarItemKind | null;
+type CreateKind = CreatableKind | null;
 
 interface UnifiedCalendarProps {
   period: CalendarViewPeriod;
@@ -152,7 +162,7 @@ interface UnifiedCalendarProps {
    * renderer-intrinsic omission has to be server-enforced, and the old
    * behaviour fetched four kinds a month to throw three away.
    */
-  lockedKinds?: CalendarItemKind[];
+  lockedKinds?: CalendarSourceKind[];
   onPeriodChange: (period: CalendarViewPeriod) => void;
   onDateChange: (date?: string) => void;
   onDayChange?: (day?: string) => void;
@@ -182,7 +192,7 @@ const toEvent = (
   today: string,
 ): CalendarEvent<CalendarItem> => ({
   ...calendarItemPresentation(item, today).event,
-  id: `${item.kind}:${item.id}`,
+  id: calendarItemKey(item),
   title: item.title,
   start: householdCalendarDate(item.startDate),
   end: householdCalendarDate(item.endDateExclusive),
@@ -236,7 +246,7 @@ const scheduleQueryInput = (
   startDate: string,
   endDateExclusive: string,
   filters?: CalendarFilters,
-  lockedKinds?: CalendarItemKind[],
+  lockedKinds?: CalendarSourceKind[],
 ): CalendarRangeInput => {
   const selectedKinds = (lockedKinds ?? filters?.kinds)?.filter(
     (kind) => kind === "task" || kind === "planting",
@@ -467,7 +477,7 @@ export function UnifiedCalendar({
   // comparison here — native renders the same buckets.
   const itemIncludesDay = useCallback(
     (item: CalendarItem, day: string) =>
-      data?.days[day]?.itemIds.includes(item.id) ?? false,
+      data?.days[day]?.itemIds.includes(calendarItemKey(item)) ?? false,
     [data],
   );
   const selectedItems = useMemo(
@@ -590,8 +600,9 @@ export function UnifiedCalendar({
                       className="inline-flex min-h-11 items-center underline hover:text-primary md:min-h-0"
                       onClick={() =>
                         setCreateKind(
-                          (lockedKinds ?? filters?.kinds ?? ALL_KINDS)[0] ??
-                            "meal",
+                          defaultCreateKind(
+                            (lockedKinds ?? filters?.kinds)?.[0],
+                          ),
                         )
                       }
                     >
@@ -688,7 +699,7 @@ function CalendarDaySheet({
   items: CalendarItem[];
   summary: CalendarDaySummary;
   onOpenChange: (open: boolean) => void;
-  onCreate: (kind: CalendarItemKind) => void;
+  onCreate: (kind: CreatableKind) => void;
   renderItem: (item: CalendarItem) => ReactNode;
 }) {
   return (
@@ -732,7 +743,7 @@ function CalendarDaySheet({
         <Stack gap="xs">
           <span className="text-xs font-medium text-slate">Add</span>
           <Row wrap gap="xs">
-            {ALL_KINDS.map((kind) => {
+            {CREATE_KINDS.map((kind) => {
               const Icon = KIND_ICONS[kind];
               return (
                 <Button
@@ -753,7 +764,7 @@ function CalendarDaySheet({
 
         <Stack gap="xs">
           {items.map((item) => (
-            <div key={`${item.kind}:${item.id}`}>{renderItem(item)}</div>
+            <div key={calendarItemKey(item)}>{renderItem(item)}</div>
           ))}
         </Stack>
       </Stack>

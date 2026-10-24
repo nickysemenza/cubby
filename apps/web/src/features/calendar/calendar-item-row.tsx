@@ -16,7 +16,10 @@ import { itemSpanLabel } from "./calendar-span";
 type CalendarItemPresentationVariant = "month" | "detail" | "rich";
 
 function calendarItemCost(item: CalendarItem) {
-  if (item.kind === "expense" && item.cost != null)
+  if (
+    (item.kind === "expense" || item.kind === "purchase") &&
+    item.cost != null
+  )
     return formatCurrency(item.cost);
   if (
     item.kind === "meal" &&
@@ -105,11 +108,12 @@ function CalendarItemCompact({
           {span}
         </span>
       )}
-      {item.kind === "expense" && item.cost != null && (
-        <span className="shrink-0 tabular-nums">
-          {formatCurrency(item.cost)}
-        </span>
-      )}
+      {(item.kind === "expense" || item.kind === "purchase") &&
+        item.cost != null && (
+          <span className="shrink-0 tabular-nums">
+            {formatCurrency(item.cost)}
+          </span>
+        )}
     </>
   );
 }

@@ -57,9 +57,9 @@ describe("calendar search params", () => {
     // it into `.catch(undefined)`, leaving an unfiltered calendar that reads as
     // a real answer — the exact hole `urlStringParam` exists to close.
     expect(
-      calendarSearchSchema.parse({ "expense.future": true }),
+      calendarSearchSchema.parse({ "spending.future": true }),
     ).toMatchObject({
-      "expense.future": "true",
+      "spending.future": "true",
     });
   });
 

@@ -8,6 +8,7 @@ import {
   plantingShortcode,
   projectShortcode,
   expenseShortcode,
+  purchaseShortcode,
   taskShortcode,
 } from "./identifiers";
 import { mealFilterFields, type MealOut } from "./meal";
@@ -47,10 +48,23 @@ export const calendarItemKind = z.enum([
   "meal",
   "task",
   "expense",
+  "purchase",
   "project",
   "planting",
 ]);
 export type CalendarItemKind = z.infer<typeof calendarItemKind>;
+
+/** A source may project more than one canonical entity kind. */
+export const calendarSourceKind = z.enum([
+  "meal",
+  "task",
+  "spending",
+  "project",
+  "planting",
+]);
+export type CalendarSourceKind = z.infer<typeof calendarSourceKind>;
+export const calendarSourceEntity = (source: CalendarSourceKind) =>
+  source === "spending" ? "expense" : source;
 
 export const calendarInteraction = z.enum(["move", "read-only"]);
 
@@ -105,6 +119,29 @@ export const calendarExpenseItem = z.object({
   productName: z.string().nullable(),
 });
 
+export const calendarPurchaseItem = z.object({
+  kind: z.literal("purchase"),
+  id: purchaseShortcode,
+  title: z.string(),
+  ...calendarItemBase,
+  interaction: z.literal("read-only"),
+  occurrence: z.enum(["original", "refund"]),
+  cost: moneyNullable,
+  ledgerAmount: money,
+  vendor: z.string().nullable(),
+  basis: z.enum(["stated_total", "expense_lines", "settlement", "unknown"]),
+  dateBasis: z.string(),
+  evidenceNote: z.string().optional(),
+  lines: z.array(
+    z.object({
+      id: expenseShortcode,
+      name: z.string(),
+      cost: moneyNullable,
+      productName: z.string().nullable(),
+    }),
+  ),
+});
+
 export const calendarProjectItem = z.object({
   kind: z.literal("project"),
   id: projectShortcode,
@@ -150,10 +187,20 @@ export const calendarItem = z.discriminatedUnion("kind", [
   calendarMealItem,
   calendarTaskItem,
   calendarExpenseItem,
+  calendarPurchaseItem,
   calendarProjectItem,
   calendarPlantingItem,
 ]);
 export type CalendarItem = z.infer<typeof calendarItem>;
+
+/** Entity identity owns links/media; occurrence identity owns layout/selection. */
+export const calendarItemKey = (item: CalendarItem): string => {
+  const base = `${item.kind}:${item.id}`;
+  if (item.kind === "purchase")
+    return `${base}:${item.occurrence}:${item.startDate}`;
+  if (item.kind === "planting") return `${base}:${item.milestone}`;
+  return base;
+};
 
 /** Each source uses its ordinary list filter contract. Active source filters
  * intersect source membership: a task filter excludes non-task sources. */
@@ -163,7 +210,7 @@ const calendarListFilterFields = {
 };
 
 export const calendarFilterFields = {
-  kinds: z.array(calendarItemKind).nonempty().optional(),
+  kinds: z.array(calendarSourceKind).nonempty().optional(),
   filters: z
     .object({
       meal: z
@@ -174,7 +221,7 @@ export const calendarFilterFields = {
         .object({ ...taskFilterFields, ...calendarListFilterFields })
         .strict()
         .optional(),
-      expense: z
+      spending: z
         .object({ ...expenseFilterFields, ...calendarListFilterFields })
         .strict()
         .optional(),
@@ -195,13 +242,13 @@ export const calendarFilterFields = {
 export const calendarSources = {
   meal: { dates: ["date"] },
   task: { dates: ["due"] },
-  expense: { dates: ["date"] },
+  spending: { dates: ["date"] },
   project: { projection: "subtree-date-windows" },
   planting: { dates: ["season", "transplantedOn"] },
 } as const satisfies {
   meal: { dates: readonly (keyof MealOut)[] };
   task: { dates: readonly (keyof TaskOut)[] };
-  expense: { dates: readonly (keyof ExpenseOut)[] };
+  spending: { dates: readonly (keyof ExpenseOut)[] };
   project: { projection: "subtree-date-windows" };
   planting: { dates: readonly (keyof z.infer<typeof plantingOut>)[] };
 };
@@ -210,7 +257,7 @@ export const calendarFiltersInput = z.object(calendarFilterFields).strict();
 export type CalendarFiltersInput = z.infer<typeof calendarFiltersInput>;
 
 export const calendarSourceMatches = (
-  kind: CalendarItemKind,
+  kind: CalendarSourceKind,
   input: CalendarFiltersInput,
 ): boolean =>
   (!input.kinds || input.kinds.includes(kind)) &&

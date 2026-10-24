@@ -1,6 +1,7 @@
 import {
   calendarSources,
-  type CalendarItemKind,
+  calendarSourceEntity,
+  type CalendarSourceKind,
 } from "@cubby/schemas/calendar";
 import { entitySummary } from "@cubby/schemas/entity-summary";
 
@@ -10,14 +11,17 @@ import {
   type FilterSpec,
 } from "~/entity/filter-manifest";
 
-// SAFETY: calendarSources is exhaustive over the CalendarItemKind union.
-export const calendarKinds = Object.keys(calendarSources) as CalendarItemKind[];
-export const calendarFilterKey = (kind: CalendarItemKind, key: string) =>
+// SAFETY: calendarSources is exhaustive over the CalendarSourceKind union.
+export const calendarKinds = Object.keys(
+  calendarSources,
+) as CalendarSourceKind[];
+export const calendarFilterKey = (kind: CalendarSourceKind, key: string) =>
   `${kind}.${key}`;
 
 export const calendarEntityFilterSpecs = Object.fromEntries(
   calendarKinds.map((kind) => {
-    const primary = entitySummary[kind].primarySearch;
+    const entity = calendarSourceEntity(kind);
+    const primary = entitySummary[entity].primarySearch;
     const specs: readonly FilterSpec[] = [
       ...(primary
         ? [
@@ -29,7 +33,7 @@ export const calendarEntityFilterSpecs = Object.fromEntries(
             },
           ]
         : []),
-      ...getEntityFilters(kind),
+      ...getEntityFilters(entity),
     ];
     return [kind, specs];
   }),
@@ -44,7 +48,10 @@ export const calendarFilterSpecs: readonly FilterSpec[] = [
     placeholder: "Filter by item kind...",
     options: calendarKinds.map((kind) => ({
       value: kind,
-      label: entitySummary[kind].plural,
+      label:
+        kind === "spending"
+          ? "Spending"
+          : entitySummary[calendarSourceEntity(kind)].plural,
     })),
   },
   ...calendarKinds.flatMap((kind) =>
@@ -62,8 +69,11 @@ export const calendarFilterSpecs: readonly FilterSpec[] = [
       exclusiveGroup: spec.exclusiveGroup
         ? calendarFilterKey(kind, spec.exclusiveGroup)
         : undefined,
-      group: entitySummary[kind].plural,
-      label: `${entitySummary[kind].singular} ${filterSpecLabel(spec).toLowerCase()}`,
+      group:
+        kind === "spending"
+          ? "Spending"
+          : entitySummary[calendarSourceEntity(kind)].plural,
+      label: `${kind === "spending" ? "Spending" : entitySummary[calendarSourceEntity(kind)].singular} ${filterSpecLabel(spec).toLowerCase()}`,
     })),
   ),
 ];
