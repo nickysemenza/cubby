@@ -266,3 +266,21 @@ filters, still storing nothing of their own. Reviewed decisions record who
 proposed each link (`proposedBy`); that column describes the existing decision
 rows and adds no relationship. A member's Link marks the Email related as a
 member resolution, since a reviewed Purchase link is relevance evidence.
+
+### Complete original capture
+
+New Gmail classification publications retain a versioned `gmail-original-v1`
+manifest separately from the existing normalized message checksum. It binds the
+owner, mailbox and provider message identity and captures ordered MIME structure,
+all text alternatives, headers (including Content-ID), attachment descriptors and
+actual available byte digests. Missing bytes, malformed encodings, size conflicts
+or bounded capture limits produce explicit incomplete evidence with no content
+digest. Capture uses already acquired bytes and makes no additional provider or
+storage requests.
+
+The manifest does not establish cross-Email equivalence or correction authority.
+Equal content digests do not erase independently bound provider identities. Email
+correction propagation remains held pending current-effect ownership, complete
+intent fencing and DB-only publication contracts. A later capture creates a new
+observation when its proof differs; it never retrofits an immutable historical
+Assessment or certifies previously discarded content.

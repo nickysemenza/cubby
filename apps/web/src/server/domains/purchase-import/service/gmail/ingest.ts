@@ -3,6 +3,7 @@ import type { ActorContext } from "@cubby/schemas/context";
 import type { EmailReclassifyOutcome } from "@cubby/schemas/email-actions";
 import { emailCandidateSource } from "@cubby/schemas/email-candidates";
 import type { EmailClassificationConflict } from "@cubby/schemas/email-observations";
+import type { EmailOriginalCapture } from "@cubby/schemas/email-observations";
 import {
   MAILBOX_RESEARCH_VERSION,
   mailboxClassification,
@@ -15,6 +16,7 @@ import type { Database } from "~/server/db";
 import { hasAcceptedEmailAssociation } from "~/server/domains/email/repo/email";
 import { originalChecksum } from "~/server/domains/purchase-import/repo/gmail/checksum";
 import { normalizeMessage } from "~/server/domains/purchase-import/repo/gmail/normalize";
+import { captureGmailOriginal } from "~/server/domains/purchase-import/repo/gmail/original-capture";
 import {
   GmailApiError,
   type GmailProvider,
@@ -249,6 +251,7 @@ async function observeClassification(
   unchanged: boolean,
   call: GmailClassificationCall | null,
   calls: (GmailClassificationCall | null)[] = [],
+  originalCapture?: EmailOriginalCapture,
 ) {
   if (!prior) return;
   // A reused verdict records nothing new unless it now contradicts a Purchase.
@@ -274,26 +277,31 @@ async function observeClassification(
     const actual = calls.find((entry) => entry?.operation === stamp.feature);
     if (actual?.promptVersion) stamp.promptVersion = actual.promptVersion;
   }
-  return recordEmailClassificationObservation(db, {
-    emailId: prior.id,
-    runId: input.runId ?? null,
-    checksum,
-    classification: decision.classification,
-    stage: decision.stage,
-    reason: decision.reason,
-    classificationVersion: MAILBOX_RESEARCH_VERSION,
-    model: call?.model ?? null,
-    promptVersion: call?.promptVersion ?? null,
-    operation: call?.operation ?? null,
-    conflict,
-    evaluationId: input.evaluation?.id ?? null,
-    provenance: {
-      dependencies,
-      inputFingerprint: checksum,
-      optionFingerprint: "",
+  return recordEmailClassificationObservation(
+    db,
+    {
+      emailId: prior.id,
+      runId: input.runId ?? null,
+      checksum,
+      classification: decision.classification,
+      stage: decision.stage,
+      reason: decision.reason,
+      classificationVersion: MAILBOX_RESEARCH_VERSION,
       model: call?.model ?? null,
+      promptVersion: call?.promptVersion ?? null,
+      operation: call?.operation ?? null,
+      conflict,
+      evaluationId: input.evaluation?.id ?? null,
+      provenance: {
+        dependencies,
+        inputFingerprint: checksum,
+        optionFingerprint: "",
+        model: call?.model ?? null,
+      },
     },
-  });
+    undefined,
+    originalCapture ? { originalCapture } : undefined,
+  );
 }
 
 type ReclassifyKeptReason = Extract<
@@ -650,6 +658,20 @@ async function acquireEligible(
     normalized,
     transientAttachments,
   );
+  const originalCapture = await captureGmailOriginal({
+    ledgerPartyId: input.ledgerPartyId,
+    mailboxId: identity.mailboxId,
+    messageId: identity.messageId,
+    message,
+    attachmentPayloads: new Map(
+      normalized.attachments.flatMap((attachment) => {
+        const bytes = transientAttachments.get(attachment.sourceKey);
+        return attachment.attachmentId && bytes !== undefined
+          ? [[attachment.attachmentId, bytes]]
+          : [];
+      }),
+    ),
+  });
   let uploadKeys: ReadonlyMap<string, string> = new Map();
   if (retain)
     uploadKeys = await stageGmailAttachments(
@@ -700,6 +722,7 @@ async function acquireEligible(
                   relevanceCall,
                 ),
                 [triageCall, relevanceCall],
+                originalCapture,
               );
           publication.observationId = observation?.id ?? null;
           if (publication.evaluation)

@@ -5,6 +5,52 @@ import {
   mailboxClassificationStage,
 } from "./mailbox-research.js";
 
+const originalDigest = z.string().regex(/^[a-f0-9]{64}$/u);
+const originalBinding = z.object({
+  provider: z.literal("gmail"),
+  ledgerPartyId: z.guid(),
+  mailboxId: z.string().min(1),
+  messageId: z.string().min(1),
+  threadId: z.string().nullable(),
+  internalDate: z.string().nullable(),
+});
+export const emailOriginalCaptureProblem = z.object({
+  reason: z.enum([
+    "identity_mismatch",
+    "missing_payload",
+    "missing_mime_type",
+    "invalid_encoding",
+    "invalid_size",
+    "size_mismatch",
+    "conflicting_payload",
+    "capture_limit",
+  ]),
+  part: z.string(),
+});
+export const emailOriginalPartCapture = z.object({
+  path: z.string().min(1),
+  metadataDigest: originalDigest,
+  bodyDigest: originalDigest,
+  bodyBytes: z.number().int().nonnegative(),
+});
+/** Complete source capture is evidence, never an equivalence rule or application authority. */
+export const emailOriginalCapture = z.discriminatedUnion("status", [
+  z.object({
+    version: z.literal("gmail-original-v1"),
+    status: z.literal("complete"),
+    binding: originalBinding,
+    parts: z.array(emailOriginalPartCapture).min(1).max(512),
+    contentDigest: originalDigest,
+  }),
+  z.object({
+    version: z.literal("gmail-original-v1"),
+    status: z.literal("incomplete"),
+    binding: originalBinding,
+    problem: emailOriginalCaptureProblem,
+  }),
+]);
+export type EmailOriginalCapture = z.infer<typeof emailOriginalCapture>;
+
 export const emailClassificationOperation = z.enum([
   "mailbox-triage",
   "mailbox-relevance",
