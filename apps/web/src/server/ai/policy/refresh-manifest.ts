@@ -1,6 +1,6 @@
 import {
   aiRefreshManifest,
-  SUGGESTION_AUTO_APPLY_THRESHOLD,
+  HIGH_CONFIDENCE_PROBABILITY,
   type AiRefreshManifest,
   type AiProvenance,
 } from "@cubby/schemas/ai-evaluation";
@@ -39,7 +39,7 @@ export function fieldPolicyFingerprint(
       automaticAssignment: {
         ruleKey: "field.addition",
         revision: FIELD_ASSIGNMENT_REVISION,
-        threshold: SUGGESTION_AUTO_APPLY_THRESHOLD,
+        threshold: HIGH_CONFIDENCE_PROBABILITY,
       },
       rules: row.rules,
       options: row.options,

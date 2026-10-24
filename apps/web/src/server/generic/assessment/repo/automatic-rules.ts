@@ -1,4 +1,4 @@
-import { SUGGESTION_AUTO_APPLY_THRESHOLD } from "@cubby/schemas/ai-evaluation";
+import { HIGH_CONFIDENCE_PROBABILITY } from "@cubby/schemas/ai-evaluation";
 import {
   FIELD_ASSIGNMENT_REVISION,
   AUTOMATIC_RULE_KEYS,
@@ -62,14 +62,14 @@ export const AUTOMATIC_RULES = {
     execution: "field_policy",
     family: "field",
     description:
-      "Fill an empty declared assignment field at 95% confidence with current evidence and a clear winner, preserving member decisions.",
+      "Fill an empty declared assignment field at high confidence with current evidence and a clear winner, preserving member decisions.",
     revision: () => FIELD_ASSIGNMENT_REVISION,
     match: (facts) =>
       facts.kind === "addition" &&
       entityFieldByKey(facts.entity, facts.field)?.control?.suggest?.mode ===
         "fill" &&
       !requiresSuggestionReview(facts.entity, facts.field) &&
-      facts.confidence >= SUGGESTION_AUTO_APPLY_THRESHOLD,
+      facts.confidence >= HIGH_CONFIDENCE_PROBABILITY,
     application: () => ({ kind: "accept_as_is" }),
   },
   "statement_transaction.attach": {

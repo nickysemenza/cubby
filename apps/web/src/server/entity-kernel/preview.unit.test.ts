@@ -34,8 +34,8 @@ describe("previewEntity field suggestions", () => {
     mocks.ensureRun.mockResolvedValue(fixtureRunId);
   });
 
-  // Failure: a preview commits a high bucket below the automatic threshold.
-  it.each([0.94, 0.95])(
+  // Preview and persisted automatic fill must agree with the public high-confidence boundary.
+  it.each([0.849, 0.85, 0.88])(
     "fills an empty preview field only at the automatic threshold (%s)",
     async (probability) => {
       mocks.suggestFields.mockResolvedValue({
@@ -62,7 +62,7 @@ describe("previewEntity field suggestions", () => {
         },
         ports,
       );
-      expect(result.suggestions.emoji?.applied).toBe(probability >= 0.95);
+      expect(result.suggestions.emoji?.applied).toBe(probability >= 0.85);
     },
   );
 

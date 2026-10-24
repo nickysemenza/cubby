@@ -1,6 +1,7 @@
 import { assessmentChildHandle } from "./assessment-reference";
 import { aiCallCostFields, aiCostSummaryFields } from "./ai-cost";
 import {
+  HIGH_CONFIDENCE_PROBABILITY,
   aiProvenance,
   suggestionAcceptanceReceipt,
   suggestionSupersessionReceipt,
@@ -38,8 +39,7 @@ export const confidence = z.enum(confidenceValues);
 
 export type Confidence = z.infer<typeof confidence>;
 
-/** The calibrated probability a decision needs to count as "high". */
-export const HIGH_CONFIDENCE_PROBABILITY = 0.85;
+export { HIGH_CONFIDENCE_PROBABILITY } from "./ai-evaluation";
 const MEDIUM_CONFIDENCE_PROBABILITY = 0.6;
 
 /** Buckets a decision model's calibrated probability into the public
