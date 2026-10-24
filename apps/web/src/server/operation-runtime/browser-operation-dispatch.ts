@@ -8,6 +8,7 @@ import { startOperationDefinitionFor } from "~/lib/start-operation-observability
 import { superJsonResultSchema } from "~/lib/superjson-wire";
 import {
   API_AUTH,
+  BROWSER_AUTH,
   authenticate,
   challengeError,
   isChallenge,
@@ -185,9 +186,13 @@ export function createBrowserOperationHandler(options?: {
       );
 
     try {
-      // Authenticate exactly once, before reading the request body. In
-      // particular, API_AUTH applies the cookie same-origin rule to writes.
-      const authenticated = await authenticateRequest(request, API_AUTH);
+      // Authenticate exactly once, before reading the request body; the
+      // cookie same-origin rule applies under either policy. The browser's
+      // codec selects BROWSER_AUTH so its writes keep the `web` audit channel.
+      const authenticated = await authenticateRequest(
+        request,
+        codec === "superjson" ? BROWSER_AUTH : API_AUTH,
+      );
       const authHeaders = isChallenge(authenticated)
         ? undefined
         : authenticated.responseHeaders;

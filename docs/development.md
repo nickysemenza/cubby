@@ -607,7 +607,9 @@ NDJSON with HTTP 200.
 `apps/web/src/server/http/authenticate.ts` is the single authentication step.
 The operation route accepts API keys, bearer tokens and session cookies. A
 cookie request with a `Cookie` header must be same-origin for POST; bearer and
-API-key requests are exempt. The runner owns input/output validation and the
+API-key requests are exempt. A superjson request (the browser) authenticates
+under the browser policy, so it audits as `web` and accepts no API key; other
+requests audit as `api`. The runner owns input/output validation and the
 Apple compatibility gate. An outdated `cubby-apple` build can read, but its
 writes receive HTTP 426 with `UPGRADE_REQUIRED` before operation input parsing;
 a changed read response can still break an old build.

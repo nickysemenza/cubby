@@ -123,15 +123,16 @@ export async function fetchWithRequestDiagnostics(
     try {
       const json: unknown = JSON.parse(body ?? "");
       const serialized = superJsonResultSchema.safeParse(json);
+      const value = serialized.success
+        ? superjson.deserialize(serialized.data)
+        : json;
       const envelope = z
         .object({
           ok: z.literal(false),
           error: publicStartOperationErrorSchema,
         })
-        .safeParse(
-          serialized.success ? superjson.deserialize(serialized.data) : json,
-        );
-      const direct = publicStartOperationErrorSchema.safeParse(json);
+        .safeParse(value);
+      const direct = publicStartOperationErrorSchema.safeParse(value);
       publicError = envelope.success
         ? envelope.data.error
         : direct.success

@@ -22,7 +22,6 @@ import { superJsonResultSchema } from "~/lib/superjson-wire";
 import {
   type StartOperationResult,
   type UnparsedStartOperationData,
-  publicStartOperationErrorSchema,
   unparsedStartOperationResultSchema,
 } from "~/server/operation-runtime/start-operation.contract";
 
@@ -147,11 +146,6 @@ async function postDispatch(
   try {
     body = await response.text();
     const json: unknown = JSON.parse(body);
-    if (!response.ok)
-      return {
-        ok: false,
-        error: publicStartOperationErrorSchema.parse(json),
-      };
     const parsed = superJsonResultSchema.parse(json);
     return unparsedStartOperationResultSchema.parse(
       superjson.deserialize(parsed),

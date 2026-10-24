@@ -3,7 +3,11 @@ import superjson from "superjson";
 import { describe, expect, it, vi } from "vitest";
 
 import { browserOperationPath } from "~/lib/browser-operation-path";
-import { API_AUTH, type Principal } from "~/server/http/authenticate";
+import {
+  API_AUTH,
+  BROWSER_AUTH,
+  type Principal,
+} from "~/server/http/authenticate";
 import type { AuthenticatedStartOperationContext } from "~/server/operation-runtime/start-operation.server";
 
 import { createBrowserOperationHandler } from "./browser-operation-dispatch";
@@ -59,23 +63,24 @@ describe("shared operation route", () => {
       authenticate,
       dispatch: run as never,
     });
-    const response = await handle(
-      new Request(
-        `https://cubby.example${browserOperationPath("dashboard.counts")}`,
-        {
-          method: "POST",
-          headers: {
-            authorization: "Bearer synthetic-token",
-            "x-cubby-value-codec": "superjson",
-          },
-          body: JSON.stringify(
-            superjson.serialize({ operation: "dashboard.counts" }),
-          ),
+    const request = new Request(
+      `https://cubby.example${browserOperationPath("dashboard.counts")}`,
+      {
+        method: "POST",
+        headers: {
+          authorization: "Bearer synthetic-token",
+          "x-cubby-value-codec": "superjson",
         },
-      ),
+        body: JSON.stringify(
+          superjson.serialize({ operation: "dashboard.counts" }),
+        ),
+      },
     );
+    const response = await handle(request);
 
     expect(response.status).toBe(200);
+    // The browser's writes audit as `web`, not `api`.
+    expect(authenticate).toHaveBeenCalledWith(request, BROWSER_AUTH);
     expect(response.headers.get("set-auth-token")).toBe("rotated-token");
     expect(response.headers.get("x-cubby-value-codec")).toBe("superjson");
     expect(superjson.deserialize(await response.json())).toEqual({
