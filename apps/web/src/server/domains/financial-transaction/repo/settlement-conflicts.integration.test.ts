@@ -58,7 +58,7 @@ describe("settlement conflicts", () => {
     const card = (name: string, owner: typeof buyer, last4: string) =>
       insertWithShortcode(ctx.db, "financialAccount", {
         name,
-        identity: { kind: "credit_card", issuer: null, network: "visa" },
+        identity: { kind: "credit_card", network: "visa" },
         ledgerPartyId: owner.id,
         primaryCardholderId: owner.id,
         cardNumbers: [
@@ -75,7 +75,7 @@ describe("settlement conflicts", () => {
     const otherCard = await card("Other member card", other, "3129");
     const giftCard = await insertWithShortcode(ctx.db, "financialAccount", {
       name: "Store gift card",
-      identity: { kind: "stored_value", provider: "Example Store" },
+      identity: { kind: "stored_value" },
       providerVendorId: vendor.id,
       ledgerPartyId: buyer.id,
     });
@@ -193,7 +193,7 @@ describe("settlement conflicts", () => {
     });
     const shared = await insertWithShortcode(ctx.db, "financialAccount", {
       name: "Card with an authorized user",
-      identity: { kind: "credit_card", issuer: null, network: "visa" },
+      identity: { kind: "credit_card", network: "visa" },
       ledgerPartyId: otherMember.id,
       authorizedUsers: [
         {
@@ -404,7 +404,7 @@ describe("settlement conflicts", () => {
       name: "Other member bank",
       identity: {
         kind: "bank_account",
-        institution: null,
+
         accountType: "checking",
       },
       ledgerPartyId: otherMember.id,

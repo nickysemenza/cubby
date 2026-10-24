@@ -237,7 +237,7 @@ describe("suggestFields", () => {
         basisMode: "provided",
         basis: {
           name: "Synthetic Platinum",
-          identity: '{"kind":"credit_card","issuer":null,"network":null}',
+          identity: '{"kind":"credit_card","network":null}',
         },
       },
       { decisionPort, resolveCorrections: false },

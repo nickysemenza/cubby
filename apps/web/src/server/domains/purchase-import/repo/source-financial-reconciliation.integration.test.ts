@@ -147,7 +147,7 @@ describe("accepted source financial reconciliation", () => {
     });
     const card = await insertWithShortcode(ctx.db, "financialAccount", {
       name: "Synthetic reconciliation account",
-      identity: { kind: "credit_card", issuer: null, network: "visa" },
+      identity: { kind: "credit_card", network: "visa" },
       ledgerPartyId: party.id,
     });
     await insertWithShortcode(ctx.db, "financialTransaction", {

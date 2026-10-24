@@ -482,11 +482,14 @@ the one debited; keep one stored-value account per vendor **per owner**, with
 `providerVendorId` set to the vendor and `ledgerPartyId` to the member whose
 balance it is (null only for a card the household shares), and record each
 physical card as a `physical_card` entry in `cardNumbers` rather than one
-account per card. A unique index allows one live account per provider and
-owner. To find the account a gift-card leg drew on, list `financialAccount`
-filtered by `providerVendorId` = the purchase's vendor and `ledgerPartyId` =
-the order's member (as for `settlement_party_conflict`); with no known member
-and more than one candidate, ask rather than pick.
+account per card. `providerVendorId` names the shared Vendor for every non-cash
+account: bank, card issuer, custodian, loan servicer, wallet or stored-value
+provider. Network stays separate; co-branding and the import source are not the
+provider. Multiple balances may share a provider and owner. Find candidate
+stored-value accounts through `entity_read.list financialAccount`, filtered by
+provider and order member. Resolve only one eligible match; otherwise retain the
+ambiguity and use explicitly reviewed payment-account evidence. Never merge
+rewards, gift cards or wallet balances just because their provider matches.
 
 Record what paid each order line as `tender` on payment evidence: `card` with
 `cardLastFour` when shown, `stored_value` for gift card, account balance or

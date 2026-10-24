@@ -255,7 +255,6 @@ function ProductFields({ record }: EntityEditorFieldsProps) {
 }
 
 const financialAccountFieldModels = {
-  issuer: requiredFieldModel("financialAccount", "issuer"),
   network: requiredFieldModel("financialAccount", "network"),
   identity: requiredFieldModel("financialAccount", "identity"),
   cardNumbers: requiredFieldModel("financialAccount", "cardNumbers"),
@@ -265,8 +264,8 @@ const financialAccountFieldModels = {
 
 /**
  * The account's identity (an explicit kind, no default) and dated card numbers are the generic
- * structured-value editor over their declared schemas; only the provider vendor, which a gift card
- * alone carries, and the evidence aliases keep their own fields.
+ * structured-value editor over their declared schemas. The provider organization and
+ * evidence aliases keep their own fields for every account kind.
  */
 function FinancialAccountFields({ form, record }: EntityEditorFieldsProps) {
   const mode = record ? "edit" : "create";
@@ -292,7 +291,7 @@ function FinancialAccountFields({ form, record }: EntityEditorFieldsProps) {
         entity="financialAccount"
         mode={mode}
         section="main"
-        exclude={["issuer", "network"]}
+        exclude={["network"]}
         options={{
           name: { focusOnMount: true },
           notes: { placeholder: "Optional evidence" },
@@ -300,15 +299,10 @@ function FinancialAccountFields({ form, record }: EntityEditorFieldsProps) {
       />
       {render(financialAccountFieldModels.identity)}
       {kind === "credit_card" ? (
-        <>
-          {render(financialAccountFieldModels.issuer)}
-          {render(financialAccountFieldModels.network)}
-        </>
+        <>{render(financialAccountFieldModels.network)}</>
       ) : null}
       {render(financialAccountFieldModels.cardNumbers)}
-      {kind === "stored_value"
-        ? render(financialAccountFieldModels.providerVendorId)
-        : null}
+      {render(financialAccountFieldModels.providerVendorId)}
       {render(financialAccountFieldModels.sourceAliases)}
     </>
   );

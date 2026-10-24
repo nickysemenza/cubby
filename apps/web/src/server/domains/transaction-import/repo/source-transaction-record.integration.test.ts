@@ -1329,7 +1329,7 @@ describe("statement row ledger", () => {
     const account = (
       await createRepoEntity(ctx, "financialAccount", {
         name: "Test Card",
-        identity: { kind: "credit_card", issuer: null, network: "amex" },
+        identity: { kind: "credit_card", network: "amex" },
         cardNumbers: [
           {
             last4: "4242",
@@ -1403,7 +1403,7 @@ describe("statement row ledger", () => {
     const account = (
       await createRepoEntity(ctx, "financialAccount", {
         name: "Test Card",
-        identity: { kind: "credit_card", issuer: null, network: "amex" },
+        identity: { kind: "credit_card", network: "amex" },
         cardNumbers: [],
         sourceAliases: [],
       })
@@ -1463,7 +1463,7 @@ describe("statement row ledger", () => {
     const account = (
       await createRepoEntity(ctx, "financialAccount", {
         name: "Shared Card",
-        identity: { kind: "credit_card", issuer: null, network: "amex" },
+        identity: { kind: "credit_card", network: "amex" },
         cardNumbers: [
           {
             last4: "4242",

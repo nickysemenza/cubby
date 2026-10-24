@@ -46,7 +46,7 @@ describe("settlement allocations — write path", () => {
         name,
         identity: {
           kind: "credit_card",
-          issuer: null,
+
           network: "visa",
         },
         cardNumbers: [

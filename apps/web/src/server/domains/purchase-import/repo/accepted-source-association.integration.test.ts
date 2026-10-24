@@ -2079,7 +2079,7 @@ describe("reviewed accepted source Product association", () => {
     const account = await insertWithShortcode(ctx.db, "financialAccount", {
       name: "Synthetic settlement account",
       ledgerPartyId: w.party.id,
-      identity: { kind: "credit_card", issuer: null, network: "visa" },
+      identity: { kind: "credit_card", network: "visa" },
     });
     const transaction = await insertWithShortcode(
       ctx.db,

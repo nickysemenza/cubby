@@ -182,7 +182,7 @@ describe("StructuredValueField", () => {
     await waitFor(() => expect(onSubmit).toHaveBeenCalled());
     expect(onSubmit.mock.calls[0]?.[0]).toMatchObject({
       kind: "credit_card",
-      issuer: null,
+
       network: null,
     });
   });

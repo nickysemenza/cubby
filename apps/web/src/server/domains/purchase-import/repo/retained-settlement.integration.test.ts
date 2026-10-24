@@ -65,7 +65,7 @@ describe("settlement from retained order evidence", () => {
     });
     const card = await insertWithShortcode(ctx.db, "financialAccount", {
       name: "Settlement card",
-      identity: { kind: "credit_card", issuer: null, network: "visa" },
+      identity: { kind: "credit_card", network: "visa" },
       ledgerPartyId: party.id,
     });
     // Each order is imported by its own member Run: a commit settles the Run.
@@ -290,6 +290,7 @@ describe("settlement from retained order evidence", () => {
             occurredAt: new Date("2026-09-03T12:00:00.000Z"),
             cardLastFours: [],
             storedValue: false,
+            accountId: card.id,
           },
         ],
       } satisfies Parameters<typeof planPurchaseRetainedSettlement>[1];
@@ -493,6 +494,7 @@ describe("settlement from retained order evidence", () => {
             occurredAt: new Date("2026-09-03T12:00:00.000Z"),
             cardLastFours: [],
             storedValue: false,
+            accountId: card.id,
           },
         ],
       } satisfies Parameters<typeof planPurchaseRetainedSettlement>[1];
@@ -583,7 +585,7 @@ describe("settlement from retained order evidence", () => {
     const { party, vendor, card, run } = await world();
     const giftCard = await insertWithShortcode(ctx.db, "financialAccount", {
       name: "Shop gift card",
-      identity: { kind: "stored_value", provider: "ForgeWear" },
+      identity: { kind: "stored_value" },
       providerVendorId: vendor.id,
       ledgerPartyId: party.id,
     });
@@ -610,6 +612,36 @@ describe("settlement from retained order evidence", () => {
     expect(await allocationsFor([purchaseId])).toEqual([
       { transactionId: debit.id, purchaseId, amount: 13.59 },
     ]);
+  });
+
+  it("leaves a stored-value settlement unresolved when the provider has multiple balances", async () => {
+    const { party, vendor, run } = await world();
+    const balances = [];
+    for (const name of ["Synthetic merchant credit", "Synthetic rewards"]) {
+      const account = await createRepoEntity(ctx, "financialAccount", {
+        name,
+        identity: { kind: "stored_value" },
+        providerVendorId: vendor.shortcode,
+        ledgerPartyId: party.shortcode,
+      });
+      balances.push({ id: account.entityId });
+    }
+    const purchaseId = await importOrder(run, {
+      orderId: "FW-AMBIGUOUS",
+      total: 13.59,
+      payments: [
+        {
+          amount: 13.59,
+          chargedAt: "2026-09-02T12:00:00.000Z",
+          tender: "stored_value",
+        },
+      ],
+    });
+    const [firstBalance] = balances;
+    if (!firstBalance) throw new Error("Synthetic balance missing");
+    await charge(firstBalance.id, { amount: 13.59, postedDate: "2026-09-02" });
+    await settleRetainedPaymentEvidence(ctx.db);
+    expect(await allocationsFor([purchaseId])).toEqual([]);
   });
 
   it("learns a tender when the same source is read again, without a reconciliation finding", async () => {
@@ -728,7 +760,7 @@ describe("settlement from retained order evidence", () => {
   });
 
   it("preserves source conflicts and payment multiplicity when discovery facts share a page", async () => {
-    const { party, run } = await world();
+    const { party, run, card } = await world();
     const twins = await importOrder(run, {
       orderId: "discovery-twins",
       total: 10,
@@ -801,6 +833,7 @@ describe("settlement from retained order evidence", () => {
             occurredAt: new Date("2026-09-02T12:00:00.000Z"),
             cardLastFours: [],
             storedValue: false,
+            accountId: card.id,
           },
         ],
       } satisfies Parameters<typeof planPurchaseRetainedSettlement>[1];

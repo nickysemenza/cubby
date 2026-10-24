@@ -159,8 +159,8 @@ const purchaseMemberSql = (purchase: SQL) =>
  * none or several. Card digits resolve through `cardNumbers` on the UTC charge
  * day (an undated line admits only undated cards, as `cardLastFoursOn`); a
  * stored-value line resolves to the vendor's stored-value account owned by the
- * order's member (`FinancialAccount_provider_owner_key`): the balance is
- * whoever placed the order.
+ * order's member. Multiple balances at one provider remain distinct: only a
+ * single matching account resolves, otherwise explicit payment-account evidence is needed.
  */
 // oxlint-disable-next-line cubby/no-raw-enum-literal-in-sql -- 'kind' is the account identity's JSON discriminator property, not a vocabulary value.
 const evidenceAccountSql = (evidence: SQL, purchase: SQL) => sql`(

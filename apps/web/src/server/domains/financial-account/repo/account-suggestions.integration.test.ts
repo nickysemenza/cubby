@@ -41,7 +41,6 @@ describe("Account scalar suggestion acceptance", () => {
       data: buildEntity("financialAccount", {
         name: "Synthetic switched capture",
         identity: { kind: "cash" },
-        issuer: "Synthetic Bank",
         network: "visa",
       }),
     });
@@ -58,13 +57,13 @@ describe("Account scalar suggestion acceptance", () => {
       missing: "error",
     });
     expect(detail).toMatchObject({
-      item: { identity: { kind: "cash" }, issuer: null, network: null },
+      item: { identity: { kind: "cash" }, network: null },
     });
   });
 
   it("refuses automatic acceptance of a declared review-required field at the shared sink", async () => {
     const account = await createRepoEntity(ctx, "financialAccount", {
-      identity: { kind: "credit_card", issuer: null, network: null },
+      identity: { kind: "credit_card", network: null },
     });
     const pending = await seedPending(ctx, {
       entity: "financialAccount",
@@ -96,14 +95,14 @@ describe("Account scalar suggestion acceptance", () => {
       .where(eq(financialAccount.shortcode, account.output.id));
     expect(stored?.identity).toEqual({
       kind: "credit_card",
-      issuer: null,
+
       network: null,
     });
   });
 
   it("keeps high-confidence card sweep additions pending until member review", async () => {
     const account = await createRepoEntity(ctx, "financialAccount", {
-      identity: { kind: "credit_card", issuer: null, network: null },
+      identity: { kind: "credit_card", network: null },
       provisional: true,
     });
     const started = await startSuggestionSweep(
@@ -140,7 +139,7 @@ describe("Account scalar suggestion acceptance", () => {
       .from(financialAccount)
       .where(eq(financialAccount.shortcode, account.output.id));
     expect(stored).toEqual({
-      identity: { kind: "credit_card", issuer: null, network: null },
+      identity: { kind: "credit_card", network: null },
       provisional: true,
     });
   });
@@ -150,9 +149,10 @@ describe("Account scalar suggestion acceptance", () => {
       name: "Avery Example",
       kind: "member",
     });
+    await createRepoEntity(ctx, "vendor", { name: "Harbor Example Bank" });
     const account = await createRepoEntity(ctx, "financialAccount", {
       name: "Synthetic sweep card",
-      identity: { kind: "credit_card", issuer: null, network: null },
+      identity: { kind: "credit_card", network: null },
       notes:
         "Issuer: Harbor Example Bank\nPrimary cardholder: Avery Example\nNetwork: Visa",
       provisional: true,
@@ -187,7 +187,7 @@ describe("Account scalar suggestion acceptance", () => {
       ctx.db,
       {
         entity: "financialAccount",
-        fields: ["issuer", "network", "primaryCardholderId"],
+        fields: ["providerVendorId", "network", "primaryCardholderId"],
         filters: { ids: [account.output.id] },
       },
       { context: kernelCtx(ctx), suggestPorts: { decisionPort } },
@@ -196,7 +196,7 @@ describe("Account scalar suggestion acceptance", () => {
     const rows = await runSuggestions(ctx.db, started.id);
     expect(rows.map(({ field, status }) => ({ field, status }))).toEqual(
       expect.arrayContaining([
-        { field: "issuer", status: "pending" },
+        { field: "providerVendorId", status: "pending" },
         { field: "network", status: "pending" },
         { field: "primaryCardholderId", status: "pending" },
       ]),
@@ -211,13 +211,13 @@ describe("Account scalar suggestion acceptance", () => {
       .from(financialAccount)
       .where(eq(financialAccount.shortcode, account.output.id));
     expect(stored).toEqual({
-      identity: { kind: "credit_card", issuer: null, network: null },
+      identity: { kind: "credit_card", network: null },
       primaryCardholderId: null,
       provisional: true,
     });
   });
 
-  it("offers all live members and saved issuers to the model, and accepts none for funding-only evidence", async () => {
+  it("offers all live members and provider Vendors to the model, and accepts none for funding-only evidence", async () => {
     const first = await createRepoEntity(ctx, "ledgerParty", {
       name: "Avery Example",
       kind: "member",
@@ -230,16 +230,12 @@ describe("Account scalar suggestion acceptance", () => {
       name: "Synthetic guest",
       kind: "guest",
     });
-    await createRepoEntity(ctx, "financialAccount", {
-      identity: {
-        kind: "credit_card",
-        issuer: "Synthetic Vocabulary Bank",
-        network: null,
-      },
+    const provider = await createRepoEntity(ctx, "vendor", {
+      name: "Synthetic Vocabulary Bank",
     });
     const basis = {
       name: "Synthetic card",
-      identity: '{"kind":"credit_card","issuer":null,"network":null}',
+      identity: '{"kind":"credit_card","network":null}',
       notes:
         "Avery Example funds this card and made 90 purchases. Blair Sample is an authorized user.",
     };
@@ -259,6 +255,20 @@ describe("Account scalar suggestion acceptance", () => {
     expect(members).not.toEqual(
       expect.arrayContaining([
         expect.objectContaining({ name: "Synthetic guest" }),
+      ]),
+    );
+    const providerSpec = fieldSuggestSpecFor(
+      "financialAccount",
+      "providerVendorId",
+    );
+    if (providerSpec?.kind !== "reference")
+      throw new Error("Missing provider spec");
+    expect(await providerSpec.roster(ctx.db, basis, basis)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: provider.output.id,
+          name: "Synthetic Vocabulary Bank",
+        }),
       ]),
     );
     const decisionPort = vi.fn<DecisionPort>(async (input) => {
@@ -288,7 +298,7 @@ describe("Account scalar suggestion acceptance", () => {
       runId,
       {
         entity: "financialAccount",
-        targets: ["primaryCardholderId", "issuer"],
+        targets: ["primaryCardholderId", "providerVendorId"],
         basisMode: "provided",
         basis,
       },
@@ -296,14 +306,20 @@ describe("Account scalar suggestion acceptance", () => {
     );
     expect(decisionPort).toHaveBeenCalledTimes(2);
     expect(result.suggestions.primaryCardholderId).toBeNull();
-    expect(result.suggestions.issuer).toBeNull();
+    expect(result.suggestions.providerVendorId).toBeNull();
     expect(result.outcomes).toMatchObject({
       primaryCardholderId: { kind: "evaluated", answer: "none" },
-      issuer: { kind: "evaluated", answer: "none" },
+      providerVendorId: { kind: "evaluated", answer: "none" },
     });
   });
 
-  it("accepts issuer, network and primary holder through the kernel without changing histories or provisional status", async () => {
+  it("accepts provider, network and primary holder through the kernel without changing histories or provisional status", async () => {
+    const provider = await createRepoEntity(ctx, "vendor", {
+      name: "Harbor Example Bank",
+    });
+    const alternative = await createRepoEntity(ctx, "vendor", {
+      name: "Meadow Example Bank",
+    });
     const member = await createRepoEntity(ctx, "ledgerParty", {
       kind: "member",
     });
@@ -340,7 +356,7 @@ describe("Account scalar suggestion acceptance", () => {
     };
     const account = await createRepoEntity(ctx, "financialAccount", {
       name: "Synthetic card",
-      identity: { kind: "credit_card", issuer: null, network: "visa" },
+      identity: { kind: "credit_card", network: "visa" },
       provisional: true,
       primaryCardholderId: originalHolder.output.id,
       ...histories,
@@ -349,7 +365,7 @@ describe("Account scalar suggestion acceptance", () => {
     });
     const id = await recordId(ctx.db, account.output.id, "financialAccount");
     for (const [field, currentValue, suggestedValue] of [
-      ["issuer", null, "Harbor Example Bank"],
+      ["providerVendorId", null, provider.output.id],
       ["network", "visa", "mastercard"],
       ["primaryCardholderId", originalHolder.output.id, member.output.id],
     ] as const) {
@@ -372,11 +388,11 @@ describe("Account scalar suggestion acceptance", () => {
     });
     expect(saved).toMatchObject({
       item: {
-        issuer: "Harbor Example Bank",
+        providerVendorId: provider.output.id,
         network: "mastercard",
         identity: {
           kind: "credit_card",
-          issuer: "Harbor Example Bank",
+
           network: "mastercard",
         },
         primaryCardholderId: member.output.id,
@@ -387,9 +403,9 @@ describe("Account scalar suggestion acceptance", () => {
     const advice = await seedPending(ctx, {
       entity: "financialAccount",
       recordId: id,
-      field: "issuer",
-      currentValue: "Harbor Example Bank",
-      suggestedValue: "Meadow Example Bank",
+      field: "providerVendorId",
+      currentValue: provider.output.id,
+      suggestedValue: alternative.output.id,
       kind: "correction",
     });
     await getDb(ctx.db).execute(
@@ -399,13 +415,54 @@ describe("Account scalar suggestion acceptance", () => {
     expect(await isSuggestionReviewable(ctx.db, advice.id)).toBe(false);
   });
 
+  it("keeps multiple bank, card and reward accounts at one provider independent", async () => {
+    const provider = await createRepoEntity(ctx, "vendor", {
+      name: "Synthetic Provider Bank",
+    });
+    const member = await createRepoEntity(ctx, "ledgerParty", {
+      kind: "member",
+    });
+    const identities = [
+      { kind: "bank_account", accountType: "checking" },
+      { kind: "credit_card", network: "visa" },
+      { kind: "stored_value" },
+      { kind: "stored_value" },
+      { kind: "other" },
+    ] as const;
+    const ids = new Set<string>();
+    for (const identity of identities) {
+      const account = await createRepoEntity(ctx, "financialAccount", {
+        identity,
+        ledgerPartyId: member.output.id,
+        providerVendorId: provider.output.id,
+      });
+      ids.add(account.output.id);
+      expect(account.output).toMatchObject({
+        identity,
+        providerVendorId: provider.output.id,
+        providerVendorName: "Synthetic Provider Bank",
+      });
+    }
+    expect(ids.size).toBe(identities.length);
+    const cash = await createRepoEntity(ctx, "financialAccount", {
+      identity: { kind: "cash" },
+    });
+    await expect(
+      executeEntity(kernelCtx(ctx), {
+        entity: "financialAccount",
+        action: "update",
+        id: cash.output.id,
+        data: { providerVendorId: provider.output.id },
+      }),
+    ).rejects.toThrow("Cash accounts do not have a provider");
+  });
+
   it("rejects non-card scalar writes and refuses a guest as primary cardholder", async () => {
     const cash = await createRepoEntity(ctx, "financialAccount", {
       identity: { kind: "cash" },
     });
     const guest = await createRepoEntity(ctx, "ledgerParty", { kind: "guest" });
     for (const data of [
-      { issuer: "Synthetic Bank" },
       { network: "visa" },
       { primaryCardholderId: guest.output.id },
     ] as const) {

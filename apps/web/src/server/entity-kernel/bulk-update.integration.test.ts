@@ -132,7 +132,7 @@ describe("generic bulk updates", () => {
     );
     const account = await createRepoEntity(ctx, "financialAccount", {
       name: "Synthetic allocation account",
-      identity: { kind: "credit_card", issuer: null, network: "visa" },
+      identity: { kind: "credit_card", network: "visa" },
       cardNumbers: [],
     });
     const transactions = await Promise.all(

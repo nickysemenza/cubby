@@ -51,7 +51,7 @@ import type { Database } from "~/server/db";
 import { expenseTradeAffinity } from "~/server/domains/expense/repo/analytics";
 import {
   cardholderSuggestionMembers,
-  savedCardIssuers,
+  accountProviderVendors,
 } from "~/server/domains/financial-account/repo/suggestion-candidates";
 import {
   getLocationPutAwayCandidates,
@@ -70,7 +70,7 @@ import {
   type InternalSearchCandidate,
 } from "~/server/generic/search/service/search.service";
 
-import { issuerCandidates, hasCreditCardIdentity } from "./account-evidence";
+import { hasCreditCardIdentity } from "./account-evidence";
 import { rankCategoryCandidates } from "./category-ranking";
 
 const preparation = new AsyncLocalStorage<{
@@ -414,13 +414,13 @@ const FIELD_SUGGEST_OVERRIDES = {
   } satisfies ReferenceSuggestSpec<
     Awaited<ReturnType<typeof cardholderSuggestionMembers>>[number]
   >,
-  "financialAccount.issuer": {
-    ...FIELD_SUGGEST_DECISIONS["financialAccount.issuer"],
-    roster: async (db, basis) =>
-      hasCreditCardIdentity(basis)
-        ? issuerCandidates(await savedCardIssuers(db), basis)
-        : [],
-  } satisfies TextRosterSuggestSpec,
+  "financialAccount.providerVendorId": {
+    ...FIELD_SUGGEST_DECISIONS["financialAccount.providerVendorId"],
+    roster: async (db) => await accountProviderVendors(db),
+    idOf: (candidate) => candidate.id,
+    labelOf: (candidate) => candidate.name,
+    renderLine: (candidate) => `${candidate.id} | ${candidate.name}`,
+  } satisfies ReferenceSuggestSpec<{ id: string; name: string }>,
   "vendor.defaultSpendingCategoryId": {
     ...FIELD_SUGGEST_DECISIONS["vendor.defaultSpendingCategoryId"],
     ...spendingCategoryRuntime,

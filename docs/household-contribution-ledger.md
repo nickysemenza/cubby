@@ -84,18 +84,27 @@ A credit card's `primaryCardholderId` identifies its primary member independentl
 of the account's `ledgerPartyId` and inventory-owner default. `authorizedUsers`
 records member memberships with inclusive `validFrom`/`validTo` dates (null is an
 open endpoint). History details link each Ledger Party beside its date bounds on both web and
-Apple clients. Issuer, network, and primary cardholder use reviewed Jev/Clef field
-suggestions. Account identity and notes supply the evidence; a saved issuer or
-member roster supplies choices, not proof. All live members and the full network
-enum reach the model; missing, ambiguous or conflicting holder/network evidence
-requires none. Saved issuer vocabulary and literal `Issuer:` lines supply issuer
-choices; the model decides whether the account evidence supports a match.
-Shared funding and purchase frequency do not establish card access. Issuer and
-network are editable scalar projections of the existing identity object;
-acceptance preserves its sibling fields and the account's explicit histories.
+Apple clients. Every non-cash account can name a provider through
+`providerVendorId`, referencing the shared Vendor roster. The provider is the bank,
+card issuer, custodian, loan servicer, wallet operator or stored-value provider.
+Card co-branding, employer and import source are not provider identity. Network
+remains a separate credit-card enum. Multiple accounts, including distinct rewards
+and merchant-credit balances, may share the same provider and owner. Stored-value
+payment evidence resolves only when exactly one eligible account matches; ambiguous
+balances require explicit payment-account evidence.
 
-The generic suggestion framework chooses among scalar enum, reference or text
-candidates. It cannot generate structured facts or dated history rows.
+Provider, network and primary cardholder use reviewed Jev/Clef field suggestions.
+Saved account names, identity, notes and source aliases supply evidence; a Vendor
+roster or member roster supplies choices, not proof. All eligible Vendors, live
+members and the full network enum reach the model. Missing, ambiguous or conflicting
+evidence requires none; funding and purchase frequency do not identify a primary
+cardholder. Network is an editable scalar projection of identity; provider is an
+ordinary entity reference. The preserving cutover copies retired issuer,
+institution and provider text into notes before removing those identity keys;
+unique exact Vendor names or aliases backfill missing references. Ambiguous or
+unmatched text stays as evidence with no guessed provider. Existing provider
+references win. The generic suggestion framework chooses among reference and enum
+candidates; it does not generate structured facts or dated history rows.
 Authorized-user memberships, funding periods, card-number history and every
 `validFrom`/`validTo` remain explicitly entered; no account-specific AI extractor
 fills them. Provisional is cleared only through member confirmation.

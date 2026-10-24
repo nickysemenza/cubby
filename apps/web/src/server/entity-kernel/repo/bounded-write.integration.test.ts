@@ -172,7 +172,7 @@ describe("bounded entity writes", () => {
   it("does not inspect allocation or reference collections on a FinancialTransaction note edit", async () => {
     const account = await createRepoEntity(ctx, "financialAccount", {
       name: "Synthetic note-only account",
-      identity: { kind: "credit_card", issuer: null, network: "visa" },
+      identity: { kind: "credit_card", network: "visa" },
       cardNumbers: [],
       sourceAliases: [],
     });

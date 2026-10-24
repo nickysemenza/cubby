@@ -133,7 +133,7 @@ const card = async (ctx: Ctx) => {
     name: "Synthetic Card",
     ledgerPartyId: owner.output.id,
     provisional: false,
-    identity: { kind: "credit_card", issuer: null, network: "visa" },
+    identity: { kind: "credit_card", network: "visa" },
     sourceAliases: [
       {
         source: "monarch",

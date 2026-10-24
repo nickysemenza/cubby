@@ -183,7 +183,7 @@ const card = async (ctx: Ctx) => {
     name: "Synthetic Card",
     ledgerPartyId: owner.output.id,
     provisional: false,
-    identity: { kind: "credit_card", issuer: null, network: "visa" },
+    identity: { kind: "credit_card", network: "visa" },
     sourceAliases: [
       {
         source: "monarch",
@@ -429,7 +429,7 @@ describe("statement Transaction suggestions", () => {
       name: "Synthetic Debit",
       identity: {
         kind: "bank_account",
-        institution: "Synthetic Bank",
+
         accountType: "checking",
       },
       sourceAliases: [
@@ -1084,7 +1084,7 @@ describe("statement Transaction suggestions", () => {
     expect(await buildChargeProposals(ctx.db, [charge])).toEqual([]);
     const other = await createRepoIdentity(ctx, "financialAccount", {
       name: "Synthetic other account",
-      identity: { kind: "credit_card", issuer: null, network: "visa" },
+      identity: { kind: "credit_card", network: "visa" },
       sourceAliases: [],
     });
     const outside = await retryStatementGenerationRefs(ctx.db, {
@@ -3842,7 +3842,7 @@ describe("statement Transaction suggestions", () => {
                 name: "Synthetic competing source account",
                 identity: {
                   kind: "credit_card",
-                  issuer: null,
+
                   network: "visa",
                 },
                 sourceAliases: [
@@ -4266,7 +4266,7 @@ describe("statement Transaction suggestions", () => {
       name: "Synthetic Checking",
       identity: {
         kind: "bank_account",
-        institution: "Example Bank",
+
         accountType: "checking",
       },
       ledgerPartyId: member.output.id,
@@ -4278,14 +4278,23 @@ describe("statement Transaction suggestions", () => {
         },
       ],
     });
+    const walletProvider = await createRepoIdentity(ctx, "vendor", {
+      name: "Synthetic Wallet Holdings",
+      aliases: ["PayFriend"],
+    });
+    const partnerProvider = await createRepoIdentity(ctx, "vendor", {
+      name: "SplitPay",
+    });
     const wallet = await createRepoIdentity(ctx, "financialAccount", {
       name: "Synthetic PayFriend",
-      identity: { kind: "stored_value", provider: "PayFriend" },
+      identity: { kind: "stored_value" },
+      providerVendorId: walletProvider.output.id,
       ledgerPartyId: member.output.id,
     });
     const partnerWallet = await createRepoIdentity(ctx, "financialAccount", {
       name: "Synthetic SplitPay",
-      identity: { kind: "stored_value", provider: "SplitPay" },
+      identity: { kind: "stored_value" },
+      providerVendorId: partnerProvider.output.id,
       ledgerPartyId: partner.output.id,
     });
     await record(ctx, [
@@ -4330,7 +4339,7 @@ describe("statement Transaction suggestions", () => {
   it("holds a payment-app payment back on the label alone", async () => {
     await createRepoIdentity(ctx, "financialAccount", {
       name: "Synthetic PayFriend",
-      identity: { kind: "stored_value", provider: "PayFriend" },
+      identity: { kind: "stored_value" },
       sourceAliases: [
         {
           source: "monarch",

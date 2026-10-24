@@ -116,7 +116,7 @@ it.each(sizes)(
         name: "Synthetic benchmark card",
         ledgerPartyId: owner.output.id,
         provisional: false,
-        identity: { kind: "credit_card", issuer: null, network: "visa" },
+        identity: { kind: "credit_card", network: "visa" },
         sourceAliases: [
           {
             source: "monarch",

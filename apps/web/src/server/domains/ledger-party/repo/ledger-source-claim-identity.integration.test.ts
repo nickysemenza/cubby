@@ -342,7 +342,7 @@ describe("source claim identity round trip", () => {
         name: "Identity placeholder",
         identity: {
           kind: "credit_card",
-          issuer: "Synthetic Bank",
+
           network: "visa",
         },
         primaryCardholderId: null,
@@ -373,7 +373,7 @@ describe("source claim identity round trip", () => {
       {
         identity: {
           kind: "credit_card",
-          issuer: "Other Bank",
+
           network: "visa",
         },
       },

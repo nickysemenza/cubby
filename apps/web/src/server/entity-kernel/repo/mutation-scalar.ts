@@ -25,7 +25,7 @@ export function nonColumnMutationScalar(
     const kind = key === "googleDriveFolderUrl" ? "folder" : "page";
     return sql`(SELECT link.url FROM "EntityExternalId" link WHERE link."entityId"=saved.id AND link.source=${source} AND link.kind=${kind} AND link."isPrimary"=true AND link."deletedAt" IS NULL LIMIT 1)`;
   }
-  if (entity === "financialAccount" && (key === "issuer" || key === "network"))
+  if (entity === "financialAccount" && key === "network")
     return sql`CASE WHEN saved.identity->>${"kind"}=${financialAccountIdentityKind.enum.credit_card} THEN saved.identity->>${key} END`;
   if (entity === "expense" && key === "vendor")
     return sql`(SELECT vendor.name FROM "Purchase" purchase JOIN "Vendor" vendor ON vendor.id=purchase."vendorId" AND vendor."deletedAt" IS NULL WHERE purchase.id=saved."purchaseId" AND purchase."deletedAt" IS NULL)`;

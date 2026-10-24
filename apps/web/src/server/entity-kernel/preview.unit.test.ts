@@ -81,7 +81,7 @@ describe("previewEntity field suggestions", () => {
     });
     mocks.suggestFields.mockResolvedValue({
       suggestions: {
-        issuer: choice("Example Bank"),
+        providerVendorId: choice("VEN-4K7M"),
         network: choice("visa"),
         primaryCardholderId: choice("LPY-4K7M"),
       },
@@ -92,18 +92,20 @@ describe("previewEntity field suggestions", () => {
         entity: "financialAccount",
         data: {
           name: "Example Rewards",
-          identity: { kind: "credit_card", issuer: null, network: null },
+          identity: { kind: "credit_card", network: null },
         },
-        context: { targets: ["issuer", "network", "primaryCardholderId"] },
+        context: {
+          targets: ["providerVendorId", "network", "primaryCardholderId"],
+        },
       },
       ports,
     );
     expect(result.suggestions).toMatchObject({
-      issuer: { applied: false },
+      providerVendorId: { applied: false },
       network: { applied: false },
       primaryCardholderId: { applied: false },
     });
-    expect(result.proposed.issuer).not.toBe("Example Bank");
+    expect(result.proposed.providerVendorId).not.toBe("VEN-4K7M");
     expect(result.proposed.network).not.toBe("visa");
     expect(result.proposed.primaryCardholderId).not.toBe("LPY-4K7M");
   });

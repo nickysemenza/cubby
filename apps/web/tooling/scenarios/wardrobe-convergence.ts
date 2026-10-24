@@ -481,7 +481,7 @@ async function recordSyntheticStatement(
   const account = await createFixtureWithContext(kernel, "financialAccount", {
     name: "Fixture Visa",
     ledgerPartyId: memberId,
-    identity: { kind: "credit_card", issuer: null, network: "visa" },
+    identity: { kind: "credit_card", network: "visa" },
     cardNumbers: [
       {
         last4: "4242",

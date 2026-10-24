@@ -34,10 +34,10 @@ describe("entity edit definitions", () => {
       overrides: {
         identity: {
           kind: "credit_card",
-          issuer: "Synthetic Bank",
+
           network: "visa",
         },
-        issuer: "Synthetic Bank",
+        providerVendorId: testShortcode("vendor", "BANK"),
         network: "visa",
       },
     });
@@ -54,11 +54,13 @@ describe("entity edit definitions", () => {
     const values = initialEntityEditValues(resolved, request);
     const result = buildEntityEdit(resolved, request, {
       ...values,
-      issuer: "Synthetic Credit Union",
+      providerVendorId: testShortcode("vendor", "UNION"),
     });
     if (!result.ok || !result.changed || result.command.operation !== "update")
       throw new Error("Card scalar edit must build an update");
-    expect(result.command.data).toEqual({ issuer: "Synthetic Credit Union" });
+    expect(result.command.data).toEqual({
+      providerVendorId: testShortcode("vendor", "UNION"),
+    });
   });
   it.each(["task", "expense"] as const)(
     "leaves %s capture trade unresolved until chosen or inherited",

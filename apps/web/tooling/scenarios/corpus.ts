@@ -283,7 +283,7 @@ async function seedConnectedHousehold(
     name: "Cedar Checking",
     identity: {
       kind: "bank_account",
-      institution: "Example Bank",
+
       accountType: "checking",
     },
     ledgerPartyId: memberCode,

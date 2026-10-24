@@ -317,7 +317,7 @@ test("Suggestions lists every family with named records and category pills, and 
   const alias = uniqueName(testInfo, "Suggestions card");
   await createEntityFixture(page, "financialAccount", {
     name: alias,
-    identity: { kind: "credit_card", issuer: null, network: "visa" },
+    identity: { kind: "credit_card", network: "visa" },
     sourceAliases: [{ source: "monarch", alias, externalAccountId: null }],
   });
   const importId = await recordRows(
@@ -478,7 +478,7 @@ test("statement Suggestions attach to a named candidate, bulk-accept a clean sup
         name: alias,
         ledgerPartyId: owner.shortcode,
         provisional: false,
-        identity: { kind: "credit_card", issuer: null, network: "visa" },
+        identity: { kind: "credit_card", network: "visa" },
         sourceAliases: [{ source: "monarch", alias, externalAccountId: null }],
       });
       const recorded = await create("financialTransaction", {

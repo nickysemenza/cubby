@@ -778,7 +778,7 @@ describe("purchase repository — mergePurchases", () => {
       name: "Settlement Merge Card",
       identity: {
         kind: "credit_card",
-        issuer: null,
+
         network: "visa",
       },
       cardNumbers: [

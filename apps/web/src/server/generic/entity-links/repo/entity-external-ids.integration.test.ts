@@ -108,7 +108,7 @@ describe("EntityExternalId", () => {
     (
       await createRepoEntity(ctx, "financialAccount", {
         name,
-        identity: { kind: "credit_card", issuer: null, network: "visa" },
+        identity: { kind: "credit_card", network: "visa" },
         cardNumbers: [],
         sourceAliases: [],
       })

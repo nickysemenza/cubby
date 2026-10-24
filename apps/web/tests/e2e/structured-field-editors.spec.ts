@@ -1,7 +1,10 @@
 import { and, asc, eq } from "drizzle-orm";
 import { entityExternalId, financialAccount } from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/db/helpers";
-import { gotoAuthenticatedPage } from "./support/e2e-helpers";
+import {
+  gotoAuthenticatedPage,
+  selectComboboxItem,
+} from "./support/e2e-helpers";
 import { expect, test } from "./support/e2e-test";
 import { createEntityFixture, getFixtureDb } from "./fixtures/core";
 
@@ -122,6 +125,10 @@ test("vendor agent hints are edited with the generic structured editor", async (
 test("a new account must choose its identity kind instead of getting a default", async ({
   page,
 }) => {
+  const providerName = `Synthetic account provider ${Date.now()}`;
+  const provider = await createEntityFixture(page, "vendor", {
+    name: providerName,
+  });
   await page.setViewportSize({ width: 1280, height: 1000 });
   const name = `Example card ${Date.now()}`;
   await gotoAuthenticatedPage(
@@ -140,9 +147,13 @@ test("a new account must choose its identity kind instead of getting a default",
 
   await identity.click();
   await page.getByRole("option", { name: "Credit card" }).click();
-  await dialog
-    .getByRole("textbox", { name: "Issuer" })
-    .fill("Example Credit Union");
+  await expect(dialog.getByRole("textbox", { name: "Issuer" })).toHaveCount(0);
+  await selectComboboxItem(
+    page,
+    dialog.getByRole("combobox", { name: "Provider", exact: true }),
+    providerName,
+    { query: providerName, code: provider.id },
+  );
   await dialog.getByRole("button", { name: "Add card number" }).click();
   await dialog.getByRole("textbox", { name: "Last 4" }).fill("4242");
   await dialog.getByRole("combobox", { name: "Kind" }).click();
@@ -150,10 +161,12 @@ test("a new account must choose its identity kind instead of getting a default",
   await dialog.getByRole("button", { name: "Create" }).click();
   await expect(dialog).toBeHidden();
   const stored = await getDb(getFixtureDb()).query.financialAccount.findFirst({
+    with: { providerVendor: { columns: { shortcode: true } } },
     where: and(eq(financialAccount.name, name), notDeleted(financialAccount)),
   });
   expect(stored).toMatchObject({
-    identity: { kind: "credit_card", issuer: "Example Credit Union" },
+    identity: { kind: "credit_card", network: null },
+    providerVendor: { shortcode: provider.id },
     cardNumbers: [{ last4: "4242", kind: "primary" }],
   });
 });

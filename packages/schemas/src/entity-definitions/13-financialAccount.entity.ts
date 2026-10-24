@@ -83,7 +83,7 @@ export default defineEntity({
           kind: "fields",
           id: "account-identity",
           title: "Account identity",
-          fields: ["identity", "issuer", "network"],
+          fields: ["identity", "network"],
         },
         {
           kind: "chart",
@@ -179,35 +179,6 @@ export default defineEntity({
           read: financialAccountIdentity,
           create: financialAccountIdentity,
           update: financialAccountIdentity.optional(),
-        },
-      },
-      {
-        key: "issuer",
-        kind: "text",
-        nullable: true,
-        description:
-          "Credit-card issuer, stored in identity. Suggestions require account-specific issuer evidence.",
-        provenance: {
-          kind: "relation",
-          sources: [{ label: "Account identity" }],
-        },
-        control: {
-          kind: "text",
-          suggest: {
-            basis: ["name", "identity", "notes", "sourceAliases"],
-            backedBy: [{ column: "identity" }],
-            // Financial identity controls statement/account matching.
-            reviewRequired: true,
-          },
-        },
-        display: {
-          columnGroup: "Account",
-          mobile: { slot: "meta", priority: 20 },
-        },
-        validation: {
-          read: z.string().nullable(),
-          create: z.string().nullable().optional(),
-          update: z.string().nullable().optional(),
         },
       },
       {
@@ -325,9 +296,16 @@ export default defineEntity({
         kind: "identifier",
         nullable: true,
         description:
-          "The vendor that owes a gift card or store-credit balance. Stored-value accounts only; one live account per provider and owner.",
+          "The organization providing or servicing this account: bank, card issuer, loan servicer, wallet or stored-value provider. Multiple accounts may share a provider; card co-branding does not establish the provider.",
         reference: { entity: "vendor" },
-        control: { kind: "specialized", renderer: "entity-select" },
+        control: {
+          kind: "specialized",
+          renderer: "entity-select",
+          suggest: {
+            basis: ["name", "identity", "notes", "sourceAliases"],
+            reviewRequired: true,
+          },
+        },
         display: { columnGroup: "Account", columnLabel: "Provider" },
         validation: {
           read: vendorShortcode.nullable(),
@@ -556,7 +534,6 @@ export default defineEntity({
       "deletedAt",
     ],
     create: [
-      "issuer",
       "network",
       "primaryCardholderId",
       "authorizedUsers",
@@ -572,7 +549,6 @@ export default defineEntity({
       "notes",
     ],
     update: [
-      "issuer",
       "network",
       "primaryCardholderId",
       "authorizedUsers",
@@ -639,7 +615,6 @@ export default defineEntity({
     intents: {
       fields: {
         capture: [
-          "issuer",
           "network",
           "name",
           "identity",
@@ -650,7 +625,6 @@ export default defineEntity({
           "notes",
         ],
         full: [
-          "issuer",
           "network",
           "primaryCardholderId",
           "authorizedUsers",
@@ -670,7 +644,6 @@ export default defineEntity({
       update: ["full", "identity"],
     },
     output: [
-      "issuer",
       "network",
       "authorizedUserItems",
       "fundingPeriodItems",
@@ -714,29 +687,17 @@ export default defineEntity({
     indexes: [
       { on: ["name"] },
       { on: ["provisional"] },
-      // One live balance per provider and owner, so settlement can resolve a
-      // gift-card leg from (purchase vendor, order's member) alone.
-      // NULL owners stay distinct: a household card coexists with members'
-      // balances.
-      {
-        name: "FinancialAccount_provider_owner_key",
-        on: ["providerVendorId", "ledgerPartyId"],
-        unique: true,
-        where: "{providerVendorId} IS NOT NULL AND {deletedAt} IS NULL",
-      },
+      { on: ["providerVendorId", "ledgerPartyId"] },
     ],
     checks: [
       {
-        name: "FinancialAccount_providerVendor_stored_value_check",
-        sql: "{providerVendorId} IS NULL OR {identity}->>'kind' = 'stored_value'",
+        name: "FinancialAccount_provider_non_cash_check",
+        sql: "{providerVendorId} IS NULL OR {identity}->>'kind' <> 'cash'",
       },
     ],
-    unindexedReferences: {
-      providerVendorId:
-        "provider lookups read live rows through the partial FinancialAccount_provider_owner_key",
-    },
     relations: {
       ledgerParty: "ledgerPartyId",
+      providerVendor: "providerVendorId",
       transactions: { many: "financialTransaction" },
     },
   },
@@ -912,7 +873,7 @@ export default defineEntity({
     },
     {
       key: "provider-vendor",
-      label: "Stored-value provider",
+      label: "Provider",
       target: "vendor",
       cardinality: "one",
       provenance: {

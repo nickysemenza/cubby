@@ -774,16 +774,9 @@ export async function buildChargeProposals(
   const accounts: OwnAccount[] = preparation.accounts.map((account) => ({
     id: account.id,
     kind: account.identity.kind,
-    names: [
-      account.identity.kind === "stored_value"
-        ? account.identity.provider
-        : null,
-      account.identity.kind === "bank_account" ||
-      account.identity.kind === "other"
-        ? account.identity.institution
-        : null,
-      account.vendorName,
-    ].filter((name): name is string => Boolean(name)),
+    names: [account.vendorName, ...(account.vendorAliases ?? [])].filter(
+      (name): name is string => Boolean(name),
+    ),
     ledgerPartyId: account.ledgerPartyId,
   }));
   const [pendingTransactions, siblings, claimed, history] = await Promise.all([
