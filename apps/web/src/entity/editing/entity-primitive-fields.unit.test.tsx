@@ -318,7 +318,7 @@ describe("EntityPrimitiveFields", () => {
     render(<LocationMainFieldsWithSuggestions operations={operations} />, {
       wrapper: harness.wrapper,
     });
-    expect(await screen.findByText("Room")).toBeInTheDocument();
+    expect(await screen.findByText("room")).toBeInTheDocument();
     harness.dispose();
   });
 
