@@ -37,8 +37,8 @@ enum CLI {
             client: CubbyClient(baseURL: baseURL, credentials: credentials, identity: identity), json: true)
     }
 
-    /// Runs `body`, translating `CubbyAPIError` and `AuthError` into the one-line stderr format
-    /// the CLI promises ("HTTP <status> <code>: <message>") and exit code 1. Any other error
+    /// Runs `body`, translating `CubbyAPIError` into detailed response diagnostics on stderr
+    /// and exit code 1. Any other error
     /// (a bad `--json-body`, for instance) is left for ArgumentParser's default reporting.
     static func run(
         isolation: isolated (any Actor)? = #isolation,
@@ -47,9 +47,7 @@ enum CLI {
         do {
             try await body()
         } catch let error as CubbyAPIError {
-            let code = error.detail?.code ?? "HTTP_ERROR"
-            let message = error.detail?.message ?? "Request failed"
-            printError("HTTP \(error.status) \(code): \(message)")
+            printError(apiErrorMessage(error))
             throw ExitCode.failure
         } catch let error as AuthError {
             if case .http(let status, let body) = error {

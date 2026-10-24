@@ -824,6 +824,7 @@ async function seedConnectedHousehold(
             {
               sourceEventKey: "pickup",
               kind: "carrier_possession",
+              timeBasis: "stated_event",
               time: { kind: "date", value: day(-18) },
               rawStatus: "Collected from seller",
               location: "Example origin depot",
@@ -834,6 +835,7 @@ async function seedConnectedHousehold(
             {
               sourceEventKey: "delivery",
               kind: "delivered",
+              timeBasis: "stated_event",
               time: { kind: "date", value: day(-15) },
               rawStatus: "Delivered",
               location: "Example destination",

@@ -3,6 +3,7 @@ import {
   shipmentEvidence,
   retainedShipmentEvidence,
 } from "@cubby/schemas/shipment-evidence";
+import { sha256Hex } from "@cubby/shared/sha256";
 import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
@@ -12,6 +13,7 @@ import {
   email,
   shipment,
   shipmentSourceCapture,
+  shipmentObservation,
   expense,
   inventoryEntry,
 } from "~/server/db/schema";
@@ -19,6 +21,7 @@ import { readRetainedMail } from "~/server/domains/mail/repo/retained-mail";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { recordShipmentEvidence } from "~/server/domains/shipment/repo/evidence";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { canonicalJson, jsonSnapshot } from "~/server/lib/canonical-json";
 
 import {
   mailSource,
@@ -69,7 +72,8 @@ describe("imported shipment source identity", () => {
               {
                 sourceEventKey: null,
                 kind: "in_transit",
-                time: { kind: "date", value: "2026-06-03" },
+                timeBasis: "notification_received",
+                time: { kind: "date", value: "2026-09-20" },
                 rawStatus: "Your package is in transit",
                 location: null,
                 carrierId: null,
@@ -149,8 +153,20 @@ describe("imported shipment source identity", () => {
             carrierName: null,
             trackingNumber: null,
           },
+          {
+            sourceEventKey: "historical-dated",
+            kind: "in_transit",
+            time: { kind: "date", value: "2026-06-02" },
+            rawStatus:
+              "Historical package update with unrecorded date provenance",
+            location: null,
+            carrierId: null,
+            carrierName: null,
+            trackingNumber: null,
+          },
         ],
       });
+      const originalPacket = JSON.stringify(packet);
       const input = {
         source: mailSource(original),
         runId,
@@ -164,8 +180,27 @@ describe("imported shipment source identity", () => {
         );
       await record();
       await record();
+      expect(JSON.stringify(packet)).toBe(originalPacket);
       expect(packet.purpose).toBe("replacement");
       expect(packet.observations[0]?.time).toEqual({ kind: "unknown" });
+      const rows = await getDb(ctx.db).select().from(shipmentObservation);
+      expect(
+        rows.find((row) => row.sourceEventKey === null)?.event,
+      ).toMatchObject({
+        time: { kind: "date" },
+        timeBasis: "notification_received",
+      });
+      expect(rows).toHaveLength(2);
+      const historical = rows.find(
+        (row) => row.sourceEventKey === "historical-dated",
+      );
+      expect(historical?.event).toEqual(packet.observations[1]);
+      expect(historical?.event).not.toHaveProperty("timeBasis");
+      expect(historical?.fingerprint).toBe(
+        await sha256Hex(
+          canonicalJson(jsonSnapshot.parse(packet.observations[1])),
+        ),
+      );
       expect((await getDb(ctx.db).select().from(shipment))[0]?.purpose).toBe(
         "unknown",
       );

@@ -2560,6 +2560,16 @@ The retired SQL rule also inferred ordering conflicts from coarse calendar-day
 intervals and other movement kinds; those no longer establish a defect. Missing
 or coarse timing still affects the dates/span checks without inventing instants.
 
+Shipment observations distinguish stated event dates, date-only notification
+fallbacks and estimates with `timeBasis`. Historical missing provenance stays
+unknown; retained extraction JSON and fingerprints are not defaulted or rewritten.
+First/last dates and event counts include dated observations, including forecasts.
+Quality evaluates the non-estimate timeline; estimates cannot establish shipment
+or delivery evidence. Notification dates cannot establish exact elapsed milestones.
+Timeline readback exposes revision successors and each supporting capture's source
+identity without copying retained message bodies. An unchanged observation keeps
+its original attribution when a refreshed Email capture adds supporting membership.
+
 Every scored entity registers one `defineStoredEntityChecks` entry
 (`generic/data-quality/repo/stored-registry.ts`): a versioned TypeScript
 evaluator whose single batch loader produces the records consumed by pure

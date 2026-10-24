@@ -22,6 +22,37 @@ const event = (
 });
 
 describe("shipment evidence reconciliation", () => {
+  it("keeps forecast and notification dates out of exact delivery milestones", () => {
+    const forecast = {
+      ...event("delivered", "2026-06-06T09:00:00Z"),
+      timeBasis: "estimate",
+    } satisfies ShipmentObservationInput;
+    const notification = {
+      ...forecast,
+      timeBasis: "notification_received",
+    } satisfies ShipmentObservationInput;
+    expect(shipmentMilestones([forecast], null).deliveredAt).toBeNull();
+    expect(shipmentMilestones([notification], null).deliveredAt).toBeNull();
+    const timeline = reconcileShipmentTimeline([
+      { id: "forecast", event: forecast, superseded: false },
+      { id: "notification", event: notification, superseded: false },
+      {
+        id: "stated",
+        event: { ...forecast, timeBasis: "stated_event" },
+        superseded: false,
+      },
+    ]);
+    expect(timeline).toHaveLength(3);
+    expect(shipmentEventSummary(timeline).eventCount).toBe(3);
+    expect(
+      shipmentEventSummary([{ event: forecast, observationIds: ["forecast"] }]),
+    ).toMatchObject({
+      eventCount: 1,
+      firstEventDate: "2026-06-06",
+      lastEventDate: "2026-06-06",
+    });
+  });
+
   it("combines clear duplicate reports without losing their source handles", () => {
     const delivery = event("delivered", "2026-06-06T09:00:00Z");
     const result = reconcileShipmentTimeline([

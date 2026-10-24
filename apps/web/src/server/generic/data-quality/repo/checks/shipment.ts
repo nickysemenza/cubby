@@ -16,7 +16,7 @@ import { qualityCheck } from "~/server/generic/data-quality/repo/builders";
 import { defineStoredEntityChecks } from "~/server/generic/data-quality/repo/stored-registry";
 
 /** Bump when the rules or their declared scoring metadata change. */
-export const SHIPMENT_QUALITY_RULES_VERSION = 2;
+export const SHIPMENT_QUALITY_RULES_VERSION = 3;
 
 type ShipmentQualityRecord = Awaited<
   ReturnType<typeof loadShipmentQualityRecords>
@@ -116,7 +116,9 @@ async function loadShipmentQualityRecords(
           : [],
       ),
     );
-    const events = timeline.map(({ event }) => event);
+    const events = timeline
+      .map(({ event }) => event)
+      .filter((event) => event.timeBasis !== "estimate");
     return {
       id: row.id,
       shortcode: row.shortcode,
@@ -125,7 +127,9 @@ async function loadShipmentQualityRecords(
       purchaseAssociationReviewed: row.purchaseAssociationReviewed,
       livePurchaseId: row.livePurchaseId,
       events,
-      summary: shipmentEventSummary(timeline),
+      summary: shipmentEventSummary(
+        timeline.filter(({ event }) => event.timeBasis !== "estimate"),
+      ),
       // The Purchase has a calendar date, not an observed order instant.
       milestones: shipmentMilestones(events, null),
     };

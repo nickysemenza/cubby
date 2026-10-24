@@ -1,4 +1,7 @@
-import type { ShipmentObservationInput } from "@cubby/schemas/shipment-evidence";
+import type {
+  ShipmentEvidenceSource,
+  ShipmentObservationInput,
+} from "@cubby/schemas/shipment-evidence";
 import {
   datedShipmentEventTime,
   shipmentTimelineOut,
@@ -40,6 +43,7 @@ export function reconcileShipmentTimeline(
         : canonicalJson(
             jsonSnapshot.parse({
               kind: event.kind,
+              timeBasis: event.timeBasis ?? "stated_event",
               time: new Date(event.time.value).toISOString(),
               carrier: event.carrierId ?? event.carrierName,
               location: event.location?.trim().toLowerCase() ?? null,
@@ -66,6 +70,8 @@ export function reconcileShipmentTimeline(
 export function shipmentEventSummary(
   timeline: ReturnType<typeof reconcileShipmentTimeline>,
 ) {
+  // First/last describe retained observations, including dated forecasts.
+  // Delivery milestones and quality independently require actual event evidence.
   const dated = timeline.flatMap<
     Extract<ShipmentObservationInput["time"], { kind: "instant" | "date" }>
   >(({ event }) => {
@@ -117,10 +123,16 @@ export function shipmentMilestones(
 ) {
   const conflicts: string[] = [];
   const exact = (kind: ShipmentObservationInput["kind"], first: boolean) => {
-    const observations = events.filter((event) => event.kind === kind);
+    const observations = events.filter(
+      (event) => event.kind === kind && event.timeBasis !== "estimate",
+    );
     if (
       !observations.length ||
-      observations.some((event) => event.time.kind !== "instant")
+      observations.some(
+        (event) =>
+          event.time.kind !== "instant" ||
+          event.timeBasis === "notification_received",
+      )
     )
       return null;
     const instants = [
@@ -163,6 +175,25 @@ export function shipmentMilestones(
   };
 }
 
+function publicTimelineSource(source: ShipmentEvidenceSource) {
+  if (source.kind === "email") return source;
+  if (source.kind === "tracking_page")
+    return {
+      kind: source.kind,
+      url: source.url,
+      externalKey: source.externalKey,
+      capturedAt: source.capturedAt,
+    };
+  return {
+    kind: source.kind,
+    externalKey: source.externalKey,
+    fileName: source.fileName,
+    sender: source.sender,
+    sentAt: source.sentAt,
+    capturedAt: source.capturedAt,
+  };
+}
+
 export async function readShipmentTimeline(db: Database, code: string) {
   const row = await canonicalShipment(db, code, true);
   const records = await getDb(db)
@@ -178,8 +209,16 @@ export async function readShipmentTimeline(db: Database, code: string) {
     .where(eq(shipmentObservation.shipmentId, row.id));
   const memberships = records.length
     ? await getDb(db)
-        .select()
+        .select({
+          observationId: shipmentObservationCapture.observationId,
+          captureId: shipmentObservationCapture.captureId,
+          source: shipmentSourceCapture.source,
+        })
         .from(shipmentObservationCapture)
+        .innerJoin(
+          shipmentSourceCapture,
+          eq(shipmentSourceCapture.id, shipmentObservationCapture.captureId),
+        )
         .where(
           inArray(
             shipmentObservationCapture.observationId,
@@ -195,27 +234,17 @@ export async function readShipmentTimeline(db: Database, code: string) {
     captureIds: memberships
       .filter((membership) => membership.observationId === observation.id)
       .map((membership) => membership.captureId),
-    source:
-      source.kind === "email"
-        ? source
-        : source.kind === "tracking_page"
-          ? {
-              kind: source.kind,
-              url: source.url,
-              externalKey: source.externalKey,
-              capturedAt: source.capturedAt,
-            }
-          : {
-              kind: source.kind,
-              externalKey: source.externalKey,
-              fileName: source.fileName,
-              sender: source.sender,
-              sentAt: source.sentAt,
-              capturedAt: source.capturedAt,
-            },
+    source: publicTimelineSource(source),
+    captureSources: memberships
+      .filter((membership) => membership.observationId === observation.id)
+      .map((membership) => ({
+        captureId: membership.captureId,
+        source: publicTimelineSource(membership.source),
+      })),
     firstSeenAt: observation.firstSeenAt.toISOString(),
     lastSeenAt: observation.lastSeenAt.toISOString(),
     superseded: observation.supersededById !== null,
+    supersededByObservationId: observation.supersededById,
     memberReviewed: observation.memberReviewed,
   }));
   const timeline = reconcileShipmentTimeline(

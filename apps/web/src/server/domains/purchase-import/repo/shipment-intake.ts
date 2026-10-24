@@ -22,7 +22,7 @@ import {
   retainedMailSource,
 } from "~/server/domains/purchase-import/repo/import-scope";
 import { assertMailSourceIdentityReady } from "~/server/domains/purchase-import/repo/mail-source-identity";
-import { recordShipmentEvidence } from "~/server/domains/shipment/repo/evidence";
+import { recordRetainedShipmentEvidence } from "~/server/domains/shipment/repo/evidence";
 import { createAppError } from "~/server/errors/app-error";
 import { lookupShortcodes } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
@@ -96,7 +96,7 @@ export async function recordImportedShipmentEvidence(
       "MAIL_EVIDENCE_STALE",
       "Shipment Email or Purchase is no longer available.",
     );
-  await recordShipmentEvidence(
+  await recordRetainedShipmentEvidence(
     db,
     {
       source: {
@@ -112,6 +112,11 @@ export async function recordImportedShipmentEvidence(
           purpose: purpose.success ? purpose.data : "unknown",
           observations: packet.observations.map((observation) => ({
             ...observation,
+            // Only a date supplied here has known fallback provenance. A retained
+            // date without provenance must not become a claimed stated event.
+            ...(observation.time.kind === "unknown" && original.receivedAt
+              ? { timeBasis: observation.timeBasis ?? "notification_received" }
+              : {}),
             time:
               observation.time.kind === "unknown" && original.receivedAt
                 ? {

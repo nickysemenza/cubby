@@ -77,6 +77,10 @@ let package = Package(
             dependencies: ["CubbyKit"],
             resources: [.copy("Fixtures")]
         ),
+        .testTarget(
+            name: "CubbyCLITests",
+            dependencies: ["cubby"]
+        ),
     ],
     swiftLanguageModes: [.v6]
 )

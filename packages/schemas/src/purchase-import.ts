@@ -780,13 +780,21 @@ const preparedImportOrderInput = z
     via: mailAdmissionPath.optional(),
     evidenceChecksum: z.string().regex(/^[a-f0-9]{64}$/),
     extractionRevision: z.string().trim().min(1).max(200),
-    extraction: importExtractionOutcome.refine(
-      (value) =>
-        (value.candidate?.shipments ?? []).every(
-          (packet) => shipmentPurpose.safeParse(packet.purpose).success,
-        ),
-      "New shipment purposes must be incoming, outgoing or unknown.",
-    ),
+    extraction: importExtractionOutcome
+      .refine(
+        (value) =>
+          (value.candidate?.shipments ?? []).every(
+            (packet) => shipmentPurpose.safeParse(packet.purpose).success,
+          ),
+        "New shipment purposes must be incoming, outgoing or unknown.",
+      )
+      .refine(
+        (value) =>
+          (value.candidate?.shipments ?? []).every(
+            (packet) => shipmentEvidence.safeParse(packet).success,
+          ),
+        "New shipment observations require explicit timeBasis provenance.",
+      ),
     lineIds: z.array(stableImportItemId).max(500),
     primaryDocumentImageId: imageShortcode.nullable().default(null),
     screenshotImageId: imageShortcode.nullable().default(null),
