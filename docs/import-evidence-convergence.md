@@ -380,10 +380,11 @@ MCP server guidance routes financial evidence through this intake and the
 financial-evidence-import playbook. Recording evidence delegates downstream
 matching, Suggestions and guarded booking to Cubby; a client does not follow
 intake with a separate transaction-create, attach or Expense-booking sequence.
-The current collection adapter still runs in the client. Cubby-owned provider
-collection and credential integration remain separate prerequisites for
-unattended synchronization; access to a member's connected MCP tools does not
-give the Cubby Worker those credentials or capabilities.
+Collection runs through the local skill with the member's connected Monarch
+and Cubby MCP tools. This path does not require a Worker-owned Monarch
+connection. Any recurring execution uses that same skill on an explicitly
+authorized host with verified credentials, after historical reconciliation;
+the skill itself installs no scheduler.
 
 Keep every source observation and original description. Provider identity is
 scoped to its source and account; immutable revisions retain one explicit
