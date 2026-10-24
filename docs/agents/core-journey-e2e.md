@@ -33,6 +33,34 @@ between preparation and approval, is intentionally omitted to reduce CI work.
 The removed capture helper constructed synthetic HTML text rather than driving a
 production authenticated retailer browser.
 
+The headless photo and wardrobe runs verify that subject-lift jobs wait for an
+Apple device even when the synthetic cloud description marks a label ineligible;
+cloud eligibility does not suppress Apple subject lifting.
+The Node harness supplies the checkout's Git revision for in-process MCP calls,
+matching the release constant injected into the built Worker.
+Wardrobe order preparation names the source's seller explicitly on initial
+import, replay and duplicate capture, creating or reusing the Vendor through
+the import contract.
+Purchase import-history report semantics remain in
+`entity-report/repo/records.integration.test.ts`; the wardrobe settlement browser
+step does not wait for the superseded direct `run.history` request.
+The browser steps open settlement review from More actions, review the Product
+pair in Suggestions, and check the joined Product's ownership/evidence guidance.
+These steps use pinned `playwright-recorder-plus` and save H.264 MP4 recordings named
+`late-charge-review.mp4`, `match-review.mp4` and `joined-product.mp4` in the run's
+artifact directory. The package captures through Playwright's public screencast
+API and ships its own FFmpeg binary; no system FFmpeg or WebM conversion is needed.
+Stop each recorder and await `finalized` before reporting or attaching its MP4.
+As in `photo-group-review.spec.ts`, identity judgment is scripted through
+`publishProductPair`; name-only MCP proposals are informational and do not
+establish merge admission. Exact-identity admission remains in Product match
+integration coverage.
+The final SQL read-back owns the exact settlement allocation count; retired
+workbench-card images and settlement-panel wording are not browser assertions.
+The duplicate-capture trap supplies a conflicting line amount and expects a
+conflict finding while preserving the original Expense and settlement; identical
+lines in a new capture are a no-op, not a conflict.
+
 The wardrobe run verifies the joined graph after merge: one live Product, own
 item and label Images, one InventoryEntry, one Purchase, its Expense, a posted
 FinancialTransaction, and one allocation. It creates the Purchase before the

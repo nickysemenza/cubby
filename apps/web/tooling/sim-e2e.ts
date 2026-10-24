@@ -36,13 +36,19 @@ import { scrubErrorMessage } from "../src/lib/error-diagnostics";
 import { startOperation } from "../tests/e2e/support/start-operation";
 import { openWorkerdRuntime, type WorkerdRuntime } from "./workerd-runtime";
 import { leaseNamedDatabase } from "./test-database-lease";
-import { ensureWebBuild, readWebBuildProvenance } from "./web-build-provenance";
+import {
+  ensureWebBuild,
+  gitRevision,
+  readWebBuildProvenance,
+} from "./web-build-provenance";
 
 const webRoot = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)),
   "..",
 );
 const repoRoot = path.resolve(webRoot, "../..");
+// In-process server calls need the release constant normally injected by Vite.
+Object.assign(globalThis, { __GIT_COMMIT__: gitRevision(repoRoot).commit });
 const kitRoot = path.join(repoRoot, "apps/apple/CubbyKit");
 const appleRoot = path.join(repoRoot, "apps/apple");
 // `pnpm test:e2e:sim -- <flags>` may forward the separator itself.
@@ -457,20 +463,20 @@ async function exercisePhotoProcessingJobs(imageIDs: string[]): Promise<void> {
          AND (j.kind <> 'describe_image' OR j."processorRevision" = $2)`,
       [imageIDs, processing.IMAGE_DESCRIPTION_PROCESSOR_REVISION],
     );
-    for (const [index, imageID] of imageIDs.entries()) {
+    for (const imageID of imageIDs) {
       const state = (kind: string) =>
         states.rows.find((row) => row.imageId === imageID && row.kind === kind)
           ?.state;
       if (state("describe_image") !== "ready")
         throw new Error(`Description job not ready for ${imageID}`);
-      const expectedLiftState = index === 1 ? "skipped" : "waiting_for_device";
-      if (state("subject_lift") !== expectedLiftState)
+      // Apple decides whether a subject exists, independently of cloud eligibility.
+      if (state("subject_lift") !== "waiting_for_device")
         throw new Error(
           `Cutout job state for ${imageID}: ${state("subject_lift")}`,
         );
     }
     console.log(
-      `[${lane}] Synthetic descriptions adopted; cutouts skipped or waiting for a device as expected`,
+      `[${lane}] Synthetic descriptions adopted; all cutouts waiting for a device independently of cloud eligibility`,
     );
   } finally {
     await pool.end();

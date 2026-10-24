@@ -455,6 +455,25 @@ Read the failed scenario and artifact summary before rerunning. Use
 to retrieve its diagnostics. Browser execution remains uncached even when a
 matching build and the shared services are reused.
 
+For review footage, set `CUBBY_E2E_VIDEO=1` on a focused browser run. The shared
+page fixture uses `playwright-recorder-plus` with a 1920×1080 viewport and
+attaches each finalized `video.mp4` to the Playwright report. Ordinary
+runs leave recording disabled. The package's pinned `ffmpeg-static` install
+script is allowed in `pnpm-workspace.yaml` to prepare its binary.
+MP4 runs disable trace screenshots so tracing does not reserve a lower-resolution
+screencast first; action and DOM traces remain available. Ordinary runs retain
+their configured trace settings.
+HD recording runs use the CI test and assertion timeouts to accommodate capture
+and encoding work; ordinary local runs keep their shorter timing budget.
+
+```sh
+CUBBY_E2E_VIDEO=1 pnpm test:e2e photo-group-review.spec.ts --project="Authenticated tests" --workers=1
+pnpm exec agent-device record contact-sheet path/to/video.mp4 --out artifacts/contact-sheet.png
+```
+
+The contact-sheet command samples visual changes and includes timestamps. It
+works with an individual test MP4 or a combined review recording.
+
 ## Build and cache constraints
 
 Package contents are shared through pnpm's store; a checkout's apparent
