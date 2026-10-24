@@ -74,7 +74,6 @@ export function EntityIdentityMark({
     <EntityCover
       images={[
         {
-          id: `${entity}:${displayImage.url}`,
           url: displayImage.url,
           representations: displayImage.representations,
         },

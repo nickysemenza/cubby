@@ -28,6 +28,9 @@ for (const width of [402, 900, 1280]) {
           entity="product"
           title="Example utility lamp"
           heroNo="4K7M"
+          heroDisplayImage={{
+            url: "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='48' height='48'%3E%3Crect width='48' height='48' fill='%23111'/%3E%3C/svg%3E",
+          }}
           heroStamp={{ label: "Ready" }}
           rawData={{ createdAt: "2026-01-01T12:00:00Z" }}
           heroActions={{ primary: <Button size="sm">Edit</Button> }}
@@ -44,6 +47,11 @@ for (const width of [402, 900, 1280]) {
       </div>,
       { wrapper: harness.wrapper },
     );
+    const thumbnail = screen
+      .getByTestId("detail-spec-plate")
+      .querySelector(":scope > div > .shrink-0");
+    expect(thumbnail?.getBoundingClientRect().width).toBe(48);
+    expect(thumbnail?.getBoundingClientRect().height).toBe(48);
     const title = screen.getByRole("heading").getBoundingClientRect();
     const edit = screen
       .getByRole("button", { name: "Edit" })

@@ -5,6 +5,8 @@ import {
   type EntityFieldModel,
 } from "@cubby/schemas/entity-fields";
 import {
+  entityManifest,
+  imageDisplayBindings,
   isAuditableEntity,
   isGalleryEntity,
 } from "@cubby/schemas/entity-manifest";
@@ -37,6 +39,11 @@ import {
   isBrowserRoutedEntity,
 } from "~/entity/entities";
 import { isGeneratedBrowserCrudEntity } from "~/entity/entity-contracts";
+import {
+  entityDisplayImageKey,
+  useEntityDisplayImages,
+  type EntityDisplayImagesQueryOptions,
+} from "~/entity/entity-media/entity-display-images";
 import {
   readRecordField,
   readDisplayReferenceField,
@@ -249,6 +256,7 @@ function orderSections(
 interface GenericEntityDetailOperations {
   list?: EntityRelationTableOperations;
   timeline?: EntityTimelineOperations;
+  displayImages?: EntityDisplayImagesQueryOptions;
 }
 
 function declaredSections<E extends GenericDetailEntity>(
@@ -541,6 +549,22 @@ function FullEntityDetail<E extends GenericDetailEntity>({
 
   const { images, documents } = detailFiles(entity, record, bag);
   const heroImages = detail.hero.images ? images : undefined;
+  // A local gallery is not the canonical cover: logos and related-record
+  // fallbacks are resolved at this page boundary, just as for record pills.
+  const imageRef = { entityKind: entity, entityId: bag.id };
+  const displayImages = useEntityDisplayImages(
+    (entityManifest[entity].imageStorage !== false ||
+      imageDisplayBindings[entity].length > 0) &&
+      !heroImages?.length
+      ? [imageRef]
+      : [],
+    undefined,
+    operations.displayImages,
+  );
+  const heroDisplayImage = displayImages[entityDisplayImageKey(imageRef)];
+  const emoji = z
+    .looseObject({ emoji: z.string().nullish() })
+    .parse(record).emoji;
   const sections = declaredSections(entity, record, bag, operations);
   // The first fields section is the record's headline facts, leading the
   // content column ahead of Needs you and Activity.
@@ -672,20 +696,20 @@ function FullEntityDetail<E extends GenericDetailEntity>({
         wayfinding={detailWayfinding(entity, record)}
         title={
           <span className="flex min-w-0 items-start gap-2">
-            <RecordEmoji
-              entity={entity}
-              record={record}
-              emoji={
-                z.looseObject({ emoji: z.string().nullish() }).parse(record)
-                  .emoji
-              }
-              size={20}
-            />
+            {((!heroImages?.length && !heroDisplayImage) || emoji) && (
+              <RecordEmoji
+                entity={entity}
+                record={record}
+                emoji={emoji}
+                size={20}
+              />
+            )}
             <span className="min-w-0">{title}</span>
           </span>
         }
         rawData={record}
         heroImages={heroImages}
+        heroDisplayImage={heroDisplayImage}
         heroNo={bag.id}
         heroStamp={heroStamp}
         summary={<DetailSummary entity={entity} record={record} />}

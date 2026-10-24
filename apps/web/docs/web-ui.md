@@ -269,3 +269,11 @@ them through the display-image provider, including transitive images. Never
 start an image or record-mark metadata query from a cell or option row. Use
 identity metadata already supplied by the owner; a missing mark falls back to
 the canonical entity mark.
+
+Detail identity headers use the canonical display-image resolver when the local
+gallery is empty, including Vendor logos and inherited Product Brand images.
+Resolve that cover at the page boundary, not from the thumbnail. Eligibility
+follows image storage and display bindings, including logo storage; the legacy
+`hasImages` gallery/cover trait does not gate identity imagery. Keep the Images
+section limited to the record's own gallery; borrowed covers do not become
+attachments. A header with a thumbnail omits its duplicate generic title mark.

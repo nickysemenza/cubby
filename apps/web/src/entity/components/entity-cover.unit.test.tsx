@@ -8,8 +8,8 @@ describe("EntityCover", () => {
     render(
       <EntityCover
         images={[
-          { id: "one", url: "https://example.com/one.png" },
-          { id: "two", url: "https://example.com/two.png" },
+          { url: "https://example.com/one.png" },
+          { url: "https://example.com/two.png" },
         ]}
         entity="product"
         alt="Paint tin"
@@ -33,7 +33,7 @@ describe("EntityCover", () => {
   it("replaces a failed transformed and original image with its fallback", () => {
     render(
       <EntityCover
-        images={[{ id: "one", url: "https://example.com/broken.png" }]}
+        images={[{ url: "https://example.com/broken.png" }]}
         alt="Broken cover"
         fallback={<span>Cover unavailable</span>}
         size={40}

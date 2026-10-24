@@ -1,4 +1,5 @@
 import type { Entity } from "@cubby/schemas/entity";
+import type { ImageUrlSummary } from "@cubby/schemas/image-summary";
 import {
   createContext,
   type ReactNode,
@@ -155,6 +156,7 @@ interface PageDetailProps extends PageBaseProps {
   summary?: ReactNode;
   heroNo?: string;
   heroImages?: Array<{ id: string; url: string; filename: string }>;
+  heroDisplayImage?: ImageUrlSummary | null;
   /** Edit, the main workflow action, and overflow at every width. */
   heroActions?: DetailHeroActions;
   rawData?: unknown;
@@ -272,6 +274,7 @@ function DetailPageShell(props: PageDetailProps) {
           summary={props.summary}
           heroActions={props.heroActions}
           heroImages={props.heroImages}
+          heroDisplayImage={props.heroDisplayImage}
         />
         <PageIdentityContext.Provider value={null}>
           <PageDetailContext.Provider
