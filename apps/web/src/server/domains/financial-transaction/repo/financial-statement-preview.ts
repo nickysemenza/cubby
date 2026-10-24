@@ -106,6 +106,8 @@ export type FinancialStatementPreviewOptions = {
   retainedRefs?: ReadonlyMap<string, string>;
   /** Server-only: a stored SourceTransactionRecord account outranks alias/last4 resolution, keyed by row key. */
   accountHints?: ReadonlyMap<string, string>;
+  /** Server-only accepted settlement account; fallback only after source resolution finds no account. */
+  settlementAccountHints?: ReadonlyMap<string, string>;
   /** One synchronous preparation scope; never retain across model latency or another page. */
   preparation?: FinancialStatementPreviewPreparation;
 };
@@ -471,7 +473,13 @@ export async function previewFinancialTransactionImport(
         : [];
     const accountMatches =
       aliasMatches.length > 0 ? aliasMatches : identityMatches;
-    return accountMatches.length === 1 ? accountMatches[0] : null;
+    if (accountMatches.length > 0)
+      return accountMatches.length === 1 ? accountMatches[0] : null;
+    const settledAccount = options.settlementAccountHints?.get(row.key);
+    return settledAccount
+      ? (parsedAccounts.find((account) => account.id === settledAccount) ??
+          null)
+      : null;
   };
   const statusFor = (
     row: FinancialTransactionImportRow,

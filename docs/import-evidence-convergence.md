@@ -721,6 +721,14 @@ production outcomes.
 
 ## Reviewing statement outcomes
 
+Matched booking discovery can use the accepted transaction's live account when
+retained source bindings, provider scope, aliases and card evidence resolve no
+account. This server-owned fallback neither writes an alias nor changes source
+facts. Ambiguous or conflicting provider scope cannot use it. A resolved source
+account that differs from the accepted transaction remains an explicit review
+conflict and cannot qualify as clean advice. Generation and fresh application
+rebuild use the same account resolution.
+
 The shared Suggestions list and counts accept retained source observations and
 TransactionImports in `recordIds`. Source scope follows the charge identity
 across revisions, and collection scope uses retained membership rather than

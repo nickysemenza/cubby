@@ -3587,6 +3587,74 @@ describe("statement Transaction suggestions", () => {
     ).toEqual([target(1).id, target(3).id]);
   });
 
+  it.each(["unresolved", "conflicting"])(
+    "discovers matched booking with %s source account evidence",
+    async (sourceResolution) => {
+      const account = (await card(ctx)).output;
+      const conflictingAccount =
+        sourceResolution === "conflicting"
+          ? (
+              await createRepoIdentity(ctx, "financialAccount", {
+                name: "Synthetic competing source account",
+                identity: {
+                  kind: "credit_card",
+                  issuer: null,
+                  network: "visa",
+                },
+                sourceAliases: [
+                  {
+                    source: "monarch",
+                    alias: "Synthetic historical account label",
+                    externalAccountId: null,
+                  },
+                ],
+              })
+            ).output
+          : null;
+      await record(ctx, [
+        rowInput({ accountDescriptor: "Synthetic historical account label" }),
+      ]);
+      const [source] = (await listSourceTransactionRecords(ctx.db, {})).data;
+      if (!source) throw new Error("Synthetic retained source missing");
+      const transaction = await createRepoIdentity(
+        ctx,
+        "financialTransaction",
+        {
+          accountId: account.id,
+          kind: "purchase",
+          status: "posted",
+          amount: 42.5,
+          postedDate: "2026-05-04",
+          merchant: "Example Grocer",
+          sourceRefs: [{ source: "monarch", externalId: source.externalId }],
+        },
+      );
+      const before = await getDb(ctx.db).select().from(sourceTransactionRecord);
+      await generate(ctx);
+      expect(await suggestions(ctx)).toMatchObject([
+        {
+          recommended: "book",
+          accountId: conflictingAccount?.id ?? account.id,
+          matchedTransactionId: transaction.output.id,
+          ...(conflictingAccount
+            ? {
+                clean: false,
+                reviewReason:
+                  "The source account conflicts with the accepted transaction account; review the account evidence.",
+              }
+            : {}),
+        },
+      ]);
+      expect(
+        await getDb(ctx.db).select().from(sourceTransactionRecord),
+      ).toEqual(before);
+      expect(
+        await getDb(ctx.db).select().from(financialTransaction),
+      ).toHaveLength(1);
+      expect(await getDb(ctx.db).select().from(expense)).toHaveLength(0);
+    },
+  );
+
   // Failure modes: a ref attached on another path (the import page, an
   // agent's entity.update) leaves the suggestion live, and accepting it
   // records the charge twice.
