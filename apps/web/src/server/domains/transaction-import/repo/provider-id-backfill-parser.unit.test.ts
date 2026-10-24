@@ -5,10 +5,13 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { providerIdBackfillInput } from "@cubby/schemas/source-transaction-record";
+import { testShortcode } from "@cubby/schemas/testing";
 import { expect, it } from "vitest";
 import { z } from "zod";
 
-it("local parser counts original occurrences across chunks and retains physical multiline positions and raw columns", () => {
+import { checkOriginalCsv } from "./provider-id-backfill-proof";
+
+it("local parser counts original occurrences across chunks and validates normalized IDs and amounts while retaining raw columns", () => {
   const directory = mkdtempSync(join(tmpdir(), "cubby-synthetic-csv-"));
   try {
     const file = join(directory, "synthetic.csv");
@@ -20,7 +23,7 @@ it("local parser counts original occurrences across chunks and retains physical 
         Array.from(
           { length: 500 },
           (_, index) =>
-            `2026-01-01,Synthetic shop,Synthetic card,SYNTHETIC ${index},-12,synthetic-${index},\r\n`,
+            `2026-01-01,Synthetic shop,Synthetic card,SYNTHETIC ${index},${index === 1 ? "(-12)" : "-12"},${index === 0 ? " synthetic-0 " : `synthetic-${index}`},\r\n`,
         ).join("") +
         "2026-01-01,Synthetic shop,Synthetic card,SYNTHETIC SHOP,-12,synthetic-duplicate,\r\n",
     );
@@ -63,6 +66,25 @@ it("local parser counts original occurrences across chunks and retains physical 
     expect(
       parsed.providerIdBackfillProofs.at(-1)?.originalRow.rowPosition,
     ).toBe(505);
+    for (const [index, rawId, rawAmount] of [
+      [1, " synthetic-0 ", "-12"],
+      [2, "synthetic-1", "(-12)"],
+    ] as const) {
+      const proof = providerIdBackfillInput.parse({
+        ...parsed.providerIdBackfillProofs[index],
+        recordId: testShortcode("sourceTransactionRecord", "normalized-csv"),
+        collectionId: testShortcode("transactionImport", "normalized-csv"),
+      });
+      expect(proof.originalRow).toMatchObject({
+        providerTransactionId: rawId.trim(),
+        providerAmount: -12,
+        providerData: {
+          fields: { Id: rawId, Amount: rawAmount },
+          csv: { sourceAmount: rawAmount },
+        },
+      });
+      expect(() => checkOriginalCsv(proof)).not.toThrow();
+    }
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }

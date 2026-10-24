@@ -45,7 +45,10 @@ import { auditLog } from "~/server/db/schema";
 import { resolveEntityDisplayImages } from "~/server/entity-kernel/repo/entity-display-image";
 import { identityShortcodes } from "~/server/entity-kernel/repo/entity-identity";
 import { captureAuditId } from "~/server/generic/audit-log/repo/audit-receipts";
-import { recordChange } from "~/server/generic/changes/repo/change";
+import {
+  recordChange,
+  type RepositoryChange,
+} from "~/server/generic/changes/repo/change";
 import type { RemovalAuditEntry } from "~/server/generic/removal/repo/core";
 import {
   type EntityRef,
@@ -299,7 +302,7 @@ export async function logAuditEntries(
   db: Database | DrizzleTransaction,
   actor: ActorContext,
   entries: AuditEntryInput[],
-  publication: "source" | "provider-id-backfill" = "source",
+  publication: RepositoryChange["kind"] = "source",
 ): Promise<void> {
   if (entries.length === 0) return;
 
@@ -320,8 +323,7 @@ export async function logAuditEntries(
     });
   for (const row of inserted) captureAuditId(row.id);
   await recordChange(db, {
-    // This evidence-only repair retains receipts and reader hints without Jobs.
-    kind: publication === "provider-id-backfill" ? "projection" : "source",
+    kind: publication,
     categories: [...inserted.map((row) => row.entityKind), "auditLog"],
   });
 }

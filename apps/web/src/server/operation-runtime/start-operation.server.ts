@@ -18,6 +18,7 @@ import { recordDatabaseWrite } from "~/server/db/freshness/client";
 import { runAfterCommit } from "~/server/db/helpers";
 import {
   type ReadPolicy,
+  calendarMutationPolicy,
   mutationChangesHouseholdData,
   readPolicyFor,
 } from "~/server/db/read-policy";
@@ -598,9 +599,8 @@ export function createStartOperationRunner(runtime: StartOperationRuntime) {
         throwIfStartOperationAborted(options.request.signal);
         if (
           state.mutationStarted &&
-          definition.id !== "sourceTransactionRecord.backfillProviderId"
+          calendarMutationPolicy(definition.registered) === "publish"
         ) {
-          // Provider ID repair publishes its audit/read hints without derived work.
           // Inside a delegated transaction the mark waits for the outer
           // commit; marked earlier, the calendar alarm could publish and clear
           // a snapshot that lacks this write.

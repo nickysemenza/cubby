@@ -49,14 +49,15 @@ export function checkOriginalCsv(input: ProviderIdBackfillInput) {
   const rawAmount = fields.Amount?.trim() ?? "";
   const numeric = rawAmount.replace(/[$,()\s]/g, "");
   const amount =
-    Number(numeric) *
-    (rawAmount.startsWith("(") && rawAmount.endsWith(")") ? -1 : 1);
+    rawAmount.startsWith("(") && rawAmount.endsWith(")")
+      ? -Math.abs(Number(numeric))
+      : Number(numeric);
   const status = optional("Status")?.toLowerCase();
   requireBackfillProof(
     ["Date", "Merchant", "Account", "Original Statement", "Amount", "Id"].every(
       (key) => key in fields,
     ) &&
-      fields.Id === input.providerTransactionId &&
+      optional("Id") === input.providerTransactionId &&
       row.providerTransactionId === input.providerTransactionId &&
       csv.fileSha256 === input.fingerprint &&
       csv.sourceAmount === fields.Amount &&

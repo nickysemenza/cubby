@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { mutationChangesHouseholdData, readPolicyFor } from "./read-policy";
+import {
+  calendarMutationPolicy,
+  mutationChangesHouseholdData,
+  readPolicyFor,
+} from "./read-policy";
 
 describe("shared read policy", () => {
   it("uses authoritative reads for representative interactive workflows", () => {
@@ -47,5 +51,13 @@ describe("shared read policy", () => {
       false,
     );
     expect(mutationChangesHouseholdData("entity.mutate")).toBe(true);
+  });
+
+  it("keeps metadata repair reader hints without calendar publication", () => {
+    const operation = "sourceTransactionRecord.backfillProviderId";
+    expect(mutationChangesHouseholdData(operation)).toBe(true);
+    expect(calendarMutationPolicy(operation)).toBe("skip");
+    expect(calendarMutationPolicy("entity.mutate")).toBe("publish");
+    expect(calendarMutationPolicy(undefined)).toBe("publish");
   });
 });

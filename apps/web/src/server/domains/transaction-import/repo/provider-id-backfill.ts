@@ -379,7 +379,7 @@ export async function backfillProviderId(
               },
             },
           ],
-          "provider-id-backfill",
+          "projection",
         );
       }
       return {
