@@ -1,10 +1,34 @@
+import { assessmentSubjects } from "@cubby/schemas/assessment";
 import { type ImageId } from "@cubby/schemas/identifiers";
 import { and, desc, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import { type Database } from "~/server/db/database";
+import { notDeleted } from "~/server/db/helpers/predicates";
 import { repositoryQueries as getDb } from "~/server/db/repository-access.boundary";
-import { assessmentState, feedback } from "~/server/db/retained-tables";
+import {
+  assessmentState,
+  assessment,
+  image,
+  feedback,
+} from "~/server/db/retained-tables";
+
+/** Content freshness is shared by direct and batch readers; propagation still requires its receipt authority. */
+export function currentImageDescriptionConfirmation() {
+  return and(
+    eq(assessment.family, "image_description"),
+    eq(assessmentState.family, "image_description"),
+    eq(assessmentState.entity, "image"),
+    eq(assessmentState.active, true),
+    notDeleted(image),
+    eq(assessment.fingerprint, image.sha256),
+    eq(assessmentState.fingerprint, image.sha256),
+    sql`${assessment.subject}->>${assessmentSubjects.image_description.keyof().enum.contentHash} = ${image.sha256}`,
+    sql`${assessment.subject}->>${assessmentSubjects.image_description.keyof().enum.recordId} = ${image.id}::text`,
+    sql`${assessmentState.confirmedValue} @> ${JSON.stringify({ present: true })}::jsonb`,
+    sql`jsonb_typeof(${assessmentState.confirmedValue}->${"value"}) = ${"string"}`,
+  );
+}
 
 export async function readConfirmedDescription(db: Database, imageId: ImageId) {
   const [row] = await getDb(db)
@@ -16,15 +40,9 @@ export async function readConfirmedDescription(db: Database, imageId: ImageId) {
         ),
     })
     .from(assessmentState)
-    .where(
-      and(
-        eq(assessmentState.family, "image_description"),
-        eq(assessmentState.entity, "image"),
-        eq(assessmentState.recordId, imageId),
-        eq(assessmentState.active, true),
-        sql`${assessmentState.confirmedValue} @> ${JSON.stringify({ present: true })}::jsonb`,
-      ),
-    )
+    .innerJoin(assessment, eq(assessment.id, assessmentState.id))
+    .innerJoin(image, eq(image.id, assessmentState.recordId))
+    .where(and(eq(image.id, imageId), currentImageDescriptionConfirmation()))
     .orderBy(desc(assessmentState.updatedAt))
     .limit(1);
   return row?.correction?.present
