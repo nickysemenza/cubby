@@ -146,6 +146,15 @@ export async function reconcileRecordedFinancialEvidence(
           LEFT JOIN "SourceTransactionRecord" latest ON latest.source=observed.source AND latest."chargeKey"=observed."chargeKey"
             AND latest.current AND latest."deletedAt" IS NULL
           WHERE ft.shortcode=${transactionId}
+            -- A set-aside charge is not independent corroboration. Keep unresolved
+            -- references in the result so they still require review.
+            AND NOT EXISTS (
+              SELECT 1 FROM "SourceTransactionRecord" predecessor
+              WHERE predecessor.source=observed.source
+                AND predecessor."chargeKey"=observed."chargeKey"
+                AND predecessor."deletedAt" IS NULL
+                AND predecessor."supersededByRowId" IS NOT NULL
+            )
         `);
           if (evidence.some((row) => row.amount === null))
             return {

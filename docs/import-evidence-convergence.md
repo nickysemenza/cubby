@@ -427,10 +427,19 @@ Replaying a retained collection with newly supplied provider IDs cannot silently
 replace its ID-less charge identities. Intake refuses a provider identity that
 overlaps an ID-less member at the same physical position, or an unpositioned
 member's frozen reference. Exact existing provider observations can replay through
-the usual immutable-evidence checks. Resolve a new source identity explicitly before replay;
+the usual immutable-evidence checks, preserving frozen provider-bearing `v2`
+identities and charge keys within their original collection. A deleted or
+ambiguous retained provider member remains held; changed evidence requires a
+new collection rather than rewriting the retained observation.
+Resolve a new source identity explicitly before replay;
 this guard neither rewrites historical observations nor assigns identifiers from
 content equality. Distinct positioned occurrences remain independent, including
 identical rows delivered in later chunks.
+
+When checking independent evidence for an amount correction or confirmed
+withdrawal, a superseded charge no longer corroborates the older booking.
+Unresolved references and genuinely independent current charges still require
+review; supersession does not grant authority to change money by itself.
 
 A collection owns its immutable observation time, declared count and optional
 account/date/visibility scope. Chunks resume that collection. Membership is

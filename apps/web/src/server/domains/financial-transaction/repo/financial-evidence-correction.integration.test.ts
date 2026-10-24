@@ -29,7 +29,10 @@ describe("generated booking evidence corrections", () => {
   const verify: FinancialEvidenceCorrectionInput["verifyCurrentEvidence"] =
     () => Promise.resolve({ status: "verified" });
 
-  async function fixture(postedOnly = false) {
+  async function fixture(
+    postedOnly = false,
+    extraReference?: { source: string; externalId: string },
+  ) {
     const owner = await createRepoEntity(ctx, "ledgerParty", {
       kind: "member",
       name: "Synthetic correction member",
@@ -60,6 +63,7 @@ describe("generated booking evidence corrections", () => {
           externalId:
             "v3:1111111111111111111111111111111111111111111111111111111111111111",
         },
+        ...(extraReference ? [extraReference] : []),
       ],
       allocations: [{ purchaseId: purchase.output.id, amount: 25 }],
     });
@@ -269,6 +273,124 @@ describe("generated booking evidence corrections", () => {
       expenses: [],
     });
   });
+
+  it.each(["independent", "superseded", "unresolved"])(
+    "respects a %s historical predecessor during provider revision and withdrawal",
+    async (predecessorState) => {
+      const { input, money } = await fixture(
+        false,
+        predecessorState === "unresolved"
+          ? {
+              source: "synthetic-other",
+              externalId: "synthetic-unresolved-reference",
+            }
+          : undefined,
+      );
+      const history = await getDb(ctx.db)
+        .select()
+        .from(sourceTransactionRecord);
+      const predecessor = history.find((row) => !row.current);
+      const head = history.find((row) => row.current);
+      if (!predecessor || !head)
+        throw new Error("Synthetic correction history missing");
+      // Reproduce a retained older charge and its proven provider-history bridge.
+      await getDb(ctx.db)
+        .update(sourceTransactionRecord)
+        .set({
+          chargeKey: "synthetic-predecessor-charge",
+          current: true,
+          supersededByRowId:
+            predecessorState !== "independent" ? head.id : null,
+        })
+        .where(eq(sourceTransactionRecord.id, predecessor.id));
+      await getDb(ctx.db)
+        .update(sourceTransactionRecord)
+        .set({
+          providerTransactionId: "synthetic-reconciled-provider",
+          providerAccountId: "synthetic-reconciled-account",
+          legacyReference: predecessor.externalId,
+        })
+        .where(eq(sourceTransactionRecord.id, head.id));
+      const before = await money();
+      const expectedReviewReasons =
+        predecessorState === "superseded"
+          ? []
+          : [
+              predecessorState === "unresolved"
+                ? "Independent settlement evidence needs review before this booking changes."
+                : "Other current source evidence still supports this booking or disagrees with the new amount.",
+            ];
+      const revision = recordSourceTransactionRecordsInput.parse({
+        import: {
+          source: input.source,
+          label: "Synthetic reconciled revision",
+          fingerprint: "synthetic-reconciled-revision",
+          observedAt: "2026-11-01T00:00:00Z",
+          rowCountDeclared: 1,
+          coverage: {
+            account: "synthetic-reconciled-account",
+            from: "2026-09-01",
+            to: "2026-09-30",
+            visibility: "all",
+          },
+        },
+        rows: [
+          {
+            providerTransactionId: "synthetic-reconciled-provider",
+            providerAccountId: "synthetic-reconciled-account",
+            accountDescriptor: "Synthetic cash",
+            statementDate: "2026-09-01",
+            providerAmount: -40,
+            rawDescription: "Synthetic store",
+          },
+        ],
+        complete: true,
+      });
+      const revised = await recordSourceTransactionRecords(
+        ctx.db,
+        revision,
+        ctx.actor,
+      );
+      expect(revised).toMatchObject({ inserted: 1, revised: 1 });
+      expect(revised.correctionReviews.map((review) => review.reason)).toEqual(
+        expectedReviewReasons,
+      );
+      expect(await money()).toEqual(
+        predecessorState === "superseded"
+          ? {
+              amount: 40,
+              status: "observed",
+              allocations: [40],
+              expenses: [40],
+            }
+          : before,
+      );
+      const withdrawn = await recordSourceTransactionRecords(
+        ctx.db,
+        recordSourceTransactionRecordsInput.parse({
+          import: {
+            ...revision.import,
+            fingerprint: "synthetic-reconciled-withdrawal",
+            observedAt: "2026-11-02T00:00:00Z",
+            rowCountDeclared: 0,
+          },
+          rows: [],
+          complete: true,
+          confirmedWithdrawals: ["synthetic-reconciled-provider"],
+        }),
+        ctx.actor,
+      );
+      expect(withdrawn).toMatchObject({ withdrawn: 1 });
+      expect(
+        withdrawn.correctionReviews.map((review) => review.reason),
+      ).toEqual(expectedReviewReasons);
+      expect(await money()).toEqual(
+        predecessorState === "superseded"
+          ? { amount: 40, status: "void", allocations: [], expenses: [] }
+          : before,
+      );
+    },
+  );
 
   // A later posted date can cross funding periods; the original accepted
   // attribution fingerprint cannot authorize money under the projected date.
