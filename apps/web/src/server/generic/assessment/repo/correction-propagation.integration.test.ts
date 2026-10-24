@@ -289,6 +289,7 @@ describe("confirmed correction propagation", () => {
 
   async function legacyQuestion(
     question: Awaited<ReturnType<typeof preparedQuestion>>,
+    confidence = 0.88,
   ) {
     const { sha256Hex } = await import("@cubby/shared/sha256");
     const { canonicalJson } = await import("~/server/lib/canonical-json");
@@ -317,7 +318,7 @@ describe("confirmed correction propagation", () => {
         },
         judgment: {
           value: taxonomyShortcode("tools"),
-          confidence: 0.88,
+          confidence,
           runnerUpValue: null,
           runnerUpConfidence: null,
           kind: "addition",
@@ -331,7 +332,7 @@ describe("confirmed correction propagation", () => {
         currentValue: null,
         provenance: { ...question.provenance, model: "typesafe/jev" },
         suggestedValue: taxonomyShortcode("tools"),
-        confidence: 0.88,
+        confidence,
         model: "typesafe/jev",
         kind: "addition",
         data: {
@@ -406,6 +407,46 @@ describe("confirmed correction propagation", () => {
     expect(await productCategoryId(ctx.db, target.product.id)).toBe(
       taxonomyId("tools"),
     );
+  });
+
+  it("preserves opaque same-key authority alongside a proven canonical alias", async () => {
+    const question = await preparedQuestion();
+    const source = await legacyQuestion(question);
+    await reviewAssessment(ctx.db, kernelCtx(ctx), {
+      assessmentId: source.prediction.id,
+      operationId: crypto.randomUUID(),
+      verdict: "wrong",
+      intent: "apply",
+      correction: { present: true, value: taxonomyShortcode("food") },
+    });
+    const opaqueTarget = await propose({ correctionKey: source.correctionKey });
+    await drain();
+    expect(await productCategoryId(ctx.db, opaqueTarget.product.id)).toBe(
+      taxonomyId("food"),
+    );
+    const opaqueSource = await propose({ correctionKey: source.correctionKey });
+    await reviewAssessment(ctx.db, kernelCtx(ctx), {
+      assessmentId: opaqueSource.prediction.id,
+      operationId: crypto.randomUUID(),
+      verdict: "wrong",
+      intent: "apply",
+      correction: { present: true, value: null },
+    });
+    const target = await legacyQuestion(question, 0.99);
+    expect(
+      (await applyAutomaticRules(ctx.db, [target.prediction.id])).applied,
+    ).toEqual([]);
+    expect(await productCategoryId(ctx.db, target.product.id)).toBeNull();
+    const output = await suggestFields(
+      ctx.db,
+      question.runId,
+      question.input,
+      question.ports,
+    );
+    expect(output.outcomes?.categoryId).toMatchObject({
+      kind: "correction",
+      decision: { status: "conflict" },
+    });
   });
 
   it("advances history cursors through nonmatching field candidates", async () => {

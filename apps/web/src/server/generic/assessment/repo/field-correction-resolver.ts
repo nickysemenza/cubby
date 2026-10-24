@@ -81,7 +81,7 @@ async function isCurrentFieldCorrection(
 /** One authority resolver for historical repair, automatic admission and future question reuse. */
 export async function resolveFieldCorrection(
   db: Database,
-  key: string,
+  key: string | readonly string[],
   scope?: { entity: string; field: string },
 ) {
   const current: SuggestionCorrectionSource[] = [];
@@ -89,8 +89,8 @@ export async function resolveFieldCorrection(
     if (await isCurrentFieldCorrection(db, source)) current.push(source);
   const revision = await sha256Hex(
     canonicalJson({
-      version: "field-correction-authority-v1",
-      key,
+      version: "field-correction-authority-v2",
+      keys: [...new Set(typeof key === "string" ? [key] : key)].sort(),
       sources: current.map((source) => ({
         feedbackId: source.feedbackId,
         applicationFeedbackId: source.applicationFeedbackId,

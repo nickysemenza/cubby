@@ -31,6 +31,7 @@ import {
   matchStatementRules,
   ruleBase,
 } from "~/server/generic/assessment/repo/automatic-rules";
+import { fieldCorrectionIdentityKeys } from "~/server/generic/assessment/repo/field-assessment-review";
 import { canAutomaticallyFillField } from "~/server/generic/assessment/repo/suggestion-review";
 
 const log = createLogger("automatic-rules");
@@ -293,10 +294,14 @@ export async function applyAutomaticRules(
         // Conflicts also withhold the old model answer; correction work owns the resolution.
         if (
           (
-            await resolveFieldCorrection(db, key, {
-              entity: row.entity,
-              field: row.field,
-            })
+            await resolveFieldCorrection(
+              db,
+              fieldCorrectionIdentityKeys(identity),
+              {
+                entity: row.entity,
+                field: row.field,
+              },
+            )
           ).kind !== "none"
         )
           continue;

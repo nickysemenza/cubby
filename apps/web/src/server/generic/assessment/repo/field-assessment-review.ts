@@ -87,7 +87,8 @@ export async function proveFieldCorrectionIdentity(input: {
   entity: string;
   field: string;
   evidence: unknown;
-  manifest: AiRefreshManifest;
+  manifest?: AiRefreshManifest;
+  loadManifest?: () => Promise<AiRefreshManifest>;
 }) {
   const evidence = z
     .object({
@@ -102,7 +103,11 @@ export async function proveFieldCorrectionIdentity(input: {
     z.object({ correctionKey: z.string().nullable() }).safeParse(input.evidence)
       .data?.correctionKey ?? null;
   const unsupported = (
-    reason: "missing_key" | "missing_inputs" | "hash_mismatch",
+    reason:
+      | "missing_key"
+      | "missing_inputs"
+      | "missing_dependencies"
+      | "hash_mismatch",
   ) => ({ storedKey, canonicalKey: null, reason });
   if (!storedKey) return unsupported("missing_key");
   if (!evidence.success) return unsupported("hash_mismatch");
@@ -117,9 +122,14 @@ export async function proveFieldCorrectionIdentity(input: {
   }
   if (evidence.data?.basis === undefined || !evidence.data.inputs?.length)
     return unsupported("missing_inputs");
+  const manifest = evidence.data.dependencies
+    ? null
+    : (input.manifest ?? (await input.loadManifest?.()));
+  if (!evidence.data.dependencies && !manifest)
+    return unsupported("missing_dependencies");
   const dependencies =
     evidence.data.dependencies ??
-    dependencyStamps(input.manifest, [
+    dependencyStamps(manifest ?? {}, [
       ...fieldDependencyKeys(input.entity, input.field),
       ...evidence.data.inputs.map((call) => call.feature),
     ]);
@@ -183,4 +193,18 @@ export async function fieldReviewIdentity(input: {
       }),
     ),
   );
+}
+
+/** Both immutable exact scope and a proven alias remain valid identities. */
+export function fieldCorrectionIdentityKeys(
+  identity: Pick<
+    Awaited<ReturnType<typeof proveFieldCorrectionIdentity>>,
+    "storedKey" | "canonicalKey"
+  >,
+) {
+  return [
+    ...new Set(
+      [identity.storedKey, identity.canonicalKey].filter((key) => key !== null),
+    ),
+  ].sort();
 }

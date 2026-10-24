@@ -25,6 +25,7 @@ import {
   correctionWorkInput,
   enqueueCorrectionWork,
 } from "~/server/generic/assessment/repo/correction-work";
+import { fieldCorrectionIdentityKeys } from "~/server/generic/assessment/repo/field-assessment-review";
 import { isReviewFamily } from "~/server/generic/assessment/repo/review-families";
 import { defineJobHandler } from "~/server/generic/jobs/service/jobs";
 
@@ -57,7 +58,11 @@ export const correctionPropagationHandler = defineJobHandler(
             target && assessmentSubjects.field.safeParse(target.subject).data;
           const sources =
             key && scope
-              ? await readFieldCorrectionSources(tx, key, scope)
+              ? await readFieldCorrectionSources(
+                  tx,
+                  identity ? fieldCorrectionIdentityKeys(identity) : [],
+                  scope,
+                )
               : [];
           for (const source of sources)
             if (source.assessmentId !== targetId)
@@ -97,7 +102,7 @@ export const correctionPropagationHandler = defineJobHandler(
       : key && scope && source.family === "field"
         ? await correctionTargetIds(db, {
             sourceAssessmentId: source.assessmentId,
-            correctionKey: key,
+            correctionKey: fieldCorrectionIdentityKeys(identity),
             entity: scope.entity,
             field: scope.field,
             after: cursor.after,

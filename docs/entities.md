@@ -3707,7 +3707,13 @@ retained inputs and dependencies reproduce its original hash exactly. Candidate 
 dependency stamps are accepted only by that hash proof. Missing or mismatching historical
 inputs retain opaque exact-key scope; old canonical/Sweep digests do not reconstruct
 missing captured inputs. Discovery, historical repair, lineage and serialization use the
-same proof, retaining both stored and proven canonical lock identities. History cursors
+same proof, retaining both stored and proven canonical identities through matching
+and locking; preferring the alias must not discard opaque exact-key authority.
+Related identity scans load candidate dependency stamps lazily once per page.
+Target freshness includes the same inheritance context and direct reference rows
+used by preparation, including Task parent identity. Retained application receipts
+whose original fingerprint cannot prove that required context remain protected
+history rather than gaining reconstructed write authority. History cursors
 advance over scanned field candidates even when no candidate matches. This change does
 not rerun previously completed history jobs. Record identity and proposed
 answer are not part of that equivalence key. Missing historical keys are not

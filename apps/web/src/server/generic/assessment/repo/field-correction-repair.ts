@@ -19,6 +19,7 @@ import {
   readConfirmedCorrection,
 } from "~/server/generic/assessment/repo/correction-sources";
 import { correctionAlreadyRecorded } from "~/server/generic/assessment/repo/correction-work";
+import { fieldCorrectionIdentityKeys } from "~/server/generic/assessment/repo/field-assessment-review";
 import { lockFieldCorrectionKey } from "~/server/generic/assessment/repo/field-correction-lock";
 import {
   resolveFieldCorrection,
@@ -83,7 +84,11 @@ export const fieldCorrectionRepair: CorrectionRepairAdapter<
         status: "held",
         reason: "Complete decision inputs are not equivalent",
       };
-    const resolution = await resolveFieldCorrection(db, key, source.data);
+    const resolution = await resolveFieldCorrection(
+      db,
+      fieldCorrectionIdentityKeys(identity),
+      source.data,
+    );
     if (
       !resolution.sources.some(
         (candidate) => candidate.feedbackId === input.source.feedbackId,

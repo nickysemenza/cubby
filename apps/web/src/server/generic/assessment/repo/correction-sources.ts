@@ -19,12 +19,16 @@ import { getDb } from "~/server/db/helpers";
 import { assessment, assessmentState, feedback } from "~/server/db/schema";
 import { assertApplicationReceipt } from "~/server/generic/assessment/repo/assessment";
 
-import { proveFieldCorrectionIdentity } from "./field-assessment-review";
+import {
+  proveFieldCorrectionIdentity,
+  fieldCorrectionIdentityKeys,
+} from "./field-assessment-review";
 
 export async function readFieldCorrectionIdentity(
   db: Database,
   subject: unknown,
   evidence: unknown,
+  loadManifest = () => producingAiManifest(db),
 ) {
   const retainedEvidence = z.json().parse(evidence);
   const field = z
@@ -39,8 +43,21 @@ export async function readFieldCorrectionIdentity(
   return proveFieldCorrectionIdentity({
     ...field.data,
     evidence: retainedEvidence,
-    manifest: await producingAiManifest(db),
+    loadManifest,
   });
+}
+
+/** One lazy manifest read for related identity facts in a candidate page. */
+export function fieldCorrectionIdentityReader(db: Database) {
+  let manifest: ReturnType<typeof producingAiManifest> | undefined;
+  const loadManifest = () => (manifest ??= producingAiManifest(db));
+  return (subject: unknown, evidence: unknown) =>
+    readFieldCorrectionIdentity(
+      db,
+      subject,
+      z.json().parse(evidence),
+      loadManifest,
+    );
 }
 
 export async function equivalentFieldCorrections(
@@ -54,16 +71,9 @@ export async function equivalentFieldCorrections(
     "subject" | "evidence"
   >,
 ) {
-  const left = await readFieldCorrectionIdentity(
-    db,
-    source.subject,
-    source.evidence,
-  );
-  const right = await readFieldCorrectionIdentity(
-    db,
-    target.subject,
-    target.evidence,
-  );
+  const readIdentity = fieldCorrectionIdentityReader(db);
+  const left = await readIdentity(source.subject, source.evidence);
+  const right = await readIdentity(target.subject, target.evidence);
   const keys = new Set(
     [left.storedKey, left.canonicalKey].filter((key) => key !== null),
   );
@@ -164,10 +174,11 @@ export async function readConfirmedCorrection(
 /** Scope discovery to the field; only hash-proven identities gain normalized aliases. */
 export async function readFieldCorrectionSources(
   db: Database,
-  key: string,
+  key: string | readonly string[],
   scope?: { entity: string; field: string },
 ) {
-  const matches = [];
+  const keys = new Set(typeof key === "string" ? [key] : key);
+  const candidatesWithIdentity = [];
   let after: string | null = null;
   for (;;) {
     const candidates = await getDb(db)
@@ -185,13 +196,16 @@ export async function readFieldCorrectionSources(
                 sql`${assessment.subject}->>'entity' = ${scope.entity}`,
                 sql`${assessment.subject}->>${assessmentSubjects.field.keyof().enum.field} = ${scope.field}`,
               )
-            : sql`${assessment.evidence}->>'correctionKey' = ${key}`,
+            : inArray(sql<string>`${assessment.evidence}->>'correctionKey'`, [
+                ...keys,
+              ]),
           after ? sql`${feedback.id} > ${after}::uuid` : undefined,
         ),
       )
       .orderBy(asc(feedback.id))
       .limit(100);
     if (!candidates.length) break;
+    const readIdentity = fieldCorrectionIdentityReader(db);
     for (const source of await confirmedSources(
       db,
       inArray(
@@ -199,18 +213,29 @@ export async function readFieldCorrectionSources(
         candidates.map((row) => row.id),
       ),
     )) {
-      const identity = await readFieldCorrectionIdentity(
-        db,
-        source.subject,
-        source.evidence,
-      );
-      if (identity.storedKey === key || identity.canonicalKey === key)
-        matches.push(source);
+      const identity = await readIdentity(source.subject, source.evidence);
+      candidatesWithIdentity.push({
+        source,
+        keys: fieldCorrectionIdentityKeys(identity),
+      });
     }
     after = candidates.at(-1)!.id;
     if (candidates.length < 100) break;
   }
-  return matches;
+  // A proof for a stored key also preserves roots with that exact key but no recipe.
+  for (let changed = true; changed;) {
+    changed = false;
+    for (const candidate of candidatesWithIdentity)
+      if (candidate.keys.some((key) => keys.has(key)))
+        for (const key of candidate.keys)
+          if (!keys.has(key)) {
+            keys.add(key);
+            changed = true;
+          }
+  }
+  return candidatesWithIdentity
+    .filter((candidate) => candidate.keys.some((key) => keys.has(key)))
+    .map((candidate) => candidate.source);
 }
 
 /** Skip input preparation when this field has never had confirmed correction authority. */
@@ -282,7 +307,7 @@ export async function correctionTargetIds(
   db: Database,
   input: {
     sourceAssessmentId: string;
-    correctionKey: string;
+    correctionKey: string | readonly string[];
     entity: string;
     field: string;
     after: string | null;
@@ -316,16 +341,15 @@ export async function correctionTargetIds(
     .orderBy(asc(assessment.id))
     .limit(input.limit);
   const targets = [];
+  const keys = new Set(
+    typeof input.correctionKey === "string"
+      ? [input.correctionKey]
+      : input.correctionKey,
+  );
+  const readIdentity = fieldCorrectionIdentityReader(db);
   for (const row of scanned) {
-    const identity = await readFieldCorrectionIdentity(
-      db,
-      row.subject,
-      row.evidence,
-    );
-    if (
-      identity.storedKey === input.correctionKey ||
-      identity.canonicalKey === input.correctionKey
-    )
+    const identity = await readIdentity(row.subject, row.evidence);
+    if (fieldCorrectionIdentityKeys(identity).some((key) => keys.has(key)))
       targets.push({ id: row.id });
   }
   return {

@@ -18,7 +18,7 @@ const INHERITANCE_CONTEXT_KEYS = {
 
 /** Runtime context is shared by live forms and canonical background preparation. */
 export function fieldSuggestionContextKeys(
-  entity: ShortcodeEntity,
+  entity: string,
   basisKeys: readonly string[],
 ): readonly string[] {
   const inherited =

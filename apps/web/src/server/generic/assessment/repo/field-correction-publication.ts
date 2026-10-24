@@ -89,7 +89,7 @@ export async function publishFieldCorrectionQuestion(
         producer: {
           kind: "rule",
           model: null,
-          revision: "field-correction-authority-v1",
+          revision: "field-correction-authority-v2",
           runId: null,
           evaluationId: null,
         },

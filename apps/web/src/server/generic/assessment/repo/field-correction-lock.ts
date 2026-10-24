@@ -7,7 +7,7 @@ import {
   assessment,
   assessmentState,
 } from "~/server/db/schema";
-import { readFieldCorrectionIdentity } from "~/server/generic/assessment/repo/correction-sources";
+import { fieldCorrectionIdentityReader } from "~/server/generic/assessment/repo/correction-sources";
 
 /** Replacement and member review share key-before-record/projection ordering. */
 export async function lockFieldCorrectionKeysForField(
@@ -31,8 +31,9 @@ export async function lockFieldCorrectionKeysForField(
       ),
     );
   const keys = new Set(input.keys);
+  const readIdentity = fieldCorrectionIdentityReader(db);
   for (const row of prior) {
-    const identity = await readFieldCorrectionIdentity(db, input, row.evidence);
+    const identity = await readIdentity(input, row.evidence);
     keys.add(identity.storedKey);
     keys.add(identity.canonicalKey);
   }
