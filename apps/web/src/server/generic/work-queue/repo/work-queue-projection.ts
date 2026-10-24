@@ -1,4 +1,4 @@
-import type { DataCheck } from "@cubby/schemas/data-quality";
+import type { DataCheck, DataQuality } from "@cubby/schemas/data-quality";
 import type { Entity } from "@cubby/schemas/entity";
 import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
 import type { WorkQueueRow } from "@cubby/schemas/work-queue";
@@ -28,7 +28,12 @@ export type WorkQueueScope = {
   kinds?: readonly WorkQueueRow["kind"][];
   /** Only gap-carrying branches survive, narrowed to these checks. */
   check?: readonly DataCheck[];
-  record?: { entity: ShortcodeEntity; id: string };
+  record?: {
+    entity: ShortcodeEntity;
+    id: string;
+    /** Fresh verdicts for this single-record read; never a publication. */
+    quality?: DataQuality;
+  };
   /** Typed facts needed for population filtering/sorting; others load on the page. */
   facts?: readonly (keyof RecordFacts)[];
 };

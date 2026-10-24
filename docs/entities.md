@@ -2591,7 +2591,10 @@ metadata, not graph relationships. Entity itself has no quality columns.
 Lists, filters, score sorts and related rollups consume published outcomes. A
 missing publication is unassessed. `loadDataQualities`
 defaults to live evaluation for record and detail reads; list pages and the Work
-queue pass `"stored"`. Lazy explanations evaluate the same TypeScript functions
+queue population reads pass `"stored"`. A single-record Work strip evaluates
+that record's quality live and reuses it for gap admission, messages and counts,
+so a record page does not wait for a household-wide refresh pass. This does not
+publish or repair the stored snapshot. Lazy explanations evaluate the same TypeScript functions
 live without publishing repairs. SQL predicates (`generic/data-quality/repo/sql.ts`)
 are indexed per-row lookups on published rows; the status predicate derives
 the same status as the TypeScript core from those check states.

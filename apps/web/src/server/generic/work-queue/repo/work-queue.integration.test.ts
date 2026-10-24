@@ -15,13 +15,14 @@ import type { z } from "zod";
 import { householdLocalDate, shiftPlainDate } from "~/lib/household-date";
 import { user } from "~/server/db/auth.schema";
 import { getDb } from "~/server/db/helpers";
-import { assessment, expense, run } from "~/server/db/schema";
+import { assessment, expense, run, image } from "~/server/db/schema";
 import * as connections from "~/server/domains/connection/repo/entity-connections";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import {
   publishAssessment,
   publishFieldAssessment,
 } from "~/server/generic/assessment/repo/assessment";
+import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 import {
@@ -30,6 +31,8 @@ import {
 } from "~/server/generic/work-queue/service/work-queue-read";
 import { publishAllQualityFixtures } from "~/server/testing/quality.fixtures";
 import {
+  createImageFixture,
+  insertEntityAttachments,
   createProductIdentityFixture,
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
@@ -61,6 +64,65 @@ describe("Work queue gaps, typed columns, and record rows", () => {
     await publishAllQualityFixtures(ctx.db);
     return readRecordWorkQueue(...args);
   };
+
+  it("keeps record logo warnings current without repairing the published queue", async () => {
+    const subject = await createRepoEntity(ctx, "vendor", {
+      name: "Synthetic logo freshness",
+      website: "https://vendor.example",
+    });
+    await publishAllQualityFixtures(ctx.db);
+    const before = await readRecordWorkQueue(
+      ctx.db,
+      null,
+      subject.output.id,
+      false,
+    );
+    expect(
+      before.items.flatMap((row) => row.gaps).map((gap) => gap.check),
+    ).toContain("vendor_logo");
+    const logo = await createImageFixture(ctx.db, "queue-logo-freshness");
+    await insertEntityAttachments(ctx.db, {
+      entityId: subject.entityId,
+      imageId: logo.id,
+      role: "logo",
+    });
+    const current = await readRecordWorkQueue(
+      ctx.db,
+      null,
+      subject.output.id,
+      false,
+    );
+    expect(current.items.filter((row) => row.source === "research")).toEqual(
+      [],
+    );
+    expect(current.meta.totalCount).toBe(before.meta.totalCount - 1);
+    const published = (
+      await loadDataQualities(ctx.db, "vendor", [subject.entityId], "stored")
+    ).get(subject.entityId);
+    expect(published?.gaps.map((gap) => gap.check)).toContain("vendor_logo");
+
+    await publishAllQualityFixtures(ctx.db);
+    await getDb(ctx.db)
+      .update(image)
+      .set({ deletedAt: new Date() })
+      .where(eq(image.id, logo.id));
+    const reopened = await readRecordWorkQueue(
+      ctx.db,
+      null,
+      subject.output.id,
+      false,
+    );
+    expect(
+      reopened.items.flatMap((row) => row.gaps).map((gap) => gap.check),
+    ).toContain("vendor_logo");
+    expect(reopened.meta.totalCount).toBe(before.meta.totalCount);
+    const stillPublished = (
+      await loadDataQualities(ctx.db, "vendor", [subject.entityId], "stored")
+    ).get(subject.entityId);
+    expect(stillPublished?.gaps.map((gap) => gap.check)).not.toContain(
+      "vendor_logo",
+    );
+  });
 
   // Listing must not reconstruct every pending connection's evidence before
   // pagination. Background retirement owns display freshness; apply still fences it.
