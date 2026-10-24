@@ -20,7 +20,7 @@ import {
   mailboxClassification,
 } from "@cubby/schemas/mailbox-research";
 import { mailResearchRunInput, runWorkLabel } from "@cubby/schemas/run-fields";
-import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { groupBy } from "es-toolkit";
 
 import { operationCommandRequest } from "~/contracts/define";
@@ -34,6 +34,8 @@ import type { Database } from "~/server/db";
 import { getDb, notDeleted } from "~/server/db/helpers";
 import {
   aiUsage,
+  aiEvaluation,
+  aiEvaluationRequest,
   emailCandidateObservation,
   emailClassificationObservation,
   feedback,
@@ -270,6 +272,7 @@ function stageRow(
   email: typeof emailTable.$inferSelect,
   latest: Observation | undefined,
   decidedBy: (typeof automatedStages)[number] | null,
+  classifier?: typeof run.$inferSelect,
 ): ReportRecordRow {
   const step = stageStep[stage];
   if (latest)
@@ -281,6 +284,20 @@ function stageRow(
       at: latest.createdAt,
       conflict: latest.conflict,
     });
+  if (classifier)
+    return pipelineRow(
+      step,
+      IMPORT_RUN_STATE[runRowState(classifier.status) ?? "done"],
+      {
+        entity: "run",
+        id: classifier.shortcode,
+        lines: [
+          `${classifier.shortcode} · ${classifier.status}`,
+          classifier.dispatchError,
+        ],
+        at: classifier.endedAt ?? classifier.startedAt,
+      },
+    );
   const order = automatedStages.indexOf(stage);
   if (decidedBy && automatedStages.indexOf(decidedBy) > order)
     return pipelineRow(step, "Ran", {
@@ -916,6 +933,29 @@ export async function emailReviewReport(
     email.classification === "related" &&
     current &&
     !["deleted", "excluded", "researching"].includes(email.status);
+  const [classifier] =
+    email.classification === "uncertain"
+      ? await client
+          .select({ owner: run })
+          .from(aiEvaluationRequest)
+          .innerJoin(
+            aiEvaluation,
+            eq(aiEvaluation.id, aiEvaluationRequest.evaluationId),
+          )
+          .innerJoin(run, eq(run.id, aiEvaluationRequest.runId))
+          .where(
+            and(
+              eq(aiEvaluation.executionKind, "mail_reclassify"),
+              sql`${aiEvaluation.target}->>'recordId' = ${email.id}`,
+              sql`${aiEvaluation.snapshot}->>'checksum' IS NOT DISTINCT FROM ${email.checksum}`,
+              eq(run.ledgerPartyId, email.ledgerPartyId),
+              notDeleted(run),
+              isNull(aiEvaluationRequest.cancelledAt),
+            ),
+          )
+          .orderBy(desc(run.startedAt), desc(run.id))
+          .limit(1)
+      : [];
   const automaticImport = await mailImportEnabled(db, email.mailboxId);
   const associations = await readEmailAssociations(db, code, actor);
   // Per-stage results for the current original, newest first.
@@ -931,6 +971,7 @@ export async function emailReviewReport(
   const footer = await runMembership(client, email, [
     ...predictions.map((item) => item.runId),
     ...candidates.map((item) => item.runId),
+    classifier?.owner.id ?? null,
   ]);
   const awaitingAcceptance =
     email.classificationStage !== "resolution" &&
@@ -952,6 +993,12 @@ export async function emailReviewReport(
             email,
             currentPredictions.find((item) => item.stage === stage),
             decidedBy,
+            stage ===
+              (currentPredictions.some((item) => item.stage === "decision")
+                ? "model"
+                : "decision")
+              ? classifier?.owner
+              : undefined,
           ),
         ),
         memberRow(
