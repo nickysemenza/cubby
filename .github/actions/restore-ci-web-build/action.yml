@@ -1,0 +1,17 @@
+name: Restore CI web build
+description: Restore this run's web output and matching WASM, then verify existing provenance
+runs:
+  using: composite
+  steps:
+    - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+      with:
+        name: web-build-${{ github.sha }}
+        path: ${{ runner.temp }}/cubby-web-build
+    - name: Extract web build
+      shell: bash
+      run: tar -xzf "$RUNNER_TEMP/cubby-web-build/web-build.tar.gz"
+    - name: Verify web build provenance
+      shell: bash
+      env:
+        CUBBY_E2E_PREBUILT_WEB: "1"
+      run: pnpm --filter @cubby/web exec tsx tooling/build-cf.ts --ensure

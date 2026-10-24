@@ -53,7 +53,7 @@ env:
 jobs:
   plan:
     name: Plan
-    runs-on: [self-hosted, celesto-micro]
+    runs-on: ubuntu-slim
     timeout-minutes: 5
     outputs:
       # Nightly and manual runs start every filtered lane.
@@ -176,9 +176,44 @@ jobs:
             './**/*.md'
             './**/*.mdx'
 
+  web-build:
+    name: Prepare web build
+    runs-on: [self-hosted, celesto-xl]
+    timeout-minutes: 15
+    # Build and consumers use identical source identity and heap settings.
+    env: &web-lane-env
+      ImageVersion: celesto-ubuntu-24.04-x64-v1
+      CUBBY_TEMPLATE_SERVICE_ID: ${{ github.run_id }}:${{ github.run_attempt }}:${{ github.job }}
+      NODE_OPTIONS: "--max-old-space-size=4096"
+      BETTER_AUTH_SECRET: ci-secret-TbGFDRAbhlR8e3RaXsfHR9CQ7r4nIc9
+      CUBBY_SOURCE_COMMIT: ${{ github.sha }}
+      CUBBY_SOURCE_BRANCH: ${{ github.ref_name }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: ./.github/actions/setup-node-with-deps
+        with:
+          wasm: restore
+      - name: Restore or build web app once
+        run: pnpm exec nx run @cubby/web:build-cf --outputStyle=stream
+      - name: Package web build and matching WASM
+        run: >-
+          tar -czf "$RUNNER_TEMP/web-build.tar.gz"
+          apps/web/.cloudflare/output
+          apps/web/.cloudflare/web-build-provenance.json
+          packages/wasm
+      - name: Share web build with test shards
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: web-build-${{ github.sha }}
+          path: ${{ runner.temp }}/web-build.tar.gz
+          compression-level: 0
+          retention-days: 1
+          overwrite: true
+
   # Each entry owns a Celesto runner and fresh PostgreSQL services.
   lanes:
     name: ${{ matrix.name }}
+    needs: web-build
     runs-on:
       [self-hosted, "${{ matrix.vitest && 'celesto-xl' || 'celesto-large' }}"]
     timeout-minutes: 20
@@ -188,30 +223,18 @@ jobs:
         include:
           # Browser shards run alone: a companion check behind a shard
           # serializes the slowest lane's wall time.
-          - name: E2E tests (desktop 1/8)
+          - name: E2E tests (desktop 1/4)
             browser: desktop-1
-            run: CUBBY_E2E_SHARD=1/8 pnpm exec nx run @cubby/web:e2e --outputStyle=stream
-          - name: E2E tests (desktop 2/8)
+            run: CUBBY_E2E_SHARD=1/4 pnpm exec nx run @cubby/web:e2e --outputStyle=stream
+          - name: E2E tests (desktop 2/4)
             browser: desktop-2
-            run: CUBBY_E2E_SHARD=2/8 pnpm exec nx run @cubby/web:e2e --outputStyle=stream
-          - name: E2E tests (desktop 3/8)
+            run: CUBBY_E2E_SHARD=2/4 pnpm exec nx run @cubby/web:e2e --outputStyle=stream
+          - name: E2E tests (desktop 3/4)
             browser: desktop-3
-            run: CUBBY_E2E_SHARD=3/8 pnpm exec nx run @cubby/web:e2e --outputStyle=stream
-          - name: E2E tests (desktop 4/8)
+            run: CUBBY_E2E_SHARD=3/4 pnpm exec nx run @cubby/web:e2e --outputStyle=stream
+          - name: E2E tests (desktop 4/4)
             browser: desktop-4
-            run: CUBBY_E2E_SHARD=4/8 pnpm exec nx run @cubby/web:e2e --outputStyle=stream
-          - name: E2E tests (desktop 5/8)
-            browser: desktop-5
-            run: CUBBY_E2E_SHARD=5/8 pnpm exec nx run @cubby/web:e2e --outputStyle=stream
-          - name: E2E tests (desktop 6/8)
-            browser: desktop-6
-            run: CUBBY_E2E_SHARD=6/8 pnpm exec nx run @cubby/web:e2e --outputStyle=stream
-          - name: E2E tests (desktop 7/8)
-            browser: desktop-7
-            run: CUBBY_E2E_SHARD=7/8 pnpm exec nx run @cubby/web:e2e --outputStyle=stream
-          - name: E2E tests (desktop 8/8)
-            browser: desktop-8
-            run: CUBBY_E2E_SHARD=8/8 pnpm exec nx run @cubby/web:e2e --outputStyle=stream
+            run: CUBBY_E2E_SHARD=4/4 pnpm exec nx run @cubby/web:e2e --outputStyle=stream
           # Every Vitest project is split by file; all blobs feed the report.
           - name: Vitest (1/4)
             vitest: "1"
@@ -256,13 +279,7 @@ jobs:
         ports:
           - 5000:5000
     # Each job owns fresh services and one host marker namespace.
-    env: &web-lane-env
-      ImageVersion: celesto-ubuntu-24.04-x64-v1
-      CUBBY_TEMPLATE_SERVICE_ID: ${{ github.run_id }}:${{ github.run_attempt }}:${{ github.job }}
-      NODE_OPTIONS: "--max-old-space-size=4096"
-      BETTER_AUTH_SECRET: ci-secret-TbGFDRAbhlR8e3RaXsfHR9CQ7r4nIc9
-      CUBBY_SOURCE_COMMIT: ${{ github.sha }}
-      CUBBY_SOURCE_BRANCH: ${{ github.ref_name }}
+    env: *web-lane-env
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - id: setup
@@ -272,8 +289,8 @@ jobs:
       - name: Install Chromium for required component-browser tests
         if: ${{ matrix.vitest }}
         run: pnpm --filter @cubby/web exec playwright install --with-deps chromium
-      - name: Restore or build web app
-        run: pnpm exec nx run @cubby/web:build-cf --outputStyle=stream
+      - name: Restore and verify shared web build
+        uses: ./.github/actions/restore-ci-web-build
       - name: Run Vitest shard
         if: ${{ matrix.vitest }}
         run: ${{ matrix.run }}
@@ -408,9 +425,10 @@ jobs:
   # Manual diagnostics never satisfy the PR merge check.
   ci-passed:
     name: ${{ github.event_name == 'workflow_dispatch' && 'Manual CI diagnostics' || 'CI passed' }}
-    needs: [plan, validation, lanes, rust, apple-host, apple-simulator]
+    needs:
+      [plan, web-build, validation, lanes, rust, apple-host, apple-simulator]
     if: always()
-    runs-on: [self-hosted, celesto-micro]
+    runs-on: ubuntu-slim
     timeout-minutes: 5
     steps:
       - uses: re-actors/alls-green@b5b5b37504aa4183270bd3d855c52a67f212be35 # v1.3.0
@@ -531,8 +549,8 @@ jobs:
       - uses: ./.github/actions/setup-node-with-deps
         with:
           wasm: restore
-      - name: Restore or build web app
-        run: pnpm exec nx run @cubby/web:build-cf --outputStyle=stream
+      - name: Restore and verify shared web build
+        uses: ./.github/actions/restore-ci-web-build
       - name: Run Playwright purchase import tests
         uses: ./.github/actions/playwright
         with:
