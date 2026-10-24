@@ -277,19 +277,13 @@ export async function applyAutomaticRules(
   for (const row of rows) {
     if (!row.active || row.status !== "pending" || !row.served) continue;
     if (row.family === "field") {
-      const { fieldCorrectionKey, readFieldCorrectionSources } =
-        await import("./correction-sources");
+      const { fieldCorrectionKey } = await import("./correction-sources");
       const key = fieldCorrectionKey(row.data);
       if (key) {
-        const { isCurrentFieldCorrection } =
-          await import("./field-correction-repair");
-        const sources = await readFieldCorrectionSources(db, key);
-        let corrected = false;
-        for (const source of sources)
-          if (await isCurrentFieldCorrection(db, source)) corrected = true;
-        // Root member authority is resolved by correction work, not model confidence.
-        // Conflicting corrections also withhold the old model answer.
-        if (corrected) continue;
+        const { resolveFieldCorrection } =
+          await import("./field-correction-resolver");
+        // Conflicts also withhold the old model answer; correction work owns the resolution.
+        if ((await resolveFieldCorrection(db, key)).kind !== "none") continue;
       }
     }
     const stamp = ruleStamps.safeParse(row.data).data;

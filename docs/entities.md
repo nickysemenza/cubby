@@ -3711,6 +3711,12 @@ audit timestamps alone do not establish the latest committed decision. Deleted
 source subjects supply no current correction authority; retained history does not
 block subsequent proposal processing.
 Pending proposals are retired even when an explicit-null correction needs no value change.
+Historical repair, automatic admission and remembered-question reuse share one
+current-authority resolver. An equivalent confirmed correction or conflict reopens
+a remembered decline under a stable correction-set revision without calling a
+provider or writing from the read. Superseded or deleted source authority no longer
+invalidates that memory. This cache fence does not yet bypass live model execution
+or represent a correction as model confidence.
 Existing applicable corrections withhold the model's
 automatic answer while correction work resolves it. Historical repair requires
 the original automatic application receipt, its unchanged audited field write,

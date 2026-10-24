@@ -3,24 +3,17 @@ import { suggestionAcceptanceReceipt } from "@cubby/schemas/ai-evaluation";
 import { assessmentSubjects } from "@cubby/schemas/assessment";
 import { entityFieldByKey } from "@cubby/schemas/entity-fields";
 import { requiresSuggestionReview } from "@cubby/schemas/field-suggestion";
-import type { SuggestionCorrectionSource } from "@cubby/schemas/suggestion-correction";
 import { and, eq } from "drizzle-orm";
 import { z } from "zod";
 
-import type { Database } from "~/server/db";
 import { getDb } from "~/server/db/helpers";
 import { assessmentState, feedback } from "~/server/db/schema";
 import { systemActor } from "~/server/domains/run/repo/ensure-run";
 import type { CorrectionRepairAdapter } from "~/server/generic/assessment/correction-repair";
 import { transitionAssessmentState } from "~/server/generic/assessment/repo/assessment-state";
-import {
-  fieldCorrectionKey,
-  readFieldCorrectionSources,
-} from "~/server/generic/assessment/repo/correction-sources";
-import {
-  fieldInputFingerprint,
-  fieldInputFingerprintIfLive,
-} from "~/server/generic/assessment/repo/field-input-fence";
+import { fieldCorrectionKey } from "~/server/generic/assessment/repo/correction-sources";
+import { resolveFieldCorrection } from "~/server/generic/assessment/repo/field-correction-resolver";
+import { fieldInputFingerprint } from "~/server/generic/assessment/repo/field-input-fence";
 import {
   confirmedFieldFillRefusal,
   writePropagatedFieldCorrection,
@@ -29,51 +22,6 @@ import { latestFieldWrite } from "~/server/generic/audit-log/repo/field-write";
 import { canonicalJson } from "~/server/lib/canonical-json";
 
 const fieldRepairPlan = z.object({ inputFingerprint: z.string() });
-
-/** A later member write, including an unchanged save or ABA edit, retires this authority. */
-export async function isCurrentFieldCorrection(
-  db: Database,
-  source: SuggestionCorrectionSource,
-) {
-  const subject = assessmentSubjects.field.safeParse(source.subject);
-  if (!subject.success) return false;
-  const [state] = await getDb(db)
-    .select()
-    .from(assessmentState)
-    .where(eq(assessmentState.id, source.assessmentId))
-    .limit(1);
-  if (!state) return false;
-  const bound = suggestionAcceptanceReceipt.safeParse(
-    source.applicationReceipt,
-  );
-  const captured = suggestionAcceptanceReceipt.safeParse(
-    source.fieldApplicationReceipt,
-  );
-  const receipt = captured.success ? captured : bound;
-  if (!receipt.success || receipt.data.mode !== "member") return false;
-  const latest = await latestFieldWrite(
-    db,
-    state.entity,
-    state.recordId,
-    state.field,
-  );
-  const currentFingerprint = await fieldInputFingerprintIfLive(
-    db,
-    state.entity,
-    state.recordId,
-    state.field,
-  );
-  if (
-    currentFingerprint === null ||
-    receipt.data.appliedInputFingerprint !== currentFingerprint
-  )
-    return false;
-  if (latest) return receipt.data.auditIds.includes(latest.id);
-  return (
-    receipt.data.auditIds.length === 0 &&
-    receipt.data.appliedInputFingerprint === currentFingerprint
-  );
-}
 
 export const fieldCorrectionRepair: CorrectionRepairAdapter<
   typeof fieldRepairPlan
@@ -111,13 +59,9 @@ export const fieldCorrectionRepair: CorrectionRepairAdapter<
         status: "held",
         reason: "Complete decision inputs are not equivalent",
       };
-    const sources = await readFieldCorrectionSources(db, key);
-    const current: SuggestionCorrectionSource[] = [];
-    for (const candidate of sources)
-      if (await isCurrentFieldCorrection(db, candidate))
-        current.push(candidate);
+    const resolution = await resolveFieldCorrection(db, key);
     if (
-      !current.some(
+      !resolution.sources.some(
         (candidate) => candidate.feedbackId === input.source.feedbackId,
       )
     )
@@ -125,13 +69,7 @@ export const fieldCorrectionRepair: CorrectionRepairAdapter<
         status: "held",
         reason: "The originating member correction is no longer current",
       };
-    if (
-      current.some(
-        (candidate) =>
-          canonicalJson(candidate.correctedValue) !==
-          canonicalJson(input.source.correctedValue),
-      )
-    )
+    if (resolution.kind === "conflict")
       return {
         status: "held",
         reason: "Equivalent evidence has conflicting member corrections",

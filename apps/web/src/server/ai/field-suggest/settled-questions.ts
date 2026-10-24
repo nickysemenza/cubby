@@ -32,6 +32,8 @@ import { producingAiManifest } from "~/server/ai/repo/ai-refresh";
 import type { Database } from "~/server/db";
 import { getDb, withTransactionDatabase } from "~/server/db/helpers";
 import { aiAnalysis, assessmentState, feedback } from "~/server/db/schema";
+import { fieldCorrectionIdentity } from "~/server/generic/assessment/repo/field-assessment-review";
+import { resolveFieldCorrection } from "~/server/generic/assessment/repo/field-correction-resolver";
 import { canonicalJson } from "~/server/lib/canonical-json";
 import { settleBatch } from "~/server/workflows/settle-batch";
 
@@ -222,6 +224,7 @@ async function recheck(
   db: Database,
   entity: SettledSuggestionQuestionsInput["entity"],
   question: SettledSuggestionQuestion,
+  manifest: AiRefreshManifest,
   remembered: z.infer<typeof rememberedSchema>,
   missId: string | null,
   ports: SettledPorts,
@@ -254,6 +257,29 @@ async function recheck(
       outcome: null,
       revision: `${missed}unverified:${crypto.randomUUID()}`,
     };
+  const inputs = prepared.inputs.filter(
+    (call) => call.operation === `suggestFields.${entity}.${question.field}`,
+  );
+  const correctionKey = await fieldCorrectionIdentity({
+    entity,
+    field: question.field,
+    basis: question.basis,
+    inputs,
+    dependencies: dependencyStamps(manifest, [
+      ...fieldDependencyKeys(entity, question.field),
+      ...inputs.map((call) => call.feature),
+    ]),
+  });
+  if (correctionKey) {
+    const resolution = await resolveFieldCorrection(db, correctionKey);
+    // A cached decline has no correction authority. Reopen even conflicts,
+    // whose resolution belongs to correction work rather than the model cache.
+    if (resolution.kind !== "none")
+      return {
+        outcome: null,
+        revision: `${missed}correction:${resolution.revision}`,
+      };
+  }
   const signature = await settledSignature(
     { entity, field: question.field },
     preparedOutcome,
@@ -359,6 +385,7 @@ export async function readSettledQuestions(
           db,
           input.entity,
           question,
+          manifest,
           entry.remembered,
           entry.missId,
           ports,
