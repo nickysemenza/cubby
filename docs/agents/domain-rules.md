@@ -233,7 +233,11 @@ member's entity brand.
 
 Drizzle raw-`sql` traps: a nullable timestamp `CASE` must cast its bound
 instant to `timestamp`; an unconstrained parameter beside `NULL` otherwise
-infers `text` and fails the update. Bound `jsonb_build_object` keys need `::text`
+infers `text` and fails the update. Timestamp aggregates and scalar subqueries
+need `.mapWith(sourceTimestampColumn)` to decode driver strings as Dates;
+`sql<Date>` supplies only a compile-time type. Keep null results null and test
+the operation output schema against nonempty activity.
+Bound `jsonb_build_object` keys need `::text`
 when no typed expression constrains their parameters. An interpolated column renders **unqualified** on a
 single-table select, including inside a nested projection. A correlated
 subquery can silently compare its own columns instead of the outer row;
