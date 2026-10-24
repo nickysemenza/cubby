@@ -1,6 +1,7 @@
 import { suggestionAcceptanceReceipt } from "@cubby/schemas/ai-evaluation";
 import {
   assessmentReviewInput,
+  assessmentFamily,
   assessmentReviewBatchInput,
   assessmentSubjects,
   assessmentJudgments,
@@ -532,7 +533,8 @@ async function settleReview(
         subject: assessment.subject,
         judgment: assessment.judgment,
         producer: assessment.producer,
-        evidence: assessment.evidence,
+        // Only field application consumes captured correction inputs; history must not load unrelated snapshots.
+        evidence: sql`CASE WHEN ${assessment.family} = ${assessmentFamily.enum.field} AND ${input.intent === "apply"} THEN ${assessment.evidence} ELSE NULL END`,
       })
       .from(assessment)
       .where(eq(assessment.id, input.assessmentId))
