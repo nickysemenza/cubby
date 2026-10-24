@@ -176,6 +176,13 @@
       "when": 1792875587486,
       "tag": "0024_receipt_expense_binding",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1792878044107,
+      "tag": "0025_financial_account_providers",
+      "breakpoints": true
     }
   ]
 }

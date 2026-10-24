@@ -101,9 +101,10 @@ evidence requires none; funding and purchase frequency do not identify a primary
 cardholder. Network is an editable scalar projection of identity; provider is an
 ordinary entity reference. The preserving cutover copies retired issuer,
 institution and provider text into notes before removing those identity keys;
-unique exact Vendor names or aliases backfill missing references. Ambiguous or
-unmatched text stays as evidence with no guessed provider. Existing provider
-references win. The generic suggestion framework chooses among reference and enum
+missing references are assigned through ordinary reviewed MCP or CLI mutations
+after deployment, using the member-approved provider mapping. The migration never
+guesses or assigns a provider from legacy text. Existing provider references remain
+unchanged. The generic suggestion framework chooses among reference and enum
 candidates; it does not generate structured facts or dated history rows.
 Authorized-user memberships, funding periods, card-number history and every
 `validFrom`/`validTo` remain explicitly entered; no account-specific AI extractor

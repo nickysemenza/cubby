@@ -150,7 +150,7 @@ test("a new account must choose its identity kind instead of getting a default",
   await expect(dialog.getByRole("textbox", { name: "Issuer" })).toHaveCount(0);
   await selectComboboxItem(
     page,
-    dialog.getByRole("combobox", { name: "Provider", exact: true }),
+    dialog.getByRole("combobox", { name: "Provider vendor", exact: true }),
     providerName,
     { query: providerName, code: provider.id },
   );

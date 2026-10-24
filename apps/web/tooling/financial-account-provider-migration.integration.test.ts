@@ -4,11 +4,11 @@ import { expect, it } from "vitest";
 import { migrateDatabase } from "./db-migrate";
 import { withMigrationDatabase } from "./test-database-lease";
 
-it("preserves account evidence and references while resolving only unambiguous providers", async () => {
+it("preserves account evidence and existing references without assigning missing providers", async () => {
   await withMigrationDatabase(async (client) => {
     const db = drizzle(client);
     await migrateDatabase(db, {
-      through: "0023_serialize_correction_authority",
+      through: "0024_receipt_expense_binding",
     });
     const provider = "00000000-0000-4000-8000-000000000011";
     const duplicate = "00000000-0000-4000-8000-000000000012";
@@ -62,7 +62,7 @@ it("preserves account evidence and references while resolving only unambiguous p
         `SELECT * FROM "FinancialAccount" WHERE shortcode LIKE 'FAC-SYNTHETIC%' ORDER BY shortcode`,
       )
     ).rows;
-    await migrateDatabase(db, { through: "0024_financial_account_providers" });
+    await migrateDatabase(db, { through: "0025_financial_account_providers" });
     const after = (
       await client.query(
         `SELECT * FROM "FinancialAccount" WHERE shortcode LIKE 'FAC-SYNTHETIC%' ORDER BY shortcode`,
@@ -92,9 +92,7 @@ it("preserves account evidence and references while resolving only unambiguous p
         oldIdentity.provider,
       ].filter(Boolean))
         expect(row.notes).toContain(value);
-      expect(row.providerVendorId).toBe(
-        index < 3 || index === 6 ? provider : null,
-      );
+      expect(row.providerVendorId).toBe(index === 6 ? provider : null);
     }
     expect(
       (
