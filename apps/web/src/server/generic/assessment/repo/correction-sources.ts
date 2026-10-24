@@ -9,7 +9,7 @@ import {
   correctionAuthorityReceiptKinds,
 } from "@cubby/schemas/suggestion-correction";
 import { CORRECTION_OUTCOME_RECEIPT_KIND } from "@cubby/schemas/suggestion-correction";
-import { and, asc, eq, inArray, or, sql, type SQL } from "drizzle-orm";
+import { and, asc, eq, gt, inArray, or, sql, type SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { z } from "zod";
 
@@ -394,5 +394,43 @@ export async function correctionTargetIds(
     targets,
     after: scanned.at(-1)?.id ?? input.after,
     done: scanned.length < input.limit,
+  };
+}
+
+/** Cursor advances over candidates, including refused or incomplete applications. */
+export async function imageCorrectionEnrollmentPage(
+  db: Database,
+  input: { after: string | null; limit: number },
+) {
+  const candidates = await getDb(db)
+    .select({ id: feedback.id })
+    .from(feedback)
+    .innerJoin(assessment, eq(assessment.id, feedback.assessmentId))
+    .where(
+      and(
+        eq(assessment.family, "image_description"),
+        eq(assessment.served, true),
+        eq(feedback.authority, "member"),
+        eq(feedback.intent, "apply"),
+        sql`${feedback.correction}->>${"present"} = ${"true"}`,
+        input.after ? gt(feedback.id, input.after) : undefined,
+      ),
+    )
+    .orderBy(asc(feedback.id))
+    .limit(input.limit);
+  const sources = candidates.length
+    ? await confirmedSources(
+        db,
+        inArray(
+          feedback.id,
+          candidates.map((row) => row.id),
+        ),
+      )
+    : [];
+  return {
+    sources,
+    scanned: candidates.length,
+    after: candidates.at(-1)?.id ?? input.after,
+    done: candidates.length < input.limit,
   };
 }

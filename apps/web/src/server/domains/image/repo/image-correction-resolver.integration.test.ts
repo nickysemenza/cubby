@@ -1,5 +1,6 @@
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import { imageDescriptionCorrectionOwner } from "@cubby/schemas/image-processing";
+import { enrollSuggestionCorrectionsInput } from "@cubby/schemas/suggestion-correction";
 import { and, eq, inArray } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
@@ -21,6 +22,7 @@ import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixture
 import { publishAssessment } from "~/server/generic/assessment/repo/assessment";
 import { readConfirmedDescription } from "~/server/generic/assessment/repo/assessment-image";
 import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
+import { enrollSuggestionCorrections } from "~/server/generic/assessment/repo/correction-enrollment";
 import {
   readConfirmedCorrection,
   readCorrectionTarget,
@@ -111,6 +113,147 @@ describe("image correction authority", () => {
     }
     throw new Error("Synthetic image correction jobs did not finish");
   }
+
+  it("previews retained roots without writes and enrolls distinct history once without resetting completed jobs", async () => {
+    const target = await question("retained-target");
+    const root = await correct(
+      "retained-root",
+      "Synthetic retained correction",
+    );
+    // Simulate pre-adapter completed work; these operational records are immutable
+    // inputs to enrollment, not jobs that the new operation may reset.
+    await getDb(ctx.db)
+      .update(job)
+      .set({
+        state: "completed",
+        result: { status: "held", reason: "Synthetic pre-adapter history" },
+      })
+      .where(eq(job.kind, "assessment.correction"));
+    const original = await getDb(ctx.db).select().from(job);
+    const previewInput = enrollSuggestionCorrectionsInput.parse({
+      family: "image_description",
+    });
+    expect(
+      await enrollSuggestionCorrections(ctx.db, previewInput),
+    ).toMatchObject({
+      dryRun: true,
+      scanned: 1,
+      receiptBackedRoots: 1,
+      enrolledRoots: 0,
+      done: true,
+    });
+    expect(await getDb(ctx.db).select().from(job)).toEqual(original);
+    const applyInput = { ...previewInput, dryRun: false };
+    for (let attempt = 0; attempt < 2; attempt++)
+      expect(
+        await enrollSuggestionCorrections(ctx.db, applyInput),
+      ).toMatchObject({ enrolledRoots: 1 });
+    const enrolled = await getDb(ctx.db).select().from(job);
+    expect(enrolled).toHaveLength(original.length + 1);
+    expect(
+      enrolled.find((row) => !original.some((old) => old.id === row.id)),
+    ).toMatchObject({
+      key: `assessment-correction-history:image-description-v1:${root.result.feedbackId}`,
+      state: "queued",
+      input: {
+        sourceFeedbackId: root.result.feedbackId,
+        targetAssessmentId: null,
+      },
+    });
+    await drain();
+    expect(
+      await readConfirmedDescription(
+        ctx.db,
+        parseEntityId("image", target.picture.id),
+      ),
+    ).toMatchObject({
+      description: "Synthetic retained correction",
+      owner: { kind: "correction" },
+    });
+    for (const old of original.filter(
+      (row) => row.kind === "assessment.correction",
+    ))
+      expect(
+        (await getDb(ctx.db).select().from(job).where(eq(job.id, old.id)))[0],
+      ).toEqual(old);
+    const completed = await getDb(ctx.db).select().from(job);
+    await enrollSuggestionCorrections(ctx.db, applyInput);
+    expect(await getDb(ctx.db).select().from(job)).toEqual(completed);
+  });
+
+  it("never restarts failed versioned enrollment on repeated execution", async () => {
+    const root = await correct(
+      "failed-enrollment-root",
+      "Synthetic failed history correction",
+    );
+    const input = enrollSuggestionCorrectionsInput.parse({
+      family: "image_description",
+      dryRun: false,
+    });
+    await enrollSuggestionCorrections(ctx.db, input);
+    const key = `assessment-correction-history:image-description-v1:${root.result.feedbackId}`;
+    await getDb(ctx.db)
+      .update(job)
+      .set({
+        state: "failed",
+        error: "Synthetic retained failure",
+        attempts: 3,
+      })
+      .where(eq(job.key, key));
+    const before = (
+      await getDb(ctx.db).select().from(job).where(eq(job.key, key))
+    )[0];
+    expect(before).toMatchObject({ state: "failed", attempts: 3 });
+    await enrollSuggestionCorrections(ctx.db, input);
+    expect(
+      (await getDb(ctx.db).select().from(job).where(eq(job.key, key)))[0],
+    ).toEqual(before);
+  });
+
+  it("advances bounded enrollment past refused member applications without inventing authority", async () => {
+    const refused = await question("refused-enrollment");
+    await getDb(ctx.db)
+      .update(image)
+      .set({ sha256: "b".repeat(64) })
+      .where(eq(image.id, parseEntityId("image", refused.picture.id)));
+    await expect(
+      reviewAssessment(ctx.db, kernelCtx(ctx), {
+        assessmentId: refused.prediction.id,
+        operationId: "synthetic:refused-enrollment",
+        verdict: "wrong",
+        intent: "apply",
+        correction: { present: true, value: "Synthetic refused correction" },
+      }),
+    ).rejects.toThrow("Image evidence changed before confirmation");
+    await correct("valid-enrollment", "Synthetic valid correction");
+    const jobsBefore = await getDb(ctx.db).select().from(job);
+    let after: string | null = null;
+    let scanned = 0;
+    let roots = 0;
+    let emptyCandidatePages = 0;
+    for (let page = 0; page < 4; page++) {
+      const result = await enrollSuggestionCorrections(
+        ctx.db,
+        enrollSuggestionCorrectionsInput.parse({
+          family: "image_description",
+          after,
+          limit: 1,
+        }),
+      );
+      scanned += result.scanned;
+      roots += result.receiptBackedRoots;
+      if (result.scanned && !result.receiptBackedRoots) emptyCandidatePages++;
+      if (result.done) break;
+      expect(result.after).not.toBe(after);
+      after = result.after;
+    }
+    expect({ scanned, roots, emptyCandidatePages }).toEqual({
+      scanned: 2,
+      roots: 1,
+      emptyCandidatePages: 1,
+    });
+    expect(await getDb(ctx.db).select().from(job)).toEqual(jobsBefore);
+  });
 
   it.each(["historical", "future"])(
     "enrolls %s model descriptions and preserves correction precedence after later model publication",

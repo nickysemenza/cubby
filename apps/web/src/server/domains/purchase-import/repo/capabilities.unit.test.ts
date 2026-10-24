@@ -25,6 +25,9 @@ describe("import run capabilities", () => {
         expect(() => assertRunCapability(purpose, capability)).toThrow(
           `forbids ${capability}`,
         );
+    expect(
+      capabilityForPurchaseAgentAction("suggestions.enroll_corrections"),
+    ).toBe("member_decision");
     expect(capabilityForPurchaseAgentAction("run.set_mail_import")).toBe(
       "member_decision",
     );

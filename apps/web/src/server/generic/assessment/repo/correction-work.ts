@@ -46,10 +46,40 @@ export async function enqueueCorrectionWork(
   sourceFeedbackId: string,
   targetAssessmentId: string | null,
 ) {
-  await enqueueJob(db, {
+  await enqueueCorrectionIntent(db, {
     key: `assessment-correction:${sourceFeedbackId}:${targetAssessmentId ?? "history"}`,
+    sourceFeedbackId,
+    targetAssessmentId,
+  });
+}
+
+/** A distinct fixed revision preserves completed pre-adapter history and receipts. */
+export async function enrollRetainedImageCorrection(
+  db: Database,
+  sourceFeedbackId: string,
+) {
+  await enqueueCorrectionIntent(db, {
+    key: `assessment-correction-history:image-description-v1:${sourceFeedbackId}`,
+    sourceFeedbackId,
+    targetAssessmentId: null,
+  });
+}
+
+async function enqueueCorrectionIntent(
+  db: Database,
+  input: {
+    key: string;
+    sourceFeedbackId: string | null;
+    targetAssessmentId: string | null;
+  },
+) {
+  await enqueueJob(db, {
+    key: input.key,
     kind: "assessment.correction",
-    input: { sourceFeedbackId, targetAssessmentId },
+    input: {
+      sourceFeedbackId: input.sourceFeedbackId,
+      targetAssessmentId: input.targetAssessmentId,
+    },
   });
   await runAfterCommit(db, async () => {
     const { wakeJobs } =
@@ -93,14 +123,9 @@ async function enqueueCorrectionsForPublication(
     if (!subject.contentHash || prediction.fingerprint !== subject.contentHash)
       return;
   } else return;
-  await enqueueJob(db, {
+  await enqueueCorrectionIntent(db, {
     key: `assessment-correction-publication:${prediction.id}`,
-    kind: "assessment.correction",
-    input: { sourceFeedbackId: null, targetAssessmentId: prediction.id },
-  });
-  await runAfterCommit(db, async () => {
-    const { wakeJobs } =
-      await import("~/server/workflows/background-tasks/publish");
-    await wakeJobs({ source: "assessment.correction" });
+    sourceFeedbackId: null,
+    targetAssessmentId: prediction.id,
   });
 }
