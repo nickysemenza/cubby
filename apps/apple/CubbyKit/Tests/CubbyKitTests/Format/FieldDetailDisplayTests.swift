@@ -12,6 +12,22 @@ struct FieldDetailDisplayTests {
         try #require(EntityCatalog[entity].field(key))
     }
 
+    @Test func accountApplicabilityReadsNestedClassifierAndRefusesMissingValues() throws {
+        for key in ["network", "primaryCardholderId", "authorizedUsers"] {
+            let descriptor = try field(.financialAccount, key)
+            #expect(descriptor.applicability?.first?.readPath == "identity.kind")
+            for raw: JSONValue in [
+                ["identity": ["kind": "bank"]], [:], ["identity": .null],
+                ["identity": ["kind": "future_kind"], "network": "visa"],
+            ] {
+                #expect(descriptor.applicabilityRefusal(in: raw) == "Only applies to credit-card accounts.")
+            }
+            // Empty applicable fields and effective inherited values remain eligible for actions.
+            #expect(descriptor.applicabilityRefusal(in: ["identity": ["kind": "credit_card"]]) == nil)
+        }
+        #expect(try field(.financialAccount, "identity").applicabilityRefusal(in: [:]) == nil)
+    }
+
     // MARK: - Server-composed text
 
     @Test func structuredDetailFieldsDeclareWhereTheServerPutsTheirText() throws {

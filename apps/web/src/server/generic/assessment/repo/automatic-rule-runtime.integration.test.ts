@@ -132,7 +132,7 @@ const card = async (ctx: Ctx) => {
   return createRepoEntity(ctx, "financialAccount", {
     name: "Synthetic Card",
     ledgerPartyId: owner.output.id,
-    provisional: false,
+
     identity: { kind: "credit_card", network: "visa" },
     sourceAliases: [
       {

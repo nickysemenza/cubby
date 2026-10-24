@@ -350,7 +350,7 @@ describe("source claim identity round trip", () => {
         authorizedUsers: [],
         fundingPeriods: [],
         cardNumbers: [],
-        provisional: false,
+
         sourceAliases: [],
         ledgerPartyId: null,
         providerVendorId: null,

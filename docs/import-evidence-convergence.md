@@ -19,13 +19,13 @@ as posted. Transfers, card payments and ordinary income remain settlement-only.
 Booking links recorded Expenses or creates one bare Purchase and one lump
 Expense. Purchases created from bank evidence have no invented itemization,
 order identifier or printed total. New bare Purchases preserve a live member
-account owner as purchaser, otherwise use the live primary member of a confirmed
+account owner as purchaser, otherwise use the live primary member of a
 household credit card only when no authorized-user period includes the spending
 date (transaction date, then posted date). Otherwise-supported spending on a live,
-non-provisional, household-owned credit card books with an unknown individual
+household-owned credit card books with an unknown individual
 purchaser, including shared access or missing primary-cardholder evidence. A
 household is never stored as a member purchaser override. Missing/deleted owners,
-guest owners, provisional/deleted accounts and household bank accounts remain
+guest owners, deleted accounts and household bank accounts remain
 guarded. Explicit member choices and an existing Purchase's overrides and
 inherited receipt/order/member evidence remain authoritative. Funding attribution
 remains its own dated contract.

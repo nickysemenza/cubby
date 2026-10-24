@@ -2,6 +2,7 @@ import type { LedgerPartyShortcode } from "@cubby/schemas/identifiers";
 import { ledgerPartyKind } from "@cubby/schemas/ledger-party";
 import { type SQL, sql } from "drizzle-orm";
 
+import { effectiveFieldSql } from "~/server/db/computed/effective-field";
 import { soleCardAccessSql } from "~/server/domains/financial-account/repo/purchaser";
 import {
   purchaseMailMembersSql,
@@ -43,7 +44,7 @@ const purchasePurchasersSql = (purchases: SQL) => sql`
     JOIN "FinancialAccount" account ON account.id = ft."accountId"
     JOIN (${purchaseMembersSql(sql`SELECT * FROM purchase`, sql`SELECT * FROM mail`)}) order_member
       ON order_member.id = purchase.id
-    LEFT JOIN "LedgerParty" holder ON holder.id = account."primaryCardholderId"
+    LEFT JOIN "LedgerParty" holder ON holder.id = ${effectiveFieldSql("financialAccount", "primaryCardholderId", "account")}
       AND holder."deletedAt" IS NULL AND holder.kind = ${ledgerPartyKind.enum.member}
   ), paying AS (
     -- A paying card is a live account with a positive allocation; its holder

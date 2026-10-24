@@ -81,7 +81,7 @@ attribution journey.
 ## Card access, purchaser, and funding dates
 
 A credit card's `primaryCardholderId` identifies its primary member independently
-of the account's `ledgerPartyId` and inventory-owner default. `authorizedUsers`
+of funding and the inventory-owner default. It inherits the live member `ledgerPartyId` on credit cards until an explicit member or None overrides it. Reset restores live inheritance; household and guest parties supply no default. Existing member selections remain explicit. `authorizedUsers`
 records member memberships with inclusive `validFrom`/`validTo` dates (null is an
 open endpoint). History details link each Ledger Party beside its date bounds on both web and
 Apple clients. Every non-cash account can name a provider through
@@ -92,6 +92,10 @@ remains a separate credit-card enum. Multiple accounts, including distinct rewar
 and merchant-credit balances, may share the same provider and owner. Stored-value
 payment evidence resolves only when exactly one eligible account matches; ambiguous
 balances require explicit payment-account evidence.
+
+Network, primary cardholder and authorized users are inapplicable to non-credit-card accounts: table and detail show a read-only dash with a hover/focus explanation, without suggestion actions. The generic renderer applies the same treatment to existing same-record `not_allowed` classification policies across entities. Applicable empty values retain their normal controls.
+
+Accounts have no provisional state or confirmation workflow. Imports create ordinary accounts immediately; identity, ownership, access-period and settlement-evidence checks still govern automatic booking. Historical audit records are retained.
 
 Provider, network and primary cardholder use reviewed Jev/Clef field suggestions.
 Saved account names, identity, notes and source aliases supply evidence; a Vendor
@@ -108,7 +112,7 @@ unchanged. The generic suggestion framework chooses among reference and enum
 candidates; it does not generate structured facts or dated history rows.
 Authorized-user memberships, funding periods, card-number history and every
 `validFrom`/`validTo` remain explicitly entered; no account-specific AI extractor
-fills them. Provisional is cleared only through member confirmation.
+fills them.
 A primary cardholder cannot also be an authorized user. Outside
 those memberships, the household's sole-use rule identifies the primary member
 as purchaser. Multiple paying accounts must all agree on that sole user.

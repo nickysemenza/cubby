@@ -475,12 +475,6 @@ export const productIdentifierOutsideIssuerSchema = z.object({
   kinds: z.array(z.string()),
 });
 
-export const provisionalFinancialAccountSchema = z.object({
-  id: financialAccountShortcode,
-  name: z.string(),
-  transactionCount: z.number().int(),
-});
-
 /**
  * A broken `FinancialTransactionAllocation` invariant. Every reason has a
  * mechanical cause and a definite right answer, so this is a `defect`, not a
@@ -763,13 +757,6 @@ export const problemDetectors = {
     "fast",
     "defect",
     productIdentifierOutsideIssuerSchema,
-  ),
-  // Coverage: receipts keep minting provisional accounts, so the list never
-  // stays empty. The fix is a link to the real provider account.
-  provisionalFinancialAccounts: detector(
-    "fast",
-    "coverage",
-    provisionalFinancialAccountSchema,
   ),
   financialTransactionAllocationDefects: detector(
     "fast",

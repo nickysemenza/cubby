@@ -32,7 +32,6 @@ const account = {
 describe("financial account contracts", () => {
   it("accepts representative identity variants and rejects invalid last four", () => {
     expect(financialAccountCreateInput.parse(account)).toMatchObject({
-      provisional: false,
       sourceAliases: [],
     });
     expect(

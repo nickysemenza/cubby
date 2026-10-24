@@ -790,7 +790,7 @@ describe("purchase repository — mergePurchases", () => {
           note: null,
         },
       ],
-      provisional: false,
+
       sourceAliases: [],
       notes: null,
     });

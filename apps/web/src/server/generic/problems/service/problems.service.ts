@@ -1277,12 +1277,6 @@ export const findFastProblems = async (db: Database): Promise<ProblemsFast> => {
             "duplicate-financial-account-source-aliases",
             allProblemsSchema.shape.duplicateFinancialAccountSourceAliases,
           ),
-        provisionalFinancialAccounts: () =>
-          diagnosticItems(
-            db,
-            "provisional-financial-accounts",
-            allProblemsSchema.shape.provisionalFinancialAccounts,
-          ),
         invalidFinancialJson: () =>
           diagnosticItems(
             db,
@@ -1334,7 +1328,6 @@ export const findFastProblems = async (db: Database): Promise<ProblemsFast> => {
     duplicateFinancialAccountSourceAliases:
       r.duplicateFinancialAccountSourceAliases.items,
     productIdentifiersOutsideIssuer: r.productIdentifiersOutsideIssuer.items,
-    provisionalFinancialAccounts: r.provisionalFinancialAccounts.items,
     invalidFinancialJson: r.invalidFinancialJson.items,
     incompleteTransactionImports: r.incompleteTransactionImports.items,
     referentialLivenessViolations: r.referentialLivenessViolations.items,

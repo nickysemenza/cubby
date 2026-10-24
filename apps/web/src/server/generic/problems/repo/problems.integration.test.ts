@@ -866,7 +866,7 @@ describe("problems — charges not reconciling", () => {
           note: null,
         },
       ],
-      provisional: false,
+
       sourceAliases: [],
       notes: null,
     });
@@ -988,7 +988,7 @@ describe("problems — purchase financial settlement mismatches", () => {
           note: null,
         },
       ],
-      provisional: false,
+
       sourceAliases: [],
       notes: null,
     });

@@ -1153,7 +1153,12 @@ struct EntityListView: View {
         _ field: FieldDescriptor, row: EntityRow, fact: EntityRowPresentation.Fact?
     ) -> some View {
         Group {
-            if let fact {
+            if let reason = field.applicabilityRefusal(in: row.raw) {
+                Text("—").foregroundStyle(.tertiary)
+                    .help(reason)
+                    .focusable()
+                    .accessibilityLabel("\(field.label): Not applicable. \(reason)")
+            } else if let fact {
                 HStack(spacing: FieldGuideTokens.Space.xs) {
                     if field.listRenderer == .dataQuality {
                         if EntityRowPresentation.needsData(in: row) {

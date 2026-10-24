@@ -260,7 +260,8 @@ struct FieldsSectionView: View {
 
     @ViewBuilder
     private func resolutionActions(_ field: FieldDescriptor) -> some View {
-        if let resolved = FieldResolutionPresentation(raw: row.raw, field: field),
+        if field.applicabilityRefusal(in: row.raw) == nil,
+            let resolved = FieldResolutionPresentation(raw: row.raw, field: field),
             descriptor.key.nativeActions.contains(.update)
         {
             ForEach(resolved.actions(field: field)) { action in
@@ -275,7 +276,8 @@ struct FieldsSectionView: View {
     }
 
     private func isInteractive(_ field: FieldDescriptor) -> Bool {
-        field.reference != nil || field.detailRenderer == .recipeSource
+        guard field.applicabilityRefusal(in: row.raw) == nil else { return false }
+        return field.reference != nil || field.detailRenderer == .recipeSource
             || field.format == "external-link"
             || FieldResolutionPresentation(raw: row.raw, field: field)?.isInherited == true
     }
@@ -289,7 +291,9 @@ struct FieldsSectionView: View {
 
     @ViewBuilder
     private func macWideField(_ field: FieldDescriptor) -> some View {
-        if field.controlKind == .textarea,
+        if field.applicabilityRefusal(in: row.raw) != nil {
+            fieldRowWithResolutionActions(field)
+        } else if field.controlKind == .textarea,
             let value = EntityFieldValue.text(in: row.raw, field: field, surface: "detail")
         {
             VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
@@ -313,7 +317,9 @@ struct FieldsSectionView: View {
 
     @ViewBuilder
     private func macGridValue(_ field: FieldDescriptor) -> some View {
-        if let reference = EntityFieldValue.reference(in: row.raw, field: field) {
+        if let reason = field.applicabilityRefusal(in: row.raw) {
+            inapplicableValue(field, reason: reason)
+        } else if let reference = EntityFieldValue.reference(in: row.raw, field: field) {
             VStack(alignment: .leading, spacing: 2) {
                 NavigationLink(value: Route.entityDetail(reference.entity, id: reference.id)) {
                     Text(reference.name ?? reference.id).foregroundStyle(.tint)
@@ -358,6 +364,13 @@ struct FieldsSectionView: View {
         }
     }
 
+    private func inapplicableValue(_ field: FieldDescriptor, reason: String) -> some View {
+        Text("—").foregroundStyle(.tertiary)
+            .help(reason)
+            .focusable()
+            .accessibilityLabel("\(field.label): Not applicable. \(reason)")
+    }
+
     private func displayText(_ field: FieldDescriptor) -> String? {
         let value = EntityFieldValue.text(in: row.raw, field: field, surface: "detail")
         if summary, value == nil,
@@ -383,6 +396,7 @@ struct FieldsSectionView: View {
             guard let field = descriptor.field(key), key != descriptor.titleField, key != "id" else {
                 return nil
             }
+            if field.applicabilityRefusal(in: row.raw) != nil { return field }
             if NativePresentationCoverage.unsupportedDetail(field) != nil { return nil }
             if field.detailRenderer == .expenseSpendingCategory
                 || field.detailRenderer == .spendingCategorySummary
@@ -405,7 +419,9 @@ struct FieldsSectionView: View {
 
     @ViewBuilder
     private func fieldRow(_ field: FieldDescriptor) -> some View {
-        if field.reference?.multiple == true {
+        if let reason = field.applicabilityRefusal(in: row.raw) {
+            LabeledContent(field.label) { inapplicableValue(field, reason: reason) }
+        } else if field.reference?.multiple == true {
             RecordReferenceList(
                 field: field, row: row, subject: EntityRef(entity: descriptor.key, id: row.id))
         } else if field.itemsPath != nil {

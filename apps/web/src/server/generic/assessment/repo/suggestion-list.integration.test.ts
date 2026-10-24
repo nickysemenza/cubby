@@ -449,7 +449,7 @@ describe("cross-family Suggestion list", () => {
       action: "update",
       entity: "financialAccount",
       id: account.output.id,
-      data: { ledgerPartyId: owner.output.id, provisional: false },
+      data: { ledgerPartyId: owner.output.id },
     });
     const category = await createEntity(
       buildKernelContext(ctx.db, ctx.actor.userId),

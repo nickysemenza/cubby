@@ -21,7 +21,6 @@ describe("financial transaction descriptor processor filter", () => {
       name: "Synthetic descriptor card",
       identity: { kind: "cash" },
       ledgerPartyId: party.shortcode,
-      provisional: false,
     });
     const charges = new Map<string, string>();
     for (const [index, rawDescription] of [

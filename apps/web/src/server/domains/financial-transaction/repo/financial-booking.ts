@@ -33,7 +33,7 @@ import { createExpense } from "~/server/domains/expense/repo/crud";
 import { spendingClassificationRevision } from "~/server/domains/expense/repo/expense-category-resolution";
 import {
   accountPurchaserKey,
-  confirmedHouseholdCard,
+  liveHouseholdCard,
   financialAccountPurchaser,
   loadAccountPurchaserProofs,
 } from "~/server/domains/financial-account/repo/purchaser";
@@ -306,7 +306,7 @@ export async function previewFinancialBooking(
   if (!purchaseId && !input.purchaserId) {
     const purchaser =
       account && financialAccountPurchaser(account, purchaserProof);
-    if (!purchaser && !(account && confirmedHouseholdCard(account)))
+    if (!purchaser && !(account && liveHouseholdCard(account)))
       return fail(
         "Choose a live member purchaser or confirm a household credit card before creating a bare Purchase.",
       );

@@ -593,7 +593,25 @@ const compileInherit = (
         throw new EntityDeclarationError(
           `${context}.from ${source.path} must end at a stored field of a related record.`,
         );
-      return { kind: "effective", hops, field: terminal, column };
+      let when: { column: string; value: string } | null = null;
+      if (source.when) {
+        const predicate = source.when;
+        const condition = target.fieldModel.storage.find(
+          (field) => field.key === predicate.field,
+        );
+        if (!condition || !sqlWord.test(source.when.value))
+          throw new EntityDeclarationError(
+            `${context}.from ${source.path} requires a stored condition field and a plain-word value.`,
+          );
+        when = { column: condition.column, value: source.when.value };
+      }
+      return {
+        kind: "effective",
+        hops,
+        field: terminal,
+        column,
+        ...(when ? { when } : {}),
+      };
     });
     compiled[field.key] = {
       column: stored.column,

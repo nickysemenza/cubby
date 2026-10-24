@@ -78,7 +78,6 @@ describe("financial-only Email evidence", () => {
       name: "Synthetic checking",
       identity: { kind: "cash" },
       ledgerPartyId: party.shortcode,
-      provisional: false,
     });
     const posted = await createRepoEntity(ctx, "financialTransaction", {
       accountId: account.output.id,

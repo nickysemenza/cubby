@@ -1,3 +1,4 @@
+import { declaredClassificationPolicies } from "@cubby/schemas/classification-field-policy";
 /**
  * The only implementation of inherited values: a field that declares
  * `resolution.inherit` reads its effective value, its fallback, and the
@@ -64,6 +65,35 @@ const name = (alias: string) => sql.raw(`"${alias}"`);
 const literal = (value: string) => sql.raw(`'${value}'`);
 const live = (alias: string, softDelete: boolean) =>
   softDelete ? sql` AND ${ref(alias, "deletedAt")} IS NULL` : sql``;
+
+/** Same-record field policies gate effective values as well as client editing. */
+const applicableSql = (entity: Entity, field: string, alias: string): SQL => {
+  const predicates = Object.values(declaredClassificationPolicies).flatMap(
+    (policy) => {
+      if (policy.target.entity !== entity || policy.target.reference !== null)
+        return [];
+      const declaration = policy.fields.find((item) => item.field === field);
+      if (!declaration) return [];
+      let value: SQL = ref(alias, policy.column);
+      const segments = policy.readPath.split(".").slice(1);
+      for (const [index, segment] of segments.entries())
+        value =
+          index === segments.length - 1
+            ? sql`${value}->>${literal(segment)}`
+            : sql`${value}->${literal(segment)}`;
+      const choices = Object.entries(declaration.byValue).map(
+        ([key, status]) =>
+          sql`WHEN ${value} = ${literal(key)} THEN ${sql.raw(status === "not_allowed" ? "false" : "true")}`,
+      );
+      return [
+        sql`CASE ${sql.join(choices, sql` `)} ELSE ${sql.raw(declaration.otherwise === "not_allowed" ? "false" : "true")} END`,
+      ];
+    },
+  );
+  return predicates.length
+    ? sql`(${sql.join(predicates, sql` AND `)})`
+    : sql`true`;
+};
 
 /** Whether the row's own stored value decides, over a row alias. */
 const ownDecides = (chain: GeneratedInherit, alias: string): SQL => {
@@ -230,7 +260,7 @@ const sourceSql = (
     case "effective": {
       const path = pathFrom(entity, source.hops, alias, depth, `s${prio}p`);
       const decided = name(`ih${depth}e${prio}`);
-      return sql`SELECT ${rank} AS prio, ${decided}.v, ${decided}.src FROM ${path.tables} CROSS JOIN LATERAL (${decisionSql(path.target, source, path.leaf, depth + 1)}) ${decided} WHERE ${path.where}`;
+      return sql`SELECT ${rank} AS prio, ${decided}.v, ${decided}.src FROM ${path.tables} CROSS JOIN LATERAL (${decisionSql(path.target, source, path.leaf, depth + 1)}) ${decided} WHERE ${path.where}${source.when ? sql` AND ${ref(path.leaf, source.when.column)} = ${literal(source.when.value)}` : sql``}`;
     }
   }
 };
@@ -250,7 +280,7 @@ const fallbackRowSql = (
         sourceSql(entity, chain, source, index + 1, alias, depth),
       ),
       sql` UNION ALL `,
-    )}) ${row} ORDER BY ${row}.prio LIMIT 1`,
+    )}) ${row} WHERE ${applicableSql(entity, inheritedFieldOfColumn(entity, chain.column) ?? chain.column, alias)} ORDER BY ${row}.prio LIMIT 1`,
   };
 };
 
@@ -272,7 +302,7 @@ const effectiveSql = (
   depth: number,
 ): SQL => {
   const chain = requireChain(entity, field);
-  const value = sql`CASE WHEN ${ownDecides(chain, alias)} THEN ${ownValue(chain, alias)} ELSE ${inheritedSql(entity, chain, alias, depth)} END`;
+  const value = sql`CASE WHEN NOT ${applicableSql(entity, field, alias)} THEN NULL WHEN ${ownDecides(chain, alias)} THEN ${ownValue(chain, alias)} ELSE ${inheritedSql(entity, chain, alias, depth)} END`;
   return chain.empty === "array" ? sql`COALESCE(${value}, '{}')` : value;
 };
 

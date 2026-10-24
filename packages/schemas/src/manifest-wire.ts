@@ -101,6 +101,12 @@ export const manifestWire = {
     key: "[string]",
     primary: "FieldCollectionPrimary~",
   }),
+  FieldApplicability: record({
+    readPath: "string",
+    byValue: "[string:boolean]",
+    otherwise: "boolean",
+    reason: "string",
+  }),
   FieldDescriptor: record(
     {
       key: "string",
@@ -114,6 +120,7 @@ export const manifestWire = {
       nullable: "boolean",
       reference: "FieldReference~",
       explanation: "FieldExplanation~",
+      applicability: "[FieldApplicability]?",
       resolution: "FieldResolutionDescriptor~",
       controlKind: "EntityControlKind~",
       controlRenderer: "ControlRendererID~",

@@ -125,14 +125,6 @@ const problemActionCapabilities = {
       target: "item",
     }),
   ],
-  provisionalFinancialAccounts: [
-    action({
-      id: "link-account",
-      label: "Link account",
-      scope: "item",
-      target: "item",
-    }),
-  ],
   vendorsWithoutLogos: [
     action({
       id: "fetch-logo",

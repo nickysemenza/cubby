@@ -63,7 +63,6 @@ import { actualExpenseSql } from "~/server/db/helpers/predicates";
 import {
   email,
   expense,
-  financialAccount,
   financialTransaction,
   image,
   product,
@@ -612,21 +611,6 @@ async function workQueueProjection(
         nextAction: "Inspect current progress and retained execution evidence.",
       },
       key: "execution:run",
-    }),
-    ...workQueueCandidate(scope, {
-      entity: "financialAccount",
-      table: sql`${financialAccount}`,
-      id: sql`"FinancialAccount".shortcode`,
-      name: sql`"FinancialAccount".name`,
-      owners: sql`ARRAY["FinancialAccount"."ledgerPartyId"]`,
-      where: sql`"FinancialAccount"."deletedAt" IS NULL AND ${gapCondition("financialAccount", "financial_account_unclaimed")}`,
-      details: {
-        source: "account",
-        kind: "review",
-        reason: "Provisional financial account",
-        nextAction: "Claim the account using provider evidence.",
-      },
-      key: "account:provisional",
     }),
     // An account's own Work counts its Transaction suggestions; the global
     // view has one row for the family, below.

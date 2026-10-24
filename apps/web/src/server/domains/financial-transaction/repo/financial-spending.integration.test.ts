@@ -66,7 +66,6 @@ describe("shared spending booking", () => {
         : { kind: "cash" },
       ledgerPartyId: household?.output.id ?? owner.output.id,
       primaryCardholderId: sharedCard ? owner.output.id : null,
-      provisional: false,
     });
     const vendor = await createRepoIdentity(ctx, "vendor", {
       name: "Synthetic Orchard",
@@ -307,7 +306,6 @@ describe("shared spending booking", () => {
     "missing",
     "deleted",
     "nonmember",
-    "provisional",
     "deleted-account",
     "noncard",
   ] as const)(
@@ -328,11 +326,9 @@ describe("shared spending booking", () => {
           .set(
             state === "missing"
               ? { primaryCardholderId: null }
-              : state === "provisional"
-                ? { provisional: true }
-                : state === "noncard"
-                  ? { identity: { kind: "cash" } }
-                  : { deletedAt: new Date() },
+              : state === "noncard"
+                ? { identity: { kind: "cash" } }
+                : { deletedAt: new Date() },
           )
           .where(eq(financialAccount.id, account.entityId));
       const spending = await previewFinancialSpending(ctx.db, {
@@ -600,49 +596,47 @@ describe("shared spending booking", () => {
       ).toEqual([{ cost: 42.5 }]);
     },
   );
-  it.each([
-    "missing owner",
-    "guest owner",
-    "provisional",
-    "deleted owner",
-    "bank",
-  ])("holds household purchaser admission for %s", async (mode) => {
-    const { transaction, advice, account, other } = await householdCard(true);
-    if (mode === "guest owner")
-      await getDb(ctx.db)
-        .update(ledgerParty)
-        .set({ kind: "guest" })
-        .where(eq(ledgerParty.id, other.entityId));
-    if (mode === "deleted owner")
-      await getDb(ctx.db).execute(
-        sql`UPDATE "LedgerParty" SET "deletedAt"=now() WHERE id=(SELECT "ledgerPartyId" FROM "FinancialAccount" WHERE id=${account.entityId})`,
-      );
-    await getDb(ctx.db)
-      .update(financialAccount)
-      .set({
-        provisional: false,
-        ...(mode === "missing owner" ? { ledgerPartyId: null } : {}),
-        ...(mode === "guest owner" ? { ledgerPartyId: other.entityId } : {}),
-        ...(mode === "provisional" ? { provisional: true } : {}),
-        ...(mode === "bank"
-          ? {
-              identity: {
-                kind: "bank_account" as const,
-                accountType: "checking" as const,
-              },
-              primaryCardholderId: null,
-              authorizedUsers: [],
-            }
-          : {}),
-      })
-      .where(eq(financialAccount.id, account.entityId));
-    expect(
-      await previewFinancialSpending(ctx.db, {
-        transactionId: transaction.output.id,
-        advice,
-      }),
-    ).toMatchObject({ status: "review_required" });
-  });
+  it.each(["missing owner", "guest owner", "deleted owner", "bank"])(
+    "holds household purchaser admission for %s",
+    async (mode) => {
+      const { transaction, advice, account, other } = await householdCard(true);
+      if (mode === "guest owner")
+        await getDb(ctx.db)
+          .update(ledgerParty)
+          .set({ kind: "guest" })
+          .where(eq(ledgerParty.id, other.entityId));
+      if (mode === "deleted owner")
+        await getDb(ctx.db).execute(
+          sql`UPDATE "LedgerParty" SET "deletedAt"=now() WHERE id=(SELECT "ledgerPartyId" FROM "FinancialAccount" WHERE id=${account.entityId})`,
+        );
+      if (mode !== "deleted owner")
+        await getDb(ctx.db)
+          .update(financialAccount)
+          .set({
+            ...(mode === "missing owner" ? { ledgerPartyId: null } : {}),
+            ...(mode === "guest owner"
+              ? { ledgerPartyId: other.entityId }
+              : {}),
+            ...(mode === "bank"
+              ? {
+                  identity: {
+                    kind: "bank_account" as const,
+                    accountType: "checking" as const,
+                  },
+                  primaryCardholderId: null,
+                  authorizedUsers: [],
+                }
+              : {}),
+          })
+          .where(eq(financialAccount.id, account.entityId));
+      expect(
+        await previewFinancialSpending(ctx.db, {
+          transactionId: transaction.output.id,
+          advice,
+        }),
+      ).toMatchObject({ status: "review_required" });
+    },
+  );
   it("refuses changed invalid primary evidence while the purchaser remains unknown", async () => {
     const { owner, transaction, advice } = await householdCard(true);
     await getDb(ctx.db)
@@ -1451,7 +1445,7 @@ describe("shared spending booking", () => {
     });
     await getDb(ctx.db)
       .update(financialAccount)
-      .set({ provisional: true })
+      .set({ ledgerPartyId: null })
       .where(eq(financialAccount.shortcode, account.output.id));
     await expect(
       commitFinancialSpending(ctx.db, plan, ctx.actor),

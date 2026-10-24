@@ -102,11 +102,6 @@ describe("buildFinancialAccountWhere", () => {
 
   it.each([
     { name: "name", filters: { search: "checking" }, contains: '"name"' },
-    {
-      name: "provisional",
-      filters: { provisional: true },
-      contains: '"provisional"',
-    },
   ])(
     "still narrows by $name (declared stored filter)",
     async ({ filters, contains }) => {

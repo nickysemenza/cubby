@@ -180,6 +180,7 @@ describe("declared entity displays", () => {
   it("keeps allocated category links when the scalar resolution is null", () => {
     const harness = createBrowserTestHarness();
     const record = {
+      lineKind: "principal",
       spendingCategoryId: null,
       spendingCategoryName: null,
       fieldResolutions: {
@@ -295,6 +296,7 @@ describe("declared entity displays", () => {
         {renderDetailFieldValue(
           "financialAccount",
           {
+            identity: { kind: "credit_card" },
             authorizedUserItems: [
               {
                 entity: "ledgerParty",
@@ -1383,3 +1385,69 @@ it("edits the effective inherited checkbox and restores the nullable override", 
   expect(screen.getByText("Undecided")).toBeVisible();
   harness.dispose();
 });
+
+it.each(["network", "primaryCardholderId"])(
+  "makes an inapplicable account %s read-only on list and detail",
+  async (key) => {
+    const record = {
+      id: "synthetic-account",
+      identity: { kind: "bank_account" },
+      network: null,
+      primaryCardholderId: null,
+    };
+    const field = fieldOf("financialAccount", key);
+    const view = render(
+      <>{renderDetailFieldValue("financialAccount", record, field)}</>,
+    );
+    const dash = screen.getByRole("note", {
+      name: "Not applicable. Only applies to credit-card accounts.",
+    });
+    expect(dash).toHaveTextContent("—");
+    expect(dash).toHaveAttribute("tabindex", "0");
+    expect(screen.queryByRole("button")).toBeNull();
+    view.unmount();
+    const save = vi.fn();
+    const helper = createCubbyColumnHelper<typeof record>();
+    const overrides = createCubbyColumnCollection<typeof record>((add) =>
+      add(
+        helper.display({
+          id: key,
+          cell: () => <button>Edit</button>,
+          meta: {
+            cellData: {
+              kind: "text",
+              getCopyPayload: () => null,
+              applyPaste: save,
+              preparePaste: () => "visa",
+              rowWrite: { field: key, save },
+            },
+          },
+        }),
+      ),
+    );
+    const columns = createEntityDisplayColumns(
+      "financialAccount",
+      helper,
+      overrides,
+      { only: [key] },
+    );
+    const [column] = columns.visit((column) => column);
+    if (!column) throw new Error("Expected account field column");
+    render(<>{renderRowCell(column.cell, record)}</>);
+    expect(screen.getByRole("note")).toBeVisible();
+    expect(screen.queryByRole("button")).toBeNull();
+    await runPastePlan({
+      ops: [
+        {
+          row: 0,
+          col: 0,
+          source: { kind: "text", json: "visa", text: "visa" },
+        },
+      ],
+      rows: [record],
+      columnCellData: [column.meta?.cellData ?? null],
+      formatError: String,
+    });
+    expect(save).not.toHaveBeenCalled();
+  },
+);

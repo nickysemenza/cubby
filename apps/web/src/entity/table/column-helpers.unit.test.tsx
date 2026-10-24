@@ -795,29 +795,29 @@ describe("createCurrencyColumn zero handling", () => {
 });
 
 describe("boolean tones come from the roster, not the factory", () => {
-  type ProvisionalRow = { provisional: boolean | null };
+  type PlannedRow = { planned: boolean | null };
   // Inverted against the default: the unresolved state is the flagged one.
-  const provisionalOptions = booleanCellOptions(
-    { true: "Provisional", false: "Known" },
+  const plannedOptions = booleanCellOptions(
+    { true: "Planned", false: "Known" },
     { true: "var(--warning)", false: "var(--positive)" },
   );
 
   it("honours an inverted tone map and matches what other surfaces render", () => {
     const column = createBooleanColumn(
-      createCubbyColumnHelper<ProvisionalRow>(),
-      "provisional",
-      { trueFalseOptions: provisionalOptions },
+      createCubbyColumnHelper<PlannedRow>(),
+      "planned",
+      { trueFalseOptions: plannedOptions },
     );
 
     // The pill the table cell paints must use the same tint the detail page's
-    // `renderOptionCell(…, provisionalOptions)` paints for the same value.
+    // `renderOptionCell(…, plannedOptions)` paints for the same value.
     const inkFor = (value: string) =>
-      provisionalOptions.find((o) => o.value === value)?.color;
+      plannedOptions.find((o) => o.value === value)?.color;
     expect(inkFor("true")).toBe("var(--warning)");
     expect(inkFor("false")).toBe("var(--positive)");
 
-    renderColumn<ProvisionalRow, string | null>(column, { provisional: true });
-    const pill = screen.getByText("Provisional").closest("[data-enum-role]");
+    renderColumn<PlannedRow, string | null>(column, { planned: true });
+    const pill = screen.getByText("Planned").closest("[data-enum-role]");
     expect(pill).toHaveClass("bg-warning-surface");
   });
 });

@@ -45,7 +45,6 @@ describe("server verified financial convergence", () => {
       name: "Synthetic cash",
       identity: { kind: "cash" },
       ledgerPartyId: party.output.id,
-      provisional: false,
     });
     const vendor = await createRepoEntity(ctx, "vendor", {
       name: "Synthetic store",
@@ -89,7 +88,6 @@ describe("server verified financial convergence", () => {
       name: "Synthetic advice account",
       identity: { kind: "cash" },
       ledgerPartyId: owner.output.id,
-      provisional: false,
     });
     await createRepoEntity(ctx, "vendor", { name: "Synthetic advice market" });
     const category = await insertWithShortcode(ctx.db, "spendingCategory", {
@@ -194,7 +192,6 @@ describe("server verified financial convergence", () => {
             validTo: null,
           },
         ],
-        provisional: false,
       });
       const transaction = await createRepoEntity(ctx, "financialTransaction", {
         accountId: account.output.id,
@@ -259,7 +256,6 @@ describe("server verified financial convergence", () => {
           validTo: null,
         },
       ],
-      provisional: false,
     });
     const transaction = await createRepoEntity(ctx, "financialTransaction", {
       accountId: account.output.id,
@@ -306,7 +302,6 @@ describe("server verified financial convergence", () => {
           validTo: null,
         },
       ],
-      provisional: false,
     });
     const transaction = await createRepoEntity(ctx, "financialTransaction", {
       accountId: account.output.id,
@@ -538,7 +533,6 @@ describe("server verified financial convergence", () => {
       name: "Synthetic card 0000",
       identity: { kind: "cash" },
       ledgerPartyId: party.shortcode,
-      provisional: false,
     });
     await createRepoEntity(ctx, "vendor", {
       name: "Synthetic hardware",

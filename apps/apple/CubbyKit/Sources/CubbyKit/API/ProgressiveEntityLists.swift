@@ -71,6 +71,11 @@ extension CubbyClient {
         for field in descriptor.fields
         where (field.showInList && !field.listHidden) || field.mobileSlot != nil {
             fields.insert(field.key)
+            for applicability in field.applicability ?? [] {
+                if let root = applicability.readPath.split(separator: ".").first {
+                    fields.insert(String(root))
+                }
+            }
             if let path = field.labelPath,
                 let root = path.split(whereSeparator: { $0 == "." || $0 == "[" }).first
             {

@@ -112,9 +112,8 @@ describe("detail filter link route contracts", () => {
     expect(
       entitySearch.financialAccount.schema.parse({
         identity: "credit_card",
-        provisional: "true",
       }),
-    ).toMatchObject({ identity: "credit_card", provisional: "true" });
+    ).toMatchObject({ identity: "credit_card" });
 
     expect(
       entitySearch.financialTransaction.schema.parse({

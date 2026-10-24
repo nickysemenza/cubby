@@ -59,7 +59,6 @@ export type DiagnosticKey =
   | "duplicate-financial-transaction-source-refs"
   | "duplicate-financial-account-source-aliases"
   | "product-identifiers-outside-issuer"
-  | "provisional-financial-accounts"
   | "invalid-financial-json"
   | "incomplete-transaction-imports"
   | "title-derivable-unit-size"

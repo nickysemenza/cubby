@@ -193,7 +193,7 @@ const card = async (ctx: Ctx) => {
   return createRepoIdentity(ctx, "financialAccount", {
     name: "Synthetic Card",
     ledgerPartyId: owner.output.id,
-    provisional: false,
+
     identity: { kind: "credit_card", network: "visa" },
     sourceAliases: [
       {
@@ -1029,7 +1029,6 @@ describe("statement Transaction suggestions", () => {
         await createRepoIdentity(ctx, "financialAccount", {
           name: "Synthetic race account",
           ledgerPartyId: owner.id,
-          provisional: false,
           identity: { kind: "credit_card", network: "visa" },
         })
       ).output;

@@ -75,7 +75,7 @@ describe("consolidated household ledger", () => {
           authorizedUsers: [],
           fundingPeriods: [],
           cardNumbers: [],
-          provisional: false,
+
           sourceAliases: [],
           ledgerPartyId: guest.output.id,
           providerVendorId: null,

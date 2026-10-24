@@ -138,7 +138,7 @@ const FIELD_SUGGEST_DECISION_OVERRIDES = {
     entity: "ledgerParty",
     maxCandidates: REFERENCE_ROSTER_CAP,
     rules:
-      "Choose a primary cardholder only from explicit primary-cardholder or account-holder evidence in saved notes or statement evidence. An authorized user, funding party, purchase frequency, shared funding, an account nickname or inventory ownership never establishes the primary cardholder. Choose none for missing, conflicting or ambiguous evidence. Preserve the saved assignment until explicitly reviewed and applied. Never change Provisional status.",
+      "Choose a primary cardholder only from explicit primary-cardholder or account-holder evidence in saved notes or statement evidence. An authorized user, funding party, purchase frequency, shared funding, an account nickname or inventory ownership never establishes the primary cardholder. Choose none for missing, conflicting or ambiguous evidence. Preserve the saved assignment until explicitly reviewed and applied.",
     subject: (basis) => renderSubject("financialAccount", basis),
   } satisfies ReferenceSuggestDecision,
   "financialAccount.providerVendorId": {
@@ -146,7 +146,7 @@ const FIELD_SUGGEST_DECISION_OVERRIDES = {
     entity: "vendor",
     maxCandidates: Number.MAX_SAFE_INTEGER,
     rules:
-      "Choose the organization providing or servicing this account from explicit bank, issuer, custodian, loan-servicer, wallet or stored-value evidence. A card's co-brand, employer, payment network or import source does not establish its provider. Rewards belong to the organization operating the rewards program, not the retailer where points were redeemed. Cash has no provider. Choose none for missing, conflicting or ambiguous evidence. Preserve explicit saved choices until reviewed and applied; never change account kind or Provisional status.",
+      "Choose the organization providing or servicing this account from explicit bank, issuer, custodian, loan-servicer, wallet or stored-value evidence. A card's co-brand, employer, payment network or import source does not establish its provider. Rewards belong to the organization operating the rewards program, not the retailer where points were redeemed. Cash has no provider. Choose none for missing, conflicting or ambiguous evidence. Preserve explicit saved choices until reviewed and applied; never change account kind.",
     subject: (basis) => renderSubject("financialAccount", basis),
   } satisfies ReferenceSuggestDecision,
   "vendor.defaultSpendingCategoryId": {

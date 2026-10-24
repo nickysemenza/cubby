@@ -15,7 +15,8 @@ const classifierValues = (
   const field = owner.fieldModel.fields.find(
     (candidate) => candidate.key === policy.classifier,
   );
-  const options = field?.control?.options ?? null;
+  const options =
+    field?.control?.options ?? field?.display.valueOptions ?? null;
   if (options === null || options.length === 0)
     throw new EntityDeclarationError(
       `${context}.classifier ${policy.classifier} must be an enum field of ${owner.key} with select options.`,
@@ -160,6 +161,14 @@ export const renderClassificationPolicyArtifacts = (
         {
           owner: owner.key,
           classifier: policy.classifier,
+          readPath:
+            owner.fieldModel.fields.find(
+              (field) => field.key === policy.classifier,
+            )?.display.readPath ?? policy.classifier,
+          column:
+            owner.fieldModel.storage.find(
+              (field) => field.key === policy.classifier,
+            )?.column ?? policy.classifier,
           values,
           target: policy.target
             ? { ...policy.target }
@@ -176,6 +185,8 @@ export const renderClassificationPolicyArtifacts = (
     "type DeclaredClassificationPolicy = Readonly<{\n" +
     "  owner: string;\n" +
     "  classifier: string;\n" +
+    "  readPath: string;\n" +
+    "  column: string;\n" +
     "  values: readonly string[];\n" +
     "  target: Readonly<{ entity: string; reference: string | null }>;\n" +
     "  enforced: boolean;\n" +

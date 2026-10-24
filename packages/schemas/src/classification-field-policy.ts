@@ -146,3 +146,65 @@ export const declaredPoliciesGoverning = (
 export const classificationReference = (
   id: DeclaredClassificationPolicyId,
 ): string | null => declaredClassificationPolicies[id].target.reference;
+
+/** Classifiers may be scalar fields or declared projections of a structured field. */
+export function classificationValue<TRecord extends object>(
+  policy: { readonly classifier: string; readonly readPath: string },
+  record: TRecord,
+): string | null {
+  let value: unknown = record;
+  for (const segment of policy.readPath.split(".")) {
+    if (typeof value === "string") {
+      try {
+        value = JSON.parse(value);
+      } catch {
+        return null;
+      }
+    }
+    if (value === null || typeof value !== "object") return null;
+    value = Object.entries(value).find(([key]) => key === segment)?.[1];
+  }
+  return typeof value === "string" ||
+    typeof value === "number" ||
+    typeof value === "boolean"
+    ? String(value)
+    : null;
+}
+
+/** A refused same-record field has no editor or suggestion action on any client. */
+export function classificationFieldRefusal<TRecord extends object>(
+  entity: string,
+  record: TRecord,
+  field: string,
+): string | null {
+  for (const policy of Object.values(declaredClassificationPolicies)) {
+    if (policy.target.entity !== entity || policy.target.reference !== null)
+      continue;
+    const declaration = policy.fields.find((item) => item.field === field);
+    if (!declaration) continue;
+    const classifier = classificationValue(policy, record);
+    const byValue: Readonly<Record<string, FieldPolicyValue>> =
+      declaration.byValue;
+    if (
+      ((classifier === null ? undefined : byValue[classifier]) ??
+        declaration.otherwise) === "not_allowed"
+    )
+      return "refusal" in declaration && typeof declaration.refusal === "string"
+        ? declaration.refusal
+        : "This field does not apply to this record.";
+  }
+  return null;
+}
+
+export function classificationFieldDependencies(
+  entity: string,
+  field: string,
+): string[] {
+  return Object.values(declaredClassificationPolicies).flatMap((policy) =>
+    policy.target.entity === entity &&
+    policy.target.reference === null &&
+    policy.fields.some((item) => item.field === field)
+      ? [policy.readPath.split(".")[0] ?? policy.classifier]
+      : [],
+  );
+}

@@ -1,3 +1,4 @@
+import { classificationFieldDependencies } from "@cubby/schemas/classification-field-policy";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { BrowserRoutedEntity } from "@cubby/schemas/entity-manifest";
 
@@ -25,6 +26,7 @@ export function listColumnReadFields(
   return [
     ...new Set([
       field.key,
+      ...classificationFieldDependencies(entity, field.key),
       ...referenceFieldReadFields(field),
       ...(field.resolution
         ? ["fieldResolutions", ...Object.keys(field.resolution.reset)]

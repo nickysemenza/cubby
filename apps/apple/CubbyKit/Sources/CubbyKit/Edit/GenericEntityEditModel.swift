@@ -96,10 +96,19 @@ public final class GenericEntityEditModel {
 
     // MARK: - Fields and sections
 
+    /// Draft classifier changes immediately update editor and suggestion eligibility.
+    public var applicabilityRecord: JSONValue {
+        var values: [String: JSONValue] = [:]
+        if case .object(let saved) = original { values = saved }
+        values.merge(draft) { _, draftValue in draftValue }
+        return .object(values)
+    }
+
     /// The fields the editor shows: in the mode's payload roster and with a control.
     public var visibleFields: [FieldDescriptor] {
         let fields = descriptor.fields.filter { field in
             field.controlKind != nil && (isCreate ? field.inCreate : field.inUpdate)
+                && field.applicabilityRefusal(in: applicabilityRecord) == nil
         }
         let hasCollectionControl = fields.contains { $0.collection?.primary != nil }
         return fields.filter {

@@ -22,6 +22,18 @@ private final class EditStub: URLProtocol, @unchecked Sendable {
 @Suite("GenericEntityEditModel", .serialized)
 @MainActor
 struct GenericEntityEditModelTests {
+    @Test func refusedAccountFieldsHaveNoEditorAndBecomeEditableForCreditCards() throws {
+        let model = GenericEntityEditModel(
+            descriptor: EntityCatalog[.financialAccount], mode: .update(id: "FAC-2345"),
+            client: try makeClient(), original: ["identity": ["kind": "bank"]])
+        let refused: Set<String> = ["network", "primaryCardholderId", "authorizedUsers"]
+        #expect(Set(model.visibleFields.map(\.key)).isDisjoint(with: refused))
+        model.draft["identity"] = ["kind": "credit_card"]
+        #expect(refused.isSubset(of: Set(model.visibleFields.map(\.key))))
+        model.draft["identity"] = .null
+        #expect(Set(model.visibleFields.map(\.key)).isDisjoint(with: refused))
+    }
+
     @Test func dateRangePatchReplacesClearsAndRejectsReversedDates() async throws {
         let original: JSONValue = [
             "id": "PRJ-2345", "dates": ["start": "2039-05-10", "end": "2039-05-20"],

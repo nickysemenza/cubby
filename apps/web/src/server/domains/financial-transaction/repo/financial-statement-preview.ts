@@ -63,7 +63,7 @@ const last4FromDescriptor = (descriptor: string) => {
   return match?.[1] ?? null;
 };
 
-const provisionalAccountFor = (
+const newAccountFor = (
   row: FinancialTransactionImportPreviewInput["rows"][number],
 ) => {
   const last4 = last4FromDescriptor(row.account);
@@ -81,7 +81,6 @@ const provisionalAccountFor = (
     name: row.account.trim(),
     identity,
     cardNumbers,
-    provisional: true as const,
     sourceAliases: [
       {
         source: row.source,
@@ -710,7 +709,7 @@ export async function previewFinancialTransactionImport(
         ? parseShortcodeFor("financialAccount", account.shortcode)
         : null,
       accountName: account?.name ?? null,
-      provisionalAccount: account ? null : provisionalAccountFor(row),
+      newAccount: account ? null : newAccountFor(row),
       proposed,
       existingTransactionIds,
       existingTransactions: (alreadyRecorded.length
