@@ -1441,6 +1441,18 @@ export const ENTITY_EDGES = {
   },
   expense: {
     ...edges({
+      "ImportSourceProduct.expenseId": {
+        column: importSourceProduct.expenseId,
+        role: "metadata",
+        label: "receipt lines",
+        description:
+          "The receipt line refers to its current editable Expense; the Expense owns its Product.",
+        liveness: {
+          kind: "allow-target-deleted",
+          reason:
+            "A deleted Expense remains the historical receipt target and contributes no current Product claim.",
+        },
+      },
       "ExpenseAttribution.expenseId": {
         column: expenseAttribution.expenseId,
         role: "composition",

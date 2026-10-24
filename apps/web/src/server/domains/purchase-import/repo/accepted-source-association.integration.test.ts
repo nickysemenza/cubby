@@ -1,9 +1,11 @@
+import { readFileSync } from "node:fs";
+
 import type { ActorContext } from "@cubby/schemas/context";
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
 import { ledgerSourceClaimInput } from "@cubby/schemas/ledger-transfer";
 import { importSourceKind } from "@cubby/schemas/purchase-import";
-import { eq, inArray } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 import { promoteHistoricalAcceptedOrders } from "tooling/historical-accepted-orders";
 import { withTestDb } from "tooling/test-setup";
 import { beforeAll, describe, expect, it } from "vitest";
@@ -35,6 +37,7 @@ import {
 } from "~/server/db/schema";
 import { updateExpense } from "~/server/domains/expense/repo/crud";
 import { mergeProducts } from "~/server/domains/product/repo/merge";
+import { loadProductIdentifierClaims } from "~/server/domains/product/repo/product-identity-claims";
 import { mergePurchases } from "~/server/domains/purchase/repo/purchase";
 import { mergeVendors } from "~/server/domains/vendor/repo/vendor";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
@@ -76,7 +79,14 @@ describe("reviewed accepted source Product association", () => {
   const worldKey = (multi: boolean, unboundSecond: boolean) =>
     `world:${multi}:${unboundSecond}`;
   const seedWorld =
-    (multi: boolean, unboundSecond: boolean) =>
+    (
+      multi: boolean,
+      unboundSecond: boolean,
+      sourceKind:
+        | "receipt_photo"
+        | "browser_order"
+        | "vendor_export" = "receipt_photo",
+    ) =>
     async (db: Database, actor: ActorContext) => {
       const { party, vendor } = await memberImportWorld(db, actor, {
         vendor: { name: "Synthetic photo retailer" },
@@ -102,7 +112,8 @@ describe("reviewed accepted source Product association", () => {
                 : undefined,
             vendorId: vendor.shortcode,
             source: {
-              kind: "receipt_photo",
+              kind:
+                sourceKind === "browser_order" ? "vendor_export" : sourceKind,
               externalKey: "synthetic:photo-association",
               checksum: "a".repeat(64),
             },
@@ -149,6 +160,11 @@ describe("reviewed accepted source Product association", () => {
           },
         ],
       });
+      // Browser capture is retired as an input kind, but retained orders remain editable.
+      if (sourceKind === "browser_order") {
+        await getDb(db).update(importSourceClaim).set({ kind: sourceKind });
+        await getDb(db).update(importPreparedOrder).set({ sourceKind });
+      }
       const photographed = await createProductIdentityFixture(
         db,
         makeProductInput({ name: "Synthetic photographed household item" }),
@@ -263,6 +279,89 @@ describe("reviewed accepted source Product association", () => {
       snapshot,
     };
   }
+
+  it.each(["browser_order", "vendor_export", "receipt_photo"] as const)(
+    "repairs an unresolved %s Product with an ordinary Expense edit",
+    async (sourceKind) => {
+      const seeded = await seedWorld(
+        false,
+        false,
+        sourceKind,
+      )(ctx.db, ctx.actor);
+      const db = getDb(ctx.db);
+      const [item] = await db.select().from(expense);
+      if (!item) throw new Error("Synthetic imported Expense missing");
+      const before = {
+        sources: await db.select().from(importSourceOrder),
+        observations: await db.select().from(sourceOrderObservation),
+        payments: await db.select().from(purchasePaymentEvidence),
+        allocations: await db.select().from(financialTransactionAllocation),
+        attributions: await db.select().from(expenseAttribution),
+        inventory: await db.select().from(inventoryEntry),
+      };
+      const [binding] = await db.select().from(importSourceProduct);
+      expect(binding).toMatchObject({
+        lineIndex: 0,
+        productId: null,
+        expenseId: item.id,
+      });
+      await updateExpense(
+        ctx.db,
+        parseShortcodeFor("expense", item.shortcode),
+        {
+          productId: seeded.photographed.id,
+          productQuantity: 2,
+        },
+        ctx.actor,
+      );
+      const [after] = await db.select().from(expense);
+      expect(after).toMatchObject({
+        productId: seeded.photographed.entityId,
+        productQuantity: 2,
+        cost: item.cost,
+        date: item.date,
+        purchaseId: item.purchaseId,
+      });
+      expect({
+        sources: await db.select().from(importSourceOrder),
+        observations: await db.select().from(sourceOrderObservation),
+        payments: await db.select().from(purchasePaymentEvidence),
+        allocations: await db.select().from(financialTransactionAllocation),
+        attributions: await db.select().from(expenseAttribution),
+        inventory: await db.select().from(inventoryEntry),
+      }).toEqual(before);
+      expect(await loadProductIdentifierClaims(ctx.db)).toEqual([]);
+    },
+  );
+
+  it("backfills only unambiguous historical receipt Expense references without rewriting records", async () => {
+    const w = await world();
+    await w.db.update(importSourceProduct).set({ expenseId: null });
+    const before = await w.snapshot();
+    const cutover = readFileSync(
+      new URL(
+        "../../../../../drizzle/0024_receipt_expense_binding.sql",
+        import.meta.url,
+      ),
+      "utf8",
+    )
+      .split("--> statement-breakpoint")
+      .at(-1)!;
+    await w.db.execute(sql.raw(cutover));
+    const [bound] = await w.db.select().from(importSourceProduct);
+    expect(bound).toMatchObject({ expenseId: w.item.id, productId: null });
+    expect(await w.snapshot()).toEqual(before);
+    // Two current Expenses for the same original line must never be guessed.
+    const { id: _id, shortcode: _shortcode, ...duplicate } = w.item;
+    await insertWithShortcode(ctx.db, "expense", duplicate);
+    await w.db.update(importSourceProduct).set({ expenseId: null });
+    await w.db.execute(sql.raw(cutover));
+    expect(
+      (await w.db.select().from(importSourceProduct)).map(
+        (row) => row.expenseId,
+      ),
+    ).toEqual([null]);
+  });
 
   type World = Awaited<ReturnType<typeof world>>;
   it.each([
@@ -1949,7 +2048,11 @@ describe("reviewed accepted source Product association", () => {
       { sourceOrderId: sibling.order.id, resolution: w.resolution },
       ctx.actor,
     );
-    expect(await w.db.select().from(importSourceProduct)).toEqual([]);
+    expect(
+      (await w.db.select().from(importSourceProduct)).filter(
+        (row) => row.productId !== null,
+      ),
+    ).toEqual([]);
     await w.db
       .update(expense)
       .set({ productId: null, productQuantity: null })

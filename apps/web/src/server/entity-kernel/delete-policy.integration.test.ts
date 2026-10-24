@@ -800,6 +800,9 @@ async function seedImportSourceClaim(
       .values({
         sourceOrderId: claim.id,
         lineIndex: 0,
+        expenseId: shortcodeByPrefix.get("EXP-")
+          ? await resolveOrThrow(db, "expense", shortcodeByPrefix.get("EXP-")!)
+          : null,
         productId: await resolveOrThrow(db, "product", productCode),
       });
   return run!.id;

@@ -16,6 +16,7 @@ import {
   financialTransactionAllocation,
   importSourceClaim,
   importSourceOrder,
+  importSourceProduct,
   purchase,
   purchasePaymentEvidence,
   sourceOrderObservation,
@@ -513,6 +514,97 @@ describe("accepted source financial reconciliation", () => {
     });
     expect(await snapshot()).toEqual(before);
   });
+
+  it.each([false, true])(
+    "preserves only proven receipt correspondences on replacement (item changed: %s)",
+    async (itemChanged) => {
+      const w = await world();
+      await w.submit("sibling-receipt", "c".repeat(64), candidate, {
+        kind: "receipt_photo",
+        externalKey: "synthetic:sibling-receipt",
+      });
+      const sibling = (await w.database.select().from(importSourceOrder)).find(
+        (row) => row.id !== w.initial.orders[0]!.id,
+      );
+      if (!sibling) throw new Error("Synthetic sibling receipt missing");
+      const item = w.initial.expenses[0]!;
+      await w.database
+        .insert(importSourceProduct)
+        .values({
+          sourceOrderId: sibling.id,
+          lineIndex: 0,
+          expenseId: item.id,
+          productId: null,
+        })
+        .onConflictDoUpdate({
+          target: [
+            importSourceProduct.sourceOrderId,
+            importSourceProduct.lineIndex,
+          ],
+          set: { expenseId: item.id },
+        });
+      const originals = Object.fromEntries(
+        (await w.database.select().from(importSourceOrder)).map((row) => [
+          row.id,
+          row.originalOrder,
+        ]),
+      );
+      await w.submit("review-replacement", "d".repeat(64), {
+        ...candidate,
+        orderedAt: "2026-09-02T18:00:00Z",
+        lines: itemChanged
+          ? [{ ...candidate.lines[0]!, title: "Synthetic replacement item" }]
+          : candidate.lines,
+      });
+      const finding = (await w.database.select().from(runFinding)).find(
+        (row) =>
+          storedImportFix.parse(row.proposedFix)?.kind ===
+          "reconcile_source_order",
+      );
+      if (!finding) throw new Error("Synthetic replacement review missing");
+      const review = await prepareSourceOrderReconciliation(
+        ctx.db,
+        {
+          id: finding.id,
+          resolution: {
+            kind: "replace_lines",
+            expenseIds: [parseShortcodeFor("expense", item.shortcode)],
+            lines: [
+              {
+                lineIndex: 0,
+                expenseId: parseShortcodeFor("expense", item.shortcode),
+                productId: null,
+              },
+            ],
+          },
+        },
+        ctx.actor,
+      );
+      await resolveRunFinding(
+        ctx.db,
+        {
+          id: finding.id,
+          action: "apply",
+          reviewedFingerprint: review.reviewedFingerprint,
+        },
+        ctx.actor,
+      );
+      const bindings = await w.database.select().from(importSourceProduct);
+      expect(bindings).toHaveLength(2);
+      expect(bindings.map((row) => row.expenseId)).toEqual([
+        itemChanged ? null : item.id,
+        itemChanged ? null : item.id,
+      ]);
+      const after = await w.state();
+      expect(after.expenses).toHaveLength(1);
+      expect(after.expenses[0]).toMatchObject({ id: item.id, cost: 40 });
+      expect(
+        Object.fromEntries(
+          after.orders.map((row) => [row.id, row.originalOrder]),
+        ),
+      ).toEqual(originals);
+    },
+  );
 
   it("commits an explicitly reviewed cost correction once and retains the first extraction", async () => {
     const { submit, state, initial, accepted, database } = await world();

@@ -19,6 +19,7 @@ import {
 } from "~/server/db/schema";
 import { deleteProducts } from "~/server/domains/product/repo/crud";
 import { mergeProducts } from "~/server/domains/product/repo/merge";
+import { loadProductIdentifierClaims } from "~/server/domains/product/repo/product-identity-claims";
 import {
   listPurchaseProducts,
   listProductPurchases,
@@ -123,6 +124,11 @@ describe("incomplete itemized purchase identity", () => {
         .select()
         .from(purchase)
         .where(eq(purchase.id, purchaseId));
+      expect(
+        (await loadProductIdentifierClaims(ctx.db)).map(
+          (claim) => claim.productId,
+        ),
+      ).toEqual([(await getDb(ctx.db).select().from(product))[0]!.id]);
       expect(saved).toMatchObject({ date: expectedDate, statedTotal: 24 });
       const items = await getDb(ctx.db).select().from(product);
       expect(items).toHaveLength(1);
@@ -203,6 +209,11 @@ describe("incomplete itemized purchase identity", () => {
           .where(eq(expense.purchaseId, savedPurchaseId)),
       ).toEqual([]);
       const items = await getDb(ctx.db).select().from(product);
+      expect(
+        (await loadProductIdentifierClaims(ctx.db)).map(
+          (claim) => claim.productId,
+        ),
+      ).toEqual([items[0]!.id]);
       expect(items).toHaveLength(1);
       const item = items[0]!;
       expect(await listPurchaseProducts(ctx.db, savedPurchaseId)).toMatchObject(
@@ -323,6 +334,7 @@ describe("incomplete itemized purchase identity", () => {
     await importVendorOrder(ctx.db, input, ctx.actor.userId);
     const [item] = await getDb(ctx.db).select().from(product);
     if (!item) throw new Error("Synthetic Product missing");
+    expect(await loadProductIdentifierClaims(ctx.db, item.id)).toHaveLength(1);
     await getDb(ctx.db)
       .delete(entityLink)
       .where(
@@ -331,6 +343,7 @@ describe("incomplete itemized purchase identity", () => {
           eq(entityLink.toEntityId, item.id),
         ),
       );
+    expect(await loadProductIdentifierClaims(ctx.db, item.id)).toEqual([]);
     expect(await findOrphanedProducts(ctx.db)).not.toEqual(
       expect.arrayContaining([expect.objectContaining({ id: item.shortcode })]),
     );

@@ -242,25 +242,19 @@ same outcome without prescribing an agent runtime.
    item Expenses, explicit `new` or `existing` choices bind uniquely matching,
    unbound, unclaimed principal rows and retain the original source-line
    associations. Amounts, dates, purpose and adjustment rows stay intact.
-   Ambiguous rows, conflicting Products and previously accepted sources require
-   source-order reconciliation review. `purchase_import_read.mail_read.acceptedSourceOrders`
-   supplies accepted order handles and exact source identities; lifecycle-only
-   Purchase links do not supply a repair handle. A known accepted original with missing
-   Product bindings uses `purchase_import.commit_accepted_reconciliation`
-   with its `sourceOrderId` and deliberate attach-only line resolution.
-   An optional `prepare_reconciliation` preview helps inspect the current
-   records; no preview token is required for this Product-only write. Each line names an existing
-   `productId`, or sets `productId: null` and deliberate `newProduct: {kind:
-   "new"}`. New creation requires the known immutable original and its exact
-   original preparation, a unique unbound item Expense, and no competing source
-   ownership. The transaction reads and validates current Expense, preparation,
-   identity and claim state before binding. Extra lifecycle and cash-back
-   source associations alone do not conflict or require individual clearance.
-   Actual conflicting bindings, claims or evidence still refuse. Creation retains the source
-   line and reviewed current binding; the original snapshot stays immutable.
-   Unknown historical observations or missing preparations require evidence
-   review and cannot use this path. Re-importing an accepted original with
-   changed Product choices returns a review finding.
+   To correct a Product on an already-imported item, use the ordinary Expense
+   entity update: set its `productId` and `productQuantity`. Create a missing
+   Product through normal entity creation first. The Expense owns the current
+   Product; retained receipt identifiers follow its live binding. This does
+   not require an accepted-source handle, original preparation or a new import.
+   Keep the item's amount, date, Purchase and other classifications unchanged.
+   Clear `productId` to remove the binding; this also clears its quantity.
+   Read the Expense back to verify. Importing or correcting a Product never
+   receives stock.
+   Use source-order reconciliation for changed itemization or financial facts,
+   rather than for ordinary Product corrections. Its existing accepted-source
+   writer remains available for specialist source-line review; it preserves
+   money and stock and refuses ambiguous or changed original bindings.
    A source-order reconciliation finding whose source differs from manual
    Expenses (a single manual line versus an itemized original) is applied in
    two steps. First `prepare_reconciliation` with the finding `id` and a

@@ -1,13 +1,15 @@
 import type { ProductId } from "@cubby/schemas/identifiers";
 import { acceptedSourceOrder } from "@cubby/schemas/purchase-import";
 import { createLogger } from "@cubby/worker-tracing";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 
 import type { Database } from "~/server/db";
 import { getDb, notDeleted } from "~/server/db/helpers";
 import {
   importSourceProduct,
+  expense,
+  entityLink,
   importSourceOrder,
   importSourceClaim,
   purchase,
@@ -48,7 +50,7 @@ export type DroppedProductIdentifierClaim = {
   error: string;
 };
 
-/** Only an accepted original line and its durable Product binding establish a
+/** A receipt line and its live Expense Product binding establish a
  * claim. A line whose issuer cannot resolve is dropped and reported with the
  * raw resolution error instead of failing every Product's catalog scan. */
 export async function loadProductIdentifierClaims(
@@ -61,7 +63,7 @@ export async function loadProductIdentifierClaims(
   const rows = await getDb(db)
     .select({
       bindingId: importSourceProduct.id,
-      productId: importSourceProduct.productId,
+      productId: product.id,
       lineIndex: importSourceProduct.lineIndex,
       sourceOrderId: importSourceOrder.id,
       sourceClaimId: importSourceClaim.id,
@@ -80,11 +82,38 @@ export async function loadProductIdentifierClaims(
       eq(importSourceClaim.id, importSourceOrder.sourceClaimId),
     )
     .innerJoin(purchase, eq(purchase.id, importSourceOrder.purchaseId))
-    .innerJoin(product, eq(product.id, importSourceProduct.productId))
+    .leftJoin(
+      expense,
+      and(
+        eq(expense.id, importSourceProduct.expenseId),
+        eq(expense.purchaseId, purchase.id),
+        notDeleted(expense),
+      ),
+    )
+    .leftJoin(
+      entityLink,
+      and(
+        eq(entityLink.kind, "purchaseProduct"),
+        eq(entityLink.fromEntityId, purchase.id),
+        eq(entityLink.toEntityId, importSourceProduct.productId),
+        notDeleted(entityLink),
+      ),
+    )
+    // An incomplete order can name Products without inventing an Expense.
+    // That identity must still have its current generic Purchase/Product link.
+    .innerJoin(
+      product,
+      eq(
+        product.id,
+        sql`CASE WHEN ${importSourceProduct.expenseId} IS NOT NULL
+      THEN ${expense.productId} ELSE ${entityLink.toEntityId} END`,
+      ),
+    )
     .where(
       and(
         notDeleted(product),
-        targetId ? eq(importSourceProduct.productId, targetId) : undefined,
+        notDeleted(purchase),
+        targetId ? eq(product.id, targetId) : undefined,
       ),
     )
     .orderBy(importSourceProduct.id);

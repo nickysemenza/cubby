@@ -806,7 +806,10 @@ type ImportSourceAssociationInput = Pick<
   primaryDocumentImageId?: ImportWriterInput["primaryDocumentImageId"];
   screenshotImageId?: ImportWriterInput["screenshotImageId"];
   productBindings?: ReadonlyArray<
-    Pick<typeof importSourceProduct.$inferInsert, "lineIndex" | "productId">
+    Pick<
+      typeof importSourceProduct.$inferInsert,
+      "lineIndex" | "productId" | "expenseId"
+    >
   >;
 };
 
@@ -838,6 +841,7 @@ async function recordOriginalProductBindings(
       sourceOrderId,
       lineIndex: binding.lineIndex,
       productId: binding.productId,
+      expenseId: binding.expenseId,
     })),
   );
 }
@@ -1791,6 +1795,15 @@ export async function importVendorOrder(
           const identity = identityDecisions[lineIndex];
           if (!identity || identity.lineKind !== "principal") continue;
           if (identity.unresolvedReason) {
+            const matches = current.filter((row) =>
+              importedLineMatchesExpense(row, line),
+            );
+            if (matches.length === 1 && matches[0])
+              productLines.push({
+                lineIndex,
+                productId: null,
+                expenseId: parseEntityId("expense", matches[0].id),
+              });
             findingIds.push(
               await fileFinding(
                 tx,
@@ -1845,7 +1858,11 @@ export async function importVendorOrder(
               fields: ["productId", "productQuantity"],
             });
           }
-          productLines.push({ lineIndex, productId });
+          productLines.push({
+            lineIndex,
+            productId,
+            expenseId: parseEntityId("expense", row.id),
+          });
         }
       } else if (decision.kind === "insert") {
         const productsByExternalIdentity = new Map<string, string>();
@@ -1880,7 +1897,6 @@ export async function importVendorOrder(
             },
           );
           const quantity = receiptProductQuantity(productId, line, identity);
-          if (productId) productLines.push({ lineIndex, productId });
           const inserted = await insertWithShortcode(tx, "expense", {
             purchaseId,
             name: line.title,
@@ -1905,6 +1921,7 @@ export async function importVendorOrder(
             productId,
             productQuantity: quantity,
           });
+          productLines.push({ lineIndex, productId, expenseId: inserted.id });
           rowMutations.push({
             targetKind: "expense",
             targetId: inserted.id,

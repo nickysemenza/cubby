@@ -976,7 +976,12 @@ async function buildProductMergePlan(
       productId: importSourceProduct.productId,
     })
     .from(importSourceProduct)
-    .where(inArray(importSourceProduct.productId, liveLoserIds));
+    .where(inArray(importSourceProduct.productId, liveLoserIds))
+    .then((rows) =>
+      rows.flatMap((row) =>
+        row.productId ? [{ ...row, productId: row.productId }] : [],
+      ),
+    );
   const tasks = (
     await db
       .select({ id: task.id, productId: task.subjectProductId })

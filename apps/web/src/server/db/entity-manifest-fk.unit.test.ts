@@ -354,6 +354,11 @@ const NON_GRAPH_ENTITY_FK_EXEMPTIONS = {
     classification: "metadata",
     reason: "idempotency provenance for the purchase created from evidence",
   },
+  "ImportSourceProduct.expenseId": {
+    classification: "metadata",
+    reason:
+      "receipt provenance follows an editable Expense, while the workflow child is not a navigable entity",
+  },
   "ImportSourceProduct.productId": {
     classification: "metadata",
     reason:

@@ -660,6 +660,7 @@ export async function commitSourceOrderReconciliation(
   const audit = [];
   const reused = new Set<typeof expense.$inferSelect.id>();
   const resolvedBindings = [];
+  const lineExpenses = new Map<number, typeof expense.$inferSelect.id>();
   const productsByExternalIdentity = new Map<string, string>();
   const selected =
     resolution.kind === "replace_lines"
@@ -713,6 +714,7 @@ export async function commitSourceOrderReconciliation(
         : null;
     resolvedBindings.push({ lineIndex: binding.lineIndex, productId });
     if (resolution.kind === "attach_only") {
+      if (existing) lineExpenses.set(binding.lineIndex, existing.id);
       if (
         existing &&
         ((!existing.productId && productId) || existing.purchaseId === null)
@@ -814,6 +816,7 @@ export async function commitSourceOrderReconciliation(
       });
     }
     if (!row) throw new Error("The reviewed Expense changed during commit.");
+    lineExpenses.set(binding.lineIndex, row.id);
     const allocations = current.attributions.filter(
       (allocation) => allocation.lineIndex === binding.lineIndex,
     );
@@ -991,17 +994,81 @@ export async function commitSourceOrderReconciliation(
     .returning();
   if (!association)
     throw new Error("Accepted source association was not persisted.");
-  if (!state.association)
-    for (const binding of firstObservation.productBindings)
-      if (binding.productId)
+  if (resolution.kind === "replace_lines") {
+    const selectedIds = new Set(selected.map((row) => row.id));
+    // A reused Expense may now describe a different item. Check every receipt
+    // that referred to it, including sibling sources, before retaining its SKU.
+    for (const prior of state.productBindings) {
+      if (!prior.expenseId || !selectedIds.has(prior.expenseId)) continue;
+      const original = state.sourceOrders.find(
+        (order) => order.id === prior.sourceOrderId,
+      )?.originalOrder?.extraction.candidate?.lines[prior.lineIndex];
+      const replacementIndex = [...lineExpenses].find(
+        ([, id]) => id === prior.expenseId,
+      )?.[0];
+      const replacement =
+        replacementIndex === undefined
+          ? null
+          : candidate.lines[replacementIndex];
+      if (
+        !original ||
+        !replacement ||
+        (await reconciliationFingerprint(original)) !==
+          (await reconciliationFingerprint(replacement))
+      )
         await tx
-          .insert(importSourceProduct)
-          .values({
-            sourceOrderId: association.id,
-            lineIndex: binding.lineIndex,
-            productId: parseEntityId("product", binding.productId),
-          })
-          .onConflictDoNothing();
+          .update(importSourceProduct)
+          .set({ expenseId: null })
+          .where(eq(importSourceProduct.id, prior.id));
+    }
+  }
+  const originalLines = firstObservation.extraction.candidate?.lines ?? [];
+  const originalKeys = await Promise.all(
+    originalLines.map(reconciliationFingerprint),
+  );
+  const proposedKeys = await Promise.all(
+    candidate.lines.map(reconciliationFingerprint),
+  );
+  const sameRoster =
+    (await reconciliationFingerprint(originalKeys)) ===
+    (await reconciliationFingerprint(proposedKeys));
+  // Only line contents establish correspondence. Header/payment edits cannot
+  // discard unchanged receipt identifiers; ambiguous reordered lines stay unknown.
+  for (const [lineIndex, originalKey] of originalKeys.entries()) {
+    const matches = proposedKeys.flatMap((key, index) =>
+      key === originalKey ? [index] : [],
+    );
+    const proposedIndex = sameRoster
+      ? lineIndex
+      : matches.length === 1 &&
+          originalKeys.filter((key) => key === originalKey).length === 1
+        ? matches[0]
+        : undefined;
+    const expenseId =
+      proposedIndex === undefined
+        ? null
+        : (lineExpenses.get(proposedIndex) ?? null);
+    const binding = firstObservation.productBindings.find(
+      (row) => row.lineIndex === lineIndex,
+    );
+    await tx
+      .insert(importSourceProduct)
+      .values({
+        sourceOrderId: association.id,
+        lineIndex,
+        productId: binding?.productId
+          ? parseEntityId("product", binding.productId)
+          : null,
+        expenseId,
+      })
+      .onConflictDoUpdate({
+        target: [
+          importSourceProduct.sourceOrderId,
+          importSourceProduct.lineIndex,
+        ],
+        set: { expenseId },
+      });
+  }
   const productOnly = reappliesAcceptedObservation(state, resolution, intent);
   const syncedPayments = productOnly ? [] : candidate.payments;
   const ownedPayments = productOnly

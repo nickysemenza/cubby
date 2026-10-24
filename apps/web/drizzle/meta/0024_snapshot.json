@@ -1,6 +1,6 @@
 {
-  "id": "d13f661a-f609-4a83-97e0-b96d452bc600",
-  "prevId": "b78c513f-82de-4616-ad0f-ad48136f4190",
+  "id": "19e4ed38-2331-4b07-9fc4-cb08ddd43c88",
+  "prevId": "d13f661a-f609-4a83-97e0-b96d452bc600",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -11656,11 +11656,17 @@
           "primaryKey": false,
           "notNull": true
         },
+        "expenseId": {
+          "name": "expenseId",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
         "productId": {
           "name": "productId",
           "type": "uuid",
           "primaryKey": false,
-          "notNull": true
+          "notNull": false
         }
       },
       "indexes": {
@@ -11708,6 +11714,19 @@
           "tableTo": "ImportSourceOrder",
           "columnsFrom": [
             "sourceOrderId"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "ImportSourceProduct_expenseId_Expense_id_fk": {
+          "name": "ImportSourceProduct_expenseId_Expense_id_fk",
+          "tableFrom": "ImportSourceProduct",
+          "tableTo": "Expense",
+          "columnsFrom": [
+            "expenseId"
           ],
           "columnsTo": [
             "id"
