@@ -16,6 +16,21 @@ inputs:
 runs:
   using: "composite"
   steps:
+    - name: Ensure Linux file descriptor paths
+      if: runner.os == 'Linux'
+      shell: bash
+      run: |
+        # Minimal runner images can omit the path Bash process substitution
+        # uses; install-action needs it before installing wasm-pack.
+        if [[ ! -e /dev/fd ]]; then
+          test -d /proc/self/fd
+          if [[ "$EUID" == 0 ]]; then
+            ln -s /proc/self/fd /dev/fd
+          else
+            sudo ln -s /proc/self/fd /dev/fd
+          fi
+        fi
+
     # The one remote-cache seam (docs/ci.md): the workflow exposes the
     # NX_CACHE_URL/NX_CACHE_TOKEN secrets, and Nx reads them under its own
     # names. A fork PR receives no secrets, so both stay unset and Nx uses

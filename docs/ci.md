@@ -46,6 +46,8 @@ but does not guarantee Celesto capacity.
 
 Setup installs Rust for WASM cache misses, Swift for Linux native formatting,
 and Chromium system dependencies even when its browser archive is cached.
+It also restores `/dev/fd` when absent on Linux: Bash process substitution in
+the WASM installer requires that link to `/proc/self/fd` on minimal images.
 Rust checks now execute on x64 instead of ARM. Linux validation and web lanes
 set a Celesto image identity for Nx result keys, preventing reuse of GitHub
 image passes. Increment that identity when changing the runner image contract.
