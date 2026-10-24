@@ -62,7 +62,7 @@ async function memberParty(context: AuthenticatedRequestContext) {
   return party;
 }
 
-/** The stored Sweep scope of a request: account shortcodes become ids. */
+/** Resolve public entity scopes before estimating or creating any Sweep work. */
 async function sweepScopes(
   db: AuthenticatedRequestContext["db"],
   input: SweepStartInput,
@@ -75,6 +75,14 @@ async function sweepScopes(
           return {
             family: entry.family,
             scope: {
+              ...(entry.family === "statement_transaction" &&
+                entry.importId && {
+                  importId: await resolveOrThrow(
+                    db,
+                    "transactionImport",
+                    entry.importId,
+                  ),
+                }),
               ...(entry.accountIds?.length && {
                 accountIds: await Promise.all(
                   entry.accountIds.map((code) =>

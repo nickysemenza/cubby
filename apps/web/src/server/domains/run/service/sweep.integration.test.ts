@@ -1,9 +1,12 @@
 import { aiEvaluationState } from "@cubby/schemas/ai-evaluation";
 import { assessmentFamily } from "@cubby/schemas/assessment";
+import { sweepRunInput } from "@cubby/schemas/run-fields";
 import { recordSourceTransactionRecordsInput } from "@cubby/schemas/source-transaction-record";
 import type { SourceTransactionRecordInput } from "@cubby/schemas/source-transaction-record";
+import { sweepStartInput } from "@cubby/schemas/sweep";
 import { eq, sql } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
+import { buildKernelContext } from "tooling/scenarios/context";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
@@ -11,10 +14,12 @@ import { z } from "zod";
 import type { DecisionPort } from "~/server/ai/decision-model";
 import { activateAiRefresh } from "~/server/ai/repo/ai-refresh";
 import { getDb } from "~/server/db/helpers";
-import { run } from "~/server/db/schema";
+import { ledgerParty, run, transactionImport } from "~/server/db/schema";
+import { runHandlers } from "~/server/domains/run/operations/run.server";
 import { recordSourceTransactionRecords } from "~/server/domains/transaction-import/repo/source-transaction-record";
 import { labelStatementSuggestions } from "~/server/domains/transaction-import/service/statement-suggestion-labels";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
+import { systemPrincipal } from "~/server/http/authenticate";
 import {
   drainDerivedRefreshFrontier,
   withJobFixtureExecution,
@@ -89,6 +94,120 @@ describe("Sweeps", () => {
       }),
       ctx.actor,
     );
+
+  const memberRequest = async () => {
+    const member = await createRepoEntity(ctx, "ledgerParty", {
+      name: "Synthetic Sweep member",
+      kind: "member",
+    });
+    await getDb(ctx.db)
+      .update(ledgerParty)
+      .set({ userId: ctx.actor.userId })
+      .where(eq(ledgerParty.shortcode, member.output.id));
+    return {
+      principal: systemPrincipal(buildKernelContext(ctx.db, ctx.actor.userId)),
+      headers: new Headers(),
+      signal: new AbortController().signal,
+    };
+  };
+
+  // The public TIM-code must select the same retained UUID for both operations;
+  // accepting it only in the schema would silently broaden the financial pass.
+  it("resolves a retained collection for both the estimate and execution without completing it", async () => {
+    const request = await memberRequest();
+    const scoped = (await account("Synthetic Card", "Synthetic Card (...4242)"))
+      .output;
+    const saved = await recordRows([row(), row()], "synthetic-retained-sweep");
+    await recordRows([row(), row(), row()], "synthetic-unrelated-sweep");
+    const retained = await getDb(ctx.db).query.transactionImport.findFirst({
+      where: eq(transactionImport.id, saved.batchId!),
+    });
+    expect(retained).toBeDefined();
+    expect(retained?.completedAt).toBeNull();
+    const data = sweepStartInput.parse({
+      families: [
+        {
+          family: "statement_transaction",
+          importId: retained!.shortcode,
+          accountIds: [scoped.id],
+          since: "2026-05-01",
+        },
+      ],
+    });
+    const estimated = await runHandlers.operations.sweepEstimate({
+      request,
+      data,
+    });
+    expect(estimated).toMatchObject({
+      ok: true,
+      data: { families: [{ family: "statement_transaction", records: 2 }] },
+    });
+    const started = await runHandlers.operations.sweep({ request, data });
+    expect(started.ok).toBe(true);
+    if (!started.ok) return;
+    const stored = await getDb(ctx.db).query.run.findFirst({
+      where: eq(run.shortcode, started.data.runId),
+    });
+    expect(sweepRunInput.parse(stored?.input).families).toEqual([
+      {
+        family: "statement_transaction",
+        scope: {
+          importId: saved.batchId,
+          accountIds: [
+            await resolveOrThrow(ctx.db, "financialAccount", scoped.id),
+          ],
+          since: "2026-05-01",
+        },
+      },
+    ]);
+    expect(await drive(stored!.id)).toBe("finished");
+    const steps = await readRunSteps(ctx.db, stored!.id);
+    expect(steps[0]).toMatchObject({ done: 2, failed: 0, left: 0 });
+    expect(
+      await getDb(ctx.db).query.transactionImport.findFirst({
+        where: eq(transactionImport.id, saved.batchId!),
+      }),
+    ).toEqual(retained);
+    const { rows } = await getDb(ctx.db).execute<{ count: number }>(sql`
+      SELECT count(*)::int AS count FROM "SourceTransactionRecord"
+      WHERE "withdrawnAt" IS NOT NULL
+    `);
+    expect(rows[0]?.count).toBe(0);
+  });
+
+  it("refuses invalid, missing and deleted collection references before creating work", async () => {
+    const request = await memberRequest();
+    const saved = await recordRows([row()], "synthetic-deleted-sweep");
+    const [deleted] = await getDb(ctx.db)
+      .update(transactionImport)
+      .set({ deletedAt: new Date() })
+      .where(eq(transactionImport.id, saved.batchId!))
+      .returning({ shortcode: transactionImport.shortcode });
+    const beforeRuns = await getDb(ctx.db).query.run.findMany();
+    const beforeJobs = await getDb(ctx.db).execute(
+      sql`SELECT * FROM "Job" ORDER BY id`,
+    );
+    for (const importId of [
+      "invalid",
+      "FAC-ABCD",
+      "TIM-ZZZZ",
+      deleted!.shortcode,
+    ]) {
+      const data = {
+        families: [{ family: "statement_transaction", importId }],
+      };
+      expect(
+        await runHandlers.operations.sweepEstimate({ request, data }),
+      ).toMatchObject({ ok: false });
+      expect(
+        await runHandlers.operations.sweep({ request, data }),
+      ).toMatchObject({ ok: false });
+    }
+    expect(await getDb(ctx.db).query.run.findMany()).toEqual(beforeRuns);
+    expect(
+      (await getDb(ctx.db).execute(sql`SELECT * FROM "Job" ORDER BY id`)).rows,
+    ).toEqual(beforeJobs.rows);
+  });
 
   const drive = async (runId: string) => {
     const [owner] = await getDb(ctx.db)

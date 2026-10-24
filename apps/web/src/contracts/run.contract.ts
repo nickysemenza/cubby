@@ -282,7 +282,7 @@ export const runContract = defineContract(
     }),
     sweep: mutation({
       description:
-        "Find suggestions: start one Sweep over the chosen Suggestion families (statement_transaction and transfer_pair scoped by accountIds/since, recommendation by entityKinds, field by entity and fields; omitted scope covers everything). Returns the Sweep Run; follow it with run_read.work_snapshot and review results with suggestions_read.list. Model calls spend within the household AI budget and pause at it.",
+        "Start one Sweep over the chosen Suggestion families (statement_transaction and transfer_pair scoped by accountIds/since, recommendation by entityKinds, field by entity and fields; omitted scope covers everything). For statement_transaction, optional importId (TIM-code) reprocesses a retained collection under existing automatic policies, including enabled clean spending booking; accountIds/since intersect that collection. This can apply financial changes, not just filter suggestions. Returns the Sweep Run; follow it with run_read.work_snapshot and review results with suggestions_read.list. Model calls spend within the household AI budget and pause at it.",
       openWorld: true,
       input: sweepStartInput,
       output: z.object({ runId: runShortcode }),

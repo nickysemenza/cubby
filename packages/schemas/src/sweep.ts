@@ -1,10 +1,13 @@
 import { z } from "zod";
 
 import { plainDate } from "./base-entity";
-import { financialAccountShortcode } from "./identifiers";
+import {
+  financialAccountShortcode,
+  transactionImportShortcode,
+} from "./identifiers";
 import { sweepFieldTargets } from "./run-fields";
 
-/** A Sweep as a member or agent asks for it: account scopes by shortcode. */
+/** A Sweep as a member or agent asks for it: entity scopes by shortcode. */
 export const sweepStartInput = z.object({
   families: z
     .array(
@@ -16,6 +19,7 @@ export const sweepStartInput = z.object({
         }),
         z.object({
           family: z.literal("statement_transaction"),
+          importId: transactionImportShortcode.optional(),
           accountIds: z.array(financialAccountShortcode).max(100).optional(),
           since: plainDate.optional(),
         }),

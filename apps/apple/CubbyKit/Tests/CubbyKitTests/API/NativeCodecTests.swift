@@ -5,6 +5,19 @@ import Testing
 
 @Suite("Direct native codecs")
 struct NativeCodecTests {
+    @Test func retainedStatementSweepPreservesCollectionAndIntersectingScope() throws {
+        let wire: JSONValue = [
+            "families": [
+                [
+                    "family": "statement_transaction", "importId": "TIM-2345",
+                    "accountIds": ["FAC-2345"], "since": "2026-05-01",
+                ]
+            ]
+        ]
+        let input: SweepStartInput = try wire.decoded()
+        #expect(try JSONValue(encoding: input) == wire)
+    }
+
     @Test func readySpendingAllowsUnknownPurchaserRoundTrip() throws {
         let wire: JSONValue = [
             "request": ["advice": .null, "rejectedPurchaseIds": []],

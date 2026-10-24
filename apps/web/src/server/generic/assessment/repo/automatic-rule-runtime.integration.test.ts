@@ -62,6 +62,7 @@ import {
   canAutomaticallyFillField,
   acceptSuggestion,
 } from "~/server/generic/assessment/repo/suggestion-review";
+import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 type Ctx = ReturnType<typeof withTestDb>;
 
@@ -158,7 +159,7 @@ async function soleCandidateCharge(ctx: Ctx) {
       sourceRefs: [],
     })
   ).output;
-  await recordSourceTransactionRecords(
+  const recorded = await recordSourceTransactionRecords(
     ctx.db,
     recordSourceTransactionRecordsInput.parse({
       import: {
@@ -186,7 +187,7 @@ async function soleCandidateCharge(ctx: Ctx) {
     ctx.actor,
   );
   await generateStatementSuggestionPage(ctx.db, { after: null, runId: null });
-  return { account, existing };
+  return { account, existing, recorded };
 }
 
 /** A second charge of the same money, a day after the sole candidate's. */
@@ -285,6 +286,72 @@ const chargeSuggestion = async (ctx: Ctx) =>
 // switch; feedback retries reapply rejected or already-booked evidence.
 describe("clean import booking controls", () => {
   const ctx = withTestDb();
+
+  it.each([
+    { scope: "import", booking: true, booked: true },
+    { scope: "import", booking: false, booked: false },
+    { scope: "account/date", booking: true, booked: false },
+  ] as const)(
+    "reprocesses retained $scope spending with booking $booking and measured attach off",
+    async ({ scope, booking, booked }) => {
+      const { account, recorded } = await soleCandidateCharge(ctx);
+      await setAutomaticRule(ctx.db, ctx.actor, {
+        ruleKey: ATTACH,
+        enabled: false,
+      });
+      await setAutomaticRule(ctx.db, ctx.actor, {
+        ruleKey: BOOK_SPENDING,
+        enabled: booking,
+      });
+      const switches = async () =>
+        (await listAutomaticRules(ctx.db)).rules.map(
+          ({ ruleKey, enabled }) => ({ ruleKey, enabled }),
+        );
+      const before = await switches();
+      const collection = await getDb(ctx.db).query.transactionImport.findFirst({
+        where: (table, { eq }) => eq(table.id, recorded.batchId!),
+      });
+      const withdrawals = () =>
+        getDb(ctx.db).execute(sql`
+        SELECT id, "withdrawnAt", "withdrawalImportId" FROM "SourceTransactionRecord" ORDER BY id
+      `);
+      const beforeWithdrawals = await withdrawals();
+      const result = await labelStatementSuggestions(ctx.db, {
+        port: sameCharge,
+        scope:
+          scope === "import"
+            ? { importId: recorded.batchId! }
+            : {
+                accountIds: [
+                  await resolveOrThrow(ctx.db, "financialAccount", account.id),
+                ],
+                since: "2026-05-01",
+              },
+      });
+      expect(result.failed).toEqual([]);
+      const suggestion = await chargeSuggestion(ctx);
+      expect((await stateOf(ctx, suggestion.id)).status).toBe(
+        booked ? "applied" : "pending",
+      );
+      expect(await getDb(ctx.db).select().from(expense)).toHaveLength(
+        booked ? 1 : 0,
+      );
+      const audit = await listAutomaticDecisions(ctx.db, {
+        family: "statement_transaction",
+        limit: 20,
+      });
+      expect(audit.items.map(({ automaticRule }) => automaticRule)).toEqual(
+        booked ? [ruleBase(BOOK_SPENDING)] : [],
+      );
+      expect(await switches()).toEqual(before);
+      expect(
+        await getDb(ctx.db).query.transactionImport.findFirst({
+          where: (table, { eq }) => eq(table.id, recorded.batchId!),
+        }),
+      ).toEqual(collection);
+      expect((await withdrawals()).rows).toEqual(beforeWithdrawals.rows);
+    },
+  );
 
   it("defaults on and lets a member pause and resume", async () => {
     expect(await ruleOf(ctx, BOOK_SPENDING)).toMatchObject({
