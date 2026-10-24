@@ -30,22 +30,33 @@ independent and use the existing Nx `build-cf` cache, including its source
 provenance. The test commands retain their build ensure for standalone use;
 after the explicit build it verifies the existing output. Build preparation
 now runs even when the subsequent test target replays a cached pass.
-`Plan` and `Test report` trial Celesto's ephemeral Linux x64 Micro runner through
-`runs-on: [self-hosted, celesto-micro]`; Celesto hosts the machine, while
-`self-hosted` is GitHub's label for runners outside its hosted fleet.
-Reporting installs dependencies and merges blobs without building the app or
-installing browsers. It stays outside `CI passed`, which uses `ubuntu-slim`.
-The repository must be enabled in the Celesto GitHub App and linked to a
-workspace with usable Micro credit before either job can start. Plan filters
-changed paths and feeds the required merge gate and native lanes, so unavailable
-Celesto capacity or credit now blocks CI completion. The Micro trial allows only
-one retained sandbox at a time, which can serialize these jobs across PRs. A queued runner
-is not bounded by the job's execution timeout. Compare queue time, install and
-merge duration, report publication, and billed runtime before expanding the
-trial; it does not measure build/test performance. Revert both jobs to
-`ubuntu-slim` to end the trial. Required build/test lanes keep their existing
-runners. Standard GitHub-hosted runners are free for this public repository,
-so this trial evaluates compatibility and turnaround rather than cost savings.
+All Linux jobs in `ci.yaml` use Celesto's ephemeral Ubuntu x64 runners.
+Plan, reporting and the final gate use Micro; validation, browser shards, Rust
+and optional jobs use Large; Vitest shards use XL. The workflow owns runner
+labels. Apple host tests and simulator builds stay on GitHub's macOS runners;
+deployment and other workflows retain their existing runners.
+
+Celesto hosts these machines; `self-hosted` is GitHub's label for runners
+outside its hosted fleet. Enable the repository in the Celesto GitHub App and
+link it to a workspace with paid credit for Large/XL and enough concurrent
+sandbox capacity. The Micro-only trial cannot run the full workflow. A queued
+runner is not bounded by its execution timeout, and unavailable capacity or
+credit blocks the merge gate. Moving jobs off GitHub frees its runner slots,
+but does not guarantee Celesto capacity.
+
+Setup installs Rust for WASM cache misses, Swift for Linux native formatting,
+and Chromium system dependencies even when its browser archive is cached.
+Rust checks now execute on x64 instead of ARM. Linux validation and web lanes
+set a Celesto image identity for Nx result keys, preventing reuse of GitHub
+image passes. Increment that identity when changing the runner image contract.
+Reporting still merges blobs without building the app or installing browsers
+and remains outside `CI passed`.
+
+Standard GitHub-hosted runners are free for this public repository. Evaluate
+push-to-result time, queueing, setup, uncached execution, report publication and
+billed runtime before claiming a benefit. Larger runners do not automatically
+increase configured test worker counts. Revert runner labels to GitHub's hosted
+labels to end the cutover; Rust can return to `ubuntu-24.04-arm`.
 
 ## Journeys
 

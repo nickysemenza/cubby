@@ -110,9 +110,10 @@ jobs:
 
   validation:
     name: Validation and docs
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, celesto-large]
     timeout-minutes: 20
     env:
+      ImageVersion: celesto-ubuntu-24.04-x64-v1
       NODE_OPTIONS: "--max-old-space-size=4096"
       NX_PARALLEL: "2"
     steps:
@@ -121,6 +122,10 @@ jobs:
         uses: ./.github/actions/setup-node-with-deps
         with:
           wasm: restore
+      - name: Install Swift for native formatting
+        uses: swift-actions/setup-swift@364295d9c23900ce04d4e5cc708387921b4e50f9 # v3
+        with:
+          swift-version: "6.2"
       # Independent failures stay red but do not hide the remaining diagnostics.
       - name: Generated contracts
         if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
@@ -158,10 +163,11 @@ jobs:
             './**/*.md'
             './**/*.mdx'
 
-  # Every entry is one standard runner with fresh PostgreSQL services.
+  # Each entry owns a Celesto runner and fresh PostgreSQL services.
   lanes:
     name: ${{ matrix.name }}
-    runs-on: ubuntu-latest
+    runs-on:
+      [self-hosted, "${{ matrix.vitest && 'celesto-xl' || 'celesto-large' }}"]
     timeout-minutes: 20
     strategy:
       fail-fast: false
@@ -222,6 +228,7 @@ jobs:
           - 5000:5000
     # Each job owns fresh services and one host marker namespace.
     env: &web-lane-env
+      ImageVersion: celesto-ubuntu-24.04-x64-v1
       CUBBY_TEMPLATE_SERVICE_ID: ${{ github.run_id }}:${{ github.run_attempt }}:${{ github.job }}
       NODE_OPTIONS: "--max-old-space-size=4096"
       BETTER_AUTH_SECRET: ci-secret-TbGFDRAbhlR8e3RaXsfHR9CQ7r4nIc9
@@ -235,7 +242,7 @@ jobs:
           wasm: restore
       - name: Install Chromium for required component-browser tests
         if: ${{ matrix.vitest }}
-        run: pnpm --filter @cubby/web run test:e2e:install-browser -- chromium
+        run: pnpm --filter @cubby/web exec playwright install --with-deps chromium
       - name: Restore or build web app
         run: pnpm exec nx run @cubby/web:build-cf --outputStyle=stream
       - name: Run Vitest shard
@@ -268,16 +275,16 @@ jobs:
     name: Rust - recipebridge, cookbook-wasm and cubby-ffi
     needs: plan
     if: needs.plan.outputs.rust == 'true'
-    runs-on: ubuntu-24.04-arm
+    runs-on: [self-hosted, celesto-large]
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      - uses: ./.github/actions/setup-node-with-deps
-        with:
-          workspace-filter: cubby
       - uses: actions-rust-lang/setup-rust-toolchain@ecabd13d1c56bd1345c230e542e9144811ad706f # v2
         with:
           cache: false
+      - uses: ./.github/actions/setup-node-with-deps
+        with:
+          workspace-filter: cubby
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         id: rust-cache
         with:
@@ -374,7 +381,7 @@ jobs:
     name: ${{ github.event_name == 'workflow_dispatch' && 'Manual CI diagnostics' || 'CI passed' }}
     needs: [plan, validation, lanes, rust, apple-host, apple-simulator]
     if: always()
-    runs-on: ubuntu-slim
+    runs-on: [self-hosted, celesto-micro]
     timeout-minutes: 5
     steps:
       - uses: re-actors/alls-green@b5b5b37504aa4183270bd3d855c52a67f212be35 # v1.3.0
@@ -391,7 +398,6 @@ jobs:
     name: Test report
     needs: [validation, lanes]
     if: ${{ !cancelled() }}
-    # Trial the Micro runner on reporting before moving required build/test lanes.
     runs-on: [self-hosted, celesto-micro]
     timeout-minutes: 10
     permissions:
@@ -487,7 +493,7 @@ jobs:
       cancel-in-progress: false
       queue: max
     continue-on-error: true
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, celesto-large]
     timeout-minutes: 15
     services: *test-databases
     env: *web-lane-env
@@ -514,7 +520,7 @@ jobs:
       cancel-in-progress: false
       queue: max
     continue-on-error: true
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, celesto-large]
     timeout-minutes: 15
     services: *test-databases
     env: *web-lane-env
