@@ -51,7 +51,9 @@ Before Swift setup it imports the official Swift signing keys into the fresh
 runner's GnuPG keyring so installer signature verification can succeed.
 It also restores `/dev/fd` when absent on Linux: Bash process substitution in
 the WASM installer requires that link to `/proc/self/fd` on minimal images.
-Rust checks now execute on x64 instead of ARM. Linux validation and web lanes
+Rust checks now execute on x64 instead of ARM. Celesto runs as root, so
+filesystem permission regressions inject the failing syscall rather than rely
+on chmod restrictions that root bypasses. Linux validation and web lanes
 set a Celesto image identity for Nx result keys, preventing reuse of GitHub
 image passes. Increment that identity when changing the runner image contract.
 Reporting still merges blobs without building the app or installing browsers
