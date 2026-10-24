@@ -1196,7 +1196,7 @@ export function EntityBasicInfo<TRecord extends object>({
   const facts = (
     <Facts
       layout="list"
-      facts={fields.flatMap((field) => {
+      facts={fields.flatMap<Fact>((field) => {
         const refusal = classificationFieldRefusal(entity, record, field.key);
         if (refusal)
           return [
