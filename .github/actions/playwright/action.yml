@@ -18,6 +18,10 @@ inputs:
 runs:
   using: "composite"
   steps:
+    # Browser archives do not contain the operating system libraries.
+    - name: Install Chromium system dependencies
+      shell: bash
+      run: pnpm --filter @cubby/web exec playwright install-deps chromium
     - name: Resolve installed Playwright version
       id: playwright
       shell: bash

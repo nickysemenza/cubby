@@ -110,9 +110,10 @@ jobs:
 
   validation:
     name: Validation and docs
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, celesto-large]
     timeout-minutes: 20
     env:
+      ImageVersion: celesto-ubuntu-24.04-x64-v1
       NODE_OPTIONS: "--max-old-space-size=4096"
       NX_PARALLEL: "2"
     steps:
@@ -121,6 +122,23 @@ jobs:
         uses: ./.github/actions/setup-node-with-deps
         with:
           wasm: restore
+      - name: Install Swift signature verification prerequisite
+        run: |
+          privilege=()
+          if [[ "$EUID" != 0 ]]; then privilege=(sudo); fi
+          "${privilege[@]}" apt-get update
+          "${privilege[@]}" apt-get install -y --no-install-recommends gnupg
+          # Fresh Celesto images have no Swift signing keys in their keyring.
+          curl --fail --silent --show-error --location --compressed --retry 3 \
+            https://www.swift.org/keys/all-keys.asc | gpg --batch --import
+      - name: Install Swift for native formatting
+        uses: swift-actions/setup-swift@364295d9c23900ce04d4e5cc708387921b4e50f9 # v3
+        env:
+          # Swift's dependency install includes tzdata on the minimal image.
+          DEBIAN_FRONTEND: noninteractive
+          TZ: Etc/UTC
+        with:
+          swift-version: "6.2"
       # Independent failures stay red but do not hide the remaining diagnostics.
       - name: Generated contracts
         if: ${{ !cancelled() && steps.setup.outcome == 'success' }}
@@ -158,10 +176,46 @@ jobs:
             './**/*.md'
             './**/*.mdx'
 
-  # Every entry is one standard runner with fresh PostgreSQL services.
+  web-build:
+    name: Prepare web build
+    runs-on: [self-hosted, celesto-xl]
+    timeout-minutes: 15
+    # Build and consumers use identical source identity and heap settings.
+    env: &web-lane-env
+      ImageVersion: celesto-ubuntu-24.04-x64-v1
+      CUBBY_TEMPLATE_SERVICE_ID: ${{ github.run_id }}:${{ github.run_attempt }}:${{ github.job }}
+      NODE_OPTIONS: "--max-old-space-size=4096"
+      BETTER_AUTH_SECRET: ci-secret-TbGFDRAbhlR8e3RaXsfHR9CQ7r4nIc9
+      CUBBY_SOURCE_COMMIT: ${{ github.sha }}
+      CUBBY_SOURCE_BRANCH: ${{ github.ref_name }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: ./.github/actions/setup-node-with-deps
+        with:
+          wasm: restore
+      - name: Restore or build web app once
+        run: pnpm exec nx run @cubby/web:build-cf --outputStyle=stream
+      - name: Package web build and matching WASM
+        run: >-
+          tar -czf "$RUNNER_TEMP/web-build.tar.gz"
+          apps/web/.cloudflare/output
+          apps/web/.cloudflare/web-build-provenance.json
+          packages/wasm
+      - name: Share web build with test shards
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: web-build-${{ github.sha }}
+          path: ${{ runner.temp }}/web-build.tar.gz
+          compression-level: 0
+          retention-days: 1
+          overwrite: true
+
+  # Each entry owns a Celesto runner and fresh PostgreSQL services.
   lanes:
     name: ${{ matrix.name }}
-    runs-on: ubuntu-latest
+    needs: web-build
+    runs-on:
+      [self-hosted, "${{ matrix.vitest && 'celesto-xl' || 'celesto-large' }}"]
     timeout-minutes: 20
     strategy:
       fail-fast: false
@@ -181,16 +235,20 @@ jobs:
           - name: E2E tests (desktop 4/4)
             browser: desktop-4
             run: CUBBY_E2E_SHARD=4/4 pnpm exec nx run @cubby/web:e2e --outputStyle=stream
-          # Every Vitest project (unit, UI, component browser, tooling,
-          # packages, PostgreSQL, workerd), split by file. Each shard's blob
-          # feeds the merged report.
-          - name: Vitest (1/2)
+          # Every Vitest project is split by file; all blobs feed the report.
+          - name: Vitest (1/4)
             vitest: "1"
-            run: CUBBY_VITEST_SHARD=1/2 pnpm exec nx run @cubby/web:vitest-ci --outputStyle=stream
-          - name: Vitest (2/2)
+            run: CUBBY_VITEST_SHARD=1/4 pnpm exec nx run @cubby/web:vitest-ci --outputStyle=stream
+          - name: Vitest (2/4)
             vitest: "2"
-            run: CUBBY_VITEST_SHARD=2/2 pnpm exec nx run @cubby/web:vitest-ci --outputStyle=stream
+            run: CUBBY_VITEST_SHARD=2/4 pnpm exec nx run @cubby/web:vitest-ci --outputStyle=stream
             db-check: true
+          - name: Vitest (3/4)
+            vitest: "3"
+            run: CUBBY_VITEST_SHARD=3/4 pnpm exec nx run @cubby/web:vitest-ci --outputStyle=stream
+          - name: Vitest (4/4)
+            vitest: "4"
+            run: CUBBY_VITEST_SHARD=4/4 pnpm exec nx run @cubby/web:vitest-ci --outputStyle=stream
     services: &test-databases
       postgres:
         image: mirror.gcr.io/pgvector/pgvector@sha256:ac08538c6f8b9904c33c8224c5e5706dbe760aca29db1d096972b4052c22a75d
@@ -221,12 +279,7 @@ jobs:
         ports:
           - 5000:5000
     # Each job owns fresh services and one host marker namespace.
-    env: &web-lane-env
-      CUBBY_TEMPLATE_SERVICE_ID: ${{ github.run_id }}:${{ github.run_attempt }}:${{ github.job }}
-      NODE_OPTIONS: "--max-old-space-size=4096"
-      BETTER_AUTH_SECRET: ci-secret-TbGFDRAbhlR8e3RaXsfHR9CQ7r4nIc9
-      CUBBY_SOURCE_COMMIT: ${{ github.sha }}
-      CUBBY_SOURCE_BRANCH: ${{ github.ref_name }}
+    env: *web-lane-env
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - id: setup
@@ -235,9 +288,9 @@ jobs:
           wasm: restore
       - name: Install Chromium for required component-browser tests
         if: ${{ matrix.vitest }}
-        run: pnpm --filter @cubby/web run test:e2e:install-browser -- chromium
-      - name: Restore or build web app
-        run: pnpm exec nx run @cubby/web:build-cf --outputStyle=stream
+        run: pnpm --filter @cubby/web exec playwright install --with-deps chromium
+      - name: Restore and verify shared web build
+        uses: ./.github/actions/restore-ci-web-build
       - name: Run Vitest shard
         if: ${{ matrix.vitest }}
         run: ${{ matrix.run }}
@@ -268,16 +321,16 @@ jobs:
     name: Rust - recipebridge, cookbook-wasm and cubby-ffi
     needs: plan
     if: needs.plan.outputs.rust == 'true'
-    runs-on: ubuntu-24.04-arm
+    runs-on: [self-hosted, celesto-large]
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      - uses: ./.github/actions/setup-node-with-deps
-        with:
-          workspace-filter: cubby
       - uses: actions-rust-lang/setup-rust-toolchain@ecabd13d1c56bd1345c230e542e9144811ad706f # v2
         with:
           cache: false
+      - uses: ./.github/actions/setup-node-with-deps
+        with:
+          workspace-filter: cubby
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         id: rust-cache
         with:
@@ -372,7 +425,8 @@ jobs:
   # Manual diagnostics never satisfy the PR merge check.
   ci-passed:
     name: ${{ github.event_name == 'workflow_dispatch' && 'Manual CI diagnostics' || 'CI passed' }}
-    needs: [plan, validation, lanes, rust, apple-host, apple-simulator]
+    needs:
+      [plan, web-build, validation, lanes, rust, apple-host, apple-simulator]
     if: always()
     runs-on: ubuntu-slim
     timeout-minutes: 5
@@ -391,7 +445,7 @@ jobs:
     name: Test report
     needs: [validation, lanes]
     if: ${{ !cancelled() }}
-    runs-on: ubuntu-slim
+    runs-on: [self-hosted, celesto-micro]
     timeout-minutes: 10
     permissions:
       actions: read
@@ -486,7 +540,7 @@ jobs:
       cancel-in-progress: false
       queue: max
     continue-on-error: true
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, celesto-large]
     timeout-minutes: 15
     services: *test-databases
     env: *web-lane-env
@@ -495,8 +549,8 @@ jobs:
       - uses: ./.github/actions/setup-node-with-deps
         with:
           wasm: restore
-      - name: Restore or build web app
-        run: pnpm exec nx run @cubby/web:build-cf --outputStyle=stream
+      - name: Restore and verify shared web build
+        uses: ./.github/actions/restore-ci-web-build
       - name: Run Playwright purchase import tests
         uses: ./.github/actions/playwright
         with:
@@ -513,7 +567,7 @@ jobs:
       cancel-in-progress: false
       queue: max
     continue-on-error: true
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, celesto-large]
     timeout-minutes: 15
     services: *test-databases
     env: *web-lane-env
