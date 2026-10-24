@@ -71,7 +71,7 @@ describe("inline suggestion review", () => {
       screen.getByRole("button", { name: /Uses your correction/u }),
     );
     await waitFor(() =>
-      expect(screen.getByText("Readable category")).toBeInTheDocument(),
+      expect(screen.getByText(/Readable category/u)).toBeInTheDocument(),
     );
     expect(
       screen.getByText("00000000-0000-4000-8000-000000000002"),
