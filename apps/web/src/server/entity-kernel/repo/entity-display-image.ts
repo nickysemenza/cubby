@@ -69,7 +69,10 @@ type DisplaySource = Readonly<{
   entity: Entity;
   target: Entity;
   priority: number;
-  ordering: "declared" | "newest" | "oldest";
+  groups: readonly Readonly<{
+    hopIndex: number;
+    ordering: "declared" | "newest" | "oldest";
+  }>[];
   path: readonly RelationshipPathStep[];
 }>;
 
@@ -103,12 +106,7 @@ const inheritedRelationsSql = (branches: readonly DisplayBranch[]): SQL => {
 
 const EXPENSE_PROJECT_RELATION = "display_expense_project";
 
-/**
- * A display source is a manifest relationship path followed by the target's
- * direct Image relationship. This deliberately never re-enters the display
- * resolver: borrowed images are terminal presentation evidence, not another
- * entity's recursively-derived displayImages.
- */
+/** Borrowed media follows declared paths; only direct Image relationships own files. */
 const imageRelationshipSteps = (
   entity: Entity,
 ): readonly RelationshipPathStep[] => {
@@ -137,32 +135,89 @@ const displayPathSteps = (
   return { target: current, steps };
 };
 
-/** Generated bindings are validated by the manifest compiler; compiling them
- * once here turns every declared source into a bounded SQL UNION arm. */
+/**
+ * Expand declared fallbacks breadth first: directly related photos precede
+ * deeper logos. Each path visits a subject kind once, keeping reciprocal
+ * Recipe/Meal and Task/Project declarations finite without runtime recursion.
+ */
 const DISPLAY_SOURCES: readonly DisplaySource[] = allEntities.flatMap(
-  (entity) =>
-    imageDisplayBindings[entity].map((binding) => {
-      const relationship = displayPathSteps(entity, binding.relationPath);
-      if (relationship.target !== binding.targetEntity) {
-        throw new Error(
-          `Image display binding ${entity}.${binding.relationPath.join(".")} targets ${binding.targetEntity}, not ${relationship.target}`,
+  (entity) => {
+    const sources: DisplaySource[] = [];
+    const pending: Array<{
+      target: Entity;
+      path: readonly RelationshipPathStep[];
+      groups: DisplaySource["groups"];
+      visited: ReadonlySet<Entity>;
+    }> = [{ target: entity, path: [], groups: [], visited: new Set([entity]) }];
+    for (let cursor = 0; cursor < pending.length; cursor++) {
+      const parent = pending[cursor]!;
+      for (const binding of imageDisplayBindings[parent.target]) {
+        const relationship = displayPathSteps(
+          parent.target,
+          binding.relationPath,
         );
+        if (relationship.target !== binding.targetEntity) {
+          throw new Error(
+            `Image display binding ${parent.target}.${binding.relationPath.join(".")} targets ${binding.targetEntity}, not ${relationship.target}`,
+          );
+        }
+        if (parent.visited.has(relationship.target)) continue;
+        const path = [...parent.path, ...relationship.steps];
+        const groups = [
+          ...parent.groups,
+          { hopIndex: path.length - 1, ordering: binding.ordering },
+        ];
+        if (
+          relationship.target === "image" ||
+          entityManifest[relationship.target].images.storage !== false
+        ) {
+          sources.push({
+            entity,
+            target: relationship.target,
+            priority: sources.length + 1,
+            groups,
+            path:
+              relationship.target === "image"
+                ? path
+                : [...path, ...imageRelationshipSteps(relationship.target)],
+          });
+        }
+        pending.push({
+          target: relationship.target,
+          path,
+          groups,
+          visited: new Set([...parent.visited, relationship.target]),
+        });
       }
-      return {
-        entity,
-        target: relationship.target,
-        priority: binding.priority,
-        ordering: binding.ordering,
-        path:
-          relationship.target === "image"
-            ? relationship.steps
-            : [
-                ...relationship.steps,
-                ...imageRelationshipSteps(relationship.target),
-              ],
-      };
-    }),
+    }
+    return sources;
+  },
 );
+
+/** Keep every relationship group's ordering before its nested groups and files. */
+const DISPLAY_GROUP_COUNT = Math.max(
+  1,
+  ...DISPLAY_SOURCES.map((source) => source.groups.length),
+);
+const displayGroupColumns = (
+  groups: readonly { createdAt: SQL; id: SQL }[],
+): SQL =>
+  sql.join(
+    Array.from({ length: DISPLAY_GROUP_COUNT }, (_, index) => {
+      const group = groups[index];
+      return sql`${group?.createdAt ?? sql`NULL::timestamptz`} AS ${sql.identifier(`group${index}CreatedAt`)}, ${group?.id ?? sql`NULL::uuid`} AS ${sql.identifier(`group${index}Id`)}`;
+    }),
+    sql`, `,
+  );
+const displayGroupOrder = (alias: string): SQL =>
+  sql.join(
+    Array.from(
+      { length: DISPLAY_GROUP_COUNT },
+      (_, index) =>
+        sql`${sql.identifier(alias)}.${sql.identifier(`group${index}CreatedAt`)}, ${sql.identifier(alias)}.${sql.identifier(`group${index}Id`)}`,
+    ),
+    sql`, `,
+  );
 
 const sourceAlias = (value: string) => value.replaceAll(/[^A-Za-z0-9]/g, "_");
 
@@ -207,7 +262,7 @@ const directStorageBranch = (entity: Entity): SQL | null => {
     : aliasColumn("s", "createdAt");
   return sql`
         SELECT i.key, i.shortcode, 0 AS priority,
-               NULL::timestamptz AS "groupCreatedAt", NULL::uuid AS "groupId",
+               ${displayGroupColumns([])},
                ${sortOrder} AS "sortOrder", ${createdAt} AS "createdAt", i.id AS "imageId"
         FROM ${sql.raw(`"${traversal.rootTable}"`)} s
         ${traversal.joins}
@@ -219,10 +274,8 @@ const directStorageBranch = (entity: Entity): SQL | null => {
 };
 
 /**
- * A borrowed source stops at the target's direct attachment. Its relation
- * group is ordered by the final relation hop when one exists, otherwise by
- * the target record itself. That preserves declared link order while making
- * newest/oldest policy data-driven rather than an entity-name switch.
+ * Each expanded source ends at a direct attachment. Preserve ordering at every
+ * borrowed hop so a deeper fallback retains its parent relationship order.
  */
 const displaySourceBranch = (
   source: DisplaySource,
@@ -242,13 +295,18 @@ const displaySourceBranch = (
       inheritedRelation: inheritedRelationName,
     },
   );
-  const targetImageSteps =
-    source.target === "image"
-      ? 0
-      : imageRelationshipSteps(source.target).length;
-  const targetHopIndex = traversal.hops.length - targetImageSteps - 1;
-  const groupHop = traversal.hops.at(targetHopIndex);
-  const groupAlias = groupHop?.alias ?? "s";
+  const groups = source.groups.map((group) => {
+    const alias = traversal.hops[group.hopIndex]?.alias ?? "s";
+    return {
+      createdAt:
+        group.ordering === "newest"
+          ? sql`to_timestamp(-EXTRACT(EPOCH FROM ${aliasColumn(alias, "createdAt")}))`
+          : aliasColumn(alias, "createdAt"),
+      id: aliasColumn(alias, "id"),
+    };
+  });
+  const groupAlias =
+    traversal.hops[source.groups.at(-1)!.hopIndex]?.alias ?? "s";
   const attachmentHop = traversal.hops.at(-2);
   const targetStorage = entityManifest[source.target].images.storage;
   const targetGallery = targetStorage === "gallery";
@@ -257,10 +315,6 @@ const displaySourceBranch = (
       `Gallery display source ${source.target} has no attachment hop`,
     );
   }
-  const groupCreatedAt =
-    source.ordering === "newest"
-      ? sql`to_timestamp(-EXTRACT(EPOCH FROM ${aliasColumn(groupAlias, "createdAt")}))`
-      : aliasColumn(groupAlias, "createdAt");
   const sortOrder = targetGallery
     ? aliasColumn(attachmentHop!.alias, "sortOrder")
     : sql`0`;
@@ -272,7 +326,7 @@ const displaySourceBranch = (
     inheritedRelations: traversal.inheritedRelations,
     branch: sql`
         SELECT i.key, i.shortcode, ${source.priority} AS priority,
-               ${groupCreatedAt} AS "groupCreatedAt", ${aliasColumn(groupAlias, "id")} AS "groupId",
+               ${displayGroupColumns(groups)},
                ${sortOrder} AS "sortOrder", ${createdAt} AS "createdAt", i.id AS "imageId"
         FROM ${sql.raw(`"${traversal.rootTable}"`)} s
         ${traversal.joins}
@@ -322,8 +376,7 @@ export const entityDisplayImagePresenceSql = (entity: Entity, id: SQL): SQL => {
   const branches = selected.map(({ branch }) => branch);
   if (entity === "image")
     branches.push(sql`
-    SELECT i.key, i.shortcode, 0 AS priority, NULL::timestamptz AS "groupCreatedAt",
-      NULL::uuid AS "groupId", 0 AS "sortOrder", i."createdAt", i.id AS "imageId"
+    SELECT i.key, i.shortcode, 0 AS priority, ${displayGroupColumns([])}, 0 AS "sortOrder", i."createdAt", i.id AS "imageId"
     FROM "Image" i WHERE i.id = refs."entityId" AND i."deletedAt" IS NULL
       AND ${displayableImageSql("i")}`);
   if (branches.length === 0) return sql`false`;
@@ -358,12 +411,12 @@ const displayImageRowSchema = z.object({
  * This is THE display-image policy: list rows' `displayImages`, search hits,
  * entity-link hover cards and the audit log all read it, and no client derives
  * a cover itself. An entity's own gallery/cover comes first (priority 0),
- * mechanically for every `GalleryEntity` — see {@link ownGalleryUnionBranch}.
+ * mechanically for every image-owning entity.
  * Direct storage always wins. Explicit relationship arms then supply truthful
- * fallback imagery without recursively resolving another entity's
- * `displayImages`; that keeps reciprocal relationships such as recipe and meal
- * finite. Callers keep UUIDs private, map the returned summaries onto public
- * DTOs, and use a semantic entity mark when a ref resolves to nothing.
+ * fallback imagery through finite, cycle-guarded paths. All candidates are
+ * selected in this one query rather than recursively loading related records.
+ * Callers keep UUIDs private, map the returned summaries onto public DTOs, and
+ * use a semantic entity mark when a ref resolves to nothing.
  */
 async function resolveDisplayImageListsFromSqlRefs(
   db: Database | DrizzleTransaction,
@@ -425,7 +478,7 @@ async function resolveDisplayImageListsFromSqlRefs(
             'useOriginal', selected_image."useOriginal",
             'derivativeKey', derivative.key
           )
-          ORDER BY candidates.priority, candidates."groupCreatedAt", candidates."groupId",
+          ORDER BY candidates.priority, ${displayGroupOrder("candidates")},
                    candidates."sortOrder", candidates."createdAt", candidates."imageId"
         ),
         '[]'::json
@@ -433,14 +486,14 @@ async function resolveDisplayImageListsFromSqlRefs(
       FROM (
         SELECT DISTINCT ON (raw_candidates."imageId") raw_candidates.*
         FROM (
-        SELECT i.key, i.shortcode, 0 AS priority, NULL::timestamptz AS "groupCreatedAt", NULL::uuid AS "groupId", 0 AS "sortOrder", i."createdAt", i.id AS "imageId"
+        SELECT i.key, i.shortcode, 0 AS priority, ${displayGroupColumns([])}, 0 AS "sortOrder", i."createdAt", i.id AS "imageId"
         FROM "Image" i
         WHERE refs."entityKind" = 'image' AND i.id = refs."entityId"
           AND i."deletedAt" IS NULL AND ${displayableImageSql("i")}
         ${borrowedImages}
         ) raw_candidates
         ORDER BY raw_candidates."imageId", raw_candidates.priority,
-                 raw_candidates."groupCreatedAt", raw_candidates."groupId",
+                 ${displayGroupOrder("raw_candidates")},
                  raw_candidates."sortOrder", raw_candidates."createdAt"
       ) candidates
       JOIN "Image" selected_image ON selected_image.id = candidates."imageId"

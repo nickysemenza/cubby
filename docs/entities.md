@@ -856,15 +856,30 @@ with image storage declares `capabilities.images.displaySources`; there is no
 default to replace. An entity without storage borrows from a ranked singular
 outgoing relation to an Image or image-storing subject (direct Image
 references first); `displaySourceOverrides` replaces that derived ranking and
-`[]` opts out. The schema rejects the other name for each kind. The compiler does not borrow through incoming activity or
-recursively consume another entity's resolved `displayImages`. The centralized
-resolver in `apps/web/src/server/entity-kernel/repo/entity-display-image.ts` orders direct
-displayable images before related images, filters unavailable files, and
-deduplicates by image ID. Web and native clients render the first result and do
-not derive their own cover. The exclusions in
-`packages/schemas/src/image.ts` own file displayability; both the in-memory
-predicate and aliased repository SQL compile that declaration. Attachment
-liveness and purpose remain relationship rules at the resolver/query.
+`[]` opts out. The schema rejects the other name for each kind. Only declared
+paths are followed; incoming activity is never discovered as a fallback.
+The centralized resolver in
+`apps/web/src/server/entity-kernel/repo/entity-display-image.ts` composes these
+paths breadth first in one SQL read. Direct displayable images come first,
+then directly related images in declaration order, then deeper fallbacks.
+Each path visits a subject kind once, so reciprocal Recipe/Meal and Task/Project
+policies terminate. Each relationship retains its declared newest/oldest ordering
+before nested relationships and attachment order. Unavailable files, PDFs,
+deleted records and Product label images never become covers, and repeated
+images are deduplicated by Image ID. Web and native clients render the first
+result and do not derive their own cover.
+
+Products fall back to their Brand's logo. Product consumers, including Inventory,
+Ingredients and Expenses, can borrow that logo through their declared paths.
+Expenses also reach the seller logo through their linked Purchase; Vendor is
+Purchase-owned, not an independent Expense assignment. Display-image quality
+presence uses these same composed paths. Generated read dependencies include
+transitive media inputs so changing a Brand logo invalidates consumers as well
+as the Product; unrelated mutation ripples are not recursively expanded.
+
+The exclusions in `packages/schemas/src/image.ts` own file displayability;
+both the in-memory predicate and aliased repository SQL compile that declaration.
+Attachment liveness and purpose remain relationship rules at the resolver/query.
 
 Declare display sources in preference order. Array position compiles to
 priority after directly owned images; ordering defaults to `declared`, with explicit `newest` or

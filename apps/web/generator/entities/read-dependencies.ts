@@ -32,18 +32,28 @@ export const entityReadDependents = (entities: readonly CompiledEntity[]) => {
         if (input !== undefined) inputs.add(input);
       }
     }
-    for (const source of consumer.imagePolicy.displaySources) {
-      let current = consumer;
-      for (const key of source.relationPath) {
-        const relation = current.relations.find(
-          (relation) => relation.key === key,
-        );
-        const target = entities.find(
-          (entity) => entity.key === relation?.target,
-        );
-        if (!target) break;
-        inputs.add(target.key);
-        current = target;
+    // Media reads compose declared fallbacks, so invalidation must include
+    // their transitive inputs without expanding unrelated mutation ripples.
+    const mediaInputs = [consumer];
+    const visitedMedia = new Set<string>();
+    for (let cursor = 0; cursor < mediaInputs.length; cursor++) {
+      const mediaConsumer = mediaInputs[cursor]!;
+      if (visitedMedia.has(mediaConsumer.key)) continue;
+      visitedMedia.add(mediaConsumer.key);
+      for (const source of mediaConsumer.imagePolicy.displaySources) {
+        let current = mediaConsumer;
+        for (const key of source.relationPath) {
+          const relation = current.relations.find(
+            (relation) => relation.key === key,
+          );
+          const target = entities.find(
+            (entity) => entity.key === relation?.target,
+          );
+          if (!target) break;
+          inputs.add(target.key);
+          current = target;
+        }
+        mediaInputs.push(current);
       }
     }
     for (const input of inputs)

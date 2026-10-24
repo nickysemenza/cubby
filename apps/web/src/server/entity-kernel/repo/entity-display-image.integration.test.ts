@@ -1,6 +1,7 @@
 import { entityRefKey } from "@cubby/schemas/entity";
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import { eq, sql } from "drizzle-orm";
+import { createRepoEntity } from "tooling/factories/repo";
 import { taxonomyShortcode } from "tooling/product-category-fixtures";
 import { countTestDbQueries, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
@@ -12,6 +13,7 @@ import {
   image,
   imageDerivative,
   product,
+  vendor,
 } from "~/server/db/schema";
 import {
   setCookbookProduct,
@@ -35,8 +37,10 @@ import {
   entityKernelContextSchema,
   executeEntity,
 } from "~/server/entity-kernel";
+import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
 import { resolveLiveShortcode } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { publishQualityFixtures } from "~/server/testing/quality.fixtures";
 import {
   createIngredientFixture,
   createInventoryFixture,
@@ -53,6 +57,7 @@ import { createTestRequestContext } from "~/server/testing/request-context";
 
 import {
   entityDisplayImagePresenceSql,
+  resolvePublicEntityDisplayImages,
   resolveEntityDisplayImages,
   resolveEntityAttachments,
   withDisplayImages,
@@ -264,6 +269,148 @@ describe("entity display image resolver", () => {
   });
 
   describe("product", () => {
+    it("uses a Brand logo through Products and their consumers, including quality presence", async () => {
+      const brand = await createRepoEntity(ctx, "vendor", {
+        name: "Synthetic CAD brand",
+      });
+      const logo = await makeImage();
+      await insertEntityAttachments(ctx.db, {
+        entityId: brand.entityId,
+        imageId: logo.id,
+        role: "logo",
+      });
+      const item = await createProductIdentityFixture(
+        ctx.db,
+        makeProductInput({
+          name: "Synthetic CAD subscription",
+          brandId: brand.output.id,
+        }),
+        ctx.actor,
+      );
+      const expense = await createRepoEntity(
+        ctx,
+        "expense",
+        makeExpenseInput({ productId: item.id }),
+      );
+      const location = await createLocationFixture(
+        ctx.db,
+        makeLocationInput({ name: "Synthetic image shelf" }),
+        ctx.actor,
+      );
+      const entry = await createInventoryFixture(
+        ctx.db,
+        {
+          productId: item.id,
+          locationId: location.id,
+          amount: { value: 1, unit: "each" },
+        },
+        ctx.actor,
+      );
+      const refs = [
+        { entityKind: "product" as const, entityId: item.entityId },
+        { entityKind: "expense" as const, entityId: expense.entityId },
+        { entityKind: "inventory" as const, entityId: entry.entityId },
+      ];
+      const measured = await countTestDbQueries(() =>
+        resolveEntityDisplayImages(ctx.db, refs),
+      );
+      expect(measured.queryCount).toBe(1);
+      const images = measured.result;
+      expect(
+        refs.map((ref) =>
+          images.get(entityRefKey(ref.entityKind, ref.entityId)),
+        ),
+      ).toEqual(refs.map(() => expectedImageUrl(logo)));
+      const publicImages = await resolvePublicEntityDisplayImages(ctx.db, [
+        { entityKind: "product", entityId: item.id },
+      ]);
+      expect(publicImages.get(entityRefKey("product", item.id))).toEqual(
+        expectedImageUrl(logo),
+      );
+      const qualities = await loadDataQualities(ctx.db, "product", [
+        item.entityId,
+      ]);
+      expect(qualities.has(item.entityId)).toBe(true);
+      expect(
+        qualities.get(item.entityId)?.gaps.map((gap) => gap.check),
+      ).not.toContain("product_display_image");
+      await publishQualityFixtures(ctx.db, "product");
+      const stored = await loadDataQualities(
+        ctx.db,
+        "product",
+        [item.entityId],
+        "stored",
+      );
+      expect(stored.has(item.entityId)).toBe(true);
+      expect(
+        stored.get(item.entityId)?.gaps.map((gap) => gap.check),
+      ).not.toContain("product_display_image");
+      const label = await makeImage();
+      await insertEntityAttachments(ctx.db, {
+        entityId: item.entityId,
+        imageId: label.id,
+        purpose: "label",
+      });
+      expect(
+        (await resolveEntityDisplayImages(ctx.db, refs)).get(
+          entityRefKey("product", item.entityId),
+        ),
+      ).toEqual(expectedImageUrl(logo));
+      const ownImage = await makeImage();
+      await insertEntityAttachments(ctx.db, {
+        entityId: item.entityId,
+        imageId: ownImage.id,
+      });
+      expect(
+        (await resolveEntityDisplayImages(ctx.db, refs)).get(
+          entityRefKey("product", item.entityId),
+        ),
+      ).toEqual(expectedImageUrl(ownImage));
+      await getDb(ctx.db)
+        .update(image)
+        .set({ storageStatus: "missing" })
+        .where(eq(image.id, ownImage.id));
+      expect(
+        (await resolveEntityDisplayImages(ctx.db, refs)).get(
+          entityRefKey("product", item.entityId),
+        ),
+      ).toEqual(expectedImageUrl(logo));
+      await getDb(ctx.db)
+        .update(vendor)
+        .set({ deletedAt: new Date() })
+        .where(eq(vendor.id, brand.entityId));
+      expect((await resolveEntityDisplayImages(ctx.db, refs)).size).toBe(0);
+      const missingQualities = await loadDataQualities(ctx.db, "product", [
+        item.entityId,
+      ]);
+      expect(
+        missingQualities.get(item.entityId)?.gaps.map((gap) => gap.check),
+      ).toContain("product_display_image");
+    });
+
+    it("uses an Expense Vendor logo without Product or Purchase images", async () => {
+      const vendor = await createRepoEntity(ctx, "vendor", {
+        name: "Synthetic service seller",
+      });
+      const logo = await makeImage();
+      await insertEntityAttachments(ctx.db, {
+        entityId: vendor.entityId,
+        imageId: logo.id,
+        role: "logo",
+      });
+      const expense = await createRepoEntity(
+        ctx,
+        "expense",
+        makeExpenseInput({ vendor: vendor.output.name }),
+      );
+      const images = await resolveEntityDisplayImages(ctx.db, [
+        { entityKind: "expense", entityId: expense.entityId },
+      ]);
+      expect(images.get(entityRefKey("expense", expense.entityId))).toEqual(
+        expectedImageUrl(logo),
+      );
+    });
+
     it("orders displayImages by sortOrder and excludes PDF, missing, and soft-deleted links", async () => {
       const p = await createProductIdentityFixture(
         ctx.db,
@@ -1002,6 +1149,85 @@ describe("entity display image resolver", () => {
   });
 
   describe("project through tasks", () => {
+    it("composes Task/Project fallbacks and deduplicates reciprocal image paths", async () => {
+      const project = await createRepoEntity(ctx, "project", {
+        name: "Synthetic media project",
+        defaultTrade: "other",
+      });
+      const secondBrand = await createRepoEntity(ctx, "vendor", {
+        name: "Synthetic second brand",
+      });
+      const brand = await createRepoEntity(ctx, "vendor", {
+        name: "Synthetic nested brand",
+      });
+      const oldLogo = await makeImage();
+      const newLogo = await makeImage();
+      await insertEntityAttachments(ctx.db, [
+        { entityId: brand.entityId, imageId: oldLogo.id, role: "logo" },
+        { entityId: secondBrand.entityId, imageId: newLogo.id, role: "logo" },
+      ]);
+      const olderProduct = await createProductIdentityFixture(
+        ctx.db,
+        makeProductInput({
+          name: "Synthetic old subject",
+          brandId: brand.output.id,
+        }),
+        ctx.actor,
+      );
+      const newerProduct = await createProductIdentityFixture(
+        ctx.db,
+        makeProductInput({
+          name: "Synthetic new subject",
+          brandId: secondBrand.output.id,
+        }),
+        ctx.actor,
+      );
+      await createRepoEntity(ctx, "task", {
+        name: "Synthetic old task",
+        projectId: project.output.id,
+        subjectProductId: olderProduct.id,
+        subjectProductMode: "explicit",
+      });
+      await createRepoEntity(ctx, "task", {
+        name: "Synthetic new task",
+        projectId: project.output.id,
+        subjectProductId: newerProduct.id,
+        subjectProductMode: "explicit",
+      });
+      const rows = await withDisplayImages(
+        ctx.db,
+        "project",
+        [{ id: project.entityId }],
+        (row) => row,
+      );
+      expect(rows[0]?.displayImages).toEqual([
+        expectedDisplayImage(oldLogo),
+        expectedDisplayImage(newLogo),
+      ]);
+      const bareTask = await createRepoEntity(ctx, "task", {
+        name: "Synthetic task without a subject",
+        projectId: project.output.id,
+      });
+      const images = await resolveEntityDisplayImages(ctx.db, [
+        { entityKind: "task", entityId: bareTask.entityId },
+      ]);
+      expect(images.get(entityRefKey("task", bareTask.entityId))).toEqual(
+        expectedImageUrl(oldLogo),
+      );
+      const direct = await makeImage();
+      await insertEntityAttachments(ctx.db, {
+        entityId: project.entityId,
+        imageId: direct.id,
+      });
+      expect(
+        (
+          await resolveEntityDisplayImages(ctx.db, [
+            { entityKind: "task", entityId: bareTask.entityId },
+          ])
+        ).get(entityRefKey("task", bareTask.entityId)),
+      ).toEqual(expectedImageUrl(direct));
+    });
+
     // An inherited Task project joins through a statement-local effective
     // relation; a child Task with no project of its own still lends its image
     // to its parent's project, and never to another project.
