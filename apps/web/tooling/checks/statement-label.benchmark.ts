@@ -226,7 +226,7 @@ it.each(sizes)(
         .mockImplementation(async (items, questionFor, options) => {
           settleProbe.mockClear();
           queuedQuestions += items.length;
-          queuedPromptBytes += items.reduce((total, item) => {
+          queuedPromptBytes += items.reduce<number>((total, item) => {
             const args = questionFor(item);
             return (
               total +

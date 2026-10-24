@@ -3344,42 +3344,71 @@ describe("statement Transaction suggestions", () => {
 
   it("keeps context-overflow defaults free before the last admitted question", async () => {
     await card(ctx);
-    await record(ctx, [rowInput()]);
+    await record(ctx, [
+      rowInput({
+        providerTransactionId: "synthetic-overflow-charge",
+        rawDescription: "synthetic oversized evidence ".repeat(40_000),
+      }),
+    ]);
     await generate(ctx);
-    const fits = vi
-      .spyOn(decisionModel, "decisionChoiceFitsContext")
-      .mockReturnValueOnce(false)
-      .mockReturnValue(true);
-    const port = vi.fn(
-      answering({ kind: "purchase", counterparty: "business" }),
+    await record(
+      ctx,
+      [rowInput({ providerTransactionId: "synthetic-fitting-charge" })],
+      {
+        fingerprint: "synthetic-fitting-import",
+      },
     );
+    await generate(ctx);
+    const before = await statementSuggestionsRepo.suggestionsNeedingLabels(
+      ctx.db,
+      2,
+    );
+    const overflowing = before.find(
+      (row) => (row.judgment.create?.rawDescription?.length ?? 0) > 32_000,
+    );
+    expect(overflowing).toBeDefined();
+    if (!overflowing) return;
+    await statementSuggestionsRepo.recordStatementLabelCheckpoint(ctx.db, {
+      charge: assessmentSubjects.statement_transaction.parse(
+        overflowing.subject,
+      ),
+      evidenceFingerprint: overflowing.evidenceFingerprint,
+      checkpoint: {
+        revision: STATEMENT_LABEL_REVISION,
+        model: null,
+        models: [],
+        judgment: overflowing.judgment,
+        kind: false,
+        counterparty: false,
+        spending: true,
+      },
+    });
+    // Freeze historical cursor order so the real overflow precedes fitting work.
+    await getDb(ctx.db)
+      .update(assessmentState)
+      .set({ createdAt: new Date("2026-01-01T00:00:00Z") })
+      .where(eq(assessmentState.id, overflowing.id));
+    const fits = vi.spyOn(decisionModel, "decisionChoiceFitsContext");
+    const port = vi.fn(answering({ kind: "other", counterparty: "business" }));
     try {
       const outcome = await labelStatementSuggestions(ctx.db, {
         runId: await ensureRun(ctx.db, ctx.actor, { purpose: "background" }),
         port,
         decisionLimit: 1,
       });
-      expect(port).toHaveBeenCalledTimes(1);
-      expect(outcome).toMatchObject({
-        completed: 0,
-        failed: [],
-        labels: { generated: 2 },
-      });
-      const [saved] = await statementSuggestionsRepo.suggestionsNeedingLabels(
-        ctx.db,
-        1,
+      expect(fits.mock.results.some((result) => result.value === false)).toBe(
+        true,
       );
-      expect(saved!.checkpoint).toMatchObject({
-        kind: true,
-        counterparty: true,
-        spending: false,
-        judgment: {
-          create: {
-            votes: { label: null },
-            counterparty: { label: "business" },
-          },
-        },
-      });
+      expect(port).toHaveBeenCalledTimes(1);
+      expect(outcome.failed).toEqual([]);
+      expect(outcome.labels).toMatchObject({ generated: 3, reused: 1 });
+      const saved = await statementSuggestionsRepo.suggestionsNeedingLabels(
+        ctx.db,
+        2,
+      );
+      expect(saved.map((row) => row.checkpoint)).toMatchObject([
+        { kind: true, counterparty: false },
+      ]);
     } finally {
       fits.mockRestore();
     }
