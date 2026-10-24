@@ -58,6 +58,7 @@ import {
   statementSuggestionStatusCounts,
 } from "~/server/domains/transaction-import/repo/statement-suggestion-read";
 import { kindAgreed } from "~/server/domains/transaction-import/repo/statement-transaction-kind";
+import { readCorrectionOutcomes } from "~/server/generic/assessment/repo/correction-outcomes";
 import {
   reviewFamilyDeclarations,
   pendingRecommendationEligibility,
@@ -279,6 +280,10 @@ const field: SuggestionFamilyPresentation<"field"> = {
       keys.map((key) => key.assessmentId),
     );
     const byId = new Map(keys.map((key) => [key.assessmentId, key]));
+    const corrections = await readCorrectionOutcomes(
+      db,
+      keys.map((key) => key.assessmentId),
+    );
     return new Map(
       rows.flatMap((row) => {
         const key = byId.get(row.assessmentId);
@@ -290,6 +295,12 @@ const field: SuggestionFamilyPresentation<"field"> = {
             : []),
           { kind: "value", value: row.suggestedValue },
         ];
+        const correction = corrections.get(row.assessmentId);
+        if (correction?.outcome.status === "held")
+          summary.push({
+            kind: "text",
+            text: `Automatic correction held: ${correction.outcome.reason}`,
+          });
         return [
           [
             row.assessmentId,

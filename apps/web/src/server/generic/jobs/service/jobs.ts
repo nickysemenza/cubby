@@ -108,7 +108,14 @@ export async function advanceJob(
     const published = await withJobExecution(
       db,
       claimed,
-      () => publishJobPage(db, claimed, prepared.page, prepared.publish),
+      () =>
+        publishJobPage(
+          db,
+          claimed,
+          prepared.page,
+          prepared.publish,
+          prepared.isolationLevel,
+        ),
       details,
     );
     entry().info("publish", {

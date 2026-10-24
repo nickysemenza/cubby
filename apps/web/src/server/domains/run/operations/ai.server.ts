@@ -79,7 +79,10 @@ import {
   startSuggestionSweep,
 } from "~/server/domains/run/service/suggestion-sweep";
 import { publishAssessment } from "~/server/generic/assessment/repo/assessment";
-import { fieldReviewIdentity } from "~/server/generic/assessment/repo/field-assessment-review";
+import {
+  fieldCorrectionIdentity,
+  fieldReviewIdentity,
+} from "~/server/generic/assessment/repo/field-assessment-review";
 import { latestSuggestionSweepStatus } from "~/server/generic/assessment/repo/suggestion-review";
 import {
   resolveAllOrThrow,
@@ -307,6 +310,14 @@ export const inferFieldAssessments = async (
       ...fieldDependencyKeys(input.entity, field),
       ...inputs.map((call) => call.feature),
     ]);
+    const correctionKey = await fieldCorrectionIdentity({
+      entity: input.entity,
+      field,
+      basis: input.basis,
+      inputs,
+      dependencies,
+      incomplete: captured.incomplete,
+    });
     const reviewKey = await fieldReviewIdentity({
       entity: input.entity,
       recordId,
@@ -389,6 +400,7 @@ export const inferFieldAssessments = async (
               basis: input.basis,
               inputs,
               proposal: suggestion ?? null,
+              correctionKey,
             }),
           },
           {
@@ -400,7 +412,7 @@ export const inferFieldAssessments = async (
               suggestion?.financeReview?.fingerprint ?? null,
             status: suggestion ? "pending" : "resolved",
             active: false,
-            data: { reviewKey },
+            data: { reviewKey, correctionKey },
           },
         );
       }));

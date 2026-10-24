@@ -21,9 +21,11 @@ import type { SupportedDecisionModel } from "@cubby/shared/ai/models";
 
 import {
   decisionChoiceFitsContext,
+  decisionModelFor,
   type DecisionPort,
   runDecisionChoice,
 } from "~/server/ai/decision-model";
+import { captureAiInput } from "~/server/ai/evaluation-inputs";
 import {
   type AiSelectionSpec,
   selectionPrompt,
@@ -114,6 +116,19 @@ export async function runAiSelection<C>(
   }
 
   const prompt = selectionPrompt(spec, args.subject, shown);
+  // Labels alone do not identify a roster: equal labels can name different records.
+  await captureAiInput(
+    {
+      ...spec.feature,
+      model: decisionModelFor({
+        ...prompt,
+        feature: spec.feature,
+        decisionModel: args.decisionModel,
+      }),
+    },
+    args.usage.operation,
+    { rosterIds: shown.map(spec.idOf) },
+  );
   const { choices } = prompt;
   if (!decisionChoiceFitsContext(prompt)) {
     const port = args.ai ?? productionAiSelectionPort;

@@ -35,7 +35,10 @@ import { settleArrivedFindingsForProduct } from "~/server/domains/purchase-impor
 import { executeEntity } from "~/server/entity-kernel";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { entityCommandSchema } from "~/server/entity-kernel/contracts";
-import { fieldReviewIdentity } from "~/server/generic/assessment/repo/field-assessment-review";
+import {
+  fieldCorrectionIdentity,
+  fieldReviewIdentity,
+} from "~/server/generic/assessment/repo/field-assessment-review";
 import { latestFieldWrite } from "~/server/generic/audit-log/repo/field-write";
 import { resolveLiveShortcodes } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { canonicalJson } from "~/server/lib/canonical-json";
@@ -173,6 +176,17 @@ async function suggestTarget(
     served: true,
   });
   if (primary) {
+    primary.correctionKey = await fieldCorrectionIdentity({
+      entity: input.entity,
+      field: input.field,
+      basis: target.basis,
+      inputs: primaryCall.inputs,
+      incomplete: primaryCall.incomplete,
+      dependencies: dependencyStamps(manifest, [
+        ...fieldDependencyKeys(input.entity, input.field),
+        ...primaryCall.inputs.map((call) => call.feature),
+      ]),
+    });
     primary.reviewKey = await fieldReviewIdentity({
       entity: input.entity,
       recordId: target.entityId,

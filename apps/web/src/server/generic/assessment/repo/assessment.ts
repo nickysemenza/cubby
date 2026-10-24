@@ -6,6 +6,7 @@ import {
   feedbackAuthority,
   feedbackEvent,
 } from "@cubby/schemas/assessment";
+import { CORRECTION_OUTCOME_RECEIPT_KIND } from "@cubby/schemas/suggestion-correction";
 import { and, eq, inArray, sql, type SQL } from "drizzle-orm";
 import { isEqual } from "es-toolkit";
 import { z } from "zod";
@@ -20,7 +21,10 @@ import {
   assessmentState,
   feedback,
 } from "~/server/db/retained-tables";
-import { recordChange } from "~/server/generic/changes/repo/change";
+import {
+  recordAssessmentChange,
+  recordChange,
+} from "~/server/generic/changes/repo/change";
 
 import {
   assessmentProjectionSnapshot,
@@ -58,10 +62,13 @@ export function assertApplicationReceipt(
  */
 export const automaticApplicationRule = (assessmentId: SQL) => sql<
   string | null
->`(SELECT (f.metadata->${"rule"}->>${"key"}) || '@' || (f.metadata->${"rule"}->>${"revision"})
+>`(SELECT CASE WHEN f.metadata->>${"kind"} = ${CORRECTION_OUTCOME_RECEIPT_KIND} THEN 'member-correction@1'
+    ELSE (f.metadata->${"rule"}->>${"key"}) || '@' || (f.metadata->${"rule"}->>${"revision"}) END
   FROM "Feedback" f WHERE f."assessmentId" = ${assessmentId}
     AND f.authority = ${feedbackAuthority.enum.automatic}
-    AND f.metadata->>${"kind"} = ${"assessment_application"}
+    AND (f.metadata->>${"kind"} = ${"assessment_application"}
+      OR (f.metadata->>${"kind"} = ${CORRECTION_OUTCOME_RECEIPT_KIND} AND f.receipt->>${"status"} = ${"applied"}))
+  ORDER BY f."createdAt" DESC, f.id DESC
   LIMIT 1)`;
 
 /** The rule stamps an AssessmentState's publication matched. */
@@ -167,6 +174,13 @@ export async function publishAssessments(
         return state ? [{ ...state, id: row.id, family: row.family }] : [];
       }),
     );
+    const correctionTargets = inserted.filter((row) => row.family === "field");
+    if (correctionTargets.length) {
+      await recordAssessmentChange(transactionDb, {
+        kind: "publications",
+        ids: correctionTargets.map((row) => row.id),
+      });
+    }
     if (
       inserted.some(
         (row) =>
@@ -247,6 +261,7 @@ export async function publishFieldAssessment(
       evidence: {
         currentValue: z.json().parse(projection.currentValue ?? null),
         provenance: projection.provenance ?? null,
+        correctionKey: data.correctionKey ?? null,
       },
       served,
     },
@@ -303,6 +318,17 @@ export async function recordFeedback(
     if (!row) throw new Error("Feedback publication returned no row");
     if (!isEqual(input, feedbackEvent.parse(row)))
       throw new Error("Immutable Feedback retry changed its event");
+    if (
+      inserted &&
+      row.authority === "member" &&
+      row.intent === "apply" &&
+      row.receipt !== null
+    ) {
+      await recordAssessmentChange(transactionDb, {
+        kind: "application",
+        receiptId: row.id,
+      });
+    }
     if (
       inserted &&
       (prediction.family === "email_relevance" ||

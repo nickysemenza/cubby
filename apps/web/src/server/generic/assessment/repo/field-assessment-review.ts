@@ -6,6 +6,32 @@ import { z } from "zod";
 import type { CapturedInput } from "~/server/ai/evaluation-inputs";
 import { canonicalJson } from "~/server/lib/canonical-json";
 
+/** Exact pre-decision inputs, independent of record identity and model output. */
+export async function fieldCorrectionIdentity(input: {
+  entity: string;
+  field: string;
+  basis: unknown;
+  inputs: readonly CapturedInput[];
+  dependencies: AiProvenance["dependencies"];
+  incomplete?: boolean;
+}) {
+  const inputs = input.inputs.filter(
+    (call) => call.operation === `suggestFields.${input.entity}.${input.field}`,
+  );
+  if (input.incomplete || !inputs.length || !input.dependencies.length)
+    return null;
+  return sha256Hex(
+    canonicalJson({
+      version: "field-correction-v1",
+      entity: input.entity,
+      field: input.field,
+      basis: z.json().parse(input.basis),
+      inputs,
+      dependencies: input.dependencies,
+    }),
+  );
+}
+
 /** Match actual served evidence and the exact proposal across inference entry points. */
 export async function fieldReviewIdentity(input: {
   entity: string;
