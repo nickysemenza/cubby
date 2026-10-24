@@ -86,7 +86,9 @@ async function runStepInputWhere(
   }
   const accounts = await statementHoldAccounts(db, family.scope);
   if (!accounts.length) return sql`false`;
-  const holds = statementPendingInputTransactions(accounts);
+  const holds = statementPendingInputTransactions(accounts, {
+    scope: family.scope,
+  });
   return sql`"FinancialTransaction".id IN (SELECT id FROM (${holds}) inputs)`;
 }
 

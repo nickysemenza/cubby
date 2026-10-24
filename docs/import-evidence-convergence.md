@@ -588,7 +588,12 @@ Interruption preserves reusable labels and completed publications.
 Label-page selection partitions positions by whether either original-order component
 is retained. Ordinary rows use native timestamp/ID ordering; retained rows keep the
 same component-wise overrides. A statement Sweep carries its full account/date/import
-scope through label counting, selection, retries and receipt admission. Date and import
+scope through hold counting, paging and input inspection as well as label counting,
+selection, retries and receipt admission. Hold selection intersects the account filter
+with retained charge membership/date before cursor limits; it admits whole holds and
+retains every pending settlement reference's evidence. Existing explicit withdrawal
+proof is still required for a void proposal; incomplete membership supplies none.
+Date and import
 filters intersect on retained source observations using the generation identity selector,
 including withdrawal imports; the date is the source `statementDate`, not the
 Assessment timestamp. Account scope uses live generation-preview resolution in batches,

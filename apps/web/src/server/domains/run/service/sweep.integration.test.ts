@@ -17,6 +17,7 @@ import { getDb } from "~/server/db/helpers";
 import { ledgerParty, run, transactionImport } from "~/server/db/schema";
 import { runHandlers } from "~/server/domains/run/operations/run.server";
 import { recordSourceTransactionRecords } from "~/server/domains/transaction-import/repo/source-transaction-record";
+import { buildHoldVoidProposals } from "~/server/domains/transaction-import/repo/statement-suggestions";
 import { labelStatementSuggestions } from "~/server/domains/transaction-import/service/statement-suggestion-labels";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { systemPrincipal } from "~/server/http/authenticate";
@@ -174,6 +175,173 @@ describe("Sweeps", () => {
     `);
     expect(rows[0]?.count).toBe(0);
   });
+
+  // A later label filter cannot undo a void Suggestion published by the holds
+  // step. Its counted population and page must admit the same whole holds.
+  it.each([
+    { scope: "collection", included: ["selected", "old", "foreign"] },
+    { scope: "date", included: ["selected", "foreign", "unrelated"] },
+    { scope: "collection/account", included: ["selected", "old"] },
+    { scope: "collection/date", included: ["selected", "foreign"] },
+  ] as const)(
+    "keeps the full statement Sweep hold population inside $scope scope",
+    async ({ scope, included }) => {
+      const primary = (
+        await account("Synthetic hold card", "Synthetic Card (...4242)")
+      ).output;
+      const foreign = (
+        await account("Synthetic foreign hold card", "Other Card (...9999)")
+      ).output;
+      const held = [
+        row({
+          providerTransactionId: "selected",
+          providerStatus: "pending",
+          providerAmount: -20,
+        }),
+        row({
+          providerTransactionId: "old",
+          providerStatus: "pending",
+          providerAmount: -21,
+          statementDate: "2026-04-01",
+        }),
+        row({
+          providerTransactionId: "foreign",
+          providerStatus: "pending",
+          providerAmount: -22,
+          accountDescriptor: "Other Card (...9999)",
+        }),
+      ];
+      const retained = await recordRows(held, "synthetic-retained-holds");
+      await recordRows(
+        [
+          row({
+            providerTransactionId: "unrelated",
+            providerStatus: "pending",
+            providerAmount: -23,
+          }),
+        ],
+        "synthetic-unrelated-hold",
+      );
+      // Persist explicit complete-window withdrawal proof before restoring the
+      // legacy pending transactions that the Sweep must inspect. Incomplete
+      // membership alone supplies no disappearance proof.
+      for (const [descriptor, ids] of [
+        ["Synthetic Card (...4242)", ["selected", "old", "unrelated"]],
+        ["Other Card (...9999)", ["foreign"]],
+      ] as const) {
+        const withdrawal = await recordSourceTransactionRecords(
+          ctx.db,
+          recordSourceTransactionRecordsInput.parse({
+            import: {
+              source: "monarch",
+              label: "Synthetic confirmed withdrawal",
+              fingerprint: `synthetic-withdrawn-holds-${descriptor}`,
+              dateKind: "posted",
+              observedAt: "2026-11-01T00:00:00Z",
+              rowCountDeclared: 0,
+              coverage: {
+                account: descriptor,
+                from: "2026-04-01",
+                to: "2026-05-31",
+                visibility: "all",
+              },
+            },
+            rows: [],
+            complete: true,
+            confirmedWithdrawals: ids,
+          }),
+          ctx.actor,
+        );
+        expect(withdrawal.withdrawn).toBe(ids.length);
+      }
+      const observations = await getDb(
+        ctx.db,
+      ).query.sourceTransactionRecord.findMany();
+      for (const observation of observations) {
+        await createRepoEntity(ctx, "financialTransaction", {
+          accountId:
+            observation.accountDescriptor === "Other Card (...9999)"
+              ? foreign.id
+              : primary.id,
+          kind: "other",
+          status: "pending",
+          amount: observation.amount,
+          transactionDate: observation.statementDate,
+          sourceRefs: [
+            { source: observation.source, externalId: observation.externalId },
+          ],
+        });
+      }
+      expect(await buildHoldVoidProposals(ctx.db)).toHaveLength(4);
+      const selectedIds = new Set<string>(included);
+      const excludedKeys = observations
+        .filter((item) => !selectedIds.has(item.providerTransactionId!))
+        .map((item) => item.chargeKey);
+      const excludedAssessments = () =>
+        getDb(ctx.db).execute(sql`
+      SELECT * FROM "AssessmentState" WHERE family = ${assessmentFamily.enum.statement_transaction}
+        AND data->>${"chargeKey"} IN (${sql.join(
+          excludedKeys.map((key) => sql`${key}`),
+          sql`, `,
+        )}) ORDER BY id
+    `);
+      const before = await excludedAssessments();
+      const collections = await getDb(
+        ctx.db,
+      ).query.transactionImport.findMany();
+      const runId = await startSweep(ctx.db, ctx.actor, {
+        trigger: "manual",
+        families: [
+          {
+            family: "statement_transaction",
+            scope: {
+              ...(scope !== "date" && { importId: retained.batchId! }),
+              ...(scope === "collection/account" && {
+                accountIds: [
+                  await resolveOrThrow(ctx.db, "financialAccount", primary.id),
+                ],
+              }),
+              ...((scope === "date" || scope === "collection/date") && {
+                since: "2026-05-01",
+              }),
+            },
+          },
+        ],
+      });
+      expect(await drive(runId)).toBe("finished");
+      expect((await excludedAssessments()).rows).toEqual(before.rows);
+      expect(
+        (await readRunSteps(ctx.db, runId)).find(
+          (step) => step.key === "statement_holds",
+        ),
+      ).toMatchObject({
+        state: "done",
+        found: included.length,
+        done: included.length,
+        failed: 0,
+        left: 0,
+      });
+      const { rows: proposed } = await getDb(ctx.db).execute<{
+        id: string;
+      }>(sql`
+      SELECT data->>${"chargeKey"} AS id FROM "AssessmentState"
+      WHERE family = ${assessmentFamily.enum.statement_transaction} AND active
+        AND data->>${"recommended"} = ${"void"}
+    `);
+      expect(proposed.map((item) => item.id).sort()).toEqual(
+        observations
+          .filter((item) => selectedIds.has(item.providerTransactionId!))
+          .map((item) => item.chargeKey)
+          .sort(),
+      );
+      expect(await getDb(ctx.db).query.transactionImport.findMany()).toEqual(
+        collections,
+      );
+      expect(
+        await getDb(ctx.db).query.sourceTransactionRecord.findMany(),
+      ).toEqual(observations);
+    },
+  );
 
   it("refuses invalid, missing and deleted collection references before creating work", async () => {
     const request = await memberRequest();
