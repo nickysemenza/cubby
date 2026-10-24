@@ -3832,7 +3832,9 @@ effect has a distinct identity, so restored text cannot substitute for unchanged
 effect proof. New member projection events name their command as the cause.
 Direct and batch prose readers verify propagated holders against the same
 automatic outcome receipts, loaded once per requested page. They expose correction
-authority and root provenance without model analysis or claims; an equal later
+authority and root provenance without model analysis or claims. Photo review
+keeps prose and receipt disclosures at the full card width, outside the narrow
+thumbnail rail. An equal later
 model proposal is retired against the existing holder rather than taking ownership.
 Historical repair, future enrollment, re-correction and replay share that domain
 adapter. Held pending rows retain reasons and corrected text in Suggestions with

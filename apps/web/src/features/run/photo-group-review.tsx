@@ -2647,7 +2647,6 @@ function ProposalCard({
                 editable
                 busy={busy}
               />
-              <GroupEvidence proposal={proposal} imagesById={imagesById} />
             </>
           }
           renderBody={(step) => (
@@ -2666,6 +2665,9 @@ function ProposalCard({
             />
           )}
         />
+        <div className="mt-3">
+          <GroupEvidence proposal={proposal} imagesById={imagesById} />
+        </div>
         {proposal.missingImageCount ? (
           <StatusText as="p" tone="warning" className="mt-3 text-xs">
             {proposal.missingImageCount === 1
