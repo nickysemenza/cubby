@@ -70,7 +70,10 @@ surfaces. Order and receipt work uses [purchase-import](../purchase-import/SKILL
   its own ledger sign. Validate supported currency before recording; never
   combine currencies or invent an exchange rate.
 - Keep the provider account descriptor and full mask, raw description, merchant,
-  category and notes. Set `dateKind` only from established date semantics; a
+  category and notes. When bank-original description is unavailable, use an
+  empty `rawDescription` and retain available cleansed text in `providerData`
+  under its original field name, explicitly identifying the missing original.
+  Set `dateKind` only from established date semantics; a
   date-shaped string alone establishes none. Unknown provider status is null,
   never an invented `posted` value. Include zero-value observations.
 - Give each immutable collection a stable fingerprint of its exact retained
