@@ -3793,6 +3793,8 @@ are never labelled as applied results. Verification requires an actual automatic
 application rule receipt or the family's application proof; admission of a held
 attempt supplies neither. Pagination orders by the displayed attempt time,
 falling back to the original Assessment time when there is no correction attempt.
+Hold summaries describe the refused repair; the old proposal remains in Evidence,
+so it is not presented as an instruction to overwrite the saved member value.
 Reads schedule or apply nothing.
 This adds no confirmation
 prompt or second queue. Every review family declares its repair policy, but

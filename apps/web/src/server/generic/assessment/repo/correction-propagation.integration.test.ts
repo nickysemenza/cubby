@@ -1292,6 +1292,9 @@ describe("confirmed correction propagation", () => {
       expect(pending.meta.totalCount).toBe(0);
       expect(automatic.totalCount).toBe(1);
       expect(automatic.items[0]?.applicationVerified).toBe(false);
+      expect(automatic.items[0]?.summary).toBe(
+        "Automatic correction held: Complete decision inputs are not equivalent",
+      );
       expect(automatic.items[0]?.correctionAttempt).toMatchObject({
         sourceFeedbackId: result.feedbackId,
         outcome: {

@@ -110,9 +110,9 @@ export async function listAutomaticDecisions(
       correction?.outcome.status === "applied"
         ? `Automatically corrected to ${JSON.stringify(correction.correctedValue)}`
         : correction?.outcome.status === "held"
-          ? `${originalSummary}. Automatic correction held: ${correction.outcome.reason}`
+          ? `Automatic correction held: ${correction.outcome.reason}`
           : correction?.outcome.status === "unchanged"
-            ? `${originalSummary}. Correction attempt required no change`
+            ? "Automatic correction required no change"
             : originalSummary;
     return automaticDecisionRow.parse({
       id: row.id,
