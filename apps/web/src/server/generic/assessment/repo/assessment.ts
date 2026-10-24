@@ -279,6 +279,14 @@ export async function recordFeedback(
   db: Database,
   raw: z.input<typeof feedbackEvent>,
 ) {
+  return (await recordFeedbackWithInsertion(db, raw)).event;
+}
+
+/** Domain command capture needs insertion novelty, never timestamp-based replay inference. */
+export async function recordFeedbackWithInsertion(
+  db: Database,
+  raw: z.input<typeof feedbackEvent>,
+) {
   const input = feedbackEvent.parse(raw);
   return withTransactionDatabase(db, async (transactionDb) => {
     const client = getDb(transactionDb);
@@ -343,6 +351,6 @@ export async function recordFeedback(
         kind: "source",
         categories: ["email"],
       });
-    return row;
+    return { event: row, inserted: inserted !== undefined };
   });
 }

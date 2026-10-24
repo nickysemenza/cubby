@@ -301,6 +301,24 @@ Observation reuse compares both evidence components, including their absence.
 Changed or newly missing proof creates a new observation without modifying the
 previous Assessment. No historical capture is inferred or backfilled.
 
+### Retained review frontier
+
+A new shared member Email relevance/link review (including an Email/Purchase
+connection review) retains a system-history frontier receipt in the same
+transaction as its command Feedback. It records sorted retained protecting event
+handles across checksums and superseded subjects. Direct resolutions and actual
+link decisions protect intent; application receipts and model observations do
+not become new member commands. Connection endpoints require retained proof.
+Unresolved subject identity records an explicit hold without losing the review.
+
+Exact command replay preserves its original frontier. A historical command with
+no frontier never gains a reconstructed baseline. Preparation failure preserves
+the committed command and frontier; transaction failure rolls back both.
+These receipts establish the command/frontier association only. They contain no
+selected-effect proof, do not establish complete cross-domain serialization and
+are not reusable correction authority. Email propagation stays held until the
+outer gate, current-effect ownership and full eligibility contracts are enforced.
+
 ### Relevance correction preparation and publication
 
 Explicit relevance correction requires a root database for preparation. Provider

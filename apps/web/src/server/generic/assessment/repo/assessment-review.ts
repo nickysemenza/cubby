@@ -41,12 +41,14 @@ import {
   withImageCorrectionIntent,
 } from "~/server/domains/image/repo/image-correction-lock";
 import { writeImageDescriptionConfirmation } from "~/server/domains/image/repo/image-description-confirmation";
+import { withEmailReviewFrontier } from "~/server/domains/purchase-import/repo/email-review-intent";
 import type { PreparedEmailRelevanceCorrection } from "~/server/domains/purchase-import/repo/gmail/relevance-correction";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import {
   assertApplicationReceipt,
   publishAssessment,
   recordFeedback,
+  recordFeedbackWithInsertion,
 } from "~/server/generic/assessment/repo/assessment";
 import { acknowledgeSavedField } from "~/server/generic/assessment/repo/assessment-field-receipt";
 import {
@@ -700,7 +702,7 @@ async function settleReview(
       ? assessmentSubjects.image_description.parse(prediction.subject)
       : null;
   const writeReview = (transactionDb: Database) =>
-    recordFeedback(transactionDb, {
+    recordFeedbackWithInsertion(transactionDb, {
       ...input,
       assessmentId: prediction.id,
       authority,
@@ -712,9 +714,10 @@ async function settleReview(
         ...(automatic && { rule: automatic.rule }),
       },
     });
-  const event = imageSubject
+  const publication = imageSubject
     ? await withImageCorrectionIntent(db, imageSubject, writeReview)
-    : await writeReview(db);
+    : await withEmailReviewFrontier(db, prediction, writeReview);
+  const event = publication.event;
   if (input.intent === "draft") {
     return {
       assessmentId: prediction.id,

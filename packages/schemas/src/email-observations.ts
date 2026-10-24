@@ -1,6 +1,7 @@
 import { aiProvenance, capturedFieldInput } from "./ai-evaluation";
 import { z } from "zod";
-import { ledgerPartyId } from "./identifier-fields.js";
+import { assessmentChildHandle } from "./assessment-reference";
+import { emailId, ledgerPartyId } from "./identifier-fields.js";
 import {
   mailboxClassification,
   mailboxClassificationStage,
@@ -63,6 +64,28 @@ export const emailClassificationPublicationEvidence = z.object({
 });
 export type EmailClassificationPublicationEvidence = z.infer<
   typeof emailClassificationPublicationEvidence
+>;
+
+/** Retained decision events, without claiming current effect ownership or serialization. */
+export const emailProtectingIntentFrontier = z.discriminatedUnion("status", [
+  z.object({
+    status: z.literal("captured"),
+    emailId,
+    feedbackIds: z.array(assessmentChildHandle),
+  }),
+  z.object({
+    status: z.literal("held"),
+    emailId: emailId.nullable(),
+    reason: z.string().min(1),
+  }),
+]);
+export const emailReviewFrontierReceipt = z.object({
+  version: z.literal("email-review-frontier-v1"),
+  commandFeedbackId: assessmentChildHandle,
+  frontier: emailProtectingIntentFrontier,
+});
+export type EmailProtectingIntentFrontier = z.infer<
+  typeof emailProtectingIntentFrontier
 >;
 
 export const emailClassificationOperation = z.enum([

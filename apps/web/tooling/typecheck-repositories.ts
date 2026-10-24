@@ -61,6 +61,7 @@ export const repositoryOwners = [
   "src/server/generic/assessment/repo/assessment-state.ts",
   "src/server/generic/assessment/repo/assessment.ts",
   "src/server/generic/assessment/repo/correction-receipt.ts",
+  "src/server/domains/purchase-import/repo/email-review-intent.ts",
   "src/server/generic/problems/repo/detectors-vendor.ts",
   "src/server/generic/problems/repo/detectors-purchase.ts",
   "src/server/generic/problems/repo/reparse.ts",

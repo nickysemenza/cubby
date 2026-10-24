@@ -1,5 +1,7 @@
 /** Member correction must retain only the exact reviewed original, preserve prediction
  * history and disposition, refuse authority/content races, and clean only new cache keys. */
+import { emailReviewFrontierReceipt } from "@cubby/schemas/email-observations";
+import { emailId } from "@cubby/schemas/identifiers";
 import { runEntityId } from "@cubby/schemas/identifiers";
 import { MAIL_ATTACHMENT_MAX_BYTES } from "@cubby/schemas/mailbox-research";
 import { eq } from "drizzle-orm";
@@ -28,6 +30,7 @@ import {
   feedback,
   imageProcessingOrphan,
 } from "~/server/db/schema";
+import { readEmailProtectingIntent } from "~/server/domains/purchase-import/repo/email-review-intent";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
 import { ensureEmailAssessment } from "~/server/generic/assessment/repo/assessment-email";
@@ -407,6 +410,20 @@ describe("member-only exact original relevance correction", () => {
           event.operationId === `command-application:${f.review.operationId}`,
       ),
     ).toBeUndefined();
+    const command = events.find(
+      (event) => event.operationId === f.review.operationId,
+    );
+    const frontier = events.find(
+      (event) => event.operationId === `email-review-frontier:${command?.id}`,
+    );
+    expect(emailReviewFrontierReceipt.parse(frontier?.receipt)).toMatchObject({
+      commandFeedbackId: command?.id,
+      frontier: {
+        status: "captured",
+        emailId: f.email.id,
+        feedbackIds: expect.arrayContaining([command?.id]),
+      },
+    });
     expect(
       (
         await getDb(ctx.db)
@@ -426,6 +443,26 @@ describe("member-only exact original relevance correction", () => {
   it("replays a successful shared application without consulting an unavailable provider", async () => {
     const f = await sharedReviewFixture();
     const first = await reviewAssessment(ctx.db, kernelCtx(ctx), f.review);
+    const application = (
+      await getDb(ctx.db)
+        .select()
+        .from(feedback)
+        .where(eq(feedback.assessmentId, f.review.assessmentId))
+    ).find(
+      (event) =>
+        event.operationId === `command-application:${f.review.operationId}`,
+    );
+    expect(application).toBeDefined();
+    const frontier = await readEmailProtectingIntent(
+      ctx.db,
+      emailId.parse(f.email.id),
+    );
+    expect(frontier).toMatchObject({
+      status: "captured",
+      feedbackIds: expect.arrayContaining([first.feedbackId]),
+    });
+    if (frontier.status !== "captured") throw new Error(frontier.reason);
+    expect(frontier.feedbackIds).not.toContain(application?.id);
     f.factory.mockRejectedValue(
       new Error("Synthetic provider unavailable after success"),
     );
