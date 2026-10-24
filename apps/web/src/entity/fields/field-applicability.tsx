@@ -1,3 +1,4 @@
+/* oxlint-disable jsx-a11y/no-noninteractive-tabindex -- The read-only tooltip explanation must be reachable by keyboard. */
 import {
   Tooltip,
   TooltipContent,
@@ -6,7 +7,6 @@ import {
 
 /** An inapplicable value has an explanation, but no editing or suggestion affordance. */
 export function NotApplicableField({ reason }: { reason: string }) {
-  // oxlint-disable-next-line jsx-a11y/no-noninteractive-tabindex -- The read-only tooltip explanation must be reachable by keyboard.
   return (
     <Tooltip>
       <TooltipTrigger
@@ -25,3 +25,5 @@ export function NotApplicableField({ reason }: { reason: string }) {
     </Tooltip>
   );
 }
+
+/* oxlint-enable jsx-a11y/no-noninteractive-tabindex */
