@@ -3438,7 +3438,8 @@ Brand for a live Product brand reference, Both for both, and Unused for neither.
 Deleted records, VendorAccounts and pending proposals do not assign roles.
 Each category has a labelled, colored icon pill. Role filtering selects exact
 categories with any-of semantics (Seller + Both finds all sellers); grouping
-uses the same four categories. The default list remains ungrouped.
+uses the same four categories. The default list remains ungrouped and sorted
+by descending seller spend.
 
 The Vendor table separates Purchasing fields from Brand / catalog using declared
 column groups. Its branded-product count includes live Products whose `brandId`

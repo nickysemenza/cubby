@@ -1150,9 +1150,9 @@ export default defineEntity({
     },
     sort: {
       fields: [
-        "role",
         "spend",
         "name",
+        "role",
         "purchaseCount",
         "brandedProductCount",
         "brandCategoryCount",
