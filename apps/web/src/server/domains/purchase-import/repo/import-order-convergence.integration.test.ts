@@ -388,7 +388,7 @@ async function createConvergenceHarness(ctx: TestDbContext) {
           fingerprint: token,
           rowCountDeclared: 1,
         },
-        rows: [row],
+        rows: [{ ...row, rowPosition: 1 }],
       }),
       actor,
     );

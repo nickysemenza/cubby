@@ -283,6 +283,7 @@ describe("EntityExternalId", () => {
       },
       rows: [
         {
+          rowPosition: 1,
           accountDescriptor: "Synthetic Card (...0001)",
           statementDate: "2026-03-04",
           providerAmount: -19.99,

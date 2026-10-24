@@ -1087,6 +1087,7 @@ describe("member actionable Work queue", () => {
           },
           rows: [
             {
+              rowPosition: 1,
               accountDescriptor: label,
               statementDate: "2026-09-20",
               providerAmount: -12,

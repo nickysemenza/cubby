@@ -292,7 +292,7 @@ function retainedCollectionObservation({
 }: {
   priorMembers: readonly RecordedMember[];
   row: RecordSourceTransactionRecordsInput["rows"][number];
-  externalId: string;
+  externalId: string | undefined;
   legacyExternalId: string;
 }) {
   // Physical identity wins even when historical keys were mispositioned.
@@ -402,7 +402,6 @@ async function prepareStatementObservations(
       amount: row.providerAmount,
       originalStatement: row.rawDescription,
     });
-    const collectionObservation = `v3:${await sha256Hex(JSON.stringify([source, "unpositioned", input.import.fingerprint, legacyExternalId]))}`;
     const providerAccountId = row.providerAccountId ?? null;
     let chargeKey = row.providerTransactionId
       ? `provider:${await sha256Hex(JSON.stringify([source, providerAccountId ?? row.accountDescriptor, row.providerTransactionId]))}`
@@ -412,7 +411,7 @@ async function prepareStatementObservations(
             input.import.fingerprint,
             row.rowPosition,
           )
-        : collectionObservation;
+        : undefined;
     if (row.providerTransactionId) {
       const predecessors = previousProviderRows.filter((prior) => {
         if (prior.providerTransactionId !== row.providerTransactionId)
@@ -469,29 +468,30 @@ async function prepareStatementObservations(
         );
       if (keys[0]) chargeKey = keys[0];
     }
-    let externalId = row.providerTransactionId
-      ? `v3:${await sha256Hex(
-          canonicalJson({
-            chargeKey,
-            providerAccountId,
-            accountDescriptor: row.accountDescriptor,
-            date: row.statementDate,
-            amount: row.providerAmount,
-            merchant: row.merchant,
-            description: row.rawDescription,
-            category: row.sourceCategory,
-            status: row.providerStatus,
-            notes: row.providerNotes,
-            data: row.providerData ?? null,
-          }),
-        )}`
-      : row.rowPosition !== undefined
-        ? await sourceTransactionRecordOccurrenceId(
-            source,
-            input.import.fingerprint,
-            row.rowPosition,
-          )
-        : collectionObservation;
+    let externalId =
+      row.providerTransactionId && chargeKey !== undefined
+        ? `v3:${await sha256Hex(
+            canonicalJson({
+              chargeKey,
+              providerAccountId,
+              accountDescriptor: row.accountDescriptor,
+              date: row.statementDate,
+              amount: row.providerAmount,
+              merchant: row.merchant,
+              description: row.rawDescription,
+              category: row.sourceCategory,
+              status: row.providerStatus,
+              notes: row.providerNotes,
+              data: row.providerData ?? null,
+            }),
+          )}`
+        : row.rowPosition !== undefined
+          ? await sourceTransactionRecordOccurrenceId(
+              source,
+              input.import.fingerprint,
+              row.rowPosition,
+            )
+          : undefined;
     if (!row.providerTransactionId) {
       const retained = retainedCollectionObservation({
         priorMembers,
@@ -504,6 +504,13 @@ async function prepareStatementObservations(
         chargeKey = retained.chargeKey;
       }
     }
+    // Retained membership can replay a historical identity; new observations
+    // need a provider identity or a physical position to preserve multiplicity.
+    if (!externalId || !chargeKey)
+      throw createAppError(
+        "CONSTRAINT_VIOLATION",
+        "New observations require a provider transaction ID or a stable physical row position.",
+      );
     rows.push({
       ...row,
       source,

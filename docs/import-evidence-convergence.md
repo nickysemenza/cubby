@@ -338,6 +338,13 @@ Both entities use generated list and detail routes in the Financial evidence
 area: `/source-transaction-records` and `/transaction-imports`.
 
 Source transaction records enter through `finance.record`.
+New observations require an attested provider transaction ID in its account
+scope or a stable physical collection position. Equal dates, descriptions and
+amounts never establish occurrence identity. Unpositioned requests can only
+replay a uniquely retained historical collection member; they cannot add new
+observations. Existing historical identities, decisions and settlement references
+remain unchanged. Supply positions for every occurrence in new ID-less exports,
+including identical transactions across chunks.
 Generic create and merge are unavailable. Provider facts, identity, revisions,
 collection membership and source coverage remain intake-owned and immutable
 through generic commands. Generic updates edit only declared household judgment

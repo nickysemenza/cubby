@@ -713,7 +713,7 @@ describe("statement Transaction suggestions", () => {
     "keeps an identical ID-less delta observation actionable after the other is %s",
     async (decision) => {
       await card(ctx);
-      const observed = rowInput({ rowPosition: undefined });
+      const observed = rowInput({ rowPosition: 1 });
       await record(ctx, [observed], { fingerprint: "synthetic-idless-first" });
       const [first] = (await listSourceTransactionRecords(ctx.db, {})).data;
       await record(ctx, [observed], { fingerprint: "synthetic-idless-second" });
