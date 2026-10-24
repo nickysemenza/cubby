@@ -120,6 +120,35 @@ describe("statement row ledger", () => {
     },
   );
 
+  it("replays an existing provider member beside historical ID-less evidence", async () => {
+    const original = rowInput();
+    const provider = rowInput({
+      rowPosition: 2,
+      providerTransactionId: "synthetic-retained-provider",
+    });
+    await record(ctx.db, ctx.actor, [original, provider]);
+    await getDb(ctx.db)
+      .update(sourceTransactionRecord)
+      .set({ rowPosition: null })
+      .where(sql`${sourceTransactionRecord.providerTransactionId} IS NULL`);
+    const before = (await getDb(ctx.db).select().from(sourceTransactionRecord))
+      .map((row) => row.externalId)
+      .sort();
+    for (const dryRun of [true, false]) {
+      await expect(
+        record(ctx.db, ctx.actor, [provider], {}, dryRun),
+      ).resolves.toMatchObject({ unchanged: 1, inserted: 0 });
+    }
+    expect(
+      (await getDb(ctx.db).select().from(sourceTransactionRecord))
+        .map((row) => row.externalId)
+        .sort(),
+    ).toEqual(before);
+    expect(
+      await getDb(ctx.db).select().from(transactionImportRecord),
+    ).toHaveLength(2);
+  });
+
   it("retains a distinct positioned occurrence when a later chunk supplies its provider ID", async () => {
     const original = rowInput();
     await record(ctx.db, ctx.actor, [original]);

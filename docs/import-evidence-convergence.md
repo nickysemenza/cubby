@@ -417,7 +417,8 @@ Cross-provider equality proposes reconciliation rather than establishing identit
 Replaying a retained collection with newly supplied provider IDs cannot silently
 replace its ID-less charge identities. Intake refuses a provider identity that
 overlaps an ID-less member at the same physical position, or an unpositioned
-member's frozen reference. Resolve that source identity explicitly before replay;
+member's frozen reference. Exact existing provider observations can replay through
+the usual immutable-evidence checks. Resolve a new source identity explicitly before replay;
 this guard neither rewrites historical observations nor assigns identifiers from
 content equality. Distinct positioned occurrences remain independent, including
 identical rows delivered in later chunks.
