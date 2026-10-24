@@ -136,11 +136,12 @@ pnpm --dir apps/web exec tsx tooling/shipment-evidence-audit.ts /absolute/privat
 
 `shipmentEvidenceAuditInput` beside that entrypoint owns the manifest: expected
 batch/Email IDs, original pages with requested offsets, per-batch write receipts,
-source dispositions, verified carrier-name resolutions and before/after timelines. Missing originals, batches,
+source dispositions (with resolution receipts for linked outcomes), verified carrier-name resolutions and before/after timelines. Missing originals, batches,
 readbacks or dispositions fail the audit. An unresolved disposition retains its
 concrete evidence gap. The audit verifies byte coverage and observation-level
 readback/preservation, including distinct occurrences, refreshed capture membership and automatic or reviewed revision lineage;
-it does not certify semantic extraction or package
+A linked Email without a package event need not invent one; its resolution receipt
+still has to verify the Purchase link. The audit does not certify semantic extraction or package
 identity. Review literal status/date excerpts and carrier/Purchase/package
 identity independently before writing.
 

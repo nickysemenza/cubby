@@ -34,6 +34,19 @@ struct APIErrorOutputTests {
         #expect(!output.contains("synthetic-request-payload"))
     }
 
+    @Test func unfamiliarJSONResponseDiagnosticsSurvive() {
+        for body in [
+            #"{"detail":"Synthetic upstream connection refused"}"#,
+            #"[{"detail":"Synthetic upstream connection refused"}]"#,
+        ] {
+            let output = CLI.apiErrorMessage(
+                .decode(
+                    status: 502, operationID: "synthetic.read",
+                    body: Data(body.utf8)))
+            #expect(output.contains("Synthetic upstream connection refused"))
+        }
+    }
+
     @Test func rawJSONDiagnosticsSurviveAnUnknownOptionalShape() {
         let body = Data(
             #"{"code":"REFUSED","message":"Synthetic refusal","diagnostics":{"futureShape":["edge detail"]}}"#

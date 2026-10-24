@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { vendorShortcode } from "@cubby/schemas/identifiers";
 
 import {
   completeRetainedMail,
@@ -152,6 +153,13 @@ describe("retained shipment evidence audit", () => {
     });
     const firstBatch = input.batches.at(0);
     if (!firstBatch) throw new Error("Missing synthetic batch");
+    const disposition = firstBatch.dispositions[0];
+    if (!disposition) throw new Error("Missing synthetic disposition");
+    disposition.outcome = "linked";
+    expect(auditShipmentEvidence(input).errors).toContain(
+      `${emailId}: linked disposition lacks a verified resolution receipt`,
+    );
+    disposition.outcome = "unresolved";
     firstBatch.expectedRecordIds.push("planned-evidence");
     expect(auditShipmentEvidence(input).errors).toContain(
       "batch-a: missing planned record/receipt planned-evidence",
@@ -320,19 +328,36 @@ describe("retained shipment evidence audit", () => {
     successor.memberReviewed = false;
     expect(auditShipmentEvidence(input).ok).toBe(true);
 
+    // Two versions in one revision chain cannot prove two source occurrences.
+    successor.time = first.time;
+    packet.observations = [wanted, { ...wanted }];
+    record.receipt.repeatedObservations = 2;
+    expect(auditShipmentEvidence(input).errors).toContain(
+      `${emailId}: observation missing from readback`,
+    );
+    packet.observations = [wanted];
+    record.receipt.repeatedObservations = 1;
     // Package carrier metadata does not supply observation carrier claims.
-    packet.carrierId = "VEN-2ABC4";
+    packet.carrierId = vendorShortcode.parse("VEN-2ABC4");
     packet.carrierName = "Synthetic carrier";
     expect(auditShipmentEvidence(input).ok).toBe(true);
 
     // A refreshed capture can retain the original observation attribution.
-    first.source = { kind: "email", emailId, checksum: "b".repeat(64) };
+    first.source = {
+      kind: "email",
+      emailId: input.expectedEmailIds[0]!,
+      checksum: "b".repeat(64),
+    };
     before.observations = [{ ...first, superseded: false }];
     first.captureIds = ["10000000-0000-4000-8000-000000000005"];
     first.captureSources = [
       {
         captureId: "10000000-0000-4000-8000-000000000005",
-        source: { kind: "email", emailId, checksum },
+        source: {
+          kind: "email",
+          emailId: input.expectedEmailIds[0]!,
+          checksum,
+        },
       },
     ];
     expect(auditShipmentEvidence(input).ok).toBe(true);

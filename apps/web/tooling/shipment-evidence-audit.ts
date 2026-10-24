@@ -1,7 +1,7 @@
 import { readFile, writeFile } from "node:fs/promises";
 import { pathToFileURL } from "node:url";
 
-import { mailReadOut } from "@cubby/schemas/mailbox-research";
+import { mailReadOut, mailResolveOut } from "@cubby/schemas/mailbox-research";
 import { vendorShortcode } from "@cubby/schemas/identifiers";
 import {
   retainedShipmentEvidence,
@@ -31,6 +31,7 @@ const batch = z.object({
       checksum: emailIdentity.shape.checksum,
       outcome: z.enum(["linked", "unresolved"]),
       reason: z.string().min(1),
+      resolution: mailResolveOut.optional(),
     }),
   ),
   timelines: z.array(shipmentTimelineOut),
@@ -98,6 +99,21 @@ function validSuccessor(original: Observation, timeline: Timeline) {
     row = next;
   }
   return row.observationId !== original.observationId && !row.superseded;
+}
+
+// Revisions represent one occurrence even when a later correction restores its old value.
+function occurrenceId(original: Observation, timeline: Timeline): string {
+  const visited = new Set<string>();
+  let row = original;
+  while (row.superseded && !visited.has(row.observationId)) {
+    visited.add(row.observationId);
+    const next = timeline.observations.find(
+      (candidate) => candidate.observationId === row.supersededByObservationId,
+    );
+    if (!next) break;
+    row = next;
+  }
+  return row.observationId;
 }
 
 function auditRecord(
@@ -183,7 +199,7 @@ function auditRecord(
         );
       const found = timeline.observations.find(
         (row) =>
-          !matched.has(row.observationId) &&
+          !matched.has(occurrenceId(row, timeline)) &&
           row.source.kind === "email" &&
           row.source.emailId === packet.source.id &&
           (row.source.checksum === packet.source.checksum ||
@@ -213,7 +229,7 @@ function auditRecord(
       if (!found)
         errors.push(`${packet.source.id}: observation missing from readback`);
       else {
-        matched.add(found.observationId);
+        matched.add(occurrenceId(found, timeline));
         if (found.superseded && !validSuccessor(found, timeline))
           errors.push(
             `${packet.source.id}: superseded replay lacks a verified successor`,
@@ -287,6 +303,21 @@ export function auditShipmentEvidence(
       )
         errors.push(
           `${disposition.emailId}: disposition source/checksum mismatch`,
+        );
+      if (
+        disposition.outcome === "linked" &&
+        (!disposition.resolution ||
+          disposition.resolution.mailboxId !==
+            (source?.textPages[0] ?? source?.htmlPages[0])?.response
+              .mailboxId ||
+          disposition.resolution.messageId !==
+            (source?.textPages[0] ?? source?.htmlPages[0])?.response
+              .messageId ||
+          disposition.resolution.disposition !== "linked" ||
+          !disposition.resolution.purchaseIds.length)
+      )
+        errors.push(
+          `${disposition.emailId}: linked disposition lacks a verified resolution receipt`,
         );
       dispositions.add(disposition.emailId);
     }

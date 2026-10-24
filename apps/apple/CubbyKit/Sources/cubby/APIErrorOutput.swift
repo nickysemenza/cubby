@@ -44,12 +44,11 @@ extension CLI {
         }
         if let object = response as? [String: Any] {
             // An error response may echo input alongside its diagnostics. Do not print that input.
-            for key in ["code", "message", "reason", "requestId", "validationIssues", "diagnostics", "error"]
-            {
-                if let value = object[key] { details[key] = value }
+            for (key, value) in object {
+                details[key] = ["input", "payload"].contains(key.lowercased()) ? "[REDACTED]" : value
             }
-        } else if let text = response as? String {
-            details["message"] = text
+        } else if let response {
+            details["response"] = response
         }
         if !details.isEmpty,
             let data = try? JSONSerialization.data(
