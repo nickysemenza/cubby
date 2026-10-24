@@ -16,6 +16,23 @@ transaction, or a manual entry, a person can reach **one well-identified
 Product** with the right evidence attached. The entry point and sequence do
 not change what the result means.
 
+## Photo capture and review
+
+A new belongings import on Apple defaults to owned items and the Run member.
+Storage location is optional during capture; structured intent and destination
+travel with the Run to both agent paths and web review. The native handoff links
+to that same Run's Photos section. Uploading and grouping do not create stock.
+Missing receive destinations block approval and can be filled once for pending
+receive groups on web, without replacing an item-specific destination or an
+explicit reference, already-counted or historical choice. Additional photos and
+labels never increase quantity. A Product match alone does not prove another
+physical copy.
+
+Ready item details stay folded until changed; genuine concerns open for review.
+The web can apply all ready groups directly or a selected subset, with Product
+and stock effects visible before approval. Autosave barriers, revision checks
+and independent batch failures remain in force.
+
 ## The whole journey
 
 Connect read-only Gmail in Cubby Settings, record Monarch financial evidence

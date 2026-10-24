@@ -22,6 +22,8 @@ import {
   setPhotoRunProcessor,
 } from "~/server/domains/photo-import/repo/run/lifecycle";
 import {
+  readPhotoRunDefaults,
+  setPhotoRunDefaults,
   resolvePhotoGroupConcern,
   approvePhotoGroupProposals,
   assertPhotoRunReviewer,
@@ -70,6 +72,7 @@ export const photoImportHandlers = implementOperationDomain(
       const snapshot = await readPhotoRunSnapshot(context.db, input.runId);
       return {
         review: snapshot.review,
+        defaults: snapshot.defaults,
         images: snapshot.images,
         lifecycle: snapshot.lifecycle,
       };
@@ -231,7 +234,20 @@ export const photoImportHandlers = implementOperationDomain(
     stage: (context, input) => stagePhotoImport(context.db, input),
     commit: (context, input) =>
       commitPhotoImport(context, input, manifestPhotoImportRouteAdapter),
+    setDefaults: async (context, input) => {
+      await assertPhotoRunReviewer(
+        context.db,
+        context.actorContext,
+        input.runId,
+      );
+      await setPhotoRunDefaults(context.db, input.runId, input.defaults);
+      const { review, images, lifecycle, defaults } =
+        await readPhotoRunSnapshot(context.db, input.runId);
+      return { review, images, lifecycle, defaults };
+    },
     createRun: async (context, input) => {
+      if (input.defaults?.locationId)
+        await resolveOrThrow(context.db, "location", input.defaults.locationId);
       const ledgerPartyId = input.ledgerPartyId
         ? await resolveOrThrow(context.db, "ledgerParty", input.ledgerPartyId)
         : undefined;
@@ -239,6 +255,7 @@ export const photoImportHandlers = implementOperationDomain(
         ledgerPartyId,
         actorUserId: context.auth.userId,
         notes: input.notes,
+        defaults: input.defaults,
         grouping: {
           processor: input.processor,
           clientBatchId: input.clientBatchId,
@@ -302,6 +319,7 @@ export const photoImportHandlers = implementOperationDomain(
         runId: input.runId,
         ledgerPartyId: run.ledgerPartyId,
         notes: run.notes,
+        defaults: await readPhotoRunDefaults(context.db, input.runId),
         totalImages: all.length,
         nextCursor: end < all.length ? end : null,
         images: all.slice(cursor, end).map((image) => {

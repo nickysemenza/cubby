@@ -59,6 +59,8 @@ import {
   photoRunCandidates,
 } from "../photo-group-candidates";
 import {
+  setPhotoRunDefaults,
+  readPhotoRunReview,
   approvePhotoGroupProposals,
   resolvePhotoGroupConcern,
   assertPhotoRunReviewer,
@@ -151,6 +153,90 @@ describe("photo group proposals", () => {
       );
     return row;
   };
+
+  it("inherits owned-item intent and fills a missing batch location without overwriting exceptions", async () => {
+    const { run, codes } = await seedRun(4);
+    const stockBefore = await getDb(ctx.db)
+      .select({ id: inventoryEntry.id })
+      .from(inventoryEntry);
+    await setPhotoRunDefaults(ctx.db, run.shortcode, {
+      stockIntent: "receive",
+      locationId: null,
+    });
+    const first = createGroup("owned", [codes[0]!]);
+    first.review = undefined;
+    const reference = createGroup("reference", [codes[1]!]);
+    const historical = createGroup("historical", [codes[2]!]);
+    historical.review = {
+      observedName: "Synthetic former item",
+      stockIntent: "historical",
+      unresolvedReason: null,
+    };
+    const skipped = {
+      ...createGroup("skipped", []),
+      review: undefined,
+      skip: [
+        { id: parseShortcodeFor("image", codes[3]!), reason: "Unusable frame" },
+      ],
+    };
+    await proposePhotoGroups(ctx.db, {
+      runId: run.shortcode,
+      groups: [first, reference, historical, skipped],
+    });
+    const before = await readPhotoRunReview(ctx.db, run.shortcode);
+    expect(
+      before.review.proposals.find((group) => group.groupKey === "owned"),
+    ).toMatchObject({
+      review: { stockIntent: "receive" },
+      blockedReason: expect.stringContaining("storage location"),
+    });
+    const closet = await createLocationFixture(
+      ctx.db,
+      makeLocationInput({
+        name: "Synthetic batch closet",
+        parentId: TEST_HOME_SHORTCODE,
+      }),
+      ctx.actor,
+    );
+    await setPhotoRunDefaults(ctx.db, run.shortcode, {
+      stockIntent: "receive",
+      locationId: parseShortcodeFor("location", closet.id),
+    });
+    await proposePhotoGroups(ctx.db, {
+      runId: run.shortcode,
+      groups: [skipped],
+    });
+    const after = await readPhotoRunReview(ctx.db, run.shortcode);
+    expect(after.defaults?.locationId).toBe(closet.id);
+    expect(
+      after.review.proposals.find((group) => group.groupKey === "skipped")
+        ?.inventory,
+    ).toBeNull();
+    const [storedRun] = await getDb(ctx.db)
+      .select({ input: runTable.input })
+      .from(runTable)
+      .where(eq(runTable.id, run.id));
+    expect(storedRun?.input).toMatchObject({ processor: null });
+    expect(
+      after.review.proposals.find((group) => group.groupKey === "owned"),
+    ).toMatchObject({
+      inventory: { quantity: 1, locationId: closet.id },
+      blockedReason: null,
+    });
+    expect(
+      after.review.proposals.find((group) => group.groupKey === "reference")
+        ?.inventory,
+    ).toBeNull();
+    expect(
+      after.review.proposals.find((group) => group.groupKey === "historical")
+        ?.inventory,
+    ).toBeNull();
+    expect(
+      await getDb(ctx.db)
+        .select({ id: inventoryEntry.id })
+        .from(inventoryEntry),
+    ).toEqual(stockBefore);
+  });
 
   it("preserves legacy manufacturer evidence through draft edits and choosing an existing Product", async () => {
     const { run, codes } = await seedRun(1);

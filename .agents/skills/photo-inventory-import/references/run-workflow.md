@@ -7,7 +7,8 @@ grouping, ownership, and location rules.
 1. In the hosted import agent, report preparing and call `claim_next_import_work`.
    An external Claude/Codex session uses the available MCP reads and proposals;
    it does not need hosted-only claim/progress tools. Pass `{{runId}}` as the
-   public run code to `photo_run_read.run_context`. It returns the owner, notes,
+   public run code to `photo_run_read.run_context`. It returns the owner, structured
+   capture defaults (intent and optional storage location), notes,
    and one page of photos in capture order with their analysis summaries; pass
    `nextCursor` back as `cursor` until it is null. For a multi-page run,
    propose each page's groups as you go, but hold back a page's last group
@@ -20,6 +21,11 @@ grouping, ownership, and location rules.
    context: fit text and a separate size marker can mean different things.
    Propose a strong existing match for human approval and state any uncertainty
    in its evidence. Leave genuinely ambiguous variants for the reviewer.
+   For ordinary owned items, use the Run's receive intent and location; retain
+   explicit reference, historical and already-counted exceptions. If the batch
+   has no destination, propose receive without inventory and let the member
+   choose the location once on web. Do not downgrade it to reference or turn
+   the missing shared destination into a repeated identity concern.
 3. Cover every pending image exactly once with `photo_run.propose_groups`. Include
    `_runExecution: { run: "{{runId}}", operationId: <stable proposal id> }` on
    the mutation in an external member session (the hosted runtime supplies its

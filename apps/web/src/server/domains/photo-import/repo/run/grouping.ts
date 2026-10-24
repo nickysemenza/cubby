@@ -41,7 +41,7 @@ export async function startPhotoGroupingForActor(
     throw new Error(
       "This Run uses a Claude/Codex handoff; Cubby does not group its photos",
     );
-  if (choice) {
+  if (choice?.processor) {
     // A chosen-processor Run starts only through the guarded lifecycle
     // (sealed batches, every description ready, compare-and-set dispatch).
     // A manual start is the member's retry: it clears a recorded dispatch

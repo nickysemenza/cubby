@@ -474,8 +474,16 @@ describe("photo run lifecycle", () => {
     const replay = await startPhotoInventoryRun(ctx.db, {
       actorUserId: ctx.actor.userId,
       grouping,
+      defaults: { stockIntent: "evidence", locationId: null },
     });
     expect(replay.publicId).toBe(first.publicId);
+    // A retried capture keeps the original owned-items intent.
+    expect(
+      storedPhotoRunInput.parse((await readRun(first.id)).input)?.defaults,
+    ).toEqual({
+      stockIntent: "receive",
+      locationId: null,
+    });
   });
 
   it("registers only the initiating install and never stores the push token in an error", async () => {

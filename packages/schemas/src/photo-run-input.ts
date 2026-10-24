@@ -1,7 +1,15 @@
 import { z } from "zod";
+import { locationShortcode } from "./identifier-fields";
+
+/** Shared capture intent; stock is written only after member approval. */
+export const photoRunDefaults = z.object({
+  stockIntent: z.enum(["receive", "evidence", "historical"]),
+  locationId: locationShortcode.nullable(),
+});
+export type PhotoRunDefaults = z.infer<typeof photoRunDefaults>;
 
 // A leaf module: `run-fields` types `Run.input` with these, and
-// `photo-import-run` imports `run-fields`, so they import only zod.
+// `photo-import-run` imports `run-fields`, so dependencies stay with zod and leaf identifiers.
 
 /**
  * Who groups a photo Run's photos, chosen per Run when it is created:
@@ -40,7 +48,9 @@ export type PhotoRunUploadBatch = z.infer<typeof photoRunUploadBatch>;
  */
 export const photoInventoryRunInput = z.strictObject({
   kind: z.literal("photo_inventory"),
-  processor: photoRunProcessor,
+  /** Null preserves manual grouping when an older Run gains capture defaults. */
+  processor: photoRunProcessor.nullable(),
+  defaults: photoRunDefaults.optional(),
   batches: z.array(photoRunUploadBatch).max(500),
 });
 export type PhotoInventoryRunInput = z.infer<typeof photoInventoryRunInput>;
