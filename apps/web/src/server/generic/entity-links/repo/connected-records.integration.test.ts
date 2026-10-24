@@ -1,6 +1,6 @@
 import { eq } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
-import { withTestDb } from "tooling/test-setup";
+import { countTestDbQueries, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { getDb } from "~/server/db/helpers";
@@ -207,12 +207,15 @@ describe("complete connected record tables", () => {
 
     // The detail page reads every view at once: totals stay complete while
     // rows stop at the preview limit, in manifest order.
-    const preview = await getConnectedRecordsPreview(ctx.db, {
-      source,
-      limit: 1,
-    });
+    const { result: preview, queryCount } = await countTestDbQueries(() =>
+      getConnectedRecordsPreview(ctx.db, {
+        source,
+        limit: 1,
+      }),
+    );
+    expect(queryCount).toBe(1);
     const purchases = preview.views.find(
-      (view) => view.viewKey === "purchases",
+      (view) => view.targetEntity === "purchase",
     );
     expect(purchases?.totalCount).toBe(2);
     expect(purchases?.items).toEqual(page1.items);

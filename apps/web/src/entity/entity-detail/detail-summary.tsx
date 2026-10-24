@@ -18,6 +18,7 @@ import {
 } from "~/entity/display/entity-display";
 import { entities, isBrowserRoutedEntity } from "~/entity/entities";
 import { EntityDisplayImagesProvider } from "~/entity/entity-media/entity-display-images";
+import { ConnectionPaths } from "~/entity/relationships/connection-paths";
 import { entityGraph } from "~/integrations/tanstack-query/generated/catalog/entityGraph.gen";
 import { entityReport } from "~/integrations/tanstack-query/generated/catalog/entityReport.gen";
 import { cn } from "~/lib/utils";
@@ -28,7 +29,6 @@ import { Button } from "~/ui/primitives/button";
 import { Skeleton } from "~/ui/primitives/skeleton";
 
 import { readPathValue } from "../read-path";
-import { RecordPaths } from "./connected-records-table";
 import type { DetailRecordOf, GenericDetailEntity } from "./detail-record";
 import { ReportRowText, ReportTimeDisplay } from "./records-ledger";
 import { LIVE_REPORT_POLL_MS, ReportBlocks } from "./report-slot";
@@ -149,7 +149,7 @@ export function CompactSummaryReport({
                               <DateDisplay timestamp={row.at} stacked={false} />
                             ) : null}
                             {row.paths?.some((path) => path.length > 2) ? (
-                              <RecordPaths paths={row.paths} compact />
+                              <ConnectionPaths paths={row.paths} compact />
                             ) : null}
                             <ReportRowText row={row} />
                             {row.externalLink ? (
@@ -416,7 +416,7 @@ export function DetailSummary<E extends GenericDetailEntity>({
                         }
                         secondary={
                           item.paths.some((path) => path.length > 2) ? (
-                            <RecordPaths paths={item.paths} compact />
+                            <ConnectionPaths paths={item.paths} compact />
                           ) : null
                         }
                       />

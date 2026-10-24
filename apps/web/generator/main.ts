@@ -5,7 +5,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { z } from "zod";
 import {
-  connectedViews,
+  curatedConnectionViews,
   derivedConnectedRelationship,
 } from "@cubby/schemas/compiler/connected-view-definitions";
 import type {
@@ -28,7 +28,7 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
 
 const validateConnectedViews = (entities: readonly CompiledEntity[]) => {
   const byKey = new Map(entities.map((entity) => [entity.key, entity]));
-  for (const [source, views] of Object.entries(connectedViews)) {
+  for (const [source, views] of Object.entries(curatedConnectionViews)) {
     if (!byKey.has(source))
       throw new EntityDeclarationError(
         `Unknown connected-view source ${source}`,

@@ -2,9 +2,8 @@ import { fireEvent, render } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it } from "vitest";
 import { page } from "vitest/browser";
 
+import { ConnectionPaths } from "~/entity/relationships/connection-paths";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
-
-import { RecordPaths } from "./connected-records-table";
 
 let harness: ReturnType<typeof createBrowserTestHarness>;
 beforeEach(() => {
@@ -21,7 +20,7 @@ it("contains long connection evidence inside a narrow relation column", async ()
       data-testid="connection-cell"
       style={{ width: 280, overflow: "hidden" }}
     >
-      <RecordPaths
+      <ConnectionPaths
         compact
         paths={[
           [

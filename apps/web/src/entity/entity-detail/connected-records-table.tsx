@@ -1,16 +1,17 @@
-import type {
-  ConnectedPathNode,
-  ConnectedRecordsOutput,
-} from "@cubby/schemas/connected-records";
-import type { Entity, EntityRef } from "@cubby/schemas/entity";
+import type { ConnectedRecordsOutput } from "@cubby/schemas/connected-records";
+import type { Entity } from "@cubby/schemas/entity";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 
-import { EntityRefLink } from "~/entity/components/entity-ref-link";
 import { entities, isBrowserRoutedEntity } from "~/entity/entities";
 import { EntityDisplayImagesProvider } from "~/entity/entity-media/entity-display-images";
+import {
+  ConnectionPaths,
+  ConnectionRecordLink,
+  connectionRefs,
+  ambiguousConnectionLabels,
+} from "~/entity/relationships/connection-paths";
 import { entityGraph } from "~/integrations/tanstack-query/generated/catalog/entityGraph.gen";
-import { cn } from "~/lib/utils";
 import {
   RecordFold,
   RecordGroup,
@@ -33,102 +34,7 @@ import {
 
 const PAGE_SIZE = 20;
 const PREVIEW_SIZE = 3;
-
 type ConnectedItem = ConnectedRecordsOutput["items"][number];
-
-/**
- * The records a page of paths passes through, for one batched cover request.
- * Targets are left to the owner: a relation table already batches its rows.
- */
-export function connectionRefs(items: readonly ConnectedItem[]): EntityRef[] {
-  return items.flatMap((item) =>
-    item.paths.flatMap((path) => path.slice(1, -1)),
-  );
-}
-
-/**
- * One record as a cover-or-icon chip. `kind` names an intermediate record by
- * its entity kind (paths repeat names: an Expense is named after its Product);
- * the full name stays in the trail's title.
- */
-function RecordChip({
-  node,
-  kind = false,
-}: {
-  node: ConnectedPathNode;
-  kind?: boolean;
-}) {
-  if (!isBrowserRoutedEntity(node.entityKind))
-    return (
-      <span className="min-w-0 truncate" title={node.label}>
-        {kind ? node.entityKind : node.label}
-      </span>
-    );
-  return (
-    <EntityRefLink
-      entity={node.entityKind}
-      id={node.entityId}
-      name={kind ? entities[node.entityKind].label : node.label}
-      // The batched provider supplies covers; a per-chip emoji lookup would
-      // spend one request per path node.
-      emoji={null}
-    />
-  );
-}
-
-/** Every path expands to its actual records and the declared steps between them. */
-export function RecordPaths({
-  paths,
-  compact = false,
-}: {
-  paths: ConnectedItem["paths"];
-  compact?: boolean;
-}) {
-  const [expanded, setExpanded] = useState(false);
-  const first = paths[0];
-  if (!first) return null;
-  const labels = [
-    ...new Set(first.flatMap((node) => (node.via ? [node.via.label] : []))),
-  ];
-  const summary = labels.length ? labels.join(" → ") : "Direct connection";
-  return (
-    <div className={cn("max-w-full min-w-0", compact ? "text-xs" : "text-sm")}>
-      <button
-        type="button"
-        aria-expanded={expanded}
-        className="max-w-full cursor-pointer truncate text-left text-muted-foreground hover:text-foreground"
-        title={`Via ${summary}`}
-        onClick={() => setExpanded(!expanded)}
-      >
-        Via {summary}
-        {paths.length > 1 ? ` · ${paths.length} paths` : ""}
-      </button>
-      {expanded ? (
-        <ul className="mt-1 space-y-2">
-          {paths.map((path) => (
-            <li key={JSON.stringify(path)}>
-              <ol className="flex flex-wrap items-center gap-1">
-                {path.map((node, index) => (
-                  <li
-                    key={JSON.stringify(path.slice(0, index + 1))}
-                    className="flex max-w-full min-w-0 flex-wrap items-center gap-1"
-                  >
-                    {index > 0 ? (
-                      <span className="text-muted-foreground">
-                        {node.via ? `→ ${node.via.label} →` : "→"}
-                      </span>
-                    ) : null}
-                    <RecordChip node={node} />
-                  </li>
-                ))}
-              </ol>
-            </li>
-          ))}
-        </ul>
-      ) : null}
-    </div>
-  );
-}
 
 function ConnectionPager({
   page,
@@ -159,19 +65,24 @@ function ConnectionPager({
   );
 }
 
-/** One connected record: identity, the route that reached it, and its distance. */
+/** One connected record with its shared identity and witnessed explanations. */
 function ConnectedRow({
   item,
   movement,
+  disambiguate = false,
 }: {
   item: ConnectedItem;
   movement: boolean;
+  disambiguate?: boolean;
 }) {
   return (
     <RecordRow
       primary={
         <>
-          <RecordChip node={item.target} />
+          <ConnectionRecordLink
+            node={item.target}
+            disambiguate={disambiguate}
+          />
           {movement ? (
             <RelationshipMovementBadges id={item.target.entityId} />
           ) : null}
@@ -182,7 +93,7 @@ function ConnectedRow({
         {
           id: "via",
           label: "Via",
-          value: <RecordPaths paths={item.paths} compact />,
+          value: <ConnectionPaths paths={item.paths} compact />,
         },
       ]}
     />
@@ -240,6 +151,7 @@ export function ConnectedRecordsTable({
   );
   const items = query.data?.items ?? [];
   const totalCount = query.data?.totalCount ?? 0;
+  const ambiguous = ambiguousConnectionLabels(items.map((item) => item.target));
   return (
     <RelationshipMovementProvider
       source={movementSource}
@@ -271,6 +183,7 @@ export function ConnectedRecordsTable({
               key={item.target.entityId}
               item={item}
               movement={movementSource !== null}
+              disambiguate={ambiguous.has(item.target.label)}
             />
           ))}
         </RecordList>
@@ -344,6 +257,9 @@ export function ConnectedRecordsSection({
                 key={item.target.entityId}
                 item={item}
                 movement={false}
+                disambiguate={ambiguousConnectionLabels(
+                  view.items.map((entry) => entry.target),
+                ).has(item.target.label)}
               />
             ))}
           </RecordGroup>

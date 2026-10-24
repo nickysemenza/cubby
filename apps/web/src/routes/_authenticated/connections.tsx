@@ -1,4 +1,4 @@
-import { connectedViews } from "@cubby/schemas/connected-views";
+import { connectionCatalog } from "@cubby/schemas/connected-views";
 import { entitySchema } from "@cubby/schemas/entity";
 import { entityGraphRootSchema } from "@cubby/schemas/entity-graph";
 import { entityManifest } from "@cubby/schemas/entity-manifest";
@@ -58,7 +58,9 @@ function ConnectionsPage() {
         )
       : undefined;
   const curated = source
-    ? connectedViews[source].find((item) => item.key === view)
+    ? view
+      ? connectionCatalog.resolve(source, view)
+      : undefined
     : undefined;
   const target = relation?.target ?? curated?.target;
   const showRecords =
