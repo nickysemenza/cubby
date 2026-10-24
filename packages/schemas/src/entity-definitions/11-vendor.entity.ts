@@ -171,6 +171,7 @@ export default defineEntity({
         ],
         media: ["logo", "displayImages"],
         derived: [
+          "role",
           "purchaseCount",
           "brandedProductCount",
           "brandCategoryCount",
@@ -634,6 +635,60 @@ export default defineEntity({
         },
       },
       {
+        key: "role",
+        kind: "enum",
+        display: {
+          columnLabel: "Role",
+          width: "sm",
+          optionRole: "category",
+          optionColor: "neutral-status",
+          valueOptions: [
+            {
+              value: "seller",
+              label: "Seller",
+              color: "category-1",
+              glyph: { phosphor: "Storefront", sfSymbol: "storefront" },
+            },
+            {
+              value: "brand",
+              label: "Brand",
+              color: "category-2",
+              glyph: { phosphor: "Tag", sfSymbol: "tag" },
+            },
+            {
+              value: "both",
+              label: "Both",
+              color: "category-3",
+              glyph: {
+                phosphor: "Intersect",
+                sfSymbol: "circle.lefthalf.filled",
+              },
+            },
+            {
+              value: "unused",
+              label: "Unused",
+              color: "neutral-status",
+              glyph: { phosphor: "MinusCircle", sfSymbol: "minus.circle" },
+            },
+          ],
+        },
+        provenance: {
+          kind: "derived",
+          sources: [{ entity: "purchase" }, { entity: "product" }],
+        },
+        explanation: {
+          ruleId: "vendor.role",
+          description:
+            "Seller when referenced by a live Purchase, Brand when referenced as a live Product's brand, Both for both uses, and Unused for neither. Accounts and pending proposals do not assign a role.",
+          readPath: "role",
+        },
+        validation: {
+          read: z.enum(["seller", "brand", "both", "unused"]),
+          create: null,
+          update: null,
+        },
+      },
+      {
         key: "brandCategoryCount",
         kind: "number",
         display: {
@@ -1074,6 +1129,7 @@ export default defineEntity({
       "notes",
     ],
     derived: {
+      role: { type: "enum", options: ["seller", "brand", "both", "unused"] },
       spend: { type: "number" },
       purchaseCount: { type: "number" },
       brandedProductCount: { type: "number" },
@@ -1096,6 +1152,7 @@ export default defineEntity({
       fields: [
         "spend",
         "name",
+        "role",
         "purchaseCount",
         "brandedProductCount",
         "brandCategoryCount",
@@ -1161,6 +1218,7 @@ export default defineEntity({
       "agentHintsLabel",
       "returnWindowDays",
       "notes",
+      "role",
       "purchaseCount",
       "brandedProductCount",
       "brandCategoryCount",
@@ -1205,6 +1263,19 @@ export default defineEntity({
     audit: true,
     schema: { module: "@cubby/schemas/vendor", export: "vendorFilterFields" },
     descriptors: [
+      {
+        columnId: "role",
+        kind: "multiselect",
+        derived: true,
+        placeholder: "Filter role...",
+        deriveSchema: true,
+        options: [
+          { value: "seller", label: "Seller" },
+          { value: "brand", label: "Brand" },
+          { value: "both", label: "Both" },
+          { value: "unused", label: "Unused" },
+        ],
+      },
       {
         columnId: "needsClassification",
         field: "needsClassification",
