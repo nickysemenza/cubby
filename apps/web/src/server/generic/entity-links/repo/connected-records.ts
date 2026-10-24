@@ -10,6 +10,7 @@ import type { DerivedConnectedRelationship } from "@cubby/schemas/connected-view
 import {
   connectedPathVariants,
   connectedViews,
+  curatedConnectedViews,
   relationshipsFor,
 } from "@cubby/schemas/connected-views";
 import type { Entity } from "@cubby/schemas/entity";
@@ -264,22 +265,26 @@ export async function getConnectedRecordsPreview(
   db: Database,
   input: ConnectedRecordsPreviewInput,
 ): Promise<ConnectedRecordsPreviewOutput> {
+  const selected =
+    input.scope === "context"
+      ? curatedConnectedViews[input.source.entityKind]
+      : connectedViews[input.source.entityKind].filter(
+          (view) => view.preview !== false,
+        );
   const views = await Promise.all(
-    connectedViews[input.source.entityKind]
-      .filter((view) => view.preview !== false)
-      .map(async (view) => {
-        const page = await getConnectedRecords(db, {
-          source: input.source,
-          viewKey: view.key,
-          limit: input.limit ?? 3,
-        });
-        return {
-          ...page,
-          viewKey: view.key,
-          title: view.title,
-          evidence: view.evidence ?? false,
-        };
-      }),
+    selected.map(async (view) => {
+      const page = await getConnectedRecords(db, {
+        source: input.source,
+        viewKey: view.key,
+        limit: input.limit ?? 3,
+      });
+      return {
+        ...page,
+        viewKey: view.key,
+        title: view.title,
+        evidence: "evidence" in view ? (view.evidence ?? false) : false,
+      };
+    }),
   );
   return { views };
 }

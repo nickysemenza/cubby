@@ -41,6 +41,8 @@ export type ConnectedRecordsOutput = z.infer<
 
 export const connectedRecordsPreviewInputSchema = z.object({
   source: entityGraphRootSchema,
+  /** Full detail groups or the curated headline routes, using the same resolver. */
+  scope: z.enum(["connections", "context"]).default("connections"),
   /** Rows per view; each view also reports its complete count. */
   limit: z.number().int().min(1).max(10).default(3),
 });

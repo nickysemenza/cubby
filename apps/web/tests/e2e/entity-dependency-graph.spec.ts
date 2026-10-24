@@ -56,11 +56,13 @@ test("connections workspace shares dense facts, linked paths, and native handoff
   await expect(
     context.getByRole("link", { name: "Connection patio project" }),
   ).toBeVisible();
+  await context.getByRole("button", { name: /^Via / }).click();
   await expect(
-    context.getByTitle("Expense: Connection lighting purchase", {
+    context.getByRole("link", {
+      name: "Connection lighting purchase",
       exact: true,
     }),
-  ).toBeVisible();
+  ).toHaveAttribute("href", `/expenses/${expense.id}`);
   await gotoAuthenticatedPage(
     page,
     `/connections?source=product&id=${product.id}`,

@@ -3064,8 +3064,9 @@ selects facts and status; those canonical reads own money, quantities and
 progress. Graph rendering never computes a separate unit price or spend total.
 The graph's structural metadata stays available to native clients. Detail-page
 connections use declared local relationships and curated multi-step routes,
-rather than arbitrary graph reachability. Header context stays limited to target
-groups selected by curated routes. Existing filter-derived relations retain
+rather than arbitrary graph reachability. Header context requests the preview reader's `context` scope, retaining
+the original curated route titles and witnessed paths; the default
+`connections` scope groups all declared routes by target kind. Existing filter-derived relations retain
 their owning filtered tables; external references have no local detail target.
 `relationship-paths.ts` owns the
 shared directional catalog used by table route composition and graph expansion.

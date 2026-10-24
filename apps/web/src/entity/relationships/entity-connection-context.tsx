@@ -39,6 +39,7 @@ function ResolvedContext({
     entityGraph.connectedRecordsPreview.queryOptions({
       source: { entityKind: entity, entityId: id },
       limit: 3,
+      scope: "context",
     }),
   );
   if (query.isPending)
@@ -56,13 +57,7 @@ function ResolvedContext({
       />
     );
   const views = query.data.views
-    .filter(
-      (view) =>
-        view.totalCount > 0 &&
-        curatedConnectedViews[entity].some(
-          (curated) => curated.target === view.targetEntity,
-        ),
-    )
+    .filter((view) => view.totalCount > 0)
     .slice(0, 4);
   if (!views.length) return null;
   const refs = views.flatMap((view) =>
