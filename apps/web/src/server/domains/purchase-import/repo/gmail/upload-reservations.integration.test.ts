@@ -21,6 +21,8 @@ import {
 import { claimImageProcessingOrphans } from "~/server/domains/image-processing/repo/image-processing";
 import {
   reserveMailAttachmentUpload,
+  discardMailAttachmentUpload,
+  finalizeMailAttachmentUpload,
   cleanupAbandonedMailAttachmentUploads,
   MAIL_ATTACHMENT_UPLOAD_REASON,
 } from "~/server/domains/mail/repo/mail-attachment-uploads";
@@ -156,6 +158,62 @@ describe("durable Mail attachment upload reservations", () => {
       );
     return { source, attachment, input, objects, storage, put, remove, read };
   }
+  it("discards only a still-reserved upload with no adopted attachment", async () => {
+    const f = await fixture();
+    const key = `order-mail-attachment/synthetic-discard/${crypto.randomUUID()}`;
+    f.objects.set(key, new Uint8Array([1, 2, 3]));
+    expect(await discardMailAttachmentUpload(ctx.db, key, f.storage)).toBe(0);
+    expect(f.objects.has(key)).toBe(true);
+    await reserveMailAttachmentUpload(ctx.db, {
+      key,
+      attemptId: crypto.randomUUID(),
+    });
+    await getDb(ctx.db)
+      .update(orderMailAttachment)
+      .set({ pendingObjectKey: key })
+      .where(eq(orderMailAttachment.id, f.attachment.id));
+    expect(await discardMailAttachmentUpload(ctx.db, key, f.storage)).toBe(0);
+    expect(f.objects.has(key)).toBe(true);
+    await getDb(ctx.db)
+      .update(orderMailAttachment)
+      .set({ pendingObjectKey: null })
+      .where(eq(orderMailAttachment.id, f.attachment.id));
+    expect(await discardMailAttachmentUpload(ctx.db, key, f.storage)).toBe(1);
+    expect(f.objects.has(key)).toBe(false);
+    expect(
+      await getDb(ctx.db)
+        .select()
+        .from(imageProcessingOrphan)
+        .where(eq(imageProcessingOrphan.key, key)),
+    ).toEqual([]);
+  });
+  it("preserves consumed uploads and retains failed cleanup receipts", async () => {
+    const f = await fixture();
+    const key = `order-mail-attachment/synthetic-consumed/${crypto.randomUUID()}`;
+    f.objects.set(key, new Uint8Array([1]));
+    await reserveMailAttachmentUpload(ctx.db, {
+      key,
+      attemptId: crypto.randomUUID(),
+    });
+    await expect(
+      discardMailAttachmentUpload(ctx.db, key, {
+        delete: async () => {
+          throw new Error("Synthetic unavailable storage");
+        },
+      }),
+    ).rejects.toThrow("Synthetic unavailable storage");
+    expect(
+      await getDb(ctx.db)
+        .select()
+        .from(imageProcessingOrphan)
+        .where(eq(imageProcessingOrphan.key, key)),
+    ).toHaveLength(1);
+    await withTransaction(ctx.db, (tx) =>
+      finalizeMailAttachmentUpload(tx, key),
+    );
+    expect(await discardMailAttachmentUpload(ctx.db, key, f.storage)).toBe(0);
+    expect(f.objects.has(key)).toBe(true);
+  });
   it("finds a rolled-back PUT after immediate cleanup fails and reaps it without deleting a later committed original", async () => {
     const f = await fixture();
     f.put.mockImplementation(async (key, bytes, type) => {

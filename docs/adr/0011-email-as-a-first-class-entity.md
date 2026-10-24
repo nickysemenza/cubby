@@ -182,7 +182,9 @@ When a caller already owns a transaction, reservation uses a separate pooled
 connection. A single-connection transaction scope refuses before uploading bytes;
 walking transaction ancestry alone does not establish an independent commit.
 Mail reservations have their own cleanup path, separate from signed image
-uploads; cleanup holds the reservation lock through deletion. A failed key or
+uploads; cleanup holds the reservation lock through deletion. Immediate correction
+cleanup uses the same reference checks and cannot delete a consumed reservation's
+object or bytes referenced by a retained attachment or Image. A failed key or
 Email never prevents disposal of independent keys and Emails, and failures
 remain retryable and visible.
 An attachment deliberately promoted to independently owned Purchase/Product

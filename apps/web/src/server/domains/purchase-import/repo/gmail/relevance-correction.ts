@@ -21,6 +21,7 @@ import {
 } from "~/server/db/helpers";
 import { runAfterCommit } from "~/server/db/helpers/core";
 import { email as emailTable, orderMailAttachment } from "~/server/db/schema";
+import { discardMailAttachmentUpload } from "~/server/domains/mail/repo/mail-attachment-uploads";
 import { originalChecksum } from "~/server/domains/purchase-import/repo/gmail/checksum";
 import { normalizeMessage } from "~/server/domains/purchase-import/repo/gmail/normalize";
 import { captureGmailOriginal } from "~/server/domains/purchase-import/repo/gmail/original-capture";
@@ -165,11 +166,18 @@ async function correctionAttachmentBytes(
   return { bytes, originalPayloads };
 }
 async function cleanNewCorrectionKeys(
+  db: Database,
   created: Set<string>,
   error: Error,
 ): Promise<never> {
   const cleanup = await Promise.allSettled(
-    [...created].map((key) => productionOrderMailAttachmentStorage.delete(key)),
+    [...created].map((key) =>
+      discardMailAttachmentUpload(
+        db,
+        key,
+        productionOrderMailAttachmentStorage,
+      ),
+    ),
   );
   const failures = cleanup.flatMap((result) =>
     result.status === "rejected" ? [result.reason] : [],
@@ -320,6 +328,7 @@ export async function correctEmailRelevance(
   } catch (error) {
     if (committed) throw error;
     return cleanNewCorrectionKeys(
+      db,
       created,
       error instanceof Error
         ? error
