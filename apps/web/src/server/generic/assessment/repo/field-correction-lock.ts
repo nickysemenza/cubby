@@ -1,0 +1,75 @@
+import { and, eq } from "drizzle-orm";
+
+import type { Database } from "~/server/db";
+import { getDb } from "~/server/db/helpers";
+import { assessment, assessmentState } from "~/server/db/schema";
+import { lockCorrectionKey } from "~/server/generic/assessment/repo/correction-lock";
+import {
+  fieldCorrectionIdentityReader,
+  resolveFieldCorrectionIdentities,
+} from "~/server/generic/assessment/repo/correction-sources";
+
+/** Replacement and member review share key-before-record/projection ordering. */
+export async function lockFieldCorrectionKeysForField(
+  db: Database,
+  input: {
+    entity: string;
+    recordId: string;
+    field: string;
+    keys: readonly (string | null)[];
+  },
+) {
+  await lockFieldCorrectionScope(db, input.entity, input.field);
+  const prior = await getDb(db)
+    .select({ evidence: assessment.evidence })
+    .from(assessment)
+    .innerJoin(assessmentState, eq(assessmentState.id, assessment.id))
+    .where(
+      and(
+        eq(assessmentState.entity, input.entity),
+        eq(assessmentState.recordId, input.recordId),
+        eq(assessmentState.field, input.field),
+      ),
+    );
+  const keys = new Set(input.keys);
+  const readIdentity = fieldCorrectionIdentityReader(db);
+  for (const row of prior) {
+    const identity = await readIdentity(input, row.evidence);
+    keys.add(identity.storedKey);
+    keys.add(identity.canonicalKey);
+  }
+  await lockExpandedFieldCorrectionIdentities(
+    db,
+    input,
+    [...keys].filter((key) => key !== null),
+  );
+}
+
+/** The field gate stabilizes alias discovery, including proof committed on another record. */
+export async function lockFieldCorrectionScope(
+  db: Database,
+  entity: string,
+  field: string,
+) {
+  await lockCorrectionKey(db, `field-correction-scope:${entity}:${field}`);
+}
+
+/** One lock identity contract for member confirmation and every automatic consequence. */
+export async function lockFieldCorrectionIdentities(
+  db: Database,
+  scope: { entity: string; field: string },
+  keys: readonly string[],
+) {
+  await lockFieldCorrectionScope(db, scope.entity, scope.field);
+  return lockExpandedFieldCorrectionIdentities(db, scope, keys);
+}
+
+async function lockExpandedFieldCorrectionIdentities(
+  db: Database,
+  scope: { entity: string; field: string },
+  keys: readonly string[],
+) {
+  const expanded = await resolveFieldCorrectionIdentities(db, keys, scope);
+  for (const key of expanded.keys) await lockCorrectionKey(db, key);
+  return expanded.keys;
+}

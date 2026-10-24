@@ -31,7 +31,7 @@ test("linked Expense categories display their readable label and transaction exp
       });
       const { id: accountId } = await create("financialAccount", {
         name: tag,
-        identity: { kind: "credit_card", issuer: null, network: "visa" },
+        identity: { kind: "credit_card", network: "visa" },
       });
       const { id: vendorId } = await create("vendor", {
         name: tag,

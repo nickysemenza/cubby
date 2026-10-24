@@ -25,7 +25,7 @@ const meal = (title = "Dinner"): CalendarItem => ({
   mealType: "dinner",
   mealKind: "cooked",
   recipeNames: ["Soup"],
-  coverImageUrl: null,
+  displayImages: [],
   mealTotals: withMacros({
     cost: {
       status: "complete",
@@ -58,11 +58,12 @@ const task = (): CalendarItem => ({
   trade: "other",
   projectName: null,
   subjectProductName: null,
-  coverImageUrl: null,
+  displayImages: [],
 });
 
 const planting = (): CalendarItem => ({
   kind: "planting",
+  displayImages: [],
   id: testShortcode("planting", "PLT-3B2C"),
   milestone: "sowed",
   title: "Tomato · Brandywine",

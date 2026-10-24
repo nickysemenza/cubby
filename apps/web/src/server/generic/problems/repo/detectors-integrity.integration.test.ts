@@ -841,7 +841,7 @@ const SOURCE_FACTORIES = {
   "FinancialAccount.providerVendorId": (db, targetId) =>
     insertWithShortcode(db, "financialAccount", {
       name: uniq("Stored value"),
-      identity: { kind: "stored_value", provider: "Synthetic store" },
+      identity: { kind: "stored_value" },
       providerVendorId: parseEntityId("vendor", targetId),
     }),
 
@@ -999,7 +999,7 @@ const SOURCE_FACTORIES = {
       name: uniq("Primary credit card"),
       identity: {
         kind: "credit_card",
-        issuer: "Example Bank",
+
         network: "visa",
       },
       primaryCardholderId: parseEntityId("ledgerParty", targetId),

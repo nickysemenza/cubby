@@ -3,9 +3,10 @@ import {
   financeCategoryApplyInput,
   suggestionReviewListInput,
   suggestionStatus,
+  confirmedFieldDecision,
 } from "@cubby/schemas/ai";
 import { aiProvenance } from "@cubby/schemas/ai-evaluation";
-import { SUGGESTION_AUTO_APPLY_THRESHOLD } from "@cubby/schemas/ai-evaluation";
+import { HIGH_CONFIDENCE_PROBABILITY } from "@cubby/schemas/ai-evaluation";
 import { suggestionAcceptanceReceipt } from "@cubby/schemas/ai-evaluation";
 import { assessmentChildHandle } from "@cubby/schemas/assessment";
 import { entityRefKey } from "@cubby/schemas/entity";
@@ -102,7 +103,18 @@ function reviewableRow(
   suggestion: typeof suggestionTable.$inferSelect,
   runCode: string | null,
 ) {
-  return [{ ...suggestionRowSchema.parse(suggestion), runId: runCode }];
+  const authority = confirmedFieldDecision.safeParse(
+    z
+      .object({ correctionAuthority: z.json().optional() })
+      .safeParse(suggestion.data).data?.correctionAuthority,
+  );
+  return [
+    {
+      ...suggestionRowSchema.parse(suggestion),
+      runId: runCode,
+      ...(authority.success && { correctionAuthority: authority.data }),
+    },
+  ];
 }
 /** Only served Assessments are member review candidates. */
 export const reviewableSuggestionSql = sql`EXISTS (SELECT 1 FROM "Assessment" prediction WHERE prediction.id=${suggestionTable.id} AND prediction.served)`;
@@ -317,6 +329,7 @@ export async function fieldSuggestionKeys(
       field: suggestionTable.field,
       kind: suggestionTable.kind,
       confidence: suggestionTable.confidence,
+      correctionAuthority: sql<unknown>`${suggestionTable.data}->'correctionAuthority'`,
       createdAt: suggestionTable.createdAt,
       matchedRules: matchedRulesOf(sql`${suggestionTable.data}`),
       automaticRule: automaticApplicationRule(sql`${suggestionTable.id}`),
@@ -419,6 +432,23 @@ async function writeSuggestionValue(
   );
 }
 
+/** Reuse the field writer without rewriting the original Assessment or its receipt. */
+export async function writePropagatedFieldCorrection(
+  db: Database,
+  context: EntityKernelContext,
+  row: Pick<
+    z.infer<typeof suggestionRowSchema>,
+    "entity" | "recordId" | "field" | "financeReviewFingerprint"
+  >,
+  value: z.infer<ReturnType<typeof z.json>>,
+) {
+  const { auditIds } = await withAuditReceipts(() =>
+    writeSuggestionValue(db, context, row, value),
+  );
+  await fenceFieldInputsAtCommit(db, row.entity, row.recordId, row.field);
+  return { auditIds };
+}
+
 async function applySuggestionValue(
   db: Database,
   context: EntityKernelContext,
@@ -442,7 +472,7 @@ async function applySuggestionValue(
     reason: options.reason ?? "member_acceptance",
     confidence: options.confidence ?? null,
     threshold:
-      options.mode === "automatic" ? SUGGESTION_AUTO_APPLY_THRESHOLD : null,
+      options.mode === "automatic" ? HIGH_CONFIDENCE_PROBABILITY : null,
   });
   // Capture advances dependency revisions after business writes. Only the
   // mutable projection gets this settled fingerprint; history stays immutable.
@@ -472,6 +502,7 @@ async function automaticFieldFillRefusal(
   db: Database,
   context: EntityKernelContext,
   row: typeof suggestionTable.$inferSelect,
+  authority: "model" | "confirmed_correction" = "model",
 ) {
   const entity = fieldSuggestionsInput.shape.entity.parse(row.entity);
   const policy = entityFieldByKey(entity, row.field)?.control?.suggest;
@@ -482,10 +513,11 @@ async function automaticFieldFillRefusal(
     row.kind !== "addition" ||
     policy?.mode !== "fill" ||
     requiresSuggestionReview(entity, row.field) ||
-    row.confidence < SUGGESTION_AUTO_APPLY_THRESHOLD ||
+    (authority === "model" && row.confidence < HIGH_CONFIDENCE_PROBABILITY) ||
     !empty(row.currentValue) ||
-    empty(row.suggestedValue) ||
-    (row.runnerUpConfidence !== null &&
+    (authority === "model" && empty(row.suggestedValue)) ||
+    (authority === "model" &&
+      row.runnerUpConfidence !== null &&
       row.confidence - row.runnerUpConfidence < 0.1)
   )
     return `Field ${row.entity}.${row.field} is not eligible for automatic fill`;
@@ -555,6 +587,15 @@ async function automaticFieldFillRefusal(
   )
     return "Automatic fill preserves a rejected value";
   return null;
+}
+
+/** Confirmed correction authority replaces model certainty, never field or member safeguards. */
+export async function confirmedFieldFillRefusal(
+  db: Database,
+  context: EntityKernelContext,
+  row: typeof suggestionTable.$inferSelect,
+) {
+  return automaticFieldFillRefusal(db, context, row, "confirmed_correction");
 }
 
 /** Read-only preflight; acceptance repeats all checks inside its write fence. */

@@ -1,6 +1,7 @@
 import type { ActorContext } from "@cubby/schemas/context";
 /** Vendor spend is derived only from `SUM(Expense.cost)` through live purchases. */
 import type { DataQuality } from "@cubby/schemas/data-quality";
+import { entityRefKey } from "@cubby/schemas/entity";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 import {
@@ -87,6 +88,7 @@ import {
 import { assertReviewedSpendingClassification } from "~/server/domains/spending-category/repo/spending-classification-review-authorization";
 import { foldVendorAccountsInto } from "~/server/domains/vendor-account/repo/vendor-account";
 import { agentHintsLabel } from "~/server/entity-kernel/repo/detail-display-labels";
+import { resolveEntityDisplayImages } from "~/server/entity-kernel/repo/entity-display-image";
 import { patchEntityRows } from "~/server/entity-kernel/repo/entity-patch";
 import {
   type MutationReceipt,
@@ -157,10 +159,9 @@ export const VENDOR_DELETE_EDGE_POLICY = {
       "Immutable extraction history retains its original subject UUID and tombstone without being repointed.",
   },
   "FinancialAccount.providerVendorId": {
-    code: "block-stored-value-accounts",
+    code: "block-financial-accounts",
     effect: "block",
-    description:
-      "A stored-value account retains the vendor that owes its balance.",
+    description: "A financial account retains its provider organization.",
   },
   "Run.vendorId": {
     code: "block-runs",
@@ -231,10 +232,10 @@ export const VENDOR_MERGE_EDGE_POLICY = {
       "Immutable extraction history retains its original subject UUID and tombstone without being repointed.",
   },
   "FinancialAccount.providerVendorId": {
-    code: "block-stored-value-accounts",
+    code: "block-financial-accounts",
     effect: "block",
     description:
-      "Stored-value accounts must be reassigned explicitly before merging vendors; each provider and owner holds at most one live balance.",
+      "Financial accounts must be reassigned explicitly before merging their provider vendors.",
   },
   "Run.vendorId": {
     code: "repoint-runs",
@@ -311,6 +312,16 @@ export const vendorPurchaseCount = correlated<number>(
 const vendorBrandedProductCount = correlated<number>(
   `(SELECT count(*)::int FROM "Product" p
      WHERE p."brandId" = "Vendor"."id" AND p."deletedAt" IS NULL)`,
+);
+
+// Qualify the outer identity so role predicates also work inside grouped reads.
+const vendorRole = correlated<VendorOut["role"]>(
+  `(SELECT CASE WHEN roles.seller AND roles.brand THEN 'both'
+    WHEN roles.seller THEN 'seller' WHEN roles.brand THEN 'brand' ELSE 'unused' END
+    FROM (SELECT
+      EXISTS (SELECT 1 FROM "Purchase" p WHERE p."vendorId" = "Vendor"."id" AND p."deletedAt" IS NULL) AS seller,
+      EXISTS (SELECT 1 FROM "Product" p WHERE p."brandId" = "Vendor"."id" AND p."deletedAt" IS NULL) AS brand
+    ) roles)`,
 );
 
 const vendorBrandCategoryCount = correlated<number>(
@@ -504,6 +515,7 @@ const vendorColumns = {
   notes: vendor.notes,
   createdAt: vendor.createdAt,
   updatedAt: vendor.updatedAt,
+  role: vendorRole,
   purchaseCount: vendorPurchaseCount,
   brandedProductCount: vendorBrandedProductCount,
   brandCategoryCount: vendorBrandCategoryCount,
@@ -569,6 +581,7 @@ type VendorRow = {
   notes: string | null;
   createdAt: Date;
   updatedAt: Date;
+  role: VendorOut["role"];
   purchaseCount: number;
   brandedProductCount: number;
   brandCategoryCount: number;
@@ -669,6 +682,7 @@ const dbVendorToAPI = (row: VendorRow, dataQuality: DataQuality): VendorOut => {
     agentHints,
     agentHintsLabel: agentHintsLabel(agentHints),
     notes: row.notes,
+    role: row.role,
     purchaseCount: Number(row.purchaseCount),
     brandedProductCount: Number(row.brandedProductCount),
     brandCategoryCount: Number(row.brandCategoryCount),
@@ -691,6 +705,7 @@ const dbVendorToAPI = (row: VendorRow, dataQuality: DataQuality): VendorOut => {
 const vendorScaffold = listScaffold("vendor", vendor, {
   derived: {
     spend: vendorSpend,
+    role: vendorRole,
     purchaseCount: vendorPurchaseCount,
     brandedProductCount: vendorBrandedProductCount,
     brandCategoryCount: vendorBrandCategoryCount,
@@ -723,6 +738,7 @@ export const vendorListRead = async (
   projection: ListProjection = { kind: "full" },
 ) => {
   const {
+    role,
     purchaseCount,
     brandedProductCount,
     brandCategoryCount,
@@ -748,6 +764,7 @@ export const vendorListRead = async (
         .select({
           ...core,
           ...listGroupFields(projection, "derived", () => ({
+            role,
             purchaseCount,
             brandedProductCount,
             brandCategoryCount,
@@ -889,29 +906,24 @@ export const vendorOptions = async (
 ): Promise<VendorOptionsOut> => {
   const rows = await getDb(db)
     .select({
+      entityId: vendor.id,
       shortcode: vendor.shortcode,
       name: vendor.name,
       count: vendorPurchaseCount,
-      logoKey: image.key,
     })
     .from(vendor)
-    .leftJoin(entityAttachment, vendorLogoAttachment)
-    .leftJoin(
-      image,
-      and(
-        eq(image.id, entityAttachment.imageId),
-        notDeleted(image),
-        displayableImageWhere,
-      ),
-    )
     .where(notDeleted(vendor))
     .orderBy(desc(vendorPurchaseCount), asc(vendor.name));
 
+  const images = await resolveEntityDisplayImages(
+    db,
+    rows.map((row) => ({ entityKind: "vendor", entityId: row.entityId })),
+  );
   return rows.map((row) => ({
     id: parseShortcodeFor("vendor", row.shortcode),
     name: row.name,
     count: Number(row.count),
-    logo: row.logoKey ? { url: getR2PublicUrl(row.logoKey) } : null,
+    logo: images.get(entityRefKey("vendor", row.entityId)) ?? null,
   }));
 };
 

@@ -1,7 +1,6 @@
 import { productCategorySummary } from "./product-category-fields";
 import { locationTypeValues } from "@cubby/shared";
 import { z } from "zod";
-import { imageOut } from "./entity-definitions/field-primitives";
 import { productShortcode, locationShortcode } from "./identifier-fields";
 import { money, moneyNullable } from "./money";
 
@@ -46,7 +45,6 @@ export const locationIdentityProductOut = z.object({
   brandName: z.string().nullable(),
   model: z.string().nullable(),
   category: productCategorySummary.nullable(),
-  coverImage: imageOut.nullable(),
   price: moneyNullable,
 });
 export type LocationIdentityProductOut = z.infer<
@@ -106,6 +104,7 @@ export function locationReadSchemas<S extends z.ZodRawShape>(
   });
 
   type RecursiveLocation = z.output<typeof base> & {
+    displayImages?: z.output<typeof displayImagesField>;
     children?: RecursiveLocation[];
     parent?: RecursiveLocation;
     childCount?: number;
@@ -115,6 +114,7 @@ export function locationReadSchemas<S extends z.ZodRawShape>(
   };
   const detail: z.ZodObject<
     S & {
+      displayImages: z.ZodOptional<typeof displayImagesField>;
       children: z.ZodOptional<z.ZodLazy<z.ZodType<RecursiveLocation[]>>>;
       parent: z.ZodOptional<z.ZodLazy<z.ZodType<RecursiveLocation>>>;
       childCount: z.ZodOptional<z.ZodNumber>;
@@ -124,6 +124,7 @@ export function locationReadSchemas<S extends z.ZodRawShape>(
     }
   > = z.object({
     ...base.shape,
+    displayImages: displayImagesField.optional(),
     children: z
       .lazy((): z.ZodType<RecursiveLocation[]> => recursiveSchema().array())
       .optional(),

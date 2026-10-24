@@ -541,9 +541,22 @@ describe("MCP catalog", () => {
       },
     );
     expect(commit.isError).toBe(true);
+    expect(JSON.stringify(commit.content)).not.toContain("inputSchema");
     expect(JSON.stringify(commit.content)).toContain(
       "does not mount purchase_import.commit",
     );
+    const malformed = await callMcpTool(
+      createMcpServer(),
+      "purchase_import",
+      { action: "prepare", input: { orders: [{}] } },
+      kernelRequestContext(kernel),
+      {
+        entityKernel: kernel,
+        purchaseAgent: { runId: run.id, grantId: "catalog-grant" },
+      },
+    );
+    expect(malformed.isError).toBe(true);
+    expect(JSON.stringify(malformed.content)).not.toContain("inputSchema");
     // The purpose gate refuses before the writer runs.
     expect(
       z

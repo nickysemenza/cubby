@@ -19,14 +19,25 @@ export const purchaseChildren = [
       },
       { key: "lineIndex", kind: "integer", notNull: true },
       {
+        // The Expense owns the current Product; productId below is import history.
+        key: "expenseId",
+        kind: "uuid",
+        type: "ExpenseId",
+        reference: { table: "expense", column: "id" },
+      },
+      {
         key: "productId",
         kind: "uuid",
-        notNull: true,
         type: "ProductId",
         reference: { table: "product", column: "id" },
       },
     ],
-    types: [{ module: "@cubby/schemas/identifiers", exports: ["ProductId"] }],
+    types: [
+      {
+        module: "@cubby/schemas/identifiers",
+        exports: ["ProductId", "ExpenseId"],
+      },
+    ],
     indexes: [
       {
         name: "ImportSourceProduct_sourceOrder_line_key",

@@ -173,7 +173,7 @@ describe("server verified financial convergence", () => {
       });
       const account = await createRepoEntity(ctx, "financialAccount", {
         name: "Synthetic shared card",
-        identity: { kind: "credit_card", issuer: null, network: "visa" },
+        identity: { kind: "credit_card", network: "visa" },
         ledgerPartyId: owner.output.id,
         primaryCardholderId:
           role === "cardholder" ? holder.output.id : owner.output.id,
@@ -242,7 +242,7 @@ describe("server verified financial convergence", () => {
     });
     const account = await createRepoEntity(ctx, "financialAccount", {
       name: "Synthetic late card",
-      identity: { kind: "credit_card", issuer: null, network: "visa" },
+      identity: { kind: "credit_card", network: "visa" },
       ledgerPartyId: owner.output.id,
       primaryCardholderId: owner.output.id,
       authorizedUsers: [
@@ -297,7 +297,7 @@ describe("server verified financial convergence", () => {
     });
     const account = await createRepoEntity(ctx, "financialAccount", {
       name: "Synthetic other card",
-      identity: { kind: "credit_card", issuer: null, network: "visa" },
+      identity: { kind: "credit_card", network: "visa" },
       ledgerPartyId: owner.output.id,
       fundingPeriods: [
         {

@@ -317,7 +317,7 @@ test("Suggestions lists every family with named records and category pills, and 
   const alias = uniqueName(testInfo, "Suggestions card");
   await createEntityFixture(page, "financialAccount", {
     name: alias,
-    identity: { kind: "credit_card", issuer: null, network: "visa" },
+    identity: { kind: "credit_card", network: "visa" },
     sourceAliases: [{ source: "monarch", alias, externalAccountId: null }],
   });
   const importId = await recordRows(
@@ -478,7 +478,7 @@ test("statement Suggestions attach to a named candidate, bulk-accept a clean sup
         name: alias,
         ledgerPartyId: owner.shortcode,
         provisional: false,
-        identity: { kind: "credit_card", issuer: null, network: "visa" },
+        identity: { kind: "credit_card", network: "visa" },
         sourceAliases: [{ source: "monarch", alias, externalAccountId: null }],
       });
       const recorded = await create("financialTransaction", {
@@ -712,7 +712,7 @@ test("Find suggestions estimates a Sweep before it starts, then follows its Step
   await status.getByRole("link").first().click();
   await expect(page).toHaveURL(/\/runs\/RUN-/);
   await expect(
-    page.getByRole("heading", { name: "Steps", exact: true }),
+    page.getByRole("heading", { name: "Execution steps", exact: true }),
   ).toBeVisible();
 });
 
@@ -746,11 +746,11 @@ test("Suggestions contains automatic history and pausable statement spending", a
   await toggle.click();
   await expect(toggle).toHaveAttribute("aria-checked", "true");
   await page
-    .getByRole("tab", { name: "Automatic decisions", exact: true })
+    .getByRole("tab", { name: "Automation history", exact: true })
     .click();
   await expect(page).toHaveURL(/status=automatic/);
   await expect(
-    page.getByRole("region", { name: "Automatic decisions", exact: true }),
+    page.getByRole("region", { name: "Automation history", exact: true }),
   ).toBeVisible();
   await page.getByRole("tab", { name: "Pending", exact: true }).click();
   await expect(suggestionsTable(page)).toBeVisible();

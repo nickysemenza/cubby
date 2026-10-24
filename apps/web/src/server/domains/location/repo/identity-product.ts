@@ -8,11 +8,9 @@
  */
 
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
-import { isDisplayableImageFile } from "@cubby/schemas/image";
 import type { LocationIdentityProductOut } from "@cubby/schemas/location";
 
 import { isNotDeleted } from "~/server/db/helpers/query";
-import { mapImages } from "~/server/db/helpers/transform";
 
 import type { LocationIdentityProductRow } from "./internal-types";
 
@@ -27,10 +25,6 @@ export const mapLocationIdentityProduct = (
     brandName: product.brandName,
     model: product.model ?? null,
     category: product.category ?? null,
-    // First DISPLAYABLE image, not first image: `mapImages` drops soft-deleted
-    // rows but deliberately keeps documents and failed renders, so `[0]` here
-    // could hand a PDF manual to every surface that draws this as a thumbnail.
-    coverImage: mapImages(product.images).find(isDisplayableImageFile) ?? null,
     price: product.price ?? null,
   };
 };

@@ -470,6 +470,9 @@ describe("PhotoImportRunView", () => {
       within(progress).getByRole("progressbar", { name: "Photos reviewed" }),
     ).toHaveAttribute("aria-valuenow", "2");
     expect(progress).toHaveTextContent("2 of 3 photos settled");
+    await userEvent.click(
+      within(progress).getByRole("button", { name: "Processing details" }),
+    );
     expect(progress).toHaveTextContent("Device analysis · optional");
     expect(progress).toHaveTextContent("Cloud description");
     expect(progress).toHaveTextContent("Subject lift · optional");
@@ -891,6 +894,7 @@ it("keeps a dirty field through refresh and saves it before approval", async () 
 
   rejectName = false;
   await userEvent.click(approve);
+  await userEvent.click(screen.getByRole("button", { name: /^Results · 1$/ }));
   await waitFor(() =>
     expect(screen.getByLabelText("Products from this import")).toBeVisible(),
   );

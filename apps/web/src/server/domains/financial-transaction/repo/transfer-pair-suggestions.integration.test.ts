@@ -137,12 +137,12 @@ describe("transfer-pair suggestions", () => {
 
   const checking: FinancialAccountIdentity = {
     kind: "bank_account",
-    institution: "Example Bank",
+
     accountType: "checking",
   };
   const savings: FinancialAccountIdentity = {
     kind: "bank_account",
-    institution: "Example Bank",
+
     accountType: "savings",
   };
   const account = async (
@@ -1095,7 +1095,6 @@ describe("transfer-pair suggestions", () => {
     const bank = await account("Synthetic checking", member);
     const wallet = await account("Synthetic wallet", member, {
       kind: "stored_value",
-      provider: "Example Pay",
     });
     const reserve = await account("Synthetic savings", member, savings);
     // The check is recorded as a transfer and its category says Transfer.
@@ -1146,7 +1145,6 @@ describe("transfer-pair suggestions", () => {
     await account("Synthetic checking", payer);
     await account("Synthetic brokerage", payee, {
       kind: "other",
-      institution: "Example Brokerage",
     });
     await statement([
       {
@@ -1213,7 +1211,7 @@ describe("transfer-pair suggestions", () => {
     const reserve = await account("Synthetic savings", member, savings);
     await account("Synthetic card", member, {
       kind: "credit_card",
-      issuer: null,
+
       network: "visa",
     });
     await statement([
@@ -1594,7 +1592,6 @@ describe("transfer-pair suggestions", () => {
     await account("Synthetic savings", member, savings);
     await account("Synthetic brokerage", member, {
       kind: "other",
-      institution: "Example Brokerage",
     });
     await transaction(bank, 500, "2026-09-01");
     await statement([

@@ -14,21 +14,20 @@ import { transactionImportMembers } from "~/server/domains/transaction-import/re
 
 import { CHARGE_STATE, chargeKeyOf, chargeStateOf } from "./statement-charge";
 
-/** Which unmatched charges a generation pass covers; empty covers the ledger. */
+/** Which charge identities a generation or label pass covers; empty covers the ledger. */
 export type StatementSuggestionScope = {
   /** Only the charges one import observed. */
   importId?: string | null;
   /**
-   * Only charges that resolve to these FinancialAccounts. Resolution is the
-   * preview's (an alias, then a card's last four), so this filters resolved
-   * proposals rather than the rows a page reads.
+   * Only charges that resolve to these live FinancialAccounts using the
+   * statement preview's stored, provider, card and settlement account rules.
    */
   accountIds?: readonly string[];
   /** Only charges dated on or after this day (`YYYY-MM-DD`). */
   since?: string | null;
 };
 
-const scopedChargeKeys = (scope: StatementSuggestionScope) => {
+export const scopedStatementChargeKeys = (scope: StatementSuggestionScope) => {
   const { importId, since } = scope;
   // A scope selects whole charges, so the charge's state still reads every
   // live observation of it.
@@ -51,7 +50,7 @@ export const statementInputChargeKeys = (
   after: { source: string; chargeKey: string } | null,
   limit: number,
 ) => sql`
-  SELECT DISTINCT keys.source, keys."chargeKey" FROM (${scopedChargeKeys(scope)}) keys
+  SELECT DISTINCT keys.source, keys."chargeKey" FROM (${scopedStatementChargeKeys(scope)}) keys
   ${after ? sql`WHERE (keys.source,keys."chargeKey") > (${after.source},${after.chargeKey})` : sql``}
   ORDER BY keys.source,keys."chargeKey" LIMIT ${limit}`;
 
@@ -64,7 +63,9 @@ export const statementInputCharges = (
   // retained observation of each admitted identity still participates.
   const chargeFilters = [
     ...(scope.importId || scope.since
-      ? [sql`(r.source, ${chargeKeyOf("r")}) IN (${scopedChargeKeys(scope)})`]
+      ? [
+          sql`(r.source, ${chargeKeyOf("r")}) IN (${scopedStatementChargeKeys(scope)})`,
+        ]
       : []),
     ...(keys
       ? [

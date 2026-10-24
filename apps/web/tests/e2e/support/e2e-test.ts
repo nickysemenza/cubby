@@ -1,4 +1,5 @@
 import { test as base, expect } from "@playwright/test";
+import { attachRecorder } from "playwright-recorder-plus";
 import { drainDerivedRefreshFrontier } from "~/server/testing/background-queue";
 import { getFixtureDb } from "../fixtures/core";
 
@@ -34,10 +35,11 @@ type WorkerFixtures = {
 const recordingVideo = process.env.CUBBY_E2E_VIDEO === "1";
 
 const test = base.extend<TestFixtures, WorkerFixtures>({
-  // `video` is worker-scoped: a spec's `test.use({ video })`, even to the
-  // default, splits its tests into separate workers, each booting another
-  // browser, database, and Worker harness. Recording is chosen per run here.
-  video: [recordingVideo ? "on" : "off", { scope: "worker" }],
+  // The page fixture owns opt-in MP4 capture; do not also record built-in WebM.
+  video: ["off", { scope: "worker" }],
+  viewport: async ({ viewport }, provide) => {
+    await provide(recordingVideo ? { width: 1920, height: 1080 } : viewport);
+  },
   workerdProfile: ["offline", { scope: "worker", option: true }],
   objectStoragePublicUrl: [undefined, { scope: "worker", option: true }],
   e2eRuntime: [
@@ -83,6 +85,21 @@ const test = base.extend<TestFixtures, WorkerFixtures>({
     // `page.request` is this context's request client.
     retryStaleKeepAlive(context.request);
     await provide(context);
+  },
+  page: async ({ page }, provide, testInfo) => {
+    if (!recordingVideo) return provide(page);
+    const videoPath = testInfo.outputPath("video.mp4");
+    const recorder = await attachRecorder(page, { path: videoPath });
+    try {
+      await provide(page);
+    } finally {
+      await recorder.stop();
+      await recorder.finalized;
+      await testInfo.attach("video", {
+        path: videoPath,
+        contentType: "video/mp4",
+      });
+    }
   },
   request: async ({ request }, provide) => {
     retryStaleKeepAlive(request);

@@ -146,6 +146,10 @@ and whose `_meta["cubby/error"]` carries `code`, `reason`, `requestId`, and
 that fails its own schema is `INVALID_OUTPUT` and names each failing path.
 A runner failure is rendered as the runner settled it; it is not normalized or
 reported a second time.
+Generated capability tools append `recovery: "input_schema"` and the allowed
+action's live `inputSchema` to input-validation errors. Correct the payload
+from that contract (or call `describe`); missing evidence is never fabricated.
+Output validation and domain refusals do not advertise input-schema recovery.
 
 Every MCP principal carries a wall-clock budget (`MCP_TOOL_DEADLINE_MS` in
 `apps/web/src/server/http/authenticate.ts`): 18 s for reads, 45 s

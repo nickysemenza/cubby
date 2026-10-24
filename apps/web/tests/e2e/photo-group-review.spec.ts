@@ -120,7 +120,7 @@ test("applies selected notes to a resolved historical Product without changing i
   ).toBeDisabled();
   await group.getByRole("button", { name: "Resolved", exact: true }).click();
   await group
-    .getByRole("button", { name: "Change Own it now?", exact: true })
+    .getByRole("button", { name: "Change Inventory", exact: true })
     .click();
   await group.getByRole("combobox", { name: "stock decision" }).click();
   await page
@@ -130,7 +130,7 @@ test("applies selected notes to a resolved historical Product without changing i
     })
     .click();
   await group
-    .getByRole("button", { name: "Open Right one?", exact: true })
+    .getByRole("button", { name: "Change Right one?", exact: true })
     .click();
   await group.getByText(/Product changes ·/).click();
   await group
@@ -174,6 +174,104 @@ test("applies selected notes to a resolved historical Product without changing i
     amountValue: 2,
     amountUnit: "kg",
   });
+});
+
+test("fills the owned-items destination once and applies ready items without selection", async ({
+  page,
+  e2eRuntime,
+}, testInfo) => {
+  const batchName = `Owned batch ${Date.now()}`;
+  const seed = await seedPhotoGroupReviewRun(
+    page,
+    batchName,
+    e2eRuntime.objectStorageUrl,
+  );
+  const configured = await startOperation(
+    page.request,
+    "photoImport.setDefaults",
+    {
+      runId: seed.runId,
+      defaults: { stockIntent: "receive", locationId: null },
+    },
+  );
+  expect(configured.ok(), await configured.text()).toBeTruthy();
+  const owned = {
+    ...seed.groups[0]!,
+    images: [
+      ...seed.groups[0]!.images,
+      { id: seed.labelImage.shortcode, purpose: "label" as const },
+    ],
+    skip: [],
+    inventory: undefined,
+    review: undefined,
+  };
+  const proposed = await startOperation(
+    page.request,
+    "photoImport.saveGroups",
+    { runId: seed.runId, groups: [owned, seed.groups[1]!] },
+  );
+  expect(proposed.ok(), await proposed.text()).toBeTruthy();
+  await gotoAuthenticatedPage(
+    page,
+    `/runs/${seed.runId}#photo-batch`,
+    page.getByRole("heading", { name: "Photo review" }),
+  );
+  const group = page.locator("#photo-group-g1");
+  await expect(
+    group.getByRole("button", { name: "Create product", exact: true }),
+  ).toBeDisabled();
+  await page
+    .getByRole("combobox", { name: "Default storage location", exact: true })
+    .click();
+  await page
+    .getByRole("option", { name: new RegExp(`${batchName} location`) })
+    .click();
+  await expect(
+    page.getByRole("button", { name: "Apply 2 ready items", exact: true }),
+  ).toBeEnabled();
+  await expect(
+    group.getByRole("textbox", { name: "New product name" }),
+  ).toBeHidden();
+  await expect(
+    group.getByRole("combobox", { name: "stock decision" }),
+  ).toBeHidden();
+  await page.screenshot({
+    path: testInfo.outputPath("owned-ready-desktop.png"),
+  });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await group.scrollIntoViewIfNeeded();
+  expect(
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= window.innerWidth,
+    ),
+  ).toBe(true);
+  await page.screenshot({
+    path: testInfo.outputPath("owned-ready-mobile.png"),
+  });
+  await page.setViewportSize({ width: 1920, height: 1080 });
+  if (recordingVideo) await page.waitForTimeout(1_000);
+  const approval = page.waitForResponse((response) =>
+    dispatchOperations(response.request()).some(
+      (operation) => operation.operation === "photoImport.approveGroups",
+    ),
+  );
+  await page
+    .getByRole("button", { name: "Apply 2 ready items", exact: true })
+    .click();
+  const outcome = await operationResult(
+    await approval,
+    "photoImport.approveGroups",
+    reviewPhotoGroupsOutput,
+  );
+  expect(outcome.results.map((result) => result.outcome)).toEqual([
+    "committed",
+    "committed",
+  ]);
+  await expect(
+    page.getByText("0 to review · 2 settled · 0 photos not in a group", {
+      exact: true,
+    }),
+  ).toBeVisible();
 });
 
 test("approves two selected photo groups with one reviewed batch action", async ({
@@ -240,6 +338,7 @@ test("approves two selected photo groups with one reviewed batch action", async 
       .getByRole("navigation", { name: "Section index" })
       .locator('[aria-label="Applied"]'),
   ).toHaveCount(2);
+  await page.getByRole("button", { name: "Results · 2", exact: true }).click();
   await expect(
     page
       .getByLabel("Products from this import")
@@ -283,7 +382,7 @@ test("reviews, approves, and discards proposed photo groups on the photo-invento
     }),
   ).toBeVisible();
   const g1Card = page.locator("[data-photo-group]").filter({
-    has: page.getByRole("heading", { name: "Gray crew t-shirt — M" }),
+    has: page.getByRole("heading", { name: `Gray crew t-shirt — M ${name}` }),
   });
   await expect(g1Card).toBeVisible();
   await expect(g1Card.getByText("Item", { exact: true })).toBeVisible();
@@ -325,6 +424,9 @@ test("reviews, approves, and discards proposed photo groups on the photo-invento
   // Blurring the edited name and clicking Approve in the same gesture must
   // save the correction before creating the Product.
   const correctedName = `${name} Gray crew t-shirt — size M`;
+  await g1Card
+    .getByRole("button", { name: "Change Details", exact: true })
+    .click();
   await g1Card
     .getByRole("textbox", { name: "New product name" })
     .fill(correctedName);
@@ -618,7 +720,7 @@ test("reviews an occupied location and adds the photo count to its chosen stock 
   );
   await page
     .locator("#photo-group-g1")
-    .getByRole("button", { name: "Change Own it now?", exact: true })
+    .getByRole("button", { name: "Change Inventory", exact: true })
     .click();
   const entryPicker = page
     .locator("#photo-group-g1")
@@ -851,8 +953,11 @@ test("distinguishes attach and create and exposes saved photo evidence", async (
   );
   const attach = page.locator("#photo-group-g1");
   const create = page.locator("#photo-group-g2");
+  await attach
+    .getByRole("button", { name: "Change Right one?", exact: true })
+    .click();
   // Missing evidence is a photo-slot state, not a repeated field warning.
-  await expect(attach.getByLabel("Label photo missing")).toBeVisible();
+  await expect(attach.getByLabel("Label photo missing")).toHaveCount(0);
   await expect(
     attach.getByRole("link", { name: /B0SYNTH123/ }),
   ).toHaveAttribute("href", "https://www.amazon.com/dp/B0SYNTH123");
@@ -876,7 +981,7 @@ test("distinguishes attach and create and exposes saved photo evidence", async (
   ).toHaveCount(0);
   await expect(
     attach
-      .locator(".decision-steps-media")
+      .getByRole("region", { name: "Photo evidence", exact: true })
       .getByText("No description analysis retained."),
   ).toHaveCount(1);
   await expect(
@@ -909,7 +1014,10 @@ test("distinguishes attach and create and exposes saved photo evidence", async (
     .toBe(true);
 
   await create.scrollIntoViewIfNeeded();
-  await expect(create.getByLabel("Label photo missing")).toBeVisible();
+  await expect(create.getByLabel("Label photo missing")).toHaveCount(0);
+  await create
+    .getByRole("button", { name: "Change Details", exact: true })
+    .click();
   await expect(
     create.getByText("Creates Synthetic shell jacket and attaches 1 photo.", {
       exact: true,
@@ -1003,6 +1111,9 @@ test("keeps proposed edits separate while saved product evidence loads, fails, a
     page.getByRole("heading", { name: "Photo review" }),
   );
   const modelRow = attach.locator('[data-cross-check="model"]');
+  await attach
+    .getByRole("button", { name: "Change Right one?", exact: true })
+    .click();
   try {
     await expect(modelRow).toContainText("Loading current product");
     await expect(modelRow).not.toContainText("SJ-999");
@@ -1051,6 +1162,9 @@ test("rejects a photo candidate and persists the reviewed rejection", async ({
     page.getByRole("heading", { name: "Photo review" }),
   );
   const attach = page.locator("#photo-group-g1");
+  await attach
+    .getByRole("button", { name: "Change Right one?", exact: true })
+    .click();
   await performOperation(page, "photoImport.rejectCandidate", () =>
     attach.getByRole("button", { name: "Not this one…", exact: true }).click(),
   );
@@ -1138,7 +1252,12 @@ test("keeps a noisy care label to meaningful checks and linked purchase evidence
     page.getByRole("heading", { name: "Photo review" }),
   );
   const card = page.locator("#photo-group-g1");
-  const label = card.locator(".decision-steps-media").getByLabel("Label text");
+  await card
+    .getByRole("button", { name: "Change Right one?", exact: true })
+    .click();
+  const label = card
+    .getByRole("region", { name: "Photo evidence", exact: true })
+    .getByLabel("Label text");
   await expect(label).toContainText("C33223");
   await expect(label).toHaveText(
     /^MEN'S · 9M · C33223 · MADE IN VIETNAM · Bather and Manmade$/,
@@ -1160,4 +1279,74 @@ test("keeps a noisy care label to meaningful checks and linked purchase evidence
 
   await expect(card.getByText("Why the agent proposed this")).toBeVisible();
   await expect(card.getByText(agentNote)).toBeHidden();
+});
+
+test("photo approval follows filtered ready scope and explicit selection overrides it", async ({
+  page,
+  e2eRuntime,
+}) => {
+  const seed = await seedPhotoGroupReviewRun(
+    page,
+    `Scoped review ${Date.now()}`,
+    e2eRuntime.objectStorageUrl,
+  );
+  const proposed = await startOperation(
+    page.request,
+    "photoImport.saveGroups",
+    { runId: seed.runId, groups: seed.groups },
+  );
+  expect(proposed.ok(), await proposed.text()).toBeTruthy();
+  await gotoAuthenticatedPage(
+    page,
+    `/runs/${seed.runId}#photo-batch`,
+    page.getByRole("heading", { name: "Photo review", exact: true }),
+  );
+  const search = page.getByRole("textbox", { name: "Search photo groups" });
+  await search.fill("Gray crew t-shirt");
+  await expect(page.locator("#photo-group-g2")).toBeHidden();
+  await expect(
+    page.getByRole("button", { name: "Apply 1 ready item", exact: true }),
+  ).toBeEnabled();
+  const firstReceipt = page.waitForResponse((response) =>
+    dispatchOperations(response.request()).some(
+      (operation) => operation.operation === "photoImport.approveGroups",
+    ),
+  );
+  await page
+    .getByRole("button", { name: "Apply 1 ready item", exact: true })
+    .click();
+  const first = await operationResult(
+    await firstReceipt,
+    "photoImport.approveGroups",
+    reviewPhotoGroupsOutput,
+  );
+  expect(first.results.map((item) => item.groupKey)).toEqual(["g1"]);
+  expect(first.results.map((item) => item.outcome)).toEqual(["committed"]);
+  expect(first.proposals.find((item) => item.groupKey === "g2")?.state).toBe(
+    "proposed",
+  );
+  // A resolved item stays in the review position until the member changes views.
+  await expect(page.locator("#photo-group-g1")).toBeAttached();
+  await search.clear();
+  await page.locator("#photo-group-g2").getByRole("checkbox").check();
+  await search.fill("Gray crew t-shirt");
+  await expect(page.locator("#photo-group-g2")).toBeHidden();
+  await expect(
+    page.getByRole("button", { name: "Apply 1 selected item", exact: true }),
+  ).toBeEnabled();
+  const secondReceipt = page.waitForResponse((response) =>
+    dispatchOperations(response.request()).some(
+      (operation) => operation.operation === "photoImport.approveGroups",
+    ),
+  );
+  await page
+    .getByRole("button", { name: "Apply 1 selected item", exact: true })
+    .click();
+  const second = await operationResult(
+    await secondReceipt,
+    "photoImport.approveGroups",
+    reviewPhotoGroupsOutput,
+  );
+  expect(second.results.map((item) => item.groupKey)).toEqual(["g2"]);
+  expect(second.results.map((item) => item.outcome)).toEqual(["committed"]);
 });

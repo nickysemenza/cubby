@@ -6,7 +6,7 @@ import {
 } from "@cubby/schemas/compiler/native-coverage";
 import type { RawReadSchemas } from "@cubby/schemas/entity-definitions/definition";
 import { relationshipProvenanceSchema } from "./list-fields.ts";
-import { connectedViews } from "@cubby/schemas/compiler/connected-view-definitions";
+import { curatedConnectionViews } from "@cubby/schemas/compiler/connected-view-definitions";
 import { listViewId } from "@cubby/schemas/entity-definitions/definition";
 import type {
   CompiledEditSection,
@@ -1157,7 +1157,7 @@ export const validateRelationSections = (
       if (chart.kind !== "chart" && chart.kind !== "records") continue;
       const routes = chart.viewKey.startsWith("relation:")
         ? [[chart.viewKey.slice(9)]]
-        : Object.entries(connectedViews)
+        : Object.entries(curatedConnectionViews)
             .find(([key]) => key === entity.key)?.[1]
             .find((view) => view.key === chart.viewKey)?.routes;
       if (!routes?.length)

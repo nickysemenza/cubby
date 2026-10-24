@@ -244,15 +244,6 @@ const productCategoryProjection = {
 
 const locationIdentityProduct = {
   extras: productCategoryProjection,
-  with: {
-    images: {
-      where: notDeleted(entityAttachment),
-      orderBy: imageOrder,
-      with: {
-        image: true,
-      },
-    },
-  },
 } as const;
 
 /**

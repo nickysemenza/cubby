@@ -32,6 +32,7 @@ const fetchedVendor = vendorOut.parse({
   },
   returnWindowDays: null,
   notes: null,
+  role: "unused",
   brandedProductCount: 0,
   brandCategoryCount: 0,
   purchasedBrandProductCount: 0,

@@ -37,6 +37,10 @@ import {
   type ListEntity,
 } from "~/entity/generated/entity-lists.gen";
 import {
+  connectionRefs,
+  ConnectionPaths,
+} from "~/entity/relationships/connection-paths";
+import {
   defaultSortDirectionFor,
   defaultSortFor,
 } from "~/entity/sortable-fields";
@@ -59,7 +63,6 @@ import type { ListQueryOptionsFn } from "../../ui/hooks/use-paginated-table-core
 import { type BaseListRow, useEntityList } from "../hooks/use-entity-list";
 import { useEntityFieldSave } from "../hooks/use-update-mutation";
 import { ListWorkbench } from "../table/list-workbench";
-import { connectionRefs, RecordPaths } from "./connected-records-table";
 import { RelationScopeContext } from "./relation-scope";
 import {
   relationshipMovementSource,
@@ -446,7 +449,7 @@ function ConnectionEvidenceCell({ id }: { id: string }) {
   const evidence = useContext(EvidenceContext)?.get(id);
   return evidence ? (
     <div className="max-w-full min-w-0 overflow-hidden">
-      <RecordPaths paths={evidence.paths} compact />
+      <ConnectionPaths paths={evidence.paths} compact />
     </div>
   ) : (
     <span className="text-muted-foreground">—</span>
@@ -727,7 +730,9 @@ function LiveEntityRelationTable({
                     {movementSource !== null ? (
                       <RelationshipMovementBadges id={row.id} />
                     ) : null}
-                    {item ? <RecordPaths paths={item.paths} compact /> : null}
+                    {item ? (
+                      <ConnectionPaths paths={item.paths} compact />
+                    ) : null}
                   </div>
                 ) : null;
               }}

@@ -21,6 +21,8 @@ import {
 import { claimImageProcessingOrphans } from "~/server/domains/image-processing/repo/image-processing";
 import {
   reserveMailAttachmentUpload,
+  discardMailAttachmentUpload,
+  finalizeMailAttachmentUpload,
   cleanupAbandonedMailAttachmentUploads,
   MAIL_ATTACHMENT_UPLOAD_REASON,
 } from "~/server/domains/mail/repo/mail-attachment-uploads";
@@ -156,6 +158,62 @@ describe("durable Mail attachment upload reservations", () => {
       );
     return { source, attachment, input, objects, storage, put, remove, read };
   }
+  it("discards only a still-reserved upload with no adopted attachment", async () => {
+    const f = await fixture();
+    const key = `order-mail-attachment/synthetic-discard/${crypto.randomUUID()}`;
+    f.objects.set(key, new Uint8Array([1, 2, 3]));
+    expect(await discardMailAttachmentUpload(ctx.db, key, f.storage)).toBe(0);
+    expect(f.objects.has(key)).toBe(true);
+    await reserveMailAttachmentUpload(ctx.db, {
+      key,
+      attemptId: crypto.randomUUID(),
+    });
+    await getDb(ctx.db)
+      .update(orderMailAttachment)
+      .set({ pendingObjectKey: key })
+      .where(eq(orderMailAttachment.id, f.attachment.id));
+    expect(await discardMailAttachmentUpload(ctx.db, key, f.storage)).toBe(0);
+    expect(f.objects.has(key)).toBe(true);
+    await getDb(ctx.db)
+      .update(orderMailAttachment)
+      .set({ pendingObjectKey: null })
+      .where(eq(orderMailAttachment.id, f.attachment.id));
+    expect(await discardMailAttachmentUpload(ctx.db, key, f.storage)).toBe(1);
+    expect(f.objects.has(key)).toBe(false);
+    expect(
+      await getDb(ctx.db)
+        .select()
+        .from(imageProcessingOrphan)
+        .where(eq(imageProcessingOrphan.key, key)),
+    ).toEqual([]);
+  });
+  it("preserves consumed uploads and retains failed cleanup receipts", async () => {
+    const f = await fixture();
+    const key = `order-mail-attachment/synthetic-consumed/${crypto.randomUUID()}`;
+    f.objects.set(key, new Uint8Array([1]));
+    await reserveMailAttachmentUpload(ctx.db, {
+      key,
+      attemptId: crypto.randomUUID(),
+    });
+    await expect(
+      discardMailAttachmentUpload(ctx.db, key, {
+        delete: async () => {
+          throw new Error("Synthetic unavailable storage");
+        },
+      }),
+    ).rejects.toThrow("Synthetic unavailable storage");
+    expect(
+      await getDb(ctx.db)
+        .select()
+        .from(imageProcessingOrphan)
+        .where(eq(imageProcessingOrphan.key, key)),
+    ).toHaveLength(1);
+    await withTransaction(ctx.db, (tx) =>
+      finalizeMailAttachmentUpload(tx, key),
+    );
+    expect(await discardMailAttachmentUpload(ctx.db, key, f.storage)).toBe(0);
+    expect(f.objects.has(key)).toBe(true);
+  });
   it("finds a rolled-back PUT after immediate cleanup fails and reaps it without deleting a later committed original", async () => {
     const f = await fixture();
     f.put.mockImplementation(async (key, bytes, type) => {
@@ -256,19 +314,20 @@ describe("durable Mail attachment upload reservations", () => {
         .where(eq(imageProcessingOrphan.key, key)),
     ).toEqual([]);
   });
-  it("refuses an unrooted raw transaction before an original PUT", async () => {
+  it("refuses an unrooted raw transaction before provider lookup or PUT", async () => {
     const f = await fixture();
     await expect(
       getDb(ctx.db).transaction(async (tx) =>
         correctEmailRelevance(databaseForTransaction(tx), f.input, ctx.actor),
       ),
     ).rejects.toThrow(
-      "Mail attachment upload reservation requires a rooted durable database",
+      "Email correction preparation requires a root database outside the application transaction",
     );
+    expect(providers.gmailProviderForUser).not.toHaveBeenCalled();
     expect(f.put).not.toHaveBeenCalled();
     expect(f.objects.size).toBe(0);
   });
-  it("refuses a rooted single-connection outer transaction before PUT because its reservation would roll back", async () => {
+  it("refuses an already-open rooted transaction before provider lookup or PUT", async () => {
     const f = await fixture();
     await expect(
       withConnection(ctx.db, (single) =>
@@ -282,8 +341,9 @@ describe("durable Mail attachment upload reservations", () => {
         }),
       ),
     ).rejects.toThrow(
-      "Mail attachment upload reservation requires an independent durable connection",
+      "Email correction preparation requires a root database outside the application transaction",
     );
+    expect(providers.gmailProviderForUser).not.toHaveBeenCalled();
     expect(f.put).not.toHaveBeenCalled();
     expect(f.objects.size).toBe(0);
     expect(await getDb(ctx.db).select().from(imageProcessingOrphan)).toEqual(

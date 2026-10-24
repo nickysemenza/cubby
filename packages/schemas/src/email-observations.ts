@@ -1,9 +1,92 @@
-import { aiProvenance } from "./ai-evaluation";
+import { aiProvenance, capturedFieldInput } from "./ai-evaluation";
 import { z } from "zod";
+import { assessmentChildHandle } from "./assessment-reference";
+import { emailId, ledgerPartyId } from "./identifier-fields.js";
 import {
   mailboxClassification,
   mailboxClassificationStage,
 } from "./mailbox-research.js";
+
+const originalDigest = z.string().regex(/^[a-f0-9]{64}$/u);
+const originalBinding = z.object({
+  provider: z.literal("gmail"),
+  ledgerPartyId,
+  mailboxId: z.string().min(1),
+  messageId: z.string().min(1),
+  threadId: z.string().nullable(),
+  internalDate: z.string().nullable(),
+});
+export const emailOriginalCaptureProblem = z.object({
+  reason: z.enum([
+    "identity_mismatch",
+    "missing_payload",
+    "missing_mime_type",
+    "invalid_encoding",
+    "invalid_size",
+    "size_mismatch",
+    "conflicting_payload",
+    "capture_limit",
+  ]),
+  part: z.string(),
+});
+export const emailOriginalPartCapture = z.object({
+  path: z.string().min(1),
+  metadataDigest: originalDigest,
+  bodyDigest: originalDigest,
+  bodyBytes: z.number().int().nonnegative(),
+});
+/** Complete source capture is evidence, never an equivalence rule or application authority. */
+export const emailOriginalCapture = z.discriminatedUnion("status", [
+  z.object({
+    version: z.literal("gmail-original-v1"),
+    status: z.literal("complete"),
+    binding: originalBinding,
+    parts: z.array(emailOriginalPartCapture).min(1).max(512),
+    contentDigest: originalDigest,
+  }),
+  z.object({
+    version: z.literal("gmail-original-v1"),
+    status: z.literal("incomplete"),
+    binding: originalBinding,
+    problem: emailOriginalCaptureProblem,
+  }),
+]);
+export type EmailOriginalCapture = z.infer<typeof emailOriginalCapture>;
+
+/** Declared logical requests, not answering-model or provider-wire attestations. */
+export const emailLogicalInputCapture = z.object({
+  version: z.literal("gmail-logical-inputs-v1"),
+  inputs: z.array(capturedFieldInput).min(1),
+});
+export const emailClassificationPublicationEvidence = z.object({
+  originalCapture: emailOriginalCapture.optional(),
+  logicalInputCapture: emailLogicalInputCapture.optional(),
+});
+export type EmailClassificationPublicationEvidence = z.infer<
+  typeof emailClassificationPublicationEvidence
+>;
+
+/** Retained decision events, without claiming current effect ownership or serialization. */
+export const emailProtectingIntentFrontier = z.discriminatedUnion("status", [
+  z.object({
+    status: z.literal("captured"),
+    emailId,
+    feedbackIds: z.array(assessmentChildHandle),
+  }),
+  z.object({
+    status: z.literal("held"),
+    emailId: emailId.nullable(),
+    reason: z.string().min(1),
+  }),
+]);
+export const emailReviewFrontierReceipt = z.object({
+  version: z.literal("email-review-frontier-v1"),
+  commandFeedbackId: assessmentChildHandle,
+  frontier: emailProtectingIntentFrontier,
+});
+export type EmailProtectingIntentFrontier = z.infer<
+  typeof emailProtectingIntentFrontier
+>;
 
 export const emailClassificationOperation = z.enum([
   "mailbox-triage",

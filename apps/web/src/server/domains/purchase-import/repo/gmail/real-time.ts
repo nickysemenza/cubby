@@ -41,7 +41,7 @@ export async function exactMemberEmail(
       "Only a member without a Run can refetch an Email original; admitted Run evidence stays frozen.",
     );
   const query = getDb(db)
-    .select({ email: emailTable })
+    .select({ email: emailTable, connectedAccountId: account.id })
     .from(emailTable)
     .innerJoin(
       ledgerParty,
@@ -75,7 +75,7 @@ export async function exactMemberEmail(
       "EMAIL_NOT_FOUND",
       "No live Email in this exact connected mailbox belongs to this member.",
     );
-  if (!lock) return email.email;
+  if (!lock) return email;
   const reference = email.email;
   const [owner] = await getDb(db)
     .select({ id: ledgerParty.id })
@@ -105,7 +105,8 @@ export async function exactMemberEmail(
       ),
     )
     .for("update");
-  if (!connected)
+  // The same mailbox tuple can reappear after unlink/reconnect with a new row.
+  if (!connected || connected.id !== email.connectedAccountId)
     throw createAppError(
       "MAIL_EVIDENCE_STALE",
       "Email connected account changed before locking.",
@@ -136,7 +137,7 @@ export async function exactMemberEmail(
       "MAIL_EVIDENCE_STALE",
       "Email original assignment or ownership changed before locking.",
     );
-  return current;
+  return { email: current, connectedAccountId: connected.id };
 }
 export function boundedAttachment(
   attachment: GmailOrderMailAttachment,
@@ -169,7 +170,7 @@ export async function readEmailOriginalTransient(
   actor: ActorContext,
 ): Promise<z.infer<typeof mailReadOut>> {
   const input = mailReadInput.parse(rawInput);
-  const email = await exactMemberEmail(db, input, actor);
+  const { email } = await exactMemberEmail(db, input, actor);
   const providerCall = async <T>(read: () => Promise<T>): Promise<T> => {
     try {
       return await read();

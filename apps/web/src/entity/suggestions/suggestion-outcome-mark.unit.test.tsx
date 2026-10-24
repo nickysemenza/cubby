@@ -36,6 +36,45 @@ const pickOutcome = (
 });
 
 describe("describeOutcome headline copy", () => {
+  it("labels confirmed member authority without inventing model confidence", () => {
+    const outcome: FieldSuggestionOutcome = {
+      kind: "correction",
+      targetInputFingerprint: null,
+      decision: {
+        status: "confirmed",
+        correctionKey: "synthetic-key",
+        revision: "synthetic-revision",
+        sourceFeedbackId: "00000000-0000-4000-8000-000000000001",
+        sourceApplicationFeedbackId: "00000000-0000-4000-8000-000000000002",
+        value: null,
+      },
+    };
+    render(<SuggestionOutcomeMark outcome={outcome} surface="line" />);
+    expect(screen.getByText(/Uses your correction/u)).toBeTruthy();
+    expect(describeOutcome({ outcome })).not.toMatch(/%|confidence/u);
+  });
+
+  it("keeps conflicting corrections passive", () => {
+    const outcome: FieldSuggestionOutcome = {
+      kind: "correction",
+      targetInputFingerprint: null,
+      decision: {
+        status: "conflict",
+        correctionKey: "synthetic-key",
+        revision: "synthetic-revision",
+        sources: [
+          {
+            sourceFeedbackId: "00000000-0000-4000-8000-000000000001",
+            sourceApplicationFeedbackId: "00000000-0000-4000-8000-000000000002",
+            value: null,
+          },
+        ],
+      },
+    };
+    expect(describeOutcome({ outcome })).toBe(
+      "Conflicting corrections — held for review",
+    );
+  });
   it("agrees with the current value", () => {
     expect(
       describeOutcome({

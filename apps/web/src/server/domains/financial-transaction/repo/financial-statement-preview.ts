@@ -70,8 +70,8 @@ const provisionalAccountFor = (
   const network = networkFromDescriptor(row.account);
   const identity: FinancialAccountIdentity =
     last4 || network
-      ? { kind: "credit_card", issuer: null, network: network ?? "other" }
-      : { kind: "other", institution: null };
+      ? { kind: "credit_card", network: network ?? "other" }
+      : { kind: "other" };
   // A statement labels the account with its current card, so the digits it
   // carries are the primary card as of today, not a dated historical one.
   const cardNumbers: FinancialAccountCardNumber[] = last4
@@ -106,6 +106,8 @@ export type FinancialStatementPreviewOptions = {
   retainedRefs?: ReadonlyMap<string, string>;
   /** Server-only: a stored SourceTransactionRecord account outranks alias/last4 resolution, keyed by row key. */
   accountHints?: ReadonlyMap<string, string>;
+  /** Server-only accepted settlement account; fallback only after source resolution finds no account. */
+  settlementAccountHints?: ReadonlyMap<string, string>;
   /** One synchronous preparation scope; never retain across model latency or another page. */
   preparation?: FinancialStatementPreviewPreparation;
 };
@@ -122,6 +124,7 @@ export async function prepareFinancialStatementPreview(db: Database) {
       cardNumbers: financialAccount.cardNumbers,
       ledgerPartyId: financialAccount.ledgerPartyId,
       vendorName: vendor.name,
+      vendorAliases: vendor.aliases,
     })
     .from(financialAccount)
     .leftJoin(
@@ -471,7 +474,13 @@ export async function previewFinancialTransactionImport(
         : [];
     const accountMatches =
       aliasMatches.length > 0 ? aliasMatches : identityMatches;
-    return accountMatches.length === 1 ? accountMatches[0] : null;
+    if (accountMatches.length > 0)
+      return accountMatches.length === 1 ? accountMatches[0] : null;
+    const settledAccount = options.settlementAccountHints?.get(row.key);
+    return settledAccount
+      ? (parsedAccounts.find((account) => account.id === settledAccount) ??
+          null)
+      : null;
   };
   const statusFor = (
     row: FinancialTransactionImportRow,

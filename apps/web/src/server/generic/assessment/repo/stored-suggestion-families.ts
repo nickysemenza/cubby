@@ -11,8 +11,10 @@ import type { Database } from "~/server/db";
 import { unwrapDb } from "~/server/db/helpers";
 import { currentProductPairPolicySql } from "~/server/domains/product/repo/match/product-match-candidate";
 import { getProductMatchQueue } from "~/server/domains/product/repo/match/product-match-review";
+import { readCorrectionOutcomes } from "~/server/generic/assessment/repo/correction-outcomes";
 
 import {
+  pendingImageDescriptionEligibility,
   readAssessmentRecordRefs,
   reviewFamilyDeclarations,
 } from "./review-families";
@@ -70,14 +72,14 @@ async function storedKeys(
   }>(sql`
     SELECT a.id, s.fingerprint, a."createdAt", COALESCE((a.judgment->>${assessmentJudgments.product_pair.keyof().enum.conflict})::boolean, false) AS conflict
     FROM "Assessment" a JOIN "AssessmentState" s ON s.id = a.id
-    WHERE a.family = ${family} AND a.served AND s.active AND s.status = ${suggestionStatus.enum.pending} AND s.suppression IS NULL AND ${declaration.actionable}
+    WHERE ${family === "image_description" ? pendingImageDescriptionEligibility() : sql`a.family = ${family} AND a.served AND s.active AND s.status = ${suggestionStatus.enum.pending} AND s.suppression IS NULL AND ${declaration.actionable}`}
       AND ${assessmentIdScope(query.assessmentIds, sql`a.id`)}
       ${query.filters.runId ? sql`AND s."runId" = (SELECT id FROM "Run" WHERE shortcode = ${query.filters.runId})` : sql``}
       ${
         family === "product_pair"
           ? sql`AND ${currentProductPairPolicySql(sql`a.producer`)} AND EXISTS (SELECT 1 FROM "Product" p WHERE p.id = s."recordId" AND p."deletedAt" IS NULL)
         AND EXISTS (SELECT 1 FROM "Product" p WHERE p.id::text = s.data->>'otherId' AND p."deletedAt" IS NULL)`
-          : sql`AND EXISTS (SELECT 1 FROM "Image" i WHERE i.id = s."recordId" AND i."deletedAt" IS NULL)`
+          : sql``
       }`);
   return rows.map((row) => ({
     family,
@@ -174,6 +176,10 @@ export const imageDescriptionFamily: SuggestionFamilyPresentation<"image_descrip
     keys: (db, query) => storedKeys(db, query, "image_description"),
     rows: async (db, keys) => {
       if (!keys.length) return new Map();
+      const corrections = await readCorrectionOutcomes(
+        db,
+        keys.map((key) => key.assessmentId),
+      );
       const { rows } = await unwrapDb(db).execute<{
         id: string;
         judgment: unknown;
@@ -194,6 +200,9 @@ export const imageDescriptionFamily: SuggestionFamilyPresentation<"image_descrip
             record = refs.get(row.id)?.[0];
           if (!key || !record) return [];
           const description = z.string().min(1).parse(row.judgment);
+          const correction = corrections.get(row.id);
+          const held =
+            correction?.outcome.status === "held" ? correction.outcome : null;
           return [
             [
               row.id,
@@ -201,15 +210,42 @@ export const imageDescriptionFamily: SuggestionFamilyPresentation<"image_descrip
                 ...keyBase(key),
                 family: "image_description",
                 record,
-                summary: [{ kind: "text", text: description }],
-                actions: actions("accept", "correct", "reject", "dismiss"),
+                summary: [
+                  { kind: "text", text: description },
+                  ...(held
+                    ? [
+                        {
+                          kind: "text",
+                          text: `Automatic correction held: ${held.reason}`,
+                        },
+                      ]
+                    : []),
+                ],
+                actions: held
+                  ? actions("correct", "dismiss")
+                  : actions("accept", "correct", "reject", "dismiss"),
                 review: {
                   correction: {
                     label: "Correct description",
                     value: description,
                   },
                 },
-                evidence: { kind: "declared", description, facts: [] },
+                evidence: {
+                  kind: "declared",
+                  description,
+                  facts: held
+                    ? [
+                        { label: "Automatic correction", value: held.reason },
+                        {
+                          label: "Confirmed description",
+                          value:
+                            typeof correction?.correctedValue === "string"
+                              ? correction.correctedValue
+                              : JSON.stringify(correction?.correctedValue),
+                        },
+                      ]
+                    : [],
+                },
               }),
             ] as const,
           ];

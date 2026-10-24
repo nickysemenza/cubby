@@ -22,6 +22,7 @@ import {
   flattenCookbookRecipes,
   isLegacyCookbookRawJson,
 } from "@cubby/schemas/cookbook";
+import { entityRefKey } from "@cubby/schemas/entity";
 import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 import {
   type CookbookId,
@@ -45,7 +46,6 @@ import type {
 import { and, asc, eq, isNull, ne, sql } from "drizzle-orm";
 import type { z } from "zod";
 
-import { getR2PublicUrl } from "~/server/clients/r2-public-url";
 import type { Database } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import {
@@ -53,20 +53,12 @@ import {
   databaseForTransaction,
   getDb,
   notDeleted,
-  unwrapDb,
   updateAndReturn,
   withTransaction,
 } from "~/server/db/helpers";
 import type { ListReadIntent } from "~/server/db/helpers/query";
-import {
-  cookbook,
-  entityAttachment,
-  image,
-  product,
-  recipe,
-} from "~/server/db/schema";
+import { cookbook, image, product, recipe } from "~/server/db/schema";
 import { cookbookSourceRecipeCountSql } from "~/server/domains/cookbook/repo/cookbook-source-count";
-import { getProductCoverImageUrlsByProductIds } from "~/server/domains/product/repo/crud";
 import {
   deleteRecipesByCookbookTx,
   getCookbookRecipeIdsByTitle,
@@ -76,11 +68,15 @@ import {
   type CookbookImportContext,
   upsertCookbookRecipeFromCookbook,
 } from "~/server/domains/recipe/repo/import-recipe-convert";
+import { resolveEntityDisplayImages } from "~/server/entity-kernel/repo/entity-display-image";
 import {
   type MutationReceipt,
   defineMutationWriter,
 } from "~/server/entity-kernel/repo/repository";
-import { createEntityCrud } from "~/server/entity-kernel/repo/repository";
+import {
+  createEntityCrud,
+  createEntityRowFetcher,
+} from "~/server/entity-kernel/repo/repository";
 import {
   replaceSingularAttachment,
   singularAttachmentImageIds,
@@ -318,7 +314,6 @@ const selectCookbookSummaryRows = (db: Database, page: ListPage) =>
       author: cookbook.author,
       subjects: cookbook.subjects,
       recipeCount: recipeCountSql,
-      coverKey: image.key,
       sourceRecipeCount: cookbookSourceRecipeCountSql(cookbook.rawJson),
       // Rows from before the book-tree format hold a flat array.
       needsReextract: sql<boolean>`jsonb_typeof(${cookbook.rawJson}) = 'array'`,
@@ -332,20 +327,11 @@ const selectCookbookSummaryRows = (db: Database, page: ListPage) =>
       and(eq(recipe.cookbookId, cookbook.id), notDeleted(recipe)),
     )
     .leftJoin(
-      entityAttachment,
-      and(
-        eq(entityAttachment.entityId, cookbook.id),
-        eq(entityAttachment.role, "cover"),
-        notDeleted(entityAttachment),
-      ),
-    )
-    .leftJoin(image, eq(image.id, entityAttachment.imageId))
-    .leftJoin(
       product,
       and(eq(product.id, cookbook.productId), notDeleted(product)),
     )
     .where(page.where)
-    .groupBy(cookbook.id, image.key, product.id)
+    .groupBy(cookbook.id, product.id)
     .orderBy(...page.orderBy)
     .limit(page.limit)
     .offset(page.offset);
@@ -354,35 +340,37 @@ type CookbookSummaryRow = Awaited<
   ReturnType<typeof selectCookbookSummaryRows>
 >[number];
 
-// The linked product's own cover, via the shared batched reader rather than a
-// third join — ProductImage carries the cover flag, so inlining it here would
-// mean duplicating that resolution.
-const loadCookbookProductCovers = (db: Database, rows: CookbookSummaryRow[]) =>
-  getProductCoverImageUrlsByProductIds(
-    db,
-    rows.flatMap((r) => (r.productId ? [r.productId] : [])),
-  );
-
 const cookbookRead = (db: Database): ListReadOptions<CookbookSummaryRow> => ({
   media: true,
   bindings: (bind) => {
     const covers = bind.batch(({ rows }) =>
-      loadCookbookProductCovers(db, rows),
+      resolveEntityDisplayImages(
+        db,
+        rows.flatMap((row) => [
+          { entityKind: "cookbook" as const, entityId: row.id },
+          ...(row.productId
+            ? [{ entityKind: "product" as const, entityId: row.productId }]
+            : []),
+        ]),
+      ),
     );
     return [
-      bind(cookbookSummary.pick({ coverUrl: true }), (row) => ({
-        coverUrl: row.coverKey ? getR2PublicUrl(row.coverKey) : null,
-      })),
-      covers.fields(cookbookSummary.pick({ product: true }), (row, loaded) => ({
-        product:
-          row.productId && row.productShortcode && row.productName
-            ? {
-                id: parseShortcodeFor("product", row.productShortcode),
-                name: row.productName,
-                coverUrl: loaded.get(row.productId) ?? null,
-              }
-            : null,
-      })),
+      covers.fields(
+        cookbookSummary.pick({ coverUrl: true, product: true }),
+        (row, loaded) => ({
+          coverUrl: loaded.get(entityRefKey("cookbook", row.id))?.url ?? null,
+          product:
+            row.productId && row.productShortcode && row.productName
+              ? {
+                  id: parseShortcodeFor("product", row.productShortcode),
+                  name: row.productName,
+                  coverUrl:
+                    loaded.get(entityRefKey("product", row.productId))?.url ??
+                    null,
+                }
+              : null,
+        }),
+      ),
     ];
   },
 });
@@ -454,15 +442,8 @@ type CookbookEdit = CookbookUpdateInput & { productId?: ProductId | null };
 const cookbookCrud = createEntityCrud({
   table: cookbook,
   entity: "cookbook",
-  fetchById: async (db, id) =>
-    (
-      await unwrapDb(db)
-        .select()
-        .from(cookbook)
-        .where(and(eq(cookbook.id, id), notDeleted(cookbook)))
-        .limit(1)
-    )[0],
-  fromDB: (_db, row) => row,
+  fetchById: createEntityRowFetcher(cookbook),
+  fromDB: (_db, row: typeof cookbook.$inferSelect) => row,
   toUpdate: (data: CookbookEdit) => buildPartialUpdateValues(data),
   auditUpdateFields: ["name", "author", "subjects", "productId"],
   // The live title is unique, so a taken title is refused up front naming the

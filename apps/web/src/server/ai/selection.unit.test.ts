@@ -13,6 +13,7 @@ import {
 } from "~/server/ai/selection";
 import { createDatabase } from "~/server/db/database-runtime";
 
+import { withAiInputs } from "./evaluation-inputs";
 import { FIELD_SUGGESTION_FEATURE } from "./policy/features";
 
 const db = createDatabase(() => {
@@ -65,6 +66,26 @@ function decisionPortFor(
 }
 
 describe("runAiSelection", () => {
+  it("captures canonical roster identities even when their rendered labels are equal", async () => {
+    const prepare = (id: string) =>
+      withAiInputs(true, () =>
+        runAiSelection(
+          { ...spec, renderLine: (widget) => widget.label },
+          {
+            subject: "Synthetic equal-label selection",
+            candidates: [{ id, label: "Same label" }],
+            usage,
+          },
+        ),
+      );
+    const first = await prepare("synthetic-first-record");
+    const second = await prepare("synthetic-second-record");
+    expect(first.inputs).toHaveLength(2);
+    expect(first.inputs[0]?.fingerprint).not.toBe(
+      second.inputs[0]?.fingerprint,
+    );
+    expect(first.inputs[1]?.fingerprint).toBe(second.inputs[1]?.fingerprint);
+  });
   it("asks the decision model over the rendered shortlist plus a none choice, and resolves the index", async () => {
     const decisionPort = decisionPortFor("c0", {
       c0: 0.9,

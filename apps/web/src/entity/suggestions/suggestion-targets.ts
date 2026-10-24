@@ -1,5 +1,6 @@
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
+import { fieldSuggestionContextKeys } from "@cubby/schemas/field-suggestion";
 
 import { referenceFieldReadFields } from "../entity-references";
 import { readPathRoot } from "../read-path";
@@ -25,37 +26,13 @@ export interface SuggestTargets {
   readonly basisKeys: readonly string[];
 }
 
-const INHERITANCE_CONTEXT_KEYS = {
-  expense: ["lineKind", "purchaseId", "productId", "projectId", "trade"],
-  task: [
-    "parentTaskId",
-    "projectId",
-    "projectMode",
-    "subjectProductId",
-    "subjectProductMode",
-    "trade",
-  ],
-} as const satisfies Partial<Record<ShortcodeEntity, readonly string[]>>;
-
 /** Declared suggestion dependencies plus the raw assignment/source keys the
  * authoritative inheritance resolver needs for this entity. */
 export function suggestionContextKeys(
   entity: ShortcodeEntity,
   targets: SuggestTargets,
 ): readonly string[] {
-  const inheritedKeys: readonly string[] =
-    entity === "expense"
-      ? INHERITANCE_CONTEXT_KEYS.expense
-      : entity === "task"
-        ? INHERITANCE_CONTEXT_KEYS.task
-        : [];
-  const financeKeys =
-    entity === "financialTransaction"
-      ? ["purchaseId", "spendingCategoryId", "itemizationExpectation"]
-      : entity === "purchase"
-        ? ["vendorId", "spendingCategoryId", "itemizationExpectation"]
-        : [];
-  return [...new Set([...targets.basisKeys, ...inheritedKeys, ...financeKeys])];
+  return fieldSuggestionContextKeys(entity, targets.basisKeys);
 }
 
 const EMPTY_TARGETS: SuggestTargets = { targets: [], basisKeys: [] };

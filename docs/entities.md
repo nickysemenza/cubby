@@ -667,7 +667,7 @@ operation does not declare. A server `*Preview` query supplies any
 delete), so web and native show the same verdict. A list/multi-select verb
 (`bulkEdit`) is `ownedElsewhere`, not a plan.
 
-A section or slot can declare `workspace: "overview" | "work" | "evidence"` for browser detail grouping. Relations default to Work, timelines to Evidence, and other sections to Overview. The Relations group holds the generated Connected records section ahead of Relationships. It reads one `entity.connectedRecordsPreview`: every local-path logical relationship and its inverse, including same-type relationships, plus explicitly curated multi-step routes. Connections group by target entity kind and deduplicate target records while retaining every witnessed explanation; curated route keys remain addressable aliases without duplicate preview groups. Every group and body renders continuously; navigation scrolls to stable sections and preserves mounted drafts. Full detail headings and index entries stay present while loading and after a section becomes empty. The old group fragments remain jump aliases; a real section ID takes precedence if it matches an alias. Explicit jumps add history; scrolling only updates the highlighted entry. Photo comparison grids respond to their own width so the outline cannot squeeze identity evidence into a zero-width column. Apple retains native record fields and native Contents navigation; Connections uses the shared hosted workspace. The Run evidence pilot renders only the shared Evidence group in its isolated hosted surface. Durable transcript and structured logs remain available for every Run purpose; purchase-import predicates apply only to workflow reports. Workspace vocabulary is presentation metadata, separate from SQL enums.
+A section or slot can declare `workspace: "overview" | "work" | "evidence"` for browser detail grouping. Relations default to Work, timelines to Evidence, and other sections to Overview. Every generic entity detail includes the Connected records section ahead of Relationships, including an empty section when no local routes exist. It reads one `entity.connectedRecordsPreview`: every local-path logical relationship and its inverse, including same-type relationships, plus explicitly curated multi-step routes. Connections group by target entity kind and deduplicate target records while retaining every witnessed explanation; curated route keys remain addressable aliases without duplicate preview groups. Every group and body renders continuously; navigation scrolls to stable sections and preserves mounted drafts. Full detail headings and index entries stay present while loading and after a section becomes empty. The old group fragments remain jump aliases; a real section ID takes precedence if it matches an alias. Explicit jumps add history; scrolling only updates the highlighted entry. Photo comparison grids respond to their own width so the outline cannot squeeze identity evidence into a zero-width column. Apple retains native record fields and native Contents navigation; Connections uses the shared hosted workspace. The Run evidence pilot renders only the shared Evidence group in its isolated hosted surface. Durable transcript and structured logs remain available for every Run purpose; purchase-import predicates apply only to workflow reports. Workspace vocabulary is presentation metadata, separate from SQL enums.
 
 `detail.overviewSections` still emits independent `overview` metadata for web and Swift. On full web detail, sections that set `overview: false` join Evidence unless their declaration explicitly chooses another group. The native Contents outline follows the native record's reading order; all section bodies remain visible.
 
@@ -862,6 +862,16 @@ The centralized resolver in
 `apps/web/src/server/entity-kernel/repo/entity-display-image.ts` composes these
 paths breadth first in one SQL read. Direct displayable images come first,
 then directly related images in declaration order, then deeper fallbacks.
+Source transaction records reuse the accepted-settlement relation to borrow the
+linked FinancialTransaction’s canonical images, including Purchase and Vendor
+fallbacks. When those yield no image, a unique supported merchant inference
+may supply the Vendor logo as a decorative fallback. Ambiguous or insufficient
+history never supplies a logo, and the fallback does not accept a match.
+MCP Product projections expose the same canonical cover URL; owned gallery
+cover flags identify a match to that selection rather than choosing another image.
+Calendar range items and Location trees carry this same canonical `displayImages`
+projection. Picker cover/logo URLs serialize the resolver’s result rather than
+querying attachment tables themselves.
 Each path visits a subject kind once, so reciprocal Recipe/Meal and Task/Project
 policies terminate. Each relationship retains its declared newest/oldest ordering
 before nested relationships and attachment order. Unavailable files, PDFs,
@@ -1119,7 +1129,7 @@ still apply; pruning and merging are separate actions. Feedback preserves
 historical application receipts.
 
 Mandatory field review is limited to concrete consequential exceptions declared
-with `reviewRequired`: FinancialAccount issuer/network and sole purchaser establish
+with `reviewRequired`: FinancialAccount provider/network and sole purchaser establish
 financial identity and attribution; Expense line kind changes accounting role; Cookbook and Device Product links
 identify specific owned objects. Ordinary descriptive fields, including record
 emoji and Vendor spending category/itemization, use the common empty-field
@@ -1198,7 +1208,7 @@ The `model.fields` roster owns field kinds, read keys, labels, validation,
 controls, and display membership. `EntityBasicInfo` reads `display.detail`;
 `createEntityDisplayColumns` reads `display.list`. List suggestions target visible
 columns, so a suggestible field must declare list membership to be reviewed
-there. Financial accounts expose issuer, network, and primary cardholder on both
+there. Financial accounts expose provider, network, and primary cardholder on both
 surfaces. A field's
 `display.renderer.list` or `display.renderer.detail` selects a semantic
 renderer while the declaration continues to own membership, labels, ordering,
@@ -2588,6 +2598,10 @@ refresh because Meal cost completeness and Location descriptions read them.
 `EntityQualityCheck` stores pass, gap, waived or not_applicable for each check.
 Both have kind-checked composite FKs to `Entity`; they are derived identity
 metadata, not graph relationships. Entity itself has no quality columns.
+Hydration consumes the named check states directly for both published and live
+evaluations; check order is not an intermediate row encoding.
+Quality consumers use `storedEntryFor` in `entries.ts` as the single
+erased-table registry accessor; SQL builders do not wrap or re-export it.
 Lists, filters, score sorts and related rollups consume published outcomes. A
 missing publication is unassessed. `loadDataQualities`
 defaults to live evaluation for record and detail reads; list pages and the Work
@@ -2600,11 +2614,13 @@ are indexed per-row lookups on published rows; the status predicate derives
 the same status as the TypeScript core from those check states.
 
 The `quality` refresh family is enrolled by the existing `recordChange` owner.
-Its identity pages contain at most 25 records and share the routine Job's
+Its identity pages contain at most 200 records and share the routine Job's
 cutoff, token and generation validation. Every pass evaluates current inputs,
 backfills missing rows and replaces outcomes when they or the entity's
-`rulesVersion` change. Publication rechecks the prepared verdicts in its
-transaction. Tombstones are scanned for cleanup; authoritative removal also
+`rulesVersion` change. Page preparation calculates exact pending work to avoid idle Runs. Publication
+reevaluates current sources in its transaction, then the publisher compares stored
+outcomes once and returns the authoritative changed IDs for notifications and
+tallies, including retired tombstones and empty/no-op publications. Tombstones are scanned for cleanup; authoritative removal also
 retires both tables in its transaction under the quality Job lock. Reads never
 repair stored quality.
 
@@ -2879,7 +2895,11 @@ is not offered: a read-time projection cannot know when work appeared.
 filter into every branch, skips field-level suggestion groups and record-less
 diagnostics, and keeps the list's routing; the generic detail page and
 inspector render those rows as a compact Work queue strip and nothing when
-there are none.
+there are none. Pending image descriptions contribute one Work row per live
+Image, using the same served/pending/suppression admission as Suggestions. Its
+count does not establish application freshness or correction authority. The row
+uses the existing original-source image owner/shared routing and opens the
+Image's Suggestions, including held correction evidence; reads schedule nothing.
 
 The browser reuses shared infinite loading, column controls, checkbox selection,
 Copy codes and responsive source-record inspection. Queue keys identify work
@@ -3081,8 +3101,17 @@ rather than arbitrary graph reachability. Header context requests the preview re
 the original curated route titles and witnessed paths; the default
 `connections` scope groups all declared routes by target kind. Existing filter-derived relations retain
 their owning filtered tables; external references have no local detail target.
-`relationship-paths.ts` owns the
-shared directional catalog used by table route composition and graph expansion.
+`createConnectionCatalog` compiles each entity's directional relationships,
+grouped views, curated context and named route lookup once. Only curated
+multi-step routes need explicit entries; new entities inherit direct and inverse
+coverage without an empty registry entry. `relationship-paths.ts` supplies the
+shared directional relationships used by table composition and graph expansion.
+The preview reader composes the same paged query as a full connection table
+into one SQL statement for all requested groups; each keeps its complete count,
+page limit and provenance. Table cells, summaries and context disclosures reuse
+`connection-paths.tsx` for linked trails and batched cover references. Distinct
+records with equal labels show their shortcodes; identity, never label equality,
+controls deduplication.
 Named routes compose any finite number of logical steps; physical joins remain
 in `compileTraversal`, which checks liveness on intermediate records. Graph
 roots also follow their manifest soft-delete capability; Emails and Runs do
@@ -3095,6 +3124,16 @@ repeated observations do not duplicate the related-record row. Product purchase-
 so a sibling product on the same order cannot lend this product its project.
 Each surfaced target retains its witnessed, linked path; multiple projects are
 reported together rather than choosing one implied purpose.
+
+FinancialTransaction Product connections follow confirmed purchase allocations
+through either itemized Expenses or explicit purchase–Product links, with inverse
+paths for Product navigation. A split settlement includes products and vendors
+from every allocated Purchase, deduplicating targets while retaining each
+witnessed path. Transaction context highlights purchase Vendors
+and Products; Product and Vendor context exposes settlement Transactions.
+Merchant-label inference remains a suggestion and never creates a confirmed
+Vendor or Product connection. These are related purchase products, not a claim
+that a partial settlement paid for a particular item or a new source of spend.
 
 `recommendations.forEntity` returns a source reference, a source-context
 `basisKey`, and typed groups; discovery works when recommendations or a
@@ -3404,6 +3443,14 @@ which entity declarations must not import.
 
 ## Product Brand and Purchase Seller
 
+The Vendor list shows a derived Role: Seller for a live Purchase reference,
+Brand for a live Product brand reference, Both for both, and Unused for neither.
+Deleted records, VendorAccounts and pending proposals do not assign roles.
+Each category has a labelled, colored icon pill. Role filtering selects exact
+categories with any-of semantics (Seller + Both finds all sellers); grouping
+uses the same four categories. The default list remains ungrouped and sorted
+by descending seller spend.
+
 The Vendor table separates Purchasing fields from Brand / catalog using declared
 column groups. Its branded-product count includes live Products whose `brandId`
 is this Vendor, independently of products purchased from the Vendor as Seller.
@@ -3479,6 +3526,10 @@ ProductCategory's inherited `feature` also distinguishes service accounting:
 Bind Services on a category ancestor to cover utilities, insurance and similar
 categories; there is no per-Product service switch and category names do not
 control behavior. A child with its own different feature overrides the ancestor.
+Pricing, quantity and ownership SQL share `serviceCategorySql`, which delegates
+to the canonical `categoryFeatureInSql` set predicate. The declaration owns
+nearest live ancestors, depth and cycle guards; the Product predicate retains
+its native live-row check. No separate service membership catalog is stored.
 
 Actual Expenses retain their amounts and quantities (usage, seats or other
 source units). Service quantities do not accumulate acquired stock, establish
@@ -3647,7 +3698,8 @@ Email link decisions remain ordinary history. Report incorrect records Wrong
 Feedback through the existing family path, without applying a correction or
 pausing automation. Applied effects remain; affected records link to their domain
 actions. Feedback participates in supported later reassessment without promising
-historical record repair. Wrong and corrected decisions remain in the audit.
+universal historical record repair. Confirmed field corrections have the exact-input
+propagation described below. Wrong and corrected decisions remain in the audit.
 Legacy Email predictions without application receipts are included with
 **Unverified application**, even if they disagree with the Email's current relevance.
 New ingestion records observation and application receipts atomically with routing;
@@ -3662,6 +3714,175 @@ page's Decisions tab catalogs every decision's basis, options, rules and
 rendered request (`ai.decisionCatalog`) with a Jev/Clef Try panel. The
 household's Work has one row per Suggestion family linking into the page,
 and a Sweep Run's detail links to its own.
+
+Applied member field corrections enroll `assessment.correction` work in the same
+transaction as their command-bound application receipt. An apply intent alone,
+a draft, a history-only grade, or an automatic consequence supplies no reusable
+member authority. Explicit corrected null remains distinct from no correction.
+The first supported scope is identical complete pre-decision inputs for eligible
+descriptive fill fields: declared decision basis and inheritance context, ordered
+request fingerprints, canonical roster identities, served model and policy dependencies.
+Presentation-only resolution metadata does not change equivalence. New publications
+retain their versioned identity recipe, including basis, ordered captured inputs and
+dependency stamps. A retained raw-v1 live key gains a normalized alias only when those
+retained inputs and dependencies reproduce its original hash exactly. Candidate current
+dependency stamps are accepted only by that hash proof. Missing or mismatching historical
+inputs retain opaque exact-key scope; old canonical/Sweep digests do not reconstruct
+missing captured inputs. Discovery, historical repair, lineage and serialization use the
+same proof, retaining both stored and proven canonical identities through matching
+and locking; preferring the alias must not discard opaque exact-key authority.
+Related identity scans load candidate dependency stamps lazily once per page.
+Target freshness includes the same inheritance context and direct reference rows
+used by preparation, including Task parent identity. Retained application receipts
+whose original fingerprint cannot prove that required context remain protected
+history rather than gaining reconstructed write authority. History cursors
+advance over scanned field candidates even when no candidate matches. This change does
+not rerun previously completed history jobs. Record identity and proposed
+answer are not part of that equivalence key. Missing historical keys are not
+reconstructed from current data; fuzzy similarity does not authorize repair.
+
+The same coordinator scans prior matching Assessments in bounded Job pages and
+handles later publications through durable publication work that resolves authority
+after the proposal commits, so an overlapping history scan cannot miss enrollment.
+Source authority includes an immutable applied field fingerprint and write revision;
+audit timestamps alone do not establish the latest committed decision. Deleted
+source subjects supply no current correction authority; retained history does not
+block subsequent proposal processing.
+Pending proposals are retired even when an explicit-null correction needs no value change.
+Historical repair, automatic admission and remembered-question reuse share one
+current-authority resolver. An equivalent confirmed correction or conflict reopens
+a remembered decline under a stable correction-set revision without calling a
+provider or writing from the read. Superseded or deleted source authority no longer
+invalidates that memory. Eligible field inference prepares complete decision inputs
+without providers and resolves this authority before executing a model or its cache.
+Confirmed corrections and conflicts have their own outcome, including root application
+receipt provenance and explicit null; neither carries a model confidence score.
+Incomplete preparation falls through to ordinary inference without inventing equivalence.
+Only canonical saved-record refresh and Sweep snapshots publish correction questions
+for automatic application. Client-provided form basis may display the correction but
+never supplies automatic-write authority. Publication fences the prepared target
+fingerprint, and the existing correction Job revalidates source authority and member
+ownership before the domain writer. Conflicts remain passive in Suggestions; no
+additional approval prompt or competing queue is introduced. Pure model evaluations
+can disable the inference shortcut without bypassing guarded application checks.
+Sweep compares the queued policy basis with the canonical saved record before
+inference and fences that snapshot through publication. A fresh target fingerprint
+cannot authorize a correction resolved from stale queued inputs. Sweep takes
+the replacement and predecessor correction keys before locking predecessor
+projections, matching member review's key-before-projection order.
+Live and stored disclosures show corrected values through canonical field
+renderers, explicit None, and supporting member/application receipts.
+Existing applicable corrections withhold the model's
+automatic answer while correction work resolves it. Historical repair requires
+the original automatic application receipt, its unchanged audited field write,
+and current post-application evidence. Explicit member decisions, including an
+unchanged save or an intervening change and restoration, protect the target.
+Conflicting current corrections remain held; recency alone never chooses one.
+Original Assessments, confidence and application receipts remain unchanged.
+Propagation records a separate automatic receipt linking the root member Feedback,
+member actor, original target application and actual effects; successful replay
+precedes stale-state checks. Serializable Job publication commits writes, outcomes
+and cursor together through transaction-bound domain writers.
+Field confirmation, automatic admission, correction-question publication and
+repair first update a shared entity/field gate in `AssessmentCorrectionLock`,
+then resolve the retained proof expansion and update its sorted raw and canonical
+keys before record/projection locks. The gate stabilizes discovery when a proof
+or an opaque correction commits on another record; assessment-local keys alone
+cannot fence the expanded authority. The household's bounded correction volume
+uses this field-level serialization instead of a separate alias registry.
+Discovery, history selection, repair and prior-effect lineage share that same
+proof expansion, including retired roots as identity proof without granting them
+current correction authority. The physical row update forces an older
+serializable snapshot to retry if another record confirms conflicting authority;
+an advisory lock or unrelated refresh Job contention cannot supply this fence.
+The lock table stores no correction authority or application history.
+Later confirmed corrections can repair an earlier propagated effect only while
+its captured post-application fingerprint still matches. Repeated equivalent
+authority settles against that receipt without another field write, including
+explicit None. The original proposal value never substitutes for current effect
+proof when correcting an automatic consequence again.
+
+Pending held field work stays in the existing Suggestions family and Work link,
+with its reason in the shared row summary. Automation history also admits
+canonical correction attempts independently of the target's pending/applied
+status or an original automatic rule. This includes holds on a member-applied
+source whose retained inputs cannot establish reusable equivalence. Admission
+requires the automatic outcome's exact operation identity and bound member
+application, actor and corrected value. Its latest recorded attempt includes
+root command/application and outcome receipt provenance; it is historical
+evidence, not a fresh eligibility check. Held attempts have no review action and
+are never labelled as applied results. Verification requires an actual automatic
+application rule receipt or the family's application proof; admission of a held
+attempt supplies neither. Pagination orders by the displayed attempt time,
+falling back to the original Assessment time when there is no correction attempt.
+Hold summaries describe the refused repair; the old proposal remains in Evidence,
+so it is not presented as an instruction to overwrite the saved member value.
+Reads schedule or apply nothing.
+This adds no confirmation
+prompt or second queue. Every review family declares its repair policy, but
+registration is not support: financial semantics, transfers, Product merges,
+mail routing/links/import outcomes and recommendation subtypes
+currently retain explicit holds pending domain-specific implementation. Broader
+semantic applicability and remaining domain-specific inference integration
+remain tracked by [#3189](https://github.com/nickysemenza/cubby/issues/3189).
+Ordinary automatic field additions use the same high-confidence boundary shown
+to members (85% or above), with a clear winner and current-evidence/member-intent
+checks. Only declared fill fields qualify; review-required fields and populated
+member values remain protected. Preview and persisted application share that
+threshold. Propagated corrections use receipt authority, never invented model
+confidence. This field policy does not change financial acceptance rules.
+
+Image correction authority is text-only and scoped to identical retained content
+hashes. Its provider-free resolver admits only successful command-bound member
+corrections whose live Image, immutable subject/fingerprint and current applied
+confirmation still agree. A replacement confirmation retires the prior holder's
+authority. Distinct current roots with different text remain a conflict; neither
+timestamp order nor model confidence selects a winner. History-only grades,
+replaced/deleted content and confirmations without a matching application receipt
+do not establish reusable authority. This resolver does not apply a correction or
+replace an image analysis: claims, nutrition and cutout eligibility remain model
+outputs. Untouched pending model descriptions support text correction; applied
+history requires an unchanged receipt-bound propagated holder. Unattributed or
+unsupported applied confirmations stay held. The coordinator enrolls bounded
+history for new corrections and durably resolves roots after future model
+publication commits. Existing completed image history Jobs are not reset: a
+separate bounded `suggestions.enrollCorrections` operation supports `field` and
+`image_description` and previews retained member correction candidates by Feedback cursor (`dryRun: true` by default).
+Its cursor and correction provenance expose opaque Assessment/Feedback child
+handles and effect receipt identities, never entity UUIDs. Its receipt-backed
+root count does not establish current applicability. Explicit
+`dryRun: false` creates fixed-version, deduplicated family history intents without
+resetting any old Job or outcome; the adapter still rechecks authority and member
+intent before text changes. Continue scanned pages even when no root qualifies.
+Field enrollment uses the fixed `field-identity-v2` revision to discover previously
+unvisited targets after identity-proof changes. Existing per-root/target outcomes,
+including holds, remain replayed; enrollment does not authorize their retry or
+replace historical receipts. Image enrollment retains its original fixed key.
+This operation is not automatically invoked at deployment. Separately authorized
+enrollment and verified outcomes remain operational prerequisites before
+historical completion can be claimed.
+Image member Feedback, including history-only grades and refused apply intent,
+commits under the shared physical content-key fence. Confirmation acquires that
+fence, then a record-intent fence, before its Image or projection locks and uses snapshot retries. The record fence protects current content even when a member reviews an older or hash-less publication. Its review
+event remains durable separately from a later refused application. The same key is reserved
+for automatic text consequences, so different Images with identical bytes
+cannot confirm conflicting authority outside that serialization boundary.
+One image-domain writer clears prior holders and records typed confirmation
+ownership in the selected projection. Direct member ownership names its command
+Feedback and actor; automatic ownership is reserved for a root command/application,
+target Assessment, prior effect receipt and original application lineage. Each
+effect has a distinct identity, so restored text cannot substitute for unchanged
+effect proof. New member projection events name their command as the cause.
+Direct and batch prose readers verify propagated holders against the same
+automatic outcome receipts, loaded once per requested page. They expose correction
+authority and root provenance without model analysis or claims. Photo review
+keeps prose and receipt disclosures at the full card width, outside the narrow
+thumbnail rail. An equal later
+model proposal is retired against the existing holder rather than taking ownership.
+Historical repair, future enrollment, re-correction and replay share that domain
+adapter. Held pending rows retain reasons and corrected text in Suggestions with
+only correction/dismissal actions, while applied consequences enter Automatic
+decisions. This does not complete other held families or historical enrollment.
 
 ### Automatic semantic classification
 

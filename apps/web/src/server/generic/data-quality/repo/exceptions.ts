@@ -28,7 +28,7 @@ import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolv
 
 import { storedEntryFor } from "./entries";
 import { loadDataQualities } from "./hydrate";
-import { checksOf, entryFor } from "./sql";
+import { checksOf } from "./sql";
 import { evaluateLiveQuality } from "./stored";
 
 const storedException = (row: {
@@ -69,7 +69,7 @@ const mutateException = async (
     );
   }
   const id = await resolveOrThrow(db, entityKind, input.entityId);
-  const table = entryFor(entityKind).table;
+  const table = storedEntryFor(entityKind).table;
 
   await withTransaction(db, async (tx) => {
     // Lock the record so concurrent waiver edits serialize on it.

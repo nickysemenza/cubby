@@ -5,6 +5,54 @@ import Testing
 
 @Suite("Direct native codecs")
 struct NativeCodecTests {
+    @Test func readySpendingAllowsUnknownPurchaserRoundTrip() throws {
+        let wire: JSONValue = [
+            "request": ["advice": .null, "rejectedPurchaseIds": []],
+            "snapshot": "synthetic-spending", "candidates": [],
+            "status": "ready", "effect": "create_aggregate",
+            "purchaserId": .null, "purchaserSnapshot": "synthetic-purchaser",
+            "vendorId": .null, "vendorName": "Synthetic Orchard",
+            "spendingCategoryId": "SPC-2345", "purchaseId": .null,
+        ]
+        let ready: FinancialSpendingPlanReady = try wire.decoded()
+        #expect(ready.purchaserId == nil)
+        #expect(try JSONValue(encoding: ready)["purchaserId"] == .null)
+        let plan: FinancialSpendingPlan = try wire.decoded()
+        #expect(try JSONValue(encoding: plan) == wire)
+    }
+
+    @Test func propagatedImageTextRetainsReceiptAuthorityWithoutModelClaims() throws {
+        let owner: JSONValue = [
+            "kind": "correction",
+            "effectId": "00000000-0000-4000-8000-000000000001",
+            "sourceFeedbackId": "00000000-0000-4000-8000-000000000002",
+            "sourceApplicationFeedbackId": "00000000-0000-4000-8000-000000000003",
+            "sourceActorUserId": "synthetic-member",
+            "targetAssessmentId": "00000000-0000-4000-8000-000000000004",
+            "originalApplicationFeedbackId": .null,
+            "priorCorrectionApplicationFeedbackId": .null,
+        ]
+        let raw: JSONValue = [
+            "description": "Synthetic corrected image",
+            "authority": "correction",
+            "correction": owner,
+            "analysis": .null,
+            "claims": [],
+            "missingReason": .null,
+        ]
+        let selected: SelectedImageDescriptionEvidence = try raw.decoded()
+        #expect(selected.authority == .correction)
+        #expect(selected.analysis == nil)
+        #expect(selected.claims.isEmpty)
+        #expect(try JSONValue(encoding: selected)["correction"] == owner)
+        let confirmation: ImageDescriptionConfirmationOwner = try owner.decoded()
+        guard case .correction = confirmation else {
+            Issue.record("Automatic image correction was interpreted as direct member confirmation")
+            return
+        }
+        #expect(try JSONValue(encoding: confirmation) == owner)
+    }
+
     @Test func optionalNullableRoundTripPreservesAllThreeStates() throws {
         let base: JSONValue = ["operationId": "synthetic-operation", "verdict": "accept"]
         let absent: AssessmentReviewInput = try base.decoded()
@@ -179,5 +227,11 @@ struct NativeCodecTests {
         let fractional = try transcoder.decode("2026-01-01T00:00:00.000Z")
         #expect(try transcoder.decode("2026-01-01T00:00:00Z") == fractional)
         #expect(try transcoder.encode(fractional) == "2026-01-01T00:00:00.000Z")
+        for milliseconds in ["001", "010", "123", "280", "283", "999"] {
+            let revision = "2026-10-24T05:34:23.\(milliseconds)Z"
+            let decoded = try transcoder.decode(revision)
+            #expect(try transcoder.encode(decoded) == revision)
+            #expect(try JSONValue(encoding: decoded) == .string(revision))
+        }
     }
 }

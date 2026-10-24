@@ -12,6 +12,7 @@ import { entityMedia } from "~/integrations/tanstack-query/generated/catalog/ent
 
 import {
   EntityDisplayImagesProvider,
+  entityDisplayImageKey,
   type EntityDisplayImagesQueryOptions,
   useEntityDisplayImage,
   useEntityDisplayImages,
@@ -162,4 +163,72 @@ describe("useEntityDisplayImages", () => {
       expect(result.current.inner?.url).toContain("LOC-INNER");
     });
   });
+});
+
+it("batches otherwise-uncovered mounted references and leaves declared collections with their owner", async () => {
+  transport.mockImplementation(async (refs) =>
+    Object.fromEntries(
+      refs.map((ref) => [
+        entityDisplayImageKey(ref),
+        { url: "https://images.example/borrowed-cover.jpg" },
+      ]),
+    ),
+  );
+  const loose = { entityKind: "shipment", entityId: "SHIP-LOOSE" } as const;
+  const declared = {
+    entityKind: "purchase",
+    entityId: "PUR-DECLARED",
+  } as const;
+  const QueryWrapper = createWrapper();
+  const wrapper = ({ children }: { children: ReactNode }) => (
+    <QueryWrapper>
+      <EntityDisplayImagesProvider
+        refs={[]}
+        collectMountedRefs
+        seeded={{ "email:EML-NOCOVER": null }}
+        queryOptions={queryOptions}
+      >
+        <EntityDisplayImagesProvider
+          refs={[declared]}
+          queryOptions={queryOptions}
+        >
+          {children}
+        </EntityDisplayImagesProvider>
+      </EntityDisplayImagesProvider>
+    </QueryWrapper>
+  );
+  const { result, unmount } = renderHook(
+    () => ({
+      preloaded: useEntityDisplayImage(
+        { entityKind: "product", entityId: "PRD-PRELOADED" },
+        { url: "https://images.example/preloaded.jpg" },
+      ),
+      noCover: useEntityDisplayImage({
+        entityKind: "email",
+        entityId: "EML-NOCOVER",
+      }),
+      first: useEntityDisplayImage(loose),
+      duplicate: useEntityDisplayImage(loose),
+      declared: useEntityDisplayImage(declared),
+    }),
+    { wrapper },
+  );
+  await waitFor(() =>
+    expect(result.current.first?.url).toContain("borrowed-cover"),
+  );
+  await waitFor(() =>
+    expect(result.current.declared?.url).toContain("borrowed-cover"),
+  );
+  expect(result.current.noCover).toBeNull();
+  expect(result.current.preloaded?.url).toContain("preloaded.jpg");
+  expect(transport).toHaveBeenCalledTimes(2);
+  expect(
+    transport.mock.calls
+      .flatMap(([refs]) => refs)
+      .map(entityDisplayImageKey)
+      .sort(),
+  ).toEqual(
+    [entityDisplayImageKey(declared), entityDisplayImageKey(loose)].sort(),
+  );
+  unmount();
 });

@@ -44,6 +44,7 @@ import {
 import {
   asActor,
   createEntityCrud,
+  createEntityRowFetcher,
   defineRepository,
   listOn,
   listReadOn,
@@ -332,11 +333,8 @@ const candidateShortcodes = async (
 const wishCrud = createEntityCrud({
   entity: "wish",
   table: wish,
-  fetchById: (db, id) =>
-    unwrapDb(db).query.wish.findFirst({
-      where: and(eq(wish.id, id), notDeleted(wish)),
-    }),
-  fromDB: async (db, row) => (await hydrateWishes(db, [row]))[0]!,
+  fetchById: createEntityRowFetcher(wish),
+  fromDB: async (db, row: WishRow) => (await hydrateWishes(db, [row]))[0]!,
   toUpdate: (data: WishUpdateData, before) => {
     const acquiredAt =
       data.acquired === undefined

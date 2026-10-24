@@ -82,6 +82,7 @@ struct EntityFieldSuggestionSection: View {
                         VStack(alignment: .leading, spacing: FieldGuideTokens.Space.xs) {
                             Text(field.label).font(.headline)
                             Text(outcomeText(field.key)).foregroundStyle(.secondary)
+                            correctionEvidence(field)
                         }
                     }
                 }
@@ -96,7 +97,8 @@ struct EntityFieldSuggestionSection: View {
                         }
                     }.disabled(review.isApplying || review.isLoading)
                 }
-                if !review.fields.contains(where: { review.proposal($0.key) != nil }) {
+                if !review.fields.contains(where: { review.proposal($0.key) != nil }) && !hasCorrectionOutcome
+                {
                     Text("No current suggestion to review. Edit the fields or request fresh suggestions.")
                         .foregroundStyle(.secondary)
                 }
@@ -140,6 +142,12 @@ struct EntityFieldSuggestionSection: View {
             return outcome.answer == .none
                 ? "No suggested change from the available evidence."
                 : "Review dismissed or draft changed. Request fresh suggestions."
+        case .correction(let outcome):
+            switch outcome.decision {
+            case .confirmed: return "Uses an applied member correction after current evidence checks."
+            case .conflict: return "Conflicting member corrections are held for review."
+            case .unrecognized(let raw): return "Unsupported correction authority: \(raw)"
+            }
         case nil:
             return "No current suggestion to review."
         }
@@ -147,8 +155,41 @@ struct EntityFieldSuggestionSection: View {
 
     private func currentText(_ field: FieldDescriptor) -> String {
         let value = review.editor.draft[field.key] ?? .null
+        return valueText(value, field: field)
+    }
+
+    private func valueText(_ value: JSONValue, field: FieldDescriptor) -> String {
         if let id = value.stringValue, let name = pickedTitles[id] { return name }
         return EntityFieldValue.text(value, field: field) ?? "None"
+    }
+
+    private var hasCorrectionOutcome: Bool {
+        review.fields.contains { field in
+            if case .correction? = review.response?.outcomes?[field.key] { return true }
+            return false
+        }
+    }
+
+    @ViewBuilder
+    private func correctionEvidence(_ field: FieldDescriptor) -> some View {
+        if case .correction(let outcome)? = review.response?.outcomes?[field.key] {
+            DisclosureGroup("Correction evidence") {
+                switch outcome.decision {
+                case .confirmed(let correction):
+                    Text("Corrected value: \(valueText(correction.value, field: field))")
+                    Text("Member decision: \(correction.sourceFeedbackId)").font(.caption)
+                    Text("Application receipt: \(correction.sourceApplicationFeedbackId)").font(.caption)
+                case .conflict(let correction):
+                    ForEach(correction.sources, id: \.sourceFeedbackId) { source in
+                        Text("Corrected value: \(valueText(source.value, field: field))")
+                        Text("Member decision: \(source.sourceFeedbackId)").font(.caption)
+                        Text("Application receipt: \(source.sourceApplicationFeedbackId)").font(.caption)
+                    }
+                case .unrecognized(let raw):
+                    Text("Unsupported correction evidence: \(raw)")
+                }
+            }
+        }
     }
 
     private func perform(_ action: @escaping @MainActor () async throws -> Void) {

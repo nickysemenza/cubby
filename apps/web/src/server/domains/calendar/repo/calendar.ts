@@ -10,6 +10,7 @@ import {
   calendarSources,
   calendarSourceMatches,
 } from "@cubby/schemas/calendar";
+import { entityRefKey } from "@cubby/schemas/entity";
 import { parseEntityId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import {
   MEAL_TYPE_LABELS,
@@ -28,7 +29,6 @@ import {
   or,
   sql,
 } from "drizzle-orm";
-import { uniq } from "es-toolkit";
 
 import { shiftPlainDate } from "~/lib/household-date";
 import { aggregateTotals } from "~/lib/nutrition-estimates";
@@ -47,15 +47,14 @@ import {
   mealScaffold,
   getMealsByDateRange,
 } from "~/server/domains/meal/repo/crud";
-import { getProductCoverImageUrlsByProductIds } from "~/server/domains/product/repo/crud";
 import { projectScaffold } from "~/server/domains/project/repo/lookup";
 import { loadProjectDateWindows } from "~/server/domains/project/repo/subtree";
-import { getRecipeCoverImageUrlsByShortcodes } from "~/server/domains/recipe/repo/crud";
 import { getTasksByIDs } from "~/server/domains/task/repo/crud";
 import { effectiveTaskDueDateSql } from "~/server/domains/task/repo/helpers";
 import { dbTaskToAPI } from "~/server/domains/task/repo/helpers";
 import { taskScaffold } from "~/server/domains/task/repo/lookup";
 import { hydrateTaskInheritanceRows } from "~/server/domains/task/repo/task-project-inheritance";
+import { resolvePublicEntityDisplayImageLists } from "~/server/entity-kernel/repo/entity-display-image";
 import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
 import type { NestedListScaffold } from "~/server/generic/list/repo/list";
 
@@ -233,7 +232,6 @@ const loadCalendarProjects = async (
 
 const mapMealItems = (
   meals: Awaited<ReturnType<typeof loadCalendarMeals>>,
-  recipeCoverImageUrls: Map<string, string>,
 ): CalendarItem[] =>
   meals.map((meal) => ({
     kind: "meal",
@@ -247,10 +245,7 @@ const mapMealItems = (
     mealType: meal.mealType,
     mealKind: meal.mealKind,
     recipeNames: meal.recipes.map((recipe) => recipe.recipe.name),
-    coverImageUrl:
-      meal.recipes
-        .map((recipe) => recipeCoverImageUrls.get(recipe.recipeId))
-        .find((url) => url !== undefined) ?? null,
+    displayImages: [],
     mealTotals: meal.totals,
     dataQuality: meal.dataQuality,
   }));
@@ -258,7 +253,6 @@ const mapMealItems = (
 const mapTaskItems = async (
   db: Database,
   rows: Awaited<ReturnType<typeof loadCalendarTasks>>,
-  productCoverImageUrls: Map<string, string>,
 ): Promise<CalendarItem[]> => {
   const dataQualities = await loadDataQualities(
     db,
@@ -284,9 +278,7 @@ const mapTaskItems = async (
             trade: value.trade,
             projectName: value.projectName,
             subjectProductName: value.subjectProductName,
-            coverImageUrl: row.subjectProductId
-              ? (productCoverImageUrls.get(row.subjectProductId) ?? null)
-              : null,
+            displayImages: [],
           },
         ]
       : [];
@@ -296,7 +288,6 @@ const mapTaskItems = async (
 const mapExpenseItems = async (
   db: Database,
   rows: Awaited<ReturnType<typeof loadCalendarExpenses>>,
-  productCoverImageUrls: Map<string, string>,
 ): Promise<CalendarItem[]> => {
   const dataQualities = await loadDataQualities(
     db,
@@ -323,9 +314,7 @@ const mapExpenseItems = async (
             trade: value.trade,
             projectName: value.projectName,
             productName: value.productName,
-            coverImageUrl: row.productId
-              ? (productCoverImageUrls.get(row.productId) ?? null)
-              : null,
+            displayImages: [],
           },
         ]
       : [];
@@ -354,6 +343,7 @@ const mapProjectItems = (
       : [
           {
             kind: "project" as const,
+            displayImages: [],
             id: parseShortcodeFor("project", row.shortcode),
             title: row.name,
             startDate,
@@ -465,28 +455,22 @@ export async function getCalendarRange(
     wants("project") ? loadProjectDateWindows(db) : null,
   ]);
 
-  const recipeIds = uniq(
-    meals.flatMap((meal) => meal.recipes.map((value) => value.recipeId)),
-  );
-  const productIds = uniq([
-    ...taskRows.flatMap((row) =>
-      row.subjectProductId ? [row.subjectProductId] : [],
-    ),
-    ...expenseRows.flatMap((row) => (row.productId ? [row.productId] : [])),
-  ]);
-  const [recipeCoverImageUrls, productCoverImageUrls] = await Promise.all([
-    getRecipeCoverImageUrlsByShortcodes(db, recipeIds),
-    getProductCoverImageUrlsByProductIds(db, productIds),
-  ]);
-
   const items = sortCalendarItems([
-    ...mapMealItems(meals, recipeCoverImageUrls),
-    ...(await mapTaskItems(db, taskRows, productCoverImageUrls)),
-    ...(await mapExpenseItems(db, expenseRows, productCoverImageUrls)),
+    ...mapMealItems(meals),
+    ...(await mapTaskItems(db, taskRows)),
+    ...(await mapExpenseItems(db, expenseRows)),
     ...mapProjectItems(projectRows, projectDates, input),
     ...mapPlantingItems(plantingRows, input),
   ]);
-  return { items, days: summarizeCalendarDays(input, items) };
+  const covers = await resolvePublicEntityDisplayImageLists(
+    db,
+    items.map((item) => ({ entityKind: item.kind, entityId: item.id })),
+  );
+  const hydrated = items.map((item) => ({
+    ...item,
+    displayImages: covers.get(entityRefKey(item.kind, item.id)) ?? [],
+  }));
+  return { items: hydrated, days: summarizeCalendarDays(input, hydrated) };
 }
 
 /** One read for the two-kind Schedule workbench. The window selects dated

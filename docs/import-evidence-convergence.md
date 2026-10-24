@@ -18,9 +18,36 @@ as null on evidence and observed on the FinancialTransaction, never fabricated
 as posted. Transfers, card payments and ordinary income remain settlement-only.
 Booking links recorded Expenses or creates one bare Purchase and one lump
 Expense. Purchases created from bank evidence have no invented itemization,
-order identifier or printed total. New bare Purchases use the account's live
-member owner as purchaser; household-only or missing purchaser evidence needs
-review. Funding attribution remains its own dated contract.
+order identifier or printed total. New bare Purchases preserve a live member
+account owner as purchaser, otherwise use the live primary member of a confirmed
+household credit card only when no authorized-user period includes the spending
+date (transaction date, then posted date). Otherwise-supported spending on a live,
+non-provisional, household-owned credit card books with an unknown individual
+purchaser, including shared access or missing primary-cardholder evidence. A
+household is never stored as a member purchaser override. Missing/deleted owners,
+guest owners, provisional/deleted accounts and household bank accounts remain
+guarded. Explicit member choices and an existing Purchase's overrides and
+inherited receipt/order/member evidence remain authoritative. Funding attribution
+remains its own dated contract.
+
+Spending policy `2026-10-24.2` makes ready-plan `purchaserId` nullable in place;
+statement label policy `2026-10-24.1` invalidates prior eligibility checkpoints.
+regenerate native schemas and reconnect cached MCP clients for this wire change.
+Apple compatibility version `2.68.0` rejects older writes that cannot return the
+required purchaser proof with an approval.
+Approval snapshots include account authority, dated access and holder evidence.
+Ready plans and direct booking previews retain a separate `purchaserSnapshot`
+for replay validation of that evidence even when both old and new
+individual purchaser values are null; changed or absent proof requires fresh
+review. Retained older proposals remain readable without that proof, but cannot
+commit or replay as accepted ready plans.
+
+Purchase inheritance and booking share the sole-access predicate; page previews
+batch holder proof and commits recheck current holder and access evidence.
+When settlement links an existing receipt, sole-card inheritance requires sole
+access on both the receipt/order date and charge date (posted date fallback).
+A shared charge therefore preserves known receipt-member evidence across
+different dates; settlement never freezes that derived value into an override.
 
 Transaction booking and evidence coverage use those same observed, pending and
 posted states. Supported unbooked spending remains a booking gap before posting;
@@ -102,6 +129,10 @@ the existing current-evidence rules: eligible field questions can be reassessed,
 while an unchanged rejected answer is withheld from automatic application.
 An unchanged rejected statement suggestion remains rejected. Changed evidence
 may produce a new suggestion; there is no historical correction pass.
+Shared correction coordination explicitly holds semantic repair for
+`statement_transaction` and `transfer_pair`; these families have no supported
+ready plan. Source amount/withdrawal correction requires its own current source
+proof and never grants authority for kind/category changes or transfer re-pairing.
 
 Mail preparation validates source kind, owned original identity and exact
 checksums before any paid attribution or relationship judgment. Admission
@@ -381,6 +412,15 @@ workflow computations. `record` owns intake and `previewSuggestion` owns the
 read-only review projection. The former custom list, import roster, update and
 delete APIs have no separate replacement surface.
 
+`finance_read.drift` reports possible overlap between distinct charge keys,
+not proven duplicate money. Equal source/account/date/amount fields and row
+creation order cannot establish occurrence identity or revision direction.
+Its default shared-membership exclusion preserves normal export coexistence;
+historical mixed membership still needs source proof. Inspect retained provider
+identities, revisions, collection memberships and accepted settlement references
+before guarded reconciliation. Truncation and an empty candidate list do not
+prove historical completeness. The read grants no bulk supersession authority.
+
 ## Normalized financial evidence intake
 
 Claude/Codex use the [financial-evidence-import skill](../.agents/skills/financial-evidence-import/SKILL.md)
@@ -409,6 +449,24 @@ content equality alone cannot establish that they are one charge. Zero evidence 
 remain accepted links, with one explicit charge owning a legacy alias; the
 alias alone never spreads an ignore or settlement to coexisting charges.
 Cross-provider equality proposes reconciliation rather than establishing identity.
+
+Replaying a retained collection with newly supplied provider IDs cannot silently
+replace its ID-less charge identities. Intake refuses a provider identity that
+overlaps an ID-less member at the same physical position, or an unpositioned
+member's frozen reference. Exact existing provider observations can replay through
+the usual immutable-evidence checks, preserving frozen provider-bearing `v2`
+identities and charge keys within their original collection. A deleted or
+ambiguous retained provider member remains held; changed evidence requires a
+new collection rather than rewriting the retained observation.
+Resolve a new source identity explicitly before replay;
+this guard neither rewrites historical observations nor assigns identifiers from
+content equality. Distinct positioned occurrences remain independent, including
+identical rows delivered in later chunks.
+
+When checking independent evidence for an amount correction or confirmed
+withdrawal, a superseded charge no longer corroborates the older booking.
+Unresolved references and genuinely independent current charges still require
+review; supersession does not grant authority to change money by itself.
 
 A collection owns its immutable observation time, declared count and optional
 account/date/visibility scope. Chunks resume that collection. Membership is
@@ -482,9 +540,17 @@ independent charges. Label pages default to 32 suggestions, retaining the shared
 512-suggestion ceiling for explicit callers. Identity questions remain batched;
 merchant/spending preparation runs in waves of at most 32, with field questions
 batched within each wave. The default page admits one spending wave instead of
-serializing behind four wave barriers. RunStep page samples retain selection, discovery,
-decision, spending-fact, spending, publication and ordered-application wall times
-plus database metrics. Ordered application includes no-action prefix validation
+serializing behind four wave barriers. A single page allowance admits fresh
+context-fitting questions incrementally in identity/kind/counterparty/spending
+order, reserving spending before the next charge. Compatible checkpoint answers
+remain eligible after the allowance is exhausted. Out-of-context defaults consume
+no allowance; once none remains, unrendered questions wait for the next page.
+Untouched charges retain their complete candidate population and inclusive cursor;
+they receive no empty checkpoint, skipped outcome or completion. Started work
+settles before publication. RunStep page samples retain selection, discovery,
+label preparation (prompt rendering and judgment cloning), decision,
+spending-fact, spending, publication and ordered-application wall times plus
+database metrics. Ordered application includes no-action prefix validation
 and receipt settlement; it must not be mistaken for unmeasured model latency.
 Cooperative pages stop admitting new spending work
 after 20 seconds, settle started work, and save partial answers before yielding.
@@ -521,9 +587,34 @@ before each admission, since regeneration can introduce actionable rules.
 Interruption preserves reusable labels and completed publications.
 Label-page selection partitions positions by whether either original-order component
 is retained. Ordinary rows use native timestamp/ID ordering; retained rows keep the
-same component-wise overrides. Both branches apply full current-evidence eligibility,
-exact import membership, cursor comparison and Assessment existence before taking
-their bounded first sets. The merged first set is hydrated after its limit. Disjoint
+same component-wise overrides. A statement Sweep carries its full account/date/import
+scope through label counting, selection, retries and receipt admission. Date and import
+filters intersect on retained source observations using the generation identity selector,
+including withdrawal imports; the date is the source `statementDate`, not the
+Assessment timestamp. Account scope uses live generation-preview resolution in batches,
+including stored and accepted-settlement hints; void targets use their live transaction's
+account. Both cursor branches apply identity/date scope, full current-evidence eligibility,
+cursor comparison and Assessment existence before taking bounded candidate sets.
+Account preparation reads only those candidates and continues past excluded positions
+in fixed-size batches independent of the remaining output capacity, until the scoped
+page is full or the scan is exhausted. Extra admitted candidates keep their original
+cursor positions for the next page; only the filled output page hydrates
+judgments and checkpoints. Scoped counts traverse the eligible population separately.
+Scope follows regeneration and is checked again inside automatic review's serializable
+write admission, so valid fresh evidence for another account cannot authorize an effect.
+Scoped checkpoints and label publications also recheck the live resolver inside their
+serializable write transactions, including batch fallback and committed receipt recovery.
+Scoped checkpoint retention runs sequentially within a label page because every new
+checkpoint updates the same Job progress row. Model preparation remains batched.
+An out-of-scope result preserves existing evidence and paid checkpoints without publishing
+or acknowledging that target. Background calls without scope retain their ordinary path.
+Both no-action-prefix and ordinary receipt completion recheck that same scope inside
+their write transactions, including zero-rule and resumed-receipt paths. Excluded receipts
+keep `applicationPending` and their original `applicationOrder`; completion counts include
+only IDs admitted by the writer. Account/date scope remains eligible for the no-action
+shortcut with this guard.
+Account/date scope does not grant import-only automatic-rule authority: only a supplied
+import does. Default background labeling remains unscoped. Disjoint
 partial work indexes exclude completed labels and keep receipt recovery separate from
 ordinary cursor access. Schema-owned family, status and label-work keys stay SQL
 literals so generic plans can admit those indexes; household values and cursors
@@ -609,6 +700,25 @@ normalization must not truncate them into a different account reference.
 Historical descriptor spelling and reference strings remain retained. New
 normalization must preserve complete masks; a changed descriptor is not grounds
 to rewrite accepted transaction identity or an old observation.
+
+### Correcting a purchased Product
+
+Correct an imported item's Product through the ordinary Expense entity update.
+Create a missing Product through the ordinary Product create first, then set
+`Expense.productId` and the purchased quantity. No accepted-source lookup,
+original preparation or reconciliation command is required for this correction.
+The live Expense owns the current Product. A retained receipt-line reference
+lets identifier discovery follow that Product, including reassignments and
+clearing the Product; original import Product decisions remain history.
+Deleted Expenses and Purchases do not contribute receipt-derived identifiers.
+An incomplete order with no Expense retains identifier discovery through its
+current generic Purchase/Product association; removing that association removes
+the claim without inventing money.
+Imports record the Expense reference even when a Product is unresolved. The
+migration links older original lines only to unique exact item Expenses and
+leaves ambiguous history unlinked. It preserves original records and changes
+no money, payments, attribution or inventory. Financial reconciliation retains
+its existing review and conservation checks.
 
 Retailer preparation can explicitly target an orderless Purchase. Receipt
 itemization that changes recorded lines proposes `reconcile_source_order`
@@ -708,6 +818,23 @@ production outcomes.
 
 ## Reviewing statement outcomes
 
+Matched booking discovery can use the accepted transaction's live account when
+retained source bindings, provider scope, aliases and card evidence resolve no
+account. This server-owned fallback neither writes an alias nor changes source
+facts. Ambiguous or conflicting provider scope cannot use it. A resolved source
+account that differs from the accepted transaction remains an explicit review
+conflict and cannot qualify as clean advice. Generation and fresh application
+rebuild use the same account resolution.
+
+The shared Suggestions list and counts accept retained source observations and
+TransactionImports in `recordIds`. Source scope follows the charge identity
+across revisions, and collection scope uses retained membership rather than
+first ownership. Multiple observations of one charge return one proposal.
+These reads expose served proposals only: an empty result does not establish
+complete source coverage or reconciliation, and listing does not refresh or
+validate an application. Preview and acceptance retain their current-evidence
+guards. Source scoping changes no overlap or financial identity decisions.
+
 Suggestions is the reconciliation workspace: Pending proposals, optional Automatic
 decisions audit, and Automatic rules. Source transaction records is the generic
 imported-evidence browser; Transaction imports shows the retained collections.
@@ -722,7 +849,8 @@ Filter the declared evidence projection by account, amount, date and match state
 as needed. Several observations can describe the same charge.
 
 Statement review shows Source, Proposed result and Evidence. The read-only
-`sourceTransactionRecord.previewSuggestion` revalidates the Assessment fingerprint and live
+`sourceTransactionRecord.previewSuggestion` (MCP `finance_read.preview_suggestion`)
+revalidates the Assessment fingerprint and live
 charge before projecting a draft through the same action gates and spending
 planner as acceptance. It writes no aliases or records. The preview identifies
 transaction changes, vendor reuse/creation and alias effects, Purchase/Expense

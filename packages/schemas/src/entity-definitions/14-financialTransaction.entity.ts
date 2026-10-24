@@ -1885,6 +1885,54 @@ export default defineEntity(
             },
           ],
         },
+        // Explicit purchase links remain evidence before an Expense is itemized.
+        sources: [
+          {
+            key: "explicit",
+            label: "Explicit purchase product link",
+            provenance: {
+              kind: "local-path",
+              steps: [
+                {
+                  edge: "FinancialTransactionAllocation.transactionId",
+                  direction: "incoming",
+                },
+                {
+                  edge: "FinancialTransactionAllocation.purchaseId",
+                  direction: "outgoing",
+                },
+                {
+                  edge: "EntityLink[purchaseProduct].from",
+                  direction: "incoming",
+                },
+                {
+                  edge: "EntityLink[purchaseProduct].to",
+                  direction: "outgoing",
+                },
+              ],
+            },
+            inverse: {
+              steps: [
+                {
+                  edge: "EntityLink[purchaseProduct].to",
+                  direction: "incoming",
+                },
+                {
+                  edge: "EntityLink[purchaseProduct].from",
+                  direction: "outgoing",
+                },
+                {
+                  edge: "FinancialTransactionAllocation.purchaseId",
+                  direction: "incoming",
+                },
+                {
+                  edge: "FinancialTransactionAllocation.transactionId",
+                  direction: "outgoing",
+                },
+              ],
+            },
+          },
+        ],
       },
     ],
     search: "lexical",

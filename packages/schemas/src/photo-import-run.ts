@@ -20,7 +20,7 @@ import { runStatus } from "./run-fields";
 import { purchaseImportRunExecution } from "./purchase-import";
 import { productImagePurpose } from "./image";
 import { imageSightingReportFields } from "./image-sighting";
-import { photoRunProcessor } from "./photo-run-input";
+import { photoRunProcessor, photoRunDefaults } from "./photo-run-input";
 import { selectedImageDescriptionEvidence } from "./image-processing";
 import { imageProcessingJobState } from "./image-processing";
 import { inventoryOwnershipMode } from "./inventory-ownership";
@@ -666,6 +666,8 @@ export {
   storedPhotoRunInput,
   photoInventoryRunInput,
   type PhotoInventoryRunInput,
+  photoRunDefaults,
+  type PhotoRunDefaults,
   photoRunProcessor,
   type PhotoRunProcessor,
   photoRunUploadBatch,
@@ -720,6 +722,7 @@ export type PhotoRunLifecycle = z.infer<typeof photoRunLifecycle>;
 /** The run page's review read: proposals plus every run photo. */
 export const photoRunReviewResponse = z.object({
   review: photoGroupProposalList,
+  defaults: photoRunDefaults.nullish(),
   images: z.array(photoRunImage),
   lifecycle: photoRunLifecycle,
 });
@@ -730,6 +733,7 @@ export type PhotoRunReview = z.infer<typeof photoRunReviewResponse>;
 export const photoImportCreateRunInput = z.object({
   ledgerPartyId: ledgerPartyShortcode.optional(),
   notes: z.string().max(2_000).optional(),
+  defaults: photoRunDefaults.optional(),
   processor: photoRunProcessor,
   /**
    * The first batch's durable client UUID. It is also the Run's idempotency

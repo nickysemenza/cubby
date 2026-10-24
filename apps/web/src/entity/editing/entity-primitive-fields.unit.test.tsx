@@ -223,7 +223,7 @@ function CardScalarFields({
   onSubmit: (values: unknown) => void;
 }) {
   const form = useForm({
-    defaultValues: { issuer: "Synthetic Bank", network: "visa" },
+    defaultValues: { network: "visa" },
   });
   return (
     <FormProvider {...form}>
@@ -231,7 +231,7 @@ function CardScalarFields({
         <EntityPrimitiveFields
           entity="financialAccount"
           mode="edit"
-          include={["issuer", "network"]}
+          include={["network"]}
         />
         <button type="submit">Save card fields</button>
       </form>
@@ -240,7 +240,7 @@ function CardScalarFields({
 }
 
 describe("EntityPrimitiveFields", () => {
-  it("edits the card issuer and network through their generic scalar controls", async () => {
+  it("edits the card network through its generic scalar control", async () => {
     let submitted: unknown;
     render(
       <CardScalarFields
@@ -249,9 +249,6 @@ describe("EntityPrimitiveFields", () => {
         }}
       />,
     );
-    fireEvent.change(screen.getByRole("textbox", { name: "Issuer" }), {
-      target: { value: "Synthetic Union" },
-    });
     const picker = screen.getByRole("combobox", { name: "Network" });
     picker.focus();
     fireEvent.keyDown(picker, { key: "ArrowDown" });
@@ -261,7 +258,6 @@ describe("EntityPrimitiveFields", () => {
     fireEvent.submit(screen.getByRole("button", { name: "Save card fields" }));
     await waitFor(() =>
       expect(submitted).toEqual({
-        issuer: "Synthetic Union",
         network: "mastercard",
       }),
     );
@@ -318,7 +314,7 @@ describe("EntityPrimitiveFields", () => {
     render(<LocationMainFieldsWithSuggestions operations={operations} />, {
       wrapper: harness.wrapper,
     });
-    expect(await screen.findByText("Room")).toBeInTheDocument();
+    expect(await screen.findByText("room")).toBeInTheDocument();
     harness.dispose();
   });
 

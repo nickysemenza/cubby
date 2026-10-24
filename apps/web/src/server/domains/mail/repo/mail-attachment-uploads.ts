@@ -106,6 +106,52 @@ export async function finalizeMailAttachmentUpload(
     );
 }
 
+/** Called only while the exact reservation row is locked. */
+async function discardLockedUpload(
+  tx: DrizzleTransaction,
+  key: string,
+  storage: Pick<OrderMailAttachmentStorage, "delete">,
+): Promise<number> {
+  // Soft-deleted media still owns its physical object until media disposal.
+  const [attachment] = await tx
+    .select({ id: orderMailAttachment.id })
+    .from(orderMailAttachment)
+    .where(eq(orderMailAttachment.pendingObjectKey, key))
+    .limit(1);
+  const [promoted] = await tx
+    .select({ id: image.id })
+    .from(image)
+    .where(eq(image.key, key))
+    .limit(1);
+  if (attachment || promoted) return 0;
+  await storage.delete(key);
+  await finalizeMailAttachmentUpload(tx, key);
+  return 1;
+}
+
+/** Discard only an unadopted upload owned by this exact durable reservation.
+ * A missing/consumed reservation is not permission to delete an object. */
+export async function discardMailAttachmentUpload(
+  db: Database,
+  key: string,
+  storage: Pick<OrderMailAttachmentStorage, "delete">,
+): Promise<number> {
+  return withTransaction(db, async (tx) => {
+    const [reserved] = await tx
+      .select({ key: imageProcessingOrphan.key })
+      .from(imageProcessingOrphan)
+      .where(
+        and(
+          eq(imageProcessingOrphan.key, key),
+          eq(imageProcessingOrphan.reason, MAIL_ATTACHMENT_UPLOAD_REASON),
+        ),
+      )
+      .for("update")
+      .limit(1);
+    return reserved ? discardLockedUpload(tx, reserved.key, storage) : 0;
+  });
+}
+
 /** Hold the reservation lock through deletion, so a suspended publisher cannot
  * recreate an already-reaped key. Failed deletes retain their durable receipt. */
 export async function cleanupAbandonedMailAttachmentUploads(
@@ -144,21 +190,7 @@ export async function cleanupAbandonedMailAttachmentUploads(
           .for("update", { skipLocked: true })
           .limit(1);
         if (!reserved) return 0;
-        // Include soft-deleted media: its physical object belongs to media disposal.
-        const [attachment] = await tx
-          .select({ id: orderMailAttachment.id })
-          .from(orderMailAttachment)
-          .where(eq(orderMailAttachment.pendingObjectKey, reserved.key))
-          .limit(1);
-        const [promoted] = await tx
-          .select({ id: image.id })
-          .from(image)
-          .where(eq(image.key, reserved.key))
-          .limit(1);
-        if (attachment || promoted) return 0;
-        await storage.delete(reserved.key);
-        await finalizeMailAttachmentUpload(tx, reserved.key);
-        return 1;
+        return discardLockedUpload(tx, reserved.key, storage);
       });
     } catch (error) {
       failures.push(error);

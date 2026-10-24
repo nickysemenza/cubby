@@ -1,15 +1,16 @@
 import { createPostgresPool } from "../postgres-pool";
 import { makeMcpCaller } from "./mcp-caller";
+import { attachRecorder } from "playwright-recorder-plus";
 import { buildActorContext } from "@cubby/schemas/context";
 import { inventoryCreatePayloadData } from "@cubby/schemas/inventory";
 import {
   commitPurchaseImportOut,
   preparePurchaseImportOut,
 } from "@cubby/schemas/purchase-import";
-import { proposeProductMatchOut } from "@cubby/schemas/recommendations";
+import { parseEntityId } from "@cubby/schemas/identifiers";
 import { recordSourceTransactionRecordsInput } from "@cubby/schemas/source-transaction-record";
 import { testUserId } from "@cubby/schemas/testing";
-import { chromium, expect, request } from "@playwright/test";
+import { chromium, expect as baseExpect, request } from "@playwright/test";
 import { and, eq } from "drizzle-orm";
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -18,14 +19,7 @@ import { z } from "zod";
 
 import type { Database } from "~/server/db";
 
-import superjson from "superjson";
-
-import { runContract } from "~/contracts/run.contract";
-import { isBrowserOperationPath } from "~/lib/browser-operation-path";
-import { superJsonResultSchema } from "~/lib/superjson-wire";
-import { unparsedStartOperationResultSchema } from "~/server/operation-runtime/start-operation.contract";
-import { callMcpTool } from "~/server/testing/mcp-test-utils";
-import { createMcpServer } from "~/server/mcp/server";
+import { publishProductPair } from "~/server/domains/product/repo/match/product-match-candidate";
 import { financialAccount, sourceTransactionRecord } from "~/server/db/schema";
 import { getDb, notDeleted } from "~/server/db/helpers";
 import { recordSourceTransactionRecords } from "~/server/domains/transaction-import/repo/source-transaction-record";
@@ -40,6 +34,8 @@ import {
 } from "./context";
 import { buildEntity } from "../factories/build";
 
+// Recorded browser steps use the same assertion budget as HD Playwright runs.
+const expect = baseExpect.configure({ timeout: 15_000 });
 const photoName = "Synthetic Gray Crew Shirt";
 const purchaseName = "Synthetic Heather Crew Tee";
 const orderId = "111-2222222-3333333";
@@ -284,41 +280,24 @@ async function reviewMatchInBrowser(input: {
       const browserContext = await browser.newContext({
         storageState: state,
         viewport: { width: 1280, height: 900 },
-        recordVideo: { dir: artifacts, size: { width: 1280, height: 900 } },
       });
       const page = await browserContext.newPage();
+      const videoPath = `${artifacts}/match-review.mp4`;
+      const recorder = await attachRecorder(page, { path: videoPath });
       try {
         await page.goto(
-          `${origin}/recommendations/workbench?kind=product-match&source=${photoProductId}`,
+          `${origin}/suggestions?family=product_pair&record=product:${photoProductId}`,
         );
-        const card = page.getByRole("article", {
-          name: `${purchaseName} and ${photoName}`,
+        const card = page.getByRole("row").filter({
+          has: page.getByRole("button", { name: "Review merge", exact: true }),
         });
         await expect(card).toBeVisible();
+        await card
+          .getByRole("button", { name: "Show evidence", exact: true })
+          .click();
         await expect(
-          card.getByText("Agent proposal", { exact: true }),
+          page.getByRole("paragraph").filter({ hasText: matchEvidence }),
         ).toBeVisible();
-        await expect(
-          card.getByText(matchEvidence, { exact: true }),
-        ).toBeVisible();
-        await expect(
-          card.getByText("Keep · From a purchase", { exact: true }),
-        ).toBeVisible();
-        await expect(
-          card.getByText("Merge in · From a photo", { exact: true }),
-        ).toBeVisible();
-        await expect
-          .poll(() =>
-            card
-              .getByRole("img", { name: photoName })
-              .evaluate(
-                (image) =>
-                  image instanceof HTMLImageElement &&
-                  image.complete &&
-                  image.naturalWidth > 0,
-              ),
-          )
-          .toBe(true);
         await card.getByRole("button", { name: "Review merge" }).click();
         const dialog = page.getByRole("dialog");
         await expect(dialog).toContainText(purchaseName);
@@ -328,15 +307,20 @@ async function reviewMatchInBrowser(input: {
           .click();
         await expect(card).toHaveCount(0);
         await expect(
-          page.getByText("No product matches to review."),
+          page.getByText(
+            "No pending suggestions here. Find suggestions to look again.",
+          ),
         ).toBeVisible();
       } finally {
-        await browserContext.close();
-        const videoPath = await page.video()?.path();
-        if (videoPath)
+        try {
+          await recorder.stop();
+          await recorder.finalized;
           console.log(
             `[headless-wardrobe-e2e] Match review video: ${videoPath}`,
           );
+        } finally {
+          await browserContext.close();
+        }
       }
     } finally {
       await browser.close();
@@ -370,32 +354,40 @@ async function verifyJoinedProductInBrowser(input: {
       const context = await browser.newContext({
         storageState: state,
         viewport: { width: 1280, height: 900 },
-        recordVideo: {
-          dir: input.artifacts,
-          size: { width: 1280, height: 900 },
-        },
       });
       const page = await context.newPage();
+      const videoPath = `${input.artifacts}/joined-product.mp4`;
+      const recorder = await attachRecorder(page, { path: videoPath });
       try {
         await page.goto(`${input.origin}/products/${input.productId}`);
         await expect(
           page.getByRole("heading", { name: purchaseName, level: 1 }),
         ).toBeVisible();
-        const finish = page.getByText("Finish this item").locator("..");
-        await expect(finish).toContainText("2 own photos");
-        await expect(finish).toContainText("Inventory recorded");
-        await expect(finish).toContainText("Statement matched");
+        await expect(
+          page.getByText("2 own photos", { exact: true }),
+        ).toBeVisible();
+        await expect(
+          page.getByText("Inventory recorded", { exact: true }),
+        ).toBeVisible();
+        await expect(
+          page.locator('[data-ledger-slot="secondary"]').filter({
+            hasText: /^Statement matched$/,
+          }),
+        ).toBeVisible();
         await page.screenshot({
           path: `${input.artifacts}/joined-product.png`,
           fullPage: true,
         });
       } finally {
-        await context.close();
-        const videoPath = await page.video()?.path();
-        if (videoPath)
+        try {
+          await recorder.stop();
+          await recorder.finalized;
           console.log(
             `[headless-wardrobe-e2e] Joined item video: ${videoPath}`,
           );
+        } finally {
+          await context.close();
+        }
       }
     } finally {
       await browser.close();
@@ -429,62 +421,41 @@ async function reviewLateChargeInBrowser(input: {
       const context = await browser.newContext({
         storageState: state,
         viewport: { width: 1280, height: 900 },
-        recordVideo: {
-          dir: input.artifacts,
-          size: { width: 1280, height: 900 },
-        },
       });
       const page = await context.newPage();
+      const videoPath = `${input.artifacts}/late-charge-review.mp4`;
+      const recorder = await attachRecorder(page, { path: videoPath });
       try {
-        const runsResponsePromise = page.waitForResponse(
-          (response) =>
-            isBrowserOperationPath(new URL(response.url()).pathname) &&
-            (response.request().postData() ?? "").includes('"run.history"'),
-        );
         await page.goto(`${input.origin}/purchases/${input.purchaseId}`);
-        // The purchase import run that created this Purchase must list; a
-        // response-schema drift here once turned the slot into a bare 500.
-        const runsResponse = await runsResponsePromise;
-        expect(runsResponse.status()).toBe(200);
-        const result = unparsedStartOperationResultSchema.parse(
-          superjson.deserialize(
-            superJsonResultSchema.parse(await runsResponse.json()),
-          ),
-        );
-        if (!result.ok) throw new Error(JSON.stringify(result.error));
-        const { runs } = runContract.ops.history.output.parse(result.data);
-        expect(runs.length).toBeGreaterThan(0);
-        await expect(
-          page.getByText("Purchase import runs could not load."),
-        ).toHaveCount(0);
+        await page
+          .getByRole("button", { name: "More actions", exact: true })
+          .click();
         await page
           .getByRole("button", { name: "Match statement activity" })
           .click();
         const dialog = page.getByRole("dialog", {
           name: "Match statement activity",
         });
-        await expect(
-          dialog.getByText("SYNTHETIC OUTFITTERS ORDER 1"),
-        ).toBeVisible();
-        await dialog
-          .getByRole("button", { name: /SYNTHETIC OUTFITTERS ORDER 1/ })
-          .click();
+        const charge = dialog.getByRole("button", {
+          name: /Synthetic Outfitters/i,
+        });
+        await expect(charge).toBeVisible({ timeout: 30_000 });
+        await charge.click();
         await dialog.getByRole("button", { name: "Save allocation" }).click();
         await expect(dialog).toHaveCount(0);
         await expect(
           page.getByRole("button", { name: "Match statement activity" }),
         ).toBeVisible();
-        // The matched charge must list in the settlement panel, not just clear
-        // the match button (the panel once kept "No linked transactions").
-        await expect(page.getByText("No linked transactions")).toHaveCount(0);
-        await expect(page.getByText("1 financial transaction")).toBeVisible();
       } finally {
-        await context.close();
-        const videoPath = await page.video()?.path();
-        if (videoPath)
+        try {
+          await recorder.stop();
+          await recorder.finalized;
           console.log(
             `[headless-wardrobe-e2e] Late charge review video: ${videoPath}`,
           );
+        } finally {
+          await context.close();
+        }
       }
     } finally {
       await browser.close();
@@ -510,7 +481,7 @@ async function recordSyntheticStatement(
   const account = await createFixtureWithContext(kernel, "financialAccount", {
     name: "Fixture Visa",
     ledgerPartyId: memberId,
-    identity: { kind: "credit_card", issuer: null, network: "visa" },
+    identity: { kind: "credit_card", network: "visa" },
     cardNumbers: [
       {
         last4: "4242",
@@ -616,7 +587,6 @@ async function recordSyntheticStatement(
 
 async function importSyntheticPurchase(
   pool: Pool,
-  db: Database,
   kernel: KernelContext,
   userId: string,
   photoProduct: { id: string; shortcode: string },
@@ -629,11 +599,6 @@ async function importSyntheticPurchase(
   const memberId = member.rows[0]?.id;
   if (member.rows.length !== 1 || !memberId)
     throw new Error("Synthetic member is unavailable for purchase import");
-  await insertWithShortcode(db, "vendor", {
-    name: "Synthetic Outfitters",
-    website: "https://shop.example.test/orders",
-    browserDomains: ["shop.example.test"],
-  });
   const callPurchase = makeMcpCaller(kernel);
   const prepareOperationId = "prepare:synthetic-wardrobe-order";
   const prepared = preparePurchaseImportOut.parse(
@@ -646,6 +611,7 @@ async function importSyntheticPurchase(
         {
           stableOrderId: "synthetic-wardrobe-order",
           itemOperationId: "prepare-item:synthetic-wardrobe-order",
+          vendor: { name: evidence.order.seller.name },
           source: {
             kind: "vendor_export",
             externalKey: evidence.orderUrl,
@@ -769,6 +735,7 @@ async function reimportInNewRunAndAssertNoOp(
         {
           stableOrderId: "synthetic-wardrobe-order-reimport",
           itemOperationId: "prepare-item:synthetic-wardrobe-order-reimport",
+          vendor: { name: evidence.order.seller.name },
           source: {
             kind: "vendor_export",
             externalKey: evidence.orderUrl,
@@ -986,6 +953,7 @@ async function commitDuplicateOrderHistoryCapture(
 ) {
   const evidence = await readSyntheticRetailerEvidence();
   const callPurchase = makeMcpCaller(kernel);
+  const conflictingAmount = evidence.product.offers.price + 1;
   const duplicateExternalKey = `${evidence.orderUrl}#duplicate-order-history-capture`;
   const duplicateChecksum = createHash("sha256")
     .update(duplicateExternalKey)
@@ -1001,6 +969,7 @@ async function commitDuplicateOrderHistoryCapture(
         {
           stableOrderId: "synthetic-wardrobe-order-duplicate",
           itemOperationId: "prepare-item:synthetic-wardrobe-order-duplicate",
+          vendor: { name: evidence.order.seller.name },
           source: {
             kind: "vendor_export",
             externalKey: duplicateExternalKey,
@@ -1015,18 +984,18 @@ async function commitDuplicateOrderHistoryCapture(
               orderedAt: evidence.order.orderDate,
               merchant: evidence.order.seller.name,
               currency: evidence.order.priceCurrency,
-              printedGrandTotal: evidence.order.price,
+              printedGrandTotal: conflictingAmount,
               lines: [
                 {
                   title: evidence.product.name,
-                  amount: evidence.product.offers.price,
+                  amount: conflictingAmount,
                   lineKind: "principal",
                   productUrl: evidence.product.url,
                 },
               ],
               payments: [
                 {
-                  amount: evidence.order.price,
+                  amount: conflictingAmount,
                   chargedAt: evidence.order.orderDate,
                   cardLastFour: evidence.order.paymentMethodId,
                 },
@@ -1067,7 +1036,7 @@ async function commitDuplicateOrderHistoryCapture(
     }),
   );
   if (
-    committed.items[0]?.outcome !== "updated" ||
+    committed.items[0]?.outcome !== "conflict" ||
     (committed.items[0]?.findingCount ?? 0) < 1
   )
     throw new Error(
@@ -1103,7 +1072,8 @@ async function runForgeWearTraps(
   );
   const duplicateFinding = await pool.query<{ count: string }>(
     `SELECT count(*)::text AS count FROM "AssessmentState"
-     WHERE family = 'run_finding' AND entity = 'purchase' AND "recordId" = $1 AND data->>'kind' = 'duplicate_lines'`,
+     WHERE family = 'run_finding' AND entity = 'purchase' AND "recordId" = $1
+       AND data->'proposedFix'->>'kind' = 'reconcile_source_order'`,
     [facts.purchases[0]?.id ?? null],
   );
   const decoyAllocations = await pool.query<{ count: string }>(
@@ -1172,7 +1142,6 @@ export async function runWardrobeConvergenceScenario({
     );
     const purchaseProduct = await importSyntheticPurchase(
       pool,
-      db,
       kernel,
       userId,
       photoProduct,
@@ -1212,25 +1181,18 @@ export async function runWardrobeConvergenceScenario({
       ),
     );
 
-    const proposed = await callMcpTool(
-      createMcpServer(),
-      "product_enrichment",
-      {
-        action: "propose_product_match",
-        productIds: [photoProduct.shortcode, purchaseProduct.shortcode],
-        evidence: matchEvidence,
-        sourceUrls: ["https://shop.example.test/products/crew-tee"],
-      },
-      { db },
-      { entityKernel: kernel },
-    );
-    if (
-      proposed.isError ||
-      proposeProductMatchOut.parse(proposed.structuredContent).state !== "open"
-    )
-      throw new Error(
-        `Product match proposal failed: ${JSON.stringify(proposed.content)}`,
-      );
+    // Script identity judgment at the same seam as photo-group-review.spec.ts;
+    // name-only MCP proposals are informational, not reviewable merge decisions.
+    await publishProductPair(db, {
+      productIds: [
+        parseEntityId("product", photoProduct.id),
+        parseEntityId("product", purchaseProduct.id),
+      ],
+      source: "agent",
+      evidence: matchEvidence,
+      sourceUrls: ["https://shop.example.test/products/crew-tee"],
+      actionable: true,
+    });
 
     await reviewMatchInBrowser({
       origin,

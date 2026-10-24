@@ -1,5 +1,6 @@
 import { entitySchema } from "@cubby/schemas/entity";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
+import { fieldSuggestionContextKeys } from "@cubby/schemas/field-suggestion";
 import { parseEntityId } from "@cubby/schemas/identifiers";
 import { sha256Hex } from "@cubby/shared/sha256";
 import { sql } from "drizzle-orm";
@@ -66,13 +67,15 @@ export async function fieldInputFingerprintIfLive(
   const backings =
     policy && "backedBy" in policy ? (policy.backedBy ?? []) : [];
   const keys = [
-    ...new Set([
-      field,
-      ...(policy?.basis ?? []),
-      ...backings.map((backing) =>
-        "via" in backing ? backing.via : backing.column,
-      ),
-    ]),
+    ...new Set(
+      fieldSuggestionContextKeys(kind, [
+        field,
+        ...(policy?.basis ?? []),
+        ...backings.map((backing) =>
+          "via" in backing ? backing.via : backing.column,
+        ),
+      ]),
+    ),
   ].sort();
   const basis = Object.fromEntries(keys.map((key) => [key, row[key] ?? null]));
   for (const backing of backings) {

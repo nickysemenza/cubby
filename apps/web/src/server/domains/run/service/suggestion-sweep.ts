@@ -1,9 +1,14 @@
 import {
   fieldSuggestionsInput,
+  fieldCorrectionOutcome,
   type FieldSuggestionsInput,
 } from "@cubby/schemas/ai";
 import { aiProvenance } from "@cubby/schemas/ai-evaluation";
-import { basisValueOf } from "@cubby/schemas/field-suggestion";
+import {
+  basisValueOf,
+  fieldSuggestionContextKeys,
+  fieldSuggestionResolutionContext,
+} from "@cubby/schemas/field-suggestion";
 import { parseEntityId, type RunId } from "@cubby/schemas/identifiers";
 import type { RunTrigger } from "@cubby/schemas/purchase-import";
 import {
@@ -35,7 +40,13 @@ import { settleArrivedFindingsForProduct } from "~/server/domains/purchase-impor
 import { executeEntity } from "~/server/entity-kernel";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { entityCommandSchema } from "~/server/entity-kernel/contracts";
-import { fieldReviewIdentity } from "~/server/generic/assessment/repo/field-assessment-review";
+import {
+  fieldCorrectionIdentity,
+  fieldCorrectionRecipe,
+  fieldReviewIdentity,
+} from "~/server/generic/assessment/repo/field-assessment-review";
+import { publishFieldCorrectionQuestion } from "~/server/generic/assessment/repo/field-correction-publication";
+import { fieldInputFingerprint } from "~/server/generic/assessment/repo/field-input-fence";
 import { latestFieldWrite } from "~/server/generic/audit-log/repo/field-write";
 import { resolveLiveShortcodes } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { canonicalJson } from "~/server/lib/canonical-json";
@@ -107,6 +118,7 @@ const sweepSnapshot = z.object({
   fieldDecisionId: z.uuid().nullable(),
 });
 const sweepResult = z.object({
+  correctionOutcome: fieldCorrectionOutcome.nullable().default(null),
   entries: z.array(sweepSuggestionSchema),
   financeReviewFingerprint: z.string().nullable(),
   diagnostics: z
@@ -120,6 +132,7 @@ const sweepResult = z.object({
     )
     .default([]),
   provenance: aiProvenance,
+  correctionRecipe: fieldCorrectionRecipe.optional(),
 });
 async function suggestTarget(
   db: Database,
@@ -147,7 +160,13 @@ async function suggestTarget(
   const decision = decisions.suggestions[input.field];
   if (!decision) {
     const entries: SweepSuggestion[] = [];
-    return { primary: null, entries, financeReviewFingerprint: null };
+    const outcome = decisions.outcomes?.[input.field];
+    return {
+      primary: null,
+      entries,
+      financeReviewFingerprint: null,
+      correctionOutcome: outcome?.kind === "correction" ? outcome : null,
+    };
   }
   const model =
     [...primaryCall.inputs]
@@ -173,6 +192,29 @@ async function suggestTarget(
     served: true,
   });
   if (primary) {
+    if (!primaryCall.incomplete)
+      primary.correctionRecipe = {
+        version: "field-correction-v2",
+        entity: input.entity,
+        field: input.field,
+        basis: z.json().parse(target.basis),
+        inputs: primaryCall.inputs,
+        dependencies: dependencyStamps(manifest, [
+          ...fieldDependencyKeys(input.entity, input.field),
+          ...primaryCall.inputs.map((call) => call.feature),
+        ]),
+      };
+    primary.correctionKey = await fieldCorrectionIdentity({
+      entity: input.entity,
+      field: input.field,
+      basis: target.basis,
+      inputs: primaryCall.inputs,
+      incomplete: primaryCall.incomplete,
+      dependencies: dependencyStamps(manifest, [
+        ...fieldDependencyKeys(input.entity, input.field),
+        ...primaryCall.inputs.map((call) => call.feature),
+      ]),
+    });
     primary.reviewKey = await fieldReviewIdentity({
       entity: input.entity,
       recordId: target.entityId,
@@ -384,19 +426,55 @@ export async function executeSuggestionSweepTarget(
   if (!item.attemptToken)
     throw new Error("Suggestion sweep has no attempt token");
   const snapshot = sweepSnapshot.parse(item.snapshot);
-  const { input, target, fieldDecisionId } = snapshot;
+  const { input, target: queuedTarget, fieldDecisionId } = snapshot;
+  const preparedFingerprint = await fieldInputFingerprint(
+    db,
+    input.entity,
+    queuedTarget.entityId,
+    queuedTarget.field,
+  );
   const current = await executeEntity(
     ports.context,
     entityCommandSchema.parse({
       action: "get",
       entity: input.entity,
-      id: target.id,
+      id: queuedTarget.id,
       missing: "null",
     }),
   );
   if (current.action !== "get" || !current.item)
     throw new Error("Suggestion target no longer exists");
   const record = z.record(z.string(), z.unknown()).parse(current.item);
+  const policy = decisionCatalogRows().find(
+    (row) => row.entity === input.entity && row.field === queuedTarget.field,
+  );
+  if (!policy) throw new Error("Suggestion field policy no longer exists");
+  const policyKeys = [
+    ...policy.basis.map((row) => row.key),
+    queuedTarget.field,
+  ];
+  const basisKeys = fieldSuggestionContextKeys(input.entity, policyKeys);
+  const basis = Object.fromEntries(
+    basisKeys.map((key) => [key, basisValueOf(record[key])]),
+  );
+  const queuedBasis = Object.fromEntries(
+    basisKeys.map((key) => [key, queuedTarget.basis[key] ?? null]),
+  );
+  if (
+    canonicalJson(basis) !== canonicalJson(queuedBasis) ||
+    (await fieldInputFingerprint(
+      db,
+      input.entity,
+      queuedTarget.entityId,
+      queuedTarget.field,
+    )) !== preparedFingerprint
+  )
+    throw new Error("Suggestion basis changed after queuing");
+  basis.__resolutionContext = fieldSuggestionResolutionContext(
+    record.fieldResolutions,
+    policyKeys,
+  );
+  const target = { ...queuedTarget, basis };
   if (
     canonicalJson(z.json().parse(record[target.field] ?? null)) !==
       canonicalJson(target.currentValue) ||
@@ -453,10 +531,26 @@ export async function executeSuggestionSweepTarget(
       optionFingerprint:
         manifest[fieldPolicyKey(input.entity, target.field)]
           ?.policyFingerprint ?? "",
-      model:
-        captured.result.primary?.model ?? input.decisionModelOverride ?? null,
+      model: captured.result.correctionOutcome
+        ? null
+        : (captured.result.primary?.model ??
+          input.decisionModelOverride ??
+          null),
     };
-    saved = sweepResult.safeParse({ ...captured.result, provenance });
+    saved = sweepResult.safeParse({
+      ...captured.result,
+      provenance,
+      correctionRecipe: captured.incomplete
+        ? undefined
+        : {
+            version: "field-correction-v2",
+            entity: input.entity,
+            field: target.field,
+            basis: target.basis,
+            inputs: captured.inputs,
+            dependencies: provenance.dependencies,
+          },
+    });
     if (!saved.success) throw saved.error;
     if (
       !(await storeAiEvaluationResult(
@@ -468,8 +562,35 @@ export async function executeSuggestionSweepTarget(
       throw new Error("Suggestion evaluation attempt is obsolete");
   }
   const result = saved.data;
+  if (
+    result.correctionOutcome &&
+    result.correctionOutcome.targetInputFingerprint !== preparedFingerprint
+  )
+    throw new Error("Correction target changed during inference");
   await publishAiEvaluation(db, item.id, item.attemptToken, async (tx) => {
+    if (
+      (await fieldInputFingerprint(
+        tx,
+        input.entity,
+        target.entityId,
+        target.field,
+      )) !== preparedFingerprint
+    )
+      throw new Error("Suggestion basis changed during inference");
     const diagnostics = [...result.diagnostics];
+    if (result.correctionOutcome) {
+      await publishFieldCorrectionQuestion(tx, {
+        entity: input.entity,
+        recordId: target.entityId,
+        field: target.field,
+        currentValue: target.currentValue,
+        outcome: result.correctionOutcome,
+        correctionRecipe: result.correctionRecipe,
+        provenance: result.provenance,
+        runId: item.runId,
+      });
+      return { outcome: "queued", diagnostics };
+    }
     const outcome = await publishSweepSuggestions(
       tx,
       item.runId,

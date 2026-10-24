@@ -3,7 +3,7 @@ import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { getDb, withTransactionDatabase } from "~/server/db/helpers";
+import { getDb } from "~/server/db/helpers";
 import { purchase as purchaseTable, vendorAccount } from "~/server/db/schema";
 import {
   assessment,
@@ -14,6 +14,7 @@ import {
   orderMail,
   orderMailEvent,
 } from "~/server/db/schema";
+import { withEmailEvidenceWrite } from "~/server/domains/purchase-import/repo/email-evidence-write-scope";
 import { decideEmailPurchase } from "~/server/domains/purchase-import/repo/email-purchase-decision";
 import { syntheticRetainedMail } from "~/server/domains/purchase-import/service/gmail/retained-mail.fixtures";
 import { connectionSourceFingerprint } from "~/server/domains/run/repo/connection-refresh";
@@ -319,8 +320,14 @@ describe("fresh retained Email connection recommendations", () => {
       expectedFingerprint: proposal.fingerprint,
     };
     await expect(
-      withTransactionDatabase(ctx.db, async (db) => {
-        await reviewAssessment(db, { ...kernelCtx(ctx), db }, command);
+      withEmailEvidenceWrite(ctx.db, async (db, scope) => {
+        await reviewAssessment(
+          db,
+          { ...kernelCtx(ctx), db },
+          command,
+          undefined,
+          scope,
+        );
         throw new Error("synthetic rollback");
       }),
     ).rejects.toThrow("synthetic rollback");

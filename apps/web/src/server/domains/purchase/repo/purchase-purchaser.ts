@@ -2,6 +2,7 @@ import type { LedgerPartyShortcode } from "@cubby/schemas/identifiers";
 import { ledgerPartyKind } from "@cubby/schemas/ledger-party";
 import { type SQL, sql } from "drizzle-orm";
 
+import { soleCardAccessSql } from "~/server/domains/financial-account/repo/purchaser";
 import {
   purchaseMailMembersSql,
   purchaseMembersSql,
@@ -16,8 +17,8 @@ import {
  * explicit override; unknown when a settlement_party_conflict exists (a
  * disagreement between the paying account and the order's member, not
  * attribution for either); the one member who alone could use every paying
- * card on the order date; the one member its Vendor Account and Email
- * evidence name. Inherited attribution is never persisted.
+ * card on both the order and charge dates; the one member its Vendor Account
+ * and Email evidence name. Inherited attribution is never persisted.
  *
  * One definition for the column and the filter: over one correlated row it
  * reads that purchase's edges through their indexes; over every Purchase it
@@ -29,7 +30,8 @@ const purchasePurchasersSql = (purchases: SQL) => sql`
   mail AS MATERIALIZED (${purchaseMailMembersSql(sql`SELECT * FROM purchase`)}),
   settled AS (
     SELECT allocation."purchaseId", allocation.amount, purchase.date,
-      account.id AS account_id, account."deletedAt" AS account_deleted_at,
+      coalesce(ft."transactionDate", ft."postedDate") AS charge_date,
+      account."deletedAt" AS account_deleted_at,
       account."authorizedUsers",
       holder.shortcode AS holder,
       ${settlementPartyConflictSql(sql.raw("account"), sql.raw("ft"), sql`order_member.member`)} AS conflict
@@ -45,18 +47,16 @@ const purchasePurchasersSql = (purchases: SQL) => sql`
       AND holder."deletedAt" IS NULL AND holder.kind = ${ledgerPartyKind.enum.member}
   ), paying AS (
     -- A paying card is a live account with a positive allocation; its holder
-    -- alone uses it when no authorized user's period covers the order date.
-    SELECT settled.*, settled.holder IS NOT NULL AND settled.date IS NOT NULL AND NOT EXISTS (
-      SELECT 1 FROM jsonb_array_elements(settled."authorizedUsers") membership
-      WHERE (membership->>'validFrom' IS NULL OR (membership->>'validFrom')::date <= settled.date)
-        AND (membership->>'validTo' IS NULL OR settled.date <= (membership->>'validTo')::date)
-    ) AS sole
+    -- alone uses it when no authorized user's period covers either date.
+    -- Shared charge-date access cannot identify a shopper from an earlier sole-use order date.
+    SELECT settled.*, settled.holder IS NOT NULL AND
+      ${soleCardAccessSql(sql`settled."authorizedUsers"`, sql`settled.date`)} AND
+      ${soleCardAccessSql(sql`settled."authorizedUsers"`, sql`settled.charge_date`)} AS sole
     FROM settled
     WHERE settled.amount > 0 AND settled.account_deleted_at IS NULL
   ), cards AS (
     SELECT "purchaseId",
-      count(DISTINCT account_id) AS accounts,
-      count(DISTINCT account_id) FILTER (WHERE sole) AS sole_accounts,
+      bool_and(sole) AS sole,
       count(DISTINCT holder) FILTER (WHERE sole) AS holders,
       min(holder) FILTER (WHERE sole) AS holder
     FROM paying GROUP BY "purchaseId"
@@ -76,7 +76,7 @@ const purchasePurchasersSql = (purchases: SQL) => sql`
   SELECT purchase.id, CASE
     WHEN purchase."purchaserOverrideId" IS NOT NULL THEN override_party.shortcode
     WHEN EXISTS (SELECT 1 FROM settled WHERE settled."purchaseId" = purchase.id AND settled.conflict) THEN NULL
-    WHEN cards.accounts > 0 AND cards.accounts = cards.sole_accounts AND cards.holders = 1 THEN cards.holder
+    WHEN cards.sole AND cards.holders = 1 THEN cards.holder
     ELSE evidence.shortcode
   END AS value
   FROM purchase

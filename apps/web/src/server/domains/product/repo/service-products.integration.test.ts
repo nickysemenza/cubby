@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
 import { taxonomyShortcode } from "tooling/product-category-fixtures";
 import { withTestDb } from "tooling/test-setup";
@@ -6,6 +6,7 @@ import { describe, expect, it } from "vitest";
 
 import { getDb } from "~/server/db/helpers";
 import { expense, product } from "~/server/db/schema";
+import { updateProductCategory } from "~/server/domains/product-category/repo/product-category";
 import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
 import {
   productPricingSummary,
@@ -29,9 +30,12 @@ import {
   listProductComponents,
 } from "./product-components";
 import {
+  loadProductQuantityLedgers,
+  loadProductDetailQuantityLedgers,
   loadProductPickerQuantities,
   loadProductQuantitySummaries,
 } from "./quantity-ledger";
+import { serviceProductIdSql } from "./service-category";
 import { getProductWithFood } from "./write/product-writes";
 
 describe("category-based service Products", () => {
@@ -199,6 +203,114 @@ describe("category-based service Products", () => {
       expect(originals).toContainEqual({ cost: 90, quantity: 30 });
     },
   );
+
+  it("keeps direct service kit charges out of physical quantities and prices while honoring an explicit override", async () => {
+    await updateProductCategory(
+      ctx.db,
+      taxonomyShortcode("tools"),
+      {
+        parentId: taxonomyShortcode("services"),
+      },
+      ctx.actor,
+    );
+    const service = await createProductIdentityFixture(
+      ctx.db,
+      makeProductInput({
+        name: "Synthetic service kit",
+        categoryId: taxonomyShortcode("services"),
+        price: 123,
+      }),
+      ctx.actor,
+    );
+    const physical = await createProductIdentityFixture(
+      ctx.db,
+      makeProductInput({
+        name: "Synthetic override kit",
+        categoryId: taxonomyShortcode("tools"),
+        price: null,
+      }),
+      ctx.actor,
+    );
+    const part = await createProductIdentityFixture(
+      ctx.db,
+      makeProductInput({
+        name: "Synthetic kit component",
+        price: null,
+      }),
+      ctx.actor,
+    );
+    for (const kit of [service, physical]) {
+      await attachProductComponents(
+        ctx.db,
+        kit.entityId,
+        [{ productId: part.entityId, quantity: 4 }],
+        ctx.actor,
+      );
+      await createRepoEntity(
+        ctx,
+        "expense",
+        makeExpenseInput({
+          name: "Synthetic kit acquisition",
+          productId: kit.id,
+          cost: kit === service ? 200 : 24,
+          productQuantity: 2,
+        }),
+      );
+      await createRepoEntity(
+        ctx,
+        "expense",
+        makeExpenseInput({
+          name: "Synthetic kit exit",
+          productId: kit.id,
+          cost: kit === service ? -100 : -12,
+          productQuantity: -1,
+        }),
+      );
+    }
+    const ids = [service.entityId, physical.entityId, part.entityId];
+    const batch = await loadProductQuantityLedgers(ctx.db, ids);
+    const detail = await loadProductDetailQuantityLedgers(ctx.db, ids);
+    for (const id of ids) expect(detail.get(id)).toEqual(batch.get(id));
+    expect(batch.has(service.entityId)).toBe(false);
+    const serviceDetail = await getProductWithFood(
+      ctx.db,
+      { findFood: async () => null },
+      service.entityId,
+    );
+    expect(serviceDetail.quantityLedger).toMatchObject({
+      acquiredUnits: 0,
+      exitedUnits: 0,
+      expectedQuantity: 0,
+    });
+    expect(serviceDetail.pricing.effectivePrice).toBeNull();
+    expect(batch.get(physical.entityId)).toMatchObject({
+      acquiredUnits: 2,
+      exitedUnits: 1,
+      expectedQuantity: 1,
+    });
+    expect(batch.get(part.entityId)).toMatchObject({
+      acquiredUnits: 8,
+      exitedUnits: 4,
+      expectedQuantity: 4,
+    });
+    const prices = await loadExactEffectivePrices(ctx.db, [
+      { id: service.entityId, price: 123 },
+      { id: physical.entityId, price: null },
+      { id: part.entityId, price: null },
+    ]);
+    expect(prices.get(service.entityId)).toBeNull();
+    expect(prices.get(physical.entityId)).toBe(12);
+    expect(prices.get(part.entityId)).toBe(3);
+    // Native payload liveness remains required even when its category matches.
+    await getDb(ctx.db)
+      .update(product)
+      .set({ deletedAt: new Date() })
+      .where(eq(product.id, service.entityId));
+    const deleted = await getDb(ctx.db).execute(
+      sql`SELECT ${serviceProductIdSql(sql`${service.entityId}::uuid`)} AS service`,
+    );
+    expect(deleted.rows[0]?.service).toBe(false);
+  });
 
   it("excludes planned/deleted charges and keeps unknown evidence explicit beyond the history page", async () => {
     const service = await createProductIdentityFixture(

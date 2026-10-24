@@ -4,7 +4,7 @@ import { TreeViewIcon } from "@phosphor-icons/react/dist/csr/TreeView";
 import { useMutation, useSuspenseQuery } from "@tanstack/react-query";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 
-import { ProductImageSummariesProvider } from "~/entity/presentation/product-image-summaries";
+import { EntityDisplayImagesProvider } from "~/entity/entity-media/entity-display-images";
 import { collectTreeProductIds } from "~/features/location/location-gallery-data";
 import { location } from "~/integrations/tanstack-query/generated/catalog/location.gen";
 import { Picker } from "~/ui/combobox/picker";
@@ -143,7 +143,12 @@ export function ArrangeSurface({
         moveLocation={moveLocation}
         moveItem={moveItem}
       >
-        <ProductImageSummariesProvider productIds={productIds}>
+        <EntityDisplayImagesProvider
+          refs={productIds.map((entityId) => ({
+            entityKind: "product",
+            entityId,
+          }))}
+        >
           {view === "board" ? (
             <ArrangeBoard
               roots={roots}
@@ -161,7 +166,7 @@ export function ArrangeSurface({
               onSelect={onSelect}
             />
           )}
-        </ProductImageSummariesProvider>
+        </EntityDisplayImagesProvider>
       </ArrangeDndProvider>
     </Stack>
   );

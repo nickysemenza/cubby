@@ -3,8 +3,6 @@ import { loadRunDetail } from "~/server/domains/purchase-import/repo/run-service
 import { emailImportOut } from "@cubby/schemas/email-actions";
 import { importRunAgentManifest } from "@cubby/schemas/import-run-agent";
 import { sha256Hex } from "@cubby/shared/sha256";
-import superjson from "superjson";
-import { z } from "zod";
 import { eq, inArray } from "drizzle-orm";
 
 import * as schema from "~/server/db/schema";
@@ -13,7 +11,7 @@ import {
   authorizePurchaseAgent,
   workerdDiagnostic,
 } from "~/server/domains/purchase-import/repo/purchase-agent-workerd.fixtures";
-import { browserOperationPath } from "~/lib/browser-operation-path";
+import { startOperation } from "./support/start-operation";
 import { getDb } from "~/server/db/helpers";
 
 import {
@@ -396,25 +394,18 @@ test("admits several retained confirmations as separate tasks in the same Run", 
       ...finished("batch"),
     ],
   });
-  const response = await page.request.post(
-    browserOperationPath("purchaseImport.emailImport"),
+  const response = await startOperation(
+    page.request,
+    "purchaseImport.emailImport",
     {
-      headers: { Origin: e2eRuntime.baseURL },
-      data: superjson.serialize({
-        operation: "purchaseImport.emailImport",
-        input: {
-          items: seed.events.map(({ emailId, checksum }) => ({
-            id: emailId,
-            expectedChecksum: checksum,
-          })),
-        },
-      }),
+      items: seed.events.map(({ emailId, checksum }) => ({
+        id: emailId,
+        expectedChecksum: checksum,
+      })),
     },
   );
   expect(response.status(), await response.text()).toBe(200);
-  const { runIds } = z
-    .object({ ok: z.literal(true), data: emailImportOut })
-    .parse(superjson.deserialize(await response.json())).data;
+  const { runIds } = emailImportOut.parse(await response.json());
   expect(runIds).toHaveLength(1);
   const runShortcode = runIds[0]!;
   const run = await runByShortcode(runShortcode);

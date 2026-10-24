@@ -33,7 +33,7 @@ describe("financial transaction itemization verdict", () => {
     const accountId = (
       await createRepoEntity(ctx, "financialAccount", {
         name: "Itemization Visa",
-        identity: { kind: "credit_card", issuer: null, network: "visa" },
+        identity: { kind: "credit_card", network: "visa" },
         cardNumbers: [],
         sourceAliases: [],
       })

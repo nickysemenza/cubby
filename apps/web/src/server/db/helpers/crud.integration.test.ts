@@ -1,7 +1,7 @@
 import { locationId } from "@cubby/schemas/identifiers";
 import { eq, sql } from "drizzle-orm";
 import { TEST_HOME_ID, withTestDb } from "tooling/test-setup";
-import { describe, expect, it } from "vitest";
+import { describe, expect, expectTypeOf, it } from "vitest";
 
 import { getDb, withTransaction } from "~/server/db/helpers";
 import { updateManyAndReturn } from "~/server/db/helpers/crud";
@@ -33,6 +33,14 @@ describe("keyed updates", () => {
     const changed = await withTransaction(ctx.db, (tx) =>
       updateManyAndReturn(tx, location, {
         key: "shortcode",
+        returning: [
+          "shortcode",
+          "notes",
+          "tags",
+          "lastBulkInventory",
+          "parentId",
+          "updatedAt",
+        ],
         changes: [
           {
             keyValue: second.shortcode,
@@ -73,12 +81,26 @@ describe("keyed updates", () => {
     });
     expect(changed[2]).toMatchObject({ notes: "retained", tags: ["first"] });
     expect(changed.every((row) => row.updatedAt instanceof Date)).toBe(true);
-    expect(
-      await updateManyAndReturn(ctx.db, location, {
-        key: "id",
-        changes: [{ keyValue: first.id, patch: {} }],
-      }),
-    ).toEqual([]);
+    const unchanged = await updateManyAndReturn(ctx.db, location, {
+      key: "id",
+      returning: ["id"],
+      changes: [{ keyValue: first.id, patch: {} }],
+    });
+    expectTypeOf(unchanged).toEqualTypeOf<
+      Pick<typeof location.$inferSelect, "id">[]
+    >();
+    expectTypeOf(changed).toEqualTypeOf<
+      Pick<
+        typeof location.$inferSelect,
+        | "shortcode"
+        | "notes"
+        | "tags"
+        | "lastBulkInventory"
+        | "parentId"
+        | "updatedAt"
+      >[]
+    >();
+    expect(unchanged).toEqual([]);
   });
 
   it("rejects duplicate keys before applying any patch", async () => {
@@ -90,6 +112,7 @@ describe("keyed updates", () => {
     await expect(
       updateManyAndReturn(ctx.db, location, {
         key: "id",
+        returning: ["id", "notes"],
         changes: [
           { keyValue: row.id, patch: { notes: "must not persist" } },
           { keyValue: row.id, patch: {} },
@@ -114,12 +137,14 @@ describe("keyed updates", () => {
     expect(
       await updateManyAndReturn(ctx.db, location, {
         key: "id",
+        returning: ["id", "notes"],
         changes: [{ keyValue: upper, patch: { notes: "retained" } }],
       }),
     ).toMatchObject([{ id: row.id, notes: "retained" }]);
     await expect(
       updateManyAndReturn(ctx.db, location, {
         key: "id",
+        returning: ["id", "notes"],
         changes: [
           { keyValue: upper, patch: { notes: "must not persist" } },
           { keyValue: row.id, patch: { tags: ["must not persist"] } },
@@ -155,6 +180,7 @@ describe("keyed updates", () => {
     expect(
       await updateManyAndReturn(ctx.db, location, {
         key: "shortcode",
+        returning: ["shortcode", "id", "tags"],
         changes,
       }),
     ).toMatchObject([
@@ -163,6 +189,7 @@ describe("keyed updates", () => {
     await expect(
       updateManyAndReturn(ctx.db, location, {
         key: "shortcode",
+        returning: ["shortcode", "id", "tags"],
         changes: [
           { keyValue: row.shortcode, patch: { notes: "must not persist" } },
           {

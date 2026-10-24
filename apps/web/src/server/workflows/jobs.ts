@@ -15,6 +15,7 @@ import type { Database } from "~/server/db";
 import { imageProcessingJobHandler } from "~/server/domains/image-processing/service/dispatch";
 import { deliverPurchaseDispatch } from "~/server/domains/purchase-agent/service/dispatch";
 import { connectionDiscoveryJobHandler } from "~/server/domains/run/service/derived-discovery";
+import { correctionPropagationHandler } from "~/server/generic/assessment/service/correction-propagation";
 import { embeddingCleanupHandler } from "~/server/generic/embedding/service/embedding-cleanup";
 import { JOB_DRAIN } from "~/server/generic/jobs/limits";
 import {
@@ -59,6 +60,7 @@ const backgroundHandlers = {
 
 export const productionJobHandlers: JobHandlers = {
   ...backgroundHandlers,
+  "assessment.correction": correctionPropagationHandler,
   "refresh.family": refreshFamilyHandler,
   "discovery.connections": connectionDiscoveryJobHandler,
   "embedding.refresh": embeddingJobHandler(),

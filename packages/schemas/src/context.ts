@@ -1,5 +1,9 @@
 import { z } from "zod";
 import type { DeviceId, RunId, UserId } from "./identifiers";
+import { userId as userIdentifierSchema } from "./identifier-fields";
+
+/** Reserved actor for unattended work; shared receipt readers verify this identity. */
+export const SYSTEM_USER_ID = userIdentifierSchema.parse("cubby-system");
 
 /**
  * How a write entered the app. Who and what did it are separate columns:

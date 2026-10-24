@@ -38,7 +38,7 @@ export default defineConfig<object, { workerdProfile: WorkerdProfile }>({
      its workflow currently benchmarks two workers per runner via --workers.
      Preserve the local fast-failure budget while giving CI scenarios more
      wall-clock room. */
-  timeout: isCI ? 120_000 : 30_000,
+  timeout: isCI || process.env.CUBBY_E2E_VIDEO === "1" ? 120_000 : 30_000,
 
   /* Global setup prepares the immutable Worker config and database template. */
   globalSetup: "./tests/e2e/support/e2e-global-setup.ts",
@@ -75,8 +75,8 @@ export default defineConfig<object, { workerdProfile: WorkerdProfile }>({
       // terminal; the HTML report alone leaves the hook's output blank.
       [["line"], ["html"], ["./tests/e2e/support/e2e-harness-reporter.ts"]],
   expect: {
-    // Allow a bit more time on CI for client-side navigations
-    timeout: isCI ? 15000 : 5000,
+    // HD capture adds CPU work; opt-in review runs use the CI timing budget.
+    timeout: isCI || process.env.CUBBY_E2E_VIDEO === "1" ? 15000 : 5000,
   },
   /* Shared settings for all the projects below. See https://playwright.dev/docs/api/class-testoptions. */
   use: {
@@ -89,7 +89,11 @@ export default defineConfig<object, { workerdProfile: WorkerdProfile }>({
 
     /* CI records only the retry of a failed test, so passing tests pay no
        tracing cost; locally nothing retries, so record and keep failures. */
-    trace: isCI ? "on-first-retry" : "retain-on-failure",
+    trace: {
+      mode: isCI ? "on-first-retry" : "retain-on-failure",
+      // Trace screenshots otherwise claim an 800×450 screencast before HD capture.
+      screenshots: process.env.CUBBY_E2E_VIDEO !== "1",
+    },
     screenshot: "only-on-failure",
   },
 

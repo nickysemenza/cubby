@@ -25,7 +25,6 @@ export const runReportSlots = {
   "import-progress-stopped": runReport("run.import-progress-stopped"),
   "import-purchases": runReport("run.import-purchases"),
   "import-findings": runReport("run.import-findings"),
-  "import-targets": runReport("run.import-targets"),
   "import-prepared-orders": runReport("run.import-prepared-orders"),
   "import-timeline": runReport("run.import-timeline"),
   "import-debug-log": runReport("run.import-debug-log"),

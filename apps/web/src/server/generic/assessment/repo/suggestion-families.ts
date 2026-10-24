@@ -1,4 +1,4 @@
-import { suggestionStatus } from "@cubby/schemas/ai";
+import { suggestionStatus, confirmedFieldDecision } from "@cubby/schemas/ai";
 import {
   assessmentFamily,
   type assessmentReviewInput,
@@ -58,6 +58,7 @@ import {
   statementSuggestionStatusCounts,
 } from "~/server/domains/transaction-import/repo/statement-suggestion-read";
 import { kindAgreed } from "~/server/domains/transaction-import/repo/statement-transaction-kind";
+import { readCorrectionOutcomes } from "~/server/generic/assessment/repo/correction-outcomes";
 import {
   reviewFamilyDeclarations,
   pendingRecommendationEligibility,
@@ -247,7 +248,14 @@ const field: SuggestionFamilyPresentation<"field"> = {
     return rows.map((row) => {
       const entity = shortcodeEntity.parse(row.entity);
       const kind = fieldKind.parse(row.kind);
-      const strength = fieldStrength(row.confidence);
+      const authority = confirmedFieldDecision.safeParse(
+        row.correctionAuthority,
+      );
+      const strength = authority.success
+        ? authority.data.status === "confirmed"
+          ? "strong"
+          : "weak"
+        : fieldStrength(row.confidence);
       return {
         family: "field" as const,
         assessmentId: row.id,
@@ -268,7 +276,7 @@ const field: SuggestionFamilyPresentation<"field"> = {
           entity,
           field: row.field,
           kind,
-          confidence: row.confidence,
+          confidence: authority.success ? null : row.confidence,
         },
       };
     });
@@ -279,6 +287,10 @@ const field: SuggestionFamilyPresentation<"field"> = {
       keys.map((key) => key.assessmentId),
     );
     const byId = new Map(keys.map((key) => [key.assessmentId, key]));
+    const corrections = await readCorrectionOutcomes(
+      db,
+      keys.map((key) => key.assessmentId),
+    );
     return new Map(
       rows.flatMap((row) => {
         const key = byId.get(row.assessmentId);
@@ -290,6 +302,20 @@ const field: SuggestionFamilyPresentation<"field"> = {
             : []),
           { kind: "value", value: row.suggestedValue },
         ];
+        const correction = corrections.get(row.assessmentId);
+        if (row.correctionAuthority)
+          summary.push({
+            kind: "text",
+            text:
+              row.correctionAuthority.status === "confirmed"
+                ? "Uses a confirmed member correction"
+                : "Conflicting member corrections held",
+          });
+        if (correction?.outcome.status === "held")
+          summary.push({
+            kind: "text",
+            text: `Automatic correction held: ${correction.outcome.reason}`,
+          });
         return [
           [
             row.assessmentId,
@@ -298,7 +324,10 @@ const field: SuggestionFamilyPresentation<"field"> = {
               family: "field",
               record: { entity: row.entity, id: row.recordId },
               summary,
-              actions: verbs("accept", "correct", "reject", "dismiss"),
+              actions:
+                row.correctionAuthority?.status === "conflict"
+                  ? verbs("correct", "dismiss")
+                  : verbs("accept", "correct", "reject", "dismiss"),
               evidence: row,
             }),
           ],

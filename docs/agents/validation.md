@@ -13,17 +13,18 @@ contracts so the observed failure reaches the intended guard.
 Read the section for the current decision; follow its links when triggered.
 Publication does not require loading every test, native-stack or performance rule.
 
-| Decision                                           | Section                                                   |
-| -------------------------------------------------- | --------------------------------------------------------- |
-| Add, retain or delete a test                       | [Test retention](#test-retention)                         |
-| Choose a test boundary                             | [Signal and speed](#signal-and-speed)                     |
-| Run a focused check or diagnose a failure          | [During implementation](#during-implementation)           |
-| Choose evidence for the changed behavior           | [Before opening a PR](#before-opening-a-pr)               |
-| Commit, push, inspect CI or assess merge readiness | [Commit, push, and merge](#commit-push-and-merge)         |
-| Capture UI evidence                                | [PR screenshots](#pr-screenshots)                         |
-| Publish dependent PRs                              | [Native PR stacks](#native-pr-stacks)                     |
-| Evaluate a performance change                      | [Performance review](#performance-review)                 |
-| Run a broad local diagnostic                       | [Explicit local diagnostics](#explicit-local-diagnostics) |
+| Decision                                           | Section                                                                           |
+| -------------------------------------------------- | --------------------------------------------------------------------------------- |
+| Add, retain or delete a test                       | [Test retention](#test-retention)                                                 |
+| Choose a test boundary                             | [Signal and speed](#signal-and-speed)                                             |
+| Run a focused check or diagnose a failure          | [During implementation](#during-implementation)                                   |
+| Run a TypeScript typecheck                         | [tsrs compiler entry points](validation-quality.md#quality-and-local-diagnostics) |
+| Choose evidence for the changed behavior           | [Before opening a PR](#before-opening-a-pr)                                       |
+| Commit, push, inspect CI or assess merge readiness | [Commit, push, and merge](#commit-push-and-merge)                                 |
+| Capture UI evidence                                | [PR screenshots](#pr-screenshots)                                                 |
+| Publish dependent PRs                              | [Native PR stacks](#native-pr-stacks)                                             |
+| Evaluate a performance change                      | [Performance review](#performance-review)                                         |
+| Run a broad local diagnostic                       | [Explicit local diagnostics](#explicit-local-diagnostics)                         |
 
 For prose-only changes, use the staged formatting hook and check changed links;
 no typecheck, generation, build or runtime tests are required. CI still owns the
@@ -202,7 +203,11 @@ Choose local evidence by the changed behavior:
 
 - Web/server behavior: the affected regression or real user journey. Run one
   app typecheck when TypeScript behavior or signatures change; include the
-  test program when tests/tooling change (see [quality](validation-quality.md)).
+  test program when tests/tooling change (see [quality](validation-quality.md)). New repository-owned
+  modules and table/computed-SQL helpers must join the ownership roster in
+  `apps/web/tooling/typecheck-repositories.ts`; composition imports use its alias
+  boundary. Run the full web `typecheck` command, including its boundary guard,
+  for these additions: an app-only compile does not check resolved ownership.
   That one run comes before commit or push, never after each edit. The shared
   compiler launcher uses one checker to reduce each worktree's memory;
   cold checks still hold substantially more than unchanged incremental runs.
@@ -391,6 +396,33 @@ dependency reuse, per-row SQL work, polling and concurrency ownership, browser
 import dependencies, and predicate/index alignment. Extend existing projection,
 report-dependency, transport, and measurement tools. Keep workload-specific
 query decisions with their owning domain; share evidence collection and parsing.
+
+The explicit statement-label experiment runs real preparation, publication and
+receipt settlement through synthetic PostgreSQL fixtures and deterministic
+Decision ports. Run it with
+`pnpm --dir apps/web exec vitest run --config tooling/checks/statement-label-benchmark.config.ts`.
+It requires the existing local PostgreSQL service on port 55432 and generated
+declarations/WASM. It creates fresh, uniquely named databases and retains them;
+it does not reset existing databases, start services, or call providers. Results
+and optional CPU profiles go under ignored `artifacts/statement-label-benchmark/`.
+`CUBBY_BENCH_SIZES` selects page sizes (default `8,32,64,128`),
+`CUBBY_BENCH_CANDIDATES` selects same-amount candidates per charge (0–128),
+and `CUBBY_BENCH_BYTES` selects synthetic description padding (0–16000 bytes).
+Use `CUBBY_BENCH_KIND=purchase CUBBY_BENCH_ADVICE=decision-port` for real
+merchant/category preparation with a synthetic 16-category roster; default
+injected advice isolates statement preparation. `CUBBY_BENCH_PROFILE=1` enables
+Node CPU sampling. Setup, initial page and checkpoint replay are separate.
+Heap samples are Node phase-boundary observations, not Worker heap measurements
+or exact allocation peaks. Query-active intervals include client/network work;
+they do not measure PostgreSQL server CPU. Provider funding, cache and Job-claim
+admission, queue gaps and production throughput need their owning runtime checks.
+
+The existing statement service regressions can also run with fresh retained
+synthetic databases through
+`pnpm --dir apps/web exec vitest run --config tooling/checks/statement-label-regressions.config.ts -t 'bounds saturated|checkpoint-only|context-overflow|does not persist empty'`.
+This entrypoint substitutes only the test-database fixture, rejects fetch traffic,
+and does not reset databases or start services. The ordinary integration suite
+owns these same regression cases; use its normal harness for general coverage.
 
 ## Explicit local diagnostics
 

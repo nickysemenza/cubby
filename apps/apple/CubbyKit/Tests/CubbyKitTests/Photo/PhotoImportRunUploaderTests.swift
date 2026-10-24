@@ -588,6 +588,7 @@ struct PhotoImportRunUploaderTests {
         session.start(
             photos,
             createRun: PhotoImportCreateRunInput(
+                defaults: .init(stockIntent: .receive, locationId: LocationCode("LOC-2345")),
                 processor: .cubby, clientBatchId: UUID().uuidString, imageCount: photos.count))
         #expect(session.progress.total == 1)
         await session.idle()
@@ -597,7 +598,10 @@ struct PhotoImportRunUploaderTests {
         await session.idle()
         #expect(session.phase == .complete)
         #expect(session.runID == "RUN-TEST")
-        #expect(script.requests(matching: "/photoImport/createRun").count == 2)
+        let creates = script.requests(matching: "/photoImport/createRun")
+        #expect(creates.count == 2)
+        #expect(creates.allSatisfy { $0.fields["defaults"]?["stockIntent"]?.stringValue == "receive" })
+        #expect(creates.allSatisfy { $0.fields["defaults"]?["locationId"]?.stringValue == "LOC-2345" })
     }
 
     @Test @MainActor func sessionCanFinishUploadingWhileAnalysisContinues() async throws {

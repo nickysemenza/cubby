@@ -854,7 +854,7 @@ describe("problems — charges not reconciling", () => {
       name: "Posted Refund Card",
       identity: {
         kind: "credit_card",
-        issuer: null,
+
         network: "visa",
       },
       cardNumbers: [
@@ -976,7 +976,7 @@ describe("problems — purchase financial settlement mismatches", () => {
       name: "Settlement Visa",
       identity: {
         kind: "credit_card",
-        issuer: null,
+
         network: "visa",
       },
       cardNumbers: [

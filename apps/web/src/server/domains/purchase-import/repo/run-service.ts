@@ -27,6 +27,7 @@ import {
   storedPhotoRunInput,
   type PhotoInventoryRunInput,
   type PhotoRunProcessor,
+  type PhotoRunDefaults,
 } from "@cubby/schemas/photo-import-run";
 import {
   type AgentProgressEvent,
@@ -297,6 +298,7 @@ export type StartPhotoInventoryRunInput = {
   ledgerPartyId?: LedgerPartyId;
   actorUserId: UserId;
   notes?: string;
+  defaults?: PhotoRunDefaults;
   /**
    * The per-Run grouping choice and first upload batch. Omitted only by
    * fixtures of the legacy manual flow, which keeps a null `Run.input`.
@@ -417,6 +419,10 @@ export async function startPhotoInventoryRun(
         ? {
             kind: "photo_inventory",
             processor: input.grouping.processor,
+            defaults: input.defaults ?? {
+              stockIntent: "receive",
+              locationId: null,
+            },
             batches: [
               {
                 clientBatchId: input.grouping.clientBatchId,

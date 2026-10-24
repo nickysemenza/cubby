@@ -172,7 +172,7 @@ export async function createConvergenceFixtures(
   });
   const card = await create("financialAccount", {
     name: `${name} card`,
-    identity: { kind: "credit_card", issuer: null, network: "visa" },
+    identity: { kind: "credit_card", network: "visa" },
     ledgerPartyId: memberShortcode,
     sourceAliases: [
       {

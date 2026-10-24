@@ -345,7 +345,7 @@ export const assessmentReviewInput = feedbackEvent
       // lookaround, so a published lookahead pattern rejects every id.
       .refine(
         (id) =>
-          !/^(?:command-application|receipt|application|merge|email-accuracy|automatic|projection):/.test(
+          !/^(?:command-application|receipt|application|merge|email-accuracy|automatic|projection|correction):/.test(
             id,
           ) &&
           !/^(?:decision|resolution|saved-application|saved-correction|legacy-projection|legacy-resolution)$/.test(

@@ -32,6 +32,15 @@ The Mac root browser owns split selection even while its detail pane has related
 
 Native Mac table cells explicitly receive the owning AppModel so sorting and row reuse preserve field explanation dependencies. Reference cells in the root split browser open through its detail navigator; nested tables use their enclosing navigation stack. The browse screen contains its accessibility children, preserving the table, column control, and summary identifiers.
 
+## Photo capture and handoff
+
+New belongings imports default to owned items and the signed-in member. A storage
+location is optional during capture and required before adding stock during review.
+Keep processor choice under Import options. Carry these defaults in the durable
+Run; Continue on web shares the same Run at its Photos anchor while upload and
+analysis can continue. Clean identity steps stay folded; missing destinations and
+real concerns use the server-projected attention state.
+
 ## Photo group decisions
 
 Native photo review renders the server's `DecisionStep[]` and `blockedReason`; it does not infer approval readiness. `DecisionSteps` marks each status with a distinct Dynamic Type–scaled symbol: a positive filled checkmark for done, a dashed circle for blocked, a minus circle for not needed and a dark mark on citron for needs input. Summaries wrap rather than truncate. One step expands at a time; answered rows show the summary and Change. The `apply` key is omitted because Create/Attach lives in the footer and atomically confirms and applies the reviewed revisions. Ready batch selections exclude blocked groups.

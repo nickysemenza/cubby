@@ -8,7 +8,10 @@ public struct LenientISO8601DateTranscoder: Sendable {
     public init() {}
 
     public func encode(_ date: Date) throws -> String {
-        fractional.format(date)
+        // FormatStyle truncates floating-point fractions, changing some revision timestamps by 1ms.
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return formatter.string(from: date)
     }
 
     public func decode(_ dateString: String) throws -> Date {

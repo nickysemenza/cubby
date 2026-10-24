@@ -292,7 +292,7 @@ export async function seedSplitSettlement(
   });
   const card = await insertWithShortcode(db, "financialAccount", {
     name: "Synthetic Split Card",
-    identity: { kind: "credit_card", issuer: null, network: "visa" },
+    identity: { kind: "credit_card", network: "visa" },
     ledgerPartyId: parseEntityId("ledgerParty", memberId),
   });
   const charge = await insertWithShortcode(db, "financialTransaction", {

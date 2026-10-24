@@ -45,6 +45,7 @@ import {
   runAfterCommit,
   unwrapDb,
   withTransactionDatabase,
+  withSnapshotWriteDatabase,
 } from "~/server/db/helpers";
 import { assessmentState, financialTransaction } from "~/server/db/schema";
 import {
@@ -97,6 +98,7 @@ import {
   statementHoldAccounts as holdAccounts,
   statementInputCharges,
   statementInputChargeKeys,
+  scopedStatementChargeKeys,
   statementPendingInputTransactions,
   type StatementSuggestionScope,
 } from "./statement-input";
@@ -664,10 +666,14 @@ function sourceLifecycleDiffers(
   );
 }
 
-export async function buildChargeProposals(
+/** Shared live account resolution, including stored and accepted settlement hints. */
+async function prepareChargePreviews(
   db: Database,
   charges: readonly ChargeRef[],
-): Promise<ChargeProposal[]> {
+  sharedPreparation?: Awaited<
+    ReturnType<typeof prepareFinancialStatementPreview>
+  >,
+) {
   const observations = await loadObservations(db, charges);
   const byCharge = new Map<string, Observation[]>();
   for (const row of observations) {
@@ -680,7 +686,7 @@ export async function buildChargeProposals(
       ? [{ charge, observations: rows, canonical: canonicalObservation(rows) }]
       : [];
   });
-  if (!grouped.length) return [];
+  if (!grouped.length) return null;
   const { rows: matchedCharges } = await unwrapDb(db).execute<{
     source: string;
     chargeKey: string;
@@ -696,12 +702,13 @@ export async function buildChargeProposals(
   const { rows: acceptedRows } = matchedByCharge.size
     ? await unwrapDb(db).execute<{
         shortcode: string;
+        accountId: string;
         amount: number;
         status: typeof financialTransaction.$inferSelect.status;
         transactionDate: string | null;
         postedDate: string | null;
       }>(sql`
-    SELECT ft.shortcode, ft.amount, ft.status, ft."transactionDate"::text AS "transactionDate", ft."postedDate"::text AS "postedDate" FROM "FinancialTransaction" ft
+    SELECT ft.shortcode, ft."accountId", ft.amount, ft.status, ft."transactionDate"::text AS "transactionDate", ft."postedDate"::text AS "postedDate" FROM "FinancialTransaction" ft
     WHERE ft."deletedAt" IS NULL AND ft.shortcode IN (${sql.join(
       [...matchedByCharge.values()].map((code) => sql`${code}`),
       sql`,`,
@@ -709,7 +716,8 @@ export async function buildChargeProposals(
   `)
     : { rows: [] };
   const accepted = new Map(acceptedRows.map((row) => [row.shortcode, row]));
-  const preparation = await prepareFinancialStatementPreview(db);
+  const preparation =
+    sharedPreparation ?? (await prepareFinancialStatementPreview(db));
   const preview = await previewFinancialTransactionImport(
     db,
     {
@@ -727,6 +735,15 @@ export async function buildChargeProposals(
           canonical.externalId,
         ]),
       ),
+      settlementAccountHints: new Map(
+        grouped.flatMap(({ charge }) => {
+          const code = matchedByCharge.get(chargeId(charge));
+          const settled = code ? accepted.get(code) : undefined;
+          return settled
+            ? [[chargeId(charge), settled.accountId] as const]
+            : [];
+        }),
+      ),
       accountHints: new Map(
         grouped.flatMap(({ charge, observations: rows }) => {
           const stored = rows.find((row) => row.accountId)?.accountId;
@@ -735,6 +752,30 @@ export async function buildChargeProposals(
       ),
     },
   );
+  return {
+    grouped,
+    matchedByCharge,
+    matchedCharges,
+    accepted,
+    preparation,
+    preview,
+  };
+}
+
+export async function buildChargeProposals(
+  db: Database,
+  charges: readonly ChargeRef[],
+): Promise<ChargeProposal[]> {
+  const prepared = await prepareChargePreviews(db, charges);
+  if (!prepared) return [];
+  const {
+    grouped,
+    matchedByCharge,
+    matchedCharges,
+    accepted,
+    preparation,
+    preview,
+  } = prepared;
   const previewByKey = new Map(preview.rows.map((row) => [row.key, row]));
   const ids = preparation.ids;
   const matchedCodes = matchedCharges
@@ -764,16 +805,9 @@ export async function buildChargeProposals(
   const accounts: OwnAccount[] = preparation.accounts.map((account) => ({
     id: account.id,
     kind: account.identity.kind,
-    names: [
-      account.identity.kind === "stored_value"
-        ? account.identity.provider
-        : null,
-      account.identity.kind === "bank_account" ||
-      account.identity.kind === "other"
-        ? account.identity.institution
-        : null,
-      account.vendorName,
-    ].filter((name): name is string => Boolean(name)),
+    names: [account.vendorName, ...(account.vendorAliases ?? [])].filter(
+      (name): name is string => Boolean(name),
+    ),
     ledgerPartyId: account.ledgerPartyId,
   }));
   const [pendingTransactions, siblings, claimed, history] = await Promise.all([
@@ -838,7 +872,10 @@ export async function buildChargeProposals(
     const priorTransaction = matchedCode
       ? accepted.get(matchedCode)
       : undefined;
-    const reviewReason = sourceCorrectionReason(priorTransaction, canonical);
+    const reviewReason =
+      priorTransaction && priorTransaction.accountId !== accountId
+        ? "The source account conflicts with the accepted transaction account; review the account evidence."
+        : sourceCorrectionReason(priorTransaction, canonical);
     const effectiveStatus = canonical.providerStatus ?? "observed";
     const statementAmount = row.proposed.amount;
     const candidates: StatementTransactionCandidate[] =
@@ -1828,21 +1865,39 @@ export type StatementLabelPublicationResult =
         applicationOrder: z.infer<typeof statementApplicationOrder> | null;
       };
     }
-  | { kind: "resolved"; reason: Exclude<PublishOutcome, "published"> }
+  | {
+      kind: "resolved";
+      reason: Exclude<PublishOutcome, "published"> | "out_of_scope";
+    }
   | { kind: "failed"; error: unknown };
 
 /** New writes and recovery use the same locks, evidence fences and receipt owner. */
 async function publishCompleteLabelBatch(
   db: Database,
   entries: readonly CompleteStatementLabelPublication[],
+  scope?: StatementSuggestionScope,
 ): Promise<Map<string, StatementLabelPublicationResult>> {
-  return withTransactionDatabase(db, async (tx) => {
+  const publish = async (tx: Database) => {
     await assertWorkflowEffect(tx);
     const { charges, prior, current } = await lockChargePublicationInputs(
       tx,
       entries.map((entry) => entry.proposal),
     );
     const outcomes = new Map<string, StatementLabelPublicationResult>();
+    const scopedIds = scope
+      ? await statementLabelTargetsInScope(
+          tx,
+          scope,
+          [...prior.values()].flatMap((history) =>
+            history
+              .filter(
+                (row) =>
+                  row.active && row.status === suggestionStatus.enum.pending,
+              )
+              .map((row) => row.id),
+          ),
+        )
+      : null;
     const publications: Array<{
       entry: CompleteStatementLabelPublication;
       history: ChargePublicationHistory[];
@@ -1853,6 +1908,19 @@ async function publishCompleteLabelBatch(
       const { proposal } = entry;
       const id = chargeId(proposal.charge);
       const history = prior.get(id) ?? [];
+      // Check the live resolver before publication and receipt recovery, not
+      // merely the account retained on the previously admitted Assessment.
+      const pending = history.filter(
+        (row) => row.active && row.status === suggestionStatus.enum.pending,
+      );
+      if (
+        scopedIds &&
+        pending.length &&
+        !pending.some((row) => scopedIds.has(row.id))
+      ) {
+        outcomes.set(id, { kind: "resolved", reason: "out_of_scope" });
+        continue;
+      }
       const checkpoint = statementLabelCheckpoint.parse(entry.checkpoint);
       if (
         checkpoint.revision !== STATEMENT_LABEL_REVISION ||
@@ -2031,13 +2099,17 @@ async function publishCompleteLabelBatch(
       assessmentIds: retirementIds,
     });
     return outcomes;
-  });
+  };
+  return scope
+    ? withSnapshotWriteDatabase(db, publish, { isolationLevel: "serializable" })
+    : withTransactionDatabase(db, publish);
 }
 
 /** Isolate failed entries without replaying a committed publication as a new write. */
 export async function publishCompleteStatementLabels(
   db: Database,
   entries: readonly CompleteStatementLabelPublication[],
+  scope?: StatementSuggestionScope,
 ): Promise<Map<string, StatementLabelPublicationResult>> {
   if (
     new Set(entries.map((entry) => chargeId(entry.proposal.charge))).size !==
@@ -2055,7 +2127,11 @@ export async function publishCompleteStatementLabels(
     STATEMENT_PUBLISH_CONCURRENCY,
     async (batch) => {
       try {
-        for (const [id, outcome] of await publishCompleteLabelBatch(db, batch))
+        for (const [id, outcome] of await publishCompleteLabelBatch(
+          db,
+          batch,
+          scope,
+        ))
           outcomes.set(id, outcome);
         return;
       } catch (error) {
@@ -2067,9 +2143,11 @@ export async function publishCompleteStatementLabels(
       for (const entry of batch) {
         const id = chargeId(entry.proposal.charge);
         try {
-          for (const [key, outcome] of await publishCompleteLabelBatch(db, [
-            entry,
-          ]))
+          for (const [key, outcome] of await publishCompleteLabelBatch(
+            db,
+            [entry],
+            scope,
+          ))
             outcomes.set(key, outcome);
         } catch (error) {
           if (isWorkflowInterrupted(error)) throw error;
@@ -2289,9 +2367,33 @@ async function prepareStatementGenerationPage(
 export async function regenerateCharges(
   db: Database,
   charges: readonly ChargeRef[],
+  scope?: StatementSuggestionScope,
 ) {
-  for (const proposal of await buildChargeProposals(db, charges))
+  if (!charges.length) return;
+  const admitted =
+    scope?.importId || scope?.since
+      ? new Set(
+          (
+            await unwrapDb(db).execute<ChargeRef>(sql`
+        SELECT scoped.source, scoped."chargeKey" FROM (${scopedStatementChargeKeys(scope)}) scoped
+        WHERE (scoped.source, scoped."chargeKey") IN (${tuples(charges)})
+      `)
+          ).rows.map(chargeId),
+        )
+      : null;
+  for (const proposal of await buildChargeProposals(
+    db,
+    admitted
+      ? charges.filter((charge) => admitted.has(chargeId(charge)))
+      : charges,
+  )) {
+    if (
+      scope?.accountIds?.length &&
+      !scope.accountIds.includes(proposal.judgment.accountId)
+    )
+      continue;
     await publishChargeProposal(db, proposal, ruleProducer(null));
+  }
 }
 
 /** Admit a retry in its current scope before repairing any projection. */
@@ -2490,8 +2592,13 @@ export async function generateStatementSuggestionPage(
       const ref = `charge:${chargeId(proposal.charge)}`;
       if (failed.some((failure) => failure.ref === ref)) continue;
       try {
-        await regenerateCharges(db, [proposal.charge]);
-        await applyAutomaticRulesForCharge(db, proposal.charge, true);
+        await regenerateCharges(db, [proposal.charge], input.scope);
+        await applyAutomaticRulesForCharge(
+          db,
+          proposal.charge,
+          true,
+          input.scope,
+        );
       } catch (error) {
         if (isWorkflowInterrupted(error)) throw error;
         failed.push(statementGenerationFailure(ref, error));
@@ -2623,15 +2730,37 @@ export async function recordStatementLabelCheckpoint(
     charge: ChargeRef;
     evidenceFingerprint: string;
     checkpoint: StatementLabelCheckpoint;
+    scope?: StatementSuggestionScope;
   },
-): Promise<"saved" | "settled" | "moved"> {
+): Promise<"saved" | "settled" | "moved" | "out_of_scope"> {
   const checkpoint = statementLabelCheckpoint.parse(input.checkpoint);
-  return withTransactionDatabase(db, async (tx) => {
+  const save = async (
+    tx: Database,
+  ): Promise<"saved" | "settled" | "moved" | "out_of_scope"> => {
     const owner = currentJobExecution();
     const progress = owner
       ? await lockJobProgress(tx, owner.claim)
       : async () => {};
     await assertWorkflowEffect(tx);
+    if (input.scope) {
+      const { rows } = await unwrapDb(tx).execute<{ id: string }>(sql`
+        SELECT s.id FROM "AssessmentState" s WHERE ${pendingSuggestion()}
+          AND ${suggestionField("source")} = ${input.charge.source}
+          AND ${suggestionField("chargeKey")} = ${input.charge.chargeKey}
+          AND ${suggestionField("evidenceFingerprint")} = ${input.evidenceFingerprint}
+      `);
+      if (
+        rows.length &&
+        !(
+          await statementLabelTargetsInScope(
+            tx,
+            input.scope,
+            rows.map((row) => row.id),
+          )
+        ).size
+      )
+        return "out_of_scope";
+    }
     let gainedAnswers = false;
     const answerIds = (value: StatementLabelCheckpoint | null) =>
       new Set([
@@ -2736,20 +2865,31 @@ export async function recordStatementLabelCheckpoint(
     LIMIT 1
   `);
     return settled.length ? "settled" : "moved";
-  });
+  };
+  return input.scope
+    ? withSnapshotWriteDatabase(db, save, { isolationLevel: "serializable" })
+    : withTransactionDatabase(db, save);
 }
 
 /** Clear only the receipt whose application settled; a replacement owns its own receipt. */
 export async function completeStatementApplications(
   db: Database,
   assessmentIds: readonly string[],
+  scope?: StatementSuggestionScope,
 ) {
-  if (!assessmentIds.length) return;
-  await withTransactionDatabase(db, async (tx) => {
+  if (!assessmentIds.length) return [];
+  const complete = async (tx: Database) => {
     await assertWorkflowEffect(tx);
+    // Completion mutates durable receipt/cursor state even when no financial
+    // rule applied. Its write admission must retain the original selection.
+    const scoped = scope
+      ? await statementLabelTargetsInScope(tx, scope, assessmentIds)
+      : null;
+    const admitted = assessmentIds.filter((id) => !scoped || scoped.has(id));
+    if (!admitted.length) return [];
     await transitionAssessmentStates(
       tx,
-      inArray(assessmentState.id, [...assessmentIds]),
+      inArray(assessmentState.id, admitted),
       (row) => {
         const {
           applicationPending: _pending,
@@ -2760,13 +2900,19 @@ export async function completeStatementApplications(
       },
       { kind: "statement_application_completed" },
     );
-  });
+    return admitted;
+  };
+  return scope
+    ? withSnapshotWriteDatabase(db, complete, {
+        isolationLevel: "serializable",
+      })
+    : withTransactionDatabase(db, complete);
 }
 
 export const STATEMENT_APPLICATION_PREFIX_LIMIT =
   JOB_PAGE_LIMITS.suggestionsPerPage;
 
-/** A locked unscoped publication without applicable rule stamps cannot admit an automatic effect.
+/** A locked publication without import authority or applicable rule stamps cannot admit an automatic effect.
  * Only the original consecutive prefix is resolved; callers must apply a
  * boundary charge after releasing these locks and reread the remaining suffix.
  */
@@ -2777,7 +2923,9 @@ export async function completeNoActionStatementPrefix(
     charge: ChargeRef;
     evidenceFingerprint: string;
   }[],
+  scope?: StatementSuggestionScope,
 ) {
+  if (scope?.importId) return 0;
   const window = entries.slice(0, STATEMENT_APPLICATION_PREFIX_LIMIT);
   if (!window.length) return 0;
   if (new Set(window.map((entry) => entry.assessmentId)).size !== window.length)
@@ -2810,7 +2958,7 @@ export async function completeNoActionStatementPrefix(
     )
     .limit(1);
   if (!candidate) return 0;
-  return withTransactionDatabase(db, async (tx) => {
+  const complete = async (tx: Database) => {
     await assertWorkflowEffect(tx);
     const rows = await getDb(tx)
       .select({
@@ -2832,12 +2980,20 @@ export async function completeNoActionStatementPrefix(
       .orderBy(assessmentState.id)
       .for("update");
     const byId = new Map(rows.map((row) => [row.id, row]));
+    const scoped = scope
+      ? await statementLabelTargetsInScope(
+          tx,
+          scope,
+          rows.map((row) => row.id),
+        )
+      : null;
     const settled: string[] = [];
     for (const entry of window) {
       const row = byId.get(entry.assessmentId);
       const data = stateData.safeParse(row?.data);
       if (
         !row ||
+        (scoped && !scoped.has(entry.assessmentId)) ||
         row.family !== assessmentFamily.enum.statement_transaction ||
         !row.active ||
         row.status !== suggestionStatus.enum.pending ||
@@ -2852,9 +3008,13 @@ export async function completeNoActionStatementPrefix(
         break;
       settled.push(entry.assessmentId);
     }
-    await completeStatementApplications(tx, settled);
-    return settled.length;
-  });
+    return (await completeStatementApplications(tx, settled, scope)).length;
+  };
+  return scope
+    ? withSnapshotWriteDatabase(db, complete, {
+        isolationLevel: "serializable",
+      })
+    : withTransactionDatabase(db, complete);
 }
 
 /**
@@ -2862,12 +3022,13 @@ export async function completeNoActionStatementPrefix(
  * A stale row is paged past rather than ending the pass; regeneration
  * republishes it under a later position.
  */
-export async function suggestionsNeedingLabels(
+async function statementLabelCandidates(
   db: Database,
   limit: number,
   after: LabelCursor | null = null,
-  importId: string | null = null,
+  scope: StatementSuggestionScope = {},
 ) {
+  const scoped = labelIdentityScope(scope);
   const positionAt = sql`coalesce((s.data->'applicationOrder'->>'createdAt')::timestamp, s."createdAt")`;
   const positionId = sql`coalesce((s.data->'applicationOrder'->>'id')::uuid, s.id)`;
   const nativePosition = sql`(s.data->'applicationOrder'->>'createdAt' IS NULL AND s.data->'applicationOrder'->>'id' IS NULL)`;
@@ -2879,17 +3040,72 @@ export async function suggestionsNeedingLabels(
       WHERE ${pendingSuggestion()} AND ((s.data->>'needsLabel')::boolean
         OR coalesce((s.data->>'applicationPending')::boolean, false))
         AND ${position === "native" ? nativePosition : sql`NOT ${nativePosition}`}
-        ${importScope(importId)}
+        AND ${scoped}
         ${after ? sql`AND (${at}, ${id}) ${after.inclusive ? sql`>=` : sql`>`} (${after.createdAt}::timestamp, ${after.id}::uuid)` : sql``}
       ORDER BY ${at},${id} LIMIT ${limit}`;
   };
   // Disjoint positions preserve the global first K in their two first-K sets.
-  // Every eligibility check and the Assessment join precedes each branch limit;
-  // judgments are hydrated only after the merged limit.
+  // Identity/date eligibility and the cursor precede each branch limit.
   const query = sql`WITH selected AS MATERIALIZED (
     SELECT * FROM ((${selectPositions("native")}) UNION ALL (${selectPositions("retained")})) candidates
     ORDER BY "positionAt","positionId" LIMIT ${limit}
   )
+  SELECT selected.id,to_char(selected."positionAt",'YYYY-MM-DD"T"HH24:MI:SS.US') AS "createdAt",selected."positionId" AS "cursorId"
+  FROM selected
+  ORDER BY selected."positionAt",selected."positionId"`;
+  const { rows } = await unwrapDb(db).execute<{
+    id: string;
+    createdAt: string;
+    cursorId: string;
+  }>(query);
+  return rows;
+}
+
+/** Fill the requested scoped page, advancing over excluded cursor candidates. */
+export async function suggestionsNeedingLabels(
+  db: Database,
+  limit: number,
+  after: LabelCursor | null = null,
+  scope: StatementSuggestionScope = {},
+) {
+  const selected: Awaited<ReturnType<typeof statementLabelCandidates>> = [];
+  let cursor = after;
+  // A nearly full output page must not turn a sparse suffix into one preview
+  // per excluded candidate. Extra admitted rows retain their native positions.
+  const scanLimit = Math.min(limit, STATEMENT_SUGGESTION_PAGE);
+  while (selected.length < limit) {
+    const candidates = await statementLabelCandidates(
+      db,
+      scanLimit,
+      cursor,
+      scope,
+    );
+    const admitted = scope.accountIds?.length
+      ? await statementLabelTargetsInScope(
+          db,
+          scope,
+          candidates.map((row) => row.id),
+        )
+      : null;
+    selected.push(
+      ...candidates
+        .filter((row) => !admitted || admitted.has(row.id))
+        .slice(0, limit - selected.length),
+    );
+    const last = candidates.at(-1);
+    if (!last || candidates.length < scanLimit) break;
+    cursor = { createdAt: last.createdAt, id: last.cursorId };
+  }
+  if (!selected.length) return [];
+  // Account preparation is bounded by cursor candidates; only the filled page
+  // hydrates judgments/checkpoints. Exclusions never end a partial scan early.
+  const query = sql`WITH selected(id,"positionAt","positionId") AS (VALUES ${sql.join(
+    selected.map(
+      (row) =>
+        sql`(${row.id}::uuid,${row.createdAt}::timestamp,${row.cursorId}::uuid)`,
+    ),
+    sql`, `,
+  )})
   SELECT s.id,to_char(selected."positionAt",'YYYY-MM-DD"T"HH24:MI:SS.US') AS "createdAt",selected."positionId" AS "cursorId",
     a.subject,a.judgment,s.data->'amount' AS amount,
     ${suggestionField("evidenceFingerprint")} AS "evidenceFingerprint",s.data->'labelCheckpoint' AS checkpoint,
@@ -2917,28 +3133,125 @@ export async function suggestionsNeedingLabels(
   }));
 }
 
-/**
- * An import-scoped pass labels only the charges that import observed, so
- * concurrent import Sweeps never ask the model about the same suggestions.
- */
-const importScope = (importId: string | null) =>
-  importId
-    ? sql`AND (${suggestionField("source")}, ${suggestionField("chargeKey")}) IN (
-        SELECT seen.source, ${chargeKeyOf("seen")} FROM "SourceTransactionRecord" seen
-        WHERE seen."deletedAt" IS NULL AND seen.id IN (
-          SELECT m."statementRowId" FROM ${transactionImportMembers} m WHERE m."importId" = ${importId}::uuid))`
-    : sql``;
+const labelIdentityScope = (scope: StatementSuggestionScope) =>
+  scope.importId || scope.since
+    ? sql`(${suggestionField("source")}, ${suggestionField("chargeKey")}) IN (${scopedStatementChargeKeys(scope)})`
+    : sql`true`;
+
+/** Resolve only named cursor candidates or write-admission targets. */
+async function statementLabelScope(
+  db: Database,
+  scope: StatementSuggestionScope,
+  assessmentIds: readonly string[],
+) {
+  const identity = labelIdentityScope(scope);
+  const selected = assessmentIds.length
+    ? sql`s.id IN (${sql.join(
+        assessmentIds.map((id) => sql`${id}::uuid`),
+        sql`, `,
+      )})`
+    : sql`false`;
+  if (!scope.accountIds?.length) return sql`${identity} AND ${selected}`;
+  // Re-admission checks scope alone. Replaced/completed rows still reach the
+  // existing evidence fences and later-round regeneration/replay path.
+  const eligible = sql`s.family = ${assessmentFamily.enum.statement_transaction}`;
+  const { rows } = await unwrapDb(db).execute<
+    ChargeRef & {
+      id: string;
+      voidTarget: boolean;
+      voidAccountId: string | null;
+    }
+  >(sql`
+    SELECT s.id, ${suggestionField("source")} AS source, ${suggestionField("chargeKey")} AS "chargeKey",
+      a.judgment->${statementTransactionAction.enum.void}->>'transactionId' IS NOT NULL AS "voidTarget",
+      held."accountId" AS "voidAccountId"
+    FROM "AssessmentState" s JOIN "Assessment" a ON a.id=s.id
+    LEFT JOIN "FinancialTransaction" held ON held.id=(a.judgment->${statementTransactionAction.enum.void}->>'transactionId')::uuid
+      AND held."deletedAt" IS NULL
+    WHERE ${eligible} AND ${identity} AND ${selected}
+  `);
+  const admitted: string[] = [];
+  const preparation = rows.length
+    ? await prepareFinancialStatementPreview(db)
+    : undefined;
+  for (
+    let offset = 0;
+    offset < rows.length;
+    offset += STATEMENT_SUGGESTION_PAGE
+  ) {
+    const batch = rows.slice(offset, offset + STATEMENT_SUGGESTION_PAGE);
+    const prepared = await prepareChargePreviews(
+      db,
+      batch.filter((row) => !row.voidTarget),
+      preparation,
+    );
+    const accounts = new Map(
+      prepared?.preview.rows.map((row) => [
+        row.key,
+        row.accountId ? prepared.preparation.ids.get(row.accountId) : undefined,
+      ]),
+    );
+    for (const row of batch) {
+      const accountId = row.voidAccountId ?? accounts.get(chargeId(row));
+      if (accountId && scope.accountIds.includes(accountId))
+        admitted.push(row.id);
+    }
+  }
+  return admitted.length
+    ? sql`${identity} AND s.id IN (${sql.join(
+        admitted.map((id) => sql`${id}::uuid`),
+        sql`, `,
+      )})`
+    : sql`false`;
+}
+
+/** Model latency and retries must re-admit the selected receipts under the same scope. */
+export async function statementLabelTargetsInScope(
+  db: Database,
+  scope: StatementSuggestionScope,
+  assessmentIds: readonly string[],
+) {
+  const scoped = await statementLabelScope(db, scope, assessmentIds);
+  const { rows } = await unwrapDb(db).execute<{ id: string }>(sql`
+    SELECT s.id FROM "AssessmentState" s JOIN "Assessment" a ON a.id=s.id
+    WHERE s.family = ${assessmentFamily.enum.statement_transaction} AND ${scoped}
+  `);
+  return new Set(rows.map((row) => row.id));
+}
 
 /** How many pending suggestions still need labels, for a Sweep's count. */
 export async function countSuggestionsNeedingLabels(
   db: Database,
-  importId: string | null = null,
+  scope: StatementSuggestionScope = {},
 ) {
+  if (scope.accountIds?.length) {
+    let count = 0;
+    let after: LabelCursor | null = null;
+    for (;;) {
+      const candidates = await statementLabelCandidates(
+        db,
+        STATEMENT_SUGGESTION_PAGE,
+        after,
+        scope,
+      );
+      count += (
+        await statementLabelTargetsInScope(
+          db,
+          scope,
+          candidates.map((row) => row.id),
+        )
+      ).size;
+      const last = candidates.at(-1);
+      if (!last || candidates.length < STATEMENT_SUGGESTION_PAGE) return count;
+      after = { createdAt: last.createdAt, id: last.cursorId };
+    }
+  }
+  const scoped = labelIdentityScope(scope);
   const { rows } = await unwrapDb(db).execute<{ count: number }>(sql`
-    SELECT count(*)::int AS count FROM "AssessmentState" s
+    SELECT count(*)::int AS count FROM "AssessmentState" s JOIN "Assessment" a ON a.id=s.id
     WHERE ${pendingSuggestion()} AND ((${suggestionField("needsLabel")})::boolean
       OR coalesce((s.data->>'applicationPending')::boolean, false))
-      ${importScope(importId)}
+      AND ${scoped}
   `);
   return rows[0]?.count ?? 0;
 }

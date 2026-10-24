@@ -24,7 +24,7 @@ describe("server photo group steps", () => {
       "identity",
       "ownership",
     ]);
-    expect(photoGroupSteps(base).steps[1]?.status).toBe("needs_input");
+    expect(photoGroupSteps(base).steps[1]?.status).toBe("done");
     expect(
       photoGroupSteps({ ...base, concern: "Read the label" }).steps[1],
     ).toMatchObject({ status: "needs_input", summary: "Read the label" });
@@ -40,7 +40,7 @@ describe("server photo group steps", () => {
         stockIntent: "receive",
         inventoryMissing: true,
       }).blockedReason,
-    ).toContain("Inventory");
+    ).toContain("storage location");
     // The folded step names where stock lands, not just that it will.
     expect(
       photoGroupSteps({

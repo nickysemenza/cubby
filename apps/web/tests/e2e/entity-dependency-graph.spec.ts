@@ -49,6 +49,14 @@ test("connections workspace shares dense facts, linked paths, and native handoff
     projectId: project.id,
   });
   await gotoAuthenticatedPage(page, `/products/${product.id}`);
+  const moreContext = page.getByRole("button", {
+    name: "More context",
+    exact: true,
+  });
+  await moreContext.click();
+  await expect(
+    page.getByRole("button", { name: "Less context", exact: true }),
+  ).toHaveAttribute("aria-expanded", "true");
   const context = page.getByRole("region", {
     name: "Purchase projects",
     exact: true,

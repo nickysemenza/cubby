@@ -1,3 +1,4 @@
+import { displayImagesField } from "./display-images";
 import cookbookDefinition from "./entity-definitions/03-cookbook.entity";
 import recipeDefinition from "./entity-definitions/01-recipe.entity";
 import { recipeUsageMcpEntityOut } from "./recipe-fields";
@@ -115,7 +116,9 @@ export type RecipeGraphOut = z.infer<typeof recipeGraphOut>;
 
 export const recipeOutFields = recipeDefinition.readSchemas.output.shape;
 
-export const recipeOut = recipeDefinition.readSchemas.output;
+export const recipeOut = recipeDefinition.readSchemas.output.extend({
+  displayImages: displayImagesField.optional(),
+});
 
 /** Full recipe output with storage-only section and line identifiers removed. */
 export const recipeMcpEntityOut = recipeOut.extend({

@@ -20,6 +20,7 @@ import type { Database } from "~/server/db";
 import { getDb, unwrapDb } from "~/server/db/helpers";
 import { assessment, automaticRule } from "~/server/db/schema";
 import { systemActor } from "~/server/domains/run/repo/ensure-run";
+import type { StatementSuggestionScope } from "~/server/domains/transaction-import/repo/statement-input";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { createAppError } from "~/server/errors/app-error";
 import { matchedRulesOf } from "~/server/generic/assessment/repo/assessment";
@@ -31,6 +32,7 @@ import {
   matchStatementRules,
   ruleBase,
 } from "~/server/generic/assessment/repo/automatic-rules";
+import { fieldCorrectionIdentityKeys } from "~/server/generic/assessment/repo/field-assessment-review";
 import { canAutomaticallyFillField } from "~/server/generic/assessment/repo/suggestion-review";
 
 const log = createLogger("automatic-rules");
@@ -205,6 +207,8 @@ type Candidate = {
   active: boolean;
   served: boolean;
   data: unknown;
+  evidence: unknown;
+  subject: unknown;
   entity: string;
   field: string;
   kind: string;
@@ -258,13 +262,15 @@ export async function applyAutomaticRules(
     onFailure?: (assessmentId: string, message: string) => void;
     /** An import authorizes clean spending plans while their rule is enabled. */
     importClean?: boolean;
+    /** Selection constraints survive regeneration and are rechecked by write admission. */
+    statementScope?: StatementSuggestionScope;
   } = {},
 ): Promise<AutomaticRuleOutcome> {
   const outcome: AutomaticRuleOutcome = { applied: [], refused: [] };
   if (!assessmentIds.length) return outcome;
   const { rows } = await unwrapDb(db).execute<Candidate>(sql`
     SELECT s.id, s.family, s.status, s.active, a.served, s.data, s.entity, s.field,
-      s.kind, s.confidence, s.model, s.fingerprint, s."runId", a.judgment
+      s.kind, s.confidence, s.model, s.fingerprint, s."runId", a.judgment, a.evidence, a.subject
     FROM "AssessmentState" s
     JOIN "Assessment" a ON a.id = s.id
     WHERE s.id IN (${sql.join(
@@ -276,6 +282,34 @@ export async function applyAutomaticRules(
   let base = options.context;
   for (const row of rows) {
     if (!row.active || row.status !== "pending" || !row.served) continue;
+    if (row.family === "field") {
+      const { readFieldCorrectionIdentity } =
+        await import("./correction-sources");
+      const identity = await readFieldCorrectionIdentity(
+        db,
+        row.subject,
+        row.evidence,
+      );
+      const key = identity.canonicalKey ?? identity.storedKey;
+      if (key) {
+        const { resolveFieldCorrection } =
+          await import("./field-correction-resolver");
+        // Conflicts also withhold the old model answer; correction work owns the resolution.
+        if (
+          (
+            await resolveFieldCorrection(
+              db,
+              fieldCorrectionIdentityKeys(identity),
+              {
+                entity: row.entity,
+                field: row.field,
+              },
+            )
+          ).kind !== "none"
+        )
+          continue;
+      }
+    }
     const stamp = ruleStamps.safeParse(row.data).data;
     if (row.family !== "field" && !stamp?.matchedRules.length) continue;
     const current = currentMatches(row);
@@ -372,6 +406,7 @@ export async function applyAutomaticRules(
         },
         {
           authority: "automatic",
+          statementScope: options.statementScope,
           rule: {
             key: match.key,
             revision: match.revision,
@@ -409,6 +444,7 @@ export async function applyAutomaticRulesForCharge(
   db: Database,
   charge: { source: string; chargeKey: string },
   importClean = false,
+  statementScope?: StatementSuggestionScope,
 ) {
   const { rows } = await unwrapDb(db).execute<{ id: string }>(sql`
     SELECT id FROM "AssessmentState"
@@ -420,6 +456,6 @@ export async function applyAutomaticRulesForCharge(
   return applyAutomaticRules(
     db,
     rows.map((row) => row.id),
-    { importClean },
+    { importClean, statementScope },
   );
 }

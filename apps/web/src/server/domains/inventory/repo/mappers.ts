@@ -1,4 +1,5 @@
 import type { DataQuality } from "@cubby/schemas/data-quality";
+import type { DisplayImageSummary } from "@cubby/schemas/display-images";
 import { type ProductId, parseShortcodeFor } from "@cubby/schemas/identifiers";
 import {
   inventoryDisplayName,
@@ -109,6 +110,7 @@ export const dbInventoryEntryToAPI: (
   dataQuality: DataQuality,
   locationDataQuality: DataQuality,
   ownership?: InventoryOwnershipTrace,
+  displayImages?: DisplayImageSummary[],
 ) => z.infer<typeof inventoryWithLocationAndProductOut> = (
   inventoryentry,
   valuation,
@@ -116,6 +118,7 @@ export const dbInventoryEntryToAPI: (
   dataQuality,
   locationDataQuality,
   ownership,
+  displayImages = [],
 ) => {
   const { product, location } = inventoryentry;
 
@@ -147,6 +150,7 @@ export const dbInventoryEntryToAPI: (
       dataQuality: locationDataQuality,
     },
     product: {
+      displayImages,
       ...mapDbProductToInventoryEmbed({
         ...product,
         pricing,

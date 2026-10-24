@@ -430,11 +430,9 @@
       "field": "identity",
       "read": {
         "kind": "credit_card",
-        "issuer": "Synthetic Bank",
         "network": "visa"
       },
       "input": {
-        "issuer": "Synthetic Bank",
         "network": "visa",
         "kind": "credit_card"
       }

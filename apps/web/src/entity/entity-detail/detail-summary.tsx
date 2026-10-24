@@ -18,6 +18,7 @@ import {
 } from "~/entity/display/entity-display";
 import { entities, isBrowserRoutedEntity } from "~/entity/entities";
 import { EntityDisplayImagesProvider } from "~/entity/entity-media/entity-display-images";
+import { ConnectionPaths } from "~/entity/relationships/connection-paths";
 import { entityGraph } from "~/integrations/tanstack-query/generated/catalog/entityGraph.gen";
 import { entityReport } from "~/integrations/tanstack-query/generated/catalog/entityReport.gen";
 import { cn } from "~/lib/utils";
@@ -28,7 +29,6 @@ import { Button } from "~/ui/primitives/button";
 import { Skeleton } from "~/ui/primitives/skeleton";
 
 import { readPathValue } from "../read-path";
-import { RecordPaths } from "./connected-records-table";
 import type { DetailRecordOf, GenericDetailEntity } from "./detail-record";
 import { ReportRowText, ReportTimeDisplay } from "./records-ledger";
 import { LIVE_REPORT_POLL_MS, ReportBlocks } from "./report-slot";
@@ -67,14 +67,17 @@ function reportImageRefs(blocks: readonly ReportBlock[]): EntityRef[] {
 function SummaryCell({
   title,
   children,
+  hidden = false,
 }: {
   title: string;
   children: ReactNode;
+  hidden?: boolean;
 }) {
   return (
     <section
       aria-label={title}
-      className="min-w-0 border-b border-border px-3 py-2 text-xs"
+      hidden={hidden}
+      className="min-w-0 border-b border-border px-3 py-2 text-xs [&_[data-entity-pill]>span:last-child]:truncate"
     >
       <h2 className="mb-1 text-xs font-medium text-muted-foreground">
         {title}
@@ -87,12 +90,28 @@ function SummaryCell({
 /** Display-only projection; full workflow controls remain in their owning sections. */
 export function CompactSummaryReport({
   blocks,
+  title,
 }: {
   blocks: readonly ReportBlock[];
+  title?: string;
 }) {
   const projection = summaryReportProjection(blocks);
   const [expanded, setExpanded] = useState(false);
-  const displayed = expanded ? blocks : projection.blocks;
+  const preview = projection.blocks.filter(
+    (block) =>
+      block.kind !== "note" ||
+      block.strong ||
+      block.tone === "warning" ||
+      block.tone === "destructive",
+  );
+  const more =
+    projection.more ||
+    preview.length !== projection.blocks.length ||
+    blocks.some(
+      (block) =>
+        block.kind === "records" && (block.rows.length > 2 || !!block.footer),
+    );
+  const displayed = expanded ? blocks : preview;
   return (
     <EntityDisplayImagesProvider refs={reportImageRefs(displayed)}>
       <div className="space-y-1">
@@ -104,19 +123,19 @@ export function CompactSummaryReport({
             const rows = block.rows.filter((row) => !more.includes(row));
             return (
               <div key={JSON.stringify(block)}>
-                {block.title ? (
+                {block.title && (expanded || block.title !== title) ? (
                   <p className="mb-1 text-muted-foreground">{block.title}</p>
                 ) : null}
                 <RecordList
                   empty={block.empty}
                   footer={
-                    block.footer ??
+                    (expanded ? block.footer : undefined) ??
                     (block.totalCount === undefined
                       ? undefined
                       : `${block.totalCount} total`)
                   }
                 >
-                  {(expanded ? rows : rows.slice(0, 3)).map((row, i) => (
+                  {(expanded ? rows : rows.slice(0, 2)).map((row, i) => (
                     <RecordRow
                       key={row.id ?? i}
                       clip={false}
@@ -149,7 +168,7 @@ export function CompactSummaryReport({
                               <DateDisplay timestamp={row.at} stacked={false} />
                             ) : null}
                             {row.paths?.some((path) => path.length > 2) ? (
-                              <RecordPaths paths={row.paths} compact />
+                              <ConnectionPaths paths={row.paths} compact />
                             ) : null}
                             <ReportRowText row={row} />
                             {row.externalLink ? (
@@ -169,7 +188,7 @@ export function CompactSummaryReport({
                   ))}
                 </RecordList>
                 {block.connection &&
-                (block.totalCount ?? block.rows.length) > 3 ? (
+                (block.totalCount ?? block.rows.length) > 2 ? (
                   <Link
                     to="/connections"
                     search={{
@@ -184,7 +203,7 @@ export function CompactSummaryReport({
                   </Link>
                 ) : null}
                 {block.listLink &&
-                (block.totalCount ?? block.rows.length) > 3 &&
+                (block.totalCount ?? block.rows.length) > 2 &&
                 isRoutedReportEntity(block.listLink.entity) ? (
                   <a
                     className="mt-1 inline-block text-link hover:underline"
@@ -224,7 +243,7 @@ export function CompactSummaryReport({
           const _exhaustive: never = block;
           return _exhaustive;
         })}
-        {projection.more ? (
+        {more ? (
           <Button
             variant="ghost"
             size="sm"
@@ -251,13 +270,14 @@ export function DetailSummary<E extends GenericDetailEntity>({
   const slots: readonly DetailSummarySlot[] =
     entitySummary[entity].detail.summary;
   const id = record.id;
+  const [showContext, setShowContext] = useState(false);
   const records = slots.filter((slot) => slot.kind === "records");
   const recordQueries = useQueries({
     queries: records.map((slot) =>
       entityGraph.connectedRecords.queryOptions({
         source: { entityKind: entity, entityId: id },
         viewKey: slot.viewKey,
-        limit: 3,
+        limit: 2,
       }),
     ),
   });
@@ -294,22 +314,70 @@ export function DetailSummary<E extends GenericDetailEntity>({
         ]) ?? [],
     ),
   ];
+  const secondary = new Set(
+    slots
+      .slice(4)
+      .filter((slot) => {
+        if (slot.kind === "fields") return false;
+        if (slot.kind === "report") {
+          if (reportQuery?.isError) return false;
+          const report = reportQuery?.data?.reports.find(
+            (entry) => entry.slot === slot.slot,
+          )?.report;
+          if (
+            report?.blocks.some(
+              (block) =>
+                block.kind === "note" &&
+                (block.strong ||
+                  block.tone === "warning" ||
+                  block.tone === "destructive"),
+            )
+          )
+            return false;
+          return report === undefined || report.blocks.length > 0;
+        }
+        if (slot.kind === "records") {
+          const query =
+            recordQueries[records.findIndex((entry) => entry.id === slot.id)];
+          if (query?.isError) return false;
+          return query?.data === undefined || query.data.totalCount > 0;
+        }
+        return true;
+      })
+      .map((slot) => slot.id),
+  );
   if (!slots.length) return null;
   return (
     <EntityDisplayImagesProvider refs={imageRefs}>
       <div
         aria-label="Record summary"
         className={cn(
-          "grid grid-cols-2 border-y border-border [&>section:nth-child(odd)]:border-r",
+          "grid grid-cols-1 border-y border-border sm:grid-cols-2 sm:[&>section:nth-child(odd)]:border-r",
           !compact &&
-            "md:grid-cols-4 md:[&>section]:border-r md:[&>section:nth-child(4n)]:border-r-0",
+            "xl:grid-cols-3 xl:[&>section]:border-r xl:[&>section:nth-child(3n)]:border-r-0",
         )}
       >
         {slots.map((slot) => {
           let content: ReactNode;
           if (slot.kind === "fields") {
+            // Missing facts remain in the full record; they need no summary cell.
+            if (
+              slot.fields.length === 1 &&
+              slot.fields.every((key) => {
+                const field = fields.find((field) => field.key === key);
+                return (
+                  field &&
+                  field.readKey !== null &&
+                  readPathValue(
+                    record,
+                    field.display.readPath ?? field.readKey,
+                  ) == null
+                );
+              })
+            )
+              return null;
             content = (
-              <dl className="space-y-2">
+              <dl className="space-y-1">
                 {slot.fields.map((key) => {
                   const field = fields.find((field) => field.key === key);
                   if (!field) return null;
@@ -325,17 +393,20 @@ export function DetailSummary<E extends GenericDetailEntity>({
                           field.display.readPath ?? field.readKey,
                         );
                   return (
-                    <div key={key}>
+                    <div
+                      key={key}
+                      className="flex min-w-0 items-baseline gap-2"
+                    >
                       <dt
                         className={
                           slot.fields.length === 1 && slot.title === field.label
                             ? "sr-only"
-                            : "text-muted-foreground"
+                            : "shrink-0 text-muted-foreground"
                         }
                       >
                         {field.label}
                       </dt>
-                      <dd className="mt-0.5 break-words">
+                      <dd className="min-w-0 break-words">
                         {absent || value === null
                           ? "Not recorded"
                           : renderDetailFieldValue(entity, record, field)}
@@ -372,7 +443,12 @@ export function DetailSummary<E extends GenericDetailEntity>({
               if (!report)
                 throw new Error(`Missing summary report ${slot.slot}`);
               if (!report.blocks.length) return null;
-              content = <CompactSummaryReport blocks={report.blocks} />;
+              content = (
+                <CompactSummaryReport
+                  blocks={report.blocks}
+                  title={slot.title}
+                />
+              );
             }
           } else {
             const query =
@@ -393,9 +469,6 @@ export function DetailSummary<E extends GenericDetailEntity>({
               if (!query.data.totalCount) return null;
               content = (
                 <>
-                  <p className="mb-1 font-mono tabular-nums">
-                    {query.data.totalCount} total
-                  </p>
                   <RecordList>
                     {query.data.items.map((item) => (
                       <RecordRow
@@ -416,7 +489,7 @@ export function DetailSummary<E extends GenericDetailEntity>({
                         }
                         secondary={
                           item.paths.some((path) => path.length > 2) ? (
-                            <RecordPaths paths={item.paths} compact />
+                            <ConnectionPaths paths={item.paths} compact />
                           ) : null
                         }
                       />
@@ -441,11 +514,27 @@ export function DetailSummary<E extends GenericDetailEntity>({
             }
           }
           return (
-            <SummaryCell key={slot.id} title={slot.title}>
+            <SummaryCell
+              key={slot.id}
+              title={slot.title}
+              hidden={secondary.has(slot.id) && !showContext}
+            >
               {content}
             </SummaryCell>
           );
         })}
+        {secondary.size > 0 ? (
+          <div className="col-span-full border-b border-border px-3 py-1">
+            <Button
+              variant="ghost"
+              size="sm"
+              aria-expanded={showContext}
+              onClick={() => setShowContext((value) => !value)}
+            >
+              {showContext ? "Less context" : "More context"}
+            </Button>
+          </div>
+        ) : null}
       </div>
     </EntityDisplayImagesProvider>
   );

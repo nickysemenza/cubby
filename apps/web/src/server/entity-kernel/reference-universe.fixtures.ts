@@ -237,7 +237,7 @@ async function seedPostPipelineCoverage(
     await getDb(db)
       .update(financialAccountTable)
       .set({
-        identity: { kind: "stored_value", provider: "Delete policy fixture" },
+        identity: { kind: "stored_value" },
         providerVendorId: vendorId,
       })
       .where(eq(financialAccountTable.id, financialAccountId));

@@ -212,9 +212,9 @@ export async function publishQualityRows(
   db: ReaderDb,
   ids: readonly string[],
   rows: readonly QualityPublication[],
-) {
+): Promise<string[]> {
   const changed = await changedQualityIds(db, ids, rows);
-  if (!changed.length) return;
+  if (!changed.length) return changed;
   const tx = unwrapDb(db);
   await tx
     .delete(entityQualityCheck)
@@ -223,7 +223,7 @@ export async function publishQualityRows(
     .delete(entityQuality)
     .where(inArray(entityQuality.entityId, changed));
   const next = rows.filter((row) => changed.includes(row.entityId));
-  if (!next.length) return;
+  if (!next.length) return changed;
   const computedAt = new Date();
   await tx
     .insert(entityQuality)
@@ -239,4 +239,5 @@ export async function publishQualityRows(
     })),
   );
   if (values.length) await tx.insert(entityQualityCheck).values(values);
+  return changed;
 }

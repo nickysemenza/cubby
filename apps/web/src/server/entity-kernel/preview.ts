@@ -1,4 +1,4 @@
-import { SUGGESTION_AUTO_APPLY_THRESHOLD } from "@cubby/schemas/ai-evaluation";
+import { HIGH_CONFIDENCE_PROBABILITY } from "@cubby/schemas/ai-evaluation";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import { resolveExpenseLineKind } from "@cubby/schemas/expense-line-kind";
 import type { FieldResolutions } from "@cubby/schemas/field-resolution";
@@ -205,7 +205,7 @@ async function applyPreviewSuggestions(args: {
         args.explicit[field] === undefined &&
         (currentValue == null || currentValue === "") &&
         probability !== null &&
-        probability >= SUGGESTION_AUTO_APPLY_THRESHOLD &&
+        probability >= HIGH_CONFIDENCE_PROBABILITY &&
         suggestion.alternatives.every(
           (other) => probability - other.probability >= 0.1,
         ) &&

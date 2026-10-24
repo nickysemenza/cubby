@@ -1,7 +1,8 @@
 import { assessmentChildHandle } from "./assessment-reference";
 import { z } from "zod";
 
-export const SUGGESTION_AUTO_APPLY_THRESHOLD = 0.95;
+/** Public confidence labels and eligible empty-field filling share one boundary. */
+export const HIGH_CONFIDENCE_PROBABILITY = 0.85;
 
 export const aiDependencyStamp = z.object({
   feature: z.string().min(1),
@@ -152,4 +153,13 @@ export const aiRefreshProgress = z.object({
   obsolete: z.number().int().nonnegative().optional(),
   cancelled: z.number().int().nonnegative().optional(),
   errors: z.array(z.string()).max(10).optional(),
+});
+
+/** Ordered provider input evidence retained with field correction identity recipes. */
+export const capturedFieldInput = z.object({
+  feature: z.string(),
+  promptVersion: z.string(),
+  operation: z.string(),
+  model: z.string(),
+  fingerprint: z.string(),
 });

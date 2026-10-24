@@ -87,6 +87,7 @@ function treeData(): InfLocation[] {
     {
       ...kitchen,
       images: [kitchenImage],
+      displayImages: [kitchenImage],
       directItemCount: 1,
       totalItemCount: 2,
       inventoryItems: [

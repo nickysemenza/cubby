@@ -1,4 +1,3 @@
-import { connectedViews } from "@cubby/schemas/connected-views";
 import type { CompiledEntityPresentation } from "@cubby/schemas/entity-definitions/definition";
 import {
   entityFieldModels,
@@ -373,6 +372,7 @@ function declaredSections<E extends GenericDetailEntity>(
           {
             ...base,
             title,
+            collapsed: slot.collapsed,
             headerAction: section.explanationField ? (
               <FieldExplanation
                 entity={entity}
@@ -575,16 +575,14 @@ function FullEntityDetail<E extends GenericDetailEntity>({
   // Change history plus declared dated relations, merged into one timeline.
   const timeline =
     isAuditableEntity(entity) || detail.activityRelations.length > 0;
-  if (connectedViews[entity].length > 0) {
-    sections.push({
-      id: "connected-records",
-      title: "Connected records",
-      workspace: "relations",
-      icon: LinkIcon,
-      placement: "primary",
-      content: <ConnectedRecordsSection source={entity} sourceId={bag.id} />,
-    });
-  }
+  sections.push({
+    id: "connected-records",
+    title: "Connected records",
+    workspace: "relations",
+    icon: LinkIcon,
+    placement: "primary",
+    content: <ConnectedRecordsSection source={entity} sourceId={bag.id} />,
+  });
 
   if (!sections.some((section) => section.id === "suggestions"))
     sections.push({

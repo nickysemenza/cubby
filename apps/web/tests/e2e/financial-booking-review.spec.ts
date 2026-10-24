@@ -41,7 +41,7 @@ test("reviews spending in the browser with stale and replay guards", async ({
     });
     const account = await create("financialAccount", {
       name: "Synthetic review card",
-      identity: { kind: "credit_card", issuer: null, network: "visa" },
+      identity: { kind: "credit_card", network: "visa" },
       ledgerPartyId: owner.shortcode,
       provisional: false,
     });

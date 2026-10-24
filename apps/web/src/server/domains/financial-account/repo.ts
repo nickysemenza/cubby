@@ -125,9 +125,6 @@ const columns = {
   id: financialAccount.id,
   shortcode: financialAccount.shortcode,
   name: financialAccount.name,
-  issuer: sql<
-    string | null
-  >`CASE WHEN "FinancialAccount"."identity"->>${"kind"} = ${financialAccountIdentityKind.enum.credit_card} THEN "FinancialAccount"."identity"->>'issuer' END`,
   network: sql<
     string | null
   >`CASE WHEN "FinancialAccount"."identity"->>${"kind"} = ${financialAccountIdentityKind.enum.credit_card} THEN "FinancialAccount"."identity"->>'network' END`,
@@ -185,7 +182,6 @@ const toOut = (
     authorizedUsers: row.authorizedUsers,
     fundingPeriods: row.fundingPeriods,
     primaryCardholderId: row.primaryCardholderShortcode,
-    issuer: row.issuer,
     network: row.network,
     identity: financialAccountIdentity.parse(row.identity),
     provisional: row.provisional,
@@ -437,13 +433,18 @@ async function resolveProviderVendorForAccount(
   // Row lock so a concurrent vendor delete cannot pass its incoming-edge
   // check between this read and the insert that references it.
   const [row] = await tx
-    .select({ id: vendor.id })
+    .select({ id: vendor.id, systemKey: vendor.systemKey })
     .from(vendor)
     .where(and(eq(vendor.id, id), notDeleted(vendor)))
     .for("share")
     .limit(1);
   if (!row)
     throw createAppError("VENDOR_NOT_FOUND", `Vendor not found: ${shortcode}`);
+  if (row.systemKey !== null)
+    throw createAppError(
+      "CONSTRAINT_VIOLATION",
+      "Generic / Unbranded cannot provide a financial account.",
+    );
   return row.id;
 }
 
@@ -451,29 +452,28 @@ function assertProviderMatchesKind(
   identity: FinancialAccountCreateInput["identity"],
   providerVendorId: string | null,
 ) {
-  if (providerVendorId !== null && identity.kind !== "stored_value")
+  if (identity.kind === "cash" && providerVendorId !== null)
     throw createAppError(
       "CONSTRAINT_VIOLATION",
-      `Only a stored-value account names a provider vendor; this account is ${identity.kind}.`,
+      "Cash accounts do not have a provider.",
     );
 }
 
 /** Scalar edits merge into the backing object; they never replace its sibling values. */
 function withCardIdentityFields(
   identity: FinancialAccountCreateInput["identity"],
-  fields: Pick<FinancialAccountUpdateData, "issuer" | "network">,
+  fields: Pick<FinancialAccountUpdateData, "network">,
 ): FinancialAccountCreateInput["identity"] {
   if (identity.kind !== "credit_card") {
-    if (fields.issuer != null || fields.network != null)
+    if (fields.network != null)
       throw createAppError(
         "CONSTRAINT_VIOLATION",
-        "Issuer and network only apply to credit-card accounts.",
+        "Network only applies to credit-card accounts.",
       );
     return identity;
   }
   return {
     ...identity,
-    ...(fields.issuer !== undefined ? { issuer: fields.issuer } : {}),
     ...(fields.network !== undefined ? { network: fields.network } : {}),
   };
 }
@@ -515,7 +515,6 @@ export const createFinancialAccount = defineMutationWriter({
         ledgerPartyId,
         providerVendorId,
         primaryCardholderId,
-        issuer: _issuer,
         network: _network,
         ...columns
       } = data;
@@ -711,15 +710,12 @@ export const updateFinancialAccount = defineMutationWriter({
         ledgerPartyId: _ledgerPartyId,
         providerVendorId: _providerVendorId,
         primaryCardholderId: _primaryCardholderId,
-        issuer: _issuer,
         network: _network,
         ...accountData
       } = data;
       const updateData: Partial<typeof financialAccount.$inferInsert> = {
         ...accountData,
-        ...(data.identity !== undefined ||
-        data.issuer !== undefined ||
-        data.network !== undefined
+        ...(data.identity !== undefined || data.network !== undefined
           ? { identity }
           : {}),
       };

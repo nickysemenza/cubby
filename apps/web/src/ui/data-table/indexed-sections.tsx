@@ -57,6 +57,8 @@ export interface IndexedSection {
   /** Row count for a list section whose rows are already loaded; async lists
    * report theirs through `useSectionCount`. */
   count?: number;
+  /** Execution evidence may start folded without removing its anchor. */
+  collapsed?: boolean;
 }
 
 /** A group heading and its sections. Ids use `detail-group-<key>`, so `#<key>` reaches it. */
@@ -94,6 +96,13 @@ function SectionCard({
   section: IndexedSection;
   className?: string;
 }) {
+  const hash = useLocation({ select: (location) => location.hash });
+  const [open, setOpen] = useState(
+    !section.collapsed || normalizedHash(hash) === section.id,
+  );
+  useEffect(() => {
+    if (normalizedHash(hash) === section.id) setOpen(true);
+  }, [hash, section.id]);
   const [reportedCount, setCount] = useState<number | undefined>(undefined);
   const [reportedEmpty, setEmpty] = useState(false);
   const register = useContext(SectionIndexRegistryContext);
@@ -115,6 +124,10 @@ function SectionCard({
         <Section
           id={section.id}
           tabIndex={-1}
+          onFocus={(event) => {
+            if (section.collapsed && event.target === event.currentTarget)
+              setOpen(true);
+          }}
           data-empty={empty || undefined}
           data-detail-section
           className={cn(
@@ -126,6 +139,9 @@ function SectionCard({
           )}
           headingAs={Heading}
           title={section.title}
+          disclosure={
+            section.collapsed ? { open, onOpenChange: setOpen } : undefined
+          }
           empty={empty}
           count={
             <SectionIndexMarker

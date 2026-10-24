@@ -1,9 +1,12 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
+import { EntityDisplayImagesProvider } from "~/entity/entity-media/entity-display-images";
+import { ConnectionPaths } from "~/entity/relationships/connection-paths";
+import { entityGraph } from "~/integrations/tanstack-query/generated/catalog/entityGraph.gen";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 
-import { RecordPaths } from "./connected-records-table";
+import { ConnectedRecordsSection } from "./connected-records-table";
 
 describe("record connection evidence", () => {
   let harness: ReturnType<typeof createBrowserTestHarness>;
@@ -14,9 +17,64 @@ describe("record connection evidence", () => {
     harness.dispose();
   });
 
+  it("keeps distinct records with equal labels visibly identifiable and linked", () => {
+    const source = { entityKind: "email", entityId: "EML-TEST" } as const;
+    const targets = ["SHIP-ONE", "SHIP-TWO"].map(
+      (entityId) =>
+        ({
+          entityKind: "shipment",
+          entityId,
+          label: "Synthetic parcel",
+        }) as const,
+    );
+    const query = entityGraph.connectedRecordsPreview.queryOptions({
+      source,
+      limit: 3,
+    });
+    harness.queryClient.setQueryDefaults(query.queryKey, {
+      staleTime: Infinity,
+    });
+    harness.queryClient.setQueryData(query.queryKey, {
+      views: [
+        {
+          viewKey: "entity:shipment",
+          title: "Shipments",
+          targetEntity: "shipment",
+          totalCount: 2,
+          evidence: false,
+          items: targets.map((target) => ({
+            target,
+            shortestHops: 1,
+            paths: [[{ ...source, label: "Synthetic email" }, target]],
+          })),
+        },
+      ],
+    });
+    render(
+      <EntityDisplayImagesProvider
+        refs={[]}
+        seeded={Object.fromEntries(
+          [source, ...targets].map((ref) => [
+            `${ref.entityKind}:${ref.entityId}`,
+            null,
+          ]),
+        )}
+      >
+        <ConnectedRecordsSection source="email" sourceId="EML-TEST" />
+      </EntityDisplayImagesProvider>,
+      { wrapper: harness.wrapper },
+    );
+    expect(
+      screen.getByRole("link", { name: "Synthetic parcel · SHIP-ONE" }),
+    ).toHaveAttribute("href", "/shipments/SHIP-ONE");
+    expect(
+      screen.getByRole("link", { name: "Synthetic parcel · SHIP-TWO" }),
+    ).toHaveAttribute("href", "/shipments/SHIP-TWO");
+  });
+
   it("links the shortest witnessed route and expands other routes", () => {
     render(
-      <RecordPaths
+      <ConnectionPaths
         paths={[
           [
             {
@@ -78,7 +136,7 @@ describe("record connection evidence", () => {
 
   it("explains a connection whose evidence passes through storage-only rows", () => {
     render(
-      <RecordPaths
+      <ConnectionPaths
         paths={[
           [
             {

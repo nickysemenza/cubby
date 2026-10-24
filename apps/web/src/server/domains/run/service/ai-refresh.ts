@@ -8,7 +8,11 @@ import {
 } from "@cubby/schemas/ai-evaluation";
 import { buildActorContext } from "@cubby/schemas/context";
 import { entityRefKey } from "@cubby/schemas/entity";
-import { basisValueOf } from "@cubby/schemas/field-suggestion";
+import {
+  basisValueOf,
+  fieldSuggestionContextKeys,
+  fieldSuggestionResolutionContext,
+} from "@cubby/schemas/field-suggestion";
 import {
   parseEntityRef,
   parseEntityId,
@@ -63,7 +67,12 @@ import { executeEntity } from "~/server/entity-kernel";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { entityCommandSchema } from "~/server/entity-kernel/contracts";
 import { applyAutomaticRules } from "~/server/generic/assessment/repo/automatic-rule-runtime";
-import { fieldReviewIdentity } from "~/server/generic/assessment/repo/field-assessment-review";
+import {
+  fieldCorrectionIdentity,
+  fieldCorrectionRecipe,
+  fieldReviewIdentity,
+} from "~/server/generic/assessment/repo/field-assessment-review";
+import { publishFieldCorrectionQuestion } from "~/server/generic/assessment/repo/field-correction-publication";
 import {
   fieldInputFingerprint,
   fenceFieldInputsAtCommit,
@@ -130,6 +139,8 @@ const fieldSnapshot = z.object({
 });
 const fieldResult = z.object({
   reviewKey: z.string().nullable().optional(),
+  correctionKey: z.string().nullable().optional(),
+  correctionRecipe: fieldCorrectionRecipe.optional(),
   output: fieldSuggestionsOut,
   provenance: aiProvenance,
 });
@@ -184,9 +195,14 @@ async function prepareField(
   );
   if (!policy) return null;
   const basis = Object.fromEntries(
-    [...new Set([...policy.basis.map((row) => row.key), target.field])].map(
-      (key) => [key, basisValueOf(record[key])],
-    ),
+    fieldSuggestionContextKeys(entity, [
+      ...policy.basis.map((row) => row.key),
+      target.field,
+    ]).map((key) => [key, basisValueOf(record[key])]),
+  );
+  basis.__resolutionContext = fieldSuggestionResolutionContext(
+    record.fieldResolutions,
+    [...policy.basis.map((row) => row.key), target.field],
   );
   const lastWrite = await latestFieldWrite(
     db,
@@ -957,15 +973,17 @@ export async function executeAiRefreshTarget(
       const provenance = {
         ...prepared.provenance,
         model:
-          [...evaluated.inputs]
-            .reverse()
-            .find(
-              (call) =>
-                call.operation ===
-                `suggestFields.${snapshot.entity}.${snapshot.field}`,
-            )?.model ??
-          snapshot.decisionModelOverride ??
-          null,
+          evaluated.result.outcomes?.[snapshot.field]?.kind === "correction"
+            ? null
+            : ([...evaluated.inputs]
+                .reverse()
+                .find(
+                  (call) =>
+                    call.operation ===
+                    `suggestFields.${snapshot.entity}.${snapshot.field}`,
+                )?.model ??
+              snapshot.decisionModelOverride ??
+              null),
       };
       const reviewKey = await fieldReviewIdentity({
         entity: snapshot.entity,
@@ -981,6 +999,24 @@ export async function executeAiRefreshTarget(
         output: evaluated.result,
         provenance,
         reviewKey,
+        correctionRecipe: evaluated.incomplete
+          ? undefined
+          : {
+              version: "field-correction-v2",
+              entity: snapshot.entity,
+              field: snapshot.field,
+              basis: snapshot.basis,
+              inputs: evaluated.inputs,
+              dependencies: provenance.dependencies,
+            },
+        correctionKey: await fieldCorrectionIdentity({
+          entity: snapshot.entity,
+          field: snapshot.field,
+          basis: snapshot.basis,
+          inputs: evaluated.inputs,
+          dependencies: provenance.dependencies,
+          incomplete: evaluated.incomplete,
+        }),
       });
       if (!result.success) throw result.error;
       if (
@@ -1001,6 +1037,24 @@ export async function executeAiRefreshTarget(
       )
         throw new Error("AI evaluation target changed during inference");
       const decision = saved.output.suggestions[snapshot.field];
+      const correctionOutcome = saved.output.outcomes?.[snapshot.field];
+      if (correctionOutcome?.kind === "correction") {
+        await publishFieldCorrectionQuestion(tx, {
+          entity: snapshot.entity,
+          recordId: target.recordId,
+          field: snapshot.field,
+          currentValue: snapshot.currentValue,
+          outcome: correctionOutcome,
+          correctionRecipe: saved.correctionRecipe,
+          provenance: saved.provenance,
+          runId: claimed.runId,
+        });
+        return {
+          outcome: "queued",
+          applicationFailures: [],
+          evaluatedOutcome: correctionOutcome,
+        };
+      }
       const model =
         saved.provenance.model ?? snapshot.decisionModelOverride ?? "unknown";
       const entry = decision
@@ -1032,6 +1086,8 @@ export async function executeAiRefreshTarget(
               {
                 ...entry,
                 reviewKey: saved.reviewKey,
+                correctionKey: saved.correctionKey,
+                correctionRecipe: saved.correctionRecipe,
                 model: saved.provenance.model ?? entry.model,
               },
             ]

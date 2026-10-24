@@ -674,6 +674,10 @@ sets split without dropping candidates. Waiting on another request's cache lease
 does not hold up owned misses. Each upstream batch records usage once and still
 passes through gateway egress admission. Dependent decision phases wait for their
 required answers before starting another batch.
+Request serialization runs synchronously before entering the async transport,
+whose suspended frame retains only the body and expected question keys rather
+than the combined evidence input. The serialized body remains identical across
+throttled retries; response keys still must match the complete expected set.
 Finite collections that must prepare evidence or perform dependent choices use
 `settleDecisionWorkItems`. It bounds preparation, releases preparation slots
 while questions wait, and submits compatible cache misses in waves. Each
@@ -712,7 +716,21 @@ paths. Media limits and payloads belong to `server/ai/decision-model.ts` and
 Image description consumers select confirmed corrections first, then the current
 preferred cloud result, then the newest available source-matching observation.
 A newer Apple observation does not displace a preferred cloud description;
-observations for replaced image content are historical evidence only.
+observations for replaced image content are historical evidence only. Both direct and
+batch confirmation readers require the live Image hash to match the immutable
+Assessment subject/fingerprint and its current projection. Replaced or deleted
+content hides the old confirmation from current descriptions while retaining its
+confirmed value, original prediction and application receipts. Current-content
+display does not itself grant cross-image propagation authority.
+Propagated text additionally requires its automatic effect receipt and typed root
+ownership to match the selected holder. Direct status and batch evidence retain
+that ownership; web photo evidence and native Image detail distinguish it from
+a direct member confirmation and expose the source application receipt behind
+evidence disclosure. Native status reload clears prior current descriptions
+before fetching, so a failed refresh cannot retain an unverified confirmation.
+The composable classification reader shares the content/effect proof and excludes
+model observations that cannot prove the current image hash. Model job results,
+claims and cutout outputs remain independent retained observations.
 
 Identification retains visual composition separately from identity scope.
 Multiple related views, parts, or life stages may support one catalog identity;

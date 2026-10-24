@@ -821,33 +821,19 @@ const identityTerms = (
   const last4s = cardNumbers.map((card) => card.last4);
   switch (identity.kind) {
     case "credit_card":
-      return presentIdentityTerms([
-        identity.kind,
-        identity.issuer,
-        identity.network,
-        ...last4s,
-      ]);
+      return presentIdentityTerms([identity.kind, identity.network, ...last4s]);
     case "bank_account":
       return presentIdentityTerms([
         identity.kind,
-        identity.institution,
         identity.accountType,
         ...last4s,
       ]);
     case "stored_value":
-      return presentIdentityTerms([
-        identity.kind,
-        identity.provider,
-        ...last4s,
-      ]);
+      return presentIdentityTerms([identity.kind, ...last4s]);
     case "cash":
       return [identity.kind];
     case "other":
-      return presentIdentityTerms([
-        identity.kind,
-        identity.institution,
-        ...last4s,
-      ]);
+      return presentIdentityTerms([identity.kind, ...last4s]);
   }
 };
 
@@ -866,6 +852,7 @@ async function getFinancialAccountEmbeddingTexts(
             )
           : undefined,
       ),
+      with: { providerVendor: { columns: { name: true } } },
       columns: {
         id: true,
         name: true,
@@ -883,7 +870,10 @@ async function getFinancialAccountEmbeddingTexts(
     entityId: row.id,
     embeddingText: buildFinancialAccountEmbeddingText({
       name: row.name,
-      identityTerms: identityTerms(row.identity, row.cardNumbers),
+      identityTerms: [
+        ...identityTerms(row.identity, row.cardNumbers),
+        ...(row.providerVendor ? [row.providerVendor.name] : []),
+      ],
       sourceAliasTerms: row.sourceAliases.flatMap((alias) => [
         alias.source,
         alias.alias,

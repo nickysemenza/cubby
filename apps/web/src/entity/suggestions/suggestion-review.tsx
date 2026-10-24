@@ -9,12 +9,14 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import type { z } from "zod";
 
 import { CategoryLabelById } from "~/entity/presentation/category-label";
 import { showErrorToast } from "~/ui/feedback/error-details";
 import { Description } from "~/ui/primitives/description";
 
 import { CellFrame } from "../../ui/data-table/cell-frame";
+import { CorrectionAuthorityEvidence } from "./correction-authority-evidence";
 import { formatProbability, stringLabelOf } from "./field-suggestion";
 import { SuggestionBody } from "./suggestion-body";
 import type { SuggestionOutcomeSurface } from "./suggestion-outcome-mark";
@@ -219,6 +221,7 @@ export function SuggestionReview({
   notice,
   alternative = false,
   outcome = null,
+  renderValue,
   surface = "inline",
   autoFilled = false,
   prune = false,
@@ -247,6 +250,11 @@ export function SuggestionReview({
   /** What the decision model's decision tier did with this field — drives the always-visible
    * mark even when there's no actionable proposal (or none at all). */
   outcome?: FieldSuggestionOutcome | null;
+  /** One field presentation for the proposal, alternative, and member evidence. */
+  renderValue?: (
+    value: z.infer<ReturnType<typeof z.json>>,
+    label?: string,
+  ) => ReactNode;
   /** `"cell"` folds the whole body into the mark's popover so a dense table
    * row stays 32px. Inline values show the proposal and Accept, with
    * evidence expanded only by an explicit Review disclosure. */
@@ -296,6 +304,14 @@ export function SuggestionReview({
             pending={pending}
             checking={checking}
             error={error}
+            review={
+              outcome?.kind === "correction" ? (
+                <CorrectionAuthorityEvidence
+                  decision={outcome.decision}
+                  renderValue={renderValue}
+                />
+              ) : undefined
+            }
           />
         }
       >
@@ -316,13 +332,19 @@ export function SuggestionReview({
       proposed={
         isRemove
           ? `${suggestion.label ?? `Remove ${suggestion.value}`}${suggestion.detail ? ` — ${suggestion.detail}` : ""}`
-          : (suggestion.label ?? suggestion.value)
+          : (renderValue?.(suggestion.value, suggestion.label ?? undefined) ??
+            suggestion.label ??
+            suggestion.value)
       }
       probability={suggestion.probability}
       confidence={suggestion.confidence}
       runnerUp={
         runnerUp && !isRemove
-          ? { label: runnerUp.label, probability: runnerUp.probability }
+          ? {
+              label:
+                renderValue?.(runnerUp.value, runnerUp.label) ?? runnerUp.label,
+              probability: runnerUp.probability,
+            }
           : null
       }
       removal={isRemove}

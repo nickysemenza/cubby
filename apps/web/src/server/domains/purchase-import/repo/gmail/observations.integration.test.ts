@@ -1,5 +1,6 @@
 /** Predictions remain immutable after member labels; accepted content survives
  * contradictory predictions, and retrieval failures never invent classifications. */
+import { emailClassificationPublicationEvidence } from "@cubby/schemas/email-observations";
 import { eq } from "drizzle-orm";
 import {
   listFeedbackByKind,
@@ -8,6 +9,7 @@ import {
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import { withAiInputs } from "~/server/ai/evaluation-inputs";
 import { getDb } from "~/server/db/helpers";
 import {
   emailClassificationObservation,
@@ -17,8 +19,10 @@ import {
 } from "~/server/db/schema";
 import { orderMailEvent } from "~/server/db/schema";
 import { readRetainedMail } from "~/server/domains/mail/repo/retained-mail";
+import { productionMailTriage } from "~/server/domains/purchase-import/service/gmail/triage-model";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { publishAssessment } from "~/server/generic/assessment/repo/assessment";
+import { ensureEmailAssessment } from "~/server/generic/assessment/repo/assessment-email";
 import { publishEmailLinkDecision } from "~/server/generic/assessment/repo/assessment-email-link";
 import { listAutomaticDecisions } from "~/server/generic/assessment/repo/automatic-decisions";
 import { listSuggestionPage } from "~/server/generic/assessment/repo/suggestion-list";
@@ -27,6 +31,8 @@ import { runFinding } from "~/server/testing/run-finding.fixtures";
 
 import { ingestGmailMessages } from "../../service/gmail/ingest";
 import { importedPurchaseFixture } from "../../service/import-run.fixtures";
+import { recordEmailClassificationObservation } from "./observations";
+import { captureGmailOriginal } from "./original-capture";
 import { GmailApiError, type GmailProvider } from "./types";
 const storage = {
   put: async () => undefined,
@@ -190,6 +196,207 @@ describe("immutable Email observations", () => {
       ).toEqual([]);
     }
   });
+  it("captures external bytes obtained by existing retention staging", async () => {
+    const party = await insertWithShortcode(ctx.db, "ledgerParty", {
+      name: "Synthetic staged member",
+      kind: "member",
+      userId: ctx.actor.userId,
+    });
+    let fetched = 0;
+    const payload = Buffer.from("Synthetic staged bytes");
+    await ingestGmailMessages(
+      ctx.db,
+      {
+        ...gmail,
+        getMessage: async (id) => ({
+          id,
+          payload: {
+            mimeType: "multipart/mixed",
+            parts: [
+              {
+                mimeType: "text/plain",
+                body: {
+                  data: Buffer.from("Synthetic receipt").toString("base64url"),
+                },
+              },
+              {
+                mimeType: "application/pdf",
+                filename: "synthetic.pdf",
+                body: {
+                  attachmentId: "synthetic-attachment",
+                  size: payload.length,
+                },
+              },
+            ],
+          },
+        }),
+        getAttachment: async () => {
+          fetched += 1;
+          return { data: payload.toString("base64url"), size: payload.length };
+        },
+      },
+      {
+        ledgerPartyId: party.id,
+        mailboxId: "synthetic-staged-mailbox",
+        messageIds: ["synthetic-staged-message"],
+        storage,
+        triage: async (content) => {
+          await withAiInputs(
+            true,
+            () =>
+              productionMailTriage(
+                ctx.db,
+                "11111111-2222-4333-8444-555555555555",
+              )(content),
+            { providerFree: true },
+          );
+          return "related";
+        },
+      },
+    );
+    const [observation] = await getDb(ctx.db)
+      .select()
+      .from(emailClassificationObservation);
+    if (!observation) throw new Error("Synthetic staged observation missing");
+    expect(
+      (await ensureEmailAssessment(ctx.db, observation.id)).evidence,
+    ).toMatchObject({
+      originalCapture: { status: "complete" },
+      logicalInputCapture: {
+        version: "gmail-logical-inputs-v1",
+        inputs: [expect.objectContaining({ operation: "mailbox-triage" })],
+      },
+    });
+    expect(fetched).toBe(1);
+  });
+  it("keeps new original proof immutable and rejects a different publication binding", async () => {
+    const party = await insertWithShortcode(ctx.db, "ledgerParty", {
+      name: "Synthetic capture member",
+      kind: "member",
+      userId: ctx.actor.userId,
+    });
+    const mail = await insertWithShortcode(ctx.db, "email", {
+      ledgerPartyId: party.id,
+      provider: "gmail",
+      mailboxId: "synthetic-capture-mailbox",
+      messageId: "synthetic-capture-message",
+      checksum: "synthetic-legacy-checksum",
+      status: "pending",
+    });
+    const input = {
+      emailId: mail.id,
+      checksum: "synthetic-legacy-checksum",
+      classification: "uncertain" as const,
+      stage: "decision" as const,
+      reason: "Synthetic observation",
+      classificationVersion: "synthetic-v1",
+    };
+    const legacy = await recordEmailClassificationObservation(ctx.db, input);
+    const legacyAssessment = await ensureEmailAssessment(ctx.db, legacy.id);
+    const originalCapture = await captureGmailOriginal({
+      ledgerPartyId: party.id,
+      mailboxId: mail.mailboxId,
+      messageId: mail.messageId,
+      message: await gmail.getMessage(mail.messageId),
+    });
+    const captured = await recordEmailClassificationObservation(
+      ctx.db,
+      input,
+      undefined,
+      { originalCapture },
+    );
+    expect(captured.id).not.toBe(legacy.id);
+    expect((await ensureEmailAssessment(ctx.db, legacy.id)).evidence).toEqual(
+      legacyAssessment.evidence,
+    );
+    expect(
+      (await ensureEmailAssessment(ctx.db, captured.id)).evidence,
+    ).toMatchObject({ originalCapture });
+    expect(
+      (
+        await recordEmailClassificationObservation(ctx.db, input, undefined, {
+          originalCapture,
+        })
+      ).id,
+    ).toBe(captured.id);
+    const logicalInputCapture = {
+      version: "gmail-logical-inputs-v1",
+      inputs: [
+        {
+          feature: "mailbox-triage",
+          promptVersion: "synthetic-v1",
+          operation: "mailbox-triage",
+          model: "synthetic-model",
+          fingerprint: "a".repeat(64),
+        },
+      ],
+    } satisfies NonNullable<
+      import("@cubby/schemas/email-observations").EmailClassificationPublicationEvidence["logicalInputCapture"]
+    >;
+    // Presence changes are new observations; neither source nor request proof is inherited.
+    for (const publication of [
+      { originalCapture, logicalInputCapture },
+      { logicalInputCapture },
+      {},
+      { originalCapture },
+    ]) {
+      const before = await ensureEmailAssessment(ctx.db, captured.id);
+      const next = await recordEmailClassificationObservation(
+        ctx.db,
+        input,
+        undefined,
+        publication,
+      );
+      expect(next.id).not.toBe(captured.id);
+      expect(
+        (
+          await recordEmailClassificationObservation(
+            ctx.db,
+            input,
+            undefined,
+            publication,
+          )
+        ).id,
+      ).toBe(next.id);
+      const retained = await ensureEmailAssessment(ctx.db, next.id);
+      const proof = emailClassificationPublicationEvidence.parse(
+        retained.evidence,
+      );
+      expect(retained.evidence).toMatchObject(publication);
+      expect("originalCapture" in proof).toBe("originalCapture" in publication);
+      expect("logicalInputCapture" in proof).toBe(
+        "logicalInputCapture" in publication,
+      );
+      expect(
+        (await ensureEmailAssessment(ctx.db, captured.id)).evidence,
+      ).toEqual(before.evidence);
+    }
+    await expect(
+      recordEmailClassificationObservation(ctx.db, input, undefined, {
+        originalCapture: {
+          ...originalCapture,
+          binding: {
+            ...originalCapture.binding,
+            mailboxId: "synthetic-other-mailbox",
+          },
+        },
+      }),
+    ).rejects.toThrow("does not match");
+    expect(
+      await getDb(ctx.db)
+        .select()
+        .from(emailClassificationObservation)
+        .where(eq(emailClassificationObservation.emailId, mail.id)),
+    ).toHaveLength(6);
+    expect(
+      (
+        await getDb(ctx.db)
+          .select()
+          .from(emailTable)
+          .where(eq(emailTable.id, mail.id))
+      )[0]?.classification,
+    ).toBeNull();
+  });
   it("persists prediction before a label and keeps raw retrieval failures separate", async () => {
     const party = await insertWithShortcode(ctx.db, "ledgerParty", {
       name: "Synthetic member",
@@ -212,6 +419,19 @@ describe("immutable Email observations", () => {
     expect(predictions).toHaveLength(1);
     const prediction = predictions[0];
     if (!email || !prediction) throw new Error("Synthetic prediction missing");
+    expect(
+      (await ensureEmailAssessment(ctx.db, prediction.id)).evidence,
+    ).toMatchObject({
+      originalCapture: {
+        status: "complete",
+        version: "gmail-original-v1",
+        binding: {
+          ledgerPartyId: party.id,
+          mailboxId: input.mailboxId,
+          messageId: input.messageIds[0],
+        },
+      },
+    });
     // A saved prediction alone cannot establish that routing used it. Ingest
     // must record application in the same publication transaction.
     expect(

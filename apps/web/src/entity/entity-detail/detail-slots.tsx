@@ -18,6 +18,8 @@ export interface DetailSlot<E extends GenericDetailEntity> {
    * purpose: it decides the section ledger before anything loads.
    */
   applies?(record: DetailRecordOf<E>): boolean;
+  /** Defer execution evidence until requested; direct section links open it. */
+  collapsed?: boolean;
 }
 
 /**

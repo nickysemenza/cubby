@@ -4,9 +4,11 @@ import { Link } from "@tanstack/react-router";
 import { format, parseISO } from "date-fns";
 
 import { actionsForSurface } from "~/entity/actions/action-items";
-import { entities, entityDetailParams } from "~/entity/entities";
+import { EntityRefLink } from "~/entity/components/entity-ref-link";
+import { EntityDisplayImagesProvider } from "~/entity/entity-media/entity-display-images";
 import { mealListLabel } from "~/features/meal/meal-format";
 import { meal } from "~/integrations/tanstack-query/generated/catalog/meal.gen";
+import { DenseCellContext } from "~/ui/common/stacked-value";
 import { EmptyState } from "~/ui/feedback/empty-state";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { Section } from "~/ui/layout";
@@ -63,31 +65,41 @@ export function TodayMeals({
           Nothing planned this week. <Link to="/meals">Plan a meal</Link>.
         </EmptyState>
       ) : (
-        <HomeList label="Meals ahead">
-          {meals.slice(0, MEAL_ROWS).map((item) => {
-            const label = mealListLabel(item);
-            const slot = item.mealType ? MEAL_TYPE_LABELS[item.mealType] : null;
-            return (
-              <HomeRow
-                key={item.id}
-                leading={
-                  item.date === asOf.meals.from
-                    ? "Today"
-                    : format(parseISO(item.date), "EEE")
-                }
-              >
-                <Link
-                  to={entities.meal.routes.detail}
-                  params={entityDetailParams(item.id)}
-                  title={label}
-                  className="truncate underline-offset-2 outline-none hover:text-primary hover:underline focus-visible:ring-2 focus-visible:ring-ring"
-                >
-                  {slot && slot !== label ? `${slot} · ${label}` : label}
-                </Link>
-              </HomeRow>
-            );
-          })}
-        </HomeList>
+        <EntityDisplayImagesProvider
+          refs={meals
+            .slice(0, MEAL_ROWS)
+            .map((item) => ({ entityKind: "meal", entityId: item.id }))}
+        >
+          <DenseCellContext.Provider value={{ linksTo: null }}>
+            <HomeList label="Meals ahead">
+              {meals.slice(0, MEAL_ROWS).map((item) => {
+                const label = mealListLabel(item);
+                const slot = item.mealType
+                  ? MEAL_TYPE_LABELS[item.mealType]
+                  : null;
+                return (
+                  <HomeRow
+                    key={item.id}
+                    leading={
+                      item.date === asOf.meals.from
+                        ? "Today"
+                        : format(parseISO(item.date), "EEE")
+                    }
+                  >
+                    <EntityRefLink
+                      entity="meal"
+                      id={item.id}
+                      name={
+                        slot && slot !== label ? `${slot} · ${label}` : label
+                      }
+                      className="max-w-full min-w-0"
+                    />
+                  </HomeRow>
+                );
+              })}
+            </HomeList>
+          </DenseCellContext.Provider>
+        </EntityDisplayImagesProvider>
       )}
       <p className="flex flex-wrap gap-x-3 pt-2 text-xs text-muted-foreground [&>a]:inline-flex [&>a]:items-center [&>a]:hover:text-foreground [&>a]:hover:underline [&>a]:max-md:min-h-11">
         {later > 0 && <span>{later} more this week</span>}

@@ -20,7 +20,7 @@ import {
 } from "./financial-transaction-fields";
 import { plainDate } from "./project";
 
-export const FINANCIAL_SPENDING_POLICY = "2026-10-20.1";
+export const FINANCIAL_SPENDING_POLICY = "2026-10-24.2";
 
 /** Advice never bypasses planning; explicit commands and queue policy authorize execution. */
 export const financialSpendingAdvice = z.object({
@@ -85,7 +85,9 @@ export const financialSpendingPlan = z.discriminatedUnion("status", [
   spendingPlanBasis.extend({
     status: z.literal("ready"),
     effect: z.enum(["create_aggregate", "link_existing", "settle_existing"]),
-    purchaserId: ledgerPartyShortcode,
+    purchaserId: ledgerPartyShortcode.nullable(),
+    /** Retained proposals without purchaser proof remain readable but cannot commit or replay. */
+    purchaserSnapshot: z.string().optional(),
     vendorId: vendorShortcode.nullable(),
     vendorName: z.string(),
     spendingCategoryId: spendingCategoryShortcode,
@@ -105,6 +107,7 @@ export const financialBookingInput = z.object({
   purchaserId: ledgerPartyShortcode.nullable().default(null),
 });
 export const financialBookingPreview = financialBookingInput.extend({
+  purchaserSnapshot: z.string(),
   spendingCategoryId: spendingCategoryShortcode.nullable().default(null),
   categoryOverride: spendingCategoryShortcode.nullable().default(null),
   action: z.enum(["create_aggregate", "link_existing"]),

@@ -1,6 +1,7 @@
 import type { FieldSuggestion } from "@cubby/schemas/ai";
 import { useContext } from "react";
 
+import { renderSuggestedListFieldValue } from "~/entity/display/entity-display";
 import { assessment } from "~/integrations/tanstack-query/generated/catalog/assessment.gen";
 
 import {
@@ -57,6 +58,18 @@ function StandaloneSuggestion({
 
   return (
     <FieldSuggestionHint
+      renderValue={
+        source && targetKey
+          ? (value, label) =>
+              renderSuggestedListFieldValue(
+                source.entity,
+                { id: source.entityId ?? "" },
+                targetKey,
+                value,
+                label,
+              )
+          : undefined
+      }
       currentValue={currentValue}
       questionKey={JSON.stringify(source)}
       suggestion={suggestion}

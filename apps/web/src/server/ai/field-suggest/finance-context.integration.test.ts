@@ -77,7 +77,7 @@ describe("reviewed linked finance category suggestions", () => {
     });
     const account = await insertWithShortcode(ctx.db, "financialAccount", {
       name: "Fixture card",
-      identity: { kind: "credit_card", issuer: null, network: "visa" },
+      identity: { kind: "credit_card", network: "visa" },
       ledgerPartyId: party.id,
     });
     const charge = await insertWithShortcode(ctx.db, "financialTransaction", {

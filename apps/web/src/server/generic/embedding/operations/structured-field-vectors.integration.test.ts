@@ -118,7 +118,7 @@ describe("structured field read-to-input vectors", () => {
         "financialAccount",
         buildEntity("financialAccount", {
           name: "Synthetic allocation vector account",
-          identity: { kind: "credit_card", issuer: null, network: "visa" },
+          identity: { kind: "credit_card", network: "visa" },
           cardNumbers: [],
         }),
       );
@@ -172,7 +172,7 @@ describe("structured field read-to-input vectors", () => {
         ...buildEntity("financialAccount", {
           identity: {
             kind: "credit_card",
-            issuer: "Example Bank",
+
             network: "visa",
           },
         }),
@@ -195,7 +195,7 @@ describe("structured field read-to-input vectors", () => {
         ...buildEntity("financialAccount", {
           identity: {
             kind: "credit_card",
-            issuer: "Example Bank",
+
             network: "visa",
           },
         }),
@@ -210,7 +210,7 @@ describe("structured field read-to-input vectors", () => {
         name: "Vector card",
         identity: {
           kind: "credit_card",
-          issuer: "Synthetic Bank",
+
           network: "visa",
         },
         cardNumbers: [],
@@ -220,7 +220,7 @@ describe("structured field read-to-input vectors", () => {
         name: "Vector reissued card",
         identity: {
           kind: "credit_card",
-          issuer: "Synthetic Bank",
+
           network: "visa",
         },
         cardNumbers: [

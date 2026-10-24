@@ -45,6 +45,42 @@ const removeSuggestion: FieldSuggestion = {
 };
 
 describe("inline suggestion review", () => {
+  it("discloses live correction values and receipts without offering model actions", async () => {
+    render(
+      <SuggestionReview
+        suggestion={null}
+        currentValue={null}
+        questionKey="synthetic-correction"
+        onApply={() => {}}
+        renderValue={() => "Readable category"}
+        outcome={{
+          kind: "correction",
+          targetInputFingerprint: null,
+          decision: {
+            status: "confirmed",
+            correctionKey: "synthetic-key",
+            revision: "synthetic-revision",
+            sourceFeedbackId: "00000000-0000-4000-8000-000000000001",
+            sourceApplicationFeedbackId: "00000000-0000-4000-8000-000000000002",
+            value: "synthetic-reference",
+          },
+        }}
+      />,
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: /Uses your correction/u }),
+    );
+    await waitFor(() =>
+      expect(screen.getByText(/Readable category/u)).toBeInTheDocument(),
+    );
+    expect(
+      screen.getByText("00000000-0000-4000-8000-000000000002"),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Accept" }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText(/Confidence:/u)).not.toBeInTheDocument();
+  });
   it.each([false, true])(
     "keeps evidence collapsed until Review without hiding the actionable proposal (phone=%s)",
     (phone) => {

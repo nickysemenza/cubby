@@ -27,7 +27,7 @@ const lastActiveExpr = sql<Date | null>`(
   select max(${oauthRefreshToken.createdAt}) from ${oauthRefreshToken}
   where ${oauthRefreshToken.clientId} = ${oauthConsent.clientId}
     and ${oauthRefreshToken.userId} = ${oauthConsent.userId}
-)`;
+)`.mapWith(oauthRefreshToken.createdAt);
 
 export async function listConnectedApps(
   db: Database,

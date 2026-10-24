@@ -70,41 +70,42 @@ const location = (
 describe("resolveLocationVisual", () => {
   it("prefers an own photo over the linked product and children", () => {
     const own = image("own");
-    const product = image("product");
     const child = location("BBBB", "drawer", { images: [image("child")] });
     const result = resolveLocationVisual(
       location("AAAA", null, {
         images: [own],
+        displayImages: [own],
         product: {
           id: testShortcode("product", "PRD-AAAA"),
           name: "Two drawer box",
           brandName: "Example",
           model: null,
           category: categorySummaryFixture("storage"),
-          coverImage: product,
+
           price: 50,
         },
         children: [child],
       }),
     );
 
-    expect(result.primaryImage).toBe(own);
+    expect(result.primaryImage).toEqual(own);
     expect(result.primarySource).toBe("location");
     expect(result.childVisuals).toHaveLength(1);
   });
 
-  it("falls back through product, child, then none", () => {
+  it("uses the canonical product image and keeps child photos out of parent identity", () => {
     const product = image("product");
     const childImage = image("child");
     const child = location("BBBB", "drawer", { images: [childImage] });
     const productBacked = location("AAAA", null, {
+      displayImages: [product],
       product: {
         id: testShortcode("product", "PRD-AAAA"),
         name: "Two drawer box",
         brandName: "Example",
         model: null,
         category: categorySummaryFixture("storage"),
-        coverImage: product,
+
         price: null,
       },
       children: [child],
@@ -114,7 +115,7 @@ describe("resolveLocationVisual", () => {
     expect(
       resolveLocationVisual(location("CCCC", "box", { children: [child] }))
         .primarySource,
-    ).toBe("child");
+    ).toBe("none");
     expect(resolveLocationVisual(location("DDDD", "box")).primarySource).toBe(
       "none",
     );

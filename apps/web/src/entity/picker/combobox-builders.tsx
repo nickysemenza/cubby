@@ -8,11 +8,6 @@ import {
   type ShortcodeFor,
   type VendorShortcode,
 } from "@cubby/schemas/identifiers";
-import {
-  type ImageRenderStatus,
-  type ImageStorageStatus,
-  isDisplayableImageFile,
-} from "@cubby/schemas/image";
 import type { InfLocation, LocationType } from "@cubby/schemas/location";
 import { locationType } from "@cubby/schemas/location";
 import { isServiceProductCategory } from "@cubby/schemas/product-category-fields";
@@ -239,11 +234,9 @@ export const buildProductComboboxItem = (
     brandName: string | null;
     category?: ProductCategory | null;
     coverImageUrl?: string | null;
-    images?: Array<{
+    displayImages?: Array<{
       url: string;
-      contentType: string;
-      renderStatus?: ImageRenderStatus | null;
-      storageStatus?: ImageStorageStatus | null;
+      representations?: { preferred: string };
     }>;
     aliases?: string[] | null;
     quantityLedger?: {
@@ -269,7 +262,8 @@ export const buildProductComboboxItem = (
   const onHand = product.onHand ?? deriveProductOnHand(product, ledger);
   const coverImageUrl =
     product.coverImageUrl ??
-    product.images?.find(isDisplayableImageFile)?.url ??
+    product.displayImages?.[0]?.representations?.preferred ??
+    product.displayImages?.[0]?.url ??
     null;
   const base = productPickerBase(product, coverImageUrl);
   return isServiceProductCategory(product.category) || !ledger || !onHand

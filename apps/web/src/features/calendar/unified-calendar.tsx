@@ -4,6 +4,7 @@ import type {
   CalendarItemKind,
   CalendarRangeInput,
 } from "@cubby/schemas/calendar";
+import type { EntityRef } from "@cubby/schemas/entity";
 import { CaretLeftIcon } from "@phosphor-icons/react/dist/csr/CaretLeft";
 import { CaretRightIcon } from "@phosphor-icons/react/dist/csr/CaretRight";
 import { PlusIcon } from "@phosphor-icons/react/dist/csr/Plus";
@@ -22,6 +23,10 @@ import {
 import { toast } from "sonner";
 
 import { useEntityCommands } from "~/entity/editing/use-entity-commands";
+import {
+  EntityDisplayImagesProvider,
+  entityDisplayImageKey,
+} from "~/entity/entity-media/entity-display-images";
 import { calendar } from "~/integrations/tanstack-query/generated/catalog/calendar.gen";
 import { browserOnlyLazy } from "~/lib/browser-only-lazy";
 import { formatCalendarDay } from "~/lib/date-format";
@@ -341,6 +346,20 @@ export function UnifiedCalendar({
     placeholderData: keepPreviousData,
   });
   const items = data?.items ?? NO_ITEMS;
+  const imageRefs = useMemo<EntityRef[]>(
+    () => items.map((item) => ({ entityKind: item.kind, entityId: item.id })),
+    [items],
+  );
+  const seededImages = useMemo(
+    () =>
+      Object.fromEntries(
+        items.map((item) => [
+          entityDisplayImageKey({ entityKind: item.kind, entityId: item.id }),
+          item.displayImages[0] ?? null,
+        ]),
+      ),
+    [items],
+  );
   const editorHandle = useMemo(() => createPopoverHandle<CalendarItem>(), []);
 
   const sourceEvents = useMemo(
@@ -493,7 +512,7 @@ export function UnifiedCalendar({
     );
 
   return (
-    <>
+    <EntityDisplayImagesProvider refs={imageRefs} seeded={seededImages}>
       <Stack gap="sm">
         <Row align="center" wrap gap="xs">
           <Button
@@ -653,7 +672,7 @@ export function UnifiedCalendar({
           />
         </Suspense>
       ) : null}
-    </>
+    </EntityDisplayImagesProvider>
   );
 }
 

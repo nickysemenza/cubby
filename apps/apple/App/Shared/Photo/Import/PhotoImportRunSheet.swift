@@ -32,6 +32,9 @@ final class PhotoImportRunFlow {
     private(set) var notificationError: String?
     var selectedOwnerID: LedgerPartyShortcode?
     var selectedOwnerName: String?
+    var selectedLocationID: LocationShortcode?
+    var selectedLocationName: String?
+    var ownsItemsNow = true
 
     let session: PhotoImportRunSession
     private var preparedPhotos: [PhotoImportRunPhoto] = []
@@ -230,6 +233,7 @@ final class PhotoImportRunFlow {
     func startNewRun(items: [PhotoSelectionItem], client: CubbyClient) {
         let createRun = PhotoImportCreateRunInput(
             ledgerPartyId: selectedOwnerID, notes: notes.isEmpty ? nil : notes,
+            defaults: .init(stockIntent: ownsItemsNow ? .receive : .evidence, locationId: selectedLocationID),
             processor: usesExternalProcessor ? .external : .cubby,
             clientBatchId: checkpointURL?.deletingPathExtension().lastPathComponent ?? UUID().uuidString,
             imageCount: items.count)
@@ -437,6 +441,7 @@ struct PhotoImportRunSheet: View {
     @Environment(AppModel.self) private var appModel
     @Environment(\.dismiss) private var dismiss
     @State private var pickingOwner = false
+    @State private var pickingLocation = false
 
     var body: some View {
         NavigationStack {
@@ -456,6 +461,16 @@ struct PhotoImportRunSheet: View {
                 guard let owner = picks.first else { return }
                 flow.selectedOwnerID = owner.id
                 flow.selectedOwnerName = owner.title
+            }
+        }
+        .sheet(isPresented: $pickingLocation) {
+            EntityPickerSheet(
+                target: .location, selected: [flow.selectedLocationID?.rawValue].compactMap { $0 }
+            ) {
+                picks in
+                guard let location = picks.first else { return }
+                flow.selectedLocationID = LocationCode(location.id)
+                flow.selectedLocationName = location.title
             }
         }
     }
@@ -526,11 +541,28 @@ struct PhotoImportRunSheet: View {
                     LabeledContent("Owner", value: flow.selectedOwnerName ?? "You (signed-in member)")
                 }
                 .accessibilityIdentifier("photos.run.owner")
-                Picker("Process with", selection: $flow.usesExternalProcessor) {
-                    Text("Cubby / Pi").tag(false)
-                    Text("Claude / Codex").tag(true)
+                Toggle("I own these items now", isOn: $flow.ownsItemsNow)
+                    .accessibilityIdentifier("photos.run.owned")
+                if flow.ownsItemsNow {
+                    Button {
+                        pickingLocation = true
+                    } label: {
+                        LabeledContent(
+                            "Storage location", value: flow.selectedLocationName ?? "Choose later on web")
+                    }
+                    .accessibilityIdentifier("photos.run.location")
+                    Text(
+                        "Location is optional now. Nothing is added to inventory until you review and approve."
+                    )
+                    .font(.caption).foregroundStyle(.secondary)
                 }
-                .accessibilityIdentifier("photos.run.processor")
+                DisclosureGroup("Import options") {
+                    Picker("Process with", selection: $flow.usesExternalProcessor) {
+                        Text("Cubby / Pi").tag(false)
+                        Text("Claude / Codex").tag(true)
+                    }
+                    .accessibilityIdentifier("photos.run.processor")
+                }
                 Toggle(
                     "Notify me for this import",
                     isOn: Binding(
@@ -620,6 +652,13 @@ private struct RunningView: View {
     @Environment(AppModel.self) private var appModel
     @State private var review = RunReviewSession()
 
+    private func webReviewURL(_ runID: String) -> URL {
+        let url = appModel.webURL(for: .run, id: runID)
+        var components = URLComponents(url: url, resolvingAgainstBaseURL: false)
+        components?.fragment = "photo-batch"
+        return components?.url ?? url
+    }
+
     private var runLinkTitle: String {
         review.review?.review.proposals.contains { $0.state == .proposed } == true
             ? "Review item groups" : "View import"
@@ -628,8 +667,7 @@ private struct RunningView: View {
     private func runDestination(_ runID: String) -> RunConsoleView {
         RunConsoleView(
             runID: runID,
-            initialSection: review.review?.review.proposals.contains { $0.state == .proposed } == true
-                ? .photoReview : nil)
+            initialSection: .photoReview)
     }
 
     var body: some View {
@@ -648,6 +686,15 @@ private struct RunningView: View {
             }
             if let runID = session.runID, session.phase != .complete {
                 NavigationLink(runLinkTitle) { runDestination(runID) }
+            }
+            if let runID = session.runID {
+                ShareLink(item: webReviewURL(runID)) {
+                    Label("Continue on web", systemImage: "square.and.arrow.up")
+                }
+                Text(
+                    "Open this same import on your computer to review the items. Your photos and progress stay with the run."
+                )
+                .font(.caption).foregroundStyle(.secondary)
             }
             ProgressView(
                 value: Double(session.progress.analyzed), total: Double(max(session.progress.total, 1))

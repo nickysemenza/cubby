@@ -32,25 +32,23 @@ export interface ConnectedView {
   target: Entity;
   /** Related documents supplement citations; they do not verify field values. */
   evidence?: boolean;
-  /** Alias routes stay addressable without duplicating a target group in previews. */
-  preview?: false;
   /** Each route follows named, directional manifest relationships. */
   routes: readonly (readonly string[])[];
 }
 
 /**
- * The indirect tables worth reading on a record. Every entity has an explicit
- * entry, including entities whose useful connections are already direct or
- * whose relationships are external. Paths through a shared vendor, purchase,
+ * Only curated indirect routes need an entry; every entity's direct relations
+ * compile automatically. Paths through a shared vendor, purchase,
  * or project into unrelated sibling records are intentionally absent.
  */
-export const connectedViews = {
-  sourceTransactionRecord: [],
-  transactionImport: [],
-  shipment: [],
-  email: [],
-  imageJob: [],
+export const curatedConnectionViews = {
   product: [
+    {
+      key: "settlement-transactions",
+      title: "Settlement transactions",
+      target: "financialTransaction",
+      routes: [["purchases", "financial-transactions"]],
+    },
     {
       key: "purchase-projects",
       title: "Purchase projects",
@@ -350,6 +348,12 @@ export const connectedViews = {
   ],
   vendor: [
     {
+      key: "settlement-transactions",
+      title: "Settlement transactions",
+      target: "financialTransaction",
+      routes: [["purchases", "financial-transactions"]],
+    },
+    {
       key: "inventory",
       title: "Stock from purchased products",
       target: "inventory",
@@ -427,6 +431,18 @@ export const connectedViews = {
   ],
   financialTransaction: [
     {
+      key: "settlement-vendors",
+      title: "Purchase vendors",
+      target: "vendor",
+      routes: [["purchase", "vendor"]],
+    },
+    {
+      key: "settlement-products",
+      title: "Purchase products",
+      target: "product",
+      routes: [["purchase", "products"]],
+    },
+    {
       key: "projects",
       title: "Projects",
       target: "project",
@@ -482,8 +498,6 @@ export const connectedViews = {
       routes: [["purchase", "vendor"]],
     },
   ],
-  "usda-food": [],
-  image: [],
   planting: [
     {
       key: "products",
@@ -568,7 +582,6 @@ export const connectedViews = {
       routes: [["purchases", "projects"]],
     },
   ],
-  spendingCategory: [],
   productCategory: [
     {
       key: "inventory",
@@ -627,7 +640,6 @@ export const connectedViews = {
       routes: [["purchases", "projects"]],
     },
   ],
-  device: [],
   plant: [
     {
       key: "growing-locations",
@@ -703,50 +715,126 @@ export const connectedViews = {
       routes: [["ingredient", "meals"]],
     },
   ],
-} as const satisfies Record<Entity, readonly ConnectedView[]>;
+} as const satisfies Partial<Record<Entity, readonly ConnectedView[]>>;
 
-export type ConnectedViewKey<E extends Entity = Entity> =
-  (typeof connectedViews)[E][number]["key"];
+export type ConnectionScope = "connections" | "context";
+export type ResolvedConnectionView =
+  | (ConnectedView & { kind: "paths" })
+  | {
+      kind: "derived";
+      key: string;
+      title: string;
+      target: Entity;
+      filter: string;
+    };
 
-/** Direct logical connections are automatic; only meaningful indirect routes need curation. */
-export function connectedViewsFor(
-  catalog: RelationshipCatalog,
-  source: Entity,
-): readonly ConnectedView[] {
-  const grouped = new Map<Entity, ConnectedView>();
-  for (const relationship of relationshipsFor(catalog, source)) {
-    if (
-      !relationship.sources.some(
-        (item) => item.provenance.kind === "local-path",
-      )
-    )
-      continue;
-    const previous = grouped.get(relationship.target);
-    grouped.set(relationship.target, {
-      key: `entity:${relationship.target}`,
-      title:
-        catalog.find((entry) => entry.key === relationship.target)?.plural ??
-        relationship.target,
-      target: relationship.target,
-      routes: [...(previous?.routes ?? []), [relationship.key]],
-    });
-  }
-  const aliases: ConnectedView[] = [];
-  for (const curated of connectedViews[source]) {
-    const previous = grouped.get(curated.target);
-    if (!previous) {
-      grouped.set(curated.target, curated);
-      continue;
-    }
-    grouped.set(curated.target, {
-      ...previous,
-      evidence:
-        previous.evidence ||
-        ("evidence" in curated && curated.evidence) ||
-        false,
-      routes: [...previous.routes, ...curated.routes],
-    });
-    aliases.push({ ...curated, preview: false });
-  }
-  return [...grouped.values(), ...aliases];
+interface ConnectionPlan {
+  relationships: ReturnType<typeof relationshipsFor>;
+  connections: readonly ConnectedView[];
+  context: readonly ConnectedView[];
+  named: Map<string, ConnectedView>;
 }
+
+/** One compiled catalog owns directional relationships, grouped views and named route resolution. */
+export function createConnectionCatalog(catalog: RelationshipCatalog) {
+  const curated = new Map<string, readonly ConnectedView[]>(
+    Object.entries(curatedConnectionViews),
+  );
+  const plans = new Map<string, ConnectionPlan>(
+    catalog.map((entry) => {
+      const relationships = relationshipsFor(catalog, entry.key);
+      const grouped = new Map<Entity, ConnectedView>();
+      const add = (
+        target: Entity,
+        routes: ConnectedView["routes"],
+        evidence = false,
+      ) => {
+        const previous = grouped.get(target);
+        const combined = [...(previous?.routes ?? []), ...routes];
+        grouped.set(target, {
+          key: `entity:${target}`,
+          title:
+            catalog.find((candidate) => candidate.key === target)?.plural ??
+            target,
+          target,
+          evidence: previous?.evidence || evidence,
+          routes: [
+            ...new Map(
+              combined.map((route) => [JSON.stringify(route), route]),
+            ).values(),
+          ],
+        });
+      };
+      for (const relationship of relationships) {
+        if (
+          relationship.sources.some(
+            (source) => source.provenance.kind === "local-path",
+          )
+        )
+          add(relationship.target, [[relationship.key]]);
+      }
+      const context = curated.get(entry.key) ?? [];
+      for (const view of context)
+        add(view.target, view.routes, view.evidence ?? false);
+      const connections = [...grouped.values()];
+      return [
+        entry.key,
+        {
+          relationships,
+          connections,
+          context,
+          named: new Map(
+            [...connections, ...context].map((view) => [view.key, view]),
+          ),
+        },
+      ] as const;
+    }),
+  );
+  const plan = (source: string) => {
+    const result = plans.get(source);
+    if (!result) throw new Error(`No connection catalog entry for ${source}`);
+    return result;
+  };
+  return {
+    relationships: (source: string) => plan(source).relationships,
+    views: (
+      source: string,
+      scope: ConnectionScope = "connections",
+    ): readonly ConnectedView[] => plan(source)[scope],
+    resolve: (
+      source: string,
+      key: string,
+    ): ResolvedConnectionView | undefined => {
+      const view = plan(source).named.get(key);
+      if (view) return { ...view, kind: "paths" };
+      if (!key.startsWith("relation:")) return undefined;
+      const relationship = plan(source).relationships.find(
+        (item) => item.key === key.slice(9),
+      );
+      if (!relationship) return undefined;
+      const provenance = relationship.sources[0]?.provenance;
+      if (provenance?.kind === "derived")
+        return {
+          kind: "derived",
+          key,
+          title: relationship.label,
+          target: relationship.target,
+          filter: provenance.filter,
+        };
+      if (
+        !relationship.sources.some(
+          (item) => item.provenance.kind === "local-path",
+        )
+      )
+        return undefined;
+      return {
+        kind: "paths",
+        key,
+        title: relationship.label,
+        target: relationship.target,
+        routes: [[relationship.key]],
+      };
+    },
+  };
+}
+export type ConnectionCatalog = ReturnType<typeof createConnectionCatalog>;

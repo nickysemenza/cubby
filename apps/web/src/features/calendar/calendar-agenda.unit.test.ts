@@ -23,7 +23,7 @@ const meal = (id: string, startDate: string): CalendarItem => ({
   mealType: null,
   mealKind: "cooked",
   recipeNames: [],
-  coverImageUrl: null,
+  displayImages: [],
   mealTotals: withMacros({
     cost: { status: "unavailable", reason: "empty" },
     nutrition: buildNutrition(() => ({
@@ -49,11 +49,12 @@ const task = (
   trade: "planning",
   projectName: null,
   subjectProductName: null,
-  coverImageUrl: null,
+  displayImages: [],
 });
 
 const planting = (id: string, startDate: string): CalendarItem => ({
   kind: "planting",
+  displayImages: [],
   id: testShortcode("planting", id),
   milestone: "sowed",
   title: id,

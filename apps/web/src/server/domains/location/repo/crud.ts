@@ -1,14 +1,13 @@
 import type { ActorContext } from "@cubby/schemas/context";
+import { entityRefKey } from "@cubby/schemas/entity";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { OperationDisposition } from "@cubby/schemas/entity-integrity";
 import {
   type LocationId,
-  type ProductId,
   parseEntityId,
   parseShortcodeFor,
 } from "@cubby/schemas/identifiers";
 import type { ImageOut } from "@cubby/schemas/image";
-import { isDisplayableImageFile } from "@cubby/schemas/image";
 import { preferredImageUrl } from "@cubby/schemas/image-summary";
 import { locationListItemOut } from "@cubby/schemas/location";
 import type {
@@ -36,7 +35,6 @@ import {
   buildPartialUpdateValues,
   getDb,
   imageJoinBindings,
-  imageOrder,
   type ListReadIntent,
   isTransaction,
   mapImages,
@@ -72,6 +70,10 @@ import { rollupLocationValuations } from "~/server/domains/location/repo/locatio
 import { parseLocationType } from "~/server/domains/location/repo/parse-type";
 import { loadProductPricing } from "~/server/domains/product/repo/pricing";
 import { assertClassificationPolicies } from "~/server/domains/spending-category/repo/classification-field-policy";
+import {
+  resolveEntityDisplayImages,
+  resolveEntityDisplayImageLists,
+} from "~/server/entity-kernel/repo/entity-display-image";
 import {
   type MutationReceipt,
   defineMutationWriter,
@@ -855,106 +857,57 @@ export const locationListRead = async (
   );
 };
 
-/**
- * Cover photo per location — first displayable image by `imageOrder` — for a
- * page of ids, in one query. Non-displayable rows (PDF attachments, failed
- * renders, missing storage) don't block the location: the next image gets the
- * slot, matching what the thumbnail cells elsewhere actually render.
- */
+/** Full image metadata for picker DTOs; selection belongs to the canonical resolver. */
 const loadLocationCoverImages = async (
   db: Database,
   ids: LocationId[],
 ): Promise<Map<LocationId, ImageOut>> => {
-  const byId = new Map<LocationId, ImageOut>();
-  if (ids.length === 0) return byId;
-
-  const rows = await getDb(db).query.entityAttachment.findMany({
-    where: and(
-      inArray(entityAttachment.entityId, ids),
-      notDeleted(entityAttachment),
+  const covers = await resolveEntityDisplayImageLists(
+    db,
+    ids.map((entityId) => ({ entityKind: "location", entityId })),
+  );
+  const codes = [
+    ...new Set(
+      [...covers.values()].flatMap((images) =>
+        images[0] ? [images[0].id] : [],
+      ),
     ),
-    orderBy: imageOrder,
-    with: { image: true },
+  ];
+  if (!codes.length) return new Map();
+  const rows = await getDb(db).query.image.findMany({
+    where: inArray(image.shortcode, codes),
   });
-
-  for (const row of rows) {
-    const locationId = parseEntityId("location", row.entityId);
-    if (byId.has(locationId)) continue;
-    const [mapped] = mapImages([row]);
-    if (mapped && isDisplayableImageFile(mapped)) {
-      byId.set(locationId, mapped);
-    }
-  }
-  const entries = await hydrateImageReadProjection(db, [...byId]);
-  return new Map(entries);
+  const records = await hydrateImageReadProjection(
+    db,
+    mapImages(rows.map((image) => ({ image }))),
+  );
+  const byCode = new Map(records.map((image) => [image.id, image]));
+  return new Map(
+    ids.flatMap((id) => {
+      const cover = covers.get(entityRefKey("location", id))?.[0];
+      const record = cover ? byCode.get(cover.id) : undefined;
+      return record && cover
+        ? [[id, { ...record, url: preferredImageUrl(cover) }]]
+        : [];
+    }),
+  );
 };
 
-/**
- * First displayable product cover for each live identity SKU, in one batched
- * relation read. This is deliberately separate from LocationImage: callers
- * may render it as a location cover, but it remains product-owned media.
- */
-const loadIdentityProductCoverImages = async (
-  db: Database,
-  ids: ProductId[],
-): Promise<Map<ProductId, ImageOut>> => {
-  const byId = new Map<ProductId, ImageOut>();
-  if (ids.length === 0) return byId;
-  const uniqueIds = [...new Set(ids)];
-
-  const rows = await getDb(db).query.product.findMany({
-    where: and(inArray(product.id, uniqueIds), notDeleted(product)),
-    columns: { id: true },
-    with: {
-      images: {
-        where: notDeleted(entityAttachment),
-        orderBy: imageOrder,
-        with: { image: true },
-      },
-    },
-  });
-
-  for (const row of rows) {
-    const cover = mapImages(row.images).find(isDisplayableImageFile);
-    if (cover) byId.set(row.id, cover);
-  }
-  const entries = await hydrateImageReadProjection(db, [...byId]);
-  return new Map(entries);
-};
-
-/**
- * One displayable cover URL for each requested Location. An own Location photo
- * wins; a product-backed Location falls back to the cover of the Product it
- * represents. This is the compact-list counterpart to `LocationVisual`'s
- * richer client-side resolver and keeps list callers from duplicating the two
- * batched image reads.
- */
+/** URL projection of the canonical Location cover, including transitive fallback. */
 export const getLocationCoverImageUrlsByLocationIds = async (
   db: Database,
   ids: LocationId[],
 ): Promise<Map<LocationId, string>> => {
-  const byId = new Map<LocationId, string>();
-  if (ids.length === 0) return byId;
-
-  const rows = await getDb(db)
-    .select({ id: location.id, productId: location.productId })
-    .from(location)
-    .where(and(inArray(location.id, ids), notDeleted(location)));
-  const productIds = rows.flatMap((row) =>
-    row.productId ? [row.productId] : [],
+  const covers = await resolveEntityDisplayImages(
+    db,
+    ids.map((entityId) => ({ entityKind: "location", entityId })),
   );
-  const [ownCovers, identityProductCovers] = await Promise.all([
-    loadLocationCoverImages(db, ids),
-    loadIdentityProductCoverImages(db, productIds),
-  ]);
-
-  for (const row of rows) {
-    const cover =
-      ownCovers.get(row.id) ??
-      (row.productId ? identityProductCovers.get(row.productId) : undefined);
-    if (cover) byId.set(row.id, preferredImageUrl(cover));
-  }
-  return byId;
+  return new Map(
+    ids.flatMap((id) => {
+      const cover = covers.get(entityRefKey("location", id));
+      return cover ? [[id, preferredImageUrl(cover)]] : [];
+    }),
+  );
 };
 
 /**
@@ -1006,13 +959,9 @@ export const locationSearch = async (
   const rows = page.data;
 
   const ids = rows.map((row) => row.id);
-  const [ancestorsById, coverById, productCoverById] = await Promise.all([
+  const [ancestorsById, coverById] = await Promise.all([
     loadLocationAncestors(db, ids),
     loadLocationCoverImages(db, ids),
-    loadIdentityProductCoverImages(
-      db,
-      rows.flatMap((row) => (row.productId ? [row.productId] : [])),
-    ),
   ]);
   return {
     ...page,
@@ -1022,10 +971,7 @@ export const locationSearch = async (
       type: parseLocationType(row.type),
       aliases: row.aliases ?? [],
       ancestors: ancestorsById.get(row.id) ?? [],
-      coverImage:
-        coverById.get(row.id) ??
-        (row.productId ? productCoverById.get(row.productId) : null) ??
-        null,
+      coverImage: coverById.get(row.id) ?? null,
     })),
   };
 };
@@ -1190,30 +1136,42 @@ export const getLocationById = async (
   // surface reading this payload (the location hovercard, the Contents
   // header's fallback) report 0 for a location that holds stock directly and
   // has no children to roll up.
-  const [childCountResults, stockItemsByLocationId, valuations, dataQualities] =
-    await Promise.all([
-      childIds.length > 0
-        ? dbClient
-            .select({
-              parentId: location.parentId,
-              count: sql<number>`count(*)::int`,
-            })
-            .from(location)
-            .where(
-              and(notDeleted(location), inArray(location.parentId, childIds)),
-            )
-            .groupBy(location.parentId)
-        : [],
-      // Items and count come from the same rows so the resource detail cannot
-      // report `directItemCount: 12` next to `inventoryItems: []` again.
-      loadStockItemsByLocation(db, [id, ...childIds]),
-      // A whole-tree compute: this location's own valuation is a rollup over
-      // its entire subtree, which nothing scoped to `id`/`childIds` can produce.
-      earlyValuations ?? computeLocationValuations(db),
-      // Root, every direct child and the whole ancestor chain — everywhere
-      // `buildLocationWithChildren` recurses into below.
-      loadDataQualities(db, "location", [id, ...childIds, ...parentChainIds]),
-    ]);
+  const [
+    childCountResults,
+    stockItemsByLocationId,
+    valuations,
+    dataQualities,
+    displayImages,
+  ] = await Promise.all([
+    childIds.length > 0
+      ? dbClient
+          .select({
+            parentId: location.parentId,
+            count: sql<number>`count(*)::int`,
+          })
+          .from(location)
+          .where(
+            and(notDeleted(location), inArray(location.parentId, childIds)),
+          )
+          .groupBy(location.parentId)
+      : [],
+    // Items and count come from the same rows so the resource detail cannot
+    // report `directItemCount: 12` next to `inventoryItems: []` again.
+    loadStockItemsByLocation(db, [id, ...childIds]),
+    // A whole-tree compute: this location's own valuation is a rollup over
+    // its entire subtree, which nothing scoped to `id`/`childIds` can produce.
+    earlyValuations ?? computeLocationValuations(db),
+    // Root, every direct child and the whole ancestor chain — everywhere
+    // `buildLocationWithChildren` recurses into below.
+    loadDataQualities(db, "location", [id, ...childIds, ...parentChainIds]),
+    resolveEntityDisplayImageLists(
+      db,
+      [id, ...childIds, ...parentChainIds].map((entityId) => ({
+        entityKind: "location",
+        entityId,
+      })),
+    ),
+  ]);
 
   for (const row of childCountResults) {
     if (row.parentId) childCountMap[row.parentId] = row.count;
@@ -1242,6 +1200,7 @@ export const getLocationById = async (
     true,
     valuations,
     dataQualities,
+    displayImages,
   );
 };
 

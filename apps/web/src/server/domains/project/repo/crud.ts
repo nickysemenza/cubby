@@ -17,7 +17,6 @@ import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import {
   assertNoDependents,
   buildPartialUpdateValues,
-  getDb,
   notDeleted,
   updateLiveAndReturn,
   withTransaction,
@@ -33,7 +32,10 @@ import {
   type MutationReceipt,
   defineMutationWriter,
 } from "~/server/entity-kernel/repo/repository";
-import { createEntityReader } from "~/server/entity-kernel/repo/repository";
+import {
+  createEntityReader,
+  createEntityRowFetcher,
+} from "~/server/entity-kernel/repo/repository";
 import { createAppError } from "~/server/errors/app-error";
 import {
   type AuditChangeMap,
@@ -124,16 +126,13 @@ export const PROJECT_DELETE_EDGE_POLICY = {
 /** `projectUpdateData` has no standalone type export — derive it from the input. */
 type ProjectUpdateData = ProjectUpdateInput["data"];
 
-const fetchProjectById = (db: Database, id: ProjectId) =>
-  getDb(db).query.project.findFirst({
-    where: and(eq(project.id, id), notDeleted(project)),
-  });
+const fetchProjectById = createEntityRowFetcher(project);
 
 const createProjectReader = (tree?: ProjectTree) =>
   createEntityReader({
     entity: "project",
     fetchById: fetchProjectById,
-    fromDB: async (db, row) => {
+    fromDB: async (db: Database, row: typeof project.$inferSelect) => {
       // Whole-tree parent/child map + this project's subtree rollup — see
       // subtree.ts's doc comment for why the tree is loaded in full rather than
       // walked with per-row queries.

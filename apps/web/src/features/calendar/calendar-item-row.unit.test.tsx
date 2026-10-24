@@ -4,6 +4,12 @@ import { testShortcode } from "@cubby/schemas/testing";
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
+import {
+  EntityDisplayImagesProvider,
+  entityDisplayImageKey,
+} from "~/entity/entity-media/entity-display-images";
+import { createBrowserTestHarness } from "~/lib/test/browser-harness";
+
 import { CalendarItemPresentation } from "./calendar-item-row";
 
 const eatingOutMeal: Extract<CalendarItem, { kind: "meal" }> = {
@@ -18,7 +24,7 @@ const eatingOutMeal: Extract<CalendarItem, { kind: "meal" }> = {
   mealType: "dinner",
   mealKind: "eating_out",
   recipeNames: [],
-  coverImageUrl: null,
+  displayImages: [],
   mealTotals: withMacros({
     cost: { status: "unavailable", reason: "empty" },
     nutrition: buildNutrition(() => ({
@@ -30,6 +36,7 @@ const eatingOutMeal: Extract<CalendarItem, { kind: "meal" }> = {
 
 const plantingMilestone: Extract<CalendarItem, { kind: "planting" }> = {
   kind: "planting",
+  displayImages: [],
   id: testShortcode("planting", "PLT-3B2C"),
   milestone: "sowed",
   title: "Tomato · Brandywine",
@@ -53,10 +60,47 @@ const plannedExpense: Extract<CalendarItem, { kind: "expense" }> = {
   trade: "other",
   projectName: "Kitchen",
   productName: "Souper Cubes",
-  coverImageUrl: "https://example.com/tray.png",
+  displayImages: [
+    {
+      id: testShortcode("image", "IMG-4K7M"),
+      url: "https://example.com/tray.png",
+    },
+  ],
 };
 
 describe("CalendarItemPresentation", () => {
+  it("shows canonical images in compact spans and day-sheet rows without a legacy cover", () => {
+    const harness = createBrowserTestHarness();
+    const ref = {
+      entityKind: plantingMilestone.kind,
+      entityId: plantingMilestone.id,
+    };
+    const seeded = {
+      [entityDisplayImageKey(ref)]: {
+        url: "https://images.example/calendar-plant.jpg",
+      },
+    };
+    const content = (variant: "month" | "detail" | "rich") => (
+      <EntityDisplayImagesProvider refs={[ref]} seeded={seeded}>
+        <CalendarItemPresentation item={plantingMilestone} variant={variant} />
+      </EntityDisplayImagesProvider>
+    );
+    const view = render(content("month"), { wrapper: harness.wrapper });
+    try {
+      for (const variant of ["month", "detail", "rich"] as const) {
+        view.rerender(content(variant));
+        expect(screen.getByRole("presentation")).toHaveAttribute(
+          "src",
+          "https://images.example/calendar-plant.jpg",
+        );
+        expect(screen.getByText(plantingMilestone.title)).toBeInTheDocument();
+      }
+    } finally {
+      view.unmount();
+      harness.dispose();
+    }
+  });
+
   it("keeps non-cooked meal kinds explicit in compact month rows", () => {
     render(<CalendarItemPresentation item={eatingOutMeal} variant="month" />);
     expect(screen.getByText("Eating out")).toBeInTheDocument();
@@ -125,7 +169,7 @@ describe("CalendarItemPresentation", () => {
       trade: "appliances",
       projectName: "Household",
       subjectProductName: "KitchenAid mixer",
-      coverImageUrl: null,
+      displayImages: [],
     };
     render(<CalendarItemPresentation item={task} variant="rich" />);
     expect(screen.getByText("Blocked")).toBeInTheDocument();

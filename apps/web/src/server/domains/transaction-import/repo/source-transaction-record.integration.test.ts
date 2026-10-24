@@ -30,7 +30,10 @@ import {
   recordSourceTransactionRecords,
   updateSourceTransactionRecords,
 } from "./source-transaction-record";
-import { sourceTransactionRecordExternalId } from "./source-transaction-record-identity";
+import {
+  sourceTransactionRecordExternalId,
+  sourceTransactionRecordOccurrenceId,
+} from "./source-transaction-record-identity";
 import {
   listTransactionImports,
   listSourceTransactionRecords,
@@ -82,6 +85,276 @@ const record = (
 
 describe("statement row ledger", () => {
   const ctx = withTestDb();
+
+  it.each(["positioned", "historical"])(
+    "refuses introducing a provider identity over retained %s collection evidence",
+    async (positionRetention) => {
+      const original = rowInput();
+      await record(ctx.db, ctx.actor, [original]);
+      if (positionRetention === "historical") {
+        // Older imports did not retain file positions; content cannot assign a new provider identity.
+        await getDb(ctx.db)
+          .update(sourceTransactionRecord)
+          .set({ rowPosition: null });
+      }
+      const before = await getDb(ctx.db).select().from(sourceTransactionRecord);
+      for (const dryRun of [true, false]) {
+        await expect(
+          record(
+            ctx.db,
+            ctx.actor,
+            [
+              {
+                ...original,
+                providerTransactionId: "synthetic-new-provider-id",
+              },
+            ],
+            {},
+            dryRun,
+          ),
+        ).rejects.toThrow("retained collection");
+      }
+      expect(
+        await getDb(ctx.db).select().from(sourceTransactionRecord),
+      ).toEqual(before);
+      expect(
+        await getDb(ctx.db).select().from(transactionImportRecord),
+      ).toHaveLength(1);
+    },
+  );
+
+  it("replays an existing provider member beside historical ID-less evidence", async () => {
+    const original = rowInput();
+    const provider = rowInput({
+      rowPosition: 2,
+      providerTransactionId: "synthetic-retained-provider",
+    });
+    await record(ctx.db, ctx.actor, [original, provider]);
+    await getDb(ctx.db)
+      .update(sourceTransactionRecord)
+      .set({ rowPosition: null })
+      .where(sql`${sourceTransactionRecord.providerTransactionId} IS NULL`);
+    const before = (await getDb(ctx.db).select().from(sourceTransactionRecord))
+      .map((row) => row.externalId)
+      .sort();
+    for (const dryRun of [true, false]) {
+      await expect(
+        record(ctx.db, ctx.actor, [provider], {}, dryRun),
+      ).resolves.toMatchObject({ unchanged: 1, inserted: 0 });
+    }
+    expect(
+      (await getDb(ctx.db).select().from(sourceTransactionRecord))
+        .map((row) => row.externalId)
+        .sort(),
+    ).toEqual(before);
+    expect(
+      await getDb(ctx.db).select().from(transactionImportRecord),
+    ).toHaveLength(2);
+  });
+
+  it.each(["retained", "missing"])(
+    "replays a frozen provider occurrence with %s legacy identity without moving accepted ownership",
+    async (legacyIdentity) => {
+      const fingerprint = "synthetic-frozen-provider-collection";
+      const input = rowInput({
+        rowPosition: 7,
+        providerTransactionId: "synthetic-frozen-provider",
+        providerData: { original: "synthetic retained evidence" },
+      });
+      const importScope = {
+        fingerprint,
+        rowCountDeclared: 1,
+        observedAt: "2026-06-01T00:00:00Z",
+      };
+      await record(ctx.db, ctx.actor, [input], importScope);
+      const [stored] = await getDb(ctx.db)
+        .select()
+        .from(sourceTransactionRecord);
+      if (!stored) throw new Error("Synthetic provider observation missing");
+      const frozen = await sourceTransactionRecordOccurrenceId(
+        "monarch",
+        fingerprint,
+        7,
+      );
+      // Older provider-bearing imports retained physical occurrence identities.
+      await getDb(ctx.db)
+        .update(sourceTransactionRecord)
+        .set({
+          externalId: frozen,
+          chargeKey: frozen,
+          legacyExternalId:
+            legacyIdentity === "missing" ? null : stored.legacyExternalId,
+        })
+        .where(eq(sourceTransactionRecord.id, stored.id));
+      const account = (
+        await createRepoEntity(ctx, "financialAccount", {
+          name: "Synthetic replay account",
+        })
+      ).output;
+      const transaction = await createRepoEntity(ctx, "financialTransaction", {
+        accountId: account.id,
+        kind: "purchase",
+        status: "posted",
+        amount: 128.5,
+        postedDate: input.statementDate,
+        sourceRefs: [{ source: "monarch", externalId: frozen }],
+      });
+      const before = await getDb(ctx.db).select().from(sourceTransactionRecord);
+      expect(before[0]).toMatchObject({
+        providerTransactionId: input.providerTransactionId,
+        providerAccountId: null,
+        chargeKey: frozen,
+      });
+      for (const dryRun of [true, false])
+        await expect(
+          record(ctx.db, ctx.actor, [input], importScope, dryRun),
+        ).resolves.toMatchObject({
+          inserted: 0,
+          unchanged: 1,
+          revised: 0,
+          refreshed: 0,
+          alreadyInThisBatch: 1,
+        });
+      expect(
+        await getDb(ctx.db).select().from(sourceTransactionRecord),
+      ).toEqual(before);
+      for (const changed of [
+        { ...input, providerAmount: -129 },
+        { ...input, providerData: { original: "synthetic altered evidence" } },
+      ])
+        await expect(
+          record(ctx.db, ctx.actor, [changed], importScope),
+        ).rejects.toThrow("original evidence");
+      const later = await record(
+        ctx.db,
+        ctx.actor,
+        [{ ...input, providerNotes: "Synthetic later revision" }],
+        {
+          ...importScope,
+          fingerprint: "synthetic-later-provider-collection",
+          observedAt: "2026-06-02T00:00:00Z",
+        },
+      );
+      expect(later).toMatchObject({ inserted: 1, revised: 1 });
+      await record(ctx.db, ctx.actor, [input], importScope);
+      const history = await getDb(ctx.db)
+        .select()
+        .from(sourceTransactionRecord);
+      expect(history).toHaveLength(2);
+      expect(history.every((row) => row.chargeKey === frozen)).toBe(true);
+      expect(history.find((row) => row.externalId === frozen)?.current).toBe(
+        false,
+      );
+      expect(
+        (await listSourceTransactionRecords(ctx.db, {})).data.every(
+          (row) => row.transactionId === transaction.output.id,
+        ),
+      ).toBe(true);
+      expect(
+        await getDb(ctx.db).select().from(transactionImportRecord),
+      ).toHaveLength(2);
+    },
+  );
+
+  it("refuses replaying a deleted frozen provider member", async () => {
+    const input = rowInput({
+      providerTransactionId: "synthetic-deleted-provider",
+    });
+    await record(ctx.db, ctx.actor, [input]);
+    const [stored] = await getDb(ctx.db).select().from(sourceTransactionRecord);
+    if (!stored) throw new Error("Synthetic provider observation missing");
+    const frozen = await sourceTransactionRecordOccurrenceId(
+      "monarch",
+      "fp-monarch-1",
+      1,
+    );
+    await getDb(ctx.db)
+      .update(sourceTransactionRecord)
+      .set({ externalId: frozen, chargeKey: frozen })
+      .where(eq(sourceTransactionRecord.id, stored.id));
+    await deleteThroughKernel(ctx.db, ctx.actor, "sourceTransactionRecord", [
+      stored.shortcode,
+    ]);
+    const before = await getDb(ctx.db).select().from(sourceTransactionRecord);
+    await expect(record(ctx.db, ctx.actor, [input], {}, true)).rejects.toThrow(
+      "one live observation",
+    );
+    expect(await getDb(ctx.db).select().from(sourceTransactionRecord)).toEqual(
+      before,
+    );
+  });
+
+  it.each(["together", "later chunk"])(
+    "keeps null-ID account scopes distinct when admitted %s and replayed",
+    async (admission) => {
+      const fingerprint = "synthetic-descriptor-scoped-accounts";
+      const rows = ["Synthetic account A", "Synthetic account B"].map(
+        (accountDescriptor, index) =>
+          rowInput({
+            accountDescriptor,
+            rowPosition: index + 1,
+            providerTransactionId: "synthetic-account-scoped-transaction",
+            providerAccountId: null,
+          }),
+      );
+      const scope = { fingerprint, rowCountDeclared: 2 };
+      if (admission === "together")
+        await record(ctx.db, ctx.actor, rows, scope);
+      else
+        for (const row of rows) await record(ctx.db, ctx.actor, [row], scope);
+      const admitted = await getDb(ctx.db)
+        .select()
+        .from(sourceTransactionRecord);
+      expect(new Set(admitted.map((row) => row.chargeKey)).size).toBe(2);
+      for (const row of admitted) {
+        if (row.rowPosition === null)
+          throw new Error("Synthetic physical position missing");
+        const frozen = await sourceTransactionRecordOccurrenceId(
+          "monarch",
+          fingerprint,
+          row.rowPosition,
+        );
+        await getDb(ctx.db)
+          .update(sourceTransactionRecord)
+          .set({ externalId: frozen, chargeKey: frozen })
+          .where(eq(sourceTransactionRecord.id, row.id));
+      }
+      const before = await getDb(ctx.db).select().from(sourceTransactionRecord);
+      for (const dryRun of [true, false])
+        await expect(
+          record(ctx.db, ctx.actor, rows, scope, dryRun),
+        ).resolves.toMatchObject({
+          inserted: 0,
+          unchanged: 2,
+          revised: 0,
+          alreadyInThisBatch: 2,
+        });
+      expect(
+        await getDb(ctx.db).select().from(sourceTransactionRecord),
+      ).toEqual(before);
+      expect(
+        await getDb(ctx.db).select().from(transactionImportRecord),
+      ).toHaveLength(2);
+    },
+  );
+
+  it("retains a distinct positioned occurrence when a later chunk supplies its provider ID", async () => {
+    const original = rowInput();
+    await record(ctx.db, ctx.actor, [original]);
+    await record(ctx.db, ctx.actor, [
+      {
+        ...original,
+        rowPosition: 2,
+        providerTransactionId: "synthetic-independent-id",
+      },
+    ]);
+    const rows = await getDb(ctx.db).select().from(sourceTransactionRecord);
+    expect(rows).toHaveLength(2);
+    expect(new Set(rows.map((row) => row.chargeKey)).size).toBe(2);
+    expect(
+      await getDb(ctx.db).select().from(transactionImportRecord),
+    ).toHaveLength(2);
+  });
 
   it("refuses new unpositioned observations before creating evidence collections", async () => {
     for (const dryRun of [true, false]) {
@@ -1056,7 +1329,7 @@ describe("statement row ledger", () => {
     const account = (
       await createRepoEntity(ctx, "financialAccount", {
         name: "Test Card",
-        identity: { kind: "credit_card", issuer: null, network: "amex" },
+        identity: { kind: "credit_card", network: "amex" },
         cardNumbers: [
           {
             last4: "4242",
@@ -1130,7 +1403,7 @@ describe("statement row ledger", () => {
     const account = (
       await createRepoEntity(ctx, "financialAccount", {
         name: "Test Card",
-        identity: { kind: "credit_card", issuer: null, network: "amex" },
+        identity: { kind: "credit_card", network: "amex" },
         cardNumbers: [],
         sourceAliases: [],
       })
@@ -1190,7 +1463,7 @@ describe("statement row ledger", () => {
     const account = (
       await createRepoEntity(ctx, "financialAccount", {
         name: "Shared Card",
-        identity: { kind: "credit_card", issuer: null, network: "amex" },
+        identity: { kind: "credit_card", network: "amex" },
         cardNumbers: [
           {
             last4: "4242",

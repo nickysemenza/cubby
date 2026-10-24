@@ -40,7 +40,10 @@ export async function productIdentityEvidenceFence(
       SELECT "imageId" AS id FROM "EntityAttachment"
       WHERE "entityKind" = ${entitySchema.enum.product} AND "entityId" IN (SELECT id FROM targets)
     ), bindings AS (
-      SELECT * FROM "ImportSourceProduct" WHERE "productId" IN (SELECT id FROM targets)
+      SELECT b.* FROM "ImportSourceProduct" b
+      LEFT JOIN "Expense" e ON e.id = b."expenseId"
+      WHERE b."productId" IN (SELECT id FROM targets)
+        OR e."productId" IN (SELECT id FROM targets)
     ), orders AS (
       SELECT * FROM "ImportSourceOrder" WHERE id IN (SELECT "sourceOrderId" FROM bindings)
     ), history AS (
@@ -57,9 +60,11 @@ export async function productIdentityEvidenceFence(
       UNION ALL SELECT 'identity-assessment', id::text, xmin::text FROM "Assessment" WHERE id IN (SELECT id FROM history) OR id::text IN (
         SELECT jsonb_array_elements_text(CASE WHEN jsonb_typeof(evidence->'signals'->'conflictLineage') = 'array' THEN evidence->'signals'->'conflictLineage' ELSE '[]'::jsonb END) FROM history
       )
-      UNION ALL SELECT 'binding', id::text, xmin::text FROM "ImportSourceProduct" WHERE "productId" IN (SELECT id FROM targets)
+      UNION ALL SELECT 'binding', id::text, xmin::text FROM "ImportSourceProduct" WHERE id IN (SELECT id FROM bindings)
+      UNION ALL SELECT 'identity-expense', id::text, xmin::text FROM "Expense" WHERE "productId" IN (SELECT id FROM targets) OR id IN (SELECT "expenseId" FROM bindings)
       UNION ALL SELECT 'order', id::text, xmin::text FROM "ImportSourceOrder" WHERE id IN (SELECT id FROM orders)
       UNION ALL SELECT 'claim', id::text, xmin::text FROM "ImportSourceClaim" WHERE id IN (SELECT "sourceClaimId" FROM orders)
+      UNION ALL SELECT 'identity-purchase-link', id::text, xmin::text FROM "EntityLink" WHERE kind = ${"purchaseProduct"} AND ("toEntityId" IN (SELECT id FROM targets) OR "fromEntityId" IN (SELECT "purchaseId" FROM orders))
       UNION ALL SELECT 'identity-purchase', id::text, xmin::text FROM "Purchase" WHERE id IN (SELECT "purchaseId" FROM orders)
       UNION ALL SELECT 'identity-vendor', id::text, xmin::text FROM "Vendor"
       UNION ALL SELECT 'issuer', slug, xmin::text FROM "ExternalSource"

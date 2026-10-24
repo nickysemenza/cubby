@@ -24,6 +24,7 @@ import { fieldEnumOptions } from "~/entity/display/enum-field-display";
 import { EntityReferencePicker } from "~/entity/picker/entity-reference-picker";
 import { Picker as RecordPicker } from "~/entity/picker/picker";
 import { WithVendorShortcodeSearch } from "~/entity/picker/with-vendor-search";
+import { CorrectionAuthorityEvidence } from "~/entity/suggestions/correction-authority-evidence";
 import {
   SuggestionBody,
   suggestionBasisLabels,
@@ -136,12 +137,25 @@ function SpendingResultFacts({
         ],
         [
           "Purchaser",
-          <RecordLink
-            key="purchaser"
-            record={{ entity: "ledgerParty", id: plan.purchaserId }}
-          />,
+          plan.purchaseId ? (
+            "Keep existing Purchase purchaser"
+          ) : plan.purchaserId ? (
+            <RecordLink
+              key="purchaser"
+              record={{ entity: "ledgerParty", id: plan.purchaserId }}
+            />
+          ) : (
+            "Unknown"
+          ),
         ],
-        ["Purchaser basis", "Payment-account owner"],
+        [
+          "Purchaser basis",
+          plan.purchaseId
+            ? "Existing Purchase evidence"
+            : plan.purchaserId
+              ? "Member account owner or sole cardholder on the spending date"
+              : "Household card does not identify an individual",
+        ],
         [
           "Payment account",
           <RecordLink
@@ -860,6 +874,15 @@ function FieldEvidence({ row }: { row: FieldRow }) {
       suggested={suggested}
     />
   );
+  if (suggestion.correctionAuthority)
+    return (
+      <div className="max-w-xl">
+        <CorrectionAuthorityEvidence
+          decision={suggestion.correctionAuthority}
+          renderValue={(raw) => value(raw, true)}
+        />
+      </div>
+    );
   return (
     <div className="max-w-xl">
       <SuggestionBody

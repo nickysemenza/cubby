@@ -58,7 +58,7 @@ function requireTestValue<T>(value: T | null | undefined, message: string): T {
 const account = (name: string, aliases: FinancialAccountSourceAlias[] = []) =>
   buildEntity("financialAccount", {
     name,
-    identity: { kind: "credit_card", issuer: null, network: "visa" },
+    identity: { kind: "credit_card", network: "visa" },
     cardNumbers: [
       {
         last4: "1234",
@@ -82,7 +82,7 @@ describe("financial repositories — critical invariants", () => {
         ctx.db,
         buildEntity("financialAccount", {
           name: "Labelled Visa",
-          identity: { kind: "credit_card", issuer: null, network: "visa" },
+          identity: { kind: "credit_card", network: "visa" },
           cardNumbers: [
             {
               last4: "4321",
@@ -543,7 +543,7 @@ describe("financial repositories — critical invariants", () => {
     const identityAccount = (
       await createRepoEntity(ctx, "financialAccount", {
         name: "Identity-only Visa",
-        identity: { kind: "credit_card", issuer: null, network: "visa" },
+        identity: { kind: "credit_card", network: "visa" },
         // A reissued card: the provider may still label the account with
         // the retired digits, so both must resolve here.
         cardNumbers: [
@@ -585,7 +585,7 @@ describe("financial repositories — critical invariants", () => {
     // unique, so the row stays unresolved rather than guessing.
     await createRepoEntity(ctx, "financialAccount", {
       name: "Sibling Visa",
-      identity: { kind: "credit_card", issuer: null, network: "visa" },
+      identity: { kind: "credit_card", network: "visa" },
       cardNumbers: [
         {
           last4: "9997",
@@ -1563,10 +1563,8 @@ describe("financial repositories — critical invariants", () => {
     ).toContain("kind-sign-violation");
   });
 
-  // Two members can each hold their own store credit at one vendor; settlement
-  // resolves a gift-card leg by (provider vendor, owner), so that pair must
-  // stay unique among live accounts and the provider must mean stored value.
-  it("keys stored-value accounts by provider vendor and owner", async () => {
+  // Provider and owner filter accounts without collapsing distinct balances.
+  it("allows independent balances and cards at the same provider", async () => {
     const vendor = await getVendorByID(
       ctx.db,
       await findOrCreateVendor(ctx.db, "Stored Value Vendor"),
@@ -1589,7 +1587,7 @@ describe("financial repositories — critical invariants", () => {
     const storedValue = (name: string, owner: string | null) =>
       createRepoEntity(ctx, "financialAccount", {
         name,
-        identity: { kind: "stored_value", provider: "Synthetic store" },
+        identity: { kind: "stored_value" },
         providerVendorId: vendor.id,
         ledgerPartyId: owner,
       });
@@ -1600,10 +1598,8 @@ describe("financial repositories — critical invariants", () => {
     expect(a.providerVendorId).toBe(vendor.id);
     expect(a.providerVendorName).toBe("Stored Value Vendor");
 
-    await expect(storedValue("Credit A again", memberA)).rejects.toMatchObject({
-      cause: { constraint: "FinancialAccount_provider_owner_key" },
-    });
-    // Null owners stay distinct, so a second household card is allowed.
+    const rewards = (await storedValue("Separate rewards A", memberA)).output;
+    // Multiple household balances are also independent.
     await expect(storedValue("Shared card 2", null)).resolves.toBeDefined();
 
     await expect(
@@ -1611,7 +1607,7 @@ describe("financial repositories — critical invariants", () => {
         ...account("Provider on a credit card"),
         providerVendorId: vendor.id,
       }),
-    ).rejects.toThrow(/stored-value account/);
+    ).resolves.toBeDefined();
     await expect(
       updateFinancialAccount(
         ctx.db,
@@ -1622,7 +1618,7 @@ describe("financial repositories — critical invariants", () => {
     ).rejects.toThrow(/fixed at creation/);
 
     for (const [owner, expected] of [
-      [memberA, [a.id]],
+      [memberA, [a.id, rewards.id]],
       [memberB, [b.id]],
     ] as const) {
       const resolved = await listFinancialAccounts(
@@ -1631,10 +1627,12 @@ describe("financial repositories — critical invariants", () => {
         [],
         { pageIndex: 0, pageSize: 10 },
       );
-      expect(resolved.data.map((row) => row.id)).toEqual(expected);
+      expect(resolved.data.map((row) => row.id).sort()).toEqual(
+        [...expected].sort(),
+      );
     }
 
-    // Soft-deleting frees the pair for a replacement account.
+    // Deleting one balance leaves its siblings available.
     await deleteThroughKernel(ctx.db, ctx.actor, "financialAccount", [a.id]);
     await expect(storedValue("Credit A new", memberA)).resolves.toBeDefined();
     expect(shared.ledgerPartyId).toBeNull();

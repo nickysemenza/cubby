@@ -1,10 +1,8 @@
 import type { AssessmentFamily } from "@cubby/schemas/assessment";
 import type { RunOut } from "@cubby/schemas/run";
 import { ACTIVE_RUN_STATUSES } from "@cubby/shared/client-constants";
-import { ArrowSquareOutIcon } from "@phosphor-icons/react/dist/csr/ArrowSquareOut";
 import { StackIcon } from "@phosphor-icons/react/dist/csr/Stack";
 import { useQuery } from "@tanstack/react-query";
-import { Link } from "@tanstack/react-router";
 import { useCallback, useSyncExternalStore } from "react";
 
 import { ReportBlocks } from "~/entity/entity-detail/report-slot";
@@ -13,12 +11,14 @@ import { job } from "~/integrations/tanstack-query/generated/catalog/job.gen";
 import { runDetail } from "~/integrations/tanstack-query/generated/catalog/runDetail.gen";
 import { formatCount } from "~/lib/number-format";
 import { runPlanBlocks } from "~/lib/run-plan";
+import { Picker } from "~/ui/combobox/picker";
 import type { KeyNumber } from "~/ui/common/key-numbers";
 import { RecordList } from "~/ui/common/record-list";
 import {
   useSectionCount,
   useSectionEmpty,
 } from "~/ui/data-table/detail-section-state";
+import { Button } from "~/ui/primitives/button";
 
 import { JobDiagnostics } from "../job/job-diagnostics";
 import { DecisionLedger } from "./decision-ledger";
@@ -51,6 +51,27 @@ const live = (status: string) =>
  */
 const facetByRun = new Map<string, string | null>();
 const facetListeners = new Set<() => void>();
+const familyByRun = new Map<string, AssessmentFamily>();
+function useRunFamily(runId: string) {
+  const family = useSyncExternalStore(
+    (listener) => {
+      facetListeners.add(listener);
+      return () => facetListeners.delete(listener);
+    },
+    () => familyByRun.get(runId) ?? null,
+    () => null,
+  );
+  const setFamily = useCallback(
+    (next: AssessmentFamily) => {
+      familyByRun.set(runId, next);
+      facetByRun.set(runId, null);
+      for (const listener of facetListeners) listener();
+    },
+    [runId],
+  );
+  return [family, setFamily] as const;
+}
+
 function useRunFacet(runId: string) {
   const facet = useSyncExternalStore(
     (listener) => {
@@ -81,6 +102,7 @@ const scrollTo = (id: string) =>
  */
 function useRunDetail(record: RunOut) {
   const polling = live(record.status) ? LIVE_POLL_MS : false;
+  const [selectedFamily, setFamily] = useRunFamily(record.id);
   const steps = useQuery({
     ...runDetail.steps.queryOptions({ runId: record.id }),
     refetchInterval: polling,
@@ -92,13 +114,21 @@ function useRunDetail(record: RunOut) {
   const overview = steps.data
     ? runOverview(steps.data, jobs.data, Date.now(), steps.data.input)
     : null;
-  // The family whose ledger the page shows: the latest started step's results.
+  const families = [
+    ...new Set(
+      overview?.steps.flatMap((step) => (step.results ? [step.results] : [])) ??
+        [],
+    ),
+  ];
+  // Start with the latest publication; earlier families remain selectable.
   const family: AssessmentFamily | null =
-    overview?.steps
-      .filter((step) => step.results && step.phase !== "not_started")
-      .at(-1)?.results ??
-    overview?.steps.find((step) => step.results)?.results ??
-    null;
+    selectedFamily && families.includes(selectedFamily)
+      ? selectedFamily
+      : (overview?.steps
+          .filter((step) => step.results && step.phase !== "not_started")
+          .at(-1)?.results ??
+        overview?.steps.find((step) => step.results)?.results ??
+        null);
   const decisions = useQuery({
     ...runDetail.decisions.queryOptions({
       runId: record.id,
@@ -110,7 +140,18 @@ function useRunDetail(record: RunOut) {
   const presenter = family ? presenterFor(family) : null;
   const rows = decisions.data?.rows ?? [];
   const facets = presenter ? decisionFacetCounts(rows, presenter) : [];
-  return { steps, jobs, overview, family, decisions, presenter, rows, facets };
+  return {
+    steps,
+    jobs,
+    overview,
+    family,
+    families,
+    setFamily,
+    decisions,
+    presenter,
+    rows,
+    facets,
+  };
 }
 
 /**
@@ -118,8 +159,16 @@ function useRunDetail(record: RunOut) {
  * RunStep timeline. Decisions and Diagnostics are their own declared slots.
  */
 export function RunStepsDetail({ record }: { record: RunOut }) {
-  const { steps, overview, family, decisions, presenter, rows, facets } =
-    useRunDetail(record);
+  const {
+    steps,
+    overview,
+    family,
+    setFamily,
+    decisions,
+    presenter,
+    rows,
+    facets,
+  } = useRunDetail(record);
   const [facet, setFacet] = useRunFacet(record.id);
   useSectionCount(steps.data?.steps.length);
 
@@ -210,14 +259,16 @@ export function RunStepsDetail({ record }: { record: RunOut }) {
   const linksOf = (step: RunStepView) => (
     <>
       {step.results ? (
-        <Link
-          to="/suggestions"
-          search={{ runId: record.id }}
-          className="inline-flex items-center gap-1 text-link hover:underline"
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => {
+            if (step.results) setFamily(step.results);
+            scrollTo(DECISIONS_ID);
+          }}
         >
-          Review this Run's Suggestions
-          <ArrowSquareOutIcon aria-hidden className="size-3" />
-        </Link>
+          Review these decisions
+        </Button>
       ) : null}
       <a
         href={`#${DIAGNOSTICS_ID}`}
@@ -256,13 +307,28 @@ export function RunStepsDetail({ record }: { record: RunOut }) {
 
 /** The Assessments the Run published in its current family, with evidence. */
 export function RunDecisions({ record }: { record: RunOut }) {
-  const { decisions, presenter, rows } = useRunDetail(record);
+  const { decisions, presenter, rows, family, families, setFamily } =
+    useRunDetail(record);
   const [facet, setFacet] = useRunFacet(record.id);
   useSectionCount(presenter ? decisions.data?.total : undefined);
   useSectionEmpty(!presenter);
   if (!presenter) return null;
   return (
     <div className="grid gap-2">
+      {families.length > 1 ? (
+        <Picker
+          label="Decision family"
+          value={family}
+          options={families.map((value) => ({
+            value,
+            label: humanizeKey(presenterFor(value).noun),
+          }))}
+          onValueChange={(value) => {
+            const next = families.find((candidate) => candidate === value);
+            if (next) setFamily(next);
+          }}
+        />
+      ) : null}
       <p className="text-xs/4.5 text-muted-foreground">
         {humanizeKey(presenter.noun)} this Run published. A recommendation
         changes nothing until it is applied.
@@ -280,6 +346,9 @@ export function RunDecisions({ record }: { record: RunOut }) {
         />
       ) : (
         <DecisionLedger
+          key={family}
+          runId={record.id}
+          poll={live(record.status)}
           rows={rows}
           total={decisions.data.total}
           presenter={presenter}

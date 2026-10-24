@@ -15,11 +15,11 @@ existing local-secret loader. Keep calls sequential and show sample sizes first.
 - Report aggregates only. Record ids, shortcodes, subjects, senders, bodies
   and values never enter the repository, commit messages or PR text; use
   synthetic examples when a failure needs illustrating.
-- Your grade is a strong model's opinion, not ground truth. Grade offline in
-  the session. `mail.accuracy_grade` records a **member** grade, so call it
-  only for items the member confirmed in this session.
-- Grade blind: read the item before its prediction (`imports_read.
-  email_accuracy_blind`, or the record itself before the suggestion).
+- Your grade is a strong model's opinion, not ground truth. Keep independent
+  grades in the session; record operational Feedback through
+  `suggestions.review_batch` only after member confirmation.
+- Grade blind: read the original evidence and lock the grade before opening
+  the suggestion, recorded outcome or fresh prediction.
 - Read the retained original body for every Email before locking its grade.
   Header-only judgments stay provisional. If predictions were opened first,
   report the body review as retrospective rather than blind.
@@ -28,7 +28,7 @@ existing local-secret loader. Keep calls sequential and show sample sizes first.
   replay calls. Keep private worklists and originals in session memory; files
   contain aggregates and synthetic examples only.
 - Keep originals immutable. Use the grading paths below for measurement;
-  `purchase_import.email_reclassify` and member review/apply through `review_assessment` change
+  `purchase_import.email_reclassify` and member review/apply through `suggestions.review_batch` change
   operational authority rather than record an independent evaluation.
 
 ## Field decisions (Jev vs Clef, prompts, options)
@@ -65,9 +65,11 @@ existing local-secret loader. Keep calls sequential and show sample sizes first.
 
 ## Email relevance
 
-1. Get member approval before `mail.accuracy_sample` freezes a stratified sample
-   (it keeps inclusion probabilities); `imports_read.email_accuracy_blind` reads
-   it without predictions.
+1. Agree on the sample size and selection method. Select Email references
+   through `entity_read.list` without reading prediction fields, and keep the
+   worklist in the session. The current MCP catalog has no frozen-sample,
+   blind-roster or weighted-report operation. The retained `email_accuracy`
+   evaluation discriminator does not expose those operations.
 2. Grade each item from `purchase_import_read.mail_read` (or the member's Gmail
    connector), using [Relevance](../../../docs/guide/terminology.md#purchase-research)
    as the label contract. Missing originals are unavailable, never guessed.
@@ -81,15 +83,19 @@ existing local-secret loader. Keep calls sequential and show sample sizes first.
    `imageEvidence` and `usage` for image refusals, readability, bytes and costs.
    Before/after a change:
    preview the same graded sample before and after it deploys.
-4. Report, weighted by inclusion probability: false negatives (related
-   Email called unrelated — the costly error), false positives, uncertain
-   rate, bounded-view size and which incompleteness reasons fired.
-   After grades are locked, `imports_read.email_accuracy_report.items` joins
-   the blind roster by `predictionId` and gives each frozen inclusion probability
-   and inverse-probability weight. Use these weights for session-only grades and
-   fresh previews; the report's confusion matrices cover member-graded samples.
-   Report unavailable originals, ambiguous grades, and unpredicted population
-   coverage separately. Never substitute current routing fields for frozen weights.
+4. Report sample counts and rates: false negatives (related Email called
+   unrelated — the costly error), false positives, uncertain rate, bounded-view
+   size and which incompleteness reasons fired. Report unavailable originals,
+   ambiguous grades and unpredicted coverage separately. A selected sample
+   describes those cases; population estimates require known inclusion
+   probabilities from a valid sampling design. Current routing fields cannot
+   reconstruct historical sampling weights.
+5. After grades are locked, read recorded decisions through
+   `suggestions_read.automatic_decisions` or the Emails list's Accuracy view.
+   Keep those historical outcomes separate from fresh triage previews. Member-
+   confirmed Feedback uses `suggestions.review_batch` with the recorded
+   Assessment handle and `intent: "history"`; a session grade or fresh preview
+   alone supplies no durable Assessment handle and changes no operational state.
 
 ## Mail import outcomes
 

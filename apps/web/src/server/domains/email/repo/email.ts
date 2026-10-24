@@ -53,6 +53,7 @@ import {
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import {
   createEntityReader,
+  createEntityRowFetcher,
   defineRepository,
 } from "~/server/entity-kernel/repo/repository";
 import {
@@ -527,14 +528,7 @@ const readerFor = (viewer: EmailViewer) =>
     Database | DrizzleTransaction
   >({
     entity: "email",
-    fetchById: async (db, id) => {
-      const [row] = await unwrapDb(db)
-        .select()
-        .from(emailTable)
-        .where(and(eq(emailTable.id, id), notDeleted(emailTable)))
-        .limit(1);
-      return row;
-    },
+    fetchById: createEntityRowFetcher(emailTable),
     fromDB: async (db, row) =>
       emailOut.parse(
         (await hydrateRead(db, [row], { kind: "full" }, viewer))[0],

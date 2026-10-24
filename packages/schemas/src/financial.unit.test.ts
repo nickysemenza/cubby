@@ -24,7 +24,6 @@ const account = {
   name: "Visa ····3692",
   identity: {
     kind: "credit_card" as const,
-    issuer: null,
     network: "visa" as const,
   },
   cardNumbers: [card("3692")],
@@ -60,7 +59,7 @@ describe("financial account contracts", () => {
         name: "Checking",
         identity: {
           kind: "bank_account",
-          institution: "Credit union",
+
           accountType: "checking",
         },
         cardNumbers: [card("1234")],

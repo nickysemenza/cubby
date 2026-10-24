@@ -2,7 +2,10 @@ import { count, eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
-import { entityQuality } from "~/server/db/entity-quality-schema";
+import {
+  entityQuality,
+  entityQualityCheck,
+} from "~/server/db/entity-quality-schema";
 import { getDb, withTransactionDatabase } from "~/server/db/helpers";
 import {
   job,
@@ -12,9 +15,16 @@ import {
   searchDocument,
 } from "~/server/db/schema";
 import { ensureRun, systemActor } from "~/server/domains/run/repo/ensure-run";
+import { qualityRefreshDriver } from "~/server/generic/data-quality/repo/refresh";
+import {
+  prepareQualityPublications,
+  publishQualityRows,
+} from "~/server/generic/data-quality/repo/stored";
 import { advanceJob } from "~/server/generic/jobs/service/jobs";
 import {
   createProductIdentityFixture,
+  createImageFixture,
+  insertEntityAttachments,
   insertEntityFixtures,
   makeProductInput,
 } from "~/server/testing/repo.fixtures";
@@ -33,6 +43,96 @@ import { invalidateRefreshFamily, scheduleRefreshFamilies } from "./families";
 // the Run opened count as done, not as records that left the population.
 describe("broad refresh jobs", () => {
   const ctx = withTestDb();
+  it("returns authoritative publication changes for changed, unchanged and retired outcomes", async () => {
+    const [saved] = await insertEntityFixtures(ctx.db, location, "location", [
+      { shortcode: "LOC-2345", name: "Synthetic publication", type: "room" },
+    ]);
+    if (!saved) throw new Error("Expected location fixture");
+    const ids = [saved.id];
+    const rows = await prepareQualityPublications(ctx.db, "location", ids);
+    const publish = async (next: typeof rows) =>
+      withTransactionDatabase(ctx.db, (tx) =>
+        publishQualityRows(tx, ids, next),
+      );
+    expect(await publish(rows)).toEqual(ids);
+    expect(await publish(rows)).toEqual([]);
+    const revised = rows.map((row) => ({
+      ...row,
+      rulesVersion: row.rulesVersion + 1,
+    }));
+    expect(await publish(revised)).toEqual(ids);
+    expect(await publish(revised)).toEqual([]);
+    await getDb(ctx.db)
+      .update(location)
+      .set({ deletedAt: new Date() })
+      .where(eq(location.id, saved.id));
+    const retired = await prepareQualityPublications(ctx.db, "location", ids);
+    expect(retired).toEqual([]);
+    expect(await publish(retired)).toEqual(ids);
+    expect(await publish([])).toEqual([]);
+    expect(await publishQualityRows(ctx.db, [], [])).toEqual([]);
+    expect(
+      await getDb(ctx.db)
+        .select()
+        .from(entityQuality)
+        .where(eq(entityQuality.entityId, saved.id)),
+    ).toEqual([]);
+    expect(
+      await getDb(ctx.db)
+        .select()
+        .from(entityQualityCheck)
+        .where(eq(entityQualityCheck.entityId, saved.id)),
+    ).toEqual([]);
+  });
+
+  it("publishes a source edit committed after preparation and keeps exact idle pending counts", async () => {
+    const [saved] = await insertEntityFixtures(ctx.db, location, "location", [
+      { shortcode: "LOC-2345", name: "Synthetic publication", type: "room" },
+    ]);
+    if (!saved) throw new Error("Expected location fixture");
+    const image = await createImageFixture(
+      ctx.db,
+      "synthetic-concurrent-quality",
+    );
+    const boundary = new Date().toISOString();
+    const before = await prepareQualityPublications(ctx.db, "location", [
+      saved.id,
+    ]);
+    const page = await qualityRefreshDriver.page(ctx.db, null, boundary);
+    expect(page.pending).toBeGreaterThan(0);
+    await insertEntityAttachments(ctx.db, {
+      entityId: saved.id,
+      imageId: image.id,
+      sortOrder: 0,
+    });
+    const current = await prepareQualityPublications(ctx.db, "location", [
+      saved.id,
+    ]);
+    expect(before[0]?.checks.location_display_image).toBe("gap");
+    expect(current[0]?.checks.location_display_image).toBe("pass");
+    const result = await withTransactionDatabase(ctx.db, (tx) =>
+      page.publish(tx),
+    );
+    expect(result.changed).toBeGreaterThan(0);
+    const [published] = await getDb(ctx.db)
+      .select()
+      .from(entityQuality)
+      .where(eq(entityQuality.entityId, saved.id));
+    const checks = await getDb(ctx.db)
+      .select()
+      .from(entityQualityCheck)
+      .where(eq(entityQualityCheck.entityId, saved.id));
+    expect(published?.score).toBe(current[0]?.score);
+    expect(
+      Object.fromEntries(checks.map((check) => [check.checkKey, check.state])),
+    ).toEqual(current[0]?.checks);
+    const idle = await qualityRefreshDriver.page(ctx.db, null, boundary);
+    expect(idle.pending).toBe(0);
+    expect(
+      await withTransactionDatabase(ctx.db, (tx) => idle.publish(tx)),
+    ).toMatchObject({ changed: 0 });
+  });
+
   it("rolls family intent back with a rejected save", async () => {
     await expect(
       withTransactionDatabase(ctx.db, async (tx) => {

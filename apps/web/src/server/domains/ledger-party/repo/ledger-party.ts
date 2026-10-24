@@ -47,7 +47,10 @@ import {
   type MutationReceipt,
   defineMutationWriter,
 } from "~/server/entity-kernel/repo/repository";
-import { createEntityCrud } from "~/server/entity-kernel/repo/repository";
+import {
+  createEntityCrud,
+  createEntityRowFetcher,
+} from "~/server/entity-kernel/repo/repository";
 import { createAppError } from "~/server/errors/app-error";
 import { logAuditEntry } from "~/server/generic/audit-log/repo/audit-log";
 import { listScaffold } from "~/server/generic/list/repo/list";
@@ -329,18 +332,6 @@ const hydrate = async (
 
 const scaffold = listScaffold("ledgerParty", ledgerParty);
 
-const getById = async (
-  db: Database | DrizzleTransaction,
-  id: LedgerPartyId,
-): Promise<LedgerPartyRow | undefined> => {
-  const [row] = await unwrapDb(db)
-    .select()
-    .from(ledgerParty)
-    .where(and(eq(ledgerParty.id, id), notDeleted(ledgerParty)))
-    .limit(1);
-  return row;
-};
-
 /**
  * Locks the row, then refuses the kind transitions the stored state forbids.
  * Runs before the crud reads its before-state so the check and the write see
@@ -462,8 +453,8 @@ const assertKindTransition = async (
 const reader = createEntityCrud({
   entity: "ledgerParty",
   table: ledgerParty,
-  fetchById: getById,
-  fromDB: async (db, row) => (await hydrate(db, [row]))[0]!,
+  fetchById: createEntityRowFetcher(ledgerParty),
+  fromDB: async (db, row: LedgerPartyRow) => (await hydrate(db, [row]))[0]!,
   prepare: assertKindTransition,
   toUpdate: (data: LedgerPartyUpdateData) => buildPartialUpdateValues(data),
   auditUpdateFields: [...entityFieldModels.ledgerParty.audit],

@@ -21,7 +21,6 @@ import type {
 } from "@cubby/schemas/recipe";
 import {
   and,
-  asc,
   eq,
   getTableColumns,
   inArray,
@@ -35,7 +34,6 @@ import { match, P } from "ts-pattern";
 
 import { collectSubRecipeIds } from "~/lib/recipe-graph";
 import { recipeOutSignature } from "~/lib/recipe-signature";
-import { getR2PublicUrl } from "~/server/clients/r2-public-url";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import {
@@ -62,7 +60,6 @@ import {
   recipeSectionIngredient,
 } from "~/server/db/schema";
 import { recipeHasImages } from "~/server/domains/image/repo/image";
-import { displayableImageWhere } from "~/server/domains/image/repo/image-displayability";
 import { resolveRecipeServings } from "~/server/domains/recipe/repo/servings";
 import { resolveEntityDisplayImages } from "~/server/entity-kernel/repo/entity-display-image";
 import {
@@ -173,41 +170,6 @@ export const getRecipeByID = async (
   const qualities = await loadDataQualities(db, "recipe", [res.id]);
   // SAFETY: `res` was just fetched live by id, so its quality was evaluated.
   return dbRecipeToAPI(res, qualities.get(res.id)!);
-};
-
-export const getRecipeCoverImageUrlsByShortcodes = async (
-  db: Database,
-  ids: RecipeShortcode[],
-): Promise<Map<RecipeShortcode, string>> => {
-  const byId = new Map<RecipeShortcode, string>();
-  if (ids.length === 0) return byId;
-
-  const rows = await getDb(db)
-    .select({ shortcode: recipe.shortcode, key: image.key })
-    .from(recipe)
-    .innerJoin(entityAttachment, eq(entityAttachment.entityId, recipe.id))
-    .innerJoin(image, eq(image.id, entityAttachment.imageId))
-    .where(
-      and(
-        inArray(recipe.shortcode, ids),
-        notDeleted(recipe),
-        notDeleted(entityAttachment),
-        notDeleted(image),
-        displayableImageWhere,
-      ),
-    )
-    .orderBy(
-      recipe.shortcode,
-      asc(entityAttachment.sortOrder),
-      asc(entityAttachment.createdAt),
-      asc(entityAttachment.id),
-    );
-
-  for (const row of rows) {
-    const shortcode = parseShortcodeFor("recipe", row.shortcode);
-    if (!byId.has(shortcode)) byId.set(shortcode, getR2PublicUrl(row.key));
-  }
-  return byId;
 };
 
 export const getRecipesByIDs = async (

@@ -1,4 +1,4 @@
-import { type ImageOut, isDisplayableImageFile } from "@cubby/schemas/image";
+import type { ImageUrlSummary } from "@cubby/schemas/image-summary";
 import { Link } from "@tanstack/react-router";
 import type React from "react";
 import type { ReactNode } from "react";
@@ -9,8 +9,8 @@ import { ImagePreviewPopup } from "~/ui/primitives/image-with-preview";
 import { Tooltip, TooltipTrigger } from "~/ui/primitives/tooltip";
 
 interface ArrangeThumbProps {
-  /** Candidate covers; the first displayable one wins. */
-  images: readonly ImageOut[];
+  /** Canonical display images supplied by the owning batch. */
+  images: readonly ImageUrlSummary[];
   alt: string;
   /** Rendered width in CSS pixels — also the Cloudflare transform width. */
   size: number;
@@ -35,12 +35,6 @@ interface ArrangeThumbProps {
  * one way to reach the entity's detail page. Nothing else on this surface
  * navigates (a card click drills, the chevron zooms), so the tile is the
  * arrange surface's "open this".
- *
- * Filtering here is load-bearing for **locations**: `makeTree` hydrates location
- * images behind only a `notDeleted` guard (not `displayableImageWhere`), so
- * `images[0]` can be a PDF manual. Product images arrive already filtered by
- * `ProductImageSummariesProvider`; filtering twice is free and keeps the two
- * callers symmetric.
  *
  * Rendering the bare `Image` primitive rather than one of its wrappers is
  * deliberate: `EntityCover` with `placeholder="none"` renders nothing when
@@ -69,7 +63,7 @@ export function ArrangeThumb({
   fill = false,
   className,
 }: ArrangeThumbProps) {
-  const cover = images.find(isDisplayableImageFile);
+  const cover = images[0];
   const box = cn("size-full overflow-hidden rounded-sm object-contain");
 
   const linkProps = {

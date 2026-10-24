@@ -53,7 +53,6 @@ type EntityFieldNotes = {
 
 const VIRTUAL_CREATE_INPUTS: EntityFieldNotes = {
   financialAccount: {
-    issuer: "writes identity.issuer for credit-card accounts",
     network: "writes identity.network for credit-card accounts",
   },
   expense: {

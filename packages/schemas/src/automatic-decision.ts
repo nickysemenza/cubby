@@ -8,6 +8,7 @@ import {
   suggestionRecordRef,
   SUGGESTION_RECORD_IDS_MAX,
 } from "./suggestion-list";
+import { suggestionCorrectionOutcome } from "./suggestion-correction";
 
 export const automaticDecisionFamily = assessmentFamily.exclude([
   "run_finding",
@@ -35,6 +36,16 @@ export const automaticDecisionRow = z.object({
   decision: z.json(),
   summary: z.string(),
   applicationVerified: z.boolean(),
+  /** A recorded attempt does not establish that an automatic mutation occurred. */
+  correctionAttempt: z
+    .object({
+      receiptId: assessmentChildHandle,
+      sourceFeedbackId: assessmentChildHandle,
+      sourceApplicationFeedbackId: assessmentChildHandle,
+      createdAt: z.iso.datetime(),
+      outcome: suggestionCorrectionOutcome,
+    })
+    .nullable(),
   createdAt: z.iso.datetime(),
   fingerprint: z.string().nullable(),
   automaticRule: z.string().nullable(),

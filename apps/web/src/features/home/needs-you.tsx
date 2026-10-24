@@ -3,14 +3,15 @@ import { CURRENT_MEMBER_FILTER } from "@cubby/shared";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 
+import { EntityDisplayImagesProvider } from "~/entity/entity-media/entity-display-images";
 import {
   suggestionsSearch,
   WorkRowLink,
-  workRowType,
 } from "~/features/work-queue/work-row-link";
 import { workQueue } from "~/integrations/tanstack-query/generated/catalog/workQueue.gen";
 import { formatCount } from "~/lib/number-format";
 import { CurrencyValue } from "~/ui/common/currency-value";
+import { DenseCellContext } from "~/ui/common/stacked-value";
 import { EmptyState } from "~/ui/feedback/empty-state";
 import { ErrorDisplay } from "~/ui/feedback/error-display";
 import { useHydrated } from "~/ui/hooks/use-hydrated";
@@ -76,42 +77,52 @@ export function NeedsYou() {
               Nothing is waiting on you.
             </EmptyState>
           )}
-          <HomeList label="Needs you">
-            {rows.map((row) => {
-              const type = workRowType(row);
-              const suggestions = suggestionsSearch(row);
-              return (
-                <HomeRow
-                  key={row.key}
-                  trailing={
-                    suggestions ? (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        nativeButton={false}
-                        render={<Link to="/suggestions" search={suggestions} />}
-                        className="max-md:min-h-11"
-                      >
-                        Review
-                      </Button>
-                    ) : row.amount === null ? null : (
-                      <CurrencyValue
-                        value={row.amount}
-                        className="font-mono text-foreground-strong"
-                      />
-                    )
-                  }
-                >
-                  {type && <span className="shrink-0">{type}</span>}
-                  <WorkRowLink row={row} />
-                  <span className="min-w-0 truncate text-muted-foreground">
-                    {row.reason}
-                  </span>
-                </HomeRow>
-              );
-            })}
-            <ProblemsRow />
-          </HomeList>
+          <EntityDisplayImagesProvider
+            refs={rows.flatMap((row) =>
+              row.entity && row.id
+                ? [{ entityKind: row.entity, entityId: row.id }]
+                : [],
+            )}
+          >
+            <DenseCellContext.Provider value={{ linksTo: null }}>
+              <HomeList label="Needs you">
+                {rows.map((row) => {
+                  const suggestions = suggestionsSearch(row);
+                  return (
+                    <HomeRow
+                      key={row.key}
+                      trailing={
+                        suggestions ? (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            nativeButton={false}
+                            render={
+                              <Link to="/suggestions" search={suggestions} />
+                            }
+                            className="max-md:min-h-11"
+                          >
+                            Review
+                          </Button>
+                        ) : row.amount === null ? null : (
+                          <CurrencyValue
+                            value={row.amount}
+                            className="font-mono text-foreground-strong"
+                          />
+                        )
+                      }
+                    >
+                      <WorkRowLink row={row} />
+                      <span className="min-w-0 truncate text-muted-foreground">
+                        {row.reason}
+                      </span>
+                    </HomeRow>
+                  );
+                })}
+                <ProblemsRow />
+              </HomeList>
+            </DenseCellContext.Provider>
+          </EntityDisplayImagesProvider>
         </>
       )}
     </Section>

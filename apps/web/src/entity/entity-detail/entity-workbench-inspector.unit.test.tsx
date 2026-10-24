@@ -34,6 +34,7 @@ const vendor = vendorOut.parse({
   },
   returnWindowDays: null,
   notes: null,
+  role: "seller",
   brandedProductCount: 0,
   brandCategoryCount: 0,
   purchasedBrandProductCount: 0,

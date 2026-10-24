@@ -9,6 +9,8 @@ export interface DecisionStepsProps {
   steps: readonly DecisionStep[];
   renderBody: (step: DecisionStep) => ReactNode;
   media?: ReactNode;
+  /** Fold automatically opened questions once answered; keep manually opened editors. */
+  collapseAnswered?: boolean;
   renderAction?: (step: DecisionStep) => ReactNode;
   "aria-label"?: string;
 }
@@ -25,6 +27,7 @@ export function DecisionSteps({
   steps,
   renderBody,
   media,
+  collapseAnswered = false,
   renderAction,
   "aria-label": label = "Decisions",
 }: DecisionStepsProps) {
@@ -32,9 +35,11 @@ export function DecisionSteps({
   const [openKey, setOpenKey] = useState<string | null>(
     () => steps.find((step) => step.status === "needs_input")?.key ?? null,
   );
+  const [manuallyOpened, setManuallyOpened] = useState(false);
   const selected = steps.find((step) => step.key === openKey);
   const effectiveKey =
-    openKey === null
+    openKey === null ||
+    (collapseAnswered && !manuallyOpened && selected?.status === "done")
       ? null
       : selected &&
           selected.status !== "blocked" &&
@@ -126,7 +131,10 @@ export function DecisionSteps({
                     aria-expanded={expanded}
                     aria-controls={bodyId}
                     disabled={disabled}
-                    onClick={() => setOpenKey(expanded ? null : step.key)}
+                    onClick={() => {
+                      setManuallyOpened(true);
+                      setOpenKey(expanded ? null : step.key);
+                    }}
                     className="decision-step-trigger"
                   >
                     {disabled

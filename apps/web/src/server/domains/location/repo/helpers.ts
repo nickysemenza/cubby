@@ -1,10 +1,11 @@
+import { extractDbTimestampsFromDBRec } from "@cubby/schemas/common";
+import type { DataQuality } from "@cubby/schemas/data-quality";
 /**
  * Location repository helper functions.
  * Includes DB-to-API transformations and utility functions.
  */
-
-import { extractDbTimestampsFromDBRec } from "@cubby/schemas/common";
-import type { DataQuality } from "@cubby/schemas/data-quality";
+import type { DisplayImageSummary } from "@cubby/schemas/display-images";
+import { entityRefKey } from "@cubby/schemas/entity";
 import {
   type LocationId,
   type ProductId,
@@ -127,6 +128,7 @@ export const buildLocationWithChildren = (
   includeParent: boolean,
   valuations: ReadonlyMap<LocationId, LocationValuation> | undefined,
   dataQualities: ReadonlyMap<LocationId, DataQuality>,
+  displayImages: ReadonlyMap<string, DisplayImageSummary[]>,
 ): InfLocation => {
   const children =
     x.children && x.children.length > 0
@@ -139,6 +141,7 @@ export const buildLocationWithChildren = (
               includeParent,
               valuations,
               dataQualities,
+              displayImages,
             ),
           )
       : [];
@@ -163,6 +166,7 @@ export const buildLocationWithChildren = (
     type: parseLocationType(x.type),
     product: mapLocationIdentityProduct(x),
     images: mapImages(x.images),
+    displayImages: displayImages.get(entityRefKey("location", x.id)) ?? [],
     valuation: valuations?.get(x.id) ?? null,
     // SAFETY: every node this recurses into is in the batch `dataQualities`
     // was loaded for (root, children, and ancestor chain — see call sites).
@@ -176,6 +180,7 @@ export const buildLocationWithChildren = (
             includeParent,
             valuations,
             dataQualities,
+            displayImages,
           )
         : undefined,
     // getLocationById queries childCount directly; the tree builder doesn't,

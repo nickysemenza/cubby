@@ -4,8 +4,8 @@ import { describe, expect, it } from "vitest";
 
 import { AUTOMATIC_RULES, matchFieldRules } from "./automatic-rules";
 
-// A revision bump turns a rule off until a member re-enables it, so the seeded
-// rows must name the revisions the code declares.
+// Seeded test-world receipts must name the field policy and measured rule
+// revisions the code declares.
 describe("seeded Automatic rule revisions", () => {
   it("match the declared rules in the test world", () => {
     for (const key of [
@@ -85,11 +85,14 @@ describe("field.addition", () => {
 
   // Failure: a confident correction overwrites a member value, or ordinary
   // additions remain gated on a Sweep model rather than current evidence.
-  it("matches only additions at 95 percent without requiring a Sweep", () => {
+  it("matches only high-confidence additions without requiring a Sweep", () => {
     expect(matchFieldRules(facts)[0]?.key).toBe("field.addition");
+    expect(matchFieldRules({ ...facts, confidence: 0.88 })[0]?.key).toBe(
+      "field.addition",
+    );
     expect(matchFieldRules({ ...facts, kind: "correction" })).toEqual([]);
-    expect(matchFieldRules({ ...facts, confidence: 0.949 })).toEqual([]);
-    expect(matchFieldRules({ ...facts, confidence: 0.95 })[0]?.key).toBe(
+    expect(matchFieldRules({ ...facts, confidence: 0.849 })).toEqual([]);
+    expect(matchFieldRules({ ...facts, confidence: 0.85 })[0]?.key).toBe(
       "field.addition",
     );
   });

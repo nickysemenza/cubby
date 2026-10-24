@@ -75,6 +75,7 @@ export async function getActiveAssessmentSuppressionKeys(
 }
 
 type StateRow = typeof assessmentState.$inferSelect;
+type TransitionResult = Pick<StateRow, "id" | "entity" | "active" | "status">;
 type StateColumn = Exclude<
   keyof typeof assessmentState.$inferInsert,
   "id" | "family" | "createdAt" | "updatedAt"
@@ -153,6 +154,8 @@ async function recordProjectionEvents(
  * {@link rebuildAssessmentStates} replays the same row. Member and automatic
  * judgments stay in their own Feedback; their state effect names them as the
  * cause. Unchanged columns are not recorded.
+ * Returns native metadata for change categories, counts and current open state;
+ * locked reads and replay patches retain the evidence.
  */
 export async function transitionAssessmentStates(
   db: RepositoryQueryInput,
@@ -161,7 +164,7 @@ export async function transitionAssessmentStates(
     | AssessmentStatePatch
     | ((row: StateRow) => AssessmentStatePatch | null | undefined),
   cause: ProjectionCause,
-): Promise<StateRow[]> {
+): Promise<TransitionResult[]> {
   const client = getDb(db);
   const rows = await client
     .select()
@@ -193,6 +196,7 @@ export async function transitionAssessmentStates(
   );
   const updated = await updateManyAndReturn(db, assessmentState, {
     key: "id",
+    returning: ["id", "entity", "active", "status"],
     changes: changes.map(({ row, patch: changed }) => ({
       keyValue: row.id,
       patch: columnWrites(changed),
@@ -277,7 +281,14 @@ export async function openAssessmentState(
 ) {
   const [opened] = await getDb(db)
     .insert(assessmentState)
-    .values(input.values)
+    .values({
+      ...input.values,
+      // Saved-field None receipts obey the same JSON-null invariant as publication.
+      suggestedValue:
+        input.values.suggestedValue === null
+          ? sql`'null'::jsonb`
+          : input.values.suggestedValue,
+    })
     .onConflictDoNothing({ target: assessmentState.id })
     .returning();
   if (!opened)

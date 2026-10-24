@@ -19,7 +19,7 @@ import {
 } from "./financial-booking";
 
 /** Bump with prompt, model-policy or advice eligibility changes; retained votes carry this revision. */
-export const STATEMENT_LABEL_REVISION = "2026-10-21.1";
+export const STATEMENT_LABEL_REVISION = "2026-10-24.1";
 
 export const statementTransactionAction = z.enum([
   "create",
@@ -197,12 +197,16 @@ export type StatementTransactionApplication = z.infer<
 >;
 
 export const statementSuggestionPreviewInput = z.strictObject({
-  assessmentId: z.uuid(),
+  assessmentId: z
+    .uuid()
+    .describe(
+      "Opaque Assessment review handle from suggestions_read.list; not a household entity shortcode.",
+    ),
   expectedFingerprint: z.string().min(1),
   application: statementTransactionApplication,
 });
 export const statementSuggestionPreviewOut = z.object({
-  assessmentId: z.uuid(),
+  assessmentId: statementSuggestionPreviewInput.shape.assessmentId,
   fingerprint: z.string(),
   action: statementTransactionAction,
   kind: kind.nullable(),

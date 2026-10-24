@@ -18,7 +18,10 @@ import type { Entity } from "@cubby/schemas/entity";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
 import { fieldResolutionsSchema } from "@cubby/schemas/field-resolution";
-import { usesSavedFieldSuggestionContext } from "@cubby/schemas/field-suggestion";
+import {
+  usesSavedFieldSuggestionContext,
+  fieldSuggestionResolutionContext,
+} from "@cubby/schemas/field-suggestion";
 import { productCategorySummary } from "@cubby/schemas/product-category-fields";
 import {
   SUGGESTION_LIST_PAGE_MAX,
@@ -64,6 +67,7 @@ import type { StandardEntity } from "~/entity/entity-contracts";
 import { entityDetailFor } from "~/entity/entity-detail";
 import { readReferenceField } from "~/entity/entity-references";
 import { generatedBrowserCrudEntities } from "~/entity/generated/entity-routes.gen";
+import { CorrectionAuthorityEvidence } from "~/entity/suggestions/correction-authority-evidence";
 import { entityRipple } from "~/integrations/tanstack-query/cache-tags";
 import { ai } from "~/integrations/tanstack-query/generated/catalog/ai.gen";
 import { assessment } from "~/integrations/tanstack-query/generated/catalog/assessment.gen";
@@ -464,14 +468,7 @@ function resolutionContext(
   record: SuggestionRecord,
   keys: readonly string[],
 ): string | null {
-  const parsed = fieldResolutionsSchema.safeParse(record.fieldResolutions);
-  if (!parsed.success) return null;
-  const relevant = new Set(keys);
-  return JSON.stringify(
-    Object.fromEntries(
-      Object.entries(parsed.data).filter(([field]) => relevant.has(field)),
-    ),
-  );
+  return fieldSuggestionResolutionContext(record.fieldResolutions, keys);
 }
 
 const basisFingerprint = (basis: Record<string, string | null>) =>
@@ -1817,6 +1814,7 @@ function ResolvedFieldSuggestion({
   source,
   prune,
   surface,
+  renderValue,
   children,
 }: {
   context: RecordSuggestionsCtx;
@@ -1825,6 +1823,7 @@ function ResolvedFieldSuggestion({
   source: FieldSuggestionSource;
   prune: boolean;
   surface: "inline" | "cell";
+  renderValue?: (value: JsonValue) => ReactNode;
   children: ReactNode;
 }) {
   const snapshot = useRef({ row, field });
@@ -1904,6 +1903,7 @@ function ResolvedFieldSuggestion({
             )}
             apply={apply}
             dismiss={dismiss}
+            renderValue={renderValue}
           >
             {children}
           </LiveSuggestionCell>
@@ -1942,6 +1942,16 @@ function ResolvedFieldSuggestion({
         notice={usesInheritedValue ? "Uses the inherited value" : undefined}
         alternative={source.basisMode === "provided"}
         outcome={row.outcomes[field]}
+        renderValue={(value, label) =>
+          renderValue?.(value) ??
+          renderSuggestedListFieldValue(
+            context.entity,
+            row.record,
+            field,
+            value,
+            label,
+          )
+        }
         surface={surface}
         prune={prune}
       >
@@ -2087,6 +2097,7 @@ function BoundRecordFieldSuggestion({
       source={source}
       prune={fieldModel?.control?.suggest?.mode === "prune"}
       surface={surface}
+      renderValue={renderValue}
     >
       {children}
     </ResolvedFieldSuggestion>
@@ -2110,6 +2121,41 @@ function StoredSuggestionField({
   surface: "inline" | "cell";
   children: ReactNode;
 }) {
+  if (suggestion.correctionAuthority) {
+    const mark = (
+      <SuggestionOutcomeMark
+        surface={surface}
+        outcome={{
+          kind: "correction",
+          assessmentId: suggestion.assessmentId,
+          targetInputFingerprint: null,
+          decision: suggestion.correctionAuthority,
+        }}
+        review={
+          <CorrectionAuthorityEvidence
+            decision={suggestion.correctionAuthority}
+            renderValue={(value) =>
+              renderValue?.(value) ??
+              renderSuggestedListFieldValue(
+                context.entity,
+                record,
+                field,
+                value,
+              )
+            }
+          />
+        }
+      />
+    );
+    return surface === "cell" ? (
+      <CellFrame trailing={mark}>{children}</CellFrame>
+    ) : (
+      <>
+        {children}
+        {mark}
+      </>
+    );
+  }
   const runnerUp = suggestion.runnerUpValue;
   return (
     <GhostSuggestionCell
@@ -2164,6 +2210,7 @@ function LiveSuggestionCell({
   inline,
   apply,
   dismiss,
+  renderValue,
   children,
 }: {
   context: RecordSuggestionsCtx;
@@ -2176,6 +2223,7 @@ function LiveSuggestionCell({
   inline: boolean;
   apply: () => Promise<void>;
   dismiss: () => Promise<void>;
+  renderValue?: (value: JsonValue) => ReactNode;
   children: ReactNode;
 }) {
   const actions = useSuggestionActions(
@@ -2215,12 +2263,24 @@ function LiveSuggestionCell({
       reasoning={suggestion.reasoning}
       runnerUp={
         runnerUp
-          ? { label: runnerUp.label, probability: runnerUp.probability }
+          ? {
+              label:
+                renderValue?.(runnerUp.value) ??
+                renderSuggestedListFieldValue(
+                  context.entity,
+                  record,
+                  field,
+                  runnerUp.value,
+                  runnerUp.label,
+                ),
+              probability: runnerUp.probability,
+            }
           : null
       }
       provenance={{ model: null, runId: null, at: null }}
       inline={inline}
       pending={pending}
+      renderValue={renderValue}
       accept={apply}
       reject={actions.dismiss}
       onCorrected={actions.dismiss}

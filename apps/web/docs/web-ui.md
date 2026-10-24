@@ -94,6 +94,14 @@ missing records and failed reads remain explicit, with raw error diagnostics.
 Inventory and cookbook shortcodes retain their individual detail destinations;
 legacy UUID audit references keep their unlinked/index fallback.
 Visual rules live in [DESIGN.md](../DESIGN.md#controls-and-suggestions).
+Suggestion proposals, alternatives, and correction evidence use the canonical
+suggested-field renderer on detail pages and in table reviews. References keep
+their record links and domain pills; plain text and explicit None retain their
+own presentation. Proposed values never borrow the current record's resolved
+values, reference labels, or allocations. Declared enum options retain their
+canonical labels and pills even when a suggestion supplies a display label.
+Acceptance controls keep their existing interaction; linked review values navigate
+to their records.
 Record picker builders add up to two declared metadata values as a searchable
 secondary line. Trailing picker figures use their content width, capped at
 7.5rem, so compact counts do not reserve a full metadata column and squeeze
@@ -277,3 +285,39 @@ follows image storage and display bindings, including logo storage; the legacy
 `hasImages` gallery/cover trait does not gate identity imagery. Keep the Images
 section limited to the record's own gallery; borrowed covers do not become
 attachments. A header with a thumbnail omits its duplicate generic title mark.
+
+### Record pill display images
+
+`EntityPill` uses the shared canonical display-image context, including borrowed
+images along declared relationship paths. Collection owners prepare image refs
+for their loaded rows through `EntityDisplayImagesProvider`; audit feeds do this
+for all loaded entries. The shared app provider collects otherwise-uncovered
+mounted references into the same chunked resolver. Pills register references,
+never own a query. Explicit collection batches retain ownership and seeded null
+results remain authoritative. Records with no eligible image retain their mark.
+
+Home Meals and record-backed work rows use `EntityRefLink` pills with collection-owned
+image batches. Queue review links retain their Suggestions destination. Source
+transaction records borrow canonical images through accepted transaction evidence.
+A unique supported merchant suggestion supplies a later decorative Vendor logo
+fallback; ambiguous and insufficient history retain the semantic mark.
+
+Calendar grids, span chips, agenda rows and the day sheet share one display-image
+provider for the loaded range. The server resolves `displayImages` for every item type in one range batch;
+the grid and day sheet seed the shared context from that response.
+Compact span rows show a small thumbnail when available; missing images retain
+the kind icon. Opening the day sheet does not create a separate image query.
+
+All record identity imagery uses the canonical resolver. Raw attachment galleries,
+Product image summaries, nested identity-product photos, and direct logo/cover
+joins must not select a second identity image. URL-only picker projections remain
+serializers of canonical results. Location trees carry canonical media for the
+whole loaded tree; child photo contact sheets remain explicit compartment evidence
+and never become a parent identity fallback. Recipe heroes and comparisons, Wish
+candidates, Arrange, tools, and Location contents use the same image context.
+`useEntityDisplayImage` accepts a known canonical seed so a projected image or
+explicit no-image result does not register another request with the shell batch.
+
+The same contract applies to native typed consumers: Location lists read the
+tree’s canonical media, and recount Products receive canonical media in the
+shared inventory read batch. Neither client reconstructs identity from galleries.

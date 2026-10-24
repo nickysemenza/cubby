@@ -84,18 +84,28 @@ A credit card's `primaryCardholderId` identifies its primary member independentl
 of the account's `ledgerPartyId` and inventory-owner default. `authorizedUsers`
 records member memberships with inclusive `validFrom`/`validTo` dates (null is an
 open endpoint). History details link each Ledger Party beside its date bounds on both web and
-Apple clients. Issuer, network, and primary cardholder use reviewed Jev/Clef field
-suggestions. Account identity and notes supply the evidence; a saved issuer or
-member roster supplies choices, not proof. All live members and the full network
-enum reach the model; missing, ambiguous or conflicting holder/network evidence
-requires none. Saved issuer vocabulary and literal `Issuer:` lines supply issuer
-choices; the model decides whether the account evidence supports a match.
-Shared funding and purchase frequency do not establish card access. Issuer and
-network are editable scalar projections of the existing identity object;
-acceptance preserves its sibling fields and the account's explicit histories.
+Apple clients. Every non-cash account can name a provider through
+`providerVendorId`, referencing the shared Vendor roster. The provider is the bank,
+card issuer, custodian, loan servicer, wallet operator or stored-value provider.
+Card co-branding, employer and import source are not provider identity. Network
+remains a separate credit-card enum. Multiple accounts, including distinct rewards
+and merchant-credit balances, may share the same provider and owner. Stored-value
+payment evidence resolves only when exactly one eligible account matches; ambiguous
+balances require explicit payment-account evidence.
 
-The generic suggestion framework chooses among scalar enum, reference or text
-candidates. It cannot generate structured facts or dated history rows.
+Provider, network and primary cardholder use reviewed Jev/Clef field suggestions.
+Saved account names, identity, notes and source aliases supply evidence; a Vendor
+roster or member roster supplies choices, not proof. All eligible Vendors, live
+members and the full network enum reach the model. Missing, ambiguous or conflicting
+evidence requires none; funding and purchase frequency do not identify a primary
+cardholder. Network is an editable scalar projection of identity; provider is an
+ordinary entity reference. The preserving cutover copies retired issuer,
+institution and provider text into notes before removing those identity keys;
+missing references are assigned through ordinary reviewed MCP or CLI mutations
+after deployment, using the member-approved provider mapping. The migration never
+guesses or assigns a provider from legacy text. Existing provider references remain
+unchanged. The generic suggestion framework chooses among reference and enum
+candidates; it does not generate structured facts or dated history rows.
 Authorized-user memberships, funding periods, card-number history and every
 `validFrom`/`validTo` remain explicitly entered; no account-specific AI extractor
 fills them. Provisional is cleared only through member confirmation.
@@ -104,13 +114,17 @@ those memberships, the household's sole-use rule identifies the primary member
 as purchaser. Multiple paying accounts must all agree on that sole user.
 
 Purchase `purchaserOverrideId` wins. Otherwise, use the sole-use rule at the
-Purchase's receipt/order date, then the unique member identified by its linked
+Purchase's receipt/order date and every paying transaction's charge date (posting
+date when its charge date is absent), then the unique member identified by its linked
 Vendor Account and accepted or explicitly linked Email evidence. Conflicting
 identities or shared use without identifying evidence stays unknown; a sole
 user that `settlement_party_conflict` flags (a settling account the order's
 member — vendor account, else override, else one member's Email — could not
 use on the charge date) is such a conflict. Suggestions
-are not accepted evidence. Purchaser evidence includes conflicting mailbox and
+are not accepted evidence. Shared access on either date defeats sole-use
+attribution: settlement on a shared charge date cannot replace a known receipt
+member merely because its order date had sole access. The resolver keeps reading
+receipt evidence without materializing an override. Purchaser evidence includes conflicting mailbox and
 vendor-account identities even where account-scoped Email views hide that mailbox. Missing Purchase dates cannot establish sole use.
 Clearing the override restores inheritance. Purchase merges carry an override
 when the survivor has none and refuse conflicting explicit purchasers. Source identities remain intact;

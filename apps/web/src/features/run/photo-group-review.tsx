@@ -17,7 +17,11 @@ import type {
   PhotoRunImage,
   ReviewPhotoGroupsAction,
 } from "@cubby/schemas/photo-import-run";
-import { reviewPhotoGroupsOutput } from "@cubby/schemas/photo-import-run";
+import {
+  reviewPhotoGroupsOutput,
+  photoRunReviewResponse,
+  type PhotoRunDefaults,
+} from "@cubby/schemas/photo-import-run";
 import { countLabel } from "@cubby/shared/pluralize";
 import { ArrowsMergeIcon } from "@phosphor-icons/react/dist/csr/ArrowsMerge";
 import { CheckIcon } from "@phosphor-icons/react/dist/csr/Check";
@@ -118,6 +122,11 @@ import {
   toGroupInput,
   type ProposalEdit,
 } from "./photo-review-model";
+import {
+  PhotoReviewEmpty,
+  PhotoReviewScopeControls,
+  usePhotoReviewScope,
+} from "./photo-review-scope";
 import { loadPhotoRunCandidateChunks } from "./photo-run-candidates";
 
 type ReviewSubmission = ReviewPhotoGroupsAction & { onSaved?: () => void };
@@ -283,6 +292,7 @@ function PhotoBrandPicker({
           {...search}
           entity="vendor"
           label={label}
+          placeholder="Choose a brand"
           clearable
           value={selected ?? null}
           setValue={setValue}
@@ -548,15 +558,8 @@ function GroupPhotos({
           );
         }}
       />
-      {!labelPhotos.length ? (
-        <div
-          aria-label="Label photo missing"
-          className="flex aspect-square flex-col items-center justify-center gap-1 rounded border border-dashed border-border text-xs text-muted-foreground"
-        >
-          <span className="font-medium text-foreground">Label</span>
-          <span>Missing</span>
-        </div>
-      ) : !labelPhotos.some((photo) => photo?.recognizedText?.trim()) ? (
+      {labelPhotos.length > 0 &&
+      !labelPhotos.some((photo) => photo?.recognizedText?.trim()) ? (
         <p className="text-xs text-muted-foreground">
           Label photo · {labelAnalysis}
         </p>
@@ -566,7 +569,8 @@ function GroupPhotos({
           className="text-xs text-muted-foreground"
           title={proposal.skip.map((entry) => entry.reason).join(" · ")}
         >
-          {countLabel(proposal.skip.length, "skipped photo")} · kept in run only
+          {countLabel(proposal.skip.length, "skipped photo")} ·{" "}
+          {proposal.skip.map((entry) => entry.reason).join(" · ")}
         </p>
       ) : null}
       {[...entries.keys()].map((id) => {
@@ -702,9 +706,30 @@ function GroupEvidence({
               <div className="text-muted-foreground">
                 {photo.descriptionEvidence?.authority === "member" ? (
                   <span className="font-medium text-foreground">Yours · </span>
+                ) : photo.descriptionEvidence?.authority === "correction" ? (
+                  <span className="font-medium text-foreground">
+                    From your correction ·{" "}
+                  </span>
                 ) : null}
                 <ClampedText>{description}</ClampedText>
               </div>
+            ) : null}
+            {photo.descriptionEvidence?.correction ? (
+              <Disclosure summary="Correction evidence">
+                <p>
+                  Applied from your confirmed description for identical image
+                  content.
+                </p>
+                <p>
+                  Application receipt:{" "}
+                  <code>
+                    {
+                      photo.descriptionEvidence.correction
+                        .sourceApplicationFeedbackId
+                    }
+                  </code>
+                </p>
+              </Disclosure>
             ) : null}
             {claims.length ? (
               <Disclosure summary="Claims" meta={claims.length}>
@@ -854,7 +879,7 @@ function CommitInput({
           </datalist>
           <span id={hintId} className="text-muted-foreground sm:col-start-2">
             {optionsLoading
-              ? "Checking existing brandName names…"
+              ? "Checking existing brands…"
               : draft.trim()
                 ? (() => {
                     const match = options.find(
@@ -864,9 +889,9 @@ function CommitInput({
                     );
                     return match
                       ? `Existing name · used on ${countLabel(match.count, "product")}`
-                      : "New brandName name · saved as text on this Product";
+                      : "New brand · saved on this Product";
                   })()
-                : "Use an existing brandName name or enter one."}
+                : "Choose an existing brand or enter one."}
           </span>
         </>
       ) : null}
@@ -2192,7 +2217,7 @@ function InventoryFields({
   return (
     <div className="border-t border-border pt-3">
       <div className="mb-2 flex flex-col gap-1 text-xs">
-        Own it now?
+        Inventory
         <Picker
           mode="choose"
           label="stock decision"
@@ -2603,6 +2628,7 @@ function ProposalCard({
         />
         <DecisionSteps
           aria-label="Photo group decisions"
+          collapseAnswered
           steps={proposal.steps.map((step) =>
             step.key === "identity" &&
             proposal.product.kind === "existing" &&
@@ -2626,7 +2652,6 @@ function ProposalCard({
                 editable
                 busy={busy}
               />
-              <GroupEvidence proposal={proposal} imagesById={imagesById} />
             </>
           }
           renderBody={(step) => (
@@ -2645,6 +2670,39 @@ function ProposalCard({
             />
           )}
         />
+        {proposal.review?.stockIntent === "receive" &&
+        currentProduct.data?.inventoryEntries?.length ? (
+          <div className="mt-3 space-y-2 text-xs">
+            <p>
+              Stock is already recorded for this Product. If these photos show
+              that same item, attach them without adding another unit.
+            </p>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={busy}
+              onClick={() =>
+                void save(() => ({
+                  groups: [
+                    {
+                      ...toGroupInput(proposal, { inventory: undefined }),
+                      review: {
+                        ...reviewDecision(proposal),
+                        stockIntent: "counted",
+                      },
+                    },
+                  ],
+                  removeGroupKeys: [],
+                }))
+              }
+            >
+              Already counted · attach photos
+            </Button>
+          </div>
+        ) : null}
+        <div className="mt-3">
+          <GroupEvidence proposal={proposal} imagesById={imagesById} />
+        </div>
         {proposal.missingImageCount ? (
           <StatusText as="p" tone="warning" className="mt-3 text-xs">
             {proposal.missingImageCount === 1
@@ -3338,6 +3396,68 @@ const photoNavGlyphs = {
   },
 };
 
+function PhotoRunDestination({
+  defaults,
+  disabled,
+  onChange,
+}: {
+  defaults?: PhotoRunDefaults | null;
+  disabled: boolean;
+  onChange: (defaults: PhotoRunDefaults) => void;
+}) {
+  defaults ??= { stockIntent: "receive", locationId: null };
+  const current = defaults;
+  const [selected] = useSelectedPickerItems(
+    "location",
+    current.locationId ? [current.locationId] : [],
+    [],
+  );
+  return (
+    <div className="flex flex-wrap items-center gap-3 border-b border-border pb-3">
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-medium">
+          {defaults.stockIntent === "receive"
+            ? "Owned items"
+            : defaults.stockIntent === "historical"
+              ? "Historical photos"
+              : "Reference photos"}
+        </p>
+        <p className="text-xs text-muted-foreground">
+          {defaults.stockIntent === "receive"
+            ? "Choose a storage location once. Item-specific choices stay unchanged."
+            : "Photos attach without adding stock. Change Inventory on an item to make an exception."}
+        </p>
+      </div>
+      {defaults.stockIntent === "receive" ? (
+        <div className="w-full sm:w-64">
+          <EntityReferencePicker
+            entity="location"
+            label="Default storage location"
+            value={
+              selected
+                ? {
+                    ...selected,
+                    id: parseShortcodeFor("location", selected.id),
+                  }
+                : null
+            }
+            disabled={disabled}
+            placeholder="Choose storage location"
+            setValue={(item) =>
+              onChange({
+                ...current,
+                locationId: item
+                  ? parseShortcodeFor("location", item.id)
+                  : null,
+              })
+            }
+          />
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 export function PhotoGroupReview({
   runId,
   query,
@@ -3348,19 +3468,24 @@ export function PhotoGroupReview({
   query: ReturnType<typeof usePhotoRunReview>;
 }) {
   const [session] = useState(() => new PhotoReviewDraftSession());
+  const proposals = query.data?.review.proposals;
+  const reviewView = usePhotoReviewScope({ proposals, getName: proposalName });
+  const {
+    admitted,
+    visible: visibleProposals,
+    ready,
+    filteredReady,
+  } = reviewView;
   const draft = useSyncExternalStore(
     session.subscribe,
     session.getSnapshot,
     session.getSnapshot,
   );
   const queryClient = useQueryClient();
-  const candidates = usePhotoRunCandidates(
-    runId,
-    query.data?.review.proposals ?? NO_PROPOSALS,
-  );
+  const candidates = usePhotoRunCandidates(runId, proposals ?? NO_PROPOSALS);
   const groupSections = useMemo(
     () =>
-      (query.data?.review.proposals ?? []).map((proposal) => {
+      visibleProposals.map((proposal) => {
         const Icon =
           photoNavGlyphs[proposal.product.kind][
             proposal.state !== "proposed"
@@ -3377,10 +3502,19 @@ export function PhotoGroupReview({
           content: null,
         };
       }),
-    [query.data?.review.proposals],
+    [visibleProposals],
   );
   useIndexedSubsections("photo-batch", groupSections);
   const action = useReviewAction(runId);
+  const defaultsCommand = useWorkflowCommand({
+    onResult: ({ result }) => {
+      queryClient.setQueryData(
+        photoImport.review.queryKey({ runId }),
+        photoRunReviewResponse.parse(result),
+      );
+    },
+  });
+  const nextAttention = useRef<string | null>(null);
   const save: Save = async (build, onSaved) => {
     try {
       await session.save(async () => {
@@ -3437,24 +3571,6 @@ export function PhotoGroupReview({
             )
             .map((item) => item.groupKey),
         );
-        if (
-          groupKeys.length === 1 &&
-          result.results.some(
-            (item) =>
-              item.outcome === "committed" || item.outcome === "replayed",
-          )
-        ) {
-          const next = result.proposals.find(
-            (item) =>
-              item.state === "proposed" && !groupKeys.includes(item.groupKey),
-          );
-          if (next)
-            requestAnimationFrame(() =>
-              document
-                .getElementById(`photo-group-${next.groupKey}`)
-                ?.scrollIntoView({ block: "start" }),
-            );
-        }
       } catch (error) {
         showErrorToast(error);
       }
@@ -3474,14 +3590,14 @@ export function PhotoGroupReview({
           detail:
             query.data.lifecycle.dispatchError ??
             (query.data.lifecycle.failedImageIds.length
-              ? "Retry failed descriptions above, or explicitly continue without those photos. Their originals are retained."
+              ? "Retry failed descriptions below, or explicitly continue without those photos. Their originals are retained."
               : "Review the ungrouped photos below and use a photo’s menu to propose a group. Existing approved items are retained."),
         }
       : query.data.lifecycle.processor === "external"
         ? {
             title: "Waiting for your Claude/Codex session to propose groups.",
             detail:
-              "Use the handoff above once descriptions are ready, or use a photo’s menu to create a group yourself.",
+              "Use the grouping control below once descriptions are ready, or use a photo’s menu to create a group yourself.",
           }
         : query.data.lifecycle.processor === "cubby"
           ? {
@@ -3510,17 +3626,20 @@ export function PhotoGroupReview({
       productsById.set(proposal.committedProduct.id, proposal);
   }
   const resultProducts = [...productsById.values()];
-  const ready = proposed.filter((proposal) => !proposal.blockedReason);
   const selectedBatch = ready.filter((proposal) =>
     draft.selected.has(proposal.groupKey),
   );
+  const applyingBatch = draft.selected.size ? selectedBatch : filteredReady;
   const groupByImage = new Map<string, string>();
   for (const proposal of review.proposals)
     for (const entry of [...proposal.images, ...proposal.skip]) {
       groupByImage.set(entry.id, proposal.groupKey);
     }
   const busy =
-    action.isPending || draft.saves.size > 0 || draft.approving !== null;
+    action.isPending ||
+    defaultsCommand.isPending ||
+    draft.saves.size > 0 ||
+    draft.approving !== null;
   // Result links wait through approval's passive detail-cache eviction.
   const approving = draft.approving !== null;
 
@@ -3528,7 +3647,7 @@ export function PhotoGroupReview({
     <PhotoDraftContext value={session}>
       <PhotoCandidatesContext value={candidates}>
         <Stack gap="lg">
-          {results.length > 0 ? (
+          {results.length > 0 && !reviewView.attention ? (
             <Section
               headingAs="h2"
               title="Import results"
@@ -3608,6 +3727,22 @@ export function PhotoGroupReview({
             title="Photo review"
             caption={`${proposed.length} to review · ${settled.length} settled · ${review.unassignedImageIds.length} photos not in a group`}
           >
+            <PhotoReviewScopeControls review={reviewView} />
+            {proposed.length > 0 ? (
+              <PhotoRunDestination
+                defaults={query.data.defaults}
+                disabled={busy}
+                onChange={(defaults) =>
+                  defaultsCommand.mutate(
+                    operationCommandRequest(
+                      photoImportContract,
+                      "setDefaults",
+                      { runId, defaults },
+                    ),
+                  )
+                }
+              />
+            ) : null}
             <output className="text-xs text-muted-foreground">
               {action.isPending
                 ? action.variables?.action === "save"
@@ -3619,15 +3754,23 @@ export function PhotoGroupReview({
                     ? "Saved"
                     : "Changes save when you leave a field."}
             </output>
-            {proposed.length > 0 ? (
+            {visibleProposals.some(
+              (group) => group.state === "proposed" && group.blockedReason,
+            ) ? (
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={() => {
+                  const attention = visibleProposals.filter(
+                    (group) =>
+                      group.state === "proposed" && group.blockedReason,
+                  );
+                  const previous = attention.findIndex(
+                    (group) => group.groupKey === nextAttention.current,
+                  );
                   const unresolved =
-                    proposed.find(
-                      (group) => !group.review || group.review.unresolvedReason,
-                    ) ?? proposed[0];
+                    attention[(previous + 1) % attention.length];
+                  nextAttention.current = unresolved?.groupKey ?? null;
                   if (unresolved) {
                     const target = document.getElementById(
                       `photo-group-${unresolved.groupKey}`,
@@ -3637,7 +3780,7 @@ export function PhotoGroupReview({
                   }
                 }}
               >
-                Next unresolved item
+                Next item needing a decision
               </Button>
             ) : null}
             {proposed.length > 0 ? (
@@ -3648,16 +3791,18 @@ export function PhotoGroupReview({
                 className="flex-wrap"
               >
                 <span className="text-xs text-muted-foreground">
-                  {selectedBatch.length
-                    ? `${selectedBatch.filter((group) => group.product.kind === "create").length} Products created · ${selectedBatch.filter((group) => group.product.kind === "existing").length} existing Products attached · ${selectedBatch.reduce((sum, group) => sum + (group.inventory?.quantity ?? 0), 0)} stock units received · ${selectedBatch.filter((group) => !group.inventory).length} groups with no stock change.`
-                    : "Select resolved items to apply together. Unresolved items stay in review."}
+                  {applyingBatch.length
+                    ? `${draft.selected.size ? "Selected items" : "Ready items in this view"} — On apply: ${applyingBatch.filter((group) => group.product.kind === "create").length} new Products · ${applyingBatch.filter((group) => group.product.kind === "existing").length} existing Products matched · ${applyingBatch.reduce((sum, group) => sum + (group.inventory?.quantity ?? 0), 0)} stock units to add · ${applyingBatch.filter((group) => !group.inventory).length} groups with no stock change.`
+                    : "No ready items in this scope. Unresolved items stay in review."}
                 </span>
                 <Row gap="sm" wrap>
                   <Button
                     variant="outline"
-                    disabled={busy || ready.length === 0}
+                    disabled={busy || filteredReady.length === 0}
                     onClick={() =>
-                      session.select(ready.map((proposal) => proposal.groupKey))
+                      session.select(
+                        filteredReady.map((proposal) => proposal.groupKey),
+                      )
                     }
                   >
                     Select all resolved items
@@ -3674,21 +3819,22 @@ export function PhotoGroupReview({
                   <Button
                     onMouseDown={(event) => event.preventDefault()}
                     disabled={
-                      selectedBatch.length === 0 ||
+                      applyingBatch.length === 0 ||
+                      defaultsCommand.isPending ||
                       (action.isPending &&
                         action.variables?.action !== "save") ||
                       approving
                     }
                     onClick={() =>
                       void approve(
-                        selectedBatch.map((proposal) => proposal.groupKey),
+                        applyingBatch.map((proposal) => proposal.groupKey),
                       )
                     }
                   >
                     <CheckIcon />
                     {approving
                       ? "Approving selected items…"
-                      : `Apply ${countLabel(selectedBatch.length, "selected item")}`}
+                      : `Apply ${countLabel(applyingBatch.length, draft.selected.size ? "selected item" : "ready item")}`}
                   </Button>
                 </Row>
               </Row>
@@ -3712,12 +3858,22 @@ export function PhotoGroupReview({
               )
             ) : null}
           </Section>
-          {review.proposals.length > 0 ? (
+          <PhotoReviewEmpty
+            total={review.proposals.length}
+            visible={visibleProposals.length}
+          />
+          {admitted.length > 0 ? (
             <div className="min-w-0">
               <div className="min-w-0 space-y-6">
-                {review.proposals.map((selected, index) => (
+                {/* Hidden editors stay mounted so filtering preserves unsaved drafts. */}
+                {admitted.map((selected, index) => (
                   <div
                     key={selected.groupKey}
+                    hidden={
+                      !visibleProposals.some(
+                        (item) => item.groupKey === selected.groupKey,
+                      )
+                    }
                     id={`photo-group-${selected.groupKey}`}
                     className="scroll-mt-20"
                     data-detail-section

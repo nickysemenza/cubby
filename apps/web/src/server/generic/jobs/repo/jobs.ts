@@ -14,6 +14,7 @@ import type { Database } from "~/server/db/database";
 import {
   repositoryQueries as getDb,
   repositoryTransactionDatabase as withTransactionDatabase,
+  repositorySnapshotWriteDatabase,
 } from "~/server/db/repository-access.boundary";
 import {
   repositoryBeforeCommit,
@@ -251,9 +252,14 @@ export async function publishJobPage(
   claim: JobClaim,
   submitted: JobPage,
   publish?: (tx: Database) => Promise<void | JobPage["result"]>,
+  isolationLevel?: "serializable",
 ): Promise<boolean> {
   const page = jobPage.parse(submitted);
-  return withTransactionDatabase(db, async (tx) => {
+  const transaction =
+    isolationLevel === "serializable"
+      ? repositorySnapshotWriteDatabase
+      : withTransactionDatabase;
+  return transaction(db, async (tx) => {
     const [current] = await getDb(tx)
       .select()
       .from(job)

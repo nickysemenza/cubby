@@ -1,5 +1,7 @@
+import { displayImagesField } from "@cubby/schemas/display-images";
 import { entityKeys, entitySummary } from "@cubby/schemas/entity-summary";
 import { isDisplayableImageFile } from "@cubby/schemas/image";
+import { preferredImageUrl } from "@cubby/schemas/image-summary";
 import { inventoryMcpOut } from "@cubby/schemas/inventory";
 import { mcpUsdaFoodListItemOut, mcpUsdaFoodOut } from "@cubby/schemas/mcp";
 import { mealMcpOut } from "@cubby/schemas/meal";
@@ -42,6 +44,7 @@ export function slimInventory<TInput>(row: TInput) {
 }
 
 const productProjectionInput = productTopLevelOut.extend({
+  displayImages: displayImagesField.optional(),
   food: z
     .object({ fdc_id: z.number().nullable().optional() })
     .nullable()
@@ -61,7 +64,10 @@ export function slimProduct<TInput>(row: TInput) {
   const product = parseProductProjectionInput(row);
   const itemImages = product.images ?? [];
   const labelImages = product.labelImages ?? [];
-  const cover = itemImages.find(isDisplayableImageFile) ?? null;
+  const canonicalCover = product.displayImages?.[0];
+  const coverImageUrl = canonicalCover
+    ? preferredImageUrl(canonicalCover)
+    : product.coverImageUrl;
   const pricing = product.pricing ?? pricingFromExplicitPrice(product.price);
   return productMcpOut.parse({
     id: product.id,
@@ -81,7 +87,7 @@ export function slimProduct<TInput>(row: TInput) {
     imageCount: itemImages.length + labelImages.length,
     itemImageCount: itemImages.filter(isDisplayableImageFile).length,
     labelImageCount: labelImages.filter(isDisplayableImageFile).length,
-    coverImageUrl: cover?.url ?? null,
+    coverImageUrl: coverImageUrl ?? null,
     fdc_id: product.fdc_id ?? null,
     usdaUnavailable: product.usdaUnavailable ?? null,
     stockTracked: product.stockTracked ?? null,
@@ -112,14 +118,13 @@ export function slimProductDetail<TInput>(row: TInput): ProductMcpDetailOut {
     return {
       ...file,
       displayPosition: displayable ? displayPosition : null,
-      isCover: displayable && displayPosition === 1,
+      isCover: displayable && preferredImageUrl(file) === base.coverImageUrl,
     };
   });
   const cover = images.find((file) => file.isCover) ?? null;
   return productMcpDetailOut.parse({
     ...base,
     coverImageId: cover?.id ?? null,
-    coverImageUrl: cover?.url ?? null,
     images,
   });
 }

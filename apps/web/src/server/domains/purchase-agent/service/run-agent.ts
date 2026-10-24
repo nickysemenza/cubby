@@ -70,7 +70,7 @@ import { workflowForRun } from "./import-run-workflows";
 import { readPiModelUsage } from "./model-usage";
 import { RunSettlement, SETTLEMENT_POLL_MS } from "./run-settlement";
 import { renderSignal } from "./signals";
-import { runAgentTools } from "./tools";
+import { continueMailImportOnYield, runAgentTools } from "./tools";
 import { currentWorkItemMessages } from "./work-item-context";
 
 const log = createLogger("purchase-agent");
@@ -398,6 +398,17 @@ export class PurchaseImportRunAgent
                 : undefined;
             },
             afterResponse: (message) => this.afterResponse(message),
+            onYield: (_answer, api, context) =>
+              purpose === "mail_import"
+                ? continueMailImportOnYield({
+                    services: this.services(),
+                    api,
+                    context,
+                    generation: this.readState(
+                      `request-generation:${api.taskId}`,
+                    ),
+                  })
+                : undefined,
           }),
         ],
       }),

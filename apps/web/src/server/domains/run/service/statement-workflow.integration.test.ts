@@ -46,7 +46,7 @@ it("resumes a refused statement Sweep and publishes every batched suggestion", a
   });
   await createRepoEntity(ctx, "financialAccount", {
     name: "Synthetic workflow card",
-    identity: { kind: "credit_card", issuer: null, network: "visa" },
+    identity: { kind: "credit_card", network: "visa" },
     ledgerPartyId: owner.output.id,
     provisional: false,
     sourceAliases: [
@@ -188,6 +188,7 @@ it("resumes a refused statement Sweep and publishes every batched suggestion", a
         count(*) FILTER (WHERE coalesce((data->>'needsLabel')::boolean, false))::int AS pending
       FROM "AssessmentState" WHERE family = ${assessmentFamily.enum.statement_transaction} AND active
     `);
+    expect(steps.flatMap((step) => step.errors)).toEqual([]);
     expect(saved?.status).toBe("completed");
     expect(
       steps.every((step) => step.failed === 0 && step.state === "done"),

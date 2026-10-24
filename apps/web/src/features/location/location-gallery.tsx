@@ -8,12 +8,12 @@ import { memo, useEffect, useMemo, useRef, useState } from "react";
 
 import { EntityQualityFact } from "~/entity/display/data-quality-value";
 import { EntityIcon } from "~/entity/entities";
+import {
+  EntityDisplayImagesProvider,
+  useEntityDisplayImage,
+} from "~/entity/entity-media/entity-display-images";
 import { useLocationTree } from "~/entity/hooks/use-location-tree";
 import { LocationBreadcrumb } from "~/entity/presentation/location-breadcrumb";
-import {
-  ProductImageSummariesProvider,
-  useHydratedProductImages,
-} from "~/entity/presentation/product-image-summaries";
 import { formatCurrency } from "~/lib/number-format";
 import { useHydrated } from "~/ui/hooks/use-hydrated";
 import { useIsMobile } from "~/ui/hooks/use-mobile";
@@ -380,18 +380,24 @@ function InventoryContents({ items }: { items: InventoryItemForTree[] }) {
     [items],
   );
   return (
-    <ProductImageSummariesProvider productIds={productIds}>
+    <EntityDisplayImagesProvider
+      refs={productIds.map((entityId) => ({ entityKind: "product", entityId }))}
+    >
       <ul className="grid grid-cols-1 gap-x-3 sm:grid-cols-2">
         {items.map((item) => (
           <InventoryContentsRow key={item.id} item={item} />
         ))}
       </ul>
-    </ProductImageSummariesProvider>
+    </EntityDisplayImagesProvider>
   );
 }
 
 function InventoryContentsRow({ item }: { item: InventoryItemForTree }) {
-  const images = useHydratedProductImages(item.productId);
+  const image = useEntityDisplayImage({
+    entityKind: "product",
+    entityId: item.productId,
+  });
+  const images = image ? [image] : [];
   return (
     <li className="flex min-w-0 items-center gap-2 border-t border-border px-2 py-1">
       {images[0] ? (

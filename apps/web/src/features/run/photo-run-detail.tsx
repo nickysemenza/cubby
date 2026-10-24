@@ -17,6 +17,7 @@ import { photoImport } from "~/integrations/tanstack-query/generated/catalog/pho
 import { run as runOperations } from "~/integrations/tanstack-query/generated/catalog/run.gen";
 import { AiCost } from "~/ui/common/ai-cost";
 import { Row, Section, Stack } from "~/ui/layout";
+import { Disclosure } from "~/ui/layout/disclosure";
 import { Button } from "~/ui/primitives/button";
 import { Progress } from "~/ui/primitives/progress";
 import { StatusText } from "~/ui/primitives/status-text";
@@ -117,7 +118,6 @@ function PhotoRunProgress({
     <Section headingAs="h2" title="Progress">
       <div className="grid gap-3">
         <p className="text-sm font-medium">{stage}</p>
-        <PhotoRunCost run={run} />
         <Progress
           value={
             uploading
@@ -149,28 +149,35 @@ function PhotoRunProgress({
                   ? `${described} of ${photos.length} descriptions ready`
                   : `${settled} of ${photos.length} photos settled`}
         </p>
-        {imageWork.length ? (
-          <div
-            className="flex flex-wrap gap-x-5 gap-y-2 border-t border-border pt-3"
-            aria-live="polite"
-          >
-            {[
-              { label: "Device analysis", done: deviceDone, optional: true },
-              { label: "Cloud description", done: described, optional: false },
-              { label: "Subject lift", done: cutoutsSettled, optional: true },
-            ].map((work) => (
-              <div key={work.label} className="flex items-baseline gap-2">
-                <p className="text-2xs text-muted-foreground">
-                  {work.label}
-                  {work.optional ? " · optional" : ""}
-                </p>
-                <p className="font-mono text-xs font-semibold tabular-nums">
-                  {work.done} / {imageWork.length}
-                </p>
-              </div>
-            ))}
-          </div>
-        ) : null}
+        <Disclosure summary="Processing details">
+          <PhotoRunCost run={run} />
+          {imageWork.length ? (
+            <div
+              className="flex flex-wrap gap-x-5 gap-y-2 border-t border-border pt-3"
+              aria-live="polite"
+            >
+              {[
+                { label: "Device analysis", done: deviceDone, optional: true },
+                {
+                  label: "Cloud description",
+                  done: described,
+                  optional: false,
+                },
+                { label: "Subject lift", done: cutoutsSettled, optional: true },
+              ].map((work) => (
+                <div key={work.label} className="flex items-baseline gap-2">
+                  <p className="text-2xs text-muted-foreground">
+                    {work.label}
+                    {work.optional ? " · optional" : ""}
+                  </p>
+                  <p className="font-mono text-xs font-semibold tabular-nums">
+                    {work.done} / {imageWork.length}
+                  </p>
+                </div>
+              ))}
+            </div>
+          ) : null}
+        </Disclosure>
         {deviceFailed > 0 ? (
           <StatusText tone="destructive">
             {deviceFailed} {deviceFailed === 1 ? "photo" : "photos"} failed
@@ -250,6 +257,12 @@ export function PhotoImportRunView({ run }: { run: RunDetail }) {
   const failed = review.data?.lifecycle?.failedImageIds ?? [];
   return (
     <Stack gap="lg">
+      <PhotoGroupReview
+        key={run.publicId}
+        runId={run.publicId}
+        query={review}
+        hasAgent={runHasAgent(run)}
+      />
       <PhotoRunProgress run={run} review={review.data}>
         {review.data?.lifecycle.phase === "waiting_for_upload" ? (
           <Stack gap="sm">
@@ -360,12 +373,6 @@ export function PhotoImportRunView({ run }: { run: RunDetail }) {
           </StatusText>
         ) : null}
       </PhotoRunProgress>
-      <PhotoGroupReview
-        key={run.publicId}
-        runId={run.publicId}
-        query={review}
-        hasAgent={runHasAgent(run)}
-      />
     </Stack>
   );
 }

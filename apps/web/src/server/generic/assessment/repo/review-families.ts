@@ -8,6 +8,7 @@ import {
   type AssessmentFamily,
 } from "@cubby/schemas/assessment";
 import { assessmentReviewFamilies } from "@cubby/schemas/assessment-review-family";
+import { SYSTEM_USER_ID } from "@cubby/schemas/context";
 import { entityRefKey } from "@cubby/schemas/entity";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import { shortcodeEntities } from "@cubby/schemas/entity-manifest";
@@ -16,6 +17,7 @@ import { financialTransactionSourceRef } from "@cubby/schemas/financial-transact
 import { parseEntityRef } from "@cubby/schemas/identifiers";
 import { mailboxClassificationStage } from "@cubby/schemas/mailbox-research";
 import { statementTransactionAction } from "@cubby/schemas/statement-suggestion";
+import { CORRECTION_OUTCOME_RECEIPT_KIND } from "@cubby/schemas/suggestion-correction";
 import { suggestionRecordRef } from "@cubby/schemas/suggestion-list";
 import { parseShortcode } from "@cubby/shared";
 import {
@@ -38,10 +40,13 @@ import type { Database } from "~/server/db";
 import { hasTextSql } from "~/server/db/computed/text-whitespace";
 import { unwrapDb, uuidArrayParam } from "~/server/db/helpers";
 import { assessment, assessmentState, feedback, run } from "~/server/db/schema";
+import { chargeKeyOf } from "~/server/domains/transaction-import/repo/statement-charge";
+import { transactionImportMembers } from "~/server/domains/transaction-import/repo/transaction-import-membership";
 import {
   EMAIL_APPLICATION_RECEIPT,
   EMAIL_OBSERVATION_RECEIPT,
 } from "~/server/generic/assessment/repo/assessment-email";
+import { correctionOutcomeExists } from "~/server/generic/assessment/repo/correction-receipt";
 import { lookupShortcodes } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 const reviewAssessment = alias(assessment, "a");
@@ -155,6 +160,17 @@ function statementRecords(requested?: readonly string[]) {
     if (includes(entity))
       parts.push(sql`jsonb_build_array(${ref(sql`${entity}`, id)})`);
   };
+  // A proposal belongs to the charge, including retained predecessors and later memberships.
+  const sourceScope = sql`observed.source = s.data->>${financialTransactionSourceRef.keyof().enum.source}
+    AND ${chargeKeyOf("observed")} = s.data->>'chargeKey' AND observed."deletedAt" IS NULL`;
+  if (includes(entities.sourceTransactionRecord))
+    parts.push(sql`COALESCE((SELECT jsonb_agg(${ref(sql`${entities.sourceTransactionRecord}`, sql`observed.id::text`)})
+      FROM "SourceTransactionRecord" observed WHERE ${sourceScope}), '[]'::jsonb)`);
+  if (includes(entities.transactionImport))
+    parts.push(sql`COALESCE((SELECT jsonb_agg(DISTINCT ${ref(sql`${entities.transactionImport}`, sql`member."importId"::text`)})
+      FROM "SourceTransactionRecord" observed
+      JOIN ${transactionImportMembers} member ON member."statementRowId" = observed.id
+      WHERE ${sourceScope}), '[]'::jsonb)`);
   add(entities.financialAccount, sql`s.data->>'accountId'`);
   add(
     entities.financialTransaction,
@@ -242,6 +258,16 @@ export const reviewFamilyDeclarations = {
     records: one,
     primaryOnly: true,
     actionable: sql`jsonb_typeof(a.judgment) = 'string' AND ${hasTextSql(sql`a.judgment #>> '{}'`)}`,
+    audit: exists(
+      feedbackForAssessment(
+        and(
+          eq(receipt.authority, "automatic"),
+          eq(receipt.actorUserId, SYSTEM_USER_ID),
+          eq(receipt.intent, "history"),
+          eq(receiptKind, CORRECTION_OUTCOME_RECEIPT_KIND),
+        ),
+      ),
+    ),
   },
   statement_transaction: {
     ...assessmentReviewFamilies.statement_transaction,
@@ -343,6 +369,7 @@ export const automaticAssessmentCandidate = and(
     ),
   ),
   or(
+    correctionOutcomeExists(sql`${reviewAssessment.id}`),
     inArray(
       reviewAssessment.family,
       Object.entries(reviewFamilyDeclarations).flatMap(
@@ -357,6 +384,7 @@ export const automaticAssessmentCandidate = and(
 )!;
 
 export const automaticFamilyEligibility = or(
+  correctionOutcomeExists(sql`${reviewAssessment.id}`),
   ...Object.entries(reviewFamilyDeclarations).flatMap(
     ([family, declaration]) =>
       "audit" in declaration
@@ -638,4 +666,14 @@ export async function touchingAssessmentIds(
     touchingAssessmentQuery(db, scope),
   );
   return new Set(rows.map((row) => row.id));
+}
+
+/** Pending image admission shared by Suggestions and record-scoped Work summaries.
+ * Callers join immutable Assessment a and current AssessmentState s.
+ */
+export function pendingImageDescriptionEligibility() {
+  return sql`a.family = ${assessmentFamily.enum.image_description} AND a.served
+    AND s.active AND s.status = ${suggestionStatus.enum.pending}
+    AND s.suppression IS NULL AND ${reviewFamilyDeclarations.image_description.actionable}
+    AND EXISTS (SELECT 1 FROM "Image" i WHERE i.id = s."recordId" AND i."deletedAt" IS NULL)`;
 }

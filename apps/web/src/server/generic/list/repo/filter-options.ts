@@ -1,3 +1,4 @@
+import { entityRefKey } from "@cubby/schemas/entity";
 import { type ShortcodeEntity } from "@cubby/schemas/entity-manifest";
 import type {
   FilterOptionKind,
@@ -24,14 +25,11 @@ import { z } from "zod";
 
 import { formatCalendarDay } from "~/lib/date-format";
 import { purchaseLabel } from "~/lib/purchase-label";
-import { getR2PublicUrl } from "~/server/clients/r2-public-url";
 import type { Database } from "~/server/db";
 import { stockOnly } from "~/server/db/computed/inventory-placement";
 import { productBrandNameSql } from "~/server/db/computed/product-brand-sql";
 import { formatSearchTerm, getDb, notDeleted } from "~/server/db/helpers";
 import {
-  entityAttachment,
-  image,
   ingredient,
   inventoryEntry,
   ledgerParty,
@@ -43,12 +41,12 @@ import {
   vendor,
 } from "~/server/db/schema";
 import { financialAccountTransactionCount } from "~/server/domains/financial-account/repo";
-import { displayableImageWhere } from "~/server/domains/image/repo/image-displayability";
 import { loadLocationAncestors } from "~/server/domains/location/repo/tree";
 import { getProductTagOptions } from "~/server/domains/product/repo/analytics";
 import { projectNameOptions } from "~/server/domains/project/repo/lookup";
 import { getAllTags as getAllRecipeTags } from "~/server/domains/recipe/repo/queries";
 import { vendorPurchaseCount } from "~/server/domains/vendor/repo/vendor";
+import { resolveEntityDisplayImages } from "~/server/entity-kernel/repo/entity-display-image";
 import {
   DISPLAY_NAME_COLUMN,
   resolveLiveShortcode,
@@ -305,6 +303,7 @@ async function loadEntityRows(
   const selected = selectedOnly ? input.selectedIds : [];
   let query = getDb(db)
     .select({
+      entityId: table.id,
       id: table.shortcode,
       label,
       orderId: entity === "purchase" ? purchase.orderId : sql<null>`NULL::text`,
@@ -314,7 +313,6 @@ async function loadEntityRows(
       purchaseDate:
         entity === "purchase" ? purchase.date : sql<null>`NULL::text`,
       count: count ?? sql<null>`NULL::int`,
-      logoKey: withLogo ? image.key : sql<null>`NULL::text`,
       kind: kindColumn ?? sql<null>`NULL::text`,
       emoji: emojiColumn ?? sql<null>`NULL::text`,
     })
@@ -325,24 +323,6 @@ async function loadEntityRows(
       vendor,
       and(eq(vendor.id, purchase.vendorId), notDeleted(vendor)),
     );
-  if (withLogo)
-    query = query
-      .leftJoin(
-        entityAttachment,
-        and(
-          eq(entityAttachment.entityId, table.id),
-          eq(entityAttachment.role, "logo"),
-          notDeleted(entityAttachment),
-        ),
-      )
-      .leftJoin(
-        image,
-        and(
-          eq(image.id, entityAttachment.imageId),
-          notDeleted(image),
-          displayableImageWhere,
-        ),
-      );
   const rows = await query
     .where(
       and(
@@ -357,7 +337,20 @@ async function loadEntityRows(
     .orderBy(...(count ? [desc(count)] : []), asc(label), asc(table.shortcode))
     .limit(selectedOnly ? 50 : input.limit + 1)
     .offset(selectedOnly ? 0 : Number(input.cursor ?? "0"));
-  return rows.map((row) => {
+  const imageRows = rows.map((row) => ({
+    ...row,
+    entityId: z.string().parse(row.entityId),
+  }));
+  const images = withLogo
+    ? await resolveEntityDisplayImages(
+        db,
+        imageRows.map((row) => ({
+          entityKind: entity,
+          entityId: row.entityId,
+        })),
+      )
+    : new Map();
+  return imageRows.map((row) => {
     const option: EntityOptionRow = toOptionRow(
       parseOptionQueryRow({ id: row.id, label: row.label }),
     );
@@ -379,7 +372,7 @@ async function loadEntityRows(
     }
     if (count) option.count = Number(row.count);
     if (withLogo)
-      option.logo = row.logoKey ? { url: getR2PublicUrl(row.logoKey) } : null;
+      option.logo = images.get(entityRefKey(entity, row.entityId)) ?? null;
     if (kindColumn) option.kind = ledgerPartyKind.parse(row.kind);
     if (emojiColumn) option.emoji = z.string().nullable().parse(row.emoji);
     return option;
