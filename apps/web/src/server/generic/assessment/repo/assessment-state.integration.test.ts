@@ -1,8 +1,10 @@
-import { eq, inArray } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
+import * as queryTelemetry from "~/server/db/db-query-telemetry";
 import { getDb, withTransaction } from "~/server/db/helpers";
+import { updateManyAndReturn } from "~/server/db/helpers/crud";
 import { assessment, assessmentState, feedback } from "~/server/db/schema";
 import {
   kernelCtx,
@@ -368,6 +370,17 @@ describe("AssessmentState rebuild", () => {
       })),
     );
     const ids = publications.map((row) => row.id);
+    const returning: string[] = [];
+    const statementForTrace = queryTelemetry.databaseStatementForTrace;
+    // Observe the actual driver SQL before telemetry truncates large CASE batches.
+    const trace = vi
+      .spyOn(queryTelemetry, "databaseStatementForTrace")
+      .mockImplementation((head) => {
+        const text = typeof head === "string" ? head : head.text;
+        if (text.startsWith('update "AssessmentState"'))
+          returning.push(text.split(" returning ")[1] ?? "");
+        return statementForTrace(head);
+      });
     await withTransaction(ctx.db, async (tx) => {
       const changed = await transitionAssessmentStates(
         tx,
@@ -381,16 +394,21 @@ describe("AssessmentState rebuild", () => {
         { kind: "synthetic_bulk" },
       );
       expect(changed.map((row) => row.id)).toEqual([...ids].sort());
-      expect(
-        changed.every(
-          (row) =>
-            row.updatedAt instanceof Date &&
-            row.fingerprint === null &&
-            row.suggestedValue === null &&
-            row.confidence === 0,
-        ),
-      ).toBe(true);
-    });
+      expect(changed).toEqual(
+        [...ids].sort().map((id) => ({
+          id,
+          entity: "product",
+          active: true,
+          status: "pending",
+        })),
+      );
+    }).finally(() => trace.mockRestore());
+    expect(returning.length).toBeGreaterThan(1);
+    expect(
+      returning.every(
+        (columns) => columns === '"id", "entity", "active", "status"',
+      ),
+    ).toBe(true);
     const live = await liveRows(ctx, ids);
     const events = await getDb(ctx.db)
       .select()
@@ -439,6 +457,50 @@ describe("AssessmentState rebuild", () => {
         .where(inArray(feedback.assessmentId, ids)),
     ).toEqual(events);
     expect(await rebuiltRows(ctx, ids)).toEqual(live);
+  });
+
+  it("decodes an explicit native update projection without returning evidence payloads", async () => {
+    const product = await productFixture(ctx, "Synthetic native projection");
+    const productId = await recordId(ctx.db, product.id, "product");
+    const published = await publishAssessment(
+      ctx.db,
+      recommendation(productId, "native-projection"),
+      { data: { retained: "synthetic evidence" }, fingerprint: "before" },
+    );
+    const changed = await withTransaction(ctx.db, (tx) =>
+      updateManyAndReturn(tx, assessmentState, {
+        key: "id",
+        returning: [
+          "id",
+          "updatedAt",
+          "fingerprint",
+          "suggestedValue",
+          "confidence",
+        ],
+        changes: [
+          {
+            keyValue: published.id,
+            patch: {
+              fingerprint: null,
+              suggestedValue: sql`'null'::jsonb`,
+              confidence: undefined,
+            },
+          },
+        ],
+      }),
+    );
+    expect(changed).toEqual([
+      {
+        id: published.id,
+        updatedAt: expect.any(Date),
+        fingerprint: null,
+        suggestedValue: null,
+        confidence: 0,
+      },
+    ]);
+    expect(await liveRows(ctx, [published.id])).toMatchObject([
+      { data: { retained: "synthetic evidence" }, suggestedValue: null },
+    ]);
   });
 
   it("rebuilds a legacy row from its migration snapshot and ignores retired columns", async () => {

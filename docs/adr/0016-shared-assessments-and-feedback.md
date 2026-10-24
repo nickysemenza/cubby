@@ -154,6 +154,13 @@ transition writer locks current rows in ID order and records one exact changed
 column patch per row as projection Feedback. It batches heterogeneous updates by
 written column set through native, keyed updates; omitted columns stay unchanged,
 JSON null suggestions remain JSON, and returned rows retain column decoding.
+`updateManyAndReturn` requires an explicit tuple of native column keys, starting
+with the unique key used to restore input order; it has no full-row default.
+The transition writer returns only `id`, `entity`, `active` and `status` for
+change categories, update counts and open-state consumers. The locked full-row
+read and exact replay patches remain unchanged; evidence JSON is not decoded
+again in the UPDATE result. Results come from PostgreSQL RETURNING, never an
+old-row/patch merge.
 Events, updates and commit-only invalidation remain in the caller's transaction;
 rebuilding does not depend on batch boundaries. Native update hooks run once per
 statement, so rows in a batch may share an update timestamp.

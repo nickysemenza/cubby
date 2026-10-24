@@ -119,25 +119,36 @@ export const updateAndReturn = async <T extends PgTable>(
  * Update distinct rows by one unique key, preserving input order and native
  * column encoding/return decoding. Undefined/empty patches do not write; null
  * writes SQL NULL. Callers supply SQL explicitly when they need JSON null.
+ * Returning columns are explicit, starting with the key used for correlation.
  * The key is immutable here. Transactions and domain events belong to callers.
  */
 export async function updateManyAndReturn<
   T extends PgTable,
   K extends keyof T["_"]["columns"] & keyof InferSelectModel<T> & string,
+  const R extends keyof T["_"]["columns"] & keyof InferSelectModel<T> & string =
+    never,
 >(
   db: Database | RepositoryQueryTransaction,
   table: T,
   input: {
     key: K;
+    returning: readonly [NoInfer<K>, ...R[]];
     changes: readonly {
       keyValue: InferSelectModel<T>[K];
       patch: PgUpdateSetSource<T>;
     }[];
   },
-): Promise<InferSelectModel<T>[]> {
+): Promise<Pick<InferSelectModel<T>, K | R>[]> {
   const columns = getTableColumns(table);
   const keyColumn = columns[input.key];
   if (!keyColumn) throw new Error("Unknown bulk update key");
+  const returning = Object.fromEntries(
+    input.returning.map((key) => {
+      const column = columns[key];
+      if (!column) throw new Error("Unknown bulk returning column");
+      return [key, column];
+    }),
+  );
   const keyIdentity = (value: InferSelectModel<T>[K]) => {
     const encoded: unknown = keyColumn.mapToDriverValue(value);
     if (typeof encoded === "string")
@@ -194,7 +205,10 @@ export async function updateManyAndReturn<
     group.push({ keyValue, values, parameters, bytes });
     groups.set(columnSet, group);
   }
-  const byKey = new Map<string | number | bigint, InferSelectModel<T>>();
+  const byKey = new Map<
+    string | number | bigint,
+    Pick<InferSelectModel<T>, K | R>
+  >();
   for (const group of groups.values()) {
     const first = group[0];
     if (!first) continue;
@@ -255,10 +269,10 @@ export async function updateManyAndReturn<
             batch.map((entry) => entry.keyValue),
           ),
         )
-        .returning(getTableColumns(table));
-      // SAFETY: the native full-column returning projection belongs to T;
-      // the query-result HKT union obscures only its shared array container.
-      for (const row of result as InferSelectModel<T>[])
+        .returning(returning);
+      // SAFETY: the projection selects only the requested native columns of T,
+      // including K; the query-result HKT loses the selected keys and container.
+      for (const row of result as Pick<InferSelectModel<T>, K | R>[])
         byKey.set(keyIdentity(row[input.key]), row);
     }
   }
