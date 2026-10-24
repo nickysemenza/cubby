@@ -15,7 +15,11 @@ import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { getDb } from "~/server/db/helpers";
-import { assessmentState, sourceTransactionRecord } from "~/server/db/schema";
+import {
+  assessmentState,
+  sourceTransactionRecord,
+  transactionImport,
+} from "~/server/db/schema";
 import { publishEntityConnection } from "~/server/domains/connection/repo/entity-connections";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
@@ -483,6 +487,97 @@ describe("cross-family Suggestion list", () => {
     });
     expect(listed.items.filter((row) => row.clean)).toHaveLength(1);
     expect(results).toEqual([]);
+  });
+
+  // A retained predecessor and later collection must reach the same current charge proposal.
+  it("scopes statement proposals by retained source observations and collection membership", async () => {
+    await card(ctx);
+    await record(ctx, [
+      rowInput({ providerTransactionId: "synthetic-provider-charge" }),
+    ]);
+    await record(
+      ctx,
+      [
+        rowInput({
+          providerTransactionId: "synthetic-provider-charge",
+          rawDescription: "EXAMPLE GROCER REVISED",
+        }),
+      ],
+      { fingerprint: "fp-list-revision" },
+    );
+    await record(
+      ctx,
+      [
+        rowInput({
+          providerTransactionId: "synthetic-provider-charge",
+          rawDescription: "EXAMPLE GROCER REVISED",
+        }),
+      ],
+      { fingerprint: "fp-list-reobserved" },
+    );
+    await record(ctx, [rowInput({ providerAmount: -73 })], {
+      fingerprint: "fp-list-unrelated",
+    });
+    await generate(ctx);
+    const observations = await getDb(ctx.db)
+      .select({
+        code: sourceTransactionRecord.shortcode,
+        providerId: sourceTransactionRecord.providerTransactionId,
+      })
+      .from(sourceTransactionRecord);
+    const collections = await getDb(ctx.db)
+      .select({
+        code: transactionImport.shortcode,
+        fingerprint: transactionImport.fingerprint,
+      })
+      .from(transactionImport);
+    expect(observations).toHaveLength(3);
+    expect(collections).toHaveLength(4);
+    const all = await listSuggestionPage(ctx.db, {
+      family: "statement_transaction",
+    });
+    expect(all.items).toHaveLength(2);
+    const current = all.items.find(
+      (row) =>
+        row.family === "statement_transaction" &&
+        row.evidence.rawDescription === "EXAMPLE GROCER REVISED",
+    );
+    expect(current).toBeDefined();
+    for (const ref of [
+      ...observations.map((row) => ({
+        entity: "sourceTransactionRecord" as const,
+        code: row.code,
+        relevant: row.providerId !== null,
+      })),
+      ...collections.map((row) => ({
+        entity: "transactionImport" as const,
+        code: row.code,
+        relevant: row.fingerprint !== "fp-list-unrelated",
+      })),
+    ]) {
+      const filters = {
+        family: "statement_transaction" as const,
+        entity: ref.entity,
+        recordIds: [ref.code],
+      };
+      const page = await listSuggestionPage(ctx.db, filters);
+      expect(page.items).toHaveLength(1);
+      expect(page.items.some((row) => row.id === current?.id)).toBe(
+        ref.relevant,
+      );
+      const counts = await suggestionCountsByFamily(ctx.db, filters);
+      expect(
+        counts.families.find((row) => row.family === "statement_transaction")
+          ?.pending,
+      ).toBe(1);
+    }
+    const combined = await listSuggestionPage(ctx.db, {
+      family: "statement_transaction",
+      recordIds: observations
+        .filter((row) => row.providerId !== null)
+        .map((row) => row.code),
+    });
+    expect(combined.items.map((row) => row.id)).toEqual([current?.id]);
   });
 
   // Failure mode: counts read one family, so the page's chips undercount.
