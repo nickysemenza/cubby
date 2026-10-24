@@ -13,7 +13,6 @@ import {
   dataCheckScoreCap,
   dataCheckExemptible,
   DEFAULT_UNRESOLVED_SCORE_CAP,
-  dataException,
   dataExceptionReasonLabel,
   dataQualityFacets,
   relatedDataQualityEntities,
@@ -35,7 +34,11 @@ import { liveQualityRow } from "~/server/generic/data-quality/repo/registry";
 
 import { storedEntryFor } from "./entries";
 import { checksOf, entryFor } from "./sql";
-import { evaluateLiveQuality, loadPublishedQuality } from "./stored";
+import {
+  evaluateLiveQuality,
+  loadPublishedQuality,
+  type StoredEvaluation,
+} from "./stored";
 
 type CheckState = QualityTerm["state"];
 
@@ -217,9 +220,7 @@ export const loadQualityBreakdown = async (
   const [row] = await loadEvaluations(db, entity, [target.id], "live");
   if (!row) throw new Error("Quality evaluation was not loaded");
   const evaluation = evaluateRow(entity, row);
-  const expected = checksOf(entity).filter(
-    (_, index) => row[expectedKey(index)] === true,
-  );
+  const expected = checksOf(entity).filter((check) => isExpected(row, check));
   return buildQualityBreakdown(
     expected,
     evaluation.gaps.map((gap) => dataCheck.parse(gap.check)),
@@ -227,26 +228,15 @@ export const loadQualityBreakdown = async (
       .filter(
         (exception) =>
           exception.state === "active" &&
-          row[
-            gapKey(checksOf(entity).indexOf(dataCheck.parse(exception.check)))
-          ] === true,
+          row.checks[dataCheck.parse(exception.check)] === "waived",
       )
       .map((exception) => dataCheck.parse(exception.check)),
     evaluation.exceptions,
   );
 };
 
-const hydrationRow = z
-  .object({
-    id: z.string(),
-    shortcode: z.string(),
-    exceptions: z.array(dataException),
-    storedScore: z.number().nullable().optional(),
-  })
-  .catchall(z.union([z.boolean(), z.string(), z.number(), z.null()]));
-const expectedKey = (index: number) => `e${index}`;
-const gapKey = (index: number) => `g${index}`;
-const waivedKey = (index: number) => `w${index}`;
+const isExpected = (row: StoredEvaluation, check: DataCheck): boolean =>
+  row.checks[check] !== undefined && row.checks[check] !== "not_applicable";
 
 /** Published rows for list pages, or the same TypeScript checks evaluated live. */
 const loadEvaluations = async (
@@ -254,31 +244,10 @@ const loadEvaluations = async (
   entity: ScoredEntity,
   ids: readonly string[],
   source: "stored" | "live" = "stored",
-) => {
-  const stored = storedEntryFor(entity);
-  const rows =
-    source === "live"
-      ? await evaluateLiveQuality(db, stored, ids)
-      : await loadPublishedQuality(db, entity, ids);
-  return rows.map((row) =>
-    hydrationRow.parse({
-      id: row.id,
-      shortcode: row.shortcode,
-      exceptions: row.exceptions,
-      ...("score" in row ? { storedScore: row.score } : {}),
-      ...Object.fromEntries(
-        checksOf(entity).flatMap((check, index) => {
-          const state = row.checks[check] ?? "not_applicable";
-          return [
-            [expectedKey(index), state !== "not_applicable"],
-            [gapKey(index), state === "gap" || state === "waived"],
-            [waivedKey(index), state === "waived"],
-          ];
-        }),
-      ),
-    }),
-  );
-};
+): Promise<Array<StoredEvaluation & { score?: number | null }>> =>
+  source === "live"
+    ? evaluateLiveQuality(db, storedEntryFor(entity), ids)
+    : loadPublishedQuality(db, entity, ids);
 
 type Evaluated = Omit<DataQuality, "relatedGaps" | "relatedExceptions">;
 
@@ -287,17 +256,16 @@ const targetKey = (target: { targetType: string; targetId: string }) =>
 
 const evaluateRow = (
   entity: ScoredEntity,
-  row: z.infer<typeof hydrationRow>,
+  row: StoredEvaluation & { score?: number | null },
 ): Evaluated => {
   const checks = checksOf(entity);
   const targetId = parseShortcodeFor(entity, row.shortcode);
   const expectedChecks: DataCheck[] = [];
-  const rawGaps: Array<Omit<DataQualityGap, "check"> & { check: DataCheck }> =
-    [];
-  checks.forEach((check, index) => {
-    if (row[expectedKey(index)] === true) expectedChecks.push(check);
-    if (row[expectedKey(index)] !== true || row[gapKey(index)] !== true) return;
-    rawGaps.push({
+  const gaps: Array<Omit<DataQualityGap, "check"> & { check: DataCheck }> = [];
+  checks.forEach((check) => {
+    if (isExpected(row, check)) expectedChecks.push(check);
+    if (row.checks[check] !== "gap") return;
+    gaps.push({
       check,
       facet: dataCheckFacet[check],
       kind: dataCheckKind[check],
@@ -318,9 +286,8 @@ const evaluateRow = (
   // Stored outcomes remain authoritative until publication, including a waiver
   // added or withdrawn since the last pass. Live evaluation carries the same states.
   const activeChecks = new Set(
-    checks.filter((_, index) => row[waivedKey(index)] === true),
+    checks.filter((check) => row.checks[check] === "waived"),
   );
-  const gaps = rawGaps.filter((gap) => !activeChecks.has(gap.check));
   const terms = qualityTerms(
     expectedChecks,
     gaps.map((gap) => gap.check),
@@ -334,8 +301,7 @@ const evaluateRow = (
     gaps: gaps.filter((gap) => gap.facet === name),
   }));
   const calculated = scoreQualityTerms(terms);
-  const score =
-    row.storedScore === undefined ? calculated.score : row.storedScore;
+  const score = row.score === undefined ? calculated.score : row.score;
   return { status: calculated.status, score, facets, gaps, exceptions };
 };
 
