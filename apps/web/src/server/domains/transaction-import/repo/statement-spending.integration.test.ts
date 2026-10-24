@@ -116,7 +116,7 @@ describe("statement spending review and re-import", () => {
     const result = await labelStatementSuggestions(ctx.db, {
       port: answering({ kind: "purchase", counterparty: "business" }),
       spendingAdvice: async () => advice,
-      importId,
+      scope: { importId },
     });
     expect(result.failed).toEqual([]);
   };
@@ -642,7 +642,7 @@ describe("statement spending review and re-import", () => {
         ...advice,
         vendorName: judgment.create!.merchant,
       }),
-      importId: saved.batchId!,
+      scope: { importId: saved.batchId! },
     });
     expect(labelled.failed).toEqual([]);
     expect(await total()).toBe(165);

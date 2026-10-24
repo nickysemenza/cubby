@@ -64,6 +64,8 @@ import {
   regenerateCharges,
   STATEMENT_PUBLISH_CONCURRENCY,
   suggestionsNeedingLabels,
+  statementLabelTargetsInScope,
+  type StatementSuggestionScope,
   type LabelCursor,
   recordStatementLabelCheckpoint,
   completeStatementApplications,
@@ -477,6 +479,7 @@ async function completeNoActionTargets(
     failedCharges: ReadonlySet<string>;
     completed: Set<string>;
     unfinished: Set<string>;
+    scope?: StatementSuggestionScope;
   },
 ) {
   const window = [];
@@ -501,7 +504,11 @@ async function completeNoActionTargets(
     window.push({ assessmentId, charge: next.charge, evidenceFingerprint });
     positions.push(index);
   }
-  const settled = await completeNoActionStatementPrefix(db, window);
+  const settled = await completeNoActionStatementPrefix(
+    db,
+    window,
+    input.scope,
+  );
   const through = settled ? positions[settled - 1]! + 1 : 0;
   for (const next of input.targets.slice(0, through)) {
     const key = chargeId(next.charge);
@@ -517,7 +524,7 @@ async function completeNoActionTargets(
 async function applyPublishedStatementLabels(
   db: Database,
   input: Parameters<typeof completeNoActionTargets>[1] & {
-    importId: string | null | undefined;
+    scope: StatementSuggestionScope | undefined;
     reconsidered: ReadonlySet<string>;
     fail: (charge: ChargeRef, error: unknown) => void;
   },
@@ -530,15 +537,15 @@ async function applyPublishedStatementLabels(
     failedCharges,
     completed,
     unfinished,
-    importId,
+    scope,
     reconsidered,
     fail,
   } = input;
+  const importId = scope?.importId;
   // Model work may finish out of order; effects admit only the original
   // ready prefix. Later publications keep their receipts for durable resume.
   const applied = new Set<string>();
-  const settledReceipts: string[] = [];
-  const settledCharges: string[] = [];
+  const settlementTargets: (typeof targets)[number][] = [];
   const rebuild = new Set<string>();
   // A prior-round completion is resolved unless changed evidence required publication again.
   const awaitsPublication = (key: string) =>
@@ -568,7 +575,8 @@ async function applyPublishedStatementLabels(
     }
     try {
       // Import-scoped application regenerates first and may introduce rules.
-      // Only an unscoped, freshly locked no-rule prefix can bypass admission.
+      // A freshly locked no-rule prefix can bypass rule admission without
+      // import authority; its receipt completion still enforces the full scope.
       const settled = importId
         ? 0
         : await completeNoActionTargets(db, {
@@ -582,16 +590,18 @@ async function applyPublishedStatementLabels(
             failedCharges,
             completed,
             unfinished,
+            scope,
           });
       if (settled) {
         targetIndex += settled - 1;
         continue;
       }
-      if (importId) await regenerateCharges(db, [target.charge]);
+      if (importId) await regenerateCharges(db, [target.charge], scope);
       const outcome = await applyAutomaticRulesForCharge(
         db,
         target.charge,
         Boolean(importId),
+        scope,
       );
       if (outcome.refused.length) {
         const [fresh] = await buildChargeProposals(db, [target.charge]);
@@ -610,10 +620,7 @@ async function applyPublishedStatementLabels(
       }
       // Newly published rows replaced the selected row; clear the active
       // receipt only after this charge's ordered application has settled.
-      settledReceipts.push(receipts.get(key)!);
-      settledCharges.push(key);
-      target.row.applicationPending = false;
-      unfinished.delete(target.row.cursorId);
+      settlementTargets.push(target);
       if (outcome.applied.length) applied.add(key);
     } catch (error) {
       fail(target.charge, error);
@@ -621,9 +628,25 @@ async function applyPublishedStatementLabels(
       applicationBlocked = true;
     }
   }
-  await completeStatementApplications(db, settledReceipts);
-  for (const key of settledCharges) completed.add(key);
-  return { applied, rebuild };
+  const settled = new Set(
+    await completeStatementApplications(
+      db,
+      settlementTargets.map((target) => receipts.get(chargeId(target.charge))!),
+      scope,
+    ),
+  );
+  const excluded = new Set<string>();
+  for (const target of settlementTargets) {
+    const key = chargeId(target.charge);
+    if (!settled.has(receipts.get(key)!)) {
+      excluded.add(key);
+      continue;
+    }
+    completed.add(key);
+    target.row.applicationPending = false;
+    unfinished.delete(target.row.cursorId);
+  }
+  return { applied, rebuild, excluded };
 }
 
 /**
@@ -649,8 +672,8 @@ async function runStatementLabelBatch(
     /** The Run the model calls are accounted to (a Sweep's step). */
     runId?: RunId | null;
     after?: LabelCursor | null;
-    /** Label only this import's charges (an import-scoped Sweep). */
-    importId?: string | null;
+    /** Intersect retained charge identity, date and live resolved account scope. */
+    scope?: StatementSuggestionScope;
   } = {},
 ): Promise<{
   labelled: number;
@@ -693,12 +716,7 @@ async function runStatementLabelBatch(
   );
   const prepareDeadline = Date.now() + 20_000;
   const rows = await time("statement_selection", () =>
-    suggestionsNeedingLabels(
-      db,
-      limit + 1,
-      input.after,
-      input.importId ?? null,
-    ),
+    suggestionsNeedingLabels(db, limit + 1, input.after, input.scope),
   );
   if (!rows.length) return { ...empty, active: true };
   const runId =
@@ -775,12 +793,31 @@ async function runStatementLabelBatch(
   const completed = new Set<string>();
   const labels = { reused: 0, generated: 0 };
   const pauses: AiBudgetExhaustedError[] = [];
+  const admitTargets = async () => {
+    const scope = input.scope;
+    if (!scope || !(scope.importId || scope.since || scope.accountIds?.length))
+      return;
+    const admitted = await statementLabelTargetsInScope(
+      db,
+      scope,
+      targets.map((target) => target.row.id),
+    );
+    for (const target of targets) {
+      const key = chargeId(target.charge);
+      if (admitted.has(target.row.id) || skipped.has(key)) continue;
+      skipped.add(key);
+      skippedIds.push(target.row.id);
+      unfinished.delete(target.row.cursorId);
+      stale++;
+    }
+  };
   type ReadyLabels = {
     target: (typeof targets)[number];
     moved: boolean;
     current: ChargeProposal & { amount: number };
   };
   for (let round = 0; round < MAX_LABEL_ROUNDS && targets.length; round++) {
+    await admitTargets();
     const proposals = await time("statement_discovery", () =>
       buildPage(
         db,
@@ -788,6 +825,7 @@ async function runStatementLabelBatch(
           .filter(
             (target) =>
               !target.row.applicationPending &&
+              !skipped.has(chargeId(target.charge)) &&
               !failedCharges.has(chargeId(target.charge)),
           )
           .map((target) => target.charge),
@@ -797,6 +835,7 @@ async function runStatementLabelBatch(
     const ready = targets.flatMap<ReadyLabels>((target) => {
       if (target.row.applicationPending) return [];
       const key = chargeId(target.charge);
+      if (skipped.has(key)) return [];
       if (failedCharges.has(key)) return [];
       const current = proposals?.get(key);
       const moved = !current || current.evidenceFingerprint !== target.expected;
@@ -973,14 +1012,20 @@ async function runStatementLabelBatch(
         retainProgress: () => Promise<boolean>;
       }
     >();
+    // Account mappings can change while provider work runs. Recheck the same
+    // scope before retaining checkpoints or publishing/application receipts.
+    await admitTargets();
     await forEachConcurrently(
       preparedReady.map((entry, index) => ({
         ...entry,
         computed: computed[index]!,
       })),
-      STATEMENT_PUBLISH_CONCURRENCY,
+      // Scoped checkpoint writes share this Job's progress row. Serializing
+      // these DB-only writes avoids exhausting snapshot retries on our own page.
+      input.scope ? 1 : STATEMENT_PUBLISH_CONCURRENCY,
       async (entry) => {
         const { current, target, computed } = entry;
+        if (skipped.has(chargeId(current.charge))) return;
         try {
           if (computed.status === "rejected") throw computed.reason;
           const result = computed.value;
@@ -991,6 +1036,7 @@ async function runStatementLabelBatch(
             charge: current.charge,
             evidenceFingerprint: target.expected,
             checkpoint: result.checkpoint,
+            scope: input.scope,
           };
           const retainProgress = async () => {
             // A deferred/zero-budget charge has no new answers to persist.
@@ -1000,8 +1046,13 @@ async function runStatementLabelBatch(
               db,
               checkpointInput,
             );
-            if (saved === "settled") {
+            if (saved === "settled" || saved === "out_of_scope") {
               skipped.add(chargeId(current.charge));
+              if (saved === "out_of_scope") {
+                skippedIds.push(target.row.id);
+                unfinished.delete(target.row.cursorId);
+                stale++;
+              }
               return false;
             }
             if (saved === "moved")
@@ -1079,6 +1130,7 @@ async function runStatementLabelBatch(
       publishCompleteStatementLabels(
         db,
         complete.map((item) => item.input),
+        input.scope,
       ),
     );
     for (const item of complete) {
@@ -1092,6 +1144,11 @@ async function runStatementLabelBatch(
         if (!outcome) {
           skipped.add(key);
           unfinished.delete(target.row.cursorId);
+          const result = outcomes.get(key);
+          if (result?.kind === "resolved" && result.reason === "out_of_scope") {
+            skippedIds.push(target.row.id);
+            stale++;
+          }
           continue;
         }
         if (outcome.origin === "published") labelled.add(key);
@@ -1104,22 +1161,33 @@ async function runStatementLabelBatch(
         fail(current.charge, error);
       }
     }
-    const { applied, rebuild } = await time("statement_application", () =>
-      applyPublishedStatementLabels(db, {
-        targets,
-        receipts,
-        published,
-        skipped,
-        failedCharges,
-        completed,
-        unfinished,
-        importId: input.importId,
-        reconsidered: new Set(
-          ready.map(({ current }) => chargeId(current.charge)),
-        ),
-        fail,
-      }),
+    await admitTargets();
+    const { applied, rebuild, excluded } = await time(
+      "statement_application",
+      () =>
+        applyPublishedStatementLabels(db, {
+          targets,
+          receipts,
+          published,
+          skipped,
+          failedCharges,
+          completed,
+          unfinished,
+          scope: input.scope,
+          reconsidered: new Set(
+            ready.map(({ current }) => chargeId(current.charge)),
+          ),
+          fail,
+        }),
     );
+    for (const target of targets) {
+      const key = chargeId(target.charge);
+      if (!excluded.has(key)) continue;
+      skipped.add(key);
+      skippedIds.push(target.row.id);
+      unfinished.delete(target.row.cursorId);
+      stale++;
+    }
     if (rebuild.size && round === MAX_LABEL_ROUNDS - 1) {
       const remaining = targets.filter((target) =>
         rebuild.has(chargeId(target.charge)),
@@ -1127,6 +1195,7 @@ async function runStatementLabelBatch(
       await regenerateCharges(
         db,
         remaining.map((target) => target.charge),
+        input.scope,
       );
       for (const target of remaining) retainUnfinished(target.row);
     }
@@ -1148,6 +1217,7 @@ async function runStatementLabelBatch(
         await regenerateCharges(
           db,
           targets.map((target) => target.charge),
+          input.scope,
         );
       if (pauses[0] && !input.cooperative) throw pauses[0];
       break;

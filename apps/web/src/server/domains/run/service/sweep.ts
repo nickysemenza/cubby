@@ -450,7 +450,7 @@ const statementLabel: StepDriversFor<"sweep">["statement_label"] = {
   count: async ({ db, run }) => ({
     total: await countSuggestionsNeedingLabels(
       db,
-      scopeOf(run, "statement_transaction").importId ?? null,
+      scopeOf(run, "statement_transaction"),
     ),
     boundary: null,
   }),
@@ -473,7 +473,7 @@ const statementLabel: StepDriversFor<"sweep">["statement_label"] = {
               })
               .nullable()
               .parse(step.cursor ?? null),
-        importId: scopeOf(run, "statement_transaction").importId ?? null,
+        scope: scopeOf(run, "statement_transaction"),
       });
     } catch (error) {
       const paused = budgetPause(error);

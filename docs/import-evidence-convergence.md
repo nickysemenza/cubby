@@ -587,9 +587,34 @@ before each admission, since regeneration can introduce actionable rules.
 Interruption preserves reusable labels and completed publications.
 Label-page selection partitions positions by whether either original-order component
 is retained. Ordinary rows use native timestamp/ID ordering; retained rows keep the
-same component-wise overrides. Both branches apply full current-evidence eligibility,
-exact import membership, cursor comparison and Assessment existence before taking
-their bounded first sets. The merged first set is hydrated after its limit. Disjoint
+same component-wise overrides. A statement Sweep carries its full account/date/import
+scope through label counting, selection, retries and receipt admission. Date and import
+filters intersect on retained source observations using the generation identity selector,
+including withdrawal imports; the date is the source `statementDate`, not the
+Assessment timestamp. Account scope uses live generation-preview resolution in batches,
+including stored and accepted-settlement hints; void targets use their live transaction's
+account. Both cursor branches apply identity/date scope, full current-evidence eligibility,
+cursor comparison and Assessment existence before taking bounded candidate sets.
+Account preparation reads only those candidates and continues past excluded positions
+in fixed-size batches independent of the remaining output capacity, until the scoped
+page is full or the scan is exhausted. Extra admitted candidates keep their original
+cursor positions for the next page; only the filled output page hydrates
+judgments and checkpoints. Scoped counts traverse the eligible population separately.
+Scope follows regeneration and is checked again inside automatic review's serializable
+write admission, so valid fresh evidence for another account cannot authorize an effect.
+Scoped checkpoints and label publications also recheck the live resolver inside their
+serializable write transactions, including batch fallback and committed receipt recovery.
+Scoped checkpoint retention runs sequentially within a label page because every new
+checkpoint updates the same Job progress row. Model preparation remains batched.
+An out-of-scope result preserves existing evidence and paid checkpoints without publishing
+or acknowledging that target. Background calls without scope retain their ordinary path.
+Both no-action-prefix and ordinary receipt completion recheck that same scope inside
+their write transactions, including zero-rule and resumed-receipt paths. Excluded receipts
+keep `applicationPending` and their original `applicationOrder`; completion counts include
+only IDs admitted by the writer. Account/date scope remains eligible for the no-action
+shortcut with this guard.
+Account/date scope does not grant import-only automatic-rule authority: only a supplied
+import does. Default background labeling remains unscoped. Disjoint
 partial work indexes exclude completed labels and keep receipt recovery separate from
 ordinary cursor access. Schema-owned family, status and label-work keys stay SQL
 literals so generic plans can admit those indexes; household values and cursors

@@ -1,6 +1,10 @@
 import { readFileSync } from "node:fs";
 
-import { assessmentSubjects } from "@cubby/schemas/assessment";
+import {
+  assessmentSubjects,
+  assessmentFamily,
+  assessmentProducer,
+} from "@cubby/schemas/assessment";
 import { financialSpendingAdvice } from "@cubby/schemas/financial-booking";
 import type { FinancialTransactionKind } from "@cubby/schemas/financial-transaction";
 import {
@@ -49,12 +53,19 @@ import {
   spendingCategory,
   sourceTransactionRecord,
 } from "~/server/db/schema";
+import * as statementPreview from "~/server/domains/financial-transaction/repo/financial-statement-preview";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
-import { ensureRunSteps } from "~/server/domains/run/repo/run-step";
+import {
+  ensureRunSteps,
+  readRunSteps,
+} from "~/server/domains/run/repo/run-step";
+import { advanceStepRun } from "~/server/domains/run/service/step-run";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
+import { startSweep } from "~/server/domains/run/service/sweep";
 import { answering } from "~/server/domains/transaction-import/repo/statement-decision-port.fixtures";
 import * as statementSuggestionsRepo from "~/server/domains/transaction-import/repo/statement-suggestions";
 import { labelStatementSuggestions as runStatementLabels } from "~/server/domains/transaction-import/service/statement-suggestion-labels";
+import * as statementLabelService from "~/server/domains/transaction-import/service/statement-suggestion-labels";
 import * as assessmentRepo from "~/server/generic/assessment/repo/assessment";
 import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
 import { transitionAssessmentStates } from "~/server/generic/assessment/repo/assessment-state";
@@ -406,6 +417,887 @@ async function completeLabelPublications(ctx: Ctx) {
 
 describe("statement Transaction suggestions", () => {
   const ctx = withTestDb();
+
+  it.each([false, true])(
+    "keeps statement label scope through pending application=%s",
+    async (applicationPending) => {
+      const account = (await card(ctx)).output;
+      await createRepoIdentity(ctx, "financialAccount", {
+        name: "Synthetic excluded account",
+        identity: { kind: "credit_card", issuer: null, network: "visa" },
+        sourceAliases: [
+          {
+            source: "monarch",
+            alias: "Excluded Card",
+            externalAccountId: null,
+          },
+        ],
+      });
+      await record(ctx, [
+        rowInput({
+          accountDescriptor: "Excluded Card",
+          rawDescription: "EXCLUDED ACCOUNT",
+          providerAmount: -11,
+        }),
+        rowInput({
+          statementDate: "2026-04-01",
+          rawDescription: "EXCLUDED DATE",
+          providerAmount: -22,
+        }),
+        rowInput({
+          statementDate: "2026-05-05",
+          rawDescription: "INCLUDED CHARGE",
+          providerAmount: -33,
+        }),
+      ]);
+      await generate(ctx);
+      if (applicationPending)
+        await statementSuggestionsRepo.publishCompleteStatementLabels(
+          ctx.db,
+          await completeLabelPublications(ctx),
+        );
+      const accountId = await resolveOrThrow(
+        ctx.db,
+        "financialAccount",
+        account.id,
+      );
+      const scope = { accountIds: [accountId], since: "2026-05-01" };
+      const before = await statementSuggestionsRepo.suggestionsNeedingLabels(
+        ctx.db,
+        10,
+      );
+      const excluded = before.filter(
+        (entry) => entry.judgment.create?.rawDescription !== "INCLUDED CHARGE",
+      );
+      const seen: string[] = [];
+      const answer = answering({ kind: "other", counterparty: "business" });
+      const port: DecisionPort = async (request) => {
+        seen.push(request.state);
+        return answer(request);
+      };
+      const partial = applicationPending
+        ? null
+        : await labelStatementSuggestions(ctx.db, {
+            scope,
+            port,
+            decisionLimit: 1,
+          });
+      const expectedPartial = expect.objectContaining({
+        completed: 0,
+        failed: [],
+        next: expect.objectContaining({ inclusive: true }),
+      });
+      expect(partial).toEqual(applicationPending ? null : expectedPartial);
+      const outcome = await labelStatementSuggestions(ctx.db, {
+        scope,
+        port,
+        after: partial?.next,
+      });
+      expect(outcome).toMatchObject({
+        completed: 1,
+        failed: [],
+        stale: 0,
+        next: null,
+      });
+      expect(seen.join("\n")).not.toMatch(/EXCLUDED ACCOUNT|EXCLUDED DATE/);
+      const remaining = await statementSuggestionsRepo.suggestionsNeedingLabels(
+        ctx.db,
+        10,
+      );
+      expect(remaining.map((entry) => entry.id).sort()).toEqual(
+        excluded.map((entry) => entry.id).sort(),
+      );
+      expect(
+        await statementSuggestionsRepo.countSuggestionsNeedingLabels(
+          ctx.db,
+          scope,
+        ),
+      ).toBe(0);
+    },
+  );
+
+  it("intersects statement label count and native/retained pages before their limits", async () => {
+    const account = (await card(ctx)).output;
+    await createRepoIdentity(ctx, "financialAccount", {
+      name: "Synthetic cursor exclusion",
+      identity: { kind: "credit_card", issuer: null, network: "visa" },
+      sourceAliases: [
+        { source: "monarch", alias: "Excluded Card", externalAccountId: null },
+      ],
+    });
+    const input = (index: number) =>
+      rowInput({
+        providerTransactionId: `synthetic-scope-${index}`,
+        rawDescription: `SYNTHETIC SCOPE ${index}`,
+        providerAmount: -10 - index,
+        ...(index % 3 === 0 &&
+          index < 6 && { accountDescriptor: "Excluded Card" }),
+        ...(index % 3 === 1 && index < 6 && { statementDate: "2026-04-01" }),
+      });
+    const first = await record(ctx, [0, 1, 2, 3, 4, 5].map(input));
+    await record(ctx, [6, 7].map(input), {
+      fingerprint: "synthetic-scope-other-import",
+    });
+    await generate(ctx);
+    const publications = (await completeLabelPublications(ctx)).filter(
+      (entry) =>
+        [3, 4, 5, 7].some(
+          (index) =>
+            entry.proposal.canonical.rawDescription ===
+            `SYNTHETIC SCOPE ${index}`,
+        ),
+    );
+    await statementSuggestionsRepo.publishCompleteStatementLabels(
+      ctx.db,
+      publications,
+    );
+    const rows = await statementSuggestionsRepo.suggestionsNeedingLabels(
+      ctx.db,
+      20,
+    );
+    const ordered = [0, 3, 1, 4, 2, 5, 6, 7];
+    const ids = new Map<number, string>();
+    for (const [order, index] of ordered.entries()) {
+      const entry = rows.find(
+        (row) =>
+          row.judgment.create?.rawDescription === `SYNTHETIC SCOPE ${index}`,
+      );
+      if (!entry) throw new Error("Synthetic scope cursor missing");
+      ids.set(index, entry.id);
+      const createdAt = `2026-01-01T00:00:0${order}.000001`;
+      // Retained positions are historical state that ordinary writers preserve.
+      await getDb(ctx.db)
+        .update(assessmentState)
+        .set({
+          createdAt: new Date(`2026-01-01T00:00:0${order}Z`),
+          ...(entry.applicationPending && {
+            data: sql`${assessmentState.data} || ${JSON.stringify({ applicationOrder: { createdAt, id: entry.cursorId } })}::jsonb`,
+          }),
+        })
+        .where(eq(assessmentState.id, entry.id));
+    }
+    const scope = {
+      accountIds: [
+        await resolveOrThrow(ctx.db, "financialAccount", account.id),
+      ],
+      since: "2026-05-01",
+    };
+    for (const [selected, expected] of [
+      [scope, [2, 5, 6, 7]],
+      [{ ...scope, importId: first.batchId }, [2, 5]],
+    ] as const) {
+      expect(
+        await statementSuggestionsRepo.countSuggestionsNeedingLabels(
+          ctx.db,
+          selected,
+        ),
+      ).toBe(expected.length);
+      const actual: string[] = [];
+      let after: Parameters<
+        typeof statementSuggestionsRepo.suggestionsNeedingLabels
+      >[2] = null;
+      for (;;) {
+        const page = await statementSuggestionsRepo.suggestionsNeedingLabels(
+          ctx.db,
+          1,
+          after,
+          selected,
+        );
+        const entry = page[0];
+        if (!entry) break;
+        actual.push(entry.id);
+        after = { createdAt: entry.createdAt, id: entry.cursorId };
+        expect(
+          (
+            await statementSuggestionsRepo.suggestionsNeedingLabels(
+              ctx.db,
+              1,
+              { ...after, inclusive: true },
+              selected,
+            )
+          )[0]?.id,
+        ).toBe(entry.id);
+      }
+      expect(actual).toEqual(expected.map((index) => ids.get(index)));
+    }
+    const prefix = await statementSuggestionsRepo.suggestionsNeedingLabels(
+      ctx.db,
+      2,
+      null,
+      scope,
+    );
+    const boundary = prefix.at(-1);
+    if (!boundary)
+      throw new Error("Synthetic scoped preparation boundary missing");
+    const preview = vi.spyOn(
+      statementPreview,
+      "previewFinancialTransactionImport",
+    );
+    try {
+      await statementSuggestionsRepo.suggestionsNeedingLabels(
+        ctx.db,
+        1,
+        { createdAt: boundary.createdAt, id: boundary.cursorId },
+        scope,
+      );
+      expect(
+        preview.mock.calls.flatMap(([, input]) =>
+          input.rows.map((row) => row.originalStatement),
+        ),
+      ).toEqual(["SYNTHETIC SCOPE 6"]);
+    } finally {
+      preview.mockRestore();
+    }
+  });
+
+  it.each(["ordinary", "shortcut", "resumed ordinary", "resumed shortcut"])(
+    "fences %s receipt completion under its original scope",
+    async (mode) => {
+      const account = (await card(ctx)).output;
+      const other = (
+        await createRepoIdentity(ctx, "financialAccount", {
+          name: "Synthetic receipt completion account",
+          identity: { kind: "credit_card", issuer: null, network: "visa" },
+        })
+      ).output;
+      const imported = await record(ctx, [
+        rowInput({
+          providerTransactionId: "synthetic-receipt-completion-scope",
+        }),
+      ]);
+      await generate(ctx);
+      if (mode.startsWith("resumed")) {
+        const publications = await Promise.all(
+          (await completeLabelPublications(ctx)).map(async (entry) => {
+            const judgment = structuredClone(entry.proposal.judgment);
+            if (judgment.create) judgment.create.counterparty.label = "person";
+            const proposal = await labelledProposal(entry.proposal, judgment);
+            return {
+              ...entry,
+              proposal,
+              checkpoint: { ...entry.checkpoint, judgment: proposal.judgment },
+            };
+          }),
+        );
+        await statementSuggestionsRepo.publishCompleteStatementLabels(
+          ctx.db,
+          publications,
+        );
+      }
+      const [source] = (await listSourceTransactionRecords(ctx.db, {})).data;
+      if (!source)
+        throw new Error("Synthetic receipt completion source missing");
+      let before: typeof assessmentState.$inferSelect | undefined;
+      const move = async (assessmentId: string) => {
+        if (before) return;
+        [before] = await getDb(ctx.db)
+          .select()
+          .from(assessmentState)
+          .where(eq(assessmentState.id, assessmentId));
+        await updateSourceTransactionRecords(
+          ctx.db,
+          {
+            selector: {
+              source: source.source,
+              externalIds: [source.externalId],
+            },
+            data: { accountId: other.id },
+          },
+          ctx.actor,
+        );
+      };
+      const shortcut = mode.endsWith("shortcut");
+      const prefix = statementSuggestionsRepo.completeNoActionStatementPrefix;
+      const complete = statementSuggestionsRepo.completeStatementApplications;
+      const prefixSpy = vi
+        .spyOn(statementSuggestionsRepo, "completeNoActionStatementPrefix")
+        .mockImplementation(async (...args) => {
+          const [entry] = args[1];
+          if (shortcut && entry) await move(entry.assessmentId);
+          return prefix(...args);
+        });
+      const completeSpy = vi
+        .spyOn(statementSuggestionsRepo, "completeStatementApplications")
+        .mockImplementation(async (...args) => {
+          const [id] = args[1];
+          if (!shortcut && id) await move(id);
+          return complete(...args);
+        });
+      try {
+        const scope = {
+          accountIds: [
+            await resolveOrThrow(ctx.db, "financialAccount", account.id),
+          ],
+          since: "2026-05-01",
+          // Import admission selects the ordinary zero-applicable-rule path.
+          ...(!shortcut && { importId: imported.batchId }),
+        };
+        const outcome = await labelStatementSuggestions(ctx.db, {
+          scope,
+          port: answering({ kind: "purchase", counterparty: "person" }),
+        });
+        if (!before)
+          throw new Error(
+            "Synthetic receipt completion boundary was not reached",
+          );
+        expect(outcome).toMatchObject({
+          completed: 0,
+          stale: 1,
+          failed: [],
+          next: null,
+        });
+        expect(z.record(z.string(), z.json()).parse(before.data)).toMatchObject(
+          { applicationPending: true, applicationOrder: expect.any(Object) },
+        );
+        const [after] = await getDb(ctx.db)
+          .select()
+          .from(assessmentState)
+          .where(eq(assessmentState.id, before.id));
+        expect(after?.data).toEqual(before.data);
+        expect(after?.createdAt).toEqual(before.createdAt);
+        expect(
+          await statementSuggestionsRepo.suggestionsNeedingLabels(ctx.db, 1),
+        ).toMatchObject([{ id: before.id, applicationPending: true }]);
+        expect(await getDb(ctx.db).select().from(financialTransaction)).toEqual(
+          [],
+        );
+        expect(await getDb(ctx.db).select().from(expense)).toEqual([]);
+      } finally {
+        prefixSpy.mockRestore();
+        completeSpy.mockRestore();
+      }
+    },
+  );
+
+  it("keeps scoped label scan batches full behind a nearly full output page", async () => {
+    const account = (await card(ctx)).output;
+    await createRepoIdentity(ctx, "financialAccount", {
+      name: "Synthetic scan exclusion",
+      identity: { kind: "credit_card", issuer: null, network: "visa" },
+      sourceAliases: [
+        {
+          source: "monarch",
+          alias: "Excluded scan card",
+          externalAccountId: null,
+        },
+      ],
+    });
+    await record(
+      ctx,
+      Array.from({ length: 69 }, (_, index) =>
+        rowInput({
+          providerTransactionId: `synthetic-full-scan-${index}`,
+          rawDescription: `SYNTHETIC FULL SCAN ${index}`,
+          providerAmount: -100 - index,
+          ...(index >= 32 &&
+            index < 67 && { accountDescriptor: "Excluded scan card" }),
+        }),
+      ),
+    );
+    await generate(ctx);
+    // The supported publications exist; only their historical cursor positions
+    // are arranged to put a long excluded suffix behind 32 admitted rows.
+    await getDb(ctx.db).execute(sql`UPDATE "AssessmentState" SET "createdAt" =
+      '2026-01-01'::timestamp + ((data->>'amount')::int - 100) * interval '1 second'
+      WHERE family = ${assessmentFamily.enum.statement_transaction}`);
+    const scope = {
+      accountIds: [
+        await resolveOrThrow(ctx.db, "financialAccount", account.id),
+      ],
+    };
+    const preview = vi.spyOn(
+      statementPreview,
+      "previewFinancialTransactionImport",
+    );
+    try {
+      const page = await statementSuggestionsRepo.suggestionsNeedingLabels(
+        ctx.db,
+        33,
+        null,
+        scope,
+      );
+      const batches = preview.mock.calls.map(([, input]) => input.rows.length);
+      expect(batches.length).toBeLessThanOrEqual(3);
+      expect(batches).not.toContain(1);
+      expect(page.map((row) => row.judgment.create?.rawDescription)).toEqual([
+        ...Array.from(
+          { length: 32 },
+          (_, index) => `SYNTHETIC FULL SCAN ${index}`,
+        ),
+        "SYNTHETIC FULL SCAN 67",
+      ]);
+      const last = page.at(-1);
+      if (!last) throw new Error("Synthetic full scan cursor missing");
+      expect(
+        (
+          await statementSuggestionsRepo.suggestionsNeedingLabels(
+            ctx.db,
+            1,
+            { createdAt: last.createdAt, id: last.cursorId },
+            scope,
+          )
+        ).map((row) => row.judgment.create?.rawDescription),
+      ).toEqual(["SYNTHETIC FULL SCAN 68"]);
+      expect(
+        (
+          await statementSuggestionsRepo.suggestionsNeedingLabels(
+            ctx.db,
+            1,
+            { createdAt: last.createdAt, id: last.cursorId, inclusive: true },
+            scope,
+          )
+        )[0]?.id,
+      ).toBe(last.id);
+    } finally {
+      preview.mockRestore();
+    }
+  });
+
+  it.each(["checkpoint", "publication", "publication fallback"])(
+    "fences statement scope inside %s write admission",
+    async (phase) => {
+      const account = (await card(ctx)).output;
+      const other = (
+        await createRepoIdentity(ctx, "financialAccount", {
+          name: "Synthetic label write race account",
+          identity: { kind: "credit_card", issuer: null, network: "visa" },
+        })
+      ).output;
+      const imported = await record(ctx, [
+        rowInput({ providerTransactionId: "synthetic-label-write-race" }),
+      ]);
+      await generate(ctx);
+      const [source] = (await listSourceTransactionRecords(ctx.db, {})).data;
+      const [before] = await statementSuggestionsRepo.suggestionsNeedingLabels(
+        ctx.db,
+        1,
+      );
+      if (!source || !before)
+        throw new Error("Synthetic label write race missing");
+      let moved = false;
+      const move = async () => {
+        if (moved) return;
+        moved = true;
+        await updateSourceTransactionRecords(
+          ctx.db,
+          {
+            selector: {
+              source: source.source,
+              externalIds: [source.externalId],
+            },
+            data: { accountId: other.id },
+          },
+          ctx.actor,
+        );
+      };
+      const checkpoint =
+        statementSuggestionsRepo.recordStatementLabelCheckpoint;
+      const publish = statementSuggestionsRepo.publishCompleteStatementLabels;
+      const publishAssessments = assessmentRepo.publishAssessments;
+      const checkpointSpy = vi
+        .spyOn(statementSuggestionsRepo, "recordStatementLabelCheckpoint")
+        .mockImplementation(async (...args) => {
+          if (phase === "checkpoint") await move();
+          return checkpoint(...args);
+        });
+      const publicationSpy = vi
+        .spyOn(statementSuggestionsRepo, "publishCompleteStatementLabels")
+        .mockImplementation(async (...args) => {
+          if (phase === "publication") await move();
+          return publish(...args);
+        });
+      const batchSpy = vi
+        .spyOn(assessmentRepo, "publishAssessments")
+        .mockImplementation(async (...args) => {
+          if (phase === "publication fallback" && !moved) {
+            await move();
+            throw new Error("Synthetic batch failure before scoped fallback");
+          }
+          return publishAssessments(...args);
+        });
+      try {
+        const result = await labelStatementSuggestions(ctx.db, {
+          scope: {
+            importId: imported.batchId,
+            accountIds: [
+              await resolveOrThrow(ctx.db, "financialAccount", account.id),
+            ],
+            since: "2026-05-01",
+          },
+          port: answering({ kind: "other", counterparty: "business" }),
+          ...(phase === "checkpoint" && { decisionLimit: 1 }),
+        });
+        expect(moved).toBe(true);
+        expect(result).toMatchObject({ labelled: 0, completed: 0, failed: [] });
+        const [retained] = await getDb(ctx.db)
+          .select()
+          .from(assessmentState)
+          .where(eq(assessmentState.id, before.id));
+        expect(
+          z.record(z.string(), z.json()).parse(retained?.data)
+            .labelCheckpoint ?? null,
+        ).toBeNull();
+        expect(
+          await getDb(ctx.db)
+            .select({ id: assessment.id })
+            .from(assessment)
+            .where(
+              sql`${assessment.producer}->>${"kind"} = ${assessmentProducer.shape.kind.enum.model}`,
+            ),
+        ).toEqual([]);
+      } finally {
+        checkpointSpy.mockRestore();
+        publicationSpy.mockRestore();
+        batchSpy.mockRestore();
+      }
+    },
+  );
+
+  it("fences recovered statement labels under their original scope", async () => {
+    const account = (await card(ctx)).output;
+    const other = (
+      await createRepoIdentity(ctx, "financialAccount", {
+        name: "Synthetic recovery scope account",
+        identity: { kind: "credit_card", issuer: null, network: "visa" },
+      })
+    ).output;
+    const imported = await record(ctx, [
+      rowInput({ providerTransactionId: "synthetic-recovery-scope" }),
+    ]);
+    await generate(ctx);
+    const entries = await completeLabelPublications(ctx);
+    const [entry] = entries;
+    const [source] = (await listSourceTransactionRecords(ctx.db, {})).data;
+    if (!entry || !source)
+      throw new Error("Synthetic recovered scope fixture missing");
+    const published =
+      await statementSuggestionsRepo.publishCompleteStatementLabels(
+        ctx.db,
+        entries,
+      );
+    const receipt = published.get(
+      statementSuggestionsRepo.chargeId(entry.proposal.charge),
+    );
+    if (receipt?.kind !== "ready")
+      throw new Error("Synthetic publication receipt missing");
+    const before = await getDb(ctx.db)
+      .select()
+      .from(assessmentState)
+      .where(eq(assessmentState.id, receipt.receipt.assessmentId));
+    await updateSourceTransactionRecords(
+      ctx.db,
+      {
+        selector: { source: source.source, externalIds: [source.externalId] },
+        data: { accountId: other.id },
+      },
+      ctx.actor,
+    );
+    const recovered =
+      await statementSuggestionsRepo.publishCompleteStatementLabels(
+        ctx.db,
+        entries,
+        {
+          importId: imported.batchId,
+          accountIds: [
+            await resolveOrThrow(ctx.db, "financialAccount", account.id),
+          ],
+          since: "2026-05-01",
+        },
+      );
+    expect(
+      recovered.get(statementSuggestionsRepo.chargeId(entry.proposal.charge)),
+    ).toEqual({ kind: "resolved", reason: "out_of_scope" });
+    expect(
+      await getDb(ctx.db)
+        .select()
+        .from(assessmentState)
+        .where(eq(assessmentState.id, receipt.receipt.assessmentId)),
+    ).toEqual(before);
+  });
+
+  it.each(["regeneration", "application"])(
+    "fences statement scope when accounts change before %s",
+    async (phase) => {
+      const account = (await card(ctx)).output;
+      const owner = (
+        await createRepoIdentity(ctx, "ledgerParty", {
+          name: "Synthetic second purchaser",
+          kind: "member",
+        })
+      ).output;
+      const other = (
+        await createRepoIdentity(ctx, "financialAccount", {
+          name: "Synthetic race account",
+          ledgerPartyId: owner.id,
+          provisional: false,
+          identity: { kind: "credit_card", issuer: null, network: "visa" },
+        })
+      ).output;
+      const imported = await record(ctx, [
+        rowInput({ providerTransactionId: "synthetic-application-scope-race" }),
+      ]);
+      await generate(ctx);
+      const [source] = (await listSourceTransactionRecords(ctx.db, {})).data;
+      if (!source)
+        throw new Error("Synthetic application scope source missing");
+      const regenerate = statementSuggestionsRepo.regenerateCharges;
+      const apply = automaticRuleRuntime.applyAutomaticRulesForCharge;
+      let moved = false;
+      const move = async () => {
+        if (moved) return;
+        moved = true;
+        await updateSourceTransactionRecords(
+          ctx.db,
+          {
+            selector: {
+              source: source.source,
+              externalIds: [source.externalId],
+            },
+            data: { accountId: other.id },
+          },
+          ctx.actor,
+        );
+      };
+      const regeneration = vi
+        .spyOn(statementSuggestionsRepo, "regenerateCharges")
+        .mockImplementation(async (...args) => {
+          if (phase === "regeneration") await move();
+          return regenerate(...args);
+        });
+      const application = vi
+        .spyOn(automaticRuleRuntime, "applyAutomaticRulesForCharge")
+        .mockImplementation(async (...args) => {
+          if (phase === "application" && !moved) {
+            await move();
+            // A concurrent unscoped refresh may publish reusable labels for B.
+            await regenerate(args[0], [args[1]]);
+          }
+          return apply(...args);
+        });
+      try {
+        await labelStatementSuggestions(ctx.db, {
+          scope: {
+            importId: imported.batchId,
+            accountIds: [
+              await resolveOrThrow(ctx.db, "financialAccount", account.id),
+            ],
+            since: "2026-05-01",
+          },
+          port: answering({ kind: "purchase", counterparty: "business" }),
+        });
+        expect(moved).toBe(true);
+        expect(await getDb(ctx.db).select().from(financialTransaction)).toEqual(
+          [],
+        );
+        expect(await getDb(ctx.db).select().from(expense)).toEqual([]);
+      } finally {
+        regeneration.mockRestore();
+        application.mockRestore();
+      }
+    },
+  );
+
+  it("rechecks live statement label account scope after model work", async () => {
+    const account = (await card(ctx)).output;
+    const other = (
+      await createRepoIdentity(ctx, "financialAccount", {
+        name: "Synthetic reassigned account",
+        identity: { kind: "credit_card", issuer: null, network: "visa" },
+      })
+    ).output;
+    await record(ctx, [rowInput()]);
+    await generate(ctx);
+    const [before] = await statementSuggestionsRepo.suggestionsNeedingLabels(
+      ctx.db,
+      1,
+    );
+    const [source] = (await listSourceTransactionRecords(ctx.db, {})).data;
+    if (!before || !source)
+      throw new Error("Synthetic scope reassignment missing");
+    const scope = {
+      accountIds: [
+        await resolveOrThrow(ctx.db, "financialAccount", account.id),
+      ],
+    };
+    const answer = answering({ kind: "other", counterparty: "business" });
+    let reassigned = false;
+    const outcome = await labelStatementSuggestions(ctx.db, {
+      scope,
+      port: async (request) => {
+        if (!reassigned) {
+          reassigned = true;
+          await updateSourceTransactionRecords(
+            ctx.db,
+            {
+              selector: {
+                source: source.source,
+                externalIds: [source.externalId],
+              },
+              data: { accountId: other.id },
+            },
+            ctx.actor,
+          );
+        }
+        return answer(request);
+      },
+    });
+    expect(outcome).toMatchObject({
+      labelled: 0,
+      completed: 0,
+      stale: 1,
+      failed: [],
+      skippedIds: [before.id],
+    });
+    expect(
+      await statementSuggestionsRepo.countSuggestionsNeedingLabels(
+        ctx.db,
+        scope,
+      ),
+    ).toBe(0);
+    expect(
+      await statementSuggestionsRepo.countSuggestionsNeedingLabels(ctx.db, {
+        accountIds: [
+          await resolveOrThrow(ctx.db, "financialAccount", other.id),
+        ],
+      }),
+    ).toBe(1);
+    expect(
+      await statementSuggestionsRepo.suggestionsNeedingLabels(ctx.db, 1),
+    ).toMatchObject([
+      { id: before.id, checkpoint: null, applicationPending: false },
+    ]);
+  });
+
+  it("scopes statement label dates on retained observations in the selected import", async () => {
+    const account = (await card(ctx)).output;
+    const observation = rowInput({
+      providerTransactionId: "synthetic-retained-date",
+      statementDate: "2026-05-04",
+    });
+    const first = await record(ctx, [observation], {
+      observedAt: "2026-06-01T00:00:00Z",
+    });
+    const later = await record(
+      ctx,
+      [{ ...observation, statementDate: "2026-04-01" }],
+      {
+        fingerprint: "synthetic-corrected-date",
+        observedAt: "2026-06-02T00:00:00Z",
+      },
+    );
+    await generate(ctx);
+    const scope = {
+      accountIds: [
+        await resolveOrThrow(ctx.db, "financialAccount", account.id),
+      ],
+      since: "2026-05-01",
+    };
+    const page = await statementSuggestionsRepo.suggestionsNeedingLabels(
+      ctx.db,
+      1,
+      null,
+      scope,
+    );
+    expect(page).toMatchObject([{ judgment: { statementDate: "2026-04-01" } }]);
+    expect(
+      await statementSuggestionsRepo.countSuggestionsNeedingLabels(
+        ctx.db,
+        scope,
+      ),
+    ).toBe(1);
+    expect(
+      await statementSuggestionsRepo.countSuggestionsNeedingLabels(ctx.db, {
+        ...scope,
+        importId: first.batchId,
+      }),
+    ).toBe(1);
+    expect(
+      await statementSuggestionsRepo.countSuggestionsNeedingLabels(ctx.db, {
+        ...scope,
+        importId: later.batchId,
+      }),
+    ).toBe(0);
+    expect(
+      await statementSuggestionsRepo.suggestionsNeedingLabels(ctx.db, 1, null, {
+        ...scope,
+        importId: later.batchId,
+      }),
+    ).toEqual([]);
+  });
+
+  it("carries the public statement Sweep scope into label count and execution", async () => {
+    const account = (await card(ctx)).output;
+    await createRepoIdentity(ctx, "financialAccount", {
+      name: "Synthetic public sweep exclusion",
+      identity: { kind: "credit_card", issuer: null, network: "visa" },
+      sourceAliases: [
+        { source: "monarch", alias: "Excluded Card", externalAccountId: null },
+      ],
+    });
+    await record(ctx, [
+      rowInput({ accountDescriptor: "Excluded Card", providerAmount: -11 }),
+      rowInput({ statementDate: "2026-04-01", providerAmount: -22 }),
+      rowInput({ statementDate: "2026-05-05", providerAmount: -33 }),
+    ]);
+    await generate(ctx);
+    const actual = statementLabelService.labelStatementSuggestions;
+    const advice = await statementSpendingAdvice(ctx.db);
+    // Keep the real Sweep/service; inject only its external decision/advice ports.
+    const labels = vi
+      .spyOn(statementLabelService, "labelStatementSuggestions")
+      .mockImplementation((db, input) =>
+        actual(db, {
+          ...input,
+          port: answering({ kind: "other", counterparty: "business" }),
+          spendingAdvice: advice,
+        }),
+      );
+    try {
+      const runId = await startSweep(ctx.db, ctx.actor, {
+        trigger: "manual",
+        families: [
+          {
+            family: "statement_transaction",
+            scope: {
+              accountIds: [
+                await resolveOrThrow(ctx.db, "financialAccount", account.id),
+              ],
+              since: "2026-05-01",
+            },
+          },
+        ],
+      });
+      let finished = false;
+      for (let page = 0; page < 20; page++) {
+        const result = await withJobFixtureExecution(
+          ctx.db,
+          {
+            key: `run:${runId}`,
+            kind: "run.execute",
+            input: { runId, purpose: "sweep" },
+            runId,
+          },
+          () => advanceStepRun(ctx.db, { runId, attempt: 1 }),
+        );
+        if (result.kind === "finished") {
+          finished = true;
+          break;
+        }
+        expect(result.kind).toBe("continue");
+      }
+      expect(finished).toBe(true);
+      expect(
+        (await readRunSteps(ctx.db, runId)).find(
+          (step) => step.key === "statement_label",
+        ),
+      ).toMatchObject({ state: "done", found: 1, done: 1, failed: 0 });
+      expect(
+        await statementSuggestionsRepo.countSuggestionsNeedingLabels(ctx.db),
+      ).toBe(2);
+    } finally {
+      labels.mockRestore();
+    }
+  });
 
   // Failure mode: pages build many charges at once while accept rebuilds one,
   // so any batch-dependent evidence (unordered holds, another account's rows)
@@ -2342,10 +3234,11 @@ describe("statement Transaction suggestions", () => {
     }
   });
 
-  it.each([false, true])(
-    "completes no-action labels with import scope %s and preserves its admission path",
-    async (importScoped) => {
-      await card(ctx);
+  it.each(["unscoped", "account/date", "import"])(
+    "completes no-action labels with %s scope and preserves its admission path",
+    async (mode) => {
+      const account = (await card(ctx)).output;
+      const importScoped = mode === "import";
       const recorded = await record(ctx, [
         rowInput(),
         rowInput({
@@ -2365,7 +3258,20 @@ describe("statement Transaction suggestions", () => {
             runId: await ensureRun(ctx.db, ctx.actor, {
               purpose: "background",
             }),
-            ...(importScoped && { importId: recorded.batchId }),
+            scope: importScoped
+              ? { importId: recorded.batchId }
+              : mode === "account/date"
+                ? {
+                    accountIds: [
+                      await resolveOrThrow(
+                        ctx.db,
+                        "financialAccount",
+                        account.id,
+                      ),
+                    ],
+                    since: "2026-05-01",
+                  }
+                : {},
           }),
         ).toMatchObject({
           completed: 2,
@@ -2458,11 +3364,18 @@ describe("statement Transaction suggestions", () => {
         kind: "purchase",
         counterparty: "business",
       });
-      const result = await label(ctx, (input) =>
-        input.state.includes("SYNTHETIC PREFIX BOOKING")
-          ? business(input)
-          : personal(input),
-      );
+      const result = await labelStatementSuggestions(ctx.db, {
+        scope: {
+          accountIds: [
+            await resolveOrThrow(ctx.db, "financialAccount", account.id),
+          ],
+          since: "2026-04-01",
+        },
+        port: (input) =>
+          input.state.includes("SYNTHETIC PREFIX BOOKING")
+            ? business(input)
+            : personal(input),
+      });
       expect(result).toMatchObject({ completed: 3, next: null });
       // The ordinary path also refuses this obsolete evidence in its later
       // rebuild round. Completing a no-action prefix must not bypass that fence.
@@ -3790,17 +4703,16 @@ describe("statement Transaction suggestions", () => {
       ctx.db,
       20,
       null,
-      first.batchId,
+      { importId: first.batchId },
     );
     expect(scoped.map((row) => row.id)).toEqual(expected.slice(1));
     expect(
       await statementSuggestionsRepo.countSuggestionsNeedingLabels(ctx.db),
     ).toBe(expected.length);
     expect(
-      await statementSuggestionsRepo.countSuggestionsNeedingLabels(
-        ctx.db,
-        first.batchId,
-      ),
+      await statementSuggestionsRepo.countSuggestionsNeedingLabels(ctx.db, {
+        importId: first.batchId,
+      }),
     ).toBe(expected.length - 1);
     const boundary = scoped[1];
     if (!boundary) throw new Error("Synthetic microsecond boundary missing");
@@ -3815,7 +4727,7 @@ describe("statement Transaction suggestions", () => {
             id: boundary.cursorId,
             inclusive: true,
           },
-          first.batchId,
+          { importId: first.batchId },
         )
       ).map((row) => row.id),
     ).toEqual([target(2).id, target(1).id]);
@@ -3825,7 +4737,7 @@ describe("statement Transaction suggestions", () => {
           ctx.db,
           2,
           { createdAt: boundary.createdAt, id: boundary.cursorId },
-          first.batchId,
+          { importId: first.batchId },
         )
       ).map((row) => row.id),
     ).toEqual([target(1).id, target(3).id]);
