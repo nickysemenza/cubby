@@ -35,8 +35,9 @@ recommendations and actual record changes remain separate facts.
 
 Review tables start at Needs attention when supported decisions exist, otherwise
 Results. Results includes processing, skipped, blocked and completed items;
-completion never implies every item succeeded. Execution steps, diagnostics,
-transcripts and usage follow the work and start folded. Section links open the
+completion never implies every item succeeded. The live phase summary keeps Run
+status current. Execution steps, diagnostics, transcripts and usage follow the
+work and start folded. Section links open the
 corresponding evidence without replacing the workspace.
 
 Live updates refresh existing values without reordering admitted rows or closing

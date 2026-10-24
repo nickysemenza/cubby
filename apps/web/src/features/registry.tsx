@@ -298,7 +298,8 @@ const detailSlots = {
       (run) => isExecutedRunPurpose(run.purpose),
       true,
     ),
-    "live-progress": runReportSlot("live-progress", undefined, true),
+    // This mounted report owns status synchronization even while diagnostics are folded.
+    "live-progress": runReportSlot("live-progress"),
     "import-controls": slot(
       () =>
         named(

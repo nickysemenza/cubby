@@ -202,7 +202,6 @@ test("Run work shows phase progress and expandable handoffs", async ({
       },
     });
   await gotoAuthenticatedPage(page, `/runs/${owner.shortcode}`);
-  await page.getByRole("button", { name: "Processing", exact: true }).click();
   const bar = page.getByRole("progressbar", { name: "Labelling suggestions" });
   await expect(bar).toHaveAttribute("aria-valuenow", "40");
   await expect(bar).toHaveAttribute("aria-valuemax", "100");

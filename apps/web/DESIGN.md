@@ -291,8 +291,9 @@ Run figures and funnel rows drill into the decision ledger. The ledger is the
 step's declared results family, read through a family presenter. It has facets,
 search, J/K/Enter, `/` and Esc, and stacked rows on phone. Evidence opens in a
 `SidePanel`. Steps, Decisions and Diagnostics retain their declared anchors.
-Execution evidence follows Work; steps, progress reports, diagnostics, transcripts
-and usage start folded on web, and a direct section jump opens its body. Ordinary
+Execution evidence follows Work; steps, detailed progress reports, diagnostics,
+transcripts and usage start folded on web, and a direct section jump opens its
+body. The thin live phase summary remains mounted to synchronize Run status. Ordinary
 record sections remain open and review drafts stay mounted. Completed Runs keep
 results and supported corrections/retries; completion is never a success claim
 for every item.
