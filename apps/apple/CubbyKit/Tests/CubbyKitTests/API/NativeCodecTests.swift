@@ -211,5 +211,11 @@ struct NativeCodecTests {
         let fractional = try transcoder.decode("2026-01-01T00:00:00.000Z")
         #expect(try transcoder.decode("2026-01-01T00:00:00Z") == fractional)
         #expect(try transcoder.encode(fractional) == "2026-01-01T00:00:00.000Z")
+        for milliseconds in ["001", "010", "123", "280", "283", "999"] {
+            let revision = "2026-10-24T05:34:23.\(milliseconds)Z"
+            let decoded = try transcoder.decode(revision)
+            #expect(try transcoder.encode(decoded) == revision)
+            #expect(try JSONValue(encoding: decoded) == .string(revision))
+        }
     }
 }

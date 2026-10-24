@@ -10,6 +10,8 @@ SwiftPM code-generation plugin.
 `Models/`. Generated files are ignored and restored by the generation task.
 Handwritten callers name models through CubbyKit's generated `APITypes.swift`.
 Branded identifiers, dates and JSON codecs live in `CubbyAPISupport`.
+CubbyKit's `LenientISO8601DateTranscoder` preserves server milliseconds when
+encoding dates, including photo-review revisions used by stale-write guards.
 
 `NativeOperations.swift` contains methods for operation ids and
 `OperationCatalog.swift` lists those ids for the CLI. `NativeHTTPTransport` POSTs
