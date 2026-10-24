@@ -1179,7 +1179,12 @@ export async function suggestFields(
           dependencies,
           incomplete: prepared.incomplete,
         });
-        const correction = key ? await resolveFieldCorrection(db, key) : null;
+        const correction = key
+          ? await resolveFieldCorrection(db, key, {
+              entity: input.entity,
+              field: target,
+            })
+          : null;
         if (key && correction && correction.kind !== "none") {
           adoptPreparedAiInputs(prepared.inputs);
           const decision =

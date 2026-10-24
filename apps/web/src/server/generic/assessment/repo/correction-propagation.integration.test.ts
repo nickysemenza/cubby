@@ -1,4 +1,7 @@
-import { basisValueOf } from "@cubby/schemas/field-suggestion";
+import {
+  basisValueOf,
+  fieldSuggestionContextKeys,
+} from "@cubby/schemas/field-suggestion";
 import { runEntityId } from "@cubby/schemas/identifiers";
 import { and, eq, inArray, notInArray, sql } from "drizzle-orm";
 import { driveAiWork } from "tooling/ai-work";
@@ -49,7 +52,10 @@ import {
   productCategoryId,
 } from "~/server/domains/run/service/suggestion-sweep.fixtures";
 import { executeEntity, executeEntityAs } from "~/server/entity-kernel";
-import { publishFieldAssessment } from "~/server/generic/assessment/repo/assessment";
+import {
+  publishAssessment,
+  publishFieldAssessment,
+} from "~/server/generic/assessment/repo/assessment";
 import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
 import { listAutomaticDecisions } from "~/server/generic/assessment/repo/automatic-decisions";
 import { applyAutomaticRules } from "~/server/generic/assessment/repo/automatic-rule-runtime";
@@ -57,6 +63,7 @@ import {
   readConfirmedCorrection,
   readFieldCorrectionSources,
   readCorrectionTarget,
+  correctionTargetIds,
 } from "~/server/generic/assessment/repo/correction-sources";
 import { fieldCorrectionIdentity } from "~/server/generic/assessment/repo/field-assessment-review";
 import { lockFieldCorrectionKey } from "~/server/generic/assessment/repo/field-correction-lock";
@@ -199,6 +206,8 @@ describe("confirmed correction propagation", () => {
     if (!correctionKey)
       throw new Error("Synthetic category inputs are incomplete");
     return {
+      inputs: prepared.inputs,
+      dependencies,
       input,
       runId,
       ports,
@@ -277,6 +286,266 @@ describe("confirmed correction propagation", () => {
       );
     },
   );
+
+  async function legacyQuestion(
+    question: Awaited<ReturnType<typeof preparedQuestion>>,
+  ) {
+    const { sha256Hex } = await import("@cubby/shared/sha256");
+    const { canonicalJson } = await import("~/server/lib/canonical-json");
+    const product = await productFixture(ctx, "Synthetic classification item");
+    const basis = { ...question.input.basis, __resolutionContext: "{}" };
+    const correctionKey = await sha256Hex(
+      canonicalJson({
+        version: "field-correction-v1",
+        entity: "product",
+        field: "categoryId",
+        basis,
+        inputs: question.inputs,
+        dependencies: question.dependencies,
+      }),
+    );
+    const prediction = await publishAssessment(
+      ctx.db,
+      {
+        publicationKey: `synthetic-legacy:${crypto.randomUUID()}`,
+        family: "field",
+        subject: {
+          kind: "field",
+          entity: "product",
+          recordId: product.entityId,
+          field: "categoryId",
+        },
+        judgment: {
+          value: taxonomyShortcode("tools"),
+          confidence: 0.88,
+          runnerUpValue: null,
+          runnerUpConfidence: null,
+          kind: "addition",
+        },
+        fingerprint: "synthetic-legacy-input",
+        producer: null,
+        served: true,
+        evidence: { correctionKey, basis, inputs: question.inputs },
+      },
+      {
+        currentValue: null,
+        provenance: { ...question.provenance, model: "typesafe/jev" },
+        suggestedValue: taxonomyShortcode("tools"),
+        confidence: 0.88,
+        model: "typesafe/jev",
+        kind: "addition",
+        data: {
+          correctionKey,
+          liveInputFingerprint: await fieldInputFingerprint(
+            ctx.db,
+            "product",
+            product.entityId,
+            "categoryId",
+          ),
+        },
+      },
+    );
+    return { product, prediction, correctionKey };
+  }
+
+  it("preserves a frozen raw-v1 live root in future canonical inference", async () => {
+    const question = await preparedQuestion();
+    const source = await legacyQuestion(question);
+    await reviewAssessment(ctx.db, kernelCtx(ctx), {
+      assessmentId: source.prediction.id,
+      operationId: crypto.randomUUID(),
+      verdict: "wrong",
+      intent: "apply",
+      correction: { present: true, value: taxonomyShortcode("food") },
+    });
+    const output = await suggestFields(
+      ctx.db,
+      question.runId,
+      question.input,
+      question.ports,
+    );
+    expect(output.outcomes?.categoryId).toMatchObject({
+      kind: "correction",
+      decision: { status: "confirmed", value: taxonomyShortcode("food") },
+    });
+  });
+
+  it("repairs and re-corrects a frozen raw-v1 target from canonical authority", async () => {
+    const question = await preparedQuestion();
+    const target = await legacyQuestion(question);
+    const first = await confirmKey(
+      question.correctionKey,
+      taxonomyShortcode("food"),
+    );
+    const sourceProof = await readConfirmedCorrection(
+      ctx.db,
+      first.result.feedbackId,
+    );
+    const targetProof = await readCorrectionTarget(
+      ctx.db,
+      target.prediction.id,
+    );
+    if (!sourceProof || !targetProof)
+      throw new Error("Missing synthetic repair proofs");
+    const repair = await fieldCorrectionRepair.prepare(ctx.db, {
+      source: sourceProof,
+      target: targetProof,
+    });
+    if (repair.status === "held") throw new Error(repair.reason);
+    await drain();
+    expect(await productCategoryId(ctx.db, target.product.id)).toBe(
+      taxonomyId("food"),
+    );
+    await executeEntityAs(kernelCtx(ctx), "update", {
+      entity: "product",
+      id: first.product.id,
+      data: { categoryId: taxonomyShortcode("books") },
+    });
+    await confirmKey(question.correctionKey, taxonomyShortcode("tools"));
+    await drain();
+    expect(await productCategoryId(ctx.db, target.product.id)).toBe(
+      taxonomyId("tools"),
+    );
+  });
+
+  it("advances history cursors through nonmatching field candidates", async () => {
+    const candidates = await Promise.all(
+      ["a", "b", "c"].map((correctionKey) =>
+        propose({ correctionKey: `synthetic-${correctionKey}` }),
+      ),
+    );
+    candidates.sort((a, b) => a.prediction.id.localeCompare(b.prediction.id));
+    const last = candidates.at(-1)!;
+    const target = await readCorrectionTarget(ctx.db, last.prediction.id);
+    const key = z
+      .object({ correctionKey: z.string() })
+      .parse(target?.evidence).correctionKey;
+    let after: string | null = null;
+    const found = [];
+    let emptyBeforeMatch = false;
+    for (let page = 0; page < 4; page++) {
+      const result = await correctionTargetIds(ctx.db, {
+        sourceAssessmentId: crypto.randomUUID(),
+        correctionKey: key,
+        entity: "product",
+        field: "categoryId",
+        after,
+        limit: 1,
+      });
+      if (!found.length && !result.targets.length && !result.done)
+        emptyBeforeMatch = true;
+      found.push(...result.targets.map((row) => row.id));
+      after = result.after;
+      if (result.done) break;
+    }
+    expect(emptyBeforeMatch).toBe(true);
+    expect(found).toEqual([last.prediction.id]);
+  });
+
+  it("reuses a correction from the actual live request in canonical inference and Sweep", async () => {
+    const source = await productFixture(ctx, "Synthetic classification item");
+    const record = await executeEntity(kernelCtx(ctx), {
+      action: "get",
+      entity: "product",
+      id: source.id,
+      missing: "error",
+    });
+    if (record.action !== "get" || !record.item)
+      throw new Error("Missing synthetic Product");
+    const row = z.record(z.string(), z.unknown()).parse(record.item);
+    const policy = decisionCatalogRows().find(
+      (row) => row.entity === "product" && row.field === "categoryId",
+    );
+    const basis = Object.fromEntries(
+      fieldSuggestionContextKeys("product", [
+        ...(policy?.basis.map((row) => row.key) ?? []),
+        "categoryId",
+      ]).map((key) => [key, basisValueOf(row[key])]),
+    );
+    const question = await preparedQuestion(basis);
+    const response = await inferFieldAssessments(
+      kernelCtx(ctx),
+      {
+        ...question.input,
+        entityId: source.id,
+        basis: { ...question.input.basis, __resolutionContext: "{}" },
+      },
+      {
+        recordUsage: false,
+        decisionPort: async (request) => {
+          const keys = Object.keys(request.questions.selection.criteria);
+          return {
+            answers: {
+              selection: {
+                type: "choice",
+                choice: "none",
+                confidence: 0.9,
+                probabilities: Object.fromEntries(
+                  keys.map((key) => [
+                    key,
+                    key === "none" ? 0.9 : 0.1 / Math.max(1, keys.length - 1),
+                  ]),
+                ),
+              },
+            },
+          };
+        },
+      },
+    );
+    const outcome = response.outcomes?.categoryId;
+    const assessmentId =
+      outcome && outcome.kind !== "skipped" ? outcome.assessmentId : null;
+    if (!assessmentId) throw new Error("Missing actual live assessment");
+    await executeEntityAs(kernelCtx(ctx), "update", {
+      entity: "product",
+      id: source.id,
+      data: { categoryId: taxonomyShortcode("food") },
+    });
+    const applied = await reviewAssessment(ctx.db, kernelCtx(ctx), {
+      assessmentId,
+      operationId: crypto.randomUUID(),
+      verdict: "wrong",
+      intent: "apply",
+      correction: { present: true, value: taxonomyShortcode("food") },
+      application: { kind: "saved_field", recordId: source.id },
+    });
+    expect(
+      await readConfirmedCorrection(ctx.db, applied.feedbackId),
+    ).not.toBeNull();
+    const canonical = await productFixture(
+      ctx,
+      "Synthetic classification item",
+    );
+    const reused = await suggestFields(
+      ctx.db,
+      question.runId,
+      { ...question.input, entityId: canonical.id },
+      question.ports,
+    );
+    expect(reused.outcomes?.categoryId).toMatchObject({
+      kind: "correction",
+      decision: {
+        status: "confirmed",
+        value: taxonomyShortcode("food"),
+      },
+    });
+    const swept = await productFixture(ctx, "Synthetic classification item");
+    const ports = { context: kernelCtx(ctx), suggestPorts: question.ports };
+    const started = await queueSuggestionSweep(
+      ctx.db,
+      {
+        entity: "product",
+        fields: ["categoryId"],
+        filters: { ids: [swept.id] },
+      },
+      ports,
+    );
+    await driveAiWork(ctx.db, started.id, { sweep: ports });
+    await drain();
+    const sweptValue = await productCategoryId(ctx.db, swept.id);
+
+    expect(sweptValue).toBe(taxonomyId("food"));
+  });
 
   it("settles renewed explicit None authority without another field write", async () => {
     const question = await preparedQuestion();
@@ -597,6 +866,86 @@ describe("confirmed correction propagation", () => {
     expect(await productCategoryId(ctx.db, proposed.product.id)).toBeNull();
   });
 
+  it("locks legacy and canonical predecessor identities before correction publication", async () => {
+    const question = await preparedQuestion();
+    const target = await legacyQuestion(question);
+    await confirmKey(question.correctionKey, taxonomyShortcode("food"));
+    const output = await suggestFields(
+      ctx.db,
+      question.runId,
+      { ...question.input, entityId: target.product.id },
+      question.ports,
+    );
+    const outcome = output.outcomes?.categoryId;
+    if (outcome?.kind !== "correction")
+      throw new Error("Missing correction outcome");
+    const ready = Promise.withResolvers<void>();
+    const release = Promise.withResolvers<void>();
+    const member = withTransactionDatabase(ctx.db, async (db) => {
+      await lockFieldCorrectionKey(db, target.correctionKey);
+      await getDb(db)
+        .select({ id: assessmentState.id })
+        .from(assessmentState)
+        .where(eq(assessmentState.id, target.prediction.id))
+        .for("update");
+      ready.resolve();
+      await release.promise;
+      return reviewAssessment(db, kernelCtx({ db, actor: ctx.actor }), {
+        assessmentId: target.prediction.id,
+        operationId: crypto.randomUUID(),
+        verdict: "wrong",
+        intent: "apply",
+        correction: { present: true, value: null },
+      });
+    });
+    await ready.promise;
+    const started = Promise.withResolvers<number>();
+    const publication = withTransactionDatabase(ctx.db, async (db) => {
+      const result = z
+        .object({ rows: z.array(z.object({ pid: z.number() })) })
+        .parse(await getDb(db).execute(sql`SELECT pg_backend_pid() AS pid`));
+      started.resolve(result.rows[0]!.pid);
+      return publishFieldCorrectionQuestion(db, {
+        entity: "product",
+        recordId: target.product.entityId,
+        field: "categoryId",
+        currentValue: null,
+        outcome,
+        provenance: question.provenance,
+        runId: null,
+      });
+    });
+    const pid = await started.promise;
+    try {
+      await expect
+        .poll(
+          async () => {
+            const result = z
+              .object({
+                rows: z.array(z.object({ waiting: z.boolean().nullable() })),
+              })
+              .parse(
+                await getDb(ctx.db).execute(
+                  sql`SELECT wait_event_type = 'Lock' AS waiting FROM pg_stat_activity WHERE pid = ${pid}`,
+                ),
+              );
+            return result.rows[0]?.waiting;
+          },
+          { timeout: 2000 },
+        )
+        .toBe(true);
+    } finally {
+      release.resolve();
+    }
+    const results = await Promise.allSettled([member, publication]);
+    if (results[0]?.status === "rejected") throw results[0].reason;
+    expect(results[0]?.status).toBe("fulfilled");
+    // Publication must reject the now-stale target, rather than deadlocking its review.
+    if (results[1]?.status !== "rejected")
+      throw new Error("Stale publication unexpectedly succeeded");
+    expect(String(results[1].reason)).toMatch(/changed during inference/);
+  });
+
   it("takes correction keys before locking Sweep predecessor projections", async () => {
     const target = await propose();
     const runId = await ensureRun(ctx.db, ctx.actor, {
@@ -678,6 +1027,7 @@ describe("confirmed correction propagation", () => {
     const results = await Promise.allSettled([member, sweep]);
     expect(waiting).toBe(true);
     expect(results[0]?.status).toBe("fulfilled");
+    if (results[1]?.status === "rejected") throw results[1].reason;
     expect(results[1]?.status).toBe("fulfilled");
   });
 

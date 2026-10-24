@@ -14,7 +14,8 @@ import { systemActor } from "~/server/domains/run/repo/ensure-run";
 import type { CorrectionRepairAdapter } from "~/server/generic/assessment/correction-repair";
 import { transitionAssessmentState } from "~/server/generic/assessment/repo/assessment-state";
 import {
-  fieldCorrectionKey,
+  equivalentFieldCorrections,
+  readFieldCorrectionIdentity,
   readConfirmedCorrection,
 } from "~/server/generic/assessment/repo/correction-sources";
 import { correctionAlreadyRecorded } from "~/server/generic/assessment/repo/correction-work";
@@ -66,10 +67,15 @@ export const fieldCorrectionRepair: CorrectionRepairAdapter<
         status: "held",
         reason: "This field requires its domain correction policy",
       };
-    const key = fieldCorrectionKey(input.source.evidence);
+    const identity = await readFieldCorrectionIdentity(
+      db,
+      input.source.subject,
+      input.source.evidence,
+    );
+    const key = identity.canonicalKey ?? identity.storedKey;
     if (
       !key ||
-      key !== fieldCorrectionKey(input.target.evidence) ||
+      !(await equivalentFieldCorrections(db, input.source, input.target)) ||
       source.data.entity !== target.data.entity ||
       source.data.field !== target.data.field
     )
@@ -77,7 +83,7 @@ export const fieldCorrectionRepair: CorrectionRepairAdapter<
         status: "held",
         reason: "Complete decision inputs are not equivalent",
       };
-    const resolution = await resolveFieldCorrection(db, key);
+    const resolution = await resolveFieldCorrection(db, key, source.data);
     if (
       !resolution.sources.some(
         (candidate) => candidate.feedbackId === input.source.feedbackId,
@@ -165,7 +171,7 @@ export const fieldCorrectionRepair: CorrectionRepairAdapter<
       );
       if (
         !previousSource ||
-        fieldCorrectionKey(previousSource.evidence) !== key
+        !(await equivalentFieldCorrections(db, previousSource, input.source))
       )
         continue;
       const recorded = await correctionAlreadyRecorded(
@@ -263,13 +269,33 @@ export const fieldCorrectionRepair: CorrectionRepairAdapter<
     plan,
     actor,
   ): Promise<SuggestionCorrectionOutcome> => {
-    const key = fieldCorrectionKey(input.source.evidence);
+    const identity = await readFieldCorrectionIdentity(
+      db,
+      input.source.subject,
+      input.source.evidence,
+    );
+    const key = identity.canonicalKey ?? identity.storedKey;
     if (!key)
       return {
         status: "held",
         reason: "Complete correction inputs are unavailable",
       };
-    await lockFieldCorrectionKey(db, key);
+    const targetIdentity = await readFieldCorrectionIdentity(
+      db,
+      input.target.subject,
+      input.target.evidence,
+    );
+    for (const lockKey of [
+      ...new Set([
+        identity.storedKey,
+        identity.canonicalKey,
+        targetIdentity.storedKey,
+        targetIdentity.canonicalKey,
+      ]),
+    ]
+      .filter((value) => value !== null)
+      .sort())
+      await lockFieldCorrectionKey(db, lockKey);
     // Serialize source supersession and target writes using one canonical order.
     // A source decision cannot commit between this validation and its consequence.
     const subjects = await getDb(db)

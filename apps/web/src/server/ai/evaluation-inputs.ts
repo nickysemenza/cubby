@@ -1,17 +1,12 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 
+import { capturedFieldInput } from "@cubby/schemas/ai-evaluation";
 import { sha256Hex } from "@cubby/shared/sha256";
 import { z } from "zod";
 
 import type { AiFeature } from "./policy/features";
 
-const capturedInput = z.object({
-  feature: z.string(),
-  promptVersion: z.string(),
-  operation: z.string(),
-  model: z.string(),
-  fingerprint: z.string(),
-});
+const capturedInput = capturedFieldInput;
 export type CapturedInput = z.infer<typeof capturedInput>;
 const scope = new AsyncLocalStorage<{
   prepareOnly: boolean;

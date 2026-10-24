@@ -46,7 +46,7 @@ import {
   transitionAssessmentState,
   transitionAssessmentStates,
 } from "~/server/generic/assessment/repo/assessment-state";
-import { fieldCorrectionKey } from "~/server/generic/assessment/repo/correction-sources";
+import { readFieldCorrectionIdentity } from "~/server/generic/assessment/repo/correction-sources";
 import { lockFieldCorrectionKey } from "~/server/generic/assessment/repo/field-correction-lock";
 import { resolveFieldCorrection } from "~/server/generic/assessment/repo/field-correction-resolver";
 import { fieldInputFingerprint } from "~/server/generic/assessment/repo/field-input-fence";
@@ -718,16 +718,32 @@ async function settleReview(
           );
         return priorOutcome;
       }
-      const correctionKey =
+      const identity =
         prediction.family === "field"
-          ? fieldCorrectionKey(prediction.evidence)
+          ? await readFieldCorrectionIdentity(
+              transactionDb,
+              prediction.subject,
+              prediction.evidence,
+            )
           : null;
+      const correctionKey =
+        identity && (identity.canonicalKey ?? identity.storedKey);
       if (correctionKey) {
-        await lockFieldCorrectionKey(transactionDb, correctionKey);
+        for (const key of [
+          ...new Set([identity?.storedKey, identity?.canonicalKey]),
+        ]
+          .filter((key) => key != null)
+          .sort())
+          await lockFieldCorrectionKey(transactionDb, key);
         if (
           automatic &&
-          (await resolveFieldCorrection(transactionDb, correctionKey)).kind !==
-            "none"
+          (
+            await resolveFieldCorrection(
+              transactionDb,
+              correctionKey,
+              assessmentSubjects.field.parse(prediction.subject),
+            )
+          ).kind !== "none"
         )
           throw new Error(
             "A confirmed member correction requires correction propagation",

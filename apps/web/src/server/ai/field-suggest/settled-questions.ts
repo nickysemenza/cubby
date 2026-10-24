@@ -271,7 +271,10 @@ async function recheck(
     ]),
   });
   if (correctionKey) {
-    const resolution = await resolveFieldCorrection(db, correctionKey);
+    const resolution = await resolveFieldCorrection(db, correctionKey, {
+      entity,
+      field: question.field,
+    });
     // A cached decline has no correction authority. Reopen even conflicts,
     // whose resolution belongs to correction work rather than the model cache.
     if (resolution.kind !== "none")

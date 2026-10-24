@@ -3698,8 +3698,18 @@ transaction as their command-bound application receipt. An apply intent alone,
 a draft, a history-only grade, or an automatic consequence supplies no reusable
 member authority. Explicit corrected null remains distinct from no correction.
 The first supported scope is identical complete pre-decision inputs for eligible
-descriptive fill fields: raw basis, ordered request fingerprints, canonical roster
-identities, served model and policy dependencies. Record identity and proposed
+descriptive fill fields: declared decision basis and inheritance context, ordered
+request fingerprints, canonical roster identities, served model and policy dependencies.
+Presentation-only resolution metadata does not change equivalence. New publications
+retain their versioned identity recipe, including basis, ordered captured inputs and
+dependency stamps. A retained raw-v1 live key gains a normalized alias only when those
+retained inputs and dependencies reproduce its original hash exactly. Candidate current
+dependency stamps are accepted only by that hash proof. Missing or mismatching historical
+inputs retain opaque exact-key scope; old canonical/Sweep digests do not reconstruct
+missing captured inputs. Discovery, historical repair, lineage and serialization use the
+same proof, retaining both stored and proven canonical lock identities. History cursors
+advance over scanned field candidates even when no candidate matches. This change does
+not rerun previously completed history jobs. Record identity and proposed
 answer are not part of that equivalence key. Missing historical keys are not
 reconstructed from current data; fuzzy similarity does not authorize repair.
 

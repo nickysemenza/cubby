@@ -153,3 +153,12 @@ export const aiRefreshProgress = z.object({
   cancelled: z.number().int().nonnegative().optional(),
   errors: z.array(z.string()).max(10).optional(),
 });
+
+/** Ordered provider input evidence retained with field correction identity recipes. */
+export const capturedFieldInput = z.object({
+  feature: z.string(),
+  promptVersion: z.string(),
+  operation: z.string(),
+  model: z.string(),
+  fingerprint: z.string(),
+});

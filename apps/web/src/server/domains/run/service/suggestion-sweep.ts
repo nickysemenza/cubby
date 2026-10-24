@@ -4,7 +4,11 @@ import {
   type FieldSuggestionsInput,
 } from "@cubby/schemas/ai";
 import { aiProvenance } from "@cubby/schemas/ai-evaluation";
-import { basisValueOf } from "@cubby/schemas/field-suggestion";
+import {
+  basisValueOf,
+  fieldSuggestionContextKeys,
+  fieldSuggestionResolutionContext,
+} from "@cubby/schemas/field-suggestion";
 import { parseEntityId, type RunId } from "@cubby/schemas/identifiers";
 import type { RunTrigger } from "@cubby/schemas/purchase-import";
 import {
@@ -38,6 +42,7 @@ import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import { entityCommandSchema } from "~/server/entity-kernel/contracts";
 import {
   fieldCorrectionIdentity,
+  fieldCorrectionRecipe,
   fieldReviewIdentity,
 } from "~/server/generic/assessment/repo/field-assessment-review";
 import { publishFieldCorrectionQuestion } from "~/server/generic/assessment/repo/field-correction-publication";
@@ -127,6 +132,7 @@ const sweepResult = z.object({
     )
     .default([]),
   provenance: aiProvenance,
+  correctionRecipe: fieldCorrectionRecipe.optional(),
 });
 async function suggestTarget(
   db: Database,
@@ -186,6 +192,18 @@ async function suggestTarget(
     served: true,
   });
   if (primary) {
+    if (!primaryCall.incomplete)
+      primary.correctionRecipe = {
+        version: "field-correction-v2",
+        entity: input.entity,
+        field: input.field,
+        basis: z.json().parse(target.basis),
+        inputs: primaryCall.inputs,
+        dependencies: dependencyStamps(manifest, [
+          ...fieldDependencyKeys(input.entity, input.field),
+          ...primaryCall.inputs.map((call) => call.feature),
+        ]),
+      };
     primary.correctionKey = await fieldCorrectionIdentity({
       entity: input.entity,
       field: input.field,
@@ -431,9 +449,11 @@ export async function executeSuggestionSweepTarget(
     (row) => row.entity === input.entity && row.field === queuedTarget.field,
   );
   if (!policy) throw new Error("Suggestion field policy no longer exists");
-  const basisKeys = [
-    ...new Set([...policy.basis.map((row) => row.key), queuedTarget.field]),
+  const policyKeys = [
+    ...policy.basis.map((row) => row.key),
+    queuedTarget.field,
   ];
+  const basisKeys = fieldSuggestionContextKeys(input.entity, policyKeys);
   const basis = Object.fromEntries(
     basisKeys.map((key) => [key, basisValueOf(record[key])]),
   );
@@ -450,6 +470,10 @@ export async function executeSuggestionSweepTarget(
     )) !== preparedFingerprint
   )
     throw new Error("Suggestion basis changed after queuing");
+  basis.__resolutionContext = fieldSuggestionResolutionContext(
+    record.fieldResolutions,
+    policyKeys,
+  );
   const target = { ...queuedTarget, basis };
   if (
     canonicalJson(z.json().parse(record[target.field] ?? null)) !==
@@ -513,7 +537,20 @@ export async function executeSuggestionSweepTarget(
           input.decisionModelOverride ??
           null),
     };
-    saved = sweepResult.safeParse({ ...captured.result, provenance });
+    saved = sweepResult.safeParse({
+      ...captured.result,
+      provenance,
+      correctionRecipe: captured.incomplete
+        ? undefined
+        : {
+            version: "field-correction-v2",
+            entity: input.entity,
+            field: target.field,
+            basis: target.basis,
+            inputs: captured.inputs,
+            dependencies: provenance.dependencies,
+          },
+    });
     if (!saved.success) throw saved.error;
     if (
       !(await storeAiEvaluationResult(
@@ -548,6 +585,7 @@ export async function executeSuggestionSweepTarget(
         field: target.field,
         currentValue: target.currentValue,
         outcome: result.correctionOutcome,
+        correctionRecipe: result.correctionRecipe,
         provenance: result.provenance,
         runId: item.runId,
       });

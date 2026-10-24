@@ -1,4 +1,7 @@
-import { assessmentChildHandle } from "@cubby/schemas/assessment";
+import {
+  assessmentChildHandle,
+  assessmentSubjects,
+} from "@cubby/schemas/assessment";
 import {
   suggestionCorrectionOutcome,
   suggestionCorrectionPlan,
@@ -11,7 +14,7 @@ import { recordFeedback } from "~/server/generic/assessment/repo/assessment";
 import { correctionRepairFamilies } from "~/server/generic/assessment/repo/correction-families";
 import {
   correctionTargetIds,
-  fieldCorrectionKey,
+  readFieldCorrectionIdentity,
   readConfirmedCorrection,
   readCorrectionTarget,
   readFieldCorrectionSources,
@@ -42,8 +45,20 @@ export const correctionPropagationHandler = defineJobHandler(
         page: { done: true },
         publish: async (tx) => {
           const target = await readCorrectionTarget(tx, targetId);
-          const key = target && fieldCorrectionKey(target.evidence);
-          const sources = key ? await readFieldCorrectionSources(tx, key) : [];
+          const identity =
+            target &&
+            (await readFieldCorrectionIdentity(
+              tx,
+              target.subject,
+              target.evidence,
+            ));
+          const key = identity && (identity.canonicalKey ?? identity.storedKey);
+          const scope =
+            target && assessmentSubjects.field.safeParse(target.subject).data;
+          const sources =
+            key && scope
+              ? await readFieldCorrectionSources(tx, key, scope)
+              : [];
           for (const source of sources)
             if (source.assessmentId !== targetId)
               await enqueueCorrectionWork(tx, source.feedbackId, targetId);
@@ -62,21 +77,38 @@ export const correctionPropagationHandler = defineJobHandler(
           },
         },
       };
-    const key = fieldCorrectionKey(source.evidence);
+    const identity = await readFieldCorrectionIdentity(
+      db,
+      source.subject,
+      source.evidence,
+    );
+    const key = identity.canonicalKey ?? identity.storedKey;
+    const scope = assessmentSubjects.field.safeParse(source.subject).data;
     const cursor =
       claim.cursor === null
         ? { after: null }
         : cursorSchema.parse(claim.cursor);
-    const targets = input.targetAssessmentId
-      ? [{ id: input.targetAssessmentId }]
-      : key && source.family === "field"
+    const page = input.targetAssessmentId
+      ? {
+          targets: [{ id: input.targetAssessmentId }],
+          after: cursor.after,
+          done: true,
+        }
+      : key && scope && source.family === "field"
         ? await correctionTargetIds(db, {
             sourceAssessmentId: source.assessmentId,
             correctionKey: key,
+            entity: scope.entity,
+            field: scope.field,
             after: cursor.after,
             limit: PAGE_SIZE,
           })
-        : [{ id: source.assessmentId }];
+        : {
+            targets: [{ id: source.assessmentId }],
+            after: cursor.after,
+            done: true,
+          };
+    const targets = page.targets;
     const prepared: {
       plan: z.infer<typeof suggestionCorrectionPlan>;
       repair: Awaited<ReturnType<typeof correctionRepairFamilies.field>>;
@@ -90,14 +122,11 @@ export const correctionPropagationHandler = defineJobHandler(
         repair: await correctionRepairFamilies[source.family](db, plan),
       });
     }
-    const after = targets.at(-1)?.id ?? cursor.after;
+    const after = page.after;
     return {
       isolationLevel: "serializable",
       page: {
-        done:
-          Boolean(input.targetAssessmentId) ||
-          !key ||
-          targets.length < PAGE_SIZE,
+        done: page.done,
         cursor: { after },
       },
       publish: async (tx) => {

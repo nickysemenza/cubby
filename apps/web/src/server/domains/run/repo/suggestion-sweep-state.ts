@@ -10,7 +10,6 @@ import { getDb, withTransactionDatabase } from "~/server/db/helpers";
 import {
   run as runTable,
   assessmentState as suggestionTable,
-  assessment,
 } from "~/server/db/schema";
 import { executeEntity } from "~/server/entity-kernel";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
@@ -18,8 +17,8 @@ import { entityCommandSchema } from "~/server/entity-kernel/contracts";
 import { publishFieldAssessment } from "~/server/generic/assessment/repo/assessment";
 import { transitionAssessmentStates } from "~/server/generic/assessment/repo/assessment-state";
 import { applyAutomaticRules } from "~/server/generic/assessment/repo/automatic-rule-runtime";
-import { fieldCorrectionKey } from "~/server/generic/assessment/repo/correction-sources";
-import { lockFieldCorrectionKey } from "~/server/generic/assessment/repo/field-correction-lock";
+import { fieldCorrectionRecipe } from "~/server/generic/assessment/repo/field-assessment-review";
+import { lockFieldCorrectionKeysForField } from "~/server/generic/assessment/repo/field-correction-lock";
 import {
   fieldInputFingerprint,
   fenceFieldInputsAtCommit,
@@ -50,6 +49,7 @@ export const jsonValue = (value: unknown): SuggestionValue =>
 export const sweepSuggestionSchema = z.object({
   reviewKey: z.string().nullable().optional(),
   correctionKey: z.string().nullable().optional(),
+  correctionRecipe: fieldCorrectionRecipe.optional(),
   kind: z.enum(["addition", "correction"]),
   currentValue: suggestionValueSchema,
   suggestedValue: suggestionValueSchema,
@@ -114,25 +114,10 @@ export async function saveSweepSuggestions(
     db,
     async (tx) => {
       const typedRecordId = parseEntityId(input.entity, input.recordId);
-      const priorInputs = await getDb(tx)
-        .select({ evidence: assessment.evidence })
-        .from(assessment)
-        .innerJoin(suggestionTable, eq(suggestionTable.id, assessment.id))
-        .where(
-          and(
-            eq(suggestionTable.entity, input.entity),
-            eq(suggestionTable.recordId, typedRecordId),
-            eq(suggestionTable.field, input.field),
-          ),
-        );
-      // Member review takes correction keys before its projection. Preserve that
-      // order when replacement publication later invokes automatic admission.
-      const keys = new Set([
-        ...entries.map((entry) => entry.correctionKey ?? null),
-        ...priorInputs.map((row) => fieldCorrectionKey(row.evidence)),
-      ]);
-      for (const key of [...keys].filter((key) => key !== null).sort())
-        await lockFieldCorrectionKey(tx, key);
+      await lockFieldCorrectionKeysForField(tx, {
+        ...input,
+        keys: entries.map((entry) => entry.correctionKey ?? null),
+      });
       const liveInputFingerprint = await fieldInputFingerprint(
         tx,
         input.entity,
@@ -340,6 +325,9 @@ export async function saveSweepSuggestions(
               liveInputFingerprint,
               reviewKey: entry.reviewKey ?? null,
               correctionKey: entry.correctionKey ?? null,
+              ...(entry.correctionRecipe
+                ? { correctionRecipe: entry.correctionRecipe }
+                : {}),
             },
             status: "pending",
           },

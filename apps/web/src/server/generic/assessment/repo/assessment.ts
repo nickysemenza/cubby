@@ -262,6 +262,9 @@ export async function publishFieldAssessment(
         currentValue: z.json().parse(projection.currentValue ?? null),
         provenance: projection.provenance ?? null,
         correctionKey: data.correctionKey ?? null,
+        ...(data.correctionRecipe
+          ? { correctionRecipe: data.correctionRecipe }
+          : {}),
       },
       served,
     },

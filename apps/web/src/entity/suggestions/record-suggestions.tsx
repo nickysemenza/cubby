@@ -18,7 +18,10 @@ import type { Entity } from "@cubby/schemas/entity";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
 import type { ShortcodeEntity } from "@cubby/schemas/entity-manifest";
 import { fieldResolutionsSchema } from "@cubby/schemas/field-resolution";
-import { usesSavedFieldSuggestionContext } from "@cubby/schemas/field-suggestion";
+import {
+  usesSavedFieldSuggestionContext,
+  fieldSuggestionResolutionContext,
+} from "@cubby/schemas/field-suggestion";
 import { productCategorySummary } from "@cubby/schemas/product-category-fields";
 import {
   SUGGESTION_LIST_PAGE_MAX,
@@ -465,14 +468,7 @@ function resolutionContext(
   record: SuggestionRecord,
   keys: readonly string[],
 ): string | null {
-  const parsed = fieldResolutionsSchema.safeParse(record.fieldResolutions);
-  if (!parsed.success) return null;
-  const relevant = new Set(keys);
-  return JSON.stringify(
-    Object.fromEntries(
-      Object.entries(parsed.data).filter(([field]) => relevant.has(field)),
-    ),
-  );
+  return fieldSuggestionResolutionContext(record.fieldResolutions, keys);
 }
 
 const basisFingerprint = (basis: Record<string, string | null>) =>

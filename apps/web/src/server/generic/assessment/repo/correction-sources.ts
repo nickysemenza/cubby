@@ -13,10 +13,64 @@ import { and, asc, eq, inArray, or, sql, type SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { z } from "zod";
 
+import { producingAiManifest } from "~/server/ai/repo/ai-refresh";
 import type { Database } from "~/server/db";
 import { getDb } from "~/server/db/helpers";
 import { assessment, assessmentState, feedback } from "~/server/db/schema";
 import { assertApplicationReceipt } from "~/server/generic/assessment/repo/assessment";
+
+import { proveFieldCorrectionIdentity } from "./field-assessment-review";
+
+export async function readFieldCorrectionIdentity(
+  db: Database,
+  subject: unknown,
+  evidence: unknown,
+) {
+  const retainedEvidence = z.json().parse(evidence);
+  const field = z
+    .object({ entity: z.string(), field: z.string() })
+    .safeParse(subject);
+  if (!field.success)
+    return {
+      storedKey: fieldCorrectionKey(retainedEvidence),
+      canonicalKey: null,
+      reason: "missing_inputs",
+    };
+  return proveFieldCorrectionIdentity({
+    ...field.data,
+    evidence: retainedEvidence,
+    manifest: await producingAiManifest(db),
+  });
+}
+
+export async function equivalentFieldCorrections(
+  db: Database,
+  source: Pick<
+    z.infer<typeof suggestionCorrectionSource>,
+    "subject" | "evidence"
+  >,
+  target: Pick<
+    z.infer<typeof suggestionCorrectionSource>,
+    "subject" | "evidence"
+  >,
+) {
+  const left = await readFieldCorrectionIdentity(
+    db,
+    source.subject,
+    source.evidence,
+  );
+  const right = await readFieldCorrectionIdentity(
+    db,
+    target.subject,
+    target.evidence,
+  );
+  const keys = new Set(
+    [left.storedKey, left.canonicalKey].filter((key) => key !== null),
+  );
+  return [right.storedKey, right.canonicalKey].some(
+    (key) => key !== null && keys.has(key),
+  );
+}
 
 const application = alias(feedback, "correction_application");
 const receiptMetadata = z.object({
@@ -107,15 +161,56 @@ export async function readConfirmedCorrection(
   return source ?? null;
 }
 
-/** Exact input keys bound the query; legacy evidence receives no invented scope. */
-export async function readFieldCorrectionSources(db: Database, key: string) {
-  return confirmedSources(
-    db,
-    and(
-      eq(assessment.family, "field"),
-      sql`${assessment.evidence}->>'correctionKey' = ${key}`,
-    ),
-  );
+/** Scope discovery to the field; only hash-proven identities gain normalized aliases. */
+export async function readFieldCorrectionSources(
+  db: Database,
+  key: string,
+  scope?: { entity: string; field: string },
+) {
+  const matches = [];
+  let after: string | null = null;
+  for (;;) {
+    const candidates = await getDb(db)
+      .select({ id: feedback.id })
+      .from(feedback)
+      .innerJoin(assessment, eq(assessment.id, feedback.assessmentId))
+      .where(
+        and(
+          eq(assessment.family, "field"),
+          eq(feedback.authority, "member"),
+          eq(feedback.intent, "apply"),
+          sql`${feedback.correction}->>${"present"} = ${"true"}`,
+          scope
+            ? and(
+                sql`${assessment.subject}->>'entity' = ${scope.entity}`,
+                sql`${assessment.subject}->>${assessmentSubjects.field.keyof().enum.field} = ${scope.field}`,
+              )
+            : sql`${assessment.evidence}->>'correctionKey' = ${key}`,
+          after ? sql`${feedback.id} > ${after}::uuid` : undefined,
+        ),
+      )
+      .orderBy(asc(feedback.id))
+      .limit(100);
+    if (!candidates.length) break;
+    for (const source of await confirmedSources(
+      db,
+      inArray(
+        feedback.id,
+        candidates.map((row) => row.id),
+      ),
+    )) {
+      const identity = await readFieldCorrectionIdentity(
+        db,
+        source.subject,
+        source.evidence,
+      );
+      if (identity.storedKey === key || identity.canonicalKey === key)
+        matches.push(source);
+    }
+    after = candidates.at(-1)!.id;
+    if (candidates.length < 100) break;
+  }
+  return matches;
 }
 
 /** Skip input preparation when this field has never had confirmed correction authority. */
@@ -188,12 +283,18 @@ export async function correctionTargetIds(
   input: {
     sourceAssessmentId: string;
     correctionKey: string;
+    entity: string;
+    field: string;
     after: string | null;
     limit: number;
   },
 ) {
-  return getDb(db)
-    .select({ id: assessment.id })
+  const scanned = await getDb(db)
+    .select({
+      id: assessment.id,
+      evidence: assessment.evidence,
+      subject: assessment.subject,
+    })
     .from(assessment)
     .innerJoin(assessmentState, eq(assessmentState.id, assessment.id))
     .where(
@@ -201,7 +302,8 @@ export async function correctionTargetIds(
         eq(assessment.family, "field"),
         eq(assessment.served, true),
         sql`${assessment.id} <> ${input.sourceAssessmentId}::uuid`,
-        sql`${assessment.evidence}->>'correctionKey' = ${input.correctionKey}`,
+        sql`${assessment.subject}->>'entity' = ${input.entity}`,
+        sql`${assessment.subject}->>${assessmentSubjects.field.keyof().enum.field} = ${input.field}`,
         or(
           inArray(assessmentState.status, ["pending", "applied"]),
           sql`EXISTS (SELECT 1 FROM ${feedback} effect WHERE effect."assessmentId"=${assessment.id}
@@ -213,4 +315,22 @@ export async function correctionTargetIds(
     )
     .orderBy(asc(assessment.id))
     .limit(input.limit);
+  const targets = [];
+  for (const row of scanned) {
+    const identity = await readFieldCorrectionIdentity(
+      db,
+      row.subject,
+      row.evidence,
+    );
+    if (
+      identity.storedKey === input.correctionKey ||
+      identity.canonicalKey === input.correctionKey
+    )
+      targets.push({ id: row.id });
+  }
+  return {
+    targets,
+    after: scanned.at(-1)?.id ?? input.after,
+    done: scanned.length < input.limit,
+  };
 }

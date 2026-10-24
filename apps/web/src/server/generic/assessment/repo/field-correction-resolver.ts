@@ -79,9 +79,13 @@ async function isCurrentFieldCorrection(
 }
 
 /** One authority resolver for historical repair, automatic admission and future question reuse. */
-export async function resolveFieldCorrection(db: Database, key: string) {
+export async function resolveFieldCorrection(
+  db: Database,
+  key: string,
+  scope?: { entity: string; field: string },
+) {
   const current: SuggestionCorrectionSource[] = [];
-  for (const source of await readFieldCorrectionSources(db, key))
+  for (const source of await readFieldCorrectionSources(db, key, scope))
     if (await isCurrentFieldCorrection(db, source)) current.push(source);
   const revision = await sha256Hex(
     canonicalJson({

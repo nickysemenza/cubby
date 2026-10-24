@@ -12,12 +12,14 @@ import { getDb, withTransactionDatabase } from "~/server/db/helpers";
 import { assessmentState } from "~/server/db/schema";
 import { publishAssessment } from "~/server/generic/assessment/repo/assessment";
 import { transitionAssessmentStates } from "~/server/generic/assessment/repo/assessment-state";
-import { lockFieldCorrectionKey } from "~/server/generic/assessment/repo/field-correction-lock";
+import { lockFieldCorrectionKeysForField } from "~/server/generic/assessment/repo/field-correction-lock";
 import { resolveFieldCorrection } from "~/server/generic/assessment/repo/field-correction-resolver";
 import {
   fieldInputFingerprint,
   fenceFieldInputsAtCommit,
 } from "~/server/generic/assessment/repo/field-input-fence";
+
+import { fieldCorrectionRecipe } from "./field-assessment-review";
 
 /** Publish a correction question, never a fabricated model prediction or member application. */
 export async function publishFieldCorrectionQuestion(
@@ -29,11 +31,15 @@ export async function publishFieldCorrectionQuestion(
     currentValue: unknown;
     outcome: Extract<FieldSuggestionOutcome, { kind: "correction" }>;
     provenance: AiProvenance;
+    correctionRecipe?: z.infer<typeof fieldCorrectionRecipe>;
     runId: RunId | null;
   },
 ) {
   return withTransactionDatabase(db, async (tx) => {
-    await lockFieldCorrectionKey(tx, input.outcome.decision.correctionKey);
+    await lockFieldCorrectionKeysForField(tx, {
+      ...input,
+      keys: [input.outcome.decision.correctionKey],
+    });
     const fingerprint = await fieldInputFingerprint(
       tx,
       input.entity,
@@ -44,7 +50,11 @@ export async function publishFieldCorrectionQuestion(
     if (fingerprint !== input.outcome.targetInputFingerprint)
       throw new Error("Correction target changed during inference");
     const decision = input.outcome.decision;
-    const current = await resolveFieldCorrection(tx, decision.correctionKey);
+    const current = await resolveFieldCorrection(
+      tx,
+      decision.correctionKey,
+      input,
+    );
     if (current.kind === "none" || current.revision !== decision.revision)
       throw new Error("Correction authority changed during inference");
     const value = decision.status === "confirmed" ? decision.value : null;
@@ -86,6 +96,9 @@ export async function publishFieldCorrectionQuestion(
         evidence: {
           correctionKey: decision.correctionKey,
           decision,
+          ...(input.correctionRecipe
+            ? { correctionRecipe: input.correctionRecipe }
+            : {}),
           provenance,
         },
         served: true,

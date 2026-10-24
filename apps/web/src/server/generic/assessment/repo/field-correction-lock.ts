@@ -1,6 +1,44 @@
+import { and, eq } from "drizzle-orm";
+
 import type { Database } from "~/server/db";
 import { getDb } from "~/server/db/helpers";
-import { assessmentCorrectionLock } from "~/server/db/schema";
+import {
+  assessmentCorrectionLock,
+  assessment,
+  assessmentState,
+} from "~/server/db/schema";
+import { readFieldCorrectionIdentity } from "~/server/generic/assessment/repo/correction-sources";
+
+/** Replacement and member review share key-before-record/projection ordering. */
+export async function lockFieldCorrectionKeysForField(
+  db: Database,
+  input: {
+    entity: string;
+    recordId: string;
+    field: string;
+    keys: readonly (string | null)[];
+  },
+) {
+  const prior = await getDb(db)
+    .select({ evidence: assessment.evidence })
+    .from(assessment)
+    .innerJoin(assessmentState, eq(assessmentState.id, assessment.id))
+    .where(
+      and(
+        eq(assessmentState.entity, input.entity),
+        eq(assessmentState.recordId, input.recordId),
+        eq(assessmentState.field, input.field),
+      ),
+    );
+  const keys = new Set(input.keys);
+  for (const row of prior) {
+    const identity = await readFieldCorrectionIdentity(db, input, row.evidence);
+    keys.add(identity.storedKey);
+    keys.add(identity.canonicalKey);
+  }
+  for (const key of [...keys].filter((key) => key !== null).sort())
+    await lockFieldCorrectionKey(db, key);
+}
 
 /** Must run inside the caller's write transaction, before source/target row locks. */
 export async function lockFieldCorrectionKey(db: Database, key: string) {

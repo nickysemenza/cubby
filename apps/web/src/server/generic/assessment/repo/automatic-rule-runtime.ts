@@ -205,6 +205,8 @@ type Candidate = {
   active: boolean;
   served: boolean;
   data: unknown;
+  evidence: unknown;
+  subject: unknown;
   entity: string;
   field: string;
   kind: string;
@@ -264,7 +266,7 @@ export async function applyAutomaticRules(
   if (!assessmentIds.length) return outcome;
   const { rows } = await unwrapDb(db).execute<Candidate>(sql`
     SELECT s.id, s.family, s.status, s.active, a.served, s.data, s.entity, s.field,
-      s.kind, s.confidence, s.model, s.fingerprint, s."runId", a.judgment
+      s.kind, s.confidence, s.model, s.fingerprint, s."runId", a.judgment, a.evidence, a.subject
     FROM "AssessmentState" s
     JOIN "Assessment" a ON a.id = s.id
     WHERE s.id IN (${sql.join(
@@ -277,13 +279,27 @@ export async function applyAutomaticRules(
   for (const row of rows) {
     if (!row.active || row.status !== "pending" || !row.served) continue;
     if (row.family === "field") {
-      const { fieldCorrectionKey } = await import("./correction-sources");
-      const key = fieldCorrectionKey(row.data);
+      const { readFieldCorrectionIdentity } =
+        await import("./correction-sources");
+      const identity = await readFieldCorrectionIdentity(
+        db,
+        row.subject,
+        row.evidence,
+      );
+      const key = identity.canonicalKey ?? identity.storedKey;
       if (key) {
         const { resolveFieldCorrection } =
           await import("./field-correction-resolver");
         // Conflicts also withhold the old model answer; correction work owns the resolution.
-        if ((await resolveFieldCorrection(db, key)).kind !== "none") continue;
+        if (
+          (
+            await resolveFieldCorrection(db, key, {
+              entity: row.entity,
+              field: row.field,
+            })
+          ).kind !== "none"
+        )
+          continue;
       }
     }
     const stamp = ruleStamps.safeParse(row.data).data;

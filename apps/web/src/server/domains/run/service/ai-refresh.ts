@@ -8,7 +8,11 @@ import {
 } from "@cubby/schemas/ai-evaluation";
 import { buildActorContext } from "@cubby/schemas/context";
 import { entityRefKey } from "@cubby/schemas/entity";
-import { basisValueOf } from "@cubby/schemas/field-suggestion";
+import {
+  basisValueOf,
+  fieldSuggestionContextKeys,
+  fieldSuggestionResolutionContext,
+} from "@cubby/schemas/field-suggestion";
 import {
   parseEntityRef,
   parseEntityId,
@@ -65,6 +69,7 @@ import { entityCommandSchema } from "~/server/entity-kernel/contracts";
 import { applyAutomaticRules } from "~/server/generic/assessment/repo/automatic-rule-runtime";
 import {
   fieldCorrectionIdentity,
+  fieldCorrectionRecipe,
   fieldReviewIdentity,
 } from "~/server/generic/assessment/repo/field-assessment-review";
 import { publishFieldCorrectionQuestion } from "~/server/generic/assessment/repo/field-correction-publication";
@@ -135,6 +140,7 @@ const fieldSnapshot = z.object({
 const fieldResult = z.object({
   reviewKey: z.string().nullable().optional(),
   correctionKey: z.string().nullable().optional(),
+  correctionRecipe: fieldCorrectionRecipe.optional(),
   output: fieldSuggestionsOut,
   provenance: aiProvenance,
 });
@@ -189,9 +195,14 @@ async function prepareField(
   );
   if (!policy) return null;
   const basis = Object.fromEntries(
-    [...new Set([...policy.basis.map((row) => row.key), target.field])].map(
-      (key) => [key, basisValueOf(record[key])],
-    ),
+    fieldSuggestionContextKeys(entity, [
+      ...policy.basis.map((row) => row.key),
+      target.field,
+    ]).map((key) => [key, basisValueOf(record[key])]),
+  );
+  basis.__resolutionContext = fieldSuggestionResolutionContext(
+    record.fieldResolutions,
+    [...policy.basis.map((row) => row.key), target.field],
   );
   const lastWrite = await latestFieldWrite(
     db,
@@ -988,6 +999,16 @@ export async function executeAiRefreshTarget(
         output: evaluated.result,
         provenance,
         reviewKey,
+        correctionRecipe: evaluated.incomplete
+          ? undefined
+          : {
+              version: "field-correction-v2",
+              entity: snapshot.entity,
+              field: snapshot.field,
+              basis: snapshot.basis,
+              inputs: evaluated.inputs,
+              dependencies: provenance.dependencies,
+            },
         correctionKey: await fieldCorrectionIdentity({
           entity: snapshot.entity,
           field: snapshot.field,
@@ -1024,6 +1045,7 @@ export async function executeAiRefreshTarget(
           field: snapshot.field,
           currentValue: snapshot.currentValue,
           outcome: correctionOutcome,
+          correctionRecipe: saved.correctionRecipe,
           provenance: saved.provenance,
           runId: claimed.runId,
         });
@@ -1065,6 +1087,7 @@ export async function executeAiRefreshTarget(
                 ...entry,
                 reviewKey: saved.reviewKey,
                 correctionKey: saved.correctionKey,
+                correctionRecipe: saved.correctionRecipe,
                 model: saved.provenance.model ?? entry.model,
               },
             ]

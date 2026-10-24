@@ -2,6 +2,73 @@ import { z } from "zod";
 
 import { entityFieldModels } from "./entity-fields";
 import type { ShortcodeEntity } from "./entity-manifest";
+import { fieldResolutionsSchema } from "./field-resolution";
+
+const INHERITANCE_CONTEXT_KEYS = {
+  expense: ["lineKind", "purchaseId", "productId", "projectId", "trade"],
+  task: [
+    "parentTaskId",
+    "projectId",
+    "projectMode",
+    "subjectProductId",
+    "subjectProductMode",
+    "trade",
+  ],
+} as const;
+
+/** Runtime context is shared by live forms and canonical background preparation. */
+export function fieldSuggestionContextKeys(
+  entity: ShortcodeEntity,
+  basisKeys: readonly string[],
+): readonly string[] {
+  const inherited =
+    entity === "expense"
+      ? INHERITANCE_CONTEXT_KEYS.expense
+      : entity === "task"
+        ? INHERITANCE_CONTEXT_KEYS.task
+        : [];
+  const finance =
+    entity === "financialTransaction"
+      ? ["purchaseId", "spendingCategoryId", "itemizationExpectation"]
+      : entity === "purchase"
+        ? ["vendorId", "spendingCategoryId", "itemizationExpectation"]
+        : [];
+  return [...new Set([...basisKeys, ...inherited, ...finance])];
+}
+
+export function fieldSuggestionResolutionContext(
+  raw: unknown,
+  keys: readonly string[],
+): string | null {
+  const parsed = fieldResolutionsSchema.safeParse(raw);
+  if (!parsed.success) return null;
+  const selected = new Set(keys);
+  return JSON.stringify(
+    Object.fromEntries(
+      Object.entries(parsed.data).filter(([key]) => selected.has(key)),
+    ),
+  );
+}
+
+/** Only declared per-field inputs enter identity; presentation metadata is not evidence. */
+export function fieldSuggestionIdentityBasis(
+  entity: ShortcodeEntity,
+  field: string,
+  raw: unknown,
+) {
+  const definition = entityFieldModels[entity].fields.find(
+    (candidate) => candidate.key === field,
+  );
+  const policy = definition?.control?.suggest;
+  const parsed = z.record(z.string(), z.json()).safeParse(raw);
+  if (!policy || !parsed.success) return null;
+  return Object.fromEntries(
+    fieldSuggestionContextKeys(entity, [...policy.basis, field]).map((key) => [
+      key,
+      basisValueOf(parsed.data[key]),
+    ]),
+  );
+}
 
 /** These questions read a dedicated saved finance/vendor context beyond their basis. */
 export function usesSavedFieldSuggestionContext(entity: string): boolean {
