@@ -1466,6 +1466,7 @@ export type RunReportSlot =
   | "run.import-debug-log"
   | "run.ai-usage"
   | "run.suggestions"
+  | "run.results"
   | "run.decisions"
   | "run.diagnostics"
   | "run.changes";

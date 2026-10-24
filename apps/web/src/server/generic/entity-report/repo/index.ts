@@ -290,6 +290,7 @@ const REPORTS = {
   "run.import-timeline": runBuilder("run.import-timeline"),
   "run.import-debug-log": runBuilder("run.import-debug-log"),
   "run.steps": runBuilder("run.steps"),
+  "run.results": runBuilder("run.results"),
   "run.ai-usage": runBuilder("run.ai-usage"),
   "run.suggestions": runBuilder("run.suggestions"),
   "run.decisions": runBuilder("run.decisions"),

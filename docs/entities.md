@@ -3715,6 +3715,20 @@ rendered request (`ai.decisionCatalog`) with a Jev/Clef Try panel. The
 household's Work has one row per Suggestion family linking into the page,
 and a Sweep Run's detail links to its own.
 
+Run **Results** separates direct record changes, published Suggestions and
+processed inputs. Direct changes come only from `AuditLog.runId`; counts are
+distinct records per action, with a bounded linked record list. Repeated edits
+count once, while a record created and edited appears in both action counts.
+Changes retains the complete paged field history. Suggestion publication totals
+come from immutable `Assessment.producer.runId`, including replaced publications;
+their current statuses come from `AssessmentState`. Later manual or automatic
+applications do not become Run-owned changes unless their actual writes carried
+that Run attribution. Missing attribution is never reconstructed from review
+status. Processed RunStep counts are work units, not distinct entities: steps
+can revisit the same input. Steps retains scope and input-review links. Order
+counts and explicit target review remain in the existing import journeys;
+photo review remains in its owned section.
+
 Applied member field corrections enroll `assessment.correction` work in the same
 transaction as their command-bound application receipt. An apply intent alone,
 a draft, a history-only grade, or an automatic consequence supplies no reusable

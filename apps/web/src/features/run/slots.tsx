@@ -19,6 +19,7 @@ const runReport =
   );
 
 export const runReportSlots = {
+  results: runReport("run.results"),
   "live-progress": runReport("run.live-progress"),
   "import-stats": runReport("run.import-stats"),
   "import-progress-live": runReport("run.import-progress-live"),

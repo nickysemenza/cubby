@@ -71,7 +71,7 @@ export const auditLogListInput = z.object({
 
 export type AuditLogListInput = z.infer<typeof auditLogListInput>;
 
-const auditLogActionSchema = z.enum(["create", "update", "delete"]);
+export const auditLogActionSchema = z.enum(["create", "update", "delete"]);
 
 /**
  * A `changes.from`/`changes.to` value, narrowed from `z.unknown()`.

@@ -4,9 +4,17 @@ import { countTestDbQueries, withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
 import { getDb } from "~/server/db/helpers";
-import { auditLog, run as runTable, runOperation } from "~/server/db/schema";
+import {
+  assessmentState,
+  auditLog,
+  feedback,
+  run as runTable,
+  runOperation,
+  runStep,
+} from "~/server/db/schema";
 import { startPhotoInventoryRun } from "~/server/domains/purchase-import/repo/run-service";
 import { startImportRunFixture } from "~/server/domains/purchase-import/service/import-run.fixtures";
+import { publishAssessment } from "~/server/generic/assessment/repo/assessment";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 import {
@@ -59,6 +67,180 @@ describe("Run detail reports", () => {
     });
     return { run, id: runShortcode.parse(run.publicId), vendor };
   }
+
+  it("separates a publication-only Sweep from later manual applications and revisited inputs", async () => {
+    const { run, id, vendor } = await startRun();
+    await getDb(ctx.db)
+      .update(runTable)
+      .set({ purpose: "sweep", status: "completed" })
+      .where(eq(runTable.id, run.id));
+    await getDb(ctx.db).insert(runStep).values({
+      runId: run.id,
+      key: "statement_label",
+      label: "Label inputs",
+      position: 0,
+      state: "done",
+      found: 2,
+      done: 3,
+    });
+    const publish = (key: string) =>
+      publishAssessment(
+        ctx.db,
+        {
+          publicationKey: key,
+          family: "field",
+          subject: {
+            kind: "field",
+            entity: "vendor",
+            recordId: vendor.id,
+            field: "name",
+          },
+          judgment: { value: "Synthetic reviewed vendor" },
+          fingerprint: key,
+          producer: {
+            kind: "agent",
+            model: null,
+            revision: null,
+            runId: run.id,
+            evaluationId: null,
+          },
+          evidence: null,
+        },
+        { runId: run.id },
+      );
+    const first = await publish("synthetic:run-results:first");
+    await publish("synthetic:run-results:second");
+    const read = () =>
+      buildEntityReport(ctx.db, {
+        slot: "run.results",
+        scope: { kind: "record", id },
+      });
+    const before = await read();
+    const figures = (report: typeof before, title: string) =>
+      report.blocks.flatMap((block) =>
+        block.kind === "stats" && block.title === title ? block.figures : [],
+      );
+    expect(figures(before, "Changed by this Run")).toContainEqual({
+      label: "Records",
+      value: 0,
+      format: "count",
+    });
+    expect(figures(before, "Suggestions published")).toEqual(
+      expect.arrayContaining([
+        { label: "Published", value: 2, format: "count" },
+        { label: "Records assessed", value: 1, format: "count" },
+      ]),
+    );
+    expect(before.blocks).toContainEqual(
+      expect.objectContaining({
+        kind: "table",
+        title: "Inputs processed",
+        rows: [
+          expect.objectContaining({ cells: ["Label inputs", "3", "0", "0"] }),
+        ],
+      }),
+    );
+    await getDb(ctx.db)
+      .insert(feedback)
+      .values({
+        assessmentId: first.id,
+        operationId: "synthetic:later-manual",
+        verdict: "correct",
+        correction: { present: false },
+        intent: "apply",
+        authority: "member",
+        actorUserId: ctx.actor.userId,
+        receipt: { kind: "saved_field", recordId: vendor.id },
+      });
+    await getDb(ctx.db)
+      .update(assessmentState)
+      .set({ status: "applied" })
+      .where(eq(assessmentState.id, first.id));
+    await getDb(ctx.db)
+      .insert(auditLog)
+      .values({
+        entityKind: "vendor",
+        entityId: vendor.id,
+        action: "update",
+        userId: ctx.actor.userId,
+        channel: "web",
+        changes: {
+          name: { from: "Synthetic vendor", to: "Synthetic reviewed vendor" },
+        },
+      });
+    const after = await read();
+    expect(figures(after, "Changed by this Run")).toEqual(
+      figures(before, "Changed by this Run"),
+    );
+    expect(figures(after, "Suggestions published")).toContainEqual({
+      label: "Applied",
+      value: 1,
+      format: "count",
+    });
+    expect(
+      after.blocks.flatMap((block) =>
+        block.kind === "records" ? block.rows : [],
+      ),
+    ).toEqual([]);
+    expect(
+      after.blocks.flatMap((block) =>
+        block.kind === "table" ? block.rows : [],
+      ),
+    ).toContainEqual(
+      expect.objectContaining({
+        presentation: {
+          "0": {
+            kind: "links",
+            links: [
+              {
+                label: "Review this Run’s Suggestions",
+                href: `/suggestions?runId=${id}`,
+              },
+            ],
+          },
+        },
+      }),
+    );
+  });
+
+  it("lists actual Run-owned records once while retaining distinct create and edit counts", async () => {
+    const { run, id, vendor } = await startRun();
+    await getDb(ctx.db)
+      .insert(auditLog)
+      .values(
+        ["create", "update", "update"].map((action) => ({
+          runId: run.id,
+          entityKind: "vendor" as const,
+          entityId: vendor.id,
+          action,
+          userId: ctx.actor.userId,
+          channel: "mcp" as const,
+        })),
+      );
+    const report = await buildEntityReport(ctx.db, {
+      slot: "run.results",
+      scope: { kind: "record", id },
+    });
+    expect(report.blocks).toContainEqual({
+      kind: "stats",
+      title: "Changed by this Run",
+      figures: [
+        { label: "Records", value: 1, format: "count" },
+        { label: "Created", value: 1, format: "count" },
+        { label: "Edited", value: 1, format: "count" },
+        { label: "Deleted", value: 0, format: "count" },
+      ],
+    });
+    const records = report.blocks.flatMap((block) =>
+      block.kind === "records" ? block.rows : [],
+    );
+    expect(records).toHaveLength(1);
+    expect(records[0]).toMatchObject({
+      entity: "vendor",
+      id: vendor.shortcode,
+      badges: [{ label: "Created" }, { label: "Edited" }],
+    });
+  });
 
   it("reports a live import run's counts with its status and liveness", async () => {
     const { id } = await startRun();
