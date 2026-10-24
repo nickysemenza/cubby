@@ -162,9 +162,23 @@ export default defineEntity({
             "updatedAt",
           ],
         },
-      ],
-      additionalSections: [
-        // Purpose-specific review tools lead; execution evidence follows results.
+        {
+          kind: "fields",
+          id: "runtime",
+          workspace: "evidence",
+          title: "Runtime",
+          fields: [
+            "coordinatorModel",
+            "skillRevision",
+            "runtimeRevision",
+            "decisionRevision",
+            "predecessorRunId",
+            "parentRunId",
+            "cause",
+            "attempt",
+          ],
+        },
+        // Workspaces put review tools before execution evidence.
         {
           kind: "slot",
           id: "photo-batch",
@@ -285,22 +299,6 @@ export default defineEntity({
           id: "changes",
           workspace: "evidence",
           title: "Changes",
-        },
-        {
-          kind: "fields",
-          id: "runtime",
-          workspace: "evidence",
-          title: "Runtime",
-          fields: [
-            "coordinatorModel",
-            "skillRevision",
-            "runtimeRevision",
-            "decisionRevision",
-            "predecessorRunId",
-            "parentRunId",
-            "cause",
-            "attempt",
-          ],
         },
       ],
     },
