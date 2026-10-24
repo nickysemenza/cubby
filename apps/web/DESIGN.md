@@ -271,13 +271,32 @@ and tally steps a sliding info segment. Steps sit on the RecordList timeline:
   - wait reasons as a tone pill over the raw stored detail;
   - the reason funnel ("Where the items went").
 
+Run detail leads with purpose and meaningful results, followed by specialized
+review tools in Work. The full record-facts roster belongs in Evidence. Photo groups retain their image comparison/editors; purchase
+findings and prepared orders retain domain commands. Input targets render through
+an embedded `RTable`, with Record, Status, Outcome / reason and Source columns,
+search/status filters and the shared inspector. Name links open source records;
+row clicks inspect evidence. Assessment ledgers reuse the shared suggestion
+review actions and evidence, with server-authorized fingerprints.
+
+Needs attention is the initial view only for supported decisions; otherwise show
+Results. Processing, skipped and blocked items remain discoverable in Results.
+Refresh existing values in place, preserve admitted row order and inspected
+items, and hold arrivals behind Show new items. Resolved attention rows remain
+until the member refreshes the view. Photo batch approval uses ready items in the
+filtered view unless explicit selection takes precedence; show that scope and
+its concrete effects before application.
+
 Run figures and funnel rows drill into the decision ledger. The ledger is the
 step's declared results family, read through a family presenter. It has facets,
 search, J/K/Enter, `/` and Esc, and stacked rows on phone. Evidence opens in a
-`SidePanel`. Steps, Decisions and Diagnostics are the Run's declared `steps`,
-`decisions` and `diagnostics` slots, so the section index lists all three.
-Diagnostics is a continuous section, never a tab: Job facts, Jobs by kind,
-Limits (Binding, Not limiting or Unknown) and the inline log panel.
+`SidePanel`. Steps, Decisions and Diagnostics retain their declared anchors.
+Execution evidence follows Work; steps, detailed progress reports, diagnostics,
+transcripts and usage start folded on web, and a direct section jump opens its
+body. The thin live phase summary remains mounted to synchronize Run status. Ordinary
+record sections remain open and review drafts stay mounted. Completed Runs keep
+results and supported corrections/retries; completion is never a success claim
+for every item.
 
 The dedicated Work queue is a workbench table across record types. Its
 workbench band carries line tabs (All, Review, Research, Waiting, Automatic)

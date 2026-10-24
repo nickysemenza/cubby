@@ -13,6 +13,7 @@ import type {
   RunDecisionsOut,
   RunDetailStepsOut,
 } from "~/contracts/run-detail.contract";
+import { runDetail } from "~/integrations/tanstack-query/generated/catalog/runDetail.gen";
 import { overrideStartDispatch } from "~/integrations/tanstack-query/start-transport";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
 import type { UnparsedStartOperationData } from "~/server/operation-runtime/start-operation.contract";
@@ -336,3 +337,30 @@ it.each([1440, 402])(
     expect(await within(ledger).findByText("2 of 2 decisions")).toBeVisible();
   },
 );
+
+it("keeps earlier decision families available inside the Run", async () => {
+  renderRun();
+  const picker = await screen.findByRole("combobox", {
+    name: "Decision family",
+  });
+  await userEvent.click(picker);
+  await userEvent.click(
+    await screen.findByRole("option", {
+      name: /statement.*transaction.*assessments/i,
+    }),
+  );
+  await waitFor(() =>
+    expect(
+      harness.queryClient.getQueryData(
+        runDetail.decisions.queryKey({
+          runId: run.id,
+          family: "statement_transaction",
+        }),
+      ),
+    ).toBeDefined(),
+  );
+  await userEvent.click(picker);
+  await userEvent.click(
+    await screen.findByRole("option", { name: /transfer candidates/i }),
+  );
+});

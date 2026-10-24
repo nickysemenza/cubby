@@ -87,27 +87,9 @@ export default defineEntity({
       summary: [
         {
           kind: "fields",
-          id: "execution",
-          title: "Execution",
-          fields: ["status", "attempt", "startedAt", "endedAt"],
-        },
-        {
-          kind: "fields",
           id: "purpose-scope",
           title: "Purpose & scope",
           fields: ["purpose", "vendorAccountLabel"],
-        },
-        {
-          kind: "fields",
-          id: "progress",
-          title: "Progress",
-          fields: ["workProgress"],
-        },
-        {
-          kind: "fields",
-          id: "failure",
-          title: "Failure",
-          fields: ["failureCode", "dispatchError"],
         },
         {
           kind: "fields",
@@ -116,16 +98,22 @@ export default defineEntity({
           fields: ["ordersSeen", "imported", "updated", "skipped"],
         },
         {
-          kind: "report",
-          id: "recent-decisions",
-          title: "Recent decisions",
-          slot: "run.decisions",
+          kind: "fields",
+          id: "failure",
+          title: "Needs attention",
+          fields: ["failureCode", "dispatchError"],
         },
         {
-          kind: "report",
-          id: "ai-usage",
-          title: "AI usage",
-          slot: "run.ai-usage",
+          kind: "fields",
+          id: "progress",
+          title: "Processing",
+          fields: ["workProgress"],
+        },
+        {
+          kind: "fields",
+          id: "execution",
+          title: "Execution",
+          fields: ["status", "attempt", "startedAt", "endedAt"],
         },
       ],
 
@@ -143,36 +131,66 @@ export default defineEntity({
 
         breadcrumb: "vendorAccountId",
       },
-      additionalSections: [
-        // A step-ledger Run (maintenance, sweep) leads with its steps; the
-        // slot is empty for every other purpose.
-        { kind: "slot", id: "steps", title: "Steps" },
-        // The Assessments a step-ledger Run published, then the Job that
-        // executes it: limits, waits and raw logs.
-        { kind: "slot", id: "decisions", title: "Decisions" },
+      // The summary carries purpose/results; raw record facts must not precede review.
+      sectionOverrides: [
         {
-          kind: "slot",
-          id: "diagnostics",
+          kind: "fields",
+          id: "overview",
+          title: "Record facts",
           workspace: "evidence",
-          title: "Diagnostics",
+          fields: [
+            "activityAt",
+            "status",
+            "purpose",
+            "trigger",
+            "routine",
+            "vendorAccountId",
+            "vendorId",
+            "ledgerPartyId",
+            "actorName",
+            "startedAt",
+            "endedAt",
+            "retiredAt",
+            "retirementReason",
+            "wallTime",
+            "failureCode",
+            "notes",
+            "dispatchError",
+            "coordinatorStartedAt",
+            "auditedAt",
+            "createdAt",
+            "updatedAt",
+          ],
         },
-        { kind: "slot", id: "live-progress", title: "Progress" },
-        // What the run counted and the records it worked, before its
-        // controls and agent: the first questions about any run.
-        { kind: "slot", id: "import-stats", title: "Counts" },
-        { kind: "slot", id: "import-targets", title: "Targets and outcome" },
-        // Import runs (mail import, photo inventory, file import) declare
-        // their workflow as slots that each gate their own visibility. A live
-        // run leads with progress and its agent; a stopped run carries the
-        // same two after its evidence.
-        { kind: "slot", id: "import-controls", title: "Controls" },
-        { kind: "slot", id: "import-progress-live", title: "Run progress" },
-        { kind: "slot", id: "import-agent-live", title: "Live agent" },
+        {
+          kind: "fields",
+          id: "runtime",
+          workspace: "evidence",
+          title: "Runtime",
+          fields: [
+            "coordinatorModel",
+            "skillRevision",
+            "runtimeRevision",
+            "decisionRevision",
+            "predecessorRunId",
+            "parentRunId",
+            "cause",
+            "attempt",
+          ],
+        },
+        // Workspaces put review tools before execution evidence.
         {
           kind: "slot",
-          id: "import-purchases",
+          id: "photo-batch",
           workspace: "work",
-          title: "Purchases changed",
+          title: "Photos",
+          placement: "full",
+        },
+        {
+          kind: "slot",
+          id: "decisions",
+          workspace: "work",
+          title: "Decisions",
         },
         {
           kind: "slot",
@@ -185,6 +203,66 @@ export default defineEntity({
           id: "import-prepared-orders",
           workspace: "work",
           title: "Prepared orders",
+        },
+        {
+          kind: "slot",
+          id: "suggestions",
+          workspace: "work",
+          title: "Suggestions",
+        },
+        {
+          kind: "slot",
+          id: "import-targets",
+          workspace: "work",
+          title: "Items and outcomes",
+        },
+        {
+          kind: "slot",
+          id: "import-purchases",
+          workspace: "work",
+          title: "Purchases changed",
+        },
+        {
+          kind: "slot",
+          id: "import-controls",
+          workspace: "work",
+          title: "Run controls",
+        },
+        {
+          kind: "slot",
+          id: "import-stats",
+          workspace: "evidence",
+          title: "Import counts",
+        },
+        {
+          kind: "slot",
+          id: "live-progress",
+          workspace: "evidence",
+          title: "Processing",
+        },
+        {
+          kind: "slot",
+          id: "steps",
+          workspace: "evidence",
+          title: "Execution steps",
+        },
+        {
+          kind: "slot",
+          id: "diagnostics",
+          workspace: "evidence",
+          title: "Diagnostics",
+        },
+        {
+          kind: "slot",
+          id: "import-progress-live",
+          workspace: "evidence",
+          title: "Run progress",
+        },
+        {
+          kind: "slot",
+          id: "import-agent-live",
+          workspace: "evidence",
+          title: "Live agent",
         },
         {
           kind: "slot",
@@ -212,19 +290,6 @@ export default defineEntity({
         },
         {
           kind: "slot",
-          id: "suggestions",
-          workspace: "work",
-          title: "Suggestions",
-        },
-        {
-          kind: "slot",
-          id: "photo-batch",
-          workspace: "work",
-          title: "Photos",
-          placement: "full",
-        },
-        {
-          kind: "slot",
           id: "ai-usage",
           workspace: "evidence",
           title: "AI usage",
@@ -234,22 +299,6 @@ export default defineEntity({
           id: "changes",
           workspace: "evidence",
           title: "Changes",
-        },
-        {
-          kind: "fields",
-          id: "runtime",
-          workspace: "evidence",
-          title: "Runtime",
-          fields: [
-            "coordinatorModel",
-            "skillRevision",
-            "runtimeRevision",
-            "decisionRevision",
-            "predecessorRunId",
-            "parentRunId",
-            "cause",
-            "attempt",
-          ],
         },
       ],
     },

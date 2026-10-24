@@ -372,6 +372,7 @@ function declaredSections<E extends GenericDetailEntity>(
           {
             ...base,
             title,
+            collapsed: slot.collapsed,
             headerAction: section.explanationField ? (
               <FieldExplanation
                 entity={entity}
