@@ -31,8 +31,15 @@ import {
   importSourceOrder,
   importSourceProduct,
   externalSource,
+  expense,
+  purchase as purchaseTable,
   product,
 } from "~/server/db/schema";
+import {
+  deleteExpenses,
+  updateExpense,
+} from "~/server/domains/expense/repo/crud";
+import { productIdentityEvidenceFence } from "~/server/domains/product/repo/match/product-identity-fence";
 import {
   prepareProductIdentityPairRequest,
   productIdentitySnapshot,
@@ -46,6 +53,7 @@ import {
 } from "~/server/domains/product/repo/match/product-match-candidate";
 import { getProductMatchQueue } from "~/server/domains/product/repo/match/product-match-review";
 import { loadProductIdentifierClaims } from "~/server/domains/product/repo/product-identity-claims";
+import { attachPurchaseProducts } from "~/server/domains/purchase/repo/purchase-products";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import {
   discoverAiRefresh,
@@ -305,17 +313,164 @@ describe("stored Product identity pairs", () => {
         originalOrder: original,
       })
       .returning();
-    await getDb(ctx.db)
-      .insert(importSourceProduct)
-      .values(
-        ids.map((id, lineIndex) => ({
-          sourceOrderId: order!.id,
-          lineIndex,
-          productId: id,
-        })),
-      );
+    for (const [lineIndex, id] of ids.entries()) {
+      const item = await insertWithShortcode(ctx.db, "expense", {
+        purchaseId: purchase.id,
+        productId: id,
+        name: names[lineIndex]!,
+        cost: 10,
+        date: "2026-01-01",
+        lineKind: "principal",
+        lineBasis: "item_line",
+        economicRole: "vendor",
+        costType: "materials",
+        trade: "other",
+      });
+      await getDb(ctx.db).insert(importSourceProduct).values({
+        sourceOrderId: order!.id,
+        lineIndex,
+        productId: id,
+        expenseId: item.id,
+      });
+    }
     return { products, ids, runId, decisionPort: identityPort };
   };
+  it("uses ordinary Expense Product corrections and detachments for receipt identifiers", async () => {
+    const { ids, products } = await acceptedIdentityPair(
+      ["Synthetic corrected receipt item", "Synthetic other item"],
+      "SYNTHETIC-EDIT-SKU",
+    );
+    const [binding] = await getDb(ctx.db)
+      .select()
+      .from(importSourceProduct)
+      .where(eq(importSourceProduct.productId, ids[0]!));
+    if (!binding?.expenseId)
+      throw new Error("Synthetic receipt Expense missing");
+    const [item] = await getDb(ctx.db)
+      .select()
+      .from(expense)
+      .where(eq(expense.id, binding.expenseId));
+    if (!item) throw new Error("Synthetic item missing");
+    const original = await getDb(ctx.db).select().from(importSourceOrder);
+    await updateExpense(
+      ctx.db,
+      parseShortcodeFor("expense", item.shortcode),
+      { productId: products[1]!.id },
+      ctx.actor,
+    );
+    const claims = await loadProductIdentifierClaims(ctx.db);
+    expect(
+      claims
+        .filter((claim) => claim.bindingId === binding.id)
+        .map((claim) => claim.productId),
+    ).toEqual([ids[1]]);
+    expect(await loadProductIdentifierClaims(ctx.db, ids[0])).toEqual([]);
+    expect(await getDb(ctx.db).select().from(importSourceOrder)).toEqual(
+      original,
+    );
+    const [corrected] = await getDb(ctx.db)
+      .select()
+      .from(expense)
+      .where(eq(expense.id, item.id));
+    expect(corrected).toMatchObject({
+      cost: item.cost,
+      date: item.date,
+      purchaseId: item.purchaseId,
+    });
+    await updateExpense(
+      ctx.db,
+      parseShortcodeFor("expense", item.shortcode),
+      { productId: null },
+      ctx.actor,
+    );
+    expect(
+      (await loadProductIdentifierClaims(ctx.db)).filter(
+        (claim) => claim.bindingId === binding.id,
+      ),
+    ).toEqual([]);
+  });
+  it("excludes receipt identifiers when their Expense or Purchase is deleted or detached", async () => {
+    const { ids } = await acceptedIdentityPair(
+      ["Synthetic live receipt item", "Synthetic second receipt item"],
+      "SYNTHETIC-LIVE-SKU",
+    );
+    const [binding] = await getDb(ctx.db)
+      .select()
+      .from(importSourceProduct)
+      .where(eq(importSourceProduct.productId, ids[0]!));
+    if (!binding?.expenseId)
+      throw new Error("Synthetic receipt mapping missing");
+    const [item] = await getDb(ctx.db)
+      .select()
+      .from(expense)
+      .where(eq(expense.id, binding.expenseId));
+    if (!item?.purchaseId)
+      throw new Error("Synthetic receipt Purchase missing");
+    expect(await loadProductIdentifierClaims(ctx.db, ids[0])).toHaveLength(1);
+    await getDb(ctx.db)
+      .update(expense)
+      .set({ deletedAt: new Date() })
+      .where(eq(expense.id, item.id));
+    expect(await loadProductIdentifierClaims(ctx.db, ids[0])).toEqual([]);
+    await getDb(ctx.db)
+      .update(expense)
+      .set({ deletedAt: null, purchaseId: null })
+      .where(eq(expense.id, item.id));
+    expect(await loadProductIdentifierClaims(ctx.db, ids[0])).toEqual([]);
+    await getDb(ctx.db)
+      .update(expense)
+      .set({ purchaseId: item.purchaseId })
+      .where(eq(expense.id, item.id));
+    // Originally unresolved imports have no historical Product to select by.
+    await getDb(ctx.db).update(importSourceProduct).set({ productId: null });
+    const beforeDeletion = await productIdentityEvidenceFence(ctx.db, [
+      ids[0]!,
+    ]);
+    await getDb(ctx.db)
+      .update(purchaseTable)
+      .set({ deletedAt: new Date() })
+      .where(eq(purchaseTable.id, item.purchaseId));
+    expect(await loadProductIdentifierClaims(ctx.db, ids[0])).toEqual([]);
+    expect(await productIdentityEvidenceFence(ctx.db, [ids[0]!])).not.toBe(
+      beforeDeletion,
+    );
+  });
+  it("does not revive a cleared receipt claim through an independent Product link when deleting its Expense", async () => {
+    const { ids } = await acceptedIdentityPair(
+      ["Synthetic deleted receipt item", "Synthetic remaining receipt item"],
+      "SYNTHETIC-DELETE-SKU",
+    );
+    const [binding] = await getDb(ctx.db)
+      .select()
+      .from(importSourceProduct)
+      .where(eq(importSourceProduct.productId, ids[0]!));
+    if (!binding?.expenseId)
+      throw new Error("Synthetic mapped receipt missing");
+    const [item] = await getDb(ctx.db)
+      .select()
+      .from(expense)
+      .where(eq(expense.id, binding.expenseId));
+    if (!item?.purchaseId) throw new Error("Synthetic Expense missing");
+    await attachPurchaseProducts(ctx.db, item.purchaseId, [ids[0]!], ctx.actor);
+    await updateExpense(
+      ctx.db,
+      parseShortcodeFor("expense", item.shortcode),
+      { productId: null },
+      ctx.actor,
+    );
+    expect(await loadProductIdentifierClaims(ctx.db, ids[0])).toEqual([]);
+    await deleteExpenses(
+      ctx.db,
+      [parseShortcodeFor("expense", item.shortcode)],
+      ctx.actor,
+    );
+    expect(await loadProductIdentifierClaims(ctx.db, ids[0])).toEqual([]);
+    expect(
+      (await getDb(ctx.db).select().from(importSourceProduct)).find(
+        (row) => row.id === binding.id,
+      ),
+    ).toMatchObject({ expenseId: item.id, productId: ids[0] });
+  });
   it("hides changed detector advice before any retirement pass while retaining history", async () => {
     const { ids, runId, decisionPort } = await acceptedIdentityPair([
       "Synthetic stale pair A",
@@ -807,9 +962,23 @@ describe("stored Product identity pairs", () => {
         originalOrder: original,
       })
       .returning();
-    await getDb(ctx.db)
-      .insert(importSourceProduct)
-      .values({ sourceOrderId: order!.id, lineIndex: 0, productId: bId });
+    const receiptItem = await insertWithShortcode(ctx.db, "expense", {
+      purchaseId: purchase.id,
+      productId: bId,
+      name: "Synthetic source variant",
+      cost: 10,
+      date: "2026-01-01",
+      lineKind: "principal",
+      lineBasis: "item_line",
+      economicRole: "vendor",
+      costType: "materials",
+    });
+    await getDb(ctx.db).insert(importSourceProduct).values({
+      sourceOrderId: order!.id,
+      lineIndex: 0,
+      productId: bId,
+      expenseId: receiptItem.id,
+    });
     const result = await evaluateProductIdentity(ctx.db, aId, runId, {
       decisionPort: async () => {
         throw new Error("Synthetic unavailable model");

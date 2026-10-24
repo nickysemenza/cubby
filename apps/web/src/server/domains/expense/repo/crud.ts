@@ -94,6 +94,12 @@ import {
 } from "./helpers";
 
 export const EXPENSE_DELETE_EDGE_POLICY = {
+  "ImportSourceProduct.expenseId": {
+    code: "preserve-receipt-line-history",
+    effect: "preserve",
+    description:
+      "Deleting an Expense retains its historical receipt reference so an identity-only association cannot revive a cleared Product claim.",
+  },
   "ExpenseAttribution.expenseId": {
     code: "soft-delete-attributions",
     effect: "soft-delete",

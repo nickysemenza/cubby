@@ -657,6 +657,25 @@ Historical descriptor spelling and reference strings remain retained. New
 normalization must preserve complete masks; a changed descriptor is not grounds
 to rewrite accepted transaction identity or an old observation.
 
+### Correcting a purchased Product
+
+Correct an imported item's Product through the ordinary Expense entity update.
+Create a missing Product through the ordinary Product create first, then set
+`Expense.productId` and the purchased quantity. No accepted-source lookup,
+original preparation or reconciliation command is required for this correction.
+The live Expense owns the current Product. A retained receipt-line reference
+lets identifier discovery follow that Product, including reassignments and
+clearing the Product; original import Product decisions remain history.
+Deleted Expenses and Purchases do not contribute receipt-derived identifiers.
+An incomplete order with no Expense retains identifier discovery through its
+current generic Purchase/Product association; removing that association removes
+the claim without inventing money.
+Imports record the Expense reference even when a Product is unresolved. The
+migration links older original lines only to unique exact item Expenses and
+leaves ambiguous history unlinked. It preserves original records and changes
+no money, payments, attribution or inventory. Financial reconciliation retains
+its existing review and conservation checks.
+
 Retailer preparation can explicitly target an orderless Purchase. Receipt
 itemization that changes recorded lines proposes `reconcile_source_order`
 before accepting its headers, attachments, Product bindings or payments. The

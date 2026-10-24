@@ -60,7 +60,8 @@ async function acceptedSiblingConflicts(
       : [];
     const bindings = [
       ...state.productBindings.filter(
-        (binding) => binding.sourceOrderId === order.id,
+        (binding) =>
+          binding.sourceOrderId === order.id && binding.productId !== null,
       ),
       ...(observation?.productBindings.filter((binding) => binding.productId) ??
         []),
