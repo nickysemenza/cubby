@@ -27,7 +27,8 @@ own workflow.
 The required test matrix splits its existing shards evenly between GitHub and
 Celesto: half the browser shards use GitHub Ubuntu and half use Celesto XL;
 half the Vitest shards use GitHub Ubuntu and half use Celesto XL. The workflow
-owns exact assignments and counts. Per-runner worker counts stay unchanged.
+owns exact assignments and counts. GitHub browser shards use two workers;
+Celesto XL browser shards trial four workers against their eight vCPUs.
 Each shard restores or builds its own web output through Nx before testing;
 there is no shared-build producer or artifact dependency. The existing build
 ensure verifies provenance and supports standalone tests. Cold shards may build
@@ -38,9 +39,8 @@ optional jobs and Apple jobs also stay on GitHub; Rust retains its ARM runner.
 Deployment and other workflows retain their existing runners. This limits a
 normal PR to four heavy Celesto jobs, spreading demand across both providers
 without making native lane selection wait for Celesto admission. Celesto
-browser shards trial XL at the existing worker count to isolate whether
-additional CPU/memory reduces execution time; this is an experiment, not a
-measured speedup.
+browser shards trial XL with additional workers to use the larger machine;
+this is an experiment, not a measured speedup.
 
 Celesto hosts its machines; `self-hosted` is GitHub's label for runners outside
 its hosted fleet. Enable the repository in the Celesto GitHub App and link it
@@ -51,7 +51,15 @@ block the merge gate. Moving some jobs off GitHub frees its runner slots, but
 does not guarantee Celesto capacity.
 
 Self-hosted WASM consumers explicitly install Rust. Celesto browser jobs install
-Chromium system dependencies even when its browser archive is cached. Setup
+Chromium system dependencies even when its browser archive is cached.
+`.github/actions/setup-playwright` owns browser installation and caching for
+both Vitest's component-browser tests and E2E. It sets `PLAYWRIGHT_BROWSERS_PATH`
+to the ignored workspace-local `playwright/.cache/ms-playwright` directory and
+uses a new cache namespace: archives must not contain home-directory paths from
+a different runner user. A hit reuses binaries; a miss installs only Chromium headless shell and its
+required helpers, since both required browser suites run headlessly without a
+branded browser channel. Local headed browser installation remains separate.
+Setup
 also restores `/dev/fd` when absent on Linux: Bash process substitution in the
 WASM installer requires that link to `/proc/self/fd` on minimal images.
 Celesto runs as root, so filesystem permission regressions inject the failing
@@ -96,7 +104,8 @@ include Node, platform/architecture, the hosted image version, CI mode, locale
 and timezone, each as a plain Nx `env` or `runtime` input. A runtime input's
 command must print only deterministic stdout: Nx hashes stdout and stderr. Web targets add ignored env files, generated WASM and the
 selectors in `apps/web/project.json`; shard selection is keyed per target and
-browser worker count is part of the target command. The Worker bundles all
+browser worker count (`CUBBY_E2E_WORKERS`, default two) is an explicit Nx input
+as well as a command argument. The Worker bundles all
 `docs/**/*.md`, so those bytes participate in runtime keys. Native App source
 is excluded only from web-specific passes; root tooling keeps broad coverage.
 Rust checks include their actual compiler, platform and Cargo warning policy.
@@ -210,7 +219,7 @@ Toolchain versions come from `.nvmrc`, the root `packageManager`,
 browsers must be available; [test tiers](agents/validation-tests.md) cover database setup.
 PostgreSQL remains the authoritative integration tier; Playwright defaults to
 one worker on hosted runners and two on local macOS in `playwright.config.ts`,
-the `e2e` target passes `--workers=2` for each shard. Both tiers reject an empty selection or an
+the `e2e` target passes its configured worker count for each shard. Both tiers reject an empty selection or an
 unexpected skipped test without freezing the suite to a hand-maintained count;
 a Vitest `-t` run accepts tests the pattern left out but still fails when the
 pattern matches nothing or a matched test is skipped.
@@ -419,7 +428,7 @@ Generated output is never committed; web and Apple jobs generate it during
 including the direct native contract and Swift codecs.
 
 The `lanes` job is one static matrix with browser and Vitest sharding.
-The workflow owns the shard counts; worker counts per runner stay unchanged.
+The workflow owns shard counts and provider-specific browser worker counts.
 Browser shards run alone, so no companion check waits behind one. Every
 failure still fails the job and `CI passed`, and each Nx target retains its own
 cache key.
@@ -437,7 +446,7 @@ drift check against disposable scratch databases, which runs despite a test
 failure. Service-backed projects (`integration`, `integration-workerd`,
 `capability`, `workers`) retry a failed test once on CI; Node unit, tooling and
 package projects never retry.
-Desktop Chromium runs as Playwright shards (two workers each) through the
+Desktop Chromium runs as Playwright shards through the
 `e2e` target, each restoring or building the Worker with the run's source commit and branch
 provenance. Phone-web and WebKit browser coverage was removed from PR CI and the
 Playwright suite; native checks remain separate. There is no coverage mode.

@@ -179,10 +179,12 @@ jobs:
             run: CUBBY_E2E_SHARD=2/4 pnpm exec nx run @cubby/web:e2e --outputStyle=stream
           - name: E2E tests (desktop 3/4)
             browser: desktop-3
+            browser-workers: "4"
             runner: [self-hosted, celesto-xl]
             run: CUBBY_E2E_SHARD=3/4 pnpm exec nx run @cubby/web:e2e --outputStyle=stream
           - name: E2E tests (desktop 4/4)
             browser: desktop-4
+            browser-workers: "4"
             runner: [self-hosted, celesto-xl]
             run: CUBBY_E2E_SHARD=4/4 pnpm exec nx run @cubby/web:e2e --outputStyle=stream
           # Every Vitest project is split by file; all blobs feed the report.
@@ -248,9 +250,9 @@ jobs:
         uses: ./.github/actions/setup-node-with-deps
         with:
           wasm: restore
-      - name: Install Chromium for required component-browser tests
+      - name: Setup Chromium for required component-browser tests
         if: ${{ matrix.vitest }}
-        run: pnpm --filter @cubby/web exec playwright install ${{ runner.environment == 'self-hosted' && '--with-deps' || '' }} chromium
+        uses: ./.github/actions/setup-playwright
       - name: Restore or build web app
         run: pnpm exec nx run @cubby/web:build-cf --outputStyle=stream
       - name: Run Vitest shard
@@ -270,6 +272,8 @@ jobs:
           retention-days: 7
       - name: Run Playwright shard
         if: ${{ matrix.browser }}
+        env:
+          CUBBY_E2E_WORKERS: ${{ matrix.browser-workers || '2' }}
         uses: ./.github/actions/playwright
         with:
           command: ${{ matrix.run }}

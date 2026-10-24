@@ -1,0 +1,41 @@
+name: Setup Playwright Chromium
+description: Restore or install exact Chromium in a user-independent workspace cache
+inputs:
+  save-browser:
+    description: Save a newly installed browser archive
+    required: false
+    default: "true"
+runs:
+  using: composite
+  steps:
+    - name: Use workspace-local browser binaries
+      shell: bash
+      run: echo "PLAYWRIGHT_BROWSERS_PATH=$GITHUB_WORKSPACE/playwright/.cache/ms-playwright" >> "$GITHUB_ENV"
+    # Browser archives do not contain the operating system libraries.
+    - name: Install Chromium system dependencies
+      if: runner.environment == 'self-hosted'
+      shell: bash
+      run: pnpm --filter @cubby/web exec playwright install-deps chromium
+    - name: Resolve installed Playwright version
+      id: playwright
+      shell: bash
+      working-directory: apps/web
+      run: echo "version=$(node -p "require('@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
+    - name: Restore exact Playwright browser
+      id: browser-cache
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+      with:
+        path: playwright/.cache/ms-playwright
+        key: playwright-workspace-v2-${{ runner.os }}-${{ runner.arch }}-${{ steps.playwright.outputs.version }}-chromium
+    - name: Install exact Playwright browser
+      if: steps.browser-cache.outputs.cache-hit != 'true'
+      shell: bash
+      run: pnpm --filter @cubby/web exec playwright install --only-shell chromium
+    - name: Save exact Playwright browser
+      if: steps.browser-cache.outputs.cache-hit != 'true' && inputs.save-browser == 'true'
+      # Parallel shards race for the same key; the loser's 409 is harmless.
+      continue-on-error: true
+      uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
+      with:
+        path: playwright/.cache/ms-playwright
+        key: playwright-workspace-v2-${{ runner.os }}-${{ runner.arch }}-${{ steps.playwright.outputs.version }}-chromium

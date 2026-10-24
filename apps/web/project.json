@@ -134,7 +134,7 @@
     // splits it across CI runners; the restored run bundle is the evidence of
     // the run that produced a cached pass. See vitest-ci for the build.
     "e2e": {
-      "command": "pnpm exec tsx tooling/build-cf.ts --ensure && pnpm run test:e2e:ci:desktop --workers=2 --shard=${CUBBY_E2E_SHARD:-1/1}",
+      "command": "pnpm exec tsx tooling/build-cf.ts --ensure && pnpm run test:e2e:ci:desktop --workers=${CUBBY_E2E_WORKERS:-2} --shard=${CUBBY_E2E_SHARD:-1/1}",
       "options": {
         "cwd": "apps/web"
       },
@@ -149,7 +149,11 @@
           "target": "generate"
         }
       ],
-      "inputs": ["webGate", { "env": "CUBBY_E2E_SHARD" }],
+      "inputs": [
+        "webGate",
+        { "env": "CUBBY_E2E_SHARD" },
+        { "env": "CUBBY_E2E_WORKERS" }
+      ],
       "outputs": [
         "{projectRoot}/playwright-report",
         "{projectRoot}/blob-report"
