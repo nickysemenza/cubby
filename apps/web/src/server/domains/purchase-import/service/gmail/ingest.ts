@@ -1,4 +1,5 @@
 import type { AiProvenance } from "@cubby/schemas/ai-evaluation";
+import type { ActorContext } from "@cubby/schemas/context";
 import type { EmailReclassifyOutcome } from "@cubby/schemas/email-actions";
 import { emailCandidateSource } from "@cubby/schemas/email-candidates";
 import type { EmailClassificationConflict } from "@cubby/schemas/email-observations";
@@ -56,6 +57,7 @@ import {
   reserveGmailAttachmentUploads,
   upsertOrderMail,
 } from "../../repo/gmail/persistence";
+import { queueSearchClassification } from "../../repo/gmail/reclassify-state";
 import { GmailAuthorizationError } from "../../repo/gmail/tokens";
 import {
   extractEmailCandidatePreview,
@@ -447,14 +449,6 @@ async function stageGmailAttachments(
   });
 }
 
-/** Member search judges itself; otherwise import policy or a Reclassify runs the model. */
-const relevanceModelRuns = (
-  input: IngestInput,
-  executionPolicy: Awaited<ReturnType<typeof gmailExecutionPolicy>>,
-) =>
-  !input.callerJudges &&
-  (executionPolicy !== "classification_only" || Boolean(input.reclassify));
-
 function recordUnsavedOutcome(
   outcome: GmailIngestOutcome,
   messageId: string,
@@ -516,7 +510,7 @@ function memberSearchOwnership(
   executionPolicy: Awaited<ReturnType<typeof gmailExecutionPolicy>>,
 ) {
   const keep = Boolean(
-    input.callerJudges &&
+    input.searchActor &&
     prior?.classification &&
     prior.status !== "excluded" &&
     prior.status !== "deleted" &&
@@ -528,7 +522,7 @@ function memberSearchOwnership(
     executionPolicy: (keep && prior?.executionPolicy) || executionPolicy,
     memberSearch: keep
       ? prior?.searchOrigin === "member_search"
-      : input.callerJudges,
+      : Boolean(input.searchActor),
     replay: keep
       ? (unchangedRetainedOutcome(prior) ?? { kind: "skipped" as const })
       : null,
@@ -595,6 +589,13 @@ async function acquireEligible(
         publication,
         async (tx) => {
           await saveMailboxMetadata(tx, metadata);
+          if (
+            input.searchActor &&
+            prior?.classification === "uncertain" &&
+            (prior.classificationStage === "rule" ||
+              prior.classificationStage === null)
+          )
+            await queueSearchClassification(tx, input.searchActor, prior);
           return replay;
         },
       )) ?? { kind: "skipped" }
@@ -612,15 +613,15 @@ async function acquireEligible(
         prior?.checksum === checksum)
       ? prior
       : null,
-    input.callerJudges
+    input.searchActor
       ? async () => ({
           classification: "uncertain",
           stage: "rule",
-          reason: "Found by a member's search; the caller decides",
+          reason: "Awaiting classification",
         })
       : async () =>
           (await routeGmailMessage(message, normalized, ports.triage)).decision,
-    !relevanceModelRuns(input, executionPolicy)
+    input.searchActor
       ? null
       : () =>
           interpretMailRelevance(
@@ -683,17 +684,23 @@ async function acquireEligible(
             },
           };
           await saveMailboxMetadata(tx, metadata);
-          const observation = await observeClassification(
-            tx,
-            input,
-            identity,
-            await readEmail(tx, identity),
-            checksum,
-            decision,
-            unchanged,
-            classificationCallFor(decision.stage, triageCall, relevanceCall),
-            [triageCall, relevanceCall],
-          );
+          const observation = input.searchActor
+            ? null
+            : await observeClassification(
+                tx,
+                input,
+                identity,
+                await readEmail(tx, identity),
+                checksum,
+                decision,
+                unchanged,
+                classificationCallFor(
+                  decision.stage,
+                  triageCall,
+                  relevanceCall,
+                ),
+                [triageCall, relevanceCall],
+              );
           publication.observationId = observation?.id ?? null;
           if (publication.evaluation)
             publication.evaluation.observationId = observation?.id ?? null;
@@ -713,7 +720,7 @@ async function acquireEligible(
             return reclassified;
           }
           const recorded = {
-            classificationStage: decision.stage,
+            classificationStage: input.searchActor ? undefined : decision.stage,
             classificationReason: decision.reason,
           };
           if (!retain) {
@@ -775,8 +782,38 @@ async function acquireEligible(
             orderMailId,
           });
           await restoreOrderMailContent(tx, orderMailId);
+          if (input.searchActor) {
+            const saved = await readEmail(tx, identity);
+            if (!saved) throw new Error("Search Email was not retained");
+            const classifier = await queueSearchClassification(
+              tx,
+              input.searchActor,
+              saved,
+            );
+            await saveEmail(tx, {
+              ...identity,
+              checksum,
+              classification: "uncertain",
+              status: "pending",
+              orderMailId,
+              classificationReason: `Awaiting classification in ${classifier.shortcode}`,
+            });
+          }
           if (observation)
             await recordEmailClassificationApplication(tx, observation.id);
+          if (input.reclassify && decision.classification === "related")
+            await (
+              await import("~/server/workflows/background-tasks/publish")
+            ).publishBackgroundTasks(
+              tx,
+              [
+                {
+                  kind: "maintenance.purchase-discovery",
+                  requestedAt: new Date().toISOString(),
+                },
+              ],
+              { source: "mail-classified" },
+            );
           return { kind: "saved", orderMailId };
         },
       )) ?? { kind: "skipped" }
@@ -855,8 +892,8 @@ export async function ingestGmailMessages(
       value: NonNullable<Awaited<ReturnType<typeof relatedEmailPreview>>>,
     ) => Promise<void>;
     runId?: string;
-    /** Rules only, no paid classification: the caller judges each message. */
-    callerJudges?: boolean;
+    /** Retain search acquisitions and atomically queue their classifier Run. */
+    searchActor?: ActorContext;
     /**
      * A member's Reclassify: rerun every stage, including the relevance model,
      * and publish through `reclassifyPublication`.
@@ -872,7 +909,7 @@ export async function ingestGmailMessages(
   if (!input.mailboxId.trim() || input.mailboxId === "me")
     throw new Error("A stable Google account id is required");
   const storage = input.storage ?? productionOrderMailAttachmentStorage;
-  const executionPolicy = input.callerJudges
+  const executionPolicy = input.searchActor
     ? "classification_only"
     : await gmailExecutionPolicy(db, input.runId, input);
   const outcome: GmailIngestOutcome = {

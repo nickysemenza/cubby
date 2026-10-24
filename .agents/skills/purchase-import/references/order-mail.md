@@ -14,11 +14,11 @@ handle alone cannot read mail Cubby has never recorded. Respect explicitly
 selected source tools rather than silently switching connectors.
 
 If no usable handle remains, search owned mail by the exact order reference
-before generic product searches. `purchase_import.mail_search` retains new matches as uncertain
-Email candidates; it is a mutation. Read-only research workers hand the query
-back to their writer. Inspect and settle every retained candidate through
-`purchase_import.mail_resolve` under this workflow; a search hit alone proves neither order
-identity nor a new purchase. On resumption, inspect retained candidates from
+before generic product searches. `purchase_import.mail_search` retains new matches and atomically queues normal
+classification in resumable Runs; pending results are uncertain. It is a mutation. Read-only research workers hand the query
+back to their writer. Inspect classification progress before reviewing a retained candidate through
+`purchase_import.mail_resolve`; a search hit alone proves neither order identity
+nor a new purchase. Funding pauses belong to the classifier Run. On resumption, inspect retained candidates from
 interrupted searches before repeating them.
 
 ## Record shipment evidence

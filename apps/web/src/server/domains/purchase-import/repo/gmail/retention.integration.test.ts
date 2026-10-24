@@ -102,7 +102,7 @@ describe("explicit member-search cache expiry", () => {
         ledgerPartyId: party.id,
         mailboxId: "synthetic-mailbox",
         messageIds: ["admitted-search", "abandoned-search"],
-        callerJudges: true,
+        searchActor: ctx.actor,
         storage: retainedStorage,
       });
       await getDb(ctx.db)
@@ -230,7 +230,7 @@ describe("explicit member-search cache expiry", () => {
       ledgerPartyId: party.id,
       mailboxId: "synthetic-mailbox",
       messageIds: ["expired-search"],
-      callerJudges: true,
+      searchActor: ctx.actor,
       storage,
     });
     await ingestGmailMessages(ctx.db, gmail, {
@@ -368,7 +368,7 @@ describe("explicit member-search cache expiry", () => {
       ledgerPartyId: fixture.party.id,
       mailboxId: "synthetic-mailbox",
       messageIds: ["accepted-search"],
-      callerJudges: true,
+      searchActor: ctx.actor,
       storage,
     });
     const [original] = await readRetainedMail(ctx.db, {

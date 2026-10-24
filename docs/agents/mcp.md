@@ -90,9 +90,11 @@ with `purchase_import.mail_search`. The retained read's `acceptedSourceOrders` p
 source-order handles, exact source identities and deleted-target status for
 reviewed reconciliation. Lifecycle-only links supply no accepted-order handle;
 reading one neither promotes an unknown original nor authorizes its repair.
-A member's search runs no paid classification: past Spam
-and Trash every match is retained as `uncertain`, and the caller settles each
-with `purchase_import.mail_resolve` (`unrelated` disposes of it). Change identifier slots with `entity.update` collection
+A member's search queues normal classification with each new retained original,
+excluding Spam and Trash. Pending results remain uncertain; the classifier Run
+owns model usage, funding pauses and resume. Search in an import Run uses its
+classifier directly. The automatic import switch gates unattended import, not
+classification. Use `purchase_import.mail_resolve` for a source-backed review. Change identifier slots with `entity.update` collection
 patches on `externalIds` (`{op: "add"|"replace"|"remove", key, value?, expect?}`).
 Record "searched, not available" with `data_exception.set_exception`.
 

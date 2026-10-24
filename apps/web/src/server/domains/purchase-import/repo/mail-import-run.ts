@@ -47,6 +47,7 @@ import { recordChange } from "~/server/generic/changes/repo/change";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 import { dispatchStartedRun } from "./dispatch";
+import { mailImportEnabled } from "./mail-import-settings";
 
 const CLASSIFICATION_RUN_PURPOSES: (typeof run.$inferSelect.purpose)[] = [
   "mail_discovery",
@@ -63,6 +64,7 @@ type MailImportAdmission = {
   messageIds: readonly string[];
   expectedChecksums?: readonly { orderMailId: string; checksum: string }[];
   parentRunId?: RunId;
+  automatic?: boolean;
 };
 
 async function lockMailSources(
@@ -194,6 +196,13 @@ export async function admitMailImport(
       // Serialize admission while allowing source claims to reference this member.
       .for("no key update");
     if (!party) throw new Error("Mail import requires the owning member.");
+    // Serialize the switch with automatic admission; already admitted Runs keep their controls.
+    if (
+      input.automatic &&
+      (!input.mailboxId ||
+        !(await mailImportEnabled(tx, input.mailboxId, true)))
+    )
+      return [];
     if (input.parentRunId)
       await assertRunParent(tx, input.parentRunId, {
         actorUserId: actorId,
@@ -361,6 +370,7 @@ export async function importPendingEmails(db: Database) {
         ledgerPartyId: target.ledgerPartyId,
         userId: actorId,
         mailboxId: target.mailboxId,
+        automatic: true,
         messageIds,
       });
     try {

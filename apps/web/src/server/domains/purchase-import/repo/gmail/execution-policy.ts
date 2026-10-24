@@ -88,6 +88,8 @@ export async function gmailRelevanceAllowed(db: Database, runId: string) {
     .limit(1);
   return (
     current !== undefined &&
-    (isMailReclassifyRun(current) || isAiRefreshMailRun(current))
+    (current.purpose === "mail_discovery" ||
+      isMailReclassifyRun(current) ||
+      isAiRefreshMailRun(current))
   );
 }

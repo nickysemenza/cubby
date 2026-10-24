@@ -83,6 +83,32 @@ describe("mail research admission", () => {
     if (!mail) throw new Error("Synthetic mail fixture did not persist");
     return { party, mail };
   }
+  it("rechecks the automatic switch at admission without stopping explicit or admitted work", async () => {
+    const { party, mail } = await source();
+    const input = {
+      ledgerPartyId: party.id,
+      userId: ctx.actor.userId,
+      mailboxId: mail.mailboxId,
+      messageIds: [mail.id],
+    };
+    expect(
+      await startMailImport(ctx.db, { ...input, automatic: true }),
+    ).toEqual([]);
+    await setMailImport(ctx.db, { mailboxId: mail.mailboxId, enabled: true });
+    const admitted = await startMailImport(ctx.db, {
+      ...input,
+      automatic: true,
+    });
+    expect(admitted).toHaveLength(1);
+    await setMailImport(ctx.db, { mailboxId: mail.mailboxId, enabled: false });
+    expect(
+      await startMailImport(ctx.db, { ...input, automatic: true }),
+    ).toEqual([]);
+    const replayed = await startMailImport(ctx.db, input);
+    expect(replayed[0]?.runId).toBe(admitted[0]?.runId);
+    expect(replayed[0]?.status).toBe("running");
+  });
+
   // Admission freezes the Mail population before any of its targets finish.
   it("reports the known Mail import total while its roster is active", async () => {
     const { party, mail } = await source();

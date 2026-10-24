@@ -5,26 +5,32 @@ import {
 } from "@cubby/schemas/mail-import-settings";
 import { eq } from "drizzle-orm";
 
-import type { Database } from "~/server/db";
-import { getDb, withTransactionDatabase } from "~/server/db/helpers";
+import type { Database, DrizzleTransaction } from "~/server/db";
+import { getDb, unwrapDb, withTransactionDatabase } from "~/server/db/helpers";
 import { appSettings } from "~/server/db/schema";
 
 const SETTINGS_ID = "00000000-0000-4000-8000-000000000078";
 
 export async function readMailImportSettings(
-  db: Database,
+  db: Database | DrizzleTransaction,
+  lock = false,
 ): Promise<MailImportSettings> {
-  const [row] = await getDb(db)
+  const query = unwrapDb(db)
     .select({ metadata: appSettings.metadata })
     .from(appSettings)
     .where(eq(appSettings.id, SETTINGS_ID));
+  const [row] = await (lock ? query.for("update") : query);
   return row
     ? mailImportSettings.parse(row.metadata)
     : { enabledMailboxes: [] };
 }
 
-export const mailImportEnabled = async (db: Database, mailboxId: string) =>
-  (await readMailImportSettings(db)).enabledMailboxes.includes(mailboxId);
+export const mailImportEnabled = async (
+  db: Database | DrizzleTransaction,
+  mailboxId: string,
+  lock = false,
+) =>
+  (await readMailImportSettings(db, lock)).enabledMailboxes.includes(mailboxId);
 
 export async function setMailImport(
   db: Database,

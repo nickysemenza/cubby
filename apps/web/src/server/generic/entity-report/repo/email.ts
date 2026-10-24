@@ -51,6 +51,7 @@ import {
   emailFeedbackHasClassificationSql,
 } from "~/server/domains/email/repo/email-sql";
 import { hasRetainedEmailImportContent } from "~/server/domains/purchase-import/repo/email-content";
+import { mailImportEnabled } from "~/server/domains/purchase-import/repo/mail-import-settings";
 import { runRowState } from "~/server/generic/collection/repo/collection-items";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
@@ -293,7 +294,7 @@ function stageRow(
     lines:
       stage === "model" && email.classification === "uncertain"
         ? [
-            "Classification-only discovery skips the relevance model; Reclassify runs it.",
+            "Uncertain mail waits for relevance classification; inspect its Run for progress or a funding pause.",
           ]
         : [],
   });
@@ -515,6 +516,7 @@ function importRow(
   shortcode: EmailShortcode,
   costs: Awaited<ReturnType<typeof loadImportCosts>>,
   canImport: boolean,
+  automaticImport: boolean,
 ) {
   const { importRun, usage } = costs;
   const estimate =
@@ -574,7 +576,9 @@ function importRow(
     });
   return pipelineRow("Import Run", "Not reached", {
     lines: [
-      "Related Email imports automatically when Mail import is enabled for its mailbox.",
+      automaticImport
+        ? "Awaiting automatic import."
+        : "Awaiting import — automatic import is off. Classification continues; you can import this Email explicitly.",
       ...estimate,
     ],
     commands: [
@@ -912,6 +916,7 @@ export async function emailReviewReport(
     email.classification === "related" &&
     current &&
     !["deleted", "excluded", "researching"].includes(email.status);
+  const automaticImport = await mailImportEnabled(db, email.mailboxId);
   const associations = await readEmailAssociations(db, code, actor);
   // Per-stage results for the current original, newest first.
   const currentPredictions = predictions.filter(
@@ -962,7 +967,7 @@ export async function emailReviewReport(
           candidates.find((item) => item.preview.checksum === email.checksum),
           current,
         ),
-        importRow(email, shortcode, costs, canImport),
+        importRow(email, shortcode, costs, canImport, automaticImport),
         purchaseRow(email, associations.purchases),
       ],
       empty: "No pipeline steps.",

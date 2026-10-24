@@ -14,6 +14,7 @@ import {
 } from "~/server/db/helpers";
 import { email as emailTable, ledgerParty, run } from "~/server/db/schema";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
+import { launchWorkflowRun } from "~/server/workflows/runs/lifecycle";
 
 import { prepareReclassification } from "./reclassification-work";
 
@@ -98,6 +99,7 @@ export async function startReclassifyRun(
   actor: ActorContext,
   mode: MailReclassifyRunInput["mode"],
   emails: readonly OwnedEmail[],
+  clientKey?: string,
 ) {
   const [first] = emails;
   if (!first) throw new Error("Reclassify needs at least one Email.");
@@ -105,6 +107,7 @@ export async function startReclassifyRun(
     db,
     { ...actor, runId: null },
     {
+      clientKey,
       purpose: mode === "relevance" ? "mail_reclassify" : "background",
       trigger: "manual",
       status: "running",
@@ -158,4 +161,31 @@ export async function startPreparedReclassifyRuns(
     }
     return runs;
   });
+}
+
+/** Acquisition and durable classifier intent commit together; search never judges relevance. */
+export async function queueSearchClassification(
+  db: Database,
+  actor: ActorContext,
+  email: OwnedEmail,
+) {
+  const started = await startReclassifyRun(
+    db,
+    actor,
+    "relevance",
+    [email],
+    `mail-search-classification:${email.id}:${email.checksum}`,
+  );
+  await prepareReclassification(db, started.id, [email]);
+  // Funding/auth waits can outlive the retired seven-day caller-judged search cache.
+  await getDb(db)
+    .update(emailTable)
+    .set({ searchExpiresAt: null })
+    .where(eq(emailTable.id, email.id));
+  await launchWorkflowRun(db, {
+    runId: started.id,
+    purpose: "mail_reclassify",
+    automatic: true,
+  });
+  return started;
 }

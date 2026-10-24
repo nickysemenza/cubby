@@ -25,8 +25,9 @@ Linked/unlinked checks use the same accepted-source and active lifecycle-decisio
 policy as the Purchase association list, but may stop at the first matching
 Purchase rather than enumerate and deduplicate all associations.
 
-Classification-only backfill uses rules followed by Jev/Clef, with no Luna
-relevance escalation or admission to Pi. It keeps related/uncertain content and
+Every acquisition uses rules followed by Jev/Clef and, when uncertain, Luna
+relevance fallback. Classification-only work grants no admission to Pi.
+It keeps related/uncertain content and
 only the Email row for unrelated mail. Jev/Clef classification and extraction
 have no dollar ceiling, while execution/retry bounds and cost accounting remain.
 Jev receives bounded sender/domain and subject hints, plain text alongside
@@ -91,6 +92,21 @@ the diagnostic Run exposes usage after its telemetry arrives. A preview records 
 and model usage; it publishes no Email classification, observation, retained
 content, import or member grade. Preview never grants import authority or
 bypasses paid-request admission.
+Member search retains each new original and queues its classifier Run and AI
+work in the same transaction. Pending classification is not a rule verdict;
+repeated searches reuse the same checksum-scoped Run and never revive a stopped
+Job. Queued classifier originals have no caller-judged cache expiry, so funding
+waits cannot discard them. Search in an existing import Run uses that Run's normal classifier.
+Funding/auth waits keep durable Run/Job state. Search never advances coverage.
+
+The automatic Mail import switch gates new unattended import admission only.
+Connected-mail discovery and classification continue while it is off. Enabling
+it queues immediate catch-up outside the app-open cooldown. Related mail waits
+for import while disabled; explicit selected imports remain available. Automatic
+admission locks and rechecks the setting before claiming sources. Disabling the
+switch does not cancel, pause or discard existing Runs or their progress.
+Classification completion queues catch-up; the switch still owns admission.
+
 Pi/Luna/Sol authorization remains separate. Classification and import are
 separate operations, allowing members to assess Relevance before import.
 A classifier-version refresh defers Emails already assigned to a frozen import

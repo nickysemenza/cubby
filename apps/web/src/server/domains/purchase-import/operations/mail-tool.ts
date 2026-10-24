@@ -1317,8 +1317,7 @@ export async function linkImportedMail(
  * Scoped live Gmail search for a missing original. Spam and Trash are
  * excluded; under Pi's Mail import Run matches are classified exactly as
  * discovery would, while a member's own search retains each new match as an `uncertain`
- * candidate for the caller to settle with `purchase_import.mail_resolve` and leaves an Email
- * with a decided Relevance as it is. Search never advances mailbox coverage.
+ * candidate with durable classification work, preserving an existing decided Relevance. Search never advances mailbox coverage.
  */
 export async function searchMail(
   db: Database,
@@ -1369,10 +1368,10 @@ export async function searchMail(
       mailboxId,
       messageIds,
     };
-    // Pi's paid classification is billed to its Run; a member without a Run
-    // gets rules only and judges each candidate through `purchase_import.mail_resolve`.
+    // Pi uses its existing Run. Member searches atomically enqueue classification
+    // with each retained original, so a funding stop has durable work to resume.
     if (actor.runId) ingest.runId = actor.runId;
-    else ingest.callerJudges = true;
+    else ingest.searchActor = actor;
     await ingestGmailMessages(db, provider, ingest);
     const retained = messageIds.length
       ? await database

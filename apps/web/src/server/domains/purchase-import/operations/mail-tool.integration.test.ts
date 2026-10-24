@@ -32,6 +32,7 @@ import * as s3 from "~/server/clients/s3";
 import { account } from "~/server/db/auth.schema";
 import { getDb } from "~/server/db/helpers";
 import {
+  job,
   emailClassificationObservation,
   feedback,
   assessment,
@@ -1267,11 +1268,11 @@ describe("public mail tool", () => {
       expect(await getDb(ctx.db).select().from(orderMail)).toEqual([]);
     });
 
-    it("lets a member without a Run search with rules only, retaining candidates for the caller to settle", async () => {
+    it("atomically queues classification for member searches and preserves member resolutions", async () => {
       const f = await fixture();
       const relevance = vi.spyOn(routing, "productionMailRelevance");
       const found = await searchMail(ctx.db, f.input, ctx.actor);
-      // No paid classification: the caller owns judgment.
+      // Provider/model work runs in the durable classifier Job, outside search.
       expect(routing.productionMailTriage).not.toHaveBeenCalled();
       expect(relevance).not.toHaveBeenCalled();
       expect(found.messages.map((row) => row.messageId).sort()).toEqual([
@@ -1293,7 +1294,7 @@ describe("public mail tool", () => {
           expect.objectContaining({
             messageId: "synthetic-first",
             classification: "uncertain",
-            classificationStage: "rule",
+            classificationStage: null,
             status: "pending",
             orderMailId: expect.any(String),
           }),
@@ -1305,6 +1306,25 @@ describe("public mail tool", () => {
           }),
         ]),
       );
+      const classifiers = await getDb(ctx.db)
+        .select()
+        .from(run)
+        .where(eq(run.purpose, "mail_reclassify"));
+      expect(classifiers).toHaveLength(2);
+      const classifierJobs = await getDb(ctx.db)
+        .select()
+        .from(job)
+        .where(eq(job.kind, "run.execute"));
+      expect(classifierJobs.map((item) => item.runId).sort()).toEqual(
+        classifiers.map((item) => item.id).sort(),
+      );
+      await searchMail(ctx.db, f.input, ctx.actor);
+      expect(
+        await getDb(ctx.db)
+          .select()
+          .from(run)
+          .where(eq(run.purpose, "mail_reclassify")),
+      ).toHaveLength(2);
       const [first] = await readRetainedMail(ctx.db, {
         ledgerPartyIds: [f.party.id],
         mailboxId,
@@ -1434,8 +1454,8 @@ describe("public mail tool", () => {
           expect.objectContaining({
             messageId: "synthetic-second",
             classification: "uncertain",
-            classificationStage: "rule",
-            searchExpiresAt: expect.any(Date),
+            classificationStage: null,
+            searchExpiresAt: null,
           }),
         ]),
       );
@@ -1461,7 +1481,7 @@ describe("public mail tool", () => {
         contentClearedAt: null,
         orderMailId: cleared.id,
       });
-      expect(refound?.searchExpiresAt?.getTime()).toBeGreaterThan(Date.now());
+      expect(refound?.searchExpiresAt).toBeNull();
       const [retained] = await readRetainedMail(ctx.db, {
         ledgerPartyIds: [f.party.id],
         orderMailIds: [cleared.id],

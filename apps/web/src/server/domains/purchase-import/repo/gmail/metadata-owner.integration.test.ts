@@ -56,7 +56,7 @@ describe("Gmail Email-owned metadata", () => {
     await ingestGmailMessages(ctx.db, provider, {
       ...identity,
       messageIds: [identity.messageId],
-      callerJudges: true,
+      searchActor: ctx.actor,
       storage,
     });
     const [email] = await getDb(ctx.db).select().from(emailTable);
