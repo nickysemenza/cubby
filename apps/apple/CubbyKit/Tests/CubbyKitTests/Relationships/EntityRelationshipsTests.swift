@@ -595,13 +595,13 @@ private func edge(
     _ target: EntityRef
 ) -> EntityGraphEdge {
     EntityGraphEdge(
-        id: id,
-        source: source,
-        target: target,
         relationshipKey: "related",
         label: "Related",
         sourceKey: "test",
-        provenance: ["fixture"]
+        provenance: ["fixture"],
+        id: id,
+        source: source,
+        target: target
     )
 }
 
