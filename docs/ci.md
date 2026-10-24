@@ -47,6 +47,8 @@ but does not guarantee Celesto capacity.
 Setup installs Rust for WASM cache misses, GnuPG for verified Swift installation,
 Swift for Linux native formatting,
 and Chromium system dependencies even when its browser archive is cached.
+Before Swift setup it imports the official Swift signing keys into the fresh
+runner's GnuPG keyring so installer signature verification can succeed.
 It also restores `/dev/fd` when absent on Linux: Bash process substitution in
 the WASM installer requires that link to `/proc/self/fd` on minimal images.
 Rust checks now execute on x64 instead of ARM. Linux validation and web lanes
