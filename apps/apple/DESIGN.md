@@ -113,6 +113,8 @@ quiet dash with the manifest's reason available to accessibility and hover help.
 edit, suggestion or resolution action. The manifest projects these rules from classification
 policies, including nested classifier read paths; native does not own account-kind exceptions.
 Applicable empty fields remain editable, and inherited values retain their override actions.
+A reclassification omits newly refused draft fields from outgoing writes; the server owns
+clearing incompatible stored values. Reload seeding uses the incoming classifier throughout.
 
 ## Continuous record detail
 
