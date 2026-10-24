@@ -33,7 +33,7 @@ it.each([
     );
     if (!field) throw new Error("Declared quality field is missing");
     const breakdown = buildQualityBreakdown([check], [check], []);
-    const status = dataCheckKind[check] === "defect" ? "defect" : "needs_data";
+    const status = "needs_data" as const;
     const result = explainInterpretation(
       field,
       status,

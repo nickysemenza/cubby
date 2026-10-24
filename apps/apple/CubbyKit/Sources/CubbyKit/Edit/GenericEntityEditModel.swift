@@ -106,9 +106,13 @@ public final class GenericEntityEditModel {
 
     /// The fields the editor shows: in the mode's payload roster and with a control.
     public var visibleFields: [FieldDescriptor] {
+        editableFields(in: applicabilityRecord)
+    }
+
+    private func editableFields(in record: JSONValue) -> [FieldDescriptor] {
         let fields = descriptor.fields.filter { field in
             field.controlKind != nil && (isCreate ? field.inCreate : field.inUpdate)
-                && field.applicabilityRefusal(in: applicabilityRecord) == nil
+                && field.applicabilityRefusal(in: record) == nil
         }
         let hasCollectionControl = fields.contains { $0.collection?.primary != nil }
         return fields.filter {
@@ -448,7 +452,8 @@ public final class GenericEntityEditModel {
 
     private func seed(original: JSONValue) {
         var stored = original.objectValue ?? [:]
-        for field in visibleFields {
+        // Resolve stored intent against the incoming row before the editor has a draft baseline.
+        for field in editableFields(in: original) {
             if let resolution = FieldResolutionPresentation(raw: original, field: field) {
                 stored[field.key] = resolution.storedValue
             }
