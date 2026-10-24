@@ -58,7 +58,7 @@ runs:
 
     # Celesto does not provide GitHub's preinstalled Rust toolchain.
     - name: Setup Rust for WASM builds
-      if: inputs.wasm == 'restore'
+      if: inputs.wasm == 'restore' && runner.environment == 'self-hosted'
       uses: actions-rust-lang/setup-rust-toolchain@ecabd13d1c56bd1345c230e542e9144811ad706f # v2
       with:
         cache: false

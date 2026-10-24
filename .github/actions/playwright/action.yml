@@ -20,6 +20,7 @@ runs:
   steps:
     # Browser archives do not contain the operating system libraries.
     - name: Install Chromium system dependencies
+      if: runner.environment == 'self-hosted'
       shell: bash
       run: pnpm --filter @cubby/web exec playwright install-deps chromium
     - name: Resolve installed Playwright version
