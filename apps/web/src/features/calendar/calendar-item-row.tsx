@@ -115,9 +115,7 @@ function CalendarItemRich({
           leading kind icon on the title line already carries the entity, and a
           placeholder square would eat a quarter of a fortnight column. */}
       <EntityCover
-        images={
-          cover ? [{ id: `${item.kind}:${item.id}`, url: cover.url }] : []
-        }
+        images={cover ? [{ url: cover.url }] : []}
         entity={cover?.entity ?? presentation.entity}
         size={compact ? 20 : 36}
         fit={cover?.fit}

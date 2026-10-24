@@ -136,7 +136,7 @@ export function SearchResultMedia({
   if (item.imageUrl)
     return (
       <EntityCover
-        images={[{ id: item.id, url: item.imageUrl }]}
+        images={[{ url: item.imageUrl }]}
         entity={entity}
         alt=""
         size={media.size}

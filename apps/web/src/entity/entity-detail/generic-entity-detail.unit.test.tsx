@@ -20,6 +20,7 @@ import { getEntityDetailOutputSchema } from "~/entity/generated/entity-details.g
 import { inventoryListItem } from "~/entity/generated/entity-lists.gen";
 import { installFeatures } from "~/features/registry";
 import { entityList } from "~/integrations/tanstack-query/generated/catalog/entityList.gen";
+import { entityMedia } from "~/integrations/tanstack-query/generated/catalog/entityMedia.gen";
 import { entityTimeline } from "~/integrations/tanstack-query/generated/catalog/entityTimeline.gen";
 import { fieldExplanation } from "~/integrations/tanstack-query/generated/catalog/fieldExplanation.gen";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
@@ -91,6 +92,8 @@ function recordFor<E extends GenericDetailEntity>(
 // Relation tables and timeline sections read through the transport; canned
 // empty reads keep the page's structure under test without a server.
 const operations = {
+  displayImages: entityMedia.displayImages.withTransport(async () => ({}))
+    .queryOptions,
   list: {
     list: entityList.list.withTransport(async () => ({
       items: [],
@@ -116,6 +119,38 @@ describe("GenericEntityDetail", () => {
     cleanup();
     harness.dispose();
   });
+
+  it.each(["product", "vendor"] as const)(
+    "uses the canonical image in the %s identity when its gallery is empty",
+    async (entity) => {
+      const record = recordFor(entity);
+      const query = entityMedia.displayImages.queryOptions({
+        refs: [{ entityKind: entity, entityId: record.id }],
+      });
+      harness.queryClient.setQueryDefaults(query.queryKey, {
+        staleTime: Infinity,
+      });
+      harness.queryClient.setQueryData(query.queryKey, {
+        [`${entity}:${record.id}`]: {
+          url: "https://images.example/brand-logo.png",
+        },
+      });
+      render(
+        <GenericEntityDetail
+          entity={entity}
+          record={record}
+          operations={operations}
+        />,
+        { wrapper: harness.wrapper },
+      );
+      const header = screen.getByTestId("detail-spec-plate");
+      await waitFor(() => {
+        const image = header.querySelector(":scope > div > .shrink-0 img");
+        expect(image?.getAttribute("src")).toContain("brand-logo.png");
+        expect(header.querySelector("h1 svg")).toBeNull();
+      });
+    },
+  );
 
   // AI runs had no page before Run moved onto the generic detail: the
   // purchase-import page scoped to a member party. Their page must show what

@@ -1,7 +1,7 @@
 import type { Entity } from "@cubby/schemas/entity";
 import {
   preferredImageUrl,
-  type ImageRepresentations,
+  type ImageUrlSummary,
 } from "@cubby/schemas/image-summary";
 import { ImageBrokenIcon } from "@phosphor-icons/react/dist/csr/ImageBroken";
 import type { ReactNode } from "react";
@@ -11,21 +11,8 @@ import { cn } from "~/lib/utils";
 import { Image } from "~/ui/primitives/image";
 import { ImageWithPreview } from "~/ui/primitives/image-with-preview";
 
-/**
- * Deliberately structural, not `DisplayImageSummary` — callers pass both a
- * list row's server-resolved `displayImages` (branded `ImageShortcode` id)
- * and a non-list row's own `images[]`/cascade-resolved cover (plain string
- * id). The branded id would reject the latter, and no single schema covers
- * both — see `ImageThumbnail`'s `ImageData`.
- */
-interface CoverImage {
-  id: string;
-  url: string;
-  representations?: ImageRepresentations;
-}
-
 interface EntityCoverProps {
-  images: readonly CoverImage[];
+  images: readonly ImageUrlSummary[];
   entity?: Entity;
   alt?: string;
   size?: number;

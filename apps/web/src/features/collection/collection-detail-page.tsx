@@ -463,9 +463,7 @@ export function CollectionDetailPage({
                   className="flex min-w-0 items-center gap-2 bg-card p-2 transition-colors hover:bg-muted/30"
                 >
                   <EntityCover
-                    images={
-                      root.imageUrl ? [{ id: root.id, url: root.imageUrl }] : []
-                    }
+                    images={root.imageUrl ? [{ url: root.imageUrl }] : []}
                     entity="location"
                     alt={`${root.name} cover`}
                     size={64}

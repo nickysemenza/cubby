@@ -1,4 +1,5 @@
 import type { Entity } from "@cubby/schemas/entity";
+import type { ImageUrlSummary } from "@cubby/schemas/image-summary";
 import { Link } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 import { z } from "zod";
@@ -120,6 +121,8 @@ interface DetailPageHeaderProps {
   heroActions?: DetailHeroActions;
   /** Identity thumbnail; the full gallery stays in the Images section. */
   heroImages?: Array<{ id: string; url: string; filename: string }>;
+  /** Canonical cover when this record has no local gallery image. */
+  heroDisplayImage?: ImageUrlSummary | null;
 }
 
 /** A record's identity: breadcrumb, title and status, facts, actions, key numbers. */
@@ -133,6 +136,7 @@ export function DetailPageHeader({
   summary,
   heroActions,
   heroImages,
+  heroDisplayImage,
 }: DetailPageHeaderProps) {
   const parsedRawData = detailRawDataSchema.safeParse(rawData);
   const createdAt = parsedRawData.success
@@ -200,6 +204,15 @@ export function DetailPageHeader({
               size={48}
             />
           </Link>
+        ) : heroDisplayImage ? (
+          <EntityCover
+            images={[heroDisplayImage]}
+            entity={entity}
+            fit="contain"
+            size={48}
+            className="rounded-sm outline-1 outline-[oklch(0_0_0/0.1)]"
+            preview
+          />
         ) : undefined
       }
       title={title}
