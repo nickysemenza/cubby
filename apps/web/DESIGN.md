@@ -272,7 +272,7 @@ and tally steps a sliding info segment. Steps sit on the RecordList timeline:
   - the reason funnel ("Where the items went").
 
 Run detail leads with purpose and meaningful results, followed by specialized
-review tools in Work. Photo groups retain their image comparison/editors; purchase
+review tools in Work. The full record-facts roster belongs in Evidence. Photo groups retain their image comparison/editors; purchase
 findings and prepared orders retain domain commands. Input targets render through
 an embedded `RTable`, with Record, Status, Outcome / reason and Source columns,
 search/status filters and the shared inspector. Name links open source records;

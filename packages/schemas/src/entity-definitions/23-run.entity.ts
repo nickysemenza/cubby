@@ -131,6 +131,38 @@ export default defineEntity({
 
         breadcrumb: "vendorAccountId",
       },
+      // The summary carries purpose/results; raw record facts must not precede review.
+      sectionOverrides: [
+        {
+          kind: "fields",
+          id: "overview",
+          title: "Record facts",
+          workspace: "evidence",
+          fields: [
+            "activityAt",
+            "status",
+            "purpose",
+            "trigger",
+            "routine",
+            "vendorAccountId",
+            "vendorId",
+            "ledgerPartyId",
+            "actorName",
+            "startedAt",
+            "endedAt",
+            "retiredAt",
+            "retirementReason",
+            "wallTime",
+            "failureCode",
+            "notes",
+            "dispatchError",
+            "coordinatorStartedAt",
+            "auditedAt",
+            "createdAt",
+            "updatedAt",
+          ],
+        },
+      ],
       additionalSections: [
         // Purpose-specific review tools lead; execution evidence follows results.
         {
