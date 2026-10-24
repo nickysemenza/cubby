@@ -1,4 +1,5 @@
 import { sql, eq } from "drizzle-orm";
+import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
@@ -11,7 +12,6 @@ import {
   runBeforeCommitDatabase,
 } from "~/server/db/helpers";
 import { assessmentCorrectionLock, ledgerParty } from "~/server/db/schema";
-import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 import {
   assertEmailEvidenceScope,
@@ -20,12 +20,13 @@ import {
 
 describe("Email evidence outer scope", () => {
   const ctx = withTestDb();
-  const marker = () =>
-    insertWithShortcode(ctx.db, "ledgerParty", {
+  const marker = async () => {
+    const created = await createRepoEntity(ctx, "ledgerParty", {
       name: "Synthetic scope original",
       kind: "member",
-      userId: ctx.actor.userId,
     });
+    return { id: created.entityId };
+  };
 
   it("rejects a late root entry without writing a gate", async () => {
     const before = await getDb(ctx.db).select().from(assessmentCorrectionLock);
@@ -189,6 +190,10 @@ describe("Email evidence outer scope", () => {
   it("does not replay a committed write when an after-commit effect fails", async () => {
     const party = await marker();
     let calls = 0;
+    const notificationError = Object.assign(
+      new Error("Synthetic notification failure"),
+      { code: "40001" },
+    );
     await expect(
       withEmailEvidenceWrite(ctx.db, async (db, scope) => {
         calls += 1;
@@ -200,10 +205,13 @@ describe("Email evidence outer scope", () => {
           expect(() => assertEmailEvidenceScope(db, scope)).toThrow(
             "not active",
           );
-          throw new Error("Synthetic notification failure");
+          throw notificationError;
         });
       }),
-    ).rejects.toThrow("committed");
+    ).rejects.toSatisfy(
+      (error: unknown) =>
+        error instanceof Error && error.cause === notificationError,
+    );
     expect(calls).toBe(1);
     expect(
       (
