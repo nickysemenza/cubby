@@ -120,7 +120,7 @@ export async function classificationRefusesField(
       if (
         !isFieldAllowed(
           id,
-          basis[declaredClassificationPolicies[id].classifier] ?? null,
+          classificationValue(declaredClassificationPolicies[id], basis),
           field,
         )
       )
