@@ -143,6 +143,7 @@ describe("MCP catalog", () => {
           statementDate: "2026-09-01",
           providerAmount: -12,
           rawDescription: "SYNTHETIC PURE REPLAY",
+          rowPosition: 1,
         },
       ],
     });
@@ -274,6 +275,7 @@ describe("MCP catalog", () => {
         },
         rows: [
           {
+            rowPosition: 1,
             accountDescriptor: "Synthetic card 0000",
             statementDate: "2026-01-06",
             providerAmount: -12.5,

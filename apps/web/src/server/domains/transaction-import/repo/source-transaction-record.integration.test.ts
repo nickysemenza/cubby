@@ -3,6 +3,7 @@ import {
   type TransactionImportInput,
   type SourceTransactionRecordInput,
 } from "@cubby/schemas/source-transaction-record";
+import { sha256Hex } from "@cubby/shared/sha256";
 import { eq, inArray, sql } from "drizzle-orm";
 import { createRepoEntity } from "tooling/factories/repo";
 import { withTestDb } from "tooling/test-setup";
@@ -73,7 +74,7 @@ const record = (
     db,
     recordSourceTransactionRecordsInput.parse({
       import: importInput(importOverrides),
-      rows,
+      rows: rows.map((row, index) => ({ rowPosition: index + 1, ...row })),
       dryRun,
     }),
     actor,
@@ -81,6 +82,23 @@ const record = (
 
 describe("statement row ledger", () => {
   const ctx = withTestDb();
+
+  it("refuses new unpositioned observations before creating evidence collections", async () => {
+    for (const dryRun of [true, false]) {
+      await expect(
+        record(
+          ctx.db,
+          ctx.actor,
+          [rowInput({ rowPosition: undefined })],
+          {},
+          dryRun,
+        ),
+      ).rejects.toThrow("stable physical row position");
+    }
+    expect((await listTransactionImports(ctx.db)).data).toEqual([]);
+    expect((await listSourceTransactionRecords(ctx.db, {})).data).toEqual([]);
+    expect(await getDb(ctx.db).select().from(auditLog)).toEqual([]);
+  });
 
   it("audits intake and judgment changes once while keeping provider evidence immutable", async () => {
     const input = recordSourceTransactionRecordsInput.parse({
@@ -564,96 +582,133 @@ describe("statement row ledger", () => {
     ).toMatchObject({ withdrawn: 1 });
   });
 
-  it("replays historical unpositioned membership without moving ignored or booked ownership", async () => {
-    const rows = [
-      rowInput(),
-      rowInput({ rawDescription: "SYNTHETIC BOOKED CHARGE" }),
-    ];
-    const fingerprint = "synthetic-historical-membership";
-    await record(ctx.db, ctx.actor, rows, { fingerprint });
-    // The migration retains v1 observations and charge owners rather than
-    // rehashing historical references into the current collection identity.
-    await getDb(ctx.db).execute(sql`
-      UPDATE "SourceTransactionRecord" SET "externalId" = "legacyExternalId",
-        "chargeKey" = "legacyExternalId", "legacyReference" = "legacyExternalId"
-    `);
-    const historical = (await listSourceTransactionRecords(ctx.db, {})).data;
-    const ignored = historical.find(
-      (row) => row.rawDescription === rows[0]!.rawDescription,
-    )!;
-    const booked = historical.find(
-      (row) => row.rawDescription === rows[1]!.rawDescription,
-    )!;
-    await updateSourceTransactionRecords(
-      ctx.db,
-      {
-        selector: { source: "monarch", externalIds: [ignored.externalId] },
-        data: {
-          disposition: "ignored",
-          dispositionReason: "not_modeled",
-          dispositionNote: "Synthetic reviewed exclusion",
-        },
-      },
-      ctx.actor,
-    );
-    const account = (
-      await createRepoEntity(ctx, "financialAccount", {
-        name: "Synthetic account",
-      })
-    ).output;
-    const transaction = (
-      await createRepoEntity(ctx, "financialTransaction", {
-        accountId: account.id,
-        kind: "purchase",
-        status: "posted",
-        amount: booked.amount,
-        postedDate: booked.statementDate,
-        sourceRefs: [{ source: booked.source, externalId: booked.externalId }],
-      })
-    ).output;
-    const before = (await listSourceTransactionRecords(ctx.db, {})).data;
-    expect(
-      await record(ctx.db, ctx.actor, rows, { fingerprint }),
-    ).toMatchObject({
-      inserted: 0,
-      unchanged: 2,
-      revised: 0,
-      alreadyInThisBatch: 2,
-      rowCountStored: 2,
-    });
-    expect((await listSourceTransactionRecords(ctx.db, {})).data).toEqual(
-      before,
-    );
-    expect(before.find((row) => row.id === ignored.id)?.matchState).toBe(
-      "ignored",
-    );
-    expect(before.find((row) => row.id === booked.id)?.transactionId).toBe(
-      transaction.id,
-    );
-    await expect(
-      record(
+  it.each(["v1", "v3"])(
+    "replays historical %s unpositioned membership without moving ignored or booked ownership",
+    async (identityVersion) => {
+      const rows = [
+        rowInput({ rowPosition: undefined }),
+        rowInput({
+          rowPosition: undefined,
+          rawDescription: "SYNTHETIC BOOKED CHARGE",
+        }),
+      ];
+      const fingerprint = "synthetic-historical-membership";
+      await record(
         ctx.db,
         ctx.actor,
         rows.map((row, index) => ({ ...row, rowPosition: index + 1 })),
         { fingerprint },
-      ),
-    ).rejects.toThrow("physical positions");
-    expect((await listSourceTransactionRecords(ctx.db, {})).data).toEqual(
-      before,
-    );
-    expect(
-      await record(ctx.db, ctx.actor, rows, {
-        fingerprint: "synthetic-independent-collection",
-      }),
-    ).toMatchObject({ inserted: 2, revised: 0 });
-    expect(
-      new Set(
-        (await listSourceTransactionRecords(ctx.db, {})).data.map(
-          (row) => row.chargeKey,
+      );
+      // Retain both historical identity shapes and charge owners rather than
+      // rehashing historical references into the current collection identity.
+      for (const row of (await listSourceTransactionRecords(ctx.db, {})).data) {
+        const legacyId = row.legacyExternalId;
+        if (!legacyId) throw new Error("Synthetic historical identity missing");
+        const historicalId =
+          identityVersion === "v1"
+            ? legacyId
+            : `v3:${await sha256Hex(JSON.stringify(["monarch", "unpositioned", fingerprint, legacyId]))}`;
+        await getDb(ctx.db)
+          .update(sourceTransactionRecord)
+          .set({
+            externalId: historicalId,
+            chargeKey: historicalId,
+            legacyReference: legacyId,
+            rowPosition: null,
+          })
+          .where(eq(sourceTransactionRecord.shortcode, row.id));
+      }
+      const historical = (await listSourceTransactionRecords(ctx.db, {})).data;
+      const ignored = historical.find(
+        (row) => row.rawDescription === rows[0]!.rawDescription,
+      )!;
+      const booked = historical.find(
+        (row) => row.rawDescription === rows[1]!.rawDescription,
+      )!;
+      await updateSourceTransactionRecords(
+        ctx.db,
+        {
+          selector: { source: "monarch", externalIds: [ignored.externalId] },
+          data: {
+            disposition: "ignored",
+            dispositionReason: "not_modeled",
+            dispositionNote: "Synthetic reviewed exclusion",
+          },
+        },
+        ctx.actor,
+      );
+      const account = (
+        await createRepoEntity(ctx, "financialAccount", {
+          name: "Synthetic account",
+        })
+      ).output;
+      const transaction = (
+        await createRepoEntity(ctx, "financialTransaction", {
+          accountId: account.id,
+          kind: "purchase",
+          status: "posted",
+          amount: booked.amount,
+          postedDate: booked.statementDate,
+          sourceRefs: [
+            { source: booked.source, externalId: booked.externalId },
+          ],
+        })
+      ).output;
+      const before = (await listSourceTransactionRecords(ctx.db, {})).data;
+      expect(
+        await record(ctx.db, ctx.actor, rows, { fingerprint }),
+      ).toMatchObject({
+        inserted: 0,
+        unchanged: 2,
+        revised: 0,
+        alreadyInThisBatch: 2,
+        rowCountStored: 2,
+      });
+      expect((await listSourceTransactionRecords(ctx.db, {})).data).toEqual(
+        before,
+      );
+      expect(before.find((row) => row.id === ignored.id)?.matchState).toBe(
+        "ignored",
+      );
+      expect(before.find((row) => row.id === booked.id)?.transactionId).toBe(
+        transaction.id,
+      );
+      await expect(
+        record(
+          ctx.db,
+          ctx.actor,
+          rows.map((row, index) => ({ ...row, rowPosition: index + 1 })),
+          { fingerprint },
         ),
-      ).size,
-    ).toBe(4);
-  });
+      ).rejects.toThrow("physical positions");
+      expect((await listSourceTransactionRecords(ctx.db, {})).data).toEqual(
+        before,
+      );
+      await expect(
+        record(ctx.db, ctx.actor, rows, {
+          fingerprint: "synthetic-independent-collection",
+        }),
+      ).rejects.toThrow("stable physical row position");
+      expect((await listSourceTransactionRecords(ctx.db, {})).data).toEqual(
+        before,
+      );
+      expect(
+        await record(
+          ctx.db,
+          ctx.actor,
+          rows.map((row, index) => ({ ...row, rowPosition: index + 1 })),
+          { fingerprint: "synthetic-independent-collection" },
+        ),
+      ).toMatchObject({ inserted: 2, revised: 0 });
+      expect(
+        new Set(
+          (await listSourceTransactionRecords(ctx.db, {})).data.map(
+            (row) => row.chargeKey,
+          ),
+        ).size,
+      ).toBe(4);
+    },
+  );
 
   it("refuses unpositioned replay of indistinguishable physical collection members", async () => {
     const fingerprint = "synthetic-ambiguous-membership";
@@ -665,7 +720,9 @@ describe("statement row ledger", () => {
     );
     const before = (await listSourceTransactionRecords(ctx.db, {})).data;
     await expect(
-      record(ctx.db, ctx.actor, [rowInput()], { fingerprint }),
+      record(ctx.db, ctx.actor, [rowInput({ rowPosition: undefined })], {
+        fingerprint,
+      }),
     ).rejects.toThrow("physical positions");
     expect((await listSourceTransactionRecords(ctx.db, {})).data).toEqual(
       before,
@@ -805,6 +862,7 @@ describe("statement row ledger", () => {
       providerTransactionId: "synthetic-overlapping-record",
     });
     const later = rowInput({
+      rowPosition: 2,
       statementDate: "2026-05-08",
       rawDescription: "SECOND ORDER",
     });
