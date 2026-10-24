@@ -32,11 +32,13 @@ export function CorrectionAuthorityEvidence({
         <Stack gap="xs" key={source.sourceFeedbackId}>
           <div>
             Corrected value:{" "}
-            {renderValue
-              ? renderValue(source.value)
-              : source.value === null
-                ? "None"
-                : JSON.stringify(source.value)}
+            {source.value === null
+              ? "None"
+              : renderValue
+                ? renderValue(source.value)
+                : typeof source.value === "string"
+                  ? source.value
+                  : JSON.stringify(source.value)}
           </div>
           <Description size="xs">
             Member decision:{" "}

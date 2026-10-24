@@ -41,6 +41,7 @@ import {
   fieldReviewIdentity,
 } from "~/server/generic/assessment/repo/field-assessment-review";
 import { publishFieldCorrectionQuestion } from "~/server/generic/assessment/repo/field-correction-publication";
+import { fieldInputFingerprint } from "~/server/generic/assessment/repo/field-input-fence";
 import { latestFieldWrite } from "~/server/generic/audit-log/repo/field-write";
 import { resolveLiveShortcodes } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { canonicalJson } from "~/server/lib/canonical-json";
@@ -407,19 +408,49 @@ export async function executeSuggestionSweepTarget(
   if (!item.attemptToken)
     throw new Error("Suggestion sweep has no attempt token");
   const snapshot = sweepSnapshot.parse(item.snapshot);
-  const { input, target, fieldDecisionId } = snapshot;
+  const { input, target: queuedTarget, fieldDecisionId } = snapshot;
+  const preparedFingerprint = await fieldInputFingerprint(
+    db,
+    input.entity,
+    queuedTarget.entityId,
+    queuedTarget.field,
+  );
   const current = await executeEntity(
     ports.context,
     entityCommandSchema.parse({
       action: "get",
       entity: input.entity,
-      id: target.id,
+      id: queuedTarget.id,
       missing: "null",
     }),
   );
   if (current.action !== "get" || !current.item)
     throw new Error("Suggestion target no longer exists");
   const record = z.record(z.string(), z.unknown()).parse(current.item);
+  const policy = decisionCatalogRows().find(
+    (row) => row.entity === input.entity && row.field === queuedTarget.field,
+  );
+  if (!policy) throw new Error("Suggestion field policy no longer exists");
+  const basisKeys = [
+    ...new Set([...policy.basis.map((row) => row.key), queuedTarget.field]),
+  ];
+  const basis = Object.fromEntries(
+    basisKeys.map((key) => [key, basisValueOf(record[key])]),
+  );
+  const queuedBasis = Object.fromEntries(
+    basisKeys.map((key) => [key, queuedTarget.basis[key] ?? null]),
+  );
+  if (
+    canonicalJson(basis) !== canonicalJson(queuedBasis) ||
+    (await fieldInputFingerprint(
+      db,
+      input.entity,
+      queuedTarget.entityId,
+      queuedTarget.field,
+    )) !== preparedFingerprint
+  )
+    throw new Error("Suggestion basis changed after queuing");
+  const target = { ...queuedTarget, basis };
   if (
     canonicalJson(z.json().parse(record[target.field] ?? null)) !==
       canonicalJson(target.currentValue) ||
@@ -494,7 +525,21 @@ export async function executeSuggestionSweepTarget(
       throw new Error("Suggestion evaluation attempt is obsolete");
   }
   const result = saved.data;
+  if (
+    result.correctionOutcome &&
+    result.correctionOutcome.targetInputFingerprint !== preparedFingerprint
+  )
+    throw new Error("Correction target changed during inference");
   await publishAiEvaluation(db, item.id, item.attemptToken, async (tx) => {
+    if (
+      (await fieldInputFingerprint(
+        tx,
+        input.entity,
+        target.entityId,
+        target.field,
+      )) !== preparedFingerprint
+    )
+      throw new Error("Suggestion basis changed during inference");
     const diagnostics = [...result.diagnostics];
     if (result.correctionOutcome) {
       await publishFieldCorrectionQuestion(tx, {

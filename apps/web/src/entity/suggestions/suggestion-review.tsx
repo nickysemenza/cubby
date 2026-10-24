@@ -15,6 +15,7 @@ import { showErrorToast } from "~/ui/feedback/error-details";
 import { Description } from "~/ui/primitives/description";
 
 import { CellFrame } from "../../ui/data-table/cell-frame";
+import { CorrectionAuthorityEvidence } from "./correction-authority-evidence";
 import { formatProbability, stringLabelOf } from "./field-suggestion";
 import { SuggestionBody } from "./suggestion-body";
 import type { SuggestionOutcomeSurface } from "./suggestion-outcome-mark";
@@ -219,6 +220,7 @@ export function SuggestionReview({
   notice,
   alternative = false,
   outcome = null,
+  renderCorrectionValue,
   surface = "inline",
   autoFilled = false,
   prune = false,
@@ -247,6 +249,9 @@ export function SuggestionReview({
   /** What the decision model's decision tier did with this field — drives the always-visible
    * mark even when there's no actionable proposal (or none at all). */
   outcome?: FieldSuggestionOutcome | null;
+  renderCorrectionValue?: Parameters<
+    typeof CorrectionAuthorityEvidence
+  >[0]["renderValue"];
   /** `"cell"` folds the whole body into the mark's popover so a dense table
    * row stays 32px. Inline values show the proposal and Accept, with
    * evidence expanded only by an explicit Review disclosure. */
@@ -296,6 +301,14 @@ export function SuggestionReview({
             pending={pending}
             checking={checking}
             error={error}
+            review={
+              outcome?.kind === "correction" ? (
+                <CorrectionAuthorityEvidence
+                  decision={outcome.decision}
+                  renderValue={renderCorrectionValue}
+                />
+              ) : undefined
+            }
           />
         }
       >

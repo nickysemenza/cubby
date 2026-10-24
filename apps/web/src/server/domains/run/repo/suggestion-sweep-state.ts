@@ -10,6 +10,7 @@ import { getDb, withTransactionDatabase } from "~/server/db/helpers";
 import {
   run as runTable,
   assessmentState as suggestionTable,
+  assessment,
 } from "~/server/db/schema";
 import { executeEntity } from "~/server/entity-kernel";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
@@ -17,6 +18,8 @@ import { entityCommandSchema } from "~/server/entity-kernel/contracts";
 import { publishFieldAssessment } from "~/server/generic/assessment/repo/assessment";
 import { transitionAssessmentStates } from "~/server/generic/assessment/repo/assessment-state";
 import { applyAutomaticRules } from "~/server/generic/assessment/repo/automatic-rule-runtime";
+import { fieldCorrectionKey } from "~/server/generic/assessment/repo/correction-sources";
+import { lockFieldCorrectionKey } from "~/server/generic/assessment/repo/field-correction-lock";
 import {
   fieldInputFingerprint,
   fenceFieldInputsAtCommit,
@@ -110,13 +113,32 @@ export async function saveSweepSuggestions(
   return withTransactionDatabase(
     db,
     async (tx) => {
+      const typedRecordId = parseEntityId(input.entity, input.recordId);
+      const priorInputs = await getDb(tx)
+        .select({ evidence: assessment.evidence })
+        .from(assessment)
+        .innerJoin(suggestionTable, eq(suggestionTable.id, assessment.id))
+        .where(
+          and(
+            eq(suggestionTable.entity, input.entity),
+            eq(suggestionTable.recordId, typedRecordId),
+            eq(suggestionTable.field, input.field),
+          ),
+        );
+      // Member review takes correction keys before its projection. Preserve that
+      // order when replacement publication later invokes automatic admission.
+      const keys = new Set([
+        ...entries.map((entry) => entry.correctionKey ?? null),
+        ...priorInputs.map((row) => fieldCorrectionKey(row.evidence)),
+      ]);
+      for (const key of [...keys].filter((key) => key !== null).sort())
+        await lockFieldCorrectionKey(tx, key);
       const liveInputFingerprint = await fieldInputFingerprint(
         tx,
         input.entity,
         input.recordId,
         input.field,
       );
-      const typedRecordId = parseEntityId(input.entity, input.recordId);
       const saved = await getDb(tx)
         .select()
         .from(suggestionTable)

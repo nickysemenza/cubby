@@ -1,6 +1,7 @@
 import { basisValueOf } from "@cubby/schemas/field-suggestion";
 import { runEntityId } from "@cubby/schemas/identifiers";
-import { and, eq, inArray, notInArray } from "drizzle-orm";
+import { and, eq, inArray, notInArray, sql } from "drizzle-orm";
+import { driveAiWork } from "tooling/ai-work";
 import {
   taxonomyId,
   taxonomyShortcode,
@@ -32,11 +33,16 @@ import {
   aiEvaluation,
 } from "~/server/db/schema";
 import { inferFieldAssessments } from "~/server/domains/run/operations/ai.server";
-import { systemActor } from "~/server/domains/run/repo/ensure-run";
+import { systemActor, ensureRun } from "~/server/domains/run/repo/ensure-run";
 import {
   scheduleSavedFieldQuestion,
   executeAiRefreshTarget,
 } from "~/server/domains/run/service/ai-refresh";
+import {
+  startSuggestionSweep as queueSuggestionSweep,
+  publishSweepSuggestions,
+  makeSweepSuggestion,
+} from "~/server/domains/run/service/suggestion-sweep";
 import {
   kernelCtx,
   productFixture,
@@ -53,6 +59,7 @@ import {
   readCorrectionTarget,
 } from "~/server/generic/assessment/repo/correction-sources";
 import { fieldCorrectionIdentity } from "~/server/generic/assessment/repo/field-assessment-review";
+import { lockFieldCorrectionKey } from "~/server/generic/assessment/repo/field-correction-lock";
 import { publishFieldCorrectionQuestion } from "~/server/generic/assessment/repo/field-correction-publication";
 import { fieldCorrectionRepair } from "~/server/generic/assessment/repo/field-correction-repair";
 import { fieldInputFingerprint } from "~/server/generic/assessment/repo/field-input-fence";
@@ -588,6 +595,132 @@ describe("confirmed correction propagation", () => {
       reason: "Equivalent evidence has conflicting member corrections",
     });
     expect(await productCategoryId(ctx.db, proposed.product.id)).toBeNull();
+  });
+
+  it("takes correction keys before locking Sweep predecessor projections", async () => {
+    const target = await propose();
+    const runId = await ensureRun(ctx.db, ctx.actor, {
+      purpose: "ai_suggest",
+      trigger: "manual",
+      status: "completed",
+    });
+    const ready = Promise.withResolvers<void>();
+    const release = Promise.withResolvers<void>();
+    const member = withTransactionDatabase(ctx.db, async (db) => {
+      await lockFieldCorrectionKey(db, key);
+      ready.resolve();
+      await release.promise;
+      await getDb(db)
+        .select({ id: assessmentState.id })
+        .from(assessmentState)
+        .where(eq(assessmentState.id, target.prediction.id))
+        .for("update", { noWait: true });
+      return reviewAssessment(db, kernelCtx({ db, actor: ctx.actor }), {
+        assessmentId: target.prediction.id,
+        operationId: crypto.randomUUID(),
+        verdict: "wrong",
+        intent: "apply",
+        correction: { present: true, value: null },
+      });
+    });
+    await ready.promise;
+    const started = Promise.withResolvers<number>();
+    const sweep = withTransactionDatabase(ctx.db, async (db) => {
+      const result = z
+        .object({ rows: z.array(z.object({ pid: z.number() })) })
+        .parse(await getDb(db).execute(sql`SELECT pg_backend_pid() AS pid`));
+      const pid = result.rows[0]?.pid;
+      if (!pid) throw new Error("Missing synthetic Sweep backend");
+      started.resolve(pid);
+      const entry = makeSweepSuggestion({
+        currentValue: null,
+        decision: { value: taxonomyShortcode("tools"), confidence: 0.99 },
+        model: "typesafe/jev",
+      });
+      if (!entry) throw new Error("Missing synthetic replacement");
+      return publishSweepSuggestions(
+        db,
+        runId,
+        {
+          entity: "product",
+          recordId: target.product.entityId,
+          field: "categoryId",
+          currentValue: null,
+        },
+        [{ ...entry, correctionKey: key }],
+        null,
+        kernelCtx({ db, actor: ctx.actor }),
+      );
+    });
+    const pid = await started.promise;
+    const waiting = await expect
+      .poll(
+        async () => {
+          const result = z
+            .object({
+              rows: z.array(z.object({ waiting: z.boolean().nullable() })),
+            })
+            .parse(
+              await getDb(ctx.db).execute(
+                sql`SELECT wait_event_type = 'Lock' AS waiting FROM pg_stat_activity WHERE pid = ${pid}`,
+              ),
+            );
+          return result.rows[0]?.waiting === true;
+        },
+        { timeout: 2000 },
+      )
+      .toBe(true)
+      .then(
+        () => true,
+        () => false,
+      );
+    release.resolve();
+    const results = await Promise.allSettled([member, sweep]);
+    expect(waiting).toBe(true);
+    expect(results[0]?.status).toBe("fulfilled");
+    expect(results[1]?.status).toBe("fulfilled");
+  });
+
+  it("refuses a queued Sweep correction after a basis-only edit", async () => {
+    const question = await preparedQuestion();
+    await confirmKey(question.correctionKey, taxonomyShortcode("food"));
+    const target = await productFixture(ctx, "Synthetic classification item");
+    const ports = { context: kernelCtx(ctx), suggestPorts: question.ports };
+    const started = await queueSuggestionSweep(
+      ctx.db,
+      {
+        entity: "product",
+        fields: ["categoryId"],
+        filters: { ids: [target.id] },
+      },
+      ports,
+    );
+    await executeEntityAs(kernelCtx(ctx), "update", {
+      entity: "product",
+      id: target.id,
+      data: { name: "Synthetic changed basis" },
+    });
+    await driveAiWork(ctx.db, started.id, { sweep: ports });
+    const evaluations = await getDb(ctx.db)
+      .select()
+      .from(aiEvaluation)
+      .where(eq(aiEvaluation.runId, started.id));
+    expect(evaluations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          state: "failed",
+          error: expect.stringContaining(
+            "Suggestion basis changed after queuing",
+          ),
+        }),
+      ]),
+    );
+    expect(await productCategoryId(ctx.db, target.id)).toBeNull();
+    const proposals = await getDb(ctx.db)
+      .select()
+      .from(assessmentState)
+      .where(eq(assessmentState.recordId, target.entityId));
+    expect(proposals).toHaveLength(0);
   });
 
   it("refreshes a saved field through correction work without model execution", async () => {

@@ -3727,6 +3727,13 @@ fingerprint, and the existing correction Job revalidates source authority and me
 ownership before the domain writer. Conflicts remain passive in Suggestions; no
 additional approval prompt or competing queue is introduced. Pure model evaluations
 can disable the inference shortcut without bypassing guarded application checks.
+Sweep compares the queued policy basis with the canonical saved record before
+inference and fences that snapshot through publication. A fresh target fingerprint
+cannot authorize a correction resolved from stale queued inputs. Sweep takes
+the replacement and predecessor correction keys before locking predecessor
+projections, matching member review's key-before-projection order.
+Live and stored disclosures show corrected values through canonical field
+renderers, explicit None, and supporting member/application receipts.
 Existing applicable corrections withhold the model's
 automatic answer while correction work resolves it. Historical repair requires
 the original automatic application receipt, its unchanged audited field write,

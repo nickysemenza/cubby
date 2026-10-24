@@ -1943,6 +1943,14 @@ function ResolvedFieldSuggestion({
         notice={usesInheritedValue ? "Uses the inherited value" : undefined}
         alternative={source.basisMode === "provided"}
         outcome={row.outcomes[field]}
+        renderCorrectionValue={(value) =>
+          renderSuggestedListFieldValue(
+            context.entity,
+            row.record,
+            field,
+            value,
+          )
+        }
         surface={surface}
         prune={prune}
       >
@@ -2124,7 +2132,15 @@ function StoredSuggestionField({
         review={
           <CorrectionAuthorityEvidence
             decision={suggestion.correctionAuthority}
-            renderValue={renderValue}
+            renderValue={(value) =>
+              renderValue?.(value) ??
+              renderSuggestedListFieldValue(
+                context.entity,
+                record,
+                field,
+                value,
+              )
+            }
           />
         }
       />
