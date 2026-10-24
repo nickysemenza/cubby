@@ -32,6 +32,7 @@ import {
   notDeleted,
   withTransaction,
   withTransactionDatabase,
+  isTransaction,
 } from "~/server/db/helpers";
 import { getDb, runAfterCommit } from "~/server/db/helpers/core";
 import {
@@ -836,18 +837,10 @@ export async function reserveGmailAttachmentUploads(
   return keys;
 }
 
-/** Store staged originals under a durable per-upload reservation. Existing
- * current/promoted keys are read verbatim and skipped before any PUT. */
-export const storeOrderMailAttachment = async (
+async function preserveExistingAttachment(
   db: Database,
-  input: {
-    orderMailId: string;
-    attachment: GmailOrderMailAttachment;
-    fetchData: () => Promise<string | undefined>;
-    uploadKey?: string;
-    storage: OrderMailAttachmentStorage;
-  },
-): Promise<void> => {
+  input: { orderMailId: string; attachment: GmailOrderMailAttachment },
+): Promise<boolean> {
   const database = getDb(db);
   const { orderMailId } = input;
   const providerAttachmentId = input.attachment.sourceKey;
@@ -864,7 +857,7 @@ export const storeOrderMailAttachment = async (
       ),
     )
     .limit(1);
-  if (existing?.pendingObjectKey || existing?.imageId) return;
+  if (existing?.pendingObjectKey || existing?.imageId) return true;
   if (
     !existing &&
     (await withTransaction(db, async (tx) => {
@@ -874,21 +867,30 @@ export const storeOrderMailAttachment = async (
       return adopted;
     }))
   )
-    return;
-  const data = await input.fetchData();
-  const bytes = data ? Buffer.from(data, "base64url") : null;
-  const checksum = await sha256Hex(
-    bytes ?? JSON.stringify({ sourceKey: providerAttachmentId, data: null }),
-  );
+    return true;
+  return false;
+}
+
+async function writeAttachmentMetadata(
+  db: Database,
+  input: { orderMailId: string; attachment: GmailOrderMailAttachment },
+  checksum: string,
+  stagedKey: string | null,
+) {
   const fields = {
     filename: input.attachment.filename,
     mimeType: input.attachment.mimeType,
     checksum,
+    ...(stagedKey === null ? {} : { pendingObjectKey: stagedKey }),
   };
-  const row = await withTransaction(db, async (tx) => {
+  return withTransaction(db, async (tx) => {
     const [row] = await tx
       .insert(orderMailAttachment)
-      .values({ orderMailId, providerAttachmentId, ...fields })
+      .values({
+        orderMailId: input.orderMailId,
+        providerAttachmentId: input.attachment.sourceKey,
+        ...fields,
+      })
       .onConflictDoUpdate({
         target: [
           orderMailAttachment.orderMailId,
@@ -897,27 +899,79 @@ export const storeOrderMailAttachment = async (
         set: { ...fields, updatedAt: new Date() },
       })
       .returning({ id: orderMailAttachment.id });
+    if (!row) throw new GmailPersistenceError("Attachment upsert had no id");
     await recordChange(tx, { kind: "source", categories: ["email"] });
     return row;
   });
-  if (!row) throw new GmailPersistenceError("Attachment upsert had no id");
-  if (!bytes) return;
-  const key = input.uploadKey;
-  if (!key)
+}
+
+export type PreparedOrderMailAttachment =
+  | { kind: "retained" }
+  | { kind: "missing"; checksum: string }
+  | { kind: "uploaded"; key: string; checksum: string };
+
+/** Acquire bytes before source publication; the reservation fences the cleaner during PUT. */
+export async function prepareOrderMailAttachment(
+  db: Database,
+  input: {
+    attachment: GmailOrderMailAttachment;
+    payload: string | undefined;
+    uploadKey: string | undefined;
+    storage: OrderMailAttachmentStorage;
+  },
+): Promise<PreparedOrderMailAttachment> {
+  if (isTransaction(getDb(db)))
     throw new GmailPersistenceError(
-      "Attachment upload has no durable reservation",
+      "Attachment preparation requires a root database",
     );
-  await lockMailAttachmentUpload(db, key);
-  await input.storage.put(key, bytes, input.attachment.mimeType);
+  const bytes = input.payload ? Buffer.from(input.payload, "base64url") : null;
+  if (!bytes)
+    return {
+      kind: "missing",
+      checksum: await sha256Hex(
+        JSON.stringify({ sourceKey: input.attachment.sourceKey, data: null }),
+      ),
+    };
+  if (!input.uploadKey) return { kind: "retained" };
+  const key = input.uploadKey;
   await withTransaction(db, async (tx) => {
-    await tx
-      .update(orderMailAttachment)
-      .set({ pendingObjectKey: key })
-      .where(eq(orderMailAttachment.id, row.id));
-    await recordChange(tx, { kind: "source", categories: ["email"] });
+    await lockMailAttachmentUpload(tx, key);
+    await input.storage.put(key, bytes, input.attachment.mimeType);
   });
-  await finalizeMailAttachmentUpload(db, key);
-};
+  return { kind: "uploaded", key, checksum: await sha256Hex(bytes) };
+}
+
+/** DB-only adoption; current/promoted bytes always outrank prepared metadata. */
+export async function publishStagedOrderMailAttachment(
+  db: Database,
+  input: {
+    orderMailId: string;
+    attachment: GmailOrderMailAttachment;
+    prepared: PreparedOrderMailAttachment;
+  },
+): Promise<void> {
+  if (!isTransaction(getDb(db)))
+    throw new GmailPersistenceError(
+      "Staged attachment publication requires a transaction",
+    );
+  if (await preserveExistingAttachment(db, input)) return;
+  if (input.prepared.kind === "retained")
+    throw new GmailPersistenceError(
+      "Prepared retained attachment changed before publication",
+    );
+  if (input.prepared.kind === "missing") {
+    await writeAttachmentMetadata(db, input, input.prepared.checksum, null);
+    return;
+  }
+  await lockMailAttachmentUpload(db, input.prepared.key);
+  await writeAttachmentMetadata(
+    db,
+    input,
+    input.prepared.checksum,
+    input.prepared.key,
+  );
+  await finalizeMailAttachmentUpload(db, input.prepared.key);
+}
 
 /**
  * Record history changes for messages Cubby saved. An event for a message it

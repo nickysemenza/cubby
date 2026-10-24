@@ -77,9 +77,14 @@ function bucketSummary(fields: readonly SuggestionStatusField[]): string {
   let change = 0;
   let noFit = 0;
   let notChecked = 0;
+  let corrected = 0;
   for (const field of fields) {
     if (field.outcome.kind === "skipped") {
       notChecked += 1;
+      continue;
+    }
+    if (field.outcome.kind === "correction") {
+      corrected += 1;
       continue;
     }
     if (field.outcome.answer === "none") {
@@ -100,6 +105,7 @@ function bucketSummary(fields: readonly SuggestionStatusField[]): string {
     change > 0 ? `${change} would change` : null,
     noFit > 0 ? `${noFit} no fit` : null,
     notChecked > 0 ? `${notChecked} not checked` : null,
+    corrected > 0 ? `${corrected} remembered corrections` : null,
   ]
     .filter((part): part is string => part != null)
     .join(" · ");
@@ -126,7 +132,7 @@ export function SuggestionStatus({
   unasked?: string | null;
 }) {
   const evaluated = fields.filter(
-    (field) => field.outcome.kind === "evaluated",
+    (field) => field.outcome.kind !== "skipped",
   ).length;
   const skipped = fields.length - evaluated;
   const text = headlineText({

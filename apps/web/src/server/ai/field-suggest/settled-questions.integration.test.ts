@@ -11,9 +11,13 @@ import { describe, expect, it } from "vitest";
 import type { DecisionPort } from "~/server/ai/decision-model";
 import { markPreparationIncomplete } from "~/server/ai/evaluation-inputs";
 import { NONE_KEY } from "~/server/ai/policy/decision-choice";
+import {
+  dependencyStamps,
+  fieldDependencyKeys,
+} from "~/server/ai/policy/refresh-manifest";
 import { producingAiManifest } from "~/server/ai/repo/ai-refresh";
 import { getDb } from "~/server/db/helpers";
-import { aiAnalysis, run } from "~/server/db/schema";
+import { aiAnalysis, assessment, run } from "~/server/db/schema";
 import {
   inferFieldAssessments,
   inferFieldAssessmentsBatch,
@@ -23,8 +27,11 @@ import {
   kernelCtx,
   productFixture,
 } from "~/server/domains/run/service/suggestion-sweep.fixtures";
-import { executeEntity } from "~/server/entity-kernel";
+import { executeEntity, executeEntityAs } from "~/server/entity-kernel";
+import { publishFieldAssessment } from "~/server/generic/assessment/repo/assessment";
 import { reviewAssessment } from "~/server/generic/assessment/repo/assessment-review";
+import { fieldCorrectionKey } from "~/server/generic/assessment/repo/correction-sources";
+import { fieldInputFingerprint } from "~/server/generic/assessment/repo/field-input-fence";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
 import {
@@ -112,6 +119,97 @@ describe("settled suggestion questions", () => {
     field: "categoryId",
     basis: { name, brandName: null },
   });
+
+  it.each([taxonomyShortcode("food"), null])(
+    "reopens a remembered decline for confirmed correction %s without a provider call",
+    async (correctedValue) => {
+      const question = gadget("Synthetic corrected memory");
+      const declined = await ask(question, fakeRoster);
+      expect(await read(question, fakeRoster)).toEqual(
+        declined.outcomes?.categoryId,
+      );
+      const product = await productFixture(ctx, "Synthetic corrected memory");
+      const answer = await ask(question, categoryPorts(0.5).suggestPorts, {
+        entityId: product.id,
+        savedRecord: true,
+      });
+      const outcome = answer.outcomes?.categoryId;
+      if (outcome?.kind !== "evaluated" || !outcome.assessmentId)
+        throw new Error("Synthetic source has no assessment");
+      const [draft] = await getDb(ctx.db)
+        .select()
+        .from(assessment)
+        .where(eq(assessment.id, outcome.assessmentId));
+      const correctionKey = draft && fieldCorrectionKey(draft.evidence);
+      expect(correctionKey).toBeTruthy();
+      const manifest = await producingAiManifest(ctx.db);
+      // The live form answer is display-only. Publish the served saved-field
+      // question through the same boundary as refresh/sweep before applying it.
+      const served = await publishFieldAssessment(
+        ctx.db,
+        {
+          entity: "product",
+          recordId: product.entityId,
+          field: "categoryId",
+          currentValue: null,
+          suggestedValue: taxonomyShortcode("tools"),
+          kind: "addition",
+          confidence: 0.5,
+          model: "typesafe/jev",
+          provenance: {
+            dependencies: dependencyStamps(
+              manifest,
+              fieldDependencyKeys("product", "categoryId"),
+            ),
+            inputFingerprint: "synthetic-memory-input",
+            optionFingerprint: "synthetic-memory-roster",
+            model: "typesafe/jev",
+          },
+          data: {
+            correctionKey,
+            liveInputFingerprint: await fieldInputFingerprint(
+              ctx.db,
+              "product",
+              product.entityId,
+              "categoryId",
+            ),
+          },
+        },
+        true,
+      );
+      await reviewAssessment(ctx.db, kernelCtx(ctx), {
+        assessmentId: served.id,
+        operationId: "synthetic:memory-correction",
+        verdict: "wrong",
+        intent: "apply",
+        correction: { present: true, value: correctedValue },
+      });
+      const noProvider = {
+        ...fakeRoster,
+        decisionPort: async () => {
+          throw new Error("Preparation called a provider");
+        },
+      };
+      const reopened = await readAnswer(question, noProvider);
+      expect(reopened.outcome).toBeNull();
+      expect(reopened.revision).toMatch(/^correction:/u);
+      expect(await readAnswer(question, noProvider)).toEqual(reopened);
+      // An unrelated basis has its own authority and memory scope.
+      expect(
+        (await readAnswer(gadget("Synthetic unrelated memory"), noProvider))
+          .revision,
+      ).toBeNull();
+      // Retired authority no longer invalidates the unchanged remembered decline.
+      await executeEntityAs(kernelCtx(ctx), "update", {
+        entity: "product",
+        id: product.id,
+        data: { categoryId: taxonomyShortcode("books") },
+      });
+      expect(await read(question, noProvider)).toEqual(
+        declined.outcomes?.categoryId,
+      );
+    },
+  );
 
   // A deferred list decision must retain its own captured evidence so a
   // singleton revisit reuses that publication, not another row's judgment.

@@ -1,15 +1,14 @@
-import { assessmentChildHandle } from "@cubby/schemas/assessment";
 import {
-  CORRECTION_OUTCOME_RECEIPT_KIND,
-  suggestionCorrectionOutcome,
-} from "@cubby/schemas/suggestion-correction";
-import { and, eq, inArray } from "drizzle-orm";
+  assessmentChildHandle,
+  assessmentSubjects,
+} from "@cubby/schemas/assessment";
+import type { retainedCorrectionEnrollmentFamily } from "@cubby/schemas/suggestion-correction";
+import { eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 
 import type { Database } from "~/server/db";
 import { getDb, runAfterCommit } from "~/server/db/helpers";
 import { assessment, feedback } from "~/server/db/schema";
-import { systemActor } from "~/server/domains/run/repo/ensure-run";
 import {
   fieldCorrectionKey,
   readConfirmedCorrection,
@@ -48,10 +47,45 @@ export async function enqueueCorrectionWork(
   sourceFeedbackId: string,
   targetAssessmentId: string | null,
 ) {
-  await enqueueJob(db, {
+  await enqueueCorrectionIntent(db, {
     key: `assessment-correction:${sourceFeedbackId}:${targetAssessmentId ?? "history"}`,
+    sourceFeedbackId,
+    targetAssessmentId,
+  });
+}
+
+/** A distinct fixed revision preserves completed pre-adapter history and receipts. */
+export async function enrollRetainedCorrection(
+  db: Database,
+  sourceFeedbackId: string,
+  family: z.infer<typeof retainedCorrectionEnrollmentFamily>,
+) {
+  const revision = {
+    field: "field-identity-v2",
+    image_description: "image-description-v1",
+  }[family];
+  await enqueueCorrectionIntent(db, {
+    key: `assessment-correction-history:${revision}:${sourceFeedbackId}`,
+    sourceFeedbackId,
+    targetAssessmentId: null,
+  });
+}
+
+async function enqueueCorrectionIntent(
+  db: Database,
+  input: {
+    key: string;
+    sourceFeedbackId: string | null;
+    targetAssessmentId: string | null;
+  },
+) {
+  await enqueueJob(db, {
+    key: input.key,
     kind: "assessment.correction",
-    input: { sourceFeedbackId, targetAssessmentId },
+    input: {
+      sourceFeedbackId: input.sourceFeedbackId,
+      targetAssessmentId: input.targetAssessmentId,
+    },
   });
   await runAfterCommit(db, async () => {
     const { wakeJobs } =
@@ -85,63 +119,19 @@ async function enqueueCorrectionsForPublication(
   db: Database,
   prediction: typeof assessment.$inferSelect,
 ) {
-  if (!prediction.served || prediction.family !== "field") return;
-  const key = fieldCorrectionKey(prediction.evidence);
-  if (!key) return;
-  await enqueueJob(db, {
-    key: `assessment-correction-publication:${prediction.id}`,
-    kind: "assessment.correction",
-    input: { sourceFeedbackId: null, targetAssessmentId: prediction.id },
-  });
-  await runAfterCommit(db, async () => {
-    const { wakeJobs } =
-      await import("~/server/workflows/background-tasks/publish");
-    await wakeJobs({ source: "assessment.correction" });
-  });
-}
-
-export async function correctionAlreadyRecorded(
-  db: Database,
-  sourceFeedbackId: string,
-  targetAssessmentId: string,
-) {
-  const [receipt] = await getDb(db)
-    .select()
-    .from(feedback)
-    .where(
-      and(
-        eq(feedback.assessmentId, targetAssessmentId),
-        eq(
-          feedback.operationId,
-          correctionOperationId(sourceFeedbackId, targetAssessmentId),
-        ),
-      ),
-    )
-    .limit(1);
-  if (!receipt) return null;
-  const metadata = z
-    .object({
-      kind: z.literal(CORRECTION_OUTCOME_RECEIPT_KIND),
-      sourceFeedbackId: assessmentChildHandle,
-    })
-    .parse(receipt.metadata);
-  if (
-    metadata.sourceFeedbackId !== sourceFeedbackId ||
-    receipt.authority !== "automatic" ||
-    receipt.actorUserId !== systemActor().userId ||
-    receipt.intent !== "history" ||
-    receipt.correction.present ||
-    receipt.suppression
-  )
-    throw new Error(
-      "Invalid correction propagation receipt for this source and target",
+  if (!prediction.served) return;
+  if (prediction.family === "field") {
+    if (!fieldCorrectionKey(prediction.evidence)) return;
+  } else if (prediction.family === "image_description") {
+    const subject = assessmentSubjects.image_description.parse(
+      prediction.subject,
     );
-  suggestionCorrectionOutcome.parse(receipt.receipt);
-  return receipt;
+    if (!subject.contentHash || prediction.fingerprint !== subject.contentHash)
+      return;
+  } else return;
+  await enqueueCorrectionIntent(db, {
+    key: `assessment-correction-publication:${prediction.id}`,
+    sourceFeedbackId: null,
+    targetAssessmentId: prediction.id,
+  });
 }
-
-/** One durable outcome per root correction and target; propagated outcomes never become roots. */
-export const correctionOperationId = (
-  sourceFeedbackId: string,
-  targetAssessmentId: string,
-) => `correction:${sourceFeedbackId}:${targetAssessmentId}`;

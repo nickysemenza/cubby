@@ -174,7 +174,9 @@ export async function publishAssessments(
         return state ? [{ ...state, id: row.id, family: row.family }] : [];
       }),
     );
-    const correctionTargets = inserted.filter((row) => row.family === "field");
+    const correctionTargets = inserted.filter(
+      (row) => row.family === "field" || row.family === "image_description",
+    );
     if (correctionTargets.length) {
       await recordAssessmentChange(transactionDb, {
         kind: "publications",
@@ -262,6 +264,9 @@ export async function publishFieldAssessment(
         currentValue: z.json().parse(projection.currentValue ?? null),
         provenance: projection.provenance ?? null,
         correctionKey: data.correctionKey ?? null,
+        ...(data.correctionRecipe
+          ? { correctionRecipe: data.correctionRecipe }
+          : {}),
       },
       served,
     },
@@ -271,6 +276,14 @@ export async function publishFieldAssessment(
 
 /** Recording a grade is independent of applying a correction or changing authority. */
 export async function recordFeedback(
+  db: Database,
+  raw: z.input<typeof feedbackEvent>,
+) {
+  return (await recordFeedbackWithInsertion(db, raw)).event;
+}
+
+/** Domain command capture needs insertion novelty, never timestamp-based replay inference. */
+export async function recordFeedbackWithInsertion(
   db: Database,
   raw: z.input<typeof feedbackEvent>,
 ) {
@@ -338,6 +351,6 @@ export async function recordFeedback(
         kind: "source",
         categories: ["email"],
       });
-    return row;
+    return { event: row, inserted: inserted !== undefined };
   });
 }

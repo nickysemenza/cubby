@@ -6,12 +6,7 @@ import { eq } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
 import { getDb, withTransaction } from "~/server/db/helpers";
-import { runAfterCommit } from "~/server/db/helpers/core";
-import {
-  email as emailTable,
-  orderMail,
-  orderMailAttachment,
-} from "~/server/db/schema";
+import { email as emailTable, orderMail } from "~/server/db/schema";
 import { emailMemberClassificationSql } from "~/server/domains/email/repo/email-sql";
 import { hasRetainedEmailImportContent } from "~/server/domains/purchase-import/repo/email-content";
 import { recordChange } from "~/server/generic/changes/repo/change";
@@ -65,18 +60,6 @@ export async function confirmEmailClassification(
   });
 }
 
-/** Object keys an order-mail original already stages; a failed publish must not delete them. */
-export async function pendingAttachmentKeys(
-  db: Database,
-  orderMailId: string,
-): Promise<string[]> {
-  const rows = await getDb(db)
-    .select({ key: orderMailAttachment.pendingObjectKey })
-    .from(orderMailAttachment)
-    .where(eq(orderMailAttachment.orderMailId, orderMailId));
-  return rows.flatMap(({ key }) => (key ? [key] : []));
-}
-
 /** A republished original is retained again. */
 export async function restoreOrderMailContent(
   db: Database,
@@ -90,9 +73,3 @@ export async function restoreOrderMailContent(
     await recordChange(tx, { kind: "source", categories: ["email"] });
   });
 }
-
-/** Run `effect` once the publication transaction `db` commits. */
-export const afterPublicationCommit = (
-  db: Database,
-  effect: () => Promise<void>,
-) => runAfterCommit(db, effect);

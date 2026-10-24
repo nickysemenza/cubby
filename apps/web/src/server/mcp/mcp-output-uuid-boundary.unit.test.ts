@@ -108,6 +108,22 @@ const DECLARED_UUID_OUTPUT_PATHS = new Set([
   // evidence rows above; they are readback lineage, not entity identifiers.
   "shipments_read.observations[].captureSources[].captureId",
   "shipments_read.observations[].supersededByObservationId",
+  // Correction provenance names immutable Feedback/Assessment children and effect
+  // receipts; these are audit handles, not externally addressable entity IDs.
+  "image_read.correction.owner.effectId",
+  "image_read.correction.owner.commandFeedbackId",
+  "image_read.correction.owner.sourceFeedbackId",
+  "image_read.correction.owner.sourceApplicationFeedbackId",
+  "image_read.correction.owner.targetAssessmentId",
+  "image_read.correction.owner.originalApplicationFeedbackId",
+  "image_read.correction.owner.priorCorrectionApplicationFeedbackId",
+  "suggestions_read.items[].correctionAttempt.receiptId",
+  "suggestions_read.items[].correctionAttempt.sourceFeedbackId",
+  "suggestions_read.items[].correctionAttempt.sourceApplicationFeedbackId",
+  "suggestions_read.items[].evidence.correctionAuthority.sourceFeedbackId",
+  "suggestions_read.items[].evidence.correctionAuthority.sourceApplicationFeedbackId",
+  "suggestions_read.items[].evidence.correctionAuthority.sources[].sourceFeedbackId",
+  "suggestions_read.items[].evidence.correctionAuthority.sources[].sourceApplicationFeedbackId",
   "suggestions_read.items[].id",
   "suggestions_read.items[].assessmentId",
   "suggestions_read.items[].evidence.assessmentId",
@@ -118,6 +134,8 @@ const DECLARED_UUID_OUTPUT_PATHS = new Set([
   "finance_read.assessmentId",
   "suggestions.assessmentId",
   "suggestions.items[].assessmentId",
+  // Historical enrollment advances over opaque Feedback rows, not entities.
+  "suggestions.after",
   "suggestions.feedbackId",
   "suggestions.items[].feedbackId",
 ]);

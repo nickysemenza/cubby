@@ -56,6 +56,47 @@ describe("current field suggestion inputs", () => {
     expect(await suggestionStatus(ctx.db, pending.id)).toBe("pending");
   });
 
+  it("refuses Task advice after reparenting between parents without a Project", async () => {
+    const create = async (name: string, parentTaskId?: string) =>
+      (
+        await executeEntityAs(kernelCtx(ctx), "create", {
+          entity: "task",
+          data: buildEntity("task", {
+            name,
+            trade: "other",
+            ...(parentTaskId ? { parentTaskId } : {}),
+          }),
+        })
+      ).item;
+    const first = await create("Synthetic first parent");
+    const second = await create("Synthetic second parent");
+    const child = await create("Synthetic child", first.id);
+    const project = (
+      await executeEntityAs(kernelCtx(ctx), "create", {
+        entity: "project",
+        data: buildEntity("project", { name: "Synthetic Project" }),
+      })
+    ).item;
+    const pending = await seedPending(ctx, {
+      entity: "task",
+      recordId: await resolveOrThrow(ctx.db, "task", child.id),
+      field: "projectId",
+      currentValue: null,
+      suggestedValue: project.id,
+      kind: "addition",
+    });
+    await executeEntityAs(kernelCtx(ctx), "update", {
+      entity: "task",
+      id: child.id,
+      data: { parentTaskId: second.id },
+    });
+    await expect(
+      acceptSuggestion(ctx.db, kernelCtx(ctx), { id: pending.id }),
+    ).rejects.toThrow("Suggestion inputs changed");
+    expect(await readFieldSuggestions(ctx.db, [pending.id])).toEqual([]);
+    expect(await suggestionStatus(ctx.db, pending.id)).toBe("pending");
+  });
+
   it("keeps advice available after an unchanged SpendingCategory save", async () => {
     const category = (
       await executeEntityAs(kernelCtx(ctx), "create", {

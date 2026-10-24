@@ -3,6 +3,7 @@ import {
   financeCategoryApplyInput,
   suggestionReviewListInput,
   suggestionStatus,
+  confirmedFieldDecision,
 } from "@cubby/schemas/ai";
 import { aiProvenance } from "@cubby/schemas/ai-evaluation";
 import { SUGGESTION_AUTO_APPLY_THRESHOLD } from "@cubby/schemas/ai-evaluation";
@@ -102,7 +103,18 @@ function reviewableRow(
   suggestion: typeof suggestionTable.$inferSelect,
   runCode: string | null,
 ) {
-  return [{ ...suggestionRowSchema.parse(suggestion), runId: runCode }];
+  const authority = confirmedFieldDecision.safeParse(
+    z
+      .object({ correctionAuthority: z.json().optional() })
+      .safeParse(suggestion.data).data?.correctionAuthority,
+  );
+  return [
+    {
+      ...suggestionRowSchema.parse(suggestion),
+      runId: runCode,
+      ...(authority.success && { correctionAuthority: authority.data }),
+    },
+  ];
 }
 /** Only served Assessments are member review candidates. */
 export const reviewableSuggestionSql = sql`EXISTS (SELECT 1 FROM "Assessment" prediction WHERE prediction.id=${suggestionTable.id} AND prediction.served)`;
@@ -317,6 +329,7 @@ export async function fieldSuggestionKeys(
       field: suggestionTable.field,
       kind: suggestionTable.kind,
       confidence: suggestionTable.confidence,
+      correctionAuthority: sql<unknown>`${suggestionTable.data}->'correctionAuthority'`,
       createdAt: suggestionTable.createdAt,
       matchedRules: matchedRulesOf(sql`${suggestionTable.data}`),
       automaticRule: automaticApplicationRule(sql`${suggestionTable.id}`),
@@ -503,7 +516,7 @@ async function automaticFieldFillRefusal(
     (authority === "model" &&
       row.confidence < SUGGESTION_AUTO_APPLY_THRESHOLD) ||
     !empty(row.currentValue) ||
-    empty(row.suggestedValue) ||
+    (authority === "model" && empty(row.suggestedValue)) ||
     (authority === "model" &&
       row.runnerUpConfidence !== null &&
       row.confidence - row.runnerUpConfidence < 0.1)

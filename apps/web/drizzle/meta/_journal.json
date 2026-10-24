@@ -162,6 +162,13 @@
       "when": 1792795000000,
       "tag": "0022_entity_quality",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1792821528012,
+      "tag": "0023_serialize_correction_authority",
+      "breakpoints": true
     }
   ]
 }

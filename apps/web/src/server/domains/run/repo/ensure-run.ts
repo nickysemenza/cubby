@@ -1,9 +1,12 @@
-import { type ActorContext, buildActorContext } from "@cubby/schemas/context";
+import {
+  type ActorContext,
+  buildActorContext,
+  SYSTEM_USER_ID,
+} from "@cubby/schemas/context";
 import {
   type RunId,
   type UserId,
   runEntityId,
-  userId,
 } from "@cubby/schemas/identifiers";
 import type { RunTrigger } from "@cubby/schemas/purchase-import";
 import {
@@ -39,7 +42,6 @@ import {
  * refreshes. Work a member starts (a backfill button) stays attributed to
  * that member. The reserved user exists in the production database.
  */
-const SYSTEM_USER_ID: UserId = userId.parse("cubby-system");
 export const systemActor = (): ActorContext =>
   buildActorContext(SYSTEM_USER_ID, "system");
 

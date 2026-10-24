@@ -126,7 +126,7 @@ function StatusTabs({
     >
       <TabsList variant="line" aria-label="Suggestion status">
         <TabsTrigger value="pending">Pending</TabsTrigger>
-        <TabsTrigger value="automatic">Automatic decisions</TabsTrigger>
+        <TabsTrigger value="automatic">Automation history</TabsTrigger>
         <TabsTrigger value="rules">Automatic rules</TabsTrigger>
       </TabsList>
     </Tabs>

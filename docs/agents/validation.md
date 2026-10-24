@@ -202,7 +202,11 @@ Choose local evidence by the changed behavior:
 
 - Web/server behavior: the affected regression or real user journey. Run one
   app typecheck when TypeScript behavior or signatures change; include the
-  test program when tests/tooling change (see [quality](validation-quality.md)).
+  test program when tests/tooling change (see [quality](validation-quality.md)). New repository-owned
+  modules and table/computed-SQL helpers must join the ownership roster in
+  `apps/web/tooling/typecheck-repositories.ts`; composition imports use its alias
+  boundary. Run the full web `typecheck` command, including its boundary guard,
+  for these additions: an app-only compile does not check resolved ownership.
   That one run comes before commit or push, never after each edit. The shared
   compiler launcher uses one checker to reduce each worktree's memory;
   cold checks still hold substantially more than unchanged incremental runs.

@@ -746,11 +746,11 @@ test("Suggestions contains automatic history and pausable statement spending", a
   await toggle.click();
   await expect(toggle).toHaveAttribute("aria-checked", "true");
   await page
-    .getByRole("tab", { name: "Automatic decisions", exact: true })
+    .getByRole("tab", { name: "Automation history", exact: true })
     .click();
   await expect(page).toHaveURL(/status=automatic/);
   await expect(
-    page.getByRole("region", { name: "Automatic decisions", exact: true }),
+    page.getByRole("region", { name: "Automation history", exact: true }),
   ).toBeVisible();
   await page.getByRole("tab", { name: "Pending", exact: true }).click();
   await expect(suggestionsTable(page)).toBeVisible();

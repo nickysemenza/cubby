@@ -3702,8 +3702,24 @@ transaction as their command-bound application receipt. An apply intent alone,
 a draft, a history-only grade, or an automatic consequence supplies no reusable
 member authority. Explicit corrected null remains distinct from no correction.
 The first supported scope is identical complete pre-decision inputs for eligible
-descriptive fill fields: raw basis, ordered request fingerprints, canonical roster
-identities, served model and policy dependencies. Record identity and proposed
+descriptive fill fields: declared decision basis and inheritance context, ordered
+request fingerprints, canonical roster identities, served model and policy dependencies.
+Presentation-only resolution metadata does not change equivalence. New publications
+retain their versioned identity recipe, including basis, ordered captured inputs and
+dependency stamps. A retained raw-v1 live key gains a normalized alias only when those
+retained inputs and dependencies reproduce its original hash exactly. Candidate current
+dependency stamps are accepted only by that hash proof. Missing or mismatching historical
+inputs retain opaque exact-key scope; old canonical/Sweep digests do not reconstruct
+missing captured inputs. Discovery, historical repair, lineage and serialization use the
+same proof, retaining both stored and proven canonical identities through matching
+and locking; preferring the alias must not discard opaque exact-key authority.
+Related identity scans load candidate dependency stamps lazily once per page.
+Target freshness includes the same inheritance context and direct reference rows
+used by preparation, including Task parent identity. Retained application receipts
+whose original fingerprint cannot prove that required context remain protected
+history rather than gaining reconstructed write authority. History cursors
+advance over scanned field candidates even when no candidate matches. This change does
+not rerun previously completed history jobs. Record identity and proposed
 answer are not part of that equivalence key. Missing historical keys are not
 reconstructed from current data; fuzzy similarity does not authorize repair.
 
@@ -3715,6 +3731,29 @@ audit timestamps alone do not establish the latest committed decision. Deleted
 source subjects supply no current correction authority; retained history does not
 block subsequent proposal processing.
 Pending proposals are retired even when an explicit-null correction needs no value change.
+Historical repair, automatic admission and remembered-question reuse share one
+current-authority resolver. An equivalent confirmed correction or conflict reopens
+a remembered decline under a stable correction-set revision without calling a
+provider or writing from the read. Superseded or deleted source authority no longer
+invalidates that memory. Eligible field inference prepares complete decision inputs
+without providers and resolves this authority before executing a model or its cache.
+Confirmed corrections and conflicts have their own outcome, including root application
+receipt provenance and explicit null; neither carries a model confidence score.
+Incomplete preparation falls through to ordinary inference without inventing equivalence.
+Only canonical saved-record refresh and Sweep snapshots publish correction questions
+for automatic application. Client-provided form basis may display the correction but
+never supplies automatic-write authority. Publication fences the prepared target
+fingerprint, and the existing correction Job revalidates source authority and member
+ownership before the domain writer. Conflicts remain passive in Suggestions; no
+additional approval prompt or competing queue is introduced. Pure model evaluations
+can disable the inference shortcut without bypassing guarded application checks.
+Sweep compares the queued policy basis with the canonical saved record before
+inference and fences that snapshot through publication. A fresh target fingerprint
+cannot authorize a correction resolved from stale queued inputs. Sweep takes
+the replacement and predecessor correction keys before locking predecessor
+projections, matching member review's key-before-projection order.
+Live and stored disclosures show corrected values through canonical field
+renderers, explicit None, and supporting member/application receipts.
 Existing applicable corrections withhold the model's
 automatic answer while correction work resolves it. Historical repair requires
 the original automatic application receipt, its unchanged audited field write,
@@ -3726,19 +3765,103 @@ Propagation records a separate automatic receipt linking the root member Feedbac
 member actor, original target application and actual effects; successful replay
 precedes stale-state checks. Serializable Job publication commits writes, outcomes
 and cursor together through transaction-bound domain writers.
+Field confirmation, automatic admission, correction-question publication and
+repair first update a shared entity/field gate in `AssessmentCorrectionLock`,
+then resolve the retained proof expansion and update its sorted raw and canonical
+keys before record/projection locks. The gate stabilizes discovery when a proof
+or an opaque correction commits on another record; assessment-local keys alone
+cannot fence the expanded authority. The household's bounded correction volume
+uses this field-level serialization instead of a separate alias registry.
+Discovery, history selection, repair and prior-effect lineage share that same
+proof expansion, including retired roots as identity proof without granting them
+current correction authority. The physical row update forces an older
+serializable snapshot to retry if another record confirms conflicting authority;
+an advisory lock or unrelated refresh Job contention cannot supply this fence.
+The lock table stores no correction authority or application history.
+Later confirmed corrections can repair an earlier propagated effect only while
+its captured post-application fingerprint still matches. Repeated equivalent
+authority settles against that receipt without another field write, including
+explicit None. The original proposal value never substitutes for current effect
+proof when correcting an automatic consequence again.
 
 Pending held field work stays in the existing Suggestions family and Work link,
-with its reason in the shared row summary. Automatic history shows applied field
-corrections and holds on prior automatic assignments. This adds no confirmation
+with its reason in the shared row summary. Automation history also admits
+canonical correction attempts independently of the target's pending/applied
+status or an original automatic rule. This includes holds on a member-applied
+source whose retained inputs cannot establish reusable equivalence. Admission
+requires the automatic outcome's exact operation identity and bound member
+application, actor and corrected value. Its latest recorded attempt includes
+root command/application and outcome receipt provenance; it is historical
+evidence, not a fresh eligibility check. Held attempts have no review action and
+are never labelled as applied results. Verification requires an actual automatic
+application rule receipt or the family's application proof; admission of a held
+attempt supplies neither. Pagination orders by the displayed attempt time,
+falling back to the original Assessment time when there is no correction attempt.
+Hold summaries describe the refused repair; the old proposal remains in Evidence,
+so it is not presented as an instruction to overwrite the saved member value.
+Reads schedule or apply nothing.
+This adds no confirmation
 prompt or second queue. Every review family declares its repair policy, but
 registration is not support: financial semantics, transfers, Product merges,
-mail routing/links/import outcomes, image descriptions and recommendation subtypes
+mail routing/links/import outcomes and recommendation subtypes
 currently retain explicit holds pending domain-specific implementation. Broader
-semantic applicability and future-inference integration before model execution
+semantic applicability and remaining domain-specific inference integration
 remain tracked by [#3189](https://github.com/nickysemenza/cubby/issues/3189).
 Ordinary automatic field additions still require the existing 95% policy and
 current-evidence/member-intent checks; propagated corrections do not invent a
 model confidence or lower that threshold.
+
+Image correction authority is text-only and scoped to identical retained content
+hashes. Its provider-free resolver admits only successful command-bound member
+corrections whose live Image, immutable subject/fingerprint and current applied
+confirmation still agree. A replacement confirmation retires the prior holder's
+authority. Distinct current roots with different text remain a conflict; neither
+timestamp order nor model confidence selects a winner. History-only grades,
+replaced/deleted content and confirmations without a matching application receipt
+do not establish reusable authority. This resolver does not apply a correction or
+replace an image analysis: claims, nutrition and cutout eligibility remain model
+outputs. Untouched pending model descriptions support text correction; applied
+history requires an unchanged receipt-bound propagated holder. Unattributed or
+unsupported applied confirmations stay held. The coordinator enrolls bounded
+history for new corrections and durably resolves roots after future model
+publication commits. Existing completed image history Jobs are not reset: a
+separate bounded `suggestions.enrollCorrections` operation supports `field` and
+`image_description` and previews retained member correction candidates by Feedback cursor (`dryRun: true` by default).
+Its cursor and correction provenance expose opaque Assessment/Feedback child
+handles and effect receipt identities, never entity UUIDs. Its receipt-backed
+root count does not establish current applicability. Explicit
+`dryRun: false` creates fixed-version, deduplicated family history intents without
+resetting any old Job or outcome; the adapter still rechecks authority and member
+intent before text changes. Continue scanned pages even when no root qualifies.
+Field enrollment uses the fixed `field-identity-v2` revision to discover previously
+unvisited targets after identity-proof changes. Existing per-root/target outcomes,
+including holds, remain replayed; enrollment does not authorize their retry or
+replace historical receipts. Image enrollment retains its original fixed key.
+This operation is not automatically invoked at deployment. Separately authorized
+enrollment and verified outcomes remain operational prerequisites before
+historical completion can be claimed.
+Image member Feedback, including history-only grades and refused apply intent,
+commits under the shared physical content-key fence. Confirmation acquires that
+fence, then a record-intent fence, before its Image or projection locks and uses snapshot retries. The record fence protects current content even when a member reviews an older or hash-less publication. Its review
+event remains durable separately from a later refused application. The same key is reserved
+for automatic text consequences, so different Images with identical bytes
+cannot confirm conflicting authority outside that serialization boundary.
+One image-domain writer clears prior holders and records typed confirmation
+ownership in the selected projection. Direct member ownership names its command
+Feedback and actor; automatic ownership is reserved for a root command/application,
+target Assessment, prior effect receipt and original application lineage. Each
+effect has a distinct identity, so restored text cannot substitute for unchanged
+effect proof. New member projection events name their command as the cause.
+Direct and batch prose readers verify propagated holders against the same
+automatic outcome receipts, loaded once per requested page. They expose correction
+authority and root provenance without model analysis or claims. Photo review
+keeps prose and receipt disclosures at the full card width, outside the narrow
+thumbnail rail. An equal later
+model proposal is retired against the existing holder rather than taking ownership.
+Historical repair, future enrollment, re-correction and replay share that domain
+adapter. Held pending rows retain reasons and corrected text in Suggestions with
+only correction/dismissal actions, while applied consequences enter Automatic
+decisions. This does not complete other held families or historical enrollment.
 
 ### Automatic semantic classification
 

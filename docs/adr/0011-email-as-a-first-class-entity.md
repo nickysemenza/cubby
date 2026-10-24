@@ -182,7 +182,9 @@ When a caller already owns a transaction, reservation uses a separate pooled
 connection. A single-connection transaction scope refuses before uploading bytes;
 walking transaction ancestry alone does not establish an independent commit.
 Mail reservations have their own cleanup path, separate from signed image
-uploads; cleanup holds the reservation lock through deletion. A failed key or
+uploads; cleanup holds the reservation lock through deletion. Immediate correction
+cleanup uses the same reference checks and cannot delete a consumed reservation's
+object or bytes referenced by a retained attachment or Image. A failed key or
 Email never prevents disposal of independent keys and Emails, and failures
 remain retryable and visible.
 An attachment deliberately promoted to independently owned Purchase/Product
@@ -266,3 +268,177 @@ filters, still storing nothing of their own. Reviewed decisions record who
 proposed each link (`proposedBy`); that column describes the existing decision
 rows and adds no relationship. A member's Link marks the Email related as a
 member resolution, since a reviewed Purchase link is relevance evidence.
+
+### Complete original capture
+
+New Gmail ingest and explicit relevance-correction publications retain a versioned `gmail-original-v1`
+manifest separately from the existing normalized message checksum. It binds the
+owner, mailbox and provider message identity and captures ordered MIME structure,
+all text alternatives, headers (including Content-ID), attachment descriptors and
+actual available byte digests. Missing bytes, malformed encodings, size conflicts
+or bounded capture limits produce explicit incomplete evidence with no content
+digest. Capture uses already acquired bytes and makes no additional provider or
+storage requests.
+
+The manifest does not establish cross-Email equivalence or correction authority.
+Equal content digests do not erase independently bound provider identities. Email
+correction propagation remains held pending current-effect ownership, complete
+intent fencing and DB-only publication contracts. A later capture creates a new
+observation when its proof differs; it never retrofits an immutable historical
+Assessment or certifies previously discarded content.
+
+### Logical classification input capture
+
+New ingest classification publications also retain `gmail-logical-inputs-v1`:
+ordered shared AI input metadata and fingerprints captured before cache or
+transport execution, including relevance detail retries. This records declared
+logical requests, independently of original capture and actual answering-model
+provenance. It does not attest complete provider wire inputs or grant correction
+authority. Provider identifiers present in the actual input remain significant.
+Rule-only and custom classifiers that emit no inputs retain no logical proof.
+
+Observation reuse compares both evidence components, including their absence.
+Changed or newly missing proof creates a new observation without modifying the
+previous Assessment. No historical capture is inferred or backfilled.
+
+### Retained review frontier
+
+A new shared member Email relevance/link review (including an Email/Purchase
+connection review) retains a system-history frontier receipt in the same
+transaction as its command Feedback. It records sorted retained protecting event
+handles across checksums and superseded subjects. Direct resolutions and actual
+link decisions protect intent; application receipts and model observations do
+not become new member commands. Connection endpoints require retained proof.
+Unresolved subject identity records an explicit hold without losing the review.
+
+Exact command replay preserves its original frontier. A historical command with
+no frontier never gains a reconstructed baseline. Preparation failure preserves
+the committed command and frontier; transaction failure rolls back both.
+These receipts establish the command/frontier association only. They contain no
+selected-effect proof, do not establish complete cross-domain serialization and
+are not reusable correction authority. Email propagation stays held until the
+outer gate, current-effect ownership and full eligibility contracts are enforced.
+
+### Relevance correction preparation and publication
+
+Explicit relevance correction requires a root database for preparation. Provider
+retrieval, complete-original capture and object uploads run before the application
+transaction. Each upload has a durable reservation, locked while staging bytes.
+Preparation binds the connected auth-account row identity, then rechecks owner,
+that same account incarnation and reviewed checksum after retrieval before staging.
+Disconnect/reconnect to a different account row refuses the preparation even when
+member/provider/mailbox fields match; token refresh on the same row is allowed. Publication repeats those checks under the existing parent locks,
+then adopts staged references using DB-only writers in the caller's transaction.
+Cleaned reservations cannot be published or recreate their objects. The same
+source/routing snapshot fence used by Gmail evidence publication is rechecked
+after retrieval and under publication locks. A newer same-original routing
+publication makes older preparation stale even when the reviewed checksum and
+account identity still match. This does not establish a complete member-intent
+frontier: Feedback-only intent changes and routing ABA protection still require
+the separate ownership contract.
+
+Shared review preserves validation → durable member command Feedback → canonical
+replay → preparation → transactional replay/publication. A preparation failure
+retains Feedback and raw retrieval diagnostics without an application receipt or
+routing change. A successful application replays without consulting Gmail; a
+concurrent successful receipt can also settle an invocation whose preparation
+failed, provided cleanup succeeded. Cleanup failures cannot be hidden by a
+concurrent receipt. Publication and cleanup failures remain errors and do not imply rollback.
+Routing, observation and command application receipt remain atomic. Unused or failed
+staging is discarded only through exact reservation/reference ownership checks;
+failed deletion retains the reservation for the existing cleaner. Cleanup attempts
+keys sequentially, including on a root bound to one physical connection, and
+collects failures without stopping the remaining attempts. Prepared handles expose
+only immutable Email identity; verified content, actor/source bindings and staged
+references remain module-private and cannot be replaced by caller or model data.
+
+This boundary supplies no automatic propagation authority, effect selector or
+cross-Email identity rule. Those domain contracts remain required before Email
+correction repair becomes supported.
+
+### Email evidence outer write scope
+
+`withEmailEvidenceWrite` owns a DB-only serializable root transaction and takes
+one physical `AssessmentCorrectionLock` write before domain work. Callers must
+replace the actual outer transaction entry, before Job, Run, Purchase, source
+claim, Original, Email or projection locks. Calling it inside an existing
+transaction is refused; nested writers carry the supplied capability instead.
+The scope retries aborted snapshots through the existing database helper, never
+committed writes whose after-commit notification failed.
+
+The private registered capability is valid only for that live transaction and
+its active savepoints, including before-commit publication. Construction,
+property copying, unrelated transactions, expired savepoints and later reuse of
+the same physical connection confer no scope. A second root opened while the
+scope is active is refused; provider and storage IO remain outside the boundary.
+The scope serializes writes only and supplies no member or source-proof authority.
+
+Gmail evidence publication adopts this scope before evaluation/Job, owner, Run
+and Email locks. Ordinary ingestion, explicit reclassification, refresh, removed
+source receipts and extraction-preview publication share this entry. Nested
+callers must supply the existing live capability; unscoped transaction facades
+are refused instead of taking a late gate. The publication callback receives the
+same capability for nested domain writers. Concurrent Gmail publications now
+serialize at this one household gate and use the owned snapshot retry contract.
+Provider and storage preparation stays outside it; after-commit failures never
+replay committed writes. Publication observation metadata belongs to each attempt:
+the callback reports it through the scoped publication context instead of
+mutating the retained input. Aborted attempts cannot supply later handling or
+evaluation receipts with an abandoned observation handle.
+
+This is partial outer-entry coverage. Member intent/application, link/import,
+Run controls, Original maintenance, accepted-evidence finance/shipment integration,
+current-effect selection and distinct-Email equivalence remain prerequisites. Email correction
+adapters remain held; adding this scope does not authorize financial commands,
+historical enrollment or production application.
+
+### Gmail ingest attachment preparation
+
+Gmail ingest acquires and uploads missing attachment payloads before its source
+publication transaction. Every PUT holds the exact durable upload reservation;
+publication adopts prepared checksums/keys through DB-only writers and preserves
+current or promoted bytes. Missing payloads retain metadata-only checksum behavior
+and cannot become complete original-capture proof. Source eligibility is rechecked
+after preparation by the existing publication owner.
+
+Every prepared key is subsequently discarded through reservation/reference checks,
+including declined publication, rollback and unused preparation. Adopted keys are
+preserved. Cleanup is sequential for single-connection roots, attempts all keys,
+and retains original publication and cleanup errors. A committed notification
+failure is not rollback and does not authorize deleting referenced objects.
+The former upload-inside-publication writer is removed. This preparation boundary
+precedes Email outer-scope adoption; it does not enable correction propagation.
+
+### Shared Email review scope
+
+Shared relevance/link and Email/Purchase connection reviews enter the Email
+scope separately for command/frontier capture, DB-only application and projection
+history. The gate precedes command insertion, application advisory/parent locks
+and history projection locks. Command Feedback still commits before provider
+preparation, so failed retrieval cannot erase member intent. Preparation and
+cleanup stay outside the write scope; an application outcome is rebuilt for each
+transaction attempt rather than retaining abandoned result fields.
+
+DB-only nested reviews must supply an existing live capability. Unscoped
+transaction facades are refused before retaining a command. Other review families
+keep their existing transaction owners. Batch review continues item-by-item.
+This does not establish complete protecting-event coverage or enforce a prepared
+frontier against later intent; current-effect ownership and the remaining domain
+entry points are still required before Email propagation can be enabled.
+
+### Prepared relevance publication scope
+
+Prepared relevance publication requires a live Email evidence capability before
+its owner/account/Run/Email lock sequence; a transaction alone is insufficient.
+Direct member correction acquires the root scope after provider/storage
+preparation and passes the capability to publication. Shared review forwards its
+already acquired application capability. Neither path acquires a late gate in
+nested writers, performs provider work inside retryable publication, nor derives
+source-proof authority from the capability.
+
+Existing private preparation, account/routing freshness, canonical shared replay
+and reservation cleanup contracts remain in force. A capability from another or
+expired transaction refuses before evidence changes. Direct correction remains a
+protected local action, not a reusable shared root. Its durable initiating intent,
+complete protecting-event frontier and selected-effect ownership are still open
+prerequisites; this scope adoption does not enable Email propagation.

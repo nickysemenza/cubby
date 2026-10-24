@@ -17,6 +17,8 @@ import { entityCommandSchema } from "~/server/entity-kernel/contracts";
 import { publishFieldAssessment } from "~/server/generic/assessment/repo/assessment";
 import { transitionAssessmentStates } from "~/server/generic/assessment/repo/assessment-state";
 import { applyAutomaticRules } from "~/server/generic/assessment/repo/automatic-rule-runtime";
+import { fieldCorrectionRecipe } from "~/server/generic/assessment/repo/field-assessment-review";
+import { lockFieldCorrectionKeysForField } from "~/server/generic/assessment/repo/field-correction-lock";
 import {
   fieldInputFingerprint,
   fenceFieldInputsAtCommit,
@@ -47,6 +49,7 @@ export const jsonValue = (value: unknown): SuggestionValue =>
 export const sweepSuggestionSchema = z.object({
   reviewKey: z.string().nullable().optional(),
   correctionKey: z.string().nullable().optional(),
+  correctionRecipe: fieldCorrectionRecipe.optional(),
   kind: z.enum(["addition", "correction"]),
   currentValue: suggestionValueSchema,
   suggestedValue: suggestionValueSchema,
@@ -110,13 +113,17 @@ export async function saveSweepSuggestions(
   return withTransactionDatabase(
     db,
     async (tx) => {
+      const typedRecordId = parseEntityId(input.entity, input.recordId);
+      await lockFieldCorrectionKeysForField(tx, {
+        ...input,
+        keys: entries.map((entry) => entry.correctionKey ?? null),
+      });
       const liveInputFingerprint = await fieldInputFingerprint(
         tx,
         input.entity,
         input.recordId,
         input.field,
       );
-      const typedRecordId = parseEntityId(input.entity, input.recordId);
       const saved = await getDb(tx)
         .select()
         .from(suggestionTable)
@@ -318,6 +325,9 @@ export async function saveSweepSuggestions(
               liveInputFingerprint,
               reviewKey: entry.reviewKey ?? null,
               correctionKey: entry.correctionKey ?? null,
+              ...(entry.correctionRecipe
+                ? { correctionRecipe: entry.correctionRecipe }
+                : {}),
             },
             status: "pending",
           },
