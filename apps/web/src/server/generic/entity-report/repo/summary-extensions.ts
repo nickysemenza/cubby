@@ -1,5 +1,6 @@
 import type { ReportBlock, ReportTime } from "@cubby/schemas/entity-report";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
+import { financialTransactionCoverage } from "@cubby/schemas/purchase-evidence-policy";
 import { sourceTransactionRecordMatchState } from "@cubby/schemas/source-transaction-record";
 import { countLabel } from "@cubby/shared/pluralize";
 import { sql } from "drizzle-orm";
@@ -13,7 +14,12 @@ import { getExpenseByShortcode } from "~/server/domains/expense/repo/crud";
 import { listFinancialTransactionsRead } from "~/server/domains/financial-transaction/repo/financial-transaction";
 import { householdContributionLedger } from "~/server/domains/household-contribution/repo/reports";
 import { inventoryentryListRead } from "~/server/domains/inventory/repo/crud";
+import { financialTransactionBookingSql } from "~/server/domains/purchase/repo/purchase-evidence-policy";
 import { listSourceTransactionRecordsRead } from "~/server/domains/transaction-import/repo/entity-repositories";
+import {
+  CHARGE_STATE,
+  chargeKeyOf,
+} from "~/server/domains/transaction-import/repo/statement-charge";
 import { selectedListProjection } from "~/server/generic/list/repo/list-projection";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
@@ -224,7 +230,7 @@ export async function importReconciliationSummary(
   db: Database,
   code: string,
 ): Promise<ReportBlock[]> {
-  await resolveOrThrow(db, "transactionImport", code);
+  const storedImportId = await resolveOrThrow(db, "transactionImport", code);
   const importId = parseShortcodeFor("transactionImport", code);
   const counts = await Promise.all(
     sourceTransactionRecordMatchState.options.map(async (state) => {
@@ -239,9 +245,46 @@ export async function importReconciliationSummary(
       return { state, count: result.count };
     }),
   );
+  // Charge state includes observations outside this collection; IN counts each
+  // accepted transaction once even when several retained observations support it.
+  const bookingResult = await unwrapDb(db).execute(sql`
+    SELECT coverage.booking, count(*)::int AS count
+    FROM (
+      SELECT ${financialTransactionBookingSql("ft")} AS booking
+      FROM "FinancialTransaction" ft
+      WHERE ft."deletedAt" IS NULL AND ft.shortcode IN (
+        SELECT cs.shortcode
+        FROM "TransactionImportRecord" member
+        JOIN "SourceTransactionRecord" r ON r.id = member."statementRowId" AND r."deletedAt" IS NULL
+        JOIN ${CHARGE_STATE} cs ON cs.source = r.source AND cs."chargeKey" = ${chargeKeyOf("r")}
+        WHERE member."importId" = ${storedImportId}::uuid
+          AND NOT cs.ignored AND NOT cs.superseded AND cs.shortcode IS NOT NULL
+      )
+    ) coverage
+    GROUP BY coverage.booking
+  `);
+  const bookingCounts = z
+    .array(
+      z.object({
+        booking: financialTransactionCoverage.shape.booking,
+        count: z.coerce.number().int().nonnegative(),
+      }),
+    )
+    .parse(bookingResult.rows);
+  const bookingLabels = {
+    missing: "Unbooked",
+    partial: "Partly booked",
+    recorded: "Booked",
+    not_applicable: "Not required",
+    unclassified: "Unclassified",
+  } satisfies Record<
+    z.infer<typeof financialTransactionCoverage.shape.booking>,
+    string
+  >;
   return [
     {
       kind: "stats",
+      title: "Retained observations",
       figures: counts.map(({ state, count }) => ({
         label: state.charAt(0).toUpperCase() + state.slice(1),
         value: count,
@@ -251,6 +294,22 @@ export async function importReconciliationSummary(
     {
       kind: "note",
       text: "Counts describe retained provider observations, not unique charges or spending. Intake completion and reconciliation are separate.",
+    },
+    {
+      kind: "stats",
+      title: "Matched transaction booking",
+      figures: financialTransactionCoverage.shape.booking.options.map(
+        (booking) => ({
+          label: bookingLabels[booking],
+          value:
+            bookingCounts.find((row) => row.booking === booking)?.count ?? 0,
+          format: "count",
+        }),
+      ),
+    },
+    {
+      kind: "note",
+      text: "Each matched Financial Transaction counts once here. Collections can overlap, so do not add their counts. Booked means the linked Purchases have priced Expense rows; it does not prove balanced settlement, complete sources or itemization. Unmatched observations are excluded.",
     },
   ];
 }
