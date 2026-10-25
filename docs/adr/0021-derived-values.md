@@ -59,8 +59,13 @@ and turned one Product save into a 115–147 second rollback; #2855 removed them
   inputs.
 - **AI work has one slot.** Each (record, feature) owns one slot, keyed by a
   hash of its declared input projection; reverts reuse the response cache.
-  High-confidence suggestions on descriptive fields decide at read time as
-  `auto` without writing; money and identity fields keep explicit writes.
+  Descriptive fields stay hands-off through the existing Automatic rules,
+  which apply high-confidence additions to declared fill fields with receipts;
+  a stored `automaticFields` value records which current values those rules
+  decided, so the envelope marks them `auto` until a member edits or confirms
+  them. Money and identity fields keep explicit writes. (Revised during
+  implementation: deciding at read time without a write would have duplicated
+  the Automatic rules and their receipts.)
 - **One explanation surface.** Clients render the envelope: a cell mark for
   inherited and auto values, an immediate updating dot, and one popover with
   the decision chain and stored versus live values. The drain rings the
