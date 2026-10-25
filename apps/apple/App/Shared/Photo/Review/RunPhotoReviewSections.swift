@@ -38,6 +38,8 @@ struct RunPhotoReviewSections: View {
                             Label("Start grouping", systemImage: "sparkles")
                         }
                         .disabled(session.busy)
+                    case .descriptionsMissing(let ids):
+                        continueWithoutButton(ids)
                     case .waitingForPhotos, .processing, .working:
                         EmptyView()
                     }
@@ -140,7 +142,7 @@ struct RunPhotoReviewSections: View {
                     HStack(alignment: .top) {
                         Thumb(url: URL(string: image.originalUrl), size: 58)
                         VStack(alignment: .leading) {
-                            Text(image.describeReason ?? "Photo description failed").textSelection(.enabled)
+                            Text(missingDescriptionText(image)).textSelection(.enabled)
                             Button("Retry this photo") {
                                 Task {
                                     do {
@@ -154,17 +156,7 @@ struct RunPhotoReviewSections: View {
                         }
                     }
                 }
-                Button("Continue without failed photos") {
-                    Task {
-                        do {
-                            _ = try await appModel.client.excludeFailedPhotoDescriptions(
-                                .init(
-                                    runId: runID, imageIds: review.lifecycle.failedImageIds))
-                            await refresh()
-                        } catch { appModel.handle(error) }
-                    }
-                }
-                .disabled(session.busy)
+                continueWithoutButton(review.lifecycle.failedImageIds)
             }
         case "ready_for_review":
             Text("Item groups are ready for review.")
@@ -177,6 +169,30 @@ struct RunPhotoReviewSections: View {
 
     private func refresh() async {
         await session.refresh(runID: runID, client: appModel.client)
+    }
+
+    /// The server lists failed and skipped descriptions alike in `failedImageIds`; a skip keeps
+    /// its own reason wording.
+    private func missingDescriptionText(_ image: PhotoRunImage) -> String {
+        if image.describe == .skipped {
+            return image.describeReason.map(imageSkipReasonText) ?? "Photo description was skipped"
+        }
+        return image.describeReason ?? "Photo description failed"
+    }
+
+    /// Excludes photos whose description failed or was skipped, so grouping continues without them.
+    private func continueWithoutButton(_ ids: [ImageCode]) -> some View {
+        Button(ids.count == 1 ? "Continue without this photo" : "Continue without these \(ids.count) photos")
+        {
+            Task {
+                do {
+                    _ = try await appModel.client.excludeFailedPhotoDescriptions(
+                        .init(runId: runID, imageIds: ids))
+                    await refresh()
+                } catch { appModel.handle(error) }
+            }
+        }
+        .disabled(session.busy || ids.isEmpty)
     }
 
     private func reviewWorkspace(_ review: PhotoRunReviewResponse) -> some View {
