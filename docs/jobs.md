@@ -40,10 +40,28 @@ waits on; every client (web, Apple, CLI, MCP) and every rollup reads it.
 - `blocked`: waiting on other work, such as a device preparing AVIF input.
 - `paused`: stopped by a member or its Run.
 - `update_required`: reserved for an Apple device that must update; the
-  Apple client reports it until the server tracks device versions.
+  Apple client reports it. The server derives `Device.updateRequired` from the
+  stored `appVersion` against `APPLE_CLIENT_MINIMUM_VERSION` instead.
 
 Terminal Jobs wait on nothing. `jobWaitingOnReasonSql` mirrors the derivation
-for aggregates; a regression keeps the two in agreement.
+for aggregates; a regression keeps the two in agreement. Text surfaces render
+one line through `describeJobWaitingOn` (and `describeJobRollup` for counts),
+so a lapsed lease reads "Lease on … expired; waiting to be reclaimed", never
+"In progress".
+
+Declared entity fields carry the same facts to web, Apple and MCP:
+
+- Run: `waitingOn` (the rollup line), `stalled`, `successorRunId` ("Retried
+  as", the newest Run whose `predecessorRunId` names it; `predecessorRunId`
+  reads "Retry of"), and `displayStatus` for the header. A `needs_review` or
+  `failed` Run with a successor reads `retried` (its open work moved; its own
+  findings stay on its sections), and an `execution_limit` stop reads
+  `waiting_for_funding`. The stored `status` stays the filter.
+- Image job: `waitingOn` for open rows.
+- Device: `updateRequired`, `inactive` (not seen for 7 days or never),
+  `activeLeases` (unexpired image leases whose attempt executor names the
+  install) and `appleIntelligenceAvailable` (the hello's actual-image
+  description availability, null until a hello reports it).
 
 ## Priority and fairness
 
@@ -114,7 +132,7 @@ the outcome: `pending` while open, `ready`, or `skipped` for a moot ending
 stored `failed` is a legacy state of a superseded processor. The displayed
 state derives from the Job (`image-job-state.ts`): `leased` for a live lease,
 `waiting_for_device` for parked device work, `pending`, and `failed` ("Needs
-attention") once a job failed `JOB_NEEDS_ATTENTION_ATTEMPTS` times in a row
+attention (retrying)") once a job failed `JOB_NEEDS_ATTENTION_ATTEMPTS` times in a row
 or its execution stopped; it keeps retrying. An executor's `retryable: false`
 (say `deadline_exceeded`) retries later with its cause recorded; a missing
 subject-lift derivative is rebuilt. A new processor revision is new work, and
@@ -155,14 +173,24 @@ note photos grouped while their cloud description waits (for funding, say).
 
 ## Diagnostics and repair
 
-- `job.queue`: live Jobs counted by lane and waiting-on reason, with a page of
-  matching Jobs and their `waitingOn`.
+- `job.queue`: live Jobs counted by lane and waiting-on reason, the set's
+  leased image work per executor (`leases`: live and expired), and a page of
+  matching Jobs with their `waitingOn`.
 - `job.runRollups` and `job.list` (`rollup`): a Run's live Jobs by reason, its
   own funding wait, and `stalled` when nothing was claimed or finished for
   `RUN_STALL_MS`.
 - `job.explain {id}`: the waiting-on chain for a `RUN-`, `IPR-` or `EML-` code
   or a Job id, on MCP (`maintenance`) and `cubby call`.
 - `job.health`: the queue watchdog's latest measurement.
+
+The web Activity page is the overview: the watchdog's red badge with raw
+alert evidence when unhealthy, the queue counts by lane and reason (the Apple
+lane also counts active installs, those needing an update, and leases per
+device with expired ones flagged), Runs needing attention with their rollup
+and stall flag, then the filtered Job list. Every count links to that list
+(`/activity?lane=…&reason=…`, also `state`, `kind`, `runId`, `attention`);
+Retry now confirms and applies `job.retryNow` to the list's filter, and each
+row expands to its `job.explain` chain. The audit-log changes feed follows.
 
 The `queue.watchdog` Job re-arms every five minutes from the minute cron. It
 first repairs image execution in bounded batches (retires moot work, reopens

@@ -1,6 +1,6 @@
 {
-  "id": "46194957-0f00-458d-a363-c77de03c8ebc",
-  "prevId": "93d8df18-06c6-4884-9d72-41f15552a645",
+  "id": "fce82b0a-8a61-48a3-ac6f-bf1f4ecde607",
+  "prevId": "46194957-0f00-458d-a363-c77de03c8ebc",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
@@ -6380,6 +6380,12 @@
           "primaryKey": false,
           "notNull": true,
           "default": false
+        },
+        "appleIntelligenceAvailable": {
+          "name": "appleIntelligenceAvailable",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": false
         },
         "ledgerPartyId": {
           "name": "ledgerPartyId",

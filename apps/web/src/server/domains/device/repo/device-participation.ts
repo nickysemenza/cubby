@@ -73,6 +73,8 @@ export async function upsertDeviceFromHello(
     appVersion: string | null;
     osVersion: string | null;
     automaticWork: boolean;
+    /** The hello's actual-image Foundation Models availability. */
+    appleIntelligenceAvailable?: boolean;
   },
 ): Promise<DeviceParticipation & { appVersionChanged: boolean }> {
   return withTransaction(db, async (transactionDb) => {
@@ -128,6 +130,10 @@ export async function upsertDeviceFromHello(
         osVersion: hello.osVersion,
         // The device owns its own switch; the web owns `remotePaused`.
         automaticWork: hello.automaticWork,
+        // A hello without capabilities keeps the last reported value.
+        ...(hello.appleIntelligenceAvailable === undefined
+          ? {}
+          : { appleIntelligenceAvailable: hello.appleIntelligenceAvailable }),
         lastSeenAt: now,
       })
       .where(eq(device.id, id))

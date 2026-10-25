@@ -8,12 +8,18 @@ import {
   imageJobOut,
 } from "@cubby/schemas/image-job";
 import type { ImageProcessingJobState } from "@cubby/schemas/image-processing";
+import { describeJobWaitingOn } from "@cubby/schemas/job";
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
-import { sql } from "drizzle-orm";
+import { inArray, sql } from "drizzle-orm";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
-import { unwrapDb } from "~/server/db/helpers";
+import {
+  databaseForTransaction,
+  isTransaction,
+  unwrapDb,
+} from "~/server/db/helpers";
 import type { ListReadIntent } from "~/server/db/helpers/query";
+import { job } from "~/server/db/retained-tables";
 import { imageProcessingJob } from "~/server/db/schema";
 import type { EntityKernelContext } from "~/server/entity-kernel/adapter";
 import {
@@ -21,6 +27,7 @@ import {
   createEntityRowFetcher,
   defineRepository,
 } from "~/server/entity-kernel/repo/repository";
+import { loadJobWaitingOn } from "~/server/generic/jobs/repo/waiting-on";
 import { listReadValue } from "~/server/generic/list/repo/field-compiler";
 import { listScaffold } from "~/server/generic/list/repo/list";
 import type { ListProjection } from "~/server/generic/list/repo/list-contracts";
@@ -35,6 +42,7 @@ import { imageJobDisplayStateSql } from "../image-processing/repo/image-job-stat
 import {
   IMAGE_DESCRIPTION_PROCESSOR_REVISION,
   IMAGE_IDENTIFICATION_PROCESSOR_REVISION,
+  imageProcessingJobKey,
 } from "../image-processing/repo/image-processing";
 
 type ImageJobRow = typeof imageProcessingJob.$inferSelect;
@@ -153,7 +161,34 @@ const imageJobRead = {
         rows.map((row) => row.id),
       ),
     );
+    const execution = bind.batch(async ({ db, rows }) => {
+      const open = rows.filter((row) => row.state === "pending");
+      if (!open.length) return new Map<string, string | null>();
+      const keyOf = new Map(
+        open.map((row) => [imageProcessingJobKey(row.id), row.id]),
+      );
+      const jobs = await unwrapDb(db)
+        .select()
+        .from(job)
+        .where(inArray(job.key, [...keyOf.keys()]));
+      const waiting = await loadJobWaitingOn(
+        isTransaction(db) ? databaseForTransaction(db) : db,
+        jobs,
+      );
+      return new Map(
+        jobs.map((entry) => [
+          keyOf.get(entry.key) ?? "",
+          describeJobWaitingOn(waiting.get(entry.id) ?? null),
+        ]),
+      );
+    });
     return [
+      execution.fields(
+        imageJobOut.pick({ waitingOn: true }),
+        (row, loaded) => ({
+          waitingOn: loaded.get(row.id) ?? null,
+        }),
+      ),
       images.fields(
         imageJobOut.pick({ imageId: true, displayName: true }),
         (row, loaded) => {

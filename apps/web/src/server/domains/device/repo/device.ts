@@ -41,6 +41,7 @@ import {
   createEntityRowFetcher,
 } from "~/server/entity-kernel/repo/repository";
 import { logAuditEntry } from "~/server/generic/audit-log/repo/audit-log";
+import { liveLeasesByInstallation } from "~/server/generic/jobs/repo/image-leases";
 import { listScaffold } from "~/server/generic/list/repo/list";
 import type { ListProjection } from "~/server/generic/list/repo/list-contracts";
 import {
@@ -50,6 +51,7 @@ import {
 import { completeListReader } from "~/server/generic/list/repo/list-read-adapters";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { appleAppVersionTooOld } from "~/server/http/apple-client-gate";
 import { currentMemberLedgerParty } from "~/server/http/member-login";
 
 /** `ImageSighting.deviceId` cascades: a sighting reported by a device is
@@ -86,7 +88,38 @@ type DeviceRow = typeof device.$inferSelect;
 
 const scaffold = listScaffold("device", device);
 
-const deviceRead = {} satisfies ListReadOptions<DeviceRow>;
+/** An install not seen for this long is inactive and leaves Apple lane counts. */
+const DEVICE_INACTIVE_AFTER_MS = 7 * 24 * 60 * 60_000;
+
+const deviceInactive = (lastSeenAt: Date | null, now = new Date()) =>
+  !lastSeenAt ||
+  now.getTime() - lastSeenAt.getTime() > DEVICE_INACTIVE_AFTER_MS;
+
+const deviceRead = {
+  bindings: (bind) => {
+    const leases = bind.batch(async ({ db, rows }) => ({
+      byInstallation: await liveLeasesByInstallation(
+        db,
+        rows.map((row) => row.installationId),
+      ),
+      now: new Date(),
+    }));
+    return [
+      leases.fields(
+        deviceOut.pick({
+          updateRequired: true,
+          inactive: true,
+          activeLeases: true,
+        }),
+        (row, { byInstallation, now }) => ({
+          updateRequired: appleAppVersionTooOld(row.appVersion),
+          inactive: deviceInactive(row.lastSeenAt, now),
+          activeLeases: byInstallation.get(row.installationId) ?? 0,
+        }),
+      ),
+    ];
+  },
+} satisfies ListReadOptions<DeviceRow>;
 const devicePlan = listReadPlan<DeviceRow>("device", deviceRead);
 const hydrate = async (
   db: Database | DrizzleTransaction,

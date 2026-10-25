@@ -24,21 +24,27 @@ const isOlder = (version: string, minimum: string) => {
 };
 
 /**
+ * Whether an Apple app version is older than the write minimum. An absent or
+ * unreadable version (`unknown`) is never gated; `Device.updateRequired`
+ * reads a stored `appVersion` with the same rule.
+ */
+export const appleAppVersionTooOld = (version: string | null | undefined) =>
+  version !== null &&
+  version !== undefined &&
+  dottedVersion.test(version) &&
+  isOlder(version, APPLE_CLIENT_MINIMUM_VERSION);
+
+/**
  * The offending version when the request comes from a native app build older
- * than the minimum, else null. A missing header, another client, or a version
- * the app could not read from its bundle (`unknown`) is never gated.
+ * than the minimum, else null. A missing header or another client is never
+ * gated.
  */
 export function appleClientUpdateRequired(
   headers: Headers,
 ): { current: string; minimum: string } | null {
   const current = appleAppUserAgent.exec(headers.get("user-agent") ?? "")
     ?.groups?.version;
-  if (
-    current === undefined ||
-    !dottedVersion.test(current) ||
-    !isOlder(current, APPLE_CLIENT_MINIMUM_VERSION)
-  )
-    return null;
+  if (current === undefined || !appleAppVersionTooOld(current)) return null;
   return { current, minimum: APPLE_CLIENT_MINIMUM_VERSION };
 }
 

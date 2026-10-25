@@ -59,7 +59,7 @@ const stateOptions = [
     // Image work never ends as failed: after repeated failures it keeps
     // retrying with backoff and asks for attention.
     value: "failed",
-    label: "Needs attention",
+    label: "Needs attention (retrying)",
     color: "destructive",
   },
 ] satisfies {
@@ -103,7 +103,7 @@ export default defineEntity({
           kind: "fields",
           id: "state-reason",
           title: "State & reason",
-          fields: ["state", "lastError"],
+          fields: ["state", "waitingOn", "lastError"],
         },
         {
           kind: "records",
@@ -249,6 +249,22 @@ export default defineEntity({
         validation: readOnly(z.string().nullable()),
       },
       {
+        key: "waitingOn",
+        kind: "text",
+        nullable: true,
+        display: { columnGroup: "Execution" },
+        provenance: {
+          kind: "derived",
+          sources: [{ label: "The job's execution Job" }],
+        },
+        explanation: {
+          ruleId: "image-job.waiting-on",
+          description:
+            "What the open job waits on now: a due slot, any Apple device, AI funding, a backoff, or the device holding its lease (an expired lease says so). Empty once the job settles.",
+        },
+        validation: readOnly(z.string().nullable().default(null)),
+      },
+      {
         key: "durationMs",
         kind: "number",
         nullable: true,
@@ -356,6 +372,7 @@ export default defineEntity({
       "displayName",
       "kind",
       "state",
+      "waitingOn",
       "imageId",
       "runId",
       "attempts",

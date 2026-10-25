@@ -1,7 +1,10 @@
 import { APPLE_CLIENT_MINIMUM_VERSION } from "@cubby/shared/apple-client-version";
 import { describe, expect, it } from "vitest";
 
-import { appleClientUpdateRequired } from "./apple-client-gate";
+import {
+  appleAppVersionTooOld,
+  appleClientUpdateRequired,
+} from "./apple-client-gate";
 
 const headers = (userAgent?: string) =>
   new Headers(userAgent === undefined ? {} : { "user-agent": userAgent });
@@ -50,5 +53,15 @@ describe("appleClientUpdateRequired", () => {
       "cubby-apple (ios; none)",
     ])
       expect(appleClientUpdateRequired(headers(userAgent))).toBe(null);
+  });
+});
+
+describe("appleAppVersionTooOld", () => {
+  it("flags a stored Device version below the minimum, never an unknown one", () => {
+    expect(appleAppVersionTooOld("1.9.12")).toBe(true);
+    expect(appleAppVersionTooOld(APPLE_CLIENT_MINIMUM_VERSION)).toBe(false);
+    expect(appleAppVersionTooOld("10.0")).toBe(false);
+    expect(appleAppVersionTooOld(null)).toBe(false);
+    expect(appleAppVersionTooOld("unknown")).toBe(false);
   });
 });

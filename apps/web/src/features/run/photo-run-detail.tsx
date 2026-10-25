@@ -184,9 +184,33 @@ function PhotoRunProgress({
             on-device processing. Retry from the Cubby app.
           </StatusText>
         ) : null}
+        <CloudDescriptionNote review={review} />
         {children}
       </div>
     </Section>
+  );
+}
+
+/**
+ * Grouping accepts the Apple description, so the Run says how many photos
+ * still lack their cloud one (it may be waiting for AI funding).
+ */
+function CloudDescriptionNote({
+  review,
+}: {
+  review: PhotoRunReview | undefined;
+}) {
+  const count =
+    review?.lifecycle?.withoutCloudDescriptionCount ??
+    review?.images.filter((photo) => photo.cloudDescriptionMissing).length ??
+    0;
+  if (!count) return null;
+  return (
+    <StatusText tone="muted" data-testid="without-cloud-description">
+      {count} {count === 1 ? "photo uses its" : "photos use their"} Apple
+      description; the cloud description is still waiting (often for AI funding)
+      and fills in when it runs.
+    </StatusText>
   );
 }
 

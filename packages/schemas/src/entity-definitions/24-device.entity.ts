@@ -69,7 +69,13 @@ export default defineEntity({
           kind: "fields",
           id: "automatic-work",
           title: "Automatic work",
-          fields: ["automaticWork"],
+          fields: ["automaticWork", "activeLeases"],
+        },
+        {
+          kind: "fields",
+          id: "image-readiness",
+          title: "Image work readiness",
+          fields: ["updateRequired", "inactive", "appleIntelligenceAvailable"],
         },
       ],
     },
@@ -187,6 +193,77 @@ export default defineEntity({
         },
       },
       {
+        // Written by the companion hello; null until a hello reports it.
+        key: "appleIntelligenceAvailable",
+        kind: "boolean",
+        nullable: true,
+        labelOverride: "Apple Intelligence",
+        display: { columnGroup: "Background work" },
+        validation: {
+          read: z.boolean().nullable(),
+          create: null,
+          update: null,
+        },
+      },
+      {
+        key: "updateRequired",
+        kind: "boolean",
+        display: { columnGroup: "Background work", columnLabel: "Update" },
+        provenance: {
+          kind: "derived",
+          sources: [{ label: "App version" }],
+        },
+        explanation: {
+          ruleId: "device.update-required",
+          description:
+            "The install's app version is older than the oldest build Cubby accepts writes from, so it cannot process images until it updates.",
+        },
+        validation: {
+          read: z.boolean().default(false),
+          create: null,
+          update: null,
+        },
+      },
+      {
+        key: "inactive",
+        kind: "boolean",
+        display: { columnGroup: "Background work" },
+        provenance: {
+          kind: "derived",
+          sources: [{ label: "Last seen" }],
+        },
+        explanation: {
+          ruleId: "device.inactive",
+          description:
+            "Not seen for 7 days, or never. Inactive installs are left out of Apple queue device counts.",
+        },
+        validation: {
+          read: z.boolean().default(false),
+          create: null,
+          update: null,
+        },
+      },
+      {
+        key: "activeLeases",
+        kind: "number",
+        labelOverride: "Image jobs in progress",
+        display: { columnGroup: "Background work", columnLabel: "Leases" },
+        provenance: {
+          kind: "derived",
+          sources: [{ label: "Live image job leases" }],
+        },
+        explanation: {
+          ruleId: "device.active-leases",
+          description:
+            "Image jobs this install holds an unexpired lease on right now.",
+        },
+        validation: {
+          read: z.int().nonnegative().default(0),
+          create: null,
+          update: null,
+        },
+      },
+      {
         key: "ledgerPartyId",
         kind: "identifier",
         nullable: true,
@@ -289,6 +366,7 @@ export default defineEntity({
       "lastSeenAt",
       { key: "automaticWork", defaultValue: true },
       { key: "remotePaused", defaultValue: false },
+      "appleIntelligenceAvailable",
       { key: "ledgerPartyId", reference: "ledgerParty" },
       { key: "productId", reference: "product" },
       { key: "createdAt" },
@@ -359,6 +437,10 @@ export default defineEntity({
       "lastSeenAt",
       "automaticWork",
       "remotePaused",
+      "appleIntelligenceAvailable",
+      "updateRequired",
+      "inactive",
+      "activeLeases",
       "ledgerPartyId",
       "productId",
       "ledgerPartyName",

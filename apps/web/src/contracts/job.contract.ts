@@ -91,6 +91,14 @@ const jobQueueOut = z.object({
     }),
   ),
   total: z.number().int().nonnegative(),
+  /** The set's leased image work per executor; expired leases await reclaim. */
+  leases: z.array(
+    z.object({
+      executor: z.string().nullable(),
+      live: z.number().int().nonnegative(),
+      expired: z.number().int().nonnegative(),
+    }),
+  ),
   jobs: z.array(jobFacts),
 });
 

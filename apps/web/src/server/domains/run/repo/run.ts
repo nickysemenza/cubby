@@ -1,18 +1,21 @@
 import { activityIconEntity } from "@cubby/schemas/activity";
 import { parseShortcodeFor } from "@cubby/schemas/identifiers";
+import { describeJobRollup } from "@cubby/schemas/job";
 import type { PaginationParams, SortParams } from "@cubby/schemas/pagination";
 import type { RunFilters, RunOut } from "@cubby/schemas/run";
 import { runOut } from "@cubby/schemas/run";
-import { runPurpose, runWorkLabel } from "@cubby/schemas/run-fields";
+import { runPurpose, runStatus, runWorkLabel } from "@cubby/schemas/run-fields";
 import {
   runWorkSamples,
   readRunWorkPhase,
 } from "@cubby/schemas/run-work-progress";
-import { and, eq } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 
 import { formatDuration } from "~/lib/format-duration";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
+  databaseForTransaction,
+  isTransaction,
   notDeleted,
   unwrapDb,
   withTransactionDatabase,
@@ -29,6 +32,7 @@ import {
   createEntityRowFetcher,
   listReadOn,
 } from "~/server/entity-kernel/repo/repository";
+import { readRunRollups } from "~/server/generic/jobs/repo/job-queue";
 import { listScaffold } from "~/server/generic/list/repo/list";
 import type { ListProjection } from "~/server/generic/list/repo/list-contracts";
 import {
@@ -86,7 +90,60 @@ const runRead = {
       }
       return { byRun, now: new Date() };
     });
+    const lineage = bind.batch(async ({ db, rows }) => {
+      const ids = rows.map((row) => row.id);
+      const [successors, rollups] = await Promise.all([
+        ids.length
+          ? unwrapDb(db)
+              .select({
+                predecessorRunId: runTable.predecessorRunId,
+                shortcode: runTable.shortcode,
+              })
+              .from(runTable)
+              .where(
+                and(
+                  inArray(runTable.predecessorRunId, ids),
+                  notDeleted(runTable),
+                ),
+              )
+              .orderBy(desc(runTable.startedAt))
+          : Promise.resolve([]),
+        readRunRollups(
+          isTransaction(db) ? databaseForTransaction(db) : db,
+          rows,
+        ),
+      ]);
+      const successorOf = new Map<string, string>();
+      // Newest first: the first successor seen for a Run is its latest retry.
+      for (const entry of successors)
+        if (entry.predecessorRunId && !successorOf.has(entry.predecessorRunId))
+          successorOf.set(entry.predecessorRunId, entry.shortcode);
+      return {
+        successorOf,
+        rollupOf: new Map(rollups.map((rollup) => [rollup.runId, rollup])),
+      };
+    });
     return [
+      lineage.fields(
+        runOut.pick({
+          successorRunId: true,
+          waitingOn: true,
+          stalled: true,
+          displayStatus: true,
+        }),
+        (row, { successorOf, rollupOf }) => {
+          const successor = successorOf.get(row.id) ?? null;
+          const rollup = rollupOf.get(parseShortcodeFor("run", row.shortcode));
+          return {
+            successorRunId: successor
+              ? parseShortcodeFor("run", successor)
+              : null,
+            waitingOn: rollup ? describeJobRollup(rollup.counts) : null,
+            stalled: rollup?.stalled ?? false,
+            displayStatus: runDisplayStatusOf(row, successor !== null),
+          };
+        },
+      ),
       bind(
         runOut.pick({ displayName: true, iconEntity: true }),
         (row, { references }) => {
@@ -139,6 +196,27 @@ const runRead = {
     ];
   },
 } satisfies ListReadOptions<RunRow>;
+
+/**
+ * What a Run reads as. A review stop or failure whose open work a retry
+ * successor carried reads `retried` (the successor holds that work; member
+ * findings stay on this Run's own sections), and a stop by the AI funding
+ * window reads as waiting for funding rather than review or authorization.
+ */
+function runDisplayStatusOf(
+  row: Pick<RunRow, "status" | "failureCode">,
+  hasSuccessor: boolean,
+) {
+  const status = runStatus.parse(row.status);
+  if (
+    row.failureCode === "execution_limit" &&
+    (status === "needs_review" || status === "paused_auth")
+  )
+    return "waiting_for_funding" as const;
+  if (hasSuccessor && (status === "needs_review" || status === "failed"))
+    return "retried" as const;
+  return status;
+}
 const hydrate = async (
   db: Database | DrizzleTransaction,
   rows: RunRow[],

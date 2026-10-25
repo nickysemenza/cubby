@@ -453,6 +453,8 @@ export async function pullCompanionImageProcessing(
     appVersion: hello.appVersion,
     osVersion: hello.osVersion ?? null,
     automaticWork: hello.participation.automaticWork,
+    appleIntelligenceAvailable:
+      hello.capabilities.actualImageDescription.available,
   });
   const empty = { command: null, remotePaused: participation.remotePaused };
   if (!participation.automaticWork || participation.remotePaused) return empty;

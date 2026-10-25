@@ -34,6 +34,7 @@ import {
   JOB_KIND_POLICY,
   jobKindPolicy,
 } from "~/server/generic/jobs/kind-policy";
+import { imageLeasesByExecutor } from "~/server/generic/jobs/repo/image-leases";
 import { retryJobsNow, type JobRow } from "~/server/generic/jobs/repo/jobs";
 import {
   jobWaitingOnReasonSql,
@@ -163,7 +164,7 @@ export async function readJobQueue(
 ) {
   const where = jobSetWhere(input.filter, input.runId);
   const reason = jobWaitingOnReasonSql();
-  const [tallies, rows] = await Promise.all([
+  const [tallies, rows, leases] = await Promise.all([
     getDb(db)
       .select({
         kind: job.kind,
@@ -181,6 +182,7 @@ export async function readJobQueue(
       .orderBy(desc(job.updatedAt), desc(job.id))
       .limit(input.pageSize)
       .offset(input.pageIndex * input.pageSize),
+    imageLeasesByExecutor(db, where),
   ]);
   const counts = new Map<string, number>();
   let total = 0;
@@ -201,6 +203,7 @@ export async function readJobQueue(
       };
     }),
     total,
+    leases,
     jobs: await jobFactsOf(db, rows),
   };
 }

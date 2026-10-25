@@ -2793,11 +2793,11 @@ function ProposalCard({
 
 const PROCESSING_LABEL = {
   pending: "Queued",
-  waiting_for_device: "Waiting for device",
+  waiting_for_device: "Waiting for Apple device",
   leased: "Processing",
   ready: "Done",
   skipped: "Skipped",
-  failed: "Failed",
+  failed: "Needs attention (retrying)",
 } satisfies Record<ImageProcessingJobState, string>;
 const DESCRIPTION_BLOCKING = new Set<ImageProcessingJobState>([
   "pending",
@@ -2984,6 +2984,11 @@ function PhotoTable({
                     state={photo.describe}
                     reason={photo.describeReason}
                   />
+                  {photo.cloudDescriptionMissing ? (
+                    <span className="max-w-56 text-2xs text-muted-foreground">
+                      Apple description only; cloud description waiting
+                    </span>
+                  ) : null}
                   {photo.describeReason ? (
                     <span className="max-w-56 text-2xs break-words text-destructive">
                       {photo.describeReason}
