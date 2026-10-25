@@ -28,6 +28,7 @@ import {
   IMAGE_DESCRIPTION_PROCESSOR_REVISION,
   releaseAssignedImageProcessingJob,
   renewAssignedImageProcessingLease,
+  withImageProcessingTransaction,
 } from "./image-processing";
 import { assignImageProcessingExecutor } from "./image-processing-history";
 
@@ -388,6 +389,47 @@ describe("background companion leases", () => {
       // The stalled claim's late assignment finds its token replaced.
       expect(await assign(stalled!)).toBe(false);
       expect(await deviceOwnedStreak(ctx.db)).toBe(1);
+    });
+
+    // Review finding: assignment checked the lease against now(), fixed at
+    // the hand-off transaction's start, so a lease that expired while the
+    // transaction waited was still assigned and counted.
+    it("refuses a lease that expires inside the hand-off transaction", async () => {
+      const backfill = await backfillJob();
+      const assigned = await withImageProcessingTransaction(
+        ctx.db,
+        async (tx) => {
+          const lease = await claimImageProcessingJob(tx, {
+            kinds: ["describe_image"],
+            leaseMs: 60_000,
+            processorRevisions: [IMAGE_APPLE_DESCRIPTION_PROCESSOR_REVISION],
+            deviceId,
+          });
+          expect(lease?.id).toBe(backfill);
+          await getDb(tx)
+            .update(durableJob)
+            .set({
+              leaseExpiresAt: sql`clock_timestamp() + interval '100 milliseconds'`,
+            })
+            .where(eq(durableJob.key, `image-processing:${backfill}`));
+          await getDb(tx).execute(sql`SELECT pg_sleep(0.3)`);
+          return assignImageProcessingExecutor(tx, {
+            jobId: lease!.id,
+            attemptId: lease!.attemptId,
+            userId,
+            executor: {
+              kind: "device",
+              deviceId,
+              name: "Test phone",
+              platform: "ios",
+              appVersion: "1",
+              osVersion: "26",
+            },
+          });
+        },
+      );
+      expect(assigned).toBe(false);
+      expect(await deviceOwnedStreak(ctx.db)).toBe(0);
     });
 
     it("serializes concurrent pulls at backfill's turn", async () => {

@@ -117,7 +117,9 @@ export async function assignImageProcessingExecutor(
           eq(imageProcessingJob.id, input.jobId),
           eq(imageProcessingJob.attemptId, input.attemptId),
           eq(imageProcessingJob.state, "pending"),
-          sql`EXISTS (SELECT 1 FROM "Job" j WHERE j.key='image-processing:' || ${imageProcessingJob.id}::text AND j.state=${jobState.enum.running} AND j."leaseToken"=${input.attemptId}::uuid AND j."leaseExpiresAt">now())`,
+          // Wall time, not now(): a device hand-off assigns inside the
+          // transaction that claimed, and now() stays at its start.
+          sql`EXISTS (SELECT 1 FROM "Job" j WHERE j.key='image-processing:' || ${imageProcessingJob.id}::text AND j.state=${jobState.enum.running} AND j."leaseToken"=${input.attemptId}::uuid AND j."leaseExpiresAt">clock_timestamp())`,
         ),
       )
       .for("update");
