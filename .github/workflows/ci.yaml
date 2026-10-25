@@ -15,6 +15,10 @@ on:
         description: Bypass remote passes; reuse only results freshly produced on this runner
         type: boolean
         default: false
+      fresh-tests:
+        description: Execute Vitest and Playwright without remote passes; retain cached build prerequisites
+        type: boolean
+        default: false
       purchase-import:
         description: Run the informational purchase-import browser after required diagnostics succeed
         type: boolean
@@ -158,7 +162,7 @@ jobs:
             './**/*.md'
             './**/*.mdx'
 
-  # Every entry is one standard runner with fresh PostgreSQL services.
+  # Each GitHub test shard owns fresh database services.
   lanes:
     name: ${{ matrix.name }}
     runs-on: ubuntu-latest
@@ -181,16 +185,20 @@ jobs:
           - name: E2E tests (desktop 4/4)
             browser: desktop-4
             run: CUBBY_E2E_SHARD=4/4 pnpm exec nx run @cubby/web:e2e --outputStyle=stream
-          # Every Vitest project (unit, UI, component browser, tooling,
-          # packages, PostgreSQL, workerd), split by file. Each shard's blob
-          # feeds the merged report.
-          - name: Vitest (1/2)
+          # Every Vitest project is split by file; all blobs feed the report.
+          - name: Vitest (1/4)
             vitest: "1"
-            run: CUBBY_VITEST_SHARD=1/2 pnpm exec nx run @cubby/web:vitest-ci --outputStyle=stream
-          - name: Vitest (2/2)
+            run: CUBBY_VITEST_SHARD=1/4 pnpm exec nx run @cubby/web:vitest-ci --outputStyle=stream
+          - name: Vitest (2/4)
             vitest: "2"
-            run: CUBBY_VITEST_SHARD=2/2 pnpm exec nx run @cubby/web:vitest-ci --outputStyle=stream
+            run: CUBBY_VITEST_SHARD=2/4 pnpm exec nx run @cubby/web:vitest-ci --outputStyle=stream
             db-check: true
+          - name: Vitest (3/4)
+            vitest: "3"
+            run: CUBBY_VITEST_SHARD=3/4 pnpm exec nx run @cubby/web:vitest-ci --outputStyle=stream
+          - name: Vitest (4/4)
+            vitest: "4"
+            run: CUBBY_VITEST_SHARD=4/4 pnpm exec nx run @cubby/web:vitest-ci --outputStyle=stream
     services: &test-databases
       postgres:
         image: mirror.gcr.io/pgvector/pgvector@sha256:ac08538c6f8b9904c33c8224c5e5706dbe760aca29db1d096972b4052c22a75d
@@ -233,13 +241,15 @@ jobs:
         uses: ./.github/actions/setup-node-with-deps
         with:
           wasm: restore
-      - name: Install Chromium for required component-browser tests
+      - name: Setup Chromium for required component-browser tests
         if: ${{ matrix.vitest }}
-        run: pnpm --filter @cubby/web run test:e2e:install-browser -- chromium
+        uses: ./.github/actions/setup-playwright
       - name: Restore or build web app
         run: pnpm exec nx run @cubby/web:build-cf --outputStyle=stream
       - name: Run Vitest shard
         if: ${{ matrix.vitest }}
+        env:
+          NX_SKIP_REMOTE_CACHE: ${{ (inputs.fresh || inputs.fresh-tests) && 'true' || 'false' }}
         run: ${{ matrix.run }}
       - name: Upload Vitest blob and attachments
         if: ${{ !cancelled() && matrix.vitest }}
@@ -255,6 +265,8 @@ jobs:
           retention-days: 7
       - name: Run Playwright shard
         if: ${{ matrix.browser }}
+        env:
+          NX_SKIP_REMOTE_CACHE: ${{ (inputs.fresh || inputs.fresh-tests) && 'true' || 'false' }}
         uses: ./.github/actions/playwright
         with:
           command: ${{ matrix.run }}
@@ -302,8 +314,6 @@ jobs:
     env:
       # The restore and save steps must name the same paths.
       HOST_BUILD_CACHE_PATHS: |
-        apps/apple/CubbyKit/.build/*
-        !apps/apple/CubbyKit/.build/xcode
         apps/apple/CubbyKit/.build/xcode/CompilationCache.noindex
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -320,10 +330,10 @@ jobs:
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6
         with:
           path: ${{ env.HOST_BUILD_CACHE_PATHS }}
-          key: xcode-host-v1-${{ runner.os }}-${{ steps.apple.outputs.toolchain-hash }}-${{ hashFiles('apps/apple/CubbyKit/Package.resolved') }}-${{ hashFiles('apps/apple/CubbyKit/**', '!apps/apple/CubbyKit/.build/**') }}
+          key: xcode-host-v2-${{ runner.os }}-${{ steps.apple.outputs.toolchain-hash }}-${{ hashFiles('apps/apple/CubbyKit/Package.resolved') }}-${{ hashFiles('apps/apple/CubbyKit/**', '!apps/apple/CubbyKit/.build/**') }}
           restore-keys: |
-            xcode-host-v1-${{ runner.os }}-${{ steps.apple.outputs.toolchain-hash }}-${{ hashFiles('apps/apple/CubbyKit/Package.resolved') }}-
-            xcode-host-v1-${{ runner.os }}-${{ steps.apple.outputs.toolchain-hash }}-
+            xcode-host-v2-${{ runner.os }}-${{ steps.apple.outputs.toolchain-hash }}-${{ hashFiles('apps/apple/CubbyKit/Package.resolved') }}-
+            xcode-host-v2-${{ runner.os }}-${{ steps.apple.outputs.toolchain-hash }}-
       - name: Run CubbyKit host tests
         run: pnpm exec nx run apple:host-tests --outputStyle=stream
       # Publish only successful builds: exact-key cache entries are immutable.

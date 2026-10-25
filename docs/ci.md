@@ -24,14 +24,31 @@ failures without paying a fresh install for every static check. One status
 context, `CI passed`, owns the merge gate. [Journeys](#journeys) live in their
 own workflow.
 
-Each Vitest and Playwright shard, including the optional purchase-import lane,
-has a top-level restore-or-build web step before running tests. Shards remain
-independent and use the existing Nx `build-cf` cache, including its source
-provenance. The test commands retain their build ensure for standalone use;
-after the explicit build it verifies the existing output. Build preparation
-now runs even when the subsequent test target replays a cached pass.
-`Test report` and `CI passed` use `ubuntu-slim`; reporting installs dependencies
-and merges blobs without building the app or installing browsers.
+The required test matrix runs entirely on GitHub-hosted runners: four browser
+shards and four Vitest shards use `ubuntu-latest`. Browser shards use two workers
+each. Every shard restores or builds its own web output through Nx before
+testing; the build ensure verifies provenance and supports standalone tests.
+There is no shared-build producer or artifact prerequisite between shards.
+
+Plan, reporting and the final gate use `ubuntu-slim`. Validation and optional
+jobs use GitHub Ubuntu; Rust retains its ARM runner, and Apple checks retain
+their macOS runners. Deployment and other workflows retain their runners.
+
+`.github/actions/setup-playwright` shares an exact-version Chromium headless
+shell cache between Vitest's component-browser tests and E2E. It stores browser
+binaries under the ignored workspace-local `playwright/.cache/ms-playwright`
+directory. A hit reuses binaries; a miss installs only headless shell and its
+required helpers. Required suites run headlessly without branded channels;
+local headed browser installation remains separate. GitHub's Ubuntu image
+supplies the browser's operating-system libraries. Reporting merges blobs
+without building the app or installing browsers, outside `CI passed`.
+
+Standard GitHub-hosted runners are free for this public repository. Account
+capacity still affects readiness: GitHub Pro permits 40 concurrent hosted
+jobs, with a separate maximum of five macOS jobs. Compare full push-to-gate
+time, queueing, setup and actual test execution; a cached test replay measures
+different work from executing changed-code tests. The preceding Celesto trial
+and account upgrade do not establish that Celesto is necessary for a speedup.
 
 ## Journeys
 
@@ -62,7 +79,7 @@ include Node, platform/architecture, the hosted image version, CI mode, locale
 and timezone, each as a plain Nx `env` or `runtime` input. A runtime input's
 command must print only deterministic stdout: Nx hashes stdout and stderr. Web targets add ignored env files, generated WASM and the
 selectors in `apps/web/project.json`; shard selection is keyed per target and
-browser worker count is part of the target command. The Worker bundles all
+browser worker count is fixed at two in the target command. The Worker bundles all
 `docs/**/*.md`, so those bytes participate in runtime keys. Native App source
 is excluded only from web-specific passes; root tooling keeps broad coverage.
 Rust checks include their actual compiler, platform and Cargo warning policy.
@@ -81,7 +98,11 @@ execution-sensitive inputs match.
 A manual dispatch starts every lane, still cached. `fresh=true` sets
 `NX_SKIP_REMOTE_CACHE=true`: each runner starts with an empty local cache and
 reuses prerequisites it just built, avoiding repeated WASM compilation. Fresh
-results do not read or write the remote cache.
+results do not read or write the remote cache. For timing actual web test
+execution with ordinary build-cache reuse, dispatch `fresh-tests=true` instead:
+only the required Vitest and Playwright execution steps bypass remote results.
+Dependency installation, WASM, the explicit web build and other checks retain
+their usual caches. Full `fresh=true` still overrides this narrower mode.
 This is separate from `purchase-import=true` and `live-email=true`; live
 evaluations never start merely because a run is manual or fresh. Manual
 aggregation is named `Manual CI diagnostics`, not the required PR check.
@@ -176,7 +197,7 @@ Toolchain versions come from `.nvmrc`, the root `packageManager`,
 browsers must be available; [test tiers](agents/validation-tests.md) cover database setup.
 PostgreSQL remains the authoritative integration tier; Playwright defaults to
 one worker on hosted runners and two on local macOS in `playwright.config.ts`,
-the `e2e` target passes `--workers=2` for each shard. Both tiers reject an empty selection or an
+the `e2e` target passes its configured worker count for each shard. Both tiers reject an empty selection or an
 unexpected skipped test without freezing the suite to a hand-maintained count;
 a Vitest `-t` run accepts tests the pattern left out but still fails when the
 pattern matches nothing or a matched test is skipped.
@@ -263,8 +284,10 @@ The host job runs the automatically generated
 simulator. The aggregate package scheme includes all CubbyKit tests and the CLI
 product; the library-only `CubbyKit` scheme has no test action. The command uses
 `-onlyUsePackageVersionsFromResolvedFile` to keep the committed package pins.
-Its `xcode-host-v1` cache stores `apps/apple/CubbyKit/.build`, including the
-Xcode compilation cache under `.build/xcode`. Package checkouts use the shared
+Its `xcode-host-v2` cache stores only
+`apps/apple/CubbyKit/.build/xcode/CompilationCache.noindex`. SwiftPM build
+outputs under `.build` belong to the local CLI build and are not restored by
+the Xcode host-test job. Package checkouts use the shared
 `apps/apple/SourcePackages` clone cache that the simulator job saves. Xcode's
 `Build` and `Logs` directories are excluded: tests rebuild products from cached
 compiler results rather than restoring timestamp-sensitive objects and test
@@ -384,14 +407,15 @@ Generated output is never committed; web and Apple jobs generate it during
 `Validation`'s `generate` gate checks that declarations generate cleanly,
 including the direct native contract and Swift codecs.
 
-The `lanes` job is one static matrix: four E2E shards and two Vitest shards.
+The `lanes` job is one static matrix with browser and Vitest sharding.
+The workflow owns shard counts; browser workers are fixed by the e2e target.
 Browser shards run alone, so no companion check waits behind one. Every
 failure still fails the job and `CI passed`, and each Nx target retains its own
 cache key.
 
-Each entry uses one standard runner with PostgreSQL and IntegreSQL service
+Each entry uses one GitHub runner with PostgreSQL and IntegreSQL service
 containers.
-`Vitest (n/2)` runs the `vitest-ci` target: one Vitest run of every merge-gate
+Each Vitest shard runs the `vitest-ci` target: one Vitest run of every merge-gate
 project (`unit`, `mcp-contract`, `ui`, `capability`, `scripts`,
 `packages`, `integration`, `integration-workerd` and `workers`), split by file
 with `CUBBY_VITEST_SHARD`. Vitest assigns files to shards by path hash, so the
@@ -402,8 +426,8 @@ drift check against disposable scratch databases, which runs despite a test
 failure. Service-backed projects (`integration`, `integration-workerd`,
 `capability`, `workers`) retry a failed test once on CI; Node unit, tooling and
 package projects never retry.
-Desktop Chromium runs as four Playwright shards (two workers each) through the
-`e2e` target, each building the Worker with the run's source commit and branch
+Desktop Chromium runs as Playwright shards through the
+`e2e` target, each restoring or building the Worker with the run's source commit and branch
 provenance. Phone-web and WebKit browser coverage was removed from PR CI and the
 Playwright suite; native checks remain separate. There is no coverage mode.
 The disposable PostgreSQL container uses `fsync=off`, `synchronous_commit=off`,
@@ -439,7 +463,7 @@ or credentials.
 `E2E tests (purchase import agent, optional)` runs the Playwright project of
 that name (`purchase-import-run.spec.ts`: the purchase agent with a scripted
 model and gateway, driven through the browser) through the
-`e2e-purchase-import` target, building its own Worker. It is informative only:
+`e2e-purchase-import` target, restoring or building its Worker before testing. It is informative only:
 it is outside `CI passed` and `continue-on-error`, so its failure leaves the run
 successful. It uses the same `webGate` key as the
 other web lanes and uploads the same Playwright report.
@@ -548,11 +572,11 @@ The `main` ruleset requires only `CI passed`, from GitHub Actions. Keep `strict`
 a green non-conflicting branch need not rebase, allow administrator bypasses,
 and do not require human review.
 
-Optimize readiness across four concurrent PRs on the existing hosted plan.
-The Linux `lanes` matrix sets no `max-parallel`, so its six entries run
-concurrently; validation and short control jobs are additional demand, and
-optional work has repository-level limits. Standalone browser shards pay
-setup four times to shorten the slowest lane; this does not reserve
+Optimize readiness across concurrent PRs within the account's available slots.
+The Linux `lanes` matrix sets no `max-parallel`, so all entries can run
+concurrently when capacity permits; validation and short control jobs are additional demand, and
+optional work has repository-level limits. Both test tiers use GitHub runners.
+Standalone shards pay setup on every runner; this does not reserve
 account-wide capacity or guarantee fairness against unrelated repositories.
 
 Use the Actions job timeline to distinguish created-to-start waiting, setup,
@@ -598,9 +622,10 @@ links remain in Git history.
   without a reliable critical-path gain. Shard counts and worker settings live
   in the workflows and Playwright configuration.
 - Fast projects share a job to reduce runner demand outside the browser
-  critical path. Browser and workerd checks prepare their Worker on their own
-  runner, reusing a matching build when available; a separate build job would
-  add startup and install prerequisites.
+  critical path. Browser and workerd checks prepare their own Worker, reusing
+  compatible completed Nx builds. The shared producer experiment added a
+  prerequisite and artifact transfer without demonstrating faster readiness;
+  independent builds avoid that prerequisite.
 - HTTP/2 proxying and WASM preloading did not improve end-to-end hydration.
   `context.route` asset caching disabled Chromium's HTTP/code cache and made
   navigation slower. Catch-all chunk grouping caused module initialization
