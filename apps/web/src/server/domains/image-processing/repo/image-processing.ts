@@ -91,8 +91,8 @@ import {
 } from "./image-processing-history";
 import {
   armDeviceWake,
-  armIdleDeviceWake,
   parkedDeviceWork,
+  repeatDeviceWake,
   ringImageProcessingCompanionsAfterCommit,
 } from "./image-processing-ring";
 
@@ -1097,13 +1097,10 @@ export async function repairImageProcessingExecution(
   // Device work an older build backed off never armed the wake, and the
   // drain never claims it; arming the existing wake while parked work exists
   // keeps it from idling until an unrelated ring or reconnect.
-  // A missing or finished wake is armed; a live one keeps its schedule and
-  // retry state. One transaction: the first arm records the marker and
-  // creates the wake Job together, or a failure between them would leave a
-  // marker whose later revisions never create it.
+  // A missing wake is created and a finished one requeued; a live one keeps
+  // its schedule and retry state (`repeatDeviceWake`).
   const parked = await parkedDeviceWork(db, new Date());
-  if (parked.due || parked.next)
-    await withImageProcessingTransaction(db, (tx) => armIdleDeviceWake(tx));
+  if (parked.due || parked.next) await repeatDeviceWake(db);
   // Rows a pre-cutover writer left leased or device-waiting are open work.
   const reopened = await getDb(db)
     .update(imageProcessingJob)

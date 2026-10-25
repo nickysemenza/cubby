@@ -1,13 +1,15 @@
 import { jobState } from "@cubby/schemas/job";
 import { createLogger } from "@cubby/worker-tracing";
-import { eq, sql } from "drizzle-orm";
+import { sql } from "drizzle-orm";
 
 import { getExecutionCtx, getImageProcessingNamespace } from "~/server/cf-env";
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { getDb } from "~/server/db/helpers";
 import { runAfterCommit } from "~/server/db/helpers/core";
-import { job } from "~/server/db/retained-tables";
-import { recordJobInvalidation } from "~/server/generic/jobs/repo/jobs";
+import {
+  recordJobInvalidation,
+  repeatJob,
+} from "~/server/generic/jobs/repo/jobs";
 
 import type { ImageProcessingCompanionRpc } from "../operations/rpc";
 
@@ -89,21 +91,16 @@ export async function armDeviceWake(db: Database) {
 }
 
 /**
- * Recovery arm for the watchdog: arm the wake only when it is missing or has
- * finished, never one that is waiting, backing off or running. Arming is a
- * restarting capture, so arming a backing-off wake would bypass its retry
- * deadline and reset its attempts and error; a live wake recomputes its own
- * schedule. Callers run it in one transaction with the first capture.
+ * Recovery for the watchdog: create a missing wake, or requeue a completed
+ * one, without a capture. `repeatJob` inserts with ON CONFLICT DO NOTHING and
+ * requeues in one `UPDATE … WHERE state = 'completed'`, so a wake that is
+ * waiting, backing off or running (including one a concurrent claim or
+ * failure just wrote) keeps its retry deadline, attempts and error; arming
+ * would be a restarting capture that bypasses them. The wake page recomputes
+ * its schedule from Job rows, so a fresh pass needs no marker.
  */
-export async function armIdleDeviceWake(db: Database) {
-  const [wake] = await getDb(db)
-    .select({ state: job.state })
-    .from(job)
-    .where(eq(job.key, DEVICE_WAKE_KEY));
-  if (wake && wake.state !== jobState.enum.completed) return false;
-  await armDeviceWake(db);
-  return true;
-}
+export const repeatDeviceWake = (db: Database) =>
+  repeatJob(db, { key: DEVICE_WAKE_KEY, kind: DEVICE_WAKE_KEY, input: {} });
 
 /**
  * Whether parked device work is claimable now (due, or a lapsed lease), and

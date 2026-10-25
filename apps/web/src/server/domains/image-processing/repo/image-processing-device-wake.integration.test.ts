@@ -6,7 +6,10 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { setCfEnv } from "~/server/cf-env";
 import { getDb } from "~/server/db/helpers";
-import { job as durableJob } from "~/server/db/retained-tables";
+import {
+  job as durableJob,
+  jobInvalidation,
+} from "~/server/db/retained-tables";
 import { image } from "~/server/db/schema";
 import { createUploadedImageRecord } from "~/server/domains/image/repo/image";
 import { dueJobs } from "~/server/generic/jobs/repo/jobs";
@@ -221,6 +224,98 @@ describe("parked device work wakes idle companions", () => {
     expect(
       (await dueJobs(ctx.db, 20)).some((row) => row.id === backingOff.id),
     ).toBe(false);
+  });
+
+  it("requeues a finished wake from a watchdog tick without a capture", async () => {
+    await parked();
+    await runScheduledServerWork();
+    await getDb(ctx.db)
+      .update(durableJob)
+      .set({ state: "completed" })
+      .where(eq(durableJob.key, "image.device.wake"));
+    const [before] = await getDb(ctx.db)
+      .select({ revision: jobInvalidation.revision })
+      .from(jobInvalidation)
+      .where(eq(jobInvalidation.key, "image.device.wake"));
+    await repairImageProcessingExecution(ctx.db, 25);
+    const [wake] = await getDb(ctx.db)
+      .select()
+      .from(durableJob)
+      .where(eq(durableJob.key, "image.device.wake"));
+    expect(wake?.state).toBe("queued");
+    expect((await dueJobs(ctx.db, 20)).some((row) => row.id === wake?.id)).toBe(
+      true,
+    );
+    const [after] = await getDb(ctx.db)
+      .select({ revision: jobInvalidation.revision })
+      .from(jobInvalidation)
+      .where(eq(jobInvalidation.key, "image.device.wake"));
+    expect(after?.revision).toBe(before?.revision);
+  });
+
+  // Review finding: recovery read a completed wake, then armed it; a claim or
+  // doorbell failure committing in between left a fresh retry that the
+  // restarting arm bypassed. A trigger plays that concurrent writer at the
+  // point recovery writes (its marker capture or its wake insert).
+  it("keeps a retry a concurrent failure writes while recovery runs", async () => {
+    await parked();
+    await runScheduledServerWork();
+    await getDb(ctx.db)
+      .update(durableJob)
+      .set({ state: "completed" })
+      .where(eq(durableJob.key, "image.device.wake"));
+    const database = getDb(ctx.db);
+    await database.execute(
+      sql.raw(`CREATE FUNCTION synthetic_concurrent_wake_retry() RETURNS trigger AS $$
+      BEGIN
+        UPDATE "Job" SET state = 'retry_wait', attempts = 3,
+          error = 'Synthetic concurrent doorbell failure',
+          "availableAt" = now() + interval '7 minutes'
+        WHERE key = 'image.device.wake' AND state = 'completed';
+        RETURN NEW;
+      END $$ LANGUAGE plpgsql`),
+    );
+    await database.execute(
+      sql.raw(`CREATE TRIGGER synthetic_concurrent_wake_retry_marker
+      BEFORE INSERT ON "JobInvalidation" FOR EACH ROW
+      WHEN (NEW.key = 'image.device.wake')
+      EXECUTE FUNCTION synthetic_concurrent_wake_retry()`),
+    );
+    await database.execute(
+      sql.raw(`CREATE TRIGGER synthetic_concurrent_wake_retry_job
+      BEFORE INSERT ON "Job" FOR EACH ROW
+      WHEN (NEW.key = 'image.device.wake')
+      EXECUTE FUNCTION synthetic_concurrent_wake_retry()`),
+    );
+    try {
+      await repairImageProcessingExecution(ctx.db, 25);
+    } finally {
+      await database.execute(
+        sql.raw(
+          `DROP TRIGGER IF EXISTS synthetic_concurrent_wake_retry_marker ON "JobInvalidation"`,
+        ),
+      );
+      await database.execute(
+        sql.raw(
+          `DROP TRIGGER IF EXISTS synthetic_concurrent_wake_retry_job ON "Job"`,
+        ),
+      );
+      await database.execute(
+        sql.raw(`DROP FUNCTION IF EXISTS synthetic_concurrent_wake_retry()`),
+      );
+    }
+    const [wake] = await getDb(ctx.db)
+      .select()
+      .from(durableJob)
+      .where(eq(durableJob.key, "image.device.wake"));
+    expect(wake).toMatchObject({
+      state: "retry_wait",
+      attempts: 3,
+      error: "Synthetic concurrent doorbell failure",
+    });
+    expect((await dueJobs(ctx.db, 20)).some((row) => row.id === wake?.id)).toBe(
+      false,
+    );
   });
 
   it("rings when a device releases work it cannot run", async () => {
