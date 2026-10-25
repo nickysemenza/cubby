@@ -9,13 +9,32 @@ struct ActivityView: View {
 
     @State private var queue: HouseholdQueueOverview?
     @State private var queueError: String?
+    @State private var backlog: DeviceBacklogBanner?
+    @State private var backlogError: String?
+    @State private var devices = HouseholdDevices(names: [:], thisDevice: nil)
+    @State private var deviceError: String?
+    /// The imageJob `processing` saved view (live leases), grouped by `leaseDeviceId`.
+    @State private var processingList: GenericEntityListModel?
+
+    /// Leases renew every 15 s; reloading at that pace keeps the countdowns and groups current
+    /// while Activity is on screen.
+    private static let refreshInterval = Duration.seconds(15)
+
+    private var processing: ProcessingImageJobs {
+        ProcessingImageJobs(rows: processingList?.rows ?? [], devices: devices)
+    }
 
     var body: some View {
+        let processing = processing
         List {
-            localExecution
-            HouseholdQueueSections(
-                queue: queue, error: queueError,
-                claimedImageJobIDs: appModel.companionImageActivity.claimedJobIDs)
+            DeviceBacklogBannerSection(
+                backlog: backlog, error: backlogError,
+                thisDeviceProcessing: appModel.companionImageActivity.phase == .processing)
+            localExecution(processing.thisDevice)
+            OtherDevicesSection(
+                processing: processing, expiredLeaseHolders: queue?.expiredLeaseHolders ?? [],
+                error: [processingError, deviceError].compactMap { $0 }.first)
+            HouseholdQueueSections(queue: queue, error: queueError)
             Section("Household work") {
                 NavigationLink(value: Route.entityList(.run)) {
                     Label("Runs", systemImage: "arrow.triangle.2.circlepath")
@@ -30,9 +49,15 @@ struct ActivityView: View {
             }
         }
         .navigationTitle("Activity")
-        .refreshable { await loadQueue() }
+        .refreshable { await load() }
         // Reload when this device's own phase changes (a job finished, a reconnect).
-        .task(id: appModel.companionImageActivity.phase) { await loadQueue() }
+        .task(id: appModel.companionImageActivity.phase) { await load() }
+        .task {
+            while !Task.isCancelled {
+                do { try await Task.sleep(for: Self.refreshInterval) } catch { return }
+                await load()
+            }
+        }
         .inspector(
             isPresented: Binding(
                 get: { appModel.navigator.selectedActivity != nil },
@@ -46,22 +71,69 @@ struct ActivityView: View {
         }
     }
 
-    private func loadQueue() async {
-        guard appModel.phase == .signedIn else { return }
-        do {
-            queue = try await HouseholdQueueOverview.load(client: appModel.client)
-            queueError = nil
-        } catch is CancellationError {
-        } catch {
-            Diagnostics.report(error, context: "activity.householdQueue")
-            queueError = error.localizedDescription
+    private var processingError: String? {
+        switch processingList?.phase {
+        case .failed(let message), .unavailable(let message): message
+        default: nil
         }
     }
 
-    @ViewBuilder private var localExecution: some View {
+    /// The queue counts, the device backlog, the Device directory and the processing rows load
+    /// side by side; each keeps its last value and reports its own failure.
+    private func load() async {
+        guard appModel.phase == .signedIn else { return }
+        let client = appModel.client
+        async let queueLoad = Self.attempt { try await HouseholdQueueOverview.load(client: client) }
+        async let backlogLoad = Self.attempt { try await DeviceBacklogBanner.load(client: client) }
+        async let devicesLoad = Self.attempt {
+            try await HouseholdDevices.load(client: client, installationID: AppInstallationID.current)
+        }
+        await loadProcessing(client: client)
+        switch await queueLoad {
+        case .success(let value): (queue, queueError) = (value, nil)
+        case .failure(let error): queueError = report(error, context: "activity.householdQueue")
+        }
+        switch await backlogLoad {
+        case .success(let value): (backlog, backlogError) = (value, nil)
+        case .failure(let error): backlogError = report(error, context: "activity.deviceBacklog")
+        }
+        switch await devicesLoad {
+        case .success(let value): (devices, deviceError) = (value, nil)
+        case .failure(let error): deviceError = report(error, context: "activity.devices")
+        }
+    }
+
+    private func loadProcessing(client: CubbyClient) async {
+        if let processingList {
+            await processingList.refresh()
+            return
+        }
+        let descriptor = EntityCatalog[.imageJob]
+        let view = descriptor.presentation.savedViews.first { $0.id == "processing" }
+        let list = GenericEntityListModel(
+            descriptor: descriptor, client: client, pageSize: 50,
+            filters: view?.filterState ?? EntityFilterState())
+        processingList = list
+        await list.loadInitial()
+    }
+
+    private func report(_ error: any Error, context: String) -> String? {
+        if error is CancellationError { return nil }
+        Diagnostics.report(error, context: context)
+        return error.localizedDescription
+    }
+
+    private static func attempt<T: Sendable>(
+        _ operation: @Sendable () async throws -> T
+    ) async -> Result<T, any Error> {
+        do { return .success(try await operation()) } catch { return .failure(error) }
+    }
+
+    @ViewBuilder private func localExecution(_ thisDevice: [EntityRow]) -> some View {
         let activities = appModel.backgroundActivity.visibleActivities
         Section {
             CompanionWorkerStatusRow(activity: appModel.companionImageActivity)
+            ForEach(thisDevice) { row in ProcessingImageJobRow(row: row) }
             if !activities.isEmpty {
                 ForEach(activities) { activity in
                     let row = LocalActivityRow(activity: activity) {

@@ -105,14 +105,139 @@ private struct CompanionConnectionProgress: View {
     }
 }
 
-/// Activity's household queue from `job.queue`: the Apple device lane (this device's leases,
-/// other devices' leases, work waiting for any Apple device) and the frontier AI lane, each as
-/// server counts by what the work waits on, then Jobs backing off with when they are due again.
+/// The top of Activity while image work is parked for an Apple device (`job.deviceBacklog`):
+/// how much waits, how many devices are working it, the server's ETA, and a nudge when nothing
+/// is processing.
+struct DeviceBacklogBannerSection: View {
+    let backlog: DeviceBacklogBanner?
+    /// The latest `job.deviceBacklog` failure, verbatim; a shown banner keeps its last figures.
+    var error: String? = nil
+    let thisDeviceProcessing: Bool
+
+    var body: some View {
+        if let error {
+            Section {
+                VStack(alignment: .leading, spacing: 2) {
+                    Label("Couldn't load the device backlog", systemImage: "exclamationmark.triangle")
+                        .font(.subheadline).foregroundStyle(FieldGuideTokens.warning)
+                    Text(error).font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
+                }
+                .accessibilityElement(children: .combine)
+            }
+        }
+        if let backlog, backlog.isShown {
+            Section {
+                NavigationLink(value: Route.entityList(.imageJob, savedView: "waiting-for-apple")) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Label(backlog.headline(), systemImage: "iphone.and.arrow.forward")
+                            .font(.subheadline)
+                        if let notice = backlog.idleNotice(thisDeviceProcessing: thisDeviceProcessing) {
+                            Text(notice).font(.caption).foregroundStyle(FieldGuideTokens.warning)
+                        }
+                    }
+                }
+                .accessibilityIdentifier("activity.deviceBacklog")
+            }
+        }
+    }
+}
+
+/// One processing image job: the generic imageJob row (thumbnail, name, kind, state) opening its
+/// detail, then its IPR code, its Run, and the live lease countdown.
+struct ProcessingImageJobRow: View {
+    let row: EntityRow
+    @Environment(AppModel.self) private var appModel
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            NavigationLink(value: Route.entityDetail(.imageJob, id: row.id)) {
+                EntityRowView(key: .imageJob, row: row, columns: ["kind", "state"])
+            }
+            .accessibilityIdentifier("activity.processing.\(row.id)")
+            HStack(spacing: 8) {
+                Text(row.id).font(.fieldGuideCode).textSelection(.enabled)
+                if let run = ProcessingImageJobs.runID(of: row) {
+                    Button(run) {
+                        appModel.navigator.openRecord(RecordSelection(key: .run, id: run))
+                    }
+                    .buttonStyle(.borderless)
+                    .font(.fieldGuideCode)
+                }
+                Spacer(minLength: 0)
+                if let expiresAt = ProcessingImageJobs.leaseExpiresAt(of: row) {
+                    TimelineView(.periodic(from: .now, by: 1)) { context in
+                        Text(ProcessingImageJobs.leaseCountdown(expiresAt: expiresAt, now: context.date))
+                            .monospacedDigit()
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+            .font(.caption)
+        }
+    }
+}
+
+/// Processing image jobs held by other devices, one group per Device, then installs that only
+/// hold expired leases as one counted row each.
+struct OtherDevicesSection: View {
+    let processing: ProcessingImageJobs
+    let expiredLeaseHolders: [HouseholdQueueOverview.LeaseHolder]
+    let error: String?
+
+    var body: some View {
+        if !processing.otherDevices.isEmpty || !expiredLeaseHolders.isEmpty || error != nil {
+            Section("Other devices") {
+                if let error {
+                    Text(error).font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
+                }
+                ForEach(processing.otherDevices) { group in
+                    DeviceGroupHeader(group: group)
+                    ForEach(group.rows) { row in ProcessingImageJobRow(row: row) }
+                }
+                ForEach(expiredLeaseHolders) { holder in
+                    LabeledContent {
+                        Text(holder.expired, format: .number)
+                    } label: {
+                        Label {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(holder.executor ?? "Unknown device")
+                                Text(holder.expiredLabel).font(.caption)
+                                    .foregroundStyle(FieldGuideTokens.warning)
+                            }
+                        } icon: {
+                            Image(systemName: "clock.badge.exclamationmark")
+                        }
+                    }
+                    .accessibilityElement(children: .combine)
+                }
+            }
+        }
+    }
+}
+
+private struct DeviceGroupHeader: View {
+    let group: ProcessingImageJobs.DeviceGroup
+
+    var body: some View {
+        let label = LabeledContent {
+            Text("\(group.rows.count) processing")
+        } label: {
+            Label(group.name, systemImage: "macbook.and.iphone").font(.subheadline)
+        }
+        if group.id.isEmpty {
+            label
+        } else {
+            NavigationLink(value: Route.entityDetail(.device, id: group.id)) { label }
+        }
+    }
+}
+
+/// Activity's household queue from `job.queue`: the Apple device lane (work waiting for any
+/// Apple device, linked to its image jobs) and the frontier AI lane, each as server counts by
+/// what the work waits on, then Jobs backing off with when they are due again.
 struct HouseholdQueueSections: View {
     let queue: HouseholdQueueOverview?
     let error: String?
-    /// This device's live claims (`CompanionImageWorkerActivity.claimedJobIDs`).
-    let claimedImageJobIDs: Set<String>
 
     var body: some View {
         Section {
@@ -120,14 +245,17 @@ struct HouseholdQueueSections: View {
                 // A failed refresh keeps the last counts; say so beside them so they are not read
                 // as current.
                 if let error { QueueRefreshFailureRow(error: error) }
-                let split = queue.leases(claimedImageJobIDs: claimedImageJobIDs)
-                ReasonCountRows(counts: queue.appleCounts, empty: "No Apple device work waiting")
-                ForEach(split.mine) { lease in
-                    LeaseRow(lease: lease, isThisDevice: true)
+                NavigationLink(value: Route.entityList(.imageJob, savedView: "waiting-for-apple")) {
+                    Label(
+                        "Waiting for Apple · \(queue.waitingForDeviceCount.formatted())",
+                        systemImage: "iphone.and.arrow.forward")
                 }
-                ForEach(split.others) { lease in
-                    LeaseRow(lease: lease, isThisDevice: false)
-                }
+                .accessibilityIdentifier("activity.waitingForApple")
+                ReasonCountRows(
+                    counts: queue.appleCounts.filter {
+                        $0.reason != JobWaitingOnReason.waitingDevice.rawValue
+                    },
+                    empty: nil)
             } else if let error {
                 Text(error).font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
             } else {
@@ -205,10 +333,10 @@ extension HouseholdQueueOverview.ReasonCount {
 
 private struct ReasonCountRows: View {
     let counts: [HouseholdQueueOverview.ReasonCount]
-    let empty: String
+    let empty: String?
 
     var body: some View {
-        if counts.isEmpty {
+        if counts.isEmpty, let empty {
             Label(empty, systemImage: "checkmark.circle").foregroundStyle(.secondary)
         }
         ForEach(counts) { count in
@@ -241,32 +369,6 @@ private struct QueueRefreshFailureRow: View {
                 .font(.subheadline)
                 .foregroundStyle(FieldGuideTokens.warning)
             Text(error).font(.caption).foregroundStyle(.secondary).textSelection(.enabled)
-        }
-        .accessibilityElement(children: .combine)
-    }
-}
-
-private struct LeaseRow: View {
-    let lease: HouseholdQueueOverview.Lease
-    let isThisDevice: Bool
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(isThisDevice ? "This device" : (lease.executor ?? "Unknown device"))
-                .font(.subheadline)
-            HStack(spacing: 4) {
-                Text(lease.kind)
-                if lease.expired {
-                    Text("· lease expired")
-                    Text(lease.leaseExpiresAt, style: .relative)
-                    Text("ago")
-                } else {
-                    Text("· lease ends in")
-                    Text(lease.leaseExpiresAt, style: .relative)
-                }
-            }
-            .font(.caption)
-            .foregroundStyle(lease.expired ? FieldGuideTokens.destructive : .secondary)
         }
         .accessibilityElement(children: .combine)
     }
@@ -330,13 +432,72 @@ private struct RunRollupLabel: View {
     }
 }
 
+/// Synthetic processing rows for previews, kept outside the `#Preview` bodies so the macro
+/// expressions stay cheap to type-check.
+private func previewProcessingRow(id: String, title: String, device: String, leaseSeconds: Double)
+    -> EntityRow
+{
+    let expires = (try? LenientISO8601DateTranscoder().encode(.now.addingTimeInterval(leaseSeconds))) ?? ""
+    return EntityRow(
+        id: id, title: title, subtitle: nil, imageURL: nil,
+        raw: .object([
+            "id": .string(id), "displayName": .string(title), "kind": .string("describe_image"),
+            "state": .string("leased"), "runId": .string("RUN-SYN1"),
+            "leaseDeviceId": .string(device), "leaseExpiresAt": .string(expires),
+        ]))
+}
+
+private func previewProcessing() -> ProcessingImageJobs {
+    ProcessingImageJobs(
+        rows: [
+            previewProcessingRow(
+                id: "IPR-SYN1", title: "Image description · Synthetic mug", device: "DEV-SYN1",
+                leaseSeconds: 42),
+            previewProcessingRow(
+                id: "IPR-SYN2", title: "Image description · Synthetic lamp", device: "DEV-SYN2",
+                leaseSeconds: 18),
+        ],
+        devices: HouseholdDevices(
+            names: ["DEV-SYN1": "Synthetic Mac", "DEV-SYN2": "Synthetic phone"], thisDevice: "DEV-SYN1"))
+}
+
+#Preview("Device backlog", traits: .modifier(SignedInPreview())) {
+    NavigationStack {
+        List {
+            DeviceBacklogBannerSection(
+                backlog: .init(waiting: 9_733, runsWaiting: 4, workingDevices: 0, etaSeconds: nil),
+                thisDeviceProcessing: false)
+            DeviceBacklogBannerSection(
+                backlog: .init(waiting: 240, runsWaiting: 2, workingDevices: 1, etaSeconds: 12_000),
+                thisDeviceProcessing: true)
+        }
+    }
+}
+
+#Preview("Processing on devices", traits: .modifier(SignedInPreview())) {
+    let processing = previewProcessing()
+    NavigationStack {
+        List {
+            Section("This device — now") {
+                ForEach(processing.thisDevice) { ProcessingImageJobRow(row: $0) }
+            }
+            OtherDevicesSection(
+                processing: processing,
+                expiredLeaseHolders: [.init(executor: "Synthetic old phone", live: 0, expired: 15)],
+                error: nil)
+        }
+    }
+}
+
 #Preview("Household queue — refresh failed") {
-    List {
-        HouseholdQueueSections(
-            queue: HouseholdQueueOverview(
-                appleCounts: [.init(reason: "waiting_device", count: 14)], frontierCounts: [],
-                leases: [], backingOff: [], runsNeedingAttention: 0, runs: []),
-            error: "The network connection was lost.", claimedImageJobIDs: [])
+    NavigationStack {
+        List {
+            HouseholdQueueSections(
+                queue: HouseholdQueueOverview(
+                    appleCounts: [.init(reason: "waiting_device", count: 14)], frontierCounts: [],
+                    backingOff: [], runsNeedingAttention: 0, runs: []),
+                error: "The network connection was lost.")
+        }
     }
 }
 
@@ -353,16 +514,6 @@ private struct RunRollupLabel: View {
                         .init(
                             reason: "waiting_funding", count: 40, until: .now.addingTimeInterval(3_600)),
                     ],
-                    leases: [
-                        .init(
-                            id: "job-1", kind: "image.device", imageJobID: "image-job-1",
-                            executor: "Synthetic Mac", leaseExpiresAt: .now.addingTimeInterval(45),
-                            expired: false),
-                        .init(
-                            id: "job-2", kind: "image.device", imageJobID: "image-job-2",
-                            executor: "Synthetic phone", leaseExpiresAt: .now.addingTimeInterval(-600),
-                            expired: true),
-                    ],
                     backingOff: [
                         .init(
                             id: "job-3", kind: "image.cloud", lane: "frontier_ai",
@@ -376,11 +527,11 @@ private struct RunRollupLabel: View {
                             counts: [.init(reason: "waiting_funding", count: 12)],
                             waitingForFunding: true, stalled: true, stallMinutes: 15)
                     ]),
-                error: nil, claimedImageJobIDs: ["image-job-1"])
+                error: nil)
             Section("Household work") {
                 RunsNeedingAttentionRows(
                     queue: HouseholdQueueOverview(
-                        appleCounts: [], frontierCounts: [], leases: [], backingOff: [],
+                        appleCounts: [], frontierCounts: [], backingOff: [],
                         runsNeedingAttention: 1,
                         runs: [
                             .init(
