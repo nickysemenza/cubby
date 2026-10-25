@@ -124,7 +124,7 @@ struct HouseholdQueueOverviewTests {
         let rollups = try JSONDecoder.cubby().decode(
             JobRunRollupsOutput.self,
             from: Data(
-                #"{"rollups":[{"runId":"RUN-SYN1","counts":{"leased":1,"waiting_funding":12,"due":0},"waitingForFunding":true,"lastProgressAt":"2099-01-01T00:00:00.000Z","stalled":true,"stallMinutes":15}]}"#
+                #"{"rollups":[{"runId":"RUN-SYN1","counts":{"leased":1,"waiting_funding":12,"due":0},"expiredLeases":0,"waitingForFunding":true,"lastProgressAt":"2099-01-01T00:00:00.000Z","stalled":true,"stallMinutes":15}]}"#
                     .utf8))
         let overview = try overview(runRows: rows, rollups: rollups)
         #expect(overview.runsNeedingAttention == 2)
