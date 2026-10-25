@@ -19,10 +19,12 @@ import {
   type SQL,
   sql,
 } from "drizzle-orm";
+import { QueryBuilder } from "drizzle-orm/pg-core";
 
 import { describeErrorCauses } from "~/lib/error-diagnostics";
 import type { UnparsedError } from "~/lib/error-utils";
 import type { Database } from "~/server/db/database";
+import { notDeleted } from "~/server/db/helpers/predicates";
 import {
   repositoryQueries as getDb,
   repositoryTransactionDatabase as withTransactionDatabase,
@@ -37,6 +39,7 @@ import {
   job,
   jobInvalidation,
   jobInvalidationCapture,
+  run,
 } from "~/server/db/retained-tables";
 
 import { JobSupersededError } from "../errors";
@@ -194,26 +197,26 @@ export async function recordJobInvalidation(
   input: Omit<EnqueueJobInput, "invalidate"> & { restartsPass: boolean },
 ) {
   const { restartsPass, ...enqueue } = input;
-  const capturedAt = new Date();
-  const client = repositoryQueries(db);
-  const [marker] = await client
-    .insert(jobInvalidation)
-    .values({ key: enqueue.key, restartsPass, updatedAt: capturedAt })
-    .onConflictDoUpdate({
-      target: jobInvalidation.key,
-      set: {
-        revision: sql`${jobInvalidation.revision} + 1`,
-        updatedAt: capturedAt,
-      },
-    })
-    .returning({ revision: jobInvalidation.revision });
+  const capturedAt = sql`${new Date().toISOString()}::timestamp`;
+  // One round trip: bump the marker and append its capture row (append-only,
+  // so health can date the first revision a claim has not observed without
+  // either side reading the other's row). Captures sit on hot save paths.
+  const result = await repositoryQueries(db).execute<{ revision: number }>(sql`
+    WITH marker AS (
+      INSERT INTO ${jobInvalidation} (key, "restartsPass", "updatedAt")
+      VALUES (${enqueue.key}, ${restartsPass}, ${capturedAt})
+      ON CONFLICT (key) DO UPDATE SET
+        revision = ${jobInvalidation}.revision + 1,
+        "updatedAt" = EXCLUDED."updatedAt"
+      RETURNING key, revision, "updatedAt"
+    ), capture AS (
+      INSERT INTO ${jobInvalidationCapture} (key, revision, "capturedAt")
+      SELECT key, revision, "updatedAt" FROM marker
+      ON CONFLICT DO NOTHING
+    )
+    SELECT revision::int AS revision FROM marker`);
+  const marker = result.rows[0];
   if (!marker) throw new Error(`Invalidation of ${enqueue.key} not recorded`);
-  // Append-only, so health can date the first revision a claim has not
-  // observed without either side reading the other's row.
-  await client
-    .insert(jobInvalidationCapture)
-    .values({ key: enqueue.key, revision: marker.revision, capturedAt })
-    .onConflictDoNothing();
   if (marker.revision === 1) await enqueueJob(db, enqueue);
 }
 
@@ -270,15 +273,23 @@ const drainedDue = (now: Date) =>
  * recently goes first; only a claim is service, so invalidations and
  * enqueues leave `lastClaimedAt`. Within a kind, priority then age.
  */
+/** A running, member-visible Run that owns the outer `"Job"` row. */
+const runOwningJob = new QueryBuilder()
+  .select({ one: sql`1` })
+  .from(run)
+  .where(
+    and(
+      eq(run.id, sql`"Job"."runId"`),
+      eq(run.status, runStatus.enum.running),
+      notDeleted(run),
+      inArray(run.purpose, [...VISIBLE_RUN_PURPOSES]),
+    ),
+  );
+
 const fairlyOrderedDueJobs = (now: Date, perKind?: number) => sql`
   WITH due AS (
     SELECT "Job".id, "Job".kind, "Job".priority, "Job"."updatedAt", "Job"."availableAt",
-      ("Job"."runId" IS NOT NULL AND EXISTS (
-        SELECT 1 FROM "Run" r WHERE r.id = "Job"."runId" AND r.status = ${runStatus.enum.running}
-          AND r."deletedAt" IS NULL AND r.purpose IN (${sql.join(
-            VISIBLE_RUN_PURPOSES.map((purpose) => sql`${purpose}`),
-            sql`, `,
-          )}))) AS run_owned
+      ("Job"."runId" IS NOT NULL AND EXISTS (${runOwningJob})) AS run_owned
     FROM "Job" WHERE ${drainedDue(now)}
   ), backlog AS (
     SELECT kind, count(*) AS size FROM due GROUP BY kind
@@ -365,19 +376,30 @@ export async function claimJob(
     throw new Error("Job lease must be a positive finite duration");
   const now = new Date();
   return withTransactionDatabase(db, async (tx) => {
-    const [available] = await getDb(tx)
-      .select()
-      .from(job)
-      .where(and(eq(job.id, id), due(now)))
-      .for("update", { skipLocked: true });
-    if (!available) return null;
     // Observe durable invalidation here, in the execution's own row: a moved
     // revision starts a fresh pass (new generation, no cursor, fresh budget),
-    // except that a pass in progress that finishes first keeps going.
-    const [marker] = await getDb(tx)
-      .select()
-      .from(jobInvalidation)
-      .where(eq(jobInvalidation.key, available.key));
+    // except that a pass in progress that finishes first keeps going. The
+    // marker is read in the claim's own statement and never locked: only the
+    // Job row is the claim's, so a concurrent capture is never blocked.
+    const [candidate] = await getDb(tx)
+      .select({
+        row: job,
+        markerRevision: jobInvalidation.revision,
+        markerRestartsPass: jobInvalidation.restartsPass,
+      })
+      .from(job)
+      .leftJoin(jobInvalidation, eq(jobInvalidation.key, job.key))
+      .where(and(eq(job.id, id), due(now)))
+      .for("update", { of: job, skipLocked: true });
+    if (!candidate) return null;
+    const available = candidate.row;
+    const marker =
+      candidate.markerRevision === null
+        ? undefined
+        : {
+            revision: candidate.markerRevision,
+            restartsPass: candidate.markerRestartsPass === true,
+          };
     const moved =
       marker !== undefined &&
       marker.revision !== (available.observedRevision ?? 0);
