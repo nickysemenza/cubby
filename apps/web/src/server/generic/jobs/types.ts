@@ -14,5 +14,13 @@ export type PreparedJobPage = {
 };
 export type JobHandler = {
   prepare(db: Database, job: JobClaim): Promise<PreparedJobPage>;
+  /** One lane prepares a bounded kind batch; every result still publishes separately. */
+  batch?: {
+    size: number;
+    prepare(
+      db: Database,
+      claims: readonly JobClaim[],
+    ): Promise<ReadonlyMap<string, PromiseSettledResult<PreparedJobPage>>>;
+  };
 };
 export type JobHandlers = Readonly<Record<string, JobHandler>>;

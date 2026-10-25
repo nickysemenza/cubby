@@ -159,6 +159,45 @@ describe("fair drain under a flood", () => {
     );
   });
 
+  it("projects the widened embedding selection with the same Run reserve as the drain", async () => {
+    const runId = await ensureRun(ctx.db, ctx.actor, {
+      purpose: "ai_suggest",
+      trigger: "manual",
+      execution: false,
+    });
+    const ids: string[] = [];
+    for (let index = 0; index < 21; index++)
+      ids.push(
+        (
+          await enqueueJob(ctx.db, {
+            key: `synthetic.member-batch.${index}`,
+            kind: "synthetic.member",
+            input: {},
+            runId,
+          })
+        ).id,
+      );
+    for (let index = 0; index < 6; index++)
+      ids.push(
+        (
+          await enqueueJob(ctx.db, {
+            key: `synthetic.embedding-batch.${index}`,
+            kind: "embedding.refresh",
+            input: {},
+          })
+        ).id,
+      );
+    const predicted = await dueJobPositions(ctx.db, ids);
+    const selected = await dueJobs(ctx.db, 64);
+    expect(Object.fromEntries(predicted)).toEqual(
+      Object.fromEntries(
+        selected.flatMap((row, index) =>
+          ids.includes(row.id) ? [[row.id, index]] : [],
+        ),
+      ),
+    );
+  });
+
   // Review finding: beyond the first batch the drain re-ranks kinds by their
   // last service, so a position there is a projection, not a promise.
   it("flags queue positions beyond the first batch as estimates", async () => {

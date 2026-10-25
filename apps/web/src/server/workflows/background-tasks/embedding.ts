@@ -28,9 +28,11 @@ import {
   productionVectorStore,
   type VectorStorePort,
 } from "~/server/generic/embedding/service/semantic/vector-store";
+import { withJobExecution } from "~/server/generic/jobs/context";
+import { jobKindPolicy } from "~/server/generic/jobs/kind-policy";
 import { enqueueJob } from "~/server/generic/jobs/repo/jobs";
-import { defineJobHandler } from "~/server/generic/jobs/service/jobs";
-import type { PreparedJobPage } from "~/server/generic/jobs/types";
+import type { JobClaim } from "~/server/generic/jobs/repo/jobs";
+import type { JobHandler, PreparedJobPage } from "~/server/generic/jobs/types";
 import { prepareSearchDocuments } from "~/server/generic/search/repo/search-document";
 import { SHORTCODE_TABLE } from "~/server/generic/shortcode/repo/shortcode-tables";
 
@@ -55,6 +57,7 @@ const embeddingJobInput = z.object({
   text: z.string(),
   config: z.object({
     provider: z.literal("openai"),
+    // Parse retired snapshots so execution can re-admit them instead of failing.
     model: z.enum(["text-embedding-3-small", "text-embedding-3-large"]),
     dimensions: z.number().int().positive(),
   }),
@@ -140,154 +143,308 @@ export async function enqueueEmbeddingRefs(
   return jobs;
 }
 
+/** OpenAI permits 2,048 inputs and 300,000 total tokens per request. */
+const EMBEDDING_BATCH_SIZE = jobKindPolicy("embedding.refresh").batchSize ?? 1;
+const EMBEDDING_REQUEST_TOKEN_LIMIT = 300_000;
+const EMBEDDING_INPUT_TOKEN_LIMIT = 8_192;
+type EmbeddingSubmission = {
+  claim: JobClaim;
+  input: z.output<typeof embeddingJobInput>;
+};
+
 export function embeddingJobHandler(
   port: EmbeddingRefreshPort = productionEmbeddingRefreshPort,
-) {
-  return defineJobHandler(
-    embeddingJobInput,
-    async (db, claim, input): Promise<PreparedJobPage> => {
-      if (!port.configured())
+): JobHandler {
+  async function prepare(
+    claim: JobClaim,
+    input: z.output<typeof embeddingJobInput>,
+    observed:
+      | Awaited<ReturnType<VectorStorePort["getByIds"]>>[number]
+      | undefined,
+  ): Promise<PreparedJobPage | EmbeddingSubmission> {
+    const cursor = claim.cursor ? submittedCursor.parse(claim.cursor) : null;
+    if (!cursor) return { claim, input };
+    if (
+      !observed ||
+      (await vectorPayloadHash(observed.values)) !== cursor.hash
+    ) {
+      if (Date.now() - Date.parse(cursor.submittedAt) > 2 * 60_000)
         throw new Error(
-          "Embedding provider or Vectorize binding is unavailable",
+          "Vectorize did not expose the uploaded artifact before its visibility deadline",
         );
-      const current = await prepareSearchDocuments(db, [input]);
-      const text = current.entries[0]?.body;
-      if (
-        text === undefined ||
-        (await embeddingTextHash({
-          entityKind: input.entityKind,
-          ...input.config,
-          text: normalizeSearchText(text),
-        })) !== input.hash
-      )
-        return { page: { done: true, result: { outcome: "obsolete" } } };
-      const cursor = claim.cursor ? submittedCursor.parse(claim.cursor) : null;
-      if (!cursor) {
-        const embedded = await port.embed([input.text], {
-          db,
-          feature: "entity_embedding",
-          entity: input,
-        });
-        const values = embedded[0];
-        if (!values) throw new Error("Embedding provider returned no vector");
-        const hash = await vectorPayloadHash(values);
-        const receipts = await port.vectorStore.upsert([
-          { id: claim.id, entityKind: input.entityKind, values },
-        ]);
-        const mutationId = receipts.get(claim.id);
-        if (!mutationId)
-          throw new Error("Vectorize returned no upload receipt");
-        return {
-          page: {
-            done: false,
-            cursor: { hash, mutationId, submittedAt: new Date().toISOString() },
-            availableAt: new Date(Date.now() + 3_000),
-          },
-        };
-      }
-      const [observed] = await port.vectorStore.getByIds([claim.id]);
-      if (
-        !observed ||
-        (await vectorPayloadHash(observed.values)) !== cursor.hash
-      ) {
-        if (Date.now() - Date.parse(cursor.submittedAt) > 2 * 60_000)
-          throw new Error(
-            "Vectorize did not expose the uploaded artifact before its visibility deadline",
-          );
-        return {
-          page: {
-            done: false,
-            cursor,
-            availableAt: new Date(Date.now() + 5_000),
-          },
-        };
-      }
       return {
         page: {
-          done: true,
-          result: {
-            outcome: "written",
-            mutationId: cursor.mutationId,
-            vectorHash: cursor.hash,
-          },
-        },
-        publish: async (tx) => {
-          // Writers and removals lock the source before its durable identity.
-          // Hold the same rows until commit so deletion cannot pass this check
-          // and leave a newly selected vector behind.
-          const source = SHORTCODE_TABLE[input.entityKind];
-          const [liveSource] = await getDb(tx)
-            .select({ id: source.id })
-            .from(source)
-            .where(and(eq(source.id, input.entityId), isNull(source.deletedAt)))
-            .for("share");
-          const [liveIdentity] = await getDb(tx)
-            .select({ id: entityIdentity.id })
-            .from(entityIdentity)
-            .where(
-              and(
-                eq(entityIdentity.id, input.entityId),
-                isNull(entityIdentity.deletedAt),
-              ),
-            )
-            .for("share");
-          if (!liveSource || !liveIdentity)
-            throw new Error("Embedding source was removed before selection");
-          const latest = await prepareSearchDocuments(tx, [input]);
-          const body = latest.entries[0]?.body;
-          if (
-            body === undefined ||
-            (await embeddingTextHash({
-              entityKind: input.entityKind,
-              ...input.config,
-              text: normalizeSearchText(body),
-            })) !== input.hash
-          )
-            throw new Error("Embedding inputs changed before selection");
-          await getDb(tx)
-            .update(entityEmbedding)
-            .set({ deletedAt: new Date(), artifactState: "retired" })
-            .where(
-              and(
-                eq(entityEmbedding.entityKind, input.entityKind),
-                eq(entityEmbedding.entityId, input.entityId),
-                isNull(entityEmbedding.deletedAt),
-              ),
-            );
-          await getDb(tx)
-            .insert(entityEmbedding)
-            .values({
-              id: claim.id,
-              entityKind: input.entityKind,
-              entityId: input.entityId,
-              embeddingText: input.text,
-              embeddingHash: input.hash,
-              artifactHash: input.hash,
-              ...input.config,
-              artifactState: "selected",
-              vectorHash: cursor.hash,
-              submissionId: cursor.mutationId,
-              observedAt: new Date(),
-              indexedAt: new Date(),
-              deletedAt: null,
-            })
-            .onConflictDoUpdate({
-              target: entityEmbedding.id,
-              set: {
-                deletedAt: null,
-                artifactState: "selected",
-                observedAt: new Date(),
-                indexedAt: new Date(),
-              },
-            });
-          await recordChange(tx, {
-            kind: "projection",
-            categories: [input.entityKind, "search", "relatedData", "problems"],
-          });
+          done: false,
+          cursor,
+          availableAt: new Date(Date.now() + 5_000),
         },
       };
+    }
+    return {
+      page: {
+        done: true,
+        result: {
+          outcome: "written",
+          mutationId: cursor.mutationId,
+          vectorHash: cursor.hash,
+        },
+      },
+      publish: async (tx) => {
+        // Writers and removals lock the source before its durable identity.
+        // Hold the same rows until commit so deletion cannot pass this check
+        // and leave a newly selected vector behind.
+        const source = SHORTCODE_TABLE[input.entityKind];
+        const [liveSource] = await getDb(tx)
+          .select({ id: source.id })
+          .from(source)
+          .where(and(eq(source.id, input.entityId), isNull(source.deletedAt)))
+          .for("share");
+        const [liveIdentity] = await getDb(tx)
+          .select({ id: entityIdentity.id })
+          .from(entityIdentity)
+          .where(
+            and(
+              eq(entityIdentity.id, input.entityId),
+              isNull(entityIdentity.deletedAt),
+            ),
+          )
+          .for("share");
+        if (!liveSource || !liveIdentity)
+          throw new Error("Embedding source was removed before selection");
+        const latest = await prepareSearchDocuments(tx, [input]);
+        const body = latest.entries[0]?.body;
+        if (
+          body === undefined ||
+          (await embeddingTextHash({
+            entityKind: input.entityKind,
+            ...input.config,
+            text: normalizeSearchText(body),
+          })) !== input.hash
+        )
+          throw new Error("Embedding inputs changed before selection");
+        await getDb(tx)
+          .update(entityEmbedding)
+          .set({ deletedAt: new Date(), artifactState: "retired" })
+          .where(
+            and(
+              eq(entityEmbedding.entityKind, input.entityKind),
+              eq(entityEmbedding.entityId, input.entityId),
+              isNull(entityEmbedding.deletedAt),
+            ),
+          );
+        await getDb(tx)
+          .insert(entityEmbedding)
+          .values({
+            id: claim.id,
+            entityKind: input.entityKind,
+            entityId: input.entityId,
+            embeddingText: input.text,
+            embeddingHash: input.hash,
+            artifactHash: input.hash,
+            ...input.config,
+            artifactState: "selected",
+            vectorHash: cursor.hash,
+            submissionId: cursor.mutationId,
+            observedAt: new Date(),
+            indexedAt: new Date(),
+            deletedAt: null,
+          })
+          .onConflictDoUpdate({
+            target: entityEmbedding.id,
+            set: {
+              deletedAt: null,
+              artifactState: "selected",
+              observedAt: new Date(),
+              indexedAt: new Date(),
+            },
+          });
+        await recordChange(tx, {
+          kind: "projection",
+          categories: [input.entityKind, "search", "relatedData", "problems"],
+        });
+      },
+    };
+  }
+
+  async function prepareBatch(db: Database, claims: readonly JobClaim[]) {
+    const results = new Map<string, PromiseSettledResult<PreparedJobPage>>();
+    if (!port.configured())
+      throw new Error("Embedding provider or Vectorize binding is unavailable");
+    const config = port.config();
+    const parsed: EmbeddingSubmission[] = [];
+    for (const claim of claims) {
+      try {
+        parsed.push({ claim, input: embeddingJobInput.parse(claim.input) });
+      } catch (reason) {
+        results.set(claim.id, { status: "rejected", reason });
+      }
+    }
+    const current = await prepareSearchDocuments(
+      db,
+      parsed.map(({ input }) => input),
+    );
+    const bodies = new Map(
+      current.entries.map(({ source, body }) => [
+        entityRefKey(source.entityKind, source.entityId),
+        body,
+      ]),
+    );
+    for (const { claim, input } of parsed) {
+      try {
+        if (
+          input.config.provider !== config.provider ||
+          input.config.model !== config.model ||
+          input.config.dimensions !== config.dimensions
+        ) {
+          results.set(claim.id, {
+            status: "fulfilled",
+            value: {
+              page: { done: true, result: { outcome: "obsolete" } },
+              // Re-admit only while this Job still owns publication. A cancelled
+              // claim must not create replacement work behind the member's stop.
+              publish: async (tx) => {
+                await enqueueEmbeddingRefs(
+                  tx,
+                  await prepareSearchDocuments(tx, [input]),
+                  config,
+                );
+              },
+            },
+          });
+          continue;
+        }
+        const text = bodies.get(entityRefKey(input.entityKind, input.entityId));
+        if (
+          text === undefined ||
+          (await embeddingTextHash({
+            entityKind: input.entityKind,
+            ...input.config,
+            text: normalizeSearchText(text),
+          })) !== input.hash
+        )
+          results.set(claim.id, {
+            status: "fulfilled",
+            value: { page: { done: true, result: { outcome: "obsolete" } } },
+          });
+      } catch (reason) {
+        results.set(claim.id, { status: "rejected", reason });
+      }
+    }
+    const submitted = parsed.filter(
+      ({ claim }) => !results.has(claim.id) && claim.cursor !== null,
+    );
+    const observed = new Map<
+      string,
+      Awaited<ReturnType<VectorStorePort["getByIds"]>>[number]
+    >();
+    if (submitted.length) {
+      try {
+        for (const vector of await port.vectorStore.getByIds(
+          submitted.map(({ claim }) => claim.id),
+        ))
+          observed.set(vector.id, vector);
+      } catch (reason) {
+        for (const { claim } of submitted)
+          results.set(claim.id, { status: "rejected", reason });
+      }
+    }
+    const submissions: EmbeddingSubmission[] = [];
+    for (const { claim, input } of parsed) {
+      if (results.has(claim.id)) continue;
+      try {
+        const prepared = await withJobExecution(db, claim, () =>
+          prepare(claim, input, observed.get(claim.id)),
+        );
+        if ("page" in prepared) {
+          results.set(claim.id, { status: "fulfilled", value: prepared });
+        } else {
+          submissions.push(prepared);
+        }
+      } catch (reason) {
+        results.set(claim.id, { status: "rejected", reason });
+      }
+    }
+    let chunk: EmbeddingSubmission[] = [];
+    let bytes = 0;
+    const flush = async () => {
+      if (!chunk.length) return;
+      const entries = chunk;
+      chunk = [];
+      bytes = 0;
+      try {
+        const first = entries[0]!;
+        const vectors = await port.embed(
+          entries.map(({ input }) => input.text),
+          {
+            db,
+            feature: "entity_embedding",
+            config,
+            // A batch usage row describes the call, not an arbitrary first entity.
+            ...(entries.length === 1 ? { entity: first.input } : {}),
+          },
+        );
+        if (vectors.length !== entries.length)
+          throw new Error("Embedding provider returned an incomplete batch");
+        const uploads = entries.map(({ claim, input }, index) => ({
+          id: claim.id,
+          entityKind: input.entityKind,
+          values: vectors[index]!,
+        }));
+        const receipts = await port.vectorStore.upsert(uploads);
+        for (const [index, entry] of entries.entries()) {
+          try {
+            const mutationId = receipts.get(entry.claim.id);
+            if (!mutationId)
+              throw new Error("Vectorize returned no upload receipt");
+            results.set(entry.claim.id, {
+              status: "fulfilled",
+              value: {
+                page: {
+                  done: false,
+                  cursor: {
+                    hash: await vectorPayloadHash(vectors[index]!),
+                    mutationId,
+                    submittedAt: new Date().toISOString(),
+                  },
+                  availableAt: new Date(Date.now() + 3_000),
+                },
+              },
+            });
+          } catch (reason) {
+            results.set(entry.claim.id, { status: "rejected", reason });
+          }
+        }
+      } catch (reason) {
+        for (const entry of entries)
+          results.set(entry.claim.id, { status: "rejected", reason });
+      }
+    };
+    for (const entry of submissions) {
+      // BPE tokens cannot outnumber UTF-8 bytes. Long individual inputs run
+      // alone: preserve provider validation without poisoning their neighbors.
+      const inputBytes = new TextEncoder().encode(entry.input.text).length;
+      if (
+        chunk.length >= EMBEDDING_BATCH_SIZE ||
+        bytes + inputBytes > EMBEDDING_REQUEST_TOKEN_LIMIT ||
+        inputBytes > EMBEDDING_INPUT_TOKEN_LIMIT
+      )
+        await flush();
+      chunk.push(entry);
+      bytes += inputBytes;
+      if (inputBytes > EMBEDDING_INPUT_TOKEN_LIMIT) await flush();
+    }
+    await flush();
+    return results;
+  }
+  return {
+    batch: { size: EMBEDDING_BATCH_SIZE, prepare: prepareBatch },
+    prepare: async (db, claim) => {
+      const result = (await prepareBatch(db, [claim])).get(claim.id);
+      if (!result) throw new Error("Embedding preparation omitted a Job");
+      if (result.status === "rejected") throw result.reason;
+      return result.value;
     },
-  );
+  };
 }
 
 /** Explicit background refresh uses the same Jobs as broad passes. Reads never call this. */

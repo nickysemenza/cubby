@@ -411,6 +411,10 @@ export function drainSelectionIndex(
  */
 export async function dueJobs(db: Database, limit = JOB_DRAIN.batch) {
   await stopStalledJobs(db);
+  return selectFairDueJobs(db, limit);
+}
+
+async function selectFairDueJobs(db: Database, limit: number) {
   const result = await getDb(db).execute<{
     id: string;
     kind: string;
@@ -423,7 +427,11 @@ export async function dueJobs(db: Database, limit = JOB_DRAIN.batch) {
   const reserved = backfillReserve(limit, backfill.length);
   const leading = owned.slice(0, Math.max(0, limit - reserved));
   return [...leading, ...backfill.slice(0, limit - leading.length)].map(
-    ({ id, kind }) => ({ id: parseEntityId("job", id), kind }),
+    ({ id, kind, run_owned }) => ({
+      id: parseEntityId("job", id),
+      kind,
+      runOwned: run_owned,
+    }),
   );
 }
 
@@ -437,6 +445,13 @@ export async function dueJobPositions(
   ids: readonly string[],
 ): Promise<Map<string, number>> {
   if (!ids.length) return new Map();
+  // Production handlers take their width from kind policy. Use the same first
+  // selection as the drain before projecting its widened fair rounds.
+  const first = await selectFairDueJobs(db, JOB_DRAIN.batch);
+  const batchSize = Math.max(
+    JOB_DRAIN.batch,
+    ...first.map((row) => jobKindPolicy(row.kind).batchSize ?? 1),
+  );
   const result = await getDb(db).execute<{
     id: string;
     run_owned: boolean;
@@ -460,6 +475,7 @@ export async function dueJobPositions(
       drainSelectionIndex(
         { runOwned: row.run_owned, classPosition: row.class_position },
         { owned: row.owned_total, backfill: row.backfill_total },
+        batchSize,
       ),
     ]),
   );
