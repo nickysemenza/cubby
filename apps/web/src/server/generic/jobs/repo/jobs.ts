@@ -213,6 +213,7 @@ export async function recordJobInvalidation(
 ) {
   const { restartsPass, ...enqueue } = input;
   await repositoryTransactionOn(db, async (tx) => {
+    const capturedAt = new Date().toISOString();
     const result = await repositoryQueries(tx).execute<{
       initialized: boolean;
       captured: boolean;
@@ -226,14 +227,33 @@ export async function recordJobInvalidation(
         ON CONFLICT (key) DO NOTHING RETURNING key, "restartsPass"
       ), capture AS (
         INSERT INTO ${jobInvalidationCapture} (key, "capturedAt")
-        SELECT key, ${new Date().toISOString()}::timestamp FROM (
+        SELECT key, ${capturedAt}::timestamp FROM (
           SELECT key FROM policy UNION ALL SELECT key FROM initialized
         ) owner RETURNING id
       )
       SELECT EXISTS (SELECT 1 FROM initialized) AS initialized,
         EXISTS (SELECT 1 FROM capture) AS captured,
         (SELECT "restartsPass" FROM policy UNION ALL SELECT "restartsPass" FROM initialized) AS "restartsPass"`);
-    const recorded = result.rows[0];
+    let recorded = result.rows[0];
+    if (recorded && !recorded.captured) {
+      // READ COMMITTED can lose first-key insertion to a policy invisible to
+      // the original statement. Its initializer committed the Job atomically;
+      // a fresh statement can append our input without probing that Job.
+      const concurrent = await repositoryQueries(tx).execute<{
+        initialized: boolean;
+        captured: boolean;
+        restartsPass: boolean;
+      }>(sql`
+        WITH policy AS (
+          SELECT key, "restartsPass" FROM ${jobInvalidation} WHERE key = ${enqueue.key}
+        ), capture AS (
+          INSERT INTO ${jobInvalidationCapture} (key, "capturedAt")
+          SELECT key, ${capturedAt}::timestamp FROM policy RETURNING id
+        )
+        SELECT false AS initialized, EXISTS (SELECT 1 FROM capture) AS captured,
+          (SELECT "restartsPass" FROM policy) AS "restartsPass"`);
+      recorded = concurrent.rows[0];
+    }
     if (!recorded?.captured)
       throw new Error(`Invalidation of ${enqueue.key} not recorded`);
     if (recorded.restartsPass !== restartsPass)

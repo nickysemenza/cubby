@@ -126,7 +126,10 @@ save's transaction (`recordJobInvalidation`; refresh families through
 Job's execution row or the stable `JobInvalidation` policy. Genuine concurrent
 source and image publications therefore share no mutable capture counter.
 A rolled-back save leaves no capture. First-key policy, Job and capture
-initialization commit atomically; ordinary captures never probe the Job.
+initialization commit atomically; ordinary captures never probe the Job. A
+read-committed writer that loses concurrent first-key insertion reads the
+committed policy in a fresh statement and appends its own capture. Serializable
+initialization retains the owning transaction's existing conflict retry.
 
 A Job with an unobserved capture is due, even when completed. A fresh claim
 locks its Job and acknowledges exactly the pending captures visible in that

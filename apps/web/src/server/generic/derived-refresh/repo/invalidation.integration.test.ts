@@ -160,31 +160,31 @@ describe("durable family invalidation", () => {
     expect(pending).toHaveLength(1);
   });
 
-  it("retries simultaneous first-key initialization without losing either source capture", async () => {
-    const input = {
-      key: "synthetic:first-capture",
-      kind: "synthetic.first-capture",
-      input: {},
-      restartsPass: true,
-    };
-    const prepared = Promise.withResolvers<void>();
-    const mayCommit = Promise.withResolvers<void>();
-    const first = withSnapshotWriteDatabase(
-      ctx.db,
-      async (tx) => {
-        await recordJobInvalidation(tx, input);
-        prepared.resolve();
-        await mayCommit.promise;
-      },
-      { isolationLevel: "serializable" },
-    );
-    void first.catch(prepared.reject);
-    await prepared.promise;
-    const backend = Promise.withResolvers<number>();
-    let attempts = 0;
-    const second = withSnapshotWriteDatabase(
-      ctx.db,
-      async (tx) => {
+  it.each(["serializable", "read committed"] as const)(
+    "preserves simultaneous first-key initialization at %s",
+    async (isolationLevel) => {
+      const input = {
+        key: "synthetic:first-capture",
+        kind: "synthetic.first-capture",
+        input: {},
+        restartsPass: true,
+      };
+      const prepared = Promise.withResolvers<void>();
+      const mayCommit = Promise.withResolvers<void>();
+      const first = withTransactionDatabase(
+        ctx.db,
+        async (tx) => {
+          await recordJobInvalidation(tx, input);
+          prepared.resolve();
+          await mayCommit.promise;
+        },
+        { isolationLevel },
+      );
+      void first.catch(prepared.reject);
+      await prepared.promise;
+      const backend = Promise.withResolvers<number>();
+      let attempts = 0;
+      const secondWork = async (tx: Parameters<typeof claimJob>[0]) => {
         attempts++;
         const result = await getDb(tx).execute<{ pid: number }>(
           sql`SELECT pg_backend_pid() AS pid`,
@@ -193,45 +193,48 @@ describe("durable family invalidation", () => {
         if (!pid) throw new Error("Missing second capture backend");
         backend.resolve(pid);
         await recordJobInvalidation(tx, input);
-      },
-      { isolationLevel: "serializable" },
-    );
-    void second.catch(backend.reject);
-    try {
-      const pid = await backend.promise;
-      await vi.waitFor(
-        async () => {
-          const result = await getDb(ctx.db).execute<{ waiting: boolean }>(
-            sql`SELECT wait_event_type = 'Lock' AS waiting FROM pg_stat_activity WHERE pid = ${pid}`,
-          );
-          expect(result.rows[0]?.waiting).toBe(true);
-        },
-        { timeout: 5000 },
-      );
-      mayCommit.resolve();
-      await Promise.all([first, second]);
-      expect(attempts).toBe(2);
-      expect(
-        await getDb(ctx.db).select().from(job).where(eq(job.key, input.key)),
-      ).toHaveLength(1);
-      expect(
-        await getDb(ctx.db)
+      };
+      const second =
+        isolationLevel === "serializable"
+          ? withSnapshotWriteDatabase(ctx.db, secondWork, { isolationLevel })
+          : withTransactionDatabase(ctx.db, secondWork, { isolationLevel });
+      void second.catch(backend.reject);
+      try {
+        const pid = await backend.promise;
+        await vi.waitFor(
+          async () => {
+            const result = await getDb(ctx.db).execute<{ waiting: boolean }>(
+              sql`SELECT wait_event_type = 'Lock' AS waiting FROM pg_stat_activity WHERE pid = ${pid}`,
+            );
+            expect(result.rows[0]?.waiting).toBe(true);
+          },
+          { timeout: 5000 },
+        );
+        mayCommit.resolve();
+        await Promise.all([first, second]);
+        expect(attempts).toBe(isolationLevel === "serializable" ? 2 : 1);
+        expect(
+          await getDb(ctx.db).select().from(job).where(eq(job.key, input.key)),
+        ).toHaveLength(1);
+        expect(
+          await getDb(ctx.db)
+            .select()
+            .from(jobInvalidation)
+            .where(eq(jobInvalidation.key, input.key)),
+        ).toEqual([{ key: input.key, restartsPass: true }]);
+        const captures = await getDb(ctx.db)
           .select()
-          .from(jobInvalidation)
-          .where(eq(jobInvalidation.key, input.key)),
-      ).toEqual([{ key: input.key, restartsPass: true }]);
-      const captures = await getDb(ctx.db)
-        .select()
-        .from(jobInvalidationCapture)
-        .where(eq(jobInvalidationCapture.key, input.key));
-      expect(captures).toHaveLength(2);
-      expect(new Set(captures.map((c) => c.id)).size).toBe(2);
-      expect(captures.every((c) => !c.observed)).toBe(true);
-    } finally {
-      mayCommit.resolve();
-      await Promise.allSettled([first, second]);
-    }
-  });
+          .from(jobInvalidationCapture)
+          .where(eq(jobInvalidationCapture.key, input.key));
+        expect(captures).toHaveLength(2);
+        expect(new Set(captures.map((c) => c.id)).size).toBe(2);
+        expect(captures.every((c) => !c.observed)).toBe(true);
+      } finally {
+        mayCommit.resolve();
+        await Promise.allSettled([first, second]);
+      }
+    },
+  );
 
   it("prunes observed input while new capture and claim commit on other connections", async () => {
     const marked = await restarting();

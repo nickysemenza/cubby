@@ -57,12 +57,11 @@ describe("legacy mailbox Email supersession", () => {
       messageId: metadata.mail.messageId,
       checksum: "e".repeat(64),
     });
-    // The capture moves the search family's JobInvalidation row; the
-    // execution Job row is never written by a capture.
+    // Supersession appends search input without changing policy or execution.
     const search = async () =>
       (
         await getDb(ctx.db).execute(
-          sql`SELECT j.generation, j.xmin::text AS xmin, m.revision::int AS revision, m.xmin::text AS "markerXmin"
+          sql`SELECT j.generation, j.xmin::text AS xmin, (SELECT count(*)::int FROM "JobInvalidationCapture" c WHERE c.key = m.key) AS captures, m.xmin::text AS "markerXmin"
             FROM "Job" j JOIN "JobInvalidation" m ON m.key = j.key WHERE j.key = 'refresh:search'`,
         )
       ).rows[0];
@@ -73,8 +72,8 @@ describe("legacy mailbox Email supersession", () => {
       await readEmail(ctx.db, { ...identity, mailboxId: `legacy:${party.id}` }),
     ).toMatchObject({ orderMailId: legacy.id, status: "excluded" });
     const superseded = await search();
-    expect(superseded?.revision).toBe(Number(original?.revision) + 1);
-    expect(superseded?.markerXmin).not.toBe(original?.markerXmin);
+    expect(superseded?.captures).toBe(Number(original?.captures) + 1);
+    expect(superseded?.markerXmin).toBe(original?.markerXmin);
     expect({
       generation: superseded?.generation,
       xmin: superseded?.xmin,
