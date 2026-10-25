@@ -18,6 +18,7 @@ import { locationSearch } from "~/server/domains/location/repo/crud";
 import { productSearch } from "~/server/domains/product/repo/crud";
 import { projectListRead } from "~/server/domains/project/repo/lookup";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { drainStoredDerived } from "~/server/testing/background-queue";
 import {
   createIngredientFixture,
   createInventoryFixture,
@@ -314,6 +315,7 @@ describe("custom list readers", () => {
         page(pageIndex),
         readIntent,
       );
+    await drainStoredDerived(ctx.db);
     const pages = await Promise.all([read(0), read(1)]);
     expect(
       pages.map((result) => result.data.map((row) => row.displayName)),
@@ -417,6 +419,7 @@ describe("custom list readers", () => {
         { kind: "full" },
         readIntent,
       );
+    await drainStoredDerived(ctx.db);
     const pages = await Promise.all([read(0), read(1)]);
     expect(pages.map((result) => result.data.map((row) => row.name))).toEqual([
       ["Paging alpha", "Paging beta"],

@@ -662,8 +662,47 @@ Rules:
       derived: {
         parent: { via: "parent" },
         inventoryEntries: { type: "number" },
-        // The direct stock value the compact list cell renders.
+        // The direct stock value the compact list cell renders: a live sum
+        // of the stored inventory valuations (ADR 0021).
         valuation: { type: "number" },
+        // The whole-tree rollup (direct, total, installed, container), stored
+        // and propagated up the parent chain; sorts by its total.
+        valuationRollup: {
+          type: "number",
+          stored: {
+            compute: "location.valuationRollup",
+            inputs: [
+              {
+                table: "Location",
+                match: { id: "id" },
+                columns: ["parentId", "productId", "deletedAt"],
+              },
+              {
+                table: "Location",
+                match: { parentId: "id" },
+                columns: ["parentId", "productId", "deletedAt"],
+              },
+              {
+                table: "InventoryEntry",
+                match: { locationId: "id" },
+                columns: ["locationId", "placement", "productId", "deletedAt"],
+              },
+            ],
+            dependsOn: [
+              {
+                entity: "inventory",
+                key: "valuation",
+                match: { locationId: "id" },
+              },
+              {
+                entity: "location",
+                key: "valuationRollup",
+                match: { parentId: "id" },
+              },
+              { entity: "product", key: "price", match: { id: "productId" } },
+            ],
+          },
+        },
         // Holds live stock (a fixture wired into the wall is not stock).
         hasInventory: { type: "boolean" },
         // A displayable image (PDF attachments don't count).

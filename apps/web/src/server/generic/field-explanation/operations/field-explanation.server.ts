@@ -5,6 +5,7 @@ import {
 } from "@cubby/schemas/data-quality";
 import type { Entity } from "@cubby/schemas/entity";
 import { entityFieldModels } from "@cubby/schemas/entity-fields";
+import { shortcodeEntities } from "@cubby/schemas/entity-manifest";
 import {
   fieldExplanationInput,
   fieldExplanationOutput,
@@ -29,13 +30,16 @@ import {
 } from "~/server/entity-kernel";
 import { ENTITY_KERNEL_ENTITIES } from "~/server/entity-kernel/contracts";
 import { loadQualityBreakdown } from "~/server/generic/data-quality/repo/hydrate";
+import { explainStoredDerived } from "~/server/generic/derived/repo/explain";
 import { explanationReferenceValues } from "~/server/generic/field-explanation/repo/explanation-reference-values";
 import {
   loadFieldCountEvidence,
   withFieldExplanationSnapshot,
 } from "~/server/generic/field-explanation/repo/field-explanation-evidence";
+import { resolveLiveShortcode } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { loadFieldResolutionEvidence } from "~/server/generic/suggestions/repo/field-resolution-evidence";
 import { implementOperationDomain } from "~/server/operation-runtime/operation-domain.server";
+import { derivedComputes } from "~/server/workflows/derived-computes";
 
 import { interpretFieldValue } from "./field-explanation-interpretation";
 
@@ -810,11 +814,27 @@ export async function explainField(
     ...source,
     value: linkedValues[index] ?? source.value,
   }));
+  const shortcodeEntity = shortcodeEntities.find(
+    (candidate) => candidate === entity,
+  );
+  const internalId = shortcodeEntity
+    ? await resolveLiveShortcode(context.db, input.entityId, shortcodeEntity)
+    : null;
+  const derived = internalId
+    ? await explainStoredDerived(
+        context.db,
+        derivedComputes,
+        entity,
+        field.key,
+        internalId,
+      )
+    : null;
   return fieldExplanationOutput.parse({
     subject,
     field: field.key,
     label: field.label,
     value,
+    derived: derived ?? undefined,
     evaluatedAt: new Date().toISOString(),
     interpretation,
     qualityBreakdown: snapshot.qualityBreakdown,

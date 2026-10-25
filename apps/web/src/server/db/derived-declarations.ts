@@ -19,13 +19,25 @@ export interface DerivedInput {
   readonly where: Readonly<Record<string, string>> | null;
 }
 
-/** Another stored value this one reads, joined `source.sourceColumn = this.entityColumn`. */
-export interface DerivedDependency {
+/**
+ * Another stored value this one reads: joined `source.sourceColumn =
+ * this.entityColumn`, or through a link table whose `source` column holds the
+ * changed record and `dependent` column the record to mark.
+ */
+export type DerivedDependency = {
   readonly entity: Entity;
   readonly key: string;
-  readonly sourceColumn: string;
-  readonly entityColumn: string;
-}
+} & (
+  | { readonly sourceColumn: string; readonly entityColumn: string }
+  | {
+      readonly through: {
+        readonly table: string;
+        readonly source: string;
+        readonly dependent: string;
+        readonly where: Readonly<Record<string, string>> | null;
+      };
+    }
+);
 
 export type DerivedSortType = "number" | "date" | "text" | null;
 
@@ -59,11 +71,23 @@ const storedEntry = z.object({
     ),
     dependsOn: z
       .array(
-        z.object({
-          entity: entitySchema,
-          key: z.string(),
-          match: z.record(z.string(), z.string()),
-        }),
+        z.union([
+          z.object({
+            entity: entitySchema,
+            key: z.string(),
+            match: z.record(z.string(), z.string()),
+          }),
+          z.object({
+            entity: entitySchema,
+            key: z.string(),
+            through: z.object({
+              table: z.string(),
+              source: z.string(),
+              dependent: z.string(),
+              where: z.record(z.string(), z.string()).optional(),
+            }),
+          }),
+        ]),
       )
       .optional(),
   }),
@@ -110,15 +134,26 @@ const manifestDeclarations = (): StoredDerivedDeclaration[] =>
               where: input.where ?? null,
             };
           }),
-          dependsOn: (entry.stored.dependsOn ?? []).map((dependency) => {
-            const [sourceColumn, entityColumn] = onePair(dependency.match);
-            return {
-              entity: dependency.entity,
-              key: dependency.key,
-              sourceColumn,
-              entityColumn,
-            };
-          }),
+          dependsOn: (entry.stored.dependsOn ?? []).map(
+            (dependency): DerivedDependency => {
+              if ("through" in dependency)
+                return {
+                  entity: dependency.entity,
+                  key: dependency.key,
+                  through: {
+                    ...dependency.through,
+                    where: dependency.through.where ?? null,
+                  },
+                };
+              const [sourceColumn, entityColumn] = onePair(dependency.match);
+              return {
+                entity: dependency.entity,
+                key: dependency.key,
+                sourceColumn,
+                entityColumn,
+              };
+            },
+          ),
         } satisfies StoredDerivedDeclaration,
       ];
     });

@@ -11,6 +11,11 @@ import type { Database } from "~/server/db";
 import { getDb } from "~/server/db/helpers";
 import { job } from "~/server/db/retained-tables";
 import { scheduleRefreshFamilies } from "~/server/generic/derived-refresh/repo/families";
+import {
+  claimDerivedMarks,
+  prepareDerivedPage,
+  publishDerivedPage,
+} from "~/server/generic/derived/repo/drain";
 import { unobservedJobInvalidation } from "~/server/generic/jobs/repo/jobs";
 import { advanceJob } from "~/server/generic/jobs/service/jobs";
 import type { JobHandlers } from "~/server/generic/jobs/types";
@@ -18,6 +23,7 @@ import {
   refreshFamilyHandler,
   createProductionRefreshFamilyHandler,
 } from "~/server/workflows/background-tasks/refresh-families";
+import { derivedComputes } from "~/server/workflows/derived-computes";
 
 const frontierDrains = new WeakMap<Database, Promise<void>>();
 
@@ -28,9 +34,11 @@ export function drainDerivedRefreshFrontier(
 ): Promise<void> {
   const existing = frontierDrains.get(db);
   if (existing) return existing;
-  // Lists read published quality, so fixtures settle it alongside search.
+  // Lists read published quality and stored derived values, so fixtures
+  // settle them alongside search.
   const pending = drainFamilyJobs(db, "search", maxPages)
     .then(() => drainFamilyJobs(db, "quality", maxPages))
+    .then(() => drainStoredDerived(db))
     .finally(() => frontierDrains.delete(db));
   frontierDrains.set(db, pending);
   return pending;
@@ -83,6 +91,20 @@ async function drainFamilyJobs(
     }
   }
   throw new Error(`Synthetic ${family} refresh exceeded ${maxPages} pages`);
+}
+
+/** Drain every ready derived mark through the production compute adapters. */
+export async function drainStoredDerived(
+  db: Database,
+  maxPages = 1_000,
+): Promise<void> {
+  for (let page = 0; page < maxPages; page++) {
+    const marks = await claimDerivedMarks(db);
+    if (marks.length === 0) return;
+    const plan = await prepareDerivedPage(db, derivedComputes, marks);
+    await publishDerivedPage(db, plan);
+  }
+  throw new Error(`Stored derived drain exceeded ${maxPages} pages`);
 }
 
 /** Settle only recipe intent using real Job ownership and an optional USDA fixture seam. */

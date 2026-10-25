@@ -29,6 +29,7 @@ import { notDeleted, unwrapDb } from "~/server/db/helpers";
 import { inventoryEntry, product } from "~/server/db/schema";
 import { loadExactEffectivePrices } from "~/server/domains/product/repo/pricing";
 import { getProductUnitMappingsByProductIds } from "~/server/domains/product/repo/unit-mappings";
+import { storedDerivedSql } from "~/server/generic/derived/repo/read";
 
 /**
  * Every requested Product's valuation graph: its stored conversion rows plus
@@ -89,6 +90,10 @@ const loadValuationGraphs = async (
     ]),
   );
 };
+
+const storedValuationColumn = sql<
+  number | null
+>`${storedDerivedSql("inventory", "valuation", inventoryEntry.id)}`;
 
 /** The columns valuing one inventory row needs. */
 export interface InventoryValuationRow {
@@ -206,3 +211,23 @@ export const inventoryValuationSql = (
   sql<
     number | null
   >`((${JSON.stringify(Object.fromEntries(valuations))}::jsonb ->> (${idColumn})::text)::double precision)`;
+
+/**
+ * Published valuations (ADR 0021) for live inventory rows, or for `ids`. A row
+ * whose value is not yet computed reads `null`, the same honest unknown a
+ * missing price gives; its stale mark is pending in the drain.
+ */
+export const loadStoredInventoryValuations = async (
+  db: Database | DrizzleTransaction,
+  ids?: readonly InventoryId[],
+): Promise<InventoryValuations> => {
+  const rows = await unwrapDb(db)
+    .select({ id: inventoryEntry.id, valuation: storedValuationColumn })
+    .from(inventoryEntry)
+    .where(
+      ids
+        ? and(inArray(inventoryEntry.id, [...ids]), notDeleted(inventoryEntry))
+        : notDeleted(inventoryEntry),
+    );
+  return new Map(rows.map((row) => [row.id, row.valuation]));
+};

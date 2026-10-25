@@ -151,18 +151,30 @@ const propagate = async (
   for (const { declaration: dependent, dependency } of dependentsOf(
     declaration.entity,
     declaration.key,
-  ))
+  )) {
+    const refs =
+      "through" in dependency
+        ? sql`SELECT l.${ident(dependency.through.dependent)} AS id
+                FROM ${ident(dependency.through.table)} l
+               WHERE l.${ident(dependency.through.source)} = ANY(${uuidArrayParam(changedIds)})
+                 ${sql.join(
+                   Object.entries(dependency.through.where ?? {}).map(
+                     ([column, value]) =>
+                       sql` AND l.${ident(column)} = ${value}`,
+                   ),
+                 )}`
+        : sql`SELECT d.id FROM ${ident(dependent.table)} d
+                JOIN ${ident(declaration.table)} s
+                  ON s.${ident(dependency.sourceColumn)} = d.${ident(dependency.entityColumn)}
+               WHERE s.id = ANY(${uuidArrayParam(changedIds)})`;
     await tx.execute(sql`
       INSERT INTO "DerivedDirty" (target, ref, priority)
-      SELECT DISTINCT ${dependent.target}, d.id, 1
-        FROM ${ident(dependent.table)} d
-        JOIN ${ident(declaration.table)} s
-          ON s.${ident(dependency.sourceColumn)} = d.${ident(dependency.entityColumn)}
-       WHERE s.id = ANY(${uuidArrayParam(changedIds)})
+      SELECT DISTINCT ${dependent.target}, r.id, 1 FROM (${refs}) r
       ON CONFLICT (target, ref) DO UPDATE SET
         ticket = nextval('"DerivedTicket"'),
         priority = LEAST("DerivedDirty".priority, EXCLUDED.priority),
         "readyAt" = now()`);
+  }
 };
 
 /** Write one target's computed values, returning the ids whose value changed. */

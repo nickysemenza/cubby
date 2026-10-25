@@ -1001,13 +1001,32 @@ const buildMetadataSchemas = () => {
         .min(1),
       dependsOn: z
         .array(
-          z
-            .object({
-              entity: nonEmptyString(),
-              key: derivedKey,
-              match: derivedMatchSchema,
-            })
-            .strict(),
+          z.union([
+            z
+              .object({
+                entity: nonEmptyString(),
+                key: derivedKey,
+                match: derivedMatchSchema,
+              })
+              .strict(),
+            /** Through a link table: `source` holds the changed record, `dependent` the record to mark. */
+            z
+              .object({
+                entity: nonEmptyString(),
+                key: derivedKey,
+                through: z
+                  .object({
+                    table: nonEmptyString(),
+                    source: nonEmptyString(),
+                    dependent: nonEmptyString(),
+                    where: z
+                      .record(nonEmptyString(), nonEmptyString())
+                      .optional(),
+                  })
+                  .strict(),
+              })
+              .strict(),
+          ]),
         )
         .optional()
         .default([]),

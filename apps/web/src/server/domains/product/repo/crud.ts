@@ -94,7 +94,7 @@ import {
   updateLiveAndReturn,
   withTransaction,
 } from "~/server/db/helpers";
-import { quotedTable, rankOf } from "~/server/db/helpers/related";
+import { rankOf } from "~/server/db/helpers/related";
 import {
   cookbook,
   device,
@@ -158,6 +158,7 @@ import {
 import { recordChange } from "~/server/generic/changes/repo/change";
 import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
 import type { QualityReadContext } from "~/server/generic/data-quality/repo/registry";
+import { storedDerivedSql } from "~/server/generic/derived/repo/read";
 import {
   ensureExternalSources,
   lockExternalIdentifierParents,
@@ -219,7 +220,6 @@ import {
 import { ownershipExitExpensePredicate } from "./ownership";
 import {
   hasDerivedProductPriceSql,
-  displayProductCostSql,
   enrichProductRowsWithPricing,
   loadEffectiveProductPricesById,
   loadProductPriceSum,
@@ -229,15 +229,12 @@ import {
 import {
   enrichProductRowsWithQuantityLedger,
   expectedQuantityFilterSql,
-  expectedQuantityReadSql,
-  expectedQuantitySql,
   hasUnknownAcquisitionLinesSql,
   hasUnknownQuantityLinesSql,
   unknownQuantityLinesReadSql,
   loadProductPickerQuantities,
   onHandUnitsFilterSql,
   onHandUnitsSql,
-  quantityVarianceSql,
   comparableQuantityHistoryFilterSql,
 } from "./quantity-ledger";
 import { productStockContext } from "./stock-context";
@@ -341,7 +338,8 @@ const productScaffold = listScaffold("product", product, {
       (id) => sql`${categorySummarySql(id)}::jsonb->'path'`,
       sql`${product.categoryId}`,
     ),
-    price: sql.raw(displayProductCostSql(quotedTable(product))),
+    // Stored (ADR 0021): the kit walk per row made price sorts ~300 ms.
+    price: storedDerivedSql("product", "price", product.id),
     primaryGtin: sql.raw(
       `(SELECT pei."externalId" FROM "EntityExternalId" pei ` +
         `WHERE pei."entityId" = "Product"."id" AND pei."source" = 'gtin' AND pei."deletedAt" IS NULL ` +
@@ -354,11 +352,16 @@ const productScaffold = listScaffold("product", product, {
     expenseCount: productExpenseCountFilterSql(product.id),
     // The range filter reads the catalog's one shared kit walk; the row value
     // walks each product's kits.
-    ledgerExpectedQuantity: {
-      value: sql.raw(expectedQuantitySql(quotedTable(product))),
-      set: expectedQuantityReadSql(),
-    },
-    quantityVariance: sql.raw(quantityVarianceSql(quotedTable(product))),
+    ledgerExpectedQuantity: storedDerivedSql(
+      "product",
+      "ledgerExpectedQuantity",
+      product.id,
+    ),
+    quantityVariance: storedDerivedSql(
+      "product",
+      "quantityVariance",
+      product.id,
+    ),
     // Variance only means reconciliation when both physical stock and ledger
     // evidence exist. Locations count as on-hand here because the compared SQL
     // projection counts them too.

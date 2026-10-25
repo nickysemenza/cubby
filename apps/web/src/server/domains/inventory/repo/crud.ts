@@ -78,6 +78,7 @@ import {
   dataQualitySortResolver,
   gapCondition,
 } from "~/server/generic/data-quality/repo/sql";
+import { storedDerivedSql } from "~/server/generic/derived/repo/read";
 import {
   ListContext,
   listPrepare,
@@ -121,12 +122,7 @@ import {
   loadInventoryOwnershipTraces,
 } from "./ownership";
 import { applyInventoryOwnershipInTransaction } from "./ownership-mutations";
-import {
-  type InventoryValuations,
-  inventoryValuationSql,
-  loadInventoryValuations,
-  loadLiveInventoryValuations,
-} from "./valuation";
+import { loadInventoryValuations } from "./valuation";
 
 export const checkUniqueProductDuplicate = async (
   db: Database,
@@ -225,9 +221,11 @@ type InventoryFilters = z.output<typeof inventoryFiltersSchema> & {
   searchQuery?: string;
 };
 
-// One valuation map serves the rows, their sort and filter, and the footer.
-const inventoryValuations = listPrepare((db) =>
-  loadLiveInventoryValuations(db),
+/** The stored valuation (ADR 0021): rows, sort, filter and footer read one figure. */
+const storedValuation = storedDerivedSql(
+  "inventory",
+  "valuation",
+  inventoryEntry.id,
 );
 
 const ownerFilterCodes = z
@@ -250,20 +248,16 @@ const inventoryScaffold = listScaffold("inventory", inventoryEntry, {
       ids.length === 0 ? sql`false` : inArray(inventoryEntry.id, ids),
     ),
     locationRole: gapCondition("inventory", "inventory_unknown_location"),
-    valuation: inventoryValuations.value((valuations) =>
-      inventoryValuationSql(valuations, inventoryEntry.id),
-    ),
+    valuation: storedValuation,
     // Amount is stored as a unit + value pair: group by unit, then by size.
     amount: [
       sql`${inventoryEntry.amountUnit}`,
       sql`${inventoryEntry.amountValue}`,
     ],
-    valuationStatus: inventoryValuations.value(
-      (valuations) => sql`CASE
-        WHEN ${inventoryValuationSql(valuations, inventoryEntry.id)} IS NOT NULL THEN ${inventoryValuationStatus.enum.valued}::text
+    valuationStatus: sql`CASE
+        WHEN ${storedValuation} IS NOT NULL THEN ${inventoryValuationStatus.enum.valued}::text
         WHEN (SELECT ${sql.raw(effectiveProductPriceSql("vs_p"))} FROM "Product" vs_p WHERE vs_p."id" = ${inventoryEntry.productId}) IS NOT NULL THEN ${inventoryValuationStatus.enum.priceable}::text
         ELSE ${inventoryValuationStatus.enum.unpriceable}::text END`,
-    ),
   },
 });
 const inventoryScoreSort = dataQualitySortResolver("inventory", inventoryEntry);
@@ -326,13 +320,8 @@ export const inventoryentryListRead = async (
   projection: ListProjection,
   readIntent: ListReadIntent = "page",
 ) => {
-  // The rows, their sort/filter and the footer total all read ONE computed
-  // map; a count-only read prepares it only for a valuation filter.
   const request = { filters, sorts, pagination, readIntent, projection };
   const context = await inventoryScaffold.context(db, request);
-  const valuations = context.has(inventoryValuations)
-    ? context.get(inventoryValuations)
-    : undefined;
   const whereCondition = await buildInventoryWhere(db, filters, context);
 
   // Count-only consumers deliberately do not request table footers.
@@ -342,12 +331,7 @@ export const inventoryentryListRead = async (
   // One query serves both: the scaffold's count reads it, the sums reuse it.
   let aggregate: ReturnType<typeof inventoryListAggregate> | undefined;
   const readAggregate = () =>
-    (aggregate ??= inventoryListAggregate(
-      db,
-      whereCondition,
-      valuations,
-      withSums,
-    ));
+    (aggregate ??= inventoryListAggregate(db, whereCondition, withSums));
 
   const page = await inventoryScaffold.read(db, request, {
     context,
@@ -364,6 +348,7 @@ export const inventoryentryListRead = async (
           ...getTableColumns(inventoryEntry),
           productName: product.name,
           locationName: location.name,
+          valuation: sql<number | null>`${storedValuation}`,
         })
         .from(inventoryEntry)
         .innerJoin(
@@ -423,7 +408,7 @@ export const inventoryentryListRead = async (
             }),
           })),
           bind(inventoryListItemOut.pick({ valuation: true }), (row) => ({
-            valuation: valuations?.get(row.id) ?? null,
+            valuation: row.valuation,
           })),
           ownership.fields(
             inventoryListItemOut.pick({
@@ -481,16 +466,12 @@ export const inventoryentryListRead = async (
 const inventoryListAggregate = async (
   db: Database,
   where: Awaited<ReturnType<typeof buildInventoryWhere>>,
-  valuations: InventoryValuations | undefined,
   includeSummary: boolean,
 ) => {
   const [result] = await getDb(db)
     .select({
       count: count(),
-      valuationSum:
-        includeSummary && valuations
-          ? sum(inventoryValuationSql(valuations, inventoryEntry.id))
-          : sql<number>`0`,
+      valuationSum: includeSummary ? sum(storedValuation) : sql<number>`0`,
     })
     .from(inventoryEntry)
     .innerJoin(
@@ -508,14 +489,9 @@ export const inventoryentryListSummary = async (
   db: Database,
   filters: InventoryFilters,
 ) => {
-  // The footer total reads every filtered row's valuation.
-  const context = await inventoryScaffold.context(db, {
-    filters,
-    projection: { kind: "full" },
-  });
-  const valuations = context.get(inventoryValuations);
-  const where = await buildInventoryWhere(db, filters, context);
-  const result = await inventoryListAggregate(db, where, valuations, true);
+  // The footer total reads every filtered row's stored valuation.
+  const where = await buildInventoryWhere(db, filters);
+  const result = await inventoryListAggregate(db, where, true);
   const value = Number(result.valuationSum ?? 0);
   return { valuation: Number.isNaN(value) ? 0 : value };
 };

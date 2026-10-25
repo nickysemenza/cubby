@@ -145,6 +145,13 @@ BEGIN
     PERFORM derived_mark('product.quantityVariance', ARRAY[OLD."productId"::uuid, NEW."productId"::uuid]);
   END IF;
   IF TG_OP = 'INSERT' THEN
+    IF true THEN PERFORM derived_mark('location.valuationRollup', ARRAY[NEW."locationId"::uuid]); END IF;
+  ELSIF TG_OP = 'DELETE' THEN
+    IF true THEN PERFORM derived_mark('location.valuationRollup', ARRAY[OLD."locationId"::uuid]); END IF;
+  ELSIF (true OR true) AND (OLD."locationId", OLD."placement", OLD."productId", OLD."deletedAt") IS DISTINCT FROM (NEW."locationId", NEW."placement", NEW."productId", NEW."deletedAt") THEN
+    PERFORM derived_mark('location.valuationRollup', ARRAY[OLD."locationId"::uuid, NEW."locationId"::uuid]);
+  END IF;
+  IF TG_OP = 'INSERT' THEN
     IF true THEN PERFORM derived_mark('inventory.valuation', ARRAY[NEW."id"::uuid]); END IF;
   ELSIF TG_OP = 'DELETE' THEN
     IF true THEN PERFORM derived_mark('inventory.valuation', ARRAY[OLD."id"::uuid]); END IF;
@@ -172,6 +179,20 @@ BEGIN
     IF true THEN PERFORM derived_mark('product.quantityVariance', ARRAY[OLD."productId"::uuid]); END IF;
   ELSIF (true OR true) AND (OLD."productId", OLD."deletedAt") IS DISTINCT FROM (NEW."productId", NEW."deletedAt") THEN
     PERFORM derived_mark('product.quantityVariance', ARRAY[OLD."productId"::uuid, NEW."productId"::uuid]);
+  END IF;
+  IF TG_OP = 'INSERT' THEN
+    IF true THEN PERFORM derived_mark('location.valuationRollup', ARRAY[NEW."id"::uuid]); END IF;
+  ELSIF TG_OP = 'DELETE' THEN
+    IF true THEN PERFORM derived_mark('location.valuationRollup', ARRAY[OLD."id"::uuid]); END IF;
+  ELSIF (true OR true) AND (OLD."id", OLD."parentId", OLD."productId", OLD."deletedAt") IS DISTINCT FROM (NEW."id", NEW."parentId", NEW."productId", NEW."deletedAt") THEN
+    PERFORM derived_mark('location.valuationRollup', ARRAY[OLD."id"::uuid, NEW."id"::uuid]);
+  END IF;
+  IF TG_OP = 'INSERT' THEN
+    IF true THEN PERFORM derived_mark('location.valuationRollup', ARRAY[NEW."parentId"::uuid]); END IF;
+  ELSIF TG_OP = 'DELETE' THEN
+    IF true THEN PERFORM derived_mark('location.valuationRollup', ARRAY[OLD."parentId"::uuid]); END IF;
+  ELSIF (true OR true) AND (OLD."parentId", OLD."productId", OLD."deletedAt") IS DISTINCT FROM (NEW."parentId", NEW."productId", NEW."deletedAt") THEN
+    PERFORM derived_mark('location.valuationRollup', ARRAY[OLD."parentId"::uuid, NEW."parentId"::uuid]);
   END IF;
   RETURN NULL;
 END $$;--> statement-breakpoint
@@ -263,5 +284,6 @@ INSERT INTO "JobInvalidation" (key, "restartsPass") VALUES ('derived:drain', fal
 INSERT INTO "DerivedDirty" (target, ref, priority) SELECT 'product.price', t.id, 1 FROM "Product" t ON CONFLICT (target, ref) DO NOTHING;--> statement-breakpoint
 INSERT INTO "DerivedDirty" (target, ref, priority) SELECT 'product.ledgerExpectedQuantity', t.id, 1 FROM "Product" t ON CONFLICT (target, ref) DO NOTHING;--> statement-breakpoint
 INSERT INTO "DerivedDirty" (target, ref, priority) SELECT 'product.quantityVariance', t.id, 1 FROM "Product" t ON CONFLICT (target, ref) DO NOTHING;--> statement-breakpoint
+INSERT INTO "DerivedDirty" (target, ref, priority) SELECT 'location.valuationRollup', t.id, 1 FROM "Location" t ON CONFLICT (target, ref) DO NOTHING;--> statement-breakpoint
 INSERT INTO "DerivedDirty" (target, ref, priority) SELECT 'inventory.valuation', t.id, 1 FROM "InventoryEntry" t ON CONFLICT (target, ref) DO NOTHING;--> statement-breakpoint
 -- derived:end

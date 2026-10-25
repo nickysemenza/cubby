@@ -65,6 +65,14 @@ const KIT_LINK_INPUTS: StoredInput[] = [
   },
 ];
 
+/** A kit's value changes its components': propagate kit → component. */
+const KIT_COMPONENT_LINK = {
+  table: "EntityLink",
+  source: "fromEntityId",
+  dependent: "toEntityId",
+  where: { kind: "productComponent" },
+};
+
 /** Rows the effective price reads (stored derived inputs, ADR 0021). */
 const PRICING_INPUTS: StoredInput[] = [
   {
@@ -2270,7 +2278,13 @@ Rules:
         // (ADR 0021): the kit walk is too slow to sort a page by.
         price: {
           type: "number",
-          stored: { compute: "product.price", inputs: PRICING_INPUTS },
+          stored: {
+            compute: "product.price",
+            inputs: PRICING_INPUTS,
+            dependsOn: [
+              { entity: "product", key: "price", through: KIT_COMPONENT_LINK },
+            ],
+          },
         },
         // The primary live GTIN, else the oldest.
         primaryGtin: { type: "text" },
@@ -2281,6 +2295,13 @@ Rules:
           stored: {
             compute: "product.ledgerExpectedQuantity",
             inputs: QUANTITY_INPUTS,
+            dependsOn: [
+              {
+                entity: "product",
+                key: "ledgerExpectedQuantity",
+                through: KIT_COMPONENT_LINK,
+              },
+            ],
           },
         },
         quantityVariance: {
@@ -2288,6 +2309,13 @@ Rules:
           stored: {
             compute: "product.quantityVariance",
             inputs: QUANTITY_INPUTS,
+            dependsOn: [
+              {
+                entity: "product",
+                key: "ledgerExpectedQuantity",
+                through: KIT_COMPONENT_LINK,
+              },
+            ],
           },
         },
         // Shelf against ledger, only where stock and comparable ledger history

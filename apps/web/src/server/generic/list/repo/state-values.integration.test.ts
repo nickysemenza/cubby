@@ -49,6 +49,7 @@ import { setDataException } from "~/server/generic/data-quality/repo/exceptions"
 import { gapCondition } from "~/server/generic/data-quality/repo/sql";
 import { withListGroupBy } from "~/server/generic/list/repo/list";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
+import { drainStoredDerived } from "~/server/testing/background-queue";
 import {
   createInventoryFixture,
   createLocationFixture,
@@ -105,6 +106,7 @@ describe("state predicates re-declared as values", () => {
       value: 1,
       unit: "each",
     });
+    await drainStoredDerived(ctx.db);
     const fixture = [valued, priceable, unpriceable].map(({ id }) => id);
 
     // The retired predicate: `missing` is every NULL valuation, so it
@@ -225,6 +227,7 @@ describe("state predicates re-declared as values", () => {
       ]),
       await seed("Parity untouched", []),
     ];
+    await drainStoredDerived(ctx.db);
     const fixture = all.map(({ id }) => id);
     const fixtureIds = all.map(({ entityId }) => entityId);
 
