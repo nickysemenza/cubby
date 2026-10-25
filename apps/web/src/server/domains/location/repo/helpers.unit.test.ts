@@ -11,7 +11,6 @@ import {
 import { describe, expect, it } from "vitest";
 
 import { getR2PublicUrl } from "~/server/clients/r2-public-url";
-import { resolveProductPricing } from "~/server/domains/product/repo/pricing";
 
 import {
   dbLocationToAPI,
@@ -137,6 +136,7 @@ const product = {
   categoryId: taxonomyId("food"),
   category: categorySummaryFixture("food"),
   price: 4.5,
+  effectivePrice: 4.5,
   usdaUnavailable: null,
   acquisitionOrigin: "unknown" as const,
   stockTracked: null,
@@ -226,12 +226,9 @@ describe("location mappers", () => {
       images: [{ image, deletedAt: null }],
     } satisfies LocationListDB;
 
-    const pricingByProductId = new Map([
-      [PRODUCT_ID, resolveProductPricing(product.price)],
-    ]);
     const result = {
       ...locationReferenceFields(row),
-      ...locationInventoryFields(row, pricingByProductId),
+      ...locationInventoryFields(row),
     };
 
     expect(result.parent).toEqual({

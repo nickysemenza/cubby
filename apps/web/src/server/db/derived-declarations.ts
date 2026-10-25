@@ -66,6 +66,12 @@ export interface StoredDerivedDeclaration {
   readonly target: string;
   readonly table: string;
   readonly compute: string;
+  /**
+   * `value`: published as a `DerivedValue` row, with per-row meta in the
+   * envelope. `sink`: written to the value's own table (search documents,
+   * recipe totals), so readers read that table.
+   */
+  readonly publishes: "value" | "sink";
   readonly sort: DerivedSortType;
   readonly inputs: readonly DerivedInput[];
   readonly dependsOn: readonly DerivedDependency[];
@@ -84,6 +90,7 @@ const storedEntry = z.object({
   key: z.string(),
   table: z.string().nullable(),
   type: z.string(),
+  publishes: z.enum(["value", "sink"]),
   stored: z.object({
     compute: z.string(),
     inputs: z.array(
@@ -158,6 +165,7 @@ const manifestDeclarations = (): StoredDerivedDeclaration[] =>
           target: `${entry.entity}.${entry.key}`,
           table: entry.table,
           compute: entry.stored.compute,
+          publishes: entry.publishes,
           sort: sortTypeOf(entry.type),
           inputs: entry.stored.inputs.map((input) => {
             const [tableColumn, entityColumn] = onePair(input.match);

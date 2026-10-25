@@ -5,7 +5,9 @@ import { z } from "zod";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import {
-  loadDerivedSidecar,
+  derivedSidecarOf,
+  loadPageStoredMeta,
+  type PageStoredMeta,
   resolutionDecidedBy,
 } from "~/server/generic/derived/repo/sidecar";
 
@@ -21,6 +23,8 @@ export async function withPageDerived<Row>(
   entity: Entity,
   rows: readonly unknown[],
   hydrate: () => Promise<Row[]> | Row[],
+  /** The page's stored meta, when the caller started it with the page ids. */
+  started?: Promise<PageStoredMeta>,
 ): Promise<{ data: Row[]; derived: Record<string, DerivedSidecar> }> {
   const identities = rows.map((row) => {
     const identity = identitySchema.parse(row);
@@ -31,10 +35,16 @@ export async function withPageDerived<Row>(
       fieldResolutions: resolutions.fieldResolutions,
     };
   });
-  const [data, derived] = await Promise.all([
+  const [data, stored] = await Promise.all([
     hydrate(),
-    loadDerivedSidecar(db, entity, identities),
+    started ??
+      loadPageStoredMeta(
+        db,
+        entity,
+        identities.map((identity) => identity.internalId),
+      ),
   ]);
+  const derived = derivedSidecarOf(identities, stored);
   // Inheritance bindings can add resolutions during hydration. Merge their pure
   // provenance after both loads, preserving stored state for cached fields.
   for (const row of data) {

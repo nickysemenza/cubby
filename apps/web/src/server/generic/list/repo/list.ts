@@ -98,6 +98,10 @@ import {
   dataQualityFilterPredicates,
   dataQualitySortResolver,
 } from "~/server/generic/data-quality/repo/sql";
+import {
+  loadPageStoredMeta,
+  type PageStoredMeta,
+} from "~/server/generic/derived/repo/sidecar";
 import { relatedWhereConditions } from "~/server/generic/entity-links/repo/related-view";
 import {
   type HierarchyEntity,
@@ -2313,6 +2317,7 @@ export function listScaffold<
               .offset(clauses.offset)) as Row[];
           }));
       let prefetched: ListPagePrefetch | undefined;
+      let storedMeta: Promise<PageStoredMeta> | undefined;
       const readLoadedPageWithCount =
         loadIds && !spec.count
           ? () =>
@@ -2338,6 +2343,12 @@ export function listScaffold<
                     : await countWhere(db, table, where, source));
                 const pageIds = ids.map((row) => row.id);
                 prefetched = spec.prefetch?.(pageIds, projection);
+                // The envelope's stored meta needs only ids: read it beside the rows.
+                storedMeta = spec.derived
+                  ? loadPageStoredMeta(db, entity, pageIds)
+                  : undefined;
+                // Awaited after hydration; this only keeps an early failure handled.
+                storedMeta?.catch(() => undefined);
                 const data = await loadIds(pageIds, projection);
                 span.setAttributes({
                   "db.result_count": data.length,
@@ -2428,7 +2439,7 @@ export function listScaffold<
             const hydrate = () =>
               spec.hydrate(data, projection, context, prefetched);
             const complete = spec.derived
-              ? await withPageDerived(db, entity, data, hydrate)
+              ? await withPageDerived(db, entity, data, hydrate, storedMeta)
               : { data: await hydrate(), derived: undefined };
             const hydrated = complete.data;
             if (!parent) return { ...complete, count, ...grouped };

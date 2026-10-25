@@ -153,7 +153,7 @@ export const dbInventoryEntryToAPI: (
       displayImages,
       ...mapDbProductToInventoryEmbed({
         ...product,
-        pricing,
+        effectivePrice: pricing.effectivePrice,
         primaryGtin: primaryGtinOf(product.externalIds),
       }),
       images: mapImages(product.images),

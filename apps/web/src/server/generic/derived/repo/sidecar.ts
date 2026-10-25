@@ -13,7 +13,10 @@ import type { FieldResolution } from "@cubby/schemas/field-resolution";
 
 import type { Database, DrizzleTransaction } from "~/server/db";
 import { storedDerivedDeclarations } from "~/server/db/derived-declarations";
-import { loadStoredDerived } from "~/server/generic/derived/repo/read";
+import {
+  loadStoredDerived,
+  type StoredDerivedRead,
+} from "~/server/generic/derived/repo/read";
 
 export interface SidecarRow {
   /** The internal id stored values are keyed by. */
@@ -41,23 +44,37 @@ export const resolutionDecidedBy = (resolution: FieldResolution): DecidedBy => {
     : { level: "default", source: null };
 };
 
-/** One page's sidecar: stored fields from `DerivedValue`, inherited ones from resolutions. */
-export async function loadDerivedSidecar(
+export type PageStoredMeta = ReadonlyMap<
+  string,
+  ReadonlyMap<string, StoredDerivedRead>
+>;
+
+/**
+ * The stored values with per-row meta for a page, keyed by internal id. Sink
+ * values (search documents, recipe totals) have no `DerivedValue` row. Lists
+ * start this as soon as page ids are known, beside the row load.
+ */
+export function loadPageStoredMeta(
   db: Database | DrizzleTransaction,
   entity: Entity,
-  rows: readonly SidecarRow[],
-): Promise<Record<string, DerivedSidecar>> {
+  internalIds: readonly string[],
+): Promise<PageStoredMeta> {
   const keys = storedDerivedDeclarations()
-    .filter((declaration) => declaration.entity === entity)
+    .filter(
+      (declaration) =>
+        declaration.entity === entity && declaration.publishes === "value",
+    )
     .map((declaration) => declaration.key);
-  const stored = keys.length
-    ? await loadStoredDerived(
-        db,
-        entity,
-        rows.map((row) => row.internalId),
-        keys,
-      )
-    : new Map();
+  return keys.length
+    ? loadStoredDerived(db, entity, internalIds, keys)
+    : Promise.resolve(new Map());
+}
+
+/** One page's sidecar: stored fields from `DerivedValue`, inherited ones from resolutions. */
+export function derivedSidecarOf(
+  rows: readonly SidecarRow[],
+  stored: PageStoredMeta,
+) {
   const out: Record<string, DerivedSidecar> = {};
   for (const row of rows) {
     const sidecar: Record<string, DerivedMeta> = {};

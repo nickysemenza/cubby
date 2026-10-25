@@ -409,6 +409,7 @@ export const renderEntityMetadataArtifacts = (
                         key,
                         table: entity.descriptor.dbTable ?? null,
                         type: "type" in entry ? entry.type : "number",
+                        publishes: "value",
                         stored: entry.stored,
                       },
                     ]
@@ -420,6 +421,8 @@ export const renderEntityMetadataArtifacts = (
                 key,
                 table: entity.descriptor.dbTable ?? null,
                 type: "text",
+                // Non-list stored values publish to their own tables.
+                publishes: "sink",
                 stored,
               }),
             ),
@@ -433,6 +436,7 @@ export const renderEntityMetadataArtifacts = (
                     key: "searchDocument",
                     table: entity.descriptor.dbTable,
                     type: "text",
+                    publishes: "sink",
                     stored: {
                       compute: `search.${entity.key}`,
                       inputs: [
@@ -473,6 +477,7 @@ export const renderEntityMetadataArtifacts = (
                     key: "dataQuality",
                     table: entity.descriptor.dbTable,
                     type: "number",
+                    publishes: "value",
                     stored: {
                       compute: `quality.${entity.key}`,
                       inputs: [

@@ -24,6 +24,7 @@ import { alias, QueryBuilder } from "drizzle-orm/pg-core";
 
 import { getR2PublicUrl } from "~/server/clients/r2-public-url";
 import type { Database, DrizzleTransaction } from "~/server/db";
+import { storedValueSql } from "~/server/db/computed/derived-value-sql";
 import { stockOnly } from "~/server/db/computed/inventory-placement";
 import {
   LOCATION_DESCRIPTION_FEATURE_ID,
@@ -58,10 +59,6 @@ import {
 import { syncEntityImages } from "~/server/domains/image/repo/entity-image-sync";
 import { displayableImageWhere } from "~/server/domains/image/repo/image-displayability";
 import { hydrateImageReadProjection } from "~/server/domains/image/repo/image-read-projection";
-import {
-  attachInventoryValuations,
-  loadStoredInventoryValuations,
-} from "~/server/domains/inventory/repo/valuation";
 import { getHomeLocation } from "~/server/domains/location/repo/home";
 import { mapLocationIdentityProduct } from "~/server/domains/location/repo/identity-product";
 import type {
@@ -69,7 +66,6 @@ import type {
   LocationWithParentChild,
 } from "~/server/domains/location/repo/internal-types";
 import { parseLocationType } from "~/server/domains/location/repo/parse-type";
-import { loadProductPricing } from "~/server/domains/product/repo/pricing";
 import { assertClassificationPolicies } from "~/server/domains/spending-category/repo/classification-field-policy";
 import {
   resolveEntityDisplayImages,
@@ -90,10 +86,7 @@ import {
 } from "~/server/generic/audit-log/repo/audit-log";
 import { recordChange } from "~/server/generic/changes/repo/change";
 import { loadDataQualities } from "~/server/generic/data-quality/repo/hydrate";
-import {
-  loadStoredDerived,
-  storedDerivedSql,
-} from "~/server/generic/derived/repo/read";
+import { storedDerivedSql } from "~/server/generic/derived/repo/read";
 import { type ListContext } from "~/server/generic/list/repo/field-compiler";
 import { listScaffold } from "~/server/generic/list/repo/list";
 import type { ListProjection } from "~/server/generic/list/repo/list-contracts";
@@ -761,7 +754,12 @@ export const locationListRead = async (
       load: (where) =>
         getDb(db).query.location.findMany({
           where,
-          extras: relations.location.list.extras,
+          extras: {
+            ...relations.location.list.extras,
+            valuationRollup: storedValueSql(location.id, "valuationRollup").as(
+              "valuationRollup",
+            ),
+          },
           with: {
             parent: wantsListGroup(projection, "relations")
               ? relations.location.list.with.parent
@@ -783,43 +781,6 @@ export const locationListRead = async (
       read: {
         media: true,
         bindings: (bind) => {
-          const inventory = bind.batch(async (page) => {
-            const rows = page.rows;
-            const entries = rows.flatMap((row) =>
-              (row.inventoryEntries ?? []).flatMap((entry) =>
-                "product" in entry ? [entry] : [],
-              ),
-            );
-            const [pricing, valuations] = await Promise.all([
-              loadProductPricing(
-                db,
-                entries.map((entry) => entry.product),
-              ),
-              loadStoredInventoryValuations(
-                db,
-                entries.map((entry) => entry.id),
-              ),
-            ]);
-            return { pricing, valuations };
-          });
-          const valuations = bind.batch(async (page) => {
-            const stored = await loadStoredDerived(
-              db,
-              "location",
-              page.rows.map((row) => row.id),
-              ["valuationRollup"],
-            );
-            return new Map(
-              page.rows.map((row) => [
-                row.id,
-                locationValuation
-                  .nullable()
-                  .parse(
-                    stored.get(row.id)?.get("valuationRollup")?.value ?? null,
-                  ),
-              ]),
-            );
-          });
           return [
             bind(locationListItemOut.pick({ type: true }), (row) => ({
               type: parseLocationType(row.type),
@@ -846,30 +807,27 @@ export const locationListRead = async (
                 ),
               ),
             })),
-            inventory.fields(
-              locationListItemOut.pick({ inventoryEntries: true }),
-              (row, loaded) =>
-                locationInventoryFields(
-                  {
-                    inventoryEntries: attachInventoryValuations(
-                      (row.inventoryEntries ?? []).flatMap((entry) =>
-                        "product" in entry ? [entry] : [],
-                      ),
-                      loaded.valuations,
-                    ),
-                  },
-                  loaded.pricing,
+            bind(locationListItemOut.pick({ inventoryEntries: true }), (row) =>
+              locationInventoryFields({
+                inventoryEntries: (row.inventoryEntries ?? []).flatMap(
+                  (entry) =>
+                    "product" in entry
+                      ? [{ ...entry, valuation: entry.storedValuation }]
+                      : [],
                 ),
+              }),
             ),
-            valuations.fields(
+            bind(
               locationListItemOut.pick({
                 valuation: true,
                 valuationLabel: true,
               }),
-              (row, loaded) => ({
-                valuation: loaded.get(row.id) ?? null,
-                valuationLabel: valuationLabel(loaded.get(row.id)),
-              }),
+              (row) => {
+                const valuation = locationValuation
+                  .nullable()
+                  .parse(row.valuationRollup ?? null);
+                return { valuation, valuationLabel: valuationLabel(valuation) };
+              },
             ),
           ];
         },

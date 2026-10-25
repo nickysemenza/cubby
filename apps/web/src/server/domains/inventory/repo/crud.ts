@@ -61,6 +61,7 @@ import {
 import {
   effectiveProductPriceSql,
   loadProductPricing,
+  storedEffectivePrice,
 } from "~/server/domains/product/repo/pricing";
 import { resolveEntityDisplayImageLists } from "~/server/entity-kernel/repo/entity-display-image";
 import {
@@ -78,7 +79,10 @@ import {
   dataQualitySortResolver,
   gapCondition,
 } from "~/server/generic/data-quality/repo/sql";
-import { storedDerivedSql } from "~/server/generic/derived/repo/read";
+import {
+  loadStoredDerived,
+  storedDerivedSql,
+} from "~/server/generic/derived/repo/read";
 import {
   ListContext,
   listPrepare,
@@ -381,20 +385,24 @@ export const inventoryentryListRead = async (
           loadInventoryOwnershipTraces(db, rows),
         );
         const references = bind.batch(async ({ rows }) => {
-          const related = await getDb(db).query.inventoryEntry.findMany({
-            where: inArray(
-              inventoryEntry.id,
-              rows.map((row) => row.id),
+          const [related, prices] = await Promise.all([
+            getDb(db).query.inventoryEntry.findMany({
+              where: inArray(
+                inventoryEntry.id,
+                rows.map((row) => row.id),
+              ),
+              ...relations.inventory.list,
+            }),
+            loadStoredDerived(
+              db,
+              "product",
+              [...new Set(rows.map((row) => row.productId))],
+              ["price"],
             ),
-            ...relations.inventory.list,
-          });
-          const pricing = await loadProductPricing(
-            db,
-            related.map((entry) => entry.product),
-          );
+          ]);
           return {
             byId: new Map(related.map((row) => [row.id, row])),
-            pricing,
+            prices,
           };
         });
         return [
@@ -439,9 +447,9 @@ export const inventoryentryListRead = async (
                 },
                 product: mapDbProductToInventoryList({
                   ...entry.product,
-                  pricing: requireLoadedProductPricing(
-                    loaded.pricing,
-                    entry.product.id,
+                  effectivePrice: storedEffectivePrice(
+                    loaded.prices,
+                    entry.product,
                   ),
                   primaryGtin: primaryGtinOf(entry.product.externalIds),
                 }),

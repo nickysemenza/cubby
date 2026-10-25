@@ -31,6 +31,7 @@ import {
   projectionRows,
   unitWeighted,
 } from "~/server/domains/product/repo/kit-projection";
+import type { StoredDerivedRead } from "~/server/generic/derived/repo/read";
 
 import { serviceProductSqlText } from "./service-category";
 
@@ -486,4 +487,18 @@ export const loadProductPriceSum = async (
     z.object({ priceSum: z.number() }),
   );
   return rows[0]?.priceSum ?? 0;
+};
+
+/**
+ * A Product's effective price for list embeds: the stored `product.price`
+ * (ADR 0021), or its own explicit price until the first value is published.
+ */
+export const storedEffectivePrice = (
+  stored: ReadonlyMap<string, ReadonlyMap<string, StoredDerivedRead>>,
+  row: { readonly id: ProductId; readonly price: number | null },
+): number | null => {
+  const read = stored.get(row.id)?.get("price");
+  return read && read.meta.state !== "missing"
+    ? z.number().nullable().parse(read.value)
+    : resolveProductPricing(row.price).effectivePrice;
 };
