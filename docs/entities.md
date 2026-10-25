@@ -51,6 +51,8 @@ from its URL. Saved-view filters and fixed scope are composed through the
 manifest; links encode the same effective filter. Embeds stop at their bounded
 first page, and the full list owns further browsing. Optional row disclosure
 uses the shared table's inline detail rows, rather than another table system.
+Embeds use sheet-only row inspection at every viewport width; they do not own a
+docked inspector region.
 
 A retention-managed read-only entity may omit `deletedAt`; generic readers apply
 liveness only where the table declares it. `listScaffold.population` receives the

@@ -26,7 +26,13 @@ In progress, Due, Waiting for Apple, Backing off and Needs attention. Retry now
 uses `job.retryNow` over checked codes or the exact current entity filter.
 
 Job is the sole exception to permanent `Entity` identities: retention deletes
-its identity in the same transaction as its pruned execution row. Queue work
+its identity in the same transaction as its pruned execution row. Retention also
+reconciles a bounded batch of Job identities without a payload, including rows
+orphaned by an old Worker's retention between committed backfill batches and
+deployment. The pass is idempotent and never removes another entity kind.
+Enqueue locks an existing Job through invalidation; retention skips locked
+candidates, so it cannot prune a Job being invalidated or return a stale identity.
+Queue work
 churns at roughly 175,000 Jobs a week; retaining those identities forever would
 make the identity index unbounded. A pruned `JOB-` code may be recycled and no
 longer resolves; every other entity retains its identity and code forever.
@@ -338,6 +344,9 @@ the lease, live or expired) and `leaseExpiresAt`. Its saved views are
 
 Activity on web and Apple presents the unhealthy-only health notice, device
 backlog banner, compact lane/reason counts, Runs needing attention, then Jobs.
+Navigable counts use the Job entity population, hiding internal work with the
+table; queue health continues to measure internal kinds. Every supplied retry
+restriction intersects, including mixed entity filters, row IDs and Run scope.
 Count chips scope the Job table; web records that scope in Activity's URL.
 Runs use the generic `attention` saved view: member-visible stopped Runs that
 have no successor, plus stalled Runs, ordered stalled first then newest.

@@ -13,16 +13,7 @@ import {
 } from "@cubby/schemas/job";
 import { runStatus } from "@cubby/schemas/run-fields";
 import { scrubErrorMessage } from "@cubby/worker-tracing/scrub-error-message";
-import {
-  and,
-  desc,
-  eq,
-  inArray,
-  notInArray,
-  or,
-  type SQL,
-  sql,
-} from "drizzle-orm";
+import { and, desc, inArray, notInArray, or, type SQL, sql } from "drizzle-orm";
 
 import type {
   JobFacts,
@@ -139,12 +130,8 @@ function jobSetWhere(
   filter: JobSetFilter,
   runId: RunId | null,
 ): SQL | undefined {
-  if (filter.entityFilters)
-    return and(
-      jobEntityWhere(filter.entityFilters),
-      filter.codes ? eqAny(job.shortcode, filter.codes) : undefined,
-    );
   return and(
+    filter.entityFilters ? jobEntityWhere(filter.entityFilters) : undefined,
     filter.codes ? eqAny(job.shortcode, filter.codes) : undefined,
     filter.states
       ? inArray(job.state, filter.states)
@@ -164,12 +151,9 @@ function jobSetWhere(
           filter.ids.map((id) => parseEntityId("job", id)),
         )
       : undefined,
-    filter.needsAttention
-      ? or(
-          eq(job.state, jobState.enum.failed),
-          sql`${job.attempts} >= ${JOB_NEEDS_ATTENTION_ATTEMPTS}`,
-        )
-      : undefined,
+    filter.needsAttention === undefined
+      ? undefined
+      : sql`(${job.state} = ${jobState.enum.failed} OR ${job.attempts} >= ${JOB_NEEDS_ATTENTION_ATTEMPTS}) = ${filter.needsAttention}`,
   );
 }
 

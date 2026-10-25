@@ -1078,8 +1078,8 @@ export default defineEntity({
     },
     sort: {
       fields: [
-        "stalled",
         "startedAt",
+        "stalled",
         "endedAt",
         "status",
         "purpose",

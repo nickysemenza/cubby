@@ -327,6 +327,8 @@ Associated Domains for the identifier and create exactly these active profiles:
   Activity extension; register the `com.nickysemenza.cubby.LiveActivity` identifier first)
 - `AppStore com.nickysemenza.cubby macOS` (`MAC_APP_STORE`)
 
+Enable **Background GPU Access** on `com.nickysemenza.cubby` for the continued-processing GPU entitlement; capability changes invalidate App Store profiles, so regenerate (Edit → Save) both `AppStore com.nickysemenza.cubby iOS` and `AppStore com.nickysemenza.cubby macOS` afterwards.
+
 Configure these repository Actions secrets:
 
 - `APP_STORE_CONNECT_API_KEY_P8` — the App Store Connect API key's complete `.p8` contents

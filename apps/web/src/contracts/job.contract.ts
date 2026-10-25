@@ -15,11 +15,17 @@ import { z } from "zod";
 
 import { defineContract, mutation, query } from "~/contracts/define";
 
-/** `job.explain` names a Run, image job or Email by code, or a Job by id. */
-const explainTarget = z.union([
+/** One self-describing pattern retains legacy Job UUIDs alongside public codes. */
+const explainPatterns = [
   anyShortcodeSchema(["run", "imageJob", "email", "job"]),
   z.uuid(),
-]);
+].map((schema) => z.string().parse(z.toJSONSchema(schema).pattern));
+const explainTarget = z
+  .string()
+  .regex(new RegExp(explainPatterns.join("|")))
+  .describe(
+    "A Run (RUN-), image job (IPR-), Email (EML-), Job (JOB-), or legacy Job UUID.",
+  );
 
 /** One Job as diagnostics read it: execution facts only, never domain state. */
 const jobFacts = z.object({
@@ -315,7 +321,7 @@ export const jobContract = defineContract(
     }),
     explain: query({
       description:
-        "Explain what a Run (RUN-), image job (IPR-), Email (EML-) or Job (uuid) is waiting on, as a chain from the record to the Jobs that block it.",
+        "Explain what a Run (RUN-), image job (IPR-), Email (EML-) or Job (JOB- or legacy uuid) is waiting on, as a chain from the record to the Jobs that block it.",
       input: z.strictObject({ id: explainTarget }),
       output: explainOut,
       cache: { tags: [["run"], ["image"]], profile: "live-status" },

@@ -108,6 +108,11 @@ production runtime guarantee. Do not overlap Actions or another migration
 operator. Deploy matching code immediately after the migration; no writer hold
 is required.
 
+After deployment the retention pass reconciles orphan Job identities in bounded
+batches: old retention could have deleted a backfilled Job before the new Worker
+deployed. It repeats immediately while a full batch remains. Confirm this pass
+finishes before verifying that no orphan Job identities remain.
+
 After deployment, verify every Job has exactly its matching live `Entity` row
 of kind `job`, codes match `JOB-[23456789ABCDEFGHJKMNPQRSTUVWXYZ]{10}`, no
 unreferenced Job identities remain, and the pending-capture population and

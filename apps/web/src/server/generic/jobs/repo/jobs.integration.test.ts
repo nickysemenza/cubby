@@ -1,3 +1,4 @@
+import { pollUntil } from "@cubby/shared/retry";
 import { eq, sql } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it, vi } from "vitest";
@@ -70,6 +71,77 @@ describe("durable jobs", () => {
     ).toMatchObject([{ kind: "job", shortcode: first.shortcode }]);
   });
 
+  it.each([false, true])(
+    "invalidates the stored identity after concurrent retention (replacement=%s)",
+    async (replace) => {
+      const input = {
+        key: "synthetic:retention-invalidation",
+        kind: "synthetic.race",
+        input: {},
+      };
+      const old = await enqueueJob(ctx.db, input);
+      await getDb(ctx.db)
+        .update(job)
+        .set({ state: "completed" })
+        .where(eq(job.id, old.id));
+      const locked = Promise.withResolvers<number>();
+      const release = Promise.withResolvers<void>();
+      const pruning = withTransactionDatabase(ctx.db, async (tx) => {
+        await getDb(tx)
+          .select()
+          .from(job)
+          .where(eq(job.id, old.id))
+          .for("update");
+        const backend = await getDb(tx).execute<{ pid: number }>(
+          sql`SELECT pg_backend_pid() AS pid`,
+        );
+        locked.resolve(backend.rows[0]!.pid);
+        await release.promise;
+        await getDb(tx).delete(job).where(eq(job.id, old.id));
+        await getDb(tx)
+          .delete(entityIdentity)
+          .where(eq(entityIdentity.id, old.id));
+        if (replace) await enqueueJob(tx, input);
+      });
+      const pid = await locked.promise;
+      const invalidating = enqueueJob(ctx.db, { ...input, invalidate: true });
+      try {
+        await pollUntil(
+          async () => {
+            const blocked = await getDb(ctx.db).execute<{ blocked: boolean }>(
+              sql`SELECT EXISTS (SELECT 1 FROM pg_stat_activity WHERE ${pid} = ANY(pg_blocking_pids(pid))) AS blocked`,
+            );
+            return blocked.rows[0]?.blocked ? true : undefined;
+          },
+          {
+            label: "invalidation blocked by retention",
+            timeoutMs: 5000,
+            intervalMs: 10,
+          },
+        );
+      } finally {
+        release.resolve();
+      }
+      await pruning;
+      const returned = await invalidating;
+      const [stored] = await getDb(ctx.db)
+        .select()
+        .from(job)
+        .where(eq(job.key, input.key));
+      expect(returned.id).not.toBe(old.id);
+      expect(returned).toMatchObject({
+        id: stored!.id,
+        shortcode: stored!.shortcode,
+        state: "queued",
+      });
+      expect(
+        await getDb(ctx.db)
+          .select()
+          .from(entityIdentity)
+          .where(eq(entityIdentity.id, returned.id)),
+      ).toMatchObject([{ shortcode: stored!.shortcode }]);
+    },
+  );
   it("opens serializable isolation before a snapshot-dependent Job publication", async () => {
     const work = await enqueueJob(ctx.db, {
       key: "synthetic-snapshot-publication",

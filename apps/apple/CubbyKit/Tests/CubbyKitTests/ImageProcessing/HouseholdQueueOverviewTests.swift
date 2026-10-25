@@ -54,6 +54,8 @@ struct HouseholdQueueOverviewTests {
         let model = HouseholdQueueOverview(client: client)
         await model.refresh()
         #expect(model.counts.first?.lane == .server)
+        let queueRead = try #require(requests.withLock { $0.first { $0.0 == "job.queue" } })
+        #expect(queueRead.1["filter"]?["entityFilters"] == .object([:]))
         let runRead = try #require(
             requests.withLock { $0.first { $0.0 == "entity.listBase" && $0.1["entity"] == "run" } })
         #expect(runRead.1["pagination"]?["pageSize"] == 10)

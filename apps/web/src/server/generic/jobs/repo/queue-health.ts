@@ -218,7 +218,8 @@ export async function pruneFinishedJobs(
           sql`NOT EXISTS (SELECT 1 FROM "JobInvalidation" m WHERE m.key = "Job".key)`,
         ),
       )
-      .limit(limit);
+      .limit(limit)
+      .for("update", { skipLocked: true });
     const deleted = await tx
       .delete(job)
       .where(inArray(job.id, doomed))
@@ -255,5 +256,23 @@ export async function pruneObservedInvalidationCaptures(
     .delete(jobInvalidationCapture)
     .where(inArray(jobInvalidationCapture.id, doomed))
     .returning({ id: jobInvalidationCapture.id });
+  return deleted.length;
+}
+
+/** Old retention during cutover could prune a backfilled Job without its new identity. */
+export async function pruneOrphanJobIdentities(
+  db: Database,
+  { limit }: { limit: number },
+): Promise<number> {
+  const orphan = sql`NOT ${related(job, (row) => sql`${row.id} = ${outer(entityIdentity.id)}`).exists()}`;
+  const doomed = getDb(db)
+    .select({ id: entityIdentity.id })
+    .from(entityIdentity)
+    .where(and(eq(entityIdentity.kind, "job"), orphan))
+    .limit(limit);
+  const deleted = await getDb(db)
+    .delete(entityIdentity)
+    .where(inArray(entityIdentity.id, doomed))
+    .returning({ id: entityIdentity.id });
   return deleted.length;
 }

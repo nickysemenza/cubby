@@ -107,9 +107,10 @@ export async function enqueueJob(
   return repositoryTransactionOn(db, async (tx) => {
     const found = await findOrCreateWithShortcode(tx, "job", {
       where: eq(job.key, input.key),
+      lock: true,
       values: () => values,
     });
-    let row = found.row;
+    let row: JobRow = found.row;
     if (!found.created && input.invalidate) {
       const [updated] = await tx
         .update(job)
@@ -130,7 +131,7 @@ export async function enqueueJob(
         })
         .where(
           and(
-            eq(job.key, input.key),
+            eq(job.id, row.id),
             eq(job.kind, input.kind),
             inArray(job.state, [
               "queued",
@@ -141,7 +142,7 @@ export async function enqueueJob(
           ),
         )
         .returning();
-      if (updated) row = { ...updated, shortcode: row.shortcode };
+      if (updated) row = updated;
     }
     if (row.kind !== input.kind)
       throw new Error(

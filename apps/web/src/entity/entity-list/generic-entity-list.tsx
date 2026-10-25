@@ -382,7 +382,7 @@ export function EmbeddedEntityList({
     scopeFilters: filters,
     tableStateOptions,
     additionalReadFields: detail?.readFields,
-    preview: DEFAULT_PREVIEW,
+    preview: {},
     selectable: Boolean(actions),
   });
   const codec = compileFilterCodec(getEntityFilters(entity));

@@ -3,12 +3,15 @@ import { eq } from "drizzle-orm";
 import { withTestDb } from "tooling/test-setup";
 import { describe, expect, it } from "vitest";
 
+import type { JobSetFilter } from "~/contracts/job.contract";
 import { getDb } from "~/server/db/helpers";
 import { job } from "~/server/db/retained-tables";
 import { ensureRun } from "~/server/domains/run/repo/ensure-run";
 import { kernelCtx } from "~/server/domains/run/service/suggestion-sweep.fixtures";
+import { readJobQueue } from "~/server/generic/jobs/repo/job-queue";
 import { retryJobSet } from "~/server/generic/jobs/repo/job-queue";
 import { enqueueJob } from "~/server/generic/jobs/repo/jobs";
+import { measureQueueHealth } from "~/server/generic/jobs/repo/queue-health";
 import { createImageFixture } from "~/server/testing/repo.fixtures";
 
 import { jobRepository } from "./repo";
@@ -138,5 +141,104 @@ describe("Job entity reads and scoped retry", () => {
         null,
       ),
     ).toEqual(expect.arrayContaining([failed.id, internal.id]));
+  });
+  it("intersects mixed retry restrictions and leaves unrelated Jobs untouched", async () => {
+    const owner = await ensureRun(ctx.db, ctx.actor, {
+      purpose: "maintenance",
+      execution: false,
+    });
+    const future = new Date(Date.now() + 60_000);
+    const selected = await enqueueJob(ctx.db, {
+      key: "synthetic:mixed-selected",
+      kind: "synthetic.selected",
+      runId: owner,
+      input: {},
+      availableAt: future,
+    });
+    const other = await enqueueJob(ctx.db, {
+      key: "synthetic:mixed-other",
+      kind: "synthetic.other",
+      input: {},
+      availableAt: future,
+    });
+    expect(
+      await retryJobSet(
+        ctx.db,
+        { entityFilters: {}, ids: [selected.id] },
+        null,
+      ),
+    ).toEqual([selected.id]);
+    expect(
+      (await getDb(ctx.db).select().from(job).where(eq(job.id, other.id)))[0]
+        ?.availableAt,
+    ).toEqual(future);
+    await getDb(ctx.db)
+      .update(job)
+      .set({ availableAt: future })
+      .where(eq(job.id, selected.id));
+    const exclusions: JobSetFilter[] = [
+      { states: ["failed"] },
+      { lanes: ["apple_device"] },
+      { kinds: ["synthetic.absent"] },
+      { reasons: ["due"] },
+      { needsAttention: true },
+    ];
+    for (const filter of exclusions) {
+      expect(
+        await retryJobSet(
+          ctx.db,
+          { entityFilters: {}, ids: [selected.id], ...filter },
+          null,
+        ),
+      ).toEqual([]);
+    }
+    expect(
+      await retryJobSet(ctx.db, { entityFilters: {}, ids: [other.id] }, owner),
+    ).toEqual([]);
+    await getDb(ctx.db)
+      .update(job)
+      .set({ attempts: 5 })
+      .where(eq(job.id, selected.id));
+    expect(
+      await retryJobSet(
+        ctx.db,
+        { entityFilters: {}, needsAttention: false },
+        owner,
+      ),
+    ).toEqual([]);
+    expect(await retryJobSet(ctx.db, { entityFilters: {} }, owner)).toEqual([
+      selected.id,
+    ]);
+    expect(
+      (await getDb(ctx.db).select().from(job).where(eq(job.id, other.id)))[0]
+        ?.availableAt,
+    ).toEqual(future);
+  });
+
+  it("keeps internal-only work out of navigable counts while retaining queue health", async () => {
+    await enqueueJob(ctx.db, {
+      key: "synthetic:internal-only",
+      kind: "ai-refresh.activate",
+      input: {},
+    });
+    const queue = await readJobQueue(ctx.db, {
+      filter: { entityFilters: {} },
+      runId: null,
+      pageIndex: 0,
+      pageSize: 1,
+    });
+    const rows = await jobRepository.repository.list!(kernelCtx(ctx), {}, [], {
+      pageIndex: 0,
+      pageSize: 25,
+    });
+    expect(queue).toMatchObject({ total: 0, counts: [], jobs: [] });
+    expect(rows.data).toEqual([]);
+    const health = await measureQueueHealth(ctx.db, {
+      previous: null,
+      imageDisagreement: 0,
+    });
+    expect(health.kinds).toContainEqual(
+      expect.objectContaining({ kind: "ai-refresh.activate", due: 1 }),
+    );
   });
 });

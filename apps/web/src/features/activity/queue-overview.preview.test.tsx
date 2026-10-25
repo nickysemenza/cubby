@@ -7,6 +7,7 @@ import { afterEach, beforeEach, expect, it } from "vitest";
 import { page, userEvent } from "vitest/browser";
 import { z } from "zod";
 
+import { getEntityDetailOutputSchema } from "~/entity/generated/entity-details.gen";
 import { installFeatures } from "~/features/registry";
 import { overrideStartDispatch } from "~/integrations/tanstack-query/start-transport";
 import { createBrowserTestHarness } from "~/lib/test/browser-harness";
@@ -93,6 +94,7 @@ beforeEach(async () => {
         ok: true,
         data: {
           entity,
+          missingIds: [],
           groups: [
             {
               id: "derived",
@@ -121,7 +123,30 @@ beforeEach(async () => {
           meta: { pageIndex: 0, pageSize: 50, totalCount: 0 },
         },
       };
-    if (operation === "job.queue")
+    if (operation === "entity.detail")
+      return {
+        ok: true,
+        data: mock(getEntityDetailOutputSchema("job"), {
+          overrides: {
+            ...work,
+            displayImages: [],
+            attachments: [],
+            redirectedFrom: null,
+            previousShortcodes: [],
+          },
+        }),
+      };
+    if (operation === "suggestions.recordCounts")
+      return { ok: true, data: { records: [] } };
+    if (operation === "entityMedia.displayImages")
+      return { ok: true, data: {} };
+    if (operation === "entity.graph")
+      return {
+        ok: true,
+        data: { nodes: [], edges: [], branches: [], truncated: false },
+      };
+    if (operation === "job.queue") {
+      reads.push({ operation, input });
       return {
         ok: true,
         data: {
@@ -133,6 +158,7 @@ beforeEach(async () => {
           ],
         },
       };
+    }
     if (operation === "job.health")
       return {
         ok: true,
@@ -326,5 +352,33 @@ it("retries selected Job codes through the same visible filter", async () => {
         entityFilters: expect.objectContaining({ lane: ["apple_device"] }),
       },
     }),
+  );
+});
+
+it("opens an Activity Job inspector at desktop width", async () => {
+  render(<Overview />, { wrapper: harness.wrapper });
+  const jobs = await screen.findByRole("table", { name: "Jobs table" });
+  await userEvent.click(await within(jobs).findByText("image.device"));
+  const dialog = await screen.findByRole("dialog", {
+    name: `Job ${code} preview`,
+  });
+  await waitFor(() => expect(dialog).toBeVisible());
+  expect(
+    await within(dialog).findByText("Synthetic retained diagnostic"),
+  ).toBeVisible();
+});
+
+it("requests navigable chip counts from the Job table population", async () => {
+  render(<Overview />, { wrapper: harness.wrapper });
+  await waitFor(() =>
+    expect(reads).toContainEqual(
+      expect.objectContaining({
+        operation: "job.queue",
+        input: expect.objectContaining({
+          filter: { entityFilters: {} },
+          pageSize: 1,
+        }),
+      }),
+    ),
   );
 });

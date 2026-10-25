@@ -119,6 +119,8 @@ export async function findOrCreateWithShortcode<T extends ShortcodeType>(
   entity: T,
   opts: {
     where: SQL | undefined;
+    /** The caller owns a transaction when retaining this lock through subsequent writes. */
+    lock?: true;
     /** Called only on create; must NOT set `shortcode` — this mints it. */
     values: () =>
       | Omit<InferInsertModel<ShortcodeTableFor<T>>, "shortcode">
@@ -132,11 +134,12 @@ export async function findOrCreateWithShortcode<T extends ShortcodeType>(
   const table = SHORTCODE_TABLE[entity] as ShortcodeTable;
 
   const find = async () => {
-    const rows = await unwrapDb(db)
+    const query = unwrapDb(db)
       .select(getTableColumns(table))
       .from(table)
       .where(opts.where)
       .limit(1);
+    const rows = await (opts.lock ? query.for("update") : query);
     // SAFETY: The projection is the full row of SHORTCODE_TABLE[entity].
     const [row] = rows as InferSelectModel<ShortcodeTableFor<T>>[];
     return row ? parseShortcodeRow(entity, row) : undefined;

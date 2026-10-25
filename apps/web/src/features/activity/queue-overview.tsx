@@ -174,7 +174,7 @@ function QueueSummary({
   onSearchChange: (next: Partial<QueueSearch>) => void;
 }) {
   const all = useQuery({
-    ...job.queue.queryOptions({ filter: {}, pageSize: 1 }),
+    ...job.queue.queryOptions({ filter: { entityFilters: {} }, pageSize: 1 }),
     refetchInterval: 15_000,
   });
   if (all.isPending) return <StatusText>Loading queue counts…</StatusText>;

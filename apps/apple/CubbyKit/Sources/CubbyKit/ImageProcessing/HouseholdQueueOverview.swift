@@ -29,7 +29,8 @@ public final class HouseholdQueueOverview {
 
     public func refresh() async {
         do {
-            async let queue = client.native_job_queue(body: .init(filter: .init(), pageSize: 1))
+            async let queue = client.native_job_queue(
+                body: .init(filter: .init(entityFilters: .init()), pageSize: 1))
             async let status = client.native_job_health(body: .object([:]))
             counts = try await queue.counts
             health = try await status.snapshot
