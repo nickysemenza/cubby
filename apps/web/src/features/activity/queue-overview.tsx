@@ -37,8 +37,9 @@ import { runHref } from "~/entity/routing/purchase-import-links";
 import { hasDisplayImages } from "~/entity/table/column-helpers";
 import { job } from "~/integrations/tanstack-query/generated/catalog/job.gen";
 import { formatRelative } from "~/lib/date-format";
-import { formatDuration, formatMinutesSeconds } from "~/lib/format-duration";
+import { formatMinutesSeconds } from "~/lib/format-duration";
 import { formatCount } from "~/lib/number-format";
+import { roundTo } from "~/lib/round-to";
 import { cn } from "~/lib/utils";
 import { Picker } from "~/ui/combobox/picker";
 import {
@@ -699,6 +700,15 @@ function RunsNeedingAttention() {
  * working it and when it drains at their current pace. Silent once nothing
  * waits; loud when work waits and no device is pulling.
  */
+/** Whole minutes under an hour, then hours and minutes, then days. */
+const formatEta = (seconds: number) => {
+  const minutes = Math.max(1, Math.round(seconds / 60));
+  if (minutes < 60) return `${minutes} min`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 48) return `${hours} h ${minutes % 60} min`;
+  return `${Math.round(hours / 24)} days`;
+};
+
 function DeviceBacklogNotice() {
   const backlog = useQuery(job.deviceBacklog.queryOptions({}));
   const data = backlog.data;
@@ -722,10 +732,10 @@ function DeviceBacklogNotice() {
         <p className="text-xs text-muted-foreground">
           {idle
             ? "No Apple device is processing. Keep Cubby open on your Mac (or run `cubby companion`) to work through it."
-            : `${countLabel(data.workingDevices, "device")} working · ${formatCount(Math.round(data.claimsPerMinute))}/min${
+            : `${countLabel(data.workingDevices, "device")} working · ${formatCount(roundTo(data.claimsPerMinute, 1))} jobs/min${
                 data.etaSeconds === null
                   ? ""
-                  : ` · about ${formatDuration(data.etaSeconds * 1_000)} at this pace`
+                  : ` · about ${formatEta(data.etaSeconds)} at this pace`
               }`}
         </p>
       </output>
