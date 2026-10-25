@@ -9,6 +9,8 @@ public enum CompanionImageProcessingProtocol {
     /// A resident worker's claim (`imageProcessing.pull` `leaseSeconds`). Short so a vanished
     /// device's work is reclaimed quickly; a live command keeps it with `heartbeatInterval` renewals.
     static let residentLeaseSeconds = 60
+    /// How long a new doorbell subscription may take to greet before the attempt fails.
+    static let openDeadline = Duration.seconds(15)
     /// Each in-flight command renews its lease this often through `imageProcessing.renew`, well
     /// inside `residentLeaseSeconds` so one missed renewal does not lose the lease.
     static let heartbeatInterval = Duration.seconds(15)

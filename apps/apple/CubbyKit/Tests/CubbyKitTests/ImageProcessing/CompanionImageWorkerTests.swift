@@ -52,20 +52,29 @@ struct CompanionImageWorkerTests {
         await worker.stop()
     }
 
-    /// Regression (CUBBY-APPLE-7F): URLSession called a ping's handler twice, the second time
-    /// with POSIX 53 as the connection aborted, and the second resume of the checked
-    /// continuation crashed the app.
-    @Test func aPingHandlerCalledTwiceResumesOnce() async throws {
-        try await awaitPong { handler in
-            handler(nil)
-            handler(POSIXError(.ECONNABORTED))
+    /// Field finding: the opening protocol ping's pong never arrived from the hibernating
+    /// doorbell, and the worker waited on it forever on "Opening the image-work connection…".
+    /// The first frame (the server's greeting ring) now confirms the open, within a deadline
+    /// that closes a socket which never greets.
+    @Test func aSubscriptionThatNeverGreetsFailsAtTheDeadlineAndClosesTheSocket() async throws {
+        // Like URLSession's receive, the pending frame ignores task cancellation: only closing the
+        // socket ends it, so the wait returns only if the deadline closes the socket.
+        let socket = Gate()
+        let closed = Mutex(false)
+        await #expect(throws: CompanionOpenTimeout.self) {
+            try await awaitFirstFrame(
+                within: .milliseconds(50),
+                receive: { await socket.hold() },
+                cancel: {
+                    closed.withLock { $0 = true }
+                    socket.open()
+                })
         }
-        await #expect(throws: POSIXError.self) {
-            try await awaitPong { handler in
-                handler(POSIXError(.ECONNABORTED))
-                handler(nil)
-            }
-        }
+        #expect(closed.withLock { $0 })
+    }
+
+    @Test func aGreetingConfirmsTheSubscription() async throws {
+        try await awaitFirstFrame(within: .seconds(5), receive: {}, cancel: {})
     }
 
     @Test func helloUsesTheSuppliedCreationHint() {
