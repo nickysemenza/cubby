@@ -14,18 +14,33 @@ import { createAppError } from "~/server/errors/app-error";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
 
-const GENERIC_BRAND_SYSTEM_KEY = "generic-unbranded";
+export const GENERIC_BRAND_SYSTEM_KEY = "generic-unbranded";
+
+/**
+ * The one reading of an external brand claim: blank and "(unspecified)" name
+ * no brand; the generic spellings name the generic system Vendor.
+ */
+export const parseBrandClaim = (raw: string | null | undefined) => {
+  const name = raw?.trim();
+  if (!name || name.toLowerCase() === "(unspecified)") return null;
+  const generic = ["generic", "unbranded", "generic / unbranded"].includes(
+    name.toLowerCase(),
+  );
+  return { name, generic };
+};
+
+/** A live Vendor's trimmed name or any alias equals `name`, case-insensitively. */
+export const vendorNamedSql = (name: string) =>
+  sql`(lower(${trimTextSql(vendor.name)}) = lower(${name}) OR EXISTS (SELECT 1 FROM unnest(${vendor.aliases}) alias WHERE lower(${trimTextSql(sql`alias`)}) = lower(${name})))`;
 
 /** External evidence names a marketed brand; ordinary domain writes use its reference. */
 export async function resolveProductBrandName(
   db: Database,
   raw: string | null | undefined,
 ): Promise<VendorShortcode | null> {
-  const name = raw?.trim();
-  if (!name || name.toLowerCase() === "(unspecified)") return null;
-  const generic = ["generic", "unbranded", "generic / unbranded"].includes(
-    name.toLowerCase(),
-  );
+  const claim = parseBrandClaim(raw);
+  if (!claim) return null;
+  const { name, generic } = claim;
   return withTransactionDatabase(db, async (tx) => {
     const database = getDb(tx);
     // Serialize name resolution so concurrent imports cannot mint the same new brand twice.
@@ -40,10 +55,7 @@ export async function resolveProductBrandName(
           notDeleted(vendor),
           generic
             ? eq(vendor.systemKey, GENERIC_BRAND_SYSTEM_KEY)
-            : and(
-                isNull(vendor.systemKey),
-                sql`(lower(${trimTextSql(vendor.name)}) = lower(${name}) OR EXISTS (SELECT 1 FROM unnest(${vendor.aliases}) alias WHERE lower(${trimTextSql(sql`alias`)}) = lower(${name})))`,
-              ),
+            : and(isNull(vendor.systemKey), vendorNamedSql(name)),
         ),
       );
     if (matches.length > 1)

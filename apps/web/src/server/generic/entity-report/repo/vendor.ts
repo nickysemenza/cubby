@@ -13,6 +13,7 @@ import { loadGmailCursor } from "~/server/domains/purchase-import/repo/gmail/per
 import { listMemberMailboxes } from "~/server/domains/purchase-import/repo/gmail/targets";
 import { vendorSearchTerms } from "~/server/domains/purchase-import/repo/gmail/vendor-identity";
 import { vendorMailQueries } from "~/server/domains/purchase-import/repo/gmail/vendor-mail-scope";
+import { GENERIC_BRAND_SYSTEM_KEY } from "~/server/domains/vendor/repo/product-brand";
 import { resolveOrThrow } from "~/server/generic/shortcode/repo/shortcode-resolver";
 
 const finishedAt = (iso: string | undefined) =>
@@ -39,7 +40,7 @@ export async function vendorMailSearchReport(
       .limit(1),
     listMemberMailboxes(db),
   ]);
-  if (row?.systemKey === "generic-unbranded")
+  if (row?.systemKey === GENERIC_BRAND_SYSTEM_KEY)
     return [
       {
         kind: "note",

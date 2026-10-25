@@ -22,7 +22,6 @@ import {
   categorySummarySql,
 } from "~/server/db/computed/product-category-sql";
 import { productClassificationEvidenceSql } from "~/server/db/computed/product-classification-evidence";
-import { trimTextSql } from "~/server/db/computed/text-whitespace";
 import { escapeLike, getDb, imageOrder, notDeleted } from "~/server/db/helpers";
 import {
   entityExternalId,
@@ -39,6 +38,11 @@ import {
   productHasGtin,
 } from "~/server/domains/product/repo/gtin";
 import { foodLookupParamFromProduct } from "~/server/domains/product/repo/helpers";
+import {
+  GENERIC_BRAND_SYSTEM_KEY,
+  parseBrandClaim,
+  vendorNamedSql,
+} from "~/server/domains/vendor/repo/product-brand";
 import { attachDataQuality } from "~/server/generic/data-quality/repo/hydrate";
 
 import { getProductCoverImageUrlsByProductIds } from "./crud";
@@ -282,21 +286,18 @@ export const findProductByNameWithBrandClaim = async (
   name: string,
   brandClaim: string | null | undefined,
 ): Promise<ProductTopLevelOut | null> => {
-  const claim = brandClaim?.trim();
+  const claim = parseBrandClaim(brandClaim);
   let brandId: import("@cubby/schemas/identifiers").VendorId | undefined;
-  if (claim && claim.toLowerCase() !== "(unspecified)") {
-    const generic = ["generic", "unbranded", "generic / unbranded"].includes(
-      claim.toLowerCase(),
-    );
+  if (claim) {
     const brands = await getDb(db)
       .select({ id: vendor.id })
       .from(vendor)
       .where(
         and(
           notDeleted(vendor),
-          generic
-            ? eq(vendor.systemKey, "generic-unbranded")
-            : sql`(lower(${trimTextSql(vendor.name)})=lower(${claim}) OR EXISTS (SELECT 1 FROM unnest(${vendor.aliases}) alias WHERE lower(${trimTextSql(sql`alias`)})=lower(${claim})))`,
+          claim.generic
+            ? eq(vendor.systemKey, GENERIC_BRAND_SYSTEM_KEY)
+            : vendorNamedSql(claim.name),
         ),
       )
       .limit(2);
