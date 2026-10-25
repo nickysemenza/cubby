@@ -11,7 +11,7 @@ it("reopens stranded image work into executor lanes without losing history", asy
   await withMigrationDatabase(async (client) => {
     const db = drizzle(client);
     await migrateDatabase(db, {
-      through: "0027_job_invalidation",
+      through: "0028_job_invalidation",
     });
     const id = (n: number) =>
       `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
@@ -82,7 +82,7 @@ it("reopens stranded image work into executor lanes without losing history", asy
           ],
         );
     }
-    await migrateDatabase(db, { through: "0028_image_job_lanes" });
+    await migrateDatabase(db, { through: "0029_image_job_lanes" });
     const after = await client.query<{
       id: string;
       state: string;

@@ -43,6 +43,7 @@ import {
   unwrapDb,
   withTransaction,
 } from "~/server/db/helpers";
+import { quotedTable } from "~/server/db/helpers/related";
 import {
   financialTransaction,
   financialTransactionAllocation,
@@ -439,7 +440,7 @@ const financialTransactionScaffold = listScaffold(
       merchant: { sql: sql`${financialTransaction.merchant}`, nulls: "high" },
       itemization: sql`${financialTransactionItemizationSql('"FinancialTransaction"."id"')}`,
       // Live: an integrity defect must surface without waiting for a quality refresh.
-      allocationIntegrity: sql`CASE WHEN ${allocationIntegrityDefectSql('"FinancialTransaction"')} THEN ${financialTransactionAllocationIntegrity.enum.defect}::text END`,
+      allocationIntegrity: sql`CASE WHEN ${allocationIntegrityDefectSql(quotedTable(financialTransaction))} THEN ${financialTransactionAllocationIntegrity.enum.defect}::text END`,
       descriptorProcessor: descriptorProcessorSql,
     },
   },

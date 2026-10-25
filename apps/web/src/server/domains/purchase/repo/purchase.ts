@@ -51,7 +51,6 @@ import type { Database, DrizzleTransaction } from "~/server/db";
 import type { IncomingEdgePolicy } from "~/server/db/entity-incoming-edges";
 import {
   buildPartialUpdateValues,
-  correlated,
   getDb,
   imageJoinBindings,
   type ListReadIntent,
@@ -63,6 +62,7 @@ import {
   updateLiveAndReturn,
   withTransaction,
 } from "~/server/db/helpers";
+import { outer, related } from "~/server/db/helpers/related";
 import {
   entityAttachment,
   expense,
@@ -73,7 +73,10 @@ import {
   importSourceProduct,
   ledgerSourceClaim,
   product,
+  project,
   purchase,
+  vendor,
+  vendorAccount,
 } from "~/server/db/schema";
 import {
   emptySpendingCategorySummary,
@@ -96,13 +99,13 @@ import {
 } from "~/server/domains/expense/repo/line-role-classifier";
 import {
   calculateFinancialReconciliation,
-  postedRefundTotalSql,
-  settleableExpenseTotalSql,
-  settleableUnpricedExpenseCountSql,
-  vendorExpenseTotalSql,
-  vendorExpenseCountSql,
-  vendorUnpricedExpenseCountSql,
-  vendorExpenseAggregateSql,
+  postedRefundTotal,
+  settleableExpenseTotal,
+  settleableUnpricedExpenseCount,
+  vendorExpenseAggregate,
+  vendorExpenseCount,
+  vendorExpenseTotal,
+  vendorUnpricedExpenseCount,
 } from "~/server/domains/financial-transaction/repo/financial-reconciliation";
 import {
   applyAllocationChanges,
@@ -138,6 +141,7 @@ import {
   validateProductPolicy,
   validateLiveInheritedPolicies,
 } from "~/server/generic/inheritance/repo/inheritance-validation";
+import { declaredRollup } from "~/server/generic/list/repo/field-compiler";
 import { listScaffold } from "~/server/generic/list/repo/list";
 import type { ListProjection } from "~/server/generic/list/repo/list-contracts";
 import {
@@ -302,76 +306,70 @@ export const PURCHASE_MERGE_EDGE_POLICY = {
   },
 } as const satisfies IncomingEdgePolicy<"purchase", OperationDisposition>;
 
-/**
- * Actual spend is always `SUM(Expense.cost)`, never `statedTotal`. Keep raw SQL
- * fully qualified because Drizzle strips aliases from correlated selections.
- */
-const purchaseExpenseCount = correlated<number>(
-  `(SELECT count(*)::int FROM "Expense" e
-     WHERE e."purchaseId" = "Purchase"."id" AND e."deletedAt" IS NULL)`,
+/** Actual spend is always `SUM(Expense.cost)`, never `statedTotal`. */
+const purchaseExpenses = () =>
+  related(expense, (e) => sql`${e.purchaseId} = ${outer(purchase.id)}`);
+const purchaseId = outer(purchase.id);
+
+// Declared rollups (`purchase.model.derived`); the manifest owns their SQL.
+const purchaseExpenseCount = declaredRollup(
+  "purchase",
+  "expenseCount",
+  purchase,
 );
 
-const purchaseExpenseTotal = correlated<number>(
-  `(SELECT COALESCE(sum(e."cost"::numeric), 0)::double precision FROM "Expense" e
-     WHERE e."purchaseId" = "Purchase"."id" AND e."deletedAt" IS NULL)`,
+const purchaseExpenseTotal = declaredRollup(
+  "purchase",
+  "expenseTotal",
+  purchase,
 );
 
-const purchaseUnpricedExpenseCount = correlated<number>(
-  `(SELECT count(*)::int FROM "Expense" e
-     WHERE e."purchaseId" = "Purchase"."id"
-       AND e."cost" IS NULL AND e."deletedAt" IS NULL)`,
-);
+const purchaseUnpricedExpenseCount = purchaseExpenses()
+  .where((e) => sql`${e.cost} IS NULL`)
+  .count();
 
 // Settlement compares only incurred spend; future rows cannot have settled.
-const purchaseSettleableExpenseTotal = correlated<number>(
-  settleableExpenseTotalSql('"Purchase"'),
+const purchaseSettleableExpenseTotal = settleableExpenseTotal(purchaseId);
+
+const purchaseSettleableUnpricedExpenseCount =
+  settleableUnpricedExpenseCount(purchaseId);
+
+const purchaseVendorExpenseTotal = vendorExpenseTotal(purchaseId);
+const purchaseVendorExpenseCount = vendorExpenseCount(purchaseId);
+const purchaseVendorUnpricedExpenseCount =
+  vendorUnpricedExpenseCount(purchaseId);
+
+const purchasePostedRefundTotal = postedRefundTotal(purchaseId);
+
+const purchaseDocumentCount = declaredRollup(
+  "purchase",
+  "documentCount",
+  purchase,
 );
 
-const purchaseSettleableUnpricedExpenseCount = correlated<number>(
-  settleableUnpricedExpenseCountSql('"Purchase"'),
-);
+const purchaseVendor = (options?: { includeDeleted: true }) =>
+  related(vendor, (v) => sql`${v.id} = ${outer(purchase.vendorId)}`, options);
 
-const purchaseVendorExpenseTotal = correlated<number>(
-  vendorExpenseTotalSql('"Purchase"'),
-);
-const purchaseVendorExpenseCount = correlated<number>(
-  vendorExpenseCountSql('"Purchase"'),
-);
-const purchaseVendorUnpricedExpenseCount = correlated<number>(
-  vendorUnpricedExpenseCountSql('"Purchase"'),
-);
-
-const purchasePostedRefundTotal = correlated<number>(
-  postedRefundTotalSql('"Purchase"'),
-);
-
-const purchaseDocumentCount = correlated<number>(
-  `(SELECT count(*)::int FROM "EntityAttachment" pi
-     JOIN "Image" i ON i."id" = pi."imageId" AND i."deletedAt" IS NULL
-     WHERE pi."entityId" = "Purchase"."id" AND pi."deletedAt" IS NULL)`,
-);
-
-const purchaseVendorName = correlated<string | null>(
-  `(SELECT v."name" FROM "Vendor" v
-     WHERE v."id" = "Purchase"."vendorId" AND v."deletedAt" IS NULL)`,
-);
+const purchaseVendorName = purchaseVendor().value<string>((v) => v.name);
 
 // Public shortcodes remain resolvable tombstones after a vendor soft-delete.
-const purchaseVendorShortcode = correlated<string>(
-  `(SELECT v."shortcode" FROM "Vendor" v WHERE v."id" = "Purchase"."vendorId")`,
-);
+// Every Purchase names a Vendor row, live or tombstoned, so this is never null.
+const purchaseVendorShortcode = sql<string>`${purchaseVendor({
+  includeDeleted: true,
+}).value((v) => v.shortcode)}`;
 
-const purchaseDefaultProjectShortcode = correlated<string | null>(
-  `(SELECT p."shortcode" FROM "Project" p WHERE p."id" = "Purchase"."defaultProjectId" AND p."deletedAt" IS NULL)`,
-);
+const purchaseDefaultProjectShortcode = related(
+  project,
+  (p) => sql`${p.id} = ${outer(purchase.defaultProjectId)}`,
+).value<string>((p) => p.shortcode);
 
-const purchaseVendorAccountShortcode = correlated<string | null>(
-  `(SELECT va."shortcode" FROM "VendorAccount" va WHERE va."id" = "Purchase"."vendorAccountId" AND va."deletedAt" IS NULL)`,
-);
+const purchaseVendorAccountShortcode = related(
+  vendorAccount,
+  (va) => sql`${va.id} = ${outer(purchase.vendorAccountId)}`,
+).value<string>((va) => va.shortcode);
 
-const purchaseVendorOrderUrlTemplate = correlated<string | null>(
-  `(SELECT v."orderUrlTemplate" FROM "Vendor" v
-     WHERE v."id" = "Purchase"."vendorId" AND v."deletedAt" IS NULL)`,
+const purchaseVendorOrderUrlTemplate = purchaseVendor().value<string>(
+  (v) => v.orderUrlTemplate,
 );
 
 const purchaseVendorLogoKey = sql<string | null>`(
@@ -379,7 +377,7 @@ const purchaseVendorLogoKey = sql<string | null>`(
   JOIN "EntityAttachment" logo_att ON logo_att."entityId" = v."id"
     AND logo_att."role" = 'logo' AND logo_att."deletedAt" IS NULL
   JOIN "Image" logo ON logo."id" = logo_att."imageId"
-  WHERE v."id" = ${sql.raw('"Purchase"."vendorId"')}
+  WHERE v."id" = ${outer(purchase.vendorId)}
     AND v."deletedAt" IS NULL
     AND logo."deletedAt" IS NULL
     AND ${displayableImageSql("logo")}
@@ -601,7 +599,7 @@ const syncPurchaseImages = async (
  */
 const reconciliationSql = (): SQL => {
   const tolerance = cents(RECONCILIATION_TOLERANCE);
-  const aggregate = sql.raw(vendorExpenseAggregateSql('"Purchase"'));
+  const aggregate = vendorExpenseAggregate(purchaseId);
   const refund = purchasePostedRefundTotal;
   // One vendor-expense scan feeds every verdict; the delta and refund are
   // whole cents, as `reconcilePurchase` compares them. Mirrors its
@@ -627,9 +625,6 @@ const purchaseScaffold = listScaffold("purchase", purchase, {
     reconciliationGap: sql`abs(${purchaseVendorExpenseTotal} - ${purchase.statedTotal})`,
     // A purchase with no live vendor leads a descending list.
     vendorId: { sql: purchaseVendorName, nulls: "high" },
-    expenseCount: purchaseExpenseCount,
-    expenseTotal: purchaseExpenseTotal,
-    documentCount: purchaseDocumentCount,
     pricedExpenseTotal: sql`CASE WHEN ${purchaseExpenseCount} > ${purchaseUnpricedExpenseCount} THEN ${purchaseExpenseTotal} END`,
     expenseStatus: sql`CASE
       WHEN ${purchaseExpenseCount} = 0 THEN ${purchaseExpenseStatus.enum.empty}::text

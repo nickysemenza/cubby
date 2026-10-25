@@ -217,7 +217,8 @@
       "files": ["apps/web/src/server/**/*.ts", "packages/*/src/**/*.ts"],
       "excludeFiles": ["**/*.test.ts"],
       "rules": {
-        "cubby/require-soft-delete-filter": "error"
+        "cubby/require-soft-delete-filter": "error",
+        "cubby/no-raw-deleted-at-predicate": "error"
       }
     },
     {

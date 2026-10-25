@@ -3,6 +3,7 @@ import { and, count, eq, sql } from "drizzle-orm";
 
 import type { Database } from "~/server/db";
 import { getDb } from "~/server/db/helpers";
+import { quotedTable } from "~/server/db/helpers/related";
 import { assessmentState, entityIdentity } from "~/server/db/schema";
 import { activeFindingSql } from "~/server/domains/purchase-import/repo/finding-expiry";
 import { runFindingColumns } from "~/server/domains/purchase-import/repo/run-finding";
@@ -11,7 +12,7 @@ import { obsoleteExecutionFindingSql } from "~/server/domains/purchase-import/re
 const openFindingWhere = (now: Date) =>
   and(
     activeFindingSql("AssessmentState", now),
-    sql`NOT ${obsoleteExecutionFindingSql('"AssessmentState"')}`,
+    sql`NOT ${obsoleteExecutionFindingSql(quotedTable(assessmentState))}`,
   );
 
 export async function countOpenRunFindings(db: Database) {

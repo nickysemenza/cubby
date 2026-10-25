@@ -231,16 +231,29 @@ export async function connectionRecord(
   lock = false,
 ) {
   const kind = z.enum(shortcodeEntities).parse(ref.entityKind);
-  const id = await resolveOrThrow(db, kind, ref.entityId);
+  const parsed = parseShortcode(ref.entityId);
+  if (parsed?.type !== kind) {
+    await resolveOrThrow(db, kind, ref.entityId);
+    throw new Error(`Connection ${kind} no longer exists`);
+  }
   const table: ShortcodeTable = SHORTCODE_TABLE[kind];
+  // One statement by live shortcode: resolving first doubled every record read.
   const query = getDb(db)
-    .select({ row: connectionRelevantRowSql(kind, table) })
+    .select({ id: table.id, row: connectionRelevantRowSql(kind, table) })
     .from(table)
-    .where(and(eq(table.id, id), notDeleted(table)))
+    .where(and(eq(table.shortcode, parsed.shortcode), notDeleted(table)))
     .limit(1);
   const [value] = lock ? await query.for("update") : await query;
-  if (!value) throw new Error(`Connection ${kind} no longer exists`);
-  return { id, row: snapshotJson(connectionRelevantRow(kind, value.row)) };
+  // A missing record keeps the resolver's not-found error (retryable: a retry
+  // rediscovers without it); only a live code without a row "no longer exists".
+  if (!value) {
+    await resolveOrThrow(db, kind, ref.entityId);
+    throw new Error(`Connection ${kind} no longer exists`);
+  }
+  return {
+    id: parseEntityId(kind, value.id),
+    row: snapshotJson(connectionRelevantRow(kind, value.row)),
+  };
 }
 
 /** Dependency payloads several unlocked captures can share. */
@@ -445,9 +458,28 @@ export async function captureConnectionBasis(
   lock = false,
   prepared?: PreparedConnectionBases,
 ) {
+  return (await captureConnectionEvidence(db, raw, lock, prepared)).basis;
+}
+
+/**
+ * The basis plus the source record id it read (null for Email evidence,
+ * whose source is not a payload row), so a locked publication need not
+ * resolve the source again.
+ */
+export async function captureConnectionEvidence(
+  db: Database,
+  raw: ConnectionCandidate,
+  lock = false,
+  prepared?: PreparedConnectionBases,
+): Promise<{ basis: ConnectionJson; sourceId: string | null }> {
   const candidate = connectionCandidate.parse(raw);
   if (candidate.relation === "email-purchase")
-    return snapshotJson(await captureEmailConnectionBasis(db, candidate, lock));
+    return {
+      basis: snapshotJson(
+        await captureEmailConnectionBasis(db, candidate, lock),
+      ),
+      sourceId: null,
+    };
   // Domain parent locks precede dependent payloads: Purchase before financial
   // rows, Project before Product, and Location before moving Inventory.
   const targetFirst =
@@ -571,11 +603,14 @@ export async function captureConnectionBasis(
     default:
       break;
   }
-  return snapshotJson({
-    source: source.row,
-    target: target.row,
-    dependencies: relevantDependencyEvidence(dependencies),
-  });
+  return {
+    basis: snapshotJson({
+      source: source.row,
+      target: target.row,
+      dependencies: relevantDependencyEvidence(dependencies),
+    }),
+    sourceId: source.id,
+  };
 }
 
 function relevantDependencyEvidence(value: ConnectionJson): ConnectionJson {

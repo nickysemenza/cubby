@@ -70,6 +70,8 @@ const queryEmbeddingCache = new LRUCache<string, number[]>({
   max: 500,
   ttl: 1000 * 60 * 60,
 });
+/** Concurrent callers of one query share its provider call, as cached ones do. */
+const pendingQueryEmbeddings = new Map<string, Promise<number[] | null>>();
 
 /**
  * The one gate every semantic consumer asks. An embedding is only useful if
@@ -192,13 +194,19 @@ export async function embedQuery(
     markPreparationIncomplete();
     return null;
   }
-  const [embedding] = await embedTexts([normalized], {
+  const pending = pendingQueryEmbeddings.get(normalized);
+  if (pending) return pending;
+  const request = embedTexts([normalized], {
     operation: "queryEmbedding",
     db: opts?.db,
     runId: opts?.runId,
     feature: SEMANTIC_QUERY_FEATURE.feature,
-  });
-  if (!embedding) return null;
-  queryEmbeddingCache.set(normalized, embedding);
-  return embedding;
+  })
+    .then(([embedding]) => {
+      if (embedding) queryEmbeddingCache.set(normalized, embedding);
+      return embedding ?? null;
+    })
+    .finally(() => pendingQueryEmbeddings.delete(normalized));
+  pendingQueryEmbeddings.set(normalized, request);
+  return request;
 }

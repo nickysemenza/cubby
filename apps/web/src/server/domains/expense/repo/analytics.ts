@@ -41,6 +41,7 @@ import {
   plannedExpense,
 } from "~/server/db/computed/expense-aggregate-sql";
 import { getDb, notDeleted } from "~/server/db/helpers";
+import { quotedTable } from "~/server/db/helpers/related";
 import { expense, project, purchase, vendor } from "~/server/db/schema";
 
 import {
@@ -53,8 +54,8 @@ import {
   effectiveExpenseTradeSql,
 } from "./expense-inheritance";
 
-const effectiveProjectId = effectiveExpenseProjectSql('"Expense"');
-const effectiveTrade = effectiveExpenseTradeSql('"Expense"');
+const effectiveProjectId = effectiveExpenseProjectSql(quotedTable(expense));
+const effectiveTrade = effectiveExpenseTradeSql(quotedTable(expense));
 
 const summaryFields = (cost: SQL<number | null>) => ({
   ...expenseAggregateFields(cost),

@@ -103,9 +103,6 @@ describe("list field compiler", () => {
           { sql: sql`received`, direction: "desc" },
         ],
         vendorId: sql`0`,
-        expenseCount: sql`0`,
-        expenseTotal: sql`0`,
-        documentCount: sql`0`,
         ...purchaseFilterOnly,
       },
     });
@@ -145,9 +142,6 @@ describe("list field compiler", () => {
       derived: {
         reconciliationGap: sql`declared_gap`,
         vendorId: sql`0`,
-        expenseCount: sql`0`,
-        expenseTotal: sql`0`,
-        documentCount: sql`0`,
         ...purchaseFilterOnly,
       },
     });
@@ -155,6 +149,28 @@ describe("list field compiler", () => {
       { orderBy: "reconciliationGap", direction: "desc" },
     ]);
     expect(renderWhereSql(clauses[0])).toBe("declared_gap desc nulls last");
+  });
+
+  it("orders a declared rollup by its compiled, live, correlated aggregate", () => {
+    const scaffold = listScaffold("purchase", purchase, {
+      derived: {
+        reconciliationGap: sql`declared_gap`,
+        vendorId: sql`0`,
+        ...purchaseFilterOnly,
+      },
+    });
+    const [count] = scaffold.orderBy([
+      { orderBy: "expenseCount", direction: "desc" },
+    ]);
+    expect(renderWhereSql(count)).toBe(
+      `(SELECT count(*)::int FROM "Expense" ru1 WHERE (ru1."purchaseId" = "Purchase"."id") AND ru1."deletedAt" IS NULL) desc nulls last`,
+    );
+    const [total] = scaffold.orderBy([
+      { orderBy: "expenseTotal", direction: "asc" },
+    ]);
+    expect(renderWhereSql(total)).toContain(
+      `COALESCE(sum(ru1."cost"::numeric), 0)::double precision`,
+    );
   });
 
   it("expands a stored filter over a hierarchical reference unless its toggle is off", () => {

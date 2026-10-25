@@ -97,7 +97,7 @@ export type ImageProcessingLane = "image.cloud" | "image.device";
  * Which executor runs a job, fixed by its identity: Apple devices run subject
  * lifts, Apple descriptions and the JPEG preparation an AVIF cloud
  * description needs; the server runs every other cloud call. Mirrored by the
- * lane split in `drizzle/0028_image_job_lanes.sql`.
+ * lane split in `drizzle/0029_image_job_lanes.sql`.
  */
 export function imageProcessingLane(job: {
   kind: ImageProcessingJobKind;

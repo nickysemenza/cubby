@@ -1,3 +1,4 @@
+import type { DataCheck } from "@cubby/schemas/data-quality";
 import type { FinancialReconciliationSummary } from "@cubby/schemas/financial-reconciliation";
 import {
   financialTransactionStatus,
@@ -6,11 +7,19 @@ import {
 import {
   financialTransactionItemization,
   type FinancialTransactionItemization,
+  financialTransactionKind,
 } from "@cubby/schemas/financial-transaction-fields";
+import { expenseCreateInput } from "@cubby/schemas/project";
 import { cents } from "@cubby/shared";
 import { sql, type SQL } from "drizzle-orm";
 
-import { actualExpenseSql } from "~/server/db/helpers/predicates";
+import { actualExpense } from "~/server/db/computed/expense-aggregate-sql";
+import { related } from "~/server/db/helpers/related";
+import {
+  expense,
+  financialTransaction,
+  financialTransactionAllocation,
+} from "~/server/db/schema";
 import { purchaseListsItemsSql } from "~/server/domains/purchase/repo/purchase-evidence-policy";
 import type { PurchaseFinancialAggregate } from "~/server/domains/purchase/repo/purchase-financial-aggregates";
 
@@ -57,16 +66,10 @@ export type FinancialReconciliationInput = PurchaseFinancialAggregate & {
 };
 
 /**
- * The `settleableExpenseTotal` / `settleableUnpricedExpenseCount` above, as
- * hand-qualified raw SQL, so the "INCURRED spend only" rule has one definition
- * instead of one per query shape. `purchaseAlias` is the enclosing query's
- * Purchase alias, quoted as it appears there — `'"Purchase"'` for a Drizzle
- * select, `'p'` inside a hand-written statement.
- *
- * Raw strings rather than interpolated Drizzle columns: a cross-table
- * correlated reference gets prefix-stripped by `buildSelection` and silently
- * self-joins. See `correlated()` in `db/helpers/query.ts`, which is how a
- * Drizzle select field wraps the result.
+ * The `settleableExpenseTotal` / `settleableUnpricedExpenseCount` above as
+ * correlated scalars over `purchaseId` (the enclosing query's Purchase id,
+ * e.g. `outer(purchase.id)`), so the "INCURRED spend only" rule has one
+ * definition instead of one per query shape.
  *
  * **Contract: the enclosing query owns Purchase liveness.** These fragments
  * filter Expense liveness and the incurred-only rule, and nothing else — a
@@ -76,44 +79,48 @@ export type FinancialReconciliationInput = PurchaseFinancialAggregate & {
  *
  * `repo/expense/match.ts` deliberately does NOT use these; see the note there.
  */
-export const settleableExpenseTotalSql = (purchaseAlias: string) =>
-  `(SELECT COALESCE(sum(se_e."cost"), 0)::double precision FROM "Expense" se_e
-     WHERE se_e."purchaseId" = ${purchaseAlias}."id"
-       AND se_e."deletedAt" IS NULL
-       AND ${actualExpenseSql("se_e")})`;
+const incurredExpenses = (purchaseId: SQL) =>
+  related(expense, (e) => sql`${e.purchaseId} = ${purchaseId}`).where((e) =>
+    actualExpense(e.future),
+  );
 
-export const settleableUnpricedExpenseCountSql = (purchaseAlias: string) =>
-  `(SELECT count(*)::int FROM "Expense" se_e
-     WHERE se_e."purchaseId" = ${purchaseAlias}."id"
-       AND se_e."cost" IS NULL
-       AND se_e."deletedAt" IS NULL
-       AND ${actualExpenseSql("se_e")})`;
+export const settleableExpenseTotal = (purchaseId: SQL) =>
+  incurredExpenses(purchaseId).sum((e) => e.cost);
+
+export const settleableUnpricedExpenseCount = (purchaseId: SQL) =>
+  incurredExpenses(purchaseId)
+    .where((e) => sql`${e.cost} IS NULL`)
+    .count();
 
 /** Vendor paperwork excludes household reimbursements; spend and settlement
  * continue to include every incurred Expense, including those credits. */
-const vendorExpenseRowsSql = (purchaseAlias: string) =>
-  `FROM "Expense" vp_e
-    WHERE vp_e."purchaseId" = ${purchaseAlias}."id" AND vp_e."deletedAt" IS NULL
-      AND vp_e."economicRole" = 'vendor'`;
+const vendorExpenses = (purchaseId: SQL) =>
+  related(expense, (e) => sql`${e.purchaseId} = ${purchaseId}`).where(
+    (e) => sql`${e.economicRole} = ${VENDOR_ROLE}`,
+  );
 
-const vendorExpenseTotalExpression =
-  'COALESCE(sum(vp_e."cost"::numeric), 0)::double precision';
+const vendorExpenseCost = (cost: SQL) => sql`${cost}::numeric`;
 
-export const vendorExpenseTotalSql = (purchaseAlias: string) =>
-  `(SELECT ${vendorExpenseTotalExpression} ${vendorExpenseRowsSql(purchaseAlias)})`;
+export const vendorExpenseTotal = (purchaseId: SQL) =>
+  vendorExpenses(purchaseId).sum((e) => vendorExpenseCost(e.cost));
 
-export const vendorExpenseCountSql = (purchaseAlias: string) =>
-  `(SELECT count(*)::int ${vendorExpenseRowsSql(purchaseAlias)})`;
+export const vendorExpenseCount = (purchaseId: SQL) =>
+  vendorExpenses(purchaseId).count();
 
-export const vendorUnpricedExpenseCountSql = (purchaseAlias: string) =>
-  `(SELECT count(*)::int ${vendorExpenseRowsSql(purchaseAlias)} AND vp_e."cost" IS NULL)`;
+export const vendorUnpricedExpenseCount = (purchaseId: SQL) =>
+  vendorExpenses(purchaseId)
+    .where((e) => sql`${e.cost} IS NULL`)
+    .count();
 
 /** One scan when a verdict needs the total and both line counts together. */
-export const vendorExpenseAggregateSql = (purchaseAlias: string) =>
-  `SELECT ${vendorExpenseTotalExpression} AS total,
+export const vendorExpenseAggregate = (purchaseId: SQL) =>
+  vendorExpenses(purchaseId).aggregate(
+    (
+      e,
+    ) => sql`COALESCE(sum(${vendorExpenseCost(e.cost)}), 0)::double precision AS total,
     count(*)::int AS "expenseCount",
-    count(*) FILTER (WHERE vp_e."cost" IS NULL)::int AS "unpricedCount"
-    ${vendorExpenseRowsSql(purchaseAlias)}`;
+    count(*) FILTER (WHERE ${e.cost} IS NULL)::int AS "unpricedCount"`,
+  );
 
 /**
  * The settlement total compared with incurred expenses. Outstanding expected
@@ -121,26 +128,35 @@ export const vendorExpenseAggregateSql = (purchaseAlias: string) =>
  * posted rows count. The Purchase quality loader applies the same rule in its
  * batched aggregate.
  */
-const purchaseFinancialComparisonTotalSql = (purchaseAlias: string) =>
-  `(CASE WHEN EXISTS (
+const status = financialTransactionStatus.enum;
+const VENDOR_ROLE = expenseCreateInput.shape.economicRole.parse("vendor");
+const SETTLEMENT_MISMATCH: DataCheck = "settlement_mismatch";
+
+const settlementKindList = sql.join(
+  purchaseSettlementKinds.map((kind) => sql`${kind}`),
+  sql`, `,
+);
+
+const purchaseFinancialComparisonTotal = (purchaseId: SQL) =>
+  sql`(CASE WHEN EXISTS (
     SELECT 1
     FROM "FinancialTransactionAllocation" a
     JOIN "FinancialTransaction" ft ON ft."id" = a."transactionId"
-    WHERE a."purchaseId" = ${purchaseAlias}."id" AND a."deletedAt" IS NULL
-      AND ft."deletedAt" IS NULL AND ft."kind" IN (${purchaseSettlementKinds.map((kind) => `'${kind}'`).join(", ")})
-      AND ft."status" IN ('expected', 'pending')
+    WHERE a."purchaseId" = ${purchaseId} AND a."deletedAt" IS NULL
+      AND ft."deletedAt" IS NULL AND ft."kind" IN (${settlementKindList})
+      AND ft."status" IN (${status.expected}, ${status.pending})
   ) THEN (
     SELECT COALESCE(sum(a."amount"), 0)::double precision FROM "FinancialTransactionAllocation" a
     JOIN "FinancialTransaction" ft ON ft."id" = a."transactionId"
-    WHERE a."purchaseId" = ${purchaseAlias}."id" AND a."deletedAt" IS NULL
-      AND ft."deletedAt" IS NULL AND ft."kind" IN (${purchaseSettlementKinds.map((kind) => `'${kind}'`).join(", ")})
-      AND ft."status" <> 'void'
+    WHERE a."purchaseId" = ${purchaseId} AND a."deletedAt" IS NULL
+      AND ft."deletedAt" IS NULL AND ft."kind" IN (${settlementKindList})
+      AND ft."status" <> ${status.void}
   ) ELSE (
     SELECT COALESCE(sum(a."amount"), 0)::double precision FROM "FinancialTransactionAllocation" a
     JOIN "FinancialTransaction" ft ON ft."id" = a."transactionId"
-    WHERE a."purchaseId" = ${purchaseAlias}."id" AND a."deletedAt" IS NULL
-      AND ft."deletedAt" IS NULL AND ft."kind" IN (${purchaseSettlementKinds.map((kind) => `'${kind}'`).join(", ")})
-      AND ft."status" = 'posted'
+    WHERE a."purchaseId" = ${purchaseId} AND a."deletedAt" IS NULL
+      AND ft."deletedAt" IS NULL AND ft."kind" IN (${settlementKindList})
+      AND ft."status" = ${status.posted}
   ) END)`;
 
 /**
@@ -149,32 +165,32 @@ const purchaseFinancialComparisonTotalSql = (purchaseAlias: string) =>
  * The raw verdict remains available to data quality and detail reads: accepting
  * a documented discrepancy must not falsify the actual bank/ledger delta.
  */
-const purchaseFinancialMismatchRawSql = (purchaseAlias: string) => `
-  ${settleableUnpricedExpenseCountSql(purchaseAlias)} = 0
+const purchaseFinancialMismatchRaw = (purchaseId: SQL) => sql`
+  ${settleableUnpricedExpenseCount(purchaseId)} = 0
   AND EXISTS (
     SELECT 1
     FROM "FinancialTransactionAllocation" a
     JOIN "FinancialTransaction" ft ON ft."id" = a."transactionId"
-    WHERE a."purchaseId" = ${purchaseAlias}."id"
+    WHERE a."purchaseId" = ${purchaseId}
       AND a."deletedAt" IS NULL
       AND ft."deletedAt" IS NULL
-      AND ft."kind" IN (${purchaseSettlementKinds.map((kind) => `'${kind}'`).join(", ")})
-      AND ft."status" <> 'void'
+      AND ft."kind" IN (${settlementKindList})
+      AND ft."status" <> ${status.void}
   )
-  AND floor(${purchaseFinancialComparisonTotalSql(purchaseAlias)} * 100 + 0.5)
-    IS DISTINCT FROM floor((${settleableExpenseTotalSql(purchaseAlias)}) * 100 + 0.5)`;
+  AND floor(${purchaseFinancialComparisonTotal(purchaseId)} * 100 + 0.5)
+    IS DISTINCT FROM floor((${settleableExpenseTotal(purchaseId)}) * 100 + 0.5)`;
 
 /**
  * The live actionable mismatch: current money, minus a member's durable
  * `settlement_mismatch` waiver. Detail reconciliation must not wait for a
  * quality refresh.
  */
-const purchaseFinancialMismatchSql = (purchaseAlias: string) => `
-  (${purchaseFinancialMismatchRawSql(purchaseAlias)})
+const purchaseFinancialMismatch = (purchaseId: SQL) => sql`
+  (${purchaseFinancialMismatchRaw(purchaseId)})
   AND NOT EXISTS (
     SELECT 1 FROM "DataException" exception
-    WHERE exception."entityId" = ${purchaseAlias}."id"
-      AND exception."check" = 'settlement_mismatch'
+    WHERE exception."entityId" = ${purchaseId}
+      AND exception."check" = ${SETTLEMENT_MISMATCH}
   )`;
 
 /**
@@ -217,7 +233,7 @@ export const financialTransactionItemizationSql = (
             AND iz_ft."status" <> ${financialTransactionStatus.enum.void}
         ) AS shared,
         ${purchaseListsItemsSql("iz_p")} AS itemized,
-        COALESCE(${sql.raw(purchaseFinancialMismatchSql("iz_p"))}, false) AS mismatch
+        COALESCE(${purchaseFinancialMismatch(sql`iz_p."id"`)}, false) AS mismatch
       FROM "FinancialTransactionAllocation" iz_a
       JOIN "Purchase" iz_p ON iz_p."id" = iz_a."purchaseId" AND iz_p."deletedAt" IS NULL
       WHERE iz_a."transactionId" = ${sql.raw(transactionIdRef)}
@@ -249,18 +265,24 @@ export const postedRefundPredicate = (ftxAlias: string) =>
   `${ftxAlias}."kind" = 'refund' AND ${ftxAlias}."status" = 'posted'`;
 
 /**
- * The posted-refund total for one Purchase, as a correlated scalar. Same
- * raw-string reasoning as `settleableExpenseTotalSql`, and the same contract:
- * the enclosing query owns Purchase liveness.
+ * The posted-refund total for one Purchase, as a correlated scalar over
+ * `purchaseId`, with the same contract: the enclosing query owns Purchase
+ * liveness.
  */
-export const postedRefundTotalSql = (purchaseAlias: string) =>
-  `(SELECT COALESCE(sum(pr_a."amount"), 0)::double precision
-     FROM "FinancialTransactionAllocation" pr_a
-     JOIN "FinancialTransaction" pr_ft ON pr_ft."id" = pr_a."transactionId"
-     WHERE pr_a."purchaseId" = ${purchaseAlias}."id"
-       AND pr_a."deletedAt" IS NULL
-       AND pr_ft."deletedAt" IS NULL
-       AND ${postedRefundPredicate("pr_ft")})`;
+export const postedRefundTotal = (purchaseId: SQL) =>
+  related(
+    financialTransactionAllocation,
+    (a) => sql`${a.purchaseId} = ${purchaseId}`,
+  )
+    .where((a) =>
+      related(financialTransaction, (ft) => sql`${ft.id} = ${a.transactionId}`)
+        .where(
+          (ft) =>
+            sql`${ft.kind} = ${financialTransactionKind.enum.refund} AND ${ft.status} = ${status.posted}`,
+        )
+        .exists(),
+    )
+    .sum((a) => a.amount);
 
 /**
  * What makes a settlement row count as *evidence* for the

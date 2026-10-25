@@ -34,6 +34,7 @@ import {
   withTransaction,
 } from "~/server/db/helpers";
 import type { ListReadIntent } from "~/server/db/helpers/query";
+import { quotedTable } from "~/server/db/helpers/related";
 import { entityLink, product, wish } from "~/server/db/schema";
 import { effectiveProductPriceSql } from "~/server/domains/product/repo/pricing";
 import { wishCandidateItems } from "~/server/entity-kernel/repo/detail-display-labels";
@@ -105,7 +106,7 @@ const candidateRowsForWishes = async (
       model: product.model,
       price: sql<
         number | null
-      >`${sql.raw(effectiveProductPriceSql('"Product"'))}`.as("price"),
+      >`${sql.raw(effectiveProductPriceSql(quotedTable(product)))}`.as("price"),
       createdAt: product.createdAt,
       updatedAt: product.updatedAt,
       // includes-installed: excluding installed rows would make the wish

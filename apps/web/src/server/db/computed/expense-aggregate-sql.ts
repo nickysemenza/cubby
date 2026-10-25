@@ -32,7 +32,7 @@ import { expense } from "~/server/db/schema";
  * correlated subqueries and string-built SQL, where an interpolated column
  * would bind to the wrong `"Expense"` (see {@link expenseAcquisitionSql}).
  */
-export const actualExpense = (future: AnyColumn = expense.future): SQL =>
+export const actualExpense = (future: AnyColumn | SQL = expense.future): SQL =>
   sql`${future} = false`;
 export const plannedExpense = (future: AnyColumn = expense.future): SQL =>
   sql`${future} = true`;
@@ -102,7 +102,7 @@ export const EXPENSE_MONTH_BUCKET = sql<string>`to_char(${expense.date}, 'YYYY-M
  * Raw text rather than interpolated Drizzle columns because the correlated
  * subqueries below must alias their `"Expense"` — an interpolated
  * `expense.cost` there binds to the wrong table or is prefix-stripped into a
- * self-join. See `correlated()` in `db/helpers/query.ts`.
+ * self-join. New correlated scalars use `related()` (`db/helpers/related.ts`).
  */
 export const expenseAcquisitionSql = (alias: string): string =>
   `(${alias}."cost" > 0 OR (COALESCE(${alias}."cost", 0) = 0 AND COALESCE(${alias}."productQuantity", 0) >= 0))`;
@@ -122,7 +122,7 @@ export const expenseAcquisitionSql = (alias: string): string =>
  *
  * - {@link productAcquisitionDateSql} hand-qualifies the alias, for the list
  *   cell and the ORDER BY. An interpolated `PgColumn` there is prefix-stripped
- *   by `buildSelection` into a silent self-join (see `correlated()`).
+ *   by `buildSelection` into a silent self-join (see `db/helpers/related.ts`).
  * - {@link productAcquisitionDateFilterSql} interpolates the real column, for
  *   the shared `whereClause` — which reaches the relational query builder
  *   (alias `"product"`), `$count`, and a plain `select().from(product)`

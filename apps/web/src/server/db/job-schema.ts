@@ -90,7 +90,7 @@ export const job = pgTable(
         sql`,`,
       )})`,
     ),
-    // Migration 0028 split image execution into lane kinds. Refusing the old
+    // Migration 0029 split image execution into lane kinds. Refusing the old
     // kind makes a pre-cutover Worker's write fail rather than land as work
     // no handler serves; it may be dropped once no such Worker can run.
     check("Job_kind_retired_check", sql`${table.kind} <> 'image.processing'`),

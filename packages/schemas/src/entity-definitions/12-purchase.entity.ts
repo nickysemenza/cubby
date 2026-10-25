@@ -1365,9 +1365,9 @@ export default defineEntity({
       reconciliationGap: { type: "number" },
       // The live vendor's name.
       vendorId: { type: "text" },
-      expenseCount: { type: "number" },
-      expenseTotal: { type: "number" },
-      documentCount: { type: "number" },
+      expenseCount: { rollup: "count", via: "expenses" },
+      expenseTotal: { rollup: "sum", via: "expenses.cost" },
+      documentCount: { rollup: "count", via: "images" },
       // The expense total of a purchase with at least one priced line.
       pricedExpenseTotal: { type: "number" },
       expenseStatus: { type: "enum", options: ["empty", "unpriced", "priced"] },
