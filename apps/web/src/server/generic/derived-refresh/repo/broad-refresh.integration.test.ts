@@ -35,7 +35,11 @@ import {
   refreshFamilyHandler,
 } from "~/server/workflows/background-tasks/refresh-families";
 
-import { invalidateRefreshFamily, scheduleRefreshFamilies } from "./families";
+import {
+  invalidateRefreshFamily,
+  scheduleRefreshFamilies,
+  SEARCH_REFRESH_PAGE_SIZE,
+} from "./families";
 
 // Broad pages must discover writes without endpoint capture, retain later
 // invalidation during preparation, and never publish stale output after it.
@@ -54,7 +58,7 @@ describe("broad refresh jobs", () => {
       ctx.db,
       location,
       "location",
-      Array.from({ length: 30 }, (_, index) => ({
+      Array.from({ length: SEARCH_REFRESH_PAGE_SIZE + 5 }, (_, index) => ({
         shortcode: `LOC-${3000 + index}`,
         name: `Synthetic shelf ${index} v1`,
         type: "room" as const,
@@ -161,7 +165,7 @@ describe("broad refresh jobs", () => {
       ctx.db,
       location,
       "location",
-      Array.from({ length: 30 }, (_, index) => ({
+      Array.from({ length: SEARCH_REFRESH_PAGE_SIZE + 5 }, (_, index) => ({
         shortcode: `LOC-${4000 + index}`,
         name: `Synthetic bin ${index}`,
         type: "room" as const,

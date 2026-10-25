@@ -24,6 +24,7 @@ import { qualityRefreshDriver } from "~/server/generic/data-quality/repo/refresh
 import {
   refreshFamilyInput,
   REFRESH_PAGE_SIZE,
+  SEARCH_REFRESH_PAGE_SIZE,
 } from "~/server/generic/derived-refresh/repo/families";
 import { retireStillOrphanedSearchArtifacts } from "~/server/generic/embedding/repo/entity-embedding-cleanup";
 import type { JobHandler } from "~/server/generic/jobs/types";
@@ -126,7 +127,7 @@ function refreshFamilyDrivers(
           [...searchableEntities],
           {
             cursor: searchCursorOf(at),
-            pageSize: REFRESH_PAGE_SIZE,
+            pageSize: SEARCH_REFRESH_PAGE_SIZE,
             createdBefore: boundary,
           },
         );

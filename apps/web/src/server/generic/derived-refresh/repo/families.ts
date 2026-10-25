@@ -19,6 +19,13 @@ export const refreshFamilyInput = z.object({ family: refreshFamily });
 export type RefreshFamily = z.infer<typeof refreshFamily>;
 export const REFRESH_INTERVAL_MS = 2 * 60_000;
 export const REFRESH_PAGE_SIZE = 25;
+/**
+ * Records one search page scans. A page rebuilds only stale or missing
+ * documents, so a scan is cheap; at 25 a full pass over the household corpus
+ * (~36k documents) took over a day at drain pace and held connection
+ * coverage pending. Matches the quality family's page.
+ */
+export const SEARCH_REFRESH_PAGE_SIZE = 200;
 
 export async function lockRefreshFamily(
   db: RepositoryQueryInput,
