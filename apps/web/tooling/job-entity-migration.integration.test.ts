@@ -10,7 +10,7 @@ import { withMigrationDatabase } from "./test-database-lease";
 it("backfills multiple Job batches without changing execution or retained captures and replays safely", async () => {
   await withMigrationDatabase(async (client) => {
     const db = drizzle(client);
-    await migrateDatabase(db, { through: "0034_append_only_job_invalidation" });
+    await migrateDatabase(db, { through: "0035_music_category_family" });
     await client.query(`INSERT INTO "Job" (key,kind,input,state,attempts,error,"availableAt","createdAt","updatedAt")
       SELECT 'synthetic:identity:' || n, 'synthetic.migration', jsonb_build_object('page',n),
         CASE WHEN n % 3 = 0 THEN 'paused' WHEN n % 3 = 1 THEN 'retry_wait' ELSE 'completed' END,
@@ -61,12 +61,12 @@ it("reconciles identities orphaned by old retention between committed backfill b
   await withMigrationDatabase(async (client) => {
     const db = drizzle(client);
     const runtimeClient = drizzle({ client, schema });
-    await migrateDatabase(db, { through: "0034_append_only_job_invalidation" });
+    await migrateDatabase(db, { through: "0035_music_category_family" });
     await client.query(
       `INSERT INTO "Job" (key,kind,input) SELECT 'synthetic:cutover:' || n, 'synthetic.cutover', '{}'::jsonb FROM generate_series(1,1002) n`,
     );
     const statements = readFileSync(
-      `${MIGRATIONS_FOLDER}/0035_job_entity_identity.sql`,
+      `${MIGRATIONS_FOLDER}/0036_job_entity_identity.sql`,
       "utf8",
     ).split("--> statement-breakpoint");
     for (const statement of statements) {
@@ -77,7 +77,7 @@ it("reconciles identities orphaned by old retention between committed backfill b
     await client.query(
       `DELETE FROM "Job" WHERE id IN (SELECT id FROM "Job" WHERE shortcode IS NOT NULL AND key LIKE 'synthetic:cutover:%' LIMIT 2)`,
     );
-    await migrateDatabase(db, { through: "0035_job_entity_identity" });
+    await migrateDatabase(db, { through: "0036_job_entity_identity" });
     await client.query(
       `INSERT INTO "Entity" (id, kind, shortcode) VALUES (gen_random_uuid(), 'image', 'IMG-23456')`,
     );
