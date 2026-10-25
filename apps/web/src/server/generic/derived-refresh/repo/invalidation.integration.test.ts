@@ -191,4 +191,66 @@ describe("durable family invalidation", () => {
     expect(attempts).toBe(1);
     expect(await revision("search")).toBe(2);
   });
+
+  // Some family pages publish under SERIALIZABLE and read the marker while a
+  // serializable admission captures. Publication only reads the marker and
+  // the capture never touches the Job row, so no serialization cycle forms.
+  it.each(["publication first", "capture first"] as const)(
+    "commits a serializable capture beside a serializable publication (%s)",
+    async (order) => {
+      const search = await family("search");
+      await invalidateRefreshFamily(ctx.db, "search");
+      const claim = await claimJob(ctx.db, search.id);
+      if (!claim) throw new Error("Expected claim");
+      const before = await revision("search");
+      let publications = 0;
+      let captures = 0;
+      const capture = () =>
+        withSnapshotWriteDatabase(
+          ctx.db,
+          async (tx) => {
+            captures++;
+            await invalidateRefreshFamily(tx, "search");
+          },
+          { isolationLevel: "serializable" },
+        );
+      let release: () => void = () => {};
+      const gate = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      let entered: () => void = () => {};
+      const inside = new Promise<void>((resolve) => {
+        entered = resolve;
+      });
+      const publication = publishJobPage(
+        ctx.db,
+        claim,
+        { done: true },
+        async () => {
+          publications++;
+          entered();
+          if (order === "publication first") await gate;
+        },
+        "serializable",
+      );
+      if (order === "publication first") {
+        // Publication holds its serializable snapshot after reading the marker.
+        await inside;
+        await capture();
+        release();
+        await publication;
+      } else {
+        await publication;
+        await capture();
+      }
+      expect({ captures, publications }).toEqual({
+        captures: 1,
+        publications: 1,
+      });
+      expect(await revision("search")).toBe(before + 1);
+      // The page either finished before observing the capture or was
+      // superseded by it; either way the family reruns.
+      expect(await due(search.id)).toBe(true);
+    },
+  );
 });
