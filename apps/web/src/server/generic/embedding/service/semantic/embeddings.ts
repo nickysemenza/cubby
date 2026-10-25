@@ -94,6 +94,8 @@ export async function embedTexts(
   texts: string[],
   opts?: {
     operation?: string;
+    /** A durable refresh must execute the configuration it content-addressed. */
+    config?: ReturnType<typeof getSemanticEmbeddingConfig>;
     db?: Database;
     /**
      * Every AI call belongs to a run. Most `embedTexts` callers sit several
@@ -120,7 +122,7 @@ export async function embedTexts(
   const feature = opts?.feature ?? SEMANTIC_QUERY_FEATURE.feature;
 
   return withTrace(TraceNames.api("embeddings", operation), async (span) => {
-    const config = ports.config();
+    const config = opts?.config ?? ports.config();
     span.setAttributes({
       "ai.provider": config.provider,
       "ai.model": config.model,

@@ -53,3 +53,11 @@ export async function withJobPhase<T>(
     Object.assign(details, previous);
   }
 }
+
+// A shared provider call has no single publication owner. Cache contention
+// still defers the page rather than polling as an interactive request does.
+const batchExecution = new AsyncLocalStorage<boolean>();
+export const inJobExecution = () =>
+  !!execution.getStore() || !!batchExecution.getStore();
+export const withJobBatchExecution = <T>(work: () => Promise<T>) =>
+  batchExecution.run(true, work);

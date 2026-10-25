@@ -3,7 +3,10 @@ import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
 import * as cfEnv from "~/server/cf-env";
-import { withJobExecution } from "~/server/generic/jobs/context";
+import {
+  withJobExecution,
+  withJobBatchExecution,
+} from "~/server/generic/jobs/context";
 import { JobDeferredError } from "~/server/generic/jobs/errors";
 
 import {
@@ -171,41 +174,46 @@ describe("AI response cache", () => {
   });
 
   // A contended cache lease defers a job page instead of polling inside it.
-  it("defers a job page on its first contended cache lookup", async () => {
-    const read = vi
-      .fn()
-      .mockReturnValueOnce({ kind: "busy" })
-      .mockReturnValue({ kind: "hit", value: '{"choice":"one"}' });
-    const namespace = fromPartial<
-      NonNullable<ReturnType<typeof cfEnv.getAiResponseCacheNamespace>>
-    >({
-      getByName: () => fromPartial({ readOrClaim: read }),
-    });
-    const mock = vi
-      .spyOn(cfEnv, "getAiResponseCacheNamespace")
-      .mockReturnValue(namespace);
-    const compute = vi.fn();
-    try {
-      await expect(
-        withJobExecution(fromPartial({}), fromPartial({}), () =>
+  it.each(["single", "batch"])(
+    "defers a %s job page on its first contended cache lookup",
+    async (scope) => {
+      const read = vi
+        .fn()
+        .mockReturnValueOnce({ kind: "busy" })
+        .mockReturnValue({ kind: "hit", value: '{"choice":"one"}' });
+      const namespace = fromPartial<
+        NonNullable<ReturnType<typeof cfEnv.getAiResponseCacheNamespace>>
+      >({
+        getByName: () => fromPartial({ readOrClaim: read }),
+      });
+      const mock = vi
+        .spyOn(cfEnv, "getAiResponseCacheNamespace")
+        .mockReturnValue(namespace);
+      const compute = vi.fn();
+      try {
+        const prepare = () =>
           withAiResponseCache({
             enabled: true,
-            keyInput: input("synthetic-job-contention"),
+            keyInput: input(`synthetic-job-contention-${scope}`),
             validate,
             compute,
-          }),
-        ),
-      ).rejects.toSatisfy(
-        (error: unknown) =>
-          error instanceof JobDeferredError &&
-          error.until.getTime() - Date.now() >= 14_000,
-      );
-      expect(read).toHaveBeenCalledOnce();
-      expect(compute).not.toHaveBeenCalled();
-    } finally {
-      mock.mockRestore();
-    }
-  });
+          });
+        await expect(
+          scope === "batch"
+            ? withJobBatchExecution(prepare)
+            : withJobExecution(fromPartial({}), fromPartial({}), prepare),
+        ).rejects.toSatisfy(
+          (error: unknown) =>
+            error instanceof JobDeferredError &&
+            error.until.getTime() - Date.now() >= 14_000,
+        );
+        expect(read).toHaveBeenCalledOnce();
+        expect(compute).not.toHaveBeenCalled();
+      } finally {
+        mock.mockRestore();
+      }
+    },
+  );
 
   // A full group's pair reads must be bounded by shards/chunks, not candidate count.
   it("batches 240 cache lookups and reuses hits while handling misses", async () => {

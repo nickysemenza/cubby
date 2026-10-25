@@ -116,7 +116,8 @@ Declared entity fields carry the same facts to web, Apple and MCP:
 
 ## Priority and fairness
 
-`dueJobs` builds each batch of `JOB_DRAIN.batch` Jobs:
+`dueJobs` builds each fair selection of `JOB_DRAIN.batch` Jobs (up to the
+selected kind's batch width when a batch handler is present):
 
 1. Jobs whose `runId` is a running, member-visible Run lead (routine Runs such
    as connection discovery do not).
@@ -129,7 +130,7 @@ Declared entity fields carry the same facts to web, Apple and MCP:
 
 The drain runs up to `JOB_DRAIN.concurrency` pages of a batch at once, and the
 queue consumer (`packages/shared/src/background-queue-consumer.json`) runs
-several drains. Every page holds its own row lock and lease. AI evaluation Jobs
+several drains. Every Job holds its own row lock and lease. AI evaluation Jobs
 carry no `runId` because shared evaluations serve several Runs; they compete
 as backfill. Run views still attribute them: a Run's demand (`runDemandPairs`)
 is its own Jobs plus the evaluation Jobs it owns or still requests (an
@@ -231,7 +232,7 @@ and fails after `maxAttempts`; each claim counts. A never-exhausted kind
 reported failures: a claim, a release, or reclaiming a vanished executor's
 expired lease is not an attempt. It backs off from `baseMs` doubling to
 `maxMs` (24 h for images) forever. `releaseJobClaim` hands a claim back
-without counting; typed waits (`JobDeferredError`, funding) never count.
+without counting (refunding an exhausting kind's up-front claim attempt); typed waits (`JobDeferredError`, funding) never count.
 
 Retry now (`job.retryNow`, `retryJobsNow`) makes a filtered set due at once:
 backoff and provider waits clear, prior errors stay, failed and cancelled Jobs
@@ -398,6 +399,51 @@ record (~55k), which starved every other kind for days.
   still resolved after commit under serializable isolation.
 - `run.funding-resume` is one Job per funding window; its handler resumes every
   paused Run.
+
+### Embedding execution
+
+`embedding.refresh` uses the shared drain's kind-level batch handler. When a
+normal fair selection includes embedding work, the drain reselects up to 64
+Jobs with the same run-first, backfill-reserve and weighted kind ordering.
+Run-owned and backfill embedding Jobs form separate batches. Each batch occupies
+one of the existing three execution lanes; claims, lease renewals and publication stay serial within that lane;
+freshness and visibility use bounded shared lookups, so widening embeddings
+does not multiply database sockets or change other kinds' concurrency.
+
+Each completed provider/upload chunk checkpoints its own Job receipts before
+another provider call starts. The handler checks the shared 20-second drain
+deadline between chunks; an in-flight chunk and its publication may finish past
+that deadline, but no later chunk starts. Unstarted claims are released, refunding
+the up-front claim attempt for exhausting kinds. The next wake reselects fairly,
+so newly arrived Run-owned work can lead instead of waiting for every long input
+in the original batch.
+
+One heartbeat renews only the batch's pending claims, serially on one database
+socket. Each renewal catches its own failure and uses `FOR UPDATE SKIP LOCKED`
+to avoid waiting on another transaction's Job-row lock. A refused or failed
+renewal leaves that Job's existing deadline intact; healthy siblings still renew.
+An expired claim cannot renew or publish after reclamation, and completed
+checkpoints leave the heartbeat set immediately.
+
+Fresh submissions with the same stored provider/model/dimensions share one
+embedding call and Vectorize upload. Requests contain at most 64 texts, below
+OpenAI's 2,048-input limit, and at most 300,000 UTF-8 bytes, a conservative bound
+on its 300,000-token request limit. Inputs over 8,192 bytes run alone, preserving
+provider validation of the 8,192-token input limit without failing neighbors.
+[OpenAI owns these provider limits](https://developers.openai.com/api/reference/resources/embeddings/methods/create).
+A configuration mismatch settles as obsolete and re-admits current work during
+that Job's fenced publication. A request pins the validated current configuration,
+keeping content addressing and selected-vector provenance consistent across changes.
+
+Every Job retains its own claim, generation, retry budget, physical vector ID,
+upload hash and visibility receipt. Stale sources settle alone; a failed provider
+or upload chunk retries only its member Jobs under the existing policy. Visibility
+checks and final source/input checks still run per Job, and publication rejects
+revoked claims. A shared call has no single Job publication owner; cache contention
+defers it as background work instead of polling. `AiUsage` keeps one row per
+provider call (plus existing application-cache-hit rows), attributes a shared
+call to the daily background Run without choosing an arbitrary entity, and records
+the provider's total tokens once. Embeddings remain outside frontier funding caps.
 
 ## Planned: batch evaluation
 
