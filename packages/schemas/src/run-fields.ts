@@ -119,6 +119,12 @@ export const mailDiscoveryRunInput = mailboxDiscoveryInput;
 export type MailDiscoveryRunInput = z.infer<typeof mailDiscoveryRunInput>;
 export const mailDiscoveryRunProgress = mailboxDiscoveryProgress;
 export type MailDiscoveryRunProgress = z.infer<typeof mailDiscoveryRunProgress>;
+/**
+ * Admission freezes at most 50 targets; supporting originals a notice needs
+ * append beyond them up to this backstop, so a full batch never strands a
+ * notice. The bound only stops a runaway coordinator.
+ */
+export const MAIL_RUN_ROSTER_LIMIT = 150;
 /** Original retained sources; interpreted order identity remains a research decision. */
 export const mailResearchRunInput = z.object({
   kind: z.literal("mail_research"),
@@ -130,7 +136,7 @@ export const mailResearchRunInput = z.object({
       }),
     )
     .min(1)
-    .max(50),
+    .max(MAIL_RUN_ROSTER_LIMIT),
 });
 export type MailResearchRunInput = z.infer<typeof mailResearchRunInput>;
 export const productResearchRunInput = z.object({
@@ -306,7 +312,9 @@ export const runRestartVendorPurchasesInput = researchObjective.options[0]
   .meta({ id: "RunRestartVendorPurchasesInput" });
 export const runRestartMailResearchInput = mailResearchRunInput
   .pick({ kind: true })
-  .extend({ sourceCount: z.number().int().min(1).max(50) })
+  .extend({
+    sourceCount: z.number().int().min(1).max(MAIL_RUN_ROSTER_LIMIT),
+  })
   .meta({ id: "RunRestartMailResearchInput" });
 export const runRestartInput = z.discriminatedUnion("kind", [
   runRestartOrderMailInput,

@@ -70,7 +70,9 @@ Claude or Codex session researches it later through the Research queue.
      false), still link the notice; itemizing is the order confirmation's
      work. Import from the confirmation in this Run only when it is already
      yours (`boundToRun`) or a `purchase_import` `mail_search` shows it `pending` or
-     `blocked`. When another Run holds it, `prepare` refuses with
+     `blocked`. When no Purchase exists yet and the confirmation is yours or
+     admissible, import it first, then link the notice; a full batch still
+     admits it, so never resolve the notice unresolved just to wait for it. When another Run holds it, `prepare` refuses with
      `MAIL_SOURCE_HELD_BY_RUN`: link the notice and claim the next Email;
      neither retrying nor escalating changes that refusal.
    - **A payment, refund, transfer, card repayment or reimbursement Email
