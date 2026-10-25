@@ -99,7 +99,19 @@ const retryReceipt = z.object({ retryEvaluationId: z.uuid() });
 const supersededReceipt = z.object({ supersededBy: z.uuid() });
 const refreshRunRevision = sql<number>`coalesce((${run.input}->${aiRefreshRunInput.keyof().enum.activation}->>${aiRefreshActivation.keyof().enum.revision})::int, 0)`;
 
-/** The row a work key's retries and reopens currently end at, with its reopen count. */
+/**
+ * Safety bound on a work key's chain walk. Reopens after a supersession do
+ * not use the reopen budget (an input can change back and forth before
+ * anything runs), so a chain can be longer than the budget; reaching this
+ * bound is a fault, never a tip.
+ */
+const MAX_CHAIN_HOPS = 10_000;
+
+/**
+ * The row a work key's retries and reopens currently end at, with its reopen
+ * count against the budget and the number of reopen rows (which names the
+ * next one).
+ */
 async function workKeyTip(
   db: Database,
   workKey: string,
@@ -107,19 +119,46 @@ async function workKeyTip(
 ) {
   let tip = base;
   let reopens = 0;
-  for (let hop = 0; tip && hop <= MAX_REOPENS * 4; hop++) {
+  for (let hop = 0; tip; hop++) {
     const next = retryReceipt.safeParse(tip.receipt).data?.retryEvaluationId;
     if (!next) break;
+    if (hop >= MAX_CHAIN_HOPS)
+      throw new Error(
+        `Evaluation chain for ${workKey} exceeds ${MAX_CHAIN_HOPS} links`,
+      );
     const [row] = await getDb(db)
       .select()
       .from(aiEvaluation)
       .where(eq(aiEvaluation.id, next));
     if (!row) break;
+    const previous = tip;
     tip = row;
     // An operator retry of a reopen (`<workKey>:reopen:<n>:operator-retry:<k>`)
-    // also counts toward the cap.
-    if (row.workKey.startsWith(`${workKey}${REOPEN_SEPARATOR}`)) reopens++;
+    // also counts toward the cap; a reopen of superseded work does not.
+    if (
+      row.workKey.startsWith(`${workKey}${REOPEN_SEPARATOR}`) &&
+      !supersededReceipt.safeParse(previous.receipt).success
+    )
+      reopens++;
   }
+  // The next reopen key follows the highest one that exists, so it never
+  // collides with a row the walk did not reach.
+  const reopenKeys = await getDb(db)
+    .select({ workKey: aiEvaluation.workKey })
+    .from(aiEvaluation)
+    .where(
+      sql`starts_with(${aiEvaluation.workKey}, ${`${workKey}${REOPEN_SEPARATOR}`})`,
+    );
+  const reopenRows = Math.max(
+    0,
+    ...reopenKeys.map(
+      (row) =>
+        Number.parseInt(
+          row.workKey.slice(`${workKey}${REOPEN_SEPARATOR}`.length),
+          10,
+        ) || 0,
+    ),
+  );
   const [owner] =
     tip && ["blocked", "obsolete", "cancelled"].includes(tip.state)
       ? await getDb(db)
@@ -130,6 +169,7 @@ async function workKeyTip(
   return {
     tip,
     reopens,
+    reopenRows,
     reopenable:
       tip !== undefined &&
       reopens < MAX_REOPENS &&
@@ -149,12 +189,16 @@ async function workKeyTip(
  * A changed record's new fingerprint replaces its older queued evaluation:
  * that one can only end obsolete, and keeping it doubles the backlog.
  */
-async function supersedeQueuedConnectionWork(
+async function supersedeQueuedRecordWork(
   db: Database,
+  feature: string,
   target: EvaluationTargetInput["target"],
   keepId: string,
 ) {
-  if (target.kind !== "connection") return;
+  // Record-scoped work only: a newer connection or product-identity
+  // evaluation of a record replaces the older one. Field and mailbox
+  // evaluations key on more than the record.
+  if (target.kind !== "connection" && target.kind !== "product") return;
   const stale = await getDb(db)
     .update(aiEvaluation)
     .set({
@@ -165,8 +209,11 @@ async function supersedeQueuedConnectionWork(
     })
     .where(
       and(
-        eq(aiEvaluation.feature, "entity-connections"),
+        eq(aiEvaluation.feature, feature),
         inArray(aiEvaluation.state, ["queued", "retry_wait"]),
+        // Same target kind: a Product's catalog evaluation never replaces a
+        // shared pair evaluation (`product_pair`) other Runs may request.
+        sql`${aiEvaluation.target} @> ${JSON.stringify({ kind: target.kind })}::jsonb`,
         sql`${aiEvaluation.id} <> ${keepId}::uuid`,
         sql`${aiEvaluation.target}->>'entity' = ${target.entity}`,
         sql`${aiEvaluation.target}->>'recordId' = ${target.recordId}`,
@@ -212,20 +259,21 @@ async function insertTarget(
 ) {
   const { target, provenance, blockedReason } = item;
   const workKey = await targetWorkKey(item);
+  const feature =
+    target.kind === "connection"
+      ? "entity-connections"
+      : target.kind === "field"
+        ? "field-suggestion"
+        : target.kind === "product"
+          ? "product-identity"
+          : "mailbox-triage";
   const insert = (key: string, client: Database) =>
     withTransactionDatabase(client, async (tx) => {
       const rows = await getDb(tx)
         .insert(aiEvaluation)
         .values({
           runId: runEntityId.parse(runId),
-          feature:
-            target.kind === "connection"
-              ? "entity-connections"
-              : target.kind === "field"
-                ? "field-suggestion"
-                : target.kind === "product"
-                  ? "product-identity"
-                  : "mailbox-triage",
+          feature,
           workKey: key,
           target,
           provenance,
@@ -247,8 +295,7 @@ async function insertTarget(
             kind: "ai.evaluation",
             input: { evaluationId: row.id },
           });
-          if (target.kind === "connection")
-            await supersedeQueuedConnectionWork(tx, target, row.id);
+          await supersedeQueuedRecordWork(tx, feature, target, row.id);
         }
       return rows;
     });
@@ -263,7 +310,7 @@ async function insertTarget(
     const chain = await workKeyTip(tx, workKey, base);
     if (!chain.reopenable || !chain.tip) return 0;
     const [replacement] = await insert(
-      `${workKey}${REOPEN_SEPARATOR}${chain.reopens + 1}`,
+      `${workKey}${REOPEN_SEPARATOR}${chain.reopenRows + 1}`,
       tx,
     );
     if (!replacement) return 0;
