@@ -125,6 +125,15 @@ and AVIF cloud descriptions (which need device JPEG preparation) run on
 devices; other cloud calls on the server. Device pulls claim parked work
 directly and prefer work whose last attempt ran on another device.
 
+Migration 0028 converted the pre-lane `image.processing` kind under a lock on
+`Job`, then added `Job_kind_retired_check`, which refuses that kind. A
+pre-cutover Worker's write of it waits for the migration and then fails, so
+it is never accepted as work no handler serves; a rejected scheduling is
+recreated by the image backfill. Executions an old Worker stopped (claimed
+`image.cloud` without a handler and failed) are restarted by the watchdog's
+image repair. The check retains no work and can be dropped once no
+pre-cutover Worker can run; nothing reads it.
+
 Device wire contract:
 
 - `imageProcessing.pull` leases for `leaseSeconds` (default 60, 20–300). A

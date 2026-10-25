@@ -1,3 +1,7 @@
+-- Hold Job writers for the cutover: a pre-cutover Worker's concurrent
+-- `image.processing` insert waits, then fails the retired-kind check below
+-- instead of landing as work no handler serves. Accepted rows convert here.
+LOCK TABLE "Job" IN SHARE ROW EXCLUSIVE MODE;--> statement-breakpoint
 ALTER TABLE "ImageProcessingAttempt" DROP CONSTRAINT "ImageProcessingAttempt_state_check";--> statement-breakpoint
 CREATE INDEX "Job_kind_state_idx" ON "Job" USING btree ("kind","state","availableAt");--> statement-breakpoint
 ALTER TABLE "ImageProcessingAttempt" ADD CONSTRAINT "ImageProcessingAttempt_state_check" CHECK ("ImageProcessingAttempt"."state" IN ('leased','running','waiting','expired','released','ready','skipped','failed'));--> statement-breakpoint
@@ -43,4 +47,5 @@ SELECT 'image-processing:' || j.id::text,
 FROM "ImageProcessingJob" j
 JOIN "Image" i ON i.id = j."imageId"
 WHERE j.state = 'pending'
-  AND NOT EXISTS (SELECT 1 FROM "Job" dj WHERE dj.key = 'image-processing:' || j.id::text);
+  AND NOT EXISTS (SELECT 1 FROM "Job" dj WHERE dj.key = 'image-processing:' || j.id::text);--> statement-breakpoint
+ALTER TABLE "Job" ADD CONSTRAINT "Job_kind_retired_check" CHECK ("Job"."kind" <> 'image.processing');

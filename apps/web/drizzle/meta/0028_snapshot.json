@@ -1,5 +1,5 @@
 {
-  "id": "311dc479-5306-4f3a-895d-3e5c27a07184",
+  "id": "46194957-0f00-458d-a363-c77de03c8ebc",
   "prevId": "93d8df18-06c6-4884-9d72-41f15552a645",
   "version": "7",
   "dialect": "postgresql",
@@ -2780,6 +2780,10 @@
         "Job_state_check": {
           "name": "Job_state_check",
           "value": "\"Job\".\"state\" IN ('queued','running','retry_wait','paused','completed','failed','cancelled')"
+        },
+        "Job_kind_retired_check": {
+          "name": "Job_kind_retired_check",
+          "value": "\"Job\".\"kind\" <> 'image.processing'"
         },
         "Job_attempts_check": {
           "name": "Job_attempts_check",

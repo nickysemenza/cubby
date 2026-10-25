@@ -148,6 +148,9 @@ export const unobservedJobInvalidation = () =>
   // which inside this subquery would compare the marker with itself.
   sql<boolean>`EXISTS (SELECT 1 FROM "JobInvalidation" ji WHERE ji.key = "Job".key AND ji.revision > coalesce("Job"."observedRevision", 0))`;
 
+/** Whether a Job is claimable now: the one predicate the drain, claims and health share. */
+export const jobDue = (now: Date) => due(now);
+
 const due = (now: Date) =>
   or(
     and(
@@ -630,6 +633,34 @@ export async function failJob(
   error: UnparsedError,
 ) {
   const message = JSON.stringify(describeErrorCauses(error));
+  // A restarting invalidation captured during this pass outranks its
+  // failure: the failed page read stale inputs, so the Job starts a fresh
+  // claimable pass with a fresh budget instead of failing or backing off
+  // and stranding the captured work. The prior error stays for diagnosis.
+  if (await invalidatedDuringPass(db, claim)) {
+    await getDb(db)
+      .update(job)
+      .set({
+        state: "queued",
+        cursor: null,
+        attempts: 0,
+        availableAt: new Date(),
+        waitReason: null,
+        waitUntil: null,
+        leaseToken: null,
+        leaseExpiresAt: null,
+        error: message,
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(job.id, claim.id),
+          eq(job.state, "running"),
+          eq(job.leaseToken, claim.leaseToken),
+        ),
+      );
+    return;
+  }
   const { retry } = jobKindPolicy(claim.kind);
   // A never-exhausted kind counts this reported failure here, not at claim.
   const failures = retry.exhaust ? claim.attempts : claim.attempts + 1;

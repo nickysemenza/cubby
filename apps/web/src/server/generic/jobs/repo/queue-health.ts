@@ -6,6 +6,10 @@ import type { Database } from "~/server/db";
 import { getDb } from "~/server/db/helpers";
 import { job } from "~/server/db/retained-tables";
 import { jobKindPolicy } from "~/server/generic/jobs/kind-policy";
+import {
+  jobDue,
+  unobservedJobInvalidation,
+} from "~/server/generic/jobs/repo/jobs";
 
 /** Thresholds that raise a watchdog alert; each alert carries its raw numbers. */
 export const QUEUE_ALERT_THRESHOLDS = {
@@ -37,15 +41,23 @@ export async function measureQueueHealth(
 ): Promise<QueueHealthSnapshot> {
   const now = input.now ?? new Date();
   const at = sql`${now.toISOString()}::timestamp`;
-  const due = sql`((${job.state} IN (${jobState.enum.queued}, ${jobState.enum.retry_wait}) AND ${job.availableAt} <= ${at})
-    OR (${job.state} = ${jobState.enum.running} AND ${job.leaseExpiresAt} <= ${at}))`;
+  // The drain's own predicate, so invalidation-woken Jobs count as due.
+  const due = jobDue(now);
+  const woken = unobservedJobInvalidation();
+  // When each due Job became due: an unobserved capture wakes it at the
+  // marker's write, an expired lease at its expiry.
+  const dueSince = sql`(CASE
+    WHEN ${woken} AND (${job.state} = ${jobState.enum.completed} OR ${job.availableAt} > ${at})
+      THEN (SELECT ji."updatedAt" FROM "JobInvalidation" ji WHERE ji.key = "Job".key)
+    WHEN ${job.state} = ${jobState.enum.running} THEN ${job.leaseExpiresAt}
+    ELSE ${job.availableAt} END)`;
   const rows = await getDb(db)
     .select({
       kind: job.kind,
       due: sql<number>`count(*) FILTER (WHERE ${due})::int`,
       oldestDueSeconds: sql<
         number | null
-      >`extract(epoch FROM ${at} - min(${job.availableAt}) FILTER (WHERE ${due}))::int`,
+      >`extract(epoch FROM ${at} - min(${dueSince}) FILTER (WHERE ${due}))::int`,
       recentClaims: sql<number>`count(*) FILTER (WHERE ${job.lastClaimedAt} > ${at} - ${CLAIM_WINDOW_MINUTES} * interval '1 minute')::int`,
       expiredLeases: sql<number>`count(*) FILTER (WHERE ${job.state} = ${jobState.enum.running} AND ${job.leaseExpiresAt} <= ${at})::int`,
       queued: sql<number>`count(*) FILTER (WHERE ${job.state} IN (${jobState.enum.queued}, ${jobState.enum.retry_wait}))::int`,
@@ -53,7 +65,8 @@ export async function measureQueueHealth(
     .from(job)
     .where(
       sql`${job.state} IN (${jobState.enum.queued}, ${jobState.enum.retry_wait}, ${jobState.enum.running})
-        OR ${job.lastClaimedAt} > ${at} - ${CLAIM_WINDOW_MINUTES} * interval '1 minute'`,
+        OR ${job.lastClaimedAt} > ${at} - ${CLAIM_WINDOW_MINUTES} * interval '1 minute'
+        OR ${due}`,
     )
     .groupBy(job.kind)
     .orderBy(job.kind);
