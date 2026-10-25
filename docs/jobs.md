@@ -130,10 +130,18 @@ rolled-back save leaves no invalidation.
 The Job observes the revision itself. A Job whose `observedRevision` trails
 the marker is due, even when completed. The claim that observes it starts a
 fresh pass: a new generation, no cursor or result, a fresh attempt budget, and
-the revision recorded as observed. `restartsPass: false` (the quality family)
-lets a pass in progress keep its cursor, and the finishing page absorbs
-captures made meanwhile; its scheduled repeat reruns it. Rerunning on them
-would never settle, because the pass's own Run records invalidate quality. Publication of a restarting kind rereads the marker and supersedes
+the revision recorded as observed. `restartsPass: false` (every refresh
+family) lets a pass in progress keep its cursor, and the finishing page
+absorbs captures made meanwhile; the scheduled repeat (`scheduleRefreshFamilies`
+from catch-up, after `REFRESH_INTERVAL_MS`) or the next capture then starts a
+full pass from the first record, so an edit behind the cursor is revisited.
+Rerunning on absorbed captures would never settle, because a pass's own Run
+records capture its family. Restarting on each capture kept broad passes from
+ever finishing under ordinary household writes (search reached generation
+~29k with new records unindexed); `image.device.wake` still restarts.
+Refresh families never exhaust: a failing page backs off (1 min doubling to
+15 min) and resumes, so no capture is needed to wake a failed family; paused
+and cancelled remain member stops. Publication of a restarting kind rereads the marker and supersedes
 a page whose pass began before a capture, as a generation change does. For
 restarting kinds, a capture committing during publication or while a worker
 dies is never lost: the finished or reclaimed Job still trails the marker.

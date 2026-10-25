@@ -1,3 +1,4 @@
+import { JOB_NEEDS_ATTENTION_ATTEMPTS } from "@cubby/schemas/job";
 import {
   backgroundTaskMessageSchema,
   type BackgroundTaskMessage,
@@ -53,7 +54,12 @@ async function drainFamilyJobs(
       );
     if (!pending || (pending.state === "completed" && !pending.invalidated))
       return;
-    if (["failed", "cancelled", "paused"].includes(pending.state))
+    // Families never exhaust; repeated failures ask for attention instead.
+    if (
+      ["failed", "cancelled", "paused"].includes(pending.state) ||
+      (pending.state === "retry_wait" &&
+        pending.attempts >= JOB_NEEDS_ATTENTION_ATTEMPTS)
+    )
       throw new Error(
         `Synthetic ${family} refresh stopped: ${pending.error ?? pending.state}`,
       );
@@ -102,7 +108,12 @@ export async function drainRecipeRefreshJobs(
       );
     if (!pending || (pending.state === "completed" && !pending.invalidated))
       return;
-    if (["failed", "cancelled", "paused"].includes(pending.state))
+    // Families never exhaust; repeated failures ask for attention instead.
+    if (
+      ["failed", "cancelled", "paused"].includes(pending.state) ||
+      (pending.state === "retry_wait" &&
+        pending.attempts >= JOB_NEEDS_ATTENTION_ATTEMPTS)
+    )
       throw new Error(
         `Synthetic recipe refresh stopped: ${pending.error ?? pending.state}`,
       );

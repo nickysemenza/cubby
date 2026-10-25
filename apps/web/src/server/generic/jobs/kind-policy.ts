@@ -66,6 +66,9 @@ export const JOB_KIND_POLICY = {
   // Rings companions when parked device work comes due (docs/jobs.md#image-processing).
   "image.device.wake": { ...SERVER, retry: MAINTENANCE_RETRY },
   "jobs.retention": { ...SERVER, retry: MAINTENANCE_RETRY },
+  // Derived refresh passes never restart on capture, so no capture can wake
+  // a failed one; they back off instead of failing.
+  "refresh.family": { ...SERVER, retry: MAINTENANCE_RETRY },
   "ai.evaluation": { ...SERVER, lane: "frontier_ai", maxQueued: 2_000 },
   "assessment.correction": { ...SERVER, maxQueued: 500 },
   "purchase.dispatch": { ...SERVER, lane: "external" },
