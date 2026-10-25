@@ -449,6 +449,8 @@ describe("queue watchdog, explain and retention", () => {
         }),
       );
     const [owner, requester, withdrawn] = runs as [RunId, RunId, RunId];
+    // Shared work names one target: its slot holds one open evaluation.
+    const recordId = crypto.randomUUID();
     const evaluation = (runId: RunId) =>
       enqueueAiEvaluation(ctx.db, {
         runId,
@@ -458,7 +460,7 @@ describe("queue watchdog, explain and retention", () => {
         target: {
           kind: "field",
           entity: "product",
-          recordId: crypto.randomUUID(),
+          recordId,
           field: "categoryId",
           assessmentIds: [],
         },

@@ -19,6 +19,11 @@ import { productBrandNameSql } from "~/server/db/computed/product-brand-sql";
 import { categorySummarySql } from "~/server/db/computed/product-category-sql";
 import { normalizeSearchTextSql } from "~/server/db/computed/search-normalization";
 import {
+  fanoutTarget,
+  isFanoutInput,
+  storedDerived,
+} from "~/server/db/derived-declarations";
+import {
   unwrapDb,
   uuidArrayParam,
   withTransactionOn,
@@ -908,13 +913,41 @@ const unembeddedDocumentsSql = (
 `;
 
 /** Eligibility witness only: ANN recall is not an exhaustive similarity proof. */
-export async function hasUnembeddedSearchDocuments(
+/**
+ * Semantic coverage is incomplete for these kinds while one of their search
+ * documents awaits recompute (direct or fanout marks, ADR 0021) or lacks a
+ * current embedding. One statement; the marks probe uses exact targets so it
+ * stays a primary-key lookup.
+ */
+export async function searchCoverageIncomplete(
   db: Database | DrizzleTransaction,
   config: SemanticEmbeddingConfig,
   kinds: readonly SearchableEntity[],
 ): Promise<boolean> {
   if (!kinds.length) return false;
-  const result = await unwrapDb(db).execute(sql`SELECT EXISTS (
+  const targets = kinds.flatMap((kind) => {
+    const declaration = storedDerived(kind, "searchDocument");
+    return declaration
+      ? [
+          declaration.target,
+          ...declaration.inputs.flatMap((input, index) =>
+            isFanoutInput(input)
+              ? [fanoutTarget(declaration.target, index)]
+              : [],
+          ),
+        ]
+      : [];
+  });
+  const result = await unwrapDb(db).execute(sql`SELECT ${
+    targets.length
+      ? sql`EXISTS (
+          SELECT 1 FROM "DerivedDirty" d WHERE d.target IN (${sql.join(
+            targets.map((target) => sql`${target}`),
+            sql`, `,
+          )}) LIMIT 1
+        ) OR `
+      : sql``
+  }EXISTS (
     SELECT 1 ${unembeddedDocumentsSql(config)}
       AND sd."entityKind" IN (${sql.join(
         kinds.map((kind) => sql`${kind}`),

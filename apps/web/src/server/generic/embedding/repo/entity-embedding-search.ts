@@ -5,22 +5,12 @@ import {
   type SearchableEntity,
   type SearchableEntityRef,
 } from "@cubby/schemas/search";
-import {
-  and,
-  eq,
-  inArray,
-  isNotNull,
-  isNull,
-  like,
-  or,
-  type SQL,
-} from "drizzle-orm";
+import { and, eq, inArray, isNotNull, isNull, type SQL } from "drizzle-orm";
 import { z } from "zod";
 
 import { normalizeSearchText } from "~/lib/search-normalization";
 import type { Database } from "~/server/db";
 import { getDb } from "~/server/db/helpers";
-import { derivedDirty } from "~/server/db/retained-tables";
 import {
   entityEmbedding,
   entityIdentity,
@@ -33,7 +23,7 @@ import type {
   VectorStorePort,
 } from "~/server/generic/embedding/service/semantic/vector-store";
 import {
-  hasUnembeddedSearchDocuments,
+  searchCoverageIncomplete,
   prepareSearchDocuments,
 } from "~/server/generic/search/repo/search-document";
 
@@ -173,26 +163,14 @@ async function validatedScan(
     });
   }
   // Per candidate kind (ADR 0021): coverage is unconfirmed only while one of
-  // these kinds has a pending search-document mark, not while any search
-  // work anywhere is queued (that held ~17k connection evaluations back).
-  const [pending] = await getDb(db)
-    .select({ ref: derivedDirty.ref })
-    .from(derivedDirty)
-    .where(
-      or(
-        ...kinds.flatMap((kind) => [
-          eq(derivedDirty.target, `${kind}.searchDocument`),
-          like(derivedDirty.target, `${kind}.searchDocument@%`),
-        ]),
-      ),
-    )
-    .limit(1);
-  const missing = await hasUnembeddedSearchDocuments(db, config, kinds);
+  // these kinds has a pending search-document mark or unembedded document,
+  // not while any search work anywhere is queued (that held ~17k connection
+  // evaluations back).
+  const incomplete = await searchCoverageIncomplete(db, config, kinds);
   return {
     candidates: candidates.slice(0, limit),
     complete:
-      !pending &&
-      !missing &&
+      !incomplete &&
       !(raw.length === CANDIDATE_BUDGET && candidates.length < limit),
   };
 }

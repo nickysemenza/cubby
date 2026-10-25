@@ -1,4 +1,8 @@
-import { aiEvaluationState, aiProvenance } from "@cubby/schemas/ai-evaluation";
+import {
+  aiEvaluationState,
+  aiExecutionKind,
+  aiProvenance,
+} from "@cubby/schemas/ai-evaluation";
 import type { RunId } from "@cubby/schemas/identifiers";
 import { jobState } from "@cubby/schemas/job";
 import { runStatus } from "@cubby/schemas/run-fields";
@@ -97,10 +101,16 @@ export async function enqueueAiEvaluation(
         .orderBy(desc(aiEvaluation.createdAt), desc(aiEvaluation.id))
         .limit(1);
       const baseKey = input.workKey ?? `${input.executionKind}:${id}`;
+      // Unchanged input joins in-flight work. Automatic refresh also reuses
+      // a completed result, so unchanged targets are never re-checked; a
+      // member's request owns a fresh evaluation, which the response cache
+      // answers without another paid call.
       const reusable =
         latest &&
         inputIdentity(latest.provenance) === inputIdentity(input.provenance) &&
-        ["completed", "running", "result_ready"].includes(latest.state)
+        (["running", "result_ready"].includes(latest.state) ||
+          (latest.state === "completed" &&
+            input.executionKind === aiExecutionKind.enum.ai_refresh))
           ? latest
           : undefined;
       const workKey = await availableEvaluationWorkKey(tx, {

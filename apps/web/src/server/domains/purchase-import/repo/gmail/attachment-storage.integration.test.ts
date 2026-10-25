@@ -32,7 +32,10 @@ import {
   orderMailEvent,
 } from "~/server/db/schema";
 import { insertWithShortcode } from "~/server/generic/shortcode/repo/shortcode-utils";
-import { derivedMarkTickets } from "~/server/testing/background-queue";
+import {
+  derivedMarkTickets,
+  drainStoredDerived,
+} from "~/server/testing/background-queue";
 
 import { syntheticMailImportRun } from "../../service/gmail/execution.fixtures";
 import { ingestGmailMessages as acquireGmailMessages } from "../../service/gmail/ingest";
@@ -239,6 +242,9 @@ describe("Gmail ingestion and attachment storage", () => {
       ).rows;
     const qualityTickets = () =>
       derivedMarkTickets(ctx.db, "email.dataQuality");
+    // Seeding the party marks Email quality through its declared input;
+    // this test follows the Email's own marks only.
+    await drainStoredDerived(ctx.db);
     expect(await qualityTickets()).toEqual([]);
     await saveMailboxMetadata(ctx.db, metadata);
     const createdTickets = await qualityTickets();
